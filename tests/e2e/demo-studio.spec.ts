@@ -1,6 +1,7 @@
 import type { BrowserContext, Frame, Page } from '@playwright/test';
 import { expect, test } from '../harness/fixtures';
 import { DEMO_APP } from '../harness/profile-matrix';
+import { VARIANTS } from '../harness/registry';
 import { DEMO_CSP } from '../harness/route-headers.mjs';
 import { openTask } from '../harness/studio-tasks';
 
@@ -8,8 +9,9 @@ import { openTask } from '../harness/studio-tasks';
 // under demo may not be framed, and frames /sample alone; two visitors'
 // selections and storage never meet; the full reset leaves this browser
 // holding none of the demo; and inside the frame of the sample, a link on
-// the sample keeps the selection (Q5), and a link to another host navigates
-// the frame alone, which this build accepts until PR 3's preview agent (Q4).
+// the sample keeps the selection (Q5), and a link to another host loads
+// nothing at all: Studio's own frame-src 'self' refuses it before any
+// request leaves, so neither the frame nor Studio goes anywhere (Q4).
 
 const DEMO = { type: 'profile', description: 'demo' };
 const STUDIO = { type: 'route', description: '/studio' };
@@ -48,8 +50,8 @@ async function open(page: Page): Promise<void> {
 const composition = (page: Page) => page.getByLabel('Composition', { exact: true });
 
 /** Picks a composition other than the one shown, and returns its id. */
-async function pickAnother(page: Page): Promise<string> {
-  const select = composition(page);
+async function pickAnother(page: Page, label = 'Composition'): Promise<string> {
+  const select = page.getByLabel(label, { exact: true });
   const current = await select.inputValue();
   const values = await select
     .locator('option')
@@ -57,7 +59,7 @@ async function pickAnother(page: Page): Promise<string> {
   const other = values.find((value) => value !== current);
   expect(other, 'the build offers a second composition').toBeDefined();
   await select.selectOption(other!);
-  await expect(page.getByRole('status')).toContainText('Composition is now');
+  await expect(page.getByRole('status')).toContainText(`${label} is now`);
   return other!;
 }
 
@@ -206,11 +208,14 @@ test(
   async ({ page, app }) => {
     await open(page);
     const chosen = await pickAnother(page);
+    const scheme = await pickAnother(page, 'Color scheme');
     const frame = await sampleFrame(page);
     await expect.poll(() => new URL(frame.url()).searchParams.get('variant')).toBe(chosen);
-    const link = frame.locator('a[href^="/sample/"]').first();
+    await expect.poll(() => new URL(frame.url()).searchParams.get('scheme')).toBe(scheme);
+    // A work's own page, which the sample's works list links.
+    const link = frame.locator('a[href^="/sample/work/"]').first();
     const href = await link.getAttribute('href');
-    expect(href, 'the sample links a page of its own').toBeTruthy();
+    expect(href, 'the sample links a work of its own').toBeTruthy();
     await link.click();
     // Next's router can't fetch its payload from the frame's opaque origin, so the frame
     // loads the page whole: there, with the same selection, and Studio stays where it was.
@@ -218,23 +223,39 @@ test(
       .poll(() => new URL(frame.url()).pathname)
       .toBe(new URL(href!, app.origin).pathname);
     expect(new URL(frame.url()).searchParams.get('variant')).toBe(chosen);
-    await expect(frame.locator('[data-variant]').first()).toHaveAttribute('data-variant', chosen);
+    expect(new URL(frame.url()).searchParams.get('scheme')).toBe(scheme);
+    // The selection holds on the work's page: its color scheme, and its composition, or the
+    // fallback composition in its place where the composition leaves a work's page to the
+    // host (`routes.work: shared`, lib/work-page.ts), as it does on the live site.
+    const manifest = VARIANTS.find((variant) => variant.manifest.id === chosen)?.manifest;
+    expect(manifest, chosen).toBeDefined();
+    const rendered = manifest!.routes.work === 'bespoke' ? chosen : 'fallback';
+    const boundary = frame.locator('[data-appearance-boundary="document"]');
+    await expect(boundary).toHaveAttribute('data-variant', rendered);
+    await expect(boundary).toHaveAttribute('data-color-scheme', scheme);
     expect(new URL(page.url()).pathname).toBe('/studio');
   },
 );
 
 test(
-  "a link to another host, inside Demo Studio's frame, navigates the frame alone, never Studio, and opens nothing (Q4)",
+  "a link to another host, inside Demo Studio's frame, loads nothing: Studio's frame-src refuses it before any request, and Studio stays (Q4)",
   { annotation: [STUDIO, SAMPLE, DEMO] },
   async ({ page, context, blockedRequests }) => {
+    const messages: string[] = [];
+    page.on('console', (message) => messages.push(message.text()));
     await open(page);
     const frame = await sampleFrame(page);
     const link = frame.locator('a[href^="https://"]').first();
     const href = await link.getAttribute('href');
     expect(href, 'the sample links another host').toBeTruthy();
+    const host = new URL(href!).host;
     await link.click();
-    // The frame asked for it, and the test blocks every host but the app's.
-    await expect.poll(() => blockedRequests.some((url) => url.startsWith(href!))).toBe(true);
+    // The frame's navigation is Studio's frame-src 'self' to judge, and it refuses.
+    await expect
+      .poll(() => messages.some((text) => text.includes('frame-src') && text.includes(host)))
+      .toBe(true);
+    // So no request to the host was ever made: the test's own block saw none.
+    expect(blockedRequests.filter((url) => new URL(url).host === host)).toEqual([]);
     expect(new URL(page.url()).pathname).toBe('/studio');
     expect(context.pages()).toHaveLength(1);
   },

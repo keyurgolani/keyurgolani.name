@@ -645,8 +645,10 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
                 ? 'served to a session, and sends a visitor to sign-in'
                 : 'served'
               : 'absent, 404 for every method';
+    // /studio has two entries, the owner's and Demo Studio's (#9): each title names its capability.
+    const shared = listRoutes().some((other) => other !== entry && other.pattern === entry.pattern);
     test(
-      `${entry.pattern} is ${state}`,
+      `${entry.pattern}${shared ? ` (${entry.capability})` : ''} is ${state}`,
       { annotation: [{ type: 'route', description: entry.pattern }, annotation] },
       async ({ app, request }) => {
         if (rendition) {
@@ -911,37 +913,75 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
   }
 
   if (profile !== 'owner') {
-    test(
-      'in demo and read-only every Studio path, in any spelling and to any method, and every auth route answer the unknown-route 404',
-      {
-        annotation: [
-          { type: 'route', description: '/studio' },
-          { type: 'route', description: '/studio/sign-in' },
-          { type: 'route', description: '/api/studio/[name]' },
-          annotation,
-        ],
-      },
-      async ({ request }) => {
-        // With a cookie of either name, holding what looks like a token: no
-        // session store reads it, and nothing clears it (#2).
-        const cookie = `__Host-studio_session=${'x'.repeat(43)}; studio_session=${'x'.repeat(43)}`;
-        // Each one exactly as a path no route matches.
-        await expectUnknown(request, profile, STUDIO_SPELLINGS, { cookie });
-        for (const operation of listOperations().filter(({ name }) => name.startsWith('auth.'))) {
-          for (const method of ['GET', 'POST'] as const) {
-            const response = await request.fetch(`/api/studio/${operation.name}`, {
-              method,
-              headers: { cookie },
-              data: method === 'POST' ? {} : undefined,
-            });
-            expect(response.status(), `${method} ${operation.name}`).toBe(404);
-            const { error } = (await response.json()) as { error: Record<string, string> };
-            expect(error.code).toBe('not_available_in_profile');
-            expectProfileHeaders(profile, response, `${method} ${operation.name}`);
-          }
+    // With a cookie of either name, holding what looks like a token: no
+    // session store reads it, and nothing clears it (#2).
+    const cookie = `__Host-studio_session=${'x'.repeat(43)}; studio_session=${'x'.repeat(43)}`;
+    /** Every auth operation, to GET and POST: #1's fail-closed error, under the profile's headers. */
+    const authRefused = async (request: APIRequestContext) => {
+      for (const operation of listOperations().filter(({ name }) => name.startsWith('auth.'))) {
+        for (const method of ['GET', 'POST'] as const) {
+          const response = await request.fetch(`/api/studio/${operation.name}`, {
+            method,
+            headers: { cookie },
+            data: method === 'POST' ? {} : undefined,
+          });
+          expect(response.status(), `${method} ${operation.name}`).toBe(404);
+          const { error } = (await response.json()) as { error: Record<string, string> };
+          expect(error.code).toBe('not_available_in_profile');
+          expectProfileHeaders(profile, response, `${method} ${operation.name}`);
         }
-      },
-    );
+      }
+    };
+    const routes = [
+      { type: 'route', description: '/studio' },
+      { type: 'route', description: '/studio/sign-in' },
+      { type: 'route', description: '/api/studio/[name]' },
+      annotation,
+    ];
+    if (profile === 'read-only') {
+      test(
+        'in read-only every Studio path, in any spelling and to any method, and every auth route answer the unknown-route 404',
+        { annotation: routes },
+        async ({ request }) => {
+          // Each one exactly as a path no route matches.
+          await expectUnknown(request, profile, STUDIO_SPELLINGS, { cookie });
+          await authRefused(request);
+        },
+      );
+    } else {
+      test(
+        "in demo /studio is Demo Studio, and every other Studio path, in any spelling and to any method, and every auth route answer the 404, under Studio's headers",
+        { annotation: routes },
+        async ({ request }) => {
+          // Demo Studio (#9), with no session: the cookie changes nothing, and nothing clears it.
+          const studio = await request.get('/studio', { headers: { cookie }, maxRedirects: 0 });
+          expect(studio.status()).toBe(200);
+          expect(await studio.text()).not.toContain('Password');
+          expectProfileHeaders(profile, studio, 'GET /studio');
+          // Every other spelling is no page of demo's: the 404 page for a page
+          // load, the plain 404 for the rest, each under Studio's headers.
+          for (const target of STUDIO_SPELLINGS.filter((each) => each !== '/studio')) {
+            for (const method of EVERY_METHOD) {
+              const what = `${method} ${target}`;
+              const response = await request.fetch(target, {
+                method,
+                maxRedirects: 0,
+                headers: { cookie },
+              });
+              expect(response.status(), what).toBe(404);
+              const text = await response.text();
+              expect(text, what).not.toContain('Password');
+              if (method === 'GET') expect(text, what).toMatch(/<h1>Page not found<\/h1>/);
+              else if (method !== 'HEAD') {
+                expect(response.headers()['content-type'], what).toMatch(/^text\/plain/);
+              }
+              expectProfileHeaders(profile, response, what);
+            }
+          }
+          await authRefused(request);
+        },
+      );
+    }
   }
 
   test(
