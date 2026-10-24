@@ -551,7 +551,16 @@ export async function checkProvenance({ root = REPO_ROOT, ...options } = {}) {
   const upstreamChecks = upstreamChecker(http);
   for (const entry of upstream) {
     const { pin } = entry;
-    if (!pin) continue;
+    if (!pin) {
+      // Nothing to hold the license to: say so, so it isn't read as checked.
+      findings.push(
+        finding(entry, 'unverified', {
+          field: 'provenance.license',
+          actual: 'its source is no GitHub URL at a version tag, so its license file is not read',
+        }),
+      );
+      continue;
+    }
     const at = `${pin.owner}/${pin.repo}@${pin.ref}`;
     const tag = await upstreamChecks.tag(pin);
     if (tag.kind === 'gone') {
