@@ -41,7 +41,8 @@
 // rehearsal job and release.yml's rc-rehearsal give it, on an internal
 // network, hardened, never pulling (CONTAINER_ROWS): the network reaches
 // no public address; the image refuses the old config under owner and
-// read-only; its own portfolio-store imports and publishes the migrated
+// read-only, leaving owner's volume nothing but the empty store's
+// store.json; its own portfolio-store imports and publishes the migrated
 // pair and owner reaches ready; owner's name, canonical link, og:url, Open
 // Graph image, sitemap, robots host, feed, and JSON-LD follow the pair's
 // identity and the origin (lib/identity.mjs); the owner signs in and rolls
@@ -811,7 +812,7 @@ export const CONTAINER_ROWS = [
   {
     id: 'image-old-config',
     title:
-      'the image refuses the frozen YAML config under owner and read-only, and writes nothing to the data volume',
+      "the image refuses the frozen YAML config under owner and read-only, and leaves owner's data volume only the empty store's store.json",
     run: imageOldConfig,
   },
   {
@@ -1148,13 +1149,23 @@ async function imageOldConfig(ctx) {
   ]);
   const files = parseJson(listed.stdout);
   expect(Array.isArray(files), "owner's data volume could be listed", listed.out);
-  const published = files.filter(
-    (f) => /^(revisions|publication|drafts|assets)\//.test(f) && !f.endsWith('.keep'),
-  );
-  expect(
-    published.length === 0,
-    `owner's data volume holds nothing published, not ${published.join(', ')}`,
-  );
+  const problems = refusedVolumeProblems(files);
+  expect(problems.length === 0, problems.join('; '));
+}
+
+/**
+ * What owner's server may leave on its data volume when it refuses an old
+ * config at start: nothing, or the empty store's store.json. Unlike
+ * portfolio-store, which reads the source before it touches the data
+ * directory (#130, the native old-config row), the server opens its store
+ * before it reads the source, so a refused start writes store.json and
+ * nothing else; a native owner start on the frozen YAML leaves exactly that.
+ */
+export function refusedVolumeProblems(files) {
+  const extra = files.filter((f) => f !== 'store.json');
+  return extra.length === 0
+    ? []
+    : [`owner's data volume holds only the empty store's store.json, not ${extra.join(', ')}`];
 }
 
 async function imageImport(ctx) {
@@ -1357,7 +1368,7 @@ async function previousDigest(ctx) {
  * image included, and checks it (lib/identity.mjs). The container's own
  * hostname is a build host the answers may not name.
  */
-function identityRow(ctx, name, profile, origin, identityName) {
+export function identityRow(ctx, name, profile, origin, identityName) {
   const [page, sitemap, robots, feed] = send(
     ctx,
     name,
@@ -1368,22 +1379,38 @@ function identityRow(ctx, name, profile, origin, identityName) {
   const hostname = container(ctx.run, ['inspect', '--format', '{{.Config.Hostname}}', name], {
     withheld: '[hostname]',
   }).stdout.trim();
+  const problems = identityProblems(
+    identityRowInput({
+      profile,
+      origin,
+      identityName,
+      hostname,
+      answers: { page, sitemap, robots, feed, ogImage },
+    }),
+  );
+  expect(problems.length === 0, `${profile}'s identity: ${problems.join('; ')}`);
+}
+
+/**
+ * identityProblems' input for an identity row: what the profile may not
+ * name (under demo, every fixture's name and the rehearsal origin; under
+ * owner and read-only, the sample's persona and the demo origin; and the
+ * container's hostname in both), and the Open Graph image, which has to
+ * have answered.
+ */
+export function identityRowInput({ profile, origin, identityName, hostname, answers }) {
   const forbidden =
     profile === 'demo'
       ? ['Jane Rehearsal', REVISION_ONE_NAME, REVISION_TWO_NAME, ORIGIN, hostname]
       : [SAMPLE_NAME, DEMO_ORIGIN, hostname];
-  const problems = identityProblems({
+  return {
     profile,
     origin,
     name: identityName,
-    page,
-    sitemap,
-    robots,
-    feed,
-    ogImage: ogImage ?? { status: 0 },
+    ...answers,
+    ogImage: answers.ogImage ?? { status: 0 },
     forbidden: forbidden.filter(Boolean),
-  });
-  expect(problems.length === 0, `${profile}'s identity: ${problems.join('; ')}`);
+  };
 }
 
 /** Starts a read-only or demo server, detached, hardened as the Compose examples run it. */
@@ -1526,6 +1553,19 @@ function probeSampleImport(run) {
 }
 
 /**
+ * The composition every row runs on: the default, which the bundled
+ * sample's own import proves this build registers. The run fails here when
+ * the sample doesn't import, rather than fall back to a stand-in.
+ */
+export function compositionFor(landedState) {
+  expect(
+    landedState?.sampleImports === true,
+    'the bundled sample pair imports, so the default composition is registered',
+  );
+  return defaultComposition();
+}
+
+/**
  * What the run's final verdict judges (lib/verdict.mjs): the pending rows
  * against what the sample probe found, and the reports against every
  * per-run secret, owner's password and hash required once any container
@@ -1605,13 +1645,7 @@ async function main() {
     console.log(line.split('\n').pop());
     landedState = probeSampleImport(run);
     if (landedState.error) fail('pending', landedState.error);
-    // The rows run on the default composition, which the bundled sample's
-    // own import proves this build registers.
-    expect(
-      landedState.sampleImports,
-      'the bundled sample pair imports, so the default composition is registered',
-    );
-    const composition = defaultComposition();
+    const composition = compositionFor(landedState);
     const state = { secrets, notes: [], composition };
     console.log(`[rehearsal] composition: ${composition}, the default`);
 
