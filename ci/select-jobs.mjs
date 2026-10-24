@@ -49,6 +49,9 @@ export const CHECK_JOBS = [
   'image',
   // The profile containers (#12), on the image job's saved image.
   'profiles',
+  // The release-candidate rehearsal (#12, 12-5), its container rows on the
+  // same saved image.
+  'rehearsal',
   'docs',
   // #11's quality cells and the quality gates' own proof (#74). quality-pr
   // runs in the shards quality-pr-plan counts, and quality-pr-verdict judges
@@ -133,9 +136,21 @@ export const RULES = [
       'docker-compose.yml',
       'deploy/**',
       'ci/smoke-profiles.mjs',
-      'ci/lib/profile-checks.mjs',
       'ci/profile-checks.test.mjs',
     ],
+  },
+  {
+    // The profile smoke's checks, which the rehearsal's container rows use too.
+    class: 'container',
+    jobs: ['unit', 'image', 'profiles', 'rehearsal'],
+    paths: ['ci/lib/profile-checks.mjs'],
+  },
+  {
+    // The release-candidate rehearsal: its native rows, and its container
+    // rows on the image job's image.
+    class: 'rehearsal',
+    jobs: ['unit', 'image', 'rehearsal'],
+    paths: ['ci/rehearsal.mjs', 'ci/rehearsal.test.mjs', 'ci/fixtures/rehearsal/**'],
   },
   {
     class: 'container',
@@ -235,6 +250,29 @@ export const RULES = [
       'quality-pr-verdict',
     ],
     paths: ['packages/variant-*/**', 'packages/fallback-composition/**'],
+  },
+  {
+    // The revision store and its command line, which the rehearsal
+    // rehearses, and Studio's jobs, since the store is Studio's too.
+    class: 'store',
+    jobs: [
+      'unit',
+      'build',
+      'browser',
+      'routes',
+      'image',
+      'profiles',
+      'rehearsal',
+      'preview-fixtures-browser',
+      'quality-pr-plan',
+      'quality-pr',
+      'quality-pr-verdict',
+    ],
+    paths: [
+      'packages/core/src/store/**',
+      'packages/core/src/cli.ts',
+      'packages/core/src/cli.test.ts',
+    ],
   },
   {
     // Studio and the owner code behind it: the owner suites run in browser,
@@ -448,6 +486,7 @@ export const LOCAL_COMMANDS = {
   'external-variant': 'pnpm test:external-variant',
   image: 'pnpm ci:image && pnpm ci:proxy && pnpm ci:security-proxy (needs Docker)',
   profiles: 'pnpm smoke:profiles (needs Docker; SMOKE_PROFILES=<part> for one part)',
+  rehearsal: 'pnpm rehearse (its container rows need Docker and REHEARSAL_IMAGE)',
   docs: 'pnpm check:docs',
   trace: 'pnpm ci:budgets',
 };

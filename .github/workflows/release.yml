@@ -7,7 +7,8 @@
 # an SBOM, and pushes each platform's index to GHCR by digest with no tag.
 # rc-merge merges the two into one index, pushes that by digest with no tag,
 # checks it, and attests it, and rc-scan runs Grype on that digest and on
-# the production dependencies. Only then does rc-tag tag the digest
+# the production dependencies. rc-rehearsal rehearses the upgrade on an image
+# of the same commit (ci/rehearsal.mjs). Only then does rc-tag tag the digest
 # X.Y.Z-rc.N and rc-release write the pre-release notes.
 #
 # A final release, vX.Y.Z on the newest candidate's commit: promote-verify
@@ -322,6 +323,50 @@ jobs:
           SHA: ${{ github.sha }}
         run: node ci/release/verify-rc.mjs
 
+  # The release-candidate rehearsal (#12, ci/rehearsal.mjs), as ci.yml's
+  # rehearsal job runs it on a PR: the frozen old configs refused, the
+  # migration twice, import, publish, rollback, a backup during a publish and
+  # its restore into a clean directory, and a damaged revision serving the
+  # last known good, then the image refusing the old config. The image is
+  # the tagged commit's, built here with no cache and never pushed, so
+  # nothing comes from GHCR. rc-tag waits on it, so no candidate gets its tag
+  # without it. No token reaches it.
+  rc-rehearsal:
+    name: rc-rehearsal
+    needs: [classify, rc-verify]
+    if: ${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      REHEARSAL_IMAGE: portfolio:rehearsal
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build the image from the tagged commit
+        timeout-minutes: 25
+        run: docker build --no-cache --pull --platform linux/amd64 -t "$REHEARSAL_IMAGE" .
+      - name: pnpm ci:rehearsal
+        env:
+          REHEARSAL_CONTAINER: required
+        run: pnpm ci:rehearsal
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-release-rehearsal
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 1
+
   # Each platform builds natively on its own runner and pushes its index,
   # attestations included, to GHCR by digest with no tag.
   rc-build:
@@ -551,7 +596,7 @@ jobs:
   # The scanned digest gets its candidate tag, X.Y.Z-rc.N.
   rc-tag:
     name: rc-tag
-    needs: [classify, rc-merge, rc-scan]
+    needs: [classify, rc-merge, rc-scan, rc-rehearsal]
     if: ${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
