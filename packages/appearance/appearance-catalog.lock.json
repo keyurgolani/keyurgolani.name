@@ -1,6 +1,110 @@
 {
   "lockVersion": 1,
   "packs": {
+    "accessible-reading": {
+      "axis": "typography",
+      "package": "@portfolio/appearance-typography",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "provided-by-operating-system",
+      "digest": "sha256-a30793675223c2189b7e4ba7ba52e442a2c7305b1076329f268b6de6fd4d970d"
+    },
+    "arctic-aurora": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "extended",
+      "license": "first-party",
+      "digest": "sha256-3c7e285139664c3432f49696593e49dda2984f320c2305037b9b129723242149"
+    },
+    "blue-orange-color-safe": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-556a4f9d16327bade97f50a4099a8c702ae37b69f47faf80d8aae3a19ef2aceb"
+    },
+    "botanical-sage": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-703200e5041c09da22545fea29952c6b8aec5544c803ea5314523c9235d538b4"
+    },
+    "cool-color-safe": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-3a860e9b6d7c2e2d16514caab5545f355f2049286cc3a68336a84f7a925d9645"
+    },
+    "coral-lagoon": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "extended",
+      "license": "first-party",
+      "digest": "sha256-6888d1ecdc0ab3aa037b1cde57dbf649ee9e14069026135ddf63148d50d8b41f"
+    },
+    "desert-terracotta": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-5e09be8f4ef6efd38269baccbccfea3877e85a200a54642745c87dcd0e9bdf57"
+    },
+    "earthy-clay": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-caab41a8a50f75e6d2e9b3753d25666b882deaf9dcd2d0e73f2247329320202c"
+    },
+    "editorial-serif": {
+      "axis": "typography",
+      "package": "@portfolio/appearance-typography",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "provided-by-operating-system",
+      "digest": "sha256-93c8547318ffdbdf2bc3ffae195b00e9763e05c3b62d56ce31d03a519e2888a5"
+    },
+    "forest-moss": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-30898ae3f5b1ecdd10c2dbdd5b5523d2cc35a1f33255f5846413adab29e24c22"
+    },
+    "geometric-display": {
+      "axis": "typography",
+      "package": "@portfolio/appearance-typography",
+      "version": "1.0.0",
+      "tier": "extended",
+      "license": "provided-by-operating-system",
+      "digest": "sha256-f1ba97f1be54c9830c954890e06ae4926b75d48e6d68312a512bad41dd1ba6b2"
+    },
+    "graphite": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-a954326eeb0cfbcccea3acdd5490b9014bb6e997583f7f1c6349cbd9a4688abf"
+    },
+    "high-contrast": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-65788e109e01daf0446f1783c0c2b7e96a9b93ac53d02ea9854be6ea68e012bc"
+    },
     "humanist-ui": {
       "axis": "typography",
       "package": "@portfolio/appearance-typography",
@@ -8,6 +112,110 @@
       "tier": "stable",
       "license": "provided-by-operating-system",
       "digest": "sha256-a9b6c8b8471d89f75fbe109909e35732fedb358a5ba49ed143f704c74e75e3e8"
+    },
+    "iridescent-pearl": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "extended",
+      "license": "first-party",
+      "digest": "sha256-c15fa39c4bc7f9e5eda393fb36275d78c640efe5f9a61a2765d4ff305972eaf0"
+    },
+    "jewel-twilight": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-5b9faf55414c5e6b62f9eeaa3c96874f6c985717f827daa0f5ae2c4133aebb78"
+    },
+    "lavender-dusk": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-5a836c120b06cca9ee63269a0ad10b9b4c8036d3b71ddafcc3617c23f6479fce"
+    },
+    "literary-reading": {
+      "axis": "typography",
+      "package": "@portfolio/appearance-typography",
+      "version": "1.0.0",
+      "tier": "extended",
+      "license": "provided-by-operating-system",
+      "digest": "sha256-212260499046084c2edcd6321da1d5447bbfd9d08b2b7405d35c143e74c2267e"
+    },
+    "low-stimulus-warm": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-b07a75638e3a7d40cb1a9896cbc209ae2a1b30e22997cddc7133f456714f28e6"
+    },
+    "multilingual-system": {
+      "axis": "typography",
+      "package": "@portfolio/appearance-typography",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "provided-by-operating-system",
+      "digest": "sha256-f402f81fc9331ed5893be94b662dd4ff676193e51c4e6a7c3ec5796704d4859c"
+    },
+    "neon-city": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "experimental",
+      "license": "first-party",
+      "digest": "sha256-d4dd6da5ffc833b42b4bc5e6a36a3574479faffdc499dedcaab71c8577d6f4fe"
+    },
+    "neutral-slate": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-12ee10e0514620f056d0be7d3f6d94581b1c7db8927717160f3dddc17b78b717"
+    },
+    "neutral-ui": {
+      "axis": "typography",
+      "package": "@portfolio/appearance-typography",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "provided-by-operating-system",
+      "digest": "sha256-716ce5be37194051deb0cf7613d8e9227d13cbd7de7d2bbf232db256656c0d16"
+    },
+    "ocean-abyss": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-6faef94560914743268f32445972e41913906df1e9f76f5619129552aa684534"
+    },
+    "oled-black": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "extended",
+      "license": "first-party",
+      "digest": "sha256-bfe3ea5d83ad624e5c457acdde2d220741620c5afd23b87e494361de28092e66"
+    },
+    "paper-ink": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-8a23eff72e339c8ca82c3962393052b1f46dbbdaca2dcd36d3dd6133b6bbf903"
+    },
+    "pastel-sorbet": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "extended",
+      "license": "first-party",
+      "digest": "sha256-0153455b64a4233d7450b1816a9c9f28b62bfb1b5c1404a02f8387254de81f16"
     },
     "platform-neutral": {
       "axis": "designLanguage",
@@ -17,6 +225,38 @@
       "license": "first-party",
       "digest": "sha256-f22e9239111a140d7ccddc8b229577c4bcdd70ae86b031e31c9d820d71fdfaff"
     },
+    "reduced-chroma": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-9624a112c040e84631ff80d038e29666249b3582167e6df5048ec53a27a77ea2"
+    },
+    "sepia-film": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-496dcb1b891e452ff19f87c95b4dafe139fabab7905525676d3a1f31c3252a39"
+    },
+    "sunset-ember": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-de97d6dc6b5cf3d02a2f18f04333fa45564c74c99128927255c9cb86199e5be5"
+    },
+    "technical-sans-mono": {
+      "axis": "typography",
+      "package": "@portfolio/appearance-typography",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "provided-by-operating-system",
+      "digest": "sha256-02cfb974148f33133f29c2815b57e3cfa6cf9a129e0773346c71d3426ad32243"
+    },
     "warm-parchment": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
@@ -24,6 +264,14 @@
       "tier": "stable",
       "license": "first-party",
       "digest": "sha256-d35a510314dcbd85588780196a70f656285b76214d465524780d92cd83c3fed8"
+    },
+    "zinc": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "extended",
+      "license": "MIT",
+      "digest": "sha256-d102a2bc8b6b48463e36bd8e3771f63c58fc95fbfe6641601ff53f07fc4bec69"
     }
   }
 }

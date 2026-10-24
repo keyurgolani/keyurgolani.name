@@ -1,0 +1,55 @@
+{
+  "id": "arctic-aurora",
+  "name": "Arctic Aurora",
+  "description": "Glacier teal and aurora violet on a cold ground.",
+  "version": "1.0.0",
+  "tokenContract": 1,
+  "tier": "extended",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v1 from the reviewed prototype's arctic-aurora anchors, with the light accent #2e8fa3 to #2d8b9f, 4% toward text, so the signature fill reaches 3:1 on every surface."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0,
+    "css": 3072
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [],
+  "derivation": "anchor-v1",
+  "anchors": {
+    "light": {
+      "canvas": "#f1f8fb",
+      "text": "#16323c",
+      "accent": "#2d8b9f",
+      "secondary": "#8b63b8"
+    },
+    "dark": {
+      "canvas": "#0b1d28",
+      "text": "#e7fbff",
+      "accent": "#59d6cb",
+      "secondary": "#c18beb"
+    }
+  },
+  "swatches": ["#f1f8fb", "#16323c", "#2d8b9f", "#8b63b8"]
+}

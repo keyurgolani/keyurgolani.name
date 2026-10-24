@@ -1,0 +1,27 @@
+{
+  "id": "rose-pine",
+  "name": "Rosé Pine",
+  "kind": "color-scheme",
+  "tier": "research",
+  "source": {
+    "name": "Rosé Pine",
+    "url": "https://github.com/rose-pine/rose-pine-palette"
+  },
+  "license": "unverified",
+  "researchedAt": "2026-10-17",
+  "reason": "Its upstream license isn't verified, so it doesn't ship. Promoting it is its own owner-approved PR with a source URL, an SPDX license, attribution, a pinned upstream version, and a naming decision.",
+  "anchors": {
+    "light": {
+      "canvas": "#faf4ed",
+      "text": "#575279",
+      "accent": "#d7827e",
+      "secondary": "#286983"
+    },
+    "dark": {
+      "canvas": "#191724",
+      "text": "#e0def4",
+      "accent": "#ebbcba",
+      "secondary": "#31748f"
+    }
+  }
+}
