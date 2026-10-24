@@ -8,14 +8,14 @@ import {
   isServable,
   servableAgain,
 } from './server/config-store';
-import { isExperiencePath, segmentFor } from './server/experience';
+import { isExperiencePath, REFERENCE_PATTERN, segmentFor } from './server/experience';
 import { demoCsp, demoPagePath } from './server/demo-headers';
 import { isPreviewPath, previewCsp, previewHeaders } from './server/preview-headers';
 import { publicCsp } from './server/public-headers';
 import { PORTFOLIO_FILES } from './server/portfolio-files';
 import { READY_PATH, STARTING, STARTING_HEADERS } from './server/ready-starting';
 import { unavailablePage } from './server/unavailable-page';
-import { EXPERIENCE_HEADER } from './server/route-header';
+import { CONTENT_HEADER, EXPERIENCE_HEADER } from './server/route-header';
 import { safeReturnTo, signInLocation } from './server/return-to';
 import {
   encodesFixedSegment,
@@ -124,10 +124,13 @@ import {
 // /no-such-page does: none of Studio's headers, Next's 404 page for GET and
 // HEAD, and the plain 404 for the rest.
 //
-// Under demo (#9), the showroom at /, every path under /sample, and Demo
-// Studio's paths get the demo policy from server/demo-headers.ts in place of
-// the public one or Studio's: Studio's, with worker-src 'self' and
-// form-action 'none', and frame-ancestors 'self' on /sample alone.
+// Under demo (#9), the showroom at /, every path under /sample and
+// /reference, and Demo Studio's paths get the demo policy from
+// server/demo-headers.ts in place of the public one or Studio's: Studio's,
+// with worker-src 'self' and form-action 'none', and frame-ancestors 'self'
+// on /sample alone. A page of the read-only reference goes on marked
+// x-portfolio-content: reference, so the site layout reads its view, and a
+// client's own copy of that mark goes no further than here, on any route.
 //
 // A route no profile of this build serves, such as /_fixtures/appearance in
 // a build without APPEARANCE_FIXTURES=1 (#19, Slice 3), answers as
@@ -309,6 +312,8 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
       query: searchParams,
     });
     headers.set(EXPERIENCE_HEADER, segment);
+    // The demo's read-only reference (#9): the layout reads its view.
+    if (decision.entry.pattern === REFERENCE_PATTERN) headers.set(CONTENT_HEADER, 'reference');
   }
   const response = NextResponse.next({ request: { headers } });
   response.headers.set('x-request-id', requestId);
@@ -564,6 +569,7 @@ function forwarded(
   headers.delete(NOT_FOUND_HEADER);
   headers.delete(ROUTE_HEADER);
   headers.delete(EXPERIENCE_HEADER);
+  headers.delete(CONTENT_HEADER);
   headers.delete('content-security-policy');
   headers.delete('content-security-policy-report-only');
   if (csp) headers.set('content-security-policy', csp);

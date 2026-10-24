@@ -2,7 +2,8 @@ import type { RuntimeMode } from './config';
 
 // The demo deployment's Content-Security-Policy (#9, Slice 1 item 6):
 // what proxy.ts sends, with a fresh nonce, on the pages a demo visitor
-// works in. That's the showroom at /, the sample under /sample, and Demo
+// works in. That's the showroom at /, the sample under /sample, the
+// read-only reference under /reference (#9's second pull request), and Demo
 // Studio under /studio, which the route table gives demo with #9's second
 // pull request. It is Studio's nonce policy (#2), plus `worker-src 'self'`
 // for the browser-side import worker #9 adds, with `form-action` narrowed to
@@ -14,8 +15,12 @@ import type { RuntimeMode } from './config';
 /** Who may frame a demo page: its own origin for /sample, and no one else anywhere. */
 export type DemoFraming = "'self'" | "'none'";
 
-/** Whether `pathname`, read percent-decoded as the route table reads it, is the showroom or under /sample. */
-export function demoPagePath(pathname: string): 'showroom' | 'sample' | null {
+/**
+ * Whether `pathname`, read percent-decoded as the route table reads it, is
+ * the showroom, under /sample, or under /reference, the read-only
+ * reference's pages and renditions (#9), which no page may frame.
+ */
+export function demoPagePath(pathname: string): 'showroom' | 'sample' | 'reference' | null {
   let path = pathname;
   try {
     path = decodeURIComponent(pathname);
@@ -23,7 +28,8 @@ export function demoPagePath(pathname: string): 'showroom' | 'sample' | null {
     // Read as sent.
   }
   if (path === '/') return 'showroom';
-  return /^\/sample(?:\/|$)/.test(path) ? 'sample' : null;
+  if (/^\/sample(?:\/|$)/.test(path)) return 'sample';
+  return /^\/reference(?:\/|$)/.test(path) ? 'reference' : null;
 }
 
 /**

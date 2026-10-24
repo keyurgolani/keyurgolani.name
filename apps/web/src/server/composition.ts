@@ -22,6 +22,7 @@ import {
   setLiveComposition,
   setServable,
   type DeploymentState,
+  type ServedReference,
 } from './config-store';
 import { createDispatcher, NO_BINDINGS, type Handler, type StudioBindings } from './dispatcher';
 import { listOperations, type ConfigSummary } from './operations';
@@ -38,7 +39,8 @@ import { liveVariantHealth } from './variant-health';
 // first start imports the mounted documents. Only the owner branch loads
 // owner code, through import(). startup.ts imports this module in every
 // profile, so check:deps fails any import of owner code here that isn't an
-// import(). Around that it runs the named startup requirements, the hook #2,
+// import(). Demo's read-only reference (#9) loads the same way, through
+// import() in the demo branch alone. Around that it runs the named startup requirements, the hook #2,
 // #3, and #4 implement their startup checks against.
 
 /**
@@ -355,12 +357,26 @@ export async function compose(input: CompositionInput): Promise<Composition> {
       });
       const issues = [...early.issues, ...sample.issues];
       if (!sample.ok) return { ok: false, issues };
+      // The read-only reference (#9), only when one is mounted: the one
+      // place demo code loads. It's verified whole now, before the first
+      // request, or the demo starts without it and says why.
+      let reference: ServedReference | undefined;
+      if (config.referenceDir !== undefined) {
+        const { openReference } = await import('./demo/reference');
+        const opened = await openReference({
+          dir: config.referenceDir,
+          checks: referenceChecks(input),
+        });
+        issues.push(...opened.issues);
+        if (opened.ok) reference = opened.reference;
+      }
       return built(config, {
         reader: sample.reader,
         adapter: 'sample',
         bindings: NO_BINDINGS,
         issues,
         degraded: early.degraded,
+        ...(reference ? { reference } : {}),
       });
     }
     case 'read-only': {
@@ -494,6 +510,23 @@ function unitChecks(input: CompositionInput): UnitChecks {
   };
 }
 
+/**
+ * The build's checks for the demo's reference (#9), as served, without the
+ * deployment's origin: the reference's links point at its owner's site and
+ * were checked on that origin as it was published, so the demo's would
+ * misjudge them. buildUnitChecks() leaves the origin checks out for an
+ * empty origin.
+ */
+function referenceChecks(input: CompositionInput): UnitChecks {
+  if (input.unitChecks) return input.unitChecks('');
+  const context = {
+    catalog: input.catalog,
+    extensions: input.extensions,
+    validators: input.validators,
+  };
+  return { validate: (pair) => validatePublicationUnit(pair, context), appVersion: '' };
+}
+
 function openDocuments(input: CompositionInput): OpenDocumentsResult {
   return openSourceCatalog({
     // readDeploymentConfig requires it for owner and read-only.
@@ -535,6 +568,8 @@ interface Built {
   readonly release?: () => void;
   /** Owner only: the live media's blobs, from the AssetStore (#10). */
   readonly mediaBlobs?: DeploymentState['mediaBlobs'];
+  /** Demo only: the read-only reference, verified (#9). */
+  readonly reference?: ServedReference;
 }
 
 /** The slugs a unit's public view routes, or none when the view won't build. */
@@ -631,6 +666,7 @@ function built(config: DeploymentConfig, parts: Built): Composition {
     ...(parts.dataDirectory ? { dataDirectory: parts.dataDirectory } : {}),
     ...(parts.release ? { release: parts.release } : {}),
     ...(parts.mediaBlobs ? { mediaBlobs: parts.mediaBlobs } : {}),
+    ...(parts.reference ? { reference: parts.reference } : {}),
   });
   return { ok: true, state, issues: parts.issues, summary: configSummary(config, parts.adapter) };
 }

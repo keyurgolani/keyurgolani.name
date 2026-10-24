@@ -3,7 +3,7 @@ import { VARIANTS } from '../lib/generated/registry.meta';
 import { sampleVariant } from '../lib/sample';
 import { isWorkPath, rendersWorkPage, type WorkRouteManifest } from '../lib/work-page';
 import type { Profile } from './capabilities';
-import { liveComposition } from './config-store';
+import { liveComposition, servedReference } from './config-store';
 import { EXPERIENCE_SEGMENT } from './route-header';
 
 // The experience segments (#6, Slice 2). Registry generation writes one route
@@ -31,8 +31,14 @@ export function experiencePattern<Id extends string>(id: Id) {
   return `/${EXPERIENCE_SEGMENT}/${id}/[[...route]]` as const;
 }
 
-/** The pattern of /sample's routes, the one place a request's query picks the variant. */
+/** The pattern of /sample's routes, where a request's query picks the variant. */
 export const SAMPLE_PATTERN = '/sample/[[...path]]';
+
+/**
+ * The pattern of the demo's read-only reference (#9), whose query picks the
+ * variant as /sample's does, and whose own selection is the reference's.
+ */
+export const REFERENCE_PATTERN = '/reference/[[...path]]';
 
 /**
  * Whether a request's path is an experience segment's, however it's spelled:
@@ -68,20 +74,24 @@ const WORK_PATTERN = '/work/[slug]';
 
 /**
  * Whether a visitor page is a work's own page (#10b): /work/<slug>, or
- * /sample/work/<slug> under demo. A view below one, such as
+ * /sample/work/<slug> and /reference/work/<slug> under demo. A view below one, such as
  * /work/<slug>/credits, isn't.
  */
 export function isWorkPage(request: Pick<SegmentRequest, 'pattern' | 'segments'>): boolean {
   if (request.pattern === WORK_PATTERN) return true;
-  return request.pattern === SAMPLE_PATTERN && isWorkPath(request.segments.slice(1));
+  return (
+    (request.pattern === SAMPLE_PATTERN || request.pattern === REFERENCE_PATTERN) &&
+    isWorkPath(request.segments.slice(1))
+  );
 }
 
 /**
  * The experience segment a visitor page renders in. Under demo, /sample's
- * `?variant=` names it, when it names one variant this build registers; any
+ * and /reference's `?variant=` names it, when it names one variant this build registers; any
  * other value there falls back to the sample site's own selection, as no
  * value does, and the page sends the visitor on to the URL without it (#9).
- * Everywhere else it's the live composition config-store holds, or the
+ * Without one, /reference renders the composition the reference's site
+ * selects (#9). Everywhere else it's the live composition config-store holds, or the
  * fallback composition's when it holds none this build registers. Owner and
  * read-only never read the query. On a work's own page, a composition that
  * leaves that page to the host gives way to the fallback composition (#10b).
@@ -105,9 +115,15 @@ function selectedSegment(request: SegmentRequest, registered: RegisteredSegments
     id !== undefined &&
     id !== FALLBACK_VARIANT_ID &&
     registered.some(({ manifest }) => manifest.id === id);
-  if (request.profile === 'demo' && request.pattern === SAMPLE_PATTERN) {
+  const queried = request.pattern === SAMPLE_PATTERN || request.pattern === REFERENCE_PATTERN;
+  if (request.profile === 'demo' && queried) {
     const named = sampleVariant(request.query, registered);
     if (named !== undefined) return named;
+  }
+  // The reference renders its own site's composition, never the sample's.
+  if (request.profile === 'demo' && request.pattern === REFERENCE_PATTERN) {
+    const own = servedReference()?.composition;
+    return known(own) ? own : FALLBACK_VARIANT_ID;
   }
   const live = liveComposition();
   return known(live) ? live : FALLBACK_VARIANT_ID;

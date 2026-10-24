@@ -27,6 +27,15 @@ export const ROUTE_HEADER = 'x-portfolio-route';
  */
 export const EXPERIENCE_HEADER = 'x-portfolio-experience';
 
+/**
+ * The request header proxy.ts sets to `reference` on each GET or HEAD of a
+ * page of the demo's read-only reference (#9) it lets through, so the site
+ * layout reads the reference's view for the page's metadata, language, and
+ * direction in place of the sample's. proxy.ts drops any copy a client sent,
+ * on every route, so no request picks its own content.
+ */
+export const CONTENT_HEADER = 'x-portfolio-content';
+
 /** The first segment of every experience segment's path, which the contract reserves. */
 export const EXPERIENCE_SEGMENT = '_experience';
 
