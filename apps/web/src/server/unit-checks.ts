@@ -20,6 +20,7 @@ import {
 } from '@portfolio/variant-contract';
 import type { AppearanceRegistry } from '@portfolio/appearance';
 import { appearanceCatalog, appearanceValidator } from '../lib/appearance-checks';
+import { schemeGenerators } from './scheme-generators';
 
 // The checks a publication unit goes through in this build (#3, items 5
 // and 21), for the composition root and #3's CLI alike: #4's composite
@@ -110,6 +111,9 @@ export function buildUnitChecks({
         contracts: CONTRACTS,
       };
     },
+    // The generators the registered color schemes declare (#10, 10h), which a
+    // draft save and an import run, and a publish checks what they made against.
+    schemes: schemeGenerators(appearance),
     appVersion,
   };
   return Object.freeze(checks);

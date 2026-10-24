@@ -335,6 +335,7 @@ test('owner loads its modules only through the composition root', () => {
     'core/store/read-fs',
     'core/store/reader',
     'core/store/revisions',
+    'core/store/schemes',
     'core/store/server-claim',
     'core/store/source',
     'core/store/store',
