@@ -50,13 +50,13 @@ import {
   type RegistryResult,
 } from '@portfolio/variant-contract/node';
 import type { GateTargets } from '@portfolio/appearance';
-import { currentGate, writeFailureRecord } from '../../../ci/lib/reports.mjs';
 import { loadThresholds } from '../../../quality/thresholds';
 import {
   catalogFindings,
   contrastRecords,
   hierarchyRecords,
   problemRecords,
+  writeCatalogRecords,
 } from './check-appearance-catalog';
 import { appearanceTargets } from './appearance-targets';
 import { generateRegistry, PACK_OUT, plural, renderOptions, REPO_ROOT } from './registry-options';
@@ -253,17 +253,12 @@ async function main(): Promise<number> {
   for (const line of findings) process.stderr.write(`${TAG} ${line}\n`);
   if (findings.length > 0) {
     // In CI, each pack's failure is a record naming its pack, axis, and role (#20).
-    const gate = currentGate();
-    if (gate) {
-      for (const record of [
-        ...contrastRecords(check),
-        ...hierarchyRecords(check),
-        ...problemRecords(check),
-        ...catalog.records,
-      ]) {
-        writeFailureRecord({ ...record, gate: gate.gate, reproCommand: gate.reproCommand });
-      }
-    }
+    writeCatalogRecords([
+      ...contrastRecords(check),
+      ...hierarchyRecords(check),
+      ...problemRecords(check),
+      ...catalog.records,
+    ]);
     process.stderr.write(`${TAG} ${plural(findings.length, 'finding')}.\n`);
     return 1;
   }

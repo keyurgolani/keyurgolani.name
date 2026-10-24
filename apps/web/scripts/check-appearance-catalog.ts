@@ -6,6 +6,7 @@
 // failure record through ci/run.mjs (ci/lib/reports.mjs), with the token
 // role, display mode, and tuple where it has them.
 
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
@@ -29,6 +30,7 @@ import {
   type GateFailure,
 } from '@portfolio/appearance/node';
 import type { RegistryResult } from '@portfolio/variant-contract/node';
+import { REPO_ROOT } from './registry-options';
 
 /** A failure record's fields, less the gate and command ci/run.mjs gives it. */
 export interface CatalogRecord {
@@ -56,6 +58,39 @@ export interface CatalogFindings {
     readonly locked: number;
     readonly research: number;
   };
+}
+
+/**
+ * Writes each record into the failure records ci/run.mjs reads, one file
+ * apiece, when ci/run.mjs runs this check: it sets CI_GATE and CI_REPRO.
+ * Outside it, nothing is written. This is ci/lib/reports.mjs's
+ * writeFailureRecord() and currentGate(), which a build source can't import,
+ * since the fixture host's build copies no ci/ (tests/harness/fixture-host.mjs);
+ * check-appearance-catalog.test.ts holds the two to one format.
+ */
+export function writeCatalogRecords(
+  records: readonly CatalogRecord[],
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): string[] {
+  if (!env.CI_GATE) return [];
+  const dir = path.join(
+    path.resolve(env.CI_REPORTS_DIR ?? path.join(REPO_ROOT, 'reports')),
+    'failures',
+  );
+  fs.mkdirSync(dir, { recursive: true });
+  return records.map((record) => {
+    const fields: Record<string, unknown> = {
+      ...record,
+      gate: env.CI_GATE,
+      reproCommand: env.CI_REPRO ?? `pnpm ci:${env.CI_GATE}`,
+    };
+    const written = Object.fromEntries(
+      Object.entries(fields).filter(([, value]) => value !== undefined && value !== ''),
+    );
+    const file = path.join(dir, `${env.CI_GATE}-${Date.now()}-${randomUUID()}.json`);
+    fs.writeFileSync(file, `${JSON.stringify(written, null, 2)}\n`);
+    return file;
+  });
 }
 
 const read = (root: string, file: string): string | null => {

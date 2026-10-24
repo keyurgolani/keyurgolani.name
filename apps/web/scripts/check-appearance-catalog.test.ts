@@ -7,12 +7,13 @@ import { createAppearanceRegistry, type MetaPack } from '@portfolio/appearance';
 import { checkAppearance } from '@portfolio/appearance/node';
 import { readRegistry, registryMeta, type RegistryResult } from '@portfolio/variant-contract/node';
 import Ajv2020 from 'ajv/dist/2020';
-import { failureRecord, SCHEMA_PATH } from '../../../ci/lib/reports.mjs';
+import { failureRecord, readFailureRecords, SCHEMA_PATH } from '../../../ci/lib/reports.mjs';
 import {
   catalogFindings,
   contrastRecords,
   hierarchyRecords,
   responsiblePack,
+  writeCatalogRecords,
   type CatalogRecord,
 } from './check-appearance-catalog';
 import { registryOptions, renderOptions, REPO_ROOT } from './registry-options';
@@ -178,6 +179,32 @@ test('a contrast failure is one record per display mode, naming the one pack it 
     assert.ok(record.tuple!.endsWith(`/${record.displayMode}`));
   }
   hierarchyRecords(check).forEach(valid);
+});
+
+test("the records it writes are ci/run.mjs's, one file each, and only under ci/run.mjs", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'portfolio-records-'));
+  try {
+    const record: CatalogRecord = {
+      schemaVersion: '1.1',
+      test: 'pack gate token-coverage',
+      pack: 'warm-parchment',
+      axis: 'colorScheme',
+      tokenRole: 'text-muted',
+      rule: 'token-coverage',
+    };
+    assert.deepEqual(writeCatalogRecords([record], { CI_REPORTS_DIR: dir }), []);
+    const env = { CI_GATE: 'appearance', CI_REPRO: 'pnpm ci:appearance', CI_REPORTS_DIR: dir };
+    assert.equal(writeCatalogRecords([record, { ...record, pack: 'humanist-ui' }], env).length, 2);
+    const read = readFailureRecords(path.join(dir, 'failures'));
+    assert.equal(read.length, 2);
+    for (const { record: written } of read) {
+      assert.equal(validate(written), true, JSON.stringify(validate.errors));
+      assert.equal(written.gate, 'appearance');
+      assert.equal(written.reproCommand, 'pnpm ci:appearance');
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("the responsible pack: a focus ring's width and a translucent backdrop are the language's, the rest the scheme's", () => {
