@@ -1,19 +1,56 @@
 import type { ReactElement } from 'react';
 import type { Section } from '@portfolio/schema';
-import { renderSection, VisitorControlSlot } from '@portfolio/kit/sections';
-import type { VariantRenderInput } from '@portfolio/variant-contract';
+import {
+  CaseStudy,
+  renderContext,
+  renderSection,
+  routedWork,
+  VisitorControlSlot,
+  type RoutedWork,
+} from '@portfolio/kit/sections';
+import { routeHref, type VariantRenderInput } from '@portfolio/variant-contract';
 
 // The fallback composition (#5): every visible section in content order, in
 // one column, each through the kit's shared renderers. The host renders it
 // in place of a variant this build doesn't register, and for the contract
 // fixtures and #19's matrices; a site can't select it. It owns composition
-// alone: no color, type, or motion of its own, and no theme toggle.
+// alone: no color, type, or motion of its own, and no theme toggle. On a
+// work's route (#10b) it renders that work's case study, through the kit's
+// shared CaseStudy, with a link back home. The host renders that page here
+// for every composition whose manifest says `routes.work: shared`.
 
 /** A section with a title the navigation can name. The hero and a call to action stand apart. */
 const NAMED = (section: Section) =>
   section.kind !== 'hero' && section.kind !== 'cta' && Boolean(section.title?.trim());
 
+/** A work's own page: its case study, the page's one h1, and the way home. */
+function WorkPage({
+  input,
+  work,
+}: {
+  readonly input: VariantRenderInput;
+  readonly work: RoutedWork;
+}) {
+  const { portfolio, ids } = input;
+  const ctx = renderContext(input, { id: work.id, lang: work.lang, title: undefined }, 1);
+  return (
+    <>
+      <header className="fc-header">
+        <nav className="fc-nav">
+          <a href={routeHref(input, { route: 'home' })}>{portfolio.identity.name}</a>
+        </nav>
+        <VisitorControlSlot />
+      </header>
+      <main id={ids.main} className="fc-main" tabIndex={-1}>
+        <CaseStudy work={work} ctx={ctx} level={1} />
+      </main>
+    </>
+  );
+}
+
 export default function FallbackComposition({ input }: { readonly input: VariantRenderInput }) {
+  const work = routedWork(input);
+  if (work) return <WorkPage input={input} work={work} />;
   const { portfolio, ids } = input;
   // The page's one h1 comes before any section's h2: a hero that renders
   // first carries it, and otherwise the identity's name does, above the

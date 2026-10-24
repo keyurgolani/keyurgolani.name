@@ -22,6 +22,7 @@ import {
   resolveRoute,
   ROUTE_HEADER,
   routeAccess,
+  splitPath,
   spellsRouteFile,
   type RouteDecision,
   type RouteEntry,
@@ -100,9 +101,10 @@ import {
 // every check above has let a GET or HEAD of one through, this names its
 // segment in x-portfolio-experience, from memory alone: segmentFor() reads
 // the live composition config-store holds, and under demo, /sample's
-// `variant` parameter. next.config.ts rewrites the request to
-// /_experience/<id> and the path once Next has looked in public/, and drops
-// nothing from its query. Any other method to a visitor page gets a 405,
+// `variant` parameter. On a work's own page, a composition that leaves that
+// page to the host gives way to the fallback composition (#10b).
+// next.config.ts rewrites the request to /_experience/<id> and the path once
+// Next has looked in public/, and drops nothing from its query. Any other method to a visitor page gets a 405,
 // since the page exists for GET, and so does any other method to a
 // read-only route, such as #10's /media. A request for an experience
 // segment's own path, in any spelling and to any method, answers as a path
@@ -286,10 +288,12 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   headers.set(ROUTE_HEADER, decision.status);
   if (studio) headers.set(STUDIO_PATH_HEADER, `${pathname}${search}`);
   if (decision.status === 'served' && experience) {
-    // The segment next.config.ts rewrites the request to.
+    // The segment next.config.ts rewrites the request to. The table read
+    // the path, so its segments decode.
     const segment = segmentFor({
       profile: deployment.profile,
       pattern: decision.entry.pattern,
+      segments: splitPath(pathname) ?? [],
       query: searchParams,
     });
     headers.set(EXPERIENCE_HEADER, segment);

@@ -151,6 +151,7 @@ import {
   redact,
   redactArtifacts,
   reproFor,
+  requiredSampleProblems,
   SAMPLES,
   signedInLeaks,
   sourceProblems,
@@ -275,10 +276,10 @@ const concrete = (pattern) =>
  * What a dynamic pattern's made-up path answers, by DYNAMIC_ROUTES (#12),
  * or undefined for a static pattern. `not-found` is a path that names
  * nothing it can render: no installed variant declares a view at /probe,
- * and no work has the slug probe (#5, Slice 4). The route table calls it
- * missing in every profile, so a GET gets the app's 404 page, rendered from
- * the server, and any other method the proxy's plain 404, as an absent
- * route does.
+ * and no live revision routes a case study at /work/probe (#5, Slice 4;
+ * #10b). The route table calls it missing in every profile, so a GET gets
+ * the app's 404 page, rendered from the server, and any other method the
+ * proxy's plain 404, as an absent route does.
  */
 const madeUpOf = (entry) =>
   isDynamic(entry.pattern) ? DYNAMIC_ROUTES[entry.pattern]?.madeUp : undefined;
@@ -592,11 +593,18 @@ function send(name, requests) {
  * pattern it serves whose DYNAMIC_ROUTES entry names a sample, the first
  * one / names, and what's wrong with its answer. A sample SAMPLES marks
  * required fails when / names none within `wait` ms, as demo's renditions
- * do while it derives them in the background (#10); any other is skipped,
- * and says so.
+ * do while it derives them in the background (#10), and so does one the
+ * profile serves no pattern for; any other is skipped, and says so.
  */
 async function samplePaths(name, profile, wait = 60_000) {
-  const problems = [];
+  const serves = (pattern) =>
+    listRoutes().some(
+      (entry) => entry.pattern === pattern && routeAccess(profile, entry) !== 'absent',
+    );
+  const problems = requiredSampleProblems(profile, serves).map((text) => ({
+    route: 'DYNAMIC_ROUTES',
+    text,
+  }));
   for (const entry of listRoutes()) {
     const sampleName = isDynamic(entry.pattern) ? DYNAMIC_ROUTES[entry.pattern]?.sample : undefined;
     if (sampleName === undefined || routeAccess(profile, entry) === 'absent') continue;

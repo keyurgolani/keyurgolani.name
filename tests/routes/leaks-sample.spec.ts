@@ -9,7 +9,7 @@ import { expectNoLeaks, SEEDED, sectionsOf, type View } from './leaks';
 // chapter, and fixture-notes' notes. The sample's github section renders the
 // snapshot bundled beside it (#10), so its chapter renders it like any other.
 // A view only the other variant declares is a 307 to the selected one's home,
-// and credits, under work, is the 404 page until #10's /work/<slug>.
+// and credits, under a slug no case study has, is the 404 page.
 
 test.use({ appOptions: { ...DEMO_APP, envFiles: SEEDED } });
 

@@ -37,6 +37,7 @@ import {
   renderContext,
   renderSection,
   RichText,
+  routedWork,
   seededRandom,
   SHARED_RENDERERS,
   VisitorControlSlot,
@@ -459,6 +460,7 @@ test('the shared renderers show every field of every visible record, section, an
 const FIXED_LABELS = new Set([
   'Image unavailable',
   'Case study',
+  'Read the case study',
   'Archive',
   'As of',
   'Challenge',
@@ -840,6 +842,55 @@ test('a work in the archive says so, with the fixed label Archive, and no other 
   );
   assert.equal(works.match(/data-label="archive"/g)?.length, 1);
   assert.match(works, /<p class="pf-label" data-label="archive">Archive<\/p>/);
+});
+
+test('a work with a case study links to its page, under the link base, and no other work does (#10b)', () => {
+  const links = (markup: string) =>
+    [
+      ...markup.matchAll(
+        /<p class="pf-work__case-study"><a href="([^"]+)">Read the case study<\/a><\/p>/g,
+      ),
+    ].map(([, href]) => href);
+  const works = render('selected-work');
+  assert.deepEqual(links(works), ['/work/tide-atlas']);
+  // In the entry of the work it names, under its title.
+  const entry = works
+    .split(/(?=<li id="[^"]*" class="pf-item pf-work")/)
+    .find((each) => each.includes('data-work-id="tide-atlas"'));
+  assert.match(entry ?? '', /<\/h3><p class="pf-work__case-study">/);
+  const sample = inputFor(COMPLETE, { basePath: '/sample', query: { variant: 'kit-shared' } });
+  assert.deepEqual(links(render('selected-work', sample)), [
+    '/sample/work/tide-atlas?variant=kit-shared',
+  ]);
+  assert.equal(links(page(READY)).length, page(READY).match(/data-work-id="tide-atlas"/g)?.length);
+});
+
+test('routedWork() is the work a work route names, with its case study, and null for anything else (#10b)', () => {
+  const input = (route: VariantRenderInput['route']) => ({ portfolio: INPUT.portfolio, route });
+  assert.equal(routedWork(input({ route: 'work', slug: 'tide-atlas' }))?.id, 'tide-atlas');
+  const credits = { id: 'credits', path: 'credits', under: 'work' } as never;
+  assert.equal(
+    routedWork(input({ route: 'view', view: credits, params: {}, slug: 'tide-atlas' }))?.id,
+    'tide-atlas',
+  );
+  for (const route of [
+    { route: 'home' },
+    { route: 'work', slug: 'harbor-notes' },
+    { route: 'work', slug: 'secret-work' },
+    { route: 'work', slug: 'no-such-work' },
+    { route: 'view', view: credits, params: {} },
+  ] as const) {
+    assert.equal(routedWork(input(route as never)), null, JSON.stringify(route));
+  }
+  // A public work with a slug and no case study has no page.
+  const [first] = INPUT.portfolio.works;
+  const plain = { ...first!, id: 'plain-work', slug: 'plain-work' };
+  delete (plain as { caseStudy?: unknown }).caseStudy;
+  const portfolio = { ...INPUT.portfolio, works: [...INPUT.portfolio.works, plain] };
+  assert.equal(
+    routedWork({ portfolio, route: { route: 'work', slug: 'plain-work' } } as never),
+    null,
+  );
 });
 
 test('a record’s anchor is its id, on the first visible section that lists it, so no id repeats', () => {

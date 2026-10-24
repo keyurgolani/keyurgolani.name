@@ -21,6 +21,7 @@ import {
   dynamicRouteProblems,
   isDynamic,
   MADE_UP_EXPECTATIONS,
+  requiredSampleProblems,
   SAMPLES,
   DATA_DIR,
   fatalCodes,
@@ -750,6 +751,15 @@ test('every dynamic pattern in the route table has a made-up path expectation or
   assert.deepEqual(SAMPLES.rendition.profiles, ['demo']);
   // /work/<slug> (#10b): a slug nothing has is the 404 page; a case study / links to is a page.
   assert.deepEqual(DYNAMIC_ROUTES['/work/[slug]'], { madeUp: 'not-found', sample: 'case-study' });
+  // demo's sample links its case study from /, below /sample, so demo must
+  // find one there, as it must a rendition; the harness fixture read-only
+  // and owner serve links none.
+  assert.deepEqual(DYNAMIC_ROUTES['/sample/[[...path]]'], {
+    madeUp: 'served',
+    sample: 'case-study',
+  });
+  assert.equal(SAMPLES['case-study'].required, true);
+  assert.deepEqual(SAMPLES['case-study'].profiles, ['demo']);
   for (const entry of Object.values(DYNAMIC_ROUTES)) {
     assert.ok(MADE_UP_EXPECTATIONS.includes(entry.madeUp), JSON.stringify(entry));
   }
@@ -783,6 +793,40 @@ test('a dynamic pattern with neither a made-up expectation nor a sample fails, a
   assert.deepEqual(dynamicRouteProblems(['/studio/_catalog-fixture'], {}), []);
 });
 
+test('each profile a required sample lists serves a pattern that carries it, or the smoke says so (#12, #10b)', () => {
+  // What smoke:profiles reads from the route table: demo serves /sample and
+  // /media, and no /work/<slug> at the root; read-only serves the root's.
+  const serving = {
+    demo: ['/sample/[[...path]]', '/media/[...path]'],
+    'read-only': ['/work/[slug]', '/media/[...path]'],
+    owner: ['/work/[slug]', '/media/[...path]'],
+  };
+  for (const [profile, patterns] of Object.entries(serving)) {
+    const serves = (pattern) => patterns.includes(pattern);
+    assert.deepEqual(requiredSampleProblems(profile, serves), [], profile);
+  }
+  // Were the case study's sample on /work/<slug> alone, demo would skip it.
+  const workOnly = { ...DYNAMIC_ROUTES, '/sample/[[...path]]': { madeUp: 'served' } };
+  assert.deepEqual(
+    requiredSampleProblems('demo', (pattern) => serving.demo.includes(pattern), workOnly),
+    [
+      'demo must check a case-study sample, and serves none of the patterns DYNAMIC_ROUTES gives it: /work/[slug]',
+    ],
+  );
+  // A required sample no pattern carries, and an optional one, which needs none.
+  const samples = {
+    lost: { required: true },
+    spare: { required: false },
+    elsewhere: { required: true, profiles: ['owner'] },
+  };
+  assert.deepEqual(
+    requiredSampleProblems('demo', () => true, {}, samples),
+    [
+      'demo must check a lost sample, and serves none of the patterns DYNAMIC_ROUTES gives it: none',
+    ],
+  );
+});
+
 test("a case study sample is the first /work/<slug> a page links to, and its answer is a page with the app's request id (#10b)", () => {
   assert.equal(
     caseStudyIn('<a href="/sample">x</a><a href="/work/ledger">Ledger</a><a href="/work/atlas">'),
@@ -790,6 +834,12 @@ test("a case study sample is the first /work/<slug> a page links to, and its ans
   );
   assert.equal(caseStudyIn('<a href="/work/">x</a><a href="/work/Bad_Slug">'), null);
   assert.equal(caseStudyIn(undefined), null);
+  // demo's root links the sample's case study below /sample.
+  assert.equal(
+    caseStudyIn('<a href="/sample">x</a><a href="/sample/work/postmortem-template-kit">'),
+    '/sample/work/postmortem-template-kit',
+  );
+  assert.equal(caseStudyIn('<a href="/samplework/ledger">x</a><a href="/x/work/ledger">'), null);
   const page = {
     status: 200,
     headers: {

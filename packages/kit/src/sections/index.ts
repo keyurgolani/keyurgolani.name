@@ -28,15 +28,17 @@ export {
   evidenceOf,
   githubSnapshot,
   isArchived,
+  isRoutedWork,
   isSignature,
   anchorSection,
   placedImage,
   recordAnchor,
+  routedWork,
   sectionShows,
   worksByIds,
   worksOf,
 } from './view';
-export type { Placement, ViewSource } from './view';
+export type { Placement, RoutedWork, ViewSource } from './view';
 export {
   formatFigure,
   hrefFor,

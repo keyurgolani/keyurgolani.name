@@ -9,7 +9,13 @@ import { REGISTRY } from '~/lib/variants';
 import type { LiveRevision } from './catalog-port';
 import { recordingLive } from './composition';
 import { readDeploymentConfig } from './config';
-import { liveComposition, setDeploymentState, setLiveComposition } from './config-store';
+import {
+  getDeploymentState,
+  liveComposition,
+  setDeploymentState,
+  setLiveCaseStudies,
+  setLiveComposition,
+} from './config-store';
 import { segmentFor } from './experience';
 import { experiencePage } from './experience-page';
 import { preferenceCookie } from './visitor-appearance';
@@ -81,6 +87,7 @@ function deploy(t: TestContext, live: () => LiveRevision) {
   t.after(() => {
     setDeploymentState(undefined);
     setLiveComposition(undefined);
+    setLiveCaseStudies(undefined);
   });
 }
 
@@ -128,7 +135,7 @@ test('when the live revision changed after proxy.ts read it, the page answers ex
   // the value the next request's rewrite reads.
   assert.equal(liveComposition(), 'fixture-notes');
   const next = segmentFor(
-    { profile: 'read-only', pattern: '/', query: new URLSearchParams('a=1') },
+    { profile: 'read-only', pattern: '/', segments: [], query: new URLSearchParams('a=1') },
     BUILD,
   );
   assert.equal(next, 'fixture-notes');
@@ -154,5 +161,76 @@ test("a path the table doesn't serve as a visitor page is the 404 page, in any s
   for (const route of [['sample'], ['work', 'tide-tables'], ['studio'], ['api', 'health']]) {
     const answered = await answer('fixture-notes', route);
     assert.match(answered.digest ?? '', /^NEXT_HTTP_ERROR_FALLBACK;404$/, route.join('/'));
+  }
+});
+
+test("a work's own page, which fixture-notes leaves to the host, renders in the fallback segment proxy.ts names, with no 307, and a view below one stays in fixture-chapters' segment (#10b)", async (t) => {
+  const slug = 'postmortem-template-kit';
+  let current = revision('fixture-notes');
+  deploy(t, () => current);
+  await getDeploymentState()!.catalog.getLive();
+  assert.equal(liveComposition(), 'fixture-notes');
+  const at = (segments: string[]) =>
+    segmentFor(
+      { profile: 'read-only', pattern: '/work/[slug]', segments, query: new URLSearchParams() },
+      BUILD,
+    );
+  assert.equal(at(['work', slug]), FALLBACK_ID);
+  for (let request = 0; request < 2; request += 1) {
+    const rendered = await answer(FALLBACK_ID, ['work', slug]);
+    assert.ok(rendered.element && isValidElement(rendered.element), JSON.stringify(rendered));
+  }
+  // The live composition's own segment sends it on, once, to the same URL.
+  assert.equal(
+    (await answer('fixture-notes', ['work', slug])).digest,
+    `NEXT_REDIRECT;replace;/work/${slug};307;`,
+  );
+  assert.equal(at(['work', slug]), FALLBACK_ID);
+  // A view under the work is fixture-chapters' own, so proxy.ts names its
+  // segment. (This build's route table, not BUILD, decides whether the view
+  // exists, so visitor-routes.test.ts renders it.)
+  current = revision('fixture-chapters');
+  await getDeploymentState()!.catalog.getLive();
+  const credits = segmentFor(
+    {
+      profile: 'read-only',
+      pattern: '/work/[slug]/[...view]',
+      segments: ['work', slug, 'credits'],
+      query: new URLSearchParams(),
+    },
+    BUILD,
+  );
+  assert.equal(credits, 'fixture-chapters');
+  assert.equal(at(['work', slug]), FALLBACK_ID);
+  assert.ok((await answer(FALLBACK_ID, ['work', slug])).element);
+});
+
+test('a case study a publish dropped after proxy.ts read the slugs is the 404 page, and every request after it too (#10b)', async (t) => {
+  // The example's one case study, its signature work.
+  const slug = 'postmortem-template-kit';
+  let current = revision('acme-gone');
+  deploy(t, () => current);
+  // The read register() makes at startup records the slugs, and the composition.
+  await getDeploymentState()!.catalog.getLive();
+  assert.ok((await answer(FALLBACK_ID, ['work', slug])).element);
+  // The next revision drops the case study: the page reads it, and answers 404.
+  const live = revision('acme-gone');
+  current = {
+    ...live,
+    unit: {
+      ...live.unit!,
+      portfolio: {
+        ...live.unit!.portfolio,
+        works: live.unit!.portfolio.works?.map((work) => {
+          const dropped = { ...work };
+          delete dropped.caseStudy;
+          return dropped;
+        }),
+      },
+    },
+  } as LiveRevision;
+  for (let request = 0; request < 2; request += 1) {
+    const answered = await answer(FALLBACK_ID, ['work', slug]);
+    assert.match(answered.digest ?? '', /^NEXT_HTTP_ERROR_FALLBACK;404$/, `request ${request}`);
   }
 });

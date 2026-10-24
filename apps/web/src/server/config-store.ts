@@ -39,11 +39,13 @@ export const NOT_LOADED =
 const STORE: unique symbol = Symbol.for('keyurgolani.portfolio.deployment');
 const SERVABLE: unique symbol = Symbol.for('keyurgolani.portfolio.servable');
 const LIVE_COMPOSITION: unique symbol = Symbol.for('keyurgolani.portfolio.live-composition');
+const LIVE_CASE_STUDIES: unique symbol = Symbol.for('keyurgolani.portfolio.live-case-studies');
 
 type Holder = typeof globalThis & {
   [STORE]?: DeploymentState;
   [SERVABLE]?: boolean;
   [LIVE_COMPOSITION]?: string;
+  [LIVE_CASE_STUDIES]?: ReadonlySet<string>;
 };
 
 export function getDeploymentState(): DeploymentState | undefined {
@@ -134,4 +136,25 @@ export function liveComposition(): string | undefined {
 /** Called by the composition root's reader on every getLive(), and by tests. */
 export function setLiveComposition(id: string | undefined): void {
   (globalThis as Holder)[LIVE_COMPOSITION] = id;
+}
+
+const NO_SLUGS: ReadonlySet<string> = new Set<string>();
+
+/**
+ * The slugs `/work/<slug>` serves (#10b): the live revision's public case
+ * studies, from its public view. The composition root's reader writes them
+ * in the same step as the live composition, on every getLive(), and the
+ * route table reads them from here alone, so proxy.ts answers a slug from
+ * memory. It fails closed: none before the first read, none while nothing
+ * live can be served, and none while visitor pages can't render. Slugs only:
+ * nothing about a private work is ever in it.
+ */
+export function liveCaseStudies(): ReadonlySet<string> {
+  if (!isServable()) return NO_SLUGS;
+  return (globalThis as Holder)[LIVE_CASE_STUDIES] ?? NO_SLUGS;
+}
+
+/** Called by the composition root's reader on every getLive(), and by tests. */
+export function setLiveCaseStudies(slugs: ReadonlySet<string> | undefined): void {
+  (globalThis as Holder)[LIVE_CASE_STUDIES] = slugs === undefined ? undefined : new Set(slugs);
 }

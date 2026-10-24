@@ -37,7 +37,10 @@ export interface Composition {
   readonly rendered: RegisteredVariant;
   /** The id the site selected. */
   readonly requested: string;
-  /** Whether the fallback composition stands in, since the selection isn't registered. */
+  /**
+   * Whether the fallback composition stands in: the selection isn't
+   * registered, or it leaves a work's own page to the host (#10b).
+   */
   readonly fallback: boolean;
 }
 

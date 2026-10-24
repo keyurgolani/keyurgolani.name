@@ -1,7 +1,7 @@
 // The variant specs (#5, Slice 6): `pnpm test:variants`, and `pnpm
 // ci:variants` in CI's variants job. Every registered composition on every
 // contract fixture and on the bundled sample, in six modes, the hidden
-// canary, and render parity, against the standalone build (`pnpm build`
+// canary, case-study pages (#10b), and render parity, against the standalone build (`pnpm build`
 // first), or the one PORTFOLIO_VARIANTS_WEB names. Each composition and
 // fixture is a project, since each needs its own server, and the modes'
 // own checks are one more, which needs none, when the run checks every
@@ -46,8 +46,8 @@ export default defineConfig({
           name: `${id}/${fixture.name}`,
           testMatch:
             fixture.name === 'hidden-canary'
-              ? ['fixtures.spec.ts', 'parity.spec.ts', 'hidden.spec.ts']
-              : ['fixtures.spec.ts', 'parity.spec.ts'],
+              ? ['fixtures.spec.ts', 'parity.spec.ts', 'case-study.spec.ts', 'hidden.spec.ts']
+              : ['fixtures.spec.ts', 'parity.spec.ts', 'case-study.spec.ts'],
           use: { ...devices['Desktop Chrome'], appOptions: fixtureApp(fixture, variant) },
           metadata: { variant: id, fixture: fixture.name },
         })),

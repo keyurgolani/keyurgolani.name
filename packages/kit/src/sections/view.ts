@@ -6,7 +6,14 @@
 // sections, private records, what nothing visible reaches, and references to
 // any of them, and every list in it is present.
 
-import type { ChronologyEntry, Evidence, Placement, SectionDerived, Work } from '@portfolio/schema';
+import type {
+  CaseStudy,
+  ChronologyEntry,
+  Evidence,
+  Placement,
+  SectionDerived,
+  Work,
+} from '@portfolio/schema';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
 import type { PlacedImage } from './media';
 
@@ -194,4 +201,32 @@ export function sectionShows(section: Section, input: ViewSource): boolean {
     default:
       return true;
   }
+}
+
+/** A work with its own page (#10b): a case study, at its slug. */
+export type RoutedWork = Work & { readonly caseStudy: CaseStudy; readonly slug: string };
+
+/**
+ * Whether `work` has its own page at /work/<slug> (#10b): a case study and a
+ * slug. The view holds only public works something visible reaches, so a
+ * work the renderers see here is one the host routes.
+ */
+export function isRoutedWork(work: Work): work is RoutedWork {
+  return work.caseStudy !== undefined && work.slug !== undefined;
+}
+
+/**
+ * The work whose page the input renders (#10b): on a work route, or a view
+ * under one, the view's work at that slug with a case study. Null on any
+ * other route, and for a slug the view doesn't route.
+ */
+export function routedWork(
+  input: Pick<VariantRenderInput, 'portfolio' | 'route'>,
+): RoutedWork | null {
+  const slug = input.route.route === 'home' ? undefined : input.route.slug;
+  if (slug === undefined) return null;
+  return (
+    (input.portfolio.works.find((work) => isRoutedWork(work) && work.slug === slug) as
+      RoutedWork | undefined) ?? null
+  );
 }

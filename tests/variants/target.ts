@@ -32,6 +32,9 @@ const { VARIANTS } = require(
 
 export type RegisteredVariant = (typeof VARIANTS)[number];
 
+/** Every variant that build registers, the fallback composition included. */
+export const REGISTERED: readonly RegisteredVariant[] = VARIANTS;
+
 /** The fallback composition's id, which a site can't select. */
 export const FALLBACK_ID = 'fallback';
 /** The id a site selects to reach the fallback composition: no package registers it. */

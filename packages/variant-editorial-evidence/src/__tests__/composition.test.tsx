@@ -145,10 +145,17 @@ test('a work with a case study links to its page from its plate, by its title an
   // A slug alone is no page (#10b routes a case study at a slug), so it links nowhere.
   assert.match(html, /<h3 id="ee--title-atlas"[^>]*>Atlas<\/h3>/);
   assert.doesNotMatch(html, /href="\/work\/atlas"/);
-  // Every work link on home is a routed work's.
+  // Every work link on home is a routed work's, and each routed work has
+  // one: the plate's, or the kit's works list's (#10b), as for notes in the
+  // work section and zine in the archive.
+  const routed = (pairOf(CURATED).portfolio.works ?? [])
+    .filter((work) => work.caseStudy !== undefined && work.slug !== undefined)
+    .map(({ slug }) => slug!)
+    .sort();
+  assert.deepEqual(routed, ['ledger', 'notes', 'zine']);
   const linked = [...html.matchAll(/href="\/work\/([^"?#]+)"/g)].map(([, slug]) => slug);
-  assert.deepEqual([...new Set(linked)].sort(), ['ledger']);
-  assert.equal(count(html, /Read the case study/g), 1);
+  assert.deepEqual([...new Set(linked)].sort(), routed);
+  assert.equal(count(html, /Read the case study/g), routed.length);
 });
 
 test("a case study's page: the breadcrumb, the work's title as its one h1, its fields, and the way back", () => {

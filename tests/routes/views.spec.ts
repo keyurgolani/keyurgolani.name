@@ -103,7 +103,7 @@ test.describe('without JavaScript', () => {
         // Longer than a content id, so no chapter: the contract caps a placeholder at 64.
         `/chapters/${'a'.repeat(65)}`,
         '/no-such-view',
-        // No slug names a work until #10, its views included.
+        // A slug the live revision doesn't route (#10b), its views included.
         '/work/tide-tables',
         '/work/tide-tables/credits',
         // A first segment the host keeps, which no route here answers.

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { resolvePortfolioView, type PublicView, type Site } from '@portfolio/schema';
+import { resolvePortfolioView, routedSlugs, type PublicView, type Site } from '@portfolio/schema';
 import { readPair } from '@portfolio/schema/node';
 import {
   FALLBACK_ID,
@@ -10,6 +10,7 @@ import {
   type RouteTarget,
   type VariantRegistry,
 } from '@portfolio/variant-contract';
+import { setLiveCaseStudies } from '../server/config-store';
 import { listRoutes, RETIRED_PATTERNS, routeResolver } from '../server/routes';
 import { sampleSelection } from './sample';
 import { REGISTRY } from './variants';
@@ -54,10 +55,22 @@ function viewFor(variant: string, routes?: Site['routes']): PublicView {
   return resolvePortfolioView({ portfolio: PAIR.portfolio, site }, {}, { mediaBase: '/media' });
 }
 
+/** The example's one case study: its signature work, which a visible works section lists. */
+const SLUG = 'postmortem-template-kit';
+
+/** The hidden fixture's public view: its case studies are a private work's and an unreached one's. */
+const HIDDEN = (() => {
+  const dir = fileURLToPath(new URL('../../../../tests/fixtures/hidden/', import.meta.url));
+  const result = readPair({ portfolio: `${dir}portfolio.yml`, site: `${dir}site.yml` });
+  assert.ok(result.ok);
+  return resolvePortfolioView(result.pair, {}, { mediaBase: '/media' });
+})();
+
 /** What `path` resolves to, and whether resolving it loaded the view. */
 async function resolve(
   path: Partial<VisitorPath> & { segments: string[] },
   view: PublicView = viewFor('fixture-chapters'),
+  registry: VariantRegistry = BUILD,
 ): Promise<{ route: VisitorRoute; loaded: boolean }> {
   let loaded = false;
   const route = await resolveVisitorPath(
@@ -66,7 +79,7 @@ async function resolve(
       loaded = true;
       return view;
     },
-    BUILD,
+    registry,
   );
   return { route, loaded };
 }
@@ -158,14 +171,123 @@ test('anything else is missing: an undeclared path, a bare view prefix, or a tur
   });
 });
 
-test('no work resolves until #10, so a work, its views, and redirects to one are missing', async () => {
-  for (const segments of [
-    ['work', 'tide-tables'],
-    ['work', 'tide-tables', 'credits'],
-    ['work', 'tide-tables', 'no-such-view'],
+test('a public case study renders at its slug, and its views as any view does (#10b)', async () => {
+  // fixture-chapters says routes.work: shared, so the fallback composition
+  // renders the work's own page (lib/work-page.ts).
+  assert.deepEqual(rendered((await resolve({ segments: ['work', SLUG] })).route), [
+    FALLBACK_ID,
+    { route: 'work', slug: SLUG },
+    undefined,
+  ]);
+  const credits = BUILD[1]!.manifest.routes.views.find((view) => view.id === 'credits')!;
+  assert.deepEqual(rendered((await resolve({ segments: ['work', SLUG, 'credits'] })).route), [
+    'fixture-chapters',
+    { route: 'view', view: credits, params: {}, slug: SLUG },
+    `/work/${SLUG}`,
+  ]);
+  // Only fixture-chapters declares credits: under fixture-notes, a 307 to the work.
+  assert.deepEqual(
+    (await resolve({ segments: ['work', SLUG, 'credits'] }, viewFor('fixture-notes'))).route,
+    { kind: 'redirect', location: `/work/${SLUG}` },
+  );
+  // Under /sample, the link base and ?variant= stay.
+  assert.deepEqual(
+    (
+      await resolve(
+        {
+          segments: ['work', SLUG, 'credits'],
+          basePath: '/sample',
+          selected: 'fixture-notes',
+          query: { variant: 'fixture-notes' },
+        },
+        viewFor('editorial-evidence'),
+      )
+    ).route,
+    { kind: 'redirect', location: `/sample/work/${SLUG}?variant=fixture-notes` },
+  );
+});
+
+test("a work's own page renders in a composition that says routes.work: bespoke, and in the fallback composition for one that says shared, the site's selection kept (#10b)", async () => {
+  const notes = BUILD[2]!;
+  // fixture-notes, as a variant that renders its work pages itself.
+  const bespoke = {
+    ...notes,
+    manifest: {
+      ...notes.manifest,
+      id: 'fixture-bespoke',
+      routes: { ...notes.manifest.routes, work: 'bespoke' as const },
+    },
+  };
+  const build: VariantRegistry = [...BUILD, bespoke];
+  const work = { route: 'work', slug: SLUG } as const;
+  const own = (await resolve({ segments: ['work', SLUG] }, viewFor('fixture-bespoke'), build))
+    .route;
+  assert.deepEqual(rendered(own), ['fixture-bespoke', work, undefined]);
+  assert.equal(own.kind === 'render' && own.composition.fallback, false);
+  for (const variant of ['fixture-chapters', 'fixture-notes']) {
+    const shared = (await resolve({ segments: ['work', SLUG] }, viewFor(variant), build)).route;
+    assert.deepEqual(rendered(shared), [FALLBACK_ID, work, undefined], variant);
+    assert.ok(shared.kind === 'render');
+    assert.equal(shared.composition.requested, variant);
+    assert.equal(shared.composition.fallback, true);
+    // Home and the variant's own views stay its own.
+    assert.equal(
+      rendered((await resolve({ segments: [] }, viewFor(variant), build)).route)[0],
+      variant,
+    );
+  }
+  // A view under work is the variant's, so it renders there.
+  assert.equal(
+    rendered((await resolve({ segments: ['work', SLUG, 'credits'] }, undefined, build)).route)[0],
+    'fixture-chapters',
+  );
+  // Under /sample, ?variant= picks the composition, and the rule is the same.
+  for (const [selected, expected] of [
+    ['fixture-notes', FALLBACK_ID],
+    ['fixture-bespoke', 'fixture-bespoke'],
+  ] as const) {
+    const sample = await resolve(
+      {
+        segments: ['work', SLUG],
+        basePath: '/sample',
+        selected,
+        query: { variant: selected },
+      },
+      viewFor('editorial-evidence'),
+      build,
+    );
+    assert.deepEqual(rendered(sample.route), [expected, work, undefined], selected);
+  }
+});
+
+test('any other work is missing, its views and redirects included: unknown, with no case study, private, or unreached (#10b)', async () => {
+  for (const slug of [
+    'tide-tables',
+    // A public work with no case study.
+    'small-traces',
+    'Postmortem-Template-Kit',
+    `${SLUG}-x`,
   ]) {
-    for (const view of [viewFor('fixture-chapters'), viewFor('fixture-notes')]) {
-      assert.deepEqual((await resolve({ segments }, view)).route, { kind: 'not-found' });
+    for (const segments of [
+      ['work', slug],
+      ['work', slug, 'credits'],
+      ['work', slug, 'no-such-view'],
+    ]) {
+      for (const view of [viewFor('fixture-chapters'), viewFor('fixture-notes')]) {
+        assert.deepEqual((await resolve({ segments }, view)).route, { kind: 'not-found' });
+      }
+    }
+  }
+  assert.deepEqual((await resolve({ segments: ['work'] })).route, { kind: 'not-found' });
+  // The hidden fixture's case studies: a private work's, and a public one
+  // only a hidden section reaches. Neither is in its view, so neither routes.
+  assert.deepEqual([...routedSlugs(HIDDEN)], []);
+  for (const slug of ['canary-hidden-private-slug', 'canary-hidden-record-slug']) {
+    for (const segments of [
+      ['work', slug],
+      ['work', slug, 'credits'],
+    ]) {
+      assert.deepEqual((await resolve({ segments }, HIDDEN)).route, { kind: 'not-found' }, slug);
     }
   }
 });
@@ -201,14 +323,22 @@ const PATHS: readonly string[][] = [
   ['no-such-view'],
   ['work', 'tide-tables'],
   ['work', 'tide-tables', 'credits'],
+  ['work', SLUG],
+  ['work', SLUG, 'credits'],
+  ['work', SLUG, 'notes'],
+  ['work', 'small-traces'],
+  ['work'],
   ['api', 'no-such'],
   ['favicon.ico'],
   // Under a Studio page's first segment, where no route lists it (#2).
   ['studio', 'nowhere'],
 ];
 
-test('the route table calls a path missing exactly when no visitor page renders or redirects it (#5, Slice 4)', async () => {
+test('the route table calls a path missing exactly when no visitor page renders or redirects it (#5, Slice 4)', async (t) => {
   const table = routeResolver(listRoutes(), RETIRED_PATTERNS, BUILD);
+  // The slugs the composition root's reader records from the same view (#10b).
+  t.after(() => setLiveCaseStudies(undefined));
+  setLiveCaseStudies(routedSlugs(viewFor('fixture-chapters')));
   // At the root, whichever variant the site selects.
   for (const segments of PATHS) {
     const pathname = `/${segments.join('/')}`;

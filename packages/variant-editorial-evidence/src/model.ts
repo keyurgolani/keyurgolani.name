@@ -1,5 +1,11 @@
-import type { CaseStudy, Evidence, Section, Work } from '@portfolio/schema';
-import { evidenceByIds, sectionShows, worksByIds } from '@portfolio/kit/sections';
+import type { Evidence, Section, Work } from '@portfolio/schema';
+import {
+  evidenceByIds,
+  isRoutedWork,
+  sectionShows,
+  worksByIds,
+  type RoutedWork,
+} from '@portfolio/kit/sections';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
 
 // What Editorial Evidence's home page shows, and in what order (#13), from
@@ -123,17 +129,9 @@ export function homeModel(input: Pick<VariantRenderInput, 'portfolio'>): HomeMod
   };
 }
 
-/** A work with its own page: a case study, at its slug. */
-export type RoutedWork = Work & { readonly caseStudy: CaseStudy; readonly slug: string };
-
-/**
- * Whether the work has its own page at /work/<slug>: a case study and a
- * slug, the rule #10b's route serves by. A copy of the kit's isRoutedWork()
- * until #10b lands on next, when this switches to it.
- */
-export function isRoutedWork(work: Work): work is RoutedWork {
-  return work.caseStudy !== undefined && work.slug !== undefined;
-}
+// Whether a work has its own page at /work/<slug>: a case study and a slug,
+// the rule #10b's route serves by, from the kit.
+export { isRoutedWork, type RoutedWork };
 
 /** The routed work at `slug`, if the view has one. */
 export function routedWorkAt(slug: string, portfolio: Portfolio): RoutedWork | undefined {

@@ -4,20 +4,31 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readPair } from '@portfolio/schema/node';
 import type { VariantRegistry } from '@portfolio/variant-contract';
 import { REGISTRY } from '~/lib/variants';
 import { BUNDLED_SAMPLE_NAMES } from '../lib/sample-identity';
-import type { LiveRevision } from './catalog-port';
+import type { LiveRevision, PublicationUnit } from './catalog-port';
 import {
   compose,
   recordingLive,
+  refreshingOnCommit,
   STARTUP_REQUIREMENTS,
   type StartupRequirement,
 } from './composition';
 import { readDeploymentConfig, type ConfigIssue, type Env } from './config';
-import { liveComposition, setDeploymentState, setLiveComposition } from './config-store';
+import {
+  liveCaseStudies,
+  liveComposition,
+  setDeploymentState,
+  setLiveCaseStudies,
+  setLiveComposition,
+  setServable,
+} from './config-store';
 import { loadedOwnerModules } from './load-trace';
 import { listOperations } from './operations';
+import { resolveRoute } from './routes';
+import { startStartupMedia } from './startup-media';
 
 // The composition root for profiles that never load owner code. Owner with a
 // provider, which does, has its own file: the load trace is per process.
@@ -304,4 +315,146 @@ test("every profile's reader records the composition each live revision renders,
     assert.equal((await none.getLive()).state, state);
     assert.equal(liveComposition(), undefined, state);
   }
+});
+
+/** The example pair's one case study: its signature work, which a visible works section lists. */
+const SLUG = 'postmortem-template-kit';
+
+/** Whether the route table serves `/work/<slug>` under read-only, as proxy.ts asks it. */
+const routes = (slug: string) => resolveRoute('read-only', `/work/${slug}`).status === 'served';
+
+test('the reader records the slugs /work serves in the same step as the composition, and a background read records them too (#10b)', async (t) => {
+  t.after(() => {
+    setLiveComposition(undefined);
+    setLiveCaseStudies(undefined);
+  });
+  setLiveCaseStudies(undefined);
+  // Before the first read, no slug serves.
+  assert.deepEqual([...liveCaseStudies()], []);
+  assert.equal(routes(SLUG), false);
+  const config = deployment(
+    t,
+    { PORTFOLIO_PROFILE: 'read-only' },
+    {
+      // read-only refuses the bundled sample's identity.
+      'portfolio.yml': readFileSync(EXAMPLES.portfolio, 'utf8').replace(
+        '\n  name: Anamika Devi\n',
+        '\n  name: Rowan Test\n',
+      ),
+      'site.yml': readFileSync(EXAMPLES.site, 'utf8'),
+    },
+  );
+  const composed = await compose(inputs(config));
+  assert.ok(composed.ok, JSON.stringify(!composed.ok && composed.issues));
+  // register() starts the media derivation in the background, through the
+  // composition's reader, as Studio's variantHealth reads through owner's.
+  // That read records the set, before any request reads the revision.
+  await startStartupMedia({
+    profile: 'read-only',
+    reader: composed.state.catalog,
+    options: {
+      fetchRemote: async () => {
+        throw new Error('This test fetches nothing.');
+      },
+    },
+  });
+  assert.equal(liveComposition(), 'fallback');
+  assert.deepEqual([...liveCaseStudies()], [SLUG]);
+  assert.equal(routes(SLUG), true);
+});
+
+test('a publish that drops a case study, or makes its work private, turns its slug missing on the next read, with no restart (#10b)', async (t) => {
+  t.after(() => {
+    setLiveComposition(undefined);
+    setLiveCaseStudies(undefined);
+    setServable(true);
+  });
+  const read = readPair(EXAMPLES);
+  assert.ok(read.ok);
+  const published = { ...read.pair, snapshots: {} } as unknown as PublicationUnit;
+  const withWork = (change: (work: Record<string, unknown>) => Record<string, unknown>) =>
+    ({
+      ...published,
+      portfolio: {
+        ...published.portfolio,
+        works: published.portfolio.works?.map((work) =>
+          work.id === SLUG ? change({ ...work }) : work,
+        ),
+      },
+    }) as unknown as PublicationUnit;
+  let unit: PublicationUnit | null = published;
+  const live = (): LiveRevision =>
+    unit
+      ? { state: 'live', revisionId: 'r', unitHash: 'sha256:r', unit }
+      : { state: 'empty', revisionId: null, unitHash: null, unit: null };
+  const reader = recordingLive({ getLive: async () => live() });
+  await reader.getLive();
+  assert.equal(routes(SLUG), true);
+  // The next revision drops the case study.
+  unit = withWork((work) => {
+    delete work.caseStudy;
+    return work;
+  });
+  await reader.getLive();
+  assert.equal(routes(SLUG), false);
+  // A later one brings it back, and another makes the work private.
+  unit = published;
+  await reader.getLive();
+  assert.equal(routes(SLUG), true);
+  unit = withWork((work) => ({ ...work, visibility: 'private' }));
+  await reader.getLive();
+  assert.equal(routes(SLUG), false);
+  assert.deepEqual([...liveCaseStudies()], []);
+  // A view that won't build, and an empty store, record none either.
+  unit = published;
+  await reader.getLive();
+  unit = { ...published, portfolio: null } as unknown as PublicationUnit;
+  await reader.getLive();
+  assert.equal(routes(SLUG), false);
+  unit = published;
+  await reader.getLive();
+  unit = null;
+  await reader.getLive();
+  assert.equal(routes(SLUG), false);
+  // The hidden fixture's case studies, a private work's and a public one
+  // only a hidden section reaches, record nothing.
+  const dir = fileURLToPath(new URL('../../../../tests/fixtures/hidden/', import.meta.url));
+  const hidden = readPair({ portfolio: `${dir}portfolio.yml`, site: `${dir}site.yml` });
+  assert.ok(hidden.ok);
+  unit = { ...hidden.pair, snapshots: {} } as unknown as PublicationUnit;
+  await reader.getLive();
+  assert.deepEqual([...liveCaseStudies()], []);
+  assert.equal(routes('canary-hidden-private-slug'), false);
+  assert.equal(routes('canary-hidden-record-slug'), false);
+  // And while nothing is servable, the last set serves no slug.
+  unit = published;
+  await reader.getLive();
+  setServable(false);
+  assert.equal(routes(SLUG), false);
+});
+
+test("a Studio publish that commits reads the live revision once before it answers, and a read that fails doesn't fail the publish (#10b)", async () => {
+  let reads = 0;
+  let fail = false;
+  const reader = {
+    async getLive() {
+      reads += 1;
+      if (fail) throw new Error('storage_unavailable');
+      return { state: 'empty' } as never;
+    },
+  };
+  const outcome = (kind: string) => async () => ({ kind, revisionId: 'rev_1' });
+  const studio = refreshingOnCommit(
+    { publish: outcome('committed'), rollback: outcome('conflict'), recover: outcome('committed') },
+    reader,
+  );
+  assert.deepEqual(await studio.publish(), { kind: 'committed', revisionId: 'rev_1' });
+  assert.equal(reads, 1);
+  // Nothing committed, nothing to read.
+  await studio.rollback();
+  assert.equal(reads, 1);
+  // The commit stands when the read after it fails.
+  fail = true;
+  assert.deepEqual(await studio.recover(), { kind: 'committed', revisionId: 'rev_1' });
+  assert.equal(reads, 2);
 });

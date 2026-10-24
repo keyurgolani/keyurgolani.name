@@ -351,6 +351,56 @@ test("another unit's stylesheet, linked, requested, or named anywhere, is a prob
   ]);
 });
 
+test("a shared variant's work page, which the fallback composition renders, may load the fallback's units and none of the selected variant's (#10b)", () => {
+  const fallbackSheet = `${APP}/_portfolio/variant/fallback.aaaaaaaaaaaa.css`;
+  const work = `${APP}/work/tide-tables`;
+  const base = lightPage();
+  /** The work page as the fallback composition renders it, plus `extra` stylesheets. */
+  const workPage = (extra = [], variant = 'fallback') =>
+    lightPage({
+      composition: 'fallback',
+      requests: [
+        request(work, 'document'),
+        request(BASE_CHUNK, 'stylesheet'),
+        request(fallbackSheet, 'stylesheet'),
+        ...extra.map((url) => request(url, 'stylesheet')),
+        request(APP_CHUNK, 'script'),
+      ],
+      chunks: [
+        base.chunks[0],
+        {
+          url: APP_CHUNK,
+          kind: 'js',
+          modules: [
+            { source: 'packages/kit/src/enhancements/load.tsx', package: '@portfolio/kit' },
+            { source: 'apps/web/src/lib/host-modules-client.tsx', package: 'apps/web' },
+          ],
+        },
+      ],
+      withoutMap: [fallbackSheet, ...extra],
+      references: { ...base.references, unitFiles: [fallbackSheet, ...extra] },
+      dom: {
+        ...base.dom,
+        boundary: { 'data-variant': variant },
+        stylesheets: [BASE_CHUNK, fallbackSheet, ...extra],
+      },
+    });
+  assert.deepEqual(purityProblems(workPage()), {
+    selected: { units: ['variant fallback'], platform: null },
+    problems: [],
+  });
+  // Both sets of units on the one page: the selected variant's is a problem.
+  assert.deepEqual(purityProblems(workPage([LIGHT_SHEET])).problems, [
+    "/_portfolio/variant/fixture-variant-light.bbbbbbbbbbbb.css is variant fixture-variant-light's, which the page doesn't render.",
+  ]);
+  // The selected variant's boundary on the fallback's page is one too.
+  assert.ok(
+    purityProblems(workPage([], 'fixture-variant-light')).problems.includes(
+      "The page's boundary renders fixture-variant-light, not fallback.",
+    ),
+  );
+});
+
 test("a selected pack's stylesheet and the platform's are allowed once the boundary says so, and another pack's still isn't", () => {
   const page = lightPage();
   const parchment = `${APP}/_portfolio/pack/warm-parchment.eeeeeeeeeeee.css`;

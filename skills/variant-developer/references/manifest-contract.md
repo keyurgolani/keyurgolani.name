@@ -118,7 +118,7 @@ The compatibility report counts each slot: the visible sections of its kind, the
 
 ## Routes
 
-**`routes`** (required): `{ "home": "bespoke" | "shared", "work": "bespoke" | "shared", "views": [...] }`. The host owns every route; this says which it renders through your component.
+**`routes`** (required): `{ "home": "bespoke" | "shared", "work": "bespoke" | "shared", "views": [...] }`. The host owns every route; this says which it renders through your component. A work's own page, `/work/<slug>`, renders in yours only with `"work": "bespoke"`, where `routedWork(input)` is the work; with `"shared"`, the host renders it through the fallback composition, its case study as the page's one h1 (#10b). Views you declare under `work` render in yours either way.
 
 Each view (up to 16) is `{ "id", "under": "home" | "work", "type": "path" | "fragment", "segment" }`. A path view's first segment can't be one the host reserves (`studio`, `api`, `_next`, `_fixtures`, `sample`, `reference`, `preview`, `preview-assets`, `work`, `admin`, `variants`, `assets`, which answers 404, `media`, where the site's image renditions serve, `robots.txt`, `sitemap.xml`, `feed.xml`, the icon and image routes, with or without the six-character suffix Next adds inside a route group, such as `opengraph-image-12o0cb`, and `manifest.webmanifest`), and two views can't claim the same address.
 

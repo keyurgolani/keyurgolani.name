@@ -1,6 +1,6 @@
 import { FALLBACK_VARIANT_ID } from '@portfolio/schema/ids';
 import { VARIANTS } from '../lib/generated/registry.meta';
-import type { RegisteredIds } from '../lib/sample';
+import { isWorkPath, rendersWorkPage, type WorkRouteManifest } from '../lib/work-page';
 import type { Profile } from './capabilities';
 import { liveComposition } from './config-store';
 import { EXPERIENCE_SEGMENT } from './route-header';
@@ -16,7 +16,9 @@ import { EXPERIENCE_SEGMENT } from './route-header';
 // proxy.ts marks each GET or HEAD of a visitor page with the segment of the
 // composition that renders, from segmentFor(), which reads memory only: the
 // live composition config-store holds, which the composition root's reader
-// writes on every getLive(), and the request's own query. next.config.ts
+// writes on every getLive(), and the request's own query. A work's own page
+// goes to the fallback composition's segment when the composition leaves
+// that page to the host (lib/work-page.ts, #10b). next.config.ts
 // rewrites the request there. The page there reads the same value again,
 // after it has read the live revision, and answers a 307 to the same URL
 // when the revision changed in between. A request for a segment's own path,
@@ -48,20 +50,55 @@ export function isExperiencePath(pathname: string): boolean {
   return first.replace(/\.rsc$/i, '').toLowerCase() === EXPERIENCE_SEGMENT;
 }
 
+/** The variants a segment can be: their ids, and how each takes the work route. */
+export type RegisteredSegments = readonly { readonly manifest: WorkRouteManifest }[];
+
+/** A visitor page's request, as segmentFor() reads it. */
+export interface SegmentRequest {
+  readonly profile: Profile;
+  /** The route table's pattern for the path. */
+  readonly pattern: string;
+  /** The path's decoded segments, as the route table reads them. */
+  readonly segments: readonly string[];
+  readonly query: URLSearchParams;
+}
+
+const WORK_PATTERN = '/work/[slug]';
+
+/**
+ * Whether a visitor page is a work's own page (#10b): /work/<slug>, or
+ * /sample/work/<slug> under demo. A view below one, such as
+ * /work/<slug>/credits, isn't.
+ */
+export function isWorkPage(request: Pick<SegmentRequest, 'pattern' | 'segments'>): boolean {
+  if (request.pattern === WORK_PATTERN) return true;
+  return request.pattern === SAMPLE_PATTERN && isWorkPath(request.segments.slice(1));
+}
+
 /**
  * The experience segment a visitor page renders in. Under demo, /sample's
  * `?variant=` names it, when it names one variant this build registers; any
  * other value there is the fallback composition's, and the page answers it
  * as /sample always has. Everywhere else it's the live composition
  * config-store holds, or the fallback composition's when it holds none this
- * build registers. Owner and read-only never read the query. #19 adds the
- * visitor's variant from its preference cookie here, for a site whose
- * visitor controls make the variant selectable.
+ * build registers. Owner and read-only never read the query. On a work's
+ * own page, a composition that leaves that page to the host gives way to
+ * the fallback composition (#10b). #19 adds the visitor's variant from its
+ * preference cookie here, for a site whose visitor controls make the
+ * variant selectable.
  */
 export function segmentFor(
-  request: { readonly profile: Profile; readonly pattern: string; readonly query: URLSearchParams },
-  registered: RegisteredIds = VARIANTS,
+  request: SegmentRequest,
+  registered: RegisteredSegments = VARIANTS,
 ): string {
+  const chosen = selectedSegment(request, registered);
+  if (!isWorkPage(request)) return chosen;
+  const manifest = registered.find((variant) => variant.manifest.id === chosen)?.manifest;
+  return manifest && rendersWorkPage(manifest) ? chosen : FALLBACK_VARIANT_ID;
+}
+
+/** The segment of the composition a request selects, before the work page's rule. */
+function selectedSegment(request: SegmentRequest, registered: RegisteredSegments): string {
   const known = (id: string | undefined): id is string =>
     id !== undefined &&
     id !== FALLBACK_VARIANT_ID &&

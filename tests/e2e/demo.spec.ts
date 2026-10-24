@@ -1,13 +1,16 @@
 import { expect, test } from '../harness/fixtures';
 import { DEMO_APP, profileMatrix } from '../harness/profile-matrix';
 import { FALLBACK_ID, VARIANTS } from '../harness/registry';
+import { withRscHash } from '../harness/rsc';
 
 // The demo profile (#1, slice 3): the bundled sample at / and /sample, with
 // nothing for crawlers to index and no cookie, and the route-level matrix
 // (AC4) for demo. The sample site selects Editorial Evidence, which this
 // build doesn't register until #13, so both render the fallback composition
 // in its place (#5). /sample?variant= renders a variant this build
-// registers, and anything else it names is a 404.
+// registers, and anything else it names is a 404. The sample's case study
+// renders at /sample/work/<slug>, from the sample's own slugs, and the
+// root's works list links it there (#10b).
 const DEMO = { type: 'profile', description: 'demo' };
 // identity.name in portfolio.example.yml.
 const SAMPLE_NAME = 'Anamika Devi';
@@ -130,5 +133,35 @@ test(
     );
     // From the snapshot alone: the server reached no host for it.
     expect(app.egress()).toEqual([]);
+  },
+);
+
+test(
+  "the sample's case study renders at /sample/work/<slug>, linked from / and /sample, and any other slug is the 404 page (#10b)",
+  { annotation: [{ type: 'route', description: '/sample/[[...path]]' }, DEMO] },
+  async ({ page, request, app }) => {
+    // The sample's signature work, portfolio.example.yml's one case study.
+    const path = '/sample/work/postmortem-template-kit';
+    for (const from of ['/', '/sample']) {
+      await page.goto(from);
+      await page.locator(`a[href="${path}"]`).first().click();
+      await expect(page, from).toHaveURL(`${app.origin}${path}`);
+      await expect(page.getByRole('heading', { level: 1 }), from).toHaveText(
+        'Postmortem Template Kit',
+      );
+    }
+    const headers = { RSC: '1' };
+    const flight = await request.get(await withRscHash(path, headers), {
+      headers,
+      maxRedirects: 0,
+    });
+    expect(flight.status()).toBe(200);
+    expect(flight.headers()['content-type']).toMatch(/^text\/x-component/);
+    // A public work with no case study, and a slug the sample doesn't name.
+    for (const other of ['/sample/work/small-traces', '/sample/work/no-such-work']) {
+      const response = await page.goto(other);
+      expect(response?.status(), other).toBe(404);
+      await expect(page.getByRole('heading', { level: 1 }), other).toHaveText('Page not found');
+    }
   },
 );
