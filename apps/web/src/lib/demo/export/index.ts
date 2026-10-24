@@ -1,6 +1,4 @@
 import {
-  allowedKeysAt,
-  DEFAULT_SCHEMAS,
   DOCUMENT_MAX_BYTES,
   parseSource,
   serialize,
@@ -19,8 +17,10 @@ import {
 // source's data by #4's serialize(): keys in schema order, two-space indent,
 // LF line ends, and a trailing newline. Keys the schema doesn't name, such
 // as the ids that key site.sections, routes, appearanceInputs, and
-// variantControls and its values, are sorted by UTF-16 code unit first, as
-// #4's canonicalize() sorts them. No reader gives their order a meaning:
+// variantControls and its values, are sorted by UTF-16 code unit, as #4's
+// canonicalize() sorts them: every key is sorted first, and serialize()
+// puts the ones the schema names back in schema order. No reader gives the
+// order of the rest a meaning:
 // each map is read by key, and a revision's content hash is over the
 // canonical form, where both orders are the same. So the export is pure and
 // byte-deterministic: the same models give the same bytes, whatever their
@@ -72,11 +72,6 @@ export const BROWSER_ONLY_OMISSIONS: readonly ExportOmission[] = [
   'local-images',
 ];
 
-const SCHEMAS = {
-  portfolio: DEFAULT_SCHEMAS.PortfolioSchema,
-  site: DEFAULT_SCHEMAS.SiteSchema,
-} as const;
-
 export function exportUnit(
   input: { readonly sources: { portfolio: SourceDocument; site: SourceDocument } },
   format: ExportFormat,
@@ -88,8 +83,8 @@ export function exportUnit(
     (source) => source.format === 'yaml' && yamlComments(source.text).length > 0,
   );
   const texts = {
-    portfolio: serialize(sortedUnnamed(portfolio.data, 'portfolio'), format),
-    site: serialize(sortedUnnamed(site.data, 'site'), format),
+    portfolio: serialize(sortedKeys(portfolio.data), format),
+    site: serialize(sortedKeys(site.data), format),
   };
   const encoder = new TextEncoder();
   const overImportCap = (['portfolio', 'site'] as const).filter(
@@ -109,25 +104,18 @@ export function exportUnit(
 }
 
 /**
- * The data with the keys of every object the schema doesn't describe sorted
- * by UTF-16 code unit: record maps, and whatever lies inside them. Objects
- * the schema names keys for keep theirs for serialize() to order.
+ * The data with every object's keys sorted by UTF-16 code unit. serialize()
+ * then puts the keys the schema names back in schema order, so what this
+ * decides is the order of the rest: record maps, and anything inside them.
  */
-function sortedUnnamed(data: unknown, document: 'portfolio' | 'site'): unknown {
-  const schema = SCHEMAS[document];
-  const walk = (node: unknown, path: readonly (string | number)[]): unknown => {
-    if (Array.isArray(node)) return node.map((child, index) => walk(child, [...path, index]));
-    if (typeof node !== 'object' || node === null) return node;
-    const keys = Object.keys(node);
-    const order = allowedKeysAt(schema, data, path)
-      ? keys
-      : [...keys].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-    // fromEntries, so an own __proto__ key stays a key.
-    return Object.fromEntries(
-      order.map((key) => [key, walk((node as Record<string, unknown>)[key], [...path, key])]),
-    );
-  };
-  return walk(data, []);
+function sortedKeys(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(sortedKeys);
+  if (typeof node !== 'object' || node === null) return node;
+  const keys = Object.keys(node).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  // fromEntries, so an own __proto__ key stays a key.
+  return Object.fromEntries(
+    keys.map((key) => [key, sortedKeys((node as Record<string, unknown>)[key])]),
+  );
 }
 
 function dataOf(
