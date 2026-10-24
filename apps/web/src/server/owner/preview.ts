@@ -1,4 +1,5 @@
 import 'server-only';
+import { readDerivedSchemes, type DerivedScheme } from '~/lib/derived-schemes';
 import {
   applyEdits,
   composeSchemas,
@@ -247,7 +248,14 @@ export function ownerPreviews({
     return null;
   }
 
-  const views = new Map<string, PublicView>();
+  /** Each grant's view, and the generated schemes its subject stored (#20 PR 3), by digest. */
+  const views = new Map<
+    string,
+    {
+      readonly view: PublicView;
+      readonly schemes: Readonly<Record<string, DerivedScheme>> | undefined;
+    }
+  >();
 
   /**
    * The owner service a grant's content is read through: it takes the token
@@ -262,8 +270,8 @@ export function ownerPreviews({
   ): Promise<OpenedGrant> {
     assertAuthorized(authorized, 'preview.grant');
     const ref = grantRef(record.digest);
-    let view = views.get(record.digest);
-    if (!view) {
+    let cached = views.get(record.digest);
+    if (!cached) {
       const content: Content | null =
         record.subject.kind === 'draft'
           ? record.documents
@@ -276,19 +284,28 @@ export function ownerPreviews({
         log({ level: 'error', event: 'preview.render_failed', grantRef: ref });
         throw new Error("The grant's content doesn't render.");
       }
-      view = resolvePortfolioView(
+      const view = resolvePortfolioView(
         outcome.pair,
         { media: mediaOf(content.documents), snapshots: content.snapshots },
         { mediaBase: `/preview-assets/${grant}`, extensions },
       );
-      views.set(record.digest, view);
+      // The grant's own pinned revision's or fixture's snapshots/schemes.json,
+      // checked, cached with its view under its own digest. A draft's
+      // derived schemes come with #10's 10h, which pins them at mint.
+      const stored = content.snapshots.schemes;
+      cached = {
+        view,
+        schemes: stored === undefined ? undefined : readDerivedSchemes(stored).schemes,
+      };
+      views.set(record.digest, cached);
       for (const key of views.keys()) {
         if (views.size <= VIEWS) break;
         views.delete(key);
       }
     }
     return Object.freeze({
-      view,
+      view: cached.view,
+      ...(cached.schemes === undefined ? {} : { schemes: cached.schemes }),
       environment: record.environment,
       nonce: record.nonce,
       renderedVersion: renderedVersionOf(record),
