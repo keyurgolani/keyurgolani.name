@@ -467,6 +467,24 @@ test('/reference/media is a no-store 404 for anything the view does not keep', a
   }
 });
 
+test('/reference/media checks the view itself: with every blob held, a private or unplaced asset is still a 404', async (t) => {
+  const reference = await opened(FIXTURE_DIR);
+  const all = new Map(
+    hexes(FIXTURE_DIR).map((hex) => [
+      `sha256:${hex}`,
+      new Uint8Array(readFileSync(blobPath(FIXTURE_DIR, hex))),
+    ]),
+  );
+  serving(t, { ...reference, blob: (hash) => all.get(hash) });
+  for (const assetId of [REFERENCE_CANARIES.privateAsset, 'ref-unplaced']) {
+    const found = record(FIXTURE_DIR, assetId);
+    const [first] = found.renditions;
+    const response = await get([assetId, found.sha256, `${first!.name}.${first!.ext}`]);
+    assert.equal(response.status, 404, assetId);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+  }
+});
+
 test('/reference/media is a no-store 404 for everything with no reference', async (t) => {
   const reference = await opened(FIXTURE_DIR);
   const [segments] = renditionSegments(reference);
