@@ -134,12 +134,17 @@ export function packFindings(cell: Pick<Cell, 'tuple'>, tokens: ResolvedTokens):
   });
 }
 
-/** The [37] checks a planned test runs: each SWEEP_CHECKS entry whose row it is and whose check it owes. */
+/**
+ * The [37] checks a planned test runs: each SWEEP_CHECKS entry whose row it
+ * is and whose check it owes, a swept test the sweep's own checks.
+ */
 export function sweepChecksOf(
-  test: Pick<PlannedTest, 'viewport' | 'row' | 'conditions'>,
+  test: Pick<PlannedTest, 'viewport' | 'row' | 'conditions'> & {
+    readonly cell: Pick<PlannedTest['cell'], 'sweep'>;
+  },
 ): (typeof SWEEP_CHECKS)[number]['name'][] {
   if (test.viewport.id !== SWEEP_VIEWPORT.id) return [];
-  const owed = requiredChecks(test.row.id, test.viewport.id, test.conditions);
+  const owed = requiredChecks(test.row.id, test.viewport.id, test.conditions, test.cell.sweep);
   return SWEEP_CHECKS.filter((each) => each.row === test.row.id && owed.includes(each.check)).map(
     (each) => each.name,
   );

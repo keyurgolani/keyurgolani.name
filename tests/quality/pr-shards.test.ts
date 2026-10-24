@@ -667,8 +667,19 @@ test("a changed pack's cells run in each variant's sweep group, at the sweep's r
 test("a sweep group too heavy for one worker splits by pack, each pack's rows in one part, and every pack runs once", () => {
   const meta = withTierPacks(checkoutMeta());
   const language = meta.PACKS!.find((pack) => pack.kind === 'design-language' && !pack.fixture)!;
-  // Enough packs that one variant's sweep is more than a worker's share, at the sweep's own weights.
-  const pair = Object.values(loadDurations().sweep).reduce((sum, each) => sum + each, 0);
+  // Rows weighed so that filling parts test by test would cut a pack in two
+  // (10, 60, 10, and 10 s: two packs and the next one's first row fit), and
+  // enough packs that one variant's sweep is more than a worker's share.
+  const durations = {
+    ...loadDurations(),
+    sweep: {
+      '1440x900 default': 10,
+      '1440x900 reduced-motion': 60,
+      '1440x900 forced-colors': 10,
+      '1440x900 reduced-transparency': 10,
+    },
+  };
+  const pair = Object.values(durations.sweep).reduce((sum, each) => sum + each, 0);
   const count = Math.ceil(GROUP_BUDGET / pair) + 1;
   const ids = Array.from({ length: count }, (_, at) => `swept-language-${at + 1}`);
   const plan = planCells({
@@ -680,7 +691,7 @@ test("a sweep group too heavy for one worker splits by pack, each pack's rows in
     mode: 'pr',
     changes: ids.map((id) => ({ axis: 'designLanguage' as const, id, paths: [] })),
   });
-  const groups = planGroups(plan, ENGINES);
+  const groups = planGroups(plan, ENGINES, durations);
   const swept = plan.cells.filter((cell) => cell.sweep);
   const sweepProjects = new Set(
     swept.map((cell) => serverProject(ENGINES[0]!, serverId(cellServer(cell)))),
@@ -689,7 +700,7 @@ test("a sweep group too heavy for one worker splits by pack, each pack's rows in
     (group) => sweepProjects.has(group.project) && group.weight > GROUP_BUDGET,
   );
   assert.ok(heavy.length > 0, `${count} packs make a sweep group heavier than one worker has`);
-  const split = splitGroups(groups);
+  const split = splitGroups(groups, GROUP_BUDGET, durations);
   for (const group of heavy) {
     const parts = split.filter((part) => part.project === group.project && part.file === CELL_SPEC);
     assert.ok(parts.length > 1, group.project);
@@ -706,12 +717,13 @@ test("a sweep group too heavy for one worker splits by pack, each pack's rows in
     }
   }
   // The shards still run every planned test once, at the count the planner picks.
-  const { shards } = pickShardCount(groups);
+  const { shards } = pickShardCount(groups, durations);
   assert.deepEqual(
     shards.flatMap((shard) => shard.groups.flatMap((group) => group.tests)).sort(),
     unsharded(plan).sort(),
   );
 });
+
 test("quality:pr takes --shard as the runner's own, and hands it to Playwright's processes by QUALITY_SHARD", () => {
   assert.deepEqual(parseRunArgs(['pr', '--', '--shard=2/3', '--grep', 'login']), {
     mode: 'pr',
