@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -149,6 +150,69 @@ test('check:deps fails owner code imported outside the composition root, by its 
       to: 'apps/web/src/server/owner/auth.ts',
     },
   ]);
+});
+
+/** The demo's modules and the owner's, as the demo rules name them (#9). */
+const DEMO = {
+  'apps/web/src/lib/studio-fetch.ts': 'export const studioFetch = 1;\n',
+  'apps/web/src/lib/studio/owner-backend.ts': 'export const ownerBackend = 1;\n',
+  'apps/web/src/lib/studio/journal.ts': 'export const journal = 1;\n',
+  'apps/web/src/lib/demo/storage.ts': 'export const storage = 1;\n',
+  'apps/web/src/app/(studio)/_components/demo/demo-shell.tsx':
+    "import { storage } from '~/lib/demo/storage';\nexport const shell = storage;\n",
+};
+
+test("check:deps holds the demo and owner code apart, both ways, through a shared module too: #137's mutants and 9-1b's, under one pair of rules (#9)", (t) => {
+  assert.deepEqual(
+    of(cruise(t, DEMO), 'demo-reaches-no-owner-code', 'owner-code-reaches-no-demo'),
+    [],
+  );
+  const violations = cruise(t, {
+    ...DEMO,
+    // #137's: lib/demo importing studioFetch, and owner server code loading lib/demo.
+    'apps/web/src/lib/demo/storage.ts':
+      "import { studioFetch } from '~/lib/studio-fetch';\nexport const storage = studioFetch;\n",
+    'apps/web/src/server/owner/auth.ts':
+      "import { storage } from '~/lib/demo/storage';\nexport const auth = storage;\n",
+    // 9-1b's: Demo Studio's shell importing studioFetch and the journal's backend,
+    // and Owner Studio's libraries importing lib/demo.
+    'apps/web/src/app/(studio)/_components/demo/demo-shell.tsx':
+      "import { ownerBackend } from '~/lib/studio/owner-backend';\nimport { studioFetch } from '~/lib/studio-fetch';\nexport const shell = [ownerBackend, studioFetch];\n",
+    'apps/web/src/lib/studio/journal.ts':
+      "import { storage } from '../demo/storage';\nexport const journal = storage;\n",
+    // Through a shared module: a lib/demo module that reaches any server module.
+    'apps/web/src/lib/demo/url-state.ts':
+      "import { head } from '~/lib/shared-head';\nexport const state = head;\n",
+    'apps/web/src/lib/shared-head.ts':
+      "import { loadOwner } from '~/server/composition';\nexport const head = loadOwner;\n",
+  });
+  const found = of(violations, 'demo-reaches-no-owner-code', 'owner-code-reaches-no-demo').map(
+    ({ rule, from, to }) => `${rule}: ${from} -> ${to}`,
+  );
+  for (const expected of [
+    'demo-reaches-no-owner-code: apps/web/src/lib/demo/storage.ts -> apps/web/src/lib/studio-fetch.ts',
+    'demo-reaches-no-owner-code: apps/web/src/app/(studio)/_components/demo/demo-shell.tsx -> apps/web/src/lib/studio/owner-backend.ts',
+    'demo-reaches-no-owner-code: apps/web/src/app/(studio)/_components/demo/demo-shell.tsx -> apps/web/src/lib/studio-fetch.ts',
+    'owner-code-reaches-no-demo: apps/web/src/server/owner/auth.ts -> apps/web/src/lib/demo/storage.ts',
+    'owner-code-reaches-no-demo: apps/web/src/lib/studio/journal.ts -> apps/web/src/lib/demo/storage.ts',
+  ]) {
+    assert.ok(found.includes(expected), `${expected}\n${found.join('\n')}`);
+  }
+  assert.ok(
+    found.some((line) =>
+      line.startsWith(
+        'demo-reaches-no-owner-code: apps/web/src/lib/demo/url-state.ts -> apps/web/src/server/',
+      ),
+    ),
+    found.join('\n'),
+  );
+  // One pair of rules: the two names #137's and 9-1b's own pairs had are gone.
+  const names = createRequire(import.meta.url)('../.dependency-cruiser.cjs').forbidden.map(
+    ({ name }) => name,
+  );
+  for (const name of ['demo-studio-reaches-no-owner-code', 'owner-code-loads-no-demo-code']) {
+    assert.equal(names.includes(name), false, name);
+  }
 });
 
 test("check:deps fails an import in the web app's source it can't resolve, so no alias goes unchecked (#7)", (t) => {
