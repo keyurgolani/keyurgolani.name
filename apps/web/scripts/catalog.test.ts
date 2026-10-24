@@ -208,8 +208,26 @@ test('the catalog query reads and writes as one URL form, and refuses what it ca
     'mode=system',
     'axis=variant',
     'status=pending',
+    // A license filter takes the allowlist and a Research record's unverified, nothing else.
+    'license=GPL-3.0',
+    'license=mit',
   ]) {
     assert.equal(parseCatalogQuery(bad).ok, false, bad);
+  }
+  for (const good of ['license=MIT', 'license=first-party', 'license=unverified']) {
+    assert.ok(parseCatalogQuery(good).ok, good);
+  }
+});
+
+test("display names keep their words' own casing, not the seed's title-casing of an id", async () => {
+  const entries = catalogEntries(await sources());
+  const name = (id: string) => entries.find((entry) => entry.id === id)?.name;
+  assert.equal(name('neutral-ui'), 'Neutral UI');
+  assert.equal(name('humanist-ui'), 'Humanist UI');
+  assert.equal(name('technical-sans-mono'), 'Technical Sans and Mono');
+  assert.equal(name('oled-black'), 'OLED Black');
+  for (const entry of entries) {
+    assert.doesNotMatch(entry.name, /\b(?:Ui|Oled|Hct|Y2k|Oklch|Github)\b/, entry.id);
   }
 });
 
@@ -222,7 +240,7 @@ test('search filters by words, axis, tier, status, license, and mode', async () 
   };
   assert.deepEqual(ids('q=sage'), ['botanical-sage', 'warm-parchment']);
   assert.deepEqual(ids('q=sage botanical'), ['botanical-sage']);
-  assert.deepEqual(ids('license=MIT'), ['zinc']);
+  assert.deepEqual(ids('license=MIT'), ['oled-black', 'zinc']);
   assert.equal(ids('tier=research').length, 23);
   assert.ok(ids('axis=scheme&mode=light').every((id) => id !== 'oled-black' && id !== 'neon-city'));
   assert.deepEqual(ids('axis=scheme&tier=experimental'), ['neon-city']);
@@ -240,9 +258,14 @@ test('show gives the provenance, and an unavailable id its reason or the resolve
   const entries = catalogEntries(read);
   const zinc = unavailable(read.registry, entries, 'zinc').join('\n');
   assert.match(zinc, /Tier: Extended/);
-  assert.match(zinc, /Source: Tailwind CSS colors, https:\/\/tailwindcss\.com\/docs\/colors/);
+  assert.match(
+    zinc,
+    /Source: Tailwind CSS v3\.4\.17 colors, https:\/\/github\.com\/tailwindlabs\/tailwindcss\/blob\/v3\.4\.17\/src\/public\/colors\.js/,
+  );
+  assert.match(zinc, /Version: 1\.0\.1/);
   assert.match(zinc, /License: MIT/);
   assert.match(zinc, /Attribution: Tailwind Labs/);
+  assert.match(zinc, /Copyright: Copyright \(c\) Tailwind Labs, Inc\./);
   assert.match(zinc, /Status: shipping/);
   const nord = unavailable(read.registry, entries, 'nord').join('\n');
   assert.match(nord, /Tier: Research/);
@@ -337,6 +360,69 @@ test('the branded-name audit passes the shipping catalog', async () => {
   const zinc = report.entries.find(({ id }) => id === 'zinc')!;
   assert.equal(zinc.status, 'upstream');
   assert.deepEqual(zinc.names, ['Tailwind']);
+  // Both Tailwind-derived schemes carry Tailwind CSS v3.4.17's values, credited under MIT.
+  for (const id of ['zinc', 'oled-black']) {
+    const entry = report.entries.find((each) => each.id === id)!;
+    assert.equal(entry.license, 'MIT', id);
+    assert.ok(
+      entry.notes.some((note) => /carries .* credited under MIT\./.test(note)),
+      id,
+    );
+  }
+  // neutral-slate shares one Tailwind anchor a mode, under the threshold, and says so.
+  const slate = report.entries.find(({ id }) => id === 'neutral-slate')!;
+  assert.equal(slate.status, 'first-party');
+  assert.deepEqual(
+    slate.notes.filter((note) => /under the 2-anchor threshold/.test(note)).length,
+    2,
+  );
+});
+
+test('the audit refuses an upstream palette carried without its license, copyright, and credit', () => {
+  const kind = 'color-scheme' as const;
+  // cyan-300 and purple-400, Tailwind CSS v3's, in one mode.
+  const anchors = {
+    dark: { canvas: '#000000', text: '#f5f5f2', accent: '#67e8f9', secondary: '#c084fc' },
+  };
+  assert.deepEqual(
+    audit([{ kind, manifest: scheme({ id: 'night-pop', name: 'Night Pop', anchors }) }]),
+    ['night-pop upstream-palette'],
+  );
+  const credited = {
+    source: { name: 'Tailwind CSS v3.4.17 colors', url: 'https://example.com' },
+    license: 'MIT',
+    attribution: 'Tailwind Labs, Inc.',
+    copyright: 'Copyright (c) Tailwind Labs, Inc.',
+    researchedAt: '2026-10-23',
+    maintainer: 'test',
+  };
+  assert.deepEqual(
+    audit([
+      {
+        kind,
+        manifest: scheme({ id: 'night-pop', name: 'Night Pop', anchors, provenance: credited }),
+      },
+    ]),
+    [],
+  );
+  // Without the copyright line, the credit isn't complete.
+  const { copyright: _copyright, ...uncopied } = credited;
+  void _copyright;
+  assert.deepEqual(
+    audit([
+      {
+        kind,
+        manifest: scheme({ id: 'night-pop', name: 'Night Pop', anchors, provenance: uncopied }),
+      },
+    ]),
+    ['night-pop upstream-palette'],
+  );
+  // One shared anchor is under the threshold.
+  const one = { dark: { ...anchors.dark, secondary: '#123456' } };
+  assert.deepEqual(
+    audit([{ kind, manifest: scheme({ id: 'night-pop', name: 'Night Pop', anchors: one }) }]),
+    [],
+  );
 });
 
 test('the branded-name audit refuses a brand named outside an inspired label or its license', () => {

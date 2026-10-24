@@ -1,20 +1,21 @@
 {
   "id": "zinc",
   "name": "Zinc",
-  "description": "Tailwind CSS's zinc neutrals with its violet as the accent.",
-  "version": "1.0.0",
+  "description": "Tailwind CSS's zinc neutrals with a zinc-600 accent and a violet secondary.",
+  "version": "1.0.1",
   "tokenContract": 1,
   "tier": "extended",
   "provenance": {
     "source": {
-      "name": "Tailwind CSS colors",
-      "url": "https://tailwindcss.com/docs/colors"
+      "name": "Tailwind CSS v3.4.17 colors",
+      "url": "https://github.com/tailwindlabs/tailwindcss/blob/v3.4.17/src/public/colors.js"
     },
     "license": "MIT",
-    "attribution": "Tailwind Labs, Inc., Tailwind CSS v3 zinc and violet color scales, under the MIT License.",
+    "attribution": "Tailwind Labs, Inc., Tailwind CSS v3.4.17's zinc and violet color scales, under the MIT License.",
+    "copyright": "Copyright (c) Tailwind Labs, Inc.",
     "researchedAt": "2026-10-17",
-    "maintainer": "keyurgolani",
-    "derivation": "anchor-v1 from Tailwind CSS v3 zinc-50, zinc-900, zinc-600, and violet-600 (light) and zinc-950, zinc-50, zinc-400, and violet-400 (dark)."
+    "maintainer": "keyurgolani, from Tailwind CSS v3.4.17",
+    "derivation": "anchor-v1 from Tailwind CSS v3.4.17 zinc-50, zinc-900, zinc-600, and violet-600 (light) and zinc-950, zinc-50, zinc-400, and violet-400 (dark). zinc-950 is in Tailwind CSS from v3.3.0."
   },
   "modes": ["light", "dark"],
   "accessibility": {

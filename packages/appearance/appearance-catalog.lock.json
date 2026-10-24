@@ -116,10 +116,10 @@
     "iridescent-pearl": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "tier": "extended",
       "license": "first-party",
-      "digest": "sha256-fb70c68d5c1f73d2423edaa22467d1d31204b7360660aa5184676581f1fb499e"
+      "digest": "sha256-19eafb64ad8960e03ff8a53ac5bcc434289e939e17eba3c9d38d39244a1f8f9d"
     },
     "jewel-twilight": {
       "axis": "colorScheme",
@@ -180,10 +180,10 @@
     "neutral-ui": {
       "axis": "typography",
       "package": "@portfolio/appearance-typography",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "tier": "stable",
       "license": "provided-by-operating-system",
-      "digest": "sha256-62c284d6cbbae37da62f36e70c8ead4964e8ecadb36e38235a487dd5de21629b"
+      "digest": "sha256-5293932643cb9205d910ea80c1dfcd4ec14b1b90867bc958bf302bc3e6226c65"
     },
     "ocean-abyss": {
       "axis": "colorScheme",
@@ -196,10 +196,10 @@
     "oled-black": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "tier": "extended",
-      "license": "first-party",
-      "digest": "sha256-aa4264e1c0fb899a22acb9c8f3a09fb48db4c0e10987e8651475ae5e04af7a2d"
+      "license": "MIT",
+      "digest": "sha256-a336399d0f18284402cfd81bf18446e043ec1847cc42458614a8113ba5cd2a63"
     },
     "paper-ink": {
       "axis": "colorScheme",
@@ -212,10 +212,10 @@
     "pastel-sorbet": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "tier": "extended",
       "license": "first-party",
-      "digest": "sha256-d80374eff16bc1b38384426581296b27ae1ed43e707c2b03097065f4995d2815"
+      "digest": "sha256-50be71b6f4990a6be0ffc5a081c0e1c0219d83b6dad2b6f5f3935585c4fe4c0b"
     },
     "platform-neutral": {
       "axis": "designLanguage",
@@ -252,10 +252,10 @@
     "technical-sans-mono": {
       "axis": "typography",
       "package": "@portfolio/appearance-typography",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "tier": "stable",
       "license": "provided-by-operating-system",
-      "digest": "sha256-93ba5ff3866138dc73fad9823474bef5d1cd23f025e15c77bf5b54b9fa9b121d"
+      "digest": "sha256-1dba09a1e430a1bac80937a0f748a3fe10f2637f794eb6dfde837bf8bdea3bd2"
     },
     "warm-parchment": {
       "axis": "colorScheme",
@@ -268,10 +268,10 @@
     "zinc": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "tier": "extended",
       "license": "MIT",
-      "digest": "sha256-cc35fb7344e4a1bfdb0140e420e88304ed52593a2367a4a803c3308ef5b2b522"
+      "digest": "sha256-7575a4234e0892a27e92c233b875f484db20a07d20b23068eaf1e129a4ea9c1a"
     }
   }
 }

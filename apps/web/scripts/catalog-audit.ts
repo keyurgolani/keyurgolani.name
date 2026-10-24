@@ -15,6 +15,7 @@
 // name that matches is fine, and an exception nothing matches is a finding
 // too, so the list can't go stale.
 
+import { readFileSync } from 'node:fs';
 import {
   AXIS_BY_KIND,
   AXIS_NAMES,
@@ -124,7 +125,12 @@ export interface AuditFinding {
   readonly pack: string;
   readonly axis: PackAxis;
   readonly rule:
-    'branded-name' | 'uncredited-name' | 'research-palette' | 'typeface-name' | 'stale-review';
+    | 'branded-name'
+    | 'uncredited-name'
+    | 'research-palette'
+    | 'upstream-palette'
+    | 'typeface-name'
+    | 'stale-review';
   readonly message: string;
 }
 
@@ -135,7 +141,35 @@ export interface AuditInput {
   readonly research: readonly ResearchRecord[];
   /** The reviewed exceptions; REVIEWED_NAMES by default. */
   readonly reviewed?: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  /** The upstream palettes a scheme is read against; UPSTREAM_PALETTES by default. */
+  readonly palettes?: readonly UpstreamPalette[];
 }
+
+/** An upstream palette whose values a scheme could carry, such as Tailwind CSS v3's scales. */
+export interface UpstreamPalette {
+  readonly id: string;
+  /** Its name, which a crediting scheme's provenance names. */
+  readonly name: string;
+  readonly version: string;
+  readonly url: string;
+  readonly license: string;
+  readonly copyright: string;
+  /** Each color by its upstream name, such as zinc-950. */
+  readonly colors: Readonly<Record<string, string>>;
+}
+
+/**
+ * The upstream palettes the audit knows, from upstream-palettes.json:
+ * Tailwind CSS v3.4.17's scales, read from its src/public/colors.js.
+ */
+export const UPSTREAM_PALETTES: readonly UpstreamPalette[] = (
+  JSON.parse(readFileSync(new URL('./upstream-palettes.json', import.meta.url), 'utf8')) as {
+    palettes: UpstreamPalette[];
+  }
+).palettes;
+
+/** The two-anchor threshold: a mode that shares this many anchors with a palette carries it. */
+export const SHARED_ANCHORS = 2;
 
 export interface AuditReport {
   readonly entries: readonly AuditEntry[];
@@ -167,6 +201,11 @@ function statusOf(license: string): AuditStatus {
   if (license === 'generated') return 'generated';
   if (isUpstreamLicense(license)) return 'upstream';
   return 'first-party';
+}
+
+/** The base modes schemeAnchors() reads, in its order. */
+function modeNames(manifest: ColorSchemeManifest): string[] {
+  return (['light', 'dark'] as const).filter((mode) => manifest.anchors?.[mode] || manifest[mode]);
 }
 
 /** A scheme's anchor colors per base mode: its anchors, or its authored sets' anchor roles. */
@@ -205,6 +244,7 @@ function families(stack: string): string[] {
 /** The audit over every shipping pack and Research record. */
 export function auditCatalog(input: AuditInput): AuditReport {
   const reviewed = input.reviewed ?? REVIEWED_NAMES;
+  const palettes = input.palettes ?? UPSTREAM_PALETTES;
   const terms: BrandedTerm[] = [
     ...BRANDED_TERMS,
     ...input.research.map((record) => ({
@@ -266,6 +306,43 @@ export function auditCatalog(input: AuditInput): AuditReport {
     }
 
     if (kind === 'color-scheme') {
+      // Against the upstream palettes: two shared anchors in a mode is carrying
+      // the palette, which only an adaptation under its license, crediting it, may.
+      const modes = schemeAnchors(manifest as ColorSchemeManifest);
+      for (const palette of palettes) {
+        const named = new Map<string, string>();
+        for (const [name, hex] of Object.entries(palette.colors)) {
+          if (!named.has(hex)) named.set(hex, name);
+        }
+        const word = palette.name.split(' ')[0]!;
+        modes.forEach((mode, index) => {
+          const shared = [...new Set(mode.filter((color) => named.has(color)))];
+          if (shared.length === 0) return;
+          const which = shared.map((hex) => `${named.get(hex)} ${hex}`).join(', ');
+          const where = `${modeNames(manifest as ColorSchemeManifest)[index]} mode`;
+          if (shared.length < SHARED_ANCHORS) {
+            notes.push(
+              `${palette.name}: shares one anchor in its ${where} (${which}), under the ${SHARED_ANCHORS}-anchor threshold.`,
+            );
+          } else if (
+            status === 'upstream' &&
+            license === palette.license &&
+            inProse(credit, word) &&
+            manifest.provenance.copyright === palette.copyright
+          ) {
+            notes.push(
+              `${palette.name}: carries ${which} in its ${where}, credited under ${license}.`,
+            );
+          } else {
+            findings.push({
+              pack: manifest.id,
+              axis,
+              rule: 'upstream-palette',
+              message: `${subject} carries ${palette.name} ${palette.version} in its ${where} (${which}), and its provenance doesn't credit it under ${palette.license} with "${palette.copyright}".`,
+            });
+          }
+        });
+      }
       for (const mode of schemeAnchors(manifest as ColorSchemeManifest)) {
         for (const record of input.research) {
           const shared = new Set(mode.filter((color) => researchAnchors(record).includes(color)));

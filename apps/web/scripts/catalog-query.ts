@@ -14,6 +14,7 @@ import {
   APPEARANCE_AXES,
   AXIS_BY_KIND,
   AXIS_NAMES,
+  ALLOWED_LICENSES,
   CATALOG_TIERS,
   PACK_AXES,
   parseSelection,
@@ -47,6 +48,8 @@ export interface CatalogEntry {
   readonly license: string;
   readonly source: { readonly name: string; readonly url: string | null };
   readonly attribution: string | null;
+  /** The upstream copyright line, for a pack under an upstream license. */
+  readonly copyright: string | null;
   readonly researchedAt: string;
   readonly maintainer: string | null;
   readonly derivation: string | null;
@@ -92,6 +95,7 @@ function fromManifest(
     license: provenance.license,
     source: { name: provenance.source.name, url: provenance.source.url },
     attribution: provenance.attribution,
+    copyright: provenance.copyright ?? null,
     researchedAt: provenance.researchedAt,
     maintainer: provenance.maintainer,
     derivation: provenance.derivation ?? null,
@@ -132,6 +136,7 @@ export function catalogEntries(sources: CatalogSources): CatalogEntry[] {
       license: record.license,
       source: record.source,
       attribution: null,
+      copyright: null,
       researchedAt: record.researchedAt,
       maintainer: null,
       derivation: null,
@@ -162,6 +167,9 @@ export interface CatalogQuery {
   /** A base mode the entry covers. */
   readonly mode?: BaseMode;
 }
+
+/** The licenses the license filter takes: the allowlist, and a Research record's `unverified`. */
+const LICENSE_FILTERS: readonly string[] = [...ALLOWED_LICENSES, 'unverified'];
 
 /** The query keys, in the order serializeCatalogQuery() writes them. Axes take the selection's own keys. */
 const CATALOG_QUERY_KEYS = ['q', 'axis', 'tier', 'status', 'license', 'mode'] as const;
@@ -250,6 +258,12 @@ export function parseCatalogQuery(text: string): ParsedCatalogQuery {
         query.status = value as EntryStatus;
         break;
       case 'license':
+        if (!LICENSE_FILTERS.includes(value)) {
+          return {
+            ok: false,
+            problem: `license is ${value}: use ${LICENSE_FILTERS.join(', ')}. A pack under any other license is excluded: find it with status=excluded.`,
+          };
+        }
         query.license = value;
         break;
       case 'mode':
@@ -312,6 +326,7 @@ export function formatEntry(entry: CatalogEntry): string[] {
     `  License: ${entry.license}`,
   );
   if (entry.attribution) lines.push(`  Attribution: ${entry.attribution}`);
+  if (entry.copyright) lines.push(`  Copyright: ${entry.copyright}`);
   lines.push(`  Researched: ${entry.researchedAt}`);
   if (entry.maintainer) lines.push(`  Maintainer: ${entry.maintainer}`);
   if (entry.derivation) lines.push(`  Derivation: ${entry.derivation}`);
