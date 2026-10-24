@@ -8,6 +8,7 @@ import { LAYER_ORDER } from '../layers';
 import { createAppearanceRegistry, type MetaPack } from '../registry';
 import { schemeSets } from '../sets';
 import { anchorV1 } from '../derive';
+import { FIXTURE_SEED } from '../generators/index';
 import {
   DARK_ONLY,
   HUMANIST_UI,
@@ -65,6 +66,30 @@ test('fixture packs are skipped, and a generator scheme is left to its own repor
   );
   // multilingual-system is a test pack, not a fixture: it's gated with the trio.
   assert.equal(check.combinations, 2 * 4);
+});
+
+test('a generator scheme with generated sets is gated with them, as an authored scheme is (#20 PR 3)', () => {
+  const registry = createAppearanceRegistry({ VARIANTS, PACKS });
+  const without = checkAppearance(registry);
+  assert.ok(without.skipped.some(({ id }) => id === 'fixture-seed'));
+  const generated = { 'fixture-seed': FIXTURE_SEED.generate({ seedColor: '#3366ff' }) };
+  const gated = checkAppearance(registry, { generated });
+  assert.ok(!gated.skipped.some(({ id }) => id === 'fixture-seed'));
+  assert.ok(gated.combinations > without.combinations);
+  // fixture-seed is anchor-v1's, so only a translucent fixture language's backdrops fail it.
+  assert.deepEqual(
+    gated.failures.filter(({ scheme, pair }) => scheme === 'fixture-seed' && !pair.backdrop),
+    [],
+  );
+  // Sets that fail are its failures.
+  const { light, dark } = generated['fixture-seed'];
+  const unreadable = { light: { ...light, 'text-muted': light.canvas }, dark };
+  const failing = checkAppearance(registry, { generated: { 'fixture-seed': unreadable } });
+  assert.ok(
+    failing.failures.some(
+      ({ scheme, pair }) => scheme === 'fixture-seed' && pair.foreground === 'text-muted',
+    ),
+  );
 });
 
 test('single-mode schemes render only the modes they have, and print renders light', () => {
