@@ -17,7 +17,7 @@ import {
   solveSignature,
   type SolveTargets,
 } from './anchor-v2';
-import { anchorV1, HEADROOM, highContrastV1, type Anchors } from './derive';
+import { anchorV1, HEADROOM, highContrastV1, passesOn, type Anchors } from './derive';
 import { GATE_TARGETS, gateSet, NEUTRAL_LANGUAGE } from './gate';
 import type { ColorRole, ColorTokens } from './roles';
 import type { ColorSetName } from './sets';
@@ -185,6 +185,43 @@ test('property: minimal moves: a role that passes stays, and a moved one stops a
         const previous = mix(before[role], text, percent - 2);
         assert.ok(worst(after, previous) < target + HEADROOM, `${label}: ${role} one step less`);
       }
+    }
+  }
+});
+
+test('the signature solver moves the start first on a tie, and both ends by the least total, start-light first (#20 PR 2c)', () => {
+  const text = '#ffffff';
+  const grounds = ['#000000'];
+  const passes = (start: string, end: string, target: number) =>
+    fillStops(start, end).every((color) => passesOn(color, grounds, target));
+  // A tie: moving either end alone first passes at 36%, so the start moves.
+  assert.deepEqual(solveSignature('#0040ff', '#c00040', text, grounds, 3), [
+    mix('#0040ff', text, 36),
+    '#c00040',
+  ]);
+  assert.ok(
+    passes('#0040ff', mix('#c00040', text, 36), 3 + HEADROOM),
+    'the end alone passes at 36% too',
+  );
+  // Neither end alone can pass, so both move: the least total of the two steps,
+  // and at that total, the least on the start.
+  // #000080 passes at a total of 70 split 36 and 34, or 38 and 32: the start takes the lesser.
+  const [start, end] = ['#000000', '#000080'];
+  const [solvedStart, solvedEnd] = solveSignature(start, end, text, grounds, 3);
+  const step = (from: string, to: string) =>
+    [...Array(51).keys()].map((n) => n * 2).find((n) => mix(from, text, n) === to)!;
+  const [a, b] = [step(start, solvedStart), step(end, solvedEnd)];
+  assert.ok(a > 0 && b > 0, 'both ends move');
+  assert.ok(passes(solvedStart, solvedEnd, 3 + HEADROOM));
+  assert.deepEqual([a, b], [36, 34]);
+  for (let total = 4; total <= a + b; total += 2) {
+    for (let first = Math.max(2, total - 100); first <= Math.min(100, total - 2); first += 2) {
+      if (total === a + b && first >= a) break;
+      assert.equal(
+        passes(mix(start, text, first), mix(end, text, total - first), 3 + HEADROOM),
+        false,
+        `${first}% and ${total - first}% would pass with less`,
+      );
     }
   }
 });
