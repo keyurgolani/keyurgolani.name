@@ -12,7 +12,10 @@ test('the rehearsal runs only when the head commit changes the request file, and
     reason: `the head commit doesn't change ${REQUEST}`,
   });
   // The commit that removes it runs nothing.
-  assert.equal(decide({ changed: [REQUEST], text: null }).run, false);
+  assert.deepEqual(decide({ changed: [REQUEST], text: null }), {
+    run: false,
+    reason: `the head commit removes ${REQUEST}`,
+  });
   for (const text of ['not json', '[]', 'null', '7']) {
     assert.equal(decide({ changed: [REQUEST], text }).run, false, text);
   }

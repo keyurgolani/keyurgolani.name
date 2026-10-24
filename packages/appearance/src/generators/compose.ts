@@ -1,11 +1,10 @@
 // What #20's four generators share (PR 3): each one picks a mode's four
-// anchors, and compose() makes them a scheme. The two steps a generator
-// takes itself, both on the accent: an accent with OKLCH lightness under 0.15
+// anchors, and compose() makes them a scheme. The one step a generator
+// takes itself is on the accent: an accent with OKLCH lightness under 0.15
 // or over 0.9 moves to that bound, so its hover and active states have room
-// to move away from on-accent, as #19's fixture-seed does more widely; and when
-// neither black nor white reads at 4.5:1 on it, it moves in 2% OKLCH
-// lightness steps away from on-accent, the one that reads better, until it
-// does. Then 2c's anchor-v2 solves every role
+// to move away from on-accent, as #19's fixture-seed does more widely. The
+// refined body's on-accent step needs no code: black or white always reads
+// at 4.5:1 on any color (ON_ACCENT_TARGET). Then 2c's anchor-v2 solves every role
 // and high-contrast-v2 the high-contrast sets, so a generated scheme passes
 // with every shipping language, textured ones included, as an authored
 // anchor-v2 scheme does. Every move is recorded: the generator's own on the
@@ -13,7 +12,7 @@
 
 import type { BaseMode } from '../axes';
 import { anchorV2, anchorV2Adjustments, highContrastV2, type Adjustments } from '../anchor-v2';
-import { BLACK, contrast, lightness, WHITE, withLightness } from '../color';
+import { lightness, withLightness } from '../color';
 import type { Anchors } from '../derive';
 import type { GeneratedScheme } from '../resolve-tokens';
 
@@ -58,34 +57,19 @@ export interface Composed {
   readonly tokens: GeneratedScheme;
 }
 
-/** What on-accent has to reach on the accent, which its hover and active states only add to. */
-export const ON_ACCENT_TARGET = 4.5;
-const STEP = 0.02;
-const STEPS = 50;
-
-const onAccentReads = (accent: string) =>
-  Math.max(contrast(BLACK, accent), contrast(WHITE, accent)) >= ON_ACCENT_TARGET;
-
 /**
- * `accent`, or the first 2% OKLCH lightness step of it, away from whichever
- * of black and white reads better on it, at which that one reads at
- * ON_ACCENT_TARGET.
+ * What on-accent reads at on the accent at least. Every sRGB color reads at
+ * 4.58:1 or more against black or white, whichever anchor-v1 picks, so no
+ * accent needs a step for it, and its hover and active states only add to
+ * it: schemes.test.ts holds the floor over every 8-bit gray and a grid of
+ * colors.
  */
-export function readableAccent(accent: string): string {
-  if (onAccentReads(accent)) return accent;
-  const lighter = contrast(BLACK, accent) >= contrast(WHITE, accent);
-  const from = lightness(accent);
-  for (let step = 1; step <= STEPS; step += 1) {
-    const candidate = withLightness(accent, lighter ? from + STEP * step : from - STEP * step);
-    if (onAccentReads(candidate)) return candidate;
-  }
-  return lighter ? WHITE : BLACK;
-}
+export const ON_ACCENT_TARGET = 4.5;
 
 /** The accent's OKLCH lightness bounds, which leave its states room on either side. */
 export const ACCENT_LIGHTNESS = { least: 0.15, most: 0.9 } as const;
 
-/** `accent` with its lightness held within ACCENT_LIGHTNESS, then readable: the generator's whole step. */
+/** `accent` with its lightness held within ACCENT_LIGHTNESS: the generator's one step. */
 export function generatorAccent(accent: string): string {
   const at = lightness(accent);
   const held =
@@ -94,7 +78,7 @@ export function generatorAccent(accent: string): string {
       : at > ACCENT_LIGHTNESS.most
         ? withLightness(accent, ACCENT_LIGHTNESS.most)
         : accent;
-  return readableAccent(held);
+  return held;
 }
 
 /** A composition's scheme: the generator's step, then anchor-v2 and high-contrast-v2. */
