@@ -40,7 +40,9 @@ const CHUNK = 64 * 1024;
 
 /** A path bundle.json may name: names joined by /, none empty, `.`, or `..`. */
 const isRelativePath = (file: string) =>
-  file.split('/').every((name) => name !== '' && name !== '.' && name !== '..' && !name.includes('\\'));
+  file
+    .split('/')
+    .every((name) => name !== '' && name !== '.' && name !== '..' && !name.includes('\\'));
 
 /** `dir` as verifyBundle()'s port. `dir` itself is the caller's to check (bundleDirectoryProblem()). */
 export function bundleDirectory(dir: string): BundleFiles {
@@ -59,7 +61,11 @@ export function bundleDirectory(dir: string): BundleFiles {
             await walk(file);
           } else {
             const isFile = found.isFile();
-            entries.push({ path: file, type: isFile ? 'file' : 'other', size: isFile ? found.size : 0 });
+            entries.push({
+              path: file,
+              type: isFile ? 'file' : 'other',
+              size: isFile ? found.size : 0,
+            });
           }
         }
       };
