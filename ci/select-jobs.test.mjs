@@ -133,6 +133,29 @@ const CLASSES = [
     jobs: ['static', 'unit', 'image'],
   },
   {
+    // #9: the demo origin's browser run and the fixture it starts.
+    name: 'demo origin',
+    files: [
+      'tests/proxy/demo-origin.spec.ts',
+      'tests/harness/compose/compose.demo.yml',
+      'tests/harness/compose/Caddyfile',
+      'ci/demo-origin.mjs',
+      'ci/demo-origin.test.mjs',
+    ],
+    jobs: ['static', 'unit', 'image'],
+  },
+  {
+    name: 'demo origin, with the proxy stack it starts',
+    files: ['tests/harness/proxy-stack.mjs', 'ci/demo-origin.mjs'],
+    jobs: ['static', 'unit', 'browser', 'image'],
+  },
+  {
+    // #9: the demo's reference overlay, which the profiles smoke runs.
+    name: 'demo reference overlay',
+    files: ['deploy/compose.demo.reference.yml'],
+    jobs: ['static', 'unit', 'image', 'profiles'],
+  },
+  {
     name: 'container helpers check-standalone imports',
     files: ['ci/lib/container.mjs'],
     jobs: ['static', 'unit', 'build', 'image', 'profiles'],

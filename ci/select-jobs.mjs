@@ -145,6 +145,10 @@ export const RULES = [
       'ci/proxy-smoke.mjs',
       'ci/container.test.mjs',
       'ci/test-security-proxy.mjs',
+      // The demo origin's browser run (#9), which image runs in the
+      // browser jobs' Playwright image.
+      'ci/demo-origin.mjs',
+      'ci/demo-origin.test.mjs',
       'tests/proxy/**',
       'tests/harness/compose/**',
     ],
@@ -439,7 +443,8 @@ export const LOCAL_COMMANDS = {
   'check-variants': 'pnpm check:variants',
   variants: 'pnpm build && pnpm test:variants',
   'external-variant': 'pnpm test:external-variant',
-  image: 'pnpm ci:image && pnpm ci:proxy && pnpm ci:security-proxy (needs Docker)',
+  image:
+    'pnpm ci:image && pnpm ci:proxy && pnpm ci:security-proxy && pnpm ci:demo-origin (needs Docker)',
   profiles: 'pnpm smoke:profiles (needs Docker; SMOKE_PROFILES=<part> for one part)',
   docs: 'pnpm check:docs',
   trace: 'pnpm ci:budgets',

@@ -3,7 +3,9 @@
 // from its own local CA (`tls internal`). `pnpm ci:proxy` smoke-tests it, and
 // #2's security suite runs through it under owner (`test:security:proxy`),
 // with compose.owner.yml on top, on a data volume seeded with the fixture
-// pair (owner-store.mjs).
+// pair (owner-store.mjs). With compose.demo.yml on top of that, the demo runs
+// beside the owner at DEMO_HOST, same-site with PROXY_HOST, for the demo
+// origin's browser checks (#9, ci/demo-origin.mjs).
 //
 //   const stack = await startProxyStack({ image: 'portfolio:ci' });
 //   const res = await stack.request('/api/health');
@@ -21,8 +23,11 @@ const HARNESS = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HARNESS, '..', '..');
 const COMPOSE_FILE = path.join(HARNESS, 'compose', 'compose.yml');
 const OWNER_FILE = path.join(HARNESS, 'compose', 'compose.owner.yml');
+const DEMO_FILE = path.join(HARNESS, 'compose', 'compose.demo.yml');
 const CA_ROOT = '/data/caddy/pki/authorities/local/root.crt';
 export const PROXY_HOST = 'portfolio.test';
+/** The demo's host beside the owner's, a subdomain of it, so the two are same-site. */
+export const DEMO_HOST = `demo.${PROXY_HOST}`;
 export const DEFAULT_PORTFOLIO = path.join(REPO_ROOT, 'tests', 'fixtures', 'portfolio.yml');
 export const DEFAULT_SITE = path.join(REPO_ROOT, 'tests', 'fixtures', 'site.yml');
 /** Where compose.owner.yml mounts the owner's data directory and hash, in the app container. */
@@ -39,6 +44,8 @@ export const OWNER_HASH_FILE = '/run/owner-secret/owner_password_hash';
  * @param {{ hash: string, hops?: number }} [options.owner] the app under owner with the
  *   password provider instead of read-only: the hash it reads from its _FILE, and how many
  *   proxies it trusts to append to X-Forwarded-For (default 1, the fixture's one)
+ * @param {boolean} [options.demo] the demo beside the owner, at DEMO_HOST behind the same
+ *   proxy; only with `owner`
  */
 export async function startProxyStack({
   image,
@@ -47,8 +54,10 @@ export async function startProxyStack({
   portfolio = DEFAULT_PORTFOLIO,
   site = DEFAULT_SITE,
   owner,
+  demo = false,
 } = {}) {
   if (!image) throw new Error('startProxyStack needs the image under test');
+  if (demo && !owner) throw new Error('startProxyStack runs the demo only beside the owner');
   const project = `${projectPrefix}proxy-${randomBytes(4).toString('hex')}`;
   // Under the repo (gitignored) rather than os.tmpdir(): Finch's VM shares the
   // home directory but not macOS's per-user temp directory.
@@ -80,6 +89,7 @@ export async function startProxyStack({
     env.push(`OWNER_SECRET_DIR=${secretDir}`, `TRUSTED_PROXY_HOPS=${owner.hops ?? 1}`);
     files.push('-f', OWNER_FILE);
   }
+  if (demo) files.push('-f', DEMO_FILE);
   const envFile = path.join(stateDir, 'stack.env');
   writeFileSync(envFile, `${env.join('\n')}\n`);
   const compose = (args, options = {}) =>
@@ -98,26 +108,29 @@ export async function startProxyStack({
   };
   /** Caddy's local CA root certificate, once the proxy has made it. */
   let ca;
-  const request = (pathname, { method, headers = {}, body, timeoutMs } = {}) =>
+  const request = (pathname, { method, headers = {}, body, timeoutMs, host = PROXY_HOST } = {}) =>
     send({
       protocol: 'https:',
       port,
       path: pathname,
       method,
-      headers: { host: `${PROXY_HOST}:${port}`, ...headers },
+      headers: { host: `${host}:${port}`, ...headers },
       body,
-      servername: PROXY_HOST,
+      servername: host,
       ca,
       timeoutMs,
     });
-  const healthy = () =>
-    waitFor(
-      async () => {
-        const response = await request('/api/health', { timeoutMs: 5_000 });
-        return response.status === 200 ? response : undefined;
-      },
-      { timeoutMs: 90_000, what: 'GET /api/health through the proxy' },
-    );
+  const healthy = async () => {
+    for (const host of demo ? [PROXY_HOST, DEMO_HOST] : [PROXY_HOST]) {
+      await waitFor(
+        async () => {
+          const response = await request('/api/health', { timeoutMs: 5_000, host });
+          return response.status === 200 ? response : undefined;
+        },
+        { timeoutMs: 90_000, what: `GET https://${host}/api/health through the proxy` },
+      );
+    }
+  };
 
   try {
     if (owner) {
@@ -161,7 +174,12 @@ export async function startProxyStack({
       port,
       ca,
       origin: `https://${PROXY_HOST}:${port}`,
-      /** One HTTPS request through the proxy, verified against Caddy's local CA (http-client.mjs). */
+      /** The demo's origin beside the owner's, or null without the `demo` option. */
+      demoOrigin: demo ? `https://${DEMO_HOST}:${port}` : null,
+      /**
+       * One HTTPS request through the proxy, verified against Caddy's local CA
+       * (http-client.mjs), to PROXY_HOST unless `host` names DEMO_HOST.
+       */
       request,
       /** Runs a command in a service container, with `input` on its stdin; returns spawnSync's result. */
       exec: (service, command, { input } = {}) =>

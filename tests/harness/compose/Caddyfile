@@ -17,3 +17,11 @@ https://portfolio.test {
 	tls internal
 	reverse_proxy app:3000
 }
+
+# The demo, same-site with the owner's origin as demo.jane.name is with
+# jane.name, when proxy-stack.mjs adds compose.demo.yml (#9, origin-2). With
+# no demo service, a request here fails and nothing else changes.
+https://demo.portfolio.test {
+	tls internal
+	reverse_proxy demo:3000
+}
