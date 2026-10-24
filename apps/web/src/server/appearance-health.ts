@@ -23,6 +23,8 @@ export interface AppearanceHealthOptions {
   /** The serving revision, which a diagnostic names and is told once for. */
   readonly revisionId: string;
   readonly profile: Profile;
+  /** The serving revision's stored generated schemes, `unit.snapshots.schemes` as read (#20 PR 3). */
+  readonly schemes?: unknown;
   readonly log?: (entry: LogEntry) => void;
   /** The revision and axis pairs already told, the process's own unless a test passes one. */
   readonly told?: Set<string>;
@@ -33,10 +35,11 @@ const TOLD = new Set<string>();
 /** The live site's appearance health, telling the owner of each axis that falls back once per revision. */
 export function appearanceHealth(
   site: Pick<Site, 'appearance' | 'visitorControls' | 'motionPolicy'>,
-  { revisionId, profile, log = writeLog, told = TOLD }: AppearanceHealthOptions,
+  { revisionId, profile, schemes, log = writeLog, told = TOLD }: AppearanceHealthOptions,
 ): AppearanceHealth {
-  // The published selection alone: no cookie, no query, no preview.
-  const resolved = documentAppearance({ site, variant: site.appearance.variant, profile });
+  // The published selection alone, with the revision's own stored schemes,
+  // as a visitor page renders it: no cookie, no query, no preview.
+  const resolved = documentAppearance({ site, variant: site.appearance.variant, profile, schemes });
   const fallbackAxes = resolved.fallbackAxes.filter((axis): axis is PackAxis => axis !== 'variant');
   for (const axis of fallbackAxes) {
     const key = `${revisionId} ${axis}`;
