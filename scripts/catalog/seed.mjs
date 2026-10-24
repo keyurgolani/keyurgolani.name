@@ -427,11 +427,11 @@ export const RECIPE_PARTS = {
 };
 
 /** A recipe in words, such as "soft radii, hairline borders, solid surfaces, normal density, ...". */
-export function recipeWords(recipe) {
+export function recipeWords(recipe, borderWord) {
   const [shape, border, material, density, elevation, motion, texture] = RECIPE_PARTS[recipe];
   return [
     SHAPE_WORDS[shape],
-    BORDER_WORDS[border],
+    borderWord ?? BORDER_WORDS[border],
     MATERIAL_WORDS[material],
     `${density} density`,
     ELEVATION_WORDS[elevation],
@@ -460,6 +460,24 @@ export const CONTRACT_LANGUAGE_TOKENS = {
  */
 export const BORDER_FIXES = { neumorphic: '1px solid var(--color-border-strong)' };
 
+/** What a description says of a fixed border. */
+const BORDER_FIX_WORDS = { neumorphic: 'hairline control borders' };
+
+/**
+ * The motion names the platform stylesheet has keyframes for (#19's, in
+ * packages/appearance/src/primitives/styles.css). A language names others,
+ * as the prototype does, but they animate nothing until the platform
+ * defines them, and a language can't.
+ */
+export const PLATFORM_KEYFRAMES = new Set(['fade', 'fade-rise', 'fade-scale', 'pulse-once']);
+
+/** The version every seeded language ships at: 1.0.1 since #125's review reworded its fallbacks. */
+export const LANGUAGE_VERSION = '1.0.1';
+
+/** What the platform does to a language's motion under reduced motion, a paused boundary, and print. */
+export const REDUCED_MOTION_FALLBACK =
+  'Under reduced motion, transforms and emphasis stop and entrances and exits fade; a paused boundary and print are instant.';
+
 /** A design language's manifest, from the prototype's record. */
 export function languageManifest(language) {
   const tokens = Object.fromEntries(
@@ -469,7 +487,10 @@ export function languageManifest(language) {
   Object.assign(tokens, CONTRACT_LANGUAGE_TOKENS);
   const [, , material, , , motion, texture] = RECIPE_PARTS[language.recipe];
   const inspired = language.source.licenseState === 'independent-inspired-interpretation';
-  const words = recipeWords(language.recipe);
+  const words = recipeWords(language.recipe, BORDER_FIX_WORDS[language.id]);
+  const unanimated = ['motion-enter', 'motion-exit', 'motion-emphasis'].filter(
+    (key) => tokens[key] !== 'none' && !PLATFORM_KEYFRAMES.has(tokens[key]),
+  );
   const owner = inspired ? INSPIRED_OWNERS[language.source.name] : null;
   const translucent = tokens['surface-opacity'] !== '100%' || tokens['backdrop-blur'] !== '0px';
   const caveats = [
@@ -487,6 +508,11 @@ export function languageManifest(language) {
           "Controls carry a hairline border the prototype didn't have, so they meet 3:1 non-text contrast.",
         ]
       : []),
+    ...(unanimated.length > 0
+      ? [
+          `Its ${unanimated.map((key) => `${key.slice('motion-'.length)} motion, ${tokens[key]},`).join(' and ')} ${unanimated.length === 1 ? 'has' : 'have'} no keyframes in the platform yet, so ${unanimated.length === 1 ? "it doesn't" : "they don't"} animate.`,
+        ]
+      : []),
   ];
   return {
     id: language.id,
@@ -494,7 +520,7 @@ export function languageManifest(language) {
     description: inspired
       ? `An independent interpretation of ${language.source.name}'s public design principles: ${words}. It ships no official component, token file, icon, or font.`
       : `${words.charAt(0).toUpperCase()}${words.slice(1)}.`,
-    version: '1.0.0',
+    version: LANGUAGE_VERSION,
     tokenContract: 1,
     tier: language.status,
     provenance: {
@@ -513,7 +539,7 @@ export function languageManifest(language) {
     budgets: budgets(3072),
     fallbacks: [
       'Under reduced transparency, without backdrop-filter, in forced colors, and in print, surfaces render opaque and the backdrop blur is 0.',
-      'Under reduced motion, the state transforms are none and motion is instant.',
+      REDUCED_MOTION_FALLBACK,
       ...(texture !== 'none' || material !== 'solid'
         ? ['In forced colors, the material is a solid surface, and shadows and texture drop.']
         : []),

@@ -341,7 +341,14 @@ export function catalogFindings(
     packs: [
       ...result.packs
         .filter((pack) => !pack.fixture)
-        .map((pack) => ({ kind: pack.kind, manifest: pack.manifest as PackManifest })),
+        .map((pack) => ({
+          kind: pack.kind,
+          manifest: pack.manifest as PackManifest,
+          // A language's compiled stylesheet, which the typeface rule reads too.
+          ...(pack.kind === 'design-language' && pack.stylesheet
+            ? { stylesheetText: new TextDecoder().decode(pack.stylesheet.bytes) }
+            : {}),
+        })),
       ...readHeld(root, packages)
         .filter((pack) => !fixturePackages.has(pack.packageName))
         .flatMap((pack) => (pack.manifest ? [{ kind: pack.kind, manifest: pack.manifest }] : [])),

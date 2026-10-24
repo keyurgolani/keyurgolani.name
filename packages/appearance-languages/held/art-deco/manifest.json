@@ -2,7 +2,7 @@
   "id": "art-deco",
   "name": "Art Deco",
   "description": "Stepped corners, double borders, brushed-metal surfaces, normal density, low elevation, precise motion, and an etched-line texture.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "tokenContract": 1,
   "tier": "extended",
   "provenance": {
@@ -34,7 +34,7 @@
   },
   "fallbacks": [
     "Under reduced transparency, without backdrop-filter, in forced colors, and in print, surfaces render opaque and the backdrop blur is 0.",
-    "Under reduced motion, the state transforms are none and motion is instant.",
+    "Under reduced motion, transforms and emphasis stop and entrances and exits fade; a paused boundary and print are instant.",
     "In forced colors, the material is a solid surface, and shadows and texture drop."
   ],
   "caveats": [

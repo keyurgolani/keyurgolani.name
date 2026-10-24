@@ -381,7 +381,7 @@
     "withoutTexture": 100
   },
   "unblockedBy": [
-    "anchor-v2 textured targets (scope Deferred: \"anchor-v2 solver\"), so a scheme meets the raised targets a texture sets",
-    "translucency floors (scope Deferred: \"Translucency floors\"), so a translucent surface keeps its contrast over the worst backdrop"
+    "anchor-v2 textured targets (promoted from the backlog to #20 PR 2c: \"anchor-v2 solver\"), so a scheme meets the raised targets a texture sets",
+    "translucency floors (promoted from the backlog to #20 PR 2c: \"Translucency floors\"), so a translucent surface keeps its contrast over the worst backdrop"
   ]
 }

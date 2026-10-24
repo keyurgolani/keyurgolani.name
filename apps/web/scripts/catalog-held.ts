@@ -195,7 +195,11 @@ const byWorst = (a: HeldPair, b: HeldPair) =>
   (a.scheme < b.scheme ? -1 : a.scheme > b.scheme ? 1 : 0) ||
   (a.set < b.set ? -1 : a.set > b.set ? 1 : 0);
 
-/** A held language's gate record, as the gate measures it now, or null when it passes. */
+/**
+ * A held language's gate record, as the gate measures it now, or null when
+ * it passes. A language the gate can't read has no record: heldFindings()
+ * reports its read problems.
+ */
 export function heldRecord(
   registry: AppearanceRegistry,
   manifest: DesignLanguageManifest,
@@ -233,27 +237,17 @@ export function heldRecord(
     }
     return null;
   };
-  const opaque = manifest.tokens['surface-opacity'] === '100%';
-  const unblockedBy = [
-    ...(textured
-      ? [
-          'anchor-v2 textured targets (scope Deferred: "anchor-v2 solver"), so a scheme meets the raised targets a texture sets',
-        ]
-      : []),
-    ...(!opaque
-      ? [
-          'translucency floors (scope Deferred: "Translucency floors"), so a translucent surface keeps its contrast over the worst backdrop',
-        ]
-      : []),
-  ];
-  const sentence = [
-    textured
+  // Each cause brings its sentence, and the work that would clear it.
+  const unblockedBy = causes.map((cause) =>
+    cause === 'texture'
+      ? 'anchor-v2 textured targets (promoted from the backlog to #20 PR 2c: "anchor-v2 solver"), so a scheme meets the raised targets a texture sets'
+      : 'translucency floors (promoted from the backlog to #20 PR 2c: "Translucency floors"), so a translucent surface keeps its contrast over the worst backdrop',
+  );
+  const sentence = causes.map((cause) =>
+    cause === 'texture'
       ? `its texture raises every target by ${targets.textureRaise}, past where anchor-v1 solves each scheme's roles`
-      : null,
-    !opaque
-      ? `its ${manifest.tokens['surface-opacity']} surfaces fall under the targets over a black or white backdrop`
-      : null,
-  ].filter(Boolean);
+      : `its ${manifest.tokens['surface-opacity']} surfaces fall under the targets over a black or white backdrop`,
+  );
   return {
     heldVersion: HELD_VERSION,
     id: manifest.id,
@@ -264,7 +258,7 @@ export function heldRecord(
     schemes: { failing: found.schemes.failing.size, of: found.schemes.of },
     worst: { ...worst, ratio: floor2(worst.ratio) },
     pairs,
-    ...(!opaque
+    ...(translucent
       ? {
           opacityFloor: {
             withTexture: passesAt(manifest.tokens),
@@ -331,6 +325,18 @@ export function heldFindings(
         pack: pack.id,
         axis: pack.axis,
       });
+      continue;
+    }
+    // A language the gate can't read is that problem, never a pass.
+    const read = gateLanguage((pack.manifest as DesignLanguageManifest).tokens);
+    if (!read.ok) {
+      for (const problem of read.problems) {
+        findings.push({
+          message: `The held ${name} ${pack.id} can't be read by the gate: ${problem}`,
+          pack: pack.id,
+          axis: pack.axis,
+        });
+      }
       continue;
     }
     const record = heldRecord(registry, pack.manifest as DesignLanguageManifest, targets);

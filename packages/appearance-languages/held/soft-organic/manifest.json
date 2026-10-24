@@ -2,7 +2,7 @@
   "id": "soft-organic",
   "name": "Soft Organic",
   "description": "Organic, uneven radii, hairline borders, solid surfaces, comfortable density, low elevation, springy motion, and a grain texture.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "tokenContract": 1,
   "tier": "stable",
   "provenance": {
@@ -34,12 +34,13 @@
   },
   "fallbacks": [
     "Under reduced transparency, without backdrop-filter, in forced colors, and in print, surfaces render opaque and the backdrop blur is 0.",
-    "Under reduced motion, the state transforms are none and motion is instant.",
+    "Under reduced motion, transforms and emphasis stop and entrances and exits fade; a paused boundary and print are instant.",
     "In forced colors, the material is a solid surface, and shadows and texture drop."
   ],
   "caveats": [
     "A decorative gradient texture sits behind surfaces.",
-    "Expressive state motion: hovers and presses move more than in a quiet language."
+    "Expressive state motion: hovers and presses move more than in a quiet language.",
+    "Its enter motion, spring-in, and emphasis motion, bounce-once, have no keyframes in the platform yet, so they don't animate."
   ],
   "tokens": {
     "surface-material": "linear-gradient(var(--color-surface-default), var(--color-surface-default))",

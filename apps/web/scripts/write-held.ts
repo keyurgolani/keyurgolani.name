@@ -4,7 +4,7 @@
 
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
-import type { DesignLanguageManifest } from '@portfolio/appearance';
+import { gateLanguage, type DesignLanguageManifest } from '@portfolio/appearance';
 import { packPackages } from '@portfolio/appearance/node';
 import { formatRegistryDiagnostics } from '@portfolio/variant-contract/node';
 import { appearanceTargets } from './appearance-targets';
@@ -35,6 +35,14 @@ async function main(args: readonly string[]): Promise<number> {
       stale += 1;
     }
     if (!pack.manifest || pack.kind !== 'design-language') continue;
+    const read = gateLanguage((pack.manifest as DesignLanguageManifest).tokens);
+    if (!read.ok) {
+      for (const problem of read.problems) {
+        process.stderr.write(`${TAG} ${pack.dir}: the gate can't read it: ${problem}\n`);
+      }
+      stale += 1;
+      continue;
+    }
     const text = renderHeldRecord(
       heldRecord(loaded.sources.registry, pack.manifest as DesignLanguageManifest, targets),
     );

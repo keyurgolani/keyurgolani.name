@@ -699,6 +699,6 @@
     "withoutTexture": 100
   },
   "unblockedBy": [
-    "translucency floors (scope Deferred: \"Translucency floors\"), so a translucent surface keeps its contrast over the worst backdrop"
+    "translucency floors (promoted from the backlog to #20 PR 2c: \"Translucency floors\"), so a translucent surface keeps its contrast over the worst backdrop"
   ]
 }

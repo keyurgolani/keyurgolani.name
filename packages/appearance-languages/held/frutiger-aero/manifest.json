@@ -2,7 +2,7 @@
   "id": "frutiger-aero",
   "name": "Frutiger Aero",
   "description": "Soft radii, hairline borders, glossy surfaces, comfortable density, high elevation, fluid motion, and a bubble pattern.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "tokenContract": 1,
   "tier": "extended",
   "provenance": {
@@ -34,12 +34,13 @@
   },
   "fallbacks": [
     "Under reduced transparency, without backdrop-filter, in forced colors, and in print, surfaces render opaque and the backdrop blur is 0.",
-    "Under reduced motion, the state transforms are none and motion is instant.",
+    "Under reduced motion, transforms and emphasis stop and entrances and exits fade; a paused boundary and print are instant.",
     "In forced colors, the material is a solid surface, and shadows and texture drop."
   ],
   "caveats": [
     "Translucent surfaces with a backdrop blur cost paint time on slower devices, and read less clearly over busy content.",
-    "A decorative gradient texture sits behind surfaces."
+    "A decorative gradient texture sits behind surfaces.",
+    "Its emphasis motion, float-once, has no keyframes in the platform yet, so it doesn't animate."
   ],
   "tokens": {
     "surface-material": "linear-gradient(165deg, color-mix(in srgb, var(--color-text-inverse) 22%, transparent), transparent 38%), linear-gradient(var(--color-surface-prominent), var(--color-surface-default))",

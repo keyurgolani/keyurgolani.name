@@ -163,6 +163,6 @@
     }
   ],
   "unblockedBy": [
-    "anchor-v2 textured targets (scope Deferred: \"anchor-v2 solver\"), so a scheme meets the raised targets a texture sets"
+    "anchor-v2 textured targets (promoted from the backlog to #20 PR 2c: \"anchor-v2 solver\"), so a scheme meets the raised targets a texture sets"
   ]
 }
