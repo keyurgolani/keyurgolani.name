@@ -329,7 +329,14 @@ function LiveCinema(props: CinemaProps) {
         aligning = null;
       }
       if (to === undefined || to === position) return;
-      commit(to, { replace: true, announce: horizontal() });
+      // A link to something in a chapter keeps its own fragment; scrolling
+      // only ever replaces a chapter's, the index's, or none.
+      const hash = window.location.hash;
+      const owned =
+        fragmentId(hash) === undefined ||
+        chapterOfHash(hash, prefix) !== undefined ||
+        fragmentId(hash) === `${prefix}${INDEX_ANCHOR}`;
+      commit(to, { replace: owned, announce: horizontal() });
     };
     const schedule = (wait: number) => {
       if (timer !== undefined) clearTimeout(timer);
@@ -440,7 +447,11 @@ function LiveCinema(props: CinemaProps) {
 
     // The start: the chapter the URL names, else the one in view.
     const named = chapterOfHash(window.location.hash, prefix);
-    position = named ?? measure() ?? 0;
+    // A page that hasn't scrolled is at Prologue, whatever its layout: the
+    // first paint, a print, and a still all agree. One the browser restored
+    // mid-way, on a reload, starts where it is.
+    const scrolled = window.scrollY !== 0 || stageElement.scrollLeft !== 0;
+    position = named ?? (scrolled ? measure() : undefined) ?? 0;
     setCurrent(position);
     setReady(true);
     if (named !== undefined && horizontal()) align(named, 'instant');
