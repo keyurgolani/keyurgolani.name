@@ -100,7 +100,7 @@
       "/preview/local": {
         "js": 737280,
         "postPass": 76800,
-        "why": "Demo Studio's local frame renders a visitor's document in the browser, so it loads the server's own Markdown post-pass there, sanitize-html with it, which no other page or route may reach. A default build of 9-4b1 measured 638,027 B across the 28 chunks it reaches, every variant's included, and 64,922 B for the one post-pass chunk. Each ceiling is about 15% over its measurement."
+        "why": "Demo Studio's local frame renders a visitor's document in the browser, so it loads the server's own Markdown post-pass there, sanitize-html with it, which no other page or route may reach. A default build of 9-4b1 on de81b52 measured 647,061 B across the 29 chunks it reaches, every variant's included, Horizontal Cinema among them, and 64,922 B for the one post-pass chunk. The js ceiling is about 14% over its measurement, and postPass's about 18%."
       }
     },
     "basis": {
