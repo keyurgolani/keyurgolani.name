@@ -63,3 +63,21 @@ export { type MediaBlobStore, type MediaFinding, type MediaLogEntry } from './ca
 export { localMediaRoot, type LocalMediaRoot } from './catalog/media/local';
 export { remoteImageFetcher, type RemoteFetcher } from './catalog/media/remote';
 export { resolveRendition, type RenditionBlob } from './catalog/media/resolve';
+
+// A full export's bundle, verified without a store (#9's read-only reference;
+// #3's provisional bundle format 1).
+export {
+  BUNDLE_FILE,
+  BUNDLE_FORMAT,
+  BUNDLE_LIMITS,
+  parseBundle,
+  verifyBundle,
+  type Bundle,
+  type BundleDocument,
+  type BundleEntry,
+  type BundleFiles,
+  type BundleProblem,
+  type BundleProblemCode,
+  type VerifiedBundle,
+  type VerifyBundleOptions,
+} from './catalog/bundle';
