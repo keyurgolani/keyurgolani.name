@@ -524,6 +524,23 @@ test('both scripts judge their run with finalVerdict over verdictInput, once', (
         /finalVerdict\(\s*verdictInput\(\{ results, secrets, landedState, reports: reportsDir\(\) \}\),?\s*\)/g,
       ) ?? [];
     assert.equal(calls.length, 1, file);
+    // Each problem it returns goes to fail(), which counts it, and the exit
+    // status counts every problem.
+    assert.match(
+      source,
+      /for \(const problem of finalVerdict\(\s*verdictInput\(\{ results, secrets, landedState, reports: reportsDir\(\) \}\),?\s*\)\) \{\s*fail\(problem\.slice\(0, problem\.indexOf\(':'\)\), problem\.slice\(problem\.indexOf\(':'\) \+ 2\)\);\s*\}/,
+      `${file} hands every verdict problem to fail()`,
+    );
+    assert.match(
+      source,
+      /const fail = \(id, message\) => \{\s*problems\.push\(/,
+      `${file}'s fail() counts the problem`,
+    );
+    assert.match(
+      source,
+      /return problems\.length === 0 \? 0 : 1;/,
+      `${file} exits 1 on any problem`,
+    );
     assert.equal(
       (source.match(/finalVerdict\(/g) ?? []).length,
       1,

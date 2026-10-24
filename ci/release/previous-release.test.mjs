@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parse } from 'yaml';
-import { previousRelease } from './previous-release.mjs';
+import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { previousRelease, STORE_CLI } from './previous-release.mjs';
 
 const PARENT = '0123456789abcdef0123456789abcdef01234567';
 
@@ -84,4 +86,40 @@ test('rc-rehearsal finds its previous release with this script, and has no quiet
     /^actions\/checkout@/.test(s.uses ?? ''),
   );
   assert.equal(checkout.with['fetch-depth'], 0, 'it sees every tag');
+});
+
+test('a newest release without the store, though an older one has it, fails and names both', () => {
+  const chosen = previousRelease({
+    allTags: ['v0.1.1', 'v0.2.0', 'v0.3.0'],
+    mergedTags: ['v0.1.1', 'v0.2.0', 'v0.3.0'],
+    parent: PARENT,
+    hasStore: (tag) => tag === 'v0.2.0',
+  });
+  assert.equal(chosen.ref, undefined);
+  assert.match(
+    chosen.error,
+    /v0\.3\.0, doesn't ship apps\/web\/scripts\/portfolio-store\.ts, but v0\.2\.0 does/,
+  );
+});
+
+test('the newest release in the history is picked when it ships the store, older ones or not', () => {
+  assert.equal(
+    previousRelease({
+      allTags: ['v0.1.1', 'v0.2.0', 'v0.3.0'],
+      mergedTags: ['v0.1.1', 'v0.2.0', 'v0.3.0'],
+      parent: PARENT,
+      hasStore: (tag) => tag !== 'v0.1.1',
+    }).ref,
+    'v0.3.0',
+  );
+});
+
+test("the store's path is a file HEAD tracks, so moving it fails in the PR that does", () => {
+  const root = new URL('../../', import.meta.url);
+  assert.ok(existsSync(new URL(STORE_CLI, root)), STORE_CLI);
+  const tracked = execFileSync('git', ['ls-files', '--', STORE_CLI], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  assert.equal(tracked.trim(), STORE_CLI);
 });
