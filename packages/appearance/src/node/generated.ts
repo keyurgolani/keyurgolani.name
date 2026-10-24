@@ -15,14 +15,17 @@
 // Images are read here with a first-party PNG reader (node:zlib), which
 // takes the 8-bit RGB and RGBA PNGs this repository's example media are and
 // refuses the rest, and lists the chunks, so a test can hold the images to
-// carrying no metadata. The pixel hash is SHA-256 over the decoded RGB rows
+// carrying no metadata. It reads its input as untrusted: every chunk's CRC
+// is checked, the header comes first and the end chunk last, an image is at
+// most MAX_PNG_PIXELS, and inflating never allocates more than that image's
+// rows. The pixel hash is SHA-256 over the decoded RGB rows
 // for an opaque image (example-media/provenance.json's pixelsSha256), or
 // RGBA rows for one with any transparency.
 
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { inflateSync } from 'node:zlib';
+import { crc32, inflateSync } from 'node:zlib';
 import { runGenerator, type GeneratorResult, type Raster } from '../generators/index';
 
 /** A decoded PNG and the chunk types it carried, in order. */
@@ -32,6 +35,13 @@ export interface DecodedPng {
 }
 
 const SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+/**
+ * The most pixels a PNG it reads may have, 4096 by 4096: over 30 times the
+ * example media's largest (960 by 640), and a bound on what decoding one
+ * allocates, about 64 MiB of RGBA.
+ */
+export const MAX_PNG_PIXELS = 4096 * 4096;
 
 function paeth(left: number, up: number, corner: number): number {
   const estimate = left + up - corner;
@@ -53,27 +63,47 @@ export function readPng(bytes: Uint8Array): DecodedPng {
   let width = 0;
   let height = 0;
   let channels = 0;
-  for (let at = 8; at + 8 <= buffer.length;) {
+  let at = 8;
+  for (;;) {
+    if (at + 12 > buffer.length) throw new TypeError('The PNG ends before its end chunk.');
     const length = buffer.readUInt32BE(at);
+    if (length > buffer.length - at - 12) throw new TypeError('The PNG ends inside a chunk.');
     const type = buffer.toString('latin1', at + 4, at + 8);
     const body = buffer.subarray(at + 8, at + 8 + length);
+    if (crc32(buffer.subarray(at + 4, at + 8 + length)) !== buffer.readUInt32BE(at + 8 + length)) {
+      throw new TypeError(`The PNG's ${type} chunk fails its CRC.`);
+    }
+    if ((chunks.length === 0) !== (type === 'IHDR')) {
+      throw new TypeError('The PNG has to start with its image header, and have only one.');
+    }
     chunks.push(type);
+    at += 12 + length;
     if (type === 'IHDR') {
+      if (length !== 13) throw new TypeError("The PNG's image header isn't 13 bytes.");
       width = body.readUInt32BE(0);
       height = body.readUInt32BE(4);
       const [depth, color, , , interlace] = body.subarray(8, 13);
       if (depth !== 8 || (color !== 2 && color !== 6) || interlace !== 0) {
         throw new TypeError('This reads 8-bit, non-interlaced RGB or RGBA PNGs only.');
       }
+      if (width < 1 || height < 1 || width * height > MAX_PNG_PIXELS) {
+        throw new TypeError(`This reads PNGs of 1 to ${MAX_PNG_PIXELS} pixels only.`);
+      }
       channels = color === 6 ? 4 : 3;
     } else if (type === 'IDAT') data.push(body);
     else if (type === 'IEND') break;
-    at += 12 + length;
   }
-  if (!channels || width < 1 || height < 1) throw new TypeError('The PNG has no image header.');
-  const raw = inflateSync(Buffer.concat(data));
+  if (at !== buffer.length) throw new TypeError('The PNG has data after its end chunk.');
   const stride = width * channels;
-  if (raw.length !== height * (stride + 1)) throw new TypeError("The PNG's image data is short.");
+  const size = height * (stride + 1);
+  let raw: Buffer;
+  try {
+    // Never more than the image's rows, however far the data would inflate.
+    raw = inflateSync(Buffer.concat(data), { maxOutputLength: size });
+  } catch {
+    throw new TypeError("The PNG's image data doesn't inflate to its rows.");
+  }
+  if (raw.length !== size) throw new TypeError("The PNG's image data is short.");
   const rows = Buffer.alloc(height * stride);
   for (let row = 0; row < height; row += 1) {
     const filter = raw[row * (stride + 1)]!;
