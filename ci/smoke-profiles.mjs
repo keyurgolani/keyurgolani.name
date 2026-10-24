@@ -64,6 +64,16 @@
 //   a log, or the reports this run uploads, which are redacted if one does.
 // - the Compose examples publish only on 127.0.0.1 and keep the hardening,
 //   read from `compose config`.
+// - demo with the read-only reference (#9): deploy/compose.demo.reference.yml
+//   layered over demo's example keeps that hardening and mounts nothing but
+//   the reference, read-only. With PORTFOLIO_REFERENCE_HOST_DIR unset,
+//   Compose refuses the pair, and with it naming no directory, Compose won't
+//   create the container and makes no directory. A container mounting a
+//   copy of the CI fixture as the overlay does keeps a read-only root and no
+//   writable mount, serves /reference and a rendition its view places, and
+//   gives the private one the plain 404, with no reference canary in any
+//   answer or its log. The plain demo run above still finds /reference
+//   unmounted.
 //
 // Owner's seeded run stands in for its ready rows, since the harness
 // fixture selects missing-variant, which no first start can import (12-5). No publish is reachable today, so the SIGKILL during
@@ -86,7 +96,7 @@
 import '../apps/web/scripts/server-only.cjs';
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
@@ -101,9 +111,11 @@ import {
   hashCanaries,
   HOPS_FILE,
   IMAGE_PROBE,
+  referenceLeaks,
 } from '../tests/harness/canaries.mjs';
 import { waitFor } from '../tests/harness/net.mjs';
 import { ownerSecret } from '../tests/harness/owner-secret.mjs';
+import { copyReferenceFixture, REFERENCE_FIXTURE } from '../tests/harness/reference-fixture.ts';
 import { COPY_SEED_INTO_VOLUME, seedOwnerStore } from '../tests/harness/owner-store.mjs';
 import { headerProblems, isPreviewPath, isStudioPath } from '../tests/harness/route-headers.mjs';
 import {
@@ -127,6 +139,11 @@ import {
 } from './lib/container.mjs';
 import {
   composeProblems,
+  REFERENCE_HOST_DIR,
+  REFERENCE_OVERLAY,
+  referenceOverlayProblems,
+  referenceRefusalProblems,
+  referenceRunArgs,
   HARDENING,
   hermeticProblems,
   anonymousLeaks,
@@ -1695,6 +1712,145 @@ function composeRun(profile) {
   }
 }
 
+/** The rendition URL of `assetId`'s first rendition in the CI reference fixture. */
+function fixtureRendition(assetId) {
+  const media = parse(readFileSync(path.join(REFERENCE_FIXTURE, 'media', 'media.json'), 'utf8'));
+  const found = media.assets.find((record) => record.assetId === assetId);
+  const [first] = found.renditions;
+  return `/reference/media/${assetId}/${found.sha256}/${first.name}.${first.ext}`;
+}
+
+/**
+ * demo with the read-only reference (#9), from REFERENCE_OVERLAY layered
+ * over demo's example: Compose refuses it with no directory to mount, and
+ * a container mounting a copy of the CI fixture the way the resolved
+ * overlay says keeps the hardening, serves the reference's public view and
+ * a rendition it places, and nothing private.
+ */
+async function referenceRun() {
+  const what = 'demo with a reference';
+  const project = `${run}-reference`;
+  const files = ['-p', project, '-f', EXAMPLES.demo, '-f', REFERENCE_OVERLAY];
+  const base = { ...process.env, PORTFOLIO_ORIGIN: DEMO_ORIGIN };
+  delete base.PORT;
+  delete base[REFERENCE_HOST_DIR];
+  const refused = (when, result, created) => {
+    const problems = referenceRefusalProblems(result, {
+      names: new RegExp(`${REFERENCE_HOST_DIR}|does not exist|no such file`, 'i'),
+      created,
+    });
+    for (const problem of problems) fail(`${what}: Compose`, `${when}: ${problem}`);
+    if (problems.length === 0) console.log(`[profiles] ${what}: Compose refuses it ${when}`);
+  };
+
+  // Unset, Compose won't resolve the pair.
+  refused(
+    `with ${REFERENCE_HOST_DIR} unset`,
+    container(['compose', ...files, 'config', '--format', 'json'], { env: base }),
+    false,
+  );
+  // Naming a directory that isn't there, Compose won't create the
+  // container, and makes no directory. The image under test stands in
+  // for the example's own tag, so nothing builds or pulls.
+  const missing = path.join(stateDir, 'reference-missing');
+  const tagged = path.join(stateDir, 'reference-image.yml');
+  writeFileSync(tagged, `services:\n  web:\n    image: ${JSON.stringify(image)}\n`);
+  const missingEnv = { env: { ...base, [REFERENCE_HOST_DIR]: missing } };
+  try {
+    refused(
+      `with ${REFERENCE_HOST_DIR} naming no directory`,
+      container(
+        ['compose', ...files, '-f', tagged, 'create', '--no-build', '--pull', 'never', 'web'],
+        missingEnv,
+      ),
+      existsSync(missing),
+    );
+  } finally {
+    container(['compose', ...files, '-f', tagged, 'down', '--remove-orphans'], missingEnv);
+  }
+
+  // Mounted: a copy of the fixture, as the overlay resolves.
+  const mount = copyReferenceFixture(path.join(stateDir, 'reference-export'));
+  const resolved = container(['compose', ...files, 'config', '--format', 'json'], {
+    env: { ...base, [REFERENCE_HOST_DIR]: mount },
+  });
+  const config = parse(resolved.stdout ?? '');
+  const problems = config
+    ? referenceOverlayProblems(config)
+    : [`compose config failed: ${(resolved.stderr || `exit ${resolved.status}`).trim()}`];
+  for (const problem of problems) fail(`${what}: Compose`, `${REFERENCE_OVERLAY}: ${problem}`);
+  if (problems.length > 0) return;
+  console.log(`[profiles] ${what}: ${REFERENCE_OVERLAY} keeps demo's hardening, the reference read-only`);
+
+  const name = `${run}-demo-reference`;
+  const { env, mounts } = referenceRunArgs(config);
+  const started = startServer(name, {
+    env: { PORTFOLIO_PROFILE: 'demo', PORTFOLIO_ORIGIN: DEMO_ORIGIN, ...env },
+    mounts: [...mediaCacheFor('demo'), ...mounts],
+  });
+  if (started.status !== 0) {
+    fail(what, `the container did not start: ${(started.stderr || '').trim()}`);
+    return;
+  }
+  const failed = failures.length;
+  try {
+    await waitHealthy(name, what);
+    for (const problem of hardening(name, 'demo', [])) fail(`${what}: hardening`, problem);
+    const ok = (response) =>
+      response.status === 200 ? [] : [`answered ${response.status ?? response.error}, not 200`];
+    const kept = fixtureRendition('tide-tables-cover');
+    const hidden = fixtureRendition('canary-ref-private-media');
+    const requests = [
+      {
+        path: '/reference',
+        check: (response) => [
+          ...ok(response),
+          ...(response.body?.includes('Wren Halloway') ? [] : ["doesn't show Wren Halloway"]),
+        ],
+      },
+      {
+        path: kept,
+        check: (response) => [
+          ...ok(response),
+          ...(response.headers?.['content-type'] === 'image/png'
+            ? []
+            : [`is ${response.headers?.['content-type']}, not image/png`]),
+        ],
+      },
+      {
+        path: hidden,
+        // #10's plain 404, never cached, as for any rendition nothing places.
+        check: (response) => (response.error ? [response.error] : mediaMissProblems(response)),
+      },
+    ];
+    const responses = send(
+      name,
+      requests.map((request) => ({ method: 'GET', path: request.path })),
+    );
+    requests.forEach((request, index) => {
+      const response = responses[index];
+      const text = `${JSON.stringify(response.headers ?? {})}\n${response.body ?? ''}`;
+      const leaked = referenceLeaks(text, request.path).map((canary) => `carries ${canary}`);
+      for (const problem of [...request.check(response), ...leaked]) {
+        fail(what, `GET ${request.path} ${problem}`, { profile: 'demo', route: request.path });
+      }
+    });
+    const log = output(name);
+    const warned = logEntries(log).filter((entry) => entry.key === 'PORTFOLIO_REFERENCE_DIR');
+    if (warned.length > 0) {
+      fail(what, `the reference logged ${warned.map((entry) => entry.code).join(', ')}`);
+    }
+    if (referenceLeaks(log, '/').length > 0) fail(what, 'the log holds a reference canary');
+    if (failures.length > failed) saveLogs(name, redact(log, runSecrets));
+    else console.log(`[profiles] ${what}: /reference and its placed rendition served, the private one a 404`);
+  } catch (error) {
+    fail(what, explained(name, error));
+    saveLogs(name, redact(output(name), runSecrets));
+  } finally {
+    container(['rm', '-f', name]);
+  }
+}
+
 /** Builds, loads, or pulls the image under test. */
 function acquire() {
   if (pulled) {
@@ -1750,6 +1906,7 @@ async function smoke(parts) {
     await profileRun('demo', {
       env: { PORTFOLIO_PROFILE: 'demo', PORTFOLIO_ORIGIN: DEMO_ORIGIN },
     });
+    await referenceRun();
   }
   if (parts.includes('owner')) {
     part = 'owner';

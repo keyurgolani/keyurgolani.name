@@ -86,6 +86,15 @@ docker compose -f compose.demo.yml up --build
 
 `demo` renders the bundled sample pair and mounts nothing, on the same read-only root and cache tmpfs as `read-only`.
 
+To show one published portfolio beside the sample, read-only ([The read-only reference](#the-read-only-reference)), layer `deploy/compose.demo.reference.yml` over it, with `PORTFOLIO_REFERENCE_HOST_DIR` in `deploy/.env` set to a verified export's directory:
+
+```sh
+echo 'PORTFOLIO_REFERENCE_HOST_DIR=/srv/portfolio-reference' >> .env
+docker compose -f compose.demo.yml -f compose.demo.reference.yml up --build
+```
+
+The overlay mounts that directory read-only at `/reference`, sets `PORTFOLIO_REFERENCE_DIR` to it, and changes nothing else: the same root, tmpfs, and loopback port. With the setting unset, Compose refuses the pair, and with a directory that isn't there it creates neither the container nor the directory. The server's user (uid 1001) needs to read every file in it.
+
 ### `owner`
 
 `deploy/compose.owner.yml` mounts `../config` and `../assets` as `read-only` does, on the same read-only root and Next.js cache tmpfs, and keeps drafts and revisions in the `portfolio-data` volume at `/var/lib/portfolio` (`PORTFOLIO_DATA_DIR`). The image creates that directory for the server's user (uid 1001, mode `0700`), so a new volume starts out writable by the server and no one else. A host directory mounted there instead needs `sudo chown 1001:1001` and `chmod 0700` first: the store refuses one another user owns, or that its group or anyone else may write (`data_dir_not_private`). Run one server per volume: the fixed container name stops `docker compose up --scale`. Back the volume up with `portfolio-store backup` ([Backups](#backups)).
@@ -553,7 +562,7 @@ PORTFOLIO_PROFILE=demo PORTFOLIO_ORIGIN=https://demo.jane.name pnpm start
 
 `/` and `/sample` show the sample in the sample site's selection, `editorial-evidence`, the platform default (#13). `/sample?variant=<id>` shows it in any registered variant, with that variant's views below `/sample` and the parameter on every link. `/sample` and `/` also take `language`, `scheme`, `type`, and `mode`, the other four appearance axes, by the ids this build registers, and `motion=reduce`, which renders with motion reduced. A value the build doesn't accept, such as `fallback`, an unregistered id, an empty value, or a key given twice, falls back on its axis to the sample's own, and a request with any key outside these, or with them in another order, gets a 307 to the same path with the canonical query, on `PORTFOLIO_ORIGIN`. No rejected value decides what renders, though Next echoes the URL as sent, percent-encoded, in its own payloads. The sample's `github` section renders the snapshot bundled beside it, so it fetches nothing. The sample stays out of search: every response the app sends has `X-Robots-Tag: noindex`, and `robots.txt` lets crawlers fetch every page, since a crawler only sees the `noindex` on a page it may fetch. Robots names no sitemap, the sitemap is empty, no page carries JSON-LD, and there is no feed. Every Studio operation answers with the 404 envelope.
 
-Demo Studio (#9) keeps a visitor's choices in their own browser, never on the server: the five appearance values in the page's URL, under the same keys `/sample` takes, and in `localStorage` under `portfolio-demo:v1:selection`, with a working copy under `portfolio-demo:v1:working` in `sessionStorage`. It writes no other key, sets no cookie, and calls no Studio operation. Where the browser blocks or fills the store a choice goes to, that choice stays in the page, which says "Changes will not survive a reload."; blocking only `sessionStorage` leaves the selection kept. Only the `v1` keys are read: a `portfolio-demo:` key of another version is ignored, never read. `Reset demo` deletes every `portfolio-demo:` key, any version's. Its preview frames load `/sample` with the selection, sandboxed to scripts alone. Demo Studio serves at `/studio`, with no session; under `demo` the owner's Studio pages, such as `/studio/sign-in`, are the 404 page.
+Demo Studio (#9) keeps a visitor's choices in their own browser, never on the server: the five appearance values in the page's URL, under the same keys `/sample` takes, and in `localStorage` under `portfolio-demo:v1:selection`, with a working copy under `portfolio-demo:v1:working` in `sessionStorage`. It writes no other key, sets no cookie, and calls no Studio operation. Where the browser blocks or fills the store a choice goes to, that choice stays in the page, which says "Changes will not survive a reload."; blocking only `sessionStorage` leaves the selection kept. Only the `v1` keys are read: a `portfolio-demo:` key of another version is ignored, never read. `Reset demo` deletes every `portfolio-demo:` key, any version's. Its preview frames load `/sample` with the selection, or `/reference` while a verified reference shows ([The read-only reference](#the-read-only-reference)), sandboxed to scripts alone. Demo Studio serves at `/studio`, with no session; under `demo` the owner's Studio pages, such as `/studio/sign-in`, are the 404 page.
 
 #### The read-only reference
 
@@ -564,6 +573,16 @@ The export is the layout `portfolio-store export-revision` writes: the two docum
 At startup, before the first request, the server reads the mount once and checks all of it, with no store and no data directory: exactly the files `bundle.json` lists, with no link, special file, or extra file (a stray `.DS_Store` included), each file's SHA-256 and size, the `unitHash` they make, that the pair validates under this build and means what it meant when it was exported, and that every rendition its public view shows has a listed blob. It refuses a reference over any of these limits: `bundle.json` over 1 MiB, a document, snapshot, or media document over 1 MiB, a blob over 20 MiB, more than 4096 files, 256 MiB in all, or renditions to serve over 64 MiB together, which it holds in memory. Any problem leaves the demo on its sample, never part of a reference, and logs a `config.warning` for each one, with `key` `PORTFOLIO_REFERENCE_DIR`, a `code` such as `reference_hash_mismatch` or `reference_too_large`, and the file relative to the mount, never its path or its content, then `reference_unavailable`. Export it again, and mount the whole export unchanged.
 
 Visitors get only what the public view keeps, the same view the live site is built with: no private record, hidden section, unreached record, or media nothing visible places. `/reference` renders it in the composition its site selects, and takes the same query as `/sample`. A case study is `/reference/work/<slug>`, so no slug can take the renditions' route. Its renditions serve from memory at `/reference/media/<assetId>/<sha256>/<rendition>.<ext>`, as `/media` serves the live site's: the record's `Content-Type`, `nosniff`, and a year's immutable cache. Anything else there, a private, unplaced, or unknown asset and a malformed name included, is a 404 with `Cache-Control: no-store`. A request never reads the mount, so a change to it does nothing until the server restarts. Under `owner` and `read-only`, which have no reference, every path under `/reference` is a 404, and the setting stops a production server.
+
+Demo Studio offers the reference only once startup verified it: a button names the portfolio and says read-only, and shows it in the same sandboxed frame as the sample, at `/reference`, with `source=reference` in Studio's URL. Without a verified reference the button isn't there, and a URL asking for one opens the sample. Only the demo's own pages may frame `/reference`.
+
+To refresh it, export the owner's live revision again, check the export, and swap it in whole. The commands are provisional, like the format, until `portfolio-store` ships them:
+
+1. On the owner's host, `portfolio-store export-revision live --out <dir>`, into a new or empty directory.
+2. `portfolio-store verify-revision <dir>`, which reads it as the demo does.
+3. Copy the directory to the demo's host, set `PORTFOLIO_REFERENCE_HOST_DIR` to the copy, and restart the demo.
+
+**Never mount a `--documents-only` export.** It has no `bundle.json`, so the demo refuses it with `reference_bundle_unreadable` and serves no reference.
 
 ## Environment variables
 

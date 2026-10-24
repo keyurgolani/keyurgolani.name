@@ -356,6 +356,94 @@ export function composeProblems(config) {
   return problems;
 }
 
+/** demo's read-only reference (#9): the overlay layered over deploy/compose.demo.yml. */
+export const REFERENCE_OVERLAY = 'deploy/compose.demo.reference.yml';
+/** Where the overlay mounts the reference, which PORTFOLIO_REFERENCE_DIR names. */
+export const REFERENCE_TARGET = '/reference';
+/** The host directory the overlay mounts, which it refuses to run without. */
+export const REFERENCE_HOST_DIR = 'PORTFOLIO_REFERENCE_HOST_DIR';
+
+/**
+ * Problems with demo's example and the reference overlay as `compose
+ * config` resolves them layered (#9): all of composeProblems', still demo,
+ * and the one mount a read-only bind at REFERENCE_TARGET, which
+ * PORTFOLIO_REFERENCE_DIR names. That the bind never makes a missing
+ * source, which `compose config` reports differently from one Compose
+ * version to the next, the smoke checks by running it.
+ *
+ * @param {any} config
+ * @returns {string[]}
+ */
+export function referenceOverlayProblems(config) {
+  const problems = composeProblems(config);
+  const web = config?.services?.web;
+  if (!web) return problems;
+  const env = web.environment ?? {};
+  if (env.PORTFOLIO_PROFILE !== 'demo') {
+    problems.push(`web runs ${env.PORTFOLIO_PROFILE ?? 'no profile'}, not demo`);
+  }
+  if (env.PORTFOLIO_REFERENCE_DIR !== REFERENCE_TARGET) {
+    problems.push(
+      `web sets PORTFOLIO_REFERENCE_DIR to ${env.PORTFOLIO_REFERENCE_DIR ?? 'nothing'}, not ${REFERENCE_TARGET}`,
+    );
+  }
+  const volumes = web.volumes ?? [];
+  for (const volume of volumes) {
+    if (volume.target !== REFERENCE_TARGET) {
+      problems.push(`web mounts ${volume.target} beside the reference`);
+      continue;
+    }
+    if (volume.type !== 'bind') problems.push(`the reference is a ${volume.type} mount, not a bind`);
+    if (volume.read_only !== true) problems.push('the reference mount is writable');
+    if (!path.isAbsolute(volume.source ?? '')) {
+      problems.push('the reference mount names no host directory');
+    }
+  }
+  if (!volumes.some((volume) => volume.target === REFERENCE_TARGET)) {
+    problems.push(`web mounts nothing at ${REFERENCE_TARGET}`);
+  }
+  return problems;
+}
+
+/**
+ * The `docker run` arguments that give a server container what the resolved
+ * overlay gives web: the reference as a read-only bind that never makes its
+ * source, and the setting that names it. Only for a config
+ * referenceOverlayProblems passes.
+ *
+ * @param {any} config
+ * @returns {{ env: Record<string, string>, mounts: string[] }}
+ */
+export function referenceRunArgs(config) {
+  const web = config.services.web;
+  const volume = web.volumes.find((each) => each.target === REFERENCE_TARGET);
+  return {
+    env: { PORTFOLIO_REFERENCE_DIR: web.environment.PORTFOLIO_REFERENCE_DIR },
+    mounts: ['--mount', `type=bind,source=${volume.source},target=${volume.target},readonly`],
+  };
+}
+
+/**
+ * Problems with how Compose took the overlay with no directory to mount
+ * (#9): `result` is `compose config` with REFERENCE_HOST_DIR unset, or
+ * `compose create` with it naming a directory that isn't there, which
+ * `created` says whether the attempt made. Each must fail, say why, and
+ * make nothing.
+ *
+ * @param {{ status: number | null, stderr?: string | null }} result
+ * @param {{ names: RegExp, created?: boolean }} expected
+ * @returns {string[]}
+ */
+export function referenceRefusalProblems(result, { names, created = false }) {
+  const problems = [];
+  if (result.status === 0) problems.push('Compose went ahead');
+  else if (!names.test(result.stderr ?? '')) {
+    problems.push(`Compose failed without saying why: ${(result.stderr ?? '').trim().slice(0, 300)}`);
+  }
+  if (created) problems.push('Compose made the missing directory');
+  return problems;
+}
+
 /**
  * Problems with a run's own environment: in CI no GitHub token reaches the
  * smoke, so nothing it starts could be handed one.
