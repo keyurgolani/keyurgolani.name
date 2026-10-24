@@ -2,17 +2,40 @@
   "id": "humanist-ui",
   "name": "Humanist UI",
   "description": "The platform's fallback typography profile: a humanist system stack from 0.75rem captions to a 3.5rem display, with a monospace system stack for code and numerals.",
+  "version": "1.0.0",
   "tokenContract": 1,
   "tier": "stable",
-  "budgets": { "js": 0, "css": 1536, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
   "provenance": {
-    "source": { "name": "Keyur Golani portfolio platform" },
-    "license": "first-party",
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "provided-by-operating-system",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
     "researchedAt": "2026-10-17",
     "maintainer": "keyurgolani",
-    "derivation": "The reviewed prototype's humanist-ui profile: its humanist and technical system stacks and its role metrics.",
-    "caveats": ["System fonts only: the stacks fall back to what each platform installs."]
+    "derivation": "The reviewed prototype's humanist-ui profile: its humanist and technical system stacks and its role metrics."
   },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "text-size"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 1536,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "Each role's stack ends in a generic family, so a platform without the named fonts renders its own."
+  ],
+  "caveats": ["System fonts only: the stacks fall back to what each platform installs."],
   "roles": {
     "display": {
       "font-family": "\"Trebuchet MS\", \"Segoe UI\", sans-serif",
@@ -95,7 +118,10 @@
       "font-variation-settings": "normal"
     }
   },
-  "measures": { "body": "68ch", "compact": "52ch" },
+  "measures": {
+    "body": "68ch",
+    "compact": "52ch"
+  },
   "scripts": ["Latn"],
   "fontAssets": []
 }

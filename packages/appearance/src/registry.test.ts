@@ -4,6 +4,7 @@ import {
   anchorV1,
   axisFallback,
   createAppearanceRegistry,
+  exclusionOf,
   findPack,
   isRegistered,
   otherAxes,
@@ -30,7 +31,6 @@ test('it indexes every pack by axis and keeps the variants as the metadata modul
     'fixture-asset',
     'fixture-dark-only',
     'fixture-light-only',
-    'fixture-research',
     'fixture-seed',
     'warm-parchment',
   ]);
@@ -84,7 +84,8 @@ test('the selectable ids leave out the fallback composition and Research packs',
     'fixture-seed',
     'warm-parchment',
   ]);
-  assert.ok(isRegistered(registry, 'colorScheme', 'fixture-research'));
+  // A Research record never registers (#20).
+  assert.ok(!isRegistered(registry, 'colorScheme', 'fixture-research'));
   assert.ok(!isRegistered(registry, 'variant', 'fallback'));
   assert.deepEqual(otherAxes(registry, 'colorScheme', 'platform-neutral'), ['designLanguage']);
   assert.deepEqual(otherAxes(registry, 'typography', 'editorial-evidence'), ['variant']);
@@ -139,12 +140,6 @@ test('a broken build fails to make a registry, saying why', () => {
     () => testRegistry([...PACKS, twice]),
     /Two color-scheme packs register the id fixture-dark-only/,
   );
-  const research = PACKS.map((pack) =>
-    pack.manifest.id === 'humanist-ui'
-      ? ({ ...pack, manifest: { ...pack.manifest, tier: 'research' } } as MetaPack)
-      : pack,
-  );
-  assert.throws(() => testRegistry(research), /can't be a research pack/);
   const singleMode = PACKS.map((pack) =>
     pack.manifest.id === 'warm-parchment'
       ? ({
@@ -160,4 +155,27 @@ test('a broken build fails to make a registry, saying why', () => {
       : pack,
   );
   assert.throws(() => testRegistry(generated), /needs authored or anchored light and dark modes/);
+});
+
+test('an excluded pack registers nowhere, and keeps its reason for the diagnostics (#20)', () => {
+  const excluded = {
+    kind: 'color-scheme',
+    id: 'acme-ocean',
+    packageName: '@acme/packs',
+    reason: "its license, LicenseRef-Proprietary, isn't one a pack may ship under.",
+  } as const;
+  const registry = createAppearanceRegistry({ VARIANTS, PACKS, EXCLUDED_PACKS: [excluded] });
+  assert.ok(!isRegistered(registry, 'colorScheme', 'acme-ocean'));
+  assert.ok(!selectableIds(registry, 'colorScheme').includes('acme-ocean'));
+  assert.equal(exclusionOf(registry, 'colorScheme', 'acme-ocean'), excluded);
+  assert.equal(exclusionOf(registry, 'typography', 'acme-ocean'), undefined);
+  assert.throws(
+    () =>
+      createAppearanceRegistry({
+        VARIANTS,
+        PACKS,
+        EXCLUDED_PACKS: [{ ...excluded, id: 'fixture-seed' }],
+      }),
+    /fixture-seed is both registered and excluded/,
+  );
 });

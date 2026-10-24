@@ -36,7 +36,8 @@ const INPUT_FIELDS = { 'seed-color': 'seedColor', asset: 'sourceAsset' } as cons
 
 /**
  * The site's appearance against this build's registry: each pack id
- * registered on its own axis and not Research, the display mode one the
+ * registered on its own axis (a Research record or an excluded pack never
+ * is, and an excluded one's diagnostic gives its reason), the display mode one the
  * scheme has, a generator scheme's input, and each script the visible
  * content uses covered by the typography profile.
  */
@@ -84,13 +85,6 @@ export function validateAppearance(
                   message: `${problem.message} Preview shows ${PLATFORM_DEFAULTS[axis]} in its place.`,
                 }
               : {}),
-          });
-        } else if (findPack(registry, axis, id)!.manifest.tier === 'research') {
-          add('site', ['appearance', axis], {
-            code: 'appearance.not-publishable',
-            axis,
-            message: `names a Research ${AXIS_NAMES[axis]}, which never ships. Preview renders it for review only.`,
-            remediation: `Select a stable, extended, or experimental one: ${selectableIds(registry, axis).join(', ')}.`,
           });
         }
       }

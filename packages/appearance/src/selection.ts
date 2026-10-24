@@ -20,6 +20,7 @@ import {
 } from './axes';
 import type { AppearanceDiagnostic } from './diagnostics';
 import {
+  exclusionOf,
   findPack,
   isRegistered,
   otherAxes,
@@ -92,6 +93,16 @@ export function valueProblem(
       axis,
       message: `names a ${others.map((other) => AXIS_NAMES[other]).join(' and a ')} this build registers, not a ${name}.`,
       remediation: `Move it to ${others.join(' or ')}, or select ${choices(registry, axis)}.`,
+    };
+  }
+  // An excluded pack (#20) is one this build found and left out, so its id and reason are the build's own.
+  const excluded = axis === 'variant' ? undefined : exclusionOf(registry, axis, value);
+  if (excluded) {
+    return {
+      code: 'appearance.unavailable',
+      axis,
+      message: `names ${excluded.id}, a ${name} this build left out: ${excluded.reason}`,
+      remediation: `Select ${choices(registry, axis)}, or fix ${excluded.packageName} and rebuild.`,
     };
   }
   return {

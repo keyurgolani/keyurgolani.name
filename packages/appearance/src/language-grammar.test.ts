@@ -216,6 +216,6 @@ test("the validator reports a token's grammar where the token is", () => {
   );
   assert.match(
     result.diagnostics[0]!.message,
-    /^\/tokens\/motion-enter must be one of the platform's motion recipes/,
+    /: \/tokens\/motion-enter must be one of the platform's motion recipes/,
   );
 });

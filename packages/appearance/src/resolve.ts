@@ -90,7 +90,7 @@ export interface ResolvedAppearance {
  * a variant to #5's fallback composition. A published mode the scheme lacks
  * is reported then, whatever the visitor sends. Then visitor values apply,
  * only on selectable axes (every axis under `demo`), and only registered,
- * renderable, non-Research ones. The variant, language, and typography
+ * renderable ones. The variant, language, and typography
  * apply alone. The scheme and mode apply as a pair: both when they fit each
  * other, else the scheme when it fits the published mode, else the mode
  * when it fits the published scheme. Whatever doesn't fit drops silently,
@@ -109,13 +109,6 @@ export function resolveAppearance(input: ResolveInput): ResolvedAppearance {
     if (problem) {
       diagnostics.push(problem);
       current[axis] = axisFallback(axis);
-    } else if (axis !== 'variant' && findPack(registry, axis, id)?.manifest.tier === 'research') {
-      diagnostics.push({
-        code: 'appearance.not-publishable',
-        axis,
-        message: `${id} is a Research pack, which can't be published. It renders here only for review.`,
-        remediation: 'Select a stable, extended, or experimental pack.',
-      });
     }
   }
 
@@ -232,7 +225,7 @@ function visitorValues(input: ResolveInput) {
 
 /**
  * Whether a visitor value counts on its own axis: a display mode, or an id
- * registered there (the fallback composition isn't), not Research, and for
+ * registered there (the fallback composition isn't), and for
  * a scheme, one that can render. How a scheme and a mode fit each other is
  * resolveAppearance()'s to weigh.
  */
@@ -245,8 +238,6 @@ function visitorAccepts(
   if (axis === 'displayMode') return isDisplayMode(value);
   if (valueProblem(registry, axis, value, alone(axis, value))) return false;
   if (axis === 'variant') return true;
-  const pack = findPack(registry, axis, value)!;
-  if (pack.manifest.tier === 'research') return false;
   return (
     axis !== 'colorScheme' || schemeRenders(findPack(registry, 'colorScheme', value)!, generated)
   );

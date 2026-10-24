@@ -2,19 +2,41 @@
   "id": "fixture-language-extended",
   "name": "Fixture Language Extended",
   "description": "A tier fixture: an Extended design language with square, ruled geometry, two-pixel borders, and no shadows, for the quality gates to run as a shipping Extended pack.",
+  "version": "1.0.0",
   "tokenContract": 1,
   "tier": "extended",
-  "budgets": { "js": 0, "css": 2048, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
   "provenance": {
     "source": {
-      "name": "Keyur Golani portfolio platform"
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
     },
     "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
     "researchedAt": "2026-10-22",
     "maintainer": "keyurgolani",
-    "derivation": "platform-neutral with square corners, 2px control and card borders in border-strong, flat surfaces, a 3px focus ring, and cut motion.",
-    "caveats": ["A test fixture: it registers only when QUALITY_FIXTURES is 1 or meta."]
+    "derivation": "platform-neutral with square corners, 2px control and card borders in border-strong, flat surfaces, a 3px focus ring, and cut motion."
   },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "focus-ring", "stylesheet-lint"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 2048,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "Under reduced transparency, without backdrop-filter, in forced colors, and in print, surfaces render opaque and the backdrop blur is 0.",
+    "Under reduced motion, the state transforms are none and motion is instant."
+  ],
+  "caveats": ["A test fixture: it registers only when QUALITY_FIXTURES is 1 or meta."],
   "tokens": {
     "surface-material": "linear-gradient(var(--color-surface-default), var(--color-surface-default))",
     "surface-opacity": "100%",

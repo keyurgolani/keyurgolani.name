@@ -16,7 +16,6 @@ import {
   LIGHT_ONLY,
   packDir as shippedDir,
   PLATFORM_NEUTRAL,
-  RESEARCH,
   SEED,
   TRANSLUCENT,
   WARM_PARCHMENT,
@@ -492,7 +491,6 @@ test('every first-party pack compiles from the directory its package ships', () 
     ['design-language', 'appearance-fixtures-languages', TRANSLUCENT],
     ['color-scheme', 'appearance-fixtures-schemes', DARK_ONLY],
     ['color-scheme', 'appearance-fixtures-schemes', LIGHT_ONLY],
-    ['color-scheme', 'appearance-fixtures-schemes', RESEARCH],
     ['color-scheme', 'appearance-fixtures-schemes', SEED],
     ['typography', 'appearance-fixtures-typography', FONT],
   ] as const;

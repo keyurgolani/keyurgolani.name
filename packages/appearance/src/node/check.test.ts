@@ -59,7 +59,6 @@ test('fixture packs are skipped, and a generator scheme is left to its own repor
       'colorScheme:fixture-asset',
       'colorScheme:fixture-dark-only',
       'colorScheme:fixture-light-only',
-      'colorScheme:fixture-research',
       'colorScheme:fixture-seed',
     ],
   );

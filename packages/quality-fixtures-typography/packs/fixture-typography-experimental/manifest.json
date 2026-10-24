@@ -2,23 +2,44 @@
   "id": "fixture-typography-experimental",
   "name": "Fixture Typography Experimental",
   "description": "A tier fixture: an Experimental typography profile set entirely in a monospace system stack, with tight display tracking, for the quality gates to run as a shipping Experimental pack.",
+  "version": "1.0.0",
   "tokenContract": 1,
   "tier": "experimental",
-  "budgets": { "js": 0, "css": 1536, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
   "provenance": {
     "source": {
-      "name": "Keyur Golani portfolio platform"
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
     },
     "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
     "researchedAt": "2026-10-22",
     "maintainer": "keyurgolani",
-    "derivation": "humanist-ui's role metrics on a monospace system stack for every role, with a 3rem display and -0.04em display tracking.",
-    "caveats": [
-      "A test fixture: it registers only when QUALITY_FIXTURES is 1 or meta.",
-      "System fonts only: the stacks fall back to what each platform installs.",
-      "Monospace body text sets fewer words to a line."
-    ]
+    "derivation": "humanist-ui's role metrics on a monospace system stack for every role, with a 3rem display and -0.04em display tracking."
   },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "text-size"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 1536,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "Each role's stack ends in a generic family, so a platform without the named fonts renders its own."
+  ],
+  "caveats": [
+    "A test fixture: it registers only when QUALITY_FIXTURES is 1 or meta.",
+    "System fonts only: the stacks fall back to what each platform installs.",
+    "Monospace body text sets fewer words to a line."
+  ],
   "roles": {
     "display": {
       "font-family": "\"SFMono-Regular\", Consolas, \"Liberation Mono\", monospace",

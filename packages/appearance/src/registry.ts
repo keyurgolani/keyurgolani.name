@@ -23,7 +23,7 @@ import {
 import { anchorV1 } from './derive';
 import type { ColorSchemeManifest, DesignLanguageManifest, TypographyManifest } from './manifests';
 import type { ColorTokens } from './tokens';
-import { baseModes } from './validate-pack';
+import { AXIS_BY_KIND, baseModes } from './validate-pack';
 
 /** A file registry generation wrote into the pack directory, where the host serves it from. */
 export interface PackFileRef {
@@ -69,6 +69,20 @@ export interface AppearanceMeta {
   readonly VARIANTS: VariantRegistry;
   readonly PACKS?: readonly MetaPack[];
   readonly PLATFORM_STYLESHEET?: PackFileRef | null;
+  /**
+   * The packs registry generation found and left out (#20), each with its
+   * reason, such as a license no pack may ship under. None registers, and
+   * selecting one falls back on its axis with that reason.
+   */
+  readonly EXCLUDED_PACKS?: readonly ExcludedPack[];
+}
+
+/** A pack registry generation left out of the build, and why. */
+export interface ExcludedPack {
+  readonly kind: PackKind;
+  readonly id: string;
+  readonly packageName: string;
+  readonly reason: string;
 }
 
 interface RegisteredPack {
@@ -110,13 +124,9 @@ export interface AppearanceRegistry {
   readonly packs: { readonly [A in PackAxis]: ReadonlyMap<string, PackEntries[A]> };
   /** The platform stylesheet every boundary links, once registry generation has written it. */
   readonly platformStylesheet: PackFileRef | null;
+  /** Each pack axis's excluded packs, by id: none registers. A registry built by hand may leave it out. */
+  readonly excluded?: { readonly [A in PackAxis]: ReadonlyMap<string, ExcludedPack> };
 }
-
-const AXIS_BY_KIND: Readonly<Record<PackKind, PackAxis>> = {
-  'design-language': 'designLanguage',
-  'color-scheme': 'colorScheme',
-  typography: 'typography',
-};
 
 /**
  * Indexes the metadata module's variants and packs by axis. It throws when
@@ -173,11 +183,21 @@ export function createAppearanceRegistry(meta: AppearanceMeta): AppearanceRegist
       throw new Error(
         `This build registers no ${fallback}, the ${PACK_KIND_BY_AXIS[axis]} fallback.`,
       );
-    if (entry.manifest.tier === 'research') {
+  }
+  const excluded = {
+    designLanguage: new Map<string, ExcludedPack>(),
+    colorScheme: new Map<string, ExcludedPack>(),
+    typography: new Map<string, ExcludedPack>(),
+  };
+  for (const pack of meta.EXCLUDED_PACKS ?? []) {
+    const axis = AXIS_BY_KIND[pack.kind];
+    if (!axis) throw new Error('The metadata module excludes a pack of an unknown kind.');
+    if (owners.has(pack.id)) {
       throw new Error(
-        `The ${PACK_KIND_BY_AXIS[axis]} fallback ${fallback} can't be a research pack.`,
+        `The id ${pack.id} is both registered and excluded, and an id names one thing.`,
       );
     }
+    excluded[axis].set(pack.id, pack);
   }
   const fallbackScheme = packs.colorScheme.get(PLATFORM_DEFAULTS.colorScheme)!;
   if (fallbackScheme.modes.length < 2 || fallbackScheme.manifest.generator) {
@@ -186,8 +206,18 @@ export function createAppearanceRegistry(meta: AppearanceMeta): AppearanceRegist
   return Object.freeze({
     variants: meta.VARIANTS,
     packs,
+    excluded,
     platformStylesheet: meta.PLATFORM_STYLESHEET ?? null,
   });
+}
+
+/** Why registry generation left the pack `id` names on `axis` out of this build, if it did. */
+export function exclusionOf(
+  registry: AppearanceRegistry,
+  axis: PackAxis,
+  id: string,
+): ExcludedPack | undefined {
+  return registry.excluded?.[axis].get(id);
 }
 
 function schemeSets(manifest: ColorSchemeManifest): Pick<RegisteredScheme, 'modes' | 'sets'> {
@@ -237,8 +267,8 @@ export function axisFallback(axis: IdAxis): string {
 
 /**
  * The ids a site or visitor may select on `axis`, sorted: registered
- * variants other than the fallback composition, or registered packs other
- * than Research ones.
+ * variants other than the fallback composition, or registered packs. A
+ * Research record and an excluded pack never register (#20).
  */
 export function selectableIds(registry: AppearanceRegistry, axis: IdAxis): string[] {
   if (axis === 'variant') {
@@ -247,8 +277,5 @@ export function selectableIds(registry: AppearanceRegistry, axis: IdAxis): strin
       .filter((id) => id !== FALLBACK_ID)
       .sort();
   }
-  return [...registry.packs[axis].values()]
-    .filter(({ manifest }) => manifest.tier !== 'research')
-    .map(({ manifest }) => manifest.id)
-    .sort();
+  return [...registry.packs[axis].values()].map(({ manifest }) => manifest.id).sort();
 }

@@ -4,6 +4,7 @@ import type { AppearanceAxis, AppearanceSelection, VisitorControls } from '@port
 import {
   anchorV1,
   APPEARANCE_AXES,
+  createAppearanceRegistry,
   DEFAULT_VISITOR_CONTROLS,
   modeFits,
   PLATFORM_DEFAULTS,
@@ -11,7 +12,15 @@ import {
   serializeSelection,
   type ResolveInput,
 } from './index';
-import { DARK_ONLY, pick, seeded, testRegistry, WARM_PARCHMENT } from './test-support/packs';
+import {
+  DARK_ONLY,
+  PACKS,
+  pick,
+  seeded,
+  testRegistry,
+  VARIANTS,
+  WARM_PARCHMENT,
+} from './test-support/packs';
 
 const registry = testRegistry();
 const PUBLISHED: AppearanceSelection = { ...PLATFORM_DEFAULTS, variant: 'acme-gallery' };
@@ -119,12 +128,37 @@ test('an explicit mode the scheme lacks renders the native mode with a diagnosti
   assert.deepEqual([matching.resolvedMode, matching.modeLocked], ['dark', false]);
 });
 
-test('a published Research pack renders, with the owner told it can not be published', () => {
+test('a published Research id never registers, so its axis falls back like any unregistered pack (#20)', () => {
   const resolved = resolve({ published: { ...PUBLISHED, colorScheme: 'fixture-research' } });
-  assert.equal(resolved.selection.colorScheme, 'fixture-research');
+  assert.equal(resolved.selection.colorScheme, 'warm-parchment');
+  assert.deepEqual(resolved.fallbackAxes, ['colorScheme']);
   assert.deepEqual(
     resolved.diagnostics.map(({ code }) => code),
-    ['appearance.not-publishable'],
+    ['appearance.unavailable'],
+  );
+});
+
+test('a published excluded pack falls back on its axis, and the diagnostic gives the reason (#20)', () => {
+  const registry = createAppearanceRegistry({
+    VARIANTS,
+    PACKS,
+    EXCLUDED_PACKS: [
+      {
+        kind: 'color-scheme',
+        id: 'acme-ocean',
+        packageName: '@acme/packs',
+        reason: "its license, LicenseRef-Proprietary, isn't one a pack may ship under.",
+      },
+    ],
+  });
+  const resolved = resolve({ published: { ...PUBLISHED, colorScheme: 'acme-ocean' }, registry });
+  assert.equal(resolved.selection.colorScheme, 'warm-parchment');
+  assert.deepEqual(resolved.fallbackAxes, ['colorScheme']);
+  assert.equal(resolved.diagnostics.length, 1);
+  assert.equal(resolved.diagnostics[0]!.code, 'appearance.unavailable');
+  assert.match(
+    resolved.diagnostics[0]!.message,
+    /names acme-ocean, a color scheme this build left out: its license, LicenseRef-Proprietary, isn't one a pack may ship under\. The first-party warm-parchment renders in its place\./,
   );
 });
 

@@ -2,16 +2,9 @@
   "id": "fixture-type-font",
   "name": "Fixture Type Font",
   "description": "A test fixture: the trace's typography profile, which ships a font file, so #6's font budget and the fonts-blocked trace have one to count and block.",
+  "version": "1.0.0",
   "tokenContract": 1,
   "tier": "experimental",
-  "budgets": {
-    "js": 0,
-    "css": 1536,
-    "image": 0,
-    "font": 30720,
-    "animation": 0,
-    "enhancement": 0
-  },
   "provenance": {
     "source": {
       "name": "Geist 1.401, the Latin subset next 16.2.4 ships for its dev overlay",
@@ -21,13 +14,32 @@
     "attribution": "Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font.git)",
     "researchedAt": "2026-10-22",
     "maintainer": "keyurgolani",
-    "derivation": "geist-latin.woff2 is an unmodified copy of next/dist/next-devtools/server/font/geist-latin.woff2 from next 16.2.4, SHA-256 1b5ebfb3a01a97343ac96873e6d59a8cb285c66012b6a1ac509cb2765e995ba8. OFL.txt beside it holds the license.",
-    "caveats": [
-      "A test fixture: it registers only when BUDGET_FIXTURES=1.",
-      "Latin only, the unicode-range next declares for this subset.",
-      "The same file as fixture-font's, under another flag."
-    ]
+    "derivation": "geist-latin.woff2 is an unmodified copy of next/dist/next-devtools/server/font/geist-latin.woff2 from next 16.2.4, SHA-256 1b5ebfb3a01a97343ac96873e6d59a8cb285c66012b6a1ac509cb2765e995ba8. OFL.txt beside it holds the license."
   },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "text-size"]
+  },
+  "cost": {
+    "assets": 1,
+    "assetBytes": 28356
+  },
+  "budgets": {
+    "js": 0,
+    "css": 1536,
+    "image": 0,
+    "font": 30720,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "Each role's stack ends in a generic family, so a platform without the named fonts renders its own."
+  ],
+  "caveats": [
+    "A test fixture: it registers only when BUDGET_FIXTURES=1.",
+    "Latin only, the unicode-range next declares for this subset.",
+    "The same file as fixture-font's, under another flag."
+  ],
   "roles": {
     "display": {
       "font-family": "Geist, \"Segoe UI\", sans-serif",

@@ -1,12 +1,13 @@
-// Pack manifests (#19, Slice 1, item 2): the strict `packs/<id>/manifest.json`
-// a design-language, color-scheme, or typography package holds, one per
-// pack. Every object is strict, so a key the contract doesn't define is
-// reported, never dropped. validatePackManifest() checks what the shape
-// can't. #20 owns the catalog's values; this file owns the fields.
+// Pack manifests (#19, Slice 1, item 2; #20's governance fields): the strict
+// `packs/<id>/manifest.json` a design-language, color-scheme, or typography
+// package holds, one per pack, and the `research/<id>.json` records that
+// never become one. Every object is strict, so a key the contract doesn't
+// define is reported, never dropped. validatePackManifest() checks what the
+// shape can't, and the tier and license policy.
 
 import { z } from 'zod';
 import { REGISTRY_ID_PATTERN } from '@portfolio/schema';
-import { BudgetsSchema, ManifestSchema } from '@portfolio/variant-contract';
+import { BudgetsSchema } from '@portfolio/variant-contract';
 import {
   COLOR_ROLES,
   LANGUAGE_KEYS,
@@ -83,22 +84,100 @@ const IsoDate = z.string().refine(
   { message: 'must be a date written YYYY-MM-DD, such as 2026-10-17.' },
 );
 
-/** Stable, Extended, and Experimental packs ship; Research packs never reach a production registry. */
-export const PACK_TIERS = ['stable', 'extended', 'experimental', 'research'] as const;
+/**
+ * The tiers a pack ships in (#20). Stable, Extended, and Experimental all
+ * meet the universal cross-variant contract. A Research record never
+ * becomes a pack, so `research` is a catalog tier and never a pack's.
+ */
+export const PACK_TIERS = ['stable', 'extended', 'experimental'] as const;
 export type PackTier = (typeof PACK_TIERS)[number];
+
+/** Every catalog tier: the three a pack ships in, and Research, which only a research record holds. */
+export const CATALOG_TIERS = [...PACK_TIERS, 'research'] as const;
+export type CatalogTier = (typeof CATALOG_TIERS)[number];
+
+/**
+ * The license states a pack may ship under (#20): the repository's own
+ * MIT, an independent interpretation of a system's public principles, fonts
+ * the operating system provides, a generator's output, or one of three
+ * upstream licenses, whose notice the generated third-party notices carry.
+ * Any other license keeps the pack out of every production registry.
+ */
+export const LICENSE_STATES = [
+  'first-party',
+  'independent-inspired-interpretation',
+  'provided-by-operating-system',
+  'generated',
+] as const;
+export const UPSTREAM_LICENSES = ['OFL-1.1', 'Apache-2.0', 'MIT'] as const;
+export const ALLOWED_LICENSES: readonly string[] = [...LICENSE_STATES, ...UPSTREAM_LICENSES];
+export type LicenseState = (typeof LICENSE_STATES)[number];
+export type UpstreamLicense = (typeof UPSTREAM_LICENSES)[number];
+
+/** A pack's version: semver's major.minor.patch, with no prerelease or build. */
+const Semver = z.string().regex(/^(?:0|[1-9]\d{0,5})\.(?:0|[1-9]\d{0,5})\.(?:0|[1-9]\d{0,5})$/, {
+  message: 'must be a semver version, major.minor.patch, such as 1.0.0.',
+});
 
 const Provenance = z
   .object({
-    /** Where the pack comes from: the upstream project, or the platform for a first-party pack. */
-    source: z.object({ name: plainText(120), url: Https.optional() }).strict(),
-    /** An SPDX expression, or a license state such as first-party. */
+    /** Where the pack comes from: the upstream project, or the platform's repository for a first-party pack. */
+    source: z.object({ name: plainText(120), url: Https }).strict(),
+    /** A license state, or the upstream SPDX identifier. The allowlist is ALLOWED_LICENSES. */
     license: plainText(120),
-    attribution: plainText(300).optional(),
+    /** Who the pack credits, as a notice names them. */
+    attribution: plainText(300),
     researchedAt: IsoDate,
+    /** Who maintains it: the repository's owner, or the upstream project at a pinned version. */
     maintainer: plainText(120),
-    /** How a derived pack differs from its source, such as a dark counterpart of a light-only palette. */
+    /** How the pack was made from its source, such as anchor-v1 from the prototype's anchors. */
     derivation: plainText(300).optional(),
-    caveats: z.array(plainText(300)).max(16).optional(),
+    /**
+     * The work a derived counterpart comes from, such as the light
+     * counterpart of a dark-only palette. Its own name has to differ, and
+     * `derivation` says how it was derived.
+     */
+    derivedFrom: z
+      .object({ name: plainText(60), url: Https.optional() })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+/** The base modes a pack covers. */
+const BaseModeSchema = z.enum(['light', 'dark']);
+
+/**
+ * The accessibility evidence a pack is held to: each a gate `pnpm
+ * check:appearance` runs. Each axis names exactly the checks it gets
+ * (REQUIRED_CHECKS in validate-pack.ts), so a manifest can't claim less.
+ */
+export const ACCESSIBILITY_CHECKS = [
+  'contrast',
+  'hierarchy',
+  'focus-ring',
+  'stylesheet-lint',
+  'text-size',
+] as const;
+export type AccessibilityCheck = (typeof ACCESSIBILITY_CHECKS)[number];
+
+const Accessibility = z
+  .object({
+    checks: z.array(z.enum(ACCESSIBILITY_CHECKS)).min(1).max(ACCESSIBILITY_CHECKS.length),
+    /** What a reviewer checked by hand, beyond the gates. */
+    notes: z.array(plainText(300)).max(8).optional(),
+  })
+  .strict();
+
+/** What a pack costs a page beyond its stylesheet: its asset files and their bytes, which the pack gates check against what compiles. */
+const Cost = z
+  .object({
+    assets: z.number().int().nonnegative().max(32),
+    assetBytes: z
+      .number()
+      .int()
+      .nonnegative()
+      .max(16 * 1024 * 1024),
   })
   .strict();
 
@@ -106,11 +185,23 @@ const common = {
   id: PackId,
   name: plainText(60),
   description: plainText(1000),
+  /** The pack's own version, which the catalog lock pins beside its digest. */
+  version: Semver,
   tokenContract: z.number().int().nonnegative(),
   tier: z.enum(PACK_TIERS),
   provenance: Provenance,
-  /** Its runtime budgets (#6), each at most its axis's ceiling; one left out is the ceiling. */
-  budgets: BudgetsSchema.optional(),
+  /** The base modes it covers: both for a language or a profile, and a scheme's own. */
+  modes: z.array(BaseModeSchema).min(1).max(2),
+  /** A single-mode scheme's native mode, which every display mode locks to. */
+  lockedMode: BaseModeSchema.optional(),
+  accessibility: Accessibility,
+  cost: Cost,
+  /** Its runtime budgets (#6), each at most its axis's ceiling. js and enhancement are 0, since no pack ships JavaScript. */
+  budgets: BudgetsSchema,
+  /** What renders where something the pack uses is unavailable, such as an opaque surface without backdrop-filter. */
+  fallbacks: z.array(plainText(300)).min(1).max(8),
+  /** Known cost or usability caveats, as text. Never an accessibility shortfall. */
+  caveats: z.array(plainText(300)).max(16),
 };
 
 const Hex = z.string().regex(/^#[0-9a-f]{6}$/, {
@@ -194,8 +285,6 @@ export const DesignLanguageManifestSchema = z
     tokens: LanguageTokensSchema,
     /** The language's stylesheet, compiled into its layer and scope (Slice 2). */
     stylesheet: PackFile('css').optional(),
-    /** #5's enhancement declarations, the same shape a variant's are. */
-    enhancements: ManifestSchema.shape.enhancements,
   })
   .strict();
 
@@ -266,6 +355,35 @@ export const TypographyManifestSchema = z
   })
   .strict();
 
+/**
+ * A Research record (#20): a reviewed candidate that doesn't ship, such as
+ * a palette whose license nobody has verified. It lives in its package's
+ * `research/<id>.json`, which registry generation never reads, so it's
+ * never registered, selectable, published, exported, or bundled. Promoting
+ * one is its own owner-approved PR that turns it into a pack.
+ */
+export const ResearchRecordSchema = z
+  .object({
+    id: PackId,
+    name: plainText(60),
+    kind: z.enum(['design-language', 'color-scheme', 'typography']),
+    tier: z.literal('research'),
+    /** The upstream, with no URL when there's no canonical one. */
+    source: z.object({ name: plainText(120), url: Https.nullable() }).strict(),
+    /** What's known of its license: `unverified` until someone checks. */
+    license: plainText(120),
+    researchedAt: IsoDate,
+    /** Why it doesn't ship. */
+    reason: plainText(500),
+    /** A palette's anchors as researched, which a promotion maps to semantic roles. */
+    anchors: z
+      .object({ light: AnchorsSchema.optional(), dark: AnchorsSchema.optional() })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+export type ResearchRecord = z.infer<typeof ResearchRecordSchema>;
 export type ColorTokenSet = z.infer<typeof ColorTokenSetSchema>;
 export type ColorSchemeManifest = z.infer<typeof ColorSchemeManifestSchema>;
 export type DesignLanguageManifest = z.infer<typeof DesignLanguageManifestSchema>;

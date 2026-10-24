@@ -11,10 +11,12 @@ import type { AppearanceAxis, DiagnosticSeverity } from '@portfolio/schema';
  * renders; import and publish reject it.
  */
 export const APPEARANCE_CODES = {
-  /** A well-formed pack id this build doesn't register. Preview shows the axis's fallback. */
+  /**
+   * A well-formed pack id this build doesn't register: a Research record,
+   * an excluded pack, which the message gives the reason for (#20), or one
+   * nothing installs. Preview shows the axis's fallback.
+   */
   'appearance.unavailable': 'blocks-publish',
-  /** A Research pack. Preview renders it. */
-  'appearance.not-publishable': 'blocks-publish',
   /** An explicit light or dark mode the scheme lacks. Preview renders its native mode. */
   'appearance.mode-incompatible': 'blocks-publish',
   /** A generator scheme with no valid appearanceInputs entry, or nothing generated to render. */

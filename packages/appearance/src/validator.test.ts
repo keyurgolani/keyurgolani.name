@@ -94,11 +94,14 @@ test('an unregistered pack blocks publish, and only warns on the live pair', () 
   ]);
 });
 
-test('a Research pack is not publishable, and preview renders it', () => {
-  for (const live of [false, true]) {
+test('a Research id is unregistered, so it blocks publish and only warns on the live pair (#20)', () => {
+  for (const [live, severity] of [
+    [false, 'blocks-publish'],
+    [true, 'warning'],
+  ] as const) {
     const result = check(site({}, { colorScheme: 'fixture-research' }), { live });
     assert.deepEqual(result.records, [
-      ['appearance.not-publishable', 'blocks-publish', 'site', '/appearance/colorScheme'],
+      ['appearance.unavailable', severity, 'site', '/appearance/colorScheme'],
     ]);
     assert.ok(result.pair);
   }
