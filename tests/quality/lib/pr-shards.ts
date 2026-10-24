@@ -41,6 +41,7 @@ import { assign, parseShard } from '../../../ci/shards.mjs';
 import type { Plan } from '../cells';
 import type { Engine } from './matrix';
 import { perfCells } from './perf/plan';
+import { APPEARANCE_STATE } from './state-fixtures';
 import { cellServer, planServers, serverId } from './server';
 
 /** The spec files a harness project runs. */
@@ -76,6 +77,12 @@ export interface ShardDurations {
   readonly conditions: Readonly<Record<string, number>>;
   /** The same on a cell whose tuple names a pack other than the platform default (#20). */
   readonly pack: Readonly<Record<string, number>>;
+  /**
+   * A composition's complete-state cell without the reload conditions, its
+   * published default appearance, by `<viewport> <row>`: a full page's
+   * checks, unlike the stand-in states and surfaces `plain` weighs.
+   */
+  readonly composition: Readonly<Record<string, number>>;
 }
 
 /** Whether a cell's tuple names a pack other than the platform default on any axis. */
@@ -112,6 +119,40 @@ const median = (values: readonly number[]) => {
   return sorted.length ? sorted[Math.floor(sorted.length / 2)]! : 0;
 };
 
+/** What testWeight() reads of a planned test. */
+export type WeighedTest = Pick<Plan['tests'][number], 'skip' | 'engineSkips' | 'conditions'> & {
+  readonly cell: Pick<Plan['tests'][number]['cell'], 'kind' | 'state' | 'tuple'>;
+  readonly viewport: { readonly id: string };
+  readonly row: { readonly id: string };
+};
+
+/**
+ * About how long one planned cell test takes on `engine`: none skipped; a
+ * test with the reload conditions its row's measured mean, from `pack` on a
+ * pack's tuple, else `conditions`; a composition's complete cell without
+ * them `composition`'s; and any other, a stand-in state's or a surface's,
+ * `plain`. A row with no measured weight takes `fallback`.
+ */
+export function testWeight(
+  test: WeighedTest,
+  engine: string,
+  durations: ShardDurations,
+  fallback: number = median(Object.values(durations.conditions)),
+): number {
+  if (test.skip !== undefined || test.engineSkips[engine] !== undefined) return durations.skipped;
+  const key = `${test.viewport.id} ${test.row.id}`;
+  if (!test.conditions) {
+    return test.cell.kind === 'composition' && test.cell.state === APPEARANCE_STATE.id
+      ? (durations.composition[key] ?? fallback)
+      : durations.plain;
+  }
+  return (
+    (onPack(test.cell.tuple) ? durations.pack[key] : undefined) ??
+    durations.conditions[key] ??
+    fallback
+  );
+}
+
 /** Every test group the PR plan runs on `engines`, with its weight. */
 export function planGroups(
   plan: Pick<Plan, 'cells' | 'tests' | 'targets'>,
@@ -132,18 +173,7 @@ export function planGroups(
     }
     for (const { id } of planServers(plan)) {
       const own = plan.tests.filter((test) => serverId(cellServer(test.cell)) === id);
-      const costs = own.map((test) => {
-        if (test.skip !== undefined || test.engineSkips[engine] !== undefined) {
-          return durations.skipped;
-        }
-        if (!test.conditions) return durations.plain;
-        const key = `${test.viewport.id} ${test.row.id}`;
-        return (
-          (onPack(test.cell.tuple) ? durations.pack[key] : undefined) ??
-          durations.conditions[key] ??
-          fallback
-        );
-      });
+      const costs = own.map((test) => testWeight(test, engine, durations, fallback));
       groups.push({
         project: serverProject(engine, id),
         file: CELL_SPEC,
@@ -254,10 +284,17 @@ export function assignShards(groups: readonly ShardGroup[], count: number): PrSh
 
 /** The longest a shard's workers take, placing its groups heaviest first on the freer worker. */
 export function shardWall(groups: readonly ShardGroup[], workers: number = SHARD_WORKERS): number {
+  // One project's spec file runs on one worker (fullyParallel is off), so a
+  // split group's parts on one shard run one after another: they weigh together.
+  const byFile = new Map<string, number>();
+  for (const group of groups) {
+    const key = `${group.project} ${group.file}`;
+    byFile.set(key, (byFile.get(key) ?? 0) + group.weight);
+  }
   const load = Array.from({ length: workers }, () => 0);
-  for (const group of [...groups].sort((a, b) => b.weight - a.weight)) {
+  for (const weight of [...byFile.values()].sort((a, b) => b - a)) {
     const freer = load.indexOf(Math.min(...load));
-    load[freer] = load[freer]! + group.weight;
+    load[freer] = load[freer]! + weight;
   }
   return Math.max(...load);
 }
@@ -349,6 +386,6 @@ export function projectGrep(id: string, tests?: readonly string[]): RegExp {
     })
     .join('|');
   return new RegExp(
-    `^(?=.*${server})(?=.*(?:${PERF_TAG}(?![\\w-])|@test-(?:${tags})(?![0-9a-f])))`,
+    `^(?=[\\s\\S]*${server})(?=[\\s\\S]*(?:${PERF_TAG}(?![\\w-])|@test-(?:${tags})(?![0-9a-f])))`,
   );
 }

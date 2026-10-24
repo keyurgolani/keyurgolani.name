@@ -28,8 +28,9 @@ import {
   projectGrep,
   prShard,
   serverProject,
-  shardTests,
+  SHARD_WORKERS,
   shardFiles,
+  shardTests,
 } from './lib/pr-shards';
 import { HARNESS_SERVER, planServers } from './lib/server';
 import { loadPlan } from './plan';
@@ -73,7 +74,8 @@ export default defineConfig({
   outputDir: path.join(reports, 'results'),
   fullyParallel: false,
   retries: 0,
-  workers: 2,
+  // The planner sizes shards for this many (lib/pr-shards.ts).
+  workers: SHARD_WORKERS,
   reporter: [['list'], ['./reporter.ts']],
   use: { ...base.use, trace: 'retain-on-failure', screenshot: 'only-on-failure' },
   projects: RUN_ENGINES[plan.mode].flatMap((engine) => [

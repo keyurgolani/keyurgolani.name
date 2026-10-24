@@ -1,0 +1,590 @@
+{
+  "source": "quality-pr's four shards in CI run 40066815817 (#126 at 0b4989e7): each job's wall time from its startedAt and completedAt, and each test the list reporter timed, by project, spec, and cell, viewport, and row. Skipped tests aren't listed. pr-shards.test.ts holds the planner's estimates to it.",
+  "run": 40066815817,
+  "shards": {
+    "1/4": {
+      "jobSeconds": 315,
+      "tests": [
+        {
+          "project": "chromium harness",
+          "file": "harness.spec.ts",
+          "title": "the server starts with the clock and the socket guard preloaded, and the guard says it loaded",
+          "seconds": 0.1
+        },
+        {
+          "project": "chromium harness",
+          "file": "harness.spec.ts",
+          "title": "the server runs on the fixed clock: the sitemap, modified per request, says the fixture's day",
+          "seconds": 0.1
+        },
+        {
+          "project": "chromium harness",
+          "file": "harness.spec.ts",
+          "title": "the token role is the boundary role the element's color resolves to, hard-coded for any other, and none outside a boundary",
+          "seconds": 3.5
+        },
+        {
+          "project": "chromium c946a80325",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1440x900",
+          "row": "default",
+          "seconds": 48.4
+        },
+        {
+          "project": "chromium c3363d3936",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-extended/fixture-scheme-extended/fixture-typography-extended/high-contrast",
+          "viewport": "390x844",
+          "row": "default",
+          "seconds": 56.6
+        },
+        {
+          "project": "chromium c946a80325",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1440x900",
+          "row": "reduced-motion",
+          "seconds": 8.6
+        },
+        {
+          "project": "chromium c946a80325",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1440x900",
+          "row": "forced-colors",
+          "seconds": 21.8
+        },
+        {
+          "project": "chromium c946a80325",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1440x900",
+          "row": "contrast-more",
+          "seconds": 20.8
+        },
+        {
+          "project": "chromium c946a80325",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1440x900",
+          "row": "reduced-transparency",
+          "seconds": 9.0
+        },
+        {
+          "project": "chromium c946a80325",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1440x900",
+          "row": "print",
+          "seconds": 2.2
+        },
+        {
+          "project": "chromium c946a80325",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1440x900",
+          "row": "no-javascript",
+          "seconds": 8.5
+        },
+        {
+          "project": "chromium c946a80325",
+          "file": "perf.spec.ts",
+          "title": "fallback complete /, performance at 390x844 (light)",
+          "seconds": 90.0
+        },
+        {
+          "project": "chromium c946a80325",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1024x768",
+          "row": "default",
+          "seconds": 38.4
+        },
+        {
+          "project": "chromium c946a80325",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "390x844",
+          "row": "default",
+          "seconds": 48.9
+        },
+        {
+          "project": "chromium c946a80325",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback not-found /quality-no-such-page fallback/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1440x900",
+          "row": "default",
+          "seconds": 1.5
+        },
+        {
+          "project": "chromium c946a80325",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback not-found /quality-no-such-page fallback/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1024x768",
+          "row": "default",
+          "seconds": 1.5
+        },
+        {
+          "project": "chromium c946a80325",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback not-found /quality-no-such-page fallback/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "390x844",
+          "row": "default",
+          "seconds": 2.1
+        }
+      ]
+    },
+    "2/4": {
+      "jobSeconds": 274,
+      "tests": [
+        {
+          "project": "chromium 2bd0ec4eb4",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-stable/fixture-scheme-stable/fixture-typography-stable/light",
+          "viewport": "1440x900",
+          "row": "default",
+          "seconds": 49.3
+        },
+        {
+          "project": "chromium 2bd0ec4eb4",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-stable/fixture-scheme-stable/fixture-typography-stable/light",
+          "viewport": "1440x900",
+          "row": "reduced-motion",
+          "seconds": 8.9
+        },
+        {
+          "project": "chromium 2bd0ec4eb4",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-stable/fixture-scheme-stable/fixture-typography-stable/light",
+          "viewport": "1440x900",
+          "row": "forced-colors",
+          "seconds": 19.9
+        },
+        {
+          "project": "chromium 2280a25ce3",
+          "file": "perf.spec.ts",
+          "title": "obsidian-atelier complete /, performance at 390x844 (light)",
+          "seconds": 90.0
+        },
+        {
+          "project": "chromium 2bd0ec4eb4",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-stable/fixture-scheme-stable/fixture-typography-stable/light",
+          "viewport": "1440x900",
+          "row": "contrast-more",
+          "seconds": 22.1
+        },
+        {
+          "project": "chromium 2bd0ec4eb4",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-stable/fixture-scheme-stable/fixture-typography-stable/light",
+          "viewport": "1440x900",
+          "row": "reduced-transparency",
+          "seconds": 9.2
+        },
+        {
+          "project": "chromium 2bd0ec4eb4",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-stable/fixture-scheme-stable/fixture-typography-stable/light",
+          "viewport": "1440x900",
+          "row": "print",
+          "seconds": 2.2
+        },
+        {
+          "project": "chromium 2bd0ec4eb4",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-stable/fixture-scheme-stable/fixture-typography-stable/light",
+          "viewport": "1440x900",
+          "row": "no-javascript",
+          "seconds": 8.8
+        },
+        {
+          "project": "chromium 2bd0ec4eb4",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-stable/fixture-scheme-stable/fixture-typography-stable/light",
+          "viewport": "1024x768",
+          "row": "default",
+          "seconds": 39.7
+        },
+        {
+          "project": "chromium f0fceed375",
+          "file": "perf.spec.ts",
+          "title": "kinetic-cosmos complete /, performance at 390x844 (medium)",
+          "seconds": 90.0
+        }
+      ]
+    },
+    "3/4": {
+      "jobSeconds": 432,
+      "tests": [
+        {
+          "project": "chromium harness",
+          "file": "canary.spec.ts",
+          "title": "every request the page makes carries the canary, and its trace holds it until the scrub",
+          "seconds": 1.2
+        },
+        {
+          "project": "chromium harness",
+          "file": "a11y.spec.ts",
+          "title": "under OS reduced motion › with JavaScript › OS reduced motion wins over the site, the visitor, and a preview",
+          "seconds": 4.3
+        },
+        {
+          "project": "chromium harness",
+          "file": "a11y.spec.ts",
+          "title": "under OS reduced motion › without JavaScript › OS reduced motion wins over the site, the visitor, and a preview",
+          "seconds": 4.2
+        },
+        {
+          "project": "chromium harness",
+          "file": "a11y.spec.ts",
+          "title": "no compiled stylesheet kills motion with a universal !important rule",
+          "seconds": 0.1
+        },
+        {
+          "project": "chromium harness",
+          "file": "a11y.spec.ts",
+          "title": "the host's focus ring on a phone › the skip link on /, its first stop, rings in the scheme's focus color, at 3:1 or more",
+          "seconds": 0.8
+        },
+        {
+          "project": "chromium harness",
+          "file": "a11y.spec.ts",
+          "title": "the host's focus ring on a phone › the skip link on /quality-no-such-page, its first stop, rings in the scheme's focus color, at 3:1 or more",
+          "seconds": 0.5
+        },
+        {
+          "project": "chromium harness",
+          "file": "a11y.spec.ts",
+          "title": "the host's focus ring on a phone › a variant's own focus style, unlayered, wins over the host's",
+          "seconds": 0.6
+        },
+        {
+          "project": "chromium harness",
+          "file": "a11y.spec.ts",
+          "title": "the host's focus ring on a phone › the host's ring stays off an element outside the portfolio's boundary, as Studio's are",
+          "seconds": 0.5
+        },
+        {
+          "project": "chromium harness",
+          "file": "a11y.spec.ts",
+          "title": "the host's focus ring on a phone › the host's own pages, Studio's 404 and error pages, ring in host-chrome.css's ring",
+          "seconds": 0.1
+        },
+        {
+          "project": "chromium harness",
+          "file": "a11y.spec.ts",
+          "title": "the Extended tier on a 320px phone › the display headline wraps, a table still scrolls in its region, and no number breaks",
+          "seconds": 0.6
+        },
+        {
+          "project": "chromium 2280a25ce3",
+          "file": "cells.spec.ts",
+          "cell": "composition:obsidian-atelier complete / obsidian-atelier/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1440x900",
+          "row": "default",
+          "seconds": 48.6
+        },
+        {
+          "project": "chromium 2bd0ec4eb4",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-stable/fixture-scheme-stable/fixture-typography-stable/light",
+          "viewport": "390x844",
+          "row": "default",
+          "seconds": 58.2
+        },
+        {
+          "project": "chromium 2280a25ce3",
+          "file": "cells.spec.ts",
+          "cell": "composition:obsidian-atelier complete / obsidian-atelier/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1024x768",
+          "row": "default",
+          "seconds": 45.4
+        },
+        {
+          "project": "chromium 2280a25ce3",
+          "file": "cells.spec.ts",
+          "cell": "composition:obsidian-atelier complete / obsidian-atelier/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "390x844",
+          "row": "default",
+          "seconds": 59.9
+        },
+        {
+          "project": "chromium 2d09129d79",
+          "file": "perf.spec.ts",
+          "title": "login signed-out /studio/sign-in, performance at 390x844 (light)",
+          "seconds": 90.0
+        },
+        {
+          "project": "chromium 49c54b90c0",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-experimental/fixture-scheme-experimental/fixture-typography-experimental/dark",
+          "viewport": "1440x900",
+          "row": "default",
+          "seconds": 52.6
+        },
+        {
+          "project": "chromium 6bcc71a1b7",
+          "file": "cells.spec.ts",
+          "cell": "composition:spatial-bento complete / spatial-bento/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1440x900",
+          "row": "default",
+          "seconds": 45.0
+        },
+        {
+          "project": "chromium 49c54b90c0",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-experimental/fixture-scheme-experimental/fixture-typography-experimental/dark",
+          "viewport": "1440x900",
+          "row": "reduced-motion",
+          "seconds": 9.4
+        },
+        {
+          "project": "chromium 49c54b90c0",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-experimental/fixture-scheme-experimental/fixture-typography-experimental/dark",
+          "viewport": "1440x900",
+          "row": "forced-colors",
+          "seconds": 23.8
+        },
+        {
+          "project": "chromium 6bcc71a1b7",
+          "file": "cells.spec.ts",
+          "cell": "composition:spatial-bento complete / spatial-bento/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1024x768",
+          "row": "default",
+          "seconds": 45.0
+        },
+        {
+          "project": "chromium 49c54b90c0",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-experimental/fixture-scheme-experimental/fixture-typography-experimental/dark",
+          "viewport": "1440x900",
+          "row": "contrast-more",
+          "seconds": 24.0
+        },
+        {
+          "project": "chromium 49c54b90c0",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-experimental/fixture-scheme-experimental/fixture-typography-experimental/dark",
+          "viewport": "1440x900",
+          "row": "reduced-transparency",
+          "seconds": 9.6
+        },
+        {
+          "project": "chromium 49c54b90c0",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-experimental/fixture-scheme-experimental/fixture-typography-experimental/dark",
+          "viewport": "1440x900",
+          "row": "print",
+          "seconds": 2.3
+        },
+        {
+          "project": "chromium 49c54b90c0",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-experimental/fixture-scheme-experimental/fixture-typography-experimental/dark",
+          "viewport": "1440x900",
+          "row": "no-javascript",
+          "seconds": 9.6
+        },
+        {
+          "project": "chromium 6bcc71a1b7",
+          "file": "cells.spec.ts",
+          "cell": "composition:spatial-bento complete / spatial-bento/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "390x844",
+          "row": "default",
+          "seconds": 59.5
+        },
+        {
+          "project": "chromium 49c54b90c0",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-experimental/fixture-scheme-experimental/fixture-typography-experimental/dark",
+          "viewport": "1024x768",
+          "row": "default",
+          "seconds": 40.7
+        }
+      ]
+    },
+    "4/4": {
+      "jobSeconds": 396,
+      "tests": [
+        {
+          "project": "chromium 1e4cbf7a27",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback missing-media / fallback/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1440x900",
+          "row": "default",
+          "seconds": 4.0
+        },
+        {
+          "project": "chromium 1f6b2b605c",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback sparse / fallback/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1440x900",
+          "row": "default",
+          "seconds": 4.3
+        },
+        {
+          "project": "chromium 1e4cbf7a27",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback missing-media / fallback/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1024x768",
+          "row": "default",
+          "seconds": 3.3
+        },
+        {
+          "project": "chromium 1f6b2b605c",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback sparse / fallback/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1024x768",
+          "row": "default",
+          "seconds": 3.6
+        },
+        {
+          "project": "chromium 1e4cbf7a27",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback missing-media / fallback/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "390x844",
+          "row": "default",
+          "seconds": 3.5
+        },
+        {
+          "project": "chromium 1f6b2b605c",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback sparse / fallback/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "390x844",
+          "row": "default",
+          "seconds": 4.1
+        },
+        {
+          "project": "chromium 2d09129d79",
+          "file": "cells.spec.ts",
+          "cell": "surface:login signed-out /studio/sign-in fallback/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1440x900",
+          "row": "default",
+          "seconds": 3.9
+        },
+        {
+          "project": "chromium 2d09129d79",
+          "file": "cells.spec.ts",
+          "cell": "surface:login signed-out /studio/sign-in fallback/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1024x768",
+          "row": "default",
+          "seconds": 3.4
+        },
+        {
+          "project": "chromium 2d09129d79",
+          "file": "cells.spec.ts",
+          "cell": "surface:login signed-out /studio/sign-in fallback/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "390x844",
+          "row": "default",
+          "seconds": 4.2
+        },
+        {
+          "project": "chromium 49c54b90c0",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-experimental/fixture-scheme-experimental/fixture-typography-experimental/dark",
+          "viewport": "390x844",
+          "row": "default",
+          "seconds": 56.6
+        },
+        {
+          "project": "chromium 6bcc71a1b7",
+          "file": "perf.spec.ts",
+          "title": "spatial-bento complete /, performance at 390x844 (heavy)",
+          "seconds": 90.0
+        },
+        {
+          "project": "chromium c3363d3936",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-extended/fixture-scheme-extended/fixture-typography-extended/high-contrast",
+          "viewport": "1440x900",
+          "row": "default",
+          "seconds": 47.5
+        },
+        {
+          "project": "chromium c3363d3936",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-extended/fixture-scheme-extended/fixture-typography-extended/high-contrast",
+          "viewport": "1440x900",
+          "row": "reduced-motion",
+          "seconds": 10.4
+        },
+        {
+          "project": "chromium c3363d3936",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-extended/fixture-scheme-extended/fixture-typography-extended/high-contrast",
+          "viewport": "1440x900",
+          "row": "forced-colors",
+          "seconds": 22.1
+        },
+        {
+          "project": "chromium c3363d3936",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-extended/fixture-scheme-extended/fixture-typography-extended/high-contrast",
+          "viewport": "1440x900",
+          "row": "contrast-more",
+          "seconds": 23.2
+        },
+        {
+          "project": "chromium f0fceed375",
+          "file": "cells.spec.ts",
+          "cell": "composition:kinetic-cosmos complete / kinetic-cosmos/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1440x900",
+          "row": "default",
+          "seconds": 56.5
+        },
+        {
+          "project": "chromium c3363d3936",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-extended/fixture-scheme-extended/fixture-typography-extended/high-contrast",
+          "viewport": "1440x900",
+          "row": "reduced-transparency",
+          "seconds": 10.0
+        },
+        {
+          "project": "chromium c3363d3936",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-extended/fixture-scheme-extended/fixture-typography-extended/high-contrast",
+          "viewport": "1440x900",
+          "row": "print",
+          "seconds": 2.6
+        },
+        {
+          "project": "chromium c3363d3936",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-extended/fixture-scheme-extended/fixture-typography-extended/high-contrast",
+          "viewport": "1440x900",
+          "row": "no-javascript",
+          "seconds": 9.3
+        },
+        {
+          "project": "chromium f0fceed375",
+          "file": "cells.spec.ts",
+          "cell": "composition:kinetic-cosmos complete / kinetic-cosmos/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "1024x768",
+          "row": "default",
+          "seconds": 52.8
+        },
+        {
+          "project": "chromium c3363d3936",
+          "file": "cells.spec.ts",
+          "cell": "composition:fallback complete / fallback/fixture-language-extended/fixture-scheme-extended/fixture-typography-extended/high-contrast",
+          "viewport": "1024x768",
+          "row": "default",
+          "seconds": 39.1
+        },
+        {
+          "project": "chromium f0fceed375",
+          "file": "cells.spec.ts",
+          "cell": "composition:kinetic-cosmos complete / kinetic-cosmos/platform-neutral/warm-parchment/humanist-ui/system",
+          "viewport": "390x844",
+          "row": "default",
+          "seconds": 46.2
+        }
+      ]
+    }
+  }
+}

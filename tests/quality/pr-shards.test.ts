@@ -29,9 +29,12 @@ import {
   shardFiles,
   shardWall,
   SHARD_CEILING,
+  SHARD_FIXED,
+  SHARD_WORKERS,
   splitGroups,
   testKey,
   testTag,
+  testWeight,
   type ShardGroup,
 } from './lib/pr-shards';
 import { shardOutputs } from './pr-count';
@@ -223,6 +226,139 @@ test('a cell group too heavy for one worker is split, by cell or by test, and it
   );
 });
 
+test("a split group's parts on one shard run on one worker, one after another, so they weigh together", () => {
+  const durations = { group: 5 };
+  // Two 150 s cells on one project: too heavy for a part together, so a part each.
+  const tests = ['a', 'b'].map((cell) =>
+    testKey(`composition:x ${cell} / tuple`, '1440x900', 'default', 'chromium'),
+  );
+  const twin: ShardGroup = {
+    project: 'chromium twin',
+    file: CELL_SPEC,
+    tests,
+    costs: [150, 150],
+    weight: 305,
+  };
+  const parts = splitGroups([twin], GROUP_BUDGET, durations);
+  assert.deepEqual(
+    parts.map((part) => part.weight),
+    [155, 155],
+  );
+  // On one shard they're one file in one project, which runs on one worker: 310 s, not 155 s.
+  assert.equal(shardWall(parts), 310);
+  assert.ok(SHARD_FIXED + shardWall(parts) > SHARD_CEILING);
+  const { count, slowest } = pickShardCount([twin], durations);
+  assert.equal(count, 2, `count ${count} at ${slowest}s`);
+  // Different files and projects still share a shard's workers.
+  assert.equal(
+    shardWall([...synthetic(1, 100), { ...synthetic(1, 100)[0]!, file: PERF_SPEC }]),
+    100,
+  );
+  // And the planner assumes as many workers as the config runs.
+  assert.match(
+    readFileSync(new URL('./playwright.config.ts', import.meta.url), 'utf8'),
+    /\n {2}workers: SHARD_WORKERS,\n/,
+  );
+  assert.equal(SHARD_WORKERS, 2);
+});
+
+/** quality-pr's four shards in CI run 40066815817: each job's wall time and the tests it timed. */
+interface RecordedRun {
+  readonly run: number;
+  readonly shards: Readonly<
+    Record<
+      string,
+      {
+        readonly jobSeconds: number;
+        readonly tests: readonly {
+          readonly project: string;
+          readonly file: string;
+          readonly cell?: string;
+          readonly viewport?: string;
+          readonly row?: string;
+          readonly title?: string;
+          readonly seconds: number;
+        }[];
+      }
+    >
+  >;
+}
+const RECORDED = JSON.parse(
+  readFileSync(new URL('./fixtures/shard-run-40066815817.json', import.meta.url), 'utf8'),
+) as RecordedRun;
+/** How far the planner's estimate of a recorded shard may be from its job's wall time. */
+const RECORDED_MARGIN = 0.15;
+
+/** The planner's estimate of a recorded shard: what it ran, weighed as planGroups() weighs it, on its workers. */
+function recordedEstimate(
+  shard: RecordedRun['shards'][string],
+  durations: ReturnType<typeof loadDurations>,
+): { estimate: number; matched: number } {
+  const planned = new Map(
+    plans.flatMap(({ plan }) =>
+      plan.tests.map((each) => [`${each.cell.id} ${each.viewport.id} ${each.row.id}`, each]),
+    ),
+  );
+  const byFile = new Map<string, number>();
+  let matched = 0;
+  for (const test of shard.tests) {
+    const key = `${test.project} ${test.file}`;
+    let weight: number;
+    if (test.file === CELL_SPEC) {
+      const each = planned.get(`${test.cell} ${test.viewport} ${test.row}`);
+      if (!each) continue;
+      matched += 1;
+      weight = testWeight(each, ENGINES[0]!, durations);
+    } else if (test.file === PERF_SPEC) {
+      weight = durations.perf;
+    } else {
+      // A harness spec weighs as one, its total, once.
+      if (byFile.has(key)) continue;
+      weight = durations.harness[`tests/quality/${test.file}`] ?? 0;
+    }
+    byFile.set(key, (byFile.get(key) ?? durations.group) + weight);
+  }
+  const groups = [...byFile].map(([key, weight]) => {
+    const at = key.lastIndexOf(' ');
+    return { project: key.slice(0, at), file: key.slice(at + 1), tests: [], weight };
+  });
+  return { estimate: SHARD_FIXED + shardWall(groups), matched };
+}
+
+test("the planner's estimate of each shard of a recorded CI run is within 15% of how long its job took", () => {
+  const durations = loadDurations();
+  const shards = Object.entries(RECORDED.shards);
+  assert.equal(shards.length, 4);
+  for (const [name, shard] of shards) {
+    const cells = shard.tests.filter((test) => test.file === CELL_SPEC).length;
+    const { estimate, matched } = recordedEstimate(shard, durations);
+    // Every cell the run timed is one this checkout still plans.
+    assert.equal(matched, cells, `${name}: ${matched} of ${cells} cells planned`);
+    const off = Math.abs(estimate - shard.jobSeconds) / shard.jobSeconds;
+    assert.ok(
+      off <= RECORDED_MARGIN,
+      `${name}: planned about ${Math.round(estimate)}s, the job took ${shard.jobSeconds}s`,
+    );
+  }
+  // Weighed as a stand-in state's, 2.4 s, a composition's complete cell would put a shard far outside it.
+  const undercount = {
+    ...durations,
+    composition: Object.fromEntries(
+      Object.keys(durations.composition).map((key) => [key, durations.plain]),
+    ),
+  };
+  const worst = Math.max(
+    ...shards.map(([, shard]) => {
+      const { estimate } = recordedEstimate(shard, undercount);
+      return Math.abs(estimate - shard.jobSeconds) / shard.jobSeconds;
+    }),
+  );
+  assert.ok(
+    worst > RECORDED_MARGIN,
+    `weighed as plain, the worst shard is only ${Math.round(worst * 100)}% off`,
+  );
+});
+
 test("CI's PR set, split and sharded at the count the planner picks, holds the ceiling, where Playwright's split doesn't", () => {
   for (const { name, plan } of plans) {
     const groups = planGroups(plan, ENGINES);
@@ -235,7 +371,7 @@ test("CI's PR set, split and sharded at the count the planner picks, holds the c
       assert.ok(fewer > SHARD_CEILING, `${name}: ${count - 1} shards would do, at ${fewer}s`);
       const theirs = Math.max(...byCount(groups, count).map((part) => shardWall(part)));
       assert.ok(
-        slowest - 95 < theirs,
+        slowest - SHARD_FIXED < theirs,
         `${name}: by duration ${slowest}s, by test count ${theirs}s`,
       );
     }
@@ -422,4 +558,13 @@ test("quality:pr takes --shard as the runner's own, and hands it to Playwright's
   assert.equal(runShard({ QUALITY_SHARD: '' }), null);
   assert.equal(runShard({ QUALITY_SHARD: '3/3' }), '3/3');
   assert.throws(() => runShard({ QUALITY_SHARD: '0/3' }), /QUALITY_SHARD/);
+});
+
+test("a project's grep finds its tests whatever their titles hold, a newline included", () => {
+  const key = testKey('composition:x a / tuple', '1440x900', 'default', 'chromium');
+  const grep = projectGrep('abc', [key]);
+  const tag = testTag('composition:x a / tuple', '1440x900', 'default');
+  assert.equal(grep.test(`a title\nover two lines @server-abc ${tag}`), true);
+  assert.equal(grep.test(`a title\nover two lines @server-abc ${PERF_TAG}`), true);
+  assert.equal(grep.test(`a title\nover two lines @server-abd ${tag}`), false);
 });
