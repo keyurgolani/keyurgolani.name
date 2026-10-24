@@ -218,21 +218,25 @@ test('record maps export in one order whatever their authored order, since no re
 test('an exported document over the 1 MiB import cap is listed in overImportCap, and it does not import again', () => {
   const data = exampleData('portfolio');
   const links = data.links as Record<string, unknown>[];
-  // Minified JSON just under the cap, which pretty JSON then passes.
-  for (let index = 0; JSON.stringify(data).length < 1_000_000; index++) {
+  // Minified JSON just under the cap in bytes, which pretty JSON then passes.
+  // The labels are three-byte characters, so in UTF-16 units every text here
+  // stays far under the cap: only a count of bytes finds the export over it.
+  const size = (text: string) => new TextEncoder().encode(text).byteLength;
+  for (let index = 0; size(JSON.stringify(data)) < 1024 * 1024 - 20_000; index++) {
     links.push({
       platform: 'website',
-      url: `https://example.com/${'a'.repeat(200)}/${index}`,
-      label: `Link ${index}`,
+      url: `https://example.com/${index}`,
+      label: `${'漢'.repeat(300)} ${index}`,
     });
   }
   const minified = JSON.stringify(data);
+  assert.ok(size(minified) <= 1024 * 1024);
   const original = importTexts(minified, EXAMPLE.site);
   const small = exportUnit({ sources: yamlSources }, 'json');
   assert.deepEqual(small.disclosure.overImportCap, []);
   for (const format of ['json', 'yaml'] as const) {
     const exported = exportUnit({ sources: original.unit.sources }, format);
-    const size = (text: string) => new TextEncoder().encode(text).byteLength;
+    assert.ok(exported.files[0]!.text.length < 1024 * 1024, 'under the cap in UTF-16 units');
     const over = (['portfolio', 'site'] as const).filter(
       (_, index) => size(exported.files[index]!.text) > 1024 * 1024,
     );

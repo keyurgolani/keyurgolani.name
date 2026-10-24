@@ -475,6 +475,7 @@ test('the worker message handler refuses anything but { files } of bytes as inva
     { files: CANARY },
     { files: [{ name: CANARY, bytes: CANARY }] },
     { files: [{ name: CANARY }] },
+    { files: pairFiles(EXAMPLE.portfolio).map(({ bytes }) => ({ bytes })) },
     { files: [null] },
   ]) {
     const result = importMessage(data);
@@ -581,6 +582,13 @@ test('a key the schema does not name is (unknown key) in every pointer, message,
       'a site sections key naming no section': {
         site: siteWith((data) => {
           data.sections = { [CANARY]: { hidden: true } };
+        }),
+        outcome: 'imported',
+        at: '/sections/(unknown key)',
+      },
+      'a site sections key that is a schema word elsewhere, judged at its own place': {
+        site: siteWith((data) => {
+          data.sections = { title: { hidden: true } };
         }),
         outcome: 'imported',
         at: '/sections/(unknown key)',

@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type { Diagnostic } from '@portfolio/schema';
-import { redactDiagnostic, UNKNOWN_KEY } from './redact';
-import { CANARY, exampleData } from './test-support/hostile';
+import { serialize, type Diagnostic } from '@portfolio/schema';
+import { runImport } from './pipeline';
+import { redactDiagnostic, schemaWords, UNKNOWN_KEY } from './redact';
+import { CANARY, EXAMPLE, exampleData, pairFiles } from './test-support/hostile';
 
 // The import's diagnostic redaction (#9, PR 3), on diagnostics built by
 // hand: a key the schema doesn't name leaves no trace in the pointer, the
@@ -64,6 +65,59 @@ test('a remediation or stableId that names the key is replaced, and a key spelle
   assert.equal(result.stableId, UNKNOWN_KEY);
   assert.equal(JSON.stringify(result).includes(CANARY), false);
   assert.match(result.remediation, /section id the portfolio has/);
+});
+
+test('a message naming a parent pointer that holds the key in its escaped spelling falls back too', () => {
+  const key = `${CANARY}/a~b`;
+  const spelled = `${CANARY}~1a~0b`;
+  const result = redactDiagnostic(
+    diagnostic({
+      // Only the escaped spelling is in the message: the raw key isn't, and
+      // neither is the last segment, so nothing else can find it.
+      pointer: `/identity/${spelled}/q`,
+      message: `/identity/${spelled} isn't a field here.`,
+    }),
+    data,
+  );
+  assert.equal(result.pointer, `/identity/${UNKNOWN_KEY}/${UNKNOWN_KEY}`);
+  assert.equal(result.message, `There's a schema.invalid finding at ${result.pointer}.`);
+  assert.equal(JSON.stringify(result).includes(CANARY), false);
+  assert.equal(result.message.includes(key), false);
+});
+
+test('with no data, a key inside a union member stays when the schemas name it anywhere, and a file key does not', () => {
+  const words = schemaWords();
+  for (const word of ['identity', 'title', 'body', 'hidden', 'sections', 'enabled', 'values']) {
+    assert.ok(words.has(word), word);
+  }
+  assert.equal(words.has(CANARY), false);
+  const title = redactDiagnostic(
+    diagnostic({ pointer: '/sections/0/title', message: 'At it.' }),
+    {},
+  );
+  assert.equal(title.pointer, '/sections/0/title');
+  const site = redactDiagnostic(
+    diagnostic({ document: 'site', pointer: `/sections/${CANARY}/hidden`, message: 'At it.' }),
+    {},
+  );
+  assert.equal(site.pointer, `/sections/${UNKNOWN_KEY}/hidden`);
+});
+
+test("an anchor in a section's title, in a file that does not parse, keeps its whole pointer", () => {
+  const portfolio = exampleData('portfolio');
+  const [first] = portfolio.sections as Record<string, unknown>[];
+  first!.title = 'Anchored section title';
+  const text = serialize(portfolio, 'yaml').replace(
+    'title: Anchored section title',
+    'title: &named Anchored section title',
+  );
+  assert.ok(text.includes('&named'));
+  const result = runImport(pairFiles(text, EXAMPLE.site));
+  assert.equal(result.kind === 'refused' && result.code, 'parse_limits');
+  assert.deepEqual(
+    result.diagnostics.map(({ pointer }) => pointer),
+    ['/sections/0/title'],
+  );
 });
 
 test('keys the schema names stay, an array index stays, and a diagnostic with nothing to redact is returned as it is', () => {

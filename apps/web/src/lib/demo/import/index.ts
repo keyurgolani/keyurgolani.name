@@ -25,7 +25,8 @@ import type { ImportInput, ImportRefusal, ImportResult } from './pipeline';
 //   - `not_one_document`: anything but one portfolio and one site document;
 //   - `too_large`: a file over 1 MiB, before it's parsed;
 //   - `parse_limits`: past #4's pre-parse limits, a YAML alias bomb among them;
-//   - `invalid`: text that doesn't parse, or a pair #4's validator blocks;
+//   - `invalid`: an entry that isn't `{ name, bytes: Uint8Array }`, text that
+//     doesn't parse, or a pair #4's validator blocks;
 //   - `timeout`: no answer within `timeoutMs`, or `signal` aborted;
 //   - `worker_unavailable`: no module worker could be built or run.
 //   `parse_limits` and `invalid` carry located #4 diagnostics; the rest none.
@@ -94,14 +95,22 @@ export function importFiles(
   const { signal } = options;
   const timeoutMs = importTimeout(options.timeoutMs);
   if (signal?.aborted) return Promise.resolve(refused('timeout'));
-  // The count and sizes, before anything is copied. No decode, no parse.
+  // The shape, the count, and the sizes, before anything is copied. No
+  // decode, no parse, and nothing that throws: an entry out of shape is
+  // `invalid`, as the worker would answer it.
+  if (!Array.isArray(files) || !files.every(isInput)) return Promise.resolve(refused('invalid'));
   if (files.length > 2) return Promise.resolve(refused('too_many_files'));
   if (files.length < 2) return Promise.resolve(refused('not_one_document'));
   if (files.some(({ bytes }) => bytes.byteLength > IMPORT_MAX_BYTES)) {
     return Promise.resolve(refused('too_large'));
   }
-  // Each file's own bytes, not the whole buffer a view may sit on.
-  const copies = files.map(({ name, bytes }) => ({ name, bytes: bytes.slice() }));
+  // Each file's own bytes in a buffer of their own, never the buffer a view
+  // sits on. Uint8Array's own slice, since a Buffer's shares its memory, and
+  // transferring that would detach the caller's.
+  const copies = files.map(({ name, bytes }) => ({
+    name,
+    bytes: Uint8Array.prototype.slice.call(bytes),
+  }));
 
   let worker: Worker;
   try {
@@ -150,6 +159,11 @@ export function importFiles(
 
 function refused(code: ImportRefusal, diagnostics: readonly Diagnostic[] = []): ImportResult {
   return { kind: 'refused', code, diagnostics };
+}
+
+/** An entry a caller may pass: a name and a Uint8Array of bytes. */
+function isInput(value: unknown): value is ImportInput {
+  return isObject(value) && typeof value.name === 'string' && value.bytes instanceof Uint8Array;
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> =>

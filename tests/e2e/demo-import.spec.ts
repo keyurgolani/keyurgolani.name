@@ -154,14 +154,15 @@ test(
       true,
     );
 
-    // Every request while it ran was a GET for the served scripts, and nothing
-    // else, so no request carried the files, however encoded.
+    // Every request while it ran was a GET, with no query, for the served
+    // module, the worker, or the worker's chunk, and nothing else.
     expect(
       requests
         .filter(
           ({ url, method }) =>
             method !== 'GET' ||
             new URL(url).origin !== app.origin ||
+            new URL(url).search !== '' ||
             !EXPECTED.test(new URL(url).pathname),
         )
         .map(({ method, url }) => `${method} ${url}`),

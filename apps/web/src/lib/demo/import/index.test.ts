@@ -43,8 +43,11 @@ class FakeWorker {
     FakeWorker.built.push(this);
   }
 
-  postMessage(data: unknown, transfer: unknown[] = []) {
+  postMessage(message: unknown, transfer: Transferable[] = []) {
     if (this.terminated) throw new Error('posted to a terminated worker');
+    // As a browser posts it: cloned, with the transfer list moved, so a
+    // transferred buffer is detached on this side.
+    const data = structuredClone(message, { transfer });
     this.posted.push(data);
     this.transferred.push(transfer);
     const behavior = FakeWorker.behavior;
@@ -96,12 +99,11 @@ test('an import runs in one module worker built from import.worker.ts, which is 
   assert.deepEqual(worker!.options, { type: 'module' });
   // A copy of each file, transferred, never the caller's own buffers.
   assert.deepEqual(worker!.posted, [{ files }]);
-  const posted = (worker!.posted[0] as { files: ImportInput[] }).files;
-  posted.forEach(({ bytes }, index) => assert.notEqual(bytes.buffer, files[index]!.bytes.buffer));
-  assert.deepEqual(
-    worker!.transferred[0],
-    posted.map(({ bytes }) => bytes.buffer),
-  );
+  assert.equal(worker!.transferred[0]!.length, files.length);
+  for (const buffer of worker!.transferred[0]!) {
+    assert.equal((buffer as ArrayBuffer).byteLength, 0, 'the copy moved to the worker');
+  }
+  for (const { bytes } of files) assert.ok(bytes.byteLength > 0, "the caller's bytes stay");
   assert.equal(worker!.terminated, 1);
   assert.equal(IMPORT_TIMEOUT_MS, 5000);
 });
@@ -124,6 +126,60 @@ test('the count and each byteLength are checked here before anything is copied, 
   assert.equal((await importFiles([portfolio, view])).kind, 'imported');
   const sent = (FakeWorker.built[0]!.posted[0] as { files: ImportInput[] }).files;
   assert.equal(sent[1]!.bytes.buffer.byteLength, site.bytes.byteLength);
+});
+
+test("a Node Buffer's bytes are copied into a buffer of their own, so the caller's pooled memory is never detached", async (t) => {
+  useWorker(t, FakeWorker);
+  const [portfolio, site] = files as [ImportInput, ImportInput];
+  // Two Buffers on one ArrayBuffer, as Node's pool or a polyfill lays them out.
+  const memory = new ArrayBuffer(portfolio.bytes.byteLength + site.bytes.byteLength);
+  const pooled = [
+    Buffer.from(memory, 0, portfolio.bytes.byteLength),
+    Buffer.from(memory, portfolio.bytes.byteLength, site.bytes.byteLength),
+  ];
+  pooled[0]!.set(portfolio.bytes);
+  pooled[1]!.set(site.bytes);
+  assert.equal(pooled[0]!.buffer, pooled[1]!.buffer);
+  // A Buffer's own slice shares that memory.
+  assert.equal(pooled[0]!.slice().buffer, memory);
+  const result = await importFiles([
+    { name: 'a', bytes: pooled[0]! },
+    { name: 'b', bytes: pooled[1]! },
+  ]);
+  assert.equal(result.kind, 'imported');
+  for (const buffer of pooled) {
+    assert.ok(buffer.buffer.byteLength > 0, 'the pool is still attached');
+    assert.equal(buffer.toString('utf8').length > 0, true);
+  }
+  assert.deepEqual(Buffer.from(pooled[1]!), Buffer.from(site.bytes));
+});
+
+test('an entry out of shape refuses as invalid, never throws, and builds no worker', async (t) => {
+  useWorker(t, FakeWorker);
+  const [portfolio] = files as [ImportInput];
+  const malformed: unknown[] = [
+    [portfolio, null],
+    [portfolio, undefined],
+    [portfolio, { bytes: portfolio.bytes }],
+    [portfolio, { name: 42, bytes: portfolio.bytes }],
+    [portfolio, { name: 'x', bytes: [1, 2, 3] }],
+    [portfolio, { name: 'x', bytes: new ArrayBuffer(4) }],
+    [portfolio, { name: 'x', bytes: 'text' }],
+    [portfolio, { name: 'x' }],
+    [portfolio, 'text'],
+    null,
+    'files',
+  ];
+  for (const entries of malformed) {
+    const pending = importFiles(entries as ImportInput[]);
+    assert.ok(pending instanceof Promise, JSON.stringify(entries));
+    assert.deepEqual(
+      await pending,
+      { kind: 'refused', code: 'invalid', diagnostics: [] },
+      JSON.stringify(entries),
+    );
+  }
+  assert.equal(FakeWorker.built.length, 0);
 });
 
 test('a reply out of ImportResult shape in any part is worker_unavailable', async (t) => {
