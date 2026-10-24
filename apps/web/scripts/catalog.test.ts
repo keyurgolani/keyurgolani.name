@@ -107,23 +107,27 @@ test('seeded schemes keep the prototype anchors, less the recorded signature adj
     if (!pack) continue;
     for (const mode of ['light', 'dark'] as const) {
       const seeded = scheme.modes[mode];
-      const anchors = pack.manifest.anchors?.[mode];
+      const anchors: Record<string, string> | undefined = pack.manifest.anchors?.[mode];
       assert.equal(
         Boolean(anchors),
         Boolean(seeded),
         `${scheme.id} covers ${mode} as the seed does`,
       );
       if (!seeded || !anchors) continue;
-      const expected = {
+      const expected: Record<string, string | undefined> = {
         canvas: seeded.canvas,
         text: seeded['text-primary'],
         accent: seeded.accent,
         secondary: seeded.information,
       };
-      const adjusted = mode === 'light' ? (ANCHOR_ADJUSTMENTS[scheme.id] ?? {}) : {};
+      const adjustments = ANCHOR_ADJUSTMENTS as unknown as Record<
+        string,
+        Record<string, readonly [string, string, number]>
+      >;
+      const adjusted = mode === 'light' ? (adjustments[scheme.id] ?? {}) : {};
       for (const [role, [from, to]] of Object.entries(adjusted)) {
-        assert.equal(expected[role as keyof typeof expected], from);
-        expected[role as keyof typeof expected] = to;
+        assert.equal(expected[role], from);
+        expected[role] = to;
       }
       assert.deepEqual(anchors, expected, `${scheme.id}'s ${mode} anchors`);
     }

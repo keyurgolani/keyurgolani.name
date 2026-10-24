@@ -72,10 +72,17 @@ const manifest = (id: string, version = '1.0.0', license = 'first-party') => ({
 
 test('the committed lock is current, canonical, and pins every first-party pack', () => {
   const packs = lockedPacks(ROOT);
+  // Every pack the three first-party packages ship, and nothing else.
+  const shipped = ['appearance-languages', 'appearance-schemes', 'appearance-typography']
+    .flatMap((dir) => fs.readdirSync(path.join(ROOT, 'packages', dir, 'packs')))
+    .sort();
   assert.deepEqual(
     packs.map(({ id }) => id),
-    ['humanist-ui', 'platform-neutral', 'warm-parchment'],
+    shipped,
   );
+  for (const id of ['humanist-ui', 'platform-neutral', 'warm-parchment']) {
+    assert.ok(shipped.includes(id), `the lock pins the fallback ${id}`);
+  }
   const committed = fs.readFileSync(path.join(ROOT, LOCK_FILE), 'utf8');
   assert.deepEqual(lockProblems(committed, packs), []);
   assert.equal(committed, renderLock(packs));
@@ -311,6 +318,10 @@ test('research records are read from research/, checked, and never from packs/',
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
-  // The workspace's own: the fixture record, which lives in research/.
-  assert.deepEqual(researchIds(ROOT), ['fixture-research']);
+  // The workspace's own: the fixture record and the catalog's 23 schemes (#20, PR 2), each in research/.
+  const catalog = fs
+    .readdirSync(path.join(ROOT, 'packages/appearance-schemes/research'))
+    .map((file) => file.replace(/\.json$/, ''));
+  assert.equal(catalog.length, 23);
+  assert.deepEqual(researchIds(ROOT), ['fixture-research', ...catalog].sort());
 });

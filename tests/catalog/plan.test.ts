@@ -57,6 +57,19 @@ function packLike(
   return { ...base, fixture, manifest: { ...base.manifest, id, name: id, ...patch } } as MetaPack;
 }
 
+/** The checkout's fallback packs alone, so a count doesn't move with the catalog. */
+function fallbacksOnly(meta: BuildMeta): BuildMeta {
+  const fallbacks = new Set<string>([
+    PLATFORM_DEFAULTS.designLanguage,
+    PLATFORM_DEFAULTS.colorScheme,
+    PLATFORM_DEFAULTS.typography,
+  ]);
+  return {
+    ...meta,
+    PACKS: (meta.PACKS ?? []).filter(({ manifest }) => fallbacks.has(manifest.id)),
+  };
+}
+
 /** The checkout with a second language and scheme, a dark-only scheme, and a fixture pack. */
 function wider(meta: BuildMeta): BuildMeta {
   const scheme = (meta.PACKS ?? []).find((pack) => pack.kind === 'color-scheme')!;
@@ -74,7 +87,7 @@ function wider(meta: BuildMeta): BuildMeta {
 }
 
 test('the cross-product is every registered variant against every shipping pack in every mode it renders', () => {
-  const meta = wider(checkoutMeta());
+  const meta = wider(fallbacksOnly(checkoutMeta()));
   const variants = registeredVariants(meta);
   assert.ok(variants.includes('fallback'));
   assert.deepEqual(shippingPacks(meta, 'designLanguage'), ['platform-neutral', 'second-language']);

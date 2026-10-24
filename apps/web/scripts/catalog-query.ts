@@ -7,7 +7,7 @@
 // headless catalog module, `@portfolio/appearance/catalog`, is deferred,
 // so nothing here is a package export: Studio (#9) owns the catalog UI.
 
-import fs from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 import {
@@ -377,9 +377,7 @@ export const RECIPES_FILE = 'packages/appearance/appearance-recipes.json';
 
 /** The recipes, checked: each id once. It throws on a malformed file. */
 export function readRecipes(root: string, file = RECIPES_FILE): Recipe[] {
-  const parsed = RecipesFileSchema.parse(
-    JSON.parse(fs.readFileSync(path.join(root, file), 'utf8')),
-  );
+  const parsed = RecipesFileSchema.parse(JSON.parse(readFileSync(path.join(root, file), 'utf8')));
   const ids = new Set<string>();
   for (const recipe of parsed.recipes) {
     if (ids.has(recipe.id)) throw new Error(`${file} lists the recipe ${recipe.id} twice.`);

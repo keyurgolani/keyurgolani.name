@@ -26,11 +26,11 @@
   },
   "budgets": {
     "js": 0,
+    "css": 3072,
     "image": 0,
     "font": 0,
     "animation": 0,
-    "enhancement": 0,
-    "css": 3072
+    "enhancement": 0
   },
   "fallbacks": [
     "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
