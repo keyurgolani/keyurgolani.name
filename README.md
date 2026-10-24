@@ -69,6 +69,8 @@ packages/
   fallback-composition/         The stand-in composition, and the scaffold for new ones
   variant-editorial-evidence/   Editorial Evidence, the platform default composition
   variant-kinetic-cosmos/       Kinetic Cosmos, a composition a site can select
+  variant-obsidian-atelier/     Obsidian Atelier, a composition a site can select
+  variant-spatial-bento/        Spatial Bento, a composition a site can select
 
 docs/
   architecture.md               How the pieces fit

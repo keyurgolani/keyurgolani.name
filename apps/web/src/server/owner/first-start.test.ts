@@ -31,8 +31,7 @@ import { ownerStore } from './store';
 // store imports the pair as revision 1, by the operator, through the
 // startup hook and the server claim. The import is a publish: a pair that
 // can't go live stops that start, and so does one a publish refuses, such
-// as a site whose variant this build doesn't register, every site's until
-// #13. A busy lock never stops it: the import waits for the claim while
+// as a site whose variant this build doesn't register. A busy lock never stops it: the import waits for the claim while
 // visitors get 503. Once a revision exists, the mounted pair is import input,
 // and its findings only warn. A store with history but no live.json is never
 // imported over, and one with revisions but no history imports beside them.
@@ -125,9 +124,9 @@ function fixture(name: string): Record<string, string> {
 }
 
 /**
- * The build's checks, in a build that registers the site's variant. Until
- * #13 this one registers none a site can select, so a publish here takes
- * the pair as serving does, and keeps the build's rendering and snapshots.
+ * The build's checks, as if the build registered the site's variant
+ * whatever it is, so a publish here takes the pair as serving does, and
+ * keeps the build's rendering and snapshots.
  */
 function registered(origin: string): UnitChecks {
   const checks = deploymentUnitChecks(origin);
