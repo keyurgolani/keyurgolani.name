@@ -10,6 +10,7 @@ import {
   selectionFrom,
   selectionProblem,
   selectionQuery,
+  sourceFrom,
   studioLocation,
 } from './url-state';
 
@@ -155,4 +156,41 @@ test("Studio's own URL keeps its path and its task, with the selection in betwee
     '/studio?language=platform-neutral&scheme=warm-parchment&type=humanist-ui&mode=dark#preview',
   );
   assert.equal(studioLocation('/studio', '', DEFAULTS, { catalog: { axes: [] } }), '/studio');
+});
+
+test('the URL names the reference only when the page has one, and only as exactly source=reference (#9)', () => {
+  assert.equal(sourceFrom(query('source=reference'), true), 'reference');
+  for (const text of [
+    '',
+    'source=sample',
+    'source=Reference',
+    'source=reference&source=reference',
+    'source=local',
+  ]) {
+    assert.equal(sourceFrom(query(text), true), 'sample', text);
+  }
+  // A demo with no reference opens the sample, whatever the URL asks.
+  assert.equal(sourceFrom(query('source=reference'), false), 'sample');
+});
+
+test('the Studio URL carries source=reference while the reference shows, and its frame /reference with no source key', () => {
+  assert.equal(
+    studioLocation('/studio', '#appearance', DEFAULTS, { catalog: { axes: [] } }, 'reference'),
+    '/studio?source=reference#appearance',
+  );
+  assert.equal(
+    studioLocation('/studio', '', DEFAULTS, { catalog: { axes: [] } }, 'sample'),
+    '/studio',
+  );
+  const sample = frameSource(DEFAULTS, RULES);
+  const reference = frameSource(DEFAULTS, RULES, { source: 'reference' });
+  assert.match(sample, /^\/sample(?:\?|$)/);
+  assert.equal(reference, sample.replace(/^\/sample/, '/reference'));
+  assert.doesNotMatch(reference, /source=/);
+  assert.equal(
+    frameSource(DEFAULTS, RULES, { source: 'reference', reduceMotion: true }),
+    frameSource(DEFAULTS, RULES, { reduceMotion: true }).replace(/^\/sample/, '/reference'),
+  );
+  // A source key in the Studio URL is no selection: a stored one still waits for a bare visit.
+  assert.equal(carriesSelection(query('source=reference')), false);
 });

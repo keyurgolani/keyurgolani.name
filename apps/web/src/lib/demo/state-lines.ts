@@ -24,18 +24,33 @@ function named(catalog: AppearanceCatalog, axis: (typeof AXES)[number], value: s
   return note.fallback ? `${value}, shown as ${note.fallback}` : value;
 }
 
-/** The lines for `selection`, with `persistent` saying whether it outlasts the page. */
+/**
+ * What the Content line says: the neutral sample, or, while it shows, the
+ * read-only reference by the name its own portfolio gives (#9), with no
+ * hint that anything here could change that person's site.
+ */
+export function contentLine(reference?: { readonly name: string }): string {
+  return reference
+    ? `${reference.name}'s published portfolio, a read-only snapshot. Nothing here changes ${reference.name}'s site.`
+    : 'The neutral sample portfolio, read-only.';
+}
+
+/**
+ * The lines for `selection`, with `persistent` saying whether it outlasts
+ * the page, and `reference` the reference while it shows.
+ */
 export function demoStateLines(
   catalog: AppearanceCatalog,
   selection: DemoSelection,
   persistent: boolean,
+  reference?: { readonly name: string },
 ): readonly DemoStateLine[] {
   const labels = new Map(catalog.axes.map(({ axis, label }) => [axis, label]));
   return [
     {
       id: 'content',
       label: 'Content',
-      text: 'The neutral sample portfolio, read-only.',
+      text: contentLine(reference),
       tone: 'neutral',
     },
     {
