@@ -137,7 +137,6 @@ export function AppearanceFixtures({ profile, query }: AppearanceFixturesProps) 
     appearance: page,
     visitorControls: DEFAULT_VISITOR_CONTROLS,
     profile,
-    stylesheets,
   });
   return (
     <PresentationBoundary

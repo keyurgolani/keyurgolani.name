@@ -1,11 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import type { AppearanceStylesheets } from '@portfolio/appearance';
+import { APPEARANCE_STYLESHEETS } from '~/lib/appearance-registry';
 import {
   appearancePreference,
   MAX_BODY_BYTES,
   objectKeys,
+  PREFERENCE_CACHE,
   PREFERENCE_MAX_AGE,
   preferenceCookie,
+  savedStylesheets,
   sitePath,
 } from './appearance-preference';
 
@@ -32,17 +36,39 @@ function post(
   return new Request(URL_, { method: 'POST', headers, body });
 }
 
-const answer = (request: Request, origin = ORIGIN) => appearancePreference(request, { origin });
+/** A registry's stylesheets, for warm-parchment, platform-neutral, and humanist-ui alone. */
+const STYLESHEETS: AppearanceStylesheets = {
+  platform: '/_portfolio/pack/_platform.000000000000.css',
+  pack: (axis, id) =>
+    (
+      ({
+        'colorScheme warm-parchment': '/_portfolio/pack/warm-parchment.0123456789ab.css',
+        'designLanguage platform-neutral': '/_portfolio/pack/platform-neutral.0123456789ab.css',
+        'typography humanist-ui': '/_portfolio/pack/humanist-ui.0123456789ab.css',
+      }) as Readonly<Record<string, string>>
+    )[`${axis} ${id}`] ?? null,
+};
+
+const answer = (request: Request, origin = ORIGIN) =>
+  appearancePreference(request, { origin, stylesheets: STYLESHEETS });
+
+/** The stylesheets a JSON save's answer names. */
+async function named(response: Response): Promise<unknown> {
+  assert.match(response.headers.get('content-type') ?? '', /^application\/json/);
+  return ((await response.json()) as { stylesheets: unknown }).stylesheets;
+}
 
 const COOKIE_ATTRIBUTES = `Path=/; Max-Age=${PREFERENCE_MAX_AGE}; HttpOnly; SameSite=Lax; Secure`;
 
-test('a form post sets the ids it names, and goes back to its page on the canonical origin with a 303, no-store', async () => {
+test('a form post sets the ids it names, and goes back to its page on the canonical origin with a 303, private and no-store', async () => {
   const response = await answer(
     post('scheme=warm-parchment&mode=dark&return=%2Fwork%2Ftide%3Fview%3Dall%23notes'),
   );
   assert.equal(response.status, 303);
   assert.equal(response.headers.get('location'), `${ORIGIN}/work/tide?view=all#notes`);
-  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.equal(response.headers.get('cache-control'), 'private, no-store');
+  // The form path names no stylesheet: the page it goes back to links its own.
+  assert.equal(await response.text(), '');
   assert.equal(
     response.headers.get('set-cookie'),
     `portfolio_appearance=scheme=warm-parchment&mode=dark; ${COOKIE_ATTRIBUTES}`,
@@ -54,17 +80,71 @@ test('a form post sets the ids it names, and goes back to its page on the canoni
   assert.equal(home.headers.get('location'), `${ORIGIN}/`);
 });
 
-test('the JSON save sets the same cookie and answers 204, since it follows no redirect', async () => {
+test("the JSON save sets the same cookie and answers 200 with the saved packs' stylesheets, since it follows no redirect", async () => {
   const response = await answer(
     post(JSON.stringify({ scheme: 'warm-parchment', mode: 'dark' }), { type: 'application/json' }),
   );
-  assert.equal(response.status, 204);
+  assert.equal(response.status, 200);
   assert.equal(response.headers.get('location'), null);
-  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.equal(response.headers.get('cache-control'), PREFERENCE_CACHE);
+  assert.equal(PREFERENCE_CACHE, 'private, no-store');
   assert.equal(
     response.headers.get('set-cookie'),
     `portfolio_appearance=scheme=warm-parchment&mode=dark; ${COOKIE_ATTRIBUTES}`,
   );
+  assert.deepEqual(await named(response), ['/_portfolio/pack/warm-parchment.0123456789ab.css']);
+});
+
+test("the stylesheets are the registry's own URLs for the packs saved, in axis order, never the platform's, and none for an id it lacks", async () => {
+  const every = await answer(
+    post(
+      JSON.stringify({
+        type: 'humanist-ui',
+        scheme: 'warm-parchment',
+        language: 'platform-neutral',
+        mode: 'dark',
+      }),
+      { type: 'application/json' },
+    ),
+  );
+  assert.deepEqual(await named(every), [
+    '/_portfolio/pack/platform-neutral.0123456789ab.css',
+    '/_portfolio/pack/warm-parchment.0123456789ab.css',
+    '/_portfolio/pack/humanist-ui.0123456789ab.css',
+  ]);
+  // An id the build doesn't register is saved, as the form keeps it, and names nothing.
+  const unknown = await answer(post('{"scheme":"nebula"}', { type: 'application/json' }));
+  assert.equal(unknown.status, 200);
+  assert.deepEqual(await named(unknown), []);
+  // A mode alone, or a reset, names nothing either.
+  assert.deepEqual(
+    await named(await answer(post('{"mode":"dark"}', { type: 'application/json' }))),
+    [],
+  );
+  assert.deepEqual(
+    await named(await answer(post('{"reset":true}', { type: 'application/json' }))),
+    [],
+  );
+  // The same from the function, and from this build's own registry: its pack paths alone.
+  assert.deepEqual(savedStylesheets({ colorScheme: 'nebula' }, STYLESHEETS), []);
+  const built = savedStylesheets({ colorScheme: 'warm-parchment' }, APPEARANCE_STYLESHEETS);
+  assert.equal(built.length, 1);
+  assert.match(built[0]!, /^\/_portfolio\/pack\/warm-parchment\.[0-9a-f]{12}\.css$/);
+});
+
+test('a refused save names no stylesheet, and still answers private and no-store', async () => {
+  for (const request of [
+    post('{"scheme":"warm-parchment"}', { type: 'application/json', origin: 'https://evil.test' }),
+    post('{"scheme":"Warm Parchment"}', { type: 'application/json' }),
+    post('{"scheme":"warm-parchment","scheme":"nord"}', { type: 'application/json' }),
+    post('{"scheme":"warm-parchment"}', { type: 'text/plain' }),
+  ]) {
+    const response = await answer(request);
+    assert.ok(response.status >= 400, String(response.status));
+    assert.equal(response.headers.get('cache-control'), 'private, no-store');
+    assert.equal(response.headers.get('set-cookie'), null);
+    assert.doesNotMatch(await response.text(), /_portfolio|stylesheets/);
+  }
 });
 
 test('a reset clears the cookie, whatever else the form sent', async () => {
@@ -73,7 +153,7 @@ test('a reset clears the cookie, whatever else the form sent', async () => {
   assert.equal(form.status, 303);
   assert.equal(form.headers.get('set-cookie'), cleared);
   const json = await answer(post('{"reset":true}', { type: 'application/json' }));
-  assert.equal(json.status, 204);
+  assert.equal(json.status, 200);
   assert.equal(json.headers.get('set-cookie'), cleared);
 });
 
@@ -119,7 +199,7 @@ test('a request from anywhere but the canonical origin is a 403 that sets nothin
     const response = await answer(request);
     assert.equal(response.status, 403, what);
     assert.equal(response.headers.get('set-cookie'), null, what);
-    assert.equal(response.headers.get('cache-control'), 'no-store', what);
+    assert.equal(response.headers.get('cache-control'), 'private, no-store', what);
   }
   const same = await answer(post('mode=dark', { site: 'same-origin' }));
   assert.equal(same.status, 303);
@@ -178,7 +258,7 @@ test('a body the schema refuses is a 400 that sets nothing', async () => {
     const response = await answer(request);
     assert.equal(response.status, 400, what);
     assert.equal(response.headers.get('set-cookie'), null, what);
-    assert.equal(response.headers.get('cache-control'), 'no-store', what);
+    assert.equal(response.headers.get('cache-control'), 'private, no-store', what);
   }
 });
 

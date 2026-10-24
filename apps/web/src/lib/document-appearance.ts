@@ -12,7 +12,7 @@ import {
   type ResolvedAppearance,
   type SelectionText,
 } from '@portfolio/appearance';
-import { APPEARANCE_REGISTRY, APPEARANCE_STYLESHEETS } from './appearance-registry';
+import { APPEARANCE_REGISTRY } from './appearance-registry';
 import type { EnvironmentOverride } from './environment';
 
 // What a document boundary renders (#19, Slice 4): resolveAppearance() for
@@ -80,7 +80,6 @@ export function visitorControlModel(
     appearance,
     visitorControls: { ...(site?.visitorControls ?? DEFAULT_VISITOR_CONTROLS), variant: 'locked' },
     profile,
-    stylesheets: APPEARANCE_STYLESHEETS,
   });
 }
 

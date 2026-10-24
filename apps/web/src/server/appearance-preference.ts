@@ -2,11 +2,15 @@ import 'server-only';
 import { z } from 'zod';
 import {
   APPEARANCE_AXES,
+  PACK_AXES,
   QUERY_KEYS,
   parseSelection,
   serializeSelection,
+  stylesheetHrefs,
+  type AppearanceStylesheets,
   type SelectionValues,
 } from '@portfolio/appearance';
+import { APPEARANCE_STYLESHEETS } from '~/lib/appearance-registry';
 import { APPEARANCE_COOKIE } from '~/lib/document-appearance';
 
 // POST /api/appearance (#19, Slice 4): the visitor's appearance preference,
@@ -35,8 +39,13 @@ import { APPEARANCE_COOKIE } from '~/lib/document-appearance';
 // segment following the cookie (the backlog's).
 //
 // A form gets a 303 to its page, by an absolute URL on the canonical
-// origin, and the JSON save a 204, each no-store. A name given twice is
-// refused, in a form or in JSON.
+// origin. The JSON save gets a 200 with `{ "stylesheets": [...] }`: the
+// compiled stylesheet of each pack it saved that this build registers, from
+// the registry's own URLs by stylesheetHrefs(), never anything the request
+// said, so the control preloads them before it refreshes and the page
+// carries no stylesheet URL of its own for that (#6's purity check). A
+// reset, or an id this build doesn't register, adds none. Every answer is
+// private, no-store. A name given twice is refused, in a form or in JSON.
 // Anything else is refused with nothing set: 403 for the origin, 413 past
 // the cap, 415 for another body type, and 400 for a body the schema doesn't
 // take.
@@ -75,11 +84,16 @@ const FormBody = z
 export interface PreferenceOptions {
   /** The canonical origin, never one read from the request. */
   readonly origin: string;
+  /** Where each pack's compiled stylesheet is: this build's registry's, unless a test gives others. */
+  readonly stylesheets?: AppearanceStylesheets;
 }
+
+/** Every answer's Cache-Control: the preference is the visitor's own. */
+export const PREFERENCE_CACHE = 'private, no-store';
 
 export async function appearancePreference(
   request: Request,
-  { origin }: PreferenceOptions,
+  { origin, stylesheets = APPEARANCE_STYLESHEETS }: PreferenceOptions,
 ): Promise<Response> {
   if (!fromOrigin(request, origin)) return refused(403, 'Forbidden.');
   const type = bodyType(request.headers.get('content-type'));
@@ -97,10 +111,33 @@ export async function appearancePreference(
   const cookie = body.reset
     ? preferenceCookie('', origin, 0)
     : preferenceCookie(serializeSelection(body.values), origin, PREFERENCE_MAX_AGE);
-  const headers = new Headers({ 'cache-control': 'no-store', 'set-cookie': cookie });
-  if (location === null) return new Response(null, { status: 204, headers });
+  const headers = new Headers({ 'cache-control': PREFERENCE_CACHE, 'set-cookie': cookie });
+  if (location === null) {
+    headers.set('content-type', 'application/json; charset=utf-8');
+    const saved = body.reset ? [] : savedStylesheets(body.values, stylesheets);
+    return new Response(JSON.stringify({ stylesheets: saved }), { status: 200, headers });
+  }
   headers.set('location', `${new URL(origin).origin}${location}`);
   return new Response(null, { status: 303, headers });
+}
+
+/**
+ * The compiled stylesheets of the packs `values` saved, as the registry
+ * lists them: stylesheetHrefs() over the saved pack axes alone, with no
+ * platform stylesheet, which every page already links. An id the registry
+ * doesn't have gives none, so nothing in the answer comes from the request.
+ */
+export function savedStylesheets(
+  values: SelectionValues,
+  stylesheets: AppearanceStylesheets,
+): string[] {
+  const saved = Object.fromEntries(PACK_AXES.map((axis) => [axis, values[axis] ?? ''])) as {
+    readonly [A in (typeof PACK_AXES)[number]]: string;
+  };
+  return stylesheetHrefs(saved, {
+    platform: null,
+    pack: (axis, id) => (values[axis] === undefined ? null : stylesheets.pack(axis, id)),
+  });
 }
 
 /** An Origin exactly the canonical origin, and a same-origin fetch whenever the browser says. */
@@ -257,6 +294,6 @@ export function preferenceCookie(value: string, origin: string, maxAge: number):
 function refused(status: number, text: string): Response {
   return new Response(text, {
     status,
-    headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
+    headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': PREFERENCE_CACHE },
   });
 }

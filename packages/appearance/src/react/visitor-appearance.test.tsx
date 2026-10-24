@@ -6,13 +6,13 @@ import {
   PLATFORM_DEFAULTS,
   resolveAppearance,
   visitorAppearanceModel,
-  type AppearanceStylesheets,
   type ResolveInput,
   type VisitorModelInput,
 } from '../index';
 import { elements, html, one, slotted, text } from '../test-support/markup';
 import { testRegistry } from '../test-support/packs';
 import { PresentationBoundary, saveAppearance, VisitorAppearance, type SaveDeps } from '.';
+import { packStylesheets } from './save';
 
 // VisitorAppearance (#19, Slice 3, item 3), on its own: Slice 4 adds POST
 // /api/appearance and renders it in #5's VisitorControlSlot, so these tests
@@ -29,10 +29,6 @@ const ALL_SELECTABLE: VisitorControls = {
   colorScheme: 'selectable',
   typography: 'selectable',
   displayMode: 'selectable',
-};
-const STYLESHEETS: AppearanceStylesheets = {
-  platform: '/_portfolio/pack/_platform.css',
-  pack: (_axis, id) => `/_portfolio/pack/${id}.css`,
 };
 
 function resolve(extra: Partial<ResolveInput> = {}) {
@@ -52,7 +48,6 @@ function model(extra: Partial<VisitorModelInput> = {}) {
     appearance: resolve(),
     visitorControls: DEFAULT_VISITOR_CONTROLS,
     profile: 'owner',
-    stylesheets: STYLESHEETS,
     ...extra,
   });
 }
@@ -100,7 +95,9 @@ test('packs are grouped by tier with Stable first, unrenderable generated scheme
     },
   }).controls[0]!;
   assert.ok(generated.groups.at(-1)!.choices.some((choice) => choice.value === 'fixture-seed'));
-  assert.equal(scheme.groups[0]!.choices[0]!.stylesheet, '/_portfolio/pack/warm-parchment.css');
+  // No choice names a stylesheet: a page names only those it renders (#6's purity check).
+  for (const group of scheme.groups)
+    for (const choice of group.choices) assert.equal('stylesheet' in choice, false, choice.value);
 });
 
 test('variants are listed by name, without the fallback composition', () => {
@@ -284,21 +281,24 @@ test("in a plate it's the same form, with the plate's id prefix and nothing to l
   );
 });
 
-/** Save dependencies whose preload and post resolve when the test says. */
-function fakes() {
+/** A compiled pack's URL as registry generation names it. */
+const pack = (id: string) => `/_portfolio/pack/${id}.0123456789ab.css`;
+
+/** Save dependencies whose post and preload resolve when the test says. */
+function fakes(stylesheets: readonly string[] = []) {
   const calls: string[] = [];
   const pending = new Map<string, { resolve: () => void; reject: (error: unknown) => void }>();
   const deps: SaveDeps = {
+    post: (url, body, signal) =>
+      new Promise((resolve, reject) => {
+        calls.push(`post ${url} ${body}`);
+        pending.set('post', { resolve: () => resolve({ ok: true, stylesheets }), reject });
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      }),
     preload: (href, signal) =>
       new Promise<void>((resolve, reject) => {
         calls.push(`preload ${href}`);
         pending.set(`preload ${href}`, { resolve, reject });
-        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
-      }),
-    post: (url, body, signal) =>
-      new Promise((resolve, reject) => {
-        calls.push(`post ${url} ${body}`);
-        pending.set('post', { resolve: () => resolve({ ok: true }), reject });
         signal.addEventListener('abort', () => reject(signal.reason), { once: true });
       }),
     setTimeout: (run, ms) => setTimeout(run, ms),
@@ -309,80 +309,129 @@ function fakes() {
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
-test('a save loads the stylesheet, waits for it, then posts the values as JSON', async () => {
-  const { deps, calls, pending } = fakes();
+test('a save posts the values as JSON, then preloads the stylesheets the answer names, then counts as saved', async () => {
+  const { deps, calls, pending } = fakes([pack('nord')]);
+  let outcome: string | undefined;
   const saving = saveAppearance(
-    {
-      action: '/api/appearance',
-      body: { scheme: 'nord', mode: 'dark' },
-      stylesheets: ['/nord.css'],
-    },
+    { action: '/api/appearance', body: { scheme: 'nord', mode: 'dark' } },
     deps,
+  ).then((value) => (outcome = value));
+  await flush();
+  assert.deepEqual(
+    calls,
+    ['post /api/appearance {"scheme":"nord","mode":"dark"}'],
+    'nothing loads before the route has saved',
   );
-  await flush();
-  assert.deepEqual(calls, ['preload /nord.css'], 'nothing is sent before the stylesheet loads');
-  pending.get('preload /nord.css')!.resolve();
-  await flush();
-  assert.deepEqual(calls.at(-1), 'post /api/appearance {"scheme":"nord","mode":"dark"}');
   pending.get('post')!.resolve();
-  assert.equal(await saving, 'saved');
+  await flush();
+  assert.deepEqual(calls.at(-1), `preload ${pack('nord')}`);
+  assert.equal(
+    outcome,
+    undefined,
+    "it isn't saved, so nothing refreshes, until the preload settles",
+  );
+  pending.get(`preload ${pack('nord')}`)!.resolve();
+  await saving;
+  assert.equal(outcome, 'saved');
 });
 
-test("a save the route refuses, or whose stylesheet doesn't load, fails", async () => {
+test('it preloads only same-origin pack paths from the answer, each once', async () => {
+  const { deps, calls, pending } = fakes([
+    pack('nord'),
+    pack('nord'),
+    'https://evil.example/x.css',
+    '//evil.example/x.css',
+    '/_portfolio/pack/../../x.css',
+    '/elsewhere.css',
+    7 as never,
+  ]);
+  const saving = saveAppearance({ action: '/a', body: { mode: 'dark' } }, deps);
+  await flush();
+  pending.get('post')!.resolve();
+  await flush();
+  assert.deepEqual(calls.slice(1), [`preload ${pack('nord')}`]);
+  pending.get(`preload ${pack('nord')}`)!.resolve();
+  assert.equal(await saving, 'saved');
+  assert.deepEqual(packStylesheets('not a list'), []);
+});
+
+test("a save the route refuses fails, and one whose stylesheet doesn't load still counts as saved", async () => {
   const refused: SaveDeps = {
     ...fakes().deps,
-    preload: async () => {},
+    preload: async () => assert.fail('nothing loads for a refused save'),
     post: async () => ({ ok: false }),
   };
-  assert.equal(
-    await saveAppearance({ action: '/a', body: { reset: true }, stylesheets: [] }, refused),
-    'failed',
-  );
+  assert.equal(await saveAppearance({ action: '/a', body: { reset: true } }, refused), 'failed');
   const broken: SaveDeps = {
     ...refused,
+    post: async () => ({ ok: true, stylesheets: [pack('nord')] }),
     preload: async () => {
       throw new Error('404');
     },
   };
-  assert.equal(
-    await saveAppearance({ action: '/a', body: { mode: 'dark' }, stylesheets: ['/x.css'] }, broken),
-    'failed',
-  );
+  assert.equal(await saveAppearance({ action: '/a', body: { mode: 'dark' } }, broken), 'saved');
+  const thrown: SaveDeps = {
+    ...refused,
+    post: async () => {
+      throw new Error('offline');
+    },
+  };
+  assert.equal(await saveAppearance({ action: '/a', body: { mode: 'dark' } }, thrown), 'failed');
 });
 
-test('a save that takes more than ten seconds times out, and nothing is posted after', async () => {
+test('a post that takes more than ten seconds times out, and nothing loads after', async () => {
   mock.timers.enable({ apis: ['setTimeout'] });
   try {
-    const { deps, calls } = fakes();
-    const saving = saveAppearance(
-      { action: '/a', body: { mode: 'dark' }, stylesheets: ['/x.css'] },
-      deps,
-    );
+    const { deps, calls } = fakes([pack('nord')]);
+    const saving = saveAppearance({ action: '/a', body: { mode: 'dark' } }, deps);
     await flush();
     mock.timers.tick(9_999);
     await flush();
     mock.timers.tick(1);
     assert.equal(await saving, 'timed-out');
-    assert.deepEqual(calls, ['preload /x.css']);
+    assert.deepEqual(calls, ['post /a {"mode":"dark"}']);
   } finally {
     mock.timers.reset();
   }
 });
 
-test('a newer save supersedes an older one', async () => {
+test('a preload still running at ten seconds stops, and the save, already made, counts as saved', async () => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const { deps, pending } = fakes([pack('nord')]);
+    const saving = saveAppearance({ action: '/a', body: { mode: 'dark' } }, deps);
+    await flush();
+    pending.get('post')!.resolve();
+    await flush();
+    mock.timers.tick(10_000);
+    assert.equal(await saving, 'saved');
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test('a newer save supersedes an older one, before or after its post', async () => {
   const { deps } = fakes();
   const controller = new AbortController();
   const older = saveAppearance(
-    { action: '/a', body: { mode: 'dark' }, stylesheets: ['/x.css'], signal: controller.signal },
+    { action: '/a', body: { mode: 'dark' }, signal: controller.signal },
     deps,
   );
   controller.abort();
   assert.equal(await older, 'superseded');
   assert.equal(
-    await saveAppearance(
-      { action: '/a', body: { mode: 'dark' }, stylesheets: [], signal: controller.signal },
-      deps,
-    ),
+    await saveAppearance({ action: '/a', body: { mode: 'dark' }, signal: controller.signal }, deps),
     'superseded',
   );
+  const later = fakes([pack('nord')]);
+  const preloading = new AbortController();
+  const saving = saveAppearance(
+    { action: '/a', body: { mode: 'dark' }, signal: preloading.signal },
+    later.deps,
+  );
+  await flush();
+  later.pending.get('post')!.resolve();
+  await flush();
+  preloading.abort();
+  assert.equal(await saving, 'superseded');
 });

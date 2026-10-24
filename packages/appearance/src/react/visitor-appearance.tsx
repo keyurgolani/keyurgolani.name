@@ -12,9 +12,10 @@
 //
 // With JavaScript, and a `refresh` from the host (Next's router.refresh;
 // nothing here imports next/*), each change saves at once and Apply hides:
-// the control loads the stylesheet the choice needs, waits for it to load,
-// POSTs the form's values as JSON, then calls refresh in a transition, so
-// the page renders in the new selection with its stylesheet already there.
+// the control POSTs the form's values as JSON, preloads the stylesheets the
+// route's answer names for the new selection, then calls refresh in a
+// transition, so the page renders in it with its stylesheets already there.
+// The page names no stylesheet it doesn't render (#6's purity check).
 // If that fails or takes over ten seconds, nothing changes and Retry
 // reloads the page. What happens goes to a polite live region.
 
@@ -26,11 +27,7 @@ import { Select } from '../primitives/select';
 import { Disclosure } from '../primitives/surface';
 import { attributeAxis } from '../boundary';
 import type { IdAxis } from '../axes';
-import {
-  APPEARANCE_PREFERENCE_ROUTE,
-  type VisitorAppearanceModel,
-  type VisitorAxisControl,
-} from '../visitor-model';
+import { APPEARANCE_PREFERENCE_ROUTE, type VisitorAppearanceModel } from '../visitor-model';
 import { useBoundary, useBoundaryId, useHydrated } from './boundary-root';
 import { BROWSER_SAVE, saveAppearance, type SaveBody, type SaveDeps } from './save';
 
@@ -118,15 +115,12 @@ export function VisitorAppearance({
 
   if (model.controls.length === 0) return null;
 
-  const run = async (body: SaveBody, stylesheets: readonly string[]) => {
+  const run = async (body: SaveBody) => {
     current.current?.abort();
     const controller = new AbortController();
     current.current = controller;
     setSaving(true);
-    const outcome = await saveAppearance(
-      { action, body, stylesheets, signal: controller.signal },
-      save,
-    );
+    const outcome = await saveAppearance({ action, body, signal: controller.signal }, save);
     if (outcome === 'superseded') return;
     setSaving(false);
     if (outcome === 'saved') {
@@ -141,12 +135,9 @@ export function VisitorAppearance({
   // Every handler is there from the first render and checks `live` when it
   // runs, so no control changes element when the page hydrates and the
   // control goes live: focus and the nodes stay where they were.
-  const change = (control: VisitorAxisControl, value: string) => {
+  const change = () => {
     if (!live || !form.current) return;
-    const stylesheet = control.groups
-      .flatMap((group) => group.choices)
-      .find((choice) => choice.value === value)?.stylesheet;
-    void run(formValues(form.current), stylesheet ? [stylesheet] : []);
+    void run(formValues(form.current));
   };
 
   const text =
@@ -176,7 +167,7 @@ export function VisitorAppearance({
               : (event) => {
                   if (!live) return;
                   event.preventDefault();
-                  void run(formValues(event.currentTarget), []);
+                  void run(formValues(event.currentTarget));
                 }
           }
         >
@@ -191,7 +182,7 @@ export function VisitorAppearance({
                 description={control.note}
                 options={control.groups.flatMap((group) => group.choices)}
                 defaultValue={control.value}
-                onChange={(value) => change(control, value)}
+                onChange={change}
               />
             ) : (
               <Select
@@ -204,7 +195,7 @@ export function VisitorAppearance({
                   choices: group.choices,
                 }))}
                 defaultValue={control.value}
-                onChange={(value) => change(control, value)}
+                onChange={change}
               />
             ),
           )}
@@ -219,7 +210,7 @@ export function VisitorAppearance({
               onClick={(event) => {
                 if (!live) return;
                 event.preventDefault();
-                void run({ reset: true }, []);
+                void run({ reset: true });
               }}
             >
               Reset to site default

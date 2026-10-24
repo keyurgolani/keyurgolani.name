@@ -13,6 +13,7 @@ import {
   purityProblems,
   selectedUnits,
   sourceFiles,
+  unrenderedPayloadPacks,
 } from './purity.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -654,4 +655,34 @@ test("the forbidden block's own problems fail every page", () => {
     }),
   );
   assert.deepEqual(problems, ['forbidden.modules[0], x, matches no file in the repository.']);
+});
+
+test("a page's RSC payload names no pack stylesheet but those it renders, the platform's, and the error page's fallbacks (#19)", () => {
+  const push = (text) => `<script>self.__next_f.push([1,${JSON.stringify(text)}])</script>`;
+  const boundary = {
+    'data-appearance-boundary': 'document',
+    'data-color-scheme': 'night-ink',
+  };
+  const errorPacks = { 'color-scheme': 'warm-parchment' };
+  const rendered = push(
+    '3:{"href":"/_portfolio/pack/_platform.111111111111.css"}\n4:{"href":"/_portfolio/pack/night-ink.ffffffffffff.css"}\n5:{"href":"/_portfolio/pack/warm-parchment.eeeeeeeeeeee.css"}\n',
+  );
+  assert.deepEqual(unrenderedPayloadPacks(rendered, MANIFEST, boundary, errorPacks), []);
+  // The visitor control's model once named every choice's stylesheet.
+  const catalog = push(
+    '6:{"value":"night-ink","stylesheet":"/_portfolio/pack/night-ink.ffffffffffff.css"},{"value":"warm-parchment","stylesheet":"/_portfolio/pack/warm-parchment.eeeeeeeeeeee.css"},{"value":"zinc","stylesheet":"/_portfolio/pack/zinc.222222222222.css"}\n',
+  );
+  assert.deepEqual(unrenderedPayloadPacks(catalog, MANIFEST, boundary, errorPacks), [
+    '/_portfolio/pack/zinc.222222222222.css',
+  ]);
+  // Without the error page's packs, the fallback scheme counts too.
+  assert.deepEqual(unrenderedPayloadPacks(rendered, MANIFEST, boundary), [
+    '/_portfolio/pack/warm-parchment.eeeeeeeeeeee.css',
+  ]);
+  // Outside a document boundary, not even the platform stylesheet.
+  assert.deepEqual(unrenderedPayloadPacks(rendered, MANIFEST, null), [
+    '/_portfolio/pack/_platform.111111111111.css',
+    '/_portfolio/pack/night-ink.ffffffffffff.css',
+    '/_portfolio/pack/warm-parchment.eeeeeeeeeeee.css',
+  ]);
 });

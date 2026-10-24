@@ -211,6 +211,8 @@ for (const route of ROUTES) {
           });
           const failure = thirdPartyFailure(records, options);
           if (failure) throw new Error(failure);
+          // The payload names no pack stylesheet the page doesn't render (#19).
+          expect(purity?.unrenderedPacks ?? [], `${route}'s RSC payload`).toEqual([]);
           const impure = purity ? impurity([{ route, problems: purity.problems }]) : null;
           if (impure) throw new Error(impure);
         },
@@ -268,8 +270,10 @@ test(
       ),
       contentType: 'application/json',
     });
-    for (const { route, status } of pages) {
+    for (const { route, status, unrenderedPacks } of pages) {
       expect(status, `GET ${route}`).toBe(route === NOT_FOUND ? 404 : 200);
+      // The payload names no pack stylesheet the page doesn't render (#19).
+      expect(unrenderedPacks, `${route}'s RSC payload`).toEqual([]);
     }
     const impure = impurity(pages);
     if (impure) throw new Error(impure);

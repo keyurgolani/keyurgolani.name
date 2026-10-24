@@ -526,3 +526,38 @@ export function purityProblems(page) {
     problems: [...problems],
   };
 }
+
+/**
+ * The pack stylesheets a page's RSC payload names that it doesn't render
+ * (#19): every /_portfolio/pack/ file in the payload, less the platform
+ * stylesheet, the packs the document boundary's data-<kind> attributes
+ * name, and the error page's fallback packs, which a page in a document
+ * boundary names for the error page it may need. The visitor control's
+ * model once named every registered pack's stylesheet here, so a page
+ * carried the whole catalog's URLs; it names none now, and the preference
+ * route answers a save with the new selection's.
+ *
+ * @param {string} html the document as served
+ * @param {{ units: any[], platform: any }} manifest asset-manifest.json, parsed
+ * @param {Record<string, string> | null} boundary the document boundary's attributes
+ * @param {Partial<Record<string, string>>} [errorPacks] the pack on each kind the error page renders in
+ * @returns {string[]} the paths, sorted
+ */
+export function unrenderedPayloadPacks(html, manifest, boundary, errorPacks = {}) {
+  const allowed = new Set();
+  if (manifest.platform?.url && boundary?.['data-appearance-boundary'] === 'document') {
+    allowed.add(manifest.platform.url);
+  }
+  for (const unit of manifest.units) {
+    if (!PACK_KINDS.includes(unit.kind) || !unit.stylesheet) continue;
+    if (boundary?.[`data-${unit.kind}`] === unit.id || errorPacks[unit.kind] === unit.id) {
+      allowed.add(unit.stylesheet.url);
+    }
+  }
+  const named = new Set(
+    [...flightPayload(html).text.matchAll(/\/_portfolio\/pack\/[A-Za-z0-9_\-.]+/g)].map(
+      ([match]) => match,
+    ),
+  );
+  return [...named].filter((url) => !allowed.has(url)).sort();
+}

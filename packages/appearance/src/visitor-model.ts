@@ -6,11 +6,15 @@
 // does a generated scheme with nothing generated for it, which a visitor
 // couldn't apply. Under demo there's none, since #9's pickers drive the
 // appearance there.
+//
+// A choice carries no stylesheet URL (#6's purity check): the model is in
+// every public page's payload, and a page names only the stylesheets it
+// renders. The preference route answers a JSON save with the new
+// selection's stylesheets, which the control preloads before it refreshes.
 
 import type { AppearanceAxis, DisplayMode, VisitorControls } from '@portfolio/schema';
 import { FALLBACK_ID } from '@portfolio/variant-contract';
 import { APPEARANCE_AXES, PACK_AXES, QUERY_KEYS, type PackAxis } from './axes';
-import type { AppearanceStylesheets } from './boundary';
 import type { PackTier } from './manifests';
 import { findPack, type AppearanceRegistry } from './registry';
 import type { Profile, ResolvedAppearance } from './resolve';
@@ -31,8 +35,6 @@ export interface VisitorChoice {
   readonly label: string;
   /** Why the current selection can't take it, such as `no light mode`. Set only on a disabled choice. */
   readonly unavailable?: string;
-  /** The compiled stylesheet it needs, which the control loads before it applies the choice. */
-  readonly stylesheet?: string;
 }
 
 /** The tiers a visitor sees, in the order they're listed. */
@@ -80,8 +82,6 @@ export interface VisitorModelInput {
   readonly appearance: Pick<ResolvedAppearance, 'selection' | 'resolvedMode' | 'modeLocked'>;
   readonly visitorControls: VisitorControls;
   readonly profile: Profile;
-  /** Where each pack's stylesheet is, so the control can load one before it applies it. */
-  readonly stylesheets?: AppearanceStylesheets;
   /** The generated scheme sets the resolver has, so a generated scheme with none isn't offered. */
   readonly generated?: GeneratedSchemes;
 }
@@ -173,7 +173,7 @@ function packControl(
   axis: PackAxis,
   base: Pick<VisitorAxisControl, 'axis' | 'name' | 'label'>,
 ): VisitorAxisControl {
-  const { registry, appearance, stylesheets, generated } = input;
+  const { registry, appearance, generated } = input;
   const mode = appearance.selection.displayMode;
   const groups = VISITOR_TIERS.map((tier): VisitorChoiceGroup => {
     const choices = [...registry.packs[axis].values()]
@@ -184,13 +184,11 @@ function packControl(
           schemeRenders(findPack(registry, 'colorScheme', pack.manifest.id)!, generated),
       )
       .map(({ manifest }): VisitorChoice => {
-        const stylesheet = stylesheets?.pack(axis, manifest.id) ?? undefined;
         const fits = axis !== 'colorScheme' || modeFits(registry, manifest.id, mode);
         return {
           value: manifest.id,
           label: manifest.name,
           ...(fits ? {} : { unavailable: `no ${mode} mode` }),
-          ...(stylesheet ? { stylesheet } : {}),
         };
       })
       .sort(byLabel);
