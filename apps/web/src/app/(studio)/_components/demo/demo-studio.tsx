@@ -7,6 +7,7 @@ import {
   frameSource,
   studioLocation,
   type DemoSelection,
+  type DemoSource,
   type SchemeModes,
   type SelectionRules,
 } from '~/lib/demo/url-state';
@@ -22,7 +23,9 @@ import { DemoFrame } from './demo-frame';
 // line in its header, over the demo's two tasks. Appearance has a field and
 // a reset for each of the five axes and one reset for the whole demo;
 // Preview has the frame's viewport, display mode, and motion. Each shows one
-// frame of the sample with the selection. It reaches storage only through
+// frame of the sample with the selection, or, once the visitor asks for it
+// and only when the server verified one, of the read-only reference (#9),
+// which nothing here can change. It reaches storage only through
 // the browser backend its page hands it, and never a server. Nothing here
 // publishes, saves a draft, or signs anyone in or out.
 
@@ -38,6 +41,18 @@ export interface DemoStudioProps {
   readonly failed?: boolean;
   /** The task shown before the URL names one, as on the server. */
   readonly task?: TaskId;
+  /**
+   * The read-only reference startup verified (#9): the name its portfolio
+   * gives and its own selection. Null or absent, nothing offers or names one.
+   */
+  readonly reference?: DemoReferenceProps | null;
+  /** What the frame shows as the backend arrives: the source its URL named. */
+  readonly initialSource?: DemoSource;
+}
+
+export interface DemoReferenceProps {
+  readonly name: string;
+  readonly defaults: DemoSelection;
 }
 
 /**
@@ -91,6 +106,8 @@ export function DemoStudio({
   backend,
   failed = false,
   task: initialTask,
+  reference = null,
+  initialSource = 'sample',
 }: DemoStudioProps) {
   const rules: SelectionRules = useMemo(() => ({ catalog, schemeModes }), [catalog, schemeModes]);
   const tasks = useMemo(() => tasksFor(policy.allowed, 'demo'), [policy.allowed]);
@@ -103,6 +120,9 @@ export function DemoStudio({
     () => backend?.selection() ?? null,
   );
   const [notice, setNotice] = useState('');
+  // The sample unless the page has a reference and the visitor asked for it.
+  const [source, setSource] = useState<DemoSource>(reference ? initialSource : 'sample');
+  const showing: DemoSource = reference ? source : 'sample';
   const [viewportId, setViewportId] = useState<Viewport['id']>('desktop');
   const [motion, setMotion] = useState<'system' | 'reduce'>('system');
   const systemReduces = useSystemReducesMotion();
@@ -112,6 +132,7 @@ export function DemoStudio({
   if (backend !== shown) {
     setShown(backend);
     setSelection(backend?.selection() ?? null);
+    setSource(reference ? initialSource : 'sample');
   }
 
   // The URL follows the selection, in place, so Back leaves Studio.
@@ -121,9 +142,9 @@ export function DemoStudio({
     window.history.replaceState(
       window.history.state,
       '',
-      studioLocation(pathname, hash, selection, rules),
+      studioLocation(pathname, hash, selection, rules, showing),
     );
-  }, [selection, rules]);
+  }, [selection, rules, showing]);
 
   const labelOf = (axis: CatalogAxis) =>
     catalog.axes.find((each) => each.axis === axis)?.label ?? axis;
@@ -147,15 +168,31 @@ export function DemoStudio({
     }
   }
 
+  const ownerOf = () =>
+    showing === 'reference' && reference ? `${reference.name}'s own` : "the sample's own";
+
   function resetAxis(axis: CatalogAxis) {
     if (!backend) return;
     const next = backend.resetAxis(axis);
     setSelection(next);
-    setNotice(`${labelOf(axis)} is back to the sample's own, ${nameOf(axis, next[axis])}.`);
+    setNotice(`${labelOf(axis)} is back to ${ownerOf()}, ${nameOf(axis, next[axis])}.`);
+  }
+
+  /** The frame on the reference, in its own published appearance, or back on the sample. */
+  function show(next: DemoSource) {
+    if (!backend || !reference) return;
+    setSelection(backend.showSource(next === 'reference' ? reference.defaults : null));
+    setSource(next);
+    setNotice(
+      next === 'reference'
+        ? `Showing ${reference.name}'s published portfolio, read-only. Nothing here changes ${reference.name}'s site.`
+        : 'Showing the neutral sample again.',
+    );
   }
 
   function resetAll() {
     if (!backend) return;
+    setSource('sample');
     setSelection(backend.resetAll());
     setNotice(
       "The demo is back to the sample's own appearance, and this browser holds none of it.",
@@ -163,7 +200,14 @@ export function DemoStudio({
   }
 
   const ready = backend !== null && selection !== null;
-  const lines = ready ? demoStateLines(catalog, selection, backend.persistent()) : [];
+  const lines = ready
+    ? demoStateLines(
+        catalog,
+        selection,
+        backend.persistent(),
+        showing === 'reference' && reference ? reference : undefined,
+      )
+    : [];
 
   return (
     <StudioFrame
@@ -192,7 +236,21 @@ export function DemoStudio({
                 </div>
               ))}
             </dl>
-          ) : failed ? (
+          ) : null}
+          {ready && reference ? (
+            <div className="studio-source__actions">
+              {showing === 'reference' ? (
+                <button type="button" className="studio-button" onClick={() => show('sample')}>
+                  Back to the neutral sample
+                </button>
+              ) : (
+                <button type="button" className="studio-button" onClick={() => show('reference')}>
+                  Show {reference.name}&apos;s published portfolio (read-only)
+                </button>
+              )}
+            </div>
+          ) : null}
+          {ready ? null : failed ? (
             <div className="studio-alert" role="alert">
               <p>
                 Demo Studio couldn&apos;t load: part of it didn&apos;t arrive. Check your
@@ -233,6 +291,8 @@ export function DemoStudio({
               onViewport={setViewportId}
               onMotion={setMotion}
               onChoose={(axis, value) => void choose(axis, value)}
+              source={showing}
+              {...(reference ? { referenceName: reference.name } : {})}
             />
           ) : (
             <>
@@ -259,12 +319,14 @@ export function DemoStudio({
                   </button>
                 </div>
               </div>
-              <SampleFrame
+              <ContentFrame
                 catalog={catalog}
                 selection={selection}
                 rules={rules}
                 viewportId={viewportId}
                 reduced={motion === 'reduce' && !systemReduces}
+                source={showing}
+                {...(reference ? { referenceName: reference.name } : {})}
               />
             </>
           )}
@@ -274,25 +336,37 @@ export function DemoStudio({
   );
 }
 
-function SampleFrame({
+/** The frame of what shows: the sample, or the read-only reference, by its name. */
+interface FrameSource {
+  readonly source: DemoSource;
+  readonly referenceName?: string;
+}
+
+function ContentFrame({
   catalog,
   selection,
   rules,
   viewportId,
   reduced,
+  source,
+  referenceName,
 }: {
   catalog: AppearanceCatalog;
   selection: DemoSelection;
   rules: SelectionRules;
   viewportId: Viewport['id'];
   reduced: boolean;
-}) {
+} & FrameSource) {
   const viewport = VIEWPORTS.find(({ id }) => id === viewportId) ?? VIEWPORTS[0]!;
   const name = optionNote(catalog, 'variant', selection.variant).option?.name ?? selection.variant;
+  const what =
+    source === 'reference' && referenceName
+      ? `${referenceName}'s published portfolio, read-only`
+      : 'Demo sample';
   return (
     <DemoFrame
-      src={frameSource(selection, rules, { reduceMotion: reduced })}
-      title={`Demo sample, ${name}, ${viewportLabel(viewport)}`}
+      src={frameSource(selection, rules, { reduceMotion: reduced, source })}
+      title={`${what}, ${name}, ${viewportLabel(viewport)}`}
       viewport={viewport}
     />
   );
@@ -308,6 +382,8 @@ function PreviewTask({
   onViewport,
   onMotion,
   onChoose,
+  source,
+  referenceName,
 }: {
   catalog: AppearanceCatalog;
   selection: DemoSelection;
@@ -318,7 +394,7 @@ function PreviewTask({
   onViewport: (id: Viewport['id']) => void;
   onMotion: (motion: 'system' | 'reduce') => void;
   onChoose: (axis: CatalogAxis, value: string) => void;
-}) {
+} & FrameSource) {
   const label = catalog.axes.find(({ axis }) => axis === 'displayMode')?.label ?? 'Display mode';
   return (
     <>
@@ -373,12 +449,14 @@ function PreviewTask({
           ) : null}
         </div>
       </div>
-      <SampleFrame
+      <ContentFrame
         catalog={catalog}
         selection={selection}
         rules={rules}
         viewportId={viewportId}
         reduced={motion === 'reduce' && !systemReduces}
+        source={source}
+        {...(referenceName ? { referenceName } : {})}
       />
     </>
   );
