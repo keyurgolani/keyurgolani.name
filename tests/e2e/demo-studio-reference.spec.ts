@@ -95,43 +95,57 @@ test(
     // Another origin on loopback itself, a server of the test's own on
     // 127.0.0.1 at another port, so the framer and the app share an address
     // space and no Local Network Access check can stand in for the policy.
+    // It frames the reference, and, the control, a page of its own, which
+    // loads: a frame there fails only for what its document says.
     const server = createServer((request, response) => {
       response.writeHead(200, { 'content-type': 'text/html' });
       response.end(
-        `<!doctype html><title>Elsewhere</title><iframe src="${app.origin}/reference"></iframe>`,
+        request.url === '/own'
+          ? '<!doctype html><title>Own</title><p>An elsewhere page of its own</p>'
+          : `<!doctype html><title>Elsewhere</title><iframe id="reference" src="${app.origin}/reference"></iframe><iframe id="own" src="/own"></iframe>`,
       );
     });
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     try {
       const { port } = server.address() as AddressInfo;
-      const elsewhere = `http://127.0.0.1:${port}/elsewhere`;
-      expect(new URL(elsewhere).origin).not.toBe(app.origin);
+      const elsewhere = `http://127.0.0.1:${port}`;
+      expect(elsewhere).not.toBe(app.origin);
       // Past the harness's egress guard, to this server alone.
-      await page.route(elsewhere, (route) => route.continue());
-      const refused: string[] = [];
-      page.on('console', (message) => {
-        // Chromium names the directive that refused the frame.
-        if (/frame-ancestors 'self'/.test(message.text())) refused.push(message.text());
-      });
-      expect((await page.goto(elsewhere))?.status()).toBe(200);
+      await page.route(`${elsewhere}/**`, (route) => route.continue());
+      // The violation Chromium reports, in the page's console and its CDP
+      // log alike, in either wording its builds use: "Refused to frame '<url>'
+      // because an ancestor violates ..." or "Framing '<url>' violates ...".
+      const reported: string[] = [];
+      const violation = (text: string) => {
+        const framed = /^(?:Refused to frame|Framing) '([^']+)'/.exec(text)?.[1];
+        return (
+          framed !== undefined &&
+          URL.canParse(framed) &&
+          new URL(framed).origin === app.origin &&
+          /violates the following Content Security Policy directive: "frame-ancestors 'self'"/.test(
+            text,
+          )
+        );
+      };
+      page.on('console', (message) => void reported.push(message.text()));
+      const cdp = await page.context().newCDPSession(page);
+      cdp.on('Log.entryAdded', ({ entry }) => void reported.push(entry.text));
+      await cdp.send('Log.enable');
+
+      expect((await page.goto(`${elsewhere}/elsewhere`))?.status()).toBe(200);
+      const own = page.frameLocator('#own');
+      await expect(own.locator('p')).toHaveText('An elsewhere page of its own');
       // The frame-ancestors violation alone counts: a frame that failed to
       // load any other way proves nothing about the policy.
-      await expect
-        .poll(
-          () =>
-            refused.some(
-              (text) =>
-                text.startsWith(`Refused to frame '${app.origin}/`) &&
-                text.includes('because an ancestor violates'),
-            ),
-          { timeout: 10_000 },
-        )
-        .toBe(true);
+      await expect.poll(() => reported.some(violation), { timeout: 15_000 }).toBe(true);
+      const seen = reported.find(violation)!;
+      test.info().annotations.push({ type: 'violation', description: seen });
+      console.log(`[demo-studio-reference] ${seen}`);
+      const frame = await (await page.locator('#reference').elementHandle())?.contentFrame();
+      const text = await frame?.evaluate(() => document.body?.innerText ?? '').catch(() => '');
+      expect(text ?? '').not.toContain('Wren Halloway');
     } finally {
       await new Promise((resolve) => server.close(resolve));
     }
-    const frame = await (await page.locator('iframe').elementHandle())?.contentFrame();
-    const text = await frame?.evaluate(() => document.body?.innerText ?? '').catch(() => '');
-    expect(text ?? '').not.toContain('Wren Halloway');
   },
 );

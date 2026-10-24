@@ -68,10 +68,10 @@ function expectAnswer(
   answer: Answer,
   { what, status, code, opaque }: { what: string; status: number; code: string; opaque: boolean },
 ) {
-  test.info().annotations.push({
-    type: 'answer',
-    description: `${what}: ${answer.status}, ${answer.body === 'checked' ? `body checked, ${answer.code}` : 'opaque and empty'}`,
-  });
+  const path = `${what}: ${answer.status}, ${answer.body === 'checked' ? `body checked, ${answer.code}` : 'opaque and empty'}`;
+  // On the test, and in the log, where a reader of the run sees it.
+  test.info().annotations.push({ type: 'answer', description: path });
+  console.log(`[demo-origin] ${path}`);
   expect(answer.status, what).toBe(status);
   // A request that isn't no-cors has a readable body: an empty one fails too.
   if (!opaque) expect(answer.body, `${what}: a body`).toBe('checked');
@@ -111,35 +111,53 @@ async function sameOrigin(page: Page, pathname: string, init: RequestInit = {}):
 }
 
 interface Seen {
-  readonly status: number;
-  readonly headers: Record<string, string>;
+  status?: number;
+  headers?: Record<string, string>;
   loaded: boolean;
+  /** Why the browser never delivered it: its error, block reason, or CORS error. */
+  failed?: string;
 }
 
 /**
  * The server's answers to what `page` sends under `prefix`, another origin,
  * as a CDP session sees them: the function it resolves to runs `send` and
- * resolves to the one new answer, once its body has loaded.
+ * resolves to the one new answer, once its body has loaded. A request the
+ * browser stopped fails the test, naming why.
  */
 async function crossOrigin(page: Page, prefix: string) {
   const cdp = await page.context().newCDPSession(page);
   const answers = new Map<string, Seen>();
+  cdp.on('Network.requestWillBeSent', ({ requestId, request }) => {
+    if (request.url.startsWith(prefix)) answers.set(requestId, { loaded: false });
+  });
   cdp.on('Network.responseReceived', ({ requestId, response }) => {
-    if (response.url.startsWith(prefix)) {
-      answers.set(requestId, { status: response.status, headers: response.headers, loaded: false });
-    }
+    const seen = answers.get(requestId);
+    if (seen) Object.assign(seen, { status: response.status, headers: response.headers });
   });
   cdp.on('Network.loadingFinished', ({ requestId }) => {
     const seen = answers.get(requestId);
     if (seen) seen.loaded = true;
   });
+  cdp.on('Network.loadingFailed', ({ requestId, errorText, blockedReason, corsErrorStatus }) => {
+    const seen = answers.get(requestId);
+    if (seen) {
+      seen.failed = [errorText, blockedReason, corsErrorStatus?.corsError]
+        .filter(Boolean)
+        .join(', ');
+    }
+  });
   await cdp.send('Network.enable');
   return async (send: () => Promise<unknown>): Promise<Answer> => {
     const before = new Set(answers.keys());
-    const fresh = () => [...answers].filter(([id, seen]) => !before.has(id) && seen.loaded);
+    const fresh = () =>
+      [...answers].filter(
+        ([id, seen]) => !before.has(id) && (seen.failed !== undefined || seen.loaded),
+      );
     await send();
     await expect.poll(() => fresh().length, { timeout: 15_000 }).toBe(1);
     const [requestId, seen] = fresh()[0]!;
+    expect(seen.failed, 'the browser delivered the request and its answer').toBeUndefined();
+    expect(seen.status, 'an answer came back').toBeDefined();
     // CDP may keep no data for an opaque answer, and says so; any body it
     // does hand back is read for its code.
     const text = await cdp
@@ -148,10 +166,11 @@ async function crossOrigin(page: Page, prefix: string) {
         base64Encoded ? Buffer.from(body, 'base64').toString('utf8') : body,
       )
       .catch(() => '');
-    const cors = corsOf(Object.keys(seen.headers));
+    const status = seen.status!;
+    const cors = corsOf(Object.keys(seen.headers ?? {}));
     return text === ''
-      ? { status: seen.status, code: null, cors, body: 'opaque-empty' }
-      : { status: seen.status, code: codeOf(text), cors, body: 'checked' };
+      ? { status, code: null, cors, body: 'opaque-empty' }
+      : { status, code: codeOf(text), cors, body: 'checked' };
   };
 }
 
@@ -162,19 +181,23 @@ async function ownerPage(context: BrowserContext): Promise<Page> {
   return page;
 }
 
-/** A page on the demo origin with no policy of its own, standing in for any script there. */
+/**
+ * The demo's own showroom, served from loopback like the owner's pages, in a
+ * context made with `bypassCSP`, so its policy, which allows no request off
+ * the demo, doesn't stand in for the server's checks: it models any script on
+ * the demo origin. (A page Playwright fulfilled itself has no address, so
+ * Local Network Access treats it as public and blocks its requests to
+ * loopback before they leave.)
+ */
 async function standIn(context: BrowserContext): Promise<Page> {
   const page = await context.newPage();
-  await page.route(`${DEMO}/elsewhere`, (route) =>
-    route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Demo</title>' }),
-  );
-  await page.goto(`${DEMO}/elsewhere`);
+  expect((await page.goto(`${DEMO}/`))?.status()).toBe(200);
   return page;
 }
 
 /** The owner, signed in through the owner's origin in a context of its own. */
-async function signedIn(browser: Browser) {
-  const context = await browser.newContext();
+async function signedIn(browser: Browser, options: { bypassCSP?: boolean } = {}) {
+  const context = await browser.newContext(options);
   const page = await ownerPage(context);
   const answer = await page.evaluate(async (password) => {
     const response = await fetch('/api/studio/auth.login', {
@@ -287,9 +310,9 @@ test(
   "owner commands a demo page sends with the owner's cookie attached are refused",
   { annotation: ROW },
   async ({ browser }) => {
-    const owner = await signedIn(browser);
-    // The demo's own pages allow no request off the demo, so the stand-in
-    // page has no policy.
+    // The demo's own pages allow no request off the demo, so this context
+    // sets their policy aside (standIn()).
+    const owner = await signedIn(browser, { bypassCSP: true });
     const demo = await standIn(owner.context);
     const next = await crossOrigin(demo, `${OWNER}/api/studio/`);
     // A simple request, so no preflight stops it before the server.
@@ -307,7 +330,7 @@ test(
 
     // The control: with no owner cookie, the same command is a 401, so each
     // 403 below refuses a session the owner's cookie resolved.
-    const stranger = await browser.newContext();
+    const stranger = await browser.newContext({ bypassCSP: true });
     const strangerPage = await standIn(stranger);
     const strangerNext = await crossOrigin(strangerPage, `${OWNER}/api/studio/`);
     const control = await strangerNext(() =>
