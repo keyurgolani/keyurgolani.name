@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import type { MetaPack } from '../../packages/appearance/src/index';
+import type { GeneratedSchemes, MetaPack } from '../../packages/appearance/src/index';
 import { PLATFORM_DEFAULTS } from '../../packages/appearance/src/index';
 import { readBuildMeta, type BuildMeta } from '../quality/cells';
 import { fallbackPacks } from '../quality/plan-fixtures';
@@ -24,12 +24,21 @@ import {
   registeredVariants,
   SAMPLE_SEED,
   seededDraw,
+  planBudget,
+  readPlan,
+  REHEARSAL,
+  rehearsalTimeoutMinutes,
   shardTimeoutMinutes,
   shardTuples,
   shippingPacks,
   staticPlan,
+  statesPlan,
+  statesTimeoutMinutes,
   tuplePath,
 } from './plan';
+import { resolvedTokens } from './tokens';
+import type * as CatalogGenerated from '../../apps/web/scripts/catalog-generated';
+import { packPackages } from '../../packages/appearance/src/node/index';
 import type * as RegistryOptions from '../../apps/web/scripts/registry-options';
 import { servedReader, staticSmoke, type ServedReader } from './static';
 
@@ -358,5 +367,166 @@ test('a failure names one pack: the axis that rendered wrong, else the first pac
   });
   assert.deepEqual(blamed({ ...PLATFORM_DEFAULTS, variant: 'kinetic-cosmos' }, PLATFORM_DEFAULTS), {
     axis: 'variant',
+  });
+});
+
+/** The generated schemes' reference sets, read as static-smoke.ts reads them (#20 PR 3). */
+function referenceSets(): GeneratedSchemes {
+  const { generatedEntries, referenceSets: sets } = createRequire(import.meta.url)(
+    '../../apps/web/scripts/catalog-generated.ts',
+  ) as typeof CatalogGenerated;
+  const root = fileURLToPath(new URL('../../', import.meta.url));
+  return sets(generatedEntries(root, packPackages(root)).entries);
+}
+
+test('with reference sets the static cross-product holds every registered generated scheme, and without them none (#20 PR 3)', () => {
+  const meta = checkoutMeta();
+  const generated = referenceSets();
+  const without = crossProduct(meta);
+  const withSets = crossProduct(meta, generated);
+  const schemes = (tuples: readonly { colorScheme: string }[]) =>
+    [...new Set(tuples.map(({ colorScheme }) => colorScheme))].sort();
+  const registered = (meta.PACKS ?? [])
+    .filter((pack) => pack.kind === 'color-scheme' && !pack.fixture && pack.manifest.generator)
+    .map((pack) => pack.manifest.id)
+    .sort();
+  assert.ok(registered.includes('brand-seed') && registered.includes('hct-tonal'));
+  for (const id of registered) {
+    assert.ok(!schemes(without).includes(id), `${id} has no sets without its record`);
+    assert.ok(schemes(withSets).includes(id), `${id} joins with its record`);
+  }
+  // Each takes every mode, as a dual-mode authored scheme does.
+  const of = (tuples: readonly { colorScheme: string }[], id: string) =>
+    tuples.filter(({ colorScheme }) => colorScheme === id).length;
+  for (const id of registered) assert.equal(of(withSets, id), of(without, 'warm-parchment'), id);
+  // And every other tuple is the same.
+  const others = new Set(registered);
+  assert.deepEqual(
+    withSets.filter(({ colorScheme }) => !others.has(colorScheme)),
+    without,
+  );
+});
+
+test("the rehearsal's tokens name every map they read, once, and each tuple's color sets are the ones its mode renders", () => {
+  const meta = checkoutMeta();
+  const generated = referenceSets();
+  const tuples = shardTuples(crossProduct(meta, generated), { index: 3, count: 400 });
+  const { lines, maps } = resolvedTokens(meta, tuples, generated);
+  assert.equal(lines.length, tuples.length);
+  for (const line of lines) {
+    for (const digest of [line.language, line.typography, ...Object.values(line.color)]) {
+      assert.ok(maps.has(digest!), digest);
+    }
+    const sets = Object.keys(line.color).sort();
+    if (line.displayMode === 'high-contrast')
+      assert.ok(sets.every((name) => name.startsWith('high-contrast')));
+    else assert.ok(sets.length >= 2, `${line.displayMode} renders its base and high-contrast sets`);
+    assert.deepEqual(line.fallbackAxes, []);
+  }
+  const brand = lines.find(
+    ({ colorScheme, displayMode }) => colorScheme === 'brand-seed' && displayMode === 'light',
+  );
+  if (brand) assert.deepEqual(maps.get(brand.color.light!), generated['brand-seed']!.light);
+  assert.deepEqual(resolvedTokens(meta, tuples, generated).lines, lines, 'the same each time');
+});
+
+test('the rehearsal workflow runs only on its request, never cancels, reads only, and is sized from REHEARSAL under its cap', () => {
+  const text = readFileSync(
+    new URL('../../.github/workflows/catalog-rehearsal.yml', import.meta.url),
+    'utf8',
+  );
+  const workflow = parse(text) as {
+    on: Record<string, { paths?: string[]; branches?: string[] }>;
+    permissions: Record<string, string>;
+    concurrency: { 'cancel-in-progress': boolean };
+    jobs: Record<
+      string,
+      {
+        'timeout-minutes': number;
+        needs?: string;
+        if?: string;
+        strategy?: { matrix: { shard: number[] } };
+        steps: { run?: string; env?: Record<string, string> }[];
+      }
+    >;
+  };
+  assert.deepEqual(Object.keys(workflow.on), ['pull_request']);
+  assert.deepEqual(workflow.on.pull_request!.paths, ['tests/catalog/rehearsal.json']);
+  assert.deepEqual(workflow.permissions, { contents: 'read' });
+  assert.equal(workflow.concurrency['cancel-in-progress'], false);
+  assert.doesNotMatch(text, /workflow_dispatch|schedule:|secrets\./);
+  const { request, shard, states, review } = workflow.jobs;
+  assert.deepEqual(Object.keys(workflow.jobs), ['request', 'shard', 'states', 'review']);
+  assert.ok(request!.steps.some(({ run }) => run === 'node ci/rehearsal-request.mjs --github'));
+  for (const job of [shard!, states!, review!]) {
+    assert.equal(job.needs, 'request');
+    assert.equal(job.if, "${{ needs.request.outputs.run == 'true' }}");
+  }
+  assert.equal(shard!.strategy!.matrix.shard.length, REHEARSAL.shards);
+  assert.equal(shard!['timeout-minutes'], rehearsalTimeoutMinutes());
+  const runs = shard!.steps.map((step) => step.run ?? '');
+  assert.ok(runs.indexOf('pnpm ci:catalog-static') < runs.indexOf('pnpm build'));
+  assert.ok(runs.indexOf('pnpm build') < runs.indexOf('pnpm ci:catalog-full'));
+  for (const step of shard!.steps.filter(({ run }) => run?.startsWith('pnpm ci:catalog-'))) {
+    assert.equal(step.env?.CATALOG_PLAN, 'rehearsal', step.run);
+    assert.equal(step.env?.CATALOG_SHARD, '${{ matrix.shard }}/8', step.run);
+  }
+  const pages = statesPlan(checkoutMeta()).length;
+  assert.equal(
+    pages,
+    (shippingPacks(checkoutMeta(), 'designLanguage').length +
+      shippingPacks(checkoutMeta(), 'typography').length) *
+      4,
+  );
+  assert.equal(states!['timeout-minutes'], statesTimeoutMinutes(pages));
+  assert.ok(states!.steps.some(({ run }) => run === 'pnpm ci:catalog-states'));
+  assert.ok(
+    review!.steps.some(({ run }) => run === 'pnpm catalog review --out reports/catalog/review'),
+  );
+  const total =
+    request!['timeout-minutes'] +
+    REHEARSAL.shards * shard!['timeout-minutes'] +
+    states!['timeout-minutes'] +
+    review!['timeout-minutes'];
+  assert.ok(total <= REHEARSAL.capRunnerMinutes, `${total} runner-minutes at the timeouts`);
+  // The plan fits at the checkout's size, generated schemes included.
+  const tuples = crossProduct(checkoutMeta(), referenceSets());
+  const browser = crossProduct(checkoutMeta());
+  for (let index = 1; index <= REHEARSAL.shards; index += 1) {
+    const at = { index, count: REHEARSAL.shards };
+    assert.ok(staticPlan(tuples, at, REHEARSAL.staticPerShard).length <= REHEARSAL.staticPerShard);
+    assert.equal(
+      browserPlan(browser, at, REHEARSAL.browserPerShard).length,
+      REHEARSAL.browserPerShard,
+    );
+  }
+  // The request, when it's there, asks for this plan.
+  const request_ = new URL('./rehearsal.json', import.meta.url);
+  if (existsSync(request_)) {
+    const asked = JSON.parse(readFileSync(request_, 'utf8')) as Record<string, unknown>;
+    for (const key of [
+      'shards',
+      'staticPerShard',
+      'browserPerShard',
+      'seed',
+      'capRunnerMinutes',
+    ] as const) {
+      assert.equal(asked[key], REHEARSAL[key], `rehearsal.json's ${key}`);
+    }
+  }
+});
+
+test('CATALOG_PLAN is nightly or rehearsal, and each takes its own budget', () => {
+  assert.equal(readPlan(undefined), 'nightly');
+  assert.equal(readPlan(''), 'nightly');
+  assert.equal(readPlan('rehearsal'), 'rehearsal');
+  assert.throws(() => readPlan('full'), /CATALOG_PLAN is full/);
+  assert.deepEqual(planBudget('nightly'), {
+    static: BUDGET.staticPerShard,
+    browser: BUDGET.browserPerShard,
+  });
+  assert.deepEqual(planBudget('rehearsal'), {
+    static: REHEARSAL.staticPerShard,
+    browser: REHEARSAL.browserPerShard,
   });
 });
