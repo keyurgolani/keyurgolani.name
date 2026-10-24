@@ -1,4 +1,5 @@
 import { KIND_ANNOTATION } from './lib/checks';
+import { testTag } from './lib/pr-shards';
 import { runCell } from './lib/run-cell';
 import { cellServer, serverTag } from './lib/server';
 import { expect, test } from './fixtures';
@@ -7,13 +8,14 @@ import { loadPlan } from './plan';
 // The quality cells (#11, Slice 1): each planned cell, in each viewport and
 // preference row the plan gives it, on the project's engine. Each test
 // carries its cell's server tag, so it runs only on that server's project
-// (playwright.config.ts). A stand-in state's test, or an excluded one,
+// (playwright.config.ts), and its own tag, so a shard can run some of a
+// project's tests (lib/pr-shards.ts). A stand-in state's test, or an excluded one,
 // skips with the reason the plan declares, before any server starts.
 
 const plan = await loadPlan();
 
 for (const cell of plan.cells) {
-  const tag = serverTag(cellServer(cell));
+  const server = serverTag(cellServer(cell));
   test.describe(cell.id, () => {
     for (const planned of plan.tests.filter((each) => each.cell === cell)) {
       const { viewport, row } = planned;
@@ -36,7 +38,7 @@ for (const cell of plan.cells) {
         test(
           `${cell.target} ${cell.state} ${cell.path} at ${viewport.id}, ${row.id}`,
           {
-            tag,
+            tag: [server, testTag(cell.id, viewport.id, row.id)],
             annotation: [
               { type: KIND_ANNOTATION, description: 'cell' },
               { type: 'route', description: cell.route },

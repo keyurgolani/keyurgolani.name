@@ -277,6 +277,32 @@ test("quality-pr's verdict fails a cancelled shard whose artifact is missing as 
   }
 });
 
+test("quality-pr's verdict holds the shards to the count quality-pr-plan emitted: one dropped or one extra fails it", () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'quality-merge-count-'));
+  try {
+    writeShards(root, PR_SHARDS);
+    const shards = readShards(root);
+    const count = PR_SHARDS.length;
+    const merged = (expected: number) =>
+      mergeShards(shards, { expected, mode: 'pr', jobs: 'success' });
+    assert.equal(merged(count).ok, true, JSON.stringify(merged(count).failures));
+    // An extra shard's report disagrees with the count; a dropped one leaves no report.
+    for (const [expected, rule] of [
+      [count - 1, 'shard-mismatch'],
+      [count + 1, 'missing-shard'],
+    ] as const) {
+      const verdict = merged(expected);
+      assert.equal(verdict.ok, false, `${count} shards against an emitted ${expected}`);
+      assert.ok(
+        verdict.failures.some((each) => each.rule === rule),
+        JSON.stringify(verdict.failures),
+      );
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("quality:merge takes the mode and the shard jobs' result, as quality-pr-verdict passes them", () => {
   assert.deepEqual(
     parseMergeArgs(['--', 'shards', '--shards', '3', '--mode', 'pr', '--jobs', 'failure']),

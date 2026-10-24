@@ -66,6 +66,7 @@ const CLASSES = [
       'unit',
       'build',
       'appearance-browser',
+      'quality-pr-plan',
       'quality-pr',
       'quality-pr-verdict',
       'quality-meta',
@@ -99,6 +100,7 @@ const CLASSES = [
       'external-variant',
       'preview-fixtures-browser',
       'trace',
+      'quality-pr-plan',
       'quality-pr',
       'quality-pr-verdict',
     ],
@@ -115,6 +117,7 @@ const CLASSES = [
       'image',
       'profiles',
       'preview-fixtures-browser',
+      'quality-pr-plan',
       'quality-pr',
       'quality-pr-verdict',
     ],
@@ -199,6 +202,7 @@ const CLASSES = [
       'external-variant',
       'preview-fixtures-browser',
       'trace',
+      'quality-pr-plan',
       'quality-pr',
       'quality-pr-verdict',
     ],
@@ -333,15 +337,18 @@ test('every rule that selects profiles selects image, whose saved image profiles
   }
 });
 
-test('every rule that selects quality-pr selects quality-pr-verdict, which judges its shards, and back', () => {
+test('every rule that selects quality-pr selects quality-pr-plan, which counts its shards, and quality-pr-verdict, which judges them, and back', () => {
   for (const rule of RULES) {
     if (rule.complete) continue;
-    assert.equal(
-      rule.jobs.includes('quality-pr'),
-      rule.jobs.includes('quality-pr-verdict'),
-      `${rule.class} (${rule.paths[0]}) selects one without the other`,
-    );
+    for (const partner of ['quality-pr-plan', 'quality-pr-verdict']) {
+      assert.equal(
+        rule.jobs.includes('quality-pr'),
+        rule.jobs.includes(partner),
+        `${rule.class} (${rule.paths[0]}) selects quality-pr or ${partner} without the other`,
+      );
+    }
   }
+  assert.ok(draft(['tests/quality/run.ts']).jobs.includes('quality-pr-plan'));
   assert.ok(draft(['tests/quality/run.ts']).jobs.includes('quality-pr-verdict'));
 });
 

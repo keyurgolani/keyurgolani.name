@@ -644,19 +644,60 @@ jobs:
   # set adds the cells the owner's [37] rule directs from the paths the
   # merge changes (tests/quality/lib/changes.ts): the checkout keeps the
   # merge commit's first parent, the base tip, which QUALITY_CHANGED_BASE
-  # names. It runs in four shards, each planning the whole PR set and
-  # running the test groups tests/quality/lib/pr-shards.ts gives it by
-  # measured duration; quality-pr-verdict judges them whole.
-  quality-pr:
-    name: quality-pr (${{ matrix.shard }}/4)
+  # names. It runs in the shards quality-pr-plan counts, each planning the
+  # whole PR set and running the test groups tests/quality/lib/pr-shards.ts
+  # gives it by measured duration; quality-pr-verdict judges them whole.
+  #
+  # quality-pr-plan, which every rule that selects quality-pr selects, plans the same PR set from the
+  # registry the quality host builds and the paths the merge changes, and
+  # picks the fewest shards that keep each within about 5 minutes
+  # (tests/quality/pr-count.ts), at most 12. Needing more fails, naming the
+  # heaviest group.
+  quality-pr-plan:
+    name: quality-pr-plan
     needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'quality-pr-plan') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      count: ${{ steps.count.outputs.count }}
+      shards: ${{ steps.count.outputs.shards }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: The quality host's registry
+        run: pnpm --filter @portfolio/web build:registry --modules-only
+        env:
+          QUALITY_FIXTURES: '1'
+          APPEARANCE_FIXTURES: '1'
+          BUDGET_FIXTURES: '1'
+      - name: Count the shards
+        id: count
+        env:
+          QUALITY_WEB: apps/web
+          QUALITY_CHANGED_BASE: HEAD^1
+        run: pnpm exec tsx tests/quality/pr-count.ts
+
+  quality-pr:
+    name: quality-pr (${{ matrix.shard }}/${{ needs.quality-pr-plan.outputs.count }})
+    needs: [changes, quality-pr-plan]
     if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'quality-pr') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: ${{ fromJSON(needs.quality-pr-plan.outputs.shards) }}
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
       options: --user 1001 --ipc=host --init
@@ -676,11 +717,11 @@ jobs:
       - name: pnpm store cache hit
         if: ${{ steps.install.outputs.store-hit == 'true' }}
         run: echo "pnpm store restored under this lockfile's hash"
-      - name: pnpm ci:quality-pr --shard=${{ matrix.shard }}/4
+      - name: pnpm ci:quality-pr --shard=${{ matrix.shard }}/${{ needs.quality-pr-plan.outputs.count }}
         run: pnpm ci:quality-pr "--shard=$SHARD"
         env:
-          SHARD: ${{ matrix.shard }}/4
-          CI_REPRO_COMMAND: pnpm ci:quality-pr --shard=${{ matrix.shard }}/4
+          SHARD: ${{ matrix.shard }}/${{ needs.quality-pr-plan.outputs.count }}
+          CI_REPRO_COMMAND: pnpm ci:quality-pr --shard=${{ matrix.shard }}/${{ needs.quality-pr-plan.outputs.count }}
           QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
           QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
           QUALITY_CHANGED_BASE: HEAD^1
@@ -715,7 +756,7 @@ jobs:
   # directory of their own.
   quality-pr-verdict:
     name: quality-pr-verdict
-    needs: [changes, quality-pr]
+    needs: [changes, quality-pr-plan, quality-pr]
     if: ${{ !cancelled() && contains(fromJSON(needs.changes.outputs.jobs), 'quality-pr-verdict') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -740,7 +781,8 @@ jobs:
         env:
           SHARDS: ${{ runner.temp }}/quality-shards
           SHARD_JOBS: ${{ needs.quality-pr.result }}
-        run: pnpm ci:quality-pr-verdict "$SHARDS" --shards 4 --mode pr --jobs "$SHARD_JOBS"
+          SHARD_COUNT: ${{ needs.quality-pr-plan.outputs.count }}
+        run: pnpm ci:quality-pr-verdict "$SHARDS" --shards "$SHARD_COUNT" --mode pr --jobs "$SHARD_JOBS"
       - name: Failure summary
         if: ${{ always() }}
         run: node ci/summarize.mjs
@@ -964,6 +1006,7 @@ jobs:
         check-variants,
         variants,
         external-variant,
+        quality-pr-plan,
         quality-pr,
         quality-pr-verdict,
         quality-meta,
@@ -1002,6 +1045,7 @@ jobs:
         check-variants,
         variants,
         external-variant,
+        quality-pr-plan,
         quality-pr,
         quality-pr-verdict,
         quality-meta,

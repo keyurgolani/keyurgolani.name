@@ -1,5 +1,5 @@
 {
-  "source": "Seconds per test, from the list reporter's durations in two quality-pr job logs: #84's run 39952674962 (job 120410772674, the cells with 11-2's rows) and #89's run 39941643227 (job 120374899100, the perf cells). Each is the mean of its tests there. lib/pr-shards.ts reads it.",
+  "source": "Seconds per test, from the list reporter's durations in quality-pr job logs. Each is the mean of its tests there. 'conditions' and the rest: #84's run 39952674962 (job 120410772674, the cells with 11-2's rows) and #89's run 39941643227 (job 120374899100, the perf cells). 'pack' (#20): the tier sentinels, fallback complete on each fixture-* tuple, in runs 40005559234 (jobs 120592517614, 120592517646, 120592517916), 40056077145 (jobs 120759333022, 120759333077, 120759333129) and 40055662895 (jobs 120757997966, 120757997993, 120757998006): nine cells, 203.0 s a cell. 'composition': each composition's complete cell on its published default appearance (kinetic-cosmos, obsidian-atelier, spatial-bento), in run 40066815817 (jobs 120792219276, 120792219294, 120792219316, 120792219322): three cells, about 150 s a cell. lib/pr-shards.ts reads it.",
   "group": 3,
   "skipped": 0,
   "plain": 2.4,
@@ -19,5 +19,21 @@
     "1440x900 reduced-transparency": 7.3,
     "1440x900 print": 1.8,
     "1440x900 no-javascript": 6.9
+  },
+  "pack": {
+    "1440x900 default": 46.7,
+    "1024x768 default": 36.9,
+    "390x844 default": 49,
+    "1440x900 reduced-motion": 8.7,
+    "1440x900 forced-colors": 20.8,
+    "1440x900 contrast-more": 21.2,
+    "1440x900 reduced-transparency": 8.8,
+    "1440x900 print": 2.2,
+    "1440x900 no-javascript": 8.7
+  },
+  "composition": {
+    "1440x900 default": 50,
+    "1024x768 default": 47.7,
+    "390x844 default": 55.2
   }
 }

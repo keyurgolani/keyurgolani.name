@@ -15,6 +15,7 @@ import {
 import { PERF_KIND, perfCells } from './lib/perf/plan';
 import { perfFindings, timingResult, type PerfRun } from './lib/perf/samples';
 import { RECORDS_ATTACHMENT, recordTuple } from './lib/records';
+import { PERF_TAG } from './lib/pr-shards';
 import { cellServer, serverTag } from './lib/server';
 import { expect, test } from './fixtures';
 import { loadPlan } from './plan';
@@ -40,7 +41,8 @@ for (const cell of perfCells(plan)) {
   test(
     `${cell.target} ${cell.state} ${cell.path}, performance at ${LAB_VIEWPORT} (${cell.performanceTier})`,
     {
-      tag: serverTag(cellServer(cell)),
+      // @perf keeps it in its project when a shard runs only some of the project's cells.
+      tag: [serverTag(cellServer(cell)), PERF_TAG],
       annotation: [
         { type: KIND_ANNOTATION, description: PERF_KIND },
         { type: 'route', description: cell.route },

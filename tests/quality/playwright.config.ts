@@ -11,7 +11,8 @@
 // one project share its server, so they run in order on one worker; two
 // projects run at once. Nothing retries: accessibility and performance
 // assertions never do. A quality:pr shard runs only its own spec files in
-// each project (lib/pr-shards.ts).
+// each project (lib/pr-shards.ts), and only its part's tests in a project
+// whose cell group is split.
 import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 import { reportsDir } from '../../ci/lib/reports.mjs';
@@ -24,9 +25,12 @@ import {
   HARNESS_SPECS,
   harnessProject,
   PERF_SPEC,
+  projectGrep,
   prShard,
   serverProject,
+  SHARD_WORKERS,
   shardFiles,
+  shardTests,
 } from './lib/pr-shards';
 import { HARNESS_SERVER, planServers } from './lib/server';
 import { loadPlan } from './plan';
@@ -57,7 +61,10 @@ const cellSpecs = [CELL_SPEC, PERF_SPEC, ...(plan.mode === 'full' ? ['visual.spe
 // summary lists them all, and runs only the spec files it was given in each.
 const shard = runShard();
 if (shard && plan.mode !== 'pr') throw new Error("QUALITY_SHARD is for quality:pr's shards.");
-const assigned = shard ? shardFiles(prShard(plan, RUN_ENGINES[plan.mode], shard)) : null;
+const mine = shard ? prShard(plan, RUN_ENGINES[plan.mode], shard) : null;
+const assigned = mine ? shardFiles(mine) : null;
+// A project whose cell group is split runs only its part's tests here.
+const testsOf = mine ? shardTests(mine) : new Map<string, string[]>();
 const specsFor = (project: string, specs: readonly string[]) =>
   assigned ? specs.filter((file) => assigned.get(project)?.includes(file)) : [...specs];
 
@@ -67,7 +74,8 @@ export default defineConfig({
   outputDir: path.join(reports, 'results'),
   fullyParallel: false,
   retries: 0,
-  workers: 2,
+  // The planner sizes shards for this many (lib/pr-shards.ts).
+  workers: SHARD_WORKERS,
   reporter: [['list'], ['./reporter.ts']],
   use: { ...base.use, trace: 'retain-on-failure', screenshot: 'only-on-failure' },
   projects: RUN_ENGINES[plan.mode].flatMap((engine) => [
@@ -79,7 +87,7 @@ export default defineConfig({
     ...planServers(plan).map(({ id, label, server }) => ({
       name: serverProject(engine, id),
       testMatch: specsFor(serverProject(engine, id), cellSpecs),
-      grep: new RegExp(`@server-${id}(?![0-9a-f])`),
+      grep: projectGrep(id, testsOf.get(serverProject(engine, id))),
       use: { ...engineUse(engine), cellServer: server },
       metadata: { server: label },
     })),
