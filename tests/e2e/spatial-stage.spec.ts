@@ -211,6 +211,31 @@ test(
 );
 
 test(
+  "preview: a preview's message turns it off, and a later one can't turn it on again",
+  { annotation },
+  async ({ page }) => {
+    await loadHome(page, '/');
+    await expectLive(page);
+    const before = await reading(page);
+    // As the frame channel applies a studio's environment, on the boundary.
+    const enhancement = (value: 'on' | 'off') =>
+      page.evaluate(
+        (next) => document.querySelector('[data-variant]')!.setAttribute('data-enhancement', next),
+        value,
+      );
+    await enhancement('off');
+    await expect.poll(() => reason(page)).toBe('preview-off');
+    await expectStill(page);
+    await enhancement('on');
+    // Time for the slot to see the change and, if it would, mount the stage again.
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 1_000)));
+    expect(await reason(page)).toBe('preview-off');
+    await expectStill(page);
+    expect(await reading(page)).toEqual(before);
+  },
+);
+
+test(
   'hidden: a background tab pauses it, with no frames, and keeps the stage',
   { annotation },
   async ({ page }) => {

@@ -29,6 +29,8 @@ import { Runtime } from './runtime';
 //   were, since the canvas is decoration inside the still, hidden from
 //   assistive technology. The runtime then stays static for the page.
 // - One stage a document: the first slot to mount claims it.
+// - A preview's messages only turn it off: once the boundary's
+//   `data-enhancement` is `off`, the slot stays off for its life.
 // - It reads no storage, so a sandboxed preview frame, which blocks it,
 //   changes nothing.
 
@@ -130,6 +132,7 @@ function LiveSlot({ seed }: { readonly seed: number }) {
   const [started, setStarted] = useState(false);
   const [failed, setFailed] = useState(pageFailed);
   const [live, setLive] = useState(false);
+  const [previewOff, setPreviewOff] = useState(false);
 
   // The document's one stage: the first slot to mount claims it, and gives it up as it unmounts.
   const [token] = useState(() => ({}));
@@ -145,14 +148,23 @@ function LiveSlot({ seed }: { readonly seed: number }) {
     };
   }, [token]);
 
-  const decision =
+  const read =
     signals === ''
+      ? null
+      : (JSON.parse(signals) as Omit<
+          Parameters<typeof decideStage>[0],
+          'state' | 'reason' | 'eligible' | 'failed' | 'exited' | 'claimed' | 'started'
+        >);
+  // A preview's environment can only turn the stage off: once the boundary says
+  // off, the slot stays off, whatever a later message sets.
+  if (!previewOff && read?.enhancement === 'off') setPreviewOff(true);
+
+  const decision =
+    read === null
       ? { mount: false, offered: false, reason: 'pending' as StageReason }
       : decideStage({
-          ...(JSON.parse(signals) as Omit<
-            Parameters<typeof decideStage>[0],
-            'state' | 'reason' | 'eligible' | 'failed' | 'exited' | 'claimed' | 'started'
-          >),
+          ...read,
+          enhancement: previewOff ? 'off' : read.enhancement,
           state,
           reason,
           eligible,
