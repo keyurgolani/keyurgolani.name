@@ -585,7 +585,9 @@ test('every refusal writes nothing, and says why: a target that is not empty, ov
     env: Record<string, string> = {},
   ) => {
     const out = args[args.indexOf('--out') + 1]!;
-    const before = existsSync(out) || existsSync(path.dirname(out)) ? besides(out) : null;
+    // Beside a target in the test's own directory: the system's temp directory changes under it.
+    const before =
+      path.dirname(out).startsWith(root) && existsSync(path.dirname(out)) ? besides(out) : null;
     const recorded = recordingFs();
     const run = await exportCli(seededStore, args, { fs: recorded.fs, env });
     assert.equal(run.code, 1, `${label}: ${run.out}`);
@@ -669,6 +671,45 @@ test('every refusal writes nothing, and says why: a target that is not empty, ov
 
   // And with all of it put back, the same export goes through.
   assert.equal((await exportCli(seededStore, ['live', '--out', out])).code, 0);
+});
+
+test("a rendition over the reader's 20 MiB blob limit is too_large before anything is read whole or written", async (t) => {
+  const root = realpathSync(tempDir(t, 'export-large-'));
+  const dataDir = path.join(root, 'data');
+  mkdirSync(dataDir, { mode: 0o700 });
+  const store = await newStore(t, { dataDir, checks });
+  const source = bytesOf('large-source');
+  const rendition = Buffer.alloc(20 * 1024 * 1024 + 1, 7);
+  await store.assets.put(source, 'image/png');
+  await store.assets.put(rendition, 'image/webp');
+  const input = pairInput('engineering');
+  const imported = await store.publication.importSource(
+    {
+      documents: {
+        ...input,
+        media: {
+          format: 'json',
+          sourceText: JSON.stringify({ assets: [image('large', source, rendition)] }),
+        },
+      },
+      sourceHash: `sha256:${hexOf('large')}`,
+      expectedLiveRevisionId: null,
+    },
+    'operator',
+  );
+  assert.equal(imported.kind, 'committed', JSON.stringify(imported));
+  const out = path.join(root, 'out');
+  const recorded = recordingFs();
+  const run = await cli(['export-revision', 'live', '--out', out], {
+    dataDir,
+    readSource,
+    checks,
+    fs: recorded.fs,
+  });
+  assert.equal(run.code, 1);
+  assert.match(run.err, /^too_large: .* 20971520, .*Nothing was written\.$/m);
+  assert.deepEqual(recorded.calls, []);
+  assert.equal(existsSync(out), false);
 });
 
 test('live on an empty store is refused, and so are a bad revision ID and a missing --out, as usage', async (t) => {
