@@ -1,6 +1,6 @@
 import type { Readable } from 'node:stream';
 import type { AppearanceSelection, PublicView } from '@portfolio/schema';
-import type { DerivedScheme } from '~/lib/derived-schemes';
+import type { DerivedScheme } from '../lib/derived-schemes';
 import type { Session } from './session';
 
 // Types for #7's preview grants that config-store.ts, the composition root,
