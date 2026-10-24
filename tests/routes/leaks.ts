@@ -14,7 +14,7 @@ import { withRscHash } from '../harness/rsc';
 // The canary scan (#1, Verification item 2) over every view the fixture
 // variants declare (#5, Slice 4): leaks.spec.ts at the root, and
 // leaks-sample.spec.ts below /sample, each on its own server. The
-// checkout's build registers the fallback composition and kinetic-cosmos,
+// checkout's build registers the fallback composition, kinetic-cosmos, and spatial-bento,
 // which declare none, so the profile matrices never render one. Each server is seeded as
 // the matrix seeds it, with a _FILE it reads at a canary path. No answer to
 // GET, to a GET for the RSC payload, or to POST carries a canary, in a body

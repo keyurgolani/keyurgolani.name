@@ -79,10 +79,10 @@ test('every item has an id, once, which a record answers it by', () => {
 });
 
 test('an id nothing registers fails, naming what is registered', () => {
-  assert.deepEqual(compositions, ['fallback', 'kinetic-cosmos']);
+  assert.deepEqual(compositions, ['fallback', 'kinetic-cosmos', 'spatial-bento']);
   assert.throws(
     () => checklist('studio', registrations, compositions),
-    /Nothing registers studio\. Registered: login, fallback, kinetic-cosmos\./,
+    /Nothing registers studio\. Registered: login, fallback, kinetic-cosmos, spatial-bento\./,
   );
 });
 

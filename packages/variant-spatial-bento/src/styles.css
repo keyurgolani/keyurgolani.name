@@ -1,0 +1,162 @@
+/*
+ * Spatial Bento (#16), the static document's layout. Composition only: the
+ * bento's grid, the tiles' arrangement, and the still's planes. Every color,
+ * material, border, radius, and shadow is a token of #19's appearance packs,
+ * each border token whole, since it's a whole border or none. Every rule sits
+ * under [data-variant='spatial-bento'], and every property is logical, so a
+ * right-to-left page reads the same. Nothing moves, and the page reads in
+ * content order: no dense packing, and no reordering.
+ */
+
+[data-variant='spatial-bento'] {
+  display: block;
+  box-sizing: border-box;
+  max-inline-size: 80rem;
+  margin-inline: auto;
+  padding-block: 1.5rem 4rem;
+  padding-inline: clamp(1rem, 4vw, 2.5rem);
+  /* A word too long for the line, such as a name or a URL, breaks rather than widening the page. */
+  overflow-wrap: anywhere;
+}
+
+/* The header: the section links and the visitor control, from the first paint. */
+[data-variant='spatial-bento'] .sb-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-block-end: 1.5rem;
+  padding-block-end: 1rem;
+  border-block-end: var(--ui-border-divider);
+}
+
+[data-variant='spatial-bento'] .sb-nav [data-ui-slot='navigation.list'] {
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+}
+
+/*
+ * The bento: one tile a section, in content order, as many to a row as fit
+ * at 22rem or more, each as tall as its row. The opening's tile takes a row
+ * of its own, with the still beside the words.
+ */
+[data-variant='spatial-bento'] .sb-bento {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+  gap: 1rem;
+}
+
+[data-variant='spatial-bento'] .sb-name {
+  grid-column: 1 / -1;
+  margin-block: 0 0.5rem;
+}
+
+[data-variant='spatial-bento'] .sb-bento > [data-renderer] {
+  min-inline-size: 0;
+  margin: 0;
+  padding-block: var(--ui-space-surface-block);
+  padding-inline: var(--ui-space-surface-inline);
+  background: var(--color-surface-default);
+  border: var(--ui-border-card);
+  border-radius: var(--ui-radius-card);
+  box-shadow: var(--ui-shadow-card);
+}
+
+[data-variant='spatial-bento'] .sb-bento > [data-kind='hero'] {
+  grid-column: 1 / -1;
+}
+
+/* A tile's works, cases, and evidence sit in a grid of their own as the tile widens. */
+[data-variant='spatial-bento'] .sb-bento > [data-renderer] .pf-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  gap: 1.5rem;
+}
+
+[data-variant='spatial-bento'] .sb-bento > [data-renderer] .pf-list > li {
+  margin: 0;
+}
+
+/* The opening: the words, and beside them the still of the spatial stage. */
+[data-variant='spatial-bento'] .sb-opening {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  align-items: center;
+  gap: 2rem;
+}
+
+/*
+ * The still: four planes floating in depth, one carrying the composition's
+ * one signature, the design language's signature fill. Decoration, inside
+ * its own box, so nothing overflows the tile.
+ */
+[data-variant='spatial-bento'] .sb-still {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: clip;
+  perspective: 60rem;
+}
+
+[data-variant='spatial-bento'] .sb-still__plane {
+  position: absolute;
+  inset-block-start: 22%;
+  inset-inline-start: 18%;
+  inline-size: 56%;
+  aspect-ratio: 4 / 3;
+  border: var(--ui-border-card);
+  border-radius: var(--ui-radius-card);
+  transform: rotateX(55deg) rotateZ(-35deg);
+}
+
+[data-variant='spatial-bento'] .sb-still__plane--far {
+  background: var(--color-surface-subtle);
+  translate: 0 -3.5rem;
+}
+
+[data-variant='spatial-bento'] .sb-still__plane--middle {
+  background: var(--color-surface-prominent);
+  translate: 0 -1.5rem;
+}
+
+[data-variant='spatial-bento'] .sb-still__plane--near {
+  background: var(--color-surface-default);
+  box-shadow: var(--ui-shadow-raised);
+  translate: 0 0.5rem;
+}
+
+[data-variant='spatial-bento'] .sb-still__plane--signature {
+  inset-block-start: 30%;
+  inset-inline-start: 38%;
+  inline-size: 18%;
+  background: var(--ui-signature-fill);
+  translate: 0 -0.5rem;
+}
+
+@media (max-width: 47.99rem) {
+  [data-variant='spatial-bento'] .sb-opening {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* A calm phone: the still, smaller, after the words. */
+  [data-variant='spatial-bento'] .sb-still {
+    max-inline-size: 18rem;
+  }
+}
+
+/* Print: the words in reading order, one tile after another, the still gone. */
+@media print {
+  [data-variant='spatial-bento'] .sb-still {
+    display: none;
+  }
+
+  [data-variant='spatial-bento'] .sb-bento,
+  [data-variant='spatial-bento'] .sb-opening {
+    display: block;
+  }
+
+  [data-variant='spatial-bento'] .sb-bento > [data-renderer] {
+    margin-block-end: 1rem;
+    box-shadow: none;
+  }
+}

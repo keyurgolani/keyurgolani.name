@@ -30,6 +30,7 @@ test('the PR plan: each sentinel at every viewport in the default row, and every
     'fallback unavailable / system',
     'kinetic-cosmos complete / system',
     'login signed-out /studio/sign-in system',
+    'spatial-bento complete / system',
   ]);
   const extraRows = PREFERENCE_ROWS.length - 1;
   assert.equal(plan.tests.length, plan.cells.length * VIEWPORTS.length + extraRows);
@@ -55,6 +56,7 @@ test('the PR plan: each sentinel at every viewport in the default row, and every
   assert.deepEqual(plan.targets, [
     { kind: 'composition', id: 'fallback' },
     { kind: 'composition', id: 'kinetic-cosmos' },
+    { kind: 'composition', id: 'spatial-bento' },
     { kind: 'surface', id: 'login' },
   ]);
 });
