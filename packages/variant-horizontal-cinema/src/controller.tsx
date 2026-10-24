@@ -41,13 +41,16 @@ import { Runtime } from './runtime';
 //                                       to its title when focus was in the
 //                                       chapter it left
 //   previous and next                   a step, the URL replaced, announced
-//   the wheel, a trackpad, a swipe,     the page's or the stage's own
-//   the scrollbar                       scrolling, never cancelled: once it
+//   the wheel, a trackpad, a swipe      the page's or the stage's own
+//                                       scrolling, never cancelled: once it
 //                                       settles, the nearest chapter,
 //                                       aligned, the URL replaced
-//   Tab, find, anything scrolled        the chapter it revealed, aligned at
-//   into view                           once, so what it reached stays in
-//                                       view, the URL replaced
+//   Tab                                 the chapter focus lands in, brought
+//                                       in whole at once
+//   find, the scrollbar, anything       the chapter it revealed, the stage
+//   scrolled into view                  left where it put it, so what it
+//                                       reached stays in view, the URL
+//                                       replaced
 //
 // Every one of them names one of the five chapters or nothing: a step past
 // either end is no step, and its key does what it always does. No handler
@@ -83,7 +86,7 @@ const NATIVE_KEYS =
   'input, textarea, select, video, audio, [contenteditable]:not([contenteditable="false"])';
 
 /** What moves the stage by hand, which the controller only notes. */
-const GESTURES = ['wheel', 'touchstart', 'pointerdown'] as const;
+const GESTURES = ['wheel', 'touchstart'] as const;
 
 export interface CinemaProps {
   /** The boundary's id prefix, which every id starts with. */
@@ -172,6 +175,8 @@ function CinemaMarkup({
         className="hc-stage"
         role={live ? 'region' : undefined}
         aria-labelledby={live ? labelId : undefined}
+        // A named, focusable scroll region: the keyboard scrolls it, and the arrows step from it.
+        tabIndex={live ? 0 : undefined}
       >
         {children}
       </div>
@@ -377,9 +382,11 @@ function LiveCinema(props: CinemaProps) {
         gestureAt = -Infinity;
         if (!gesture && left !== settledAt) to = revealed(left > settledAt) ?? to;
         settledAt = left;
-        // A gesture eases to the nearest chapter; anything else lands on what it revealed at once.
-        if (to !== undefined && Math.abs(offsetOf(to)) >= 1) {
-          alignStage(to, gesture ? behavior() : 'instant');
+        // A gesture eases to the nearest chapter. Anything else, Tab, find, a
+        // script, the scrollbar, stays where it put the stage, with what it
+        // reached in view, and makes the chapter it revealed current.
+        if (gesture && to !== undefined && Math.abs(offsetOf(to)) >= 1) {
+          alignStage(to, behavior());
         }
       }
       if (to === undefined || to === position) return;
