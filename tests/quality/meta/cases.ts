@@ -16,7 +16,7 @@
 // (manual-run-cases.ts).
 
 import fs from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
@@ -229,11 +229,18 @@ const TIER_PACK = /^fixture-(?:language|scheme|typography)-(?:stable|extended|ex
 function checkAppearance(flags: Record<string, string>): MetaOutcome {
   const env: NodeJS.ProcessEnv = { ...process.env };
   for (const name of Object.keys(env)) if (FIXTURE_FLAG.test(name)) delete env[name];
-  const run = spawnSync(process.execPath, [TSX, CHECK_APPEARANCE], {
-    cwd: path.join(REPO_ROOT, 'apps', 'web'),
-    encoding: 'utf8',
-    env: { ...env, ...flags },
-  });
+  // A known-bad case's failure records go to a scratch directory, never the repository's reports/.
+  const reports = fs.mkdtempSync(path.join(os.tmpdir(), 'quality-meta-reports-'));
+  let run: SpawnSyncReturns<string>;
+  try {
+    run = spawnSync(process.execPath, [TSX, CHECK_APPEARANCE], {
+      cwd: path.join(REPO_ROOT, 'apps', 'web'),
+      encoding: 'utf8',
+      env: { ...env, ...flags, CI_REPORTS_DIR: reports },
+    });
+  } finally {
+    fs.rmSync(reports, { recursive: true, force: true });
+  }
   const findings = (run.stderr ?? '')
     .split('\n')
     .filter((line) => line.startsWith(TAG) && !/ \d+ findings?\.$/.test(line))

@@ -22,12 +22,19 @@ const TSX = createRequire(import.meta.url).resolve('tsx/cli');
 function check(args: readonly string[], flags: Record<string, string> = {}) {
   const env: NodeJS.ProcessEnv = { ...process.env };
   for (const name of Object.keys(env)) if (FIXTURE_FLAG.test(name)) delete env[name];
-  return spawnSync(process.execPath, [TSX, SCRIPT, ...args], {
-    encoding: 'utf8',
-    // A failing run over the whole catalog prints a line per pair, well past the 1 MiB default.
-    maxBuffer: 256 * 1024 * 1024,
-    env: { ...env, ...flags },
-  });
+  // A run under ci/run.mjs writes failure records. A test's run, a known-bad fixture's
+  // included, writes them to a scratch directory, never to the repository's reports/.
+  const reports = fs.mkdtempSync(path.join(os.tmpdir(), 'check-appearance-reports-'));
+  try {
+    return spawnSync(process.execPath, [TSX, SCRIPT, ...args], {
+      encoding: 'utf8',
+      // A failing run over the whole catalog prints a line per pair, well past the 1 MiB default.
+      maxBuffer: 256 * 1024 * 1024,
+      env: { ...env, ...flags, CI_REPORTS_DIR: reports },
+    });
+  } finally {
+    fs.rmSync(reports, { recursive: true, force: true });
+  }
 }
 
 /** Its finding lines on stderr, without the count that ends them. */
