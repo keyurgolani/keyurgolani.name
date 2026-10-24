@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { buildChunks, enhancementEntries } from './check-budgets.mjs';
+import { asyncGroups, buildChunks, enhancementEntries } from './check-budgets.mjs';
 import { OVER_BUDGET_METRICS, overBudgetProblems } from './budgets.mjs';
 import {
   BUDGET_KINDS,
@@ -765,6 +765,100 @@ function scratch(t) {
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   return dir;
 }
+
+test("an enhancement's import counts with every chunk its async group loads, a split library's included", () => {
+  const medium = variant('medium', {
+    performanceTier: 'medium',
+    budgets: { js: 4096, enhancement: 16384 },
+    enhancements: [{ id: 'glint', export: './enhancements/glint', requires: [] }],
+  });
+  const entry = {
+    path: '/_next/static/chunks/glint.js',
+    loadedWith: ['/_next/static/chunks/three.js'],
+    modules: [
+      {
+        source: 'packages/acme/medium/src/enhancements/glint.tsx',
+        package: '@acme/medium',
+        gzipBytes: 5000,
+      },
+    ],
+  };
+  // The library the entry imports, split by the bundler into a chunk of its own.
+  const three = {
+    path: '/_next/static/chunks/three.js',
+    modules: [
+      { source: 'node_modules/three/build/three.module.js', package: 'three', gzipBytes: 150000 },
+    ],
+  };
+  // A chunk nothing loads with it counts for nothing.
+  const unrelated = {
+    path: '/_next/static/chunks/other.js',
+    modules: [{ source: 'node_modules/other/index.js', package: 'other', gzipBytes: 70000 }],
+  };
+  const entries = { medium: { glint: './src/enhancements/glint.tsx' } };
+  const { records } = check([medium], [traceCase('medium')], {
+    chunks: [entry, three, unrelated],
+    entries,
+  });
+  const [record] = records.filter((one) => one.metric === 'enhancement');
+  assert.equal(record.actual, 155000);
+  assert.equal(record.asset, '/_next/static/chunks/three.js', 'the chunk carrying the most');
+});
+
+test("the build's loaders name each async group, and a group's chunk with no map counts whole", (t) => {
+  assert.deepEqual(
+    asyncGroups(
+      'e.v(t=>Promise.all(["static/chunks/a.js","static/chunks/b.js"].map(t=>e.l(t))).then(()=>t(1)))' +
+        'x.v(t=>Promise.all([ "static/chunks/c.js" ].map(t=>e.l(t))))',
+    ),
+    [['/_next/static/chunks/a.js', '/_next/static/chunks/b.js'], ['/_next/static/chunks/c.js']],
+  );
+  const web = scratch(t);
+  const staticDir = path.join(web, '.next', 'static');
+  mkdirSync(path.join(staticDir, 'chunks'), { recursive: true });
+  const write = (name, code, sources) => {
+    writeFileSync(
+      path.join(staticDir, 'chunks', name),
+      sources ? `${code}\n//# sourceMappingURL=${name}.map` : code,
+    );
+    if (sources) {
+      writeFileSync(
+        path.join(staticDir, 'chunks', `${name}.map`),
+        JSON.stringify({ version: 3, sources, mappings: 'AAAA' }),
+      );
+    }
+  };
+  write(
+    'route.js',
+    'e.v(t=>Promise.all(["static/chunks/glint.js","static/chunks/shared.js","static/chunks/raw.js"].map(t=>e.l(t))))',
+    ['turbopack:///[project]/node_modules/@acme/medium/src/index.tsx'],
+  );
+  write('glint.js', 'console.log("glint");', [
+    'turbopack:///[project]/node_modules/@acme/medium/src/enhancements/glint.tsx',
+  ]);
+  write('shared.js', 'console.log("three");', [
+    'turbopack:///[project]/node_modules/three/build/three.module.js',
+  ]);
+  write('raw.js', 'console.log("no map at all, so the check can only count it whole");');
+  write('lonely.js', 'console.log("lonely");', [
+    'turbopack:///[project]/node_modules/lonely/index.js',
+  ]);
+  const chunks = buildChunks(['./src/enhancements/glint.tsx'], staticDir);
+  assert.deepEqual(chunks.map((one) => one.path).sort(), [
+    '/_next/static/chunks/glint.js',
+    '/_next/static/chunks/raw.js',
+    '/_next/static/chunks/shared.js',
+  ]);
+  const glint = chunks.find((one) => one.path.endsWith('/glint.js'));
+  assert.deepEqual(glint.loadedWith.sort(), [
+    '/_next/static/chunks/raw.js',
+    '/_next/static/chunks/shared.js',
+  ]);
+  const raw = chunks.find((one) => one.path.endsWith('/raw.js'));
+  assert.equal(raw.modules.length, 1);
+  assert.equal(raw.modules[0].package, null);
+  assert.ok(raw.gzipBytes > 0);
+});
 
 test("the check finds an enhancement's chunk in the build through its source map, by its package's export", (t) => {
   const web = scratch(t);
