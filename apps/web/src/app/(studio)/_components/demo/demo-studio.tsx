@@ -83,9 +83,12 @@ export function DemoStudio({ catalog, schemeModes, backend, task, AxisPicker }: 
   const [motion, setMotion] = useState<'system' | 'reduce'>('system');
   const systemReduces = useSystemReducesMotion();
 
-  useEffect(() => {
-    if (backend) setSelection(backend.selection());
-  }, [backend]);
+  // A backend the page hands over later brings its own selection, read as this renders.
+  const [shown, setShown] = useState(backend);
+  if (backend !== shown) {
+    setShown(backend);
+    setSelection(backend?.selection() ?? null);
+  }
 
   // The URL follows the selection, in place, so Back leaves Studio.
   useEffect(() => {
