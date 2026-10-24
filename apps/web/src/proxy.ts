@@ -198,18 +198,20 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   // trailing slash's too, before the 308 below could name another path.
   // Under /_portfolio/ only a path the registry wrote goes on. A build asset
   // that doesn't exist still reaches a 404 page, the site's, since nothing
-  // here knows which build files exist.
+  // here knows which build files exist. A route the table serves there, such
+  // as #20's generated schemes, gets the same 404 for a trailing slash: a
+  // file has no path below it, and the 308 would name one.
+  const sent = sentPath(request);
+  const slashed = sent.length > 1 && sent.endsWith('/');
   if (
     sharedAsset(pathname) &&
-    !(pageLoad && sharedFile(pathname)) &&
-    decision.status !== 'served'
+    ((!(pageLoad && sharedFile(pathname)) && decision.status !== 'served') || slashed)
   ) {
     return plain(404, 'Not found.', requestId, extra);
   }
 
   // The 308 Next sent itself for a trailing slash, now with the path's headers.
-  const sent = sentPath(request);
-  if (sent.length > 1 && sent.endsWith('/')) return trailingSlash(request, sent, requestId, extra);
+  if (slashed) return trailingSlash(request, sent, requestId, extra);
   // A grant path, and everything else under the preview prefixes, under a
   // profile with grant routes: admitted on to Next, or the status document.
   if (preview && hasGrants(deployment.profile)) {
