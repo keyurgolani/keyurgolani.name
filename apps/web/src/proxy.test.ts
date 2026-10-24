@@ -1360,7 +1360,9 @@ test('under owner a grant path goes on to Next only as an iframe document load, 
     await assertStatusDocument(await proxy(loaded(`/preview/${grant}`, 'iframe')), grant);
     await assertStatusDocument(await proxy(loaded(asset(grant), 'image')), `${grant} asset`);
   }
-  assert.deepEqual(checked, [ENDED, ENDED, 'local', 'local', 'x', 'x', `${ACTIVE}x`, `${ACTIVE}x`]);
+  // /preview/local is Demo Studio's frame (#9): under owner it's the absent route, whose
+  // answer is the status document with no grant to ask about. /preview-assets/local is a grant's.
+  assert.deepEqual(checked, [ENDED, ENDED, 'local', 'x', 'x', `${ACTIVE}x`, `${ACTIVE}x`]);
 });
 
 test('a grant path never goes to sign-in, and the status document is the one answer for every reason it turns a request away (#7)', async (t) => {

@@ -203,9 +203,9 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
       ? studioCsp(newNonce(), COMPILED_MODE, deployment.previewOrigin)
       : preview
         ? // Demo Studio's local frame (#9) takes blob: media from the visitor's own files.
-          (deployment.profile === 'demo' && isLocalPreviewPath(pathname)
-            ? localPreviewCsp
-            : previewCsp)(newNonce(), { mode: COMPILED_MODE, studioOrigin: deployment.origin })
+          deployment.profile === 'demo' && isLocalPreviewPath(pathname)
+          ? localPreviewCsp(newNonce(), { mode: COMPILED_MODE, studioOrigin: deployment.origin })
+          : previewCsp(newNonce(), { mode: COMPILED_MODE, studioOrigin: deployment.origin })
         : publicCsp(newNonce(), COMPILED_MODE);
   if (studio) {
     Object.assign(extra, STUDIO_RESPONSE_HEADERS, { 'content-security-policy': csp });

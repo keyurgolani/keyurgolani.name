@@ -200,7 +200,7 @@ export interface LocalFrameProps {
   readonly install?: () => Promise<void>;
 }
 
-interface Shown {
+export interface Shown {
   readonly render: Extract<LocalRender, { kind: 'render' }>;
   readonly Variant: VariantComponent;
 }
@@ -275,15 +275,35 @@ export function LocalFrame({ catalog, studioOrigin, nonce, install = installPost
     };
   }, [document, route, postPass, registries]);
 
-  if (postPass === 'failed') return <FrameStatus text="This preview couldn't load." />;
-  if (failed) return <FrameStatus text="This document doesn't render here." />;
-  if (postPass !== 'ready' || !shown) return <FrameStatus text="Waiting for the document…" busy />;
+  const view = frameView(postPass, shown, failed);
+  if (view.kind === 'unavailable') return <FrameStatus text="This preview couldn't load." />;
+  if (view.kind === 'not-rendered') return <FrameStatus text="This document doesn't render here." />;
+  if (view.kind === 'waiting') return <FrameStatus text="Waiting for the document…" busy />;
   return (
     <LocalDocumentView
-      render={shown.render}
+      render={view.shown.render}
       registries={registries}
-      Variant={shown.Variant as ComponentType<{ input: VariantRenderInput }> as VariantComponent}
+      Variant={view.shown.Variant as ComponentType<{ input: VariantRenderInput }> as VariantComponent}
       nonce={nonce}
     />
   );
+}
+
+/**
+ * What the frame shows: a document only once the post-pass is in and the
+ * document rendered. Before the post-pass arrives it waits, and if it never
+ * does, it shows no document at all, whatever Studio sent.
+ */
+export function frameView(
+  postPass: 'loading' | 'ready' | 'failed',
+  shown: Shown | null,
+  failed: boolean,
+):
+  | { readonly kind: 'unavailable' | 'not-rendered' | 'waiting' }
+  | { readonly kind: 'document'; readonly shown: Shown } {
+  if (postPass === 'failed') return { kind: 'unavailable' };
+  if (postPass !== 'ready') return { kind: 'waiting' };
+  if (failed) return { kind: 'not-rendered' };
+  if (!shown) return { kind: 'waiting' };
+  return { kind: 'document', shown };
 }
