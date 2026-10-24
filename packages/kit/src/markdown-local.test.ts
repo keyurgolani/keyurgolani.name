@@ -72,8 +72,8 @@ test("the hook's one caller passes markdown-sanitize.ts's own pass, and one modu
   const local = readFileSync(path.join(ROOT, 'packages/kit/src/markdown-local.ts'), 'utf8');
   assert.match(local, /import\('\.\/markdown-sanitize'\)/);
   assert.match(local, /setMarkdownPostPass\(\{ block: sanitizeBlocks, inline: sanitizeInline \}\)/);
-  // And one module of the web app installs it: Demo Studio's local preview frame.
-  assert.deepEqual(callers(/\binstallPostPass\(/), [
+  // And one module of the web app names the installer: Demo Studio's local preview frame.
+  assert.deepEqual(callers(/\binstallPostPass\b/).sort(), [
     path.join('apps', 'web', 'src', 'app', '(preview)', '_local', 'local-document.tsx'),
     path.join('packages', 'kit', 'src', 'markdown-local.ts'),
   ]);
