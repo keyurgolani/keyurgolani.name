@@ -2,8 +2,9 @@
 // packages/appearance/appearance-catalog.lock.json, with each first-party
 // pack's version, tier, license, and content digest, and the third-party
 // notices the image ships, apps/web/public/third-party-notices.txt, from the
-// packs' provenance. --check writes nothing and fails when either is stale,
-// as `pnpm check:appearance` does.
+// provenance of every pack a production registry registers, an installed
+// third-party pack's too. --check writes nothing and fails when either is
+// stale, as `pnpm check:appearance` does.
 //
 // It refuses to write a lock that would hide a pack whose content changed
 // without a version bump: bump the version first, and the lock follows.
@@ -18,7 +19,9 @@ import {
   renderLock,
   renderNotices,
 } from '@portfolio/appearance/node';
-import { REPO_ROOT } from './registry-options';
+import { readRegistry } from '@portfolio/variant-contract/node';
+import { noticePacks } from './check-appearance-catalog';
+import { excludePacks, registryOptions, REPO_ROOT } from './registry-options';
 
 const TAG = '[catalog:lock]';
 
@@ -30,7 +33,7 @@ function read(file: string): string | null {
   }
 }
 
-function main(args: readonly string[]): number {
+async function main(args: readonly string[]): Promise<number> {
   const check = args.includes('--check');
   if (args.some((arg) => arg !== '--check')) {
     process.stderr.write('Usage: pnpm catalog:lock [--check]\n');
@@ -38,7 +41,14 @@ function main(args: readonly string[]): number {
   }
   const packs = lockedPacks(REPO_ROOT);
   const problems = lockProblems(read(LOCK_FILE), packs);
-  const notices = renderNotices(packs);
+  // The notices cover what a production build registers: no fixture flag set.
+  const registry = await readRegistry(registryOptions({}));
+  if (!registry.ok) {
+    for (const { message } of registry.diagnostics) process.stderr.write(`${TAG} ${message}\n`);
+    process.stderr.write(`${TAG} Registry generation failed, so the notices can't be read.\n`);
+    return 1;
+  }
+  const notices = renderNotices(noticePacks(excludePacks(registry).result));
   const staleNotices = read(NOTICES_FILE) !== notices;
   if (check) {
     for (const { message } of problems) process.stderr.write(`${TAG} ${message}\n`);
@@ -71,4 +81,6 @@ function main(args: readonly string[]): number {
   return 0;
 }
 
-process.exitCode = main(process.argv.slice(2));
+void main(process.argv.slice(2)).then((code) => {
+  process.exitCode = code;
+});

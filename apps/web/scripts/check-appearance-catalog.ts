@@ -28,6 +28,7 @@ import {
   researchRecords,
   type AppearanceCheck,
   type GateFailure,
+  type NoticePack,
 } from '@portfolio/appearance/node';
 import type { RegistryResult } from '@portfolio/variant-contract/node';
 import { REPO_ROOT } from './registry-options';
@@ -159,6 +160,23 @@ export function problemRecords(check: AppearanceCheck): CatalogRecord[] {
 }
 
 /**
+ * The packs the third-party notices cover: every pack registry generation
+ * registered, from any package, less the fixtures a flag admitted, which no
+ * production build ships. The lock pins first-party packs alone, since
+ * pnpm-lock.yaml pins an installed one; the notices cover both.
+ */
+export function noticePacks(result: Pick<RegistryResult, 'packs'>): NoticePack[] {
+  return result.packs
+    .filter(({ fixture }) => !fixture)
+    .map((pack) => ({
+      id: pack.manifest.id,
+      axis: AXIS_BY_KIND[pack.kind],
+      packageName: pack.packageName,
+      manifest: pack.manifest as unknown as Record<string, unknown>,
+    }));
+}
+
+/**
  * The catalog's governance checks over what registry generation read: its
  * result, less the excluded packs, and the excluded ones.
  */
@@ -235,7 +253,7 @@ export function catalogFindings(
       asset: LOCK_FILE,
     });
   }
-  if (read(root, NOTICES_FILE) !== renderNotices(locked)) {
+  if (read(root, NOTICES_FILE) !== renderNotices(noticePacks(result))) {
     add(`${NOTICES_FILE} is stale. Run pnpm catalog:lock and commit it.`, {
       test: 'third-party notices',
       asset: NOTICES_FILE,

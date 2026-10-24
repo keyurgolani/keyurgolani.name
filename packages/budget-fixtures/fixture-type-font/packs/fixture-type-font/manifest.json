@@ -12,6 +12,7 @@
     },
     "license": "OFL-1.1",
     "attribution": "Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font.git)",
+    "copyright": "Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font.git)",
     "researchedAt": "2026-10-22",
     "maintainer": "keyurgolani",
     "derivation": "geist-latin.woff2 is an unmodified copy of next/dist/next-devtools/server/font/geist-latin.woff2 from next 16.2.4, SHA-256 1b5ebfb3a01a97343ac96873e6d59a8cb285c66012b6a1ac509cb2765e995ba8. OFL.txt beside it holds the license."

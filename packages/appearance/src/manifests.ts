@@ -127,6 +127,12 @@ const Provenance = z
     license: plainText(120),
     /** Who the pack credits, as a notice names them. */
     attribution: plainText(300),
+    /**
+     * The upstream copyright line, as the upstream license file gives it,
+     * such as "Copyright (c) 2021 Tailwind Labs, Inc.": a pack under an
+     * upstream license has one, and the third-party notices print it.
+     */
+    copyright: plainText(300).optional(),
     researchedAt: IsoDate,
     /** Who maintains it: the repository's owner, or the upstream project at a pinned version. */
     maintainer: plainText(120),

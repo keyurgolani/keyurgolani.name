@@ -218,7 +218,11 @@ test('a stable scheme has both modes, and a high-contrast set needs its base mod
 });
 
 test("a third party's pack ids carry its scope, and the fallbacks' ids are the platform's", () => {
-  const upstream = { ...clone(WARM_PARCHMENT).provenance, license: 'MIT' };
+  const upstream = {
+    ...clone(WARM_PARCHMENT).provenance,
+    license: 'MIT',
+    copyright: 'Copyright (c) 2026 Acme',
+  };
   assert.deepEqual(
     records(
       { ...clone(WARM_PARCHMENT), tier: 'extended', provenance: upstream },
@@ -249,7 +253,7 @@ test("a third party's pack can't claim Stable or this repository's own license (
   const stable = { ...clone(DARK_ONLY), id: 'acme-ocean', tier: 'stable' };
   // A single-mode scheme can't be stable either, so this is a dual-mode one.
   const dual = { ...clone(WARM_PARCHMENT), id: 'acme-paper', tier: 'stable' };
-  dual.provenance = { ...dual.provenance, license: 'MIT' };
+  dual.provenance = { ...dual.provenance, license: 'MIT', copyright: 'Copyright (c) 2026 Acme' };
   assert.deepEqual(records(dual, 'color-scheme', '@acme/packs').found, [
     ['manifest.invalid', '/tier'],
   ]);
@@ -264,6 +268,42 @@ test("a third party's pack can't claim Stable or this repository's own license (
   // The same manifests under @portfolio/* are fine.
   assert.deepEqual(records({ ...dual, id: 'paper' }, 'color-scheme').found, []);
   assert.equal(records(stable, 'color-scheme', '@acme/packs').ok, false);
+});
+
+test('a pack under an upstream license gives its copyright line, which the notices print (#20)', () => {
+  const extended = { ...clone(WARM_PARCHMENT), id: 'acme-paper', tier: 'extended' };
+  for (const license of ['MIT', 'Apache-2.0', 'OFL-1.1']) {
+    const { copyright: _drop, ...without } = { ...extended.provenance, license, copyright: '' };
+    void _drop;
+    assert.deepEqual(
+      records({ ...extended, provenance: without }, 'color-scheme', '@acme/packs').found,
+      [['manifest.invalid', '/provenance/copyright']],
+      license,
+    );
+    // A credit isn't a copyright line.
+    assert.deepEqual(
+      records(
+        { ...extended, provenance: { ...without, copyright: 'Tailwind Labs, Inc.' } },
+        'color-scheme',
+        '@acme/packs',
+      ).found,
+      [['manifest.invalid', '/provenance/copyright']],
+      license,
+    );
+    for (const copyright of ['Copyright (c) 2021 Tailwind Labs, Inc.', '(c) 2021 Acme']) {
+      assert.deepEqual(
+        records(
+          { ...extended, provenance: { ...without, copyright } },
+          'color-scheme',
+          '@acme/packs',
+        ).found,
+        [],
+        copyright,
+      );
+    }
+  }
+  // A first-party pack needs none.
+  assert.deepEqual(records(clone(WARM_PARCHMENT), 'color-scheme').found, []);
 });
 
 test('the common fields hold plain text, a known tier, and a dated provenance', () => {
@@ -291,7 +331,11 @@ test('no pack ships JavaScript: a language has no enhancements, and a pack packa
     ...clone(PLATFORM_NEUTRAL),
     id: 'acme-ripple',
     tier: 'extended',
-    provenance: { ...PLATFORM_NEUTRAL.provenance, license: 'MIT' },
+    provenance: {
+      ...PLATFORM_NEUTRAL.provenance,
+      license: 'MIT',
+      copyright: 'Copyright (c) 2026 Acme',
+    },
   };
   assert.deepEqual(
     records(
@@ -440,7 +484,7 @@ test("a typography profile's roles, measures, scripts, and font files are checke
     measures: HUMANIST_UI.measures,
     scripts: ['Latn', 'Latn'],
     fontAssets: manifest.fontAssets.slice(0, 2),
-    provenance: { ...HUMANIST_UI.provenance, license: 'OFL-1.1' },
+    provenance: { ...HUMANIST_UI.provenance, license: 'OFL-1.1', copyright: 'Copyright 2026 Acme' },
     cost: { assets: 1, assetBytes: 20480 },
   };
   assert.deepEqual(records(valid, 'typography').found, [

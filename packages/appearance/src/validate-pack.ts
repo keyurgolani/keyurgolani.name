@@ -25,6 +25,7 @@ import {
   type PackAxis,
   type PackKind,
 } from './axes';
+import { isUpstreamLicense } from './governance';
 import {
   ColorSchemeManifestSchema,
   DesignLanguageManifestSchema,
@@ -218,6 +219,18 @@ function checkGovernance(manifest: PackManifest, context: PackContext, report: R
       "is first-party, which names this repository's own MIT, and the pack comes from another package.",
       "Name the pack's own license: an upstream SPDX identifier, or another license state.",
       { actual: license },
+    );
+  }
+  const { copyright } = manifest.provenance;
+  if (isUpstreamLicense(license) && !/^(?:Copyright\b|\(c\)|©)/i.test(copyright ?? '')) {
+    report(
+      'manifest.invalid',
+      ['provenance', 'copyright'],
+      copyright === undefined
+        ? `is under ${license}, whose notice carries the upstream copyright line, and the manifest gives none.`
+        : `is ${JSON.stringify(copyright)}, which isn't a copyright line: it starts with Copyright, as the upstream license file gives it.`,
+      'Copy the copyright line from the upstream license file, such as "Copyright (c) 2021 Tailwind Labs, Inc.".',
+      copyright === undefined ? {} : { actual: copyright },
     );
   }
   if (license === 'provided-by-operating-system') {

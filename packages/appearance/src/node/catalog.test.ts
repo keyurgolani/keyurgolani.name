@@ -65,6 +65,7 @@ const manifest = (id: string, version = '1.0.0', license = 'first-party') => ({
     source: { name: 'Upstream', url: 'https://example.test/upstream' },
     license,
     attribution: 'The Upstream authors',
+    copyright: 'Copyright (c) 2026 The Upstream authors',
   },
 });
 
@@ -77,7 +78,11 @@ test('the committed lock is current, canonical, and pins every first-party pack'
   const committed = fs.readFileSync(path.join(ROOT, LOCK_FILE), 'utf8');
   assert.deepEqual(lockProblems(committed, packs), []);
   assert.equal(committed, renderLock(packs));
-  assert.equal(fs.readFileSync(path.join(ROOT, NOTICES_FILE), 'utf8'), renderNotices(packs));
+  // The notices cover every registered pack, an installed one's too:
+  // apps/web/scripts/check-appearance-catalog.test.ts holds them to the registry.
+  assert.ok(
+    fs.readFileSync(path.join(ROOT, NOTICES_FILE), 'utf8').startsWith('Third-party notices'),
+  );
   // Fixture packages and third parties never enter it.
   assert.ok(!committed.includes('fixture-'));
 });
@@ -181,11 +186,40 @@ test('the notices carry each upstream-licensed pack, and only those', () => {
   });
   try {
     const notices = renderNotices(catalogPacks(root, packPackages(root)));
+    const apache = renderNotices([
+      {
+        id: 'acme-type',
+        axis: 'typography',
+        packageName: '@acme/type',
+        manifest: manifest('acme-type', '1.0.0', 'Apache-2.0'),
+      },
+    ]);
+    assert.match(apache, /Licensed under the Apache-2\.0 license/);
+    assert.match(apache, /^ {4}Apache License$/m);
+    assert.match(apache, /^ {4}END OF TERMS AND CONDITIONS$/m);
     assert.ok(notices.indexOf('lato (color scheme') < notices.indexOf('nord (color scheme'));
     assert.match(notices, /License: MIT/);
     assert.match(notices, /License: OFL-1\.1/);
     assert.match(notices, /Attribution: The Upstream authors/);
     assert.match(notices, /Source: Upstream, https:\/\/example\.test\/upstream/);
+    // Each notice's copyright line, and under MIT the MIT permission notice beneath it.
+    const nord = notices.slice(notices.indexOf('nord (color scheme'));
+    assert.match(nord, /^ {4}Copyright \(c\) 2026 The Upstream authors$/m);
+    assert.match(nord, /^ {4}Permission is hereby granted, free of charge,/m);
+    assert.match(
+      nord,
+      /^ {4}The above copyright notice and this permission notice shall be included/m,
+    );
+    // Under OFL-1.1, the copyright line and the license's full text, once, after the notices.
+    const lato = notices.slice(notices.indexOf('lato (color scheme'), notices.indexOf('nord ('));
+    assert.match(lato, /Copyright \(c\) 2026 The Upstream authors/);
+    assert.match(
+      lato,
+      /Licensed under the OFL-1\.1 license, whose full text follows these notices/,
+    );
+    assert.equal(notices.split('SIL OPEN FONT LICENSE Version 1.1').length - 1, 1);
+    assert.ok(notices.lastIndexOf('SIL OPEN FONT LICENSE') > notices.indexOf('nord ('));
+    assert.ok(!notices.includes('Apache License'), 'no Apache-2.0 pack, no Apache text');
     assert.ok(!notices.includes('mine (') && !notices.includes('os ('));
     const none = renderNotices(
       catalogPacks(root, packPackages(root)).filter(({ id }) => id === 'mine'),

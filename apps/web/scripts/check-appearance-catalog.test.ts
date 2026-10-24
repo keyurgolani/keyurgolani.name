@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createAppearanceRegistry, type MetaPack } from '@portfolio/appearance';
-import { checkAppearance } from '@portfolio/appearance/node';
+import { checkAppearance, NOTICES_FILE, renderNotices } from '@portfolio/appearance/node';
 import { readRegistry, registryMeta, type RegistryResult } from '@portfolio/variant-contract/node';
 import Ajv2020 from 'ajv/dist/2020';
 import { failureRecord, readFailureRecords, SCHEMA_PATH } from '../../../ci/lib/reports.mjs';
@@ -12,6 +12,7 @@ import {
   catalogFindings,
   contrastRecords,
   hierarchyRecords,
+  noticePacks,
   responsiblePack,
   writeCatalogRecords,
   type CatalogRecord,
@@ -66,6 +67,67 @@ test('the repository passes every governance check', async () => {
   const findings = catalogFindings(REPO_ROOT, await shipped(), []);
   assert.deepEqual(findings.lines, []);
   assert.deepEqual(findings.counts, { gated: 3, locked: 3, research: 1 });
+});
+
+/** The registry with a third party's MIT copy of warm-parchment, as if installed from npm. */
+function withInstalledMit(result: RegistryResult): RegistryResult {
+  const base = result.packs.find(({ manifest }) => manifest.id === 'warm-parchment')!;
+  const manifest = structuredClone(base.manifest) as typeof base.manifest & {
+    tier: string;
+    provenance: { license: string; copyright?: string };
+  };
+  Object.assign(manifest, { id: 'acme-ocean', name: 'Acme Ocean', tier: 'extended' });
+  manifest.provenance.license = 'MIT';
+  manifest.provenance.copyright = 'Copyright (c) 2026 Acme Packs';
+  return {
+    ...result,
+    packs: [...result.packs, { ...base, packageName: '@acme/packs', manifest }],
+  };
+}
+
+test('the committed notices are what the production registry renders', async () => {
+  assert.equal(
+    fs.readFileSync(path.join(REPO_ROOT, NOTICES_FILE), 'utf8'),
+    renderNotices(noticePacks(await shipped())),
+  );
+  // A fixture a flag admits ships in no production build, so no notice covers it,
+  // though fixture-font is OFL-1.1 and fixture-dark-only MIT.
+  const fixtures = await shipped({ APPEARANCE_FIXTURES: '1' });
+  assert.ok(fixtures.packs.some(({ manifest }) => manifest.id === 'fixture-font'));
+  assert.ok(!noticePacks(fixtures).some(({ id }) => id.startsWith('fixture-')));
+});
+
+test('an installed third-party MIT pack gets its notice, with its copyright and the MIT text, and the lock never pins it', async () => {
+  const root = scratch();
+  try {
+    const result = withInstalledMit(await shipped());
+    const notices = renderNotices(noticePacks(result));
+    const own = notices.slice(notices.indexOf('acme-ocean (color scheme, @acme/packs)'));
+    assert.ok(notices.includes('acme-ocean (color scheme, @acme/packs)'));
+    assert.match(own, /License: MIT/);
+    assert.match(own, /^ {4}Copyright \(c\) 2026 Acme Packs$/m);
+    assert.match(own, /^ {4}Permission is hereby granted, free of charge,/m);
+    // The committed notices don't carry it, so the check names them stale.
+    // Its copied stylesheet is warm-parchment's, which the pack gates refuse; only the governance lines matter here.
+    const governance = (lines: readonly string[]) =>
+      lines.filter((line) => !/(boundary-isolation)|(token-coverage)|(bundle-size)/.test(line));
+    const stale = catalogFindings(root, result, []);
+    assert.deepEqual(governance(stale.lines), [
+      'apps/web/public/third-party-notices.txt is stale. Run pnpm catalog:lock and commit it.',
+    ]);
+    // With the notices regenerated, it passes, and the lock pins the first-party three alone.
+    fs.writeFileSync(path.join(root, NOTICES_FILE), notices);
+    const current = catalogFindings(root, result, []);
+    assert.deepEqual(governance(current.lines), []);
+    assert.equal(current.counts.locked, 3);
+    assert.ok(
+      !fs
+        .readFileSync(path.join(root, 'packages/appearance/appearance-catalog.lock.json'), 'utf8')
+        .includes('acme-ocean'),
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('a pack whose content changed without a version bump fails, naming the pack and axis', async () => {

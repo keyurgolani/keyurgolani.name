@@ -40,6 +40,7 @@ export {
   type CatalogPack,
   type LockEntry,
   type LockProblem,
+  type NoticePack,
   type PackPackage,
   type ResearchFile,
 } from './catalog';

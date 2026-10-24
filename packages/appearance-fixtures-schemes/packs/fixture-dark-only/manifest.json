@@ -12,6 +12,7 @@
     },
     "license": "MIT",
     "attribution": "The anchors are the reviewed prototype's nord dark anchors, from the Nord palette (nordtheme/nord, MIT).",
+    "copyright": "Copyright (c) 2016-present Sven Greb",
     "researchedAt": "2026-10-22",
     "maintainer": "keyurgolani",
     "derivation": "anchor-v1 from one dark set of anchors."

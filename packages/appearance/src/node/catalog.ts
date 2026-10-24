@@ -14,7 +14,7 @@ import { existsSync, readdirSync, readFileSync, type Dirent } from 'node:fs';
 import path from 'node:path';
 import { AXIS_NAMES, type PackAxis, type PackKind } from '../axes';
 import { isUpstreamLicense } from '../governance';
-import { ResearchRecordSchema, type ResearchRecord } from '../manifests';
+import { ResearchRecordSchema, type ResearchRecord, type UpstreamLicense } from '../manifests';
 import { AXIS_BY_KIND } from '../validate-pack';
 
 /** The lock, beside this package's source. */
@@ -301,13 +301,37 @@ export function lockProblems(
   return problems;
 }
 
+/** A pack the notices read: any registered pack, first-party or installed from elsewhere. */
+export interface NoticePack {
+  readonly id: string;
+  readonly axis: PackAxis;
+  readonly packageName: string;
+  readonly manifest: Record<string, unknown> | null;
+}
+
+/** Each upstream license's text, beside this package's source in licenses/. */
+const LICENSE_TEXTS: Readonly<Record<UpstreamLicense, string>> = {
+  MIT: readFileSync(new URL('../../licenses/MIT.txt', import.meta.url), 'utf8'),
+  'Apache-2.0': readFileSync(new URL('../../licenses/Apache-2.0.txt', import.meta.url), 'utf8'),
+  'OFL-1.1': readFileSync(new URL('../../licenses/OFL-1.1.txt', import.meta.url), 'utf8'),
+};
+
+const indent = (text: string) =>
+  text
+    .trimEnd()
+    .split('\n')
+    .map((line) => (line === '' ? '' : `    ${line}`));
+
 /**
- * The third-party notices for `packs`: one notice per pack under an
- * upstream license, OFL-1.1, Apache-2.0, or MIT, by id, with its source,
- * attribution, and license. First-party, inspired, operating-system, and
- * generated packs carry no third-party material.
+ * The third-party notices for `packs`, every pack the build registers: one
+ * notice per pack under an upstream license, OFL-1.1, Apache-2.0, or MIT,
+ * by id, with its source, attribution, copyright line, and license. An MIT
+ * notice carries the MIT permission notice under its copyright line, as the
+ * MIT license asks; an Apache-2.0 or OFL-1.1 notice refers to its license's
+ * full text, which follows the notices once. First-party, inspired,
+ * operating-system, and generated packs carry no third-party material.
  */
-export function renderNotices(packs: readonly CatalogPack[]): string {
+export function renderNotices(packs: readonly NoticePack[]): string {
   const lines = [
     'Third-party notices for the appearance packs this platform ships',
     '',
@@ -321,19 +345,36 @@ export function renderNotices(packs: readonly CatalogPack[]): string {
   if (upstream.length === 0) {
     lines.push('No pack in this build ships third-party material.', '');
   }
+  const full = new Set<UpstreamLicense>();
   for (const pack of upstream) {
     const provenance = (pack.manifest?.provenance ?? {}) as {
       source?: { name?: string; url?: string };
       attribution?: string;
+      copyright?: string;
     };
+    const spdx = license(pack.manifest) as UpstreamLicense;
     lines.push(
       `${pack.id} (${AXIS_NAMES[pack.axis]}, ${pack.packageName})`,
       `  Name: ${field(pack.manifest, 'name')}`,
       `  Source: ${provenance.source?.name ?? ''}, ${provenance.source?.url ?? ''}`,
-      `  License: ${license(pack.manifest)}`,
+      `  License: ${spdx}`,
       `  Attribution: ${provenance.attribution ?? ''}`,
       '',
+      `    ${provenance.copyright ?? ''}`,
+      '',
     );
+    if (spdx === 'MIT') {
+      lines.push(...indent(LICENSE_TEXTS.MIT), '');
+    } else {
+      lines.push(
+        `    Licensed under the ${spdx} license, whose full text follows these notices.`,
+        '',
+      );
+      full.add(spdx);
+    }
+  }
+  for (const spdx of (['Apache-2.0', 'OFL-1.1'] as const).filter((each) => full.has(each))) {
+    lines.push(`The ${spdx} license`, '', ...indent(LICENSE_TEXTS[spdx]), '');
   }
   return `${lines.join('\n')}`;
 }
