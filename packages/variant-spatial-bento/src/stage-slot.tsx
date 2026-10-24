@@ -12,7 +12,11 @@ import {
 } from 'react';
 import { Action } from '@portfolio/appearance/primitives';
 import { useBoundary } from '@portfolio/appearance/react';
-import type { RuntimeState } from '@portfolio/kit/runtime';
+import {
+  PREVIEW_LIFECYCLE_EVENT,
+  previewLifecycle,
+  type RuntimeState,
+} from '@portfolio/kit/runtime';
 import type { SpatialFailure } from '@portfolio/kit/spatial-canvas';
 import { decideStage, type StageReason } from './policy';
 import { Runtime } from './runtime';
@@ -156,10 +160,6 @@ function setOwner(next: object | null): void {
   for (const change of owners) change();
 }
 
-/** Where #7's frame agent keeps the last lifecycle, and the event it dispatches with each (kit/src/runtime/store.ts). */
-const LIFECYCLE_STATE = Symbol.for('kgn-preview.lifecycle');
-const LIFECYCLE_EVENT = 'kgn-preview-lifecycle';
-
 /** The width the stage needs, the same as its runtime requirement `min-width:768`. */
 const WIDE = '(min-width: 768px)';
 
@@ -172,12 +172,11 @@ function framed(): boolean {
   }
 }
 
-/** #7's last lifecycle here: none yet, visible and focused, or anything else. */
+/** #7's last lifecycle here, as the kit runtime reads it: none yet, visible and focused, or anything else. */
 function lifecycle(): 'none' | 'active' | 'inactive' {
-  const value = (window as unknown as Record<symbol, unknown>)[LIFECYCLE_STATE];
-  if (!value || typeof value !== 'object') return 'none';
-  const { state, focused } = value as Record<string, unknown>;
-  return state === 'visible' && focused === true ? 'active' : 'inactive';
+  const last = previewLifecycle();
+  if (!last) return 'none';
+  return last.state === 'visible' && last.focused ? 'active' : 'inactive';
 }
 
 // A preview's off signals, latched for the page: once any is seen, the stage stays off.
@@ -230,7 +229,7 @@ const QUERIES = ['(forced-colors: active)', '(prefers-contrast: more)', WIDE] as
 function subscribeSignals(change: () => void): () => void {
   const lists = QUERIES.map((query) => matchMedia(query));
   for (const list of lists) list.addEventListener('change', change);
-  window.addEventListener(LIFECYCLE_EVENT, change);
+  window.addEventListener(PREVIEW_LIFECYCLE_EVENT, change);
   const boundary = document.querySelector('[data-appearance-boundary]');
   const observer = boundary ? new MutationObserver(change) : null;
   observer?.observe(boundary!, {
@@ -239,7 +238,7 @@ function subscribeSignals(change: () => void): () => void {
   });
   return () => {
     for (const list of lists) list.removeEventListener('change', change);
-    window.removeEventListener(LIFECYCLE_EVENT, change);
+    window.removeEventListener(PREVIEW_LIFECYCLE_EVENT, change);
     observer?.disconnect();
   };
 }

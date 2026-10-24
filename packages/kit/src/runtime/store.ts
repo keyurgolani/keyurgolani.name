@@ -38,6 +38,11 @@ export function readLifecycle(value: unknown): LifecycleInput | null {
   return { state, focused };
 }
 
+/** #7's last lifecycle in this document, as its frame agent left it, or null outside a connected preview frame. */
+export function previewLifecycle(): LifecycleInput | null {
+  return readLifecycle((window as unknown as Record<symbol, unknown>)[LIFECYCLE_STATE]);
+}
+
 /** The visitor's pause in this tab: sessionStorage, or memory where storage throws. */
 let pausedInMemory = false;
 
@@ -68,7 +73,7 @@ function read(): DocumentInputs {
     osReduced: matchMedia(REDUCED_MOTION).matches,
     documentVisible: document.visibilityState !== 'hidden',
     visitorPaused: readPause(),
-    lifecycle: readLifecycle((window as unknown as Record<symbol, unknown>)[LIFECYCLE_STATE]),
+    lifecycle: previewLifecycle(),
   };
 }
 
