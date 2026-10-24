@@ -2,6 +2,7 @@ import type { BrowserContext, Frame, Page } from '@playwright/test';
 import { expect, test } from '../harness/fixtures';
 import { DEMO_APP } from '../harness/profile-matrix';
 import { DEMO_CSP } from '../harness/route-headers.mjs';
+import { openTask } from '../harness/studio-tasks';
 
 // Demo Studio in a browser (#9, design note sections 2 and 4): /studio
 // under demo may not be framed, and frames /sample alone; two visitors'
@@ -36,10 +37,11 @@ const SAMPLE_HOSTS = [
 
 test.use({ appOptions: DEMO_APP, blockedHosts: SAMPLE_HOSTS });
 
-/** Opens Demo Studio's Appearance task, once its backend has loaded. */
-async function open(page: Page, target = '/studio#appearance'): Promise<void> {
-  const response = await page.goto(target);
+/** Opens Demo Studio's Appearance task through its link, as #139's helper does, once its backend has loaded. */
+async function open(page: Page): Promise<void> {
+  const response = await page.goto('/studio');
   expect(response?.status()).toBe(200);
+  await openTask(page, 'Appearance');
   await expect(page.getByRole('button', { name: 'Reset demo' })).toBeVisible();
 }
 

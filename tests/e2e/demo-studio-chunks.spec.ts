@@ -48,9 +48,9 @@ test.describe('under demo', () => {
     { annotation: [STUDIO, { type: 'profile', description: 'demo' }] },
     async ({ page }) => {
       const scripts = await scriptsDuring(page, async () => {
-        const response = await page.goto('/studio#appearance');
+        const response = await page.goto('/studio');
         expect(response?.status()).toBe(200);
-        // The body renders once the backend has loaded.
+        // Appearance, Demo Studio's first task, renders once the backend has loaded.
         await expect(page.getByRole('button', { name: 'Reset demo' })).toBeVisible();
       });
       expect(scripts.size).toBeGreaterThan(0);
