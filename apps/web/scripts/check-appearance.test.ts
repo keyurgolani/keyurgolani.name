@@ -47,7 +47,22 @@ const findings = (stderr: string) =>
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const shipped = (dir: string) => fs.readdirSync(path.join(ROOT, 'packages', dir, 'packs')).length;
 const LANGUAGES = shipped('appearance-languages');
-const SCHEMES = shipped('appearance-schemes');
+/** The image-derived schemes the owner hasn't accepted (#20 PR 3), which the build leaves out. */
+const accepted = JSON.parse(
+  fs.readFileSync(path.join(ROOT, 'packages/appearance-schemes/generated/acceptance.json'), 'utf8'),
+) as Record<string, unknown>;
+const AWAITING = fs
+  .readdirSync(path.join(ROOT, 'packages/appearance-schemes/packs'))
+  .filter((id) => {
+    const manifest = JSON.parse(
+      fs.readFileSync(
+        path.join(ROOT, 'packages/appearance-schemes/packs', id, 'manifest.json'),
+        'utf8',
+      ),
+    ) as { generator?: { input: string } };
+    return manifest.generator?.input === 'asset' && !Object.hasOwn(accepted, id);
+  }).length;
+const SCHEMES = shipped('appearance-schemes') - AWAITING;
 const PROFILES = shipped('appearance-typography');
 const counted = (count: number, one: string, many: string) =>
   `${count} ${count === 1 ? one : many}`;
