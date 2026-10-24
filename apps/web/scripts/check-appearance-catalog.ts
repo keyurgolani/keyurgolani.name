@@ -184,6 +184,17 @@ export function baseLock(
 }
 
 /**
+ * What a run says of a base with no lock, such as a branch's first commit
+ * of one: nothing holds the lock to it, so the run says so instead of
+ * passing silently. Null when there's no base, or the base has a lock.
+ */
+export function baseLockNote(base: BaseLock | null): string | null {
+  return base && base.text === null
+    ? `${base.ref} has no catalog lock: the lock is held to the packs alone.`
+    : null;
+}
+
+/**
  * The packs the third-party notices cover: every pack registry generation
  * registered, from any package, less the fixtures a flag admitted, which no
  * production build ships. The lock pins first-party packs alone, since

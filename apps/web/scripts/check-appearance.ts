@@ -53,6 +53,7 @@ import type { GateTargets } from '@portfolio/appearance';
 import { loadThresholds } from '../../../quality/thresholds';
 import {
   baseLock,
+  baseLockNote,
   catalogFindings,
   contrastRecords,
   hierarchyRecords,
@@ -232,7 +233,10 @@ async function main(): Promise<number> {
     options.auditExceptions ? path.resolve(options.auditExceptions) : undefined,
   );
 
-  const catalog = catalogFindings(REPO_ROOT, result, excluded ?? [], baseLock());
+  const base = baseLock();
+  const catalog = catalogFindings(REPO_ROOT, result, excluded ?? [], base);
+  const note = baseLockNote(base);
+  if (note) process.stdout.write(`${TAG} ${note}\n`);
 
   for (const { axis, id, reason } of check.skipped)
     process.stdout.write(`${TAG} Skipped ${axis} ${id}: ${reason}.\n`);

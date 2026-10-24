@@ -21,7 +21,7 @@ import {
   renderNotices,
 } from '@portfolio/appearance/node';
 import { readRegistry } from '@portfolio/variant-contract/node';
-import { baseLock, noticePacks } from './check-appearance-catalog';
+import { baseLock, baseLockNote, noticePacks } from './check-appearance-catalog';
 import { excludePacks, registryOptions, REPO_ROOT } from './registry-options';
 
 const TAG = '[catalog:lock]';
@@ -43,6 +43,8 @@ async function main(args: readonly string[]): Promise<number> {
   const packs = lockedPacks(REPO_ROOT);
   // CATALOG_LOCK_BASE holds the lock to the change's base too, as check:appearance does.
   const base = baseLock();
+  const note = baseLockNote(base);
+  if (note) process.stdout.write(`${TAG} ${note}\n`);
   const problems = [
     ...lockProblems(read(LOCK_FILE), packs),
     ...(base ? baseLockProblems(base, packs) : []),

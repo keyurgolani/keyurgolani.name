@@ -16,6 +16,7 @@ import Ajv2020 from 'ajv/dist/2020';
 import { failureRecord, readFailureRecords, SCHEMA_PATH } from '../../../ci/lib/reports.mjs';
 import {
   baseLock,
+  baseLockNote,
   catalogFindings,
   contrastRecords,
   hierarchyRecords,
@@ -204,6 +205,12 @@ test('CATALOG_LOCK_BASE names the base lock by a git ref, none at a base without
     git('add', '-A');
     git('commit', '-q', '-m', 'no lock yet');
     assert.deepEqual(baseLock({ CATALOG_LOCK_BASE: 'HEAD' }, repo), { ref: 'HEAD', text: null });
+    // A base with no lock says so, rather than passing silently.
+    assert.equal(
+      baseLockNote(baseLock({ CATALOG_LOCK_BASE: 'HEAD' }, repo)),
+      'HEAD has no catalog lock: the lock is held to the packs alone.',
+    );
+    assert.equal(baseLockNote(null), null);
     const lockFile = path.join(repo, 'packages/appearance/appearance-catalog.lock.json');
     fs.mkdirSync(path.dirname(lockFile), { recursive: true });
     fs.writeFileSync(lockFile, '{"lockVersion":1,"packs":{}}\n');
@@ -215,6 +222,7 @@ test('CATALOG_LOCK_BASE names the base lock by a git ref, none at a base without
       ref: 'HEAD^1',
       text: '{"lockVersion":1,"packs":{}}\n',
     });
+    assert.equal(baseLockNote(baseLock({ CATALOG_LOCK_BASE: 'HEAD^1' }, repo)), null);
     assert.throws(
       () => baseLock({ CATALOG_LOCK_BASE: 'refs/heads/no-such-base' }, repo),
       /CATALOG_LOCK_BASE is refs\/heads\/no-such-base, and git can't read it/,
