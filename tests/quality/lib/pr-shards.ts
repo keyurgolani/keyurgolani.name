@@ -22,14 +22,17 @@
 // too heavy for one worker's share of a shard is split first into parts,
 // by cell, and a cell too heavy on its own by test (splitGroups), each part
 // run through a grep of its tests' tags (playwright.config.ts), so a split
-// moves tests between shards and never adds or drops one.
+// moves tests between shards and never adds or drops one. A variant's
+// sweep group (lib/sweep.ts) is one cell group whose cells are its changed
+// packs, so it splits by pack, each pack's rows kept together.
 //
 // The weights: a skipped test none; a cell test that runs the default row's
 // reload conditions (cells.ts) its viewport and row's mean, from `pack` when
 // the cell's tuple names a pack other than the platform default on any axis
 // (a tier sentinel, or since #20 a change-directed cell on any pack axis),
 // else from `conditions`; any other cell test `plain`; a perf test `perf`;
-// a harness spec its own total. They were measured from the list reporter's
+// a harness spec its own total; a swept cell's test (lib/sweep.ts) its
+// row's `sweep` weight, whatever else it is. They were measured from the list reporter's
 // durations in quality-pr job logs (`gh api .../actions/jobs/<id>/logs`),
 // each the mean of its tests: `pack` from the tier sentinels' nine cells in
 // three runs (#20), the rest from #84's and #89's.
@@ -83,6 +86,11 @@ export interface ShardDurations {
    * checks, unlike the stand-in states and surfaces `plain` weighs.
    */
   readonly composition: Readonly<Record<string, number>>;
+  /**
+   * A swept cell's test (lib/sweep.ts), a changed pack on its variant's
+   * sweep server without the reload conditions, by `<viewport> <row>`.
+   */
+  readonly sweep: Readonly<Record<string, number>>;
 }
 
 /** Whether a cell's tuple names a pack other than the platform default on any axis. */
@@ -121,14 +129,14 @@ const median = (values: readonly number[]) => {
 
 /** What testWeight() reads of a planned test. */
 export type WeighedTest = Pick<Plan['tests'][number], 'skip' | 'engineSkips' | 'conditions'> & {
-  readonly cell: Pick<Plan['tests'][number]['cell'], 'kind' | 'state' | 'tuple'>;
+  readonly cell: Pick<Plan['tests'][number]['cell'], 'kind' | 'state' | 'tuple' | 'sweep'>;
   readonly viewport: { readonly id: string };
   readonly row: { readonly id: string };
 };
 
 /**
  * About how long one planned cell test takes on `engine`: none skipped; a
- * test with the reload conditions its row's measured mean, from `pack` on a
+ * swept cell's its row's `sweep` weight; a test with the reload conditions its row's measured mean, from `pack` on a
  * pack's tuple, else `conditions`; a composition's complete cell without
  * them `composition`'s; and any other, a stand-in state's or a surface's,
  * `plain`. A row with no measured weight takes `fallback`.
@@ -141,6 +149,7 @@ export function testWeight(
 ): number {
   if (test.skip !== undefined || test.engineSkips[engine] !== undefined) return durations.skipped;
   const key = `${test.viewport.id} ${test.row.id}`;
+  if (test.cell.sweep) return durations.sweep[key] ?? fallback;
   if (!test.conditions) {
     return test.cell.kind === 'composition' && test.cell.state === APPEARANCE_STATE.id
       ? (durations.composition[key] ?? fallback)

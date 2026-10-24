@@ -603,52 +603,115 @@ test('the weights file has every row a conditions test can plan, and a perf, har
         assert.ok(durations.pack[key]! > 0, `${key} has a measured weight on a pack cell`);
       }
     }
+    for (const each of plan.tests.filter((test) => test.cell.sweep)) {
+      const key = `${each.viewport.id} ${each.row.id}`;
+      assert.ok(durations.sweep[key]! > 0, `${key} has a weight on a swept cell`);
+    }
   }
 });
 
-test('a cell on a pack weighs its tests by the measured pack weights, so a PR that changes a pack is sized by them (#20)', () => {
+test("a changed pack's cells run in each variant's sweep group, at the sweep's row weights, so a PR that changes a pack is sized by them (#20)", () => {
   const durations = loadDurations();
   const meta = withTierPacks(checkoutMeta());
   const scheme = meta.PACKS!.find((pack) => pack.kind === 'color-scheme' && !pack.fixture)!;
   const wider = {
     ...meta,
-    PACKS: [...meta.PACKS!, clone(scheme, 'second-scheme', 'stable', false)],
+    PACKS: [
+      ...meta.PACKS!,
+      clone(scheme, 'second-scheme', 'stable', false),
+      clone(scheme, 'third-scheme', 'stable', false),
+    ],
   };
   const plan = planCells({
     meta: wider,
     registrations,
     mode: 'pr',
-    changes: [{ axis: 'colorScheme', id: 'second-scheme', paths: [] }],
+    changes: [
+      { axis: 'colorScheme', id: 'second-scheme', paths: [] },
+      { axis: 'colorScheme', id: 'third-scheme', paths: [] },
+    ],
   });
-  const directed = plan.cells.filter((cell) => cell.changed);
-  assert.ok(directed.length > 0);
+  const swept = plan.cells.filter((cell) => cell.sweep);
+  const variants = plan.targets.filter((target) => target.kind === 'composition');
+  // Two packs against every variant, and one sweep server a variant.
+  assert.equal(swept.length, 2 * variants.length);
+  const servers = new Set(swept.map((cell) => serverId(cellServer(cell))));
+  assert.equal(servers.size, variants.length);
   const groups = planGroups(plan, ENGINES, durations);
-  for (const cell of directed) {
-    assert.ok(onPack(cell.tuple), cell.id);
-    const id = serverId(cellServer(cell));
+  for (const id of servers) {
     const group = groups.find(
       (each) => each.project === serverProject(ENGINES[0]!, id) && each.file === CELL_SPEC,
     )!;
     const tests = plan.tests.filter((each) => serverId(cellServer(each.cell)) === id);
+    // Both packs' four rows, at the sweep's weight for each.
+    assert.equal(tests.length, 2 * 4);
     const expected = tests.reduce(
       (sum, each) =>
         sum +
         (each.skip !== undefined || each.engineSkips[ENGINES[0]!] !== undefined
           ? durations.skipped
-          : each.conditions
-            ? durations.pack[`${each.viewport.id} ${each.row.id}`]!
-            : durations.plain),
+          : durations.sweep[`${each.viewport.id} ${each.row.id}`]!),
       durations.group,
     );
-    assert.ok(
-      Math.abs(group.weight - expected) < 1e-6,
-      `${cell.id}: ${group.weight} vs ${expected}`,
-    );
+    assert.ok(Math.abs(group.weight - expected) < 1e-6, `${id}: ${group.weight} vs ${expected}`);
   }
+  for (const cell of swept) assert.ok(onPack(cell.tuple), cell.id);
+  // A pair costs the sweep's four rows, under half of the eleven tests it cost as a cell of its own.
+  const sweepPair = Object.values(durations.sweep).reduce((sum, each) => sum + each, 0);
+  const cellPair = Object.values(durations.pack).reduce((sum, each) => sum + each, 0);
+  assert.ok(sweepPair < cellPair / 2, `${sweepPair}s against ${cellPair}s`);
   // The platform default's tuple is no pack cell.
   assert.ok(!onPack(plan.cells.find((cell) => !cell.pack && !cell.changed)!.tuple));
 });
 
+test("a sweep group too heavy for one worker splits by pack, each pack's rows in one part, and every pack runs once", () => {
+  const meta = withTierPacks(checkoutMeta());
+  const language = meta.PACKS!.find((pack) => pack.kind === 'design-language' && !pack.fixture)!;
+  // Enough packs that one variant's sweep is more than a worker's share, at the sweep's own weights.
+  const pair = Object.values(loadDurations().sweep).reduce((sum, each) => sum + each, 0);
+  const count = Math.ceil(GROUP_BUDGET / pair) + 1;
+  const ids = Array.from({ length: count }, (_, at) => `swept-language-${at + 1}`);
+  const plan = planCells({
+    meta: {
+      ...meta,
+      PACKS: [...meta.PACKS!, ...ids.map((id) => clone(language, id, 'stable', false))],
+    },
+    registrations,
+    mode: 'pr',
+    changes: ids.map((id) => ({ axis: 'designLanguage' as const, id, paths: [] })),
+  });
+  const groups = planGroups(plan, ENGINES);
+  const swept = plan.cells.filter((cell) => cell.sweep);
+  const sweepProjects = new Set(
+    swept.map((cell) => serverProject(ENGINES[0]!, serverId(cellServer(cell)))),
+  );
+  const heavy = groups.filter(
+    (group) => sweepProjects.has(group.project) && group.weight > GROUP_BUDGET,
+  );
+  assert.ok(heavy.length > 0, `${count} packs make a sweep group heavier than one worker has`);
+  const split = splitGroups(groups);
+  for (const group of heavy) {
+    const parts = split.filter((part) => part.project === group.project && part.file === CELL_SPEC);
+    assert.ok(parts.length > 1, group.project);
+    for (const part of parts) assert.ok(part.weight <= GROUP_BUDGET, `${part.weight}s`);
+    // Every test of the group in exactly one part, in order, and each pack whole in one part.
+    assert.deepEqual(
+      parts.flatMap((part) => part.tests),
+      group.tests,
+    );
+    const cellOf = (key: string) => (JSON.parse(key) as string[])[0]!;
+    for (const cell of new Set(group.tests.map(cellOf))) {
+      const holding = parts.filter((part) => part.tests.some((key) => cellOf(key) === cell));
+      assert.equal(holding.length, 1, `${cell} spans ${holding.length} parts`);
+    }
+  }
+  // The shards still run every planned test once, at the count the planner picks.
+  const { shards } = pickShardCount(groups);
+  assert.deepEqual(
+    shards.flatMap((shard) => shard.groups.flatMap((group) => group.tests)).sort(),
+    unsharded(plan).sort(),
+  );
+});
 test("quality:pr takes --shard as the runner's own, and hands it to Playwright's processes by QUALITY_SHARD", () => {
   assert.deepEqual(parseRunArgs(['pr', '--', '--shard=2/3', '--grep', 'login']), {
     mode: 'pr',

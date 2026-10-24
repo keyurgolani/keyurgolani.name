@@ -13,6 +13,9 @@
 // the earliest on a tie. The same registry gives the same rows, whatever
 // order it lists its packs in.
 
+import type { PlannedTest } from './cells';
+import { SWEEP_CHECKS, sweepChecksOf } from './lib/sweep';
+
 /** The five values a tuple sets, in the resolver's axis order. */
 export const TUPLE_AXES = [
   'variant',
@@ -136,4 +139,41 @@ export function pairwise(input: CoverageInput): Coverage {
     // Each pick covers at least one pair, or the loop ends.
   }
   return { rows, tuples, accepted: accepted.length, uncoverable };
+}
+
+/**
+ * The [37] rule's coverage in a plan (#11 and #20): every changed pack
+ * against every registered variant, in each of the five checks the sweep
+ * runs (lib/sweep.ts's SWEEP_CHECKS), counted from the planned tests, so a
+ * pack, a variant, or a check the planner left out is missing here and
+ * fails the plan. A planned test that then doesn't run fails the run's
+ * plan-coverage (lib/verdict.ts), which counts each of these tests on its
+ * own. Each triple reads `<axis> <pack> × <variant> × <check>`.
+ */
+export function sweepCoverage(input: {
+  readonly changes: readonly { readonly axis: string; readonly id: string }[];
+  readonly variants: readonly string[];
+  readonly tests: readonly Pick<PlannedTest, 'cell' | 'viewport' | 'row' | 'conditions'>[];
+}): { readonly planned: readonly string[]; readonly missing: readonly string[] } {
+  const key = (axis: string, id: string, variant: string, check: string) =>
+    `${axis} ${id} × ${variant} × ${check}`;
+  const seen = new Set<string>();
+  for (const test of input.tests) {
+    const changed = test.cell.changed?.filter((by) => by.axis !== 'variant') ?? [];
+    if (changed.length === 0) continue;
+    for (const check of sweepChecksOf(test)) {
+      for (const by of changed) seen.add(key(by.axis, by.id, test.cell.target, check));
+    }
+  }
+  const planned: string[] = [];
+  const missing: string[] = [];
+  for (const { axis, id } of input.changes) {
+    for (const variant of input.variants) {
+      for (const { name } of SWEEP_CHECKS) {
+        const triple = key(axis, id, variant, name);
+        (seen.has(triple) ? planned : missing).push(triple);
+      }
+    }
+  }
+  return { planned, missing };
 }

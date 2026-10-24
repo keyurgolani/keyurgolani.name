@@ -1,6 +1,7 @@
 import { KIND_ANNOTATION } from './lib/checks';
 import { testTag } from './lib/pr-shards';
 import { runCell } from './lib/run-cell';
+import { packCookie } from './lib/sweep';
 import { cellServer, serverTag } from './lib/server';
 import { expect, test } from './fixtures';
 import { loadPlan } from './plan';
@@ -10,7 +11,10 @@ import { loadPlan } from './plan';
 // carries its cell's server tag, so it runs only on that server's project
 // (playwright.config.ts), and its own tag, so a shard can run some of a
 // project's tests (lib/pr-shards.ts). A stand-in state's test, or an excluded one,
-// skips with the reason the plan declares, before any server starts.
+// skips with the reason the plan declares, before any server starts. A
+// swept cell (lib/sweep.ts) is one changed pack on its variant's sweep
+// server: each of its tests sets the pack's cookie in its own context
+// before the page loads, so each pack starts clean.
 
 const plan = await loadPlan();
 
@@ -50,7 +54,9 @@ for (const cell of plan.cells) {
               { type: 'row', description: row.id },
             ],
           },
-          async ({ page }, testInfo) => {
+          async ({ page, app }, testInfo) => {
+            // A swept cell's own tuple, on its variant's sweep server, in this test's fresh context.
+            if (cell.sweep) await page.context().addCookies([packCookie(cell, app.origin)]);
             await runCell({
               page,
               cell,

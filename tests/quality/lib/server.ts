@@ -10,6 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { parseDocument } from 'yaml';
 import {
   contractFixture,
   type ContractFixtureName,
@@ -27,9 +28,23 @@ export interface CellServer {
   readonly source: ContractFixtureName;
   readonly tuple: Tuple;
   readonly profile: Profile;
+  /**
+   * A variant's sweep server (lib/sweep.ts): its site lets the visitor pick
+   * every pack and the display mode, so each swept cell applies its own
+   * tuple by the preference cookie, and every pack of one variant shares it.
+   */
+  readonly sweep?: true;
 }
 
 export function cellServer(cell: Cell): CellServer {
+  if (cell.sweep) {
+    return {
+      source: cell.source,
+      tuple: defaultTuple(cell.tuple.variant, 'system'),
+      profile: cell.profile,
+      sweep: true,
+    };
+  }
   return { source: cell.source, tuple: cell.tuple, profile: cell.profile };
 }
 
@@ -42,7 +57,7 @@ export const HARNESS_SERVER: CellServer = {
 
 /** What a server is, in words: its profile, its fixture, and its tuple. */
 export const serverLabel = (server: CellServer) =>
-  `${server.profile} ${server.source} ${tupleKey(server.tuple)}`;
+  `${server.profile} ${server.source} ${tupleKey(server.tuple)}${server.sweep ? ' sweep' : ''}`;
 
 /** A server's id, which names its project and tags its cells' tests. */
 export function serverId(server: CellServer): string {
@@ -68,6 +83,24 @@ export function planServers(
     if (!servers.has(id)) servers.set(id, { id, label: serverLabel(server), server });
   }
   return [...servers.values()].sort((a, b) => (a.id < b.id ? -1 : 1));
+}
+
+/** The visitor controls a sweep server's site sets: the variant stays the page's, and every other axis is the visitor's. */
+export const SWEEP_CONTROLS = {
+  variant: 'locked',
+  designLanguage: 'selectable',
+  colorScheme: 'selectable',
+  typography: 'selectable',
+  displayMode: 'selectable',
+} as const;
+
+/** `siteText` with SWEEP_CONTROLS for its visitor controls. */
+export function sweepSiteText(siteText: string): string {
+  const document = parseDocument(siteText);
+  for (const [axis, control] of Object.entries(SWEEP_CONTROLS)) {
+    document.setIn(['visitorControls', axis], control);
+  }
+  return document.toString();
 }
 
 /** A small gray PNG and a one-page PDF, standing in for the assets a fixture links. */
@@ -118,7 +151,9 @@ export function appOptionsFor(server: CellServer, web: string, canary: string): 
   const base: AppOptions = {
     web,
     portfolio: fixture.files.portfolio,
-    siteText: siteTextFor(fixture, server.tuple),
+    siteText: server.sweep
+      ? sweepSiteText(siteTextFor(fixture, server.tuple))
+      : siteTextFor(fixture, server.tuple),
     publicFiles: ownerAssets(fixture.files.portfolio),
     sourceFiles: Object.fromEntries(
       fixture.unitFiles.map((file) => [file, readFileSync(path.join(dir, file), 'utf8')]),

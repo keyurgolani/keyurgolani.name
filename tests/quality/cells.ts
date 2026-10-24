@@ -64,7 +64,7 @@ import {
   type ContractFixture,
 } from '../../packages/variant-contract/src/node/fixtures';
 import type { Change, ChangeAxis } from './lib/changes';
-import { pairwise, tupleKey, type Coverage, type Tuple } from './coverage';
+import { pairwise, sweepCoverage, tupleKey, type Coverage, type Tuple } from './coverage';
 import {
   DEFAULT_ROW,
   PREFERENCE_ROWS,
@@ -81,6 +81,7 @@ import type {
   SurfaceRegistration,
 } from './lib/registration';
 import { APPEARANCE_STATE, STATE_FIXTURES, type StateFixture } from './lib/state-fixtures';
+import { SWEEP_ROWS, SWEEP_VIEWPORT, sweeps } from './lib/sweep';
 
 export type RunMode = 'pr' | 'full';
 
@@ -135,6 +136,12 @@ export interface Cell {
   readonly pack?: string;
   /** The changed variants and languages that brought it in, by the [37] rule. */
   readonly changed?: readonly ChangedBy[];
+  /**
+   * In a PR, a changed pack's pair with a variant runs in the pack sweep
+   * (lib/sweep.ts): on its variant's sweep server, its tuple applied by the
+   * visitor's cookie, in the [37] rows at 1440x900.
+   */
+  readonly sweep?: boolean;
   /** In the PR set. */
   readonly sentinel: boolean;
   /** Includes a fixture pack or variant, so it stays out of the zero-exception close run. */
@@ -596,8 +603,9 @@ export function planCells({ meta, registrations, mode, changes = [] }: PlanInput
   };
 
   const ordered = [...cells.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  const selected =
-    mode === 'full' ? ordered : ordered.filter((cell) => cell.sentinel || cell.changed);
+  const selected = (
+    mode === 'full' ? ordered : ordered.filter((cell) => cell.sentinel || cell.changed)
+  ).map((cell) => (sweeps(cell, mode) ? { ...cell, sweep: true } : cell));
   const firstDefault = selected.find(
     (cell) =>
       cell.kind === 'composition' &&
@@ -610,11 +618,13 @@ export function planCells({ meta, registrations, mode, changes = [] }: PlanInput
   for (const cell of selected) {
     for (const viewport of VIEWPORTS) {
       for (const row of PREFERENCE_ROWS) {
-        const planned =
-          mode === 'full' ||
-          row === DEFAULT_ROW ||
-          ((cell === firstDefault || cell.pack !== undefined || cell.changed !== undefined) &&
-            viewport === VIEWPORTS[0]);
+        // A swept cell runs the [37] rows at the sweep's viewport, and nothing else.
+        const planned = cell.sweep
+          ? viewport === SWEEP_VIEWPORT && SWEEP_ROWS.includes(row)
+          : mode === 'full' ||
+            row === DEFAULT_ROW ||
+            ((cell === firstDefault || cell.pack !== undefined || cell.changed !== undefined) &&
+              viewport === VIEWPORTS[0]);
         if (!planned) continue;
         const fields = { route: cell.route, state: cell.state, viewport: viewport.id, row: row.id };
         const exclusions = exclusionsFor(cell);
@@ -636,14 +646,27 @@ export function planCells({ meta, registrations, mode, changes = [] }: PlanInput
           engineSkips,
           // A change-directed cell too: a changed variant or language is where
           // content-inventory and failed-enhancement regressions show.
+          // The sweep's five checks need no reload conditions.
           conditions:
             mode === 'full' ||
             cell === firstDefault ||
             cell.pack !== undefined ||
-            cell.changed !== undefined,
+            (cell.changed !== undefined && !cell.sweep),
         });
       }
     }
+  }
+
+  // Every changed pack against every variant, in each of the [37] checks: a pair or a check the plan left out fails it.
+  const { missing } = sweepCoverage({
+    changes: directed.filter((change) => change.axis !== 'variant'),
+    variants: variants.map((manifest) => manifest.id),
+    tests,
+  });
+  if (missing.length > 0) {
+    throw new Error(
+      `The PR plan leaves out ${missing.length} changed pack, variant, and check triple(s) the [37] rule directs, first ${missing[0]}.`,
+    );
   }
 
   const reasons = new Set<string>();

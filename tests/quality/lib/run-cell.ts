@@ -43,6 +43,7 @@ import {
 } from './records';
 import { loadRegistrations, type Interaction } from './registration';
 import { APPEARANCE_STATE } from './state-fixtures';
+import { packFindings } from './sweep';
 import { readVitals } from './vitals';
 import {
   enhancementFindings,
@@ -227,7 +228,10 @@ async function suites(run: SuiteRun): Promise<Finding[]> {
 /** The longest axe waits for the page's finite animations to end. */
 const ANIMATION_WAIT_MS = 2_000;
 
-export async function audit(page: Page, row: PreferenceRow) {
+/** The axe rules about color, which a swept cell's audit runs alone (lib/sweep.ts). */
+export const CONTRAST_RULES = ['color-contrast', 'link-in-text-block'] as const;
+
+export async function audit(page: Page, row: PreferenceRow, contrastOnly = false) {
   const forced = row.context.forcedColors === 'active';
   const cdp = scriptless.get(page);
   // Read before script turns on: a query axe's pass would flip fails the row.
@@ -252,6 +256,9 @@ export async function audit(page: Page, row: PreferenceRow) {
       ANIMATION_WAIT_MS,
     );
     const builder = axeFor(page);
+    if (contrastOnly) {
+      builder.withRules(CONTRAST_RULES.filter((rule) => !forced || rule !== 'color-contrast'));
+    }
     if (forced) builder.disableRules(['color-contrast']);
     const results: AxeResults = await builder.analyze();
     const contrast = forced ? [] : await incompleteContrastFindings(page, results);
@@ -277,7 +284,7 @@ export async function runCell({
   // First, so a cell that throws carries them too.
   testInfo.annotations.push(...cellAnnotations(cell));
   const ran = new Set<string>();
-  const owed = new Set(requiredChecks(row.id, viewport.id, conditions));
+  const owed = new Set(requiredChecks(row.id, viewport.id, conditions, cell.sweep ?? false));
   // The print row compares the page in print with the page on screen, so it loads on screen first.
   const printRow = row.context.media === 'print';
   await applyRow(page, printRow ? { ...row, context: { ...row.context, media: undefined } } : row);
@@ -296,7 +303,7 @@ export async function runCell({
 
   // Under reduced motion the frame window after load passes before axe, whose own frames would count.
   const motion = owed.has('motion') ? await motionFindings(page) : [];
-  const { results, contrast } = await audit(page, row);
+  const { results, contrast } = await audit(page, row, cell.sweep ?? false);
   ran.add('axe');
   const details: Record<string, ElementDetails[]> = {};
   for (const rule of results.violations) {
@@ -321,6 +328,9 @@ export async function runCell({
   await keep('axe.json', { violations: results.violations, incomplete: results.incomplete });
   await keep('vitals.json', vitals);
   await keep('resolved-tokens.json', tokens);
+  // A swept cell's tuple came by the visitor's cookie: the page must render its packs (lib/sweep.ts).
+  const sweptPack = cell.sweep ? packFindings(cell, tokens) : [];
+  if (cell.sweep) ran.add('sweep-pack');
   // What a change-directed cell's failures name its tokens from (the [37] rule).
   const tokenPages = [{ route: cell.route, tokens, file: written.at(-1)! }];
 
@@ -393,7 +403,8 @@ export async function runCell({
   }
   await record(own);
   const primitives: CellFailure[] = [];
-  if (isAppearanceCell(cell) && row.id !== 'print') {
+  // A swept cell checks its variant's page alone: the full cells and quality-full keep the primitives.
+  if (isAppearanceCell(cell) && row.id !== 'print' && !cell.sweep) {
     const before = found.length;
     const route = primitivesPath(cell, row);
     const answer = await page.goto(route, { waitUntil: 'load' });
@@ -447,6 +458,10 @@ export async function runCell({
       : [runnerFailure(context, 'status', `${status}, not ${cell.expectedStatus}`)]),
     ...emulation.map((problem) => runnerFailure(context, 'media-emulation', problem)),
     ...(settled ? [] : [runnerFailure(context, 'settled', STILL_BUSY)]),
+    ...sweptPack.map((finding) => ({
+      ...runnerFailure(context, finding.rule, finding.actual ?? ''),
+      expected: finding.expected,
+    })),
     ...(now === Date.parse(FIXED_TIME)
       ? []
       : [
@@ -470,6 +485,12 @@ export async function runCell({
   expect.soft(status, `${cell.path} answers ${cell.expectedStatus}`).toBe(cell.expectedStatus);
   expect.soft(settled ? null : STILL_BUSY, `${cell.path} settles`).toBeNull();
   expect.soft(emulation, `the ${row.id} row's media emulation`).toEqual([]);
+  expect
+    .soft(
+      sweptPack.map((finding) => `${finding.expected}, rendered ${finding.actual}`),
+      about("the swept pack's tuple, as the page rendered it"),
+    )
+    .toEqual([]);
   expect.soft(new Date(now).toISOString(), "the page's clock").toBe(FIXED_TIME);
   expect
     .soft(
