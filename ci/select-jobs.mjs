@@ -517,6 +517,7 @@ export const LOCAL_COMMANDS = {
   'check-variants': 'pnpm check:variants',
   variants: 'pnpm build && pnpm test:variants',
   'external-variant': 'pnpm test:external-variant',
+  'quality-pr-plan': 'pnpm exec tsx tests/quality/pr-count.ts (QUALITY_CHANGED_BASE=origin/next)',
   image:
     'pnpm ci:image && pnpm ci:proxy && pnpm ci:security-proxy && pnpm ci:demo-origin (needs Docker)',
   profiles: 'pnpm smoke:profiles (needs Docker; SMOKE_PROFILES=<part> for one part)',
