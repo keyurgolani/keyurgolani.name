@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { anchorV1, highContrastV1, resolveTokens, type ColorTokens } from './index';
+import {
+  anchorV1,
+  anchorV2,
+  highContrastV1,
+  highContrastV2,
+  resolveTokens,
+  type ColorTokens,
+} from './index';
 import {
   DARK_ONLY,
   HUMANIST_UI,
@@ -17,8 +24,9 @@ const FALLBACKS = {
   colorScheme: 'warm-parchment',
   typography: 'humanist-ui',
 };
-const LIGHT = anchorV1(WARM_PARCHMENT.anchors!.light!, 'light');
-const DARK = anchorV1(WARM_PARCHMENT.anchors!.dark!, 'dark');
+// warm-parchment derives with anchor-v2 (#20 PR 2c); the fixture schemes stay on anchor-v1.
+const LIGHT = anchorV2(WARM_PARCHMENT.anchors!.light!, 'light');
+const DARK = anchorV2(WARM_PARCHMENT.anchors!.dark!, 'dark');
 
 test("it gives the packs' typed values for a polarity", () => {
   const tokens = resolveTokens(registry, { ...FALLBACKS, polarity: 'dark' });
@@ -48,7 +56,7 @@ test('a single-mode scheme gives its native mode whichever polarity is asked', (
 test('high contrast gives the derived set of the polarity, or the authored one', () => {
   const derived = resolveTokens(registry, { ...FALLBACKS, polarity: 'light', highContrast: true });
   assert.equal(derived.highContrast, true);
-  assert.deepEqual(derived.color, highContrastV1({ light: LIGHT, dark: DARK }, 'light'));
+  assert.deepEqual(derived.color, highContrastV2({ light: LIGHT, dark: DARK }, 'light'));
   // Asked twice, the derived set is the same one.
   assert.equal(
     resolveTokens(registry, { ...FALLBACKS, polarity: 'light', highContrast: true }).color,
@@ -95,6 +103,7 @@ test('an unregistered pack, or a generator scheme with nothing generated, gives 
     { ...FALLBACKS, colorScheme: 'fixture-seed', polarity: 'dark', highContrast: true },
     { generated: { 'fixture-seed': { light, dark: DARK } } },
   );
+  // A generated scheme's high-contrast set is high-contrast-v1's, whatever its values.
   assert.deepEqual(contrast.color, highContrastV1({ light, dark: DARK }, 'dark'));
 });
 

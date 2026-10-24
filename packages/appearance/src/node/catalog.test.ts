@@ -108,6 +108,40 @@ test('serialization is deterministic: the same packs render the same bytes, in a
   }
 });
 
+test('the lock records a translucent language approved and shipped surface-opacity, and nothing for an opaque one (#20 PR 2c)', () => {
+  const language = (id: string, tokens: Record<string, string>, extra = {}) => ({
+    id,
+    axis: 'designLanguage' as const,
+    packageName: '@portfolio/appearance-languages',
+    dir: `packages/appearance-languages/packs/${id}`,
+    manifest: { ...manifest(id), tokens, ...extra },
+    digest: `sha256-${id}`,
+  });
+  const lock = JSON.parse(
+    renderLock([
+      language('floored', { 'surface-opacity': '97%' }, { approvedSurfaceOpacity: '78%' }),
+      language('glassy', { 'surface-opacity': '88%' }),
+      language('solid', { 'surface-opacity': '100%' }),
+    ]),
+  );
+  assert.deepEqual(lock.packs.floored.surfaceOpacity, { approved: '78%', shipped: '97%' });
+  assert.deepEqual(lock.packs.glassy.surfaceOpacity, { approved: '88%', shipped: '88%' });
+  assert.equal(lock.packs.solid.surfaceOpacity, undefined);
+  // The committed lock: glassmorphism ships its floor, and records the approved design's value.
+  const committed = JSON.parse(fs.readFileSync(path.join(ROOT, LOCK_FILE), 'utf8'));
+  assert.deepEqual(committed.packs.glassmorphism.surfaceOpacity, {
+    approved: '78%',
+    shipped: '97%',
+  });
+  const translucent = Object.entries(committed.packs).filter(
+    ([, entry]) => (entry as { surfaceOpacity?: unknown }).surfaceOpacity,
+  );
+  assert.deepEqual(
+    translucent.map(([id]) => id),
+    ['glassmorphism'],
+  );
+});
+
 test('a digest covers every file by path and bytes, and nothing else', () => {
   const root = workspace({ a: { manifest: manifest('a'), files: { 'styles.css': 'x' } } });
   try {

@@ -20,7 +20,7 @@ import {
   type PackAxis,
   type PackKind,
 } from './axes';
-import { anchorV1 } from './derive';
+import { deriveBaseSet } from './sets';
 import type { ColorSchemeManifest, DesignLanguageManifest, TypographyManifest } from './manifests';
 import type { ColorTokens } from './tokens';
 import { AXIS_BY_KIND, baseModes } from './validate-pack';
@@ -101,7 +101,7 @@ export interface RegisteredScheme extends RegisteredPack {
   readonly manifest: ColorSchemeManifest;
   /** The base modes it has. A generator scheme has both, once generated. */
   readonly modes: readonly BaseMode[];
-  /** The base sets, authored or derived with anchor-v1. Empty for a generator scheme. */
+  /** The base sets, authored or derived from anchors by the manifest's derivation. Empty for a generator scheme. */
   readonly sets: { readonly light?: ColorTokens; readonly dark?: ColorTokens };
 }
 
@@ -226,7 +226,7 @@ function schemeSets(manifest: ColorSchemeManifest): Pick<RegisteredScheme, 'mode
   const sets: { light?: ColorTokens; dark?: ColorTokens } = {};
   for (const mode of modes) {
     const anchors = manifest.anchors?.[mode];
-    sets[mode] = anchors ? anchorV1(anchors, mode) : manifest[mode]!;
+    sets[mode] = anchors ? deriveBaseSet(manifest.derivation!, anchors, mode) : manifest[mode]!;
   }
   return { modes, sets };
 }

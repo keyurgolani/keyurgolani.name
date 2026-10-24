@@ -2,7 +2,7 @@
   "id": "neutral-slate",
   "name": "Neutral Slate",
   "description": "Cool slate neutrals with a clear blue accent and a grey-blue secondary.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "stable",
   "provenance": {
@@ -14,7 +14,7 @@
     "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
     "researchedAt": "2026-10-17",
     "maintainer": "keyurgolani",
-    "derivation": "anchor-v1 from the reviewed prototype's neutral-slate anchors."
+    "derivation": "anchor-v2 from the reviewed prototype's neutral-slate anchors. The anchors stay as approved. adjustments lists the 12 roles it moves from anchor-v1."
   },
   "modes": ["light", "dark"],
   "accessibility": {
@@ -33,10 +33,10 @@
     "enhancement": 0
   },
   "fallbacks": [
-    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
   ],
   "caveats": [],
-  "derivation": "anchor-v1",
+  "derivation": "anchor-v2",
   "anchors": {
     "light": {
       "canvas": "#f7f8fa",
@@ -49,6 +49,28 @@
       "text": "#edf2f7",
       "accent": "#7aa2f7",
       "secondary": "#94a3b8"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#525863", "#4c525e"],
+      "text-muted": ["#5d636c", "#575e67"],
+      "border-strong": ["#787e85", "#727880"],
+      "accent-text": ["#315fbd", "#2f59af"],
+      "data-categorical-6": ["#525863", "#4c525e"]
+    },
+    "dark": {
+      "text-secondary": ["#afb4ba", "#b3b8be"],
+      "text-muted": ["#a2a7ad", "#a7acb1"],
+      "border-strong": ["#80848a", "#878b91"],
+      "accent-text": ["#7aa2f7", "#86aaf7"],
+      "data-categorical-6": ["#afb4ba", "#b3b8be"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#224384", "#1f3e79"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#87abf8", "#91b2f9"]
     }
   },
   "swatches": ["#f7f8fa", "#18202c", "#315fbd", "#64748b"]
