@@ -248,7 +248,8 @@ export function ownerPreviews({
     return null;
   }
 
-  const views = new Map<string, PublicView>();
+  /** Each grant's view, and the generated schemes its subject stored (#20 PR 3), by digest. */
+  const views = new Map<string, { readonly view: PublicView; readonly schemes: unknown }>();
 
   /**
    * The owner service a grant's content is read through: it takes the token
@@ -263,8 +264,8 @@ export function ownerPreviews({
   ): Promise<OpenedGrant> {
     assertAuthorized(authorized, 'preview.grant');
     const ref = grantRef(record.digest);
-    let view = views.get(record.digest);
-    if (!view) {
+    let cached = views.get(record.digest);
+    if (!cached) {
       const content: Content | null =
         record.subject.kind === 'draft'
           ? record.documents
@@ -277,12 +278,15 @@ export function ownerPreviews({
         log({ level: 'error', event: 'preview.render_failed', grantRef: ref });
         throw new Error("The grant's content doesn't render.");
       }
-      view = resolvePortfolioView(
+      const view = resolvePortfolioView(
         outcome.pair,
         { media: mediaOf(content.documents), snapshots: content.snapshots },
         { mediaBase: `/preview-assets/${grant}`, extensions },
       );
-      views.set(record.digest, view);
+      // A revision's or fixture's snapshots/schemes.json. A draft's derived
+      // schemes come with #10's draft save, which stores none yet.
+      cached = { view, schemes: content.snapshots.schemes };
+      views.set(record.digest, cached);
       for (const key of views.keys()) {
         if (views.size <= VIEWS) break;
         views.delete(key);
@@ -301,7 +305,8 @@ export function ownerPreviews({
       });
     }
     return Object.freeze({
-      view,
+      view: cached.view,
+      ...(cached.schemes === undefined ? {} : { schemes: cached.schemes }),
       environment: record.environment,
       nonce: record.nonce,
       renderedVersion: renderedVersionOf(record),
