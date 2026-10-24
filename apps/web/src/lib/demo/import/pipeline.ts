@@ -13,6 +13,7 @@ import {
   type SourceDocument,
   type SourceProblem,
 } from '@portfolio/schema';
+import { redactDiagnostic, type DocumentData } from './redact';
 
 // The Demo Studio's import (#9, PR 3): the logic the module worker runs,
 // pure and headless, so Node tests drive it directly. index.ts is the
@@ -47,13 +48,26 @@ import {
 // source: nothing here writes HTML, so the sanitizing post-pass (#10) runs
 // where the content renders, in #7's /preview/local frame.
 //
-// Remote images: each portfolio media asset of kind image whose source is an
-// https URL is listed in `remoteImages`, by pointer and host, for the
-// notice. Nothing here loads one; they render as placeholders.
+// `unchecked` lists what the validator couldn't check without the catalog
+// and extensions the local frame has, as fixed strings: an axis such as
+// `site.appearance.colorScheme`, `site.routes.*` for every route toggle,
+// `site.variantControls.*`, `site.appearanceInputs.*`, `origin.sample`, a
+// `validator:<id>` the build registers, and `other` for anything else. No
+// key from the file is in it.
 //
-// Nothing here logs, fetches, or posts. A diagnostic names a pointer, a
-// position, and the rule, and its text is #4's fixed wording: it never
-// repeats a value from a file, and the file names given are never read.
+// Remote media: each portfolio media asset whose source is an https URL is
+// listed in `remoteImages`, by kind, pointer, and host, for the notice:
+// images, and video, audio, and documents, which would reveal the visitor
+// just the same if anything loaded them. Nothing here loads one; they
+// render as placeholders.
+//
+// Nothing here logs, fetches, or posts. A diagnostic is #4's: a pointer, a
+// position, the rule, and #4's fixed wording, which never repeats a value.
+// Its pointer, message, and stableId would name the file's own keys, so
+// every key the schema doesn't name at its place is replaced by
+// `(unknown key)` there (redact.ts); keys the schema names stay. A stableId
+// that isn't a key is the id of a section in the file, which #4 holds to
+// lowercase words, digits, and hyphens. The file names given are never read.
 
 export type PortfolioDocument = Portfolio;
 export type SiteDocument = Site;
@@ -78,8 +92,11 @@ export type ImportRefusal =
   | 'invalid'
   | 'worker_unavailable';
 
+export type RemoteMediaKind = 'image' | 'video' | 'audio' | 'document';
+
 export type RemoteImage = {
   readonly document: 'portfolio' | 'site';
+  readonly kind: RemoteMediaKind;
   readonly pointer: string;
   readonly host: string;
 };
@@ -90,6 +107,8 @@ export type ImportResult =
       unit: ImportedUnit;
       diagnostics: readonly Diagnostic[];
       remoteImages: readonly RemoteImage[];
+      /** What the validator couldn't check here, as fixed strings. */
+      unchecked?: readonly string[];
     }
   | { kind: 'refused'; code: ImportRefusal; diagnostics: readonly Diagnostic[] };
 
@@ -138,7 +157,8 @@ export function runImport(files: readonly ImportInput[]): ImportResult {
     const shown = limits.length > 0 ? limits : problems;
     return refused(
       limits.length > 0 ? 'parse_limits' : 'invalid',
-      shown.map(({ slot, problem }) => parseDiagnostic(slot, problem)),
+      // No data to look in, so every key in a pointer is redacted.
+      shown.map(({ slot, problem }) => redactDiagnostic(parseDiagnostic(slot, problem), {})),
     );
   }
 
@@ -167,8 +187,10 @@ export function validateImport(
   ctx: Context = {},
 ): ImportResult {
   const result = validatePublicationUnit(sources, ctx);
-  if (!result.pair) return refused('invalid', result.diagnostics);
+  const diagnostics = redacted(result.diagnostics, sources);
+  if (!result.pair) return refused('invalid', diagnostics);
   const { portfolio, site } = result.pair;
+  const unchecked = uncheckedNames(result.notChecked);
   return {
     kind: 'imported',
     unit: {
@@ -176,24 +198,59 @@ export function validateImport(
       models: { portfolio, site },
       schemaVersions: { portfolio: portfolio.schemaVersion, site: site.schemaVersion },
     },
-    diagnostics: result.diagnostics,
+    diagnostics,
     remoteImages: remoteImages(portfolio),
+    ...(unchecked.length > 0 ? { unchecked } : {}),
   };
 }
 
-/** The image assets whose source is an https URL, by pointer and host. Reads only; loads nothing. */
+/** The media assets whose source is an https URL, by kind, pointer, and host. Reads only; loads nothing. */
 export function remoteImages(portfolio: PortfolioDocument): RemoteImage[] {
   const found: RemoteImage[] = [];
   (portfolio.media ?? []).forEach((asset, index) => {
-    if (asset.kind !== 'image' || !/^https:/i.test(asset.source)) return;
+    if (!/^https:/i.test(asset.source)) return;
     // MediaSourceSchema has already accepted it as an https URL with a host.
     found.push({
       document: 'portfolio',
+      kind: asset.kind,
       pointer: `/media/${index}/source`,
       host: new URL(asset.source).host,
     });
   });
   return found;
+}
+
+/** The validator's findings, with the keys the schema doesn't name redacted. */
+function redacted(
+  diagnostics: readonly Diagnostic[],
+  sources: { readonly portfolio: SourceDocument; readonly site: SourceDocument },
+): Diagnostic[] {
+  if (diagnostics.length === 0) return [];
+  const dataOf = (source: SourceDocument) => {
+    const parsed = parseSource(source.text, source.format === 'json' ? 'json' : 'yaml');
+    return parsed.ok ? parsed.data : undefined;
+  };
+  const data: DocumentData = { portfolio: dataOf(sources.portfolio), site: dataOf(sources.site) };
+  return diagnostics.map((diagnostic) => redactDiagnostic(diagnostic, data));
+}
+
+/** Entries the validator names by a key from the file, which this lists by their place alone. */
+const KEYED_UNCHECKED = /^(site\.(?:routes|variantControls|appearanceInputs))\.[\s\S]*$/;
+const FIXED_UNCHECKED = [
+  /^site\.appearance\.(?:variant|designLanguage|colorScheme|typography|displayMode)$/,
+  /^site\.(?:routes|variantControls|appearanceInputs)\.\*$/,
+  /^origin\.(?:sample|stale)$/,
+  /^(?:derived\.unapproved|id\.reused|urls\.vanished)$/,
+  /^validator:[a-z0-9@/._-]+$/,
+];
+
+/** The validator's notChecked as fixed strings, each once, sorted. */
+export function uncheckedNames(notChecked: readonly string[]): string[] {
+  const names = notChecked.map((entry) => {
+    const name = entry.replace(KEYED_UNCHECKED, '$1.*');
+    return FIXED_UNCHECKED.some((pattern) => pattern.test(name)) ? name : 'other';
+  });
+  return [...new Set(names)].sort();
 }
 
 /**

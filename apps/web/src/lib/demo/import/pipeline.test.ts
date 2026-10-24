@@ -13,6 +13,7 @@ import {
 import { htmlProblems } from '../../../../../../packages/kit/src/test-support/strict-html';
 import {
   importMessage,
+  uncheckedNames,
   IMPORT_MAX_BYTES,
   remoteImages,
   runImport,
@@ -306,7 +307,7 @@ test("#4's URL rules refuse javascript:, non-image data:, protocol-relative, and
   }
 });
 
-test('remote images are listed by pointer and host, local, non-image, and refused ones are not, and nothing is fetched', async (t) => {
+test('remote media are listed by kind, pointer, and host, local and refused ones are not, and nothing is fetched', async (t) => {
   const fetchSpy = t.mock.method(globalThis, 'fetch', async () => {
     throw new Error('no fetch');
   });
@@ -314,12 +315,47 @@ test('remote images are listed by pointer and host, local, non-image, and refuse
     const media = data.media as Record<string, unknown>[];
     media[0]!.source = `https://images.example.net/${CANARY}/portrait.png?size=${CANARY}`;
     media[1]!.source = 'HTTPS://CDN.example.org:8443/og.png';
-    media.push({ id: 'talk-video', kind: 'video', source: 'https://video.example.net/talk.mp4' });
+    media.push(
+      { id: 'talk-video', kind: 'video', source: `https://video.example.net/${CANARY}.mp4` },
+      { id: 'talk-audio', kind: 'audio', source: 'https://audio.example.net/talk.mp3' },
+      { id: 'talk-slides', kind: 'document', source: 'https://docs.example.net/slides.pdf' },
+      { id: 'local-video', kind: 'video', source: 'talks/local.mp4' },
+    );
   });
   const result = imported(runImport(pairFiles(portfolio)));
+  const at = (data: Record<string, unknown>) => (data.media as unknown[]).length;
+  const count = at(exampleData('portfolio'));
   assert.deepEqual(result.remoteImages, [
-    { document: 'portfolio', pointer: '/media/0/source', host: 'images.example.net' },
-    { document: 'portfolio', pointer: '/media/1/source', host: 'cdn.example.org:8443' },
+    {
+      document: 'portfolio',
+      kind: 'image',
+      pointer: '/media/0/source',
+      host: 'images.example.net',
+    },
+    {
+      document: 'portfolio',
+      kind: 'image',
+      pointer: '/media/1/source',
+      host: 'cdn.example.org:8443',
+    },
+    {
+      document: 'portfolio',
+      kind: 'video',
+      pointer: `/media/${count}/source`,
+      host: 'video.example.net',
+    },
+    {
+      document: 'portfolio',
+      kind: 'audio',
+      pointer: `/media/${count + 1}/source`,
+      host: 'audio.example.net',
+    },
+    {
+      document: 'portfolio',
+      kind: 'document',
+      pointer: `/media/${count + 2}/source`,
+      host: 'docs.example.net',
+    },
   ]);
   assert.equal(JSON.stringify(result.remoteImages).includes(CANARY), false);
   assert.deepEqual(
@@ -329,7 +365,12 @@ test('remote images are listed by pointer and host, local, non-image, and refuse
   // The remote SVG fixture imports, with its host listed and its path kept out of the list.
   const svg = HOSTILE_FIXTURES.find(({ name }) => name === 'a remote SVG image')!;
   assert.deepEqual(imported(runImport(svg.files)).remoteImages, [
-    { document: 'portfolio', pointer: '/media/0/source', host: 'images.example.net' },
+    {
+      document: 'portfolio',
+      kind: 'image',
+      pointer: '/media/0/source',
+      host: 'images.example.net',
+    },
   ]);
   assert.equal(fetchSpy.mock.callCount(), 0);
 });
@@ -457,6 +498,8 @@ test('importing a hostile fixture calls no fetch, console method, sendBeacon, or
   for (const method of ['log', 'info', 'warn', 'error', 'debug', 'trace'] as const) {
     t.mock.method(console, method, () => calls.push(`console.${method}`));
   }
+  // yaml's Node build warns through process.emitWarning, its browser build through console.
+  t.mock.method(process, 'emitWarning', () => calls.push('process.emitWarning'));
   const navigator = { sendBeacon: () => (calls.push('sendBeacon'), true) };
   const had = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
   Object.defineProperty(globalThis, 'navigator', { value: navigator, configurable: true });
@@ -477,3 +520,171 @@ test('importing a hostile fixture calls no fetch, console method, sendBeacon, or
 function bytesFile(text: string): ImportInput {
   return { name: `${CANARY}.yml`, bytes: bytes(text) };
 }
+
+const HTML_KEY = '<img src=x onerror=alert(1)>';
+
+/** Every diagnostic's pointer, message, remediation, and stableId, as one text. */
+function diagnosticText(result: ImportResult): string {
+  return JSON.stringify(
+    result.diagnostics.map(({ pointer, message, remediation, stableId }) => ({
+      pointer,
+      message,
+      remediation,
+      stableId,
+    })),
+  );
+}
+
+test('a key the schema does not name is (unknown key) in every pointer, message, and stableId, top level and nested, refused or imported', () => {
+  const siteWith = (change: (data: Record<string, unknown>) => void) => {
+    const data = exampleData('site');
+    change(data);
+    return serialize(data, 'yaml');
+  };
+  const cases: Record<string, { portfolio?: string; site?: string; outcome: string; at: string }> =
+    {
+      'an unknown portfolio key at the top level': {
+        portfolio: portfolioWith((data) => {
+          data[CANARY] = 'x';
+        }),
+        outcome: 'invalid',
+        at: '/(unknown key)',
+      },
+      'an unknown key under identity': {
+        portfolio: portfolioWith((data) => {
+          (data.identity as Record<string, unknown>)[CANARY] = 'x';
+        }),
+        outcome: 'invalid',
+        at: '/identity/(unknown key)',
+      },
+      'an HTML key under identity': {
+        portfolio: portfolioWith((data) => {
+          (data.identity as Record<string, unknown>)[HTML_KEY] = 'x';
+        }),
+        outcome: 'invalid',
+        at: '/identity/(unknown key)',
+      },
+      'an unknown key nested in a work': {
+        portfolio: portfolioWith((data) => {
+          (data.works as Record<string, unknown>[])[0]![CANARY] = { deeper: true };
+        }),
+        outcome: 'invalid',
+        at: '/works/0/(unknown key)',
+      },
+      'an unknown site key at the top level': {
+        site: siteWith((data) => {
+          data[CANARY] = true;
+        }),
+        outcome: 'invalid',
+        at: '/(unknown key)',
+      },
+      'a site sections key naming no section': {
+        site: siteWith((data) => {
+          data.sections = { [CANARY]: { hidden: true } };
+        }),
+        outcome: 'imported',
+        at: '/sections/(unknown key)',
+      },
+      'an unregistered extension': {
+        portfolio: portfolioWith((data) => {
+          data.extensions = { [CANARY]: { note: 'x' } };
+        }),
+        outcome: 'imported',
+        at: '/extensions/(unknown key)',
+      },
+      'an anchor under an unknown key, before anything validates': {
+        portfolio: `${EXAMPLE.portfolio}${CANARY}: &one x\n`,
+        outcome: 'parse_limits',
+        at: '/(unknown key)',
+      },
+    };
+  for (const [name, { portfolio, site, outcome, at }] of Object.entries(cases)) {
+    const result = runImport(pairFiles(portfolio ?? EXAMPLE.portfolio, site ?? EXAMPLE.site));
+    assert.equal(refusal(result), outcome, name);
+    const text = diagnosticText(result);
+    assert.equal(text.includes(CANARY), false, `${name}: ${text}`);
+    assert.equal(text.includes('<img'), false, `${name}: ${text}`);
+    assert.equal(text.includes('onerror'), false, `${name}: ${text}`);
+    assert.ok(
+      result.diagnostics.some(({ pointer }) => pointer === at),
+      `${name}: ${JSON.stringify(result.diagnostics.map(({ pointer }) => pointer))}`,
+    );
+    for (const { stableId } of result.diagnostics) {
+      assert.ok(stableId === undefined || /^[a-z0-9-]+$|^\(unknown key\)$/.test(stableId), name);
+    }
+    if (result.kind === 'imported') {
+      assert.equal(JSON.stringify(result.unchecked ?? []).includes(CANARY), false, name);
+    }
+  }
+});
+
+test('keys the schema names stay in pointers, so a diagnostic still points at its field', () => {
+  const result = runImport(
+    pairFiles(
+      portfolioWith((data) => {
+        (data.links as Record<string, unknown>[])[0]!.url = `javascript:${CANARY}`;
+        (data.identity as Record<string, unknown>).name = 42;
+      }),
+    ),
+  );
+  const pointers = result.diagnostics.map(({ pointer }) => pointer);
+  assert.ok(pointers.includes('/links/0/url'), JSON.stringify(pointers));
+  assert.ok(pointers.includes('/identity/name'), JSON.stringify(pointers));
+  assert.equal(diagnosticText(result).includes('(unknown key)'), false);
+});
+
+test('unchecked lists what the validator could not check as fixed strings, never a key from the file', () => {
+  const plain = imported(runImport(pairFiles(EXAMPLE.portfolio)));
+  assert.ok(plain.unchecked?.includes('site.appearance.colorScheme'), String(plain.unchecked));
+  const site = exampleData('site');
+  site.routes = { [CANARY]: { enabled: true } };
+  site.variantControls = { [CANARY]: { version: 1, values: { [CANARY]: 'x' } } };
+  const keyed = imported(runImport(pairFiles(EXAMPLE.portfolio, serialize(site, 'yaml'))));
+  assert.ok(keyed.unchecked?.includes('site.routes.*'), String(keyed.unchecked));
+  assert.ok(keyed.unchecked?.includes('site.variantControls.*'), String(keyed.unchecked));
+  assert.equal(JSON.stringify(keyed.unchecked).includes(CANARY), false);
+  assert.deepEqual(
+    uncheckedNames([
+      `site.routes.${CANARY}`,
+      `site.appearanceInputs.${HTML_KEY}`,
+      'site.appearance.typography',
+      'origin.sample',
+      HTML_KEY,
+      `site.appearance.${CANARY}`,
+    ]),
+    [
+      'origin.sample',
+      'other',
+      'site.appearance.typography',
+      'site.appearanceInputs.*',
+      'site.routes.*',
+    ],
+  );
+});
+
+test('the cap counts UTF-8 bytes: multi-byte text at exactly 1 MiB is read, one byte more is too_large, and a byte order mark counts', () => {
+  const [portfolio] = pairFiles(EXAMPLE.portfolio) as [ImportInput];
+  /** The site example with a comment of two-byte characters, to `size` bytes. */
+  const padded = (size: number, prefix = '') => {
+    const head = `${prefix}${EXAMPLE.site}#`;
+    const room = size - Buffer.byteLength(head) - 1;
+    return `${head}${'é'.repeat(Math.floor(room / 2))}${room % 2 ? 'x' : ''}\n`;
+  };
+  const exact = bytesFile(padded(IMPORT_MAX_BYTES));
+  assert.equal(exact.bytes.byteLength, IMPORT_MAX_BYTES);
+  assert.ok(new TextDecoder().decode(exact.bytes).length < IMPORT_MAX_BYTES / 2 + 4096);
+  imported(runImport([portfolio, exact]));
+  const over = bytesFile(padded(IMPORT_MAX_BYTES + 1));
+  assert.equal(over.bytes.byteLength, IMPORT_MAX_BYTES + 1);
+  assert.equal(refusal(runImport([portfolio, over])), 'too_large');
+  // A byte order mark is three bytes of the file.
+  const marked = bytesFile(padded(IMPORT_MAX_BYTES, '\uFEFF'));
+  assert.equal(marked.bytes.byteLength, IMPORT_MAX_BYTES);
+  imported(runImport([portfolio, marked]));
+  const markedOver = {
+    name: 'x',
+    bytes: new Uint8Array([0xef, 0xbb, 0xbf, ...bytes(padded(IMPORT_MAX_BYTES))]),
+  };
+  assert.equal(markedOver.bytes.byteLength, IMPORT_MAX_BYTES + 3);
+  assert.equal(refusal(runImport([portfolio, markedOver])), 'too_large');
+});
