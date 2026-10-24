@@ -21,15 +21,19 @@ import {
 } from '~/lib/studio/draft-session';
 import {
   clearJournal,
+  dropsOnWrite,
   entryFor,
+  JOURNAL_MAX_ENTRIES,
+  newTabId,
   pruneJournal,
   readJournal,
   removeEntry,
   tabId,
   writeEntry,
+  type JournalEntry,
 } from '~/lib/studio/journal';
-import { pageCacheHandlers } from '~/lib/studio/page-cache';
-import { holdTab, mayRestore, openTabs } from '~/lib/studio/tab-presence';
+import { pageCacheHandlers, restoredMayKeep } from '~/lib/studio/page-cache';
+import { claimTab, mayRestore, openTabs } from '~/lib/studio/tab-presence';
 import { endSession, NEUTRAL_TITLE } from '~/lib/studio/session-end';
 import { stateLines } from '~/lib/studio/state-model';
 import { tasksFor, type StudioTask, type TaskId } from '~/lib/studio/tasks';
@@ -104,6 +108,8 @@ export function StudioShell({
   const latest = useRef<DraftSession>(session);
   // This tab's id in the journal, and when the editor's text last changed.
   const tab = useRef<string | null>(null);
+  // Settles once this tab holds its id's lock, which a load waits for.
+  const claimed = useRef<Promise<void>>(Promise.resolve());
   const editedAt = useRef<number | null>(null);
   // Before any other effect reads it: the session this render shows.
   useLayoutEffect(() => {
@@ -111,8 +117,12 @@ export function StudioShell({
   });
   // Before the shell loads anything: what may not stay in the journal goes.
   useLayoutEffect(() => {
-    tab.current = tabId(tabStorage());
-    holdTab(tab.current);
+    const own = tabStorage();
+    tab.current = tabId(own);
+    // A duplicated tab starts with a copy of its original's id: it takes one of its own.
+    claimed.current = claimTab(tab.current, () => newTabId(own)).then((id) => {
+      tab.current = id;
+    });
     const store = storage();
     if (store) pruneJournal(store, Date.now());
   }, []);
@@ -144,17 +154,21 @@ export function StudioShell({
     if (current.orphan?.tabId === own) return;
     const now = Date.now();
     if (current.local && current.draft && isDirty(current)) {
-      writeEntry(
-        store,
-        {
-          tabId: own,
-          draftId: current.draft.draftId,
-          baseVersion: current.draft.version,
-          documents: current.local,
-          savedAt: editedAt.current ?? now,
-        },
-        now,
-      );
+      const entry: JournalEntry = {
+        tabId: own,
+        draftId: current.draft.draftId,
+        baseVersion: current.draft.version,
+        documents: current.local,
+        savedAt: editedAt.current ?? now,
+      };
+      // Past the cap, the oldest tab's text goes: say so, rather than let it go unseen.
+      const dropped = dropsOnWrite(store, entry, now).length;
+      writeEntry(store, entry, now);
+      if (dropped > 0) {
+        setNotice(
+          `This browser keeps unsaved text for at most ${JOURNAL_MAX_ENTRIES} Studio tabs, so the oldest ${dropped === 1 ? "tab's was" : `${dropped} tabs' were`} let go.`,
+        );
+      }
     } else if (current.draft) {
       removeEntry(store, own, now);
     }
@@ -168,10 +182,11 @@ export function StudioShell({
   }, []);
 
   const end = useCallback(
-    (why: 'session_ended' | 'signed_out') =>
+    (why: 'session_ended' | 'signed_out', { keep = true }: { keep?: boolean } = {}) =>
       endSession(
         {
-          flush,
+          // Text the owner let go elsewhere stays gone: nothing writes it back.
+          flush: keep ? flush : () => {},
           drop: () => dispatch({ type: 'expired' }),
           setTitle: (title) => {
             document.title = title;
@@ -185,7 +200,7 @@ export function StudioShell({
   );
 
   const load = useCallback(async (from: StudioBackend) => {
-    const [draft, live] = await Promise.all([from.workingDraft(), from.live()]);
+    const [draft, live] = await Promise.all([from.workingDraft(), from.live(), claimed.current]);
     if (draft.kind === 'signed-out' || live.kind === 'signed-out') return;
     if (draft.kind === 'failed') {
       dispatch({ type: 'failed', error: draft.message });
@@ -254,7 +269,11 @@ export function StudioShell({
             setVerified(true);
             void load(backend);
           } else {
-            end('session_ended');
+            // It may have missed a discard while cached: its text goes back only while its entry is there.
+            const store = storage();
+            const keep =
+              store !== null && restoredMayKeep(readJournal(store, Date.now()), tab.current);
+            end('session_ended', { keep });
           }
         });
       },

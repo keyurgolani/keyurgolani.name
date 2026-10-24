@@ -516,3 +516,23 @@ test('the fs guard refuses a module that moves the pointer by an alias, with nod
   // The text rule alone misses it: the move names neither key.
   assert.deepEqual(movesNamingThePointer(code(aliased)), []);
 });
+
+test('the fs guard counts fs reached through process.getBuiltinModule() or a require createRequire() made (#8 review)', () => {
+  const tree = (text: string) =>
+    ts.createSourceFile('probe.ts', text, ts.ScriptTarget.Latest, true);
+  for (const text of [
+    "const fs = process.getBuiltinModule('node:fs');",
+    "const { renameSync } = getBuiltinModule('fs');",
+    "import { createRequire } from 'node:module';\nconst load = createRequire(import.meta.url);\nconst fs = load('fs');",
+    "import module from 'node:module';\nconst fs = module.createRequire(import.meta.url)('node:fs/promises');",
+  ]) {
+    assert.deepEqual(fsWrites(tree(text)), ['*'], text);
+  }
+  // A made require of another module, or a builtin that isn't fs, is no writer.
+  for (const text of [
+    "import { createRequire } from 'node:module';\nconst load = createRequire(import.meta.url);\nload('yaml');",
+    "process.getBuiltinModule('node:path');",
+  ]) {
+    assert.deepEqual(fsWrites(tree(text)), [], text);
+  }
+});

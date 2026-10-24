@@ -13,9 +13,16 @@ const LOCK_PREFIX = `${STUDIO_STORAGE_PREFIX}tab:`;
 
 /** The part of the Web Locks API presence uses, so a test can stand in for it. */
 export interface Locks {
-  request(name: string, callback: () => Promise<void>): Promise<unknown>;
+  request(
+    name: string,
+    options: { readonly ifAvailable?: boolean },
+    callback: (lock: unknown) => Promise<void>,
+  ): Promise<unknown>;
   query(): Promise<{ held?: readonly { name?: string }[] }>;
 }
+
+/** Never settles: a lock held for the rest of the page's life. */
+const forever = () => new Promise<void>(() => {});
 
 function browserLocks(): Locks | null {
   try {
@@ -28,7 +35,34 @@ function browserLocks(): Locks | null {
 /** Holds `tabId`'s lock for the rest of the page's life. */
 export function holdTab(tabId: string, locks: Locks | null = browserLocks()): void {
   if (!locks) return;
-  void locks.request(`${LOCK_PREFIX}${tabId}`, () => new Promise<void>(() => {})).catch(() => {});
+  void locks.request(`${LOCK_PREFIX}${tabId}`, {}, forever).catch(() => {});
+}
+
+/**
+ * Holds `tabId`'s lock for the rest of the page's life when no other tab
+ * holds it, and answers `tabId`; when one does, as the tab a duplicated tab
+ * came from does, holds a new id's from `fresh` and answers that, so the two
+ * never write one journal entry. Without Web Locks, `tabId` as it is.
+ */
+export async function claimTab(
+  tabId: string,
+  fresh: () => string,
+  locks: Locks | null = browserLocks(),
+): Promise<string> {
+  if (!locks) return tabId;
+  const free = await new Promise<boolean>((resolve) => {
+    locks
+      .request(`${LOCK_PREFIX}${tabId}`, { ifAvailable: true }, (lock) => {
+        resolve(lock !== null);
+        return lock === null ? Promise.resolve() : forever();
+      })
+      // A browser that refuses the request can't tell tabs apart: keep the id.
+      .catch(() => resolve(true));
+  });
+  if (free) return tabId;
+  const made = fresh();
+  holdTab(made, locks);
+  return made;
 }
 
 /**

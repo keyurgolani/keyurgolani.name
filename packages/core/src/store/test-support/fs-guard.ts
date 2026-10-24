@@ -8,7 +8,8 @@ recordOwnerModule('core/store/test-support/fs-guard');
 // PublicationService (#3, item 20; threat publish-3), on the TypeScript
 // syntax tree. A module that can write the filesystem itself, by importing
 // a write API from `fs`, `node:fs`, `fs/promises`, or `node:fs/promises`,
-// or the module whole, is one of a fixed list; and in those, every read of
+// or the module whole, by import, require, process.getBuiltinModule(), or
+// a require createRequire() made, is one of a fixed list; and in those, every read of
 // `live`, `liveTemp`, or `publication` off any object, by name or as
 // `['live']`, is one the test names. An alias such as
 // `const target = layout.live; await rename(staged, target)` is that read.
@@ -47,6 +48,7 @@ const POINTER_KEYS = new Set(['live', 'liveTemp', 'publication']);
 /** What a module takes from fs that can write: the write APIs it names, or `*` for the module whole. */
 export function fsWrites(source: ts.SourceFile): string[] {
   const found: string[] = [];
+  const requires = createdRequires(source);
   const visit = (node: ts.Node) => {
     if (
       ts.isImportDeclaration(node) &&
@@ -64,12 +66,10 @@ export function fsWrites(source: ts.SourceFile): string[] {
         }
       }
     }
-    // import('node:fs') and require('fs') get the module whole.
-    if (
-      ts.isCallExpression(node) &&
-      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isIdentifier(node.expression) && node.expression.text === 'require'))
-    ) {
+    // import('node:fs') and require('fs') get the module whole, and so do
+    // process.getBuiltinModule('fs') and a require createRequire() made,
+    // called at once or through the name it's bound to.
+    if (ts.isCallExpression(node) && loadsModule(node.expression, requires)) {
       const [specifier] = node.arguments;
       if (specifier && ts.isStringLiteralLike(specifier) && FS_MODULES.has(specifier.text)) {
         found.push('*');
@@ -79,6 +79,45 @@ export function fsWrites(source: ts.SourceFile): string[] {
   };
   visit(source);
   return found;
+}
+
+/** Whether `node` names createRequire, by itself or off a namespace such as `module.createRequire`. */
+function isCreateRequire(node: ts.Expression): boolean {
+  return (
+    (ts.isIdentifier(node) && node.text === 'createRequire') ||
+    (ts.isPropertyAccessExpression(node) && node.name.text === 'createRequire')
+  );
+}
+
+/** The names `source` binds a require to that createRequire() made. */
+function createdRequires(source: ts.SourceFile): Set<string> {
+  const names = new Set<string>();
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer &&
+      ts.isCallExpression(node.initializer) &&
+      isCreateRequire(node.initializer.expression)
+    ) {
+      names.add(node.name.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return names;
+}
+
+/** Whether a call to `callee` loads a module by its specifier: import(), require, getBuiltinModule, or a made require. */
+function loadsModule(callee: ts.Expression, requires: ReadonlySet<string>): boolean {
+  if (callee.kind === ts.SyntaxKind.ImportKeyword) return true;
+  if (ts.isIdentifier(callee)) {
+    return (
+      callee.text === 'require' || callee.text === 'getBuiltinModule' || requires.has(callee.text)
+    );
+  }
+  if (ts.isPropertyAccessExpression(callee)) return callee.name.text === 'getBuiltinModule';
+  return ts.isCallExpression(callee) && isCreateRequire(callee.expression);
 }
 
 /** Each read of `live`, `liveTemp`, or `publication` off any object in `source`, as `<line>: <text>`. */
