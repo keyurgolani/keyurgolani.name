@@ -53,6 +53,11 @@ export interface StudioPreviewProps {
   readonly appearanceOptions: AppearanceOptions;
   /** Where "Sign in again" goes. */
   readonly signIn: string;
+  /**
+   * Item focus (#8, Slice 4 item 6): the section a form item selected, which
+   * the first frame scrolls to and outlines, once it's ready. Null for none.
+   */
+  readonly focusAnchor?: string | null;
 }
 
 type Environment = MintRequest['environment'];
@@ -79,6 +84,7 @@ export function StudioPreview({
   previewOrigin,
   signIn,
   appearanceOptions,
+  focusAnchor = null,
 }: StudioPreviewProps) {
   const ids = useId();
   const [choiceId, setChoiceId] = useState(choices[0]?.id ?? '');
@@ -114,6 +120,12 @@ export function StudioPreview({
   useEffect(() => {
     link.current.setLinked(isLinked);
   }, [isLinked]);
+  // Item focus: the first frame shows the section now, or as soon as it's ready.
+  const focus = useRef(focusAnchor);
+  useEffect(() => {
+    focus.current = focusAnchor;
+    if (focusAnchor) first.current?.focus(focusAnchor);
+  }, [focusAnchor]);
   const other = (side: FrameSide) => handles[side === 0 ? 1 : 0].current;
 
   const choice = choices.find(({ id }) => id === choiceId) ?? choices[0];
@@ -406,7 +418,10 @@ export function StudioPreview({
               signIn={signIn}
               onSettled={onSettled}
               scrollSync={isLinked}
-              onArrived={(route) => link.current.arrived(side, route)}
+              onArrived={(route) => {
+                link.current.arrived(side, route);
+                if (side === 0 && focus.current) handles[0].current?.focus(focus.current);
+              }}
               onNavigated={(route) => {
                 const to = link.current.navigated(side, route);
                 const otherSide: FrameSide = side === 0 ? 1 : 0;
