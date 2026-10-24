@@ -13,6 +13,7 @@ import { elements, html, one, slotted, text } from '../test-support/markup';
 import { testRegistry } from '../test-support/packs';
 import { PresentationBoundary, saveAppearance, VisitorAppearance, type SaveDeps } from '.';
 import { MAX_PRELOADS, packStylesheets, postJson, preloadStylesheet } from './save';
+import { PACK_AXES } from '../axes';
 
 // VisitorAppearance (#19, Slice 3, item 3), on its own: Slice 4 adds POST
 // /api/appearance and renders it in #5's VisitorControlSlot, so these tests
@@ -350,6 +351,9 @@ test('it preloads only same-origin pack paths from the answer, each once', async
     `${pack('nord')}?x`,
     `${pack('nord')}/x`,
     'data:text/css,',
+    // A line break before or after a pack path: a multiline pattern would take either.
+    `https://evil.example\n${pack('nord')}`,
+    `${pack('nord')}\n/x`,
   ]);
   const saving = saveAppearance({ action: '/a', body: { mode: 'dark' } }, deps);
   await flush();
@@ -359,6 +363,12 @@ test('it preloads only same-origin pack paths from the answer, each once', async
   pending.get(`preload ${pack('nord')}`)!.resolve();
   assert.equal(await saving, 'saved');
   assert.deepEqual(packStylesheets('not a list'), []);
+  // The cap counts kept paths, after the filter and the dedupe: one per pack axis.
+  assert.equal(MAX_PRELOADS, PACK_AXES.length);
+  assert.deepEqual(
+    packStylesheets([pack('a'), pack('a'), 'junk', pack('b'), pack('c'), pack('d')]),
+    [pack('a'), pack('b'), pack('c')],
+  );
 });
 
 test("a save the route refuses fails, and one whose stylesheet doesn't load still counts as saved", async () => {
@@ -465,7 +475,9 @@ function fakeDocument({ nonce, linked = [] }: { nonce?: string; linked?: readonl
   return {
     head: { append: (element: FakeLink) => head.push(element) },
     createElement: () => link(),
-    querySelector: (selector: string) => (selector.includes('[nonce]') ? carrier : null),
+    // Only the page's own nonce'd elements carry the nonce a preload takes.
+    querySelector: (selector: string) =>
+      selector === 'link[nonce], style[nonce], script[nonce]' ? carrier : null,
     querySelectorAll: (selector: string) =>
       selector.startsWith('link[rel~="stylesheet"]')
         ? head.filter(({ rel }) => rel === 'stylesheet')
@@ -515,6 +527,14 @@ test('a stylesheet the page already links preloads nothing, so a mode alone adds
     const loading = preloadStylesheet(pack('nord'), new AbortController().signal);
     assert.equal(fake.links.length, 2);
     fake.links[1]!.fire('load');
+    await loading;
+  });
+  // The match is the whole href: the same pack under another build's hash still preloads.
+  const deployed = fakeDocument({ linked: ['/_portfolio/pack/nord.ba9876543210.css'] });
+  await withDocument(deployed, async () => {
+    const loading = preloadStylesheet(pack('nord'), new AbortController().signal);
+    assert.equal(deployed.links.length, 2, 'a new link for the new hash');
+    deployed.links[1]!.fire('load');
     await loading;
   });
 });

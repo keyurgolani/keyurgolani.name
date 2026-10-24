@@ -198,10 +198,11 @@ test(
       expect.stringMatching(/^\/_portfolio\/pack\/warm-parchment\.[0-9a-f]{12}\.css$/),
     ]);
     await expect(page.locator(`link[rel~="stylesheet"][href="${stylesheets[0]}"]`)).toHaveCount(1);
+    // The refresh follows every preload, so once the page is dark none was added.
+    await expect(page.locator(BOUNDARY)).toHaveAttribute('data-display-mode', 'dark');
     await expect(
       page.locator('link[rel="preload"][as="style"][href^="/_portfolio/pack/"]'),
     ).toHaveCount(0);
-    await expect(page.locator(BOUNDARY)).toHaveAttribute('data-display-mode', 'dark');
     expect(loads).toBe(0);
     const stored = (await page.context().cookies(app.origin)).find(
       ({ name }) => name === 'portfolio_appearance',
