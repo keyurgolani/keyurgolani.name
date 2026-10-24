@@ -4,7 +4,7 @@ A tour of the portfolio platform. You write two documents, `portfolio.yml` for t
 
 > _Screenshots use the bundled `portfolio.example.yml` demo persona ("Anamika Devi"). All content is illustrative._
 
-> _These screenshots show the v1 Editorial and Kinetic Cosmos variants, which #5 retired to `legacy/`. #13 and #14 rebuild them as compositions, with their palettes and type moving to #19's packs; until then this build renders the fallback composition._
+> _These screenshots show the v1 Editorial and Kinetic Cosmos variants, which #5 retired. #13 and #14 rebuilt them as the compositions Editorial Evidence, the platform default, and Kinetic Cosmos, with their palettes and type moving to #19's packs._
 
 ---
 

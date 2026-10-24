@@ -27,8 +27,8 @@
 //   session, and neither the log nor the data directory holds the password
 //   or the hash.
 // - owner with no password hash refuses to start for the hash, and for the
-//   first-start import of the fixture's unregistered variant until #13, but
-//   never for the data directory. Its volume starts out owned by uid 1001,
+//   first-start import of the fixture's variant, missing-variant, which no
+//   package registers, but never for the data directory. Its volume starts out owned by uid 1001,
 //   mode 0700, as the image's directory is.
 // - every startup row in tests/harness/startup-rows.mjs that refuses exits 1
 //   with its config.fatal lines and none of its canary values, and every one
@@ -65,8 +65,8 @@
 // - the Compose examples publish only on 127.0.0.1 and keep the hardening,
 //   read from `compose config`.
 //
-// Owner's seeded run stands in for its ready rows until #13 registers a
-// composition (12-5). No publish is reachable today, so the SIGKILL during
+// Owner's seeded run stands in for its ready rows, since the harness
+// fixture selects missing-variant, which no first start can import (12-5). No publish is reachable today, so the SIGKILL during
 // publish check stays with 12-5 too; packages/core/src/store/crash.test.ts
 // covers the store's side.
 //
@@ -1534,8 +1534,8 @@ function ownerRun() {
   const fatal = logEntries(output).filter((entry) => entry.event === 'config.fatal');
   const keys = fatal.map((entry) => `${entry.key}:${entry.code}`);
   // The data directory passes preflight. The first-start import of the
-  // fixture's unregistered variant refuses too, until #13 registers a
-  // composition (#3): 12-5 drops the two import lines then.
+  // fixture's variant, missing-variant, which no package registers, refuses
+  // too (#3).
   const expected = [
     'PORTFOLIO_AUTH_PASSWORD_HASH_FILE:required',
     'PORTFOLIO_DATA_DIR:store_import_failed',

@@ -76,7 +76,7 @@ test('an unregistered pack falls back on its axis alone, and a missing variant t
   assert.match(resolved.diagnostics[1]!.message, /first-party warm-parchment renders in its place/);
   // It never claims the requested pack is active, and never repeats an id the build doesn't register.
   for (const { message } of resolved.diagnostics) assert.ok(!message.includes('missing-'), message);
-  // editorial-evidence registers with #13; until then it renders the fallback composition.
+  // A registry without editorial-evidence, as a build that doesn't register the platform default, renders the fallback composition.
   const editorial = resolve({
     published: PLATFORM_DEFAULTS,
     registry: testRegistry(undefined, [registry.variants[0]!]),

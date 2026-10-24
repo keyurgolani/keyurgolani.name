@@ -517,7 +517,7 @@ test('the bundled examples load as one pair with no blocking diagnostic', () => 
     result.diagnostics.filter(({ severity }) => severity !== 'warning'),
     [],
   );
-  // The owner default, which #13 registers.
+  // The platform default, which the host registers (#13).
   assert.equal(result.pair.site.appearance.variant, 'editorial-evidence');
   // The example omits appearanceInputs, so nothing about them goes unchecked.
   assert.ok(!result.notChecked.some((entry) => entry.includes('appearanceInputs')));

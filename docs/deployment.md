@@ -331,7 +331,7 @@ On an empty store, with no `publication/live.json` and no history, no event, mov
 
 Once a revision exists, the mounted pair is import input: a missing, invalid, or old-format one only warns at startup, and the store serves what it did. An edit to it goes live only through `import` or a Studio publish.
 
-Until #13 registers a composition, every site selects a variant this build doesn't register, and a publish, an import, or a first start refuses it with `variant.unavailable`.
+The example site selects Editorial Evidence, the platform default, which this build registers (#13), so a first start on the bundled pair goes live. A site whose variant this build doesn't register is refused by a publish, an import, or a first start with `variant.unavailable`.
 
 ### Publishing, the lock, and conflicts
 
@@ -510,7 +510,7 @@ For a process manager (PM2, systemd, etc.), wrap `pnpm start` with the same envi
 PORTFOLIO_PROFILE=demo PORTFOLIO_ORIGIN=https://demo.jane.name pnpm start
 ```
 
-`/` and `/sample` show the sample in the sample site's selection, `editorial-evidence`, which renders as the fallback composition until #13 installs it. `/sample?variant=<id>` shows it in any registered variant, with that variant's views below `/sample` and the parameter on every link; `fallback`, an id this build doesn't register, an empty one, or two are a 404. The sample's `github` section doesn't render, since it would fetch a live account. Until the demo's indexing rules are settled, every response the app sends has `X-Robots-Tag: noindex`, `robots.txt` disallows everything, the sitemap is empty, and there is no feed. Every Studio operation answers with the 404 envelope.
+`/` and `/sample` show the sample in the sample site's selection, `editorial-evidence`, the platform default (#13). `/sample?variant=<id>` shows it in any registered variant, with that variant's views below `/sample` and the parameter on every link; `fallback`, an id this build doesn't register, an empty one, or two are a 404. The sample's `github` section doesn't render, since it would fetch a live account. Until the demo's indexing rules are settled, every response the app sends has `X-Robots-Tag: noindex`, `robots.txt` disallows everything, the sitemap is empty, and there is no feed. Every Studio operation answers with the 404 envelope.
 
 ## Environment variables
 

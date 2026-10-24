@@ -5,8 +5,8 @@ import { DEMO, DEMO_APP, expectNotFoundPage, PUBLIC_FILE } from './apps';
 // The bundled sample's routes under /sample, in demo (#5, Slice 4).
 // `?variant=fixture-chapters` renders that variant's views below /sample,
 // and every link and redirect keeps the parameter. The sample site selects
-// Editorial Evidence, unregistered until #13, so without the parameter the
-// fallback composition stands in, and declares no view. The root serves no
+// Editorial Evidence, the platform default (#13), so without the parameter
+// it renders, and declares no view. The root serves no
 // view under demo. The 404 page renders from the server, so it works without
 // JavaScript too.
 
@@ -87,7 +87,7 @@ test(
     for (const [path, location] of [
       [`/sample/notes${CHAPTERS}`, `/sample${CHAPTERS}`],
       ['/sample/chapters/about?variant=fixture-notes', '/sample?variant=fixture-notes'],
-      // The sample's own selection: the fallback composition, which declares no view.
+      // The sample's own selection: Editorial Evidence, which declares no view.
       ['/sample/chapters/about', '/sample'],
     ] as const) {
       const response = await request.get(path, { maxRedirects: 0 });

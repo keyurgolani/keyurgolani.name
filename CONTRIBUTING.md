@@ -30,7 +30,7 @@ This is a pnpm workspace monorepo. One app and six packages:
 | `packages/core`                 | Server-only owner code: the auth provider                                                                      |
 | `packages/fallback-composition` | The composition that renders when the site's variant isn't registered, and the one `pnpm new-variant` copies   |
 
-`legacy/` holds the retired v1 Editorial variant, outside the workspace, for #13 to rebuild. Nothing installs, builds, lints, or tests it.
+The compositions are packages too: `packages/variant-editorial-evidence` is the platform default (#13), and `packages/variant-kinetic-cosmos` is one a site can select (#14). The retired v1 variants are gone; their history is in git.
 
 All packages are workspace-linked via `workspace:*` in their dependencies.
 

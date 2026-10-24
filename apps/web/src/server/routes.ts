@@ -345,8 +345,8 @@ export function patternOfRoutePath(routePath: string): string {
  * Routes #1 removed in every profile. proxy.ts answers each with 404. Each
  * matches exactly: `/variants`, never `/variants/*`, which is missing, so a
  * file in public/variants/ or else the app's 404 page answers it. The v1
- * screenshots that lived there moved to legacy/public/ with their variants
- * (#5), and the contract reserves each first segment, so no view can sit
+ * screenshots that lived there retired with their variants (#5, #13), and
+ * the contract reserves each first segment, so no view can sit
  * here. The old /preview/[slug] is no longer one: /preview belongs to #7's
  * grant routes. Under owner, a path under it that no active grant admits
  * gets the preview's status document, and under the other profiles it

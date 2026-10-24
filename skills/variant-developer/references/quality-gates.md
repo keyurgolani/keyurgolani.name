@@ -140,7 +140,7 @@ Gate E checked a variant's card in the variant gallery, which the platform no lo
 
 ## Gate G: Fidelity against the reference (port-only)
 
-When the variant ports a `legacy/` package, another platform's design, or a Figma, check that its signature elements survived. For each signature interaction in DESIGN.md's `## Component inventory`:
+When the variant ports a v1 variant from git history, another platform's design, or a Figma, check that its signature elements survived. For each signature interaction in DESIGN.md's `## Component inventory`:
 
 | Reference signature                       | Present? | Notes |
 | ----------------------------------------- | -------- | ----- |

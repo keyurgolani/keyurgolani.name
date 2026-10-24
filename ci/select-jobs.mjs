@@ -167,8 +167,6 @@ export const RULES = [
     jobs: ['unit', 'docs'],
     paths: ['docs/**', 'README.md', 'CONTRIBUTING.md', 'SHOWCASE.md', 'LICENSE'],
   },
-  // Outside the workspace: nothing installs, builds, lints, or tests it.
-  { class: 'legacy', jobs: [], paths: ['legacy/**'] },
   { class: 'skills', jobs: ['unit', 'docs'], paths: ['skills/**'] },
   // The schemas feed validation, every render, and startup in every profile.
   { class: 'schema', jobs: PRODUCT, paths: ['packages/schema/**'] },

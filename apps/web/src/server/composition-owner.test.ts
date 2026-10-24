@@ -250,8 +250,8 @@ test("owner's revision store reader records the composition of the unit each get
     liveComposition(),
     compositionFor(live.unit.site.appearance.variant).rendered.manifest.id,
   );
-  // The example site selects a variant this build doesn't register.
-  assert.equal(liveComposition(), 'fallback');
+  // The example site selects the platform default, which this build registers (#13).
+  assert.equal(liveComposition(), 'editorial-evidence');
 });
 
 test('owner loads its modules only through the composition root', () => {
@@ -329,13 +329,13 @@ test('config.status shows each secret as set and never a value or a path', async
   // This server holds the data directory, so owner writes go through.
   assert.deepEqual(data.writes, { state: 'open' });
   assert.equal(data.origin, ORIGIN);
-  // The owner's diagnostic (#5): the site example selects a variant this
-  // build doesn't register yet, so the fallback composition renders.
-  assert.deepEqual(data.variant, {
-    status: 'degraded',
-    requested: 'editorial-evidence',
-    rendered: 'fallback',
-  });
+  // The owner's diagnostic (#5): the site example selects Editorial
+  // Evidence, which this build registers (#13), so no fallback stands in.
+  // config.status loads the module it reports on, and a registered
+  // variant's imports 'use client' primitives, which only Next's bundler
+  // resolves under react-server: here it's a fail that names the selection.
+  // variant-health-registered.test.tsx loads it as the server does, ok.
+  assert.deepEqual(data.variant, { status: 'fail', requested: 'editorial-evidence' });
 });
 
 test('every registered operation fails closed without a session and runs with one', async () => {
@@ -698,12 +698,12 @@ test("after a publish from beside the server, a Studio config.status read record
   setLiveComposition('stale');
   const response = await studio('GET', 'config.status', { 'x-test-session': 'owner' });
   assert.equal(response.status, 200, await response.clone().text());
-  // The example site selects a variant this build doesn't register, so the
-  // fallback composition renders, and the segment the proxy names is the
-  // one the page there checks again: no 307.
-  assert.equal(liveComposition(), 'fallback');
+  // The example site selects Editorial Evidence, which renders (#13), and
+  // the segment the proxy names is the one the page there checks again: no
+  // 307.
+  assert.equal(liveComposition(), 'editorial-evidence');
   assert.equal(
     segmentFor({ profile: 'owner', pattern: '/', query: new URLSearchParams() }),
-    'fallback',
+    'editorial-evidence',
   );
 });

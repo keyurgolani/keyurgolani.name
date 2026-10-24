@@ -17,12 +17,9 @@ const EXAMPLES = {
 test('the bundled examples are a pair with no blocking record, against this build', () => {
   const result = readPair(EXAMPLES, liveContext());
   assert.ok(result.ok, JSON.stringify(result.diagnostics));
-  // The owner default, Editorial Evidence, isn't registered until #13, so
-  // the fallback composition renders it, with a warning.
-  assert.deepEqual(
-    result.diagnostics.map(({ code, severity, pointer }) => [code, severity, pointer]),
-    [['variant.unavailable', 'warning', '/appearance/variant']],
-  );
+  // The owner default, Editorial Evidence, is registered (#13), so it
+  // renders itself, with no record at all.
+  assert.deepEqual(result.diagnostics, []);
   // The variant is the contract's to check, and every other appearance axis
   // #19's appearance check's: the bundled site selects the platform's
   // fallback packs, which this build registers, so none of them warns.

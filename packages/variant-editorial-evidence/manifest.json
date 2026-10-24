@@ -9,7 +9,7 @@
   "compositionFamily": "monograph",
   "motionIntent": "still",
   "performanceTier": "light",
-  "budgets": { "js": 2048, "css": 6144, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
+  "budgets": { "js": 2048, "css": 3072, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
   "renderedKinds": [],
   "unsupportedKinds": [],
   "contentSlots": [],

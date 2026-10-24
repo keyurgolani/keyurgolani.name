@@ -168,7 +168,6 @@ const CLASSES = [
     jobs: ALL,
     complete: true,
   },
-  { name: 'legacy only', files: ['legacy/variant-editorial/src/index.ts'], jobs: ['static'] },
   { name: 'browser specs only', files: ['tests/e2e/studio.spec.ts'], jobs: ['static', 'browser'] },
   {
     name: 'docs and one variant',

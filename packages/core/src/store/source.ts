@@ -97,9 +97,8 @@ export function importRefusal(
 /**
  * Owner's first-start import (item 24): the mounted pair as revision 1, by
  * the operator who mounted it. It's a publish, checked as
- * `portfolio-store import` checks one: until #13 registers a composition, a
- * site's variant is unregistered, and the import is validation_failed with
- * variant.unavailable. It commits only into an empty store: with any
+ * `portfolio-store import` checks one: a site whose variant the build
+ * doesn't register is validation_failed with variant.unavailable. It commits only into an empty store: with any
  * revision live, it's live_conflict, and nothing changes.
  */
 export function importAtFirstStart(

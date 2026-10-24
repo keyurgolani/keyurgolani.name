@@ -21,13 +21,17 @@ test('the PR plan: each sentinel at every viewport in the default row, and every
   const ids = plan.cells.map(
     (cell) => `${cell.target} ${cell.state} ${cell.path} ${cell.tuple.displayMode}`,
   );
+  // The first composition, Editorial Evidence, the platform default (#13),
+  // carries each state's sentinel; the fallback composition and Kinetic
+  // Cosmos run complete.
   assert.deepEqual(ids.sort(), [
+    'editorial-evidence complete / system',
+    'editorial-evidence last-known-good / system',
+    'editorial-evidence missing-media / system',
+    'editorial-evidence not-found /quality-no-such-page system',
+    'editorial-evidence sparse / system',
+    'editorial-evidence unavailable / system',
     'fallback complete / system',
-    'fallback last-known-good / system',
-    'fallback missing-media / system',
-    'fallback not-found /quality-no-such-page system',
-    'fallback sparse / system',
-    'fallback unavailable / system',
     'kinetic-cosmos complete / system',
     'login signed-out /studio/sign-in system',
   ]);
@@ -53,6 +57,7 @@ test('the PR plan: each sentinel at every viewport in the default row, and every
   for (const each of skipped) assert.ok(plan.reasons.includes(each.skip!), each.skip);
   for (const reason of plan.reasons) assert.ok(isReason(reason), reason);
   assert.deepEqual(plan.targets, [
+    { kind: 'composition', id: 'editorial-evidence' },
     { kind: 'composition', id: 'fallback' },
     { kind: 'composition', id: 'kinetic-cosmos' },
     { kind: 'surface', id: 'login' },

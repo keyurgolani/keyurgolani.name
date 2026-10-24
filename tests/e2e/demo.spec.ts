@@ -4,10 +4,10 @@ import { FALLBACK_ID, VARIANTS } from '../harness/registry';
 
 // The demo profile (#1, slice 3): the bundled sample at / and /sample, with
 // nothing for crawlers to index and no cookie, and the route-level matrix
-// (AC4) for demo. The sample site selects Editorial Evidence, which this
-// build doesn't register until #13, so both render the fallback composition
-// in its place (#5). /sample?variant= renders a variant this build
-// registers, and anything else it names is a 404.
+// (AC4) for demo. The sample site selects Editorial Evidence, the platform
+// default, which this build registers (#13), so both render it.
+// /sample?variant= renders a variant this build registers, and anything else
+// it names is a 404.
 const DEMO = { type: 'profile', description: 'demo' };
 // identity.name in portfolio.example.yml.
 const SAMPLE_NAME = 'Anamika Devi';
@@ -20,14 +20,14 @@ profileMatrix('demo');
 
 for (const route of ['/', '/sample']) {
   test(
-    `${route} renders the bundled sample in the fallback composition, for its unregistered selection`,
+    `${route} renders the bundled sample in its own selection, Editorial Evidence (#13)`,
     { annotation: [{ type: 'route', description: route }, DEMO] },
     async ({ page }) => {
       const response = await page.goto(route);
       expect(response?.status()).toBe(200);
       const root = page.locator('[data-variant]');
-      await expect(root).toHaveAttribute('data-variant', 'fallback');
-      await expect(root).toHaveAttribute('data-requested-variant', 'editorial-evidence');
+      await expect(root).toHaveAttribute('data-variant', 'editorial-evidence');
+      await expect(root).not.toHaveAttribute('data-requested-variant', /./);
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(SAMPLE_NAME);
     },
   );
@@ -99,7 +99,7 @@ test(
   'rendering the sample in every variant reaches no host outside the app',
   { annotation: [{ type: 'route', description: '/sample' }, DEMO] },
   async ({ page, app }) => {
-    // The fallback composition at / and /sample, then each variant this build registers.
+    // Editorial Evidence at / and /sample, then each variant this build registers.
     const selectable = VARIANTS.map(({ manifest }) => manifest.id).filter(
       (id) => id !== FALLBACK_ID,
     );

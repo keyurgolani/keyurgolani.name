@@ -15,7 +15,7 @@ import { reportsDir } from '../../ci/lib/reports.mjs';
 import base from '../../playwright.config';
 import { SCREENSHOT_COMPARISON } from '../harness/screenshots.mjs';
 import { CONTRACT_FIXTURES } from '../../packages/variant-contract/src/node/fixtures';
-import { fixtureApp, LISTED_ONLY, SAMPLE_APP, UNDER_TEST } from './target';
+import { FALLBACK_ID, fixtureApp, LISTED_ONLY, SAMPLE_APP, UNDER_TEST } from './target';
 
 const reports = path.join(reportsDir(), 'variants');
 
@@ -51,12 +51,20 @@ export default defineConfig({
           use: { ...devices['Desktop Chrome'], appOptions: fixtureApp(fixture, variant) },
           metadata: { variant: id, fixture: fixture.name },
         })),
-        {
-          name: `${id}/sample`,
-          testMatch: ['sample.spec.ts'],
-          use: { ...devices['Desktop Chrome'], appOptions: SAMPLE_APP },
-          metadata: { variant: id },
-        },
+        // The bundled sample, in every composition a site can select: the
+        // sample selects a registered one, Editorial Evidence (#13), so the
+        // fallback composition never renders it, and the contract fixtures
+        // above reach the fallback through missing-variant.
+        ...(id === FALLBACK_ID
+          ? []
+          : [
+              {
+                name: `${id}/sample`,
+                testMatch: ['sample.spec.ts'],
+                use: { ...devices['Desktop Chrome'], appOptions: SAMPLE_APP },
+                metadata: { variant: id },
+              },
+            ]),
       ];
     }),
     // The modes' own checks, on pages of their own: no server, no variant.
