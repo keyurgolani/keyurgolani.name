@@ -69,6 +69,30 @@ test('ci.yml runs quality-pr in shards', () => {
   assert.ok(COUNT > 1, 'quality-pr has a shard matrix');
 });
 
+test('quality-pr runs in four shards, and gate, selected, and its verdict require every one', () => {
+  const raw = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
+  const jobs = CI.jobs as Record<string, { needs?: string[]; strategy?: unknown }>;
+  // Four since the fourth composition registered: three took the slowest shard past 5 minutes.
+  assert.deepEqual(CI.jobs['quality-pr']?.strategy?.matrix?.shard, [1, 2, 3, 4]);
+  // Every place the job spells its count says the matrix's, and so does the verdict's --shards.
+  const job = raw.slice(raw.indexOf('\n  quality-pr:\n'), raw.indexOf('\n  quality-pr-verdict:\n'));
+  const spelled = [...job.matchAll(/matrix\.shard \}\}\/(\d+)/g)].map(([, count]) => Number(count));
+  assert.deepEqual(spelled, [COUNT, COUNT, COUNT, COUNT]);
+  assert.match(
+    raw,
+    new RegExp(`pnpm ci:quality-pr-verdict "\\$SHARDS" --shards ${COUNT} --mode pr`),
+  );
+  // gate, selected, and the verdict need the matrix job by its id, whose result
+  // is a failure when any shard fails, is cancelled, or never ran, never one
+  // shard by its display name.
+  for (const name of ['gate', 'selected']) {
+    assert.ok(jobs[name]?.needs?.includes('quality-pr'), `${name} needs quality-pr`);
+    assert.ok(jobs[name]?.needs?.includes('quality-pr-verdict'), `${name} needs its verdict`);
+  }
+  assert.deepEqual(jobs['quality-pr-verdict']?.needs, ['changes', 'quality-pr']);
+  assert.doesNotMatch(raw, /quality-pr \(\d/);
+});
+
 test("the shards' groups and cell tests union exactly to the unsharded plan's, for any count", () => {
   for (const { name, plan } of plans) {
     const groups = planGroups(plan, ENGINES);

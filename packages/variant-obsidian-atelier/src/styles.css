@@ -1,0 +1,379 @@
+/*
+ * Obsidian Atelier (#15): the night gallery's layout. Composition only: the
+ * rooms, the narrow analytical column, the index, and where an artifact
+ * sits. Every color, material, radius, border, and shadow is a token of
+ * #19's appearance packs, so the selected color scheme makes it mineral
+ * dark, or light, or high contrast; nothing here forces a mode. Accents are
+ * restrained to where the visitor is: a chapter's position and the index's
+ * numbers. Every rule sits under [data-variant='obsidian-atelier'], every
+ * property is logical, so a right-to-left page reads the same, and nothing
+ * moves, scrolls smoothly, or waits on hover.
+ */
+
+[data-variant='obsidian-atelier'] {
+  --layout-measure: 76rem;
+  --layout-column: 24rem;
+  --layout-gutter: clamp(1rem, 4vw, 3rem);
+  display: block;
+  box-sizing: border-box;
+  padding-block: 1.5rem 5rem;
+  /* A word too long for the line, such as a name or a URL, breaks rather than widening the page. */
+  overflow-wrap: anywhere;
+}
+
+/* What reads at the page's measure: the chrome, the opening, the index, and the reading order. */
+[data-variant='obsidian-atelier'] :is(.oa-chrome, .oa-opening, .oa-index, .oa-sections) {
+  box-sizing: border-box;
+  max-inline-size: var(--layout-measure);
+  margin-inline: auto;
+  padding-inline: var(--layout-gutter);
+}
+
+/* Words for assistive technology alone, such as which work a disclosure unfolds. */
+[data-variant='obsidian-atelier'] .oa-visually-hidden {
+  display: inline-block;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The chrome: the name, the index link, and the visitor control, in flow from the first paint. */
+[data-variant='obsidian-atelier'] .oa-chrome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.5rem;
+  padding-block-end: 1rem;
+  border-block-end: var(--ui-border-divider);
+}
+
+[data-variant='obsidian-atelier'] .oa-chrome__name {
+  margin-inline-end: auto;
+  color: var(--color-text-primary);
+  text-decoration-line: none;
+}
+
+[data-variant='obsidian-atelier'] .oa-chrome__index {
+  color: var(--color-text-secondary);
+}
+
+/* At least 24 by 24 CSS px for each of the composition's own links. */
+[data-variant='obsidian-atelier'] :is(.oa-chrome a, .oa-pager a) {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.5em;
+  min-block-size: 1.5rem;
+}
+
+[data-variant='obsidian-atelier'] .oa-opening {
+  padding-block: clamp(3rem, 10vw, 7rem) 3rem;
+}
+
+[data-variant='obsidian-atelier'] .oa-opening > [data-renderer] {
+  margin-block: 0;
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-opening__name, .oa-opening__tagline) {
+  margin-block: 0;
+  max-inline-size: 40rem;
+}
+
+[data-variant='obsidian-atelier'] .oa-opening__tagline {
+  margin-block-start: 1rem;
+  color: var(--color-text-secondary);
+}
+
+/* The chapter index: a quiet vertical list, numbers in the accent's text color. */
+[data-variant='obsidian-atelier'] .oa-index {
+  padding-block: 0 4rem;
+}
+
+[data-variant='obsidian-atelier'] .oa-index__heading {
+  margin-block: 0 1rem;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='obsidian-atelier'] .oa-index [data-ui-slot='navigation.list'] {
+  max-inline-size: 44rem;
+}
+
+[data-variant='obsidian-atelier'] .oa-index__number {
+  display: inline-block;
+  min-inline-size: 2.5ch;
+  color: var(--color-accent-text);
+}
+
+[data-variant='obsidian-atelier'] .oa-index__medium {
+  color: var(--color-text-muted);
+}
+
+/* After the chapters, the other sections the page shows, a step quieter. */
+[data-variant='obsidian-atelier'] .oa-index__section {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='obsidian-atelier'] .oa-index li:has(.oa-index__entry) + li:has(.oa-index__section) {
+  margin-block-start: 1rem;
+}
+
+/*
+ * A room: one chapter, the room's full width. Narrow, its parts stack in
+ * reading order. From 64rem, the premise and the case take the narrow
+ * analytical column and the artifact the rest; a photograph's plate runs
+ * across the whole room below the premise.
+ */
+[data-variant='obsidian-atelier'] .oa-room {
+  display: grid;
+  gap: 2rem var(--layout-gutter);
+  align-items: start;
+  box-sizing: border-box;
+  padding-block: clamp(3rem, 8vw, 6rem);
+  padding-inline: var(--layout-gutter);
+  border-block-start: var(--ui-border-divider);
+  scroll-margin-block-start: 1rem;
+}
+
+[data-variant='obsidian-atelier'] .oa-room > * {
+  min-inline-size: 0;
+}
+
+[data-variant='obsidian-atelier'] .oa-room__position {
+  margin-block: 0 0.75rem;
+  color: var(--color-accent-text);
+}
+
+[data-variant='obsidian-atelier'] .oa-room__medium {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-room__title, .oa-room__meta) {
+  margin-block: 0;
+}
+
+[data-variant='obsidian-atelier'] .oa-room__meta {
+  margin-block-start: 0.5rem;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='obsidian-atelier'] .oa-room__summary {
+  margin-block-start: 1rem;
+}
+
+@media (min-width: 64rem) {
+  [data-variant='obsidian-atelier'] .oa-room {
+    grid-template-columns: minmax(0, var(--layout-column)) minmax(0, 1fr);
+  }
+
+  [data-variant='obsidian-atelier'] .oa-room__premise,
+  [data-variant='obsidian-atelier'] .oa-room__case {
+    grid-column: 1;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-room__artifact {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  /* A photograph's plate: across the room, after the premise. */
+  [data-variant='obsidian-atelier'] .oa-room[data-treatment='plate'] .oa-room__artifact {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
+  /* Open, the case reads across the room, at a measure. */
+  [data-variant='obsidian-atelier'] .oa-room__case[open] {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-pager {
+    grid-column: 1 / -1;
+  }
+}
+
+/*
+ * The artifact. None is cropped: it keeps its own aspect, never wider than
+ * its pixels or the room, never taller than most of the window, so a
+ * portrait, a panorama, a page of text, and a small image read whole.
+ * An interface, a system, and an object sit on a matte, which a transparent
+ * image shows through; a photograph sits on the room itself. Its words
+ * are below it, never over it.
+ */
+/* A slot with no figure in it paints nothing: no matte, no frame. */
+[data-variant='obsidian-atelier'] .oa-room__artifact:empty {
+  display: none;
+}
+
+[data-variant='obsidian-atelier'] .oa-room__artifact .pf-figure {
+  margin: 0;
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-room__artifact, .oa-case__media) img {
+  display: block;
+  inline-size: auto;
+  max-inline-size: 100%;
+  block-size: auto;
+  max-block-size: 80vh;
+  margin-inline: auto;
+  object-fit: contain;
+}
+
+[data-variant='obsidian-atelier']
+  .oa-room:is([data-treatment='screen'], [data-treatment='diagram'], [data-treatment='object'])
+  .oa-room__artifact {
+  box-sizing: border-box;
+  padding: clamp(1rem, 3vw, 2.5rem);
+  background-color: var(--color-surface-subtle);
+  border: var(--ui-border-card);
+  border-radius: var(--ui-radius-media);
+}
+
+/* An image with no rendition yet keeps a box, with its label in the middle and its words below. */
+[data-variant='obsidian-atelier'] :is(.oa-room__artifact, .oa-case__media) .pf-media-box {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  inline-size: 100%;
+  aspect-ratio: 3 / 2;
+  padding-inline: 1rem;
+  color: var(--color-text-secondary);
+  background-color: var(--color-surface-default);
+  border: var(--ui-border-card);
+  border-radius: var(--ui-radius-media);
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-room__artifact, .oa-case__media) figcaption {
+  display: grid;
+  gap: 0.25rem;
+  max-inline-size: var(--type-measure-compact);
+  margin-block-start: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='obsidian-atelier'] figcaption :is(.pf-caption, .pf-credit, .pf-rights) {
+  display: block;
+  margin: 0;
+}
+
+[data-variant='obsidian-atelier'] .pf-rights > span + span::before {
+  content: ' · ';
+}
+
+/* Writing's room: its own excerpt, at a reading measure, as the artifact. */
+[data-variant='obsidian-atelier'] .oa-room__excerpt {
+  max-inline-size: var(--type-measure-body);
+  margin: 0;
+  padding-inline-start: 1.5rem;
+  border-inline-start: var(--ui-border-divider);
+}
+
+/* Unfold the case: the rest of the case, at a reading measure. */
+[data-variant='obsidian-atelier'] .oa-case__body {
+  display: grid;
+  gap: 1.25rem;
+  max-inline-size: var(--type-measure-body);
+}
+
+[data-variant='obsidian-atelier'] .oa-case__body :is(h3, h4, h5, h6, p, blockquote, figure) {
+  margin-block: 0;
+}
+
+[data-variant='obsidian-atelier'] .oa-case__body .pf-item > * + * {
+  margin-block-start: 0.5rem;
+}
+
+[data-variant='obsidian-atelier'] .oa-case__part {
+  display: grid;
+  gap: 0.75rem;
+}
+
+[data-variant='obsidian-atelier'] .oa-case__heading {
+  margin-block: 0;
+}
+
+[data-variant='obsidian-atelier'] .oa-case__excerpt {
+  margin-inline: 0;
+  padding-inline-start: 1rem;
+  border-inline-start: var(--ui-border-divider);
+}
+
+[data-variant='obsidian-atelier']
+  :is(.oa-facts, .oa-case__media, .oa-case__evidence, .oa-case__links) {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-facts, .oa-case__links) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+}
+
+[data-variant='obsidian-atelier'] .oa-facts--tools,
+[data-variant='obsidian-atelier'] .oa-facts--tags {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='obsidian-atelier'] .oa-case__media {
+  display: grid;
+  gap: 2rem;
+}
+
+[data-variant='obsidian-atelier'] .oa-case__evidence > li + li {
+  margin-block-start: 1rem;
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-case__tracks, .oa-case__decisions) {
+  margin: 0;
+  padding-inline-start: 1.5rem;
+}
+
+/* Previous, the index, and next: plain links at the room's end. */
+[data-variant='obsidian-atelier'] .oa-pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 2rem;
+  margin: 0;
+  padding-block: 1rem 0;
+  padding-inline: 0;
+  list-style: none;
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='obsidian-atelier'] .oa-pager__next {
+  margin-inline-start: auto;
+}
+
+[data-variant='obsidian-atelier'] .oa-pager__label {
+  color: var(--color-text-secondary);
+}
+
+/* The reading order after the chapters, through the shared renderers. */
+[data-variant='obsidian-atelier'] .oa-sections {
+  padding-block-start: 4rem;
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='obsidian-atelier'] .oa-sections > [data-renderer] {
+  max-inline-size: var(--type-measure-body);
+  margin-block: 0 4rem;
+}
+
+/* Print: the words and the artifacts in reading order, each figure whole on its page. */
+@media print {
+  [data-variant='obsidian-atelier'] .oa-room {
+    display: block;
+    padding-block: 2rem;
+  }
+
+  [data-variant='obsidian-atelier'] :is(.oa-room__artifact, .oa-case__media) figure {
+    break-inside: avoid;
+  }
+
+  [data-variant='obsidian-atelier'] :is(.oa-room__artifact, .oa-case__media) img {
+    max-block-size: 60vh;
+  }
+}

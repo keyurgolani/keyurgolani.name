@@ -218,6 +218,7 @@ test('a PR that changes a variant runs it against every stable language, and one
   assert.deepEqual(byLanguage.map((cell) => cell.target).sort(), [
     'fallback',
     'kinetic-cosmos',
+    'obsidian-atelier',
     'second-variant',
     'spatial-bento',
   ]);
