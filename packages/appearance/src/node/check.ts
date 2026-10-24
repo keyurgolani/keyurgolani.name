@@ -174,6 +174,19 @@ export function hierarchyFailures(scheme: string, sets: SchemeSets): HierarchyFa
   return failures;
 }
 
+/**
+ * The pack a contrast failure excludes (#20): one pack, never the pair. A
+ * focus ring's width, or a translucent surface read over its worst backdrop,
+ * is the design language's; every other pair is between the color scheme's
+ * own roles.
+ */
+export function responsiblePack(failure: GateFailure): { axis: PackAxis; id: string } {
+  if (failure.pair.kind === 'focus-width' || failure.pair.backdrop) {
+    return { axis: 'designLanguage', id: failure.language };
+  }
+  return { axis: 'colorScheme', id: failure.scheme };
+}
+
 const byId = <T extends { readonly manifest: { readonly id: string } }>(entries: Iterable<T>) =>
   [...entries].sort((a, b) =>
     a.manifest.id < b.manifest.id ? -1 : a.manifest.id > b.manifest.id ? 1 : 0,

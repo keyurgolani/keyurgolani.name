@@ -1,11 +1,12 @@
-// The scheduled cross-product's smoke tests (#20, tests/catalog/plan.ts):
-// one shard of every registered variant x design language x color scheme x
-// typography x display mode, each loaded under the demo profile from the
-// query. A tuple passes when its page answers 200, renders the boundary it
-// asked for on every axis, resolves each axis's tokens, and throws nothing.
-// A sample takes a screenshot. Every failing tuple is a failure record
-// naming its pack, axis, variant, viewport, display mode, and tuple, and the
-// shard fails once, after every tuple ran.
+// The scheduled cross-product's browser smoke (#20, tests/catalog/plan.ts):
+// one shard of the wider sample, every shipping pack at least once per
+// variant and display mode and a seeded draw up to the shard's budget, each
+// loaded under the demo profile from the query. A tuple passes when its page
+// answers 200, renders the boundary it asked for on every axis, resolves
+// each axis's tokens, and throws nothing. Every tuple takes a screenshot.
+// Every failing tuple is a failure record naming its pack, axis, variant,
+// viewport, display mode, and tuple, and the shard fails once, after every
+// tuple ran. A plan over its budget fails before the first load.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,11 +19,12 @@ import { readBuildMeta, FALLBACK_ID } from '../quality/cells';
 import type { Tuple } from '../quality/coverage';
 import {
   blamed,
+  browserPlan,
   crossProduct,
+  MEASURED,
+  readSeed,
   readShard,
   recordTuple,
-  sampled,
-  shardTuples,
   tuplePath,
   VIEWPORT,
 } from './plan';
@@ -62,9 +64,14 @@ interface Failure {
 }
 
 test(`the cross-product, shard ${SHARD.index} of ${SHARD.count}`, async ({ page }, testInfo) => {
-  const tuples = shardTuples(crossProduct(readBuildMeta(WEB)), SHARD);
-  // Each tuple gets a few seconds; the shard's whole share is the test's budget.
-  test.setTimeout(Math.max(60_000, tuples.length * 15_000));
+  const tuples = browserPlan(
+    crossProduct(readBuildMeta(WEB)),
+    SHARD,
+    undefined,
+    readSeed(process.env.CATALOG_SEED),
+  );
+  // Each tuple gets twice its measured time, and the server's start a minute.
+  test.setTimeout(60_000 + tuples.length * MEASURED.browserSecondsPerTuple * 2_000);
   testInfo.annotations.push({ type: 'tuples', description: String(tuples.length) });
   expect(tuples.length, 'a shard with no tuple checks nothing').toBeGreaterThan(0);
 
@@ -72,7 +79,7 @@ test(`the cross-product, shard ${SHARD.index} of ${SHARD.count}`, async ({ page 
   page.on('pageerror', (error) => errors.push(error.message));
   const failures: Failure[] = [];
 
-  for (const [index, tuple] of tuples.entries()) {
+  for (const tuple of tuples) {
     errors.length = 0;
     const mismatched: PackAxis[] = [];
     const problems: string[] = [];
@@ -113,15 +120,13 @@ test(`the cross-product, shard ${SHARD.index} of ${SHARD.count}`, async ({ page 
         problems.push(`rendered display mode ${rendered.mode}, not ${tuple.displayMode}`);
       }
       if (errors.length > 0) problems.push(`threw ${errors.join('; ')}`);
-      if (sampled(index) || problems.length > 0) {
-        fs.mkdirSync(SCREENS, { recursive: true });
-        await page.screenshot({
-          path: path.join(
-            SCREENS,
-            `${tuple.variant}--${recordTuple(tuple).replace(/\//g, '--')}.png`,
-          ),
-        });
-      }
+      fs.mkdirSync(SCREENS, { recursive: true });
+      await page.screenshot({
+        path: path.join(
+          SCREENS,
+          `${tuple.variant}--${recordTuple(tuple).replace(/\//g, '--')}.png`,
+        ),
+      });
     } catch (error) {
       problems.push(`didn't load: ${(error as Error).message.split('\n')[0]}`);
     }

@@ -14,7 +14,6 @@ import {
   AXIS_BY_KIND,
   AXIS_NAMES,
   type ExcludedPack,
-  type PackAxis,
   type PackManifest,
 } from '@portfolio/appearance';
 import {
@@ -28,9 +27,9 @@ import {
   packPackages,
   renderNotices,
   researchRecords,
+  responsiblePack,
   type AppearanceCheck,
   type BaseLock,
-  type GateFailure,
   type NoticePack,
 } from '@portfolio/appearance/node';
 import type { RegistryResult } from '@portfolio/variant-contract/node';
@@ -105,18 +104,8 @@ const read = (root: string, file: string): string | null => {
   }
 };
 
-/**
- * The pack a contrast failure excludes (#20): one pack, never the pair. A
- * focus ring's width, or a translucent surface read over its worst backdrop,
- * is the design language's; every other pair is between the color scheme's
- * own roles.
- */
-export function responsiblePack(failure: GateFailure): { axis: PackAxis; id: string } {
-  if (failure.pair.kind === 'focus-width' || failure.pair.backdrop) {
-    return { axis: 'designLanguage', id: failure.language };
-  }
-  return { axis: 'colorScheme', id: failure.scheme };
-}
+/** The pack a contrast failure excludes (#20), which check.ts in @portfolio/appearance/node decides. */
+export { responsiblePack };
 
 /** One record per display mode a contrast failure renders in, naming the pack it excludes. */
 export function contrastRecords(check: AppearanceCheck): CatalogRecord[] {

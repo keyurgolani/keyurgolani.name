@@ -182,17 +182,21 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-  # #20's cross-product: every registered variant against every shipping
-  # design language, color scheme, and typography profile in every display
-  # mode, as smoke tests on a plain production build under the demo
-  # profile, in four shards in the pinned Playwright image (tests/catalog).
-  # Each failing tuple is a record naming its pack, axis, variant, viewport,
-  # display mode, and tuple, and a sample of each shard's tuples, every
-  # failing one among them, takes a screenshot into its reports.
+  # #20's cross-product, in four shards in the pinned Playwright image
+  # (tests/catalog/plan.ts). Each shard runs the static smoke over its share
+  # of every registered variant x shipping design language x color scheme x
+  # typography profile x display mode, in Node with no browser, then the
+  # browser smoke over its share of a wider sample: every pack at least once
+  # per variant and display mode, and a seeded draw up to its budget, each
+  # loaded on a plain production build under the demo profile, with a
+  # screenshot. Each failure is a record naming its pack, axis, variant,
+  # display mode, and tuple. The timeout is plan.ts's shardTimeoutMinutes(),
+  # its fixed part and both steps at budget, twice over; a plan over budget
+  # fails at its first step instead.
   catalog-full:
     name: catalog-full (${{ matrix.shard }}/4)
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 32
     strategy:
       fail-fast: false
       matrix:
@@ -209,9 +213,18 @@ jobs:
         uses: ./.github/actions/install # zizmor: ignore[self-repository]
         with:
           node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm --filter @portfolio/web build:registry
+        run: pnpm --filter @portfolio/web build:registry
+      - name: pnpm ci:catalog-static (shard ${{ matrix.shard }}/4)
+        env:
+          CATALOG_SHARD: ${{ matrix.shard }}/4
+          CI_REPRO_COMMAND: CATALOG_SHARD=${{ matrix.shard }}/4 pnpm ci:catalog-static
+        run: pnpm ci:catalog-static
       - name: pnpm build
+        if: ${{ !cancelled() }}
         run: pnpm build
       - name: pnpm ci:catalog-full (shard ${{ matrix.shard }}/4)
+        if: ${{ !cancelled() }}
         env:
           CATALOG_SHARD: ${{ matrix.shard }}/4
           CI_REPRO_COMMAND: CATALOG_SHARD=${{ matrix.shard }}/4 pnpm ci:catalog-full

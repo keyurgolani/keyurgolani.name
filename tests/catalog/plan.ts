@@ -1,17 +1,30 @@
 // The scheduled cross-product (#20): every registered variant against
 // every shipping design language, color scheme, and typography profile in
-// every display mode, as smoke tests, sharded. `pnpm ci:catalog-full`
-// runs one shard (CATALOG_SHARD=<n>/<m>, 1/1 by default) in the scheduled
-// workflow, against a plain production build under the demo profile, which
-// reads each tuple from the query. PRs run the targeted and
-// change-directed cells (tests/quality's [37] rule); this is the whole
-// registered product, every night.
+// every display mode. The whole registered product is too many tuples to
+// load in a browser each night (tens of thousands per variant once the
+// catalog ships), so it runs in two parts, each sharded the same way
+// (CATALOG_SHARD=<n>/<m>, 1/1 by default):
+//
+// - the static smoke, `pnpm ci:catalog-static`: every tuple, in Node, with
+//   no browser (static.ts): resolve, compile, the pack gates, and the
+//   contrast table;
+// - the browser smoke, `pnpm ci:catalog-full`: a deterministic wider sample
+//   loaded under the demo profile, which reads each tuple from the query,
+//   each with a screenshot. The sample holds every shipping pack at least
+//   once per variant and per display mode (coverageSample), and a seeded
+//   draw from the shard's own tuples fills each shard to its budget.
+//
+// The full browser cross-product, with its stored artifacts, is #20 PR 3's
+// one-time sharded rehearsal. Covering arrays stay deferred, so neither
+// part uses one.
 //
 // A tuple is in the cross-product when #19's resolver renders it as asked
 // under demo: a single-mode scheme meets the modes it has. Shards take
 // tuples round robin from one sorted list, so every tuple is in exactly one
-// shard and each shard's share is even. A sample of each shard's tuples,
-// one in SAMPLE_EVERY, takes a screenshot.
+// shard and each shard's share is even. Each part has a budget of tuples per
+// shard (BUDGET), which the workflow's shard count and timeouts are sized
+// from; a plan over it fails before anything runs, naming the budget,
+// rather than timing out.
 
 // First: readBuildMeta() loads the generated registry, which imports server-only.
 import '../../apps/web/scripts/server-only.cjs';
@@ -25,9 +38,6 @@ import {
 import { MISSING_VARIANT_ID } from '../../packages/variant-contract/src/ids';
 import { accepts, FALLBACK_ID, type BuildMeta } from '../quality/cells';
 import type { Tuple } from '../quality/coverage';
-
-/** One tuple in twenty-five takes a screenshot, and at least each shard's first. */
-export const SAMPLE_EVERY = 25;
 
 /** The viewport every smoke test runs at. */
 export const VIEWPORT = { width: 1280, height: 800 } as const;
@@ -100,9 +110,6 @@ export function shardTuples(tuples: readonly Tuple[], shard: Shard): Tuple[] {
   return tuples.filter((_, index) => index % shard.count === shard.index - 1);
 }
 
-/** Whether a shard's tuple at `index` takes a screenshot. */
-export const sampled = (index: number) => index % SAMPLE_EVERY === 0;
-
 /** The page a tuple loads under demo: the composition's first route, with the tuple in the query. */
 export function tuplePath(tuple: Tuple): string {
   const query = new URLSearchParams({
@@ -132,4 +139,169 @@ export function blamed(
 ): { readonly axis: PackAxis | 'variant'; readonly pack?: string } {
   const axis = mismatched[0] ?? PACK_AXES.find((each) => tuple[each] !== defaults[each]);
   return axis ? { axis, pack: tuple[axis] } : { axis: 'variant' };
+}
+
+/**
+ * The rates the budgets are sized from (#20), each measured, with where.
+ * The static smoke's and the browser smoke's were measured on this
+ * machine's runs of each part (tests/catalog/plan.test.ts states the
+ * figures); a shard job's fixed part is quality-pr's, measured in CI.
+ */
+export const MEASURED = {
+  /** Static smoke tuples a second, resolve included: MEASURED_STATIC in the docs. */
+  staticTuplesPerSecond: 2000,
+  /** Browser smoke seconds a tuple, its load, checks, and screenshot. */
+  browserSecondsPerTuple: 3,
+  /**
+   * A shard job's fixed part, in seconds: container, checkout, install,
+   * build:registry, and a production build, as quality-pr's shards took
+   * about 95 seconds for theirs on #84 and #89.
+   */
+  fixedSeconds: 95,
+} as const;
+
+/** The minutes a shard's steps get at budget, before the 2x margin: the static part's and the browser part's. */
+const STEP_MINUTES = { static: 2, browser: 12 } as const;
+
+/**
+ * Tuples per shard each part takes: what its step's minutes hold at the
+ * measured rate. A shard job's timeout is twice its fixed part and both
+ * steps at budget (shardTimeoutMinutes), so a run at budget has a 2x margin.
+ */
+export const BUDGET = {
+  staticPerShard: Math.floor(STEP_MINUTES.static * 60 * MEASURED.staticTuplesPerSecond),
+  browserPerShard: Math.floor((STEP_MINUTES.browser * 60) / MEASURED.browserSecondsPerTuple),
+} as const;
+
+/** A catalog-full shard job's timeout-minutes: its fixed part and both steps at budget, twice over. */
+export function shardTimeoutMinutes(): number {
+  const seconds =
+    MEASURED.fixedSeconds +
+    BUDGET.staticPerShard / MEASURED.staticTuplesPerSecond +
+    BUDGET.browserPerShard * MEASURED.browserSecondsPerTuple;
+  return Math.ceil((2 * seconds) / 60);
+}
+
+/** The message a plan over its budget fails with, before anything runs. */
+export function overBudget(
+  part: 'static' | 'browser',
+  shard: Shard,
+  needed: number,
+  budget: number,
+  why: string,
+): string {
+  return `catalog-full plan exceeds ${budget} tuples per shard: the ${part} smoke's shard ${shard.index} of ${shard.count} ${why} ${needed}. Add shards to scheduled.yml's catalog-full matrix, or measure the rate again and raise BUDGET in tests/catalog/plan.ts.`;
+}
+
+/** The tuples a shard's static smoke checks: its share of every tuple, within budget. */
+export function staticPlan(
+  tuples: readonly Tuple[],
+  shard: Shard,
+  budget: number = BUDGET.staticPerShard,
+): Tuple[] {
+  const mine = shardTuples(tuples, shard);
+  if (mine.length > budget)
+    throw new Error(overBudget('static', shard, mine.length, budget, 'holds'));
+  return mine;
+}
+
+const key = (tuple: Tuple) =>
+  `${tuple.variant}/${tuple.designLanguage}/${tuple.colorScheme}/${tuple.typography}/${tuple.displayMode}`;
+
+/**
+ * Every shipping pack at least once per variant and per display mode: for
+ * each variant and mode, the fewest tuples, chosen greedily from the
+ * cross-product, that between them hold each language, scheme, and profile
+ * the cross-product has there. Sorted, and the same each time.
+ */
+export function coverageSample(tuples: readonly Tuple[]): Tuple[] {
+  const groups = new Map<string, Tuple[]>();
+  for (const tuple of tuples) {
+    const at = `${tuple.variant}\0${tuple.displayMode}`;
+    groups.set(at, [...(groups.get(at) ?? []), tuple]);
+  }
+  const chosen: Tuple[] = [];
+  for (const group of groups.values()) {
+    const sorted = [...group].sort((a, b) => (key(a) < key(b) ? -1 : 1));
+    const uncovered = new Set(
+      sorted.flatMap((tuple) => PACK_AXES.map((axis) => `${axis}:${tuple[axis]}`)),
+    );
+    while (uncovered.size > 0) {
+      let best = sorted[0]!;
+      let gain = -1;
+      for (const tuple of sorted) {
+        const covers = PACK_AXES.filter((axis) => uncovered.has(`${axis}:${tuple[axis]}`)).length;
+        if (covers > gain) {
+          best = tuple;
+          gain = covers;
+        }
+      }
+      for (const axis of PACK_AXES) uncovered.delete(`${axis}:${best[axis]}`);
+      chosen.push(best);
+    }
+  }
+  return chosen.sort((a, b) => (key(a) < key(b) ? -1 : 1));
+}
+
+/** The browser sample's seed, so a night's sample is the one a rerun gets. CATALOG_SEED overrides it. */
+export const SAMPLE_SEED = 20;
+
+/** CATALOG_SEED as a non-negative integer, SAMPLE_SEED when it's unset. It throws on anything else. */
+export function readSeed(value: string | undefined): number {
+  if (value === undefined || value === '') return SAMPLE_SEED;
+  if (!/^\d{1,9}$/.test(value)) {
+    throw new Error(`CATALOG_SEED is ${value}, and it must be a non-negative integer, such as 20.`);
+  }
+  return Number(value);
+}
+
+/** `count` of `pool`, drawn by a seeded shuffle (mulberry32), in pool order. */
+export function seededDraw(pool: readonly Tuple[], count: number, seed: number): Tuple[] {
+  let state = seed >>> 0;
+  const random = () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const indexes = pool.map((_, index) => index);
+  const take = Math.min(count, pool.length);
+  for (let at = 0; at < take; at += 1) {
+    const pick = at + Math.floor(random() * (indexes.length - at));
+    [indexes[at], indexes[pick]] = [indexes[pick]!, indexes[at]!];
+  }
+  return indexes
+    .slice(0, take)
+    .sort((a, b) => a - b)
+    .map((index) => pool[index]!);
+}
+
+/**
+ * The tuples a shard's browser smoke loads: its share of the coverage
+ * sample, then a seeded draw from its share of every other tuple, up to
+ * budget. Every tuple it loads takes a screenshot.
+ */
+export function browserPlan(
+  tuples: readonly Tuple[],
+  shard: Shard,
+  budget: number = BUDGET.browserPerShard,
+  seed: number = SAMPLE_SEED,
+): Tuple[] {
+  const coverage = coverageSample(tuples);
+  const mine = shardTuples(coverage, shard);
+  if (mine.length > budget) {
+    throw new Error(
+      overBudget(
+        'browser',
+        shard,
+        mine.length,
+        budget,
+        'needs, to show every pack once per variant and display mode,',
+      ),
+    );
+  }
+  const covered = new Set(coverage.map(key));
+  const pool = shardTuples(tuples, shard).filter((tuple) => !covered.has(key(tuple)));
+  return [...mine, ...seededDraw(pool, budget - mine.length, seed + shard.index)];
 }
