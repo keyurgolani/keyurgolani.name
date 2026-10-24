@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The previous release rc-rehearsal's previous-digest row builds
 // (ci/rehearsal.mjs, docs/releasing.md): the newest final release, vX.Y.Z,
-// merged into the candidate's parent, that ships the revision store the
+// merged into the candidate's parent, when it ships the revision store the
 // row backs up and restores (apps/web/scripts/portfolio-store.ts).
 //
 //   node ci/release/previous-release.mjs
@@ -9,11 +9,11 @@
 // The checkout needs fetch-depth: 0. Before the first final release with
 // the store there is none, and the candidate's parent stands in: an older
 // release, such as v0.1.1, has no store to back up, and going back across
-// that cutover is #18's. When such releases exist but none is merged into
-// the parent, the candidate's history doesn't hold the release it upgrades
-// from, so it fails rather than rehearse against the wrong one. It prints
-// the ref it chose and why, and writes REHEARSAL_PREVIOUS_REF=<ref> to
-// $GITHUB_ENV.
+// that cutover is #18's. It fails when the newest release lacks the store
+// though an older one has it (the store moved), and when releases with the
+// store exist but none is in the candidate's history, rather than rehearse
+// against the wrong one. It prints the ref it chose and why, and writes
+// REHEARSAL_PREVIOUS_REF=<ref> to $GITHUB_ENV.
 //
 // Pure Node with no dependencies.
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -26,27 +26,38 @@ import { finalTagsNewestFirst } from './baseline.mjs';
 export const STORE_CLI = 'apps/web/scripts/portfolio-store.ts';
 
 /**
- * The previous release: { ref, why }, or { error }.
+ * The previous release: { ref, why }, or { error }. It's the newest final
+ * release in the candidate's history, when that ships the store. With no
+ * release in the history that ships it, the parent stands in, unless one
+ * outside the history does. A newest release without the store, though an
+ * older one has it, fails: the store moved, and quietly rehearsing against
+ * the older one would skip the release the candidate upgrades from.
  *
  * @param {{ allTags: string[], mergedTags: string[], parent: string, hasStore: (tag: string) => boolean }} input
  *   every tag, the tags merged into the candidate's parent, the parent's
  *   SHA, and whether a tag's tree ships the store
  */
 export function previousRelease({ allTags, mergedTags, parent, hasStore }) {
-  const finals = finalTagsNewestFirst(allTags).filter(hasStore);
-  if (finals.length === 0) {
+  const history = finalTagsNewestFirst(mergedTags);
+  const withStore = history.filter(hasStore);
+  if (history.length > 0 && hasStore(history[0])) {
+    return { ref: history[0], why: 'the newest final release in the candidate history' };
+  }
+  if (withStore.length > 0) {
     return {
-      ref: parent,
-      why: 'no final release ships the revision store yet, so the candidate parent stands in',
+      error: `the newest final release in the candidate's history, ${history[0]}, doesn't ship ${STORE_CLI}, but ${withStore[0]} does: the store moved, so ${history[0]} can't be rehearsed against`,
     };
   }
-  const [newest] = finalTagsNewestFirst(mergedTags).filter(hasStore);
-  if (!newest) {
+  const elsewhere = finalTagsNewestFirst(allTags).filter(hasStore);
+  if (elsewhere.length > 0) {
     return {
-      error: `final releases with the revision store exist (${finals.slice(0, 3).join(', ')}), but none is in the candidate's history`,
+      error: `final releases with the revision store exist (${elsewhere.slice(0, 3).join(', ')}), but none is in the candidate's history`,
     };
   }
-  return { ref: newest, why: 'the newest final release in the candidate history' };
+  return {
+    ref: parent,
+    why: 'no final release ships the revision store yet, so the candidate parent stands in',
+  };
 }
 
 function git(args) {
