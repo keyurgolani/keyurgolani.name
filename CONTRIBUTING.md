@@ -75,7 +75,7 @@ A generated scheme's output is pinned to its generator's version (#20, [docs/app
 
 A new record for an image-derived scheme makes the owner's acceptance stale, so the scheme stays out of the build until the owner reviews it again. Only the owner runs `pnpm catalog accept`.
 
-To rehearse the whole catalog in CI, the cross-product's static and browser parts and every primitive state, change `tests/catalog/rehearsal.json` in a pull request's head commit, and remove it in a later commit. Each request is one run of `catalog-rehearsal.yml`, at most 180 runner-minutes.
+To rehearse the whole catalog in CI, the cross-product's static and browser parts and every primitive state, put the request on last, once the stack under it is final: a commit that changes `tests/catalog/rehearsal.json`, with `for` set to the full id of the commit under it (`git rev-parse HEAD` before you commit). Remove it in a later commit. Each request is one run of `catalog-rehearsal.yml`, at most 180 runner-minutes. A restack rewrites the commit under the request, so the request no longer matches and runs nothing; ask again with the new id. Reopening the pull request runs nothing either.
 
 ## Checks
 
