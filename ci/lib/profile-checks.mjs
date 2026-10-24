@@ -691,7 +691,8 @@ export function renditionProblems(pathname, response) {
  *
  * - `not-found`: the app's 404 page to GET, and the plain 404 to any other
  *   method, as a path no route matches gets;
- * - `media-miss`: #10's plain 404, never cached;
+ * - `media-miss`: #10's plain 404, never cached, which #20's generated
+ *   scheme stylesheets answer for a name no live scheme compiles to too;
  * - `served`: 200, for a pattern whose concrete path is real, as /sample's
  *   empty optional catch-all is the bundled sample's home;
  * - `status-document`: a grant route with no active grant, #7's status
@@ -708,7 +709,9 @@ export const DYNAMIC_ROUTES = Object.freeze({
   '/preview/dev/[variant]/[fixture]': { madeUp: 'not-found' },
   '/preview/[grant]/[[...route]]': { madeUp: 'status-document' },
   '/preview-assets/[grant]/[...path]': { madeUp: 'status-document' },
+  '/preview-assets/[grant]/_appearance/[file]': { madeUp: 'status-document' },
   [MEDIA_PATTERN]: { madeUp: 'media-miss', sample: 'rendition' },
+  '/_portfolio/scheme/[file]': { madeUp: 'media-miss' },
 });
 
 /** What a made-up path below a dynamic pattern may be expected to answer. */
