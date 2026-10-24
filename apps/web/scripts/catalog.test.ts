@@ -68,20 +68,47 @@ test('the seed is the review lab catalog, byte for byte', () => {
   assert.equal(createHash('sha256').update(bytes).digest('hex'), SEED_SHA256);
 });
 
-test('every hand-authored scheme ships in its approved tier, and the generated four wait for PR 3', async () => {
+/**
+ * The approved generated schemes' ids as this catalog ships them (#20 PR 3).
+ * The scope's `material-hct` would claim Material conformance a first-party
+ * HCT can't match (7 of 8 of M3's baseline tones at best without copying
+ * Material's code), and the scope rules out implying exact conformance, so
+ * it ships as `hct-tonal`, the same Extended tier: a stream D decision,
+ * logged for the owner.
+ */
+const RENAMED: Readonly<Record<string, string>> = { 'material-hct': 'hct-tonal' };
+
+test('every scheme ships in its approved tier, the generated four included, and the image-derived two wait for the owner', async () => {
   const entries = catalogEntries(await sources()).filter(({ axis }) => axis === 'colorScheme');
-  const shipping = entries.filter(({ status }) => status === 'shipping');
   for (const scheme of COLOR_SCHEMES as readonly SeedEntry[]) {
-    const entry = entries.find(({ id }) => id === scheme.id);
-    if (GENERATED_SCHEMES.has(scheme.id)) {
-      assert.equal(entry, undefined, `${scheme.id} is a generated scheme, seeded in PR 3`);
-      continue;
-    }
-    assert.ok(entry, `${scheme.id} is in the catalog`);
-    assert.equal(entry.tier, scheme.status, `${scheme.id}'s tier`);
-    assert.equal(entry.status, scheme.status === 'research' ? 'research' : 'shipping');
+    const id = RENAMED[scheme.id] ?? scheme.id;
+    const entry = entries.find((each) => each.id === id);
+    assert.ok(entry, `${id} is in the catalog`);
+    assert.equal(
+      entries.find((each) => each.id === scheme.id && id !== scheme.id),
+      undefined,
+    );
+    assert.equal(entry.tier, scheme.status, `${id}'s tier`);
+    const waits = id === 'profile-image' || id === 'portfolio-artwork';
+    assert.equal(
+      entry.status,
+      scheme.status === 'research' ? 'research' : waits ? 'excluded' : 'shipping',
+      id,
+    );
+    if (GENERATED_SCHEMES.has(scheme.id)) assert.equal(entry.license, 'generated', id);
   }
-  assert.deepEqual(tally(shipping), { stable: 18, extended: 6, experimental: 1 });
+  assert.deepEqual(
+    Object.keys(RENAMED).filter((id) => !GENERATED_SCHEMES.has(id)),
+    [],
+  );
+  assert.deepEqual(tally(entries.filter(({ status }) => status === 'shipping')), {
+    stable: 18,
+    extended: 8,
+    experimental: 1,
+  });
+  assert.deepEqual(tally(entries.filter(({ status }) => status === 'excluded')), {
+    experimental: 2,
+  });
   assert.equal(entries.filter(({ status }) => status === 'research').length, 23);
 });
 
@@ -105,7 +132,8 @@ test("seeded schemes keep the prototype anchors exactly, and anchor-v2 replaces 
     modes: Record<string, Record<string, string>>;
   })[]) {
     const pack = read.registry.packs.colorScheme.get(scheme.id);
-    if (!pack) continue;
+    // A generated scheme has no anchors: its generator picks them (PR 3).
+    if (!pack || pack.manifest.generator) continue;
     for (const mode of ['light', 'dark'] as const) {
       const seeded = scheme.modes[mode];
       const anchors: Record<string, string> | undefined = pack.manifest.anchors?.[mode];
@@ -301,8 +329,13 @@ test('search filters by words, axis, tier, status, license, and mode', async () 
   assert.deepEqual(ids('license=MIT'), ['oled-black', 'zinc']);
   assert.equal(ids('tier=research').length, 23);
   assert.ok(ids('axis=scheme&mode=light').every((id) => id !== 'oled-black' && id !== 'neon-city'));
-  assert.deepEqual(ids('axis=scheme&tier=experimental'), ['neon-city']);
-  assert.deepEqual(ids('status=excluded'), []);
+  assert.deepEqual(ids('axis=scheme&tier=experimental'), [
+    'neon-city',
+    'portfolio-artwork',
+    'profile-image',
+  ]);
+  // The image-derived schemes, which wait for the owner's acceptance (#20 PR 3).
+  assert.deepEqual(ids('status=excluded'), ['portfolio-artwork', 'profile-image']);
   assert.equal(ids('status=held').length, 5);
   assert.deepEqual(ids('q=refractive&status=held'), ['refractive-glass', 'holographic-iridescent']);
   assert.deepEqual(ids('q=nord&status=research'), ['nord']);
@@ -420,7 +453,8 @@ test('the branded-name audit passes the shipping catalog', async () => {
     research: read.research.map(({ record }) => record),
   });
   assert.deepEqual(report.findings, []);
-  assert.equal(report.entries.length, 46 + 27 + 23);
+  // The 62 registered packs (PR 3's two image-derived schemes wait, unregistered), 13 held, 23 Research.
+  assert.equal(report.entries.length, 62 + 13 + 23);
   const aero = report.entries.find(({ id }) => id === 'frutiger-aero')!;
   assert.deepEqual(aero.names, ['Aero', 'Frutiger']);
   assert.ok(aero.notes.every((note) => note.includes('reviewed')));
