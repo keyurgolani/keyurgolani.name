@@ -67,6 +67,82 @@ test(
   },
 );
 
+/**
+ * Query values no axis accepts, each built so its marker sits between two
+ * characters that change in every escaping: a percent-encoded URL leaves a
+ * hex digit before it and `%` after it, and anything else, raw text, HTML
+ * entities, or a JSON string's escapes, leaves something else there.
+ */
+const HOSTILE = [
+  '"><script>zqhostileA</script>',
+  '</script><img src=x onerror=zqhostileB>',
+  '\\zqhostileC"\'`${1}',
+  '\u202ezqhostileD\u2028\u00e4\u{1F600}',
+  '&zqhostileE&amp;&lt;',
+] as const;
+
+/** Where a marker sits in `body` other than inside a percent-encoded URL string. */
+function unencoded(body: string): string[] {
+  const found: string[] = [];
+  for (const match of body.matchAll(/zqhostile[A-E]/g)) {
+    const before = body[match.index - 1] ?? '';
+    const after = body[match.index + match[0].length] ?? '';
+    if (!/^[0-9A-Fa-f]$/.test(before) || after !== '%') {
+      found.push(body.slice(Math.max(0, match.index - 24), match.index + 24));
+    }
+  }
+  return found;
+}
+
+/** The document boundary's opening tag, which carries every axis the page renders. */
+const boundaryOf = (html: string) =>
+  /<div[^>]*data-appearance-boundary="document"[^>]*>/.exec(html)?.[0] ?? null;
+
+test(
+  'a rejected query value never decides an axis, and never appears in a 200 page, a payload, or a redirect except percent-encoded in a URL (#9)',
+  { annotation: [{ type: 'route', description: '/sample' }, DEMO] },
+  async ({ request }) => {
+    // What the canonical selection renders, which the hostile requests must match.
+    const canonical = new Map<string, string | null>();
+    for (const path of ['/sample?mode=dark', '/?mode=dark']) {
+      const response = await request.get(path, { maxRedirects: 0 });
+      expect(response.status(), path).toBe(200);
+      canonical.set(path, boundaryOf(await response.text()));
+      expect(canonical.get(path), path).toContain('data-display-mode="dark"');
+    }
+    for (const value of HOSTILE) {
+      const sent = encodeURIComponent(value);
+      const checks: Array<{ path: string; status: number; same?: string; rsc?: true }> = [
+        // A document load the page sends to the canonical URL.
+        { path: `/sample?mode=${sent}`, status: 307 },
+        { path: `/sample?mode=dark&x=${sent}`, status: 307 },
+        { path: `/?scheme=${sent}`, status: 307 },
+        // Next strips _rsc before the page reads the query, so these render.
+        { path: `/sample?_rsc=${sent}&mode=dark`, status: 200, same: '/sample?mode=dark' },
+        { path: `/?_rsc=${sent}&mode=dark`, status: 200, same: '/?mode=dark' },
+        // A client navigation: the RSC answer that carries the page's redirect.
+        { path: `/sample?x=${sent}&mode=dark`, status: 200, rsc: true },
+      ];
+      for (const { path, status, same, rsc } of checks) {
+        const headers: Record<string, string> = rsc ? { rsc: '1' } : {};
+        const target = rsc ? await withRscHash(path, headers) : path;
+        const response = await request.get(target, { maxRedirects: 0, headers });
+        const what = `${JSON.stringify(value)} ${path}`;
+        const body = await response.text();
+        expect(unencoded(body), what).toEqual([]);
+        // Every header too, the location included.
+        for (const [name, header] of Object.entries(response.headers())) {
+          expect(unencoded(header), `${what} ${name}`).toEqual([]);
+        }
+        expect(response.status(), what).toBe(status);
+        if (rsc) expect(response.headers()['content-type'], what).toMatch(/^text\/x-component/);
+        // The page renders the canonical selection's axes, every one of them.
+        if (same) expect(boundaryOf(body), what).toBe(canonical.get(same));
+      }
+    }
+  },
+);
+
 test(
   'identical URLs return identical bodies apart from the nonce, and no response sets a cookie (#9, A7)',
   { annotation: [{ type: 'route', description: '/sample' }, DEMO] },

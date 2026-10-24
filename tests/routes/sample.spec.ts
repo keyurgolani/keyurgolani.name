@@ -1,4 +1,5 @@
 import { expect, test } from '../harness/fixtures';
+import { send } from '../harness/http-client.mjs';
 import { withRscHash } from '../harness/rsc';
 import { DEMO, DEMO_APP, expectNotFoundPage, PUBLIC_FILE } from './apps';
 
@@ -143,6 +144,25 @@ test(
         expect(response.status(), path).toBe(307);
         // Absolute, on PORTFOLIO_ORIGIN, whatever the request said its host was.
         expect(response.headers().location, path).toBe(`${app.origin}${location}`);
+      }
+      // A Host that isn't PORTFOLIO_ORIGIN's, which Playwright can't send, so
+      // over node:http: the location still names PORTFOLIO_ORIGIN, never it.
+      for (const host of [
+        'evil.example',
+        'evil.example:8443',
+        `demo.${new URL(app.origin).host}`,
+      ]) {
+        const sent: Record<string, string>[] = [{ host }, { host, 'x-forwarded-host': host }];
+        for (const headers of sent) {
+          const answer = await send({
+            protocol: 'http:',
+            port: Number(new URL(app.origin).port),
+            path,
+            headers,
+          });
+          expect(answer.status, `${path} Host ${host}`).toBe(307);
+          expect(answer.headers.location, `${path} Host ${host}`).toBe(`${app.origin}${location}`);
+        }
       }
     }
     // The canonical URL renders as asked.

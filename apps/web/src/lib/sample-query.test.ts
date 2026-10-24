@@ -7,7 +7,6 @@ import type { RegisteredIds } from './sample';
 import {
   canonicalLocation,
   isCanonical,
-  isDotSegment,
   SAMPLE_QUERY_KEYS,
   sampleQuery,
   type SampleQuery,
@@ -160,19 +159,11 @@ test('no segment, however it is spelled, moves the canonical URL to another host
     assert.equal(location.hash, '', label);
     assert.equal(location.username, '', label);
     assert.equal(location.password, '', label);
-    // A segment that isn't a dot segment stays one segment of the path.
-    if (!segments.some(isDotSegment)) {
+    // A segment that isn't `.` or `..`, which collapse in any URL, stays one
+    // segment of the path. The route table names no page with either.
+    if (!segments.some((segment) => segment === '.' || segment === '..')) {
       assert.equal(location.pathname.split('/').length, segments.length + 1, label);
       if (segments[0] === 'sample') assert.match(location.pathname, /^\/sample\//, label);
     }
-  }
-});
-
-test('dot segments are spotted however their dots are spelled', () => {
-  for (const segment of ['.', '..', '%2e', '%2E%2e', '.%2e', '%2e.']) {
-    assert.equal(isDotSegment(segment), true, segment);
-  }
-  for (const segment of ['...', '.a', 'a.', '%252e', '', 'sample']) {
-    assert.equal(isDotSegment(segment), false, segment);
   }
 });

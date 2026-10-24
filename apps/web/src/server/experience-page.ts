@@ -5,13 +5,7 @@ import type { VariantRegistry } from '@portfolio/variant-contract';
 import { visitorControlModel } from '~/lib/document-appearance';
 import { ExperienceDocument, hostLang, type VariantLoader } from '~/lib/experience-document';
 import type { SearchParams } from '~/lib/sample';
-import {
-  canonicalLocation,
-  isCanonical,
-  isDotSegment,
-  sampleQuery,
-  type SampleQuery,
-} from '~/lib/sample-query';
+import { canonicalLocation, isCanonical, sampleQuery, type SampleQuery } from '~/lib/sample-query';
 import { REGISTRY } from '~/lib/variants';
 import { resolveVisitorPath, type VisitorPath } from '~/lib/visitor-routes';
 import { requireDeploymentConfig } from './config-store';
@@ -87,20 +81,18 @@ export function experiencePage(
     let selection: SampleQuery | null = null;
     let readView = getPublicView;
     // Demo reads its appearance from the query (#19, Slice 4), on /sample
-    // and the showroom at /. It goes through the registry first (#9): any
-    // other spelling of it answers a 307 to the canonical URL on the
-    // deployment's own origin, so nothing the registry didn't accept reaches
-    // the page. Only /sample's `variant` picks the composition.
+    // and the showroom at /. It goes through the registry first (#9), so no
+    // value the registry rejected decides what renders, and the page renders
+    // from the canonical query alone. Any other spelling of it answers a 307
+    // to the canonical URL on the deployment's own origin. Next still echoes
+    // the URL as sent, percent-encoded, in the payloads around the page.
+    // Only /sample's `variant` picks the composition.
     if (sample || (profile === 'demo' && decision.entry.pattern === '/')) {
       // One read of the live revision, which the route below renders too.
       const view = await getPublicView();
       readView = async () => view;
       selection = sampleQuery(query, view.site, { registered: sample ? registry : [] });
-      if (!isCanonical(query, selection)) {
-        // A dot segment names no view, and would collapse in any URL.
-        if (segments.some(isDotSegment)) notFound();
-        redirect(canonicalLocation(origin, segments, selection));
-      }
+      if (!isCanonical(query, selection)) redirect(canonicalLocation(origin, segments, selection));
     }
     if (sample && selection) {
       path = {

@@ -10,11 +10,14 @@ import { sampleVariant, type RegisteredIds } from './sample';
 // build registers: `variant` as sampleVariant() reads it, the other four as
 // resolveAppearance() would apply them to the sample site, scheme and mode
 // as a pair. A value that doesn't count falls back on its own axis to the
-// sample's, and drops from the canonical query, in this key order. A page
-// asked for with any other query answers a 307 to the same path with the
-// canonical one, built on PORTFOLIO_ORIGIN, so nothing a request sent that
-// the registry didn't accept reaches a page, and identical selections share
-// one URL.
+// sample's, and drops from the canonical query, in this key order. So no
+// value the registry rejected decides what renders. A document load asked
+// for with any other query gets a 307 to the same path with the canonical
+// one, built on PORTFOLIO_ORIGIN. Next still echoes the request's own URL,
+// percent-encoded, in the payloads it builds around the page (the 307's
+// body, a client navigation's RSC answer, and a page whose `_rsc` it strips
+// first), as it does on every 404, but never as markup and never as a value
+// the page renders from.
 
 /** The keys the canonical query holds, in its order. */
 export const SAMPLE_QUERY_KEYS = [...APPEARANCE_AXES.map((axis) => QUERY_KEYS[axis]), 'motion'];
@@ -78,8 +81,9 @@ export function isCanonical(sent: URLSearchParams, canonical: SampleQuery): bool
  * deployment's own, with the canonical query. The path is set on that URL,
  * never resolved against it, and each segment is percent-encoded, so no
  * segment, `//`, a scheme, a backslash, or `@` included, moves it to another
- * host. A dot segment would still collapse, as it does in any URL, so the
- * page answers a path with one as missing before it asks for this.
+ * host. A dot segment would still collapse, as it does in any URL, but it
+ * never gets here: the route table names no page with one, and Next's URL
+ * parsing collapses an encoded one before the page runs.
  */
 export function canonicalLocation(
   origin: string,
@@ -91,9 +95,4 @@ export function canonicalLocation(
   url.search = new URLSearchParams(canonical.query).toString();
   url.hash = '';
   return url.href;
-}
-
-/** Whether `segment` is one a URL collapses: `.` or `..`, however its dots are spelled. */
-export function isDotSegment(segment: string): boolean {
-  return /^(?:\.|%2e){1,2}$/i.test(segment);
 }

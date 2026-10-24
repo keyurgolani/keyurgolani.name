@@ -312,7 +312,7 @@ test('under read-only, the root reads no query, and sends none anywhere', async 
   assert.ok(rendered.element && isValidElement(rendered.element));
 });
 
-test('under demo, a /sample path with a dot segment and a query to drop is the 404 page, never a redirect', async (t) => {
+test('under demo, a /sample path with a dot segment and a query to drop is the 404 page the route table answers first, never a redirect', async (t) => {
   deploy(t, () => revision('fixture-notes'), 'demo');
   setLiveComposition('fixture-notes');
   for (const route of [
