@@ -215,6 +215,9 @@ function routeFileSpellings(): string[] {
 /** The live media's renditions (#10). */
 const MEDIA_PATTERN = '/media/[...path]';
 
+/** A live revision's generated schemes' stylesheets (#20). */
+const SCHEME_PATTERN = '/_portfolio/scheme/[file]';
+
 const namesNothing = (entry: Routes.RouteEntry) =>
   entry.kind === 'page' && entry.grant === undefined && concrete(entry.pattern).includes('probe');
 
@@ -596,25 +599,61 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
     // /media (#10): every profile serves it, and a path that names no
     // rendition the live view keeps, as the probe doesn't, is its plain 404.
     const rendition = served && entry.pattern === MEDIA_PATTERN;
+    // /_portfolio/scheme/ (#20): every profile serves it, and a name the live
+    // revision's stored schemes don't compile to, as no name does for a site
+    // that stores none, is its plain 404.
+    const scheme = served && entry.pattern === SCHEME_PATTERN;
     const state = rendition
       ? 'served, a 404 that is never cached for a rendition the live view lacks, and a 405 to anything but GET and HEAD'
-      : grant
-        ? 'served only to an active grant, and the status document to anything else'
-        : statusDocument
-          ? 'the status document to every method, as every preview path no grant admits'
-          : missing
-            ? unbuilt(entry)
-              ? 'in no profile of this build, the 404 page'
-              : 'missing there, the 404 page'
-            : served
-              ? gated
-                ? 'served to a session, and sends a visitor to sign-in'
-                : 'served'
-              : 'absent, 404 for every method';
+      : scheme
+        ? 'served, a 404 that is never cached for a name no live scheme compiles to, HEAD the same headers, and a 405 to anything but GET and HEAD'
+        : grant
+          ? 'served only to an active grant, and the status document to anything else'
+          : statusDocument
+            ? 'the status document to every method, as every preview path no grant admits'
+            : missing
+              ? unbuilt(entry)
+                ? 'in no profile of this build, the 404 page'
+                : 'missing there, the 404 page'
+              : served
+                ? gated
+                  ? 'served to a session, and sends a visitor to sign-in'
+                  : 'served'
+                : 'absent, 404 for every method';
     test(
       `${entry.pattern} is ${state}`,
       { annotation: [{ type: 'route', description: entry.pattern }, annotation] },
       async ({ app, request }) => {
+        if (scheme) {
+          // The probe, and a well-formed name with a hash no live scheme has.
+          for (const target of [
+            concrete(entry.pattern),
+            `/_portfolio/scheme/brand-seed.${'0'.repeat(12)}.css`,
+          ]) {
+            const response = await request.get(target, { maxRedirects: 0 });
+            expect(response.status(), target).toBe(404);
+            expect(response.headers()['content-type'], target).toMatch(/^text\/plain/);
+            expect(response.headers()['cache-control'], target).toBe('no-store');
+            expect(response.headers()['x-request-id'], target).toMatch(UUID);
+            expectProfileHeaders(profile, response, `GET ${target}`);
+            const head = await request.head(target, { maxRedirects: 0 });
+            expect(head.status(), `HEAD ${target}`).toBe(404);
+            expect(head.headers()['cache-control'], `HEAD ${target}`).toBe('no-store');
+            expect(await head.text(), `HEAD ${target}`).toBe('');
+            expectProfileHeaders(profile, head, `HEAD ${target}`);
+          }
+          // GET and HEAD alone: anything else is the proxy's 405.
+          for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+            const refused = await request.fetch(concrete(entry.pattern), {
+              method,
+              maxRedirects: 0,
+            });
+            expect(refused.status(), method).toBe(405);
+            expect(refused.headers()['allow'], method).toBe('GET, HEAD');
+            expectProfileHeaders(profile, refused, method);
+          }
+          return;
+        }
         if (rendition) {
           const response = await request.get(concrete(entry.pattern), { maxRedirects: 0 });
           expect(response.status()).toBe(404);
@@ -642,6 +681,18 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
               maxRedirects: 0,
             });
             await expectStatusDocument(profile, response, method, method);
+          }
+          // A generated scheme's stylesheet (#20), loaded as one, HEAD
+          // included: still no grant, so the status document.
+          if (entry.grant === 'style') {
+            for (const method of ['GET', 'HEAD']) {
+              const response = await request.fetch(concrete(entry.pattern), {
+                method,
+                headers: { 'sec-fetch-dest': 'style' },
+                maxRedirects: 0,
+              });
+              await expectStatusDocument(profile, response, `${method} as style`, method);
+            }
           }
           return;
         }
