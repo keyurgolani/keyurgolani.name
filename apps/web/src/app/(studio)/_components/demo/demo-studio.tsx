@@ -40,6 +40,14 @@ export interface DemoStudioProps {
   readonly task?: TaskId;
 }
 
+/**
+ * What a value the build doesn't offer means in the demo: what renders in its
+ * place, and nothing about publishing, which the demo doesn't have.
+ */
+export function demoUnoffered(fallback: string) {
+  return `This build doesn't offer it, so ${fallback} shows in its place.`;
+}
+
 /** The sandbox line every Demo Studio view shows in its header. */
 export function SandboxLine() {
   return <p className="studio-shell__signed-in">{SANDBOX_LINE}</p>;
@@ -237,6 +245,7 @@ export function DemoStudio({
                       label={label}
                       value={selection[axis]}
                       catalog={catalog}
+                      unoffered={demoUnoffered}
                       onChange={(value) => void choose(axis, value)}
                     />
                     <button type="button" className="studio-button" onClick={() => resetAxis(axis)}>
@@ -338,6 +347,7 @@ function PreviewTask({
             label={label}
             value={selection.displayMode}
             catalog={catalog}
+            unoffered={demoUnoffered}
             onChange={(value) => onChoose('displayMode', value)}
           />
         </div>

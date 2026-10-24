@@ -1,10 +1,12 @@
+import type { ReactNode } from 'react';
 import { optionNote, type AppearanceCatalog, type CatalogAxis } from '~/lib/studio/appearance';
 
 // One appearance axis's field (#8, shared with #9's Demo Studio): its label,
 // its select over what the build offers, and what the chosen value means,
 // or what renders in its place when the build doesn't offer it. The owner's
 // Appearance workspace puts its visitor control beside it; Demo Studio puts
-// a reset there. It reaches no backend.
+// a reset there. Each says, in its own words, what a value the build doesn't
+// offer means there. It reaches no backend.
 
 export interface AxisFieldProps {
   readonly id: string;
@@ -14,10 +16,21 @@ export interface AxisFieldProps {
   readonly value: string;
   readonly catalog: AppearanceCatalog;
   readonly disabled?: boolean;
+  /** What a value the build doesn't offer means, given what renders in its place. */
+  readonly unoffered: (fallback: string) => ReactNode;
   readonly onChange: (value: string) => void;
 }
 
-export function AxisField({ id, axis, label, value, catalog, disabled, onChange }: AxisFieldProps) {
+export function AxisField({
+  id,
+  axis,
+  label,
+  value,
+  catalog,
+  disabled,
+  unoffered,
+  onChange,
+}: AxisFieldProps) {
   const note = optionNote(catalog, axis, value);
   const options = catalog.axes.find((each) => each.axis === axis)?.options ?? [];
   return (
@@ -44,19 +57,22 @@ export function AxisField({ id, axis, label, value, catalog, disabled, onChange 
           </option>
         ))}
       </select>
-      <OptionFacts axis={axis} note={note} />
+      <OptionFacts axis={axis} note={note} unoffered={unoffered} />
     </>
   );
 }
 
-function OptionFacts({ axis, note }: { axis: CatalogAxis; note: ReturnType<typeof optionNote> }) {
+function OptionFacts({
+  axis,
+  note,
+  unoffered,
+}: {
+  axis: CatalogAxis;
+  note: ReturnType<typeof optionNote>;
+  unoffered: (fallback: string) => ReactNode;
+}) {
   if (!note.option) {
-    return (
-      <p className="studio-appearance__fact">
-        This build doesn&apos;t offer it, so {note.fallback} shows in its place, and it blocks
-        publishing.
-      </p>
-    );
+    return <p className="studio-appearance__fact">{unoffered(note.fallback ?? '')}</p>;
   }
   const { description, tier, provenance, performance, access } = note.option;
   return (

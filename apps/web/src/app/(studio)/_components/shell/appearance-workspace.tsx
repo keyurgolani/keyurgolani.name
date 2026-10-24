@@ -144,6 +144,12 @@ export function AppearanceWorkspace({
                 value={value}
                 catalog={catalog}
                 disabled={!canWrite}
+                unoffered={(fallback) => (
+                  <>
+                    This build doesn&apos;t offer it, so {fallback} shows in its place, and it
+                    blocks publishing.
+                  </>
+                )}
                 onChange={(next) =>
                   change({ ...state, selection: { ...state.selection, [axis]: next } })
                 }
