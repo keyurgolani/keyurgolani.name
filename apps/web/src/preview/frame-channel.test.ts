@@ -601,6 +601,34 @@ test("the agent reads Studio's messages over the port, and drops what the protoc
   assert.deepEqual(local, []);
 });
 
+test("a local frame's channel started again in the same document, as Strict Mode starts every effect twice, still says hello with the fragment's nonce (#9)", async (t) => {
+  const local: FrameChannelOptions = {
+    mode: 'local',
+    studioOrigin: STUDIO,
+    linkBase: '/preview/local',
+    renderedVersion: null,
+  };
+  const win = new FakeFrame(`${STUDIO}/preview/local#nonce=${NONCE}`);
+  // Started, stopped at once, and started again, before any hello goes.
+  startFrameChannel(win as unknown as Window, local)?.();
+  const stop = startFrameChannel(win as unknown as Window, local);
+  t.after(() => stop?.());
+  // The fragment left the URL once, on the first start.
+  assert.deepEqual(win.replaced, ['/preview/local']);
+  assert.equal(win.location.hash, '');
+  await until(() => win.parent.posted.length > 0, "the second start's hello");
+  const nonces = win.parent.posted.map(
+    ({ message }) => (message as { payload: { nonce: string } }).payload.nonce,
+  );
+  assert.ok(nonces.length > 0 && nonces.every((nonce) => nonce === NONCE), JSON.stringify(nonces));
+  // Another document, with no fragment of its own, says none.
+  const other = new FakeFrame(`${STUDIO}/preview/local`);
+  const stopOther = startFrameChannel(other as unknown as Window, local);
+  t.after(() => stopOther?.());
+  await wait(5);
+  assert.deepEqual(other.parent.posted, []);
+});
+
 test("a local frame hands each document Studio sends to its renderer, and keeps its route in memory: Studio's navigate and an internal link move it with no document load (#9)", async (t) => {
   const documents: unknown[] = [];
   const routes: string[] = [];
