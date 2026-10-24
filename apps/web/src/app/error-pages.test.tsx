@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import Module from 'node:module';
 import path from 'node:path';
@@ -241,7 +242,7 @@ test("the global 404's metadata resolves against the site's origin, and names no
 });
 
 /** A deployment whose catalog serves `site`, or fails, carrying a canary, when there's none. */
-function deploy(profile: (typeof PROFILES)[number], site?: object): void {
+function deploy(profile: (typeof PROFILES)[number], site?: object, snapshots?: object): void {
   setDeploymentState({
     config: {
       profile,
@@ -253,7 +254,7 @@ function deploy(profile: (typeof PROFILES)[number], site?: object): void {
     catalog: {
       getLive: async () => {
         if (!site) throw failure();
-        return { revisionId: 'canary-revision', unit: { site } } as never;
+        return { revisionId: 'canary-revision', unit: { site, snapshots } } as never;
       },
     },
     dispatch: () => assert.fail('the 404 page runs no operation'),
@@ -311,6 +312,45 @@ test("not-found.tsx renders inside the live site's document boundary, naming not
     html,
   );
   assertGeneric(html.replace(marker, ''));
+});
+
+/** brand-seed's reference record (#20 PR 3), as the live revision's snapshots/schemes.json holds it. */
+function storedBrandSeed() {
+  const record = JSON.parse(
+    readFileSync(
+      new URL('../../../../packages/appearance-schemes/generated/brand-seed.json', import.meta.url),
+      'utf8',
+    ),
+  ) as { result: { generator: unknown; input: { seedColor: string }; tokens: unknown } };
+  return {
+    generator: record.result.generator,
+    inputsHash: createHash('sha256').update(record.result.input.seedColor).digest('hex'),
+    tokens: record.result.tokens,
+  };
+}
+
+test("not-found.tsx renders the live revision's stored generated scheme in its document boundary, and the fallback without one (#20 PR 3)", async (t) => {
+  t.after(() => setDeploymentState(undefined));
+  t.mock.method(preferenceCookie, 'read', async () => null);
+  const site = {
+    appearance: { ...PLATFORM_DEFAULTS, variant: FALLBACK_ID, colorScheme: 'brand-seed' },
+    motionPolicy: 'system',
+    sections: {},
+  };
+  const boundary = async (snapshots: object) => {
+    deploy('read-only', site, snapshots);
+    const html = renderToStaticMarkup(await NotFoundBody());
+    return /<div ([^>]*data-appearance-boundary="document"[^>]*)>/.exec(html)![1]!;
+  };
+  const stored = await boundary({ schemes: { 'brand-seed': storedBrandSeed() } });
+  assert.ok(stored.includes('data-color-scheme="brand-seed"'), stored);
+  assert.ok(!stored.includes('data-appearance-fallback'), stored);
+  // A revision without stored sets, or with a malformed entry, falls back on the scheme.
+  for (const snapshots of [{}, { schemes: { 'brand-seed': { generator: 7 } } }]) {
+    const without = await boundary(snapshots);
+    assert.ok(!without.includes('data-color-scheme="brand-seed"'), without);
+    assert.ok(without.includes('data-appearance-fallback="color-scheme"'), without);
+  }
 });
 
 /** A registry of the fallback composition and the route tests' `chapters` fixture variant. */
