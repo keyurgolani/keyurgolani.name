@@ -285,7 +285,14 @@ test('every visitor page renders in an experience segment, and every registered 
   const experience = listRoutes().filter((entry) => entry.experience);
   assert.deepEqual(
     experience.map((entry) => entry.pattern),
-    ['/', '/[...view]', '/work/[slug]', '/work/[slug]/[...view]', '/sample/[[...path]]'],
+    [
+      '/',
+      '/[...view]',
+      '/work/[slug]',
+      '/work/[slug]/[...view]',
+      '/sample/[[...path]]',
+      '/reference/[[...path]]',
+    ],
   );
   for (const entry of experience) {
     assert.equal(entry.kind, 'page', entry.pattern);
@@ -1366,8 +1373,17 @@ test("what every profile serves, with #2's Studio pages under owner alone", () =
     ].sort(),
   );
   assert.deepEqual(served('read-only'), [...everywhere, ...site].sort());
-  // The bundled sample, and every route under it.
-  assert.deepEqual(served('demo'), [...everywhere, '/sample/[[...path]]'].sort());
+  // The bundled sample, and every route under it, and the read-only
+  // reference's pages and renditions (#9).
+  assert.deepEqual(
+    served('demo'),
+    [
+      ...everywhere,
+      '/sample/[[...path]]',
+      '/reference/[[...path]]',
+      '/reference/media/[...path]',
+    ].sort(),
+  );
 });
 
 test('each table route resolves the way its capability says, in every profile', () => {

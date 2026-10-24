@@ -1,6 +1,6 @@
 import 'server-only';
-import { constants } from 'node:fs';
-import { lstat, open, readdir, stat } from 'node:fs/promises';
+import { constants, createReadStream } from 'node:fs';
+import { lstat, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
   BUNDLE_LIMITS,
@@ -27,8 +27,8 @@ import { viewOf } from '../public-view';
 // export of a published revision, in #3's provisional bundle format 1,
 // mounted read-only at PORTFOLIO_REFERENCE_DIR. The composition root loads
 // this module under demo alone, once, at startup, and only when the setting
-// is set. It opens no store and no data directory, and writes nothing: it
-// lists the directory, reads each file once through @portfolio/core's
+// is set. It opens no store and no data directory, and writes nothing (it
+// calls no node:fs API that can): it lists the directory, reads each file once through @portfolio/core's
 // store-free verifyBundle(), and keeps in memory what the reference's public
 // view serves. A request never reads the mount, so a change there does
 // nothing until the server restarts.
@@ -92,26 +92,22 @@ export function directoryFiles(dir: string): BundleFiles {
       return entries;
     },
     async read(file, limit) {
-      const handle = await open(
-        path.join(/*turbopackIgnore: true*/ dir, ...file.split('/')),
-        constants.O_RDONLY | constants.O_NOFOLLOW,
-      );
-      try {
-        if (!(await handle.stat()).isFile()) throw new Error('Not a regular file.');
-        const chunks: Buffer[] = [];
-        let length = 0;
-        // One byte past the limit, so a file that grew past it shows.
-        while (length <= limit) {
-          const chunk = Buffer.alloc(Math.min(64 * 1024, limit + 1 - length));
-          const { bytesRead } = await handle.read(chunk, 0, chunk.length, length);
-          if (bytesRead === 0) break;
-          chunks.push(chunk.subarray(0, bytesRead));
-          length += bytesRead;
-        }
-        return new Uint8Array(Buffer.concat(chunks, length));
-      } finally {
-        await handle.close();
+      const at = path.join(/*turbopackIgnore: true*/ dir, ...file.split('/'));
+      // A regular file, opened read-only without following a link, and read
+      // to one byte past the limit, so a file that grew past it shows.
+      if (!(await lstat(at)).isFile()) throw new Error('Not a regular file.');
+      const chunks: Buffer[] = [];
+      let length = 0;
+      const stream = createReadStream(at, {
+        flags: constants.O_RDONLY | constants.O_NOFOLLOW,
+        start: 0,
+        end: limit,
+      });
+      for await (const chunk of stream) {
+        chunks.push(chunk as Buffer);
+        length += (chunk as Buffer).byteLength;
       }
+      return new Uint8Array(Buffer.concat(chunks, length));
     },
   };
 }
