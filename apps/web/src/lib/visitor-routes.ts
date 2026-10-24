@@ -26,10 +26,11 @@ export interface VisitorPath {
   /** The path below `basePath`, as segments: a catch-all route's params. */
   readonly segments: readonly string[];
   /**
-   * Where the routes are mounted: '' at the site root, '/sample' under demo,
-   * and a preview frame's grant path (#7).
+   * Where the routes are mounted: '' at the site root, '/sample' and the
+   * read-only reference's '/reference' under demo (#9), and a preview
+   * frame's grant path (#7).
    */
-  readonly basePath: '' | '/sample' | `/preview/${string}`;
+  readonly basePath: '' | '/sample' | '/reference' | `/preview/${string}`;
   /** The query every internal link and redirect keeps, such as /sample's `variant`. */
   readonly query?: Readonly<Record<string, string>>;
   /** The variant to render in place of the site's selection, as /sample's `?variant=` names one. */

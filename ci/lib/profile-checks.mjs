@@ -695,7 +695,10 @@ export function renditionProblems(pathname, response) {
  * - `served`: 200, for a pattern whose concrete path is real, as /sample's
  *   empty optional catch-all is the bundled sample's home;
  * - `status-document`: a grant route with no active grant, #7's status
- *   document to every method.
+ *   document to every method;
+ * - `unmounted`: a 404 to every method, for a page that names something only
+ *   once a mount the image doesn't have is there, as demo's /reference (#9)
+ *   with no reference, and that other profiles don't serve at all.
  *
  * A `sample`, by name in SAMPLES, adds a real path below the pattern, found
  * in a page the running app serves, with what its answer must be.
@@ -709,6 +712,10 @@ export const DYNAMIC_ROUTES = Object.freeze({
   '/preview/[grant]/[[...route]]': { madeUp: 'status-document' },
   '/preview-assets/[grant]/[...path]': { madeUp: 'status-document' },
   [MEDIA_PATTERN]: { madeUp: 'media-miss', sample: 'rendition' },
+  // demo's read-only reference (#9): the image mounts none, so its pages
+  // name nothing there, and its renditions route answers #10's plain 404.
+  '/reference/[[...path]]': { madeUp: 'unmounted' },
+  '/reference/media/[...path]': { madeUp: 'media-miss' },
 });
 
 /** What a made-up path below a dynamic pattern may be expected to answer. */
@@ -717,6 +724,7 @@ export const MADE_UP_EXPECTATIONS = Object.freeze([
   'media-miss',
   'served',
   'status-document',
+  'unmounted',
 ]);
 
 /** Whether a route pattern has a dynamic segment, such as [slug] or [[...path]]. */

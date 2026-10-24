@@ -56,3 +56,19 @@ test('the showroom is / alone, and /sample is it and every path below it, read p
     assert.equal(demoPagePath(path), null, path);
   }
 });
+
+test('/reference is it and every path below it, its renditions included, read percent-decoded (#9)', () => {
+  for (const path of [
+    '/reference',
+    '/reference/',
+    '/reference/work/tide-tables',
+    '/reference/media/cover/abc/w480-a1.webp',
+    '/%72eference',
+    '/reference%2Fx',
+  ]) {
+    assert.equal(demoPagePath(path), 'reference', path);
+  }
+  for (const path of ['/references', '/x/reference', '/Reference', '/sample/reference']) {
+    assert.notEqual(demoPagePath(path), 'reference', path);
+  }
+});

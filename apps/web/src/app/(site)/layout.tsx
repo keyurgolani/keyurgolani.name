@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react';
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import type { PublicView } from '@portfolio/schema';
 import { experienceHead } from '~/lib/experience-head';
 import { fallbackBoundary } from '~/lib/fallback-boundary';
-import { requireDeploymentConfig } from '~/server/config-store';
+import { requireDeploymentConfig, servedReference } from '~/server/config-store';
 import { getPublicView } from '~/server/public-view';
+import { CONTENT_HEADER } from '~/server/route-header';
 import '~/lib/experience-styles';
 import { FallbackBoundaryProvider } from '../_chrome/fallback-boundary';
 
@@ -14,11 +16,17 @@ import { FallbackBoundaryProvider } from '../_chrome/fallback-boundary';
 export const dynamic = 'force-dynamic';
 
 /**
- * The public view of the live pair, or null when the catalog can't produce
- * one. Under `next dev` an invalid edit lands here; the layout renders
+ * The public view of the live pair, or of the demo's reference on its own
+ * pages, or null when the catalog can't produce one. Under `next dev` an invalid edit lands here; the layout renders
  * neutral defaults and the page's own failure reaches (site)/error.tsx.
  */
 async function liveView(): Promise<PublicView | null> {
+  // A page of the demo's read-only reference (#9), as proxy.ts marks it, and
+  // no client can: the reference's own verified view, never the sample's.
+  if ((await headers()).get(CONTENT_HEADER) === 'reference') {
+    const reference = servedReference();
+    if (reference) return reference.view;
+  }
   try {
     return await getPublicView();
   } catch {

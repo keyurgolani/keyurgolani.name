@@ -77,7 +77,19 @@ export async function registerDeployment(): Promise<Registration> {
   await result.state.catalog.getLive().catch(() => undefined);
   // The server keeps running, so stdout can take its time with these.
   for (const issue of result.issues) console.log(issueLogLine(issue, result.profile));
-  log({ level: 'info', event: 'deployment.config', ...result.summary });
+  // Under demo, whether its read-only reference serves (#9): `unavailable`
+  // when one is configured and didn't verify, which the warnings above say why.
+  const reference =
+    result.profile !== 'demo'
+      ? {}
+      : {
+          reference: result.state.reference
+            ? 'served'
+            : result.state.config.referenceDir !== undefined
+              ? 'unavailable'
+              : 'absent',
+        };
+  log({ level: 'info', event: 'deployment.config', ...result.summary, ...reference });
   // read-only and demo derive their media now, in the background, logging
   // each asset's hash (#10, Risk 3); owner's comes from its store.
   const { config } = result.state;

@@ -40,11 +40,21 @@ export function publicViewOf(unit: PublicationUnit): PublicView {
   const media = liveMediaDocument(unit);
   const cached = views.get(unit);
   if (cached && cached.media === media) return cached.view;
-  const view = resolvePortfolioView(
-    unit,
-    { media, snapshots: unit.snapshots },
-    { mediaBase: MEDIA_BASE, extensions: CONTENT_EXTENSIONS },
-  );
+  const view = viewOf(unit, media, MEDIA_BASE);
   views.set(unit, { media, view });
   return view;
+}
+
+/**
+ * The public view of `unit` with the media document `media`, its
+ * renditions under `mediaBase`: what the live site shows under /media, and
+ * the demo's read-only reference (#9) under /reference/media. One function
+ * for both, so the reference drops what the live site drops.
+ */
+export function viewOf(unit: PublicationUnit, media: unknown, mediaBase: string): PublicView {
+  return resolvePortfolioView(
+    unit,
+    { media, snapshots: unit.snapshots },
+    { mediaBase, extensions: CONTENT_EXTENSIONS },
+  );
 }

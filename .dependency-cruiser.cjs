@@ -228,6 +228,66 @@ module.exports = {
       to: { path: '^packages/core/src/(?!index\\.ts$|catalog/)' },
     },
     {
+      name: 'bundle-reader-reaches-no-store',
+      severity: 'error',
+      comment:
+        "@portfolio/core's bundle reader (#9, #3's provisional bundle format 1) is what the " +
+        "demo's read-only reference is verified with, at startup, with no store: nothing it " +
+        'reaches, by any path, is the revision store, owner code, the owner load trace, a ' +
+        "file write, or #10's derivation and its sharp. It reads files only through the port " +
+        'its caller hands it.',
+      from: { path: '^packages/core/src/catalog/bundle\\.ts$' },
+      to: {
+        reachable: true,
+        path: [
+          '^packages/core/src/(?:store|auth|audit|preview|data)/',
+          '^packages/core/src/(?:load-trace|owner|cli)\\.ts$',
+          '^packages/core/src/catalog/(?:source|media/)',
+          '^apps/',
+          '^node_modules/\\.pnpm/sharp@',
+          '^node:fs',
+          '^fs$',
+        ],
+      },
+    },
+    {
+      name: 'demo-code-only-from-composition',
+      severity: 'error',
+      comment:
+        "Demo code, server/demo/ (#9's read-only reference), loads only through the " +
+        "composition root's demo branch, so owner and read-only never evaluate it. Tests may " +
+        'import it.',
+      from: {
+        pathNot: ['^apps/web/src/server/(demo/|composition\\.ts$)', '\\.test\\.(?:tsx?|mjs)$'],
+      },
+      to: { path: '^apps/web/src/server/demo/' },
+    },
+    {
+      name: 'composition-loads-demo-code-only-through-import',
+      severity: 'error',
+      comment:
+        'The composition root reaches demo code only through import() in its demo branch, ' +
+        'never a static or type import (#9), as it reaches owner code.',
+      from: { path: '^apps/web/src/server/composition\\.ts$' },
+      to: { path: '^apps/web/src/server/demo/', dependencyTypesNot: ['dynamic-import'] },
+    },
+    {
+      name: 'demo-code-imports-no-owner-code',
+      severity: 'error',
+      comment:
+        "The demo's read-only reference (#9) opens no store and no data directory: server/demo/ " +
+        "imports no owner module, of the app or of @portfolio/core, and the core's owner entry " +
+        'least of all.',
+      from: { path: '^apps/web/src/server/demo/', pathNot: '\\.test\\.ts$' },
+      to: {
+        path: [
+          '^apps/web/src/server/owner/',
+          '^packages/core/src/(?!index\\.ts$|catalog/)',
+          '^apps/web/src/server/(?:catalog-source|startup-media|live-media)\\.ts$',
+        ],
+      },
+    },
+    {
       name: 'composition-loads-owner-code-only-through-import',
       severity: 'error',
       comment:

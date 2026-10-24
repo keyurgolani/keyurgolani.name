@@ -470,6 +470,9 @@ function plan(profile, leaks, origin) {
       for (const method of METHODS.filter((each) => each !== 'GET')) {
         add(method, concrete(entry.pattern), status(404));
       }
+    } else if (madeUpOf(entry) === 'unmounted') {
+      // demo's read-only reference (#9), which the image mounts none of.
+      for (const method of METHODS) add(method, concrete(entry.pattern), status(404));
     } else if (access === 'session' && entry.kind === 'page') {
       // No session cookie: proxy.ts sends it to sign-in on the canonical origin (#2).
       add('GET', concrete(entry.pattern), (response) => {

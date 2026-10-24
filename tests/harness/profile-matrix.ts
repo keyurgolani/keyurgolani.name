@@ -32,6 +32,7 @@ import {
 } from './canaries.mjs';
 import { DEFAULT_SITE } from './app-server.mjs';
 import { expect, test, type App, type AppOptions } from './fixtures';
+import { REFERENCE_MOUNT } from './reference-fixture';
 import { VARIANTS } from './registry';
 import { headerProblems, isPreviewPath, isStudioPath, withoutNonces } from './route-headers.mjs';
 import { withRscHash } from './rsc';
@@ -78,9 +79,17 @@ const ENV_FILES: AppOptions['envFiles'] = {
 /** The read-only profile on the harness fixture, seeded for the canary scan. */
 export const READ_ONLY_APP: AppOptions = { sourceName: CANARY_SOURCE, envFiles: ENV_FILES };
 
-/** The demo profile on the bundled sample pair, with no source directory: demo reads none. */
+/**
+ * The demo profile on the bundled sample pair, with no source directory:
+ * demo reads none. It mounts a copy of the CI reference fixture, so the
+ * matrix runs the read-only reference's routes served (#9).
+ */
 export const DEMO_APP: AppOptions = {
-  env: { PORTFOLIO_PROFILE: 'demo', PORTFOLIO_SOURCE_DIR: '' },
+  env: {
+    PORTFOLIO_PROFILE: 'demo',
+    PORTFOLIO_SOURCE_DIR: '',
+    PORTFOLIO_REFERENCE_DIR: REFERENCE_MOUNT,
+  },
   envFiles: ENV_FILES,
   portfolio: null,
   site: null,
@@ -214,6 +223,8 @@ function routeFileSpellings(): string[] {
  */
 /** The live media's renditions (#10). */
 const MEDIA_PATTERN = '/media/[...path]';
+/** The read-only reference's renditions (#9), which answer as /media's do. */
+const REFERENCE_MEDIA_PATTERN = '/reference/media/[...path]';
 
 const namesNothing = (entry: Routes.RouteEntry) =>
   entry.kind === 'page' && entry.grant === undefined && concrete(entry.pattern).includes('probe');
@@ -603,7 +614,9 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
     const missing = namesNothing(entry) || unbuilt(entry);
     // /media (#10): every profile serves it, and a path that names no
     // rendition the live view keeps, as the probe doesn't, is its plain 404.
-    const rendition = served && entry.pattern === MEDIA_PATTERN;
+    // So is demo's /reference/media (#9), for the reference's view.
+    const rendition =
+      served && (entry.pattern === MEDIA_PATTERN || entry.pattern === REFERENCE_MEDIA_PATTERN);
     const state = rendition
       ? 'served, a 404 that is never cached for a rendition the live view lacks, and a 405 to anything but GET and HEAD'
       : grant

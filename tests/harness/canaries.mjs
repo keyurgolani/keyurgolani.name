@@ -14,6 +14,55 @@ export const CANARY_SOURCE = 'canary-source-0f3b9a64';
 export const CANARY_DATA = 'canary-data-3e9d51b0';
 /** Sent in every request body, which no response may echo. */
 export const CANARY_BODY = 'canary-draft-7c1e04aa';
+/**
+ * What the CI reference fixture (#9, tests/fixtures/reference-export) holds
+ * that the demo must never send: its private record, its hidden section,
+ * its private image's bytes, its bundle's events, the private work's slug
+ * (a prefix of the private image's id), and the mount's own directory name.
+ * apps/web/scripts/reference-fixture.test.ts holds these to the fixture's.
+ */
+export const REFERENCE_CANARIES = Object.freeze([
+  'CANARY-REF-PRIVATE-RECORD',
+  'CANARY-REF-HIDDEN-SECTION',
+  'CANARY-REF-PRIVATE-MEDIA',
+  'CANARY-REF-EVENT-REASON',
+  'canary-ref-private',
+  'canary-ref-private-media',
+  'wren/private.png',
+  'reference-export',
+]);
+
+/**
+ * Each reference canary `text` carries, in any encoding, but for one the
+ * request asked for by name: Next echoes the URL as sent in its payloads,
+ * the 404 page's included, so a canary that is exactly one of the sent
+ * path's segments, or one of its query values, decoded, is that echo and no
+ * leak. Only the exact value is excused, never a canary that merely holds
+ * it or that it holds: a request for /reference/work/canary-ref-private
+ * still fails on canary-ref-private-media anywhere in its answer.
+ *
+ * @param {string} text a response's headers and body
+ * @param {string} sent the path and query the request asked for
+ * @param {readonly string[]} [list]
+ * @returns {string[]} the canaries found
+ */
+export function referenceLeaks(text, sent, list = REFERENCE_CANARIES) {
+  const url = new URL(sent, 'http://unset.invalid');
+  const decode = (/** @type {string} */ part) => {
+    try {
+      return decodeURIComponent(part);
+    } catch {
+      return part;
+    }
+  };
+  const echoed = new Set([
+    ...url.pathname.split('/').filter(Boolean).map(decode),
+    ...[...url.searchParams.values()],
+  ]);
+  return list.filter(
+    (canary) => !echoed.has(canary) && encodings(canary).some((form) => text.includes(form)),
+  );
+}
 /** Fields only the config summary has, which only an owner session gets, through config.status. */
 export const SUMMARY_FIELDS = ['"proxyHops"', '"adapters"'];
 
@@ -73,6 +122,7 @@ export function canaries(root, { secrets = [], summary = true } = {}) {
         CANARY_SOURCE,
         CANARY_DATA,
         CANARY_BODY,
+        ...REFERENCE_CANARIES,
         root,
         ...(summary ? SUMMARY_FIELDS : []),
         ...secrets,

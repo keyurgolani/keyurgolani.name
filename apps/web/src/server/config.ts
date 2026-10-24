@@ -26,6 +26,7 @@ export const DEPLOYMENT_KEYS = {
   PORTFOLIO_MEDIA_ROOT: ['owner', 'read-only'],
   PORTFOLIO_TRUSTED_PROXY_HOPS: PROFILES,
   PORTFOLIO_PREVIEW_ORIGIN: ['owner', 'demo'],
+  PORTFOLIO_REFERENCE_DIR: ['demo'],
   PORTFOLIO_DATA_DIR: ['owner'],
   PORTFOLIO_AUTH_PASSWORD_HASH: ['owner'],
   PORTFOLIO_AUTH_SESSION_IDLE_MINUTES: ['owner'],
@@ -104,6 +105,12 @@ export interface DeploymentConfig {
   readonly trustedProxyHops: number;
   /** Origin for isolated previews (`owner`, `demo`). */
   readonly previewOrigin?: string;
+  /**
+   * Absolute PORTFOLIO_REFERENCE_DIR (`demo`, #9): an optional read-only
+   * mount of a full export, which startup verifies and the demo serves at
+   * /reference. Unset, there is no reference.
+   */
+  readonly referenceDir?: string;
   /** Writable data directory (`owner`), for auth state, the audit log, and revisions. */
   readonly dataDir?: string;
   /** Set when `dataDir` is `next dev`'s default rather than PORTFOLIO_DATA_DIR, so startup may make it. */
@@ -437,6 +444,12 @@ export function readDeploymentConfig(env: Env, options: ReadConfigOptions): Read
       ? path.resolve(/*turbopackIgnore: true*/ options.cwd, mediaValue.value)
       : undefined;
 
+  const referenceValue = resolveFor('PORTFOLIO_REFERENCE_DIR');
+  const referenceDir =
+    referenceValue.state === 'set'
+      ? path.resolve(/*turbopackIgnore: true*/ options.cwd, referenceValue.value)
+      : undefined;
+
   const dataValue = resolveFor('PORTFOLIO_DATA_DIR');
   const dataDefault =
     dataValue.state === 'unset' &&
@@ -530,6 +543,7 @@ export function readDeploymentConfig(env: Env, options: ReadConfigOptions): Read
     ...(sourceDir !== undefined ? { sourceDir } : {}),
     ...(mediaRoot !== undefined ? { mediaRoot } : {}),
     ...(previewOrigin !== undefined ? { previewOrigin } : {}),
+    ...(referenceDir !== undefined ? { referenceDir } : {}),
     ...(dataDir !== undefined
       ? { dataDir: path.resolve(/*turbopackIgnore: true*/ options.cwd, dataDir) }
       : {}),

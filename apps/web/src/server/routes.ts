@@ -7,7 +7,7 @@ import {
 import { VARIANTS } from '../lib/generated/registry.meta';
 import { environmentValues } from '../lib/preview-environment';
 import { accessIn, PROFILES, type Access, type Capability, type Profile } from './capabilities';
-import { liveCaseStudies } from './config-store';
+import { getDeploymentConfig, liveCaseStudies, servedReference } from './config-store';
 import { experiencePattern } from './experience';
 
 // The route table (#1, item 13): every page, route handler, and metadata
@@ -169,6 +169,23 @@ function namesWork(
 }
 
 /**
+ * Whether `segments`, below /reference, name a page of the demo's
+ * read-only reference (#9): one its verified view routes, by namesPage()'s
+ * rules and its own case-study slugs, so a private work's slug and a
+ * reserved segment, `media` included, never do. A demo with no reference
+ * names none. Under another profile, which serves no reference, a path
+ * names what it would below /sample, by namesPage()'s rules, so it answers
+ * as a route that profile doesn't serve, as /sample does there, and a path
+ * that names nothing, such as the route file's own, is missing.
+ */
+function namesReference(installed: Installed, segments: readonly string[]): boolean {
+  const reference = servedReference();
+  if (reference) return namesPage(installed, segments, reference.caseStudies);
+  const profile = getDeploymentConfig()?.profile;
+  return profile !== undefined && profile !== 'demo' && namesPage(installed, segments);
+}
+
+/**
  * Whether this build serves the preview's dev fixture route (#7, Slice 1,
  * item 8): only under `next dev`. Next writes NODE_ENV into the code as it
  * compiles it, so a production build never serves it, whatever environment
@@ -248,6 +265,32 @@ const ROUTES = [
     // registry doesn't accept falls back on its axis, and the page answers
     // a 307 to the canonical query (#9).
     names: ({ segments }, installed) => namesPage(installed, segments.slice(1)),
+  },
+  // The demo's read-only reference (#9): its pages, in the composition its
+  // site selects, with /sample's query, and its renditions. Demo alone
+  // grants reference.read. A path below it names a page only once startup
+  // has verified a reference, and then by its own view's slugs; a demo
+  // without one has no page here, the 404 page. Under every other profile
+  // it names as it would there, so the profile's own answer is the plain
+  // 404 of a route it doesn't serve. /reference/media is the renditions'
+  // route, never a page: `media` is a reserved segment, which namesPage()
+  // refuses.
+  {
+    pattern: '/reference/[[...path]]',
+    kind: 'page',
+    capability: 'reference.read',
+    visitor: true,
+    experience: true,
+    names: ({ segments }, installed) => namesReference(installed, segments.slice(1)),
+  },
+  // GET /reference/media/<assetId>/<sha256>/<rendition>.<ext>: a rendition
+  // the reference's public view keeps, from memory, and a no-store 404 for
+  // anything else.
+  {
+    pattern: '/reference/media/[...path]',
+    kind: 'handler',
+    capability: 'reference.read',
+    readOnly: true,
   },
   // Studio (#2): the Owner Studio shell (#8), and sign-in.
   // Neither reads the published site, so neither is a visitor route.

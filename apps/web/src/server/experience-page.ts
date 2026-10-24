@@ -8,8 +8,8 @@ import type { SearchParams } from '~/lib/sample';
 import { canonicalLocation, isCanonical, sampleQuery, type SampleQuery } from '~/lib/sample-query';
 import { REGISTRY } from '~/lib/variants';
 import { resolveVisitorPath, type VisitorPath } from '~/lib/visitor-routes';
-import { requireDeploymentConfig } from './config-store';
-import { SAMPLE_PATTERN, segmentFor } from './experience';
+import { requireDeploymentConfig, servedReference } from './config-store';
+import { REFERENCE_PATTERN, SAMPLE_PATTERN, segmentFor } from './experience';
 import { getPublicView } from './public-view';
 import { resolveRoute } from './routes';
 import { visitorPageAppearance } from './visitor-appearance';
@@ -34,7 +34,9 @@ import { visitorPageAppearance } from './visitor-appearance';
 // a 307 to the canonical route of a view only another installed variant
 // declares, or the 404 page. demo's root shows the sample, and demo serves
 // the sample's routes under /sample alone, so the root's links, such as a
-// works list's to a case study (#10b), go there.
+// works list's to a case study (#10b), go there. Under demo, /reference
+// renders the read-only reference (#9) from the view startup verified,
+// with /sample's query rules, its links kept under /reference.
 
 interface ExperienceProps {
   readonly params: Promise<{ readonly route?: readonly string[] }>;
@@ -77,6 +79,11 @@ export function experiencePage(
     const decision = resolveRoute(profile, asked, query);
     if (decision.status !== 'served' || !decision.entry.experience) notFound();
     const sample = decision.entry.pattern === SAMPLE_PATTERN;
+    // The demo's read-only reference (#9): its own verified view, which
+    // startup built once, in place of the live one, and never the sample's.
+    const referenced = decision.entry.pattern === REFERENCE_PATTERN;
+    const reference = referenced ? servedReference() : undefined;
+    if (referenced && !reference) notFound();
     let path: VisitorPath = { segments, basePath: '' };
     let selection: SampleQuery | null = null;
     let readView = getPublicView;
@@ -86,18 +93,20 @@ export function experiencePage(
     // from the canonical query alone. Any other spelling of it answers a 307
     // to the canonical URL on the deployment's own origin. Next still echoes
     // the URL as sent, percent-encoded, in the payloads around the page.
-    // Only /sample's `variant` picks the composition.
-    if (sample || (profile === 'demo' && decision.entry.pattern === '/')) {
-      // One read of the live revision, which the route below renders too.
-      const view = await getPublicView();
+    // Only /sample's and /reference's `variant` picks the composition.
+    if (sample || reference || (profile === 'demo' && decision.entry.pattern === '/')) {
+      // One read of the live revision, or the reference's view, which the route below renders too.
+      const view = reference ? reference.view : await getPublicView();
       readView = async () => view;
-      selection = sampleQuery(query, view.site, { registered: sample ? registry : [] });
+      selection = sampleQuery(query, view.site, {
+        registered: sample || reference ? registry : [],
+      });
       if (!isCanonical(query, selection)) redirect(canonicalLocation(origin, segments, selection));
     }
-    if (sample && selection) {
+    if ((sample || reference) && selection) {
       path = {
         segments: segments.slice(1),
-        basePath: '/sample',
+        basePath: sample ? '/sample' : '/reference',
         query: selection.query,
         ...(selection.selected === undefined ? {} : { selected: selection.selected }),
       };
@@ -132,7 +141,7 @@ export function experiencePage(
       load,
       hostModules,
       linkBase:
-        profile === 'demo' && !sample
+        profile === 'demo' && !sample && !reference
           ? { basePath: '/sample' }
           : { basePath: path.basePath, query: path.query },
       route: route.target,

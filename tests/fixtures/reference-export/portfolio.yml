@@ -1,0 +1,104 @@
+# CI fixture: the demo's read-only reference (#9), a full export of a
+# fictional person's published revision, as #3's export-revision lays one
+# out in its provisional bundle format 1. `pnpm fixture:reference` writes
+# every other file here from this pair and site.yml, and a unit test fails
+# when they drift. Nothing here is a real person's or a real reference.
+#
+# It holds canaries the demo must never send anywhere: a private work, in a
+# visible section and with a case study, CANARY-REF-PRIVATE-RECORD; a
+# section the site document hides, CANARY-REF-HIDDEN-SECTION; and a private
+# image, canary-ref-private-media, whose rendition carries
+# CANARY-REF-PRIVATE-MEDIA in its bytes. ref-unplaced is a public image
+# nothing visible places, so its rendition is never served either.
+# Reserved example domains only, and no github section, so nothing fetches.
+schemaVersion: 3
+locale: en
+direction: ltr
+
+identity:
+  name: Wren Halloway
+  tagline: Writes field guides for software that has to last.
+
+links:
+  - platform: website
+    url: https://wren.example.com
+    label: Website
+
+practice:
+  thesis: Durable systems are mostly careful notes.
+
+works:
+  - id: tide-tables
+    slug: tide-tables
+    title: Tide tables
+    medium: writing
+    url: https://wren.example.com/tide-tables
+    publishedAt: '2026-03-02'
+    summary: A field guide to scheduling work around the slow parts of a system.
+    cover:
+      asset: tide-tables-cover
+      caption: A tide chart, drawn by hand.
+    media:
+      - asset: canary-ref-private-media
+        caption: CANARY-REF-PRIVATE-MEDIA
+    caseStudy:
+      challenge: Batch jobs collided with the nightly backups.
+  - id: canary-ref-private
+    slug: canary-ref-private
+    title: CANARY-REF-PRIVATE-RECORD
+    medium: writing
+    visibility: private
+    publishedAt: '2026-04-05'
+    summary: CANARY-REF-PRIVATE-RECORD
+    cover:
+      asset: canary-ref-private-media
+    caseStudy:
+      challenge: CANARY-REF-PRIVATE-RECORD
+  - id: harbor-notes
+    title: Harbor notes
+    medium: writing
+    url: https://wren.example.com/harbor-notes
+    publishedAt: '2026-05-06'
+    summary: CANARY-REF-HIDDEN-SECTION
+
+media:
+  - id: tide-tables-cover
+    kind: image
+    source: wren/tide-tables.png
+    alt: A hand-drawn tide chart, blue curves on a cream page.
+  - id: canary-ref-private-media
+    kind: image
+    source: wren/private.png
+    visibility: private
+    alt: CANARY-REF-PRIVATE-MEDIA
+  - id: ref-unplaced
+    kind: image
+    source: wren/unplaced.png
+    alt: A plain grey square nothing shows.
+
+contact:
+  message: Write to the address on the website.
+
+sections:
+  - kind: hero
+    id: top
+    tagline: Writes field guides for software that has to last.
+
+  - kind: practice
+    id: thesis
+    title: Practice
+    part: thesis
+
+  - kind: works
+    id: writing
+    title: Writing
+    items: [tide-tables, canary-ref-private]
+
+  - kind: works
+    id: canary-ref-hidden
+    title: CANARY-REF-HIDDEN-SECTION
+    items: [harbor-notes]
+
+  - kind: contact
+    id: contact
+    title: Contact
