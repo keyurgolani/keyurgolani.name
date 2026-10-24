@@ -128,7 +128,7 @@ import {
 // /reference, and Demo Studio's paths get the demo policy from
 // server/demo-headers.ts in place of the public one or Studio's: Studio's,
 // with worker-src 'self' and form-action 'none', and frame-ancestors 'self'
-// on /sample alone. A page of the read-only reference goes on marked
+// on /sample and /reference alone. A page of the read-only reference goes on marked
 // x-portfolio-content: reference, so the site layout reads its view, and a
 // client's own copy of that mark goes no further than here, on any route.
 //
@@ -178,15 +178,20 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   }
   const studioPath = isStudioPath(pathname);
   const studio = studioPath && hasStudio(deployment.profile);
-  // Under demo (#9), the showroom, the sample, and Demo Studio get the demo
-  // policy, which only /sample's lets the demo's own pages frame.
+  // Under demo (#9), the showroom, the sample, the reference, and Demo Studio
+  // get the demo policy, which only /sample's and /reference's let the demo's
+  // own pages frame: Demo Studio's preview frame shows either.
   const demoPage =
     deployment.profile === 'demo' && !preview ? (studio ? 'studio' : demoPagePath(pathname)) : null;
   // Every other path, a Studio path under a profile with none among them,
   // gets the public site's policy (#6, item 8), its nonce on the request
   // too, so Next puts it on the scripts it renders.
   const csp = demoPage
-    ? demoCsp(newNonce(), COMPILED_MODE, demoPage === 'sample' ? "'self'" : "'none'")
+    ? demoCsp(
+        newNonce(),
+        COMPILED_MODE,
+        demoPage === 'sample' || demoPage === 'reference' ? "'self'" : "'none'",
+      )
     : studio
       ? studioCsp(newNonce(), COMPILED_MODE, deployment.previewOrigin)
       : preview

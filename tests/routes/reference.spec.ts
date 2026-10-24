@@ -16,7 +16,7 @@ import { DEMO, DEMO_APP } from './apps';
 
 // The demo's read-only reference (#9) on the fixture host, under demo, with
 // the CI fixture mounted: its pages render its own verified view, under the
-// demo policy framed by no one, with /sample's canonical query; a private
+// demo policy framed by the demo's own pages alone, with /sample's canonical query; a private
 // work and anything else its view doesn't route is the 404 page; its
 // renditions serve from memory with the record's type, nosniff, and a year,
 // and everything else there is a no-store 404; no canary the fixture holds
@@ -77,7 +77,7 @@ async function leaks(response: APIResponse, sent: string): Promise<string[]> {
 }
 
 test(
-  'a reference page renders its own view, under the demo policy framed by no one, with no JSON-LD',
+  "a reference page renders its own view, under the demo policy framed by the demo's own pages alone, with no JSON-LD",
   { annotation: [ROUTE, DEMO] },
   async ({ request }) => {
     for (const at of ['/reference', '/reference/work/tide-tables']) {
@@ -86,7 +86,8 @@ test(
       const headers = response.headers();
       const policy = DEMO_CSP.exec(headers['content-security-policy'] ?? '');
       expect(policy, at).not.toBeNull();
-      expect(policy![2], at).toBe("'none'");
+      // Demo Studio's own frame shows it, and no other site can (9-4a).
+      expect(policy![2], at).toBe("'self'");
       expect(headers['x-robots-tag'], at).toBe('noindex');
       expect(headers['set-cookie'], at).toBeUndefined();
       const html = await response.text();
