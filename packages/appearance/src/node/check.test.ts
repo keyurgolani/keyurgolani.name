@@ -199,6 +199,18 @@ test("a known-bad input's run gates only the combinations that hold its pack, an
   }
 });
 
+test('bad-texture fails only for its texture: the same fill untextured passes on anchor-v2 schemes (#20 PR 2c)', () => {
+  const read = readKnownBadFixture('bad-texture', createAppearanceRegistry(META));
+  assert.ok(read.ok);
+  const manifest = read.fixture.manifest as { tokens: Record<string, string> };
+  const untextured = {
+    ...read.fixture,
+    manifest: { ...manifest, tokens: { ...manifest.tokens, texture: 'none' } },
+  };
+  const run = runKnownBad(untextured, META);
+  assert.deepEqual(run.check?.failures ?? run.problems, []);
+});
+
 test('every refusal the refined body lists for a language stylesheet has its known-bad input', () => {
   const audits = knownBadNames().filter((name) => name.startsWith('audit-'));
   for (const rule of [
