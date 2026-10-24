@@ -19,21 +19,26 @@ export const DEMO_FRAME_SANDBOX = 'allow-scripts';
 /**
  * Whether `src` is a frame source Demo Studio may load: a path on its own
  * origin under /sample, or under /reference but for its renditions route,
- * /reference/media, which is no page.
+ * /reference/media, which is no page. Its path is read decoded, as
+ * proxy.ts's demoPagePath() reads it, so /%72eference counts as /reference;
+ * one that doesn't decode, or that decodes to a dot segment or a backslash,
+ * such as /sample/..%2fstudio, is refused.
  */
 export function isDemoFrameSource(src: string): boolean {
   if (!src.startsWith('/') || src.startsWith('//')) return false;
-  let url: URL;
+  const base = 'http://studio.invalid';
+  let path: string;
   try {
-    url = new URL(src, 'http://studio.invalid');
+    const url = new URL(src, base);
+    if (url.origin !== base) return false;
+    path = decodeURIComponent(url.pathname);
+    // Decoded, it names the same path a browser would resolve it to.
+    if (path.includes('\\') || new URL(path, base).pathname !== path) return false;
   } catch {
     return false;
   }
-  if (url.origin !== 'http://studio.invalid') return false;
-  if (/^\/sample(?:\/|$)/.test(url.pathname)) return true;
-  return (
-    /^\/reference(?:\/|$)/.test(url.pathname) && !/^\/reference\/media(?:\/|$)/.test(url.pathname)
-  );
+  if (/^\/sample(?:\/|$)/.test(path)) return true;
+  return /^\/reference(?:\/|$)/.test(path) && !/^\/reference\/media(?:\/|$)/.test(path);
 }
 
 export interface DemoFrameProps {

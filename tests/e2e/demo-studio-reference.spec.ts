@@ -1,3 +1,5 @@
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import type { Frame, Page, Response } from '@playwright/test';
 import { encodings, REFERENCE_CANARIES } from '../harness/canaries.mjs';
 import { expect, test } from '../harness/fixtures';
@@ -87,26 +89,45 @@ test(
   'a page on another origin cannot frame /reference: the demo policy lets the demo’s own pages alone',
   { annotation: [REFERENCE, DEMO] },
   async ({ page, app }) => {
-    // A made-up site, answered here, that frames the reference.
-    await page.route('https://elsewhere.test/**', (route) =>
-      route.fulfill({
-        contentType: 'text/html',
-        body: `<!doctype html><title>Elsewhere</title><iframe src="${app.origin}/reference"></iframe>`,
-      }),
-    );
-    const refused: string[] = [];
-    page.on('console', (message) => {
-      if (/frame-ancestors/i.test(message.text())) refused.push(message.text());
+    // Another origin on loopback itself, a server of the test's own on
+    // 127.0.0.1 at another port, so the framer and the app share an address
+    // space and no Local Network Access check can stand in for the policy.
+    const server = createServer((request, response) => {
+      response.writeHead(200, { 'content-type': 'text/html' });
+      response.end(
+        `<!doctype html><title>Elsewhere</title><iframe src="${app.origin}/reference"></iframe>`,
+      );
     });
-    await page.goto('https://elsewhere.test/');
-    const framed = await page.locator('iframe').elementHandle();
-    const frame = await framed?.contentFrame();
-    // Chromium says so in the console, and puts its own error page in the frame.
-    await expect
-      .poll(() => refused.length > 0 || (frame?.url() ?? '').startsWith('chrome-error:'), {
-        timeout: 10_000,
-      })
-      .toBe(true);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const { port } = server.address() as AddressInfo;
+      const elsewhere = `http://127.0.0.1:${port}/elsewhere`;
+      expect(new URL(elsewhere).origin).not.toBe(app.origin);
+      // Past the harness's egress guard, to this server alone.
+      await page.route(elsewhere, (route) => route.continue());
+      const refused: string[] = [];
+      page.on('console', (message) => {
+        // Chromium names the directive that refused the frame.
+        if (/frame-ancestors 'self'/.test(message.text())) refused.push(message.text());
+      });
+      expect((await page.goto(elsewhere))?.status()).toBe(200);
+      // The frame-ancestors violation alone counts: a frame that failed to
+      // load any other way proves nothing about the policy.
+      await expect
+        .poll(
+          () =>
+            refused.some(
+              (text) =>
+                text.startsWith(`Refused to frame '${app.origin}/`) &&
+                text.includes('because an ancestor violates'),
+            ),
+          { timeout: 10_000 },
+        )
+        .toBe(true);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+    const frame = await (await page.locator('iframe').elementHandle())?.contentFrame();
     const text = await frame?.evaluate(() => document.body?.innerText ?? '').catch(() => '');
     expect(text ?? '').not.toContain('Wren Halloway');
   },
