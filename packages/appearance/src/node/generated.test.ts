@@ -132,7 +132,7 @@ test('the PNG reader reads its input as untrusted: CRCs, chunk order, a size cap
     );
   // A chunk whose CRC doesn't match, the last byte of IEND's CRC flipped.
   const flipped = Buffer.from(good);
-  flipped[flipped.length - 1] ^= 0xff;
+  flipped.writeUInt8(flipped.readUInt8(flipped.length - 1) ^ 0xff, flipped.length - 1);
   refuses(flipped, /IEND chunk fails its CRC/);
   const idat = chunk('IDAT', deflateSync(Buffer.from([0, 1, 2, 3])));
   const ihdr = chunk('IHDR', header(1, 1));
