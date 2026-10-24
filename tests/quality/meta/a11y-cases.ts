@@ -36,6 +36,7 @@ import {
 } from '../lib/a11y/interaction';
 import { killSwitches, MOTION_SAMPLER, motionFindings, osWinsFindings } from '../lib/a11y/motion';
 import { inPage } from '../lib/a11y/probe';
+import { applyRow, audit } from '../lib/run-cell';
 import type { MetaCase, MetaOutcome } from './cases';
 
 const FIXTURES = fileURLToPath(new URL('../fixtures/a11y/', import.meta.url));
@@ -174,6 +175,18 @@ const failureState = (page: Page) => failureStateFindings(page, { axe: false });
 /** A page that needs JavaScript, as the no-JavaScript checks read it; axe has cases of its own. */
 const scriptRequired = (page: Page) =>
   scriptRequiredFindings(page, null, 'no-javascript', { axe: false });
+/** The no-JavaScript row's axe pass on the page, as run-cell.ts runs it: script off, then audit(). */
+const rowAudit = async (page: Page): Promise<Finding[]> => {
+  const row = PREFERENCE_ROWS.find((each) => each.id === 'no-javascript')!;
+  await applyRow(page, row);
+  await page.reload({ waitUntil: 'load' });
+  const { results } = await audit(page, row);
+  return results.violations.map((rule) => ({
+    gate: 'axe',
+    rule: rule.id,
+    actual: `${rule.nodes.length} element(s): ${rule.help}`,
+  }));
+};
 /** The same, with axe, which turns script on for its pass through the page's own session. */
 const scriptRequiredAxe = (page: Page) =>
   scriptRequiredFindings(page, scriptless.get(page) ?? null, 'no-javascript');
@@ -393,6 +406,8 @@ export const A11Y_CASES: readonly MetaCase[] = [
   good('inventory', inventory),
   bad('needs-canvas', 'enhancement.html', 'enhancement', 'semantics|navigation', enhancement),
   good('enhancement', enhancement),
+  // A page that declares nothing is read after its skip link is followed, as a visitor has it.
+  bad('skip-changes', 'enhancement-skip-changes.html', 'enhancement', 'semantics', enhancement),
   // A Studio surface that declares requiresScript: with JavaScript off it says so in #content.
   bad(
     'no-javascript-silent',
@@ -460,6 +475,17 @@ export const A11Y_CASES: readonly MetaCase[] = [
     'failure-state',
     failureState,
   ),
+  // A Reload a script can focus but the keyboard never reaches.
+  {
+    ...bad(
+      'failure-state-unreachable',
+      'failure-state-unreachable.html',
+      'enhancement',
+      'failure-state',
+      failureState,
+    ),
+    reason: /^enhancement failure-state: its control is out of the tab order$/,
+  },
   {
     id: 'enhancement/failure-state',
     gate: 'enhancement',
@@ -578,6 +604,16 @@ export const A11Y_CASES: readonly MetaCase[] = [
       noScript: true,
     },
   ),
+  // And so does the no-JavaScript row's own axe pass, through run-cell's audit().
+  bad('no-javascript-row-faint', 'no-javascript-faint.html', 'axe', 'color-contrast', rowAudit),
+  {
+    id: 'axe/no-javascript-row-notice',
+    gate: 'axe',
+    input: 'tests/quality/fixtures/a11y/no-javascript-notice.html',
+    expect: 'pass',
+    browser: true,
+    run: () => onPage('no-javascript-notice.html', rowAudit),
+  },
   good('axe', axeAll),
   emulationCase('high-contrast', false),
   emulationCase('high-contrast', true),

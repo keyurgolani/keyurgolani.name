@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A page whose script didn't arrive, with Reload out of the tab order</title>
+    <!--
+      Known-bad (#11): a surface that declares requiresScript whose script
+      failed to load, with an alert whose Reload has tabindex="-1": a script
+      can focus it, but the keyboard never reaches it.
+    -->
+  </head>
+  <body>
+    <a href="#content">Skip to the task</a>
+    <h1>Portfolio Studio</h1>
+    <main>
+      <div id="content" tabindex="-1"></div>
+      <div role="alert">
+        <p>Studio couldn't load. Check your connection, then reload Studio.</p>
+        <button type="button" tabindex="-1">Reload Studio</button>
+      </div>
+    </main>
+  </body>
+</html>

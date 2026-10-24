@@ -121,7 +121,7 @@ function rowPath(cell: Cell, row: PreferenceRow): string {
 const scriptless = new WeakMap<Page, CDPSession>();
 
 /** Applies what a row sets on the page rather than the context: the media type, CDP features, JavaScript off, and the motion sampler. */
-async function applyRow(page: Page, row: PreferenceRow): Promise<void> {
+export async function applyRow(page: Page, row: PreferenceRow): Promise<void> {
   if (row.context.javaScriptEnabled === false) {
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setScriptExecutionDisabled', { value: true });
@@ -227,7 +227,7 @@ async function suites(run: SuiteRun): Promise<Finding[]> {
 /** The longest axe waits for the page's finite animations to end. */
 const ANIMATION_WAIT_MS = 2_000;
 
-async function audit(page: Page, row: PreferenceRow) {
+export async function audit(page: Page, row: PreferenceRow) {
   const forced = row.context.forcedColors === 'active';
   const cdp = scriptless.get(page);
   // Read before script turns on: a query axe's pass would flip fails the row.

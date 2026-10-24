@@ -371,7 +371,8 @@ export async function failureStateFindings(
       alert: Boolean(alert),
       control: Boolean(control),
       named: new RegExp(again, 'i').test(name),
-      focused: control !== null && control.tabIndex >= 0 && document.activeElement === control,
+      reachable: control !== null && control.tabIndex >= 0,
+      focused: control !== null && document.activeElement === control,
       busy: [...document.querySelectorAll('[aria-busy="true"]')].filter(
         (element) => element.getClientRects().length > 0,
       ).length,
@@ -381,6 +382,11 @@ export async function failureStateFindings(
     fail("an alert that it couldn't load, under failed enhancement", 'no alert says so');
   } else if (!state.control) {
     fail('a control in the alert to try again, which takes focus', 'the alert has no control');
+  } else if (!state.reachable) {
+    fail(
+      'a control in the alert to try again, which takes focus',
+      'its control is out of the tab order',
+    );
   } else if (!state.focused) {
     fail(
       'a control in the alert to try again, which takes focus',
