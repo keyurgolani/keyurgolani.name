@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { currentGate, writeFailureRecord } from '../../ci/lib/reports.mjs';
 import { readBuildMeta, FALLBACK_ID } from '../quality/cells';
 import { crossProduct, readShard, recordTuple, staticPlan } from './plan';
-import { staticSmoke } from './static';
+import { publicReader, staticSmoke } from './static';
 
 const TAG = '[catalog-static]';
 const WEB = fileURLToPath(new URL('../../apps/web/', import.meta.url));
@@ -25,7 +25,7 @@ function main(): number {
     process.stderr.write(`${TAG} ${(error as Error).message}\n`);
     return 1;
   }
-  const findings = staticSmoke(meta, WEB, tuples);
+  const findings = staticSmoke(meta, publicReader(WEB), tuples);
   const seconds = (performance.now() - started) / 1000;
   const rate = Math.round(tuples.length / Math.max(seconds, 0.001));
   process.stdout.write(

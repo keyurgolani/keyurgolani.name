@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -28,7 +29,8 @@ import {
   staticPlan,
   tuplePath,
 } from './plan';
-import { staticSmoke } from './static';
+import type * as RegistryOptions from '../../apps/web/scripts/registry-options';
+import { servedReader, staticSmoke, type ServedReader } from './static';
 
 // #20's scheduled cross-product: every registered variant x shipping
 // design language x color scheme x typography x display mode the resolver
@@ -241,9 +243,31 @@ test('the seeded draw is a deterministic sample, and CATALOG_SEED reads a non-ne
     assert.throws(() => readSeed(bad), /CATALOG_SEED/, bad);
 });
 
-test("the static smoke checks every tuple's packs, compiled files, and contrast, and names each finding once", () => {
+/**
+ * What registry generation serves, read in memory: a unit run writes the
+ * generated modules alone (#75's served-files rule), so public/ holds no
+ * compiled file to read.
+ */
+async function servedInMemory(): Promise<ServedReader> {
+  // apps/web has no "type": "module", so its scripts are CommonJS to Node, as readBuildMeta() reads them.
+  const { generateRegistry } = createRequire(import.meta.url)(
+    '../../apps/web/scripts/registry-options.ts',
+  ) as typeof RegistryOptions;
+  const generated = await generateRegistry(process.env, { write: false });
+  assert.ok(generated.result.ok, 'registry generation passes');
+  return servedReader([
+    ...(generated.packs ?? []),
+    ...(generated.fonts ?? []),
+    ...(generated.variants ?? []),
+    ...(generated.assets ?? []),
+    ...(generated.stills ?? []),
+  ]);
+}
+
+test("the static smoke checks every tuple's packs, compiled files, and contrast, and names each finding once", async () => {
   const meta = checkoutMeta();
   const tuples = crossProduct(meta);
+  const WEB = await servedInMemory();
   assert.deepEqual(staticSmoke(meta, WEB, tuples), []);
   // A compiled stylesheet that isn't the one registry generation hashed fails every tuple it's in, as one finding.
   const broken: BuildMeta = {

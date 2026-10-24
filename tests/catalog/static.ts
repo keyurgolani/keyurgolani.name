@@ -52,24 +52,47 @@ interface FileRef {
   readonly sha256: string;
 }
 
-/** Whether the file `ref` names under apps/web/public has the bytes registry generation hashed, or why not. */
-function servedProblem(web: string, ref: FileRef, what: string): string | null {
-  const file = path.join(web, 'public', ...ref.url.split('/').filter(Boolean));
-  if (!existsSync(file)) return `${what} ${ref.url} isn't in apps/web/public`;
-  const sha = createHash('sha256').update(readFileSync(file)).digest('hex');
+/** The bytes the host serves at a URL, such as /_portfolio/pack/warm-parchment.<sha>.css, or null when it serves none. */
+export type ServedReader = (url: string) => Uint8Array | null;
+
+/** What a build serves from `web`/public, where a full build:registry writes it: the scheduled job's reader. */
+export function publicReader(web: string): ServedReader {
+  return (url) => {
+    const file = path.join(web, 'public', ...url.split('/').filter(Boolean));
+    return existsSync(file) ? new Uint8Array(readFileSync(file)) : null;
+  };
+}
+
+/**
+ * What registry generation would serve, from the files it returns in
+ * memory (generateRegistry with write: false), each at its URL, as
+ * SERVED_DIRS lays them out. A unit run reads this, since it writes the
+ * modules alone and public/ holds nothing.
+ */
+export function servedReader(
+  files: readonly { readonly url: string; readonly bytes: Uint8Array }[],
+): ServedReader {
+  const served = new Map(files.map(({ url, bytes }) => [url, bytes]));
+  return (url) => served.get(url) ?? null;
+}
+
+/** Whether the file `ref` names is served with the bytes registry generation hashed, or why not. */
+function servedProblem(read: ServedReader, ref: FileRef, what: string): string | null {
+  const bytes = read(ref.url);
+  if (!bytes) return `${what} ${ref.url} isn't served`;
+  const sha = createHash('sha256').update(bytes).digest('hex');
   return sha === ref.sha256 ? null : `${what} ${ref.url} isn't the file registry generation hashed`;
 }
 
-const bytesOf = (web: string, ref: FileRef) =>
-  new Uint8Array(readFileSync(path.join(web, 'public', ...ref.url.split('/').filter(Boolean))));
+const bytesOf = (read: ServedReader, ref: FileRef) => read(ref.url)!;
 
 /**
- * The static smoke over `tuples`, against the build in `web` (apps/web after
- * build:registry, which writes the metadata module and the files it serves).
+ * The static smoke over `tuples`, against the metadata module `meta` and
+ * the files `read` says the build serves.
  */
 export function staticSmoke(
   meta: BuildMeta,
-  web: string,
+  read: ServedReader,
   tuples: readonly Tuple[],
 ): StaticFinding[] {
   const registry = createAppearanceRegistry(meta);
@@ -96,16 +119,16 @@ export function staticSmoke(
       if (!pack.stylesheet && !generator) {
         found.push({ check: 'compile', message: 'compiled no stylesheet' });
       }
-      const problems = files.flatMap(({ ref, what }) => servedProblem(web, ref, what) ?? []);
+      const problems = files.flatMap(({ ref, what }) => servedProblem(read, ref, what) ?? []);
       for (const message of problems) found.push({ check: 'compile', message });
       if (problems.length === 0) {
         for (const failure of gatePack({
           kind: pack.kind,
           manifest: pack.manifest as PackManifest,
           stylesheet: pack.stylesheet
-            ? { url: pack.stylesheet.url, bytes: bytesOf(web, pack.stylesheet) }
+            ? { url: pack.stylesheet.url, bytes: bytesOf(read, pack.stylesheet) }
             : null,
-          assets: (pack.fonts ?? []).map((ref) => ({ url: ref.url, bytes: bytesOf(web, ref) })),
+          assets: (pack.fonts ?? []).map((ref) => ({ url: ref.url, bytes: bytesOf(read, ref) })),
         })) {
           found.push({ check: 'pack gate', message: `${failure.gate}: ${failure.message}` });
         }
@@ -125,7 +148,7 @@ export function staticSmoke(
     const found = !entry
       ? ['is in no metadata module entry']
       : entry.stylesheet
-        ? [servedProblem(web, entry.stylesheet, 'its compiled stylesheet')].flatMap((each) =>
+        ? [servedProblem(read, entry.stylesheet, 'its compiled stylesheet')].flatMap((each) =>
             each ? [each] : [],
           )
         : [];
