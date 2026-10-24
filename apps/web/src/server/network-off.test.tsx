@@ -16,6 +16,7 @@ import { resolvePortfolioView, routedWorks, type PublicView } from '@portfolio/s
 import { readPair, readUnitFiles } from '@portfolio/schema/node';
 import {
   buildRenderInput,
+  href,
   type RouteTarget,
   type VariantManifest,
 } from '@portfolio/variant-contract';
@@ -24,6 +25,7 @@ import { CONTRACT_FIXTURES } from '@portfolio/variant-contract/node';
 // so this test runs without the react-server condition (a .test.tsx file).
 import { variantLoader } from '~/lib/variant-loaders';
 import { REGISTRY } from '~/lib/variants';
+import { resolveVisitorPath } from '~/lib/visitor-routes';
 
 // The network-off render (#10, item 8; threat row github-3): with no source
 // adapter and no network, every contract fixture and the bundled sample
@@ -167,13 +169,23 @@ test('with no adapter and no network, every fixture and the sample render comple
       { mediaBase: '/media' },
     );
     for (const entry of REGISTRY) {
-      const Variant = (await variantLoader(entry.manifest.id)()).default;
-      for (const route of visitorRoutes(view, entry.manifest)) {
-        const where = `${name} in ${entry.manifest.id}, ${JSON.stringify(route)}`;
+      for (const target of visitorRoutes(view, entry.manifest)) {
+        const where = `${name} in ${entry.manifest.id}, ${JSON.stringify(target)}`;
+        // The composition the host renders the page in: a work page a
+        // variant leaves to the host renders in the fallback composition (#10b).
+        const segments = href(target).split('/').filter(Boolean).map(decodeURIComponent);
+        const resolved = await resolveVisitorPath(
+          { segments, basePath: '', selected: entry.manifest.id },
+          async () => view,
+        );
+        assert.equal(resolved.kind, 'render', where);
+        if (resolved.kind !== 'render') continue;
+        const { manifest } = resolved.composition.rendered;
+        const Variant = (await variantLoader(manifest.id)()).default;
         const input = buildRenderInput({
           view,
-          manifest: entry.manifest,
-          route,
+          manifest,
+          route: resolved.target,
           basePath: '',
           origin: 'https://rowan.test',
           requestTime: '2026-01-01T00:00:00Z',
@@ -181,18 +193,37 @@ test('with no adapter and no network, every fixture and the sample render comple
         // A component that throws fails here.
         const html = renderToStaticMarkup(<Variant input={input} />);
         pages += 1;
-        // Complete: every titled section renders its title, or with none, the owner's name.
-        const titles = view.portfolio.sections
-          .map((section) => (section as { title?: unknown }).title)
-          .filter((title): title is string => typeof title === 'string');
-        const expected: readonly string[] =
-          titles.length > 0 ? titles : [read.pair.portfolio.identity.name];
-        const missing: string[] = expected.filter((text: string) => !html.includes(escaped(text)));
-        assert.deepEqual(missing, [], where);
-        if (route.route === 'work') {
+        if (resolved.target.route === 'work') {
+          // A case study's own page: the kit's CaseStudy, with the work's
+          // title as the page's one h1.
+          const { slug } = resolved.target;
+          const work = view.portfolio.works.find((candidate) => candidate.slug === slug);
+          assert.ok(work, where);
+          assert.ok(html.includes(`data-work-id="${work.id}"`), where);
+          const headings = [...html.matchAll(/<h1[^>]*>([\s\S]*?)<\/h1>/g)];
+          assert.equal(headings.length, 1, where);
+          assert.match(headings[0]![0], /pf-case-study__title/, where);
+          assert.ok(headings[0]![1]!.includes(escaped(work.title)), where);
           caseStudies += 1;
-          const work = view.portfolio.works.find(({ slug }) => slug === route.slug);
-          assert.ok(work && html.includes(escaped(work.title)), where);
+          continue;
+        }
+        // Complete: every section lands on the page, its id an element's, and
+        // shows its title. A works section's title may go, as when a
+        // composition folds one into its chapters, as Obsidian Atelier does
+        // (#115). With no sections, the owner's name shows.
+        const { sections } = view.portfolio;
+        const unplaced = sections
+          .map(({ id }) => id)
+          .filter((id) => !new RegExp(`\\bid="[^"]*${id}"`).test(html));
+        assert.deepEqual(unplaced, [], where);
+        const untitled = sections
+          .filter((section) => section.kind !== 'works')
+          .map((section) => (section as { title?: unknown }).title)
+          .filter((title): title is string => typeof title === 'string')
+          .filter((title) => !html.includes(escaped(title)));
+        assert.deepEqual(untitled, [], where);
+        if (sections.length === 0) {
+          assert.ok(html.includes(escaped(read.pair.portfolio.identity.name)), where);
         }
       }
     }
