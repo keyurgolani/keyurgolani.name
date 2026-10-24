@@ -2,7 +2,7 @@
   "id": "iridescent-pearl",
   "name": "Iridescent Pearl",
   "description": "Pearl white with violet and teal accents. Light only.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "tokenContract": 1,
   "tier": "extended",
   "provenance": {
@@ -36,7 +36,10 @@
   "fallbacks": [
     "Every display mode renders the light set, high contrast renders the set high-contrast-v1 derives from it, and print renders the light set."
   ],
-  "caveats": ["Light only: it keeps its native light mode, so dark isn't offered with it."],
+  "caveats": [
+    "Light only: it keeps its native light mode, so dark isn't offered with it.",
+    "In light mode the secondary is darkened to #438d95 so the signature fill reaches 3:1, so the teal reads muted."
+  ],
   "derivation": "anchor-v1",
   "anchors": {
     "light": {

@@ -1,8 +1,8 @@
 {
   "id": "technical-sans-mono",
-  "name": "Technical Sans Mono",
+  "name": "Technical Sans and Mono",
   "description": "Monospace system headings over a neutral sans body, with monospace code and numerals.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "tokenContract": 1,
   "tier": "stable",
   "provenance": {
