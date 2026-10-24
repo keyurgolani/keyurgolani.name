@@ -38,6 +38,7 @@ What each profile grants. `public` is anyone, `session` is a signed-in owner, an
 | `asset.write`           | Uploading assets                                           | `session` | `absent` | `absent`    |
 | `media.ingest`          | Deriving image renditions when a draft is saved            | `session` | `absent` | `absent`    |
 | `media.fetchRemote`     | Fetching an https image source for a draft                 | `session` | `absent` | `absent`    |
+| `source.refresh`        | Refreshing the draft's GitHub sections with GITHUB_TOKEN   | `session` | `absent` | `absent`    |
 | `preview.grant`         | Preview frames, each by its own grant                      | `session` | `absent` | `absent`    |
 | `appearance.fixtures`   | `/_fixtures/appearance`, in `APPEARANCE_FIXTURES=1` builds | `public`  | `public` | `public`    |
 | `catalog.fixtures`      | `/studio/_catalog-fixture`, in `BUDGET_FIXTURES` builds    | `session` | `absent` | `absent`    |
@@ -318,18 +319,21 @@ docker compose -f compose.owner.yml exec web node bin/portfolio-store.mjs status
 
 In a clone, `pnpm run store <command>` runs the same command line through tsx (`pnpm store` alone is pnpm's own command). It acts as `operator` and needs no session. It reads `PORTFOLIO_ORIGIN`, or `PORTFOLIO_ORIGIN_FILE`, as the server does, since the origin's warning rules go by it, and refuses one that isn't a bare origin (`origin_invalid`). It runs beside the server: every pointer move, draft write, and retention run takes the publication lock, and a backup holds it throughout. It never runs as root (`running_as_root`), and a command on a store, or a restore into a directory, runs only as the directory's owner (`not_data_dir_owner`): the server has to read what it writes, and root would follow a link someone put in the data directory. It prints revision IDs, hashes, codes, and the paths it was given, never a secret or a document's content. It exits 0 when the command did what it says, 1 when it was refused or failed, and 2 on a usage error. Ctrl-C, SIGTERM, or SIGHUP stops it where it is, after it releases the lock it holds, and it exits 130, 143, or 129.
 
-| Command                                                      | What it does                                                                                                                                                                                  |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `status`                                                     | The state (`live`, `degraded`, `incompatible`, or `empty`), the live revision and its unit hash, how many revisions there are, the last event, and who holds the lock. Exits 1 unless `live`. |
-| `history`                                                    | Every publication event in `seq` order: its type, its revision, the revision it replaced, who, and when.                                                                                      |
-| `verify`                                                     | Every file and hash: each revision reads whole, the pointer names one, the log runs from 1 to the live `seq`, and each blob's bytes match its name. It skips revisions retention removed.     |
-| `import [--from <dir>] [--expect <revisionId\|empty>]`       | Makes the pair in `<dir>`, `PORTFOLIO_SOURCE_DIR` by default, the live revision ([Importing](#importing)).                                                                                    |
-| `rollback --to <revisionId>`                                 | Makes an earlier revision live again, if this build can publish it. Drafts stay as they are.                                                                                                  |
-| `recover [--to <revisionId>]`                                | Makes the last known good revision live, or the one named.                                                                                                                                    |
-| `unlock --force [--running]`                                 | Removes the publication lock. One touched in the last 2 minutes needs `--running` too.                                                                                                        |
-| `backup --out <dir>`                                         | Copies the store into an empty or new directory ([Backups](#backups)).                                                                                                                        |
-| `restore --from <dir> --into <dir>`                          | Copies a backup into an empty or new directory, checks every hash, and runs `verify`.                                                                                                         |
-| `retention [--keep <n>] [--remove <revisionId>] [--dry-run]` | Deletes what nothing needs ([Retention](#retention)).                                                                                                                                         |
+| Command                                                             | What it does                                                                                                                                                                                  |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status`                                                            | The state (`live`, `degraded`, `incompatible`, or `empty`), the live revision and its unit hash, how many revisions there are, the last event, and who holds the lock. Exits 1 unless `live`. |
+| `history`                                                           | Every publication event in `seq` order: its type, its revision, the revision it replaced, who, and when.                                                                                      |
+| `verify`                                                            | Every file and hash: each revision reads whole, the pointer names one, the log runs from 1 to the live `seq`, and each blob's bytes match its name. It skips revisions retention removed.     |
+| `import [--from <dir>] [--expect <revisionId\|empty>]`              | Makes the pair in `<dir>`, `PORTFOLIO_SOURCE_DIR` by default, the live revision ([Importing](#importing)).                                                                                    |
+| `rollback --to <revisionId>`                                        | Makes an earlier revision live again, if this build can publish it. Drafts stay as they are.                                                                                                  |
+| `recover [--to <revisionId>]`                                       | Makes the last known good revision live, or the one named.                                                                                                                                    |
+| `unlock --force [--running]`                                        | Removes the publication lock. One touched in the last 2 minutes needs `--running` too.                                                                                                        |
+| `backup --out <dir>`                                                | Copies the store into an empty or new directory ([Backups](#backups)).                                                                                                                        |
+| `restore --from <dir> --into <dir>`                                 | Copies a backup into an empty or new directory, checks every hash, and runs `verify`.                                                                                                         |
+| `retention [--keep <n>] [--remove <revisionId>] [--dry-run]`        | Deletes what nothing needs ([Retention](#retention)).                                                                                                                                         |
+| `media check [--fetch-remote]`                                      | Reads each image source again and reports what changed against the live revision and the working draft ([Derived changes](#derived-changes)). Writes nothing.                                 |
+| `sources refresh`                                                   | Fetches the working draft's GitHub sections into it with `GITHUB_TOKEN`, as Studio's refresh does ([Derived changes](#derived-changes)).                                                      |
+| `changes list`, `changes accept <id...>`, `changes dismiss <id...>` | The working draft's derived changes, and the owner's decision on each ([Derived changes](#derived-changes)).                                                                                  |
 
 ### Importing
 
@@ -342,6 +346,22 @@ On an empty store, with no `publication/live.json` and no history, no event, mov
 Once a revision exists, the mounted pair is import input: a missing, invalid, or old-format one only warns at startup, and the store serves what it did. An edit to it goes live only through `import` or a Studio publish.
 
 Until #13 registers a composition, every site selects a variant this build doesn't register, and a publish, an import, or a first start refuses it with `variant.unavailable`.
+
+### Derived changes
+
+A draft keeps two kinds of change apart. The owner's edits to the portfolio and site are authored. What changed that no edit made is derived, against the revision the draft started from:
+
+- `source-moved`: an image's bytes are the same, read from another source, as after a rename.
+- `source-replaced`: an image's bytes changed, from a new file or a metadata edit that rewrote it, so its renditions and dominant color changed too.
+- `integration-refreshed`: a refresh froze new data for a GitHub section.
+
+A draft save that ingests media, and a refresh, record each change in the draft as pending. A publish that would carry one no one accepted fails with `derived.unapproved`, naming the asset or the section, and nothing goes live. Accept a change and the publish carries it. Dismiss it and the draft takes back the live revision's value for that asset or section, on that write and every save after it, until the value changes again, which is a new change. Studio's `draft.changes.accept` and `draft.changes.dismiss`, and `portfolio-store changes accept|dismiss <id...>`, are draft writes, with the draft's version checked. `draft.diff` gives #8's Studio both lists apart. An import, the first-start one included, brings no decision: what the operator's files bring counts as accepted, and an import into an empty store has nothing to compare.
+
+A missing source changes no asset revision: the last one stays, marked unavailable, and so does what renders. A source that comes back with the same bytes is available again. Neither needs approval. `portfolio-store media check` reports all of them without writing anything: for the live revision and the working draft, each image is `unchanged`, `source-moved`, `source-replaced`, missing with its last revision kept, or `restored`. With neither a live revision nor a draft, it says so and exits 0. It reads local sources under `PORTFOLIO_MEDIA_ROOT`, and https ones only with `--fetch-remote`.
+
+GitHub data reaches a page only as a frozen snapshot. Studio's refresh (`draft.refreshSources`, capability `source.refresh`) and `portfolio-store sources refresh` fetch each GitHub section of the working draft into it, and a publish freezes what the draft holds into the revision's `snapshots/github.json`, where renderers read it. No page calls GitHub. Only the refresh reads `GITHUB_TOKEN`, and without one it fetches nothing and says so (`token_unset`), changing nothing. A section whose fetch fails keeps the data it had. An import keeps the live revision's GitHub data. A rollback brings back the revision's own.
+
+A Studio publish of a new case study, or of GitHub data, serves on the next request. A publish from `portfolio-store`, outside the server, serves from the server's next read of the live revision, which any visitor page makes.
 
 ### Publishing, the lock, and conflicts
 
