@@ -20,7 +20,7 @@ export function BentoOpening(props: SectionRendererProps<SectionOf<'hero'>>) {
       <div className="sb-opening__content">
         <Hero {...props} />
       </div>
-      <StageSlot seed={props.input.env.seed} />
+      <StageSlot seed={props.input.env.seed} idPrefix={props.input.ids.prefix} />
     </div>
   );
 }

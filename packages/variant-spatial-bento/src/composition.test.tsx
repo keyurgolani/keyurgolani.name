@@ -142,7 +142,9 @@ function sectionMarkup(markup: string, id: string): string {
 }
 
 /** The stage's exit, the one control the bento adds to a section. */
-const EXIT = /<span class="sb-stage__exit"><button\b[^>]*>[\s\S]*?<\/button><\/span>/g;
+/** With, while the stage can't run, the hidden line that describes it. */
+const EXIT =
+  /<span class="sb-stage__exit"><button\b[^>]*>[\s\S]*?<\/button>(?:<span id="[^"]+" hidden="">[^<]*<\/span>)?<\/span>/g;
 const withoutExit = (markup: string) => markup.replace(EXIT, '');
 
 test('the complete fixture renders one main, one h1, one visitor control slot, and its section links before the main', () => {
@@ -162,10 +164,18 @@ test('the complete fixture renders one main, one h1, one visitor control slot, a
     hrefs(nav),
     titled.map((section) => `#${section.id}`),
   );
-  // Nothing is hidden in the server's markup but the navigation's name, which names it.
+  // Nothing is hidden in the server's markup but the navigation's name, which names it, and the
+  // line that describes the exit, disabled until a browser says the stage can run.
   assert.deepEqual(
     [...markup.matchAll(/<[^>]*\shidden=""[^>]*>[^<]*/g)].map(([tag]) => tag),
-    ['<span id="sb--sections" hidden="">Sections'],
+    [
+      '<span id="sb--sections" hidden="">Sections',
+      '<span id="sb--stage-unavailable" hidden="">The 3D stage isn&#x27;t available here.',
+    ],
+  );
+  assert.match(
+    markup,
+    /<button(?=[^>]*\saria-describedby="sb--stage-unavailable")(?=[^>]*\sdisabled="")/,
   );
 });
 
@@ -190,7 +200,7 @@ test('every section is a tile of the bento, in content order, the opening first 
   // The bento's one control of its own: the stage's exit, in the opening's tile, after the still.
   const exits = [...markup.matchAll(EXIT)].map(([exit]) => exit);
   assert.equal(exits.length, 1);
-  assert.equal(text(exits[0]!), 'Spatial stage');
+  assert.equal(text(/<button\b[\s\S]*?<\/button>/.exec(exits[0]!)![0]), 'Spatial stage');
   const opening = sectionMarkup(markup, 'top');
   assert.ok(opening.indexOf(exits[0]!) > opening.indexOf('class="sb-still"'));
 });
@@ -418,7 +428,10 @@ test('the declared enhancement is the whole slot, so however it loads, the polic
   const { StageSlot } = await import('./stage');
   const input = fixtureInput('complete');
   const enhancement = renderToStaticMarkup(<StageEnhancement input={input} />);
-  assert.equal(enhancement, renderToStaticMarkup(<StageSlot seed={input.env.seed} />));
+  assert.equal(
+    enhancement,
+    renderToStaticMarkup(<StageSlot seed={input.env.seed} idPrefix={input.ids.prefix} />),
+  );
   assert.match(enhancement, /^<div class="sb-stage" data-stage-reason="pending">/);
   assert.doesNotMatch(enhancement, /<canvas/);
 });

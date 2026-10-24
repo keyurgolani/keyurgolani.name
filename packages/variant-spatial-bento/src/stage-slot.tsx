@@ -59,6 +59,46 @@ export type StageCanvasComponent = ComponentType<StageCanvasProps>;
 /** The exit's name, the same wherever it renders. */
 const EXIT_LABEL = 'Spatial stage';
 
+/** Why a disabled exit is disabled: its description, whatever the reason. */
+const EXIT_UNAVAILABLE = "The 3D stage isn't available here.";
+
+/**
+ * The exit: a toggle, pressed while the stage runs. While the stage can't
+ * run it's disabled, out of the tab order since there's no stage to leave,
+ * and described by a line saying so, hidden as the navigation's name is,
+ * so it shows nothing and moves nothing but is read with the control.
+ */
+function Exit({
+  idPrefix,
+  offered,
+  pressed,
+  onToggle,
+}: {
+  readonly idPrefix: string;
+  readonly offered: boolean;
+  readonly pressed: boolean;
+  readonly onToggle?: () => void;
+}) {
+  const note = `${idPrefix}sb--stage-unavailable`;
+  return (
+    <span className="sb-stage__exit">
+      <Action
+        pressed={pressed}
+        disabled={!offered}
+        describedBy={offered ? undefined : note}
+        onClick={onToggle}
+      >
+        {EXIT_LABEL}
+      </Action>
+      {offered ? null : (
+        <span id={note} hidden>
+          {EXIT_UNAVAILABLE}
+        </span>
+      )}
+    </span>
+  );
+}
+
 /** The planes the still draws, back to front. */
 const PLANES = ['far', 'middle', 'near', 'signature'] as const;
 
@@ -147,9 +187,11 @@ function subscribeSignals(change: () => void): () => void {
 /** The slot on its runtime: the only path that calls the hook, observes, or listens. */
 function LiveSlot({
   seed,
+  idPrefix,
   Canvas,
 }: {
   readonly seed: number;
+  readonly idPrefix: string;
   readonly Canvas: StageCanvasComponent;
 }) {
   const runtime = Runtime.useEnhancementRuntime({ requires: ['webgl2', 'min-width:768'] });
@@ -234,15 +276,12 @@ function LiveSlot({
           </StageBoundary>
         ) : null}
       </Still>
-      <span className="sb-stage__exit">
-        <Action
-          pressed={decision.offered && !exited}
-          disabled={!decision.offered}
-          onClick={() => setExited((value) => !value)}
-        >
-          {EXIT_LABEL}
-        </Action>
-      </span>
+      <Exit
+        idPrefix={idPrefix}
+        offered={decision.offered}
+        pressed={decision.offered && !exited}
+        onToggle={() => setExited((value) => !value)}
+      />
     </div>
   );
 }
@@ -254,22 +293,21 @@ function LiveSlot({
  */
 export function Slot({
   seed,
+  idPrefix,
   Canvas,
 }: {
   readonly seed: number;
+  /** The render's id prefix, `input.ids.prefix`, for the exit's description. */
+  readonly idPrefix: string;
   readonly Canvas: StageCanvasComponent;
 }) {
   const { plate } = useBoundary();
   return plate ? (
     <div className="sb-stage">
       <Still />
-      <span className="sb-stage__exit">
-        <Action pressed={false} disabled>
-          {EXIT_LABEL}
-        </Action>
-      </span>
+      <Exit idPrefix={idPrefix} offered={false} pressed={false} />
     </div>
   ) : (
-    <LiveSlot seed={seed} Canvas={Canvas} />
+    <LiveSlot seed={seed} idPrefix={idPrefix} Canvas={Canvas} />
   );
 }

@@ -10,6 +10,12 @@ const StageCanvas = lazy(() =>
   import('./stage-canvas').then((stage) => ({ default: stage.StageCanvas })),
 );
 
-export function StageSlot({ seed }: { readonly seed: number }) {
-  return <Slot seed={seed} Canvas={StageCanvas} />;
+export function StageSlot({
+  seed,
+  idPrefix,
+}: {
+  readonly seed: number;
+  readonly idPrefix: string;
+}) {
+  return <Slot seed={seed} idPrefix={idPrefix} Canvas={StageCanvas} />;
 }

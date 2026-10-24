@@ -87,5 +87,5 @@ export function StageCanvas({ state, seed, onFailure, onFirstFrame }: StageCanva
  * teardown hold however the stage comes to load.
  */
 export default function StageEnhancement({ input }: { readonly input: VariantRenderInput }) {
-  return <Slot seed={input.env.seed} Canvas={StageCanvas} />;
+  return <Slot seed={input.env.seed} idPrefix={input.ids.prefix} Canvas={StageCanvas} />;
 }

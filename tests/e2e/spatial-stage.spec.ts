@@ -73,11 +73,16 @@ async function expectLive(page: Page) {
   await expect(page.locator('.sb-still canvas[data-spatial-canvas]')).toHaveCount(1);
 }
 
+/** What a disabled exit is described by. */
+const UNAVAILABLE = "The 3D stage isn't available here.";
+
 /** The exit, disabled: the stage can't run again on this page. */
 async function expectExitDisabled(page: Page) {
   const exit = page.getByRole('button', { name: 'Spatial stage' });
   await expect(exit).toBeDisabled();
   await expect(exit).toHaveAttribute('aria-pressed', 'false');
+  // A disabled exit says why.
+  await expect(exit).toHaveAccessibleDescription(UNAVAILABLE);
 }
 
 /** The still, and nothing of the stage: no canvas, and the planes showing. */
@@ -97,11 +102,11 @@ test(
     await expectLive(page);
     // The stage's own chunk, with three.js, came once the policy let it run.
     expect((await fetched()).some((text) => text.includes('WebGLRenderer'))).toBe(true);
-    // The exit, pressed while the stage runs.
-    await expect(page.getByRole('button', { name: 'Spatial stage' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    // The exit, pressed and enabled while the stage runs, with nothing to explain.
+    const exit = page.getByRole('button', { name: 'Spatial stage' });
+    await expect(exit).toHaveAttribute('aria-pressed', 'true');
+    await expect(exit).toBeEnabled();
+    await expect(exit).not.toHaveAttribute('aria-describedby');
     // Decoration: the canvas is hidden from assistive technology, inside the hidden still.
     await expect(page.locator('canvas[data-spatial-canvas]')).toHaveAttribute(
       'aria-hidden',

@@ -47,6 +47,7 @@ test(
     const exit = page.getByRole('button', { name: 'Spatial stage' });
     await expect(exit).toBeDisabled();
     await expect(exit).toHaveAttribute('aria-pressed', 'false');
+    await expect(exit).toHaveAccessibleDescription("The 3D stage isn't available here.");
     // The browser really has no WebGL2, so this is the path a device without it takes.
     expect(
       await page.evaluate(() => document.createElement('canvas').getContext('webgl2') === null),
