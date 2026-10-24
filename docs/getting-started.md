@@ -26,7 +26,7 @@ pnpm install
 pnpm dev
 ```
 
-Visit `http://127.0.0.1:3000`. You'll see the example portfolio in the fallback composition: every section in content order, in one column. The example site selects Editorial Evidence, which this build doesn't install yet (#13), so the fallback renders in its place and the terminal logs a `variant.unavailable` warning.
+Visit `http://127.0.0.1:3000`. You'll see the example portfolio in Editorial Evidence, the platform default composition (#13), which the example site selects: the practice thesis and the signature work first, the flagship works on smaller plates, and the archive behind a disclosure. A site that selects a variant this build doesn't install renders in the fallback composition instead, and the terminal logs a `variant.unavailable` warning.
 
 `pnpm dev` runs the `read-only` profile from `config/`, with the settings in `apps/web/.env.development`. While `config/` holds neither document, it renders the bundled examples and logs a warning.
 

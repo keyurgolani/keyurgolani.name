@@ -258,7 +258,7 @@ const ORIGIN = ['--origin', 'https://rowan.name'];
 const UNAVAILABLE = (file) => [
   `${file}: variant.unavailable (warning) at /appearance/variant`,
   "  /appearance/variant names a variant this build doesn't register, so the fallback composition renders instead. It blocks publishing, not preview.",
-  '  Install its package with pnpm --filter @portfolio/web add <package> and rebuild, or select one this build registers: kinetic-cosmos, obsidian-atelier, spatial-bento.',
+  '  Install its package with pnpm --filter @portfolio/web add <package> and rebuild, or select one this build registers: editorial-evidence, kinetic-cosmos, obsidian-atelier, spatial-bento.',
   '',
 ];
 
@@ -411,7 +411,7 @@ test('validate warns when the portfolio is still the bundled sample, which produ
     /^portfolio\.yml:\d+:\d+: sample\.identity \(warning\) at \/identity\/name\n/m,
   );
   assert.match(text.stdout, /Production refuses to start with it\./);
-  assert.match(text.stdout, /\nportfolio\.yml and site\.yml are valid, with 2 warnings\.\n/);
+  assert.match(text.stdout, /\nportfolio\.yml and site\.yml are valid, with 1 warning\.\n/);
 
   const json = JSON.parse(validate(dir, '.', '--json').stdout);
   assert.equal(json.ok, true);
@@ -422,11 +422,8 @@ test('validate warns when the portfolio is still the bundled sample, which produ
       document,
       pointer,
     ]),
-    [
-      // The example selects a variant this build doesn't register yet (#13).
-      ['variant.unavailable', 'warning', 'site', '/appearance/variant'],
-      ['sample.identity', 'warning', 'portfolio', '/identity/name'],
-    ],
+    // The example's variant, Editorial Evidence, is registered (#13).
+    [['sample.identity', 'warning', 'portfolio', '/identity/name']],
   );
 
   // With a name of your own, the sample's warning is gone.
@@ -436,10 +433,7 @@ test('validate warns when the portfolio is still the bundled sample, which produ
   );
   writeFileSync(path.join(dir, 'portfolio.yml'), own);
   const renamed = validate(dir, '.', '--json');
-  assert.deepEqual(
-    JSON.parse(renamed.stdout).diagnostics.map(({ code }) => code),
-    ['variant.unavailable'],
-  );
+  assert.deepEqual(JSON.parse(renamed.stdout).diagnostics, []);
 });
 
 function idsFix(cwd, ...args) {

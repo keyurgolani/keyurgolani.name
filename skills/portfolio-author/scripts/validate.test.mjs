@@ -25,7 +25,7 @@ test('the valid pair exits 0, with only the warning that the fallback compositio
     [
       UNAVAILABLE,
       "  /appearance/variant names a variant this build doesn't register, so the fallback composition renders instead. It blocks publishing, not preview.",
-      '  Install its package with pnpm --filter @portfolio/web add <package> and rebuild, or select one this build registers: kinetic-cosmos, obsidian-atelier, spatial-bento.',
+      '  Install its package with pnpm --filter @portfolio/web add <package> and rebuild, or select one this build registers: editorial-evidence, kinetic-cosmos, obsidian-atelier, spatial-bento.',
       '',
       'portfolio.yml and site.yml are valid, with 1 warning.',
       '',

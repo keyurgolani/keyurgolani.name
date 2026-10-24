@@ -1,14 +1,12 @@
 #!/usr/bin/env node
 // The docs check: pnpm check:docs, and pnpm check:links for external links.
 //
-// Over every tracked Markdown file but legacy/ and test fixtures:
+// Over every tracked Markdown file but test fixtures:
 //   - each relative link and image resolves to a file or directory in the
 //     tree, and each #anchor to a heading or an id= in its target;
 //   - each `pnpm <script>` in code, inline or fenced, names a root script or
 //     a pnpm command, and each `pnpm --filter <package> <script>` a script of
-//     that workspace package;
-//   - each path under legacy/ in code, inline or fenced, names a file or
-//     directory that's still there.
+//     that workspace package.
 // With --external it also requests each http(s) link once (HEAD, then GET),
 // which only the scheduled workflow does. It never requests a local or
 // reserved name, a loopback, private, or link-local address, or the live
@@ -32,7 +30,7 @@ import {
   writeFailureRecord,
 } from './lib/reports.mjs';
 
-const SKIP_FILES = [/^legacy\//, /(^|\/)__fixtures__\//, /(^|\/)node_modules\//];
+const SKIP_FILES = [/(^|\/)__fixtures__\//, /(^|\/)node_modules\//];
 
 // ---- Markdown ---------------------------------------------------------------
 
@@ -162,22 +160,6 @@ const PNPM_COMMANDS = new Set([
   'update',
   'why',
 ]);
-
-/**
- * The paths under legacy/ a piece of code names, such as
- * legacy/variant-editorial/src/index.ts. The v1 copies there retire one
- * issue at a time, so a doc that points at one has to follow it out. A
- * placeholder or pattern, such as legacy/variant-<id>/ or
- * legacy/variant-{a,b}/, names no one file, so it's left alone.
- */
-export function legacyPaths(code) {
-  return [...code.matchAll(/(?<![\w./-])legacy\/[\w./-]*[\w-]/g)]
-    .filter(
-      ({ 0: named, index }) =>
-        !named.endsWith('-') && !/^\/?[<{*[]/.test(code.slice(index + named.length)),
-    )
-    .map(([named]) => named);
-}
 
 /** `pnpm` invocations in a piece of code: { filter, script }. */
 export function pnpmReferences(code) {
@@ -362,11 +344,6 @@ export function checkDocs({ root = REPO_ROOT, files = markdownFiles(root) } = {}
       }
     }
     for (const { line, text: snippet } of code) {
-      for (const named of legacyPaths(snippet)) {
-        if (!existsSync(path.join(root, named))) {
-          problems.push({ file, line, url: '', message: `${named} names no file in the tree` });
-        }
-      }
       for (const ref of pnpmReferences(snippet)) {
         const message = pnpmProblem(ref, rootScripts, packages);
         if (message)

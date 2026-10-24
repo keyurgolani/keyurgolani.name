@@ -44,9 +44,9 @@ export type BaseMode = 'light' | 'dark';
 /**
  * What a deployment shows when its site document names nothing else, and
  * each pack axis's fallback: an unregistered pack renders the first-party
- * pack on its axis. `editorial-evidence` registers with #13; until then the
- * variant axis falls back to #5's fallback composition like any other
- * unregistered variant.
+ * pack on its axis. `editorial-evidence` is the platform default
+ * composition, which the host registers (#13); a build that doesn't falls
+ * back to #5's fallback composition, as for any unregistered variant.
  */
 export const PLATFORM_DEFAULTS = Object.freeze({
   variant: 'editorial-evidence',

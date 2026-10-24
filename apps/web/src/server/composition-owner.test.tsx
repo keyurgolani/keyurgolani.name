@@ -290,8 +290,8 @@ test("owner's revision store reader records the composition of the unit each get
     liveComposition(),
     compositionFor(live.unit.site.appearance.variant).rendered.manifest.id,
   );
-  // The example site selects a variant this build doesn't register.
-  assert.equal(liveComposition(), 'fallback');
+  // The example site selects the platform default, which this build registers (#13).
+  assert.equal(liveComposition(), 'editorial-evidence');
 });
 
 test('owner loads its modules only through the composition root', () => {
@@ -376,12 +376,16 @@ test('config.status shows each secret as set and never a value or a path', async
   // This server holds the data directory, so owner writes go through.
   assert.deepEqual(data.writes, { state: 'open' });
   assert.equal(data.origin, ORIGIN);
-  // The owner's diagnostic (#5): the site example selects a variant this
-  // build doesn't register yet, so the fallback composition renders.
+  // The owner's diagnostic (#5): the site example selects Editorial
+  // Evidence, which this build registers (#13), so it renders itself and no
+  // fallback stands in. config.status loads the module it reports on, which
+  // imports 'use client' primitives: this file is a .tsx test, so it runs
+  // without the react-server condition and loads them as the server bundle
+  // does.
   assert.deepEqual(data.variant, {
-    status: 'degraded',
+    status: 'ok',
     requested: 'editorial-evidence',
-    rendered: 'fallback',
+    rendered: 'editorial-evidence',
   });
 });
 
@@ -796,13 +800,13 @@ test("after a publish from beside the server, a Studio config.status read record
   setLiveComposition('stale');
   const response = await studio('GET', 'config.status', { 'x-test-session': 'owner' });
   assert.equal(response.status, 200, await response.clone().text());
-  // The example site selects a variant this build doesn't register, so the
-  // fallback composition renders, and the segment the proxy names is the
-  // one the page there checks again: no 307.
-  assert.equal(liveComposition(), 'fallback');
+  // The example site selects Editorial Evidence, which renders (#13), and
+  // the segment the proxy names is the one the page there checks again: no
+  // 307.
+  assert.equal(liveComposition(), 'editorial-evidence');
   assert.equal(
     segmentFor({ profile: 'owner', pattern: '/', segments: [], query: new URLSearchParams() }),
-    'fallback',
+    'editorial-evidence',
   );
 });
 

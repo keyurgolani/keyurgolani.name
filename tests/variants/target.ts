@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { parse } from 'yaml';
 import type * as Registry from '../../apps/web/src/lib/generated/registry.meta';
 import { fixtureSiteSelecting } from '../../packages/variant-contract/src/contract-fixtures';
 import type { AppOptions } from '../harness/fixtures';
@@ -119,6 +120,16 @@ export function fixtureApp(fixture: ContractFixture, variant: SelectedVariant): 
     env: { NODE_OPTIONS: `--import=${pathToFileURL(FIXED_CLOCK).href}` },
   };
 }
+
+/**
+ * The variant the bundled sample's site selects, which /sample renders
+ * without a parameter: Editorial Evidence, the platform default (#13).
+ */
+export const SAMPLE_SELECTION = (
+  parse(readFileSync(path.join(REPO_ROOT, 'site.example.yml'), 'utf8')) as {
+    appearance: { variant: string };
+  }
+).appearance.variant;
 
 /** demo on the bundled sample, under the fixed clock. */
 export const SAMPLE_APP: AppOptions = {

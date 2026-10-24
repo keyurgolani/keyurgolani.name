@@ -13,10 +13,10 @@
 schemaVersion: 2
 
 # The published appearance. variant is an installed variant package's id.
-# Editorial Evidence is the owner default; until #13 installs it, the
-# fallback composition renders in its place and startup warns. The design
-# language, color scheme, and typography are #19's appearance axes: each
-# names a pack this build registers, and these are the platform's defaults
+# Editorial Evidence is the platform default, which this build installs;
+# another it lacks renders as the fallback composition, with a warning. The
+# design language, color scheme, and typography are #19's appearance axes:
+# each names a pack this build registers, and these are the platform's defaults
 appearance:
   variant: editorial-evidence
   designLanguage: platform-neutral

@@ -1,12 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from '../harness/fixtures';
 import { checkMode, MODES } from './modes';
-import { DEMO, FALLBACK_ID, FIXED_TIME, projectTarget } from './target';
+import { DEMO, FIXED_TIME, projectTarget, SAMPLE_SELECTION } from './target';
 
 // A registered composition on the bundled sample (#5, Slice 6), under demo
-// at /sample, in every mode: the sample site's own selection for the
-// fallback composition, which stands in for it until #13, and
-// ?variant=<id> for every other. demo derives the sample's images from
+// at /sample, in every mode: the sample site's own selection, Editorial
+// Evidence (#13), at /sample, and ?variant=<id> for every other. The
+// fallback composition has no sample project: the sample selects a
+// registered variant, so it never renders there. demo derives the sample's images from
 // example-media/ once it starts, in the background (#10), and the page
 // loads their renditions from /media, so every check waits for that first:
 // a screenshot taken before it would show them unavailable.
@@ -75,7 +76,8 @@ for (const mode of MODES) {
           request,
           variant,
           testInfo,
-          go: (target) => target.goto(id === FALLBACK_ID ? '/sample' : `/sample?variant=${id}`),
+          go: (target) =>
+            target.goto(id === SAMPLE_SELECTION ? '/sample' : `/sample?variant=${id}`),
           shot: `${id}-sample-${mode.name}`,
           fixture: undefined,
         });

@@ -7,8 +7,8 @@ import { withRscHash } from '../harness/rsc';
 // The demo profile (#1, slice 3; #9): the bundled sample at / and /sample,
 // with nothing for crawlers to index, no cookie, no structured data, and the
 // same body for the same URL, and the route-level matrix (AC4) for demo. The
-// sample site selects Editorial Evidence, which this build doesn't register
-// until #13, so both render the fallback composition in its place (#5).
+// sample site selects Editorial Evidence, the platform default, which this
+// build registers (#13), so both render it.
 // /sample?variant= renders a variant this build registers, and anything else
 // it names falls back to the sample's own at the canonical URL (#9). The
 // sample's case study renders at /sample/work/<slug>, from the sample's own
@@ -25,14 +25,14 @@ profileMatrix('demo');
 
 for (const route of ['/', '/sample']) {
   test(
-    `${route} renders the bundled sample in the fallback composition, for its unregistered selection`,
+    `${route} renders the bundled sample in its own selection, Editorial Evidence (#13)`,
     { annotation: [{ type: 'route', description: route }, DEMO] },
     async ({ page }) => {
       const response = await page.goto(route);
       expect(response?.status()).toBe(200);
       const root = page.locator('[data-variant]');
-      await expect(root).toHaveAttribute('data-variant', 'fallback');
-      await expect(root).toHaveAttribute('data-requested-variant', 'editorial-evidence');
+      await expect(root).toHaveAttribute('data-variant', 'editorial-evidence');
+      await expect(root).not.toHaveAttribute('data-requested-variant', /./);
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(SAMPLE_NAME);
     },
   );
@@ -56,9 +56,14 @@ test(
       expect(sent?.url(), query).toBe(`${app.origin}/sample?${query}`);
       expect((await sent?.response())?.status(), query).toBe(307);
       expect(page.url(), query).toBe(`${app.origin}/sample`);
+      // The sample's own selection, Editorial Evidence, which renders itself (#13).
       await expect(page.locator('[data-variant]'), query).toHaveAttribute(
-        'data-requested-variant',
+        'data-variant',
         'editorial-evidence',
+      );
+      await expect(page.locator('[data-variant]'), query).not.toHaveAttribute(
+        'data-requested-variant',
+        /./,
       );
       await expect(page.getByRole('heading', { level: 1 }), query).toHaveText(SAMPLE_NAME);
       // Nothing the request sent that the registry refused is in the page, its payload included.
@@ -239,7 +244,7 @@ test(
   'rendering the sample in every variant reaches no host outside the app',
   { annotation: [{ type: 'route', description: '/sample' }, DEMO] },
   async ({ page, app }) => {
-    // The fallback composition at / and /sample, then each variant this build registers.
+    // Editorial Evidence at / and /sample, then each variant this build registers.
     const selectable = VARIANTS.map(({ manifest }) => manifest.id).filter(
       (id) => id !== FALLBACK_ID,
     );

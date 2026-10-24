@@ -263,9 +263,9 @@ A content extension package sets `"portfolio": { "kind": "content-extension" }` 
 
 `packages/fallback-composition` is the host's stand-in and the clone source: every visible section in content order through the kit's shared renderers, in one column, with a navigation list and the visitor control slot in a header. It's `document`, `still`, and `light`, with empty `renderedKinds` and no slots or controls. It renders for a selection no package registers, and for the contract fixtures; a site can't select it. Fixtures select `missing-variant`, an id no package may take, to reach it.
 
-## Retired variants
+## The first-party compositions
 
-`legacy/` holds the v1 Editorial package, its screenshots, and the v1 browser specs, outside the workspace: nothing installs, builds, lints, or tests them. #13 rebuilds it on contract 2.0 as `editorial-evidence`, with its palettes and fonts moving to #19's packs. Read it for inventory; never import it. `packages/variant-editorial-evidence` is #13's rebuild, which no host registers until #13's second pull request: its own tests validate its manifest, run the source audit on it, and render it on every contract fixture. Kinetic Cosmos is rebuilt (#14) as `packages/variant-kinetic-cosmos`, and its v1 copy is gone.
+`packages/variant-editorial-evidence` is the platform default (#13): `PLATFORM_DEFAULTS.variant`, and the composition the example site selects. It's `monograph`, `still`, and `light`. It opens with the practice thesis and the signature work on its largest plate, then the flagship works on smaller ones, the proof strip, and the rest of the reading order, with the archive behind a disclosure, and each case study gets its own page. `packages/variant-kinetic-cosmos` is the second (#14). Both are dependencies of `@portfolio/web`, so they run under `test:variants`, `check:budgets`, #11's cells, the profile matrix, and the trace on every pull request. They rebuilt the retired v1 Editorial and Kinetic Cosmos packages on contract 2.0, with their palettes and fonts moving to #19's packs; the v1 copies are gone from the tree, and git history keeps them.
 
 ## Visual companion
 

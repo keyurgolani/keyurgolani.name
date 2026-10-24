@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,10 +9,10 @@ import { bundleStore } from './bundle-store.mjs';
 
 // portfolio-store's entry (#3, item 26), run the ways it ships: through tsx
 // as `pnpm run store` runs it, and as the image's one-file bundle, from a
-// directory outside the repo. Both bind this build's registry, where no
-// composition but the fallback is registered until #13, so the bundled
-// example can't be imported. The store's own tests, under packages/core,
-// cover each command.
+// directory outside the repo. Both bind this build's registry, which
+// registers the example's variant, Editorial Evidence (#13), so the bundled
+// example imports, and a variant no package takes is refused. The store's
+// own tests, under packages/core, cover each command.
 
 const ENTRY = fileURLToPath(new URL('./portfolio-store.ts', import.meta.url));
 const TSX = fileURLToPath(import.meta.resolve('tsx/cli'));
@@ -32,6 +32,16 @@ function examplePair(t) {
   return dir;
 }
 
+/** The example pair with a variant no package may take. */
+function unknownVariantPair(t) {
+  const dir = examplePair(t);
+  const site = path.join(dir, 'site.yml');
+  const text = readFileSync(site, 'utf8');
+  assert.ok(text.includes('variant: editorial-evidence'));
+  writeFileSync(site, text.replace('variant: editorial-evidence', 'variant: missing-variant'));
+  return dir;
+}
+
 const run = (command, env, cwd) => {
   const result = spawnSync(process.execPath, command, {
     cwd,
@@ -42,9 +52,8 @@ const run = (command, env, cwd) => {
   return { code: result.status, out: result.stdout, err: result.stderr };
 };
 
-test("the entry runs the store's CLI with this build's publish checks: the example is variant.unavailable until #13, and nothing goes live", (t) => {
+test("the entry runs the store's CLI with this build's publish checks: a variant it doesn't register is refused, and the example goes live (#13)", (t) => {
   const data = scratch(t, 'store-entry-');
-  const source = examplePair(t);
   const tsx = (...args) =>
     run([TSX, '--conditions=react-server', ENTRY, ...args], { PORTFOLIO_DATA_DIR: data });
 
@@ -52,16 +61,17 @@ test("the entry runs the store's CLI with this build's publish checks: the examp
   assert.equal(empty.code, 1, empty.err);
   assert.match(empty.out, /^state: empty$/m);
 
-  const imported = tsx('import', '--from', source);
-  assert.equal(imported.code, 1, imported.out);
-  assert.match(imported.err, /^validation_failed: 1 record blocks it\. Nothing was imported\.$/m);
-  assert.match(
-    imported.err,
-    /: variant\.unavailable \(blocks-publish\) at \/appearance\/variant$/m,
-  );
+  const refused = tsx('import', '--from', unknownVariantPair(t));
+  assert.equal(refused.code, 1, refused.out);
+  assert.match(refused.err, /^validation_failed: 1 record blocks it\. Nothing was imported\.$/m);
+  assert.match(refused.err, /: variant\.unavailable \(blocks-publish\) at \/appearance\/variant$/m);
+  assert.match(tsx('status').out, /^state: empty$/m, 'a refused import makes nothing live');
 
-  const after = tsx('status');
-  assert.match(after.out, /^state: empty$/m, 'a refused import makes nothing live');
+  const imported = tsx('import', '--from', examplePair(t));
+  assert.equal(imported.code, 0, imported.err);
+  assert.match(imported.out, /^Imported portfolio\.yml and site\.yml as a new revision\.$/m);
+  assert.doesNotMatch(imported.err, /variant\.unavailable/);
+  assert.match(tsx('status').out, /^live revision: rev_[0-9a-f]+ \(seq 1\)$/m);
 });
 
 test('the bundle needs Node and nothing else: it runs from a directory outside the repo', async (t) => {
@@ -104,13 +114,20 @@ test('the bundle needs Node and nothing else: it runs from a directory outside t
   const status = run([bin, 'status'], { PORTFOLIO_DATA_DIR: data }, app);
   assert.equal(status.code, 1, status.err);
   assert.match(status.out, /^state: empty$/m);
+  const refused = run(
+    [bin, 'import', '--from', unknownVariantPair(t)],
+    { PORTFOLIO_DATA_DIR: data },
+    app,
+  );
+  assert.equal(refused.code, 1);
+  assert.match(refused.err, /variant\.unavailable \(blocks-publish\)/);
   const imported = run(
     [bin, 'import', '--from', examplePair(t)],
     { PORTFOLIO_DATA_DIR: data },
     app,
   );
-  assert.equal(imported.code, 1);
-  assert.match(imported.err, /variant\.unavailable \(blocks-publish\)/);
+  assert.equal(imported.code, 0, imported.err);
+  assert.match(imported.out, /^Imported portfolio\.yml and site\.yml as a new revision\.$/m);
   const usage = run([bin, 'rollback'], { PORTFOLIO_DATA_DIR: data }, app);
   assert.equal(usage.code, 2);
 });

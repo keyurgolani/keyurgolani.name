@@ -3,7 +3,7 @@
 > Fill this out BEFORE writing any code, and get the user's approval before
 > implementation. See `skills/variant-developer/references/design-contract.md`.
 
-> **Porting from a reference?** (a `legacy/` package, another platform's
+> **Porting from a reference?** (a v1 variant from git history, another platform's
 > design, a Figma mockup) Also fill out `## Component inventory`,
 > `## Signature interactions`, `## Data-shape diff`, and `## Fidelity targets`
 > at the bottom. They drive Wave 2's scope and Phase 3's sign-off. See
