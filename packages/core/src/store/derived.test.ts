@@ -855,11 +855,27 @@ test("an edited GitHub username drops the old account's data: neither the draft 
     ),
   );
   assert.deepEqual(recased.derived?.snapshots, { github: snapshot(12) });
-  const renamed = saved(
-    await store.drafts.save(
+  // A refresh for the old account is pending when the username changes: the
+  // change goes with its data, so nothing is left to decide.
+  const refreshed = saved(
+    await store.drafts.refreshSources(
       {
         draftId: recased.draftId,
         expectedVersion: recased.version,
+        snapshots: { github: snapshot(15) },
+      },
+      'owner',
+    ),
+  );
+  assert.deepEqual(
+    changesOf(refreshed).map(({ decision }) => decision.state),
+    ['pending'],
+  );
+  const renamed = saved(
+    await store.drafts.save(
+      {
+        draftId: refreshed.draftId,
+        expectedVersion: refreshed.version,
         documents: forAccount('someone-else'),
       },
       'owner',
