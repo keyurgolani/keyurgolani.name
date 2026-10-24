@@ -41,7 +41,7 @@
     "Translucent surfaces with a backdrop blur cost paint time on slower devices, and read less clearly over busy content.",
     "A decorative gradient texture sits behind surfaces.",
     "Its double focus ring is 5px, not the prototype's 3px: at 3px, the ring is two 1px lines, short of the area a 2px ring covers at 3:1.",
-    "Ships opaque: its approved 96% translucent surfaces fall under the contrast targets with its texture over a black or white backdrop, so surfaces are 100% opaque, the orchestrator's call under the owner's delegation."
+    "Ships opaque: its approved 96% translucent surfaces fall under the contrast targets with its texture over a black or white backdrop, so its surfaces are 100% opaque, and only a dialog's backdrop is blurred. This supersedes the translucency caveats above."
   ],
   "tokens": {
     "surface-material": "linear-gradient(135deg, var(--color-surface-subtle), var(--color-surface-prominent) 45%, var(--color-surface-default) 55%, var(--color-surface-subtle))",

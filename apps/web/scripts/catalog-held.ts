@@ -12,7 +12,9 @@
 // solves with anchor-v2, so texture alone holds nothing back, and a
 // translucent language ships at its translucency floor, the least
 // surface-opacity that passes (surfaceOpacityFloor). One whose floor is
-// 100% is opaque in effect, so it stays held for the owner's call.
+// 100% is opaque in effect: it ships opaque only on a recorded decision,
+// with its approved value kept and a caveat (#20 PR 2d), and otherwise
+// stays held for the owner's call.
 // `pnpm check:appearance` fails when one is stale, when a held manifest doesn't validate, when a
 // held id is registered or held twice, or when a held pack passes now,
 // so it can be promoted, in an owner-approved PR.
