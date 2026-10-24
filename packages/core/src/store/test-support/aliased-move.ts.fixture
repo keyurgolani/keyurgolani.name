@@ -1,0 +1,13 @@
+import { rename } from 'node:fs/promises';
+import { storePaths } from '../layout';
+
+// A module the pointer guard has to refuse (#8 review, finding 5): it moves
+// the published pointer by an alias, with node:fs directly, past the
+// FsPort. pointer-moves.test.ts reads it as text and runs the guard on it;
+// its .fixture name keeps it out of the module tree, so nothing loads it.
+
+export async function aliasedMove(dir: string, staged: string): Promise<void> {
+  const layout = storePaths(dir);
+  const target = layout.live;
+  await rename(staged, target);
+}
