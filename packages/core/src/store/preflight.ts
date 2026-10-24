@@ -3,7 +3,14 @@ import { realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { recordOwnerModule } from '../load-trace';
 import { nodeFs, type FsPort } from './fs-port';
-import { isRestoreLeftover, STORE_LAYOUT, storePaths, tempBeside, type StorePaths } from './layout';
+import {
+  isRestoreLeftover,
+  isWithin as within,
+  STORE_LAYOUT,
+  storePaths,
+  tempBeside,
+  type StorePaths,
+} from './layout';
 
 // The owner startup preflight for the data directory (#3, item 3): it's
 // there, only the server's user can write it, it sits outside the source
@@ -45,12 +52,6 @@ export interface PreflightOptions {
 }
 
 const errorCode = (error: unknown) => (error as NodeJS.ErrnoException)?.code;
-
-/** Whether `inner` is `outer` or under it. */
-function within(outer: string, inner: string): boolean {
-  const relative = path.relative(outer, inner);
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
-}
 
 async function resolved(dir: string): Promise<string> {
   try {

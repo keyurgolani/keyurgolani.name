@@ -15,7 +15,9 @@ import {
   readdirSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -27,6 +29,7 @@ import {
   canonicalize,
   isPlainObject,
   mediaBlobs,
+  resolvePortfolioView,
   validatePublicationUnit,
   type MediaRecord,
 } from '@portfolio/schema';
@@ -36,7 +39,7 @@ import type { SchemeGenerators } from '../catalog/schemes';
 import { sourceCatalogReader } from '../catalog/source';
 import { sha256, type Sha256, type UnitChecks, type UnitInput } from '../catalog/unit';
 import { publicationUnitOf } from '../catalog/view';
-import { bundleDirectory, exportBlobs } from './bundle-files';
+import { bundleDirectory, servedBlobs } from './bundle-files';
 import type { Draft, DraftOutcome } from './drafts';
 import { nodeFs, type FsPort } from './fs-port';
 import type { RevisionId } from './layout';
@@ -75,12 +78,17 @@ const checks: UnitChecks = testChecks({
 const bytesOf = (label: string, size = 96) =>
   Buffer.concat([Buffer.from(`${label}:`), Buffer.alloc(size, label.length)]);
 
-/** The blobs the store holds for the test's media: two images, one rendition each, and a PDF. */
+/**
+ * The blobs the store holds for the test's media: a public cover, a private
+ * portrait, an image nothing places, each with one rendition, and a PDF.
+ */
 const BLOBS = {
   coverSource: bytesOf('cover-source'),
   coverRendition: bytesOf('cover-w4'),
   portraitSource: bytesOf('portrait-source'),
   portraitRendition: bytesOf('portrait-w4'),
+  unplacedSource: bytesOf('unplaced-source'),
+  unplacedRendition: bytesOf('unplaced-w4'),
   pdf: bytesOf('reading-list-pdf'),
 };
 
@@ -114,6 +122,7 @@ const MEDIA = {
   assets: [
     image('cover', BLOBS.coverSource, BLOBS.coverRendition),
     image('portrait', BLOBS.portraitSource, BLOBS.portraitRendition),
+    image('unplaced', BLOBS.unplacedSource, BLOBS.unplacedRendition),
     {
       assetId: 'reading-list',
       sha256: hexOf(BLOBS.pdf),
@@ -128,11 +137,35 @@ const MEDIA = {
   ],
 };
 
-/** The engineering pair, selecting the seed scheme, with the test's media document. */
+/**
+ * The engineering pair's portfolio with the test's media: shipyard's cover,
+ * public; its private portrait and its PDF, placed beside it; and an image
+ * nothing places.
+ */
+function withMediaEntries(text: string): string {
+  const placed = text.replace(
+    '    summary: A deploy orchestrator that rolls back before you notice.\n',
+    '    summary: A deploy orchestrator that rolls back before you notice.\n' +
+      '    cover:\n      asset: cover\n' +
+      '    media:\n      - asset: portrait\n      - asset: reading-list\n',
+  );
+  assert.notEqual(placed, text);
+  return (
+    `${placed}media:\n` +
+    '  - id: cover\n    kind: image\n    source: cover.png\n    alt: A test cover.\n' +
+    '  - id: portrait\n    kind: image\n    source: portrait.png\n    visibility: private\n' +
+    '    alt: A private portrait.\n' +
+    '  - id: unplaced\n    kind: image\n    source: unplaced.png\n    alt: Nothing places it.\n' +
+    '  - id: reading-list\n    kind: document\n    source: reading-list.pdf\n'
+  );
+}
+
+/** The engineering pair, selecting the seed scheme, with the test's media entries and document. */
 function pairWithSeed(seed: string): UnitInput {
   const input = pairInput('engineering');
   return {
     ...input,
+    portfolio: { ...input.portfolio, sourceText: withMediaEntries(input.portfolio.sourceText) },
     site: {
       ...input.site,
       sourceText: applyEdits(input.site.sourceText, input.site.format, [
@@ -379,7 +412,7 @@ test('an export of live and of an older revision is export format 1: the store-f
     assert.equal(parsed.unitHash, manifest.unitHash);
     const verified = await verifyBundle(bundleDirectory(out), {
       checks,
-      keep: (served) => new Set(exportBlobs(served.media)),
+      keep: (served) => new Set(servedBlobs(served)),
     });
     assert.ok(verified.ok, JSON.stringify(!verified.ok && verified.problems));
     assert.deepEqual(verified.unit, publicationUnitOf(unit));
@@ -408,32 +441,54 @@ test('an export of live and of an older revision is export format 1: the store-f
   }
 });
 
-test("the blobs are every rendition and a source that isn't an image, by bare hex, each with its sha256 and size; an image's original stays out", async (t) => {
+test("the blobs are the renditions the public view serves, by bare hex, each with its sha256 and size; a private or unplaced asset's renditions and every original stay out", async (t) => {
   const seededStore = await seeded(t);
   const out = path.join(seededStore.root, 'out');
   assert.equal((await exportCli(seededStore, ['live', '--out', out])).code, 0);
   const bundle = bundleOf(out);
-  const expected = [BLOBS.coverRendition, BLOBS.portraitRendition, BLOBS.pdf]
-    .map((bytes) => ({
-      file: `media/blobs/${hexOf(bytes)}`,
-      sha256: `sha256:${hexOf(bytes)}`,
-      size: bytes.byteLength,
-    }))
-    .sort((a, b) => (a.sha256 < b.sha256 ? -1 : 1));
+  // The public view keeps the cover and the PDF it places, and neither the
+  // private portrait nor the image nothing places.
+  const read = await readRevision(nodeFs, seededStore.store.paths, seededStore.first);
+  assert.ok(read.ok);
+  const unit = publicationUnitOf(read.revision.unit);
+  const view = resolvePortfolioView(
+    unit,
+    { media: unit.media, snapshots: unit.snapshots },
+    { mediaBase: '/media' },
+  );
+  assert.deepEqual(Object.keys(view.media).sort(), ['cover', 'reading-list']);
+  const expected = [BLOBS.coverRendition].map((bytes) => ({
+    file: `media/blobs/${hexOf(bytes)}`,
+    sha256: `sha256:${hexOf(bytes)}`,
+    size: bytes.byteLength,
+  }));
   assert.deepEqual(bundle.blobs, expected);
+  assert.deepEqual(
+    servedBlobs(unit),
+    expected.map(({ sha256: hash }) => hash),
+  );
   for (const blob of expected) {
     assert.deepEqual(
       readFileSync(path.join(out, blob.file)),
       readFileSync(seededStore.store.paths.blob(blob.sha256 as Sha256)),
     );
   }
-  assert.deepEqual(
-    readdirSync(path.join(out, 'media', 'blobs')).sort(),
-    expected.map(({ sha256: hash }) => hash.slice('sha256:'.length)).sort(),
-  );
-  for (const original of [BLOBS.coverSource, BLOBS.portraitSource]) {
-    assert.equal(existsSync(path.join(out, 'media', 'blobs', hexOf(original))), false);
+  assert.deepEqual(readdirSync(path.join(out, 'media', 'blobs')), [hexOf(BLOBS.coverRendition)]);
+  for (const absent of [
+    BLOBS.portraitRendition,
+    BLOBS.unplacedRendition,
+    BLOBS.pdf,
+    BLOBS.coverSource,
+    BLOBS.portraitSource,
+    BLOBS.unplacedSource,
+  ]) {
+    assert.equal(existsSync(path.join(out, 'media', 'blobs', hexOf(absent))), false);
   }
+  // The media document still lists every record, as the revision does.
+  assert.equal(
+    readFileSync(path.join(out, 'media', 'media.json'), 'utf8'),
+    read.revision.unit.media!.sourceText,
+  );
 });
 
 test("bundle.json has the reference fixture's shape, and its events are the ones that made the revision live, with public fields alone", async (t) => {
@@ -570,6 +625,8 @@ test("nothing of the store's own reaches a bundle: no draft, session, claim, loc
   }
 });
 
+const isDirectory = (dir: string) => existsSync(dir) && statSync(dir).isDirectory();
+
 /** What `dir`'s parent holds, so a refusal shows it left nothing beside the target either. */
 const besides = (dir: string) => readdirSync(path.dirname(dir)).sort();
 
@@ -587,7 +644,7 @@ test('every refusal writes nothing, and says why: a target that is not empty, ov
     const out = args[args.indexOf('--out') + 1]!;
     // Beside a target in the test's own directory: the system's temp directory changes under it.
     const before =
-      path.dirname(out).startsWith(root) && existsSync(path.dirname(out)) ? besides(out) : null;
+      path.dirname(out).startsWith(root) && isDirectory(path.dirname(out)) ? besides(out) : null;
     const recorded = recordingFs();
     const run = await exportCli(seededStore, args, { fs: recorded.fs, env });
     assert.equal(run.code, 1, `${label}: ${run.out}`);
@@ -625,6 +682,28 @@ test('every refusal writes nothing, and says why: a target that is not empty, ov
   await refuse('holding the source directory', ['live', '--out', holder], 'target_overlaps', {
     PORTFOLIO_SOURCE_DIR: path.join(holder, 'source'),
   });
+  // A name below either that starts with two dots is still below it.
+  await refuse(
+    'a ..name inside the data directory',
+    ['live', '--out', path.join(store.paths.root, '..x')],
+    'target_overlaps',
+  );
+  await refuse(
+    'a ..name inside the source directory',
+    ['live', '--out', path.join(source, '..x')],
+    'target_overlaps',
+    env,
+  );
+  assert.equal(existsSync(path.join(store.paths.root, '..x')), false);
+  // The data directory named through a link, and the target by its real path.
+  const dataLink = path.join(root, 'data-link');
+  symlinkSync(store.paths.root, dataLink);
+  await refuse(
+    'inside the data directory a link names',
+    ['live', '--out', path.join(store.paths.root, 'out')],
+    'target_overlaps',
+    { PORTFOLIO_DATA_DIR: dataLink },
+  );
 
   const empty = path.join(root, 'empty');
   mkdirSync(empty);
@@ -643,6 +722,16 @@ test('every refusal writes nothing, and says why: a target that is not empty, ov
   await refuse(
     'no directory to put it in',
     ['live', '--out', path.join(root, 'no', 'such')],
+    'target_parent_missing',
+  );
+  await refuse(
+    'a file where its directory should be',
+    ['live', '--out', path.join(file, 'out')],
+    'target_parent_missing',
+  );
+  await refuse(
+    'a file above its directory',
+    ['live', '--out', path.join(file, 'x', 'out')],
     'target_parent_missing',
   );
 
@@ -687,9 +776,11 @@ test("a rendition over the reader's 20 MiB blob limit is too_large before anythi
     {
       documents: {
         ...input,
+        // The cover the public view places, its one rendition past the limit.
+        portfolio: { ...input.portfolio, sourceText: withMediaEntries(input.portfolio.sourceText) },
         media: {
           format: 'json',
-          sourceText: JSON.stringify({ assets: [image('large', source, rendition)] }),
+          sourceText: JSON.stringify({ assets: [image('cover', source, rendition)] }),
         },
       },
       sourceHash: `sha256:${hexOf('large')}`,
@@ -758,6 +849,104 @@ test('an empty directory at the target takes the export, and a write that fails 
     assert.equal(existsSync(out), false, point);
     assert.deepEqual(besides(out), before, `${point}: no staging left`);
   }
+});
+
+test('a sync of the target directory that fails after the rename leaves the export in place, with a warning, and exits 0', async (t) => {
+  const seededStore = await seeded(t);
+  const out = path.join(seededStore.root, 'synced');
+  const fs = crashingFs({ point: 'export.parent.fsync', nth: 1 }, 'throw');
+  const run = await exportCli(seededStore, ['live', '--out', out], { fs });
+  assert.ok(fs.crashed());
+  assert.equal(run.code, 0, run.err);
+  assert.match(run.err, /^warning: parent_fsync_failed: the export is in place in /m);
+  assert.equal((await verifyCli(out)).code, 0);
+});
+
+/** Strict checks: this build serves no site, as one without its variant wouldn't. */
+const strict: UnitChecks = {
+  ...checks,
+  validateLive: (pair) => {
+    const result = validatePublicationUnit(pair);
+    return {
+      ...result,
+      diagnostics: [
+        ...result.diagnostics,
+        {
+          code: 'variant.unavailable',
+          severity: 'blocks-preview',
+          document: 'site',
+          pointer: '/appearance/variant',
+          message: 'Not in this build.',
+          remediation: 'Install it.',
+        },
+      ],
+    };
+  },
+};
+
+test("an export this build wouldn't serve is refused as does_not_serve, with each problem, and nothing at or beside the target", async (t) => {
+  const seededStore = await seeded(t);
+  const out = path.join(seededStore.root, 'unserved');
+  const before = besides(out);
+  const run = await cli(['export-revision', 'live', '--out', out], {
+    dataDir: seededStore.store.paths.root,
+    readSource,
+    checks: strict,
+  });
+  assert.equal(run.code, 1);
+  assert.match(
+    run.out,
+    /^problem: does_not_serve site\.yml \(variant\.unavailable in site at \/appearance\/variant\)$/m,
+  );
+  assert.match(run.err, /^does_not_serve: .*Nothing was written\.$/m);
+  assert.equal(existsSync(out), false);
+  assert.deepEqual(besides(out), before);
+});
+
+test('a target filled, or its directory swapped for a link, after the checks is refused at the move, and the staging directory goes', async (t) => {
+  const seededStore = await seeded(t);
+  const { root } = seededStore;
+
+  // The rename finds the target filled since it was checked.
+  const filled = path.join(root, 'filled');
+  const before = besides(filled);
+  const busy: FsPort = {
+    ...nodeFs,
+    async rename(from, to, point, pass) {
+      if (point === 'export.rename') {
+        throw Object.assign(new Error('Directory not empty.'), { code: 'ENOTEMPTY' });
+      }
+      return nodeFs.rename(from, to, point, pass);
+    },
+  };
+  const refusedFull = await exportCli(seededStore, ['live', '--out', filled], { fs: busy });
+  assert.equal(refusedFull.code, 1);
+  assert.match(refusedFull.err, /^target_not_empty: .*Nothing was written\.$/m);
+  assert.deepEqual(besides(filled), before);
+
+  // The target's directory becomes a link to another while the export writes.
+  const parent = path.join(root, 'parent');
+  const moved = path.join(root, 'moved');
+  mkdirSync(parent);
+  let swapped = false;
+  const swapping: FsPort = {
+    ...nodeFs,
+    async fsync(target, point) {
+      if (!swapped && point === 'export.dir.fsync') {
+        swapped = true;
+        renameSync(parent, moved);
+        symlinkSync(moved, parent);
+      }
+      return nodeFs.fsync(target, point);
+    },
+  };
+  const run = await exportCli(seededStore, ['live', '--out', path.join(parent, 'out')], {
+    fs: swapping,
+  });
+  assert.ok(swapped);
+  assert.equal(run.code, 1);
+  assert.match(run.err, /^target_linked: .*Nothing was written\.$/m);
+  assert.deepEqual(readdirSync(moved), [], 'nothing where the link points');
 });
 
 test('an export takes no lock, reads the revision by its ID, and a publish while it reads gives no mixed bundle', async (t) => {
@@ -901,6 +1090,51 @@ test("verify-revision finds a changed byte, an extra file, a missing file, a lin
   const linked = await verifyCli(link);
   assert.equal(linked.code, 1);
   assert.match(linked.out, /^problem: bundle_unreadable$/m);
+  // And under a link to a directory above it.
+  const above = path.join(seededStore.root, 'root-link');
+  symlinkSync(seededStore.root, above);
+  const under = await verifyCli(path.join(above, path.basename(out)));
+  assert.equal(under.code, 1);
+  assert.match(under.out, /^problem: bundle_unreadable$/m);
+});
+
+test('verify-revision names the bundle as it was given, never by an absolute path it made', async (t) => {
+  const { out, seededStore } = await exported(t);
+  const relative = (argv: readonly string[]) =>
+    cli(argv, { readSource, checks, cwd: seededStore.root });
+  const passing = await relative(['verify-revision', 'export']);
+  assert.equal(passing.code, 0, passing.out);
+  assert.match(passing.out, /^Verified \d+ files in export: /m);
+  writeFileSync(path.join(out, 'notes.txt'), 'extra');
+  const failing = await relative(['verify-revision', './export']);
+  assert.equal(failing.code, 1);
+  assert.match(failing.out, /^1 problem: \.\/export doesn't verify\.$/m);
+  const missing = await relative(['verify-revision', 'nothing-here']);
+  assert.equal(missing.code, 1);
+  for (const run of [passing, failing, missing]) {
+    assert.equal(`${run.out}${run.err}`.includes(seededStore.root), false, run.out);
+  }
+});
+
+test('a file swapped for a link between its checks and its open is never followed', async (t) => {
+  const { out, seededStore } = await exported(t);
+  // The link points at the very bytes the file held, so only O_NOFOLLOW tells them apart.
+  const copy = path.join(seededStore.root, 'portfolio-copy.yml');
+  writeFileSync(copy, readFileSync(path.join(out, 'portfolio.yml')));
+  const verified = await verifyBundle(
+    bundleDirectory(out, {
+      beforeOpen(file) {
+        if (file !== 'portfolio.yml') return;
+        rmSync(path.join(out, file));
+        symlinkSync(copy, path.join(out, file));
+      },
+    }),
+    { checks, keep: (served) => new Set(servedBlobs(served)) },
+  );
+  assert.equal(verified.ok, false);
+  assert.deepEqual(!verified.ok && verified.problems, [
+    { code: 'file_missing', path: 'portfolio.yml' },
+  ]);
 });
 
 async function liveUnit({ store, first }: Seeded) {
@@ -911,26 +1145,6 @@ async function liveUnit({ store, first }: Seeded) {
 
 test("verify-revision says does_not_serve for a bundle this build won't serve, and blob_unlisted for a rendition bundle.json leaves out", async (t) => {
   const { out } = await exported(t);
-  const strict: UnitChecks = {
-    ...checks,
-    validateLive: (pair) => {
-      const result = validatePublicationUnit(pair);
-      return {
-        ...result,
-        diagnostics: [
-          ...result.diagnostics,
-          {
-            code: 'variant.unavailable',
-            severity: 'blocks-preview',
-            document: 'site',
-            pointer: '/appearance/variant',
-            message: 'Not in this build.',
-            remediation: 'Install it.',
-          },
-        ],
-      };
-    },
-  };
   const run = await cli(['verify-revision', out], { readSource, checks: strict });
   assert.equal(run.code, 1);
   assert.match(

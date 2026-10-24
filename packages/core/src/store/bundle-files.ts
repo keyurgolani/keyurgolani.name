@@ -1,7 +1,12 @@
 import { constants, createReadStream } from 'node:fs';
 import { lstat, readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
-import { parseMediaDocument } from '@portfolio/schema';
+import {
+  parseMediaDocument,
+  RENDITION_TYPES,
+  resolvePortfolioView,
+  type ContentExtension,
+} from '@portfolio/schema';
 import { recordOwnerModule } from '../load-trace';
 import {
   BUNDLE_LIMITS,
@@ -11,6 +16,7 @@ import {
   type BundleProblem,
   type VerifiedBundle,
 } from '../catalog/bundle';
+import type { PublicationUnit } from '../catalog/port';
 import type { Sha256, UnitChecks } from '../catalog/unit';
 
 // A full export's directory as the store-free bundle reader reads it (#9,
@@ -42,8 +48,16 @@ const isRelativePath = (file: string) =>
     .split('/')
     .every((name) => name !== '' && name !== '.' && name !== '..' && !name.includes('\\'));
 
+export interface BundleDirectoryOptions {
+  /**
+   * Tests' hook, run after a file's checks and before it opens, where a
+   * swap for a link would land: the open still follows none.
+   */
+  readonly beforeOpen?: (file: string) => Promise<void> | void;
+}
+
 /** `dir` as verifyBundle()'s port. `dir` itself is the caller's to check (bundleDirectoryProblem()). */
-export function bundleDirectory(dir: string): BundleFiles {
+export function bundleDirectory(dir: string, options: BundleDirectoryOptions = {}): BundleFiles {
   const at = (file: string) => path.join(dir, ...file.split('/'));
   return {
     async list() {
@@ -80,9 +94,10 @@ export function bundleDirectory(dir: string): BundleFiles {
           throw new Error('Not a directory in the bundle.');
         }
       }
-      // A regular file at the last name, then opened without following a
-      // link, and a FIFO swapped in since opens and ends at once.
       if (!(await lstat(at(file))).isFile()) throw new Error('Not a regular file.');
+      // A link swapped in since the lstat fails the open (O_NOFOLLOW), and a
+      // FIFO opens and ends at once (O_NONBLOCK).
+      await options.beforeOpen?.(file);
       const chunks: Buffer[] = [];
       let length = 0;
       const stream = createReadStream(at(file), {
@@ -102,19 +117,35 @@ export function bundleDirectory(dir: string): BundleFiles {
 }
 
 /**
- * The blobs a full export holds for a media document (#10): every
- * rendition's, and the source's of an asset that isn't an image, the file
- * itself being what serves for one. An image's original stays out: no
- * route serves an original, so read-only and the demo's reference never
- * need one. A document that doesn't check holds none. Sorted, each once.
+ * The blobs a full export holds (#9, #10): each rendition of each asset the
+ * unit's public view keeps, which is exactly what /media under read-only
+ * and the demo's /reference/media serve, and what the demo's reference
+ * holds. A private or unplaced asset's renditions stay out, and so does
+ * every original, an image's or any other asset's, since no route serves
+ * one. The view is #10's resolvePortfolioView(), with the build's content
+ * extensions, as the server builds it. A media document that doesn't check
+ * holds none. Sorted, each once.
  */
-export function exportBlobs(media: unknown): readonly Sha256[] {
-  const parsed = parseMediaDocument(media);
+export function servedBlobs(
+  unit: PublicationUnit,
+  extensions: readonly ContentExtension[] = [],
+): readonly Sha256[] {
+  const parsed = parseMediaDocument(unit.media);
   if (!parsed.ok) return [];
+  const view = resolvePortfolioView(
+    unit,
+    { media: unit.media, snapshots: unit.snapshots },
+    { mediaBase: '/media', extensions },
+  );
+  const visible = new Set(Object.keys(view.media));
   const blobs = new Set<Sha256>();
   for (const record of parsed.value.assets) {
-    for (const rendition of record.renditions) blobs.add(`sha256:${rendition.sha256}`);
-    if (!record.mime.startsWith('image/')) blobs.add(`sha256:${record.sha256}`);
+    if (!visible.has(record.assetId)) continue;
+    for (const rendition of record.renditions) {
+      if (rendition.sha256 === record.sha256) continue;
+      if (!(RENDITION_TYPES as readonly string[]).includes(rendition.mime)) continue;
+      blobs.add(`sha256:${rendition.sha256}`);
+    }
   }
   return [...blobs].sort();
 }
@@ -144,14 +175,18 @@ export async function bundleDirectoryProblem(
 
 /**
  * `verify-revision <dir>`: the full export in `dir`, through the store-free
- * reader with the build's checks, and every blob its media document's
- * renditions name listed (blob_unlisted), not only the ones a public view
- * keeps. Every problem is the reader's, with paths relative to `dir`.
+ * reader with the build's checks, with every blob servedBlobs() names
+ * listed (blob_unlisted), as an export writes them. Every problem is the
+ * reader's, with paths relative to `dir`.
  */
-export function verifyExport(dir: string, checks: UnitChecks): Promise<VerifiedBundle> {
+export function verifyExport(
+  dir: string,
+  checks: UnitChecks,
+  extensions: readonly ContentExtension[] = [],
+): Promise<VerifiedBundle> {
   return verifyBundle(bundleDirectory(dir), {
     checks,
-    keep: (unit) => new Set(exportBlobs(unit.media)),
+    keep: (unit) => new Set(servedBlobs(unit, extensions)),
   });
 }
 

@@ -33,7 +33,12 @@ import { MediaSourceError } from './catalog/media/limits';
 import { githubAdapter, githubTokenFrom, type FetchLike } from './sources/github/index';
 import type { Draft } from './store/drafts';
 import { createHash } from 'node:crypto';
-import { isPlainObject, recordedChanges, type MediaRecordSource } from '@portfolio/schema';
+import {
+  isPlainObject,
+  recordedChanges,
+  type ContentExtension,
+  type MediaRecordSource,
+} from '@portfolio/schema';
 import { localMediaRoot } from './catalog/media/local';
 import { remoteImageFetcher, type RemoteFetcher } from './catalog/media/remote';
 import { openStore, type Store } from './store/store';
@@ -141,6 +146,8 @@ export interface CliOptions {
   readonly sharpDirectories?: readonly string[];
   /** How `sources refresh` calls GitHub (#10). Tests pass a stub; the default is Node's fetch. */
   readonly githubFetch?: FetchLike;
+  /** The content extensions this build registers, which an export's public view keeps records for (#9). */
+  readonly extensions?: readonly ContentExtension[];
 }
 
 class UsageError extends Error {}
@@ -1243,17 +1250,20 @@ class Commands {
       throw new UsageError('export-revision takes a revision ID, rev_ and 32 hex digits, or live.');
     }
     const out = this.given(values.out);
+    // Named as it was given: an absolute path the operator didn't type isn't printed.
+    const named = values.out;
     const documentsOnly = values['documents-only'] === true;
     const store = await this.readable();
     const source = setting(this.options.env, 'PORTFOLIO_SOURCE_DIR');
     this.running.note =
-      `Nothing is in ${out} until an export finishes. A .${path.basename(out)}.<hex>.tmp ` +
+      `Nothing is in ${named} until an export finishes. A .${path.basename(out)}.<hex>.tmp ` +
       'directory beside it may be left: remove it.';
     const outcome = await exportRevision(
       {
         fs: this.fs,
         paths: store.paths,
         checks: this.options.checks,
+        ...(this.options.extensions ? { extensions: this.options.extensions } : {}),
         ...(source ? { sourceDir: path.resolve(this.options.envBase, source) } : {}),
       },
       target,
@@ -1269,42 +1279,49 @@ class Commands {
         not_found: `the store has no revision ${target}, or retention removed it.`,
         revision_damaged: `a file of the revision is ${outcome.damage ?? 'damaged'}. \`verify\` says more.`,
         asset_missing:
-          `blob ${outcome.blob ?? ''}, which the revision's media names, isn't in the store, ` +
-          "or its bytes don't match its hash. `verify` says more.",
+          `blob ${outcome.blob ?? ''}, which the revision's public view serves, isn't in the ` +
+          "store, or its bytes don't match its hash. `verify` says more.",
         too_large: `the export would pass a bundle's limit of ${outcome.limit ?? 'its size'}, which no reader takes.`,
         does_not_serve:
           "the export doesn't verify under this build, for each problem above. " +
           '`--documents-only` still writes the two documents.',
-        target_not_empty: `${out} isn't empty. An export goes into an empty or new directory.`,
-        target_overlaps: `${out} overlaps PORTFOLIO_DATA_DIR or PORTFOLIO_SOURCE_DIR. An export goes outside both.`,
-        target_linked: `${out} is a symbolic link, or one is above it. Give the directory's real path.`,
-        target_parent_missing: `The directory ${out} goes in doesn't exist. Make it first.`,
+        target_not_empty: `${named} isn't empty. An export goes into an empty or new directory.`,
+        target_overlaps: `${named} overlaps PORTFOLIO_DATA_DIR or PORTFOLIO_SOURCE_DIR. An export goes outside both.`,
+        target_linked: `${named} is a symbolic link, or one is above it, or became one. Give the directory's real path.`,
+        target_parent_missing: `The directory ${named} goes in doesn't exist, or isn't a directory. Make it first.`,
+        target_unwritable: `The directory ${named} goes in can't be looked in or written, or it's full (${outcome.reason ?? 'unknown'}).`,
       };
       throw new Refusal(`${outcome.code}: ${messages[outcome.code]} Nothing was written.`);
     }
     if (documentsOnly) {
       this.say(
-        `Exported the documents of ${outcome.revisionId} to ${out}: ${outcome.files.join(', ')}, ` +
+        `Exported the documents of ${outcome.revisionId} to ${named}: ${outcome.files.join(', ')}, ` +
           'byte for byte, and nothing else. With no bundle.json, verify-revision has nothing to ' +
           'check them against, and read-only needs a full export to serve its snapshots and media.',
       );
     } else {
       const blobs = outcome.files.filter((file) => file.startsWith('media/blobs/')).length;
       this.say(
-        `Exported ${outcome.revisionId} to ${out}: ${count(outcome.files.length, 'file')}, ` +
+        `Exported ${outcome.revisionId} to ${named}: ${count(outcome.files.length, 'file')}, ` +
           `${count(blobs, 'blob')} (${outcome.blobBytes} bytes) among them, and bundle.json last. ` +
           'It verified before it was moved into place.',
       );
     }
     this.say(`revision: ${outcome.revisionId}`);
     this.say(`unit hash: ${outcome.unitHash}`);
+    if (outcome.warnings.includes('parent_fsync_failed')) {
+      this.complain(
+        `warning: parent_fsync_failed: the export is in place in ${named}, but syncing the ` +
+          'directory it went in failed, so a crash now could lose its name. Run verify-revision on it.',
+      );
+    }
     return 0;
   }
 
   /**
    * `verify-revision <dir>` (#9): a full export, checked by the store-free
    * reader the demo's reference starts with, with this build's checks. It
-   * reads only below <dir> and opens no store.
+   * reads only below <dir>, opens no store, and names <dir> as it was given.
    */
   private async verifyRevision(args: readonly string[]): Promise<number> {
     const { positionals } = this.parse(args, {}, 1);
@@ -1316,15 +1333,15 @@ class Commands {
       this.say(`problem: bundle_unreadable`);
       this.say(
         unusable === 'linked'
-          ? `${dir} is a symbolic link, or one is above it, and verify-revision follows none. Give its real path.`
-          : `${dir} is no directory this user can read.`,
+          ? `${given} is a symbolic link, or one is above it, and verify-revision follows none. Give its real path.`
+          : `${given} is no directory this user can read.`,
       );
       return 1;
     }
-    const verified = await verifyExport(dir, this.options.checks);
+    const verified = await verifyExport(dir, this.options.checks, this.options.extensions);
     if (!verified.ok) {
       for (const problem of verified.problems) this.say(problemLine(problem));
-      this.say(`${count(verified.problems.length, 'problem')}: ${dir} doesn't verify.`);
+      this.say(`${count(verified.problems.length, 'problem')}: ${given} doesn't verify.`);
       return 1;
     }
     const { bundle } = verified;
@@ -1334,7 +1351,7 @@ class Commands {
       Object.keys(bundle.snapshots).length +
       bundle.blobs.length;
     this.say(
-      `Verified ${count(files, 'file')} in ${dir}: exactly what bundle.json lists, every hash, ` +
+      `Verified ${count(files, 'file')} in ${given}: exactly what bundle.json lists, every hash, ` +
         'and the pair serves under this build.',
     );
     this.say(`revision: ${bundle.revisionId}`);

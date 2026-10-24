@@ -146,7 +146,7 @@ function pausingFs(
   };
   const fs: FsPort = {
     ...inner,
-    mkdir: (dir, point) => hold(point, () => inner.mkdir(dir, point)),
+    mkdir: (dir, point, options) => hold(point, () => inner.mkdir(dir, point, options)),
     writeFile: (file, data, point, options) =>
       hold(point, () => inner.writeFile(file, data, point, options)),
     fsync: (target, point) => hold(point, () => inner.fsync(target, point)),
