@@ -41,6 +41,7 @@ Reference packages:
 - **`packages/kit`**: `@portfolio/kit/sections` (`renderSection`, the shared renderers, `RichText`, `seededRandom`, `VisitorControlSlot`) and `@portfolio/kit/enhancements` (`Enhancement`), plus layout primitives and hooks. Use it. If you find yourself rewriting a helper that could live there, hoist it.
 - **`legacy/`**: the retired v1 Editorial package, outside the workspace, for #13 to port. Read it for ideas and inventory; never import it. Its themes, color schemes, and typography presets moved to #19.
 - **`packages/variant-kinetic-cosmos`**: a port of v1 Kinetic Cosmos (#14), the first registered composition: bespoke renderers for three kinds, the rest shared, #19's Dialog and Disclosure, the kit's `threadLanes`, and a motion layer on the kit runtime: CSS animations keyed on the runtime's state, a receding chrome, and `MotionControl`.
+- **`packages/variant-spatial-bento`**: Spatial Bento (#16), a server module with no client code: a tile a section through the shared renderers, the hero beside a CSS still of its stage, and a test that the bento keeps every word and link the shared renderers write.
 
 ## 2. What the host does around a variant
 
@@ -270,9 +271,9 @@ For the full catalog with reproductions and fixes, load `references/common-bugs.
 ### Motion and performance
 
 - The boundary's motion tokens stop CSS movement under every reduced-motion source, and a variant's own keyframes stop under `[data-variant='<id>']:is([data-motion='reduced'], [data-motion='static'])`; a `prefers-reduced-motion` query or a universal `!important` kill switch in variant CSS is wrong. Script motion runs on `@portfolio/kit/runtime`: `useEnhancementRuntime()` and `useFrameLoop()`. (`references/styling-conventions.md`, `common-bugs.md` §8)
-- `@portfolio/kit/spatial-r3f` is heavy: only with a `medium` or `heavy` tier and a reason, and better as an enhancement.
+- `@portfolio/kit/spatial-r3f` is heavy: use it only with a `heavy` tier and a reason, and better as an enhancement, off the static path. No audit checks a 3D import against `performanceTier`: `pnpm check:budgets` measures what it costs against the tier's ceilings, so keep `three` and R3F out of every module the server or a still renders.
 - `@portfolio/kit/motion-fx` needs `framer-motion`, an optional peer: list it in your own dependencies when you import the subpath.
-- `next.config.ts` has `reactStrictMode: false` because R3F survives WebGL context loss only without strict double-mount. Don't change it from a variant.
+- `next.config.ts` sets `reactStrictMode: true`, so in development every effect mounts, unmounts, and mounts again. A canvas effect has to survive that: create its renderer in the effect, and dispose of it, and of every listener on it, in the cleanup. Don't change it from a variant.
 
 ### Layout
 

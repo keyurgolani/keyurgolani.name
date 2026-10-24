@@ -219,6 +219,7 @@ test('a PR that changes a variant runs it against every stable language, and one
     'fallback',
     'kinetic-cosmos',
     'second-variant',
+    'spatial-bento',
   ]);
   for (const cell of byLanguage) {
     assert.equal(cell.tuple.designLanguage, 'extended-language');
