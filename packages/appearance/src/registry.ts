@@ -83,6 +83,12 @@ export interface ExcludedPack {
   readonly id: string;
   readonly packageName: string;
   readonly reason: string;
+  /**
+   * `owner-acceptance` for an image-derived scheme waiting on the owner
+   * (#20 PR 3): left out on purpose until the owner accepts it, so
+   * check:appearance reports it instead of failing on it.
+   */
+  readonly awaiting?: 'owner-acceptance';
 }
 
 interface RegisteredPack {
