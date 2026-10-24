@@ -49,6 +49,7 @@
     "check:variants": "pnpm --filter @portfolio/web check:variants",
     "check:appearance": "pnpm --filter @portfolio/web check:appearance",
     "catalog": "tsx apps/web/scripts/catalog.ts",
+    "catalog:held": "tsx apps/web/scripts/write-held.ts",
     "catalog:lock": "tsx apps/web/scripts/check-appearance-lock.ts",
     "catalog:seed": "node scripts/catalog/seed.mjs",
     "check:deps": "tsx apps/web/scripts/build-registry.ts --modules-only >&2 && depcruise apps packages --config .dependency-cruiser.cjs",

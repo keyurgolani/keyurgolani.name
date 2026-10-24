@@ -1,0 +1,88 @@
+{
+  "id": "cyberpunk",
+  "name": "Cyberpunk",
+  "description": "Cut corners, strong borders, translucent surfaces, compact density, hard offset shadows, kinetic motion, and a grid texture.",
+  "version": "1.0.0",
+  "tokenContract": 1,
+  "tier": "experimental",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "The reviewed prototype's cyber recipe, with its --appearance-* references read as --color-*, and the contract's signature-fill and emphasis-glow at the fallback language's values."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "focus-ring", "stylesheet-lint"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "Under reduced transparency, without backdrop-filter, in forced colors, and in print, surfaces render opaque and the backdrop blur is 0.",
+    "Under reduced motion, the state transforms are none and motion is instant.",
+    "In forced colors, the material is a solid surface, and shadows and texture drop."
+  ],
+  "caveats": [
+    "Translucent surfaces with a backdrop blur cost paint time on slower devices, and read less clearly over busy content.",
+    "A decorative gradient texture sits behind surfaces.",
+    "Expressive state motion: hovers and presses move more than in a quiet language."
+  ],
+  "tokens": {
+    "surface-material": "linear-gradient(color-mix(in srgb, var(--color-surface-default) 92%, transparent), color-mix(in srgb, var(--color-surface-default) 92%, transparent))",
+    "radius-control": "0 10px",
+    "radius-card": "0 16px",
+    "radius-overlay": "0 20px",
+    "radius-media": "0 12px",
+    "radius-badge": "0",
+    "border-control": "2px solid",
+    "border-card": "2px solid",
+    "border-divider": "2px solid",
+    "shadow-card": "5px 5px 0 var(--color-border-strong)",
+    "shadow-overlay": "8px 8px 0 var(--color-border-strong)",
+    "shadow-raised": "8px 8px 0 var(--color-border-strong)",
+    "shadow-inset": "none",
+    "surface-opacity": "92%",
+    "backdrop-blur": "8px",
+    "control-height": "2rem",
+    "space-control-inline": "0.625rem",
+    "space-control-block": "0.375rem",
+    "space-surface-inline": "0.75rem",
+    "space-surface-block": "0.625rem",
+    "focus-width": "3px",
+    "focus-offset": "3px",
+    "focus-style": "solid",
+    "state-hover-transform": "translate(-2px, -2px)",
+    "state-active-transform": "translate(1px, 1px)",
+    "state-selected-emphasis": "3px",
+    "state-disabled-opacity": "0.5",
+    "state-loading-opacity": "0.7",
+    "state-validation-emphasis": "3px",
+    "icon-stroke-width": "2",
+    "icon-fill": "none",
+    "motion-fast": "120ms",
+    "motion-standard": "220ms",
+    "motion-slow": "420ms",
+    "motion-easing": "cubic-bezier(0.16, 1, 0.3, 1)",
+    "motion-enter": "slide-cut",
+    "motion-exit": "fade",
+    "motion-emphasis": "glitch-once",
+    "texture": "linear-gradient(var(--color-border-subtle) 1px, transparent 1px), linear-gradient(90deg, var(--color-border-subtle) 1px, transparent 1px)",
+    "signature-fill": "linear-gradient(90deg, var(--color-signature-start), var(--color-signature-end))",
+    "emphasis-glow": "none"
+  }
+}

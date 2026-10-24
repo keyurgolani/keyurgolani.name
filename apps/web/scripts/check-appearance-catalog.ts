@@ -34,6 +34,7 @@ import {
 } from '@portfolio/appearance/node';
 import type { RegistryResult } from '@portfolio/variant-contract/node';
 import { auditCatalog } from './catalog-audit';
+import { readHeld } from './catalog-held';
 import { REPO_ROOT } from './registry-options';
 
 /** A failure record's fields, less the gate and command ci/run.mjs gives it. */
@@ -335,11 +336,16 @@ export function catalogFindings(
     seen.add(record.id);
   }
 
-  // The branded-name audit, over every shipping pack and every Research record.
+  // The branded-name audit, over every shipping and held pack and every Research record.
   const audit = auditCatalog({
-    packs: result.packs
-      .filter((pack) => !pack.fixture)
-      .map((pack) => ({ kind: pack.kind, manifest: pack.manifest as PackManifest })),
+    packs: [
+      ...result.packs
+        .filter((pack) => !pack.fixture)
+        .map((pack) => ({ kind: pack.kind, manifest: pack.manifest as PackManifest })),
+      ...readHeld(root, packages)
+        .filter((pack) => !fixturePackages.has(pack.packageName))
+        .flatMap((pack) => (pack.manifest ? [{ kind: pack.kind, manifest: pack.manifest }] : [])),
+    ],
     research: research.flatMap(({ record, packageName }) =>
       record && !fixturePackages.has(packageName) ? [record] : [],
     ),

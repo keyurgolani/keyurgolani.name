@@ -20,6 +20,8 @@ apps/web/src/app/(site)/%5Fexperience
 # The catalog's Research records (#20), which never register and never
 # reach a build: the image build never even reads them.
 packages/*/research
+# Held packs (#20), which fail their gate and never register either.
+packages/*/held
 
 archive
 experiments
