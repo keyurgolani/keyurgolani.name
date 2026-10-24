@@ -155,3 +155,95 @@ test('a source that does not parse, or has no schemaVersion, throws without quot
     );
   }
 });
+
+/** The example site with record maps in the order `keys` gives. */
+function siteWithMaps(keys: (list: string[]) => string[]): string {
+  const site = exampleData('site');
+  const map = <T>(entries: Record<string, T>) =>
+    Object.fromEntries(keys(Object.keys(entries)).map((key) => [key, entries[key]!]));
+  site.sections = map({ patents: { hidden: true }, awards: { hidden: false }, about: {} });
+  site.routes = map({
+    work: { enabled: true },
+    home: { enabled: true },
+    notes: { enabled: false },
+  });
+  site.appearanceInputs = map({
+    'material-hct': { seedColor: '#336699' },
+    'brand-seed': { seedColor: '#993366' },
+  });
+  site.variantControls = map({
+    'kinetic-cosmos': { version: 1, values: map({ zeta: 'z', alpha: 'a', mid: 'm' }) },
+    'spatial-bento': { version: 2, values: {} },
+  });
+  return serialize(site, 'json');
+}
+
+test('record maps export in one order whatever their authored order, since no reader gives it a meaning', () => {
+  const forward = siteWithMaps((list) => list);
+  const backward = siteWithMaps((list) => [...list].reverse());
+  assert.notEqual(forward, backward);
+  for (const format of ['yaml', 'json'] as const) {
+    const exportOf = (site: string) =>
+      exportUnit(
+        {
+          sources: {
+            portfolio: yamlSources.portfolio,
+            site: { text: site, format: 'json', name: 'site.json' },
+          },
+        },
+        format,
+      ).files[1]!.text;
+    assert.equal(exportOf(backward), exportOf(forward), format);
+  }
+  const site = JSON.parse(
+    exportUnit(
+      { sources: { ...yamlSources, site: { text: backward, format: 'json', name: 'site.json' } } },
+      'json',
+    ).files[1]!.text,
+  ) as Record<string, Record<string, Record<string, unknown>>>;
+  // Sorted by code unit, as canonicalize() sorts; the schema's own keys keep schema order.
+  assert.deepEqual(Object.keys(site.sections!), ['about', 'awards', 'patents']);
+  assert.deepEqual(Object.keys(site.routes!), ['home', 'notes', 'work']);
+  assert.deepEqual(Object.keys(site.appearanceInputs!), ['brand-seed', 'material-hct']);
+  assert.deepEqual(Object.keys(site.variantControls!), ['kinetic-cosmos', 'spatial-bento']);
+  assert.deepEqual(Object.keys(site.variantControls!['kinetic-cosmos']!), ['version', 'values']);
+  assert.deepEqual(Object.keys(site.variantControls!['kinetic-cosmos']!.values as object), [
+    'alpha',
+    'mid',
+    'zeta',
+  ]);
+  assert.deepEqual(Object.keys(site).slice(0, 2), ['schemaVersion', 'appearance']);
+});
+
+test('an exported document over the 1 MiB import cap is listed in overImportCap, and it does not import again', () => {
+  const data = exampleData('portfolio');
+  const links = data.links as Record<string, unknown>[];
+  // Minified JSON just under the cap, which pretty JSON then passes.
+  for (let index = 0; JSON.stringify(data).length < 1_000_000; index++) {
+    links.push({
+      platform: 'website',
+      url: `https://example.com/${'a'.repeat(200)}/${index}`,
+      label: `Link ${index}`,
+    });
+  }
+  const minified = JSON.stringify(data);
+  const original = importTexts(minified, EXAMPLE.site);
+  const small = exportUnit({ sources: yamlSources }, 'json');
+  assert.deepEqual(small.disclosure.overImportCap, []);
+  for (const format of ['json', 'yaml'] as const) {
+    const exported = exportUnit({ sources: original.unit.sources }, format);
+    const size = (text: string) => new TextEncoder().encode(text).byteLength;
+    const over = (['portfolio', 'site'] as const).filter(
+      (_, index) => size(exported.files[index]!.text) > 1024 * 1024,
+    );
+    assert.deepEqual(exported.disclosure.overImportCap, over, format);
+    if (format === 'json') assert.deepEqual(over, ['portfolio']);
+    if (over.includes('portfolio')) {
+      const again = runImport([
+        { name: 'a', bytes: bytes(exported.files[0]!.text) },
+        { name: 'b', bytes: bytes(exported.files[1]!.text) },
+      ]);
+      assert.equal(again.kind === 'refused' && again.code, 'too_large', format);
+    }
+  }
+});
