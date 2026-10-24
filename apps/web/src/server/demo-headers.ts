@@ -8,17 +8,17 @@ import type { RuntimeMode } from './config';
 // pull request. It is Studio's nonce policy (#2), plus `worker-src 'self'`
 // for the browser-side import worker #9 adds, with `form-action` narrowed to
 // 'none', since nothing on a demo page submits a form anywhere. Only /sample
-// may be framed, and only by the demo's own pages: Studio's preview frames
-// and the showroom's. Every other demo path keeps the public policy. This
+// and /reference may be framed, and only by the demo's own pages: Studio's
+// preview frames and the showroom's. Every other demo path keeps the public policy. This
 // module imports nothing, so proxy.ts can load it.
 
-/** Who may frame a demo page: its own origin for /sample, and no one else anywhere. */
+/** Who may frame a demo page: its own origin for /sample and /reference, and no one else anywhere. */
 export type DemoFraming = "'self'" | "'none'";
 
 /**
  * Whether `pathname`, read percent-decoded as the route table reads it, is
  * the showroom, under /sample, or under /reference, the read-only
- * reference's pages and renditions (#9), which no page may frame.
+ * reference's pages and renditions (#9), which Demo Studio's frame shows.
  */
 export function demoPagePath(pathname: string): 'showroom' | 'sample' | 'reference' | null {
   let path = pathname;
