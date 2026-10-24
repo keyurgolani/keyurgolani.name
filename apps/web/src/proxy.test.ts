@@ -527,7 +527,8 @@ test('every public response, in every profile, gets the public policy with a non
       '/samples',
       '/x/sample',
     ];
-    for (const path of [...paths, ...(profile === 'demo' ? ['/studio', '/Sample'] : [])]) {
+    // Under demo every Studio path gets the demo policy too (#9).
+    for (const path of [...paths, ...(profile === 'demo' ? ['/Sample'] : [])]) {
       const what = `${profile} ${path}`;
       const response = await proxy(request(path));
       const csp = response.headers.get('content-security-policy') ?? '';
@@ -541,7 +542,7 @@ test('every public response, in every profile, gets the public policy with a non
     }
     assert.equal(
       nonces.size,
-      paths.length + (profile === 'demo' ? 2 : 0),
+      paths.length + (profile === 'demo' ? 1 : 0),
       `${profile}: a nonce came twice`,
     );
   }
@@ -551,7 +552,7 @@ test('every public response, in every profile, gets the public policy with a non
 const DEMO_CSP =
   /^default-src 'self'; script-src 'self' 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; frame-src 'self'; frame-ancestors ('self'|'none'); form-action 'none'; base-uri 'none'; object-src 'none'$/;
 
-test('under demo the showroom and every /sample path get the demo policy with a nonce of its own, which only /sample lets the demo frame, and every other demo path keeps the public one (#9)', async (t) => {
+test('under demo the showroom, every /sample path, and every Studio path get the demo policy with a nonce of its own, which only /sample lets the demo frame, and every other demo path keeps the public one (#9)', async (t) => {
   deploy(t, 'demo');
   const nonces = new Set<string>();
   const framed: Array<[path: string, ancestors: string]> = [
@@ -561,6 +562,12 @@ test('under demo the showroom and every /sample path get the demo policy with a 
     ['/sample?variant=canary-variant&mode=dark', "'self'"],
     ['/sample/nowhere', "'self'"],
     ['/%73ample', "'self'"],
+    // Demo Studio, which nothing may frame, and every other Studio path.
+    ['/studio', "'none'"],
+    ['/studio?variant=canary-variant', "'none'"],
+    ['/%73tudio', "'none'"],
+    ['/studio/sign-in', "'none'"],
+    ['/Studio/x', "'none'"],
   ];
   for (const [path, ancestors] of framed) {
     const response = await proxy(request(path));
@@ -579,7 +586,7 @@ test('under demo the showroom and every /sample path get the demo policy with a 
     ['/api/health', 'GET'],
     ['/media/x', 'GET'],
     ['/no-such-page', 'GET'],
-    ['/studio', 'GET'],
+    ['/studios', 'GET'],
     ['/samples', 'GET'],
     ['/feed.xml', 'GET'],
     ['/preview/x', 'GET'],
@@ -736,7 +743,7 @@ const UNLISTED_STUDIO_PATHS = [
 ];
 
 test("under a profile with no Studio page, every Studio path is as unknown as any path: none of Studio's headers, Next's 404 page for GET and HEAD, and the plain 404 for the rest", async (t) => {
-  for (const profile of ['demo', 'read-only'] as const) {
+  for (const profile of ['read-only'] as const) {
     deploy(t, profile);
     for (const method of ['GET', 'HEAD']) {
       for (const path of LISTED_STUDIO_PATHS) {
@@ -781,6 +788,65 @@ test("under a profile with no Studio page, every Studio path is as unknown as an
   }
 });
 
+test("under demo, Demo Studio is /studio alone: every Studio path gets Studio's headers and the demo policy, /studio goes on to Next, and every other Studio page is the 404 page with Studio's no-store (#9)", async (t) => {
+  deploy(t, 'demo');
+  const studioHeaders = (response: Response, what: string) => {
+    const policy = DEMO_CSP.exec(response.headers.get('content-security-policy') ?? '');
+    assert.ok(policy, what);
+    assert.equal(policy[2], "'none'", what);
+    assert.equal(response.headers.get('referrer-policy'), 'same-origin', what);
+    assert.equal(response.headers.get('cross-origin-resource-policy'), 'same-origin', what);
+  };
+  for (const method of ['GET', 'HEAD']) {
+    // Demo Studio, with no session and no sign-in: on to Next, served.
+    for (const path of ['/studio', '/studio?variant=canary-variant']) {
+      const response = await proxy(studio(path, {}, method));
+      const what = `${method} ${path}`;
+      assert.equal(response.status, 200, what);
+      assert.equal(decision(response), 'served', what);
+      assert.equal(response.headers.get('x-middleware-request-x-portfolio-not-found'), null, what);
+      assert.equal(response.headers.get('cache-control'), null, what);
+      studioHeaders(response, what);
+    }
+    // /studio spelled percent-encoded is the 404 page, as a Studio page spelled so is under owner.
+    const encoded = await proxy(studio('/%73tudio', {}, method));
+    assert.equal(encoded.headers.get('x-middleware-request-x-portfolio-not-found'), '1', method);
+    studioHeaders(encoded, `${method} /%73tudio`);
+    // The owner's Studio pages are the 404 page, keeping next.config.ts's no-store for Studio.
+    for (const path of [
+      '/studio/sign-in',
+      '/studio/sign-in?state=failed',
+      '/studio/preview',
+      '/%73tudio/sign-in',
+    ]) {
+      const response = await proxy(studio(path, {}, method));
+      const what = `${method} ${path}`;
+      assert.equal(response.headers.get('x-middleware-next'), '1', what);
+      assert.equal(response.headers.get('x-middleware-request-x-portfolio-not-found'), '1', what);
+      assert.equal(response.headers.get('cache-control'), null, what);
+      studioHeaders(response, what);
+    }
+    // The rest go on marked missing, as under owner.
+    for (const path of UNLISTED_STUDIO_PATHS) {
+      const response = await proxy(studio(path, {}, method));
+      const what = `${method} ${path}`;
+      assert.equal(decision(response), 'missing', what);
+      assert.equal(response.headers.get('cache-control'), null, what);
+      studioHeaders(response, what);
+    }
+  }
+  // Any other method to a Studio page is the plain 404, with Studio's headers.
+  for (const method of ['POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']) {
+    for (const path of ['/studio/sign-in', '/studio/preview', ...UNLISTED_STUDIO_PATHS]) {
+      const response = await proxy(studio(path, {}, method));
+      const what = `${method} ${path}`;
+      assert.equal(response.status, 404, what);
+      assert.equal(await response.text(), 'Not found.', what);
+      studioHeaders(response, what);
+    }
+  }
+});
+
 test("#6's catalog fixture is the owner's Studio page in a build with BUDGET_FIXTURES, and as unknown as any path everywhere else, in every spelling", async (t) => {
   const built = fixtureFlags(process.env).budget === true;
   const spellings = [
@@ -803,14 +869,14 @@ test("#6's catalog fixture is the owner's Studio page in a build with BUDGET_FIX
       } else {
         // The unknown path's 404, in any build, under demo and read-only,
         // with what any unknown Studio path gets there: Studio's own
-        // headers under owner, and its no-store, which next.config.ts
-        // adds, and none under a profile with no Studio.
+        // headers under owner and demo, and its no-store, which
+        // next.config.ts adds, and none under a profile with no Studio.
         assert.equal(page.headers.get('x-middleware-request-x-portfolio-not-found'), '1', what);
         assert.equal(decision(page), null, what);
         const studio = await proxy(request('/studio/no-such-page', method));
         assert.equal(
           page.headers.get('cache-control'),
-          profile === 'owner' ? studio.headers.get('cache-control') : UNKNOWN_PATH_CACHE_CONTROL,
+          profile === 'read-only' ? UNKNOWN_PATH_CACHE_CONTROL : studio.headers.get('cache-control'),
           what,
         );
         assert.equal(
@@ -818,7 +884,7 @@ test("#6's catalog fixture is the owner's Studio page in a build with BUDGET_FIX
           studio.headers.has('content-security-policy'),
           what,
         );
-        if (profile !== 'owner') noStudioHeaders(page, what);
+        if (profile === 'read-only') noStudioHeaders(page, what);
       }
       for (const path of spellings) {
         const response = await proxy(request(path, method));
@@ -1879,7 +1945,7 @@ test("a Content-Security-Policy or Content-Security-Policy-Report-Only header th
         policy ?? '',
         profile === 'owner' && path === '/studio/sign-in'
           ? STUDIO_CSP
-          : profile === 'demo' && path === '/'
+          : profile === 'demo' && (path === '/' || path === '/studio/sign-in')
             ? DEMO_CSP
             : PUBLIC_CSP,
         what,
