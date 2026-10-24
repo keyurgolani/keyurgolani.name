@@ -83,39 +83,125 @@ function* crossProduct(values: CoverageInput['values']): Generator<Tuple> {
   }
 }
 
-/** The covering array for `input`. */
+/**
+ * Candidates by the gain they had when last counted, the most first, the
+ * earliest on a tie: a binary heap of [gain, index] pairs.
+ */
+class GainHeap {
+  private readonly items: [number, number][] = [];
+
+  private static before(a: [number, number], b: [number, number]): boolean {
+    return a[0] > b[0] || (a[0] === b[0] && a[1] < b[1]);
+  }
+
+  get size(): number {
+    return this.items.length;
+  }
+
+  push(item: [number, number]): void {
+    const items = this.items;
+    items.push(item);
+    let at = items.length - 1;
+    while (at > 0) {
+      const parent = (at - 1) >> 1;
+      if (!GainHeap.before(items[at]!, items[parent]!)) break;
+      [items[at], items[parent]] = [items[parent]!, items[at]!];
+      at = parent;
+    }
+  }
+
+  pop(): [number, number] | undefined {
+    const items = this.items;
+    const top = items[0];
+    const last = items.pop();
+    if (items.length === 0 || !last) return top;
+    items[0] = last;
+    let at = 0;
+    for (;;) {
+      const left = 2 * at + 1;
+      const right = left + 1;
+      let first = at;
+      if (left < items.length && GainHeap.before(items[left]!, items[first]!)) first = left;
+      if (right < items.length && GainHeap.before(items[right]!, items[first]!)) first = right;
+      if (first === at) return top;
+      [items[at], items[first]] = [items[first]!, items[at]!];
+      at = first;
+    }
+  }
+}
+
+/**
+ * The covering array for `input`. Each pair is a number, and the greedy
+ * pass is lazy: a candidate's gain only falls as pairs are covered, so the
+ * heap's top, counted again, is the pick when its gain hasn't fallen, and
+ * otherwise goes back with its new gain. That picks what a full scan would,
+ * the most uncovered pairs and the earliest on a tie, without counting every
+ * accepted tuple on every pick, which kept the unit job inside its timeout
+ * at #20's 35 languages.
+ */
 export function pairwise(input: CoverageInput): Coverage {
-  const accepted: { tuple: Tuple; pairs: string[] }[] = [];
-  const all = new Set<string>();
+  const ids = new Map<string, number>();
+  const idOf = (pair: string) => {
+    let id = ids.get(pair);
+    if (id === undefined) {
+      id = ids.size;
+      ids.set(pair, id);
+    }
+    return id;
+  };
+  const accepted: { tuple: Tuple; pairs: number[] }[] = [];
   let tuples = 0;
   for (const tuple of crossProduct(input.values)) {
     tuples += 1;
-    const pairs = pairsOf(tuple);
-    for (const pair of pairs) all.add(pair);
+    const pairs = pairsOf(tuple).map(idOf);
     if (input.accepts(tuple)) accepted.push({ tuple, pairs });
   }
-  const uncovered = new Set(accepted.flatMap(({ pairs }) => pairs));
-  const uncoverable = [...all].filter((pair) => !uncovered.has(pair)).sort(byCodePoint);
+  // 1 for each pair some accepted tuple holds that no row covers yet.
+  const open = new Uint8Array(ids.size);
+  let uncovered = 0;
+  for (const { pairs } of accepted) {
+    for (const pair of pairs) {
+      if (open[pair] === 0) {
+        open[pair] = 1;
+        uncovered += 1;
+      }
+    }
+  }
+  const uncoverable = [...ids]
+    .filter(([, id]) => open[id] === 0)
+    .map(([pair]) => pair)
+    .sort(byCodePoint);
 
   const rows: Tuple[] = [];
-  const picked = new Set<string>();
+  const picked = new Uint8Array(accepted.length);
+  const gainOf = (at: number) => {
+    let gain = 0;
+    for (const pair of accepted[at]!.pairs) gain += open[pair]!;
+    return gain;
+  };
+  const take = (at: number) => {
+    picked[at] = 1;
+    rows.push(accepted[at]!.tuple);
+    for (const pair of accepted[at]!.pairs) {
+      if (open[pair] === 1) {
+        open[pair] = 0;
+        uncovered -= 1;
+      }
+    }
+  };
   /** Picks the candidate covering the most uncovered pairs, the earliest on a tie. */
-  const pick = (candidates: typeof accepted) => {
-    let best: (typeof accepted)[number] | undefined;
+  const pick = (candidates: readonly number[]) => {
+    let best = -1;
     let bestGain = -1;
-    for (const candidate of candidates) {
-      if (picked.has(tupleKey(candidate.tuple))) continue;
-      const gain = candidate.pairs.filter((pair) => uncovered.has(pair)).length;
+    for (const at of candidates) {
+      if (picked[at] === 1) continue;
+      const gain = gainOf(at);
       if (gain > bestGain) {
-        best = candidate;
+        best = at;
         bestGain = gain;
       }
     }
-    if (!best) return false;
-    picked.add(tupleKey(best.tuple));
-    rows.push(best.tuple);
-    for (const pair of best.pairs) uncovered.delete(pair);
-    return true;
+    if (best >= 0) take(best);
   };
 
   const packs = [...input.fixturePacks].sort(
@@ -124,7 +210,7 @@ export function pairwise(input: CoverageInput): Coverage {
   for (const { axis, id } of packs) {
     const met = (tuple: Tuple) => tuple.variant === input.fallbackVariant && tuple[axis] === id;
     if (rows.some(met)) continue;
-    const candidates = accepted.filter(({ tuple }) => met(tuple));
+    const candidates = accepted.flatMap(({ tuple }, at) => (met(tuple) ? [at] : []));
     if (candidates.length === 0) {
       throw new Error(
         `No tuple the resolver accepts puts the fixture pack ${id} on the fallback composition.`,
@@ -132,8 +218,15 @@ export function pairwise(input: CoverageInput): Coverage {
     }
     pick(candidates);
   }
-  while (uncovered.size > 0 && pick(accepted)) {
-    // Each pick covers at least one pair, or the loop ends.
+  const heap = new GainHeap();
+  accepted.forEach((_, at) => {
+    if (picked[at] === 0) heap.push([gainOf(at), at]);
+  });
+  while (uncovered > 0 && heap.size > 0) {
+    const [counted, at] = heap.pop()!;
+    const gain = gainOf(at);
+    if (gain === counted) take(at);
+    else heap.push([gain, at]);
   }
   return { rows, tuples, accepted: accepted.length, uncoverable };
 }
