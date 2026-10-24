@@ -7,11 +7,11 @@ import { loadSelection, type DemoSelection, type SchemeModes } from '~/lib/demo/
 import type { AppearanceCatalog } from '~/lib/studio/appearance';
 import type { StudioPolicy } from '~/lib/studio/backend';
 import type { StudioDraft } from '~/lib/studio/documents';
-import { loadBackend } from '~/lib/studio/load-backend';
-import { DemoStudio } from './demo/demo-studio';
+import { DemoStudio } from './demo-studio';
 
 // Demo Studio's page shell (#9): it loads the browser backend's chunk, the
-// demo's alone, through load-backend.ts, over the visitor's own storage,
+// demo's alone, with an import() of its own, so nothing it loads names Owner
+// Studio's adapter, over the visitor's own storage,
 // with the selection the URL or this browser holds, and hands it to
 // DemoStudio. Until the chunk arrives the demo says it's loading; if it
 // never does, it says so.
@@ -33,7 +33,7 @@ export function DemoShell({ policy, setup }: DemoShellProps) {
 
   useEffect(() => {
     let cancelled = false;
-    loadBackend('demo').then(
+    import('~/lib/demo/browser-backend').then(
       ({ browserBackend, storedSelection }) => {
         if (cancelled) return;
         const rules = { catalog, schemeModes };

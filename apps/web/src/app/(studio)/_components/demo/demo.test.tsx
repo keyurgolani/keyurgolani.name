@@ -256,4 +256,7 @@ test("nothing Demo Studio loads reaches Owner Studio's adapter, its transport, o
     reached.includes('app/(studio)/_components/shell/studio-frame.tsx'),
     reached.join(', '),
   );
+  // From the demo page's own client root, which loads the browser backend.
+  assert.ok(reached.includes('app/(studio)/_components/demo/demo-shell.tsx'), reached.join(', '));
+  assert.ok(reached.includes('lib/demo/browser-backend.ts'), reached.join(', '));
 });

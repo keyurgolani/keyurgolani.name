@@ -28,7 +28,7 @@
       },
       {
         "glob": "apps/web/src/lib/demo/**",
-        "rationale": "Demo Studio's URL state, storage, and browser backend (#9): the demo deployment's Studio code, which no owner or read-only page loads."
+        "rationale": "Demo Studio's URL state, storage, and browser backend (#9): the demo deployment's Studio code, which only Demo Studio's own shell chunk and its backend's load, on /studio under demo, never a public page or Owner Studio."
       }
     ]
   },
