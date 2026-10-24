@@ -4,7 +4,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { endSession, NEUTRAL_TITLE } from './session-end';
-import { STUDIO_TASKS, tasksFor } from './tasks';
+import { DEMO_TASKS, STUDIO_TASKS, tasksFor } from './tasks';
 
 // The Studio shell's pieces outside React (#8, Slice 1): the seven tasks and
 // the policy that lists them, the order a session ends in, and Studio's
@@ -34,6 +34,21 @@ test("the navigation covers the owner's seven tasks, each behind a capability", 
     ['content', 'case-studies', 'validation'],
   );
   assert.deepEqual(tasksFor([]), []);
+});
+
+test("Demo Studio lists its two tasks behind sandbox.view, and none of the owner's", () => {
+  assert.deepEqual(
+    DEMO_TASKS.map((task) => [task.id, task.label, task.capability, task.pending]),
+    [
+      ['appearance', 'Appearance', 'sandbox.view', null],
+      ['preview', 'Preview', 'sandbox.view', null],
+    ],
+  );
+  assert.deepEqual(DEMO_TASKS, tasksFor(['sandbox.view'], 'demo'));
+  // Each profile's Studio lists only its own tasks, whatever else the list holds.
+  assert.deepEqual(tasksFor(['sandbox.view']), []);
+  assert.deepEqual(tasksFor(['studio.view', 'draft.read', 'draft.write', 'history.read'], 'demo'), []);
+  assert.deepEqual(tasksFor(['sandbox.view'], 'read-only'), []);
 });
 
 test('an ended session keeps the journal first, then drops the page, names nothing, and goes to sign-in with returnTo', () => {
