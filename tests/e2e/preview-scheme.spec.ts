@@ -65,7 +65,11 @@ test(
 
     const boundary = frame.locator('[data-appearance-boundary="document"]');
     await expect(boundary).toHaveAttribute('data-color-scheme', 'brand-seed');
-    expect(await boundary.getAttribute('data-appearance-fallback')).toBeNull();
+    // The harness site's variant is one no package registers, so the
+    // fallback composition renders: only the variant falls back, never the scheme.
+    expect((await boundary.getAttribute('data-appearance-fallback')) ?? '').not.toMatch(
+      /\bcolor-scheme\b/,
+    );
     const href = await frame
       .locator('link[rel="stylesheet"][href*="/_appearance/"]')
       .getAttribute('href');
