@@ -142,3 +142,16 @@ export function withLightness(color: string, value: number): string {
   const [, a, b] = oklab(color);
   return fromOklab([Math.min(1, Math.max(0, value)), a, b]);
 }
+
+/** The color's OKLCH chroma. */
+export function chroma(color: string): number {
+  const [, a, b] = oklab(color);
+  return Math.hypot(a, b);
+}
+
+/** The color's OKLCH hue, in degrees from 0 to 360. */
+export function hue(color: string): number {
+  const [, a, b] = oklab(color);
+  const degrees = (Math.atan2(b, a) * 180) / Math.PI;
+  return degrees < 0 ? degrees + 360 : degrees;
+}
