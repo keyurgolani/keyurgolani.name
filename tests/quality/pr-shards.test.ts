@@ -10,7 +10,6 @@ import { perfCells } from './lib/perf/plan';
 import {
   assignShards,
   CELL_SPEC,
-  cellTag,
   GROUP_BUDGET,
   groupKey,
   HARNESS_SPECS,
@@ -24,13 +23,14 @@ import {
   projectGrep,
   prShard,
   serverProject,
-  shardCells,
+  shardTests,
   shardEstimate,
   shardFiles,
   shardWall,
   SHARD_CEILING,
   splitGroups,
   testKey,
+  testTag,
   type ShardGroup,
 } from './lib/pr-shards';
 import { shardOutputs } from './pr-count';
@@ -122,40 +122,49 @@ test('the count is the fewest shards the weights allow within the ceiling, and m
   }
 });
 
-test('a cell group too heavy for one worker is split by cell, and its parts run each of its tests once', () => {
+test('a cell group too heavy for one worker is split, by cell or by test, and its parts run each of its tests once', () => {
   const durations = { group: 5 };
+  const viewports = ['1440x900', '1024x768', '390x844'];
   const cells = Array.from({ length: 6 }, (_, at) => `composition:x c${at} / tuple`);
-  const tests = cells.flatMap((cell) =>
-    ['1440x900', '1024x768', '390x844'].map((viewport) =>
-      testKey(cell, viewport, 'default', 'chromium'),
+  // Six cells of three 30 s tests, then a tier sentinel's like: nine 25 s tests, too heavy for one part.
+  const sentinel = 'composition:fallback complete / fixture/dark';
+  const rows = ['default', 'reduced-motion', 'forced-colors'];
+  const tests = [
+    ...cells.flatMap((cell) =>
+      viewports.map((viewport) => testKey(cell, viewport, 'default', 'chromium')),
     ),
-  );
+    ...viewports.flatMap((viewport) =>
+      rows.map((row) => testKey(sentinel, viewport, row, 'chromium')),
+    ),
+  ];
+  const costs = tests.map((key) => (key.includes(sentinel) ? 25 : 30));
   const heavy: ShardGroup = {
     project: 'chromium heavy',
     file: CELL_SPEC,
     tests,
-    costs: tests.map(() => 30),
-    weight: 5 + 30 * tests.length,
+    costs,
+    weight: costs.reduce((sum, cost) => sum + cost, 5),
   };
   const light = synthetic(1, 50)[0]!;
   const split = splitGroups([heavy, light], GROUP_BUDGET, durations);
-  // The light group is as it was; the heavy one is three parts of two cells each.
+  // The light group is as it was; the heavy one is parts, each within one worker's share.
   assert.deepEqual(split.at(-1), light);
   const parts = split.slice(0, -1);
-  assert.deepEqual(
-    parts.map(groupKey),
-    [1, 2, 3].map((part) => `chromium heavy ${CELL_SPEC} #${part}`),
-  );
-  for (const part of parts) assert.ok(part.weight <= GROUP_BUDGET, `${part.weight}s`);
+  assert.ok(parts.length > 3, `${parts.length} parts`);
+  parts.forEach((part, at) => {
+    assert.equal(groupKey(part), `chromium heavy ${CELL_SPEC} #${at + 1}`);
+    assert.ok(part.weight <= GROUP_BUDGET, `${part.weight}s`);
+  });
   assert.deepEqual(
     parts.flatMap((part) => part.tests),
     tests,
   );
-  assert.deepEqual(
-    parts.flatMap((part) => part.cells),
-    cells,
-  );
-  // Every count still partitions the tests, and each shard's grep takes its parts' cells alone.
+  // A cell that fits stays in one part; the sentinel, which doesn't, spans parts.
+  const partOf = (cell: string) =>
+    new Set(parts.filter((part) => part.tests.some((key) => key.includes(cell))).map(groupKey));
+  for (const cell of cells) assert.equal(partOf(cell).size, 1, cell);
+  assert.ok(partOf(sentinel).size > 1);
+  // Every count still partitions the tests, and each shard's grep takes its parts' tests alone.
   const { count, shards } = pickShardCount([heavy, light], durations);
   assert.ok(count > 1);
   assert.deepEqual(
@@ -163,20 +172,22 @@ test('a cell group too heavy for one worker is split by cell, and its parts run 
     [...tests].sort(),
   );
   for (const shard of shards) {
-    const mine = shardCells(shard).get('chromium heavy') ?? [];
+    const mine = shardTests(shard).get('chromium heavy') ?? [];
     const grep = projectGrep('abc', mine);
-    for (const cell of cells) {
-      const title = `${cell} 1440x900 default @server-abc ${cellTag(cell)}`;
-      assert.equal(grep.test(title), mine.includes(cell), `${cell} on shard ${shard.index}`);
+    for (const key of tests) {
+      const [cell, viewport, row] = JSON.parse(key) as string[];
+      const title = `${cell} ${viewport} ${row} @server-abc ${testTag(cell!, viewport!, row!)}`;
+      assert.equal(grep.test(title), mine.includes(key), `${key} on shard ${shard.index}`);
     }
     assert.equal(grep.test(`perf @server-abc ${PERF_TAG}`), true, 'its perf tests still run');
+    const [cell, viewport, row] = JSON.parse(tests[0]!) as string[];
     assert.equal(
-      grep.test(`${cells[0]} @server-abd ${cellTag(cells[0]!)}`),
+      grep.test(`x @server-abd ${testTag(cell!, viewport!, row!)}`),
       false,
       'another server',
     );
   }
-  // A cell that alone breaks the ceiling can't be split, and neither can a harness or perf group.
+  // A test that alone breaks the ceiling can't be split, and neither can a harness or perf group.
   const lone: ShardGroup = {
     ...heavy,
     tests: [testKey('composition:x huge / tuple', '1440x900', 'default', 'chromium')],
@@ -185,7 +196,7 @@ test('a cell group too heavy for one worker is split by cell, and its parts run 
   };
   assert.throws(
     () => splitGroups([lone], GROUP_BUDGET, durations),
-    /The cell composition:x huge \/ tuple alone takes about 255s on chromium heavy, over the 205s/,
+    /The test composition:x huge \/ tuple at 1440x900, default alone takes about 255s on chromium heavy, over the 205s/,
   );
   assert.throws(
     () => splitGroups([{ ...synthetic(1, 250)[0]!, file: PERF_SPEC }], GROUP_BUDGET, durations),
@@ -328,11 +339,11 @@ test("shardFiles gives each project its own spec files, and none of another shar
   );
   const owners = new Map<string, number>();
   shards.forEach((shard, at) => {
-    const cells = shardCells(shard);
+    const tests = shardTests(shard);
     for (const [project, files] of shardFiles(shard)) {
       for (const file of files) {
-        // A split cell group's parts may share a file across shards, each with its own cells.
-        const key = `${project} ${file}${file === CELL_SPEC && cells.has(project) ? ` ${cells.get(project)!.join(',')}` : ''}`;
+        // A split cell group's parts may share a file across shards, each with its own tests.
+        const key = `${project} ${file}${file === CELL_SPEC && tests.has(project) ? ` ${tests.get(project)!.join(',')}` : ''}`;
         assert.equal(owners.get(key), undefined, `${key} is in two shards`);
         owners.set(key, at);
       }

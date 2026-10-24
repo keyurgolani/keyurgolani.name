@@ -19,10 +19,10 @@
 // its fixed part plus its groups on Playwright's two workers, stays within
 // SHARD_CEILING (pickShardCount). CI's quality-pr-plan job works it out for
 // each PR (pr-count.ts), and every shard is handed that count. A cell group
-// too heavy for one worker's share of a shard is split first, by cell, into
-// parts (splitGroups), each run through a grep of its cells' tags
-// (playwright.config.ts), so a split moves cells between shards and never
-// adds or drops one.
+// too heavy for one worker's share of a shard is split first into parts,
+// by cell, and a cell too heavy on its own by test (splitGroups), each part
+// run through a grep of its tests' tags (playwright.config.ts), so a split
+// moves tests between shards and never adds or drops one.
 //
 // The weights: a skipped test none; a cell test that runs the default row's
 // reload conditions (cells.ts) its viewport and row's mean; any other cell
@@ -87,9 +87,8 @@ export interface ShardGroup {
   /** Each test's own weight, in the order of `tests`. */
   readonly costs?: readonly number[];
   readonly weight: number;
-  /** A part of a split cell group, from 1: it runs only `cells` of its project's cells.spec.ts. */
+  /** A part of a split cell group, from 1: it runs only its `tests` of its project's cells.spec.ts. */
   readonly part?: number;
-  readonly cells?: readonly string[];
 }
 
 export const groupKey = (group: Pick<ShardGroup, 'project' | 'file' | 'part'>) =>
@@ -122,13 +121,13 @@ export function planGroups(
     }
     for (const { id } of planServers(plan)) {
       const own = plan.tests.filter((test) => serverId(cellServer(test.cell)) === id);
-      const costs = own.map((test) =>
-        test.skip !== undefined || test.engineSkips[engine] !== undefined
-          ? durations.skipped
-          : test.conditions
-            ? (durations.conditions[`${test.viewport.id} ${test.row.id}`] ?? fallback)
-            : durations.plain,
-      );
+      const costs = own.map((test) => {
+        if (test.skip !== undefined || test.engineSkips[engine] !== undefined) {
+          return durations.skipped;
+        }
+        if (!test.conditions) return durations.plain;
+        return durations.conditions[`${test.viewport.id} ${test.row.id}`] ?? fallback;
+      });
       groups.push({
         project: serverProject(engine, id),
         file: CELL_SPEC,
@@ -154,11 +153,12 @@ export function planGroups(
 const cellOfTest = (key: string) => (JSON.parse(key) as string[])[0]!;
 
 /**
- * `groups`, with each cell group heavier than `budget` split by cell into
- * parts, in the plan's order, each as full as fits. Each cell's tests stay
- * together, and each test is in exactly one part. A cell that alone weighs
- * more than `budget`, or a harness or perf group that does, can't be split,
- * so it throws, naming it and what it weighs.
+ * `groups`, with each cell group heavier than `budget` split into parts, in
+ * the plan's order, each as full as fits. A cell's tests stay together when
+ * the cell fits a part on its own; a heavier cell, such as a tier sentinel's
+ * nine rows, goes test by test. Each test is in exactly one part. A test that
+ * alone weighs more than `budget`, or a harness or perf group that does,
+ * can't be split, so it throws, naming it and what it weighs.
  */
 export function splitGroups(
   groups: readonly ShardGroup[],
@@ -172,39 +172,41 @@ export function splitGroups(
         `${groupKey(group)} takes about ${Math.round(group.weight)}s, over the ${budget}s one worker has in a shard, and only a cell group splits.`,
       );
     }
-    const byCell = new Map<string, { tests: string[]; weight: number }>();
+    const byCell = new Map<string, { tests: string[]; costs: number[]; weight: number }>();
     group.tests.forEach((key, at) => {
       const cell = cellOfTest(key);
-      const entry = byCell.get(cell) ?? { tests: [], weight: 0 };
+      const entry = byCell.get(cell) ?? { tests: [], costs: [], weight: 0 };
       entry.tests.push(key);
+      entry.costs.push(group.costs![at]!);
       entry.weight += group.costs![at]!;
       byCell.set(cell, entry);
     });
-    const parts: { cells: string[]; tests: string[]; weight: number }[] = [];
-    for (const [cell, entry] of byCell) {
-      if (durations.group + entry.weight > budget) {
+    // What goes into parts whole: each cell that fits a part, else each of its tests.
+    const units = [...byCell.values()].flatMap((entry) =>
+      durations.group + entry.weight <= budget
+        ? [{ tests: entry.tests, weight: entry.weight }]
+        : entry.tests.map((key, at) => ({ tests: [key], weight: entry.costs[at]! })),
+    );
+    const parts: { tests: string[]; weight: number }[] = [];
+    for (const unit of units) {
+      if (durations.group + unit.weight > budget) {
+        const [cell, viewport, row] = JSON.parse(unit.tests[0]!) as string[];
         throw new Error(
-          `The cell ${cell} alone takes about ${Math.round(durations.group + entry.weight)}s on ${group.project}, over the ${budget}s one worker has in a shard.`,
+          `The test ${cell} at ${viewport}, ${row} alone takes about ${Math.round(durations.group + unit.weight)}s on ${group.project}, over the ${budget}s one worker has in a shard.`,
         );
       }
       const last = parts.at(-1);
-      if (last && last.weight + entry.weight <= budget) {
-        last.cells.push(cell);
-        last.tests.push(...entry.tests);
-        last.weight += entry.weight;
+      if (last && last.weight + unit.weight <= budget) {
+        last.tests.push(...unit.tests);
+        last.weight += unit.weight;
       } else {
-        parts.push({
-          cells: [cell],
-          tests: [...entry.tests],
-          weight: durations.group + entry.weight,
-        });
+        parts.push({ tests: [...unit.tests], weight: durations.group + unit.weight });
       }
     }
     return parts.map((part, at) => ({
       project: group.project,
       file: group.file,
       part: at + 1,
-      cells: part.cells,
       tests: part.tests,
       weight: part.weight,
     }));
@@ -296,33 +298,41 @@ export function shardFiles(shard: PrShard): Map<string, string[]> {
   return files;
 }
 
-/** The tag perf tests carry, so a project whose cells are split still runs them. */
+/** The tag perf tests carry, so a project whose cell group is split still runs them. */
 export const PERF_TAG = '@perf';
 
-/** The tag each of a cell's tests carries, so a shard can run some of a project's cells and not the rest. */
-export const cellTag = (cellId: string) =>
-  `@cell-${createHash('sha256').update(cellId).digest('hex').slice(0, 12)}`;
+/** The tag a cell test carries, by its cell, viewport, and row, so a shard can run some of a project's tests and not the rest. */
+export const testTag = (cell: string, viewport: string, row: string) =>
+  `@test-${createHash('sha256')
+    .update(JSON.stringify([cell, viewport, row]))
+    .digest('hex')
+    .slice(0, 12)}`;
 
-/** The cells each project with a split cell group runs in `shard`. A project left out runs its cell group whole, or not at all. */
-export function shardCells(shard: PrShard): Map<string, string[]> {
-  const cells = new Map<string, string[]>();
+/** The cell tests each project with a split cell group runs in `shard`, by test key. A project left out runs its cell group whole, or not at all. */
+export function shardTests(shard: PrShard): Map<string, string[]> {
+  const tests = new Map<string, string[]>();
   for (const group of shard.groups) {
-    if (group.cells === undefined) continue;
-    cells.set(group.project, [...(cells.get(group.project) ?? []), ...group.cells]);
+    if (group.part === undefined) continue;
+    tests.set(group.project, [...(tests.get(group.project) ?? []), ...group.tests]);
   }
-  return cells;
+  return tests;
 }
 
 /**
- * A server project's grep: its server's tests, and with `cells`, only those
- * cells' tests and its perf tests, as Playwright matches a test's title and
- * tags.
+ * A server project's grep: its server's tests, and with `tests` (keys), only
+ * those cell tests and its perf tests, as Playwright matches a test's title
+ * and tags.
  */
-export function projectGrep(id: string, cells?: readonly string[]): RegExp {
+export function projectGrep(id: string, tests?: readonly string[]): RegExp {
   const server = `@server-${id}(?![0-9a-f])`;
-  if (cells === undefined) return new RegExp(server);
-  const tags = cells.map((cell) => cellTag(cell).slice('@cell-'.length)).join('|');
+  if (tests === undefined) return new RegExp(server);
+  const tags = tests
+    .map((key) => {
+      const [cell, viewport, row] = JSON.parse(key) as string[];
+      return testTag(cell!, viewport!, row!).slice('@test-'.length);
+    })
+    .join('|');
   return new RegExp(
-    `^(?=.*${server})(?=.*(?:${PERF_TAG}(?![\\w-])|@cell-(?:${tags})(?![0-9a-f])))`,
+    `^(?=.*${server})(?=.*(?:${PERF_TAG}(?![\\w-])|@test-(?:${tags})(?![0-9a-f])))`,
   );
 }

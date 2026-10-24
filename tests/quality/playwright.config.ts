@@ -11,7 +11,7 @@
 // one project share its server, so they run in order on one worker; two
 // projects run at once. Nothing retries: accessibility and performance
 // assertions never do. A quality:pr shard runs only its own spec files in
-// each project (lib/pr-shards.ts), and only its part's cells in a project
+// each project (lib/pr-shards.ts), and only its part's tests in a project
 // whose cell group is split.
 import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
@@ -28,7 +28,7 @@ import {
   projectGrep,
   prShard,
   serverProject,
-  shardCells,
+  shardTests,
   shardFiles,
 } from './lib/pr-shards';
 import { HARNESS_SERVER, planServers } from './lib/server';
@@ -62,8 +62,8 @@ const shard = runShard();
 if (shard && plan.mode !== 'pr') throw new Error("QUALITY_SHARD is for quality:pr's shards.");
 const mine = shard ? prShard(plan, RUN_ENGINES[plan.mode], shard) : null;
 const assigned = mine ? shardFiles(mine) : null;
-// A project whose cell group is split runs only its part's cells here.
-const cellsOf = mine ? shardCells(mine) : new Map<string, string[]>();
+// A project whose cell group is split runs only its part's tests here.
+const testsOf = mine ? shardTests(mine) : new Map<string, string[]>();
 const specsFor = (project: string, specs: readonly string[]) =>
   assigned ? specs.filter((file) => assigned.get(project)?.includes(file)) : [...specs];
 
@@ -85,7 +85,7 @@ export default defineConfig({
     ...planServers(plan).map(({ id, label, server }) => ({
       name: serverProject(engine, id),
       testMatch: specsFor(serverProject(engine, id), cellSpecs),
-      grep: projectGrep(id, cellsOf.get(serverProject(engine, id))),
+      grep: projectGrep(id, testsOf.get(serverProject(engine, id))),
       use: { ...engineUse(engine), cellServer: server },
       metadata: { server: label },
     })),
