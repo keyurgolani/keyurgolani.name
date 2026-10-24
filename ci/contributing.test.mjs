@@ -37,6 +37,10 @@ export function tableRows(text, marker) {
 /** A job's check names as GitHub shows them: one per matrix shard, joined as the table does. */
 export function shownName(job) {
   const shards = job.strategy?.matrix?.shard;
+  // A shard count another job works out: one check per shard, n of N.
+  if (typeof shards === 'string' && job.name.includes('${{ matrix.shard }}')) {
+    return `\`${job.name.replace('${{ matrix.shard }}', 'n').replace(/\$\{\{[^}]*\}\}/g, 'N')}\`, one per shard`;
+  }
   if (shards && job.name.includes('${{ matrix.shard }}')) {
     const one = (shard) => `\`${job.name.replace('${{ matrix.shard }}', shard)}\``;
     return `${one(shards[0])} to ${one(shards.at(-1))}`;
