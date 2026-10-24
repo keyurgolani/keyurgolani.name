@@ -1691,9 +1691,15 @@ test('every top-level public/ entry is a name no view or route takes, so a file 
   // never one of those the content-hashed rule serves, and public/_portfolio/
   // holds none of its name.
   const written = /:kind\(([^)]+)\)/.exec(CONTENT_HASHED)![1]!.split('|');
-  const shared = listRoutes().filter((entry) => entry.pattern.startsWith('/_portfolio/'));
+  const shared = listRoutes().filter(
+    (entry) => entry.pattern === '/_portfolio' || entry.pattern.startsWith('/_portfolio/'),
+  );
   for (const entry of shared) {
-    const dir = entry.pattern.split('/')[2]!;
+    const dir = entry.pattern.split('/').filter((part) => part !== '')[1];
+    assert.ok(
+      dir !== undefined,
+      `${entry.pattern} takes /_portfolio/ itself, where the registry's files are`,
+    );
     assert.ok(!dir.startsWith('['), `${entry.pattern} takes a fixed directory`);
     assert.ok(
       !written.includes(dir),
