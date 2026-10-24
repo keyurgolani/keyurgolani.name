@@ -53,3 +53,22 @@ export {
   type SkippedPack,
 } from './check';
 export { LAYER_ORDER, startsWithLayerOrder } from '../layers';
+export {
+  auditCodeText,
+  auditedFiles,
+  auditSources,
+  auditStylesheetText,
+  AUDIT_EXCEPTIONS_FILE,
+  exceptionProblems,
+  runSourceAudit,
+  SOURCE_AUDIT_REMEDIES,
+  SOURCE_AUDIT_RULES,
+  sourceAuditDirs,
+  sourceAuditReport,
+  variantPackageDirs,
+  type AuditException,
+  type SourceAuditFinding,
+  type SourceAuditReport,
+  type SourceAuditResult,
+  type SourceAuditRule,
+} from './source-audit';

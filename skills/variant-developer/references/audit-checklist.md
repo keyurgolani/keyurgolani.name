@@ -16,6 +16,7 @@ Run often in Waves 2 and 3, and once more at Phase 3.
 - [ ] `pnpm typecheck` passes for the whole workspace.
 - [ ] `pnpm exec eslint packages/variant-<id>` passes.
 - [ ] `pnpm build` succeeds.
+- [ ] `pnpm check:appearance` exits 0: its appearance source audit finds no color literal, font, `@import`, shadow, radius, blur, or literal timing in the package, and no retired `--paper`, `--ink`, `--kc-*`, or `--vt-*` property. Take each from the tokens; don't add an exception to `packages/appearance/audit-exceptions.json` for a variant's own look.
 - [ ] `pnpm exec playwright test tests/e2e/motion-contract.spec.ts` passes for your composition, after `pnpm build`.
 - [ ] `node skills/variant-developer/scripts/kit-dedup.mjs packages/variant-<id>`: every candidate hoisted or marked `// LOCAL: <reason>`.
 - [ ] If you hoisted to `@portfolio/kit`: `pnpm --filter @portfolio/kit test` passes.

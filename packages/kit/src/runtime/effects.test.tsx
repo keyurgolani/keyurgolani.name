@@ -7,7 +7,7 @@ import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { AnimatedCounter } from '../animated-counter';
 import { MotionPolicyProvider } from '../motion';
-import { AuroraGradient, MagneticCursor, ScanlineOverlay } from '../spatial';
+import { AuroraGradient, HolographicPanel, MagneticCursor, ScanlineOverlay } from '../spatial';
 import { hidesSystemCursor } from '../spatial/magnetic-cursor';
 import type { SpatialCanvasProps } from '../spatial-r3f/spatial-canvas';
 import { TypingAnimation } from '../typing-animation';
@@ -24,6 +24,18 @@ test('the CSS effects carry no animation on the server', () => {
     // The keyframes ship, for once the runtime runs.
     assert.match(html, /@keyframes/);
   }
+});
+
+test("the holographic panel's glass is the design language's backdrop blur unless a caller gives one (#19, Slice 5)", () => {
+  const glass = (html: string) => /backdrop-filter:([^;"]*)/.exec(html)?.[1];
+  assert.equal(
+    glass(renderToStaticMarkup(<HolographicPanel>x</HolographicPanel>)),
+    'blur(var(--ui-backdrop-blur)) saturate(140%)',
+  );
+  assert.equal(
+    glass(renderToStaticMarkup(<HolographicPanel blur={6}>x</HolographicPanel>)),
+    'blur(6px) saturate(140%)',
+  );
 });
 
 test('the typing animation shows its first text whole on the server, under any policy', () => {

@@ -169,15 +169,20 @@ CSS rules don't reach motion that scripts run. Wrap the variant's client parts i
 
 ## Styling conventions
 
-- **Layout only.** Spacing, arrangement, grid and flow, sizing. No color, font, theme, or material.
-- **Scope every selector under `[data-variant='<id>']`,** and reach only what's inside it: no `+` or `~` after the scope, nested rules included. Your stylesheet loads only on the pages that render you, but a page can show another variant's boundary too, such as #19's plates, so the scope still keeps yours to your own.
+A variant arranges; the appearance axes (#19) style. Color comes from the color scheme, materials, geometry, states, and timing from the design language, and text from the typography profile, all as custom properties on the presentation boundary the host renders around you. [Appearance](appearance.md) is the contract: who owns what, the tokens, the boundary, the layer order, and the shared primitives.
+
+- **Layout only.** Spacing, arrangement, grid and flow, sizing, order, and how structure responds to the viewport. Your stylesheet compiles into the `variant-layout` layer, above the packs and below the utilities and accessibility layers, so you can arrange anything and restyle nothing.
+- **Read the tokens for everything else.** Every color is a `var(--color-<role>)`, such as `--color-text-secondary` for quiet text, never a lower opacity. Every border, radius, and shadow is a `var(--ui-<key>)`, such as `--ui-border-divider` or `--ui-radius-media`, and every duration and easing a `--ui-motion-*`. Text takes a role with `data-type-role="<role>"` in your markup, such as `display` or `caption`, or reads `var(--type-<role>-<field>)` in a rule. The only custom properties you define are `--layout-*`.
+- **Use the shared primitives** from `@portfolio/appearance/primitives` for actions, surfaces, disclosures, badges, fields, and the rest: you choose which goes where and with what emphasis, and the packs style them. Native elements come first.
+- **No appearance of your own.** A raw color (`#hex`, `rgb()`, `oklch()`, a named color), a `font-family` or `font`, a `@font-face`, a border radius, or a shadow is refused unless it reads a `var(--...)` token; `currentColor`, `transparent`, a zero radius, `none`, and CSS-wide keywords are fine. No theme blocks, no display-mode selectors, and no theme toggle: the visitor's appearance control renders in your `VisitorControlSlot`.
+- **Scope every selector under `[data-variant='<id>']`,** and reach only what's inside it: no `+` or `~` after the scope, nested rules included. Your stylesheet loads only on the pages that render you, but a page can show another variant's boundary too, such as a catalog plate, so the scope keeps yours to your own. Never key a rule on a pack's attribute, such as `[data-color-scheme]`: a composition reads the same under every pack.
+- **Reduced motion is the boundary's.** It carries `data-motion`: `full`, `reduced`, or `static`. Under `reduced` the state transforms read `none` and entrances, exits, and emphasis stop moving, but the durations stay; only `static` zeroes them. So motion on the tokens needs nothing more, and a keyframe animation of your own has to stop under `[data-variant='<id>']:is([data-motion='reduced'], [data-motion='static'])`.
 - **Name keyframes after your id,** as `<id>-name`, so no other stylesheet shares the name.
-- **No appearance of your own.** A raw color (`#hex`, `rgb()`, `oklch()`, a named color), a `font-family` or `font`, a border radius, or a shadow is refused unless it reads a `var(--...)` token; `currentColor`, `transparent`, a zero radius, `none`, and CSS-wide keywords are fine. #19's tokens fill them.
 - **Logical properties** (`margin-inline-start`, `inset-inline-end`, `text-align: start`), so a right-to-left page mirrors. A variant that declares `rtl` must use them.
 - **One stylesheet**, the `./styles.css` export. No CSS imported from modules, no `@import` but your own files by relative path, no `url()` on another host, and no `<style>`, `<link>`, or `<script>` rendered from a component.
 - **BEM-style classes** with a short prefix of your own: `<prefix>-<block>__<element>--<modifier>`.
 
-The full conventions are in [`styling-conventions.md`](../skills/variant-developer/references/styling-conventions.md).
+Judge a variant under more than one selection: the same layout should hold under every design language, color scheme, typography profile, and display mode. The full conventions are in [`styling-conventions.md`](../skills/variant-developer/references/styling-conventions.md).
 
 ## Checking a variant
 

@@ -84,9 +84,23 @@
 
 ## Appearance boundary
 
-> What the composition assumes of the appearance system (#19). Which of a
-> reference's palettes, fonts, or theme modes moved to packs instead, as
-> `provenance` records them.
+> The roles the composition picks, never their values: see `docs/appearance.md`.
+>
+> - **Text roles:** which `data-type-role` each kind of text takes (`display`,
+>   `headline`, `title`, `body`, `body-compact`, `label`, `caption`, `quote`,
+>   `code`, `numeric`).
+> - **Surfaces and colors:** each region's surface emphasis (`subtle`,
+>   `default`, `prominent`, `overlay`) and the color roles its text reads,
+>   such as `text-secondary` for quiet metadata.
+> - **Primitives:** which shared primitives it renders, and with what
+>   emphasis (an `Action` as `primary`, `secondary`, or `quiet`; a
+>   `Disclosure`; a `Badge` and its status).
+> - **Layout properties:** the `--layout-*` properties it defines, its only
+>   own custom properties.
+> - **Selections to judge it under:** at least two design languages, two
+>   color schemes, two typography profiles, and every display mode.
+> - **Moved to packs:** which of a reference's palettes, fonts, materials, or
+>   theme modes became packs instead, as `provenance` records them.
 
 ---
 

@@ -99,7 +99,7 @@ Stand up a renderable variant with every section through the shared renderers. T
 
 - Scaffold: `pnpm new-variant <id>`. It copies `packages/fallback-composition` to `packages/variant-<id>`, renames the package to `@portfolio/variant-<id>`, sets the manifest's id and name, swaps the fallback's `fc-` classes for a prefix of the id's own (never `fc`, `pf`, or `host`), adds the package to `@portfolio/web` with `pnpm --filter @portfolio/web add`, and runs `pnpm check:variants --package @portfolio/variant-<id>`.
 - Edit `manifest.json` to match DESIGN.md: `promise`, `description`, `compositionFamily`, `motionIntent`, `performanceTier`, `routes`, `visitorControl.placement`, `textDirection`, and `provenance`. Leave `renderedKinds` empty until Wave 2.
-- Write `src/styles.css`: layout only. Spacing, arrangement, grid, and structure, every selector under `[data-variant='<id>']`, logical properties throughout. No colors, fonts, radii, shadows, or theme blocks: #19's tokens supply them, and the audit refuses a raw one. Load `references/styling-conventions.md` and `references/common-bugs.md` while writing it.
+- Write `src/styles.css`: layout only. Spacing, arrangement, grid, and structure, every selector under `[data-variant='<id>']`, logical properties throughout. Everything else reads #19's tokens: colors from `var(--color-*)`, borders, radii, shadows, and timing from `var(--ui-*)`, and text through `data-type-role` in the markup or `var(--type-*)` in a rule. Your own custom properties are `--layout-*` alone. No theme blocks, no rule keyed on a pack's attribute, and no raw color, font, radius, or shadow: the audit refuses one. Render actions, surfaces, disclosures, and badges with the shared primitives from `@portfolio/appearance/primitives`, and leave their styling to the packs. Load `references/styling-conventions.md` and `references/common-bugs.md` while writing it; `docs/appearance.md` is the contract behind them.
 - Verify (Gate A): `scripts/visual-companion/start.sh --mode preview --variant <id>`, then open `/preview/dev/<id>/complete`, the `complete` contract fixture in the preview document. A 404 means the build doesn't register it: run `pnpm check:variants --package @portfolio/variant-<id>` and read the diagnostic.
 
 ### Wave 1.5: Kit hoists (when porting)
@@ -169,7 +169,7 @@ Run `references/audit-checklist.md` for the scripted gates and `references/quali
 1. `pnpm check:variants --package @portfolio/variant-<id>` exits 0: the registry registers it, and the source audit finds nothing. Either way it checks the kit modules the variant reaches and the kit's shared stylesheet; without `--package` it checks every registered variant.
 2. `pnpm typecheck` passes for the whole workspace.
 3. `pnpm exec eslint packages/variant-<id>` passes.
-4. `pnpm build` succeeds. The host build is the integration test.
+4. `pnpm build` succeeds. The host build is the integration test. Then `pnpm check:appearance` exits 0: its appearance source audit finds no color, font, `@import`, shadow, radius, blur, or timing of the variant's own (`references/styling-conventions.md`).
 5. `pnpm exec playwright test tests/e2e/motion-contract.spec.ts` passes for your composition.
 6. `node skills/variant-developer/scripts/kit-dedup.mjs packages/variant-<id>`: every candidate hoisted or marked `// LOCAL: <reason>`.
 7. `pnpm --filter @portfolio/kit test`, if you hoisted.
@@ -251,7 +251,10 @@ For the full catalog with reproductions and fixes, load `references/common-bugs.
 ### CSS
 
 - Your stylesheet loads only on the pages that render you, but a page can show another variant's boundary beside yours, such as #19's plates. A selector without `[data-variant='<id>']` restyles someone else's composition, and so does a page-wide at-rule such as `@font-face` or `@page`; the audit refuses both.
-- Layout only. A color, font, or theme block in a variant fights #19's tokens.
+- Layout only. A color, font, or theme block in a variant fights #19's tokens; read `var(--color-*)`, `var(--ui-*)`, and `var(--type-*)` instead, and define only `--layout-*`.
+- Quiet text is `var(--color-text-secondary)` or `--color-text-muted`, never a lower `opacity`.
+- A rule keyed on `[data-color-scheme]`, `[data-design-language]`, `[data-typography]`, or `[data-display-mode]` makes the composition depend on a pack. Lay out the same under every one.
+- Don't restyle a primitive's `[data-ui-slot]` parts: the design language owns them. Arrange the primitive by its `className`.
 - No `@import` from another host, and no CSS imported from modules.
 - BEM-style classes with a short prefix of your own (`fc-` is the fallback's).
 
@@ -266,7 +269,7 @@ For the full catalog with reproductions and fixes, load `references/common-bugs.
 
 ### Motion and performance
 
-- The boundary's motion tokens stop CSS movement under every reduced-motion source, and a variant's own keyframes stop under `[data-motion='reduced']`; a `prefers-reduced-motion` query or a universal `!important` kill switch in variant CSS is wrong. Script motion runs on `@portfolio/kit/runtime`: `useEnhancementRuntime()` and `useFrameLoop()`. (`references/styling-conventions.md`, `common-bugs.md` §8)
+- The boundary's motion tokens stop CSS movement under every reduced-motion source, and a variant's own keyframes stop under `[data-variant='<id>']:is([data-motion='reduced'], [data-motion='static'])`; a `prefers-reduced-motion` query or a universal `!important` kill switch in variant CSS is wrong. Script motion runs on `@portfolio/kit/runtime`: `useEnhancementRuntime()` and `useFrameLoop()`. (`references/styling-conventions.md`, `common-bugs.md` §8)
 - `@portfolio/kit/spatial-r3f` is heavy: only with a `medium` or `heavy` tier and a reason, and better as an enhancement.
 - `@portfolio/kit/motion-fx` needs `framer-motion`, an optional peer: list it in your own dependencies when you import the subpath.
 - `next.config.ts` has `reactStrictMode: false` because R3F survives WebGL context loss only without strict double-mount. Don't change it from a variant.
@@ -286,19 +289,19 @@ When every gate passes:
 
 ## 10. Reference docs, in reading order
 
-| Phase               | Reference                           | Why                                                   |
-| ------------------- | ----------------------------------- | ----------------------------------------------------- |
-| Phase 0 (port-only) | `references/fidelity-comparison.md` | Inventory recipe before opening DESIGN.md.            |
-| Phase 1             | `references/design-contract.md`     | What each section of DESIGN.md must contain.          |
-| Phase 1             | `references/coherence.md`           | The idea, carried through layout, navigation, motion. |
-| Phase 1             | `references/manifest-contract.md`   | Every manifest field, valid values, examples.         |
-| Phase 2 Wave 1      | `references/styling-conventions.md` | Scope, logical properties, BEM naming.                |
-| Phase 2 Wave 1      | `references/common-bugs.md`         | Bug catalog. Read once before writing styles.css.     |
-| Phase 2 Wave 1.5    | `references/kit-catalog.md`         | What's already in the kit.                            |
-| Phase 2 Wave 2      | `references/section-kinds.md`       | Per-kind data shape, edge cases, ideal data.          |
-| Phase 2 Wave 3      | `references/quality-gates.md`       | Visual validation recipes.                            |
-| Phase 3             | `references/audit-checklist.md`     | Sign-off contract.                                    |
-| Visual companion    | `references/visual-companion.md`    | Mockup-mode and preview-mode guide.                   |
+| Phase               | Reference                           | Why                                                    |
+| ------------------- | ----------------------------------- | ------------------------------------------------------ |
+| Phase 0 (port-only) | `references/fidelity-comparison.md` | Inventory recipe before opening DESIGN.md.             |
+| Phase 1             | `references/design-contract.md`     | What each section of DESIGN.md must contain.           |
+| Phase 1             | `references/coherence.md`           | The idea, carried through layout, navigation, motion.  |
+| Phase 1             | `references/manifest-contract.md`   | Every manifest field, valid values, examples.          |
+| Phase 2 Wave 1      | `references/styling-conventions.md` | Layers, tokens, primitives, scope, logical properties. |
+| Phase 2 Wave 1      | `references/common-bugs.md`         | Bug catalog. Read once before writing styles.css.      |
+| Phase 2 Wave 1.5    | `references/kit-catalog.md`         | What's already in the kit.                             |
+| Phase 2 Wave 2      | `references/section-kinds.md`       | Per-kind data shape, edge cases, ideal data.           |
+| Phase 2 Wave 3      | `references/quality-gates.md`       | Visual validation recipes.                             |
+| Phase 3             | `references/audit-checklist.md`     | Sign-off contract.                                     |
+| Visual companion    | `references/visual-companion.md`    | Mockup-mode and preview-mode guide.                    |
 
 ## 11. What makes a port land
 

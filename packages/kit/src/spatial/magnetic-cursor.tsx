@@ -146,7 +146,7 @@ export function MagneticCursor({
           border: `1px solid ${color}`,
           pointerEvents: 'none',
           zIndex: 9998,
-          transition: 'opacity 0.2s ease',
+          transition: 'opacity var(--ui-motion-fast) var(--ui-motion-easing)',
           willChange: 'transform, opacity',
           mixBlendMode: 'difference',
         }}

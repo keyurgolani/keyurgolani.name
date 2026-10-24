@@ -76,6 +76,7 @@ docs/
   configuration.md              Both documents, field by field
   authoring.md                  Writing a good portfolio
   variants.md                   Building a variant
+  appearance.md                 The appearance contract and pack format
   deployment.md                 Production deployment
   features.md                   Feature catalog
 
@@ -95,6 +96,7 @@ site.example.yml                Example site document
 | Authors writing the documents      | [docs/authoring.md](docs/authoring.md)                 |
 | Every field and diagnostic code    | [docs/configuration.md](docs/configuration.md)         |
 | Developers building variants       | [docs/variants.md](docs/variants.md)                   |
+| Developers building packs          | [docs/appearance.md](docs/appearance.md)               |
 | Architects understanding internals | [docs/architecture.md](docs/architecture.md)           |
 | Operators deploying to production  | [docs/deployment.md](docs/deployment.md)               |
 | Reviewers checking security        | [docs/threat-model.md](docs/threat-model.md)           |

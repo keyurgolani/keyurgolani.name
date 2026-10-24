@@ -18,7 +18,7 @@ The 11 required sections, in order:
 8. **Kit usage map**: the `@portfolio/kit` pieces you'll lean on, and the patterns you expect to hoist.
 9. **Performance tier**: why this tier, what's an enhancement, and the mobile behavior.
 10. **Accessibility**: focus order, heading levels, alt text, keyboard reach, reduced motion.
-11. **Appearance boundary**: what the composition assumes of the appearance system (#19), and which of a reference's looks moved to packs instead.
+11. **Appearance boundary**: the semantic roles the composition picks (the text role each kind of text takes, the surface emphasis of each region, and the primitives it renders), the selections you'll judge it under, and which of a reference's looks moved to packs instead.
 
 Each section is a small commitment. Together they're the contract: what the variant promises to be. Phase 2 honors it.
 
@@ -28,7 +28,7 @@ Without the contract, an agent cycles between candidate ideas while writing CSS,
 
 When you catch yourself asking "should this be a grid or a column?" mid-implementation, reread DESIGN.md. The answer is in the idea.
 
-It also keeps appearance out. "Cream paper and a sienna accent" isn't a composition decision: it's a color scheme, the owner's to pick, and #19's to ship. Section 11 is where a port records that.
+It also keeps appearance out. "Cream paper and a sienna accent" isn't a composition decision: it's a color scheme, the owner's to pick, and #19's to ship. "The name is display text, the signature work sits on a prominent surface, and quiet metadata is secondary text" is: those are roles, and every pack fills them its own way. Section 11 is where you name the roles, and where a port records what moved to packs.
 
 ## The fallback composition as a worked example
 
@@ -84,10 +84,10 @@ Focus order is reading order. The host's skip link lands on the `<main>`, which 
 
 ### Appearance boundary
 
-No color, type, or theme of its own: it renders in whatever #19's appearance provides. Its provenance records the variant template's colors, fonts, and theme toggle as retired, since they belong to the appearance axes.
+No color, type, or theme of its own: it renders in whatever #19's appearance provides, and lays out the same under every design language, color scheme, typography profile, and display mode. The kit's shared renderers pick the text roles; its own markup adds only the navigation list and the visitor control slot. Its provenance records the variant template's colors, fonts, and theme toggle as retired, since they belong to the appearance axes.
 
 ## When to consult this reference
 
 - At the start of Phase 1, before opening `assets/DESIGN.template.md`.
 - Whenever the idea feels like it's slipping.
-- When a choice sounds like appearance: a palette, a font, a theme. It isn't the variant's.
+- When a choice sounds like appearance: a palette, a font, a radius, a shadow, a theme. It isn't the variant's; pick the role instead, and let the packs fill it.
