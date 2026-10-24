@@ -5,7 +5,8 @@
 // locally as `pnpm fresh-clone`.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -22,9 +23,16 @@ import {
   SKIPPED,
   STEPS,
   withIdentityName,
+  cdTarget,
+  DOCKER_POOLS,
+  fatalSetProblems,
+  firewallRules,
+  hermeticProblems,
+  rejectedPackets,
 } from './fresh-clone.mjs';
 import { parse } from 'yaml';
 import { defaultComposition, LANDED, pendingProblems } from './lib/pending.mjs';
+import { finalVerdict } from './lib/verdict.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (doc) => readFileSync(path.join(ROOT, doc), 'utf8');
@@ -121,9 +129,19 @@ test('the run covers the guide the scope asks for: refusal and start under read-
       `the identity step comes between ${before} and ${after}`,
     );
   }
-  assert.deepEqual(STEPS.find((s) => s.id === 'compose-owner-accepts-identity').notFatal, [
-    'PORTFOLIO_SOURCE_DIR:sample_identity',
+  // Past the identity, owner refuses for its first-start import of the
+  // sample's unregistered variant, and for nothing else.
+  assert.deepEqual(STEPS.find((s) => s.id === 'compose-owner-accepts-identity').fatal, [
+    'PORTFOLIO_DATA_DIR:store_import_failed',
+    'PORTFOLIO_SOURCE_DIR:variant.unavailable',
   ]);
+  for (const id of ['compose-read-only-refuses-sample', 'compose-owner-refuses-sample']) {
+    assert.deepEqual(
+      STEPS.find((s) => s.id === id).fatal,
+      ['PORTFOLIO_SOURCE_DIR:sample_identity'],
+      id,
+    );
+  }
   for (const id of ['demo-starts', 'compose-demo-starts', 'dev', 'demo-dev']) {
     assert.ok(STEPS.find((s) => s.id === id).expect.includes.includes(SAMPLE_NAME), id);
   }
@@ -160,23 +178,14 @@ test('the scripted hash step is the guide command with -i, --stdin, and the imag
   );
 });
 
-test("owner's ready row is pending until the default composition is registered, and fails the run after", () => {
+test("owner's ready row is pending until the sample pair imports, and fails the run after", () => {
   assert.deepEqual(
     PENDING.map((row) => row.id),
     ['compose-owner-ready'],
   );
   for (const row of PENDING) assert.ok(LANDED[row.waitsOn], row.id);
-  assert.deepEqual(
-    pendingProblems(PENDING, { registered: ['kinetic-cosmos'], defaultId: 'editorial-evidence' }),
-    [],
-  );
-  assert.equal(
-    pendingProblems(PENDING, {
-      registered: ['editorial-evidence'],
-      defaultId: 'editorial-evidence',
-    }).length,
-    1,
-  );
+  assert.deepEqual(pendingProblems(PENDING, { sampleImports: false }), []);
+  assert.equal(pendingProblems(PENDING, { sampleImports: true }).length, 1);
 });
 
 test('a response is checked for its status and what it must and must not show', () => {
@@ -228,4 +237,151 @@ test("the identity step changes the copied sample's identity.name and nothing el
 
 test('the default composition is read from site.example.yml without a YAML parser, as a parser reads it', () => {
   assert.equal(defaultComposition(), parse(read('site.example.yml')).appearance.variant);
+});
+
+test('a cd goes where a shell takes it, from where the run is', () => {
+  assert.equal(cdTarget('cd deploy', '/r/keyurgolani.name'), '/r/keyurgolani.name/deploy');
+  assert.equal(cdTarget('cd keyurgolani.name', '/r'), '/r/keyurgolani.name');
+  // getting-started's cd, from deploy/, goes into deploy/keyurgolani.name, which isn't there.
+  assert.equal(
+    cdTarget('cd keyurgolani.name', '/r/keyurgolani.name/deploy'),
+    '/r/keyurgolani.name/deploy/keyurgolani.name',
+  );
+  assert.equal(cdTarget('cd deploy && ls', '/r'), null);
+  // Every cd step follows the one before it in the guide's order.
+  let at = '/r';
+  for (const step of STEPS) {
+    if (step.kind === 'root') at = '/r/keyurgolani.name';
+    if (step.kind === 'cd') at = cdTarget(step.command, at);
+  }
+  assert.equal(at, '/r/keyurgolani.name/deploy');
+  const cds = STEPS.filter((s) => s.kind === 'cd').map((s) => s.command);
+  assert.deepEqual(cds, ['cd keyurgolani.name', 'cd deploy', 'cd deploy']);
+});
+
+test('a refusal must name exactly the codes it expects, once each however often it was logged', () => {
+  const owner = [
+    'PORTFOLIO_DATA_DIR:store_import_failed',
+    'PORTFOLIO_SOURCE_DIR:variant.unavailable',
+  ];
+  assert.deepEqual(fatalSetProblems([...owner, ...owner], owner), []);
+  assert.deepEqual(
+    fatalSetProblems(['PORTFOLIO_AUTH_PASSWORD_HASH_FILE:unreadable', ...owner], owner),
+    [
+      `it refused with PORTFOLIO_AUTH_PASSWORD_HASH_FILE:unreadable, ${owner.join(', ')}, not exactly ${owner.join(', ')}`,
+    ],
+  );
+  assert.deepEqual(
+    fatalSetProblems(['PORTFOLIO_AUTH_PASSWORD_HASH_FILE:unreadable'], owner).length,
+    1,
+  );
+  assert.deepEqual(fatalSetProblems([], owner), ['it logged no config.fatal']);
+});
+
+test("the guide's environment holds no token, and an empty HOME of the run's own", () => {
+  const home = path.join(tmpdir(), 'fc-home');
+  const env = {
+    HOME: home,
+    XDG_CONFIG_HOME: path.join(home, '.config'),
+    XDG_CACHE_HOME: path.join(home, '.cache'),
+    XDG_DATA_HOME: path.join(home, '.local', 'share'),
+    XDG_STATE_HOME: path.join(home, '.local', 'state'),
+  };
+  assert.deepEqual(hermeticProblems(env, { home, listHome: () => [] }), []);
+  // Each control: a token, a HOME of someone else's, a full HOME, an XDG directory outside it.
+  assert.deepEqual(hermeticProblems({ ...env, GITHUB_TOKEN: 'x' }, { home, listHome: () => [] }), [
+    'GITHUB_TOKEN is set',
+  ]);
+  assert.deepEqual(
+    hermeticProblems(
+      { ...env, ACTIONS_RUNTIME_TOKEN: 'x', NPM_TOKEN: 'y' },
+      { home, listHome: () => [] },
+    ).length,
+    2,
+  );
+  assert.deepEqual(
+    hermeticProblems({ ...env, HOME: '/home/runner' }, { home, listHome: () => [] }).length,
+    1,
+  );
+  assert.deepEqual(hermeticProblems(env, { home, listHome: () => ['.npmrc'] }), [
+    "HOME isn't empty: .npmrc",
+  ]);
+  assert.deepEqual(
+    hermeticProblems(
+      { ...env, XDG_CACHE_HOME: '/home/runner/.cache' },
+      { home, listHome: () => [] },
+    ).length,
+    1,
+  );
+});
+
+test('the egress firewall logs and rejects new connections from each Docker pool to anything outside it', () => {
+  const rules = firewallRules();
+  assert.equal(rules.length, DOCKER_POOLS.length * 2);
+  for (const pool of DOCKER_POOLS) {
+    const mine = rules.filter((r) => r[r.indexOf('-s') + 1] === pool);
+    assert.deepEqual(
+      mine.map((r) => r[r.indexOf('-j') + 1]),
+      ['LOG', 'REJECT'],
+      pool,
+    );
+    for (const rule of mine) {
+      assert.deepEqual(rule.slice(rule.indexOf('!'), rule.indexOf('!') + 3), ['!', '-d', pool]);
+      assert.ok(rule.includes('NEW'));
+    }
+  }
+  const listing = [
+    'Chain DOCKER-USER (1 references)',
+    '    pkts      bytes target     prot opt in     out     source               destination',
+    '       0        0 LOG        0    --  *      *       172.16.0.0/12       !172.16.0.0/12        ctstate NEW /* fresh-clone-egress */ LOG flags 0 level 4 prefix "fresh-clone-egress: "',
+    '       3      180 REJECT     0    --  *      *       172.16.0.0/12       !172.16.0.0/12        ctstate NEW /* fresh-clone-egress */ reject-with icmp-port-unreachable',
+    '       2      120 REJECT     0    --  *      *       192.168.0.0/16      !192.168.0.0/16       ctstate NEW /* fresh-clone-egress */ reject-with icmp-port-unreachable',
+    '     500    30000 RETURN     0    --  *      *       0.0.0.0/0            0.0.0.0/0',
+  ].join('\n');
+  assert.equal(rejectedPackets(listing), 5);
+  assert.equal(rejectedPackets('Chain DOCKER-USER (1 references)'), 0);
+});
+
+test('the final verdict fails on a planted canary, a lost owner secret, and a pending row whose blocker landed', (t) => {
+  const reports = mkdtempSync(path.join(tmpdir(), 'fc-verdict-'));
+  t.after(() => rmSync(reports, { recursive: true, force: true }));
+  mkdirSync(path.join(reports, 'fresh-clone'), { recursive: true });
+  writeFileSync(path.join(reports, 'fresh-clone', 'commands.log'), 'nothing secret\n');
+  const secrets = { runCanary: 'canary-fresh-clone-0123', password: 'pw-0123', hash: '$scrypt$x' };
+  const required = ['runCanary', 'password', 'hash'];
+  const clean = {
+    pendingRows: PENDING,
+    landedState: { sampleImports: false },
+    reports,
+    secrets,
+    requiredSecrets: required,
+  };
+  assert.deepEqual(finalVerdict(clean), []);
+  // A planted canary in a report fails, and is redacted.
+  writeFileSync(path.join(reports, 'fresh-clone', 'commands.log'), 'the hash is $scrypt$x\n');
+  const leaked = finalVerdict(clean);
+  assert.deepEqual(leaked, [
+    'canary: fresh-clone/commands.log held a per-run secret, now redacted',
+  ]);
+  assert.doesNotMatch(
+    readFileSync(path.join(reports, 'fresh-clone', 'commands.log'), 'utf8'),
+    /\$scrypt\$x/,
+  );
+  // A scan that lost the owner's secrets fails, and so does one with nothing to look for.
+  assert.deepEqual(finalVerdict({ ...clean, secrets: { runCanary: secrets.runCanary } }), [
+    'canary: the scan has no password to look for',
+    'canary: the scan has no hash to look for',
+  ]);
+  assert.ok(
+    finalVerdict({ ...clean, secrets: {}, requiredSecrets: [] }).includes(
+      'canary: the scan has no secret to look for',
+    ),
+  );
+  // The blocker landed: the pending row fails.
+  assert.equal(
+    finalVerdict({ ...clean, landedState: { sampleImports: true } }).filter((p) =>
+      p.startsWith('pending:'),
+    ).length,
+    1,
+  );
 });
