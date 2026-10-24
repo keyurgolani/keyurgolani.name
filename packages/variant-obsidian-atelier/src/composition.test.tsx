@@ -187,7 +187,7 @@ test('the chapters are the signature and then the featured works, numbered, each
   assert.match(markup, /<div id="oa--index" class="oa-index">/);
 });
 
-test('each room ends with plain previous, index, and next links to its neighbours', () => {
+test('each room ends with plain previous, index, and next links to its neighbors', () => {
   const markup = html(fixtureInput('design'));
   const found = rooms(markup);
   found.forEach((room, index) => {
@@ -256,7 +256,7 @@ test('a room with nothing more to unfold has no empty disclosure', () => {
   assert.doesNotMatch(room.markup, /oa-room__artifact|<figure/);
 });
 
-test('a private work, or one only a hidden section reaches, is no chapter, no number, and no neighbour', () => {
+test('a private work, or one only a hidden section reaches, is no chapter, no number, and no neighbor', () => {
   const input = fixtureInput('hidden-canary');
   const markup = html(input);
   assert.doesNotMatch(markup, new RegExp(HIDDEN_CANARY));

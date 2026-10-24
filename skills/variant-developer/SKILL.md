@@ -41,6 +41,7 @@ Reference packages:
 - **`packages/kit`**: `@portfolio/kit/sections` (`renderSection`, the shared renderers, `RichText`, `seededRandom`, `VisitorControlSlot`) and `@portfolio/kit/enhancements` (`Enhancement`), plus layout primitives and hooks. Use it. If you find yourself rewriting a helper that could live there, hoist it.
 - **`legacy/`**: the retired v1 Editorial package, outside the workspace, for #13 to port. Read it for ideas and inventory; never import it. Its themes, color schemes, and typography presets moved to #19.
 - **`packages/variant-kinetic-cosmos`**: a port of v1 Kinetic Cosmos (#14), the first registered composition: bespoke renderers for three kinds, the rest shared, #19's Dialog and Disclosure, the kit's `threadLanes`, and a motion layer on the kit runtime: CSS animations keyed on the runtime's state, a receding chrome, and `MotionControl`.
+- **`packages/variant-obsidian-atelier`**: Obsidian Atelier (#15), a server module with no client code: a chapter a work, each a room whose treatment follows the work's medium, #19's Navigation, Surface, and Disclosure, and plain fragment links for the index and previous and next.
 - **`packages/variant-spatial-bento`**: Spatial Bento (#16), a server module with no client code: a tile a section through the shared renderers, the hero beside a CSS still of its stage, and a test that the bento keeps every word and link the shared renderers write.
 
 ## 2. What the host does around a variant

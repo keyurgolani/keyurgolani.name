@@ -169,7 +169,7 @@ Each is one plain JSON document of at most 1 MiB. One that doesn't parse is `sna
 
 The appearance names a composition, three appearance axes, and a display mode. The axes are #19's (appearance axes): each names a pack this build registers, and every page renders in the packs the site selects.
 
-- **`variant`** is the composition: which installed variant package lays out the page, by its manifest's id. This build registers `kinetic-cosmos` (#14), `spatial-bento` (#16), and the fallback composition, which a site can't select (`variant: fallback` is `schema.invalid`). Any other id renders as the fallback composition, with a `variant.unavailable` warning at startup and in `config.status`, until a package with that id is installed. The example's `editorial-evidence` arrives with #13.
+- **`variant`** is the composition: which installed variant package lays out the page, by its manifest's id. This build registers `kinetic-cosmos` (#14), `obsidian-atelier` (#15), `spatial-bento` (#16), and the fallback composition, which a site can't select (`variant: fallback` is `schema.invalid`). Any other id renders as the fallback composition, with a `variant.unavailable` warning at startup and in `config.status`, until a package with that id is installed. The example's `editorial-evidence` arrives with #13.
 - **`designLanguage`** is the component style. Use `platform-neutral`.
 - **`colorScheme`** is the palette. Use `warm-parchment`, the platform's.
 - **`typography`** is the type profile. Use `humanist-ui`, the platform's.
