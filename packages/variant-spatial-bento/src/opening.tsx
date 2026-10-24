@@ -3,7 +3,7 @@ import {
   type SectionOf,
   type SectionRendererProps,
 } from '@portfolio/kit/sections';
-import { StageSlot } from './stage-slot';
+import { StageSlot } from './stage';
 
 // The opening tile (#16): the hero as the shared renderer writes it, every
 // word the owner's and in reading order, beside the spatial stage's slot.

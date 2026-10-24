@@ -2,16 +2,17 @@
 
 import {
   Component,
-  lazy,
   Suspense,
   useCallback,
   useEffect,
   useState,
   useSyncExternalStore,
+  type ComponentType,
   type ReactNode,
 } from 'react';
 import { Action } from '@portfolio/appearance/primitives';
 import { useBoundary } from '@portfolio/appearance/react';
+import type { RuntimeState } from '@portfolio/kit/runtime';
 import type { SpatialFailure } from '@portfolio/kit/spatial-canvas';
 import { decideStage, type StageReason } from './policy';
 import { Runtime } from './runtime';
@@ -22,7 +23,8 @@ import { Runtime } from './runtime';
 // - A plate renders the still alone, before any runtime hook: no
 //   subscription, observer, listener, or attribute of the runtime's.
 // - The stage's module, with three.js, loads only once the policy says it
-//   runs, so nothing of it is on the static path.
+//   runs, so nothing of it is on the static path: the slot mounts the
+//   stage it's given, stage.tsx's lazily loaded one, and imports none.
 // - Any failure, its import rejected, no context, a lost context, a shader
 //   that doesn't compile, a throw, or no first frame, tears the stage down
 //   and leaves the still, the page's reading order and actions as they
@@ -34,17 +36,29 @@ import { Runtime } from './runtime';
 // - It reads no storage, so a sandboxed preview frame, which blocks it,
 //   changes nothing.
 
-const StageCanvas = lazy(() =>
-  import('./stage-canvas').then((stage) => ({ default: stage.StageCanvas })),
-);
+/** What the slot tells the stage it mounts. */
+export interface StageCanvasProps {
+  readonly state: RuntimeState;
+  /** The render's seed, `input.env.seed`, so the field is the same on every load. */
+  readonly seed: number;
+  readonly onFailure: (failure: SpatialFailure, error?: unknown) => void;
+  readonly onFirstFrame: () => void;
+}
+
+/**
+ * The stage the slot mounts: stage.tsx's lazily loaded one on the page, and
+ * the stage module's own StageCanvas when that module is what loaded, so
+ * this module never imports the stage's, and the stage's can import it.
+ */
+export type StageCanvasComponent = ComponentType<StageCanvasProps>;
 
 /** The planes the still draws, back to front. */
 const PLANES = ['far', 'middle', 'near', 'signature'] as const;
 
 /** The still of the stage: decoration, with no word, link, or control. */
-function Still({ children, live }: { readonly children?: ReactNode; readonly live?: string }) {
+function Still({ children, drawn }: { readonly children?: ReactNode; readonly drawn?: boolean }) {
   return (
-    <div className="sb-still" aria-hidden="true" data-stage={live}>
+    <div className="sb-still" aria-hidden="true" data-stage={drawn ? 'live' : undefined}>
       {PLANES.map((plane) => (
         <span key={plane} className={`sb-still__plane sb-still__plane--${plane}`} />
       ))}
@@ -124,7 +138,13 @@ function subscribeSignals(change: () => void): () => void {
 }
 
 /** The slot on its runtime: the only path that calls the hook, observes, or listens. */
-function LiveSlot({ seed }: { readonly seed: number }) {
+function LiveSlot({
+  seed,
+  Canvas,
+}: {
+  readonly seed: number;
+  readonly Canvas: StageCanvasComponent;
+}) {
   const runtime = Runtime.useEnhancementRuntime({ requires: ['webgl2', 'min-width:768'] });
   const { attachRoot, state, reason, eligible, fail } = runtime;
   const signals = useSyncExternalStore(subscribeSignals, readSignals, () => '');
@@ -193,11 +213,11 @@ function LiveSlot({ seed }: { readonly seed: number }) {
 
   return (
     <div className="sb-stage" ref={attachRoot} data-stage-reason={decision.reason}>
-      <Still live={live ? 'live' : undefined}>
+      <Still drawn={live}>
         {decision.mount ? (
           <StageBoundary onError={(error) => onFailure('import', error)}>
             <Suspense fallback={null}>
-              <StageCanvas
+              <Canvas
                 state={state}
                 seed={seed}
                 onFailure={onFailure}
@@ -219,17 +239,23 @@ function LiveSlot({ seed }: { readonly seed: number }) {
 }
 
 /**
- * The opening's stage. In a plate it's the still alone, before any runtime
+ * The stage's slot. In a plate it's the still alone, before any runtime
  * hook. Anywhere else it's the live slot, which shows the still until the
  * stage runs, and whenever it doesn't.
  */
-export function StageSlot({ seed }: { readonly seed: number }) {
+export function Slot({
+  seed,
+  Canvas,
+}: {
+  readonly seed: number;
+  readonly Canvas: StageCanvasComponent;
+}) {
   const { plate } = useBoundary();
   return plate ? (
     <div className="sb-stage">
       <Still />
     </div>
   ) : (
-    <LiveSlot seed={seed} />
+    <LiveSlot seed={seed} Canvas={Canvas} />
   );
 }

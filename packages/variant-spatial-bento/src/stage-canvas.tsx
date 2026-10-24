@@ -1,16 +1,10 @@
 'use client';
 
 import { useMemo, useRef } from 'react';
-import type { RuntimeState } from '@portfolio/kit/runtime';
-import {
-  SpatialCanvas,
-  useBoundaryColors,
-  useFrame,
-  type SpatialFailure,
-} from '@portfolio/kit/spatial-canvas';
+import { SpatialCanvas, useBoundaryColors, useFrame } from '@portfolio/kit/spatial-canvas';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
 import { buildScene, SCENE_ROLES, type Scene, type SceneRole } from './scene';
-import { StageSlot } from './stage-slot';
+import { Slot, type StageCanvasProps } from './stage-slot';
 
 // The spatial stage (#16), loaded only once the policy lets it run: the
 // still's planes in three dimensions, drifting a little, with a field of
@@ -62,14 +56,6 @@ function Planes({
   );
 }
 
-export interface StageCanvasProps {
-  readonly state: RuntimeState;
-  /** The render's seed, `input.env.seed`, so the field is the same on every load. */
-  readonly seed: number;
-  readonly onFailure: (failure: SpatialFailure, error?: unknown) => void;
-  readonly onFirstFrame: () => void;
-}
-
 export function StageCanvas({ state, seed, onFailure, onFirstFrame }: StageCanvasProps) {
   const frame = useRef<HTMLDivElement | null>(null);
   const colors = useBoundaryColors(frame, SCENE_ROLES);
@@ -101,5 +87,5 @@ export function StageCanvas({ state, seed, onFailure, onFirstFrame }: StageCanva
  * teardown hold however the stage comes to load.
  */
 export default function StageEnhancement({ input }: { readonly input: VariantRenderInput }) {
-  return <StageSlot seed={input.env.seed} />;
+  return <Slot seed={input.env.seed} Canvas={StageCanvas} />;
 }

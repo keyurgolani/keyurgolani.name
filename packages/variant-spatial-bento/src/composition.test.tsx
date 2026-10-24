@@ -326,10 +326,14 @@ test('the static path holds no stage code: the stage and three.js are one lazily
     // The stage's module only through import(), once the policy says it runs.
     assert.doesNotMatch(source, /from\s+['"]\.\/stage-canvas['"]/, file);
   }
-  const slot = SOURCES.find(([file]) => file === 'stage-slot.tsx')![1];
+  // One import() in the package, stage.tsx's, of the stage's module.
   assert.deepEqual(
-    [...slot.matchAll(/import\(\s*['"]([^'"]+)['"]\s*\)/g)].map(([, from]) => from),
-    ['./stage-canvas'],
+    SOURCES.filter(([file]) => !file.endsWith('.test.tsx')).flatMap(([file, source]) =>
+      [...source.matchAll(/import\(\s*['"]([^'"]+)['"]\s*\)/g)].map(
+        ([, from]) => `${file} ${from}`,
+      ),
+    ),
+    ['stage.tsx ./stage-canvas'],
   );
   // The matcher sees every way in: a bare import, a dynamic one, a require, and a subpath.
   for (const reach of [
@@ -389,7 +393,7 @@ const RUNNING: Parameters<typeof decideStage>[0] = {
 
 test('the declared enhancement is the whole slot, so however it loads, the policy decides', async () => {
   const { default: StageEnhancement } = await import('./stage-canvas');
-  const { StageSlot } = await import('./stage-slot');
+  const { StageSlot } = await import('./stage');
   const input = fixtureInput('complete');
   const enhancement = renderToStaticMarkup(<StageEnhancement input={input} />);
   assert.equal(enhancement, renderToStaticMarkup(<StageSlot seed={input.env.seed} />));
