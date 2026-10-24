@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import {
-  ADAPTER_SNAPSHOT_KINDS,
+  FROZEN_SNAPSHOT_KINDS,
   canonicalize,
   DOCUMENT_MAX_BYTES,
   parseSnapshot,
@@ -13,6 +13,7 @@ import {
   type PublicationUnitResult,
   type SourceDocument,
 } from '@portfolio/schema';
+import type { SchemeGenerators } from './schemes';
 
 // A publication unit (#3, items 5 and 6): the portfolio and site documents
 // (#4), an optional media document (#10, opaque here), and the snapshots
@@ -57,9 +58,10 @@ export interface UnitInput {
   readonly site: DocumentInput;
   readonly media?: DocumentInput;
   /**
-   * What an adapter froze for the unit, by kind (#10): a draft's refreshed
-   * `github` records, which a publish takes as they are. Only an adapter's
-   * kinds, each checked against its schema.
+   * What a draft's derived block froze for the unit, by kind (#10): its
+   * refreshed `github` records, and its generated `schemes` (10h), which a
+   * publish takes as they are. Only those kinds, each checked against its
+   * schema, and each scheme against the build's DerivedSchemeSchema.
    */
   readonly snapshots?: Readonly<Record<string, unknown>>;
 }
@@ -133,6 +135,12 @@ export interface UnitChecks {
   snapshots?(pair: ParsedPair, media: unknown): Readonly<Record<string, unknown>>;
   /** The blobs a media document references (#10). None until #10 registers it. */
   referencedBlobs?(media: unknown): readonly Sha256[];
+  /**
+   * The build's scheme generators (10h): which registered color scheme
+   * declares one, running it, and checking a derived scheme. Without them,
+   * a draft save generates nothing and keeps what it holds.
+   */
+  schemes?: SchemeGenerators;
   /** What the build renders a pair with, for the manifest. */
   rendering?(pair: ParsedPair): Rendering;
   /** This build's version, for the manifest. */
@@ -267,7 +275,7 @@ export function checkUnit(
   };
   const result = checks.validate(sources, ...(publication ? [publication] : []));
   const media = input.media ? mediaDiagnostics(input.media) : undefined;
-  const adapter = adapterSnapshots(input.snapshots);
+  const adapter = adapterSnapshots(input.snapshots, checks);
   const diagnostics: UnitDiagnostic[] = [
     ...result.diagnostics,
     ...(publication ? gateDiagnostics(sources, publication, result.diagnostics) : []),
@@ -328,17 +336,28 @@ function gateDiagnostics(
  * what a draft's refreshes froze. Any other kind, or data that doesn't check,
  * is a finding, so a publish never freezes it.
  */
-function adapterSnapshots(snapshots: UnitInput['snapshots']): {
+function adapterSnapshots(
+  snapshots: UnitInput['snapshots'],
+  checks: UnitChecks,
+): {
   readonly snapshots: Readonly<Record<string, unknown>>;
   readonly diagnostics: readonly UnitDiagnostic[];
 } {
   const checked: Record<string, unknown> = {};
   const diagnostics: UnitDiagnostic[] = [];
   for (const [kind, value] of Object.entries(snapshots ?? {})) {
-    const parsed = (ADAPTER_SNAPSHOT_KINDS as readonly string[]).includes(kind)
+    const parsed = (FROZEN_SNAPSHOT_KINDS as readonly string[]).includes(kind)
       ? parseSnapshot(kind, value)
       : null;
-    if (parsed?.ok) {
+    // A generated scheme is whole only by the build's DerivedSchemeSchema,
+    // which knows the color roles (10h).
+    const whole =
+      kind !== 'schemes' ||
+      !parsed?.ok ||
+      Object.values(parsed.value as Record<string, unknown>).every(
+        (entry) => checks.schemes?.check(entry) ?? true,
+      );
+    if (parsed?.ok && whole) {
       checked[kind] = plainModel(parsed.value);
       continue;
     }
@@ -347,11 +366,15 @@ function adapterSnapshots(snapshots: UnitInput['snapshots']): {
       severity: 'blocks-preview',
       document: 'snapshots',
       pointer: '',
-      message: parsed
-        ? `The draft's ${kind} snapshot doesn't check: ${parsed.problems[0]?.message ?? 'it is malformed'}`
-        : 'The draft holds a snapshot of a kind no adapter writes.',
+      message: !parsed
+        ? 'The draft holds a snapshot of a kind no adapter writes.'
+        : parsed.ok
+          ? "The draft's schemes snapshot holds an entry that isn't a whole generated scheme."
+          : `The draft's ${kind} snapshot doesn't check: ${parsed.problems[0]?.message ?? 'it is malformed'}`,
       remediation:
-        'Refresh the draft from its sources again, with portfolio-store sources refresh.',
+        kind === 'schemes'
+          ? 'Save the draft again, so its generators make the schemes again.'
+          : 'Refresh the draft from its sources again, with portfolio-store sources refresh.',
     });
   }
   return { snapshots: checked, diagnostics };

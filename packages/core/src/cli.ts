@@ -629,7 +629,9 @@ class Commands {
       const subject =
         change.subject.kind === 'media'
           ? `media ${change.subject.assetId}`
-          : `github ${change.subject.sectionId}`;
+          : change.subject.kind === 'scheme'
+            ? `scheme ${change.subject.schemeId}`
+            : `github ${change.subject.sectionId}`;
       this.say(
         `${change.id} ${change.cause} ${subject}: ${change.decision.state} (${change.fields.join(', ')})`,
       );
@@ -768,6 +770,8 @@ class Commands {
       audit: filesystemAuditSink({ dataDir: dir, now: this.now }),
       fs: this.fs,
       now: this.now,
+      // An image-derived scheme's asset decodes as the media service's does (10h).
+      sharp: () => loadSharp(this.options.sharpDirectories ?? []),
     });
     this.running.lockFile = store.paths.lock;
     return store;

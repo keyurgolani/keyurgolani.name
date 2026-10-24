@@ -1,3 +1,4 @@
+import type { SharpLoad } from '../catalog/media/derive';
 import type { AuditSink } from '../audit/sink';
 import { recordOwnerModule } from '../load-trace';
 import { filesystemAssetStore, type AssetStore } from './assets';
@@ -31,6 +32,11 @@ export interface StoreOptions {
   readonly now?: () => number;
   /** How long a waiter waits for the lock: 5 s. */
   readonly lockWaitMs?: number;
+  /**
+   * The media service's sharp, which decodes an image-derived scheme's
+   * asset (10h): loadSharp(), or portfolio-store's from its directories.
+   */
+  readonly sharp?: () => Promise<SharpLoad>;
 }
 
 export interface Store {
@@ -50,6 +56,7 @@ export function openStore({
   fs = nodeFs,
   now,
   lockWaitMs,
+  sharp,
 }: StoreOptions): Store {
   const paths = storePaths(dataDir);
   const lock = publicationLock({
@@ -68,6 +75,7 @@ export function openStore({
     assets,
     ...(now ? { now } : {}),
     ...(log ? { log } : {}),
+    ...(sharp ? { sharp } : {}),
   };
   const publication = filesystemPublicationService({ ...shared, ...(audit ? { audit } : {}) });
   return Object.freeze({
