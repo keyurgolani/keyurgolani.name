@@ -1,7 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { importFiles, IMPORT_TIMEOUT_MS } from './index';
-import { importMessage } from './pipeline';
+import {
+  importFiles,
+  importTimeout,
+  isResult,
+  IMPORT_MAX_BYTES,
+  IMPORT_TIMEOUT_MS,
+  IMPORT_TIMEOUT_RANGE_MS,
+} from './index';
+import {
+  importMessage,
+  IMPORT_MAX_BYTES as PIPELINE_MAX_BYTES,
+  type ImportInput,
+} from './pipeline';
 import { CANARY, EXAMPLE, pairFiles } from './test-support/hostile';
 
 // The main-thread API's worker wiring (#9, PR 3), with a fake Worker: one
@@ -10,15 +21,18 @@ import { CANARY, EXAMPLE, pairFiles } from './test-support/hostile';
 // or answers out of shape is worker_unavailable, a timeout or an abort is
 // timeout, and nothing ever parses on this thread instead.
 
-type Behavior = 'answer' | 'silent' | 'error' | 'malformed' | 'post-throws';
+type Behavior = 'answer' | 'silent' | 'error' | 'malformed' | 'post-throws' | 'reply';
 
 class FakeWorker {
   static behavior: Behavior = 'answer';
   static built: FakeWorker[] = [];
+  /** What the worker answers with under `reply`. */
+  static reply: unknown;
   onmessage: ((event: { data: unknown }) => void) | null = null;
   onerror: ((event: { preventDefault(): void }) => void) | null = null;
   onmessageerror: (() => void) | null = null;
   readonly posted: unknown[] = [];
+  readonly transferred: unknown[][] = [];
   terminated = 0;
   errorPrevented = false;
 
@@ -29,14 +43,16 @@ class FakeWorker {
     FakeWorker.built.push(this);
   }
 
-  postMessage(data: unknown) {
+  postMessage(data: unknown, transfer: unknown[] = []) {
     if (this.terminated) throw new Error('posted to a terminated worker');
     this.posted.push(data);
+    this.transferred.push(transfer);
     const behavior = FakeWorker.behavior;
     if (behavior === 'post-throws') throw new Error(`DataCloneError ${CANARY}`);
     queueMicrotask(() => {
       if (this.terminated) return;
       if (behavior === 'answer') this.onmessage?.({ data: importMessage(data) });
+      if (behavior === 'reply') this.onmessage?.({ data: FakeWorker.reply });
       if (behavior === 'malformed') this.onmessage?.({ data: { kind: 'imported', unit: null } });
       if (behavior === 'error') {
         this.onerror?.({
@@ -78,9 +94,88 @@ test('an import runs in one module worker built from import.worker.ts, which is 
   assert.equal(FakeWorker.built.length, 1);
   assert.match(worker!.url.href, /\/lib\/demo\/import\/import\.worker\.ts$/);
   assert.deepEqual(worker!.options, { type: 'module' });
+  // A copy of each file, transferred, never the caller's own buffers.
   assert.deepEqual(worker!.posted, [{ files }]);
+  const posted = (worker!.posted[0] as { files: ImportInput[] }).files;
+  posted.forEach(({ bytes }, index) => assert.notEqual(bytes.buffer, files[index]!.bytes.buffer));
+  assert.deepEqual(
+    worker!.transferred[0],
+    posted.map(({ bytes }) => bytes.buffer),
+  );
   assert.equal(worker!.terminated, 1);
   assert.equal(IMPORT_TIMEOUT_MS, 5000);
+});
+
+test('the count and each byteLength are checked here before anything is copied, and the worker gets only each file its own bytes', async (t) => {
+  useWorker(t, FakeWorker);
+  const [portfolio, site] = files as [ImportInput, ImportInput];
+  const none = { kind: 'refused', diagnostics: [] };
+  assert.deepEqual(await importFiles([portfolio, site, site]), { ...none, code: 'too_many_files' });
+  assert.deepEqual(await importFiles([portfolio]), { ...none, code: 'not_one_document' });
+  const huge = { name: 'x', bytes: new Uint8Array(IMPORT_MAX_BYTES + 1) };
+  assert.deepEqual(await importFiles([portfolio, huge]), { ...none, code: 'too_large' });
+  assert.equal(FakeWorker.built.length, 0);
+  assert.equal(IMPORT_MAX_BYTES, PIPELINE_MAX_BYTES);
+
+  // A small view of a big buffer: the worker gets the view's bytes alone.
+  const big = new Uint8Array(4 * IMPORT_MAX_BYTES);
+  big.set(site.bytes, 1000);
+  const view = { name: 'site', bytes: big.subarray(1000, 1000 + site.bytes.byteLength) };
+  assert.equal((await importFiles([portfolio, view])).kind, 'imported');
+  const sent = (FakeWorker.built[0]!.posted[0] as { files: ImportInput[] }).files;
+  assert.equal(sent[1]!.bytes.buffer.byteLength, site.bytes.byteLength);
+});
+
+test('a reply out of ImportResult shape in any part is worker_unavailable', async (t) => {
+  useWorker(t, FakeWorker);
+  const good = importMessage({ files });
+  assert.equal(good.kind, 'imported');
+  const unit = (good as { unit: Record<string, unknown> }).unit;
+  const replies: Record<string, unknown> = {
+    'an unknown refusal code': { kind: 'refused', code: CANARY, diagnostics: [] },
+    'a refusal with no diagnostics': { kind: 'refused', code: 'invalid' },
+    'a refusal with a diagnostic out of shape': {
+      kind: 'refused',
+      code: 'invalid',
+      diagnostics: [{ code: 'x' }],
+    },
+    'an import with no diagnostics': { ...good, diagnostics: undefined },
+    'an import with an empty unit': { ...good, unit: {} },
+    'an import with a source out of shape': {
+      ...good,
+      unit: { ...unit, sources: { portfolio: { text: 1 }, site: {} } },
+    },
+    'an import with no schema versions': { ...good, unit: { ...unit, schemaVersions: {} } },
+    'an import with a remote media entry of another kind': {
+      ...good,
+      remoteImages: [{ document: 'portfolio', kind: 'font', pointer: '/media/0', host: 'x' }],
+    },
+    'an import with unchecked entries that are not strings': { ...good, unchecked: [1] },
+    'another kind': { kind: 'other', diagnostics: [] },
+  };
+  FakeWorker.behavior = 'reply';
+  for (const [name, reply] of Object.entries(replies)) {
+    FakeWorker.reply = reply;
+    assert.deepEqual(
+      await importFiles(files),
+      { kind: 'refused', code: 'worker_unavailable', diagnostics: [] },
+      name,
+    );
+  }
+  FakeWorker.reply = good;
+  assert.deepEqual(await importFiles(files), good);
+  assert.equal(isResult(good), true);
+});
+
+test('timeoutMs is 5 seconds when absent and held between 1 and 30 seconds', () => {
+  assert.equal(importTimeout(undefined), 5000);
+  assert.equal(importTimeout(Number.NaN), 5000);
+  assert.equal(importTimeout(2500), 2500);
+  assert.equal(importTimeout(10), 1000);
+  assert.equal(importTimeout(-5), 1000);
+  assert.equal(importTimeout(2 ** 31 - 1), 30_000);
+  assert.equal(importTimeout(Number.POSITIVE_INFINITY), 30_000);
+  assert.deepEqual(IMPORT_TIMEOUT_RANGE_MS, { min: 1000, max: 30_000 });
 });
 
 test('a Worker that throws on construction, or none at all, is worker_unavailable, and nothing parses on this thread', async (t) => {
@@ -123,21 +218,29 @@ test('a worker that fails, answers out of shape, or cannot be posted to is worke
 test('a worker that never answers is terminated and refused with timeout, after timeoutMs or 5 seconds', async (t) => {
   useWorker(t, FakeWorker);
   FakeWorker.behavior = 'silent';
-  const started = Date.now();
-  const result = await importFiles(files, { timeoutMs: 30 });
-  assert.deepEqual(result, { kind: 'refused', code: 'timeout', diagnostics: [] });
-  assert.ok(Date.now() - started >= 25);
-  assert.equal(FakeWorker.built[0]!.terminated, 1);
-
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  FakeWorker.built = [];
-  const pending = importFiles(files);
-  t.mock.timers.tick(IMPORT_TIMEOUT_MS - 1);
-  await Promise.resolve();
-  assert.equal(FakeWorker.built[0]!.terminated, 0);
-  t.mock.timers.tick(1);
-  assert.deepEqual(await pending, { kind: 'refused', code: 'timeout', diagnostics: [] });
-  assert.equal(FakeWorker.built[0]!.terminated, 1);
+  const timedOut = { kind: 'refused', code: 'timeout', diagnostics: [] };
+  const runFor = async (options: { timeoutMs?: number }, fires: number) => {
+    FakeWorker.built = [];
+    let settled: unknown;
+    void importFiles(files, options).then((result) => (settled = result));
+    const flush = () => new Promise((resolve) => setImmediate(resolve));
+    t.mock.timers.tick(fires - 1);
+    await flush();
+    assert.equal(settled, undefined, JSON.stringify(options));
+    assert.equal(FakeWorker.built[0]!.terminated, 0);
+    t.mock.timers.tick(1);
+    await flush();
+    assert.deepEqual(settled, timedOut, JSON.stringify(options));
+    assert.equal(FakeWorker.built[0]!.terminated, 1);
+  };
+  // A short timeout fires well before the default, and the default at 5 seconds.
+  await runFor({ timeoutMs: 1200 }, 1200);
+  await runFor({}, IMPORT_TIMEOUT_MS);
+  // Held to the range: 10 ms is a second, and a day is 30 seconds.
+  await runFor({ timeoutMs: 10 }, 1000);
+  await runFor({ timeoutMs: 86_400_000 }, 30_000);
+  t.mock.timers.reset();
 });
 
 test('an abort terminates the worker and refuses with timeout, and an aborted signal builds none', async (t) => {
@@ -168,7 +271,11 @@ test('an abort terminates the worker and refuses with timeout, and an aborted si
 test('a late answer after a timeout changes nothing, and the worker is terminated once', async (t) => {
   useWorker(t, FakeWorker);
   FakeWorker.behavior = 'silent';
-  const result = await importFiles(files, { timeoutMs: 5 });
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const pending = importFiles(files, { timeoutMs: 1000 });
+  t.mock.timers.tick(1000);
+  const result = await pending;
+  t.mock.timers.reset();
   assert.equal(result.kind, 'refused');
   const [worker] = FakeWorker.built;
   assert.equal(worker!.onmessage, null);
