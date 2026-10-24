@@ -1,0 +1,361 @@
+/*
+ * Horizontal Cinema (#17): the chapters' layout. Composition only: where
+ * the chrome, the filmstrip, the five chapters, their frames, and the index
+ * sit. Every color, material, radius, border, and texture is a token of
+ * #19's appearance packs, so the selected color scheme makes it dark, or
+ * light, or high contrast, and only a design language whose texture is
+ * grain grains a frame's matte; nothing here forces a mode. Every rule sits
+ * under [data-variant='horizontal-cinema'], and every property is logical,
+ * so a right-to-left page runs the same chapters the other way.
+ *
+ * One DOM, two layouts, which the stylesheet alone picks: the chapters in
+ * the page's ordinary vertical flow, the default, and on a wide, tall
+ * screen with a fine pointer and no reduced motion, one native horizontal
+ * scroller of five full-width chapters. The query tests reduced motion
+ * itself, since #19 keeps data-motion full under the OS's reduce.
+ */
+
+[data-variant='horizontal-cinema'] {
+  --layout-measure: 76rem;
+  --layout-gutter: clamp(1rem, 4vw, 3rem);
+  display: block;
+  box-sizing: border-box;
+  padding-block: 1.5rem 5rem;
+  /* A word too long for the line, such as a name or a URL, breaks rather than widening the page. */
+  overflow-wrap: anywhere;
+}
+
+/* What reads at the page's measure: the chrome, the filmstrip's bar, and the index. */
+[data-variant='horizontal-cinema'] :is(.hc-chrome, .hc-bar, .hc-index) {
+  box-sizing: border-box;
+  max-inline-size: var(--layout-measure);
+  margin-inline: auto;
+  padding-inline: var(--layout-gutter);
+}
+
+/* Words for assistive technology alone, such as the filmstrip's name. */
+[data-variant='horizontal-cinema'] .hc-visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The chrome: the name, the index, and the visitor control, in flow from the first paint. */
+[data-variant='horizontal-cinema'] .hc-chrome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.5rem;
+  padding-block-end: 1rem;
+  border-block-end: var(--ui-border-divider);
+}
+
+[data-variant='horizontal-cinema'] .hc-chrome__name {
+  margin-inline-end: auto;
+  color: var(--color-text-primary);
+  text-decoration-line: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-chrome__index {
+  color: var(--color-text-secondary);
+}
+
+/* At least 24 by 24 CSS px for each of the composition's own links. */
+[data-variant='horizontal-cinema'] :is(.hc-chrome a, .hc-pager a, .hc-frame__links a) {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.5em;
+  min-block-size: 1.5rem;
+}
+
+/* The bar: the filmstrip, every chapter by its number and label, then the progress and the steps. */
+[data-variant='horizontal-cinema'] .hc-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 2rem;
+  padding-block: 1.25rem;
+}
+
+[data-variant='horizontal-cinema'] .hc-filmstrip__number {
+  color: var(--color-accent-text);
+}
+
+[data-variant='horizontal-cinema'] .hc-transport:not([hidden]) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-inline-start: auto;
+}
+
+[data-variant='horizontal-cinema'] .hc-progress {
+  margin: 0;
+  color: var(--color-accent-text);
+}
+
+/*
+ * The chapters. Vertical, the default: they stack in the page's order,
+ * each one ruled off from the last. Nothing sticks, nothing is fixed, and
+ * nothing scrolls sideways.
+ */
+[data-variant='horizontal-cinema'] .hc-stage {
+  display: block;
+  /* Room for its focus ring inside the window, since the stage spans it. */
+  margin-inline: 0.5rem;
+}
+
+[data-variant='horizontal-cinema'] .hc-chapter {
+  box-sizing: border-box;
+  min-inline-size: 0;
+  padding-block: clamp(2.5rem, 6vw, 5rem);
+  padding-inline: var(--layout-gutter);
+  border-block-start: var(--ui-border-divider);
+  scroll-margin-block-start: 1rem;
+}
+
+[data-variant='horizontal-cinema'] .hc-chapter > * {
+  box-sizing: border-box;
+  max-inline-size: var(--layout-measure);
+  margin-inline: auto;
+}
+
+[data-variant='horizontal-cinema'] .hc-chapter__title {
+  margin-block: 0 2rem;
+}
+
+[data-variant='horizontal-cinema'] .hc-chapter__number {
+  color: var(--color-accent-text);
+}
+
+[data-variant='horizontal-cinema'] .hc-chapter__body {
+  display: grid;
+  gap: 3rem;
+}
+
+[data-variant='horizontal-cinema'] .hc-chapter__body > * {
+  min-inline-size: 0;
+}
+
+[data-variant='horizontal-cinema'] :is(.hc-opening__name, .hc-opening__tagline) {
+  margin-block: 0;
+  max-inline-size: 40rem;
+}
+
+[data-variant='horizontal-cinema'] .hc-opening__tagline {
+  margin-block-start: 1rem;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] .hc-chapter__body > [data-renderer] {
+  margin-block: 0;
+}
+
+[data-variant='horizontal-cinema'] :is(.hc-chapter__sections, .hc-index__rest) > [data-renderer] {
+  max-inline-size: var(--type-measure-body);
+  margin-block: 0 3rem;
+}
+
+[data-variant='horizontal-cinema'] .hc-chapter__frames {
+  display: grid;
+  gap: 4rem;
+}
+
+/* A section's id that the frames show whole: it lands on Journey, and takes no room. */
+[data-variant='horizontal-cinema'] .hc-anchor {
+  display: block;
+}
+
+/*
+ * A frame: the media on its matte beside the words and the evidence, from
+ * 48rem; stacked in reading order below that. The media keeps its own
+ * aspect, never cropped, never wider than the matte or taller than most of
+ * the window, and its words sit below it, never over it.
+ */
+[data-variant='horizontal-cinema'] .hc-frame {
+  display: grid;
+  gap: 1.5rem var(--layout-gutter);
+  align-items: start;
+}
+
+@media (min-width: 48rem) {
+  [data-variant='horizontal-cinema'] .hc-frame[data-media='image'] {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}
+
+[data-variant='horizontal-cinema'] .hc-frame > * {
+  min-inline-size: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-frame__matte .pf-figure {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-frame__matte img {
+  display: block;
+  inline-size: auto;
+  max-inline-size: 100%;
+  block-size: auto;
+  max-block-size: 70vh;
+  margin-inline: auto;
+  object-fit: contain;
+}
+
+/* An image with no rendition yet keeps its box, its label in the middle, and its words below. */
+[data-variant='horizontal-cinema'] .hc-frame__matte .pf-media-box {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  inline-size: 100%;
+  aspect-ratio: 3 / 2;
+  padding-inline: 1rem;
+  color: var(--color-text-secondary);
+  background-color: var(--color-surface-default);
+  border: var(--ui-border-card);
+  border-radius: var(--ui-radius-media);
+}
+
+[data-variant='horizontal-cinema'] .hc-frame__matte figcaption {
+  display: grid;
+  gap: 0.25rem;
+  max-inline-size: var(--type-measure-compact);
+  margin-block-start: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] figcaption :is(.pf-caption, .pf-credit, .pf-rights) {
+  display: block;
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .pf-rights > span + span::before {
+  content: ' · ';
+}
+
+[data-variant='horizontal-cinema'] .hc-frame__words {
+  display: grid;
+  gap: 0.75rem;
+  max-inline-size: var(--type-measure-body);
+}
+
+[data-variant='horizontal-cinema'] .hc-frame__words :is(h2, h3, h4, p) {
+  margin-block: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-frame__medium {
+  color: var(--color-accent-text);
+}
+
+[data-variant='horizontal-cinema'] .hc-frame__meta {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] :is(.hc-frame__evidence, .hc-frame__links, .hc-pager) {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-frame__evidence {
+  display: grid;
+  gap: 1rem;
+  padding-block-start: 0.75rem;
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='horizontal-cinema'] .hc-frame__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.5rem;
+}
+
+/* Previous and next: plain links at each chapter's end. */
+[data-variant='horizontal-cinema'] .hc-pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 2rem;
+  margin-block-start: 3rem;
+  padding-block-start: 1rem;
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='horizontal-cinema'] .hc-pager__next {
+  margin-inline-start: auto;
+}
+
+/* Standalone links in a list, so no underline: the text's own color is all a sampler sees. */
+[data-variant='horizontal-cinema'] .hc-pager a {
+  text-decoration-line: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-pager__rel {
+  color: var(--color-text-secondary);
+}
+
+/* The index: every chapter and every titled section, then what no chapter holds, in the page's flow. */
+[data-variant='horizontal-cinema'] .hc-index {
+  padding-block-start: 4rem;
+  border-block-start: var(--ui-border-divider);
+  scroll-margin-block-start: 1rem;
+}
+
+[data-variant='horizontal-cinema'] .hc-index__heading {
+  margin-block: 0 1rem;
+}
+
+[data-variant='horizontal-cinema'] .hc-index [data-ui-slot='navigation.list'] {
+  max-inline-size: 44rem;
+}
+
+[data-variant='horizontal-cinema'] .hc-index__section {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] .hc-index__rest {
+  margin-block-start: 3rem;
+}
+
+/*
+ * Horizontal: one native scroller of exactly five full-width chapters, side
+ * by side in the inline direction. Each chapter is as tall as the tallest,
+ * so nothing clips, and the page itself scrolls vertically as it always
+ * does: the wheel, a trackpad, a swipe, Tab, find, and a fragment move the
+ * scroller natively, and the controller aligns the chapter where it
+ * settles. No CSS snapping, which would pull find and Tab back off what
+ * they reach, and no CSS smooth scrolling: the controller eases only the
+ * scrolls it starts, while its runtime is active.
+ */
+@media (min-width: 64rem) and (min-height: 36rem) and (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  [data-variant='horizontal-cinema'] .hc-stage {
+    display: grid;
+    grid-auto-columns: 100%;
+    grid-auto-flow: column;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-block: var(--ui-border-divider);
+  }
+
+  [data-variant='horizontal-cinema'] .hc-chapter {
+    border-block-start: none;
+  }
+}
+
+/* Print: the chapters in order, as the vertical layout has them, without the steps. */
+@media print {
+  [data-variant='horizontal-cinema'] .hc-transport {
+    display: none;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-frame__matte figure {
+    break-inside: avoid;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-frame__matte img {
+    max-block-size: 60vh;
+  }
+}

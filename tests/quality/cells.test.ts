@@ -28,6 +28,7 @@ test('the PR plan: each sentinel at every viewport in the default row, and every
     'fallback not-found /quality-no-such-page system',
     'fallback sparse / system',
     'fallback unavailable / system',
+    'horizontal-cinema complete / system',
     'kinetic-cosmos complete / system',
     'login signed-out /studio/sign-in system',
     'obsidian-atelier complete / system',
@@ -56,6 +57,7 @@ test('the PR plan: each sentinel at every viewport in the default row, and every
   for (const reason of plan.reasons) assert.ok(isReason(reason), reason);
   assert.deepEqual(plan.targets, [
     { kind: 'composition', id: 'fallback' },
+    { kind: 'composition', id: 'horizontal-cinema' },
     { kind: 'composition', id: 'kinetic-cosmos' },
     { kind: 'composition', id: 'obsidian-atelier' },
     { kind: 'composition', id: 'spatial-bento' },
