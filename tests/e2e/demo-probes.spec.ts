@@ -75,9 +75,12 @@ test(
       return response;
     };
 
-    // Every route entry demo doesn't serve, to every method: 404.
+    // Every route entry demo doesn't serve, to every method: 404. Not the owner's /studio,
+    // whose path demo serves as Demo Studio, by its own entry (#9).
+    const servedHere = (pattern: string) =>
+      listRoutes().some((each) => each.pattern === pattern && routeAccess('demo', each) !== 'absent');
     const denied = listRoutes().filter(
-      (entry) => entry.capability !== 'operations' && routeAccess('demo', entry) === 'absent',
+      (entry) => entry.capability !== 'operations' && !servedHere(entry.pattern),
     );
     expect(denied.length, 'the demo policy denies some route').toBeGreaterThan(0);
     for (const entry of denied) {
