@@ -30,7 +30,7 @@ import type { EnvironmentOverride } from './environment';
 // snapshots/schemes.json live, each by scheme id, as `schemes` here. Render
 // never runs a generator. An entry renders only when it's well formed, names
 // the generator and version the registered scheme's manifest does, and its
-// sets are complete and not waiting for the owner's review; anything else is
+// sets are complete; anything else is
 // left out, so the scheme falls back on its axis with a diagnostic.
 //
 // The variant is the page's own: the composition its route renders, which
@@ -81,8 +81,8 @@ const SHA256 = /^[0-9a-f]{64}$/;
 /**
  * The stored generated schemes a page may render, by scheme id: each one a
  * registered generator scheme's, made by the generator and version its
- * manifest names, with an input hash and complete sets that aren't waiting
- * for review. Anything else, or anything that isn't an object, is left out.
+ * manifest names, with an input hash and complete sets. Anything else, or
+ * anything that isn't an object, is left out.
  */
 export function storedSchemes(
   schemes: unknown,

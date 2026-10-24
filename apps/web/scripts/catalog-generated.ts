@@ -85,14 +85,24 @@ export function generatedEntries(
     const pkg = shipping.find(({ name }) => name === pack.packageName)!;
     const file = posix(path.join(pkg.dir, referenceFile(pack.id)));
     const recorded = readText(path.join(root, file));
-    const source = Object.hasOwn(REFERENCE_SOURCES, pack.id) ? REFERENCE_SOURCES[pack.id] : undefined;
+    const source = Object.hasOwn(REFERENCE_SOURCES, pack.id)
+      ? REFERENCE_SOURCES[pack.id]
+      : undefined;
     if (!source) {
       problems.push({
         pack: pack.id,
         message: `The color scheme ${pack.id} is generated and has no reference input: add one to REFERENCE_SOURCES in packages/appearance/src/node/generated.ts.`,
         writable: false,
       });
-      entries.push({ id: pack.id, packageName: pack.packageName, file, declared, recorded, record: null, text: null });
+      entries.push({
+        id: pack.id,
+        packageName: pack.packageName,
+        file,
+        declared,
+        recorded,
+        record: null,
+        text: null,
+      });
       continue;
     }
     const made = referenceRecord(root, pack.id, declared, source);
@@ -102,11 +112,27 @@ export function generatedEntries(
         message: `The color scheme ${pack.id} can't generate its reference record: ${made.problem}`,
         writable: false,
       });
-      entries.push({ id: pack.id, packageName: pack.packageName, file, declared, recorded, record: null, text: null });
+      entries.push({
+        id: pack.id,
+        packageName: pack.packageName,
+        file,
+        declared,
+        recorded,
+        record: null,
+        text: null,
+      });
       continue;
     }
     const text = renderReference(made.record);
-    entries.push({ id: pack.id, packageName: pack.packageName, file, declared, recorded, record: made.record, text });
+    entries.push({
+      id: pack.id,
+      packageName: pack.packageName,
+      file,
+      declared,
+      recorded,
+      record: made.record,
+      text,
+    });
     if (!made.record.result.contrastReport.passes) {
       const failing = made.record.result.contrastReport.pairs.filter(({ passes }) => !passes);
       problems.push({
@@ -155,20 +181,11 @@ export function generatedEntries(
 /**
  * The reference outputs as generated sets, by scheme id, for the gate and
  * the cross-product: what a site with the reference input renders. An
- * image-derived one is pending review, so it never renders, which is what
- * the build does with it until the owner accepts it; `accepted` lists the
- * ones the build registers, read as accepted.
+ * image-derived scheme the owner hasn't accepted isn't registered, so the
+ * gate and the cross-product never reach its sets.
  */
-export function referenceSets(
-  entries: readonly GeneratedEntry[],
-  accepted: ReadonlySet<string> = new Set(),
-): GeneratedSchemes {
+export function referenceSets(entries: readonly GeneratedEntry[]): GeneratedSchemes {
   const sets: Record<string, GeneratedSchemes[string]> = {};
-  for (const entry of entries) {
-    if (!entry.record) continue;
-    const { review, ...tokens } = entry.record.result.tokens;
-    if (review === 'pending' && !accepted.has(entry.id)) continue;
-    sets[entry.id] = tokens;
-  }
+  for (const entry of entries) if (entry.record) sets[entry.id] = entry.record.result.tokens;
   return sets;
 }
