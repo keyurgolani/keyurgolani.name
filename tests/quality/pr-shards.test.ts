@@ -37,6 +37,7 @@ import {
   testWeight,
   type ShardGroup,
 } from './lib/pr-shards';
+import { QUALITY_BUILD_ENV } from './lib/build.mjs';
 import { shardOutputs } from './pr-count';
 import { loadRegistrations, type Registrations } from './lib/registration';
 import { cellServer, planServers, serverId } from './lib/server';
@@ -54,6 +55,7 @@ interface Job {
   readonly if?: string;
   readonly needs?: readonly string[];
   readonly outputs?: Readonly<Record<string, string>>;
+  readonly env?: Readonly<Record<string, string>>;
   readonly strategy?: { readonly matrix?: { readonly shard?: unknown } };
   readonly steps?: readonly {
     readonly id?: string;
@@ -451,6 +453,18 @@ test('quality-pr-plan emits the count, and the matrix, the verdict, gate, and se
     }
   }
   assert.doesNotMatch(RAW_CI, /quality-pr \(\d/);
+  // The planner plans what the shards run: its registry takes exactly the
+  // flags the quality host builds with, and neither quality-pr nor its run
+  // step sets one of its own.
+  const build = plan.steps?.find((each) => /build:registry --modules-only$/.test(each.run ?? ''));
+  assert.deepEqual(build?.env, { ...QUALITY_BUILD_ENV });
+  const flag = /^[A-Z_]+_FIXTURES$/;
+  for (const env of [pr.env, ...(pr.steps ?? []).map((each) => each.env)]) {
+    assert.deepEqual(
+      Object.keys(env ?? {}).filter((key) => flag.test(key)),
+      [],
+    );
+  }
   // What the planner writes is what the matrix and the verdict read.
   assert.deepEqual(shardOutputs(3), { count: '3', shards: '[1,2,3]' });
   assert.deepEqual(JSON.parse(shardOutputs(picked()).shards).length, picked());
@@ -572,6 +586,49 @@ test('the weights file has every row a conditions test can plan, and a perf, har
       }
     }
   }
+});
+
+test('a cell on a pack weighs its tests by the measured pack weights, so a PR that changes a pack is sized by them (#20)', () => {
+  const durations = loadDurations();
+  const meta = withTierPacks(checkoutMeta());
+  const scheme = meta.PACKS!.find((pack) => pack.kind === 'color-scheme' && !pack.fixture)!;
+  const wider = {
+    ...meta,
+    PACKS: [...meta.PACKS!, clone(scheme, 'second-scheme', 'stable', false)],
+  };
+  const plan = planCells({
+    meta: wider,
+    registrations,
+    mode: 'pr',
+    changes: [{ axis: 'colorScheme', id: 'second-scheme', paths: [] }],
+  });
+  const directed = plan.cells.filter((cell) => cell.changed);
+  assert.ok(directed.length > 0);
+  const groups = planGroups(plan, ENGINES, durations);
+  for (const cell of directed) {
+    assert.ok(onPack(cell.tuple), cell.id);
+    const id = serverId(cellServer(cell));
+    const group = groups.find(
+      (each) => each.project === serverProject(ENGINES[0]!, id) && each.file === CELL_SPEC,
+    )!;
+    const tests = plan.tests.filter((each) => serverId(cellServer(each.cell)) === id);
+    const expected = tests.reduce(
+      (sum, each) =>
+        sum +
+        (each.skip !== undefined || each.engineSkips[ENGINES[0]!] !== undefined
+          ? durations.skipped
+          : each.conditions
+            ? durations.pack[`${each.viewport.id} ${each.row.id}`]!
+            : durations.plain),
+      durations.group,
+    );
+    assert.ok(
+      Math.abs(group.weight - expected) < 1e-6,
+      `${cell.id}: ${group.weight} vs ${expected}`,
+    );
+  }
+  // The platform default's tuple is no pack cell.
+  assert.ok(!onPack(plan.cells.find((cell) => !cell.pack && !cell.changed)!.tuple));
 });
 
 test("quality:pr takes --shard as the runner's own, and hands it to Playwright's processes by QUALITY_SHARD", () => {
