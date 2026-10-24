@@ -671,12 +671,16 @@ test('the owner route matrix: each route as its capability says, and retired one
     // No installed variant declares a view at /probe, and no live slug is
     // probe (#10b). A grant route's probe is its grant, and the route's
     // home is served (#7): proxy.ts checks the grant itself.
+    // A pattern another entry serves under owner, as /studio is (#9's demo entry beside it), is served.
+    const served = listRoutes().some(
+      (other) => other.pattern === entry.pattern && routeAccess('owner', other) !== 'absent',
+    );
     const expected =
       entry.kind === 'page' && pathname.includes('probe') && !entry.grant
         ? 'missing'
-        : routeAccess('owner', entry) === 'absent'
-          ? 'absent'
-          : 'served';
+        : served
+          ? 'served'
+          : 'absent';
     assert.equal(resolveRoute('owner', pathname).status, expected, entry.pattern);
   }
   for (const pattern of RETIRED_PATTERNS) {
