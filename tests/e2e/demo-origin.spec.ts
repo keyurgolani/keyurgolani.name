@@ -23,8 +23,8 @@ import {
 // refused by #2's exact Origin check, and no owner query answers in a way
 // the demo origin may read. Against the built server under owner, on
 // loopback. The browser half, that script on the demo origin can't read or
-// replace the owner's __Host- cookie over https, needs the Compose fixture
-// with a browser, and lands with the demo container (#9's third PR).
+// replace the owner's __Host- cookie over https, runs on the Compose fixture
+// in Chromium: tests/proxy/demo-origin.spec.ts (pnpm ci:demo-origin).
 
 // apps/web has no "type": "module", so its modules are CommonJS to Node and
 // load through require().
