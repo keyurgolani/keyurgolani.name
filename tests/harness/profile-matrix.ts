@@ -662,9 +662,11 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
       async ({ app, request }) => {
         if (scheme) {
           // The probe, and a well-formed name with a hash no live scheme has.
+          // A trailing slash is the same 404, never a 308 naming a path.
           for (const target of [
             concrete(entry.pattern),
             `/_portfolio/scheme/brand-seed.${'0'.repeat(12)}.css`,
+            `/_portfolio/scheme/brand-seed.${'0'.repeat(12)}.css/`,
           ]) {
             const response = await request.get(target, { maxRedirects: 0 });
             expect(response.status(), target).toBe(404);

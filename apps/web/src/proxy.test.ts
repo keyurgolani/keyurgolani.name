@@ -2070,5 +2070,15 @@ test('/_portfolio/scheme/ takes GET and HEAD alone: any other method is the plai
     ]) {
       assert.notEqual(decision(await proxy(visitor(path))), 'served', `${profile} ${path}`);
     }
+    // A trailing slash is the plain no-store 404, never a 308 naming a path, to any method.
+    for (const method of ['GET', 'HEAD', 'POST']) {
+      const what = `${profile} ${method} ${sheet}/`;
+      const slashed = await proxy(visitor(`${sheet}/`, method));
+      assert.equal(slashed.status, 404, what);
+      assert.equal(slashed.headers.get('location'), null, what);
+      assert.equal(slashed.headers.get('cache-control'), 'no-store', what);
+      assert.equal(slashed.headers.get('content-type'), 'text/plain; charset=utf-8', what);
+      assert.equal(onward(slashed), false, what);
+    }
   }
 });
