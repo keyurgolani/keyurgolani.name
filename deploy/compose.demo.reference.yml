@@ -8,6 +8,9 @@
 #
 # Never mount a --documents-only export: it has no bundle.json, so the demo
 # refuses it and serves no reference.
+#
+# The export holds the portfolio's private records, which the demo never
+# serves: keep it readable by uid 1001, the server's user, and no one else.
 services:
   web:
     environment:

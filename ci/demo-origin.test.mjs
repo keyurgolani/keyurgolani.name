@@ -27,12 +27,17 @@ test("the spec runs in ci.yml's browser-job Playwright image, its digest include
   assert.ok(containers.length > 1);
   assert.deepEqual(new Set(containers), new Set([image]));
   // Nothing in the script names an image of its own.
-  assert.doesNotMatch(readFileSync(new URL('./demo-origin.mjs', import.meta.url), 'utf8'), /sha256:[0-9a-f]{64}/);
+  assert.doesNotMatch(
+    readFileSync(new URL('./demo-origin.mjs', import.meta.url), 'utf8'),
+    /sha256:[0-9a-f]{64}/,
+  );
 });
 
 test('a browser job with no image, or one by tag alone, stops the run', () => {
   const withImage = (image) =>
-    JSON.stringify({ jobs: { [BROWSER_JOB]: image === undefined ? {} : { container: { image } } } });
+    JSON.stringify({
+      jobs: { [BROWSER_JOB]: image === undefined ? {} : { container: { image } } },
+    });
   assert.throws(() => playwrightImage(withImage(undefined)), /no digest-pinned Playwright image/);
   assert.throws(
     () => playwrightImage(withImage('mcr.microsoft.com/playwright:v1.58.2-noble')),
@@ -66,7 +71,10 @@ test("the spec's container gets the browser jobs' flags, the checkout read-only 
   const env = args.flatMap((arg, index) => (args[index - 1] === '-e' ? [arg] : []));
   assert.deepEqual(env, ['HOME=/tmp', ...PASSED_ENV]);
   for (const name of PASSED_ENV) assert.match(name, /^[A-Z_]+$/);
-  assert.doesNotMatch(text, /GITHUB_TOKEN|GH_TOKEN|ACTIONS_|SECRET|docker\.sock|--privileged|--cap-add|--env-file|--security-opt/);
+  assert.doesNotMatch(
+    text,
+    /GITHUB_TOKEN|GH_TOKEN|ACTIONS_|SECRET|docker\.sock|--privileged|--cap-add|--env-file|--security-opt/,
+  );
   // Then the image, and the demo-origin project alone, with the run's own arguments.
   const at = args.indexOf(image);
   assert.deepEqual(args.slice(at), [

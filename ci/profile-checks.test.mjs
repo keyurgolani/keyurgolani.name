@@ -525,7 +525,10 @@ test("the reference overlay layered over demo's example keeps #12's hardening an
     [(web) => void (web.volumes[0].read_only = false), 'the reference mount is writable'],
     [(web) => void delete web.volumes[0].read_only, 'the reference mount is writable'],
     [(web) => void (web.volumes[0].type = 'volume'), 'the reference is a volume mount, not a bind'],
-    [(web) => void (web.volumes[0].source = 'export'), 'the reference mount names no host directory'],
+    [
+      (web) => void (web.volumes[0].source = 'export'),
+      'the reference mount names no host directory',
+    ],
     [
       (web) => void web.volumes.push({ type: 'volume', source: 'data', target: '/data' }),
       'web mounts /data beside the reference',

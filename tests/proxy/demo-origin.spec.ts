@@ -30,7 +30,9 @@ const ROW = [
 
 test.beforeAll(() => {
   if (!PORT || !PASSWORD) {
-    throw new Error('ci/demo-origin.mjs starts the stack and sets DEMO_ORIGIN_PORT and DEMO_ORIGIN_PASSWORD');
+    throw new Error(
+      'ci/demo-origin.mjs starts the stack and sets DEMO_ORIGIN_PORT and DEMO_ORIGIN_PASSWORD',
+    );
   }
 });
 
@@ -44,10 +46,10 @@ interface Answer {
 /** `fetch(pathname, init)` from `page`, as its own script sends it, and what the server answered. */
 async function sent(page: Page, url: string, init: RequestInit = {}): Promise<Answer> {
   const answered = page.waitForResponse((response) => response.url() === url);
-  await page.evaluate(([target, options]) => fetch(target!, options as RequestInit).catch(() => null), [
-    url,
-    init,
-  ] as const);
+  await page.evaluate(
+    ([target, options]) => fetch(target!, options as RequestInit).catch(() => null),
+    [url, init] as const,
+  );
   const response = await answered;
   const body = (await response.json().catch(() => null)) as { error?: { code?: string } } | null;
   return {
@@ -74,7 +76,10 @@ async function signedIn(browser: Browser) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ password }),
     });
-    return { status: response.status, body: (await response.json()) as { data?: { csrfToken?: string } } };
+    return {
+      status: response.status,
+      body: (await response.json()) as { data?: { csrfToken?: string } },
+    };
   }, PASSWORD!);
   expect(answer.status, 'the owner signs in').toBe(200);
   const cookies = (await context.cookies(OWNER)).filter((cookie) => cookie.name === SESSION);
@@ -83,7 +88,8 @@ async function signedIn(browser: Browser) {
 }
 
 /** auth.session from the owner's origin: 200 while the owner's session stands. */
-const sessionStatus = async (page: Page) => (await sent(page, `${OWNER}/api/studio/auth.session`)).status;
+const sessionStatus = async (page: Page) =>
+  (await sent(page, `${OWNER}/api/studio/auth.session`)).status;
 
 test(
   'a studio_session cookie set with Domain=portfolio.test reaches no owner operation',
