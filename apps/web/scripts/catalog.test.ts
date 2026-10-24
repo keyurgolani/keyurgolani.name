@@ -137,7 +137,11 @@ test("seeded schemes keep the prototype anchors exactly, and anchor-v2 replaces 
     );
     const derivation = pack.manifest.provenance.derivation ?? '';
     assert.match(derivation, /^anchor-v2 from /, scheme.id);
-    assert.ok(derivation.endsWith(`adjustments lists the ${moves} roles it moves from anchor-v1.`));
+    const listed = moves === 1 ? 'the role' : `the ${moves} roles`;
+    assert.ok(
+      derivation.endsWith(`adjustments lists ${listed} it moves from anchor-v1.`),
+      scheme.id,
+    );
     // 2a's light nudges are undone, and the derivation says so.
     const nudges = (
       ANCHOR_ADJUSTMENTS as unknown as Record<string, Record<string, readonly [string, string]>>
@@ -154,8 +158,8 @@ test('the upstream palettes keep their credit under anchor-v2, which moves deriv
   const zinc = read.registry.packs.colorScheme.get('zinc')!.manifest;
   assert.equal(zinc.provenance.license, 'MIT');
   assert.match(zinc.provenance.attribution, /Tailwind Labs/);
-  assert.match(zinc.provenance.derivation!, /Tailwind CSS v3 zinc-50, zinc-900, zinc-600/);
-  assert.match(zinc.provenance.derivation!, /The anchors stay Tailwind's/);
+  assert.match(zinc.provenance.derivation!, /Tailwind CSS v3\.4\.17 zinc-50, zinc-900, zinc-600/);
+  assert.match(zinc.provenance.derivation!, /The anchors stay as credited/);
   assert.deepEqual(zinc.anchors!.light, {
     canvas: '#fafafa',
     text: '#18181b',
@@ -224,19 +228,13 @@ test('a recipe applies as its ordinary axis ids, one query, and a diagnostic for
     held.diagnostics[0]!.message,
     /^names a held design language: It fails check:appearance/,
   );
-  // Five of the eight recipes name a held language.
+  // Two of the eight recipes name a held language. paper-tactile and carbon-inspired ship since #20 PR 2c.
   const holding = readRecipes(REPO_ROOT).flatMap((recipe) =>
     reasons.has(`designLanguage:${recipe.selection.designLanguage}`)
       ? [`${recipe.id} ${recipe.selection.designLanguage}`]
       : [],
   );
-  assert.deepEqual(holding, [
-    'editorial-warmth paper-tactile',
-    'systems-clarity carbon-inspired',
-    'night-gallery atelier-luxury',
-    'cinematic-archive paper-tactile',
-    'neon-maker cyberpunk',
-  ]);
+  assert.deepEqual(holding, ['night-gallery atelier-luxury', 'neon-maker cyberpunk']);
 });
 
 test('the catalog query reads and writes as one URL form, and refuses what it cannot take', () => {
@@ -324,7 +322,7 @@ test('show gives the provenance, and an unavailable id its reason or the resolve
     zinc,
     /Source: Tailwind CSS v3\.4\.17 colors, https:\/\/github\.com\/tailwindlabs\/tailwindcss\/blob\/v3\.4\.17\/src\/public\/colors\.js/,
   );
-  assert.match(zinc, /Version: 1\.0\.1/);
+  assert.match(zinc, /Version: 1\.1\.0/);
   assert.match(zinc, /License: MIT/);
   assert.match(zinc, /Attribution: Tailwind Labs/);
   assert.match(zinc, /Copyright: Copyright \(c\) Tailwind Labs, Inc\./);
