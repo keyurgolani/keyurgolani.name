@@ -37,7 +37,7 @@
   ],
   "caveats": [
     "Renders from the sets a draft save generates from the site's appearanceInputs entry and stores with the revision. Until a site has them, warm-parchment renders in its place.",
-    "Image-derived: it stays out of every build until the owner accepts its reference output, and a generated set waits for the owner too."
+    "Image-derived: it stays out of every build until the owner accepts its reference output, and a site's own output waits for the owner's approval before it publishes, as #113's derived changes do."
   ],
   "generator": {
     "id": "profile-image",
