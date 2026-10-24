@@ -101,6 +101,7 @@ export async function NotFoundBody({
         site,
         composition.rendered.manifest.id,
         undefined,
+        false,
         served?.schemes,
       )}
       main="main"
