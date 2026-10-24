@@ -85,7 +85,10 @@ const VIEW = (() => {
   const surround = 2;
   const f = 0.8 + surround / 10;
   const c = 0.59 + (0.69 - 0.59) * ((f - 0.9) * 10);
-  const d = Math.min(1, Math.max(0, f * (1 - (1 / 3.6) * Math.exp((-adaptingLuminance - 42) / 92))));
+  const d = Math.min(
+    1,
+    Math.max(0, f * (1 - (1 / 3.6) * Math.exp((-adaptingLuminance - 42) / 92))),
+  );
   const white = times(CAT16, WHITE_POINT);
   const rgbD = white.map((channel) => d * (100 / channel) + 1 - d) as unknown as Vector;
   const k = 1 / (5 * adaptingLuminance + 1);
@@ -192,7 +195,10 @@ export const CLIP_TONE = 0.5;
 
 /** How far linear sRGB falls outside its cube, 0 inside it. */
 function excess(xyz: Vector): number {
-  return Math.max(0, ...times(XYZ_TO_SRGB, xyz).map((component) => Math.max(component - 100, -component)));
+  return Math.max(
+    0,
+    ...times(XYZ_TO_SRGB, xyz).map((component) => Math.max(component - 100, -component)),
+  );
 }
 
 /** Within the cube, allowing for float error. */
@@ -253,6 +259,9 @@ export function fromHct(hue: number, chroma: number, tone: number): string {
 }
 
 /** A tonal palette: one hue and chroma, any tone. */
-export function tone(palette: { readonly hue: number; readonly chroma: number }, at: number): string {
+export function tone(
+  palette: { readonly hue: number; readonly chroma: number },
+  at: number,
+): string {
   return fromHct(palette.hue, palette.chroma, at);
 }

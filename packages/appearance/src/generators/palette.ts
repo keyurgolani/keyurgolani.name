@@ -91,7 +91,13 @@ export function imagePalette(raster: Raster): ExtractedColor[] {
       cluster.green += bin.green;
       cluster.blue += bin.blue;
     } else {
-      clusters.push({ seed: color, count: bin.count, red: bin.red, green: bin.green, blue: bin.blue });
+      clusters.push({
+        seed: color,
+        count: bin.count,
+        red: bin.red,
+        green: bin.green,
+        blue: bin.blue,
+      });
     }
   }
   return clusters
@@ -99,7 +105,11 @@ export function imagePalette(raster: Raster): ExtractedColor[] {
       const color = mean(cluster);
       const share = cluster.count / total;
       const amount = chroma(color);
-      return { hex: color, share: round4(share), score: amount < MIN_CHROMA ? 0 : round4(share * amount) };
+      return {
+        hex: color,
+        share: round4(share),
+        score: amount < MIN_CHROMA ? 0 : round4(share * amount),
+      };
     })
     .sort((a, b) => b.score - a.score || b.share - a.share || (a.hex < b.hex ? -1 : 1))
     .slice(0, KEPT);
