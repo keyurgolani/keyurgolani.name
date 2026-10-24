@@ -6,15 +6,20 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
+  API_MAX_BYTES,
   BACKOFF_MS,
   catalogEntries,
+  cell,
   checkProvenance,
   copyrightLines,
   detectSpdx,
+  DEADLINE_MS,
   githubPin,
+  LICENSE_MAX_BYTES,
   main,
   MAX_REDIRECTS,
   recordFor,
+  renderSummary,
   tokenFor,
 } from './check-catalog-provenance.mjs';
 import { REPO_ROOT } from './lib/reports.mjs';
@@ -116,16 +121,27 @@ function tree({ zinc = {}, research = SELF, generatedFile = 'example-media/one.p
   write(path.join(root, 'example-media', 'one.png'), 'png');
   pkg('appearance-typography', 'typography');
   pack('appearance-typography', 'packs', 'humanist-ui', provenance(SELF));
-  // A fixture package, by its flag and by its name: never read.
+  // Fixture packages, by the registry's flag alone, whatever their names:
+  // never read, an upstream-licensed pack among them.
   pkg('appearance-fixtures-schemes', 'color-scheme', { fixture: true });
-  pack('appearance-fixtures-schemes', 'packs', 'fixture-seed', provenance(FIXTURE_URL));
+  pack(
+    'appearance-fixtures-schemes',
+    'packs',
+    'fixture-dark-only',
+    provenance(FIXTURE_URL, { license: 'MIT', copyright: 'Copyright (c) Fixture' }),
+  );
   write(path.join(root, 'packages', 'appearance-fixtures-schemes', 'research', 'r.json'), {
     id: 'fixture-research',
     kind: 'color-scheme',
     source: { name: 'x', url: FIXTURE_URL },
   });
-  pkg('quality-fixtures-languages', 'design-language');
-  pack('quality-fixtures-languages', 'packs', 'fixture-language', provenance(FIXTURE_URL));
+  pkg('appearance-samples', 'typography', { fixture: true });
+  pack(
+    'appearance-samples',
+    'packs',
+    'fixture-font',
+    provenance(FIXTURE_URL, { license: 'OFL-1.1', copyright: 'Copyright 2026 Fixture' }),
+  );
   // A variant isn't a pack package.
   write(path.join(root, 'packages', 'variant-x', 'package.json'), {
     name: '@portfolio/variant-x',
@@ -195,8 +211,12 @@ async function run(root, routes, options = {}) {
     root,
     fetchImpl: net.fetchImpl,
     lookupImpl: options.lookupImpl ?? publicDns,
-    sleep: async (ms) => sleeps.push(ms),
+    sleep: async (ms) => {
+      sleeps.push(ms);
+      options.onSleep?.(ms);
+    },
     token: options.token,
+    ...options.client,
   });
   return { ...result, net, sleeps };
 }
@@ -241,7 +261,22 @@ test('it reads shipping, held, Research, and generated entries, and never a fixt
 });
 
 test("on next's own tree it reads the shipping packs and no fixture", () => {
-  const { sources } = catalogEntries(REPO_ROOT);
+  const { sources, upstream } = catalogEntries(REPO_ROOT);
+  // The two upstream-licensed fixture packs skip on their packages' fixture flag.
+  for (const [dir, id] of [
+    ['appearance-fixtures-schemes', 'fixture-dark-only'],
+    ['appearance-fixtures-typography', 'fixture-font'],
+  ]) {
+    const pkg = JSON.parse(
+      readFileSync(path.join(REPO_ROOT, 'packages', dir, 'package.json'), 'utf8'),
+    );
+    assert.equal(pkg.portfolio.fixture, true, dir);
+    const manifest = JSON.parse(
+      readFileSync(path.join(REPO_ROOT, 'packages', dir, 'packs', id, 'manifest.json'), 'utf8'),
+    );
+    assert.ok(['MIT', 'Apache-2.0', 'OFL-1.1'].includes(manifest.provenance.license), id);
+    assert.ok(!upstream.some((u) => u.pack === id), id);
+  }
   assert.ok(sources.length >= 3);
   for (const s of sources) {
     assert.match(s.asset, /^packages\/appearance-(languages|schemes|typography)\//, s.asset);
@@ -845,7 +880,7 @@ test('failing findings are failure records that match the schema; informational 
     const text = logs.join('\n');
     assert.match(text, /::warning title=catalog-provenance::unverified: warm-parchment/);
     assert.match(text, /::warning title=catalog-provenance::newer-upstream: zinc/);
-    assert.match(text, /\| newer-upstream \| zinc \| colorScheme \|/);
+    assert.match(text, /\| ` newer-upstream ` \| ` zinc ` \| ` colorScheme ` \|/);
   } finally {
     rmSync(root, { recursive: true, force: true });
     rmSync(reports, { recursive: true, force: true });
@@ -954,4 +989,264 @@ test('a pin is a GitHub source at a version tag', () => {
   assert.equal(githubPin(SELF), null);
   assert.equal(githubPin('https://github.com/o/r/blob/main/x.js'), null);
   assert.equal(githubPin('https://gitlab.com/o/r/-/blob/v1.0.0/x'), null);
+});
+
+// --- the review's fix round -----------------------------------------------
+
+/** A body that never ends, counting the chunks read from it. */
+function endless(chunkBytes = 64 * 1024) {
+  let pulls = 0;
+  const stream = new ReadableStream({
+    pull(controller) {
+      pulls++;
+      controller.enqueue(new Uint8Array(chunkBytes).fill(97));
+    },
+  });
+  return { stream, pulls: () => pulls };
+}
+
+test('F1: a license file past 1 MiB is unverified, and its stream is cancelled at the cap', async () => {
+  assert.equal(LICENSE_MAX_BYTES, 1024 * 1024);
+  const root = tree();
+  try {
+    const body = endless();
+    const { findings } = await run(root, {
+      [RAW_LICENSE]: () => new Response(body.stream, { status: 200 }),
+    });
+    assert.deepEqual(kinds(findings), ['unverified zinc provenance.source.url']);
+    assert.match(findings[0].actual, /LICENSE sent more than 1048576 bytes/);
+    // 16 chunks fill the cap, the 17th passes it, and nothing more is read.
+    assert.ok(body.pulls() <= 18, `${body.pulls()} chunks read`);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('F1: a declared length past the cap is refused without reading the body', async () => {
+  const root = tree();
+  try {
+    const body = endless();
+    const { findings } = await run(root, {
+      [RAW_LICENSE]: () =>
+        new Response(body.stream, {
+          status: 200,
+          headers: { 'content-length': String(LICENSE_MAX_BYTES + 1) },
+        }),
+    });
+    assert.deepEqual(kinds(findings), ['unverified zinc provenance.source.url']);
+    assert.ok(body.pulls() <= 1, `${body.pulls()} chunks read`);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('F1: API JSON is read up to 4 MiB, and past that is unverified', async () => {
+  assert.equal(API_MAX_BYTES, 4 * 1024 * 1024);
+  const root = tree();
+  try {
+    const big = JSON.stringify({ tag_name: 'v4.1.0', pad: 'x'.repeat(2 * 1024 * 1024) });
+    const ok = await run(root, { [LATEST]: () => response(200, { text: big }) });
+    assert.deepEqual(kinds(ok.findings), ['newer-upstream zinc provenance.source.url']);
+    const body = endless();
+    const over = await run(root, {
+      [LATEST]: () => new Response(body.stream, { status: 200 }),
+    });
+    assert.deepEqual(kinds(over.findings), ['unverified zinc provenance.source.url']);
+    assert.match(over.findings[0].actual, /sent more than 4194304 bytes/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('F1: a status check reads no body, however long it is', async () => {
+  const root = tree({ research: 'https://nordtheme.com/' });
+  try {
+    const body = endless();
+    const { findings } = await run(root, {
+      'https://nordtheme.com/': (init) =>
+        init.method === 'HEAD' ? response(405) : new Response(body.stream, { status: 200 }),
+    });
+    assert.deepEqual(kinds(findings), []);
+    assert.ok(body.pulls() <= 2, `${body.pulls()} chunks read`);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('F2: a redirect to a link-local address, or to a name resolving to a private one, is refused', async () => {
+  for (const [location, lookupImpl] of [
+    ['https://169.254.169.254/latest/meta-data/', publicDns],
+    [
+      'https://internal.nordtheme.com/',
+      async (host) =>
+        host === 'internal.nordtheme.com'
+          ? [{ address: '::ffff:10.0.0.1', family: 6 }]
+          : publicDns(),
+    ],
+  ]) {
+    const root = tree({ research: 'https://nordtheme.com/' });
+    try {
+      const { findings, net } = await run(
+        root,
+        { 'https://nordtheme.com/': () => response(302, { location }) },
+        { lookupImpl },
+      );
+      assert.deepEqual(kinds(findings), ['unverified nord source.url'], location);
+      assert.match(findings[0].actual, /^not requested: /, location);
+      assert.ok(!net.requests.some((r) => r.url === location), `${location} is never requested`);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test('F3: a host that slow-walks its redirects is dead at the 60 s deadline', async () => {
+  assert.equal(DEADLINE_MS, 60_000);
+  const root = tree({ research: 'https://nordtheme.com/' });
+  try {
+    let clock = 0;
+    const slow = {};
+    // Each hop takes 13 s, under the 12 s timeout's reach of a stub, and five
+    // redirects end in a 200: without the deadline that's an answer at 78 s.
+    for (const [from, handler] of Object.entries(chain(MAX_REDIRECTS))) {
+      slow[from] = (init, n) => {
+        clock += 13_000;
+        return handler(init, n);
+      };
+    }
+    const { findings, net } = await run(root, slow, {
+      onSleep: (ms) => (clock += ms),
+      client: { now: () => clock },
+    });
+    assert.deepEqual(kinds(findings), ['dead nord source.url']);
+    assert.match(findings[0].actual, /no answer within 60 s/);
+    assert.ok(
+      !net.requests.some((r) => r.url === `https://nordtheme.com/${MAX_REDIRECTS}`),
+      'the hop past the deadline is never requested',
+    );
+    assert.ok(clock <= DEADLINE_MS + 13_000, `${clock} ms spent`);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('F3: retries and their backoff share the one deadline', async () => {
+  const root = tree({ research: 'https://nordtheme.com/' });
+  try {
+    let clock = 0;
+    const { findings, net } = await run(
+      root,
+      {
+        'https://nordtheme.com/': () => {
+          clock += 15_000;
+          return response(503);
+        },
+      },
+      { onSleep: (ms) => (clock += ms), client: { now: () => clock } },
+    );
+    assert.deepEqual(kinds(findings), ['dead nord source.url']);
+    // HEAD and GET take 30 s an attempt, so a second fits and a third doesn't.
+    assert.match(findings[0].actual, /answered 503 after 2 attempts/);
+    assert.equal(net.requests.filter((r) => r.url === 'https://nordtheme.com/').length, 4);
+    assert.ok(clock <= DEADLINE_MS + 15_000, `${clock} ms spent`);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('F3: a DNS lookup that never answers times out with the request', async () => {
+  const root = tree({ research: 'https://nordtheme.com/' });
+  try {
+    const { findings, net } = await run(
+      root,
+      {},
+      {
+        lookupImpl: (host) => (host === 'nordtheme.com' ? new Promise(() => {}) : publicDns()),
+        client: { timeoutMs: 20 },
+      },
+    );
+    assert.deepEqual(kinds(findings), ['dead nord source.url']);
+    assert.match(findings[0].actual, /timed out after 0\.02 s after 3 attempts/);
+    assert.ok(!net.requests.some((r) => r.url === 'https://nordtheme.com/'));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('F4: every summary cell is a code span, so upstream text never renders', () => {
+  const hostile = 'a **bold** <img src=x onerror=alert(1)> [link](https://x.test) `tick` | pipe';
+  assert.equal(
+    cell(hostile),
+    '`` a **bold** <img src=x onerror=alert(1)> [link](https://x.test) `tick` \\| pipe ``',
+  );
+  assert.equal(cell('two\nlines'), '` two lines `');
+  assert.equal(cell(undefined), '');
+  const summary = renderSummary({
+    findings: [
+      {
+        kind: 'unverified',
+        pack: 'zinc',
+        axis: 'colorScheme',
+        field: 'provenance.source.url',
+        url: 'https://nordtheme.com/',
+        actual: hostile,
+      },
+    ],
+    checked: { urls: 1, packs: 1 },
+  });
+  const row = summary.split('\n').find((line) => line.includes('zinc'));
+  assert.equal(
+    row,
+    `| ${['unverified', 'zinc', 'colorScheme', 'provenance.source.url', 'https://nordtheme.com/', undefined, hostile].map(cell).join(' | ')} |`,
+  );
+});
+
+test('F5: a license file reads as its primary license, whatever notices it bundles', () => {
+  const NOTICE_APACHE = '\nThird-party notice: parts are under the Apache License, Version 2.0.\n';
+  const NOTICE_OFL = '\nIt bundles a font under the SIL Open Font License, Version 1.1.\n';
+  assert.equal(detectSpdx(MIT + NOTICE_APACHE + NOTICE_OFL), 'MIT');
+  assert.equal(detectSpdx(APACHE + MIT), 'Apache-2.0');
+  assert.equal(detectSpdx(OFL + MIT), 'OFL-1.1');
+  assert.equal(detectSpdx(`${MIT}\nSPDX-License-Identifier: Apache-2.0\n`), 'MIT');
+  assert.equal(detectSpdx(`SPDX-License-Identifier: MIT\n${APACHE}`), 'MIT');
+});
+
+test('F5: an MIT license file bundling an Apache notice is no drift', async () => {
+  const root = tree();
+  try {
+    const { findings } = await run(root, {
+      [RAW_LICENSE]: () =>
+        response(200, {
+          text: `${MIT}\nThis bundles code under the Apache License, Version 2.0.\n`,
+        }),
+    });
+    assert.deepEqual(kinds(findings), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('F6: a package is skipped on its fixture flag alone, not its name', () => {
+  const root = tree();
+  try {
+    // Named like a fixture, flagged as none: it's the catalog's, so it's read.
+    write(path.join(root, 'packages', 'appearance-fixture-lookalike', 'package.json'), {
+      name: '@portfolio/appearance-fixture-lookalike',
+      portfolio: { kind: 'color-scheme', packs: './packs' },
+    });
+    write(
+      path.join(root, 'packages', 'appearance-fixture-lookalike', 'packs', 'dune', 'manifest.json'),
+      { id: 'dune', provenance: provenance('https://nordtheme.com/dune') },
+    );
+    const { sources, upstream } = catalogEntries(root);
+    assert.ok(sources.some((s) => s.pack === 'dune'));
+    // Flagged, whatever the name: the two upstream-licensed fixture packs skip.
+    assert.ok(!sources.some((s) => s.url === FIXTURE_URL));
+    assert.deepEqual(
+      upstream.map((u) => u.pack),
+      ['zinc'],
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

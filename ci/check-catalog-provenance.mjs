@@ -4,7 +4,8 @@
 //
 // It reads the catalog's own packages, never a fixture package: each pack
 // package under packages/ (a package.json `portfolio.kind` of
-// design-language, color-scheme, or typography, and no `fixture`), its
+// design-language, color-scheme, or typography, without the registry's
+// `fixture: true`), its
 // shipping packs (packs/), its held packs (held/), its Research records
 // (research/), and its generated schemes' records (generated/). Then:
 //
@@ -31,8 +32,13 @@
 // newer-upstream don't fail: they go to the job summary and the log only,
 // since the report shows every record it finds as a failure.
 //
-// Requests are https only, at most 4 at once, each with a 12 s timeout, no
-// cookies, and no credentials, with redirects followed by hand. GITHUB_TOKEN,
+// Requests are https only, at most 4 URLs at once, with no cookies and no
+// credentials, and redirects followed by hand. Each request, its DNS lookup
+// included, has a 12 s timeout, and each URL one 60 s deadline across every
+// attempt, hop, and backoff, so a host that answers slowly can't stretch the
+// job. A body is read only up to its cap (1 MiB for a license file, 4 MiB
+// for API JSON), and past it the stream is cancelled and the answer is
+// unverified; a status check reads no body at all. GITHUB_TOKEN,
 // when set, goes to api.github.com alone, never to another host or a
 // redirect off it, and never into a log, a record, or the summary. Without
 // one, each repository's API answers are cached for the run, so the
@@ -62,6 +68,10 @@ export const MAX_REDIRECTS = 5;
 export const RETRIES = 2;
 export const BACKOFF_MS = Object.freeze([2_000, 5_000]);
 export const TIMEOUT_MS = 12_000;
+/** One URL's whole budget: every attempt, hop, and backoff. */
+export const DEADLINE_MS = 60_000;
+export const LICENSE_MAX_BYTES = 1024 * 1024;
+export const API_MAX_BYTES = 4 * 1024 * 1024;
 export const CONCURRENCY = 4;
 export const API = 'https://api.github.com';
 const RAW = 'https://raw.githubusercontent.com';
@@ -149,7 +159,8 @@ export function catalogEntries(root = REPO_ROOT) {
     if (!existsSync(pkgFile)) continue;
     const portfolio = readJson(pkgFile).portfolio;
     const axis = AXES[portfolio?.kind];
-    if (!axis || portfolio.fixture === true || /fixture/.test(dir)) continue;
+    // The registry's rule (apps/web/scripts/fixture-gate.ts): the flag, not the name.
+    if (!axis || portfolio.fixture === true) continue;
     const base = path.join(packages, dir);
     const packsDir = path.resolve(base, portfolio.packs ?? './packs');
     for (const packs of [packsDir, path.join(base, 'held')]) {
@@ -221,20 +232,34 @@ export function catalogEntries(root = REPO_ROOT) {
   return { sources, upstream, files };
 }
 
-/** The SPDX identifier a license file's text is, among the upstream ones, or null. */
+/**
+ * The SPDX identifier of a license file's primary license, among the
+ * upstream ones, or null: whichever license, or SPDX tag, the text starts
+ * first, so a LICENSE that bundles another's notice after its own reads as
+ * its own.
+ */
 export function detectSpdx(text) {
-  const tagged = /SPDX-License-Identifier:\s*([A-Za-z0-9.+-]+)/.exec(text);
-  if (tagged) return tagged[1];
   const t = String(text).replace(/\s+/g, ' ');
-  if (/SIL OPEN FONT LICENSE,? Version 1\.1/i.test(t)) return 'OFL-1.1';
-  if (/Apache License,? Version 2\.0/i.test(t)) return 'Apache-2.0';
-  if (
-    /Permission is hereby granted, free of charge, to any person obtaining a copy/i.test(t) &&
-    /The above copyright notice and this permission notice shall be included/i.test(t)
-  ) {
-    return 'MIT';
-  }
-  return null;
+  const at = (re) => {
+    const m = re.exec(t);
+    return m ? m.index : Infinity;
+  };
+  const grant = at(/Permission is hereby granted, free of charge, to any person obtaining a copy/i);
+  const mit =
+    grant !== Infinity &&
+    /The above copyright notice and this permission notice shall be included/i.test(t.slice(grant))
+      ? grant
+      : Infinity;
+  const tag = /SPDX-License-Identifier:\s*([A-Za-z0-9.+-]+)/.exec(t);
+  const [first] = [
+    [tag?.[1], tag ? tag.index : Infinity],
+    ['OFL-1.1', at(/SIL OPEN FONT LICENSE,? Version 1\.1/i)],
+    ['Apache-2.0', at(/Apache License,? Version 2\.0/i)],
+    ['MIT', mit],
+  ]
+    .filter(([, index]) => index !== Infinity)
+    .sort((a, b) => a[1] - b[1]);
+  return first ? first[0] : null;
 }
 
 /** A license file's copyright lines, its templates' placeholders left out. */
@@ -250,6 +275,7 @@ const normalizeCopyright = (line) =>
 
 class Refused extends Error {}
 class TooManyRedirects extends Error {}
+class DeadlineExceeded extends Error {}
 
 const isIPv4 = (host) => /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host);
 
@@ -284,12 +310,35 @@ export function client({
   fetchImpl = fetch,
   lookupImpl = (host) => lookup(host, { all: true, verbatim: true }),
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  now = Date.now,
   token,
   timeoutMs = TIMEOUT_MS,
+  deadlineMs = DEADLINE_MS,
 } = {}) {
   const redact = (text) => (token ? String(text).split(token).join('***') : String(text));
 
-  const admit = async (url) => {
+  /** What's left of `deadline`, at most one request's timeout; throws when nothing is. */
+  const budget = (deadline) => {
+    const left = deadline - now();
+    if (left <= 0) throw new DeadlineExceeded(`no answer within ${deadlineMs / 1000} s`);
+    return Math.min(timeoutMs, left);
+  };
+
+  /** `promise`, or a TimeoutError after `ms`, with the timer cleared either way. */
+  const within = (promise, ms) => {
+    let timer;
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(
+          () => reject(new DOMException(`timed out after ${ms} ms`, 'TimeoutError')),
+          ms,
+        );
+      }),
+    ]).finally(() => clearTimeout(timer));
+  };
+
+  const admit = async (url, deadline) => {
     let u;
     try {
       u = new URL(url);
@@ -301,7 +350,8 @@ export function client({
     if (!publicHost(u.hostname)) throw new Refused(`${u.hostname} is a host this check refuses`);
     const host = u.hostname.replace(/\.+$/, '');
     if (host.startsWith('[') || isIPv4(host)) return;
-    const addresses = await lookupImpl(host);
+    // The lookup has no timeout of its own, so it gets the request's.
+    const addresses = await within(Promise.resolve(lookupImpl(host)), budget(deadline));
     for (const { address, family } of addresses) {
       if (family === 6 ? privateIPv6(address) : privateIPv4(address)) {
         throw new Refused(`${host} resolves to a private address`);
@@ -317,11 +367,35 @@ export function client({
     }
   };
 
+  /** The body as text, or null past `maxBytes`, where its stream is cancelled. */
+  const readCapped = async (response, maxBytes) => {
+    const length = Number(response.headers?.get?.('content-length'));
+    if (Number.isFinite(length) && length > maxBytes) {
+      await discard(response);
+      return null;
+    }
+    const reader = response.body?.getReader?.();
+    if (!reader) return '';
+    const chunks = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => {});
+        return null;
+      }
+      chunks.push(value);
+    }
+    return new TextDecoder().decode(Buffer.concat(chunks));
+  };
+
   /** One request, redirects followed by hand: { status, response, url }. */
-  const request = async (start, { method = 'GET', accept } = {}) => {
+  const request = async (start, { method = 'GET', accept, deadline }) => {
     let url = start;
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-      await admit(url);
+      await admit(url, deadline);
       const headers = { 'user-agent': USER_AGENT };
       if (accept) headers.accept = accept;
       const bearer = tokenFor(url, token);
@@ -334,7 +408,7 @@ export function client({
         headers,
         redirect: 'manual',
         credentials: 'omit',
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: AbortSignal.timeout(budget(deadline)),
       });
       const location = response.headers?.get?.('location');
       if (response.status >= 300 && response.status < 400 && location) {
@@ -365,12 +439,20 @@ export function client({
     return { kind: 'unverified', status, reason: `answered ${status}` };
   };
 
-  /** Runs `attempt` until it needs no retry, at most RETRIES more times, with backoff. */
+  /**
+   * Runs `attempt` until it needs no retry, at most RETRIES more times, with
+   * backoff, all within one deadline: a backoff that won't fit stops there.
+   */
   const withRetries = async (attempt) => {
+    const deadline = now() + deadlineMs;
     let result;
     for (let n = 0; n <= RETRIES; n++) {
-      if (n > 0) await sleep(BACKOFF_MS[n - 1] ?? BACKOFF_MS.at(-1));
-      result = await attempt();
+      if (n > 0) {
+        const wait = BACKOFF_MS[n - 1] ?? BACKOFF_MS.at(-1);
+        if (deadline - now() <= wait) return { ...result, attempts: n };
+        await sleep(wait);
+      }
+      result = await attempt(deadline);
       if (!result.retry) return { ...result, attempts: n + 1 };
     }
     return { ...result, attempts: RETRIES + 1 };
@@ -380,18 +462,20 @@ export function client({
     if (error instanceof Refused) {
       return { kind: 'unverified', reason: `not requested: ${redact(error.message)}` };
     }
-    if (error instanceof TooManyRedirects) return { kind: 'dead', reason: error.message };
+    if (error instanceof TooManyRedirects || error instanceof DeadlineExceeded) {
+      return { kind: 'dead', reason: error.message };
+    }
     return { kind: 'dead', retry: true, reason: failure(error) };
   };
 
-  /** The dead-URL check: { kind: ok | dead | unverified, status?, reason?, attempts }. */
+  /** The dead-URL check, reading no body: { kind: ok | dead | unverified, status?, reason?, attempts }. */
   const probe = (url) =>
-    withRetries(async () => {
+    withRetries(async (deadline) => {
       try {
-        let answer = await request(url, { method: 'HEAD' });
+        let answer = await request(url, { method: 'HEAD', deadline });
         if (answer.status < 200 || answer.status >= 300) {
           await discard(answer.response);
-          answer = await request(url, { method: 'GET' });
+          answer = await request(url, { method: 'GET', deadline });
         }
         await discard(answer.response);
         return classify(answer.status);
@@ -400,18 +484,22 @@ export function client({
       }
     });
 
-  /** A GET whose body is read: { kind, status?, reason?, text? }. */
-  const getText = (url, accept) =>
-    withRetries(async () => {
+  /** A GET whose body is read, up to `maxBytes`: { kind, status?, reason?, text? }. */
+  const getText = (url, { accept, maxBytes = LICENSE_MAX_BYTES } = {}) =>
+    withRetries(async (deadline) => {
       try {
-        const answer = await request(url, { method: 'GET', accept });
+        const answer = await request(url, { method: 'GET', accept, deadline });
         const status = classify(answer.status);
         if (status.kind !== 'ok') {
           await discard(answer.response);
           // A missing file is an answer, not a transient failure, for a read.
           return answer.status === 404 ? { ...status, retry: false } : status;
         }
-        return { ...status, text: await answer.response.text() };
+        const text = await readCapped(answer.response, maxBytes);
+        if (text === null) {
+          return { kind: 'unverified', reason: `sent more than ${maxBytes} bytes` };
+        }
+        return { ...status, text };
       } catch (error) {
         return caught(error);
       }
@@ -443,7 +531,11 @@ function upstreamChecker(http) {
   const tags = new Map();
   const latest = new Map();
   const licenses = new Map();
-  const api = (route) => http.getText(`${API}${route}`, 'application/vnd.github+json');
+  const api = (route) =>
+    http.getText(`${API}${route}`, {
+      accept: 'application/vnd.github+json',
+      maxBytes: API_MAX_BYTES,
+    });
   const json = (answer) => {
     try {
       return JSON.parse(answer.text);
@@ -665,10 +757,21 @@ export function recordFor(f, gate) {
   };
 }
 
-const cell = (text) =>
-  String(text ?? '')
+/**
+ * One job-summary cell as a code span, as the report's issueCell writes
+ * them, so upstream text never renders as Markdown, HTML, or a link: line
+ * breaks become spaces, `|` is escaped, and the fence is one backtick longer
+ * than any run inside.
+ */
+export function cell(value) {
+  if (value === undefined || value === null || value === '') return '';
+  const text = String(value)
     .replace(/\r\n|\r|\n/g, ' ')
     .replace(/\|/g, '\\|');
+  const longest = Math.max(0, ...[...text.matchAll(/`+/g)].map((m) => m[0].length));
+  const fence = '`'.repeat(longest + 1);
+  return `${fence} ${text} ${fence}`;
+}
 
 export function renderSummary({ findings, checked }) {
   const failing = findings.filter((f) => FAILING.includes(f.kind));
