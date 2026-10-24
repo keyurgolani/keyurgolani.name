@@ -59,12 +59,6 @@ export interface OpenedGrant {
   readonly renderedVersion: number | null;
   /** What a log line calls the grant: the first 8 hex characters of its digest. */
   readonly ref: string;
-  /**
-   * The generated schemes its subject stored (#20 PR 3), as read and
-   * unchecked: a revision's or fixture's `snapshots.schemes`, a draft's
-   * `derived.schemes`. A draft has none until #10's draft save stores them.
-   */
-  readonly schemes?: unknown;
 }
 
 /** The grants, as the owner composition binds them into the deployment state (#7, Slice 2). */
