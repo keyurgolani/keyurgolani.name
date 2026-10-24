@@ -210,6 +210,7 @@ test("runtime-budgets.json's forbidden block holds Studio's, the preview's, and 
       'apps/web/src/app/(preview)/**',
       'apps/web/src/preview/**',
       'apps/web/src/server/demo/**',
+      'apps/web/src/lib/demo/**',
     ],
   );
 });
