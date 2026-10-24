@@ -216,39 +216,58 @@ export function staticPlan(
 const key = (tuple: Tuple) =>
   `${tuple.variant}/${tuple.designLanguage}/${tuple.colorScheme}/${tuple.typography}/${tuple.displayMode}`;
 
+/** Tuples sorted by key, each key built once. */
+function byKey(tuples: readonly Tuple[]): Tuple[] {
+  return tuples
+    .map((tuple) => [key(tuple), tuple] as const)
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([, tuple]) => tuple);
+}
+
 /**
  * Every shipping pack at least once per variant and per display mode: for
  * each variant and mode, the fewest tuples, chosen greedily from the
  * cross-product, that between them hold each language, scheme, and profile
  * the cross-product has there. Sorted, and the same each time.
+ *
+ * Each pick is the first tuple, in key order, that shows the most packs
+ * still unshown. No tuple shows more than one pack per axis still open, so
+ * the scan stops at the first that shows that many. It's linear in the
+ * cross-product per pick, which kept the unit job inside its timeout at
+ * 2d's 35 languages (#20).
  */
 export function coverageSample(tuples: readonly Tuple[]): Tuple[] {
   const groups = new Map<string, Tuple[]>();
   for (const tuple of tuples) {
     const at = `${tuple.variant}\0${tuple.displayMode}`;
-    groups.set(at, [...(groups.get(at) ?? []), tuple]);
+    const group = groups.get(at);
+    if (group) group.push(tuple);
+    else groups.set(at, [tuple]);
   }
   const chosen: Tuple[] = [];
   for (const group of groups.values()) {
-    const sorted = [...group].sort((a, b) => (key(a) < key(b) ? -1 : 1));
-    const uncovered = new Set(
-      sorted.flatMap((tuple) => PACK_AXES.map((axis) => `${axis}:${tuple[axis]}`)),
-    );
-    while (uncovered.size > 0) {
+    const sorted = byKey(group);
+    const unshown = PACK_AXES.map((axis) => new Set(sorted.map((tuple) => tuple[axis])));
+    const open = () => unshown.filter((packs) => packs.size > 0).length;
+    for (let most = open(); most > 0; most = open()) {
       let best = sorted[0]!;
       let gain = -1;
       for (const tuple of sorted) {
-        const covers = PACK_AXES.filter((axis) => uncovered.has(`${axis}:${tuple[axis]}`)).length;
-        if (covers > gain) {
+        let shows = 0;
+        PACK_AXES.forEach((axis, at) => {
+          if (unshown[at]!.has(tuple[axis])) shows += 1;
+        });
+        if (shows > gain) {
           best = tuple;
-          gain = covers;
+          gain = shows;
+          if (gain === most) break;
         }
       }
-      for (const axis of PACK_AXES) uncovered.delete(`${axis}:${best[axis]}`);
+      PACK_AXES.forEach((axis, at) => unshown[at]!.delete(best[axis]));
       chosen.push(best);
     }
   }
-  return chosen.sort((a, b) => (key(a) < key(b) ? -1 : 1));
+  return byKey(chosen);
 }
 
 /** The browser sample's seed, so a night's sample is the one a rerun gets. CATALOG_SEED overrides it. */
