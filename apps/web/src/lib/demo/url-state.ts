@@ -9,6 +9,25 @@ import { AXES, type AppearanceCatalog, type CatalogAxis } from '../studio/appear
 // own modes allow the display mode. Anything else falls back on that axis
 // to the sample's own value. Framework-free, so a test drives it.
 
+/**
+ * What the frame shows: the neutral sample, or the read-only reference (#9),
+ * which the page offers only when the server verified one at startup.
+ */
+export type DemoSource = 'sample' | 'reference';
+
+/** The Studio URL's key for the source. The frame's own path says it, so its URL never carries one. */
+export const SOURCE_KEY = 'source';
+
+/**
+ * The source `search` names: the reference only when the URL says exactly
+ * `source=reference` once and the page has one to show. Anything else, a
+ * reference the demo doesn't have included, is the sample.
+ */
+export function sourceFrom(search: URLSearchParams, hasReference: boolean): DemoSource {
+  const named = search.getAll(SOURCE_KEY);
+  return hasReference && named.length === 1 && named[0] === 'reference' ? 'reference' : 'sample';
+}
+
 /** The five values Demo Studio shows, by axis. */
 export type DemoSelection = Readonly<Record<CatalogAxis, string>>;
 
@@ -129,29 +148,37 @@ export function selectionQuery(selection: DemoSelection, rules: SelectionRules):
   return query;
 }
 
-/** The Studio page's own URL for `selection`: its path, the selection's query, and its task fragment. */
+/**
+ * The Studio page's own URL for `selection`: its path, the selection's
+ * query, `source=reference` while the reference shows, and its task fragment.
+ */
 export function studioLocation(
   pathname: string,
   hash: string,
   selection: DemoSelection,
   rules: SelectionRules,
+  source: DemoSource = 'sample',
 ): string {
-  const query = selectionQuery(selection, rules).toString();
+  const params = selectionQuery(selection, rules);
+  if (source === 'reference') params.set(SOURCE_KEY, 'reference');
+  const query = params.toString();
   return `${pathname}${query === '' ? '' : `?${query}`}${hash}`;
 }
 
 /**
- * Where a preview frame loads: /sample with the selection's canonical query,
- * and `motion=reduce` when the preview asks for reduced motion. Always a
- * path on Studio's own origin under /sample, never a grant's or /preview's.
+ * Where a preview frame loads: /sample, or /reference for the read-only
+ * reference, with the selection's canonical query, and `motion=reduce` when
+ * the preview asks for reduced motion. Always one of those two paths on
+ * Studio's own origin, never a grant's or /preview's.
  */
 export function frameSource(
   selection: DemoSelection,
   rules: SelectionRules,
-  options: { readonly reduceMotion?: boolean } = {},
+  options: { readonly reduceMotion?: boolean; readonly source?: DemoSource } = {},
 ): string {
   const query = selectionQuery(selection, rules);
   if (options.reduceMotion) query.set('motion', 'reduce');
   const text = query.toString();
-  return `/sample${text === '' ? '' : `?${text}`}`;
+  const path = options.source === 'reference' ? '/reference' : '/sample';
+  return `${path}${text === '' ? '' : `?${text}`}`;
 }

@@ -39,3 +39,17 @@ test('no line speaks of a draft, publishing, or the live site', () => {
     }
   }
 });
+
+test("while the reference shows, the Content line names it as read-only, and says nothing here changes that person's site (#9)", () => {
+  const [content] = demoStateLines(CATALOG, DEFAULTS, true, { name: 'Wren Halloway' });
+  assert.equal(content?.id, 'content');
+  assert.equal(
+    content?.text,
+    "Wren Halloway's published portfolio, a read-only snapshot. Nothing here changes Wren Halloway's site.",
+  );
+  assert.doesNotMatch(content?.text ?? '', /draft|publish |edit|save|update|owner/i);
+  assert.equal(
+    demoStateLines(CATALOG, DEFAULTS, true)[0]?.text,
+    'The neutral sample portfolio, read-only.',
+  );
+});

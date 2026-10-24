@@ -257,3 +257,22 @@ test('a stored selection reads back through the catalog, axis by axis', () => {
     variant: 'acme-orbit',
   });
 });
+
+test("showing the reference takes its own selection as the reset target, stores none of it, and a full reset goes back to the sample's (#9)", () => {
+  const { backend, local, session } = setup();
+  const own = { ...DEFAULTS, variant: 'acme-orbit' };
+  assert.deepEqual(backend.showSource(own), own);
+  assert.deepEqual(backend.selection(), own);
+  assert.equal(local.length + session.length, 0, 'nothing stored: a reload opens on the sample');
+  // An axis resets to the reference's own while it shows.
+  assert.deepEqual(backend.showSource(own, { ...own, variant: DEFAULTS.variant }), {
+    ...own,
+    variant: DEFAULTS.variant,
+  });
+  assert.deepEqual(backend.resetAxis('variant'), own);
+  // Back to the sample: its own selection, and its resets again.
+  assert.deepEqual(backend.showSource(null), DEFAULTS);
+  backend.showSource(own);
+  assert.deepEqual(backend.resetAll(), DEFAULTS);
+  assert.deepEqual(backend.resetAxis('variant'), DEFAULTS);
+});
