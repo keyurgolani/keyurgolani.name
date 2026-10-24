@@ -412,6 +412,8 @@ test('docs, deploy/, the Dockerfile, the sample config, the skills, and the comm
     'apps/web/bin/owner.mjs',
     'apps/web/scripts/portfolio-store.ts',
     'packages/core/src/cli.ts',
+    'packages/core/src/catalog/unit.ts',
+    'packages/core/src/audit/sink.ts',
     'ci/fresh-clone.mjs',
     'ci/lib/pending.mjs',
   ]) {
@@ -426,6 +428,8 @@ test('the rehearsal, the store, and the command lines select rehearsal', () => {
     'ci/fixtures/rehearsal/baseline/toml/portfolio.toml',
     'packages/core/src/store/publication.ts',
     'packages/core/src/cli.ts',
+    'packages/core/src/catalog/source.ts',
+    'packages/core/src/audit/sink.ts',
     'apps/web/scripts/portfolio-store.ts',
     'apps/web/scripts/config.mjs',
     'packages/schema/src/migrate/index.ts',

@@ -36,6 +36,14 @@ const LEGS = [
   { arch: 'arm64', runner: 'ubuntu-24.04-arm' },
 ];
 const stepsOf = (id) => JOBS[id].steps ?? [];
+/** A step that pushes or tags an image, in any form a workflow can write it. */
+const PUSHES =
+  /docker (push|tag)\b|--push\b|buildx (build|imagetools)|build-push-action|retag\.mjs|merge-index\.mjs/;
+/** rc-rehearsal's steps that build an image, by name. */
+const rehearsalBuilds = () =>
+  stepsOf('rc-rehearsal')
+    .filter((s) => /docker (build|buildx)|build-push-action/.test(`${s.run ?? ''} ${s.uses ?? ''}`))
+    .map((s) => s.name);
 const uses = (id, action) => stepsOf(id).filter((s) => (s.uses ?? '').startsWith(`${action}@`));
 const writes = (job) =>
   Object.entries(job.permissions ?? {})
@@ -166,7 +174,13 @@ test('each platform builds once, natively on its own runner, with mode=max prove
   // Nothing else builds an image, but rc-rehearsal's local one of the
   // tagged commit, which it never pushes (its own test, below).
   for (const id of Object.keys(JOBS)) {
-    if (id in BUILD_JOBS || id === 'rc-rehearsal') continue;
+    if (id in BUILD_JOBS) continue;
+    if (id === 'rc-rehearsal') {
+      // Its one local build, and nothing that pushes or tags it.
+      assert.deepEqual(rehearsalBuilds(), ['Build the image from the tagged commit'], id);
+      assert.doesNotMatch(JSON.stringify(JOBS[id]), PUSHES, id);
+      continue;
+    }
     assert.deepEqual(uses(id, 'docker/build-push-action'), [], id);
     assert.doesNotMatch(JSON.stringify(JOBS[id]), /docker (build|push) |buildx build /, id);
   }
@@ -471,8 +485,12 @@ test('rc-rehearsal rehearses an image of the tagged commit it builds itself, wit
   const text = JSON.stringify(job);
   assert.doesNotMatch(text, /secrets\.|github\.token|GITHUB_TOKEN|GH_TOKEN|ghcr\.io/);
   assert.deepEqual(uses('rc-rehearsal', 'docker/login-action'), []);
+  // Exactly one build, and no step that pushes or tags an image.
+  assert.deepEqual(rehearsalBuilds(), ['Build the image from the tagged commit']);
+  for (const step of stepsOf('rc-rehearsal')) {
+    assert.doesNotMatch(JSON.stringify(step), PUSHES, step.name ?? step.uses);
+  }
   const build = stepsOf('rc-rehearsal').find((s) => /docker build/.test(s.run ?? ''));
-  assert.ok(build, 'it builds the image');
   assert.match(build.run, /--no-cache/);
   assert.doesNotMatch(build.run, /--push|--cache-from|--cache-to/);
   assert.ok(build['timeout-minutes'] <= 25 && job['timeout-minutes'] > build['timeout-minutes']);
@@ -482,4 +500,20 @@ test('rc-rehearsal rehearses an image of the tagged commit it builds itself, wit
   assert.equal(job.env.REHEARSAL_IMAGE, 'portfolio:rehearsal');
   assert.match(build.run, /"\$REHEARSAL_IMAGE"/);
   assert.ok(JOBS['rc-tag'].needs.includes('rc-rehearsal'), 'no candidate is tagged without it');
+});
+
+test("rc-rehearsal's checks catch a push or a second build", () => {
+  for (const run of [
+    'docker push "$REHEARSAL_IMAGE"',
+    'docker tag portfolio:rehearsal ghcr.io/x/y:1',
+    'docker build --push -t x .',
+    'docker buildx build -t x .',
+    'node ci/release/retag.mjs "$IMAGE" "$DIGEST" 1.0.0',
+  ]) {
+    assert.match(run, PUSHES, run);
+  }
+  assert.doesNotMatch(
+    'docker build --no-cache --pull --platform linux/amd64 -t "$REHEARSAL_IMAGE" .',
+    PUSHES,
+  );
 });
