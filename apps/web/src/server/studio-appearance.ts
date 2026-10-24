@@ -70,7 +70,7 @@ function packOptions(
       tier: manifest.tier,
       provenance: [
         `${manifest.provenance.source.name}, ${manifest.provenance.license}`,
-        ...(manifest.provenance.caveats ?? []),
+        ...manifest.caveats,
       ],
       performance: manifest.budgets
         ? `${kb(manifest.budgets.css ?? 0)} of CSS${(manifest.budgets.font ?? 0) > 0 ? ` and ${kb(manifest.budgets.font ?? 0)} of fonts` : ''}`

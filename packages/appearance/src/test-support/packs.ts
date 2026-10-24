@@ -65,15 +65,29 @@ export const LIGHT_ONLY = shipped(
   'fixture-light-only',
 );
 export const SEED = shipped('color-scheme', 'appearance-fixtures-schemes', 'fixture-seed');
-export const RESEARCH = shipped('color-scheme', 'appearance-fixtures-schemes', 'fixture-research');
 export const FONT = shipped('typography', 'appearance-fixtures-typography', 'fixture-font');
 
 const provenance = {
-  source: { name: 'Keyur Golani portfolio platform' },
+  source: {
+    name: 'Keyur Golani portfolio platform',
+    url: 'https://github.com/keyurgolani/keyurgolani.name',
+  },
   license: 'first-party',
+  attribution: 'Keyur Golani, for the keyurgolani.name portfolio platform.',
   researchedAt: '2026-10-17',
   maintainer: 'keyurgolani',
 };
+
+/** #20's governance fields every test pack gives, for a scheme with both base modes. */
+export const GOVERNANCE = {
+  version: '1.0.0',
+  modes: ['light', 'dark'],
+  accessibility: { checks: ['contrast', 'hierarchy'] },
+  cost: { assets: 0, assetBytes: 0 },
+  budgets: { js: 0, css: 3072, image: 0, font: 0, animation: 0, enhancement: 0 },
+  fallbacks: ['High contrast renders the sets high-contrast-v1 derives.'],
+  caveats: [],
+} as const satisfies Partial<ColorSchemeManifest>;
 
 const MONO = '"SFMono-Regular", Consolas, "Liberation Mono", monospace';
 
@@ -118,6 +132,11 @@ function scheme(id: string, extra: Partial<ColorSchemeManifest>): ColorSchemeMan
     tokenContract: TOKEN_CONTRACT_VERSION,
     tier: 'extended',
     provenance,
+    ...GOVERNANCE,
+    modes: [...GOVERNANCE.modes],
+    accessibility: { checks: [...GOVERNANCE.accessibility.checks] },
+    fallbacks: [...GOVERNANCE.fallbacks],
+    caveats: [],
     ...extra,
   };
 }
@@ -125,6 +144,7 @@ function scheme(id: string, extra: Partial<ColorSchemeManifest>): ColorSchemeMan
 /** A generator scheme that reads an asset, which no first-party pack is. */
 export const ASSET = scheme('fixture-asset', {
   tier: 'experimental',
+  provenance: { ...provenance, license: 'generated' },
   generator: { id: 'fixture-asset', version: 1, input: 'asset' },
 });
 
@@ -186,12 +206,6 @@ export const PACKS: readonly MetaPack[] = [
     packageName: '@portfolio/appearance-fixtures-schemes',
     version: '0.1.0',
     manifest: ASSET,
-  },
-  {
-    kind: 'color-scheme',
-    packageName: '@portfolio/appearance-fixtures-schemes',
-    version: '0.1.0',
-    manifest: RESEARCH,
   },
   {
     kind: 'typography',

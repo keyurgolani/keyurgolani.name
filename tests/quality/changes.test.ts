@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import type { MetaPack } from '../../packages/appearance/src/index';
 import { changePairs, planCells, readBuildMeta, type BuildMeta } from './cells';
 import { tupleKey } from './coverage';
-import { changedFiles, mapChanges, readChanges } from './lib/changes';
+import { changedFiles, mapChanges, METADATA_KEYS, readChanges, renderedKeys } from './lib/changes';
 import { PREFERENCE_ROWS, VIEWPORTS } from './lib/matrix';
 import { loadRegistrations, type Registrations } from './lib/registration';
 import { changeDiagnostic, changeFields } from './lib/records';
@@ -72,12 +72,11 @@ test("a changed path maps to its variant's package, its language's pack, or its 
   assert.deepEqual(map('packages/appearance-languages/package.json'), [
     'designLanguage platform-neutral packages/appearance-languages/package.json',
   ]);
-  // Shared code, a scheme, a pack this build doesn't register, and a lookalike directory map to nothing here.
+  // Shared code, a pack this build doesn't register, and a lookalike directory map to nothing here.
   assert.deepEqual(
     map(
       'packages/kit/src/index.ts',
       'packages/appearance/src/resolve.ts',
-      'packages/appearance-schemes/packs/warm-parchment/manifest.json',
       'packages/appearance-languages/packs/not-registered/manifest.json',
       'packages/fallback-composition-notes.md',
       'docs/variants.md',
@@ -142,6 +141,99 @@ test("a git base's changes are from the merge base, and a rename counts as both 
   }
 });
 
+test("a pack manifest whose change is metadata alone directs nothing, and any other key's change still does (#20)", () => {
+  const repo = mkdtempSync(path.join(tmpdir(), 'quality-changes-metadata-'));
+  const git = (...args: string[]) =>
+    execFileSync(
+      'git',
+      ['-c', 'user.name=Quality Test', '-c', 'user.email=quality@example.test', ...args],
+      { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+  const write = (file: string, value: unknown) => {
+    mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
+    writeFileSync(path.join(repo, file), typeof value === 'string' ? value : JSON.stringify(value));
+  };
+  const scheme = (extra: Record<string, unknown>) => ({
+    id: 'a-scheme',
+    tier: 'stable',
+    budgets: { css: 3072, js: 0 },
+    anchors: { light: { accent: '#aa3300' } },
+    ...extra,
+  });
+  const files = {
+    metadata: 'packages/appearance-schemes/packs/metadata/manifest.json',
+    reordered: 'packages/appearance-schemes/packs/reordered/manifest.json',
+    anchors: 'packages/appearance-schemes/packs/anchors/manifest.json',
+    tier: 'packages/appearance-schemes/packs/tier/manifest.json',
+    fresh: 'packages/appearance-schemes/packs/fresh/manifest.json',
+    broken: 'packages/appearance-schemes/packs/broken/manifest.json',
+    unreadable: 'packages/appearance-schemes/packs/unreadable/manifest.json',
+    css: 'packages/appearance-languages/packs/lang/language.css',
+  };
+  try {
+    git('init', '-q', '-b', 'base');
+    write(files.metadata, scheme({ name: 'Old' }));
+    write(files.reordered, scheme({}));
+    write(files.anchors, scheme({}));
+    write(files.tier, scheme({}));
+    write(files.broken, scheme({}));
+    write(files.unreadable, '{ not json');
+    write(files.css, '.a{}');
+    git('add', '-A');
+    git('commit', '-q', '-m', 'base');
+    git('switch', '-q', '-c', 'branch');
+    // Every metadata key changes at once, and nothing else.
+    write(
+      files.metadata,
+      scheme(Object.fromEntries([...METADATA_KEYS].map((key) => [key, `new ${key}`]))),
+    );
+    // The same keys in another order, and budgets' keys reordered too.
+    write(files.reordered, {
+      anchors: { light: { accent: '#aa3300' } },
+      budgets: { js: 0, css: 3072 },
+      tier: 'stable',
+      id: 'a-scheme',
+    });
+    write(files.anchors, scheme({ anchors: { light: { accent: '#aa3301' } } }));
+    write(files.tier, scheme({ tier: 'extended' }));
+    write(files.fresh, scheme({}));
+    write(files.broken, '{ not json');
+    // Unreadable on both sides is never taken for metadata alone.
+    write(files.unreadable, '{ still not json');
+    write(files.css, '.a{color:red}');
+    git('add', '-A');
+    git('commit', '-q', '-m', 'branch');
+
+    const changed = changedFiles({ QUALITY_CHANGED_BASE: 'base' }, repo);
+    assert.deepEqual(
+      [...changed!.files].sort(),
+      [files.anchors, files.broken, files.css, files.fresh, files.tier, files.unreadable].sort(),
+    );
+    assert.equal(
+      changed!.source,
+      'git diff base...HEAD, less 2 manifest(s) whose change is metadata alone',
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+  // The keys that stay are the ones the cells and the registry read.
+  for (const key of [
+    'id',
+    'tier',
+    'budgets',
+    'anchors',
+    'derivation',
+    'tokens',
+    'stylesheet',
+    'lockedMode',
+    'tokenContract',
+  ]) {
+    assert.equal(METADATA_KEYS.has(key), false, key);
+  }
+  assert.equal(renderedKeys('[]'), null);
+  assert.equal(renderedKeys('{"name":"a","id":"x"}'), renderedKeys('{"id":"x","name":"b"}'));
+});
+
 test('the changed paths come from QUALITY_CHANGED_FILES, else a git base, else none, and a base git cannot read fails', () => {
   assert.equal(changedFiles({}), null);
   assert.deepEqual(changedFiles({ QUALITY_CHANGED_FILES: '["a/b.ts"]' }), {
@@ -165,21 +257,103 @@ test('the changed paths come from QUALITY_CHANGED_FILES, else a git base, else n
   );
 });
 
-test('the [37] pairs: a changed variant with each stable language, a changed language with each stable variant', () => {
-  const stable = { variants: ['a', 'b'], designLanguages: ['x', 'y'] };
+test('the [37] pairs: a changed variant with each stable language, a changed pack on any axis with each variant (#20)', () => {
+  const targets = { variants: ['a', 'b'], languages: ['x', 'y'] };
   assert.deepEqual(
     changePairs(
       [
         { axis: 'variant', id: 'a' },
         { axis: 'designLanguage', id: 'z' },
+        { axis: 'colorScheme', id: 'q' },
+        { axis: 'typography', id: 'r' },
       ],
-      stable,
-    ).map(({ variant, designLanguage, by }) => `${variant}/${designLanguage} by ${by.id}`),
-    ['a/x by a', 'a/y by a', 'a/z by z', 'b/z by z'],
+      targets,
+    ).map(({ variant, axis, pack, by }) => `${variant}/${axis}:${pack} by ${by.id}`),
+    [
+      'a/designLanguage:x by a',
+      'a/designLanguage:y by a',
+      'a/designLanguage:z by z',
+      'b/designLanguage:z by z',
+      'a/colorScheme:q by q',
+      'b/colorScheme:q by q',
+      'a/typography:r by r',
+      'b/typography:r by r',
+    ],
+  );
+  // A variant's pair names the language it meets.
+  assert.deepEqual(changePairs([{ axis: 'variant', id: 'a' }], targets)[1]!.by, {
+    axis: 'variant',
+    id: 'a',
+    pack: { axis: 'designLanguage', id: 'y' },
+  });
+});
+
+test('a changed scheme or profile maps to its pack, and a Research record to nothing (#20)', () => {
+  const meta = checkoutMeta();
+  const map = (...files: string[]) =>
+    mapChanges(files, meta).map(({ axis, id }) => `${axis} ${id}`);
+  assert.deepEqual(map('packages/appearance-schemes/packs/warm-parchment/manifest.json'), [
+    'colorScheme warm-parchment',
+  ]);
+  assert.deepEqual(map('packages/appearance-typography/package.json'), ['typography humanist-ui']);
+  assert.deepEqual(map('packages/appearance-schemes/research/nord.json'), []);
+  // Variants first, then the pack axes in axis order.
+  assert.deepEqual(
+    map(
+      'packages/appearance-typography/packs/humanist-ui/manifest.json',
+      'packages/appearance-schemes/packs/warm-parchment/manifest.json',
+      'packages/appearance-languages/packs/platform-neutral/manifest.json',
+      'packages/fallback-composition/src/a.ts',
+    ),
+    [
+      'variant fallback',
+      'designLanguage platform-neutral',
+      'colorScheme warm-parchment',
+      'typography humanist-ui',
+    ],
   );
 });
 
-test('a PR that changes a variant runs it against every stable language, and one that changes a language against every stable variant', () => {
+/**
+ * Every composition the plan meets, as the registry lists it: the
+ * checkout's variants, less the fixture ones, and what the test adds. Read
+ * from the registry, so a variant `next` brings in doesn't change a count.
+ */
+const registeredVariants = (meta: BuildMeta) =>
+  meta.VARIANTS.map(({ manifest }) => manifest.id)
+    .filter((id) => !id.startsWith('fixture-'))
+    .sort();
+
+test('a PR that changes a scheme runs it against every variant, and a changed variant meets only the stable languages (#20)', () => {
+  const meta = wider(checkoutMeta());
+  const plan = (changes: Parameters<typeof planCells>[0]['changes']) =>
+    planCells({ meta, registrations, mode: 'pr', changes });
+  const scheme = plan([{ axis: 'colorScheme', id: 'warm-parchment', paths: [] }]);
+  const byScheme = scheme.cells.filter((cell) =>
+    cell.changed?.some((by) => by.axis === 'colorScheme'),
+  );
+  assert.deepEqual(byScheme.map((cell) => cell.target).sort(), registeredVariants(meta));
+  for (const cell of byScheme) assert.equal(cell.tuple.colorScheme, 'warm-parchment');
+  assert.deepEqual(changeFields(byScheme[0]!), { axis: 'colorScheme', pack: 'warm-parchment' });
+
+  const variant = plan([{ axis: 'variant', id: 'fallback', paths: [] }]);
+  const met = variant.cells
+    .filter((cell) => cell.changed)
+    .flatMap((cell) => cell.changed!.map((by) => `${by.pack?.axis}:${by.pack?.id}`))
+    .sort();
+  // One cell per stable shipping language: no scheme or profile pairs, no
+  // extended tier, no fixture pack.
+  assert.deepEqual(met, ['designLanguage:platform-neutral', 'designLanguage:second-language']);
+  assert.equal(byScheme.length, registeredVariants(meta).length);
+  // A changed profile runs against every variant too.
+  const profile = plan([{ axis: 'typography', id: 'humanist-ui', paths: [] }]);
+  assert.equal(
+    profile.cells.filter((cell) => cell.changed).length,
+    registeredVariants(meta).length,
+  );
+});
+
+test('a PR that changes a variant runs it against every stable language, and one that changes a language against every variant', () => {
   const meta = wider(checkoutMeta());
   const plan = (changes: Parameters<typeof planCells>[0]['changes']) =>
     planCells({ meta, registrations, mode: 'pr', changes });
@@ -188,16 +362,24 @@ test('a PR that changes a variant runs it against every stable language, and one
 
   const variant = plan([{ axis: 'variant', id: 'fallback', paths: ['packages/x'] }]);
   const directed = variant.cells.filter((cell) => cell.changed);
-  // The shipping stable languages, not the extended one or the stable fixture pack.
+  // One cell per stable shipping language: not the extended one, nor the stable fixture pack.
+  assert.equal(directed.length, 2);
   assert.deepEqual(directed.map((cell) => cell.tuple.designLanguage).sort(), [
     'platform-neutral',
     'second-language',
   ]);
+  // Each on the default scheme and typography.
+  for (const cell of directed) {
+    assert.equal(cell.tuple.colorScheme, 'warm-parchment');
+    assert.equal(cell.tuple.typography, 'humanist-ui');
+  }
   for (const cell of directed) {
     assert.equal(cell.target, 'fallback');
     assert.equal(cell.state, 'complete');
     assert.equal(cell.path, '/');
-    assert.deepEqual(cell.changed, [{ axis: 'variant', id: 'fallback' }]);
+    assert.ok(
+      cell.changed!.every((by) => by.axis === 'variant' && by.id === 'fallback' && by.pack),
+    );
     // Every viewport in the default row, and every row at the first viewport.
     const tests = variant.tests.filter((each) => each.cell === cell);
     assert.deepEqual(
@@ -215,13 +397,7 @@ test('a PR that changes a variant runs it against every stable language, and one
 
   const language = plan([{ axis: 'designLanguage', id: 'extended-language', paths: [] }]);
   const byLanguage = language.cells.filter((cell) => cell.changed);
-  assert.deepEqual(byLanguage.map((cell) => cell.target).sort(), [
-    'fallback',
-    'kinetic-cosmos',
-    'obsidian-atelier',
-    'second-variant',
-    'spatial-bento',
-  ]);
+  assert.deepEqual(byLanguage.map((cell) => cell.target).sort(), registeredVariants(meta));
   for (const cell of byLanguage) {
     assert.equal(cell.tuple.designLanguage, 'extended-language');
     assert.deepEqual(cell.changed, [{ axis: 'designLanguage', id: 'extended-language' }]);

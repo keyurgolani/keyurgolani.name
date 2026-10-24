@@ -245,7 +245,7 @@ test('declarations can only use tokens for type, motion, and color', () => {
   refuses(`${slot} { animation: spin 1s linear infinite; }`, /animates through keyframes/);
   refuses(`${slot} { animation-name: spin; }`, /animates through keyframes/);
   refuses(`${slot} { background: url(https://example.test/x.png); }`, /url\(\)/);
-  refuses(`${slot} { background: image-set(x 1x); }`, /calls image-set\(\)/);
+  refuses(`${slot} { background: image-set(x 1x); }`, /image-set\(x 1x\) loads a file/);
   refuses(
     `${slot} { border-color: var(--type-body-font-size); }`,
     /var\(--color-<role>\) or var\(--ui-<key>\)/,

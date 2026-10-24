@@ -103,6 +103,21 @@ test("next dev's data directory stays out of commits and out of the image", () =
   assert.deepEqual(gitIgnored(['packages/core/.data/x']), []);
 });
 
+test("the image build context leaves out the catalog's Research records, and keeps the packs (#20)", () => {
+  for (const file of [
+    'packages/appearance-schemes/research/nord.json',
+    'packages/appearance-fixtures-schemes/research/fixture-research.json',
+  ]) {
+    assert.ok(ignored(file), file);
+  }
+  for (const file of [
+    'packages/appearance-schemes/packs/warm-parchment/manifest.json',
+    'packages/appearance-schemes/package.json',
+  ]) {
+    assert.equal(ignored(file), false, file);
+  }
+});
+
 test('the image build context leaves out the holding pens the image scan refuses (#12)', () => {
   // The root's experiments/ and archive/, and a .variant-preview/ at any depth.
   for (const file of [

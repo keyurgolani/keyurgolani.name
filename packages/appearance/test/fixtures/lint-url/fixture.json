@@ -1,0 +1,13 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "A design language whose stylesheet loads files, each spelled to slip past a pattern: url() in mixed case, image-set(), src(), and an escaped url(). A language declares no asset, so the lint names url.",
+  "patch": {
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "lint": "url"
+    }
+  ]
+}

@@ -16,7 +16,6 @@ import {
   LIGHT_ONLY,
   packDir as shippedDir,
   PLATFORM_NEUTRAL,
-  RESEARCH,
   SEED,
   TRANSLUCENT,
   WARM_PARCHMENT,
@@ -273,8 +272,55 @@ test('a boundary without a display mode still gets every token, as system does',
   }
 });
 
+/** A pack directory with nothing in it, for a pack that reads no file. */
+const EMPTY_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'portfolio-empty-pack-'));
+test.after(() => fs.rmSync(EMPTY_DIR, { recursive: true, force: true }));
+
+test('no pack ships JavaScript: a script file anywhere in its directory fails the compile (#20)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'portfolio-script-pack-'));
+  try {
+    assert.ok(compilePack({ kind: 'color-scheme', manifest: WARM_PARCHMENT, dir }).ok);
+    for (const file of [
+      'enhance.js',
+      'lib/ripple.mjs',
+      'a.cjs',
+      'b.ts',
+      'c.tsx',
+      'd.wasm',
+      'e.html',
+      'f.svg',
+      'g.JS',
+    ]) {
+      fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+      fs.writeFileSync(path.join(dir, file), 'export {};\n');
+    }
+    // License text, notes, and data stay fine.
+    fs.writeFileSync(path.join(dir, 'OFL.txt'), 'license\n');
+    fs.writeFileSync(path.join(dir, 'README.md'), 'notes\n');
+    const result = compilePack({ kind: 'color-scheme', manifest: WARM_PARCHMENT, dir });
+    assert.ok(!result.ok);
+    assert.deepEqual(
+      result.problems.map(({ file, rule }) => [file, rule]),
+      [
+        ['a.cjs', 'javascript'],
+        ['b.ts', 'javascript'],
+        ['c.tsx', 'javascript'],
+        ['d.wasm', 'javascript'],
+        ['e.html', 'javascript'],
+        ['enhance.js', 'javascript'],
+        ['f.svg', 'javascript'],
+        ['g.JS', 'javascript'],
+        ['lib/ripple.mjs', 'javascript'],
+      ],
+    );
+    assert.match(result.problems[0]!.message, /no pack ships JavaScript/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('compilePack names a stylesheet by its content and serves it from the pack directory', () => {
-  const result = compilePack({ kind: 'color-scheme', manifest: WARM_PARCHMENT, dir: os.tmpdir() });
+  const result = compilePack({ kind: 'color-scheme', manifest: WARM_PARCHMENT, dir: EMPTY_DIR });
   assert.ok(result.ok);
   const { stylesheet, assets } = result.pack;
   assert.ok(stylesheet);
@@ -285,7 +331,7 @@ test('compilePack names a stylesheet by its content and serves it from the pack 
   const again = compilePack({
     kind: 'color-scheme',
     manifest: { ...WARM_PARCHMENT },
-    dir: os.tmpdir(),
+    dir: EMPTY_DIR,
   });
   assert.ok(again.ok);
   assert.deepEqual(
@@ -297,7 +343,7 @@ test('compilePack names a stylesheet by its content and serves it from the pack 
 
 test('a generator scheme compiles no stylesheet until it has generated sets', () => {
   assert.equal(schemeBaseSets(SEED), null);
-  const result = compilePack({ kind: 'color-scheme', manifest: SEED, dir: os.tmpdir() });
+  const result = compilePack({ kind: 'color-scheme', manifest: SEED, dir: EMPTY_DIR });
   assert.ok(result.ok);
   assert.equal(result.pack.stylesheet, null);
   const generated = { light: SHAPES[0]![1].light!, dark: SHAPES[0]![1].dark! };
@@ -492,7 +538,6 @@ test('every first-party pack compiles from the directory its package ships', () 
     ['design-language', 'appearance-fixtures-languages', TRANSLUCENT],
     ['color-scheme', 'appearance-fixtures-schemes', DARK_ONLY],
     ['color-scheme', 'appearance-fixtures-schemes', LIGHT_ONLY],
-    ['color-scheme', 'appearance-fixtures-schemes', RESEARCH],
     ['color-scheme', 'appearance-fixtures-schemes', SEED],
     ['typography', 'appearance-fixtures-typography', FONT],
   ] as const;

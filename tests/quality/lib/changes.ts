@@ -1,8 +1,9 @@
-// The owner's [37] change-directed rule (#11, 11-4): a PR that changes a
-// variant runs it against every stable design language, and one that
-// changes a design language runs it against every stable variant. This
+// The owner's [37] change-directed rule (#11, 11-4, and #20 on every pack
+// axis): a PR that changes a variant runs it against every stable design
+// language, and one that changes a pack, a design language, a color scheme,
+// or a typography profile, runs it against every registered variant. This
 // module reads which paths a run changes and maps them to the variants and
-// languages they belong to; cells.ts plans the cells.
+// packs they belong to; cells.ts plans the cells.
 //
 // The paths come from QUALITY_CHANGED_FILES (a JSON array, which run.ts
 // sets once so every Playwright process plans the same cells), else from
@@ -14,10 +15,18 @@
 // sentinels alone. A base git can't read fails the plan, so a run that was
 // asked for change-directed cells never quietly runs without them.
 //
+// A pack manifest whose change is metadata alone (#20) directs nothing: its
+// name, description, version, provenance, accessibility evidence, declared
+// cost, mode list, fallbacks and caveats change no pixel and no gate a cell
+// runs. Declared cost and modes are checked against what the pack ships by
+// check:appearance (pack-gates.ts, validate-pack.ts), and the registry reads
+// a scheme's modes from its sets. Every other key, and a manifest new at the
+// merge base or unreadable there, still directs the pack.
+//
 // A path maps by package: a file under a registered variant's package maps
-// to that variant, a file under a design-language pack's own directory
-// (`packs/<dir>/`, whose manifest names its id) to that language, and any
-// other file of a design-language package to every language it ships.
+// to that variant, a file under a pack's own directory (`packs/<dir>/`,
+// whose manifest names its id) to that pack, and any other file of a pack
+// package but its Research records to every pack it ships.
 // Shared code (the kit, the appearance core, the primitives, the harness)
 // maps to no cell here: mapping it to every cell is the PR cap's work,
 // which waits in the backlog with the 40-cell cap.
@@ -26,10 +35,11 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { REPO_ROOT } from '../../../ci/lib/reports.mjs';
+import { AXIS_BY_KIND, PACK_AXES, type PackAxis } from '../../../packages/appearance/src/index';
 import type { BuildMeta } from '../cells';
 
-/** The two axes the [37] rule directs. */
-export type ChangeAxis = 'variant' | 'designLanguage';
+/** The axes the [37] rule directs: the variant, and since #20 every pack axis. */
+export type ChangeAxis = 'variant' | PackAxis;
 
 /** One changed variant or language, and the paths that changed it. */
 export interface Change {
@@ -81,10 +91,79 @@ export function changedFiles(
       `QUALITY_CHANGED_BASE is ${base}, and git can't diff it against HEAD${stderr ? `: ${stderr.split('\n')[0]}` : ''}. Fetch it (CI's quality-pr checks out with fetch-depth: 2), or unset it to plan the sentinels alone.`,
     );
   }
+  const files = out.split('\0').filter((file) => file !== '');
+  const metadata = metadataOnlyManifests(files, base, root);
   return {
-    source: `git diff ${base}...HEAD`,
-    files: out.split('\0').filter((file) => file !== ''),
+    source: `git diff ${base}...HEAD${metadata.length > 0 ? `, less ${metadata.length} manifest(s) whose change is metadata alone` : ''}`,
+    files: files.filter((file) => !metadata.includes(file)),
   };
+}
+
+/** Manifest keys no cell reads, so a change to them alone directs nothing. */
+export const METADATA_KEYS: ReadonlySet<string> = new Set([
+  'name',
+  'description',
+  'version',
+  'provenance',
+  'accessibility',
+  'cost',
+  'modes',
+  'fallbacks',
+  'caveats',
+]);
+
+const PACK_MANIFEST = /^packages\/[^/]+\/packs\/[^/]+\/manifest\.json$/;
+
+/** A manifest's keys a cell can read, as one canonical string, or null when it isn't JSON. */
+export function renderedKeys(text: string): string | null {
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (typeof manifest !== 'object' || manifest === null || Array.isArray(manifest)) return null;
+  const canonical = (value: unknown): unknown =>
+    Array.isArray(value)
+      ? value.map(canonical)
+      : typeof value === 'object' && value !== null
+        ? Object.fromEntries(
+            Object.keys(value)
+              .sort()
+              .map((key) => [key, canonical((value as Record<string, unknown>)[key])]),
+          )
+        : value;
+  const kept = Object.fromEntries(
+    Object.entries(manifest).filter(([key]) => !METADATA_KEYS.has(key)),
+  );
+  return JSON.stringify(canonical(kept));
+}
+
+/** The pack manifests among `files` whose change from the merge base is metadata alone. */
+function metadataOnlyManifests(files: readonly string[], base: string, root: string): string[] {
+  const candidates = files.filter((file) => PACK_MANIFEST.test(file));
+  if (candidates.length === 0) return [];
+  const git = (...args: string[]): string | null => {
+    try {
+      return execFileSync('git', args, {
+        cwd: root,
+        encoding: 'utf8',
+        maxBuffer: 64 << 20,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch {
+      return null;
+    }
+  };
+  const mergeBase = git('merge-base', base, 'HEAD')?.trim();
+  if (!mergeBase) return [];
+  return candidates.filter((file) => {
+    const before = git('show', `${mergeBase}:${file}`);
+    const after = git('show', `HEAD:${file}`);
+    if (before === null || after === null) return false;
+    const keys = renderedKeys(before);
+    return keys !== null && keys === renderedKeys(after);
+  });
 }
 
 /** Every workspace package under packages/, by name, with its directory relative to `root`. */
@@ -139,32 +218,33 @@ export function mapChanges(
     const dir = packages.get(packageName);
     return dir ? [{ id: manifest.id, dir }] : [];
   });
-  const languages = (meta.PACKS ?? []).filter((pack) => pack.kind === 'design-language');
-  const languagePackages = [...new Set(languages.map((pack) => pack.packageName))].flatMap(
-    (name) => {
-      const dir = packages.get(name);
-      if (!dir) return [];
-      const own = languages.filter((pack) => pack.packageName === name).map((p) => p.manifest.id);
-      return [{ dir, ids: own, packs: packDirs(root, dir) }];
-    },
-  );
+  const packs = meta.PACKS ?? [];
+  const packPackages = [...new Set(packs.map((pack) => pack.packageName))].flatMap((name) => {
+    const dir = packages.get(name);
+    if (!dir) return [];
+    const own = packs.filter((pack) => pack.packageName === name);
+    const axis = AXIS_BY_KIND[own[0]!.kind];
+    return [{ dir, axis, ids: own.map((p) => p.manifest.id), packs: packDirs(root, dir) }];
+  });
 
   for (const file of files) {
     for (const variant of variants) if (under(file, variant.dir)) add('variant', variant.id, file);
-    for (const { dir, ids, packs } of languagePackages) {
+    for (const { dir, axis, ids, packs: dirs } of packPackages) {
       if (!under(file, dir)) continue;
-      const own = [...packs].find(([, packDir]) => under(file, packDir));
+      const own = [...dirs].find(([, packDir]) => under(file, packDir));
       if (own) {
-        if (ids.includes(own[0])) add('designLanguage', own[0], file);
-      } else if (!under(file, `${dir}/packs`)) {
+        if (ids.includes(own[0])) add(axis, own[0], file);
+      } else if (!under(file, `${dir}/packs`) && !under(file, `${dir}/research`)) {
         // A package-level file, such as its package.json, reaches every pack it ships.
-        for (const id of ids) add('designLanguage', id, file);
+        for (const id of ids) add(axis, id, file);
       }
-      // A file under packs/ in no registered pack's directory is a pack this build doesn't register.
+      // A file under packs/ in no registered pack's directory is a pack this
+      // build doesn't register, and a Research record never registers.
     }
   }
-  // Variants first, then languages, each by id.
-  const order = (change: Change) => `${change.axis === 'variant' ? 0 : 1} ${change.id}`;
+  // Variants first, then each pack axis in axis order, each by id.
+  const rank = (axis: ChangeAxis) => (axis === 'variant' ? 0 : 1 + PACK_AXES.indexOf(axis));
+  const order = (change: Change) => `${rank(change.axis)} ${change.id}`;
   return [...changes.values()].sort((a, b) => (order(a) < order(b) ? -1 : 1));
 }
 

@@ -30,8 +30,8 @@ test('setAxis changes the one value it is given', () => {
     assert.equal(result.diagnostic, undefined, axis);
     assert.deepEqual(result.selection, { ...BASE, [axis]: value });
   }
-  // A Research pack can be selected for review; publishing it is the validator's to refuse.
-  assert.equal(codeOf(BASE, 'colorScheme', 'fixture-research'), 'changed');
+  // A Research record never registers (#20), so nothing can select it.
+  assert.equal(codeOf(BASE, 'colorScheme', 'fixture-research'), 'appearance.unavailable');
   // Anything else the selection holds is carried over.
   const extended = { ...BASE, extensions: { '@acme/x': { note: 'kept' } } };
   assert.deepEqual(

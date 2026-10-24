@@ -2,18 +2,42 @@
   "id": "fixture-dark-only",
   "name": "Fixture Dark Only",
   "description": "A test fixture: a single-mode dark scheme, for mode locking, system on a single-mode scheme, and the light high-contrast set print uses.",
+  "version": "1.0.0",
   "tokenContract": 1,
   "tier": "experimental",
-  "budgets": { "js": 0, "css": 3072, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
   "provenance": {
-    "source": { "name": "Keyur Golani portfolio platform" },
-    "license": "first-party",
+    "source": {
+      "name": "Nord, by Arctic Ice Studio and Sven Greb",
+      "url": "https://github.com/nordtheme/nord"
+    },
+    "license": "MIT",
+    "attribution": "The anchors are the reviewed prototype's nord dark anchors, from the Nord palette (nordtheme/nord, MIT).",
+    "copyright": "Copyright (c) 2016-present Sven Greb",
     "researchedAt": "2026-10-22",
     "maintainer": "keyurgolani",
-    "attribution": "The anchors are the reviewed prototype's nord dark anchors, from the Nord palette (nordtheme/nord, MIT).",
-    "derivation": "anchor-v1 from one dark set of anchors.",
-    "caveats": ["A test fixture: it registers only when APPEARANCE_FIXTURES=1."]
+    "derivation": "anchor-v1 from one dark set of anchors."
   },
+  "modes": ["dark"],
+  "lockedMode": "dark",
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+  ],
+  "caveats": ["A test fixture: it registers only when APPEARANCE_FIXTURES=1."],
   "derivation": "anchor-v1",
   "anchors": {
     "dark": {

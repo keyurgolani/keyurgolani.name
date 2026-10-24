@@ -51,6 +51,15 @@ import {
 } from '@portfolio/variant-contract/node';
 import type { GateTargets } from '@portfolio/appearance';
 import { loadThresholds } from '../../../quality/thresholds';
+import {
+  baseLock,
+  baseLockNote,
+  catalogFindings,
+  contrastRecords,
+  hierarchyRecords,
+  problemRecords,
+  writeCatalogRecords,
+} from './check-appearance-catalog';
 import { appearanceTargets } from './appearance-targets';
 import { generateRegistry, PACK_OUT, plural, renderOptions, REPO_ROOT } from './registry-options';
 
@@ -124,6 +133,7 @@ function describe(check: AppearanceCheck): string[] {
 
 function expectation(item: KnownBadExpectation): string {
   if ('problem' in item) return `a problem naming "${item.problem}"`;
+  if ('lint' in item) return `a refusal under the pack lint rule ${item.lint}`;
   if ('hierarchy' in item) return `${item.hierarchy.first} and ${item.hierarchy.second} held apart`;
   const { set, foreground, ground } = item.pair;
   return `${foreground}${ground ? ` on ${ground}` : ''}${set ? ` in ${set}` : ''} failing`;
@@ -168,7 +178,7 @@ async function main(): Promise<number> {
     process.stderr.write(`${TAG} The thresholds don't load, so nothing was checked.\n`);
     return 1;
   }
-  const { result, packs } = await generateRegistry(process.env, { write: false });
+  const { result, packs, excluded } = await generateRegistry(process.env, { write: false });
   if (!result.ok) {
     process.stderr.write(formatRegistryDiagnostics(result.diagnostics));
     process.stderr.write(`${TAG} Registry generation failed, so nothing was checked.\n`);
@@ -216,15 +226,26 @@ async function main(): Promise<number> {
     }));
   const sources = stylesheetsUnder(REPO_ROOT, ['apps', 'packages']);
   const unordered = layerOrderProblems([...compiled, ...sources]);
-  const layered = [...compiled, ...sources].filter(({ css }) => /@layer\b/.test(css)).length;
+  const layered = [...compiled, ...sources].filter(({ css }) => /@layer\b/i.test(css)).length;
   const misses = knownBadMisses(registry, meta, targets);
   const audit = sourceAuditReport(
     REPO_ROOT,
     options.auditExceptions ? path.resolve(options.auditExceptions) : undefined,
   );
 
+  const base = baseLock();
+  const catalog = catalogFindings(REPO_ROOT, result, excluded ?? [], base);
+  const note = baseLockNote(base);
+  if (note) process.stdout.write(`${TAG} ${note}\n`);
+
   for (const { axis, id, reason } of check.skipped)
     process.stdout.write(`${TAG} Skipped ${axis} ${id}: ${reason}.\n`);
+  for (const pack of (excluded ?? []).filter(
+    ({ packageName }) => !packageName.startsWith('@portfolio/'),
+  ))
+    process.stdout.write(
+      `${TAG} Excluded ${pack.kind} ${pack.id} in ${pack.packageName}: ${pack.reason}\n`,
+    );
   const findings = [
     ...describe(check),
     ...unordered.map(
@@ -232,9 +253,17 @@ async function main(): Promise<number> {
     ),
     ...misses,
     ...audit.lines,
+    ...catalog.lines,
   ];
   for (const line of findings) process.stderr.write(`${TAG} ${line}\n`);
   if (findings.length > 0) {
+    // In CI, each pack's failure is a record naming its pack, axis, and role (#20).
+    writeCatalogRecords([
+      ...contrastRecords(check),
+      ...hierarchyRecords(check),
+      ...problemRecords(check),
+      ...catalog.records,
+    ]);
     process.stderr.write(`${TAG} ${plural(findings.length, 'finding')}.\n`);
     return 1;
   }
@@ -248,7 +277,9 @@ async function main(): Promise<number> {
       `${plural(check.combinations, 'combination')} and ${plural(check.pairs, 'pair')} checked, none failing; ` +
       `the hierarchy holds; ${plural(layered, 'layered stylesheet')}, each starting with the layer order; ` +
       `${plural(knownBadNames().length, 'known-bad input')} in ${relative(KNOWN_BAD_DIR)}, each failing as it names; ` +
-      `the source audit read ${plural(audit.files, 'file')}, with ${plural(audit.exceptions, 'reviewed exception')}, each still needed.\n`,
+      `the source audit read ${plural(audit.files, 'file')}, with ${plural(audit.exceptions, 'reviewed exception')}, each still needed. ` +
+      `${plural(catalog.counts.gated, 'pack')} passed the pack gates; the lock pins ${plural(catalog.counts.locked, 'pack')} and the notices are current; ` +
+      `${plural(catalog.counts.research, 'Research record')} checked, none registered.\n`,
   );
   return 0;
 }

@@ -43,8 +43,8 @@ import {
   TYPOGRAPHY_ROLES,
   type ColorTokens,
 } from '../tokens';
-import type { PackManifest } from '../validate-pack';
-import { readLanguageStylesheet, writeStyleNodes } from './stylesheet';
+import { SCRIPT_FILE, type PackManifest } from '../validate-pack';
+import { readLanguageStylesheet, writeStyleNodes, type LintRule } from './stylesheet';
 
 /** Where the host serves pack stylesheets from: apps/web/public/_portfolio/pack/. */
 export const PACK_URL = '/_portfolio/pack/';
@@ -79,6 +79,8 @@ export interface CompileProblem {
   readonly pointer: string;
   readonly message: string;
   readonly remedy: string;
+  /** The pack CSS lint rule it breaks, when it breaks one (#20). */
+  readonly rule?: LintRule;
 }
 
 export type CompileResult =
@@ -106,6 +108,20 @@ const cssFile = (id: string, css: string) => packFile(id, 'css', new TextEncoder
 
 /** Compiles one valid pack, reading the files its manifest names from its directory. */
 export function compilePack(source: PackSource): CompileResult {
+  const scripts = scriptFiles(source.dir);
+  if (scripts.length > 0) {
+    return {
+      ok: false,
+      problems: scripts.map((file) => ({
+        file,
+        pointer: '',
+        message: `${file} is a file a page could run as script, and no pack ships JavaScript.`,
+        remedy:
+          "Remove it: a pack's directory holds its manifest, its stylesheet, its fonts, and their license text.",
+        rule: 'javascript' as const,
+      })),
+    };
+  }
   if (source.kind === 'color-scheme') {
     const manifest = source.manifest as ColorSchemeManifest;
     const sets = schemeBaseSets(manifest);
@@ -116,6 +132,33 @@ export function compilePack(source: PackSource): CompileResult {
   if (source.kind === 'typography')
     return compileTypography(source.manifest as TypographyManifest, source.dir);
   return compileLanguage(source.manifest as DesignLanguageManifest, source.dir);
+}
+
+/**
+ * Every file under a pack's directory a page could run as script, such as
+ * a .js, .mjs, .ts, .wasm, .html, or .svg file, relative to it and sorted.
+ * A link with a script-file name counts, whatever it points at.
+ */
+export function scriptFiles(dir: string): string[] {
+  const found: string[] = [];
+  const walk = (current: string) => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(current, entry.name);
+      const shown = path.relative(dir, full).split(path.sep).join('/');
+      if (entry.isSymbolicLink()) {
+        if (SCRIPT_FILE.test(entry.name)) found.push(shown);
+      } else if (entry.isDirectory()) walk(full);
+      else if (SCRIPT_FILE.test(entry.name)) found.push(shown);
+    }
+  };
+  walk(dir);
+  return found.sort();
 }
 
 /** A scheme's base sets: authored, or anchor-v1's from its anchors. Null for a generator scheme. */
@@ -358,15 +401,17 @@ function compileLanguage(manifest: DesignLanguageManifest, dir: string): Compile
     }
     const sheet = readLanguageStylesheet(
       new TextDecoder('utf-8', { fatal: false }).decode(read.bytes),
+      { packId: manifest.id },
     );
     if (!sheet.ok) {
       return {
         ok: false,
-        problems: sheet.problems.map(({ line, column, message }) => ({
+        problems: sheet.problems.map(({ line, column, message, rule }) => ({
           file: manifest.stylesheet!,
           pointer: '',
           message: `${manifest.stylesheet}:${line}:${column} ${message}`,
           remedy: "Change the rule to style [data-ui-slot] parts through the language's tokens.",
+          ...(rule ? { rule } : {}),
         })),
       };
     }

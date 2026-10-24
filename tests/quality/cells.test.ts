@@ -154,10 +154,13 @@ test("a PR run takes the reload conditions on every change-directed cell, where 
     changes: [{ axis: 'variant', id: 'fallback', paths: ['packages/fallback-composition/x.ts'] }],
   });
   const directed = plan.cells.filter((cell) => cell.changed);
+  // One cell per stable shipping language, on the default scheme and
+  // typography: no pair with the night-only scheme or any profile.
   assert.deepEqual(directed.map((cell) => cell.tuple.designLanguage).sort(), [
     'platform-neutral',
     'second-language',
   ]);
+  assert.ok(!directed.some((cell) => cell.tuple.colorScheme === 'night-only'));
   for (const cell of directed) {
     const tests = plan.tests.filter((each) => each.cell === cell);
     assert.ok(tests.length > 0, cell.id);
@@ -175,6 +178,53 @@ test("a PR run takes the reload conditions on every change-directed cell, where 
       );
     }
   }
+});
+
+test('a changed generator scheme directs no cell, and plans without throwing in a PR or full run (#20)', () => {
+  const meta = withTierPacks(checkoutMeta());
+  const scheme = meta.PACKS!.find((pack) => pack.kind === 'color-scheme' && !pack.fixture)!;
+  const generator = (id: string, fixture: boolean) => {
+    const pack = clone(scheme, id, 'experimental', fixture);
+    return {
+      ...pack,
+      manifest: {
+        ...pack.manifest,
+        generator: { id: 'fixture-seed', version: 1, input: 'seed-color' },
+      },
+    } as typeof pack;
+  };
+  const wider: BuildMeta = {
+    ...meta,
+    PACKS: [...meta.PACKS!, generator('fixture-seed', true), generator('shipping-seed', false)],
+  };
+  const sentinels = planCells({ meta: wider, registrations, mode: 'pr' }).cells.length;
+  for (const id of ['fixture-seed', 'shipping-seed']) {
+    const plan = planCells({
+      meta: wider,
+      registrations,
+      mode: 'pr',
+      changes: [{ axis: 'colorScheme', id, paths: [`packages/x/packs/${id}/manifest.json`] }],
+    });
+    assert.equal(plan.cells.filter((cell) => cell.changed).length, 0, id);
+    assert.equal(plan.cells.length, sentinels, id);
+  }
+  // Beside a changed plain scheme, the plain scheme still meets every variant.
+  const both = planCells({
+    meta: wider,
+    registrations,
+    mode: 'pr',
+    changes: [
+      { axis: 'colorScheme', id: 'shipping-seed', paths: [] },
+      { axis: 'colorScheme', id: scheme.manifest.id, paths: [] },
+    ],
+  });
+  const directed = both.cells.filter((cell) => cell.changed);
+  assert.ok(directed.length > 0);
+  assert.ok(directed.every((cell) => cell.tuple.colorScheme === scheme.manifest.id));
+  // The full run directs every shipping pack but the generator one.
+  const full = planCells({ meta: wider, registrations, mode: 'full' });
+  assert.ok(!full.cells.some((cell) => cell.tuple.colorScheme === 'shipping-seed'));
+  assert.ok(!full.changes.some((change) => change.id === 'shipping-seed'));
 });
 
 test('each tier pack has a sentinel on the fallback composition, and other fixture packs stay out', () => {

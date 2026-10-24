@@ -2,19 +2,40 @@
   "id": "fixture-scheme-stable",
   "name": "Fixture Scheme Stable",
   "description": "A tier fixture: a Stable color scheme, cool slate with a blue accent and a teal secondary, in light and dark, for the quality gates to run as a shipping Stable pack.",
+  "version": "1.0.0",
   "tokenContract": 1,
   "tier": "stable",
-  "budgets": { "js": 0, "css": 3072, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
   "provenance": {
     "source": {
-      "name": "Keyur Golani portfolio platform"
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
     },
     "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
     "researchedAt": "2026-10-22",
     "maintainer": "keyurgolani",
-    "derivation": "anchor-v1 from cool slate anchors in light and dark.",
-    "caveats": ["A test fixture: it registers only when QUALITY_FIXTURES is 1 or meta."]
+    "derivation": "anchor-v1 from cool slate anchors in light and dark."
   },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+  ],
+  "caveats": ["A test fixture: it registers only when QUALITY_FIXTURES is 1 or meta."],
   "derivation": "anchor-v1",
   "anchors": {
     "light": {

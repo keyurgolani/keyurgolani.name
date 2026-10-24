@@ -1,0 +1,7 @@
+[data-ui-slot='action'] {
+  outline: none;
+}
+
+[data-ui-slot='action']:focus-visible {
+  box-shadow: 0 0 0 3px var(--color-focus);
+}

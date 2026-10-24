@@ -25,7 +25,8 @@ const COLUMNS = ['ID', 'Threat', 'Asset', 'Entry point', 'Mitigation', 'Owner', 
 // The owners #2 names, plus #3 and #4, which own the publication storage and
 // document controls, #5, which owns the visitor routes, #6, which keeps
 // browser source maps out of the default build, #8, which owns Studio's
-// browser journal, and #19, which owns the visitor's appearance preference.
+// browser journal, #19, which owns the visitor's appearance preference, and
+// #20, which owns pack governance: the pack CSS lint and Research exclusion.
 const OWNERS = [
   '#1',
   '#2',
@@ -39,6 +40,7 @@ const OWNERS = [
   '#10',
   '#12',
   '#19',
+  '#20',
   '#21',
   '#22',
 ];

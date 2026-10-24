@@ -2,21 +2,42 @@
   "id": "fixture-scheme-experimental-low-contrast",
   "name": "Fixture Scheme Experimental Low Contrast",
   "description": "A known-bad tier fixture for pnpm quality:meta: fixture-scheme-experimental with its light text-muted at 2.68:1 on the canvas, and lower on every surface, under the 4.5:1 text floor. It is Experimental, and the gate holds it to the same floor as a Stable pack, so it fails for its light text-muted alone, and no exception can waive that.",
+  "version": "1.0.0",
   "tokenContract": 1,
   "tier": "experimental",
-  "budgets": { "js": 0, "css": 3072, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
   "provenance": {
     "source": {
-      "name": "Keyur Golani portfolio platform"
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
     },
     "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
     "researchedAt": "2026-10-22",
     "maintainer": "keyurgolani",
-    "derivation": "fixture-scheme-experimental's anchor-v1 sets, authored, with the light text-muted moved from #705b73 to #a595a6.",
-    "caveats": [
-      "A known-bad fixture: it registers only when QUALITY_FIXTURES is meta, and check:appearance must fail on it."
-    ]
+    "derivation": "fixture-scheme-experimental's anchor-v1 sets, authored, with the light text-muted moved from #705b73 to #a595a6."
   },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [
+    "A known-bad fixture: it registers only when QUALITY_FIXTURES is meta, and check:appearance must fail on it."
+  ],
   "light": {
     "canvas": "#fff7fd",
     "surface-subtle": "#f9f0f7",

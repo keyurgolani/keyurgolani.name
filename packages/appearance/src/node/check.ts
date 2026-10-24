@@ -37,7 +37,7 @@ import {
 } from '../registry';
 import { validatePackManifest } from '../validate-pack';
 import { compilePack } from './compile';
-import { readLanguageStylesheet } from './stylesheet';
+import { readLanguageStylesheet, type LintRule } from './stylesheet';
 import {
   COLOR_SET_NAMES,
   isHighContrastSet,
@@ -174,6 +174,19 @@ export function hierarchyFailures(scheme: string, sets: SchemeSets): HierarchyFa
   return failures;
 }
 
+/**
+ * The pack a contrast failure excludes (#20): one pack, never the pair. A
+ * focus ring's width, or a translucent surface read over its worst backdrop,
+ * is the design language's; every other pair is between the color scheme's
+ * own roles.
+ */
+export function responsiblePack(failure: GateFailure): { axis: PackAxis; id: string } {
+  if (failure.pair.kind === 'focus-width' || failure.pair.backdrop) {
+    return { axis: 'designLanguage', id: failure.language };
+  }
+  return { axis: 'colorScheme', id: failure.scheme };
+}
+
 const byId = <T extends { readonly manifest: { readonly id: string } }>(entries: Iterable<T>) =>
   [...entries].sort((a, b) =>
     a.manifest.id < b.manifest.id ? -1 : a.manifest.id > b.manifest.id ? 1 : 0,
@@ -285,7 +298,7 @@ export function layerOrderProblems(
   files: readonly { readonly path: string; readonly css: string }[],
 ): string[] {
   return files
-    .filter(({ css }) => /@layer\b/.test(css) && !startsWithLayerOrder(css))
+    .filter(({ css }) => /@layer\b/i.test(css) && !startsWithLayerOrder(css))
     .map(({ path: file }) => file);
 }
 
@@ -307,9 +320,11 @@ export function stylesheetsUnder(
     for (const entry of entries) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
+        // The known-bad inputs never ship: each must fail, some by opening a layer of their own.
         if (
           !SKIPPED_DIRS.has(entry.name) &&
-          full !== path.join(root, 'apps', 'web', 'public', '_portfolio')
+          full !== path.join(root, 'apps', 'web', 'public', '_portfolio') &&
+          full !== path.join(root, 'packages', 'appearance', 'test', 'fixtures')
         ) {
           walk(full);
         }
@@ -339,7 +354,9 @@ export type KnownBadExpectation =
     }
   | { readonly hierarchy: { readonly first: ColorRole; readonly second: ColorRole } }
   /** A substring of a problem: a manifest, compile, or gate-reading one. */
-  | { readonly problem: string };
+  | { readonly problem: string }
+  /** A pack CSS lint rule the input breaks (#20): a refusal that names that rule, not just any. */
+  | { readonly lint: LintRule };
 
 /**
  * A known-bad test input, read from its fixture.json: a registered
@@ -492,6 +509,8 @@ export function readKnownBadFixture(
 export interface KnownBadRun {
   /** Manifest, compile, and gate-reading problems, as messages. */
   readonly problems: readonly string[];
+  /** The pack CSS lint rules its problems break (#20). */
+  readonly rules?: readonly LintRule[];
   /** The gate with the input registered beside `meta`'s packs, once it validated and compiled. */
   readonly check?: AppearanceCheck;
 }
@@ -516,7 +535,9 @@ export function runKnownBad(
     const sheet = fixture.manifest.stylesheet;
     const stylesheet =
       fixture.kind === 'design-language' && typeof sheet === 'string'
-        ? readLanguageStylesheet(fs.readFileSync(path.join(fixture.dir, sheet), 'utf8'))
+        ? readLanguageStylesheet(fs.readFileSync(path.join(fixture.dir, sheet), 'utf8'), {
+            packId: fixture.name,
+          })
         : null;
     return {
       problems: [
@@ -527,6 +548,10 @@ export function runKnownBad(
             )
           : []),
       ],
+      rules:
+        stylesheet && !stylesheet.ok
+          ? stylesheet.problems.flatMap(({ rule }) => (rule ? [rule] : []))
+          : [],
     };
   }
   const compiled = compilePack({
@@ -534,7 +559,12 @@ export function runKnownBad(
     manifest: validated.manifest,
     dir: fixture.dir,
   });
-  if (!compiled.ok) return { problems: compiled.problems.map(({ message }) => message) };
+  if (!compiled.ok) {
+    return {
+      problems: compiled.problems.map(({ message }) => message),
+      rules: compiled.problems.flatMap(({ rule }) => (rule ? [rule] : [])),
+    };
+  }
   const pack = {
     kind: fixture.kind,
     packageName: '@portfolio/appearance',
@@ -556,6 +586,7 @@ export function unmetExpectations(
   return fixture.expect.filter((expectation) => {
     if ('problem' in expectation)
       return !run.problems.some((message) => message.includes(expectation.problem));
+    if ('lint' in expectation) return !(run.rules ?? []).includes(expectation.lint);
     if ('hierarchy' in expectation) {
       return !run.check?.hierarchy.some(
         (failure) =>

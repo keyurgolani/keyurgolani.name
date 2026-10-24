@@ -460,6 +460,54 @@ test('appearance-fixtures-schemes with its fixture mark removed fails generation
   }
 });
 
+test('a pack package that names an entry point fails generation: no pack ships JavaScript (#20)', async () => {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'portfolio-fixture-gate-'));
+  try {
+    const root = workspace(scratch, 'repo', ['apps/web/node_modules/@portfolio']);
+    const name = '@portfolio/appearance-fixtures-schemes';
+    const copy = path.join(root, 'packages', 'appearance-fixtures-schemes');
+    fs.cpSync(path.join(REPO_ROOT, 'packages', 'appearance-fixtures-schemes'), copy, {
+      recursive: true,
+    });
+    fs.symlinkSync(
+      copy,
+      path.join(root, 'apps', 'web', 'node_modules', '@portfolio', 'appearance-fixtures-schemes'),
+      'dir',
+    );
+    const hostDir = path.join(root, 'apps', 'web');
+    fs.writeFileSync(
+      path.join(hostDir, 'package.json'),
+      JSON.stringify({ name: '@portfolio/web', dependencies: { [name]: 'workspace:*' } }),
+    );
+    const original = fs.readFileSync(path.join(copy, 'package.json'), 'utf8');
+    const read = () =>
+      readRegistry({
+        hostDir,
+        packs: packHooks(hostDir),
+        fixtures: fixtureGate({ APPEARANCE_FIXTURES: '1' }),
+      });
+    const refusals = (result: Awaited<ReturnType<typeof read>>) =>
+      result.diagnostics.filter(
+        (record) => record.package === name && /names an entry point/.test(record.message),
+      );
+    assert.deepEqual(refusals(await read()), [], 'as shipped, it names none');
+    for (const field of ['main', 'module', 'browser']) {
+      const pkg = JSON.parse(original);
+      pkg[field] = './index.js';
+      fs.writeFileSync(path.join(copy, 'package.json'), JSON.stringify(pkg));
+      const result = await read();
+      assert.equal(result.ok, false, field);
+      assert.ok(refusals(result).length > 0, field);
+      assert.ok(
+        result.packs.every(({ packageName }) => packageName !== name),
+        field,
+      );
+    }
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
 test('PREVIEW_FIXTURES=1 admits packages/preview-fixtures, and nothing else maps to it (#7, Slice 4)', () => {
   assert.deepEqual(fixtureRow('packages/preview-fixtures'), {
     flag: 'PREVIEW_FIXTURES',

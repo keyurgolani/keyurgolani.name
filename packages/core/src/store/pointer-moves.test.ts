@@ -73,6 +73,8 @@ const MOVES =
  */
 const FS_WRITERS = [
   'apps/web/bin/owner.mjs',
+  'apps/web/scripts/check-appearance-catalog.ts',
+  'apps/web/scripts/check-appearance-lock.ts',
   'apps/web/scripts/check-variants.ts',
   'apps/web/scripts/config.mjs',
   'apps/web/scripts/experience-segments.ts',

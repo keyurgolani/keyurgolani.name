@@ -20,6 +20,7 @@ import {
 } from './axes';
 import type { AppearanceDiagnostic } from './diagnostics';
 import {
+  exclusionOf,
   findPack,
   isRegistered,
   otherAxes,
@@ -39,7 +40,7 @@ const INSTALL = 'pnpm --filter @portfolio/web add <package>';
 
 /**
  * Why `value` can't go on `axis` of `current`, or null when it can: it must
- * be well formed, registered on that axis (a Research pack counts), and,
+ * be well formed, registered on that axis (a Research record never is), and,
  * between a scheme and an explicit light or dark mode, compatible with the
  * other. A mode the scheme lacks is refused, never fixed by changing
  * another value. Messages repeat only ids the registry registers.
@@ -92,6 +93,16 @@ export function valueProblem(
       axis,
       message: `names a ${others.map((other) => AXIS_NAMES[other]).join(' and a ')} this build registers, not a ${name}.`,
       remediation: `Move it to ${others.join(' or ')}, or select ${choices(registry, axis)}.`,
+    };
+  }
+  // An excluded pack (#20) is one this build found and left out, so its id and reason are the build's own.
+  const excluded = axis === 'variant' ? undefined : exclusionOf(registry, axis, value);
+  if (excluded) {
+    return {
+      code: 'appearance.unavailable',
+      axis,
+      message: `names ${excluded.id}, a ${name} this build left out: ${excluded.reason}`,
+      remediation: `Select ${choices(registry, axis)}, or fix ${excluded.packageName} and rebuild.`,
     };
   }
   return {

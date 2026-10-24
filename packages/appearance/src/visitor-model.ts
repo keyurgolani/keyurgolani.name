@@ -2,7 +2,7 @@
 // plain data the server builds and VisitorAppearance renders: one control
 // per selectable axis, in axis order, the packs grouped by tier with Stable
 // first, the variants by name, and each choice the current selection can't
-// take disabled with the reason. Research packs never appear, and neither
+// take disabled with the reason. Research records never register, so never appear, and neither
 // does a generated scheme with nothing generated for it, which a visitor
 // couldn't apply. Under demo there's none, since #9's pickers drive the
 // appearance there.
@@ -40,7 +40,7 @@ export const VISITOR_TIERS = [
   'stable',
   'extended',
   'experimental',
-] as const satisfies readonly Exclude<PackTier, 'research'>[];
+] as const satisfies readonly PackTier[];
 export type VisitorTier = (typeof VISITOR_TIERS)[number];
 
 export const TIER_LABELS: Readonly<Record<VisitorTier, string>> = {

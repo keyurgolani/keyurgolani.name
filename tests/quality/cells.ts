@@ -21,18 +21,22 @@
 // `full` plans every cell in every row.
 //
 // The owner's [37] change-directed rule (11-4): a changed variant runs
-// against every stable design language, and a changed language against
-// every stable variant, each pair in the first tuple the resolver renders as
-// asked, from the platform defaults on. lib/changes.ts maps a run's changed
-// paths to the variants and languages they belong to. A PR plans those
-// cells beside the sentinels, at every viewport in the default row and in
-// every row at 1440x900, as the tier packs' sentinels run, and each cell
-// names the axis that brought it in, so its failures do too. `full` plans
-// them as if every variant and language changed, so the scheduled and
-// release runs hold every pair a PR could. Stable languages are the
-// shipping (non-fixture) design languages of the stable tier; variants
-// carry no tier, so every registered non-fixture composition counts as
-// stable. The 40-cell PR cap and its sentinel ordering wait in the backlog.
+// against every stable design language, on its default scheme and
+// typography, and a changed pack, a language, or since #20 a color scheme
+// or typography profile, against every registered variant, each pair in
+// the first tuple the resolver renders as asked, from the platform
+// defaults on. A generator scheme pairs with nothing: it renders only
+// from a site's input. lib/changes.ts
+// maps a run's changed paths to the variants and packs they belong to. A PR
+// plans those cells beside the sentinels, at every viewport in the default
+// row and in every row at 1440x900, as the tier packs' sentinels run, and
+// each cell names the axis and the pack that brought it in, so its failures
+// do too. `full` plans them as if every variant and pack changed, so the
+// scheduled and release runs hold every pair a PR could. A stable language
+// is a shipping (non-fixture) one of the stable tier, and a shipping pack a
+// registered one outside a fixture package, in any tier; variants carry no
+// tier, so every registered non-fixture composition counts. The 40-cell
+// PR cap and its sentinel ordering wait in the backlog.
 
 // First: readBuildMeta() loads the generated registry, which imports
 // `server-only`; #73's shim resolves it to its empty module, as Next's
@@ -44,12 +48,15 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { parse, parseDocument } from 'yaml';
 import {
+  AXIS_NAMES,
   createAppearanceRegistry,
   DISPLAY_MODES,
+  PACK_AXES,
   PLATFORM_DEFAULTS,
   resolveAppearance,
   type AppearanceMeta,
   type AppearanceRegistry,
+  type PackAxis,
 } from '../../packages/appearance/src/index';
 import { MISSING_VARIANT_ID } from '../../packages/variant-contract/src/ids';
 import {
@@ -131,6 +138,8 @@ export interface Cell {
 export interface ChangedBy {
   readonly axis: ChangeAxis;
   readonly id: string;
+  /** For a changed variant, the stable design language the cell runs it against (#20). */
+  readonly pack?: { readonly axis: PackAxis; readonly id: string };
 }
 
 export interface PlannedTest {
@@ -248,21 +257,41 @@ export interface PlanInput {
   readonly changes?: readonly Change[];
 }
 
-/** The [37] rule's pairs: each changed variant with each stable language, each changed language with each stable variant. */
+/**
+ * The [37] rule's pairs: each changed variant with each stable design
+ * language, and each changed pack, on any axis since #20, with each
+ * registered variant. A variant's pair names the language it meets, so its
+ * failures name that pack too.
+ */
 export function changePairs(
   changes: readonly Pick<Change, 'axis' | 'id'>[],
-  stable: { readonly variants: readonly string[]; readonly designLanguages: readonly string[] },
-): { readonly variant: string; readonly designLanguage: string; readonly by: ChangedBy }[] {
+  targets: {
+    readonly variants: readonly string[];
+    /** The stable design languages a changed variant meets, one cell each. */
+    readonly languages: readonly string[];
+  },
+): {
+  readonly variant: string;
+  readonly axis: PackAxis;
+  readonly pack: string;
+  readonly by: ChangedBy;
+}[] {
   return changes.flatMap((change) =>
     change.axis === 'variant'
-      ? stable.designLanguages.map((designLanguage) => ({
+      ? targets.languages.map((pack) => ({
           variant: change.id,
-          designLanguage,
-          by: { axis: change.axis, id: change.id },
+          axis: 'designLanguage' as const,
+          pack,
+          by: {
+            axis: change.axis,
+            id: change.id,
+            pack: { axis: 'designLanguage' as const, id: pack },
+          },
         }))
-      : stable.variants.map((variant) => ({
+      : targets.variants.map((variant) => ({
           variant,
-          designLanguage: change.id,
+          axis: change.axis as PackAxis,
+          pack: change.id,
           by: { axis: change.axis, id: change.id },
         })),
   );
@@ -316,7 +345,13 @@ export function planCells({ meta, registrations, mode, changes = [] }: PlanInput
     // A cell planned twice is a sentinel if either plan says so, and keeps every reason it was planned for.
     const changed = [...(existing?.changed ?? []), ...(cell.changed ?? [])].filter(
       (by, index, all) =>
-        all.findIndex((other) => other.axis === by.axis && other.id === by.id) === index,
+        all.findIndex(
+          (other) =>
+            other.axis === by.axis &&
+            other.id === by.id &&
+            other.pack?.axis === by.pack?.axis &&
+            other.pack?.id === by.pack?.id,
+        ) === index,
     );
     cells.set(id, {
       ...cell,
@@ -398,7 +433,26 @@ export function planCells({ meta, registrations, mode, changes = [] }: PlanInput
   }
 
   // The [37] rule's cells: every changed variant against every stable
-  // language, and every changed language against every stable variant.
+  // design language, on its default scheme and typography, and every
+  // changed pack, a language, a scheme, or a profile since #20, against
+  // every registered variant. A shipping pack is a registered one outside
+  // a fixture package, in any tier: no Research record registers. A
+  // generator scheme renders as asked only from a site's input, which a
+  // cell has none of, so no pair takes one (#20): check:appearance's pack
+  // gates are its PR check.
+  const generated = new Set(
+    (meta.PACKS ?? [])
+      .filter(
+        (pack) =>
+          pack.kind === 'color-scheme' && 'generator' in pack.manifest && pack.manifest.generator,
+      )
+      .map((pack) => pack.manifest.id),
+  );
+  const shippingPacks = (kind: string) =>
+    (meta.PACKS ?? [])
+      .filter((pack) => pack.kind === kind && !pack.fixture && !generated.has(pack.manifest.id))
+      .map((pack) => pack.manifest.id)
+      .sort();
   const stablePacks = (kind: string) =>
     (meta.PACKS ?? [])
       .filter((pack) => pack.kind === kind && !pack.fixture && pack.manifest.tier === 'stable')
@@ -407,48 +461,56 @@ export function planCells({ meta, registrations, mode, changes = [] }: PlanInput
   const preferred = (kind: string, platform: string) => [
     ...new Set([platform, ...stablePacks(kind), ...packIds(kind).sort()]),
   ];
-  const schemes = preferred('color-scheme', PLATFORM_DEFAULTS.colorScheme);
-  const typographies = preferred('typography', PLATFORM_DEFAULTS.typography);
+  const others = {
+    designLanguage: preferred('design-language', PLATFORM_DEFAULTS.designLanguage),
+    colorScheme: preferred('color-scheme', PLATFORM_DEFAULTS.colorScheme),
+    typography: preferred('typography', PLATFORM_DEFAULTS.typography),
+  };
   const modes = ['system', ...DISPLAY_MODES.filter((each) => each !== 'system')];
-  const languageIds = new Set(
-    (meta.PACKS ?? [])
-      .filter((pack) => pack.kind === 'design-language' && pack.manifest.tier !== 'research')
-      .map((pack) => pack.manifest.id),
-  );
+  const shipping = {
+    designLanguage: shippingPacks('design-language'),
+    colorScheme: shippingPacks('color-scheme'),
+    typography: shippingPacks('typography'),
+  } as const satisfies Record<PackAxis, readonly string[]>;
+  const registered = (axis: PackAxis, id: string) =>
+    registry.packs[axis].has(id) && !generated.has(id);
   const directed: readonly Change[] =
     mode === 'full'
       ? [
           ...variants.map((manifest) => ({ axis: 'variant' as const, id: manifest.id, paths: [] })),
-          ...packIds('design-language')
-            .filter((id) => languageIds.has(id))
-            .sort()
-            .map((id) => ({ axis: 'designLanguage' as const, id, paths: [] })),
+          ...PACK_AXES.flatMap((axis) =>
+            shipping[axis].map((id) => ({ axis, id, paths: [] as string[] })),
+          ),
         ]
       : changes.filter((change) =>
           change.axis === 'variant'
             ? variants.some((manifest) => manifest.id === change.id)
-            : languageIds.has(change.id),
+            : registered(change.axis, change.id),
         );
-  for (const { variant, designLanguage, by } of changePairs(directed, {
+  for (const { variant, axis, pack, by } of changePairs(directed, {
     variants: variants.map((manifest) => manifest.id),
-    designLanguages: stablePacks('design-language'),
+    languages: stablePacks('design-language'),
   })) {
     const manifest = variants.find((each) => each.id === variant)!;
+    // The pair's pack on its axis, and the first tuple around it the resolver renders as asked.
+    const choices = { ...others, [axis]: [pack] };
     let tuple: Tuple | undefined;
     search: for (const displayMode of modes) {
-      for (const colorScheme of schemes) {
-        for (const typography of typographies) {
-          const candidate = { variant, designLanguage, colorScheme, typography, displayMode };
-          if (accepts(registry, candidate, 'read-only')) {
-            tuple = candidate;
-            break search;
+      for (const designLanguage of choices.designLanguage) {
+        for (const colorScheme of choices.colorScheme) {
+          for (const typography of choices.typography) {
+            const candidate = { variant, designLanguage, colorScheme, typography, displayMode };
+            if (accepts(registry, candidate, 'read-only')) {
+              tuple = candidate;
+              break search;
+            }
           }
         }
       }
     }
     if (!tuple) {
       throw new Error(
-        `The ${by.axis === 'variant' ? 'changed variant' : 'changed design language'} ${by.id} meets ${by.axis === 'variant' ? `the stable design language ${designLanguage}` : `the stable variant ${variant}`} in no tuple the resolver renders as asked, so the [37] rule can't run it.`,
+        `The ${by.axis === 'variant' ? `changed variant ${by.id}` : `changed ${AXIS_NAMES[by.axis]} ${by.id}`} meets ${by.axis === 'variant' ? `the stable ${AXIS_NAMES[axis]} ${pack}` : `the variant ${variant}`} in no tuple the resolver renders as asked, so the [37] rule can't run it.`,
       );
     }
     add({

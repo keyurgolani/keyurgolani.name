@@ -301,6 +301,14 @@ test('every job runs on a pinned GitHub-hosted Ubuntu, and arm64 only where a le
   assert.doesNotMatch(source, /setup-qemu-action|binfmt|qemu/i);
 });
 
+test("static's check:appearance holds the catalog lock to HEAD^1, which its checkout fetches (#20)", () => {
+  const steps = CI.jobs.static.steps;
+  const checkout = steps.find((step) => /^actions\/checkout@/.test(step.uses ?? ''));
+  assert.equal(checkout.with?.['fetch-depth'], 2);
+  const appearance = steps.find((step) => step.run === 'pnpm ci:appearance');
+  assert.equal(appearance.env?.CATALOG_LOCK_BASE, 'HEAD^1');
+});
+
 test('every ci.yml job sets timeout-minutes', () => {
   for (const [id, job] of Object.entries(CI.jobs)) {
     assert.ok(Number.isInteger(job['timeout-minutes']) && job['timeout-minutes'] > 0, id);

@@ -79,13 +79,8 @@ test(
   },
 );
 
-/**
- * Platform Neutral, the page's language, with a stylesheet that turns the
- * focus outline off and dots a focused part's border, compiled as registry
- * generation compiles a language: its rules in the language layer, inside
- * the language's @scope.
- */
-function outlineHidingLanguage(): string {
+/** Platform Neutral, the page's language, compiled with `stylesheet` as registry generation compiles it. */
+function compileLanguage(stylesheet: string) {
   const manifest = JSON.parse(
     readFileSync(
       new URL(
@@ -97,22 +92,37 @@ function outlineHidingLanguage(): string {
   ) as DesignLanguageManifest;
   const dir = mkdtempSync(path.join(tmpdir(), 'appearance-focus-'));
   try {
-    writeFileSync(
-      path.join(dir, 'styles.css'),
-      '[data-ui-slot]:focus-visible {\n  outline-style: none;\n  border-style: dotted;\n}\n',
-    );
-    const compiled = compilePack({
+    writeFileSync(path.join(dir, 'styles.css'), stylesheet);
+    return compilePack({
       kind: 'design-language',
       manifest: { ...manifest, stylesheet: './styles.css' },
       dir,
     });
-    if (!compiled.ok || !compiled.pack.stylesheet) {
-      throw new Error(`The language didn't compile: ${JSON.stringify(compiled)}`);
-    }
-    return new TextDecoder().decode(compiled.pack.stylesheet.bytes);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+/**
+ * A language whose focused parts turn the outline off and dot their
+ * border, its rules in the language layer, inside the language's @scope.
+ * #20's lint refuses the outline removal at compile, so this compiles the
+ * dotted border and writes the removal into the compiled rule, as a
+ * language that got past the lint would: the ring has to win either way.
+ */
+function outlineHidingLanguage(): string {
+  const refused = compileLanguage(
+    '[data-ui-slot]:focus-visible {\n  outline-style: none;\n  border-style: dotted;\n}\n',
+  );
+  if (refused.ok || !refused.problems.some(({ rule }) => rule === 'focus-outline')) {
+    throw new Error(`The lint let the outline removal through: ${JSON.stringify(refused)}`);
+  }
+  const compiled = compileLanguage('[data-ui-slot]:focus-visible {\n  border-style: dotted;\n}\n');
+  if (!compiled.ok || !compiled.pack.stylesheet) {
+    throw new Error(`The language didn't compile: ${JSON.stringify(compiled)}`);
+  }
+  const css = new TextDecoder().decode(compiled.pack.stylesheet.bytes);
+  return css.replace('border-style: dotted;', 'outline-style: none;\n      border-style: dotted;');
 }
 
 test(

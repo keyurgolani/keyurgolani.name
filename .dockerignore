@@ -17,6 +17,9 @@ apps/web/public/_portfolio/variant
 apps/web/public/_portfolio/asset
 apps/web/public/_portfolio/still
 apps/web/src/app/(site)/%5Fexperience
+# The catalog's Research records (#20), which never register and never
+# reach a build: the image build never even reads them.
+packages/*/research
 
 archive
 experiments

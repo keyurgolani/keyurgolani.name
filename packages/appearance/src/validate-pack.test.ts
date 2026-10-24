@@ -8,7 +8,6 @@ import {
   LIGHT_ONLY,
   MULTILINGUAL,
   PLATFORM_NEUTRAL,
-  RESEARCH,
   SEED,
   TRANSLUCENT,
   WARM_PARCHMENT,
@@ -25,7 +24,7 @@ function records(input: unknown, kind: PackKind, packageName = FIRST_PARTY) {
 }
 
 test('the fallback and test packs validate', () => {
-  for (const manifest of [WARM_PARCHMENT, DARK_ONLY, LIGHT_ONLY, SEED, ASSET, RESEARCH]) {
+  for (const manifest of [WARM_PARCHMENT, DARK_ONLY, LIGHT_ONLY, SEED, ASSET]) {
     const result = validatePackManifest(clone(manifest), {
       kind: 'color-scheme',
       packageName: FIRST_PARTY,
@@ -140,7 +139,11 @@ test("a language's values are checked where they are", () => {
       ['manifest.invalid', '/tokens/shadow-card'],
     ],
   );
-  assert.match(result.diagnostics[0]!.message, /^\/tokens\/radius-card can't load anything/);
+  // Each record names the pack, its axis, and the field (#20).
+  assert.match(
+    result.diagnostics[0]!.message,
+    /^The design language platform-neutral in @portfolio\/x: \/tokens\/radius-card can't load anything/,
+  );
 });
 
 test('a scheme takes its colors one way', () => {
@@ -163,8 +166,17 @@ test('a scheme takes its colors one way', () => {
     ['manifest.missing', '/derivation'],
   ]);
   assert.deepEqual(
-    records({ ...bare, tier: 'extended', dark: tokens, derivation: 'anchor-v1' }, 'color-scheme')
-      .found,
+    records(
+      {
+        ...bare,
+        tier: 'extended',
+        dark: tokens,
+        derivation: 'anchor-v1',
+        modes: ['dark'],
+        lockedMode: 'dark',
+      },
+      'color-scheme',
+    ).found,
     [['manifest.invalid', '/derivation']],
   );
   assert.deepEqual(
@@ -206,8 +218,17 @@ test('a stable scheme has both modes, and a high-contrast set needs its base mod
 });
 
 test("a third party's pack ids carry its scope, and the fallbacks' ids are the platform's", () => {
+  const upstream = {
+    ...clone(WARM_PARCHMENT).provenance,
+    license: 'MIT',
+    copyright: 'Copyright (c) 2026 Acme',
+  };
   assert.deepEqual(
-    records({ ...clone(WARM_PARCHMENT), tier: 'extended' }, 'color-scheme', '@acme/packs').found,
+    records(
+      { ...clone(WARM_PARCHMENT), tier: 'extended', provenance: upstream },
+      'color-scheme',
+      '@acme/packs',
+    ).found,
     [['manifest.id-reserved', '/id']],
   );
   assert.deepEqual(
@@ -218,13 +239,71 @@ test("a third party's pack ids carry its scope, and the fallbacks' ids are the p
     records({ ...clone(DARK_ONLY), id: 'acme-ocean' }, 'color-scheme', '@acme/packs').found,
     [],
   );
-  assert.deepEqual(records({ ...clone(HUMANIST_UI) }, 'typography', 'humanist-pack').found, [
+  const extended = { ...clone(HUMANIST_UI), tier: 'extended' };
+  assert.deepEqual(records(extended, 'typography', 'humanist-pack').found, [
     ['manifest.id-reserved', '/id'],
   ]);
   assert.deepEqual(
-    records({ ...clone(HUMANIST_UI), id: 'plain-type' }, 'typography', 'humanist-pack').found,
+    records({ ...extended, id: 'plain-type' }, 'typography', 'humanist-pack').found,
     [],
   );
+});
+
+test("a third party's pack can't claim Stable or this repository's own license (#20)", () => {
+  const stable = { ...clone(DARK_ONLY), id: 'acme-ocean', tier: 'stable' };
+  // A single-mode scheme can't be stable either, so this is a dual-mode one.
+  const dual = { ...clone(WARM_PARCHMENT), id: 'acme-paper', tier: 'stable' };
+  dual.provenance = { ...dual.provenance, license: 'MIT', copyright: 'Copyright (c) 2026 Acme' };
+  assert.deepEqual(records(dual, 'color-scheme', '@acme/packs').found, [
+    ['manifest.invalid', '/tier'],
+  ]);
+  assert.deepEqual(
+    records(
+      { ...clone(WARM_PARCHMENT), id: 'acme-paper', tier: 'extended' },
+      'color-scheme',
+      '@acme/packs',
+    ).found,
+    [['manifest.invalid', '/provenance/license']],
+  );
+  // The same manifests under @portfolio/* are fine.
+  assert.deepEqual(records({ ...dual, id: 'paper' }, 'color-scheme').found, []);
+  assert.equal(records(stable, 'color-scheme', '@acme/packs').ok, false);
+});
+
+test('a pack under an upstream license gives its copyright line, which the notices print (#20)', () => {
+  const extended = { ...clone(WARM_PARCHMENT), id: 'acme-paper', tier: 'extended' };
+  for (const license of ['MIT', 'Apache-2.0', 'OFL-1.1']) {
+    const { copyright: _drop, ...without } = { ...extended.provenance, license, copyright: '' };
+    void _drop;
+    assert.deepEqual(
+      records({ ...extended, provenance: without }, 'color-scheme', '@acme/packs').found,
+      [['manifest.invalid', '/provenance/copyright']],
+      license,
+    );
+    // A credit isn't a copyright line.
+    assert.deepEqual(
+      records(
+        { ...extended, provenance: { ...without, copyright: 'Tailwind Labs, Inc.' } },
+        'color-scheme',
+        '@acme/packs',
+      ).found,
+      [['manifest.invalid', '/provenance/copyright']],
+      license,
+    );
+    for (const copyright of ['Copyright (c) 2021 Tailwind Labs, Inc.', '(c) 2021 Acme']) {
+      assert.deepEqual(
+        records(
+          { ...extended, provenance: { ...without, copyright } },
+          'color-scheme',
+          '@acme/packs',
+        ).found,
+        [],
+        copyright,
+      );
+    }
+  }
+  // A first-party pack needs none.
+  assert.deepEqual(records(clone(WARM_PARCHMENT), 'color-scheme').found, []);
 });
 
 test('the common fields hold plain text, a known tier, and a dated provenance', () => {
@@ -247,41 +326,104 @@ test('the common fields hold plain text, a known tier, and a dated provenance', 
   assert.deepEqual(records('not a manifest', 'color-scheme').found, [['manifest.invalid', '']]);
 });
 
-test("a language's enhancements are #5's shape, each in the package's exports", () => {
-  const enhancements = [
-    { id: 'ripple', export: './enhancements/ripple', requires: [] },
-    { id: 'ripple', export: './enhancements/other', requires: ['motion-allowed'] },
-  ];
-  const manifest = { ...clone(PLATFORM_NEUTRAL), id: 'acme-ripple', enhancements };
-  const unchecked = validatePackManifest(manifest, {
-    kind: 'design-language',
-    packageName: '@acme/ripple',
-  });
-  assert.deepEqual(
-    unchecked.diagnostics.map(({ code, pointer }) => [code, pointer]),
-    [['manifest.duplicate', '/enhancements/1/id']],
-  );
-  assert.deepEqual(unchecked.notChecked, ['enhancements.export']);
-  const checked = validatePackManifest(manifest, {
-    kind: 'design-language',
-    packageName: '@acme/ripple',
-    exports: { '.': './index.js', './enhancements/ripple': './ripple.js' },
-  });
-  assert.deepEqual(
-    checked.diagnostics.map(({ code, pointer }) => [code, pointer]),
-    [
-      ['manifest.duplicate', '/enhancements/1/id'],
-      ['manifest.enhancement-missing-export', '/enhancements/1/export'],
-    ],
-  );
+test('no pack ships JavaScript: a language has no enhancements, and a pack package exports no script (#20)', () => {
+  const manifest = {
+    ...clone(PLATFORM_NEUTRAL),
+    id: 'acme-ripple',
+    tier: 'extended',
+    provenance: {
+      ...PLATFORM_NEUTRAL.provenance,
+      license: 'MIT',
+      copyright: 'Copyright (c) 2026 Acme',
+    },
+  };
   assert.deepEqual(
     records(
-      { ...manifest, enhancements: [{ id: 'wave', export: 'enhancements/wave', requires: [] }] },
+      { ...manifest, enhancements: [{ id: 'ripple', export: './ripple', requires: [] }] },
       'design-language',
       '@acme/ripple',
     ).found,
-    [['manifest.invalid', '/enhancements/0/export']],
+    [['manifest.unknown-key', '/enhancements']],
   );
+  for (const exports of [
+    './index.js',
+    { '.': './index.mjs' },
+    { './ripple': { import: './ripple.ts', default: './ripple.cjs' } },
+    { './frame': ['./frame.html'] },
+    { './icon': './icon.svg' },
+    // A target with no extension could resolve to script.
+    './index',
+    { '.': './dist/' },
+    { './packs/*': './packs/*' },
+    { '.': { import: './lib/main' } },
+  ]) {
+    const result = validatePackManifest(manifest, {
+      kind: 'design-language',
+      packageName: '@acme/ripple',
+      exports,
+    });
+    assert.deepEqual(
+      result.diagnostics.map(({ code, pointer }) => [code, pointer]),
+      [['manifest.invalid', '']],
+      JSON.stringify(exports),
+    );
+    assert.match(result.diagnostics[0]!.message, /no pack ships JavaScript/);
+  }
+  // A package that names an entry point is refused, whatever the entry is.
+  for (const entryPoints of [
+    { main: './index.js' },
+    { module: './index.mjs' },
+    { browser: './browser.js' },
+    { browser: { './a.js': false } },
+    { main: 'styles.css' },
+  ]) {
+    const result = validatePackManifest(manifest, {
+      kind: 'design-language',
+      packageName: '@acme/ripple',
+      entryPoints,
+    });
+    assert.deepEqual(
+      result.diagnostics.map(({ code, pointer }) => [code, pointer]),
+      [['manifest.invalid', '']],
+      JSON.stringify(entryPoints),
+    );
+    assert.match(result.diagnostics[0]!.message, /names an entry point.*no pack ships JavaScript/);
+  }
+  assert.equal(
+    validatePackManifest(manifest, {
+      kind: 'design-language',
+      packageName: '@acme/ripple',
+      entryPoints: { main: undefined, module: undefined, browser: undefined },
+    }).ok,
+    true,
+  );
+  // A scheme or a profile is held to it too, and a data export is fine.
+  assert.equal(
+    validatePackManifest(clone(DARK_ONLY), {
+      kind: 'color-scheme',
+      packageName: '@portfolio/x',
+      exports: { './dark.js': './dark.js' },
+    }).ok,
+    false,
+  );
+  assert.equal(
+    validatePackManifest(manifest, {
+      kind: 'design-language',
+      packageName: '@acme/ripple',
+      exports: { './package.json': './package.json' },
+    }).ok,
+    true,
+  );
+  for (const budget of ['js', 'enhancement'] as const) {
+    assert.deepEqual(
+      records(
+        { ...manifest, budgets: { ...manifest.budgets, [budget]: 1024 } },
+        'design-language',
+        '@acme/ripple',
+      ).found,
+      [['manifest.invalid', `/budgets/${budget}`]],
+    );
+  }
   assert.deepEqual(
     records({ ...clone(PLATFORM_NEUTRAL), stylesheet: '../styles.css' }, 'design-language').found,
     [['manifest.invalid', '/stylesheet']],
@@ -335,15 +477,29 @@ test("a typography profile's roles, measures, scripts, and font files are checke
     ['manifest.invalid', '/fontAssets/2/file'],
     ['manifest.missing', '/fontAssets/3/unicodeRange'],
   ]);
+  // Fonts of its own: the profile names their license, and its cost counts the one file.
   const valid = {
     ...manifest,
     roles: HUMANIST_UI.roles,
     measures: HUMANIST_UI.measures,
     scripts: ['Latn', 'Latn'],
     fontAssets: manifest.fontAssets.slice(0, 2),
+    provenance: { ...HUMANIST_UI.provenance, license: 'OFL-1.1', copyright: 'Copyright 2026 Acme' },
+    cost: { assets: 1, assetBytes: 20480 },
   };
   assert.deepEqual(records(valid, 'typography').found, [
     ['manifest.duplicate', '/scripts/1'],
     ['manifest.duplicate', '/fontAssets/1/file'],
   ]);
+  // Kept at provided-by-operating-system with no file counted, it's told both.
+  assert.deepEqual(
+    records({ ...valid, provenance: HUMANIST_UI.provenance, cost: HUMANIST_UI.cost }, 'typography')
+      .found,
+    [
+      ['manifest.duplicate', '/scripts/1'],
+      ['manifest.duplicate', '/fontAssets/1/file'],
+      ['manifest.invalid', '/provenance/license'],
+      ['manifest.invalid', '/cost/assets'],
+    ],
+  );
 });
