@@ -60,7 +60,7 @@ async function named(response: Response): Promise<unknown> {
 
 const COOKIE_ATTRIBUTES = `Path=/; Max-Age=${PREFERENCE_MAX_AGE}; HttpOnly; SameSite=Lax; Secure`;
 
-test('a form post sets the ids it names, and goes back to its page on the canonical origin with a 303, private and no-store', async () => {
+test('a form post sets the ids it names, and goes back to its page on the canonical origin with a 303, no-store', async () => {
   const response = await answer(
     post('scheme=warm-parchment&mode=dark&return=%2Fwork%2Ftide%3Fview%3Dall%23notes'),
   );
