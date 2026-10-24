@@ -7,6 +7,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { finalVerdict } from './lib/verdict.mjs';
+import { sampleImport } from './lib/pending.mjs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { parse } from 'yaml';
@@ -41,14 +43,9 @@ function tree(t, files) {
 const MANIFEST = 'apps/web/src/lib/generated/asset-manifest.json';
 const manifest = (units) => JSON.stringify({ version: 1, units, platform: {} });
 
-test('a pending row fails the run once what it waits on has landed', () => {
-  const before = { registered: ['kinetic-cosmos'], defaultId: 'editorial-evidence' };
-  const after = {
-    registered: ['editorial-evidence', 'kinetic-cosmos'],
-    defaultId: 'editorial-evidence',
-  };
-  assert.deepEqual(pendingProblems(PENDING_ROWS, before), []);
-  const problems = pendingProblems(PENDING_ROWS, after);
+test('a pending row fails the run once what it waits on has landed: the sample pair imports', () => {
+  assert.deepEqual(pendingProblems(PENDING_ROWS, { sampleImports: false }), []);
+  const problems = pendingProblems(PENDING_ROWS, { sampleImports: true });
   assert.equal(problems.length, PENDING_ROWS.length, 'every row waiting on it fails');
   for (const row of PENDING_ROWS) {
     assert.ok(
@@ -58,6 +55,68 @@ test('a pending row fails the run once what it waits on has landed', () => {
       row.id,
     );
   }
+});
+
+test("whether the sample pair imports is read from portfolio-store's own answer", () => {
+  assert.deepEqual(
+    sampleImport({
+      status: 0,
+      out: 'Imported portfolio.yml and site.yml as a new revision.\nlive revision: rev_0123456789abcdef0123456789abcdef (seq 1)\n',
+    }),
+    { sampleImports: true },
+  );
+  const unavailable = [
+    'validation_failed: 1 record blocks it. Nothing was imported.',
+    '  site:21:12: variant.unavailable (blocks-publish) at /appearance/variant',
+    "    /appearance/variant names a variant this build doesn't register.",
+  ].join('\n');
+  assert.deepEqual(sampleImport({ status: 1, out: unavailable }), { sampleImports: false });
+  // Anything else says nothing about the composition, and fails the run.
+  const other = sampleImport({
+    status: 1,
+    out: `${unavailable}\n  portfolio:3:1: schema.invalid (blocks-preview) at /identity`,
+  });
+  assert.equal(other.sampleImports, false);
+  assert.match(other.error, /schema\.invalid/);
+  assert.ok(sampleImport({ status: 2, out: 'usage' }).error);
+  assert.ok(sampleImport({ status: 0, out: 'no revision line' }).error);
+});
+
+test('the final verdict fails on a planted canary, a lost owner secret, and a landed blocker', (t) => {
+  const reports = mkdtempSync(path.join(tmpdir(), 'rehearsal-verdict-'));
+  t.after(() => rmSync(reports, { recursive: true, force: true }));
+  mkdirSync(path.join(reports, 'rehearsal'), { recursive: true });
+  writeFileSync(path.join(reports, 'rehearsal', 'commands.log'), 'clean\n');
+  const secrets = {
+    runCanary: 'canary-rehearsal-1',
+    contentCanary: 'canary-content-1',
+    password: 'pw-1',
+    hash: '$scrypt$h',
+  };
+  const input = {
+    pendingRows: PENDING_ROWS,
+    landedState: { sampleImports: false },
+    reports,
+    secrets,
+    requiredSecrets: ['runCanary', 'contentCanary', 'password', 'hash'],
+  };
+  assert.deepEqual(finalVerdict(input), []);
+  writeFileSync(
+    path.join(reports, 'rehearsal', 'commands.log'),
+    'the tagline is canary-content-1\n',
+  );
+  assert.deepEqual(finalVerdict(input), [
+    'canary: rehearsal/commands.log held a per-run secret, now redacted',
+  ]);
+  assert.deepEqual(finalVerdict({ ...input, secrets: { runCanary: 'x', contentCanary: 'y' } }), [
+    'canary: the scan has no password to look for',
+    'canary: the scan has no hash to look for',
+  ]);
+  assert.ok(
+    finalVerdict({ ...input, landedState: { sampleImports: true } }).some((p) =>
+      p.startsWith('pending: default-composition is still pending'),
+    ),
+  );
 });
 
 test('a pending row that waits on something LANDED does not define fails too', () => {
@@ -81,16 +140,31 @@ test('every pending row says what it waits on, and no row is both pending and ru
 test('the rows cover the rehearsal the scope names, in order', () => {
   assert.deepEqual(
     NATIVE_ROWS.map((row) => row.id),
-    ['old-config', 'migrate', 'import', 'backup', 'damaged'],
+    ['hermetic', 'old-config', 'migrate', 'import', 'backup', 'damaged'],
   );
   assert.deepEqual(
     CONTAINER_ROWS.map((row) => row.id),
-    ['image-old-config'],
+    [
+      'image-hermetic',
+      'image-old-config',
+      'image-import',
+      'in-app-rollback',
+      'server-last-known-good',
+      'previous-digest',
+    ],
   );
   assert.deepEqual(
     PENDING_ROWS.map((row) => row.id),
-    ['in-app-rollback', 'server-last-known-good', 'previous-digest', 'image-import'],
+    ['default-composition'],
   );
+});
+
+test("every docker run in the rehearsal names --pull=never, and every container's network is internal", () => {
+  const source = readFileSync(new URL('./rehearsal.mjs', import.meta.url), 'utf8');
+  // Every container run goes through runArgs(), which starts with --pull=never and the network.
+  assert.doesNotMatch(source, /\[\s*'run',(?!\s*'--pull=never')/);
+  assert.match(source, /'run',\s*'--pull=never',/);
+  assert.match(source, /'network', 'create', '--internal'/);
 });
 
 test('registered variants come from the generated asset manifest, without fallback or fixtures', (t) => {

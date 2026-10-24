@@ -991,22 +991,28 @@ jobs:
   # The release-candidate rehearsal's PR run (#12, ci/rehearsal.mjs): from a
   # clean data directory, the frozen old configs refused, config:migrate twice,
   # import, publish, and rollback, a backup during a publish and its restore,
-  # and a damaged revision serving the last known good, natively; then the
-  # image the image job built and checked refusing the old config, on an
-  # internal network with HARDENING. release.yml runs the same rehearsal on
+  # and a damaged revision serving the last known good, natively; then, on
+  # the image the image job built and checked, on an internal network with
+  # HARDENING: the old config refused, the image's own import, owner ready,
+  # an in-app rollback, a restart into the last known good, and the base
+  # tip's image, built here, serving the old site from its pre-upgrade
+  # backup. release.yml's rc-rehearsal runs the same script and rows on
   # every release candidate. No token, and a canary scan over every report.
   rehearsal:
     name: rehearsal
     needs: [changes, image]
     if: ${{ !cancelled() && contains(fromJSON(needs.changes.outputs.jobs), 'rehearsal') && needs.image.outputs.saved == 'true' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     env:
       IMAGE_TAG: portfolio:ci
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The merge commit and its first parent, the base tip, whose image
+          # the previous-digest row builds.
+          fetch-depth: 2
       - name: Install
         id: install
         uses: ./.github/actions/install
@@ -1024,6 +1030,7 @@ jobs:
         env:
           REHEARSAL_IMAGE_ARCHIVE: ${{ runner.temp }}/image/portfolio-ci.tar.gz
           REHEARSAL_CONTAINER: required
+          REHEARSAL_PREVIOUS_REF: HEAD^1
         run: pnpm ci:rehearsal
       - name: Failure summary
         if: ${{ always() }}
