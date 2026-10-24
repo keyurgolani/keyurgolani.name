@@ -84,6 +84,8 @@ const FS_WRITERS = [
   // #9's CI reference fixture, which `pnpm fixture:reference` writes under tests/fixtures.
   'apps/web/scripts/reference-fixture.ts',
   'apps/web/scripts/registry-options.ts',
+  // #20 PR 2b: writes each held pack's gate.json (pnpm catalog:held).
+  'apps/web/scripts/write-held.ts',
   'apps/web/src/server/config.ts',
   'packages/appearance/src/node/check.ts',
   'packages/appearance/src/node/compile.ts',

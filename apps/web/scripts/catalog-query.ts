@@ -431,12 +431,27 @@ export interface AppliedRecipe {
  * as any selection is. Which of them this build can't take is reported,
  * per axis; whether a recipe is offered at all is Studio's (deferred).
  */
-export function applyRecipe(registry: AppearanceRegistry, recipe: Recipe): AppliedRecipe {
+export function applyRecipe(
+  registry: AppearanceRegistry,
+  recipe: Recipe,
+  /** The held packs, by axis and id, with their reasons: a recipe naming one says it's held. */
+  held: ReadonlyMap<string, string> = new Map(),
+): AppliedRecipe {
   const selection = recipe.selection;
   const current = selection as AppearanceSelection;
-  const diagnostics = APPEARANCE_AXES.flatMap((axis) => {
+  const diagnostics = APPEARANCE_AXES.flatMap((axis): AppearanceDiagnostic[] => {
     const problem = valueProblem(registry, axis, selection[axis], current);
-    return problem ? [problem] : [];
+    if (!problem) return [];
+    const reason = held.get(`${axis}:${selection[axis]}`);
+    return [
+      reason
+        ? {
+            ...problem,
+            message: `names a held ${AXIS_NAMES[axis]}: ${reason}`,
+            remediation: `It ships once it passes its gate (#20 PR 2c). Until then, select another ${AXIS_NAMES[axis]}.`,
+          }
+        : problem,
+    ];
   });
   return { recipe, selection, query: serializeSelection(selection), diagnostics };
 }

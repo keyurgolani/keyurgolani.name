@@ -2,7 +2,7 @@
   "id": "atlassian-inspired",
   "name": "Atlassian Inspired",
   "description": "An independent interpretation of Atlassian's public design principles: tight radii, hairline borders, solid surfaces, compact density, no shadows, precise motion, and no texture. It ships no official component, token file, icon, or font.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "tokenContract": 1,
   "tier": "extended",
   "provenance": {
@@ -34,7 +34,7 @@
   },
   "fallbacks": [
     "Under reduced transparency, without backdrop-filter, in forced colors, and in print, surfaces render opaque and the backdrop blur is 0.",
-    "Under reduced motion, the state transforms are none and motion is instant."
+    "Under reduced motion, transforms and emphasis stop and entrances and exits fade; a paused boundary and print are instant."
   ],
   "caveats": [],
   "tokens": {

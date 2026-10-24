@@ -20,6 +20,8 @@ export interface ReadSources extends CatalogSources {
   /** Every registered pack, as the metadata module lists it. */
   readonly packs: readonly MetaPack[];
   readonly held: NonNullable<CatalogSources['held']>;
+  /** Each compiled pack stylesheet's text, by the URL the metadata module gives it. */
+  readonly stylesheets: ReadonlyMap<string, string>;
 }
 
 export async function readCatalogSources(
@@ -28,7 +30,13 @@ export async function readCatalogSources(
   | { readonly ok: true; readonly sources: ReadSources }
   | { readonly ok: false; readonly diagnostics: readonly RegistryDiagnostic[] }
 > {
-  const { result, excluded = [] } = await generateRegistry(env, { write: false });
+  const {
+    result,
+    excluded = [],
+    packs: compiled = [],
+  } = await generateRegistry(env, {
+    write: false,
+  });
   if (!result.ok) return { ok: false, diagnostics: result.diagnostics };
   const data = registryMeta(result, renderOptions(env));
   const meta: AppearanceMeta = {
@@ -77,6 +85,9 @@ export async function readCatalogSources(
         ];
       }),
       packs: meta.PACKS ?? [],
+      stylesheets: new Map(
+        compiled.map(({ url, bytes }) => [url, new TextDecoder().decode(bytes)] as const),
+      ),
     },
   };
 }
