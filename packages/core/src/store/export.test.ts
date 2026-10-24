@@ -947,6 +947,36 @@ test('a target filled, or its directory swapped for a link, after the checks is 
   assert.equal(run.code, 1);
   assert.match(run.err, /^target_linked: .*Nothing was written\.$/m);
   assert.deepEqual(readdirSync(moved), [], 'nothing where the link points');
+
+  // Swapped as the staging directory is made: refused before any file is written.
+  const early = path.join(root, 'early');
+  const earlyMoved = path.join(root, 'early-moved');
+  mkdirSync(early);
+  let writes = 0;
+  let swappedEarly = false;
+  const swappingEarly: FsPort = {
+    ...nodeFs,
+    async mkdir(dir, point, options) {
+      await nodeFs.mkdir(dir, point, options);
+      if (!swappedEarly && point === 'export.mkdir') {
+        swappedEarly = true;
+        renameSync(early, earlyMoved);
+        symlinkSync(earlyMoved, early);
+      }
+    },
+    async writeFile(file, data, point, options) {
+      writes += 1;
+      return nodeFs.writeFile(file, data, point, options);
+    },
+  };
+  const refusedEarly = await exportCli(seededStore, ['live', '--out', path.join(early, 'out')], {
+    fs: swappingEarly,
+  });
+  assert.ok(swappedEarly);
+  assert.equal(refusedEarly.code, 1);
+  assert.match(refusedEarly.err, /^target_linked: .*Nothing was written\.$/m);
+  assert.equal(writes, 0, 'no file written once the directory moved');
+  assert.deepEqual(readdirSync(earlyMoved), []);
 });
 
 test('an export takes no lock, reads the revision by its ID, and a publish while it reads gives no mixed bundle', async (t) => {
