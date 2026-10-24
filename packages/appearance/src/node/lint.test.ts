@@ -156,6 +156,23 @@ test('focus-outline: nothing removes an outline, and a focus rule draws no shado
     `${slot} { outline-style: none; }`,
     `${slot} { outline-style: hidden; }`,
     `${slot} { outline-width: 0; }`,
+    // A width is read as a number: zero however it's written, a fraction of a pixel, or below zero.
+    `${slot} { outline-width: .0px; }`,
+    `${slot} { outline-width: 00px; }`,
+    `${slot} { outline-width: 0.00rem; }`,
+    `${slot} { outline-width: +0px; }`,
+    `${slot} { outline-width: 0.01px; }`,
+    `${slot} { outline-width: 0.5px; }`,
+    `${slot} { outline-width: 0.05rem; }`,
+    `${slot} { outline-width: -1px; }`,
+    `${slot} { outline: 0.01px solid var(--color-focus); }`,
+    `${slot} { outline: solid .0px var(--color-focus); }`,
+    `${slot} { outline-width: calc(0px); }`,
+    // A transparent outline draws nothing either, in a focus rule or one that cascades into it.
+    `${slot}:focus-visible { outline-color: transparent; }`,
+    `${slot}:focus-visible { outline-color: TRANSPARENT; }`,
+    `${slot} { outline-color: transparent; }`,
+    `${slot}:focus-visible { outline: 2px solid transparent; }`,
     `${slot}:focus { outline: none; }`,
     `${slot}:focus-visible { box-shadow: 0 0 0 3px var(--color-focus); }`,
     `${slot}:FOCUS-VISIBLE { box-shadow: 0 0 0 3px var(--color-focus); }`,
@@ -172,6 +189,11 @@ test('focus-outline: nothing removes an outline, and a focus rule draws no shado
     [],
   );
   assert.ok(!refused(`${slot}:not(:focus) { box-shadow: var(--ui-shadow-card); }`));
+  // A ring at least 1px wide, written out or as a keyword or a token, keeps the rule.
+  for (const width of ['1px', '2px', '0.0625rem', 'thin', 'var(--ui-focus-width)']) {
+    assert.deepEqual(rules(`${slot} { outline-width: ${width}; }`), [], width);
+  }
+  assert.deepEqual(rules(`${slot}:focus-visible { outline-color: var(--color-focus); }`), []);
   assert.ok(testsFocus("[data-ui-slot='a']:focus-visible"));
   assert.ok(testsFocus("[data-ui-slot='a']:focus-within [data-ui-slot='b']"));
   assert.ok(!testsFocus("[data-ui-slot='a']:not(:focus)"));

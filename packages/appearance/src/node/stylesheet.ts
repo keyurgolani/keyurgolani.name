@@ -38,7 +38,8 @@ import { stylesheetValueProblem } from '../values';
  *   names an unprefixed one under this rule;
  * - `focus-outline`: focus is drawn with `outline`, which the platform
  *   stylesheet draws from the focus tokens: nothing removes an outline
- *   (`none`, `hidden`, or a zero width), and a rule that tests :focus,
+ *   (`none`, `hidden`, a width under 1px read as a number, or a
+ *   `transparent` color), and a rule that tests :focus,
  *   :focus-visible, or :focus-within draws no ring as a `box-shadow`;
  * - `javascript`: no script through CSS: `expression()`, `javascript:` or
  *   `vbscript:` URLs, `behavior`, or `-moz-binding`.
@@ -986,17 +987,49 @@ export function testsFocus(selector: string): boolean {
   return /:focus(?:-visible|-within)?(?![\w-])/.test(text);
 }
 
-/** An outline that draws nothing: none or hidden as its style, or a zero width. */
-function removesOutline(base: string, value: string): boolean {
-  const words = value.toLowerCase().split(/\s+/);
-  if (base === 'outline') {
-    return words.some(
-      (word) => word === 'none' || word === 'hidden' || /^0(?:\.0*)?(?:[a-z]+)?$/.test(word),
-    );
+/** The narrowest outline that still draws a ring: a width under it draws nothing to see. */
+export const MIN_OUTLINE_PX = 1;
+
+/**
+ * A written-out length in px (a rem or an em as 16px), read as a number, or
+ * null for anything else: a keyword, a token, a function. A bare number is a
+ * length only when it's zero.
+ */
+function lengthPx(word: string): number | null {
+  const match = /^([+-]?(?:\d+\.?\d*|\.\d+))([a-z]*)$/.exec(word);
+  if (!match) return null;
+  const number = Number(match[1]);
+  const unit = match[2]!;
+  if (unit === '') return number === 0 ? 0 : null;
+  if (unit === 'px') return number;
+  if (unit === 'rem' || unit === 'em') return number * 16;
+  return null;
+}
+
+/**
+ * Why an outline declaration draws nothing, or null when it draws a ring:
+ * none or hidden as its style, a width under MIN_OUTLINE_PX (zero however
+ * it's written, a fraction of a pixel, or below zero), or a transparent color.
+ */
+function removesOutline(base: string, value: string): string | null {
+  const words = value
+    .toLowerCase()
+    .split(/[\s,()]+/)
+    .filter(Boolean);
+  const style = words.find((word) => word === 'none' || word === 'hidden');
+  const thin = words.find((word) => {
+    const px = lengthPx(word);
+    return px !== null && px < MIN_OUTLINE_PX;
+  });
+  const clear = words.includes('transparent');
+  if ((base === 'outline' || base === 'outline-style') && style) {
+    return `sets its style to ${style}`;
   }
-  if (base === 'outline-style') return words.includes('none') || words.includes('hidden');
-  if (base === 'outline-width') return /^0(?:\.0*)?(?:[a-z]+)?$/.test(value.trim());
-  return false;
+  if ((base === 'outline' || base === 'outline-width') && thin) {
+    return `is ${thin} wide, and an outline under ${MIN_OUTLINE_PX}px draws nothing to see`;
+  }
+  if ((base === 'outline' || base === 'outline-color') && clear) return 'draws it transparent';
+  return null;
 }
 
 /**
@@ -1234,9 +1267,12 @@ function readDeclaration(
       };
     }
   }
-  if (/^outline(?:-style|-width)?$/.test(lowered) && removesOutline(lowered, value)) {
+  const removal = /^outline(?:-style|-width|-color)?$/.test(lowered)
+    ? removesOutline(lowered, value)
+    : null;
+  if (removal) {
     return {
-      message: `${property}: ${value} removes the outline focus is drawn with.`,
+      message: `${property}: ${value} removes the outline focus is drawn with: it ${removal}.`,
       rule: 'focus-outline',
     };
   }
