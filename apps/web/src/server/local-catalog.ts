@@ -2,7 +2,7 @@ import 'server-only';
 import { EXCLUDED_PACKS } from '~/lib/generated/excluded-packs';
 import { PACKS, PLATFORM_STYLESHEET, VARIANTS } from '~/lib/generated/registry.meta';
 import { variantStylesheet } from '~/lib/variants';
-import type { LocalCatalog } from '~/preview/local-catalog';
+import type { LocalCatalog } from '~/lib/local-catalog';
 
 // The catalog /preview/local's page hands Demo Studio's local frame (#9):
 // what this build registers, as plain data. Nothing in it is a visitor's or

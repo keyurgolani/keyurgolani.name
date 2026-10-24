@@ -23,7 +23,7 @@ const RENDERER = 'packages/kit/src/markdown.ts';
  * first: the renderer renders nothing until it's in.
  */
 const CLIENT_CALLERS: Readonly<Record<string, string>> = {
-  'apps/web/src/preview/local-document.tsx':
+  'apps/web/src/app/(preview)/_local/local-document.tsx':
     "Demo Studio's local frame renders the visitor's document in the browser, through markdown-local.ts's post-pass (#9)",
   'apps/web/src/app/(preview)/_local/local-preview.tsx':
     "the local frame's shell, which loads local-document.tsx on demand in the browser alone (#9)",

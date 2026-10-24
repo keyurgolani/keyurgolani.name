@@ -17,7 +17,7 @@ import {
 } from '~/lib/demo/import/test-support/hostile';
 import { VARIANT_LOADERS } from '~/lib/generated/registry.loaders';
 import { localCatalog } from '~/server/local-catalog';
-import { localRegistries } from './local-catalog';
+import { localRegistries } from '~/lib/local-catalog';
 import type { LocalDocumentMessage, LocalRender } from './local-document';
 
 // tsx compiles JSX to React.createElement calls, so the test supplies React.
@@ -111,7 +111,10 @@ test('the example renders in the composition its site selects, and in each one S
     registries,
     origin: ORIGIN,
   });
-  assert.equal(base.kind === 'render' && base.composition.rendered.manifest.id, 'editorial-evidence');
+  assert.equal(
+    base.kind === 'render' && base.composition.rendered.manifest.id,
+    'editorial-evidence',
+  );
   assert.match(await markup(base), /Anamika Devi/);
   for (const { manifest } of registries.variants) {
     if (manifest.id === 'fallback') continue;
@@ -126,7 +129,11 @@ test('the example renders in the composition its site selects, and in each one S
     assert.match(html, new RegExp(`data-variant="${manifest.id}"`), manifest.id);
     // Links stay below the frame's link base.
     for (const url of urls(html).filter((each) => each.startsWith('/'))) {
-      assert.match(url, /^\/(?:preview\/local(?:\/|#|$)|_next\/|_portfolio\/)/, `${manifest.id} ${url}`);
+      assert.match(
+        url,
+        /^\/(?:preview\/local(?:\/|#|$)|_next\/|_portfolio\/)/,
+        `${manifest.id} ${url}`,
+      );
     }
   }
 });
@@ -137,7 +144,9 @@ test("every hostile fixture the import takes renders inert in every composition,
   const { renderLocal } = await frame();
   let checked = 0;
   for (const fixture of HOSTILE_FIXTURES.filter(({ expect }) => expect === 'imported')) {
-    for (const { manifest } of registries.variants.filter(({ manifest }) => manifest.id !== 'fallback')) {
+    for (const { manifest } of registries.variants.filter(
+      ({ manifest }) => manifest.id !== 'fallback',
+    )) {
       const render = await renderLocal({
         document: documentOf(fixture.files, { variant: manifest.id }),
         route: '/',
@@ -181,7 +190,9 @@ test("no media source the content names reaches the page: a remote one renders a
     ),
   );
   assert.equal(withData.kind, 'refused');
-  for (const { manifest } of registries.variants.filter(({ manifest }) => manifest.id !== 'fallback')) {
+  for (const { manifest } of registries.variants.filter(
+    ({ manifest }) => manifest.id !== 'fallback',
+  )) {
     const html = await markup(
       await renderLocal({
         document: documentOf(pairFiles(portfolio), { variant: manifest.id }),
@@ -240,9 +251,9 @@ test('a selection sets only the five appearance axes, as text', async () => {
 });
 
 test("the frame's module installs the post-pass, and its page renders no document on the server", () => {
-  const shell = readFileSync(new URL('../app/(preview)/_local/local-preview.tsx', import.meta.url), 'utf8');
+  const shell = readFileSync(new URL('./local-preview.tsx', import.meta.url), 'utf8');
   assert.match(shell, /ssr: false/);
-  assert.match(shell, /import\('~\/preview\/local-document'\)/);
-  const page = readFileSync(new URL('../app/(preview)/preview/local/page.tsx', import.meta.url), 'utf8');
+  assert.match(shell, /import\('\.\/local-document'\)/);
+  const page = readFileSync(new URL('../preview/local/page.tsx', import.meta.url), 'utf8');
   assert.doesNotMatch(page, /getLive|readLive|catalog\.getLive|getPublicView/);
 });

@@ -44,6 +44,8 @@ export function localRegistries(catalog: LocalCatalog): LocalRegistries {
     appearance,
     stylesheets: registryStylesheets(appearance),
     variantStylesheet: (id) =>
-      Object.hasOwn(catalog.variantStylesheets, id) ? (catalog.variantStylesheets[id] ?? null) : null,
+      Object.hasOwn(catalog.variantStylesheets, id)
+        ? (catalog.variantStylesheets[id] ?? null)
+        : null,
   };
 }

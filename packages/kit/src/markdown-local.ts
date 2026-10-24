@@ -1,4 +1,3 @@
-/// <reference path="./sanitize-html.d.ts" />
 import { requireMarkdownPostPass, setMarkdownPostPass } from './markdown';
 
 // The browser's Markdown post-pass (#9, #10), for Demo Studio's local

@@ -280,7 +280,9 @@ test(
       media[1]!.kind = 'video';
       (data.links as { url: string }[])[0]!.url = `https://links.example.net/${MARKERS.link}`;
     });
-    const compositions = VARIANTS.map(({ id }) => id).filter((id) => id !== FALLBACK_ID);
+    const compositions = VARIANTS.map(({ manifest }) => manifest.id).filter(
+      (id) => id !== FALLBACK_ID,
+    );
     expect(compositions.length).toBeGreaterThan(0);
     for (const variant of compositions) {
       expect(await send(page, documentOf(H.pairFiles(portfolio), { variant })), variant).toEqual({

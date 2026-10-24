@@ -19,9 +19,13 @@ import { CONTENT_EXTENSIONS, EXTENSION_RENDERED_KINDS } from '~/lib/generated/re
 import { VARIANT_LOADERS } from '~/lib/generated/registry.loaders';
 import { ClientHostModules } from '~/lib/host-modules-client';
 import { resolveVisitorPathIn } from '~/lib/visitor-dispatch';
-import { reportFrameStatus, routeOf, startFrameChannel } from './frame-channel';
-import { localRegistries, type LocalCatalog, type LocalRegistries } from './local-catalog';
-import type { ToFramePayload } from './protocol';
+import {
+  reportFrameStatus,
+  routeOf,
+  startFrameChannel,
+  type FrameChannelOptions,
+} from '~/preview/frame-channel';
+import { localRegistries, type LocalCatalog, type LocalRegistries } from '~/lib/local-catalog';
 
 // Demo Studio's local preview frame (#7, Slice 6; #9): it renders the
 // document Studio sends over the frame's port, in the browser, so a
@@ -41,7 +45,8 @@ export const LOCAL_LINK_BASE = '/preview/local';
 /** The appearance axes a document's selection may set, as Demo Studio's URL keeps them. */
 const AXES = ['variant', 'designLanguage', 'colorScheme', 'typography', 'displayMode'] as const;
 
-export type LocalDocumentMessage = ToFramePayload<'document'>;
+/** A `document` message, as the frame channel hands it over. */
+export type LocalDocumentMessage = Parameters<NonNullable<FrameChannelOptions['onDocument']>>[0];
 
 /** What a document renders as, or why it doesn't. */
 export type LocalRender =
