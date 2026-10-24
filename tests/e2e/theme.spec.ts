@@ -187,8 +187,22 @@ test(
         response.request().method() === 'POST',
     );
     await slot.getByRole('radio', { name: 'Dark' }).check();
-    expect((await saved).status()).toBe(204);
+    const answer = await saved;
+    expect(answer.status()).toBe(200);
+    expect(answer.headers()['cache-control']).toBe('no-store');
+    // The answer names the saved packs' stylesheets, which the control preloads
+    // before it refreshes: the page names none it doesn't render (#6's purity).
+    // The page already links warm-parchment's, so a mode alone preloads nothing.
+    const { stylesheets } = (await answer.json()) as { stylesheets: string[] };
+    expect(stylesheets).toEqual([
+      expect.stringMatching(/^\/_portfolio\/pack\/warm-parchment\.[0-9a-f]{12}\.css$/),
+    ]);
+    await expect(page.locator(`link[rel~="stylesheet"][href="${stylesheets[0]}"]`)).toHaveCount(1);
+    // The refresh follows every preload, so once the page is dark none was added.
     await expect(page.locator(BOUNDARY)).toHaveAttribute('data-display-mode', 'dark');
+    await expect(
+      page.locator('link[rel="preload"][as="style"][href^="/_portfolio/pack/"]'),
+    ).toHaveCount(0);
     expect(loads).toBe(0);
     const stored = (await page.context().cookies(app.origin)).find(
       ({ name }) => name === 'portfolio_appearance',

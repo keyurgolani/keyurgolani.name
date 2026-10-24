@@ -6,13 +6,14 @@ import {
   PLATFORM_DEFAULTS,
   resolveAppearance,
   visitorAppearanceModel,
-  type AppearanceStylesheets,
   type ResolveInput,
   type VisitorModelInput,
 } from '../index';
 import { elements, html, one, slotted, text } from '../test-support/markup';
 import { testRegistry } from '../test-support/packs';
 import { PresentationBoundary, saveAppearance, VisitorAppearance, type SaveDeps } from '.';
+import { MAX_PRELOADS, packStylesheets, postJson, preloadStylesheet } from './save';
+import { PACK_AXES } from '../axes';
 
 // VisitorAppearance (#19, Slice 3, item 3), on its own: Slice 4 adds POST
 // /api/appearance and renders it in #5's VisitorControlSlot, so these tests
@@ -29,10 +30,6 @@ const ALL_SELECTABLE: VisitorControls = {
   colorScheme: 'selectable',
   typography: 'selectable',
   displayMode: 'selectable',
-};
-const STYLESHEETS: AppearanceStylesheets = {
-  platform: '/_portfolio/pack/_platform.css',
-  pack: (_axis, id) => `/_portfolio/pack/${id}.css`,
 };
 
 function resolve(extra: Partial<ResolveInput> = {}) {
@@ -52,7 +49,6 @@ function model(extra: Partial<VisitorModelInput> = {}) {
     appearance: resolve(),
     visitorControls: DEFAULT_VISITOR_CONTROLS,
     profile: 'owner',
-    stylesheets: STYLESHEETS,
     ...extra,
   });
 }
@@ -100,7 +96,9 @@ test('packs are grouped by tier with Stable first, unrenderable generated scheme
     },
   }).controls[0]!;
   assert.ok(generated.groups.at(-1)!.choices.some((choice) => choice.value === 'fixture-seed'));
-  assert.equal(scheme.groups[0]!.choices[0]!.stylesheet, '/_portfolio/pack/warm-parchment.css');
+  // No choice names a stylesheet: a page names only those it renders (#6's purity check).
+  for (const group of scheme.groups)
+    for (const choice of group.choices) assert.equal('stylesheet' in choice, false, choice.value);
 });
 
 test('variants are listed by name, without the fallback composition', () => {
@@ -284,21 +282,24 @@ test("in a plate it's the same form, with the plate's id prefix and nothing to l
   );
 });
 
-/** Save dependencies whose preload and post resolve when the test says. */
-function fakes() {
+/** A compiled pack's URL as registry generation names it. */
+const pack = (id: string) => `/_portfolio/pack/${id}.0123456789ab.css`;
+
+/** Save dependencies whose post and preload resolve when the test says. */
+function fakes(stylesheets: readonly string[] = []) {
   const calls: string[] = [];
   const pending = new Map<string, { resolve: () => void; reject: (error: unknown) => void }>();
   const deps: SaveDeps = {
+    post: (url, body, signal) =>
+      new Promise((resolve, reject) => {
+        calls.push(`post ${url} ${body}`);
+        pending.set('post', { resolve: () => resolve({ ok: true, stylesheets }), reject });
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      }),
     preload: (href, signal) =>
       new Promise<void>((resolve, reject) => {
         calls.push(`preload ${href}`);
         pending.set(`preload ${href}`, { resolve, reject });
-        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
-      }),
-    post: (url, body, signal) =>
-      new Promise((resolve, reject) => {
-        calls.push(`post ${url} ${body}`);
-        pending.set('post', { resolve: () => resolve({ ok: true }), reject });
         signal.addEventListener('abort', () => reject(signal.reason), { once: true });
       }),
     setTimeout: (run, ms) => setTimeout(run, ms),
@@ -309,80 +310,258 @@ function fakes() {
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
-test('a save loads the stylesheet, waits for it, then posts the values as JSON', async () => {
-  const { deps, calls, pending } = fakes();
+test('a save posts the values as JSON, then preloads the stylesheets the answer names, then counts as saved', async () => {
+  const { deps, calls, pending } = fakes([pack('nord')]);
+  let outcome: string | undefined;
   const saving = saveAppearance(
-    {
-      action: '/api/appearance',
-      body: { scheme: 'nord', mode: 'dark' },
-      stylesheets: ['/nord.css'],
-    },
+    { action: '/api/appearance', body: { scheme: 'nord', mode: 'dark' } },
     deps,
+  ).then((value) => (outcome = value));
+  await flush();
+  assert.deepEqual(
+    calls,
+    ['post /api/appearance {"scheme":"nord","mode":"dark"}'],
+    'nothing loads before the route has saved',
   );
-  await flush();
-  assert.deepEqual(calls, ['preload /nord.css'], 'nothing is sent before the stylesheet loads');
-  pending.get('preload /nord.css')!.resolve();
-  await flush();
-  assert.deepEqual(calls.at(-1), 'post /api/appearance {"scheme":"nord","mode":"dark"}');
   pending.get('post')!.resolve();
-  assert.equal(await saving, 'saved');
+  await flush();
+  assert.deepEqual(calls.at(-1), `preload ${pack('nord')}`);
+  assert.equal(
+    outcome,
+    undefined,
+    "it isn't saved, so nothing refreshes, until the preload settles",
+  );
+  pending.get(`preload ${pack('nord')}`)!.resolve();
+  await saving;
+  assert.equal(outcome, 'saved');
 });
 
-test("a save the route refuses, or whose stylesheet doesn't load, fails", async () => {
+test('it preloads only same-origin pack paths from the answer, each once', async () => {
+  const { deps, calls, pending } = fakes([
+    pack('nord'),
+    pack('nord'),
+    'https://evil.example/x.css',
+    '//evil.example/x.css',
+    '/_portfolio/pack/../../x.css',
+    '/elsewhere.css',
+    7 as never,
+    // Each reaches one anchor of the pack path's pattern: the start, then the end.
+    `https://evil.example${pack('nord')}`,
+    `//evil.example${pack('nord')}`,
+    `${pack('nord')}?x`,
+    `${pack('nord')}/x`,
+    'data:text/css,',
+    // A line break before or after a pack path: a multiline pattern would take either.
+    `https://evil.example\n${pack('nord')}`,
+    `${pack('nord')}\n/x`,
+  ]);
+  const saving = saveAppearance({ action: '/a', body: { mode: 'dark' } }, deps);
+  await flush();
+  pending.get('post')!.resolve();
+  await flush();
+  assert.deepEqual(calls.slice(1), [`preload ${pack('nord')}`]);
+  pending.get(`preload ${pack('nord')}`)!.resolve();
+  assert.equal(await saving, 'saved');
+  assert.deepEqual(packStylesheets('not a list'), []);
+  // The cap counts kept paths, after the filter and the dedupe: one per pack axis.
+  assert.equal(MAX_PRELOADS, PACK_AXES.length);
+  assert.deepEqual(
+    packStylesheets([pack('a'), pack('a'), 'junk', pack('b'), pack('c'), pack('d')]),
+    [pack('a'), pack('b'), pack('c')],
+  );
+});
+
+test("a save the route refuses fails, and one whose stylesheet doesn't load still counts as saved", async () => {
   const refused: SaveDeps = {
     ...fakes().deps,
-    preload: async () => {},
+    preload: async () => assert.fail('nothing loads for a refused save'),
     post: async () => ({ ok: false }),
   };
-  assert.equal(
-    await saveAppearance({ action: '/a', body: { reset: true }, stylesheets: [] }, refused),
-    'failed',
-  );
+  assert.equal(await saveAppearance({ action: '/a', body: { reset: true } }, refused), 'failed');
   const broken: SaveDeps = {
     ...refused,
+    post: async () => ({ ok: true, stylesheets: [pack('nord')] }),
     preload: async () => {
       throw new Error('404');
     },
   };
-  assert.equal(
-    await saveAppearance({ action: '/a', body: { mode: 'dark' }, stylesheets: ['/x.css'] }, broken),
-    'failed',
-  );
+  assert.equal(await saveAppearance({ action: '/a', body: { mode: 'dark' } }, broken), 'saved');
+  const thrown: SaveDeps = {
+    ...refused,
+    post: async () => {
+      throw new Error('offline');
+    },
+  };
+  assert.equal(await saveAppearance({ action: '/a', body: { mode: 'dark' } }, thrown), 'failed');
 });
 
-test('a save that takes more than ten seconds times out, and nothing is posted after', async () => {
+test('a post that takes more than ten seconds times out, and nothing loads after', async () => {
   mock.timers.enable({ apis: ['setTimeout'] });
   try {
-    const { deps, calls } = fakes();
-    const saving = saveAppearance(
-      { action: '/a', body: { mode: 'dark' }, stylesheets: ['/x.css'] },
-      deps,
-    );
+    const { deps, calls } = fakes([pack('nord')]);
+    const saving = saveAppearance({ action: '/a', body: { mode: 'dark' } }, deps);
     await flush();
     mock.timers.tick(9_999);
     await flush();
     mock.timers.tick(1);
     assert.equal(await saving, 'timed-out');
-    assert.deepEqual(calls, ['preload /x.css']);
+    assert.deepEqual(calls, ['post /a {"mode":"dark"}']);
   } finally {
     mock.timers.reset();
   }
 });
 
-test('a newer save supersedes an older one', async () => {
+test('a preload still running at ten seconds stops, and the save, already made, counts as saved', async () => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const { deps, pending } = fakes([pack('nord')]);
+    const saving = saveAppearance({ action: '/a', body: { mode: 'dark' } }, deps);
+    await flush();
+    pending.get('post')!.resolve();
+    await flush();
+    mock.timers.tick(10_000);
+    assert.equal(await saving, 'saved');
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test('a newer save supersedes an older one, before or after its post', async () => {
   const { deps } = fakes();
   const controller = new AbortController();
   const older = saveAppearance(
-    { action: '/a', body: { mode: 'dark' }, stylesheets: ['/x.css'], signal: controller.signal },
+    { action: '/a', body: { mode: 'dark' }, signal: controller.signal },
     deps,
   );
   controller.abort();
   assert.equal(await older, 'superseded');
   assert.equal(
-    await saveAppearance(
-      { action: '/a', body: { mode: 'dark' }, stylesheets: [], signal: controller.signal },
-      deps,
-    ),
+    await saveAppearance({ action: '/a', body: { mode: 'dark' }, signal: controller.signal }, deps),
     'superseded',
   );
+  const later = fakes([pack('nord')]);
+  const preloading = new AbortController();
+  const saving = saveAppearance(
+    { action: '/a', body: { mode: 'dark' }, signal: preloading.signal },
+    later.deps,
+  );
+  await flush();
+  later.pending.get('post')!.resolve();
+  await flush();
+  preloading.abort();
+  assert.equal(await saving, 'superseded');
+});
+
+/** A minimal document: its head, the links it holds, and a nonce'd element when `nonce` is given. */
+function fakeDocument({ nonce, linked = [] }: { nonce?: string; linked?: readonly string[] } = {}) {
+  type Listener = () => void;
+  const head: FakeLink[] = linked.map((href) => link({ rel: 'stylesheet', href }));
+  function link(attributes: Record<string, string> = {}) {
+    const listeners = new Map<string, Listener>();
+    const element = {
+      rel: attributes.rel ?? '',
+      as: '',
+      href: attributes.href ?? '',
+      nonce: '',
+      getAttribute: (name: string) => (name === 'href' ? element.href : null),
+      addEventListener: (type: string, listener: Listener) => listeners.set(type, listener),
+      remove: () => head.splice(head.indexOf(element), 1),
+      fire: (type: string) => listeners.get(type)?.(),
+    };
+    return element;
+  }
+  type FakeLink = ReturnType<typeof link>;
+  const carrier = nonce ? { nonce } : null;
+  return {
+    head: { append: (element: FakeLink) => head.push(element) },
+    createElement: () => link(),
+    // Only the page's own nonce'd elements carry the nonce a preload takes.
+    querySelector: (selector: string) =>
+      selector === 'link[nonce], style[nonce], script[nonce]' ? carrier : null,
+    querySelectorAll: (selector: string) =>
+      selector.startsWith('link[rel~="stylesheet"]')
+        ? head.filter(({ rel }) => rel === 'stylesheet')
+        : [],
+    links: head,
+  };
+}
+
+/** Runs `run` with `fake` as the global document. */
+async function withDocument<T>(fake: unknown, run: () => Promise<T>): Promise<T> {
+  const before = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  Object.defineProperty(globalThis, 'document', {
+    value: fake,
+    configurable: true,
+    writable: true,
+  });
+  try {
+    return await run();
+  } finally {
+    if (before) Object.defineProperty(globalThis, 'document', before);
+    else delete (globalThis as { document?: unknown }).document;
+  }
+}
+
+test("a preload link takes the page's CSP nonce, where the page has one, and only that link does", async () => {
+  for (const nonce of ['abc123', undefined]) {
+    const fake = fakeDocument(nonce ? { nonce } : {});
+    await withDocument(fake, async () => {
+      const loading = preloadStylesheet(pack('nord'), new AbortController().signal);
+      const [added] = fake.links;
+      assert.equal(added?.rel, 'preload');
+      assert.equal(added?.as, 'style');
+      assert.equal(added?.href, pack('nord'));
+      assert.equal(added?.nonce, nonce ?? '', 'the nonce the page carries, or none');
+      added!.fire('load');
+      await loading;
+    });
+  }
+});
+
+test('a stylesheet the page already links preloads nothing, so a mode alone adds no link', async () => {
+  const fake = fakeDocument({ linked: [pack('warm-parchment')] });
+  await withDocument(fake, async () => {
+    const linked = preloadStylesheet(pack('warm-parchment'), new AbortController().signal);
+    assert.equal(fake.links.length, 1, "only the page's own link");
+    await linked;
+    const loading = preloadStylesheet(pack('nord'), new AbortController().signal);
+    assert.equal(fake.links.length, 2);
+    fake.links[1]!.fire('load');
+    await loading;
+  });
+  // The match is the whole href: the same pack under another build's hash still preloads.
+  const deployed = fakeDocument({ linked: ['/_portfolio/pack/nord.ba9876543210.css'] });
+  await withDocument(deployed, async () => {
+    const loading = preloadStylesheet(pack('nord'), new AbortController().signal);
+    assert.equal(deployed.links.length, 2, 'a new link for the new hash');
+    deployed.links[1]!.fire('load');
+    await loading;
+  });
+});
+
+test("postJson reads the answer's pack paths alone, at most one per pack axis, whatever else it holds", async () => {
+  const before = globalThis.fetch;
+  const answer = (body: string, ok = true) => {
+    globalThis.fetch = (async () => new Response(body, { status: ok ? 200 : 400 })) as typeof fetch;
+  };
+  try {
+    const signal = new AbortController().signal;
+    answer(JSON.stringify({ stylesheets: [pack('nord')], extra: { stylesheets: ['/x.css'] } }));
+    assert.deepEqual(await postJson('/a', '{}', signal), { ok: true, stylesheets: [pack('nord')] });
+    answer(JSON.stringify({ stylesheets: pack('nord') }));
+    assert.deepEqual(await postJson('/a', '{}', signal), { ok: true, stylesheets: [] });
+    answer('not json');
+    assert.deepEqual(await postJson('/a', '{}', signal), { ok: true, stylesheets: [] });
+    answer('[1,2]');
+    assert.deepEqual(await postJson('/a', '{}', signal), { ok: true, stylesheets: [] });
+    const many = Array.from({ length: 1000 }, (_, index) => pack(`pack-${index}`));
+    answer(JSON.stringify({ stylesheets: many }));
+    const read = await postJson('/a', '{}', signal);
+    assert.equal(read.stylesheets!.length, MAX_PRELOADS);
+    assert.equal(MAX_PRELOADS, 3);
+    answer('{}', false);
+    assert.deepEqual(await postJson('/a', '{}', signal), { ok: false });
+  } finally {
+    globalThis.fetch = before;
+  }
 });

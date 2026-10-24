@@ -174,8 +174,13 @@ test("the visitor control offers the site's selectable axes but the variant, and
     'typography',
     'displayMode',
   ]);
-  // Each choice names the stylesheet it needs, so the control loads it before it applies it.
-  const scheme = visitorControlModel(SITE, 'read-only', appearance).controls[0]!;
-  const choice = scheme.groups.flatMap((group) => group.choices)[0]!;
-  assert.match(choice.stylesheet ?? '', /^\/_portfolio\/pack\/warm-parchment\.[0-9a-f]+\.css$/);
+  // No choice names a stylesheet, so the model a public page carries names no pack's
+  // stylesheet but those it renders (#6's purity check). The save's response does.
+  const model = visitorControlModel({ visitorControls: everything }, 'read-only', appearance);
+  for (const choice of model.controls.flatMap(({ groups }) => groups.flatMap((g) => g.choices)))
+    assert.deepEqual(
+      Object.keys(choice).filter((key) => key !== 'unavailable'),
+      ['value', 'label'],
+    );
+  assert.doesNotMatch(JSON.stringify(model), /_portfolio\/pack\//);
 });
