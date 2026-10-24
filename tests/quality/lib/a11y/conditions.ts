@@ -204,9 +204,44 @@ export function conditions(): Condition[] {
   ];
 }
 
-async function load(page: Page, path: string): Promise<void> {
+/** The longest a page may say it's still loading, by aria-busy, before a check reads it anyway. */
+export const BUSY_LIMIT_MS = 10_000;
+
+/** What a page that never stops saying it's loading is, as a finding's words. */
+export const STILL_BUSY = `the page still says it's loading, aria-busy="true", after ${BUSY_LIMIT_MS / 1000} s`;
+
+/**
+ * Waits until nothing on the page says it's still loading, an element with
+ * aria-busy="true", as a page that fetches its content after it loads does
+ * (#8's Studio), up to BUSY_LIMIT_MS. False when the page is still busy
+ * then: the caller fails the cell with STILL_BUSY, and reads the page as it
+ * stands, so it never passes on a page that never settled.
+ */
+export async function notBusy(page: Page): Promise<boolean> {
+  return page
+    .waitForFunction(() => !document.querySelector('[aria-busy="true"]'), null, {
+      timeout: BUSY_LIMIT_MS,
+    })
+    .then(
+      () => true,
+      () => false,
+    );
+}
+
+/** A finding for a page a condition reloaded that never settled. */
+const stillBusy = (condition: string): Finding => ({
+  gate: 'runner',
+  rule: 'settled',
+  expected: `the page settles under ${condition}`,
+  actual: STILL_BUSY,
+});
+
+/** Loads `path`, and answers whether it settled. */
+async function load(page: Page, path: string): Promise<boolean> {
   await page.goto(path, { waitUntil: 'load' });
+  const settled = await notBusy(page);
   await frames(page);
+  return settled;
 }
 
 /** What `before` has and `now` lacks, as findings under `condition`. */
@@ -241,7 +276,7 @@ export async function inventoryFindings(
     for (const condition of conditions().filter((each) => !only || only.includes(each.id))) {
       await condition.setup(page, cdp);
       try {
-        if (condition.reload) await load(page, path);
+        if (condition.reload && !(await load(page, path))) findings.push(stillBusy(condition.id));
         const problem = await condition.verify(page);
         if (problem) {
           // Slice 1's fail-closed rule: a condition that didn't take proves nothing.
@@ -307,7 +342,7 @@ export async function enhancementFindings(
   });
   const findings: Finding[] = [];
   try {
-    await load(page, path);
+    if (!(await load(page, path))) findings.push(stillBusy('failed enhancement'));
     const structure = await inPage<Structure>(page, { kind: 'structure' });
     const semantics = (actual: string) =>
       findings.push({

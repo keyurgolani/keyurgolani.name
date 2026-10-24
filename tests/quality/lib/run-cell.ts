@@ -46,7 +46,9 @@ import { APPEARANCE_STATE } from './state-fixtures';
 import { readVitals } from './vitals';
 import {
   enhancementFindings,
+  notBusy,
   PRINT_IGNORE,
+  STILL_BUSY,
   scriptingMediaFindings,
   inventoryFindings,
   reflowFindings,
@@ -64,12 +66,15 @@ import { MOTION_SAMPLER, motionFindings } from './a11y/motion';
 import { inPage } from './a11y/probe';
 
 /** Waits for the page to settle: loaded, its fonts in, and two frames drawn (or their time, without JavaScript). */
-async function settle(page: Page): Promise<void> {
+/** Waits for the page to load and settle, and answers whether it settled (notBusy()). */
+async function settle(page: Page): Promise<boolean> {
   await page.waitForLoadState('load');
+  const settled = await notBusy(page);
   await page.evaluate(async () => {
     await document.fonts.ready;
   });
   await frames(page);
+  return settled;
 }
 
 export interface CellRun {
@@ -270,7 +275,7 @@ export async function runCell({
   const response = await page.goto(at, { waitUntil: 'load' });
   const status = response?.status() ?? 0;
   ran.add('status');
-  await settle(page);
+  const settled = await settle(page);
   const screen = printRow ? await inPage<string[]>(page, { kind: 'inventory' }) : [];
   if (printRow) await page.emulateMedia({ media: 'print' });
 
@@ -420,6 +425,7 @@ export async function runCell({
       ? []
       : [runnerFailure(context, 'status', `${status}, not ${cell.expectedStatus}`)]),
     ...emulation.map((problem) => runnerFailure(context, 'media-emulation', problem)),
+    ...(settled ? [] : [runnerFailure(context, 'settled', STILL_BUSY)]),
     ...(now === Date.parse(FIXED_TIME)
       ? []
       : [
@@ -441,6 +447,7 @@ export async function runCell({
   const about = (what: string) => (diagnostic ? `${what}. ${diagnostic}` : what);
 
   expect.soft(status, `${cell.path} answers ${cell.expectedStatus}`).toBe(cell.expectedStatus);
+  expect.soft(settled ? null : STILL_BUSY, `${cell.path} settles`).toBeNull();
   expect.soft(emulation, `the ${row.id} row's media emulation`).toEqual([]);
   expect.soft(new Date(now).toISOString(), "the page's clock").toBe(FIXED_TIME);
   expect

@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { COLOR_ROLES } from '../../packages/appearance/src/roles';
+import { BUSY_LIMIT_MS, notBusy, STILL_BUSY } from './lib/a11y/conditions';
 import { axeFor } from './lib/axe';
 import { EGRESS_GUARD_URL, FIXED_CLOCK_URL, FIXED_TIME } from './lib/clock';
 import { elementDetailsScript } from './lib/probes';
@@ -13,6 +14,24 @@ import { expect, test } from './fixtures';
 // the same boundary (#19, Slice 4).
 
 const READ_ONLY = { type: 'profile', description: 'read-only' };
+
+test(
+  'a page settles once nothing on it is aria-busy, and one that never clears it is no settled page: its cell fails, saying so',
+  { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
+  async ({ page }) => {
+    // A page that fetches its content after load, as #8's Studio does, clears aria-busy once it lands.
+    await page.setContent(
+      '<main><p id="loading" aria-busy="true">Loading…</p><script>setTimeout(() => document.getElementById("loading").removeAttribute("aria-busy"), 300)</script></main>',
+    );
+    expect(await notBusy(page)).toBe(true);
+    // One that never does waits out the limit and answers false, which fails the cell with STILL_BUSY.
+    await page.setContent('<main><p aria-busy="true">Loading…</p></main>');
+    const started = Date.now();
+    expect(await notBusy(page)).toBe(false);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(BUSY_LIMIT_MS - 100);
+    expect(STILL_BUSY).toBe('the page still says it\'s loading, aria-busy="true", after 10 s');
+  },
+);
 
 test(
   'the server starts with the clock and the socket guard preloaded, and the guard says it loaded',
