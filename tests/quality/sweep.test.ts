@@ -1,12 +1,24 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
+import { isDeepStrictEqual } from 'node:util';
 import { parse } from 'yaml';
 import { parseSelection } from '../../packages/appearance/src/index';
 import { planCells, type BuildMeta, type Cell, type Plan } from './cells';
-import { requiredChecks } from './lib/checks';
+import { CHECKS_ANNOTATION, requiredChecks, sweepCheck, sweepRowChecks } from './lib/checks';
+import { FIXED_TIME } from './lib/clock';
 import { PREFERENCE_ROWS, VIEWPORTS } from './lib/matrix';
-import { axeFailures, changeDiagnostic, changeFields, runnerFailure } from './lib/records';
+import {
+  axeFailures,
+  changeDiagnostic,
+  changeFields,
+  RECORDS_ATTACHMENT,
+  runnerFailure,
+} from './lib/records';
+import { runCell, startPack, storageFindings, type runPass } from './lib/run-cell';
+import { CANARY_COOKIE } from './lib/env';
 import { loadRegistrations, type Registrations } from './lib/registration';
 import { appOptionsFor, cellServer, serverId, SWEEP_CONTROLS } from './lib/server';
 import { planRecord, plannedTests } from './lib/shards';
@@ -303,4 +315,214 @@ test("a swept test that didn't run fails plan-coverage, naming its pack and vari
     assert.equal(unchecked.length, 1, check);
     assert.match(unchecked[0]!, new RegExp(`without its ${check} check`));
   }
+});
+
+/** A stand-in for a Playwright run of one cell test: its output in a temp dir, its soft expectations kept. */
+function stubRun(throwOn: string | null) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'sweep-run-'));
+  const softs: string[] = [];
+  const testInfo = {
+    annotations: [] as { type: string; description?: string }[],
+    setTimeout: () => undefined,
+    outputPath: (name: string) => path.join(dir, name),
+    attach: async () => undefined,
+  };
+  const expect = {
+    soft: (value: unknown, message: string) => ({
+      toBe: (wanted: unknown) => void (value === wanted || softs.push(message)),
+      toEqual: (wanted: unknown) => void (isDeepStrictEqual(value, wanted) || softs.push(message)),
+    }),
+  };
+  // A page whose load rejects under one row, as a crashed or hung load does.
+  const page = {
+    goto: async (at: string) => {
+      if (at === `/${throwOn}`) {
+        throw new Error(`page.goto: net::ERR_ABORTED at ${at}\nCall log: more`);
+      }
+      return null;
+    },
+  };
+  return { dir, softs, testInfo, expect, page };
+}
+
+/** A pass as runPass() returns one, after loading its row's page, with every check its row owes. */
+const stubPass: typeof runPass = async (run) => {
+  await run.page.goto(`/${run.row.id}`);
+  return {
+    row: run.row,
+    isolation: [],
+    status: run.cell.expectedStatus,
+    emulation: [],
+    now: Date.parse(FIXED_TIME),
+    results: { violations: [], incomplete: [] } as never,
+    sweptPack: [],
+    suiteFailures: [],
+    failures: [],
+    ran: new Set(sweepRowChecks(run.row.id)),
+    tokenPages: [],
+  };
+};
+
+test('a swept row that throws is one sweep-row failure for that row, and the rows after it still run', async () => {
+  const plan = planCells({ meta: twoPacks(), registrations, mode: 'pr', changes: CHANGES });
+  const cell = plan.cells.find((each) => each.sweep)!;
+  const planned = plan.tests.find((each) => each.cell === cell)!;
+  for (const throwOn of ['default', 'forced-colors']) {
+    const { dir, softs, testInfo, expect, page } = stubRun(throwOn);
+    await runCell(
+      {
+        page: page as never,
+        cell,
+        viewport: planned.viewport,
+        row: planned.row,
+        conditions: planned.conditions,
+        testInfo: testInfo as never,
+        expect: expect as never,
+        origin: 'http://127.0.0.1:3000',
+      },
+      stubPass,
+    );
+    const records = JSON.parse(readFileSync(path.join(dir, RECORDS_ATTACHMENT), 'utf8')) as {
+      rule: string;
+      preferenceMode: string;
+      pack?: string;
+      actual: string;
+    }[];
+    rmSync(dir, { recursive: true, force: true });
+    assert.deepEqual(
+      records.map((each) => `${each.rule} ${each.preferenceMode} ${each.pack}`),
+      [`sweep-row ${throwOn} ${changeFields(cell).pack}`],
+    );
+    assert.equal(records[0]!.actual, `page.goto: net::ERR_ABORTED at /${throwOn}`);
+    const ran = testInfo.annotations
+      .find((each) => each.type === CHECKS_ANNOTATION)!
+      .description!.split(' ');
+    // Every other row ran to the end, and the broken one listed none of its checks.
+    for (const row of SWEEP_ROWS) {
+      const own = sweepRowChecks(row.id).map((check) => sweepCheck(row.id, check));
+      if (row.id === throwOn)
+        assert.ok(
+          own.every((check) => !ran.includes(check)),
+          row.id,
+        );
+      else
+        assert.ok(
+          own.every((check) => ran.includes(check)),
+          row.id,
+        );
+    }
+    // So the test fails, by its soft expectation.
+    assert.equal(softs.filter((each) => each.startsWith('every row of the sweep ran')).length, 1);
+  }
+  // A cell that isn't swept still throws, as Playwright reports it.
+  const plain = plan.cells.find((each) => !each.sweep)!;
+  const own = plan.tests.find((each) => each.cell === plain)!;
+  const { testInfo, expect, page } = stubRun(own.row.id);
+  await assert.rejects(
+    runCell(
+      {
+        page: page as never,
+        cell: plain,
+        viewport: own.viewport,
+        row: own.row,
+        conditions: own.conditions,
+        testInfo: testInfo as never,
+        expect: expect as never,
+      },
+      stubPass,
+    ),
+    /ERR_ABORTED/,
+  );
+});
+
+test('a cell a changed variant and a changed pack both direct keeps every viewport and row, and the pack still sweeps the other variants', () => {
+  const meta = withTierPacks(checkoutMeta());
+  const language = meta.PACKS!.find((pack) => pack.kind === 'design-language' && !pack.fixture)!;
+  const plan = planCells({
+    meta: { ...meta, PACKS: [...meta.PACKS!, clone(language, 'second-language', 'stable', false)] },
+    registrations,
+    mode: 'pr',
+    changes: [
+      { axis: 'variant', id: 'fallback', paths: [] },
+      { axis: 'designLanguage', id: 'second-language', paths: [] },
+    ],
+  });
+  const both = plan.cells.filter(
+    (cell) =>
+      cell.changed?.some((by) => by.axis === 'variant') &&
+      cell.changed.some((by) => by.axis === 'designLanguage'),
+  );
+  assert.equal(both.length, 1);
+  assert.equal(both[0]!.target, 'fallback');
+  assert.ok(!both[0]!.sweep);
+  assert.equal(
+    plan.tests.filter((each) => each.cell === both[0]).length,
+    VIEWPORTS.length + PREFERENCE_ROWS.length - 1,
+  );
+  const swept = plan.cells.filter((cell) => cell.sweep);
+  assert.deepEqual(
+    swept.map((cell) => cell.target).sort(),
+    variantsOf(plan)
+      .filter((variant) => variant !== 'fallback')
+      .sort(),
+  );
+});
+
+test('the planner fails a plan that leaves a changed pack, variant, and check out', () => {
+  const meta = twoPacks();
+  // A sixth check no swept test runs: every pair misses it.
+  const sweepChecks = [...SWEEP_CHECKS, { name: 'hover', row: 'default', check: 'hover' }];
+  assert.throws(
+    () => planCells({ meta, registrations, mode: 'pr', changes: CHANGES, sweepChecks }),
+    /^Error: The PR plan leaves out \d+ changed pack, variant, and check triple\(s\) the \[37\] rule directs, first \w+ second-\w+ × \S+ × hover\.$/,
+  );
+  // The five it runs pass.
+  assert.ok(
+    planCells({ meta, registrations, mode: 'pr', changes: CHANGES, sweepChecks: SWEEP_CHECKS }),
+  );
+});
+
+test("a swept test checks it starts clean: no cookie but the canary's, then its pack's, and localStorage empty on its first load", async () => {
+  const cell = {
+    tuple: {
+      variant: 'fallback',
+      designLanguage: 'platform-neutral',
+      colorScheme: 'second-scheme',
+      typography: 'humanist-ui',
+      displayMode: 'light',
+    },
+  };
+  const stub = (cookies: string[], storage: number | undefined) => {
+    const added: { name: string; value: string }[] = [];
+    const page = {
+      context: () => ({
+        cookies: async () => cookies.map((name) => ({ name, value: 'x' })),
+        addCookies: async (each: { name: string; value: string }[]) => void added.push(...each),
+      }),
+      addInitScript: async () => undefined,
+      evaluate: async () => storage ?? -1,
+    };
+    return { page: page as never, added };
+  };
+  const fresh = stub([CANARY_COOKIE], 0);
+  assert.deepEqual(await startPack(fresh.page, cell, 'http://127.0.0.1:3000'), []);
+  assert.deepEqual(
+    fresh.added.map((each) => each.name),
+    [APPEARANCE_COOKIE],
+  );
+  assert.deepEqual(await storageFindings(fresh.page), []);
+  // A context a pack before this one used: its cookie, and what it kept.
+  const used = stub([CANARY_COOKIE, APPEARANCE_COOKIE], 1);
+  assert.deepEqual(
+    (await startPack(used.page, cell, 'http://127.0.0.1:3000')).map(
+      (each) => `${each.rule}: ${each.actual}`,
+    ),
+    [`sweep-isolation: the context held ${APPEARANCE_COOKIE}`],
+  );
+  assert.deepEqual(
+    (await storageFindings(used.page)).map((each) => `${each.rule}: ${each.actual}`),
+    ['sweep-isolation: 1 entry'],
+  );
+  // A page nothing recorded fails too: the check never passes by default.
+  assert.equal((await storageFindings(stub([], undefined).page))[0]!.actual, 'nothing recorded it');
 });

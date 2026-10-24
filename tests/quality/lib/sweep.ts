@@ -57,6 +57,13 @@ export const SWEEP_CHECKS = [
   { name: 'reduced-transparency', row: 'reduced-transparency', check: 'transparency' },
 ] as const;
 
+/** One of the [37] rule's checks, as SWEEP_CHECKS lists them. */
+export interface SweepCheck {
+  readonly name: string;
+  readonly row: string;
+  readonly check: string;
+}
+
 /** The rows a swept test runs, in checks.ts's SWEEP_ROW_CHECKS order. */
 export const SWEEP_ROWS: readonly PreferenceRow[] = Object.keys(SWEEP_ROW_CHECKS).map((id) =>
   PREFERENCE_ROWS.find((row) => row.id === id)!,
@@ -147,12 +154,15 @@ export function sweepChecksOf(
   test: Pick<PlannedTest, 'viewport' | 'row' | 'conditions'> & {
     readonly cell: Pick<PlannedTest['cell'], 'sweep'>;
   },
-): (typeof SWEEP_CHECKS)[number]['name'][] {
+  checks: readonly SweepCheck[] = SWEEP_CHECKS,
+): string[] {
   if (test.viewport.id !== SWEEP_VIEWPORT.id) return [];
   const owed = requiredChecks(test.row.id, test.viewport.id, test.conditions, test.cell.sweep);
-  return SWEEP_CHECKS.filter((each) =>
-    test.cell.sweep
-      ? owed.includes(sweepCheck(each.row, each.check))
-      : each.row === test.row.id && owed.includes(each.check),
-  ).map((each) => each.name);
+  return checks
+    .filter((each) =>
+      test.cell.sweep
+        ? owed.includes(sweepCheck(each.row, each.check))
+        : each.row === test.row.id && owed.includes(each.check),
+    )
+    .map((each) => each.name);
 }

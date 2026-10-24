@@ -14,7 +14,7 @@
 // order it lists its packs in.
 
 import type { PlannedTest } from './cells';
-import { SWEEP_CHECKS, sweepChecksOf } from './lib/sweep';
+import { SWEEP_CHECKS, sweepChecksOf, type SweepCheck } from './lib/sweep';
 
 /** The five values a tuple sets, in the resolver's axis order. */
 export const TUPLE_AXES = [
@@ -154,14 +154,17 @@ export function sweepCoverage(input: {
   readonly changes: readonly { readonly axis: string; readonly id: string }[];
   readonly variants: readonly string[];
   readonly tests: readonly Pick<PlannedTest, 'cell' | 'viewport' | 'row' | 'conditions'>[];
+  /** The checks each pair owes: SWEEP_CHECKS. */
+  readonly checks?: readonly SweepCheck[];
 }): { readonly planned: readonly string[]; readonly missing: readonly string[] } {
+  const checks = input.checks ?? SWEEP_CHECKS;
   const key = (axis: string, id: string, variant: string, check: string) =>
     `${axis} ${id} × ${variant} × ${check}`;
   const seen = new Set<string>();
   for (const test of input.tests) {
     const changed = test.cell.changed?.filter((by) => by.axis !== 'variant') ?? [];
     if (changed.length === 0) continue;
-    for (const check of sweepChecksOf(test)) {
+    for (const check of sweepChecksOf(test, checks)) {
       for (const by of changed) seen.add(key(by.axis, by.id, test.cell.target, check));
     }
   }
@@ -169,7 +172,7 @@ export function sweepCoverage(input: {
   const missing: string[] = [];
   for (const { axis, id } of input.changes) {
     for (const variant of input.variants) {
-      for (const { name } of SWEEP_CHECKS) {
+      for (const { name } of checks) {
         const triple = key(axis, id, variant, name);
         (seen.has(triple) ? planned : missing).push(triple);
       }

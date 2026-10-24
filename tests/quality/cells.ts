@@ -84,7 +84,7 @@ import type {
   SurfaceRegistration,
 } from './lib/registration';
 import { APPEARANCE_STATE, STATE_FIXTURES, type StateFixture } from './lib/state-fixtures';
-import { SWEEP_VIEWPORT, sweeps } from './lib/sweep';
+import { SWEEP_VIEWPORT, sweeps, type SweepCheck } from './lib/sweep';
 
 export type RunMode = 'pr' | 'full';
 
@@ -285,6 +285,8 @@ export interface PlanInput {
   readonly mode: RunMode;
   /** The variants and languages a PR changes (lib/changes.ts). `full` plans every one. */
   readonly changes?: readonly Change[];
+  /** The checks the plan must hold each changed pack and variant to (lib/sweep.ts's SWEEP_CHECKS). */
+  readonly sweepChecks?: readonly SweepCheck[];
 }
 
 /**
@@ -327,7 +329,13 @@ export function changePairs(
   );
 }
 
-export function planCells({ meta, registrations, mode, changes = [] }: PlanInput): Plan {
+export function planCells({
+  meta,
+  registrations,
+  mode,
+  changes = [],
+  sweepChecks,
+}: PlanInput): Plan {
   const registry = createAppearanceRegistry(meta);
   const variants = meta.VARIANTS.map(({ manifest }) => manifest).filter(
     (manifest) => !manifest.id.startsWith('fixture-'),
@@ -665,6 +673,7 @@ export function planCells({ meta, registrations, mode, changes = [] }: PlanInput
     changes: directed.filter((change) => change.axis !== 'variant'),
     variants: variants.map((manifest) => manifest.id),
     tests,
+    ...(sweepChecks ? { checks: sweepChecks } : {}),
   });
   if (missing.length > 0) {
     throw new Error(

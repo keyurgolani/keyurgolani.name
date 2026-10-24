@@ -6,22 +6,31 @@
 // scheme, whose text fails contrast and which leaves itself in
 // localStorage, where a page that shared its context would pick it up.
 //
-// Each pack runs as each swept test starts: a fresh context, its cookie
-// (packCookie), a full load, then the sweep's default-row checks,
-// run-cell.ts's own (a swept test then loads the page again for each
-// other row, in the same context):
-// the boundary renders the pack (packFindings), axe on the contrast rules
-// with the incomplete contrast resampled (audit), and keyboard focus.
+// Each pack runs as each swept test starts, through run-cell.ts's own
+// functions: a fresh context, startPack (no cookie but the canary's, then
+// the pack's), a full load, storageFindings (localStorage empty), then the
+// sweep's default-row checks (a swept test then loads the page again for
+// each other row, in the same context): the boundary renders the pack
+// (packFindings), axe on the contrast and target-size rules with the
+// incomplete contrast resampled (audit), and keyboard focus. The loop over
+// packs is this file's: cells.spec.ts gives each pack a test of its own,
+// so Playwright's context per test is what keeps them apart there.
 //
 // - sweep/known-bad-pack (the lead's): a good pack, the known-bad one,
 //   then another good one. It fails, every finding names the bad pack, and
 //   the pack after it still ran, so batching neither hides a failure nor
 //   stops at the first.
+// - sweep/small-controls: a design language whose controls are 16 px, under
+//   axe's 24 px target size, after a good pack. It fails on target-size,
+//   every finding naming that language.
 // - sweep-isolation/good-pack-either-order (C's): the good pack after the
 //   bad one and before it. It passes both times.
 // - sweep-isolation/shared-context: the same packs on one context, which
-//   the sweep never does. The good pack after the bad one fails, so the
-//   case above would catch a sweep that let one pack's state carry over.
+//   the sweep never does, as a worker-scoped context would be. The good
+//   pack after the bad one fails, on sweep-isolation first: the bad pack's
+//   cookie and localStorage are still there.
+// - sweep-isolation/worker-context: the same, its isolation findings
+//   alone, so startPack and storageFindings have to catch it themselves.
 // - sweep-rows/either-order (C's): one test's rows on one page, a
 //   known-bad row (the focus ring gone under forced colors) after good
 //   rows and before them. Each good row finds nothing and the bad row
@@ -38,29 +47,31 @@ import { frames, keyboardFindings, type Finding } from '../lib/a11y/interaction'
 import { checkEmulation } from '../lib/emulation';
 import { DEFAULT_ROW, PREFERENCE_ROWS } from '../lib/matrix';
 import { resolvedTokensScript } from '../lib/probes';
-import { audit, emulateRow } from '../lib/run-cell';
-import { APPEARANCE_COOKIE, packCookie, packFindings } from '../lib/sweep';
+import { audit, emulateRow, startPack, storageFindings } from '../lib/run-cell';
+import { APPEARANCE_COOKIE, packFindings } from '../lib/sweep';
 import type { MetaCase, MetaOutcome } from './cases';
 
 const GOOD = 'sweep-good';
 const BAD = 'sweep-bad';
 const LATER = 'sweep-good-later';
+/** A known-bad design language: its controls 16 px, under the 24 px target size. */
+const SMALL = 'sweep-small-controls';
 const VARIANT = 'fallback';
 
-/** A swept cell of the stand-in's variant on `scheme`, as the planner would make it. */
-const swept = (scheme: string): Pick<Cell, 'tuple' | 'target'> => ({
+/** A swept cell of the stand-in's variant on `pack`, a language or a scheme, as the planner would make it. */
+const swept = (pack: string): Pick<Cell, 'tuple' | 'target'> => ({
   target: VARIANT,
   tuple: {
     variant: VARIANT,
-    designLanguage: 'platform-neutral',
-    colorScheme: scheme,
+    designLanguage: pack === SMALL ? SMALL : 'platform-neutral',
+    colorScheme: pack === SMALL ? GOOD : pack,
     typography: 'humanist-ui',
     displayMode: 'light',
   },
 });
 
-/** The stand-in's page for the scheme its cookie names, the platform's own without one. */
-function page(scheme: string): string {
+/** The stand-in's page for the language and scheme its cookie names, the platform's own without one. */
+function page({ language, scheme }: { language: string; scheme: string }): string {
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -73,14 +84,15 @@ function page(scheme: string): string {
       [data-color-scheme='${BAD}'] { color: #b8b8b8; }
       :focus-visible { outline: 2px solid #000; outline-offset: 2px; }
       a, button { display: inline-block; min-width: 24px; min-height: 24px; color: inherit; }
+      [data-design-language='${SMALL}'] button { min-width: 0; min-height: 0; width: 16px; height: 16px; padding: 0; margin: 0; }
     </style>
   </head>
   <body>
-    <div data-appearance-boundary="document" data-variant="${VARIANT}" data-design-language="platform-neutral" data-color-scheme="${scheme}" data-typography="humanist-ui">
+    <div data-appearance-boundary="document" data-variant="${VARIANT}" data-design-language="${language}" data-color-scheme="${scheme}" data-typography="humanist-ui">
       <main>
         <h1>A swept pack</h1>
         <p>Body text in the scheme's own color, which the known-bad scheme makes too faint to read.</p>
-        <p><a href="/">A link</a> <button type="button">A button</button></p>
+        <p><a href="/">A link</a> <button type="button">A button</button><button type="button">Another</button></p>
       </main>
     </div>
     <script>
@@ -96,26 +108,33 @@ function page(scheme: string): string {
 </html>`;
 }
 
-/** The scheme the request's preference cookie names. */
-function cookieScheme(header: string | undefined): string {
+/** The language and scheme the request's preference cookie names. */
+function cookiePacks(header: string | undefined): { language: string; scheme: string } {
   const value = (header ?? '')
     .split(/;\s*/)
     .find((each) => each.startsWith(`${APPEARANCE_COOKIE}=`))
     ?.slice(APPEARANCE_COOKIE.length + 1);
-  return new URLSearchParams(decodeURIComponent(value ?? '')).get('scheme') ?? GOOD;
+  const query = new URLSearchParams(decodeURIComponent(value ?? ''));
+  return {
+    language: query.get('language') ?? 'platform-neutral',
+    scheme: query.get('scheme') ?? GOOD,
+  };
 }
 
 /** The sweep's checks on one pack's page, each finding named by the pack, the variant, and the row. */
 async function checkPack(context: BrowserContext, scheme: string, origin: string) {
   const cell = swept(scheme);
-  await context.addCookies([packCookie(cell, origin)]);
   const tab = await context.newPage();
   try {
+    // run-cell.ts's own start: a clean context, then the pack's cookie.
+    const isolation = await startPack(tab, cell, origin);
     await tab.goto('/', { waitUntil: 'load' });
     await frames(tab);
+    isolation.push(...(await storageFindings(tab)));
     const tokens = await tab.evaluate(resolvedTokensScript, []);
     const { results, contrast } = await audit(tab, DEFAULT_ROW, true);
     const findings: Finding[] = [
+      ...isolation,
       ...packFindings(cell, tokens),
       ...results.violations.map((rule) => ({
         gate: 'axe',
@@ -143,11 +162,12 @@ async function sweep(
   orders: readonly (readonly string[])[],
   keep: (scheme: string) => boolean,
   shared = false,
+  only: (finding: string) => boolean = () => true,
 ): Promise<MetaOutcome> {
   const server = createServer((request, response) => {
     const found = new URL(request.url ?? '/', 'http://stand-in').pathname === '/';
     response.writeHead(found ? 200 : 404, { 'content-type': 'text/html; charset=utf-8' });
-    response.end(found ? page(cookieScheme(request.headers.cookie)) : 'Not found');
+    response.end(found ? page(cookiePacks(request.headers.cookie)) : 'Not found');
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -167,7 +187,7 @@ async function sweep(
         const context = one ?? (await browser.newContext(options));
         const own = await checkPack(context, scheme, origin);
         ran += 1;
-        if (keep(scheme)) findings.push(...own);
+        if (keep(scheme)) findings.push(...own.filter(only));
         if (!one) await context.close();
       }
       await one?.close();
@@ -274,6 +294,15 @@ export const SWEEP_CASES: readonly MetaCase[] = [
     run: () => sweep([[GOOD, BAD, LATER]], () => true),
   },
   {
+    id: 'sweep/small-controls',
+    gate: 'sweep',
+    input: `${INPUT}: ${GOOD}, then the design language ${SMALL}, its controls 16 px`,
+    expect: 'fail',
+    reason: new RegExp(`^${SMALL} on ${VARIANT}, default: axe target-size:`),
+    browser: true,
+    run: () => sweep([[GOOD, SMALL]], () => true),
+  },
+  {
     id: 'sweep/good-packs',
     gate: 'sweep',
     input: `${INPUT}: ${GOOD}, then ${LATER}`,
@@ -302,10 +331,27 @@ export const SWEEP_CASES: readonly MetaCase[] = [
     input: `${INPUT}: ${BAD} then ${GOOD} on one context, which the sweep never does`,
     expect: 'fail',
     reason: new RegExp(
-      `^${GOOD} on ${VARIANT}, default: (?:runner sweep-pack: data-color-scheme=${GOOD}, data-color-scheme=${BAD}$|axe color-contrast:|contrast \\S+:)`,
+      `^${GOOD} on ${VARIANT}, default: (?:runner sweep-isolation: |runner sweep-pack: data-color-scheme=${GOOD}, data-color-scheme=${BAD}$|axe color-contrast:|contrast \\S+:)`,
     ),
     browser: true,
     run: () => sweep([[BAD, GOOD]], (scheme) => scheme === GOOD, true),
+  },
+  {
+    id: 'sweep-isolation/worker-context',
+    gate: 'sweep-isolation',
+    input: `${INPUT}: ${BAD} then ${GOOD} on one context, as a worker-scoped one would be, isolation's findings alone`,
+    expect: 'fail',
+    reason: new RegExp(
+      `^${GOOD} on ${VARIANT}, default: runner sweep-isolation: (?:no cookie but quality_canary, the context held portfolio_appearance|localStorage empty on the first load, 1 entry)$`,
+    ),
+    browser: true,
+    run: () =>
+      sweep(
+        [[BAD, GOOD]],
+        (scheme) => scheme === GOOD,
+        true,
+        (finding) => finding.includes(' runner sweep-isolation: '),
+      ),
   },
   {
     id: 'sweep-rows/either-order',

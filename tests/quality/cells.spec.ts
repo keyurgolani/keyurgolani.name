@@ -1,7 +1,7 @@
 import { KIND_ANNOTATION } from './lib/checks';
 import { testTag } from './lib/pr-shards';
 import { runCell } from './lib/run-cell';
-import { packCookie, SWEEP_ROWS } from './lib/sweep';
+import { SWEEP_ROWS } from './lib/sweep';
 import { cellServer, serverTag } from './lib/server';
 import { expect, test } from './fixtures';
 import { loadPlan } from './plan';
@@ -13,8 +13,8 @@ import { loadPlan } from './plan';
 // project's tests (lib/pr-shards.ts). A stand-in state's test, or an excluded one,
 // skips with the reason the plan declares, before any server starts. A
 // swept cell (lib/sweep.ts) is one changed pack on its variant's sweep
-// server, in one test: it sets the pack's cookie in its own context before
-// the page loads, so each pack starts clean, and runs the [37] rows.
+// server, in one test: run-cell.ts checks its context is clean, sets the
+// pack's cookie before the page loads, and runs the [37] rows.
 
 const plan = await loadPlan();
 
@@ -55,9 +55,8 @@ for (const cell of plan.cells) {
             ],
           },
           async ({ page, app }, testInfo) => {
-            // A swept cell's own tuple, on its variant's sweep server, in this test's fresh context.
-            if (cell.sweep) await page.context().addCookies([packCookie(cell, app.origin)]);
             await runCell({
+              origin: app.origin,
               page,
               cell,
               viewport,
