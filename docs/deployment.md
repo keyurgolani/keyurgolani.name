@@ -337,7 +337,7 @@ In a clone, `pnpm run store <command>` runs the same command line through tsx (`
 
 ### Importing
 
-`import` reads the pair in `--from`, or in `PORTFOLIO_SOURCE_DIR`, the way startup reads it, validates it as a publish does, and makes it the live revision with an `import` event carrying the files' `sourceHash`. A pair that doesn't validate is `validation_failed`, with each record that blocks it, and nothing changes. When the files are the live revision's already, byte for byte, it writes no revision: the import is still recorded, as a new event on the same revision.
+`import` reads the pair in `--from`, or in `PORTFOLIO_SOURCE_DIR`, the way startup reads it, validates it as a publish does, and makes it the live revision with an `import` event carrying the files' `sourceHash`. A pair that doesn't validate is `validation_failed`, with each record that blocks it, and nothing changes. It reads and checks the pair before it touches the data directory, so an import refused for its source, its pair, or a variant this build doesn't register leaves the data directory as it found it: an empty one stays empty, with no `store.json`, and the next first start or import sees a clean directory. When the files are the live revision's already, byte for byte, it writes no revision: the import is still recorded, as a new event on the same revision.
 
 It expects the revision that was live when it started. If a Studio publish, another import, or a rollback moves the pointer first, the import is `live_conflict`, nothing changes, and running it again imports over what's live now. `--expect <revisionId>` names the expectation instead, and `--expect empty` expects a store with nothing live.
 
