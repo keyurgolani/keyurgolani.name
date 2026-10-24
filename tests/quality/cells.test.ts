@@ -359,3 +359,29 @@ test('the plan is the same each time', () => {
     b.tests.map((each) => `${each.cell.id} ${each.viewport.id} ${each.row.id}`),
   );
 });
+
+test("a PR's sentinel rows don't grow with the catalog: three shipping packs or seventy-four plan the same cells (#20)", () => {
+  const small = withTierPacks(fallbackPacks(checkoutMeta()));
+  // Enough more shipping packs for 74, spread across the axes and the tiers.
+  const shipping = (meta: BuildMeta) => meta.PACKS!.filter((pack) => !pack.fixture).length;
+  const base = (kind: string) => small.PACKS!.find((pack) => pack.kind === kind && !pack.fixture)!;
+  const kinds = ['design-language', 'color-scheme', 'typography'] as const;
+  const extra = Array.from({ length: 74 - shipping(small) }, (_, index) =>
+    clone(base(kinds[index % 3]!), `catalog-pack-${index + 1}`, TIERS[index % 3]!, false),
+  );
+  const large: BuildMeta = { ...small, PACKS: [...small.PACKS!, ...extra] };
+  assert.ok(shipping(small) <= 4);
+  assert.equal(shipping(large), 74);
+  const plan = (meta: BuildMeta) => planCells({ meta, registrations, mode: 'pr' });
+  const ids = (meta: BuildMeta, sentinel: boolean) =>
+    plan(meta)
+      .cells.filter((cell) => !sentinel || cell.sentinel)
+      .map((cell) => cell.id)
+      .sort();
+  assert.deepEqual(ids(large, true), ids(small, true));
+  assert.deepEqual(ids(large, false), ids(small, false));
+  assert.equal(plan(large).tests.length, plan(small).tests.length);
+  // The full plan still covers every pack.
+  const full = planCells({ meta: large, registrations, mode: 'full' });
+  assert.ok(full.cells.some((cell) => cell.tuple.designLanguage === 'catalog-pack-1'));
+});
