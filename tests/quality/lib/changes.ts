@@ -15,6 +15,14 @@
 // sentinels alone. A base git can't read fails the plan, so a run that was
 // asked for change-directed cells never quietly runs without them.
 //
+// A pack manifest whose change is metadata alone (#20) directs nothing: its
+// name, description, version, provenance, accessibility evidence, declared
+// cost, mode list, fallbacks and caveats change no pixel and no gate a cell
+// runs. Declared cost and modes are checked against what the pack ships by
+// check:appearance (pack-gates.ts, validate-pack.ts), and the registry reads
+// a scheme's modes from its sets. Every other key, and a manifest new at the
+// merge base or unreadable there, still directs the pack.
+//
 // A path maps by package: a file under a registered variant's package maps
 // to that variant, a file under a pack's own directory (`packs/<dir>/`,
 // whose manifest names its id) to that pack, and any other file of a pack
@@ -83,10 +91,79 @@ export function changedFiles(
       `QUALITY_CHANGED_BASE is ${base}, and git can't diff it against HEAD${stderr ? `: ${stderr.split('\n')[0]}` : ''}. Fetch it (CI's quality-pr checks out with fetch-depth: 2), or unset it to plan the sentinels alone.`,
     );
   }
+  const files = out.split('\0').filter((file) => file !== '');
+  const metadata = metadataOnlyManifests(files, base, root);
   return {
-    source: `git diff ${base}...HEAD`,
-    files: out.split('\0').filter((file) => file !== ''),
+    source: `git diff ${base}...HEAD${metadata.length > 0 ? `, less ${metadata.length} manifest(s) whose change is metadata alone` : ''}`,
+    files: files.filter((file) => !metadata.includes(file)),
   };
+}
+
+/** Manifest keys no cell reads, so a change to them alone directs nothing. */
+export const METADATA_KEYS: ReadonlySet<string> = new Set([
+  'name',
+  'description',
+  'version',
+  'provenance',
+  'accessibility',
+  'cost',
+  'modes',
+  'fallbacks',
+  'caveats',
+]);
+
+const PACK_MANIFEST = /^packages\/[^/]+\/packs\/[^/]+\/manifest\.json$/;
+
+/** A manifest's keys a cell can read, as one canonical string, or null when it isn't JSON. */
+export function renderedKeys(text: string): string | null {
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (typeof manifest !== 'object' || manifest === null || Array.isArray(manifest)) return null;
+  const canonical = (value: unknown): unknown =>
+    Array.isArray(value)
+      ? value.map(canonical)
+      : typeof value === 'object' && value !== null
+        ? Object.fromEntries(
+            Object.keys(value)
+              .sort()
+              .map((key) => [key, canonical((value as Record<string, unknown>)[key])]),
+          )
+        : value;
+  const kept = Object.fromEntries(
+    Object.entries(manifest).filter(([key]) => !METADATA_KEYS.has(key)),
+  );
+  return JSON.stringify(canonical(kept));
+}
+
+/** The pack manifests among `files` whose change from the merge base is metadata alone. */
+function metadataOnlyManifests(files: readonly string[], base: string, root: string): string[] {
+  const candidates = files.filter((file) => PACK_MANIFEST.test(file));
+  if (candidates.length === 0) return [];
+  const git = (...args: string[]): string | null => {
+    try {
+      return execFileSync('git', args, {
+        cwd: root,
+        encoding: 'utf8',
+        maxBuffer: 64 << 20,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch {
+      return null;
+    }
+  };
+  const mergeBase = git('merge-base', base, 'HEAD')?.trim();
+  if (!mergeBase) return [];
+  return candidates.filter((file) => {
+    const before = git('show', `${mergeBase}:${file}`);
+    const after = git('show', `HEAD:${file}`);
+    if (before === null || after === null) return false;
+    const keys = renderedKeys(before);
+    return keys !== null && keys === renderedKeys(after);
+  });
 }
 
 /** Every workspace package under packages/, by name, with its directory relative to `root`. */

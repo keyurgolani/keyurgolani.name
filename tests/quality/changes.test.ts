@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import type { MetaPack } from '../../packages/appearance/src/index';
 import { changePairs, planCells, readBuildMeta, type BuildMeta } from './cells';
 import { tupleKey } from './coverage';
-import { changedFiles, mapChanges, readChanges } from './lib/changes';
+import { changedFiles, mapChanges, METADATA_KEYS, readChanges, renderedKeys } from './lib/changes';
 import { PREFERENCE_ROWS, VIEWPORTS } from './lib/matrix';
 import { loadRegistrations, type Registrations } from './lib/registration';
 import { changeDiagnostic, changeFields } from './lib/records';
@@ -139,6 +139,99 @@ test("a git base's changes are from the merge base, and a rename counts as both 
   } finally {
     rmSync(repo, { recursive: true, force: true });
   }
+});
+
+test("a pack manifest whose change is metadata alone directs nothing, and any other key's change still does (#20)", () => {
+  const repo = mkdtempSync(path.join(tmpdir(), 'quality-changes-metadata-'));
+  const git = (...args: string[]) =>
+    execFileSync(
+      'git',
+      ['-c', 'user.name=Quality Test', '-c', 'user.email=quality@example.test', ...args],
+      { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+  const write = (file: string, value: unknown) => {
+    mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
+    writeFileSync(path.join(repo, file), typeof value === 'string' ? value : JSON.stringify(value));
+  };
+  const scheme = (extra: Record<string, unknown>) => ({
+    id: 'a-scheme',
+    tier: 'stable',
+    budgets: { css: 3072, js: 0 },
+    anchors: { light: { accent: '#aa3300' } },
+    ...extra,
+  });
+  const files = {
+    metadata: 'packages/appearance-schemes/packs/metadata/manifest.json',
+    reordered: 'packages/appearance-schemes/packs/reordered/manifest.json',
+    anchors: 'packages/appearance-schemes/packs/anchors/manifest.json',
+    tier: 'packages/appearance-schemes/packs/tier/manifest.json',
+    fresh: 'packages/appearance-schemes/packs/fresh/manifest.json',
+    broken: 'packages/appearance-schemes/packs/broken/manifest.json',
+    unreadable: 'packages/appearance-schemes/packs/unreadable/manifest.json',
+    css: 'packages/appearance-languages/packs/lang/language.css',
+  };
+  try {
+    git('init', '-q', '-b', 'base');
+    write(files.metadata, scheme({ name: 'Old' }));
+    write(files.reordered, scheme({}));
+    write(files.anchors, scheme({}));
+    write(files.tier, scheme({}));
+    write(files.broken, scheme({}));
+    write(files.unreadable, '{ not json');
+    write(files.css, '.a{}');
+    git('add', '-A');
+    git('commit', '-q', '-m', 'base');
+    git('switch', '-q', '-c', 'branch');
+    // Every metadata key changes at once, and nothing else.
+    write(
+      files.metadata,
+      scheme(Object.fromEntries([...METADATA_KEYS].map((key) => [key, `new ${key}`]))),
+    );
+    // The same keys in another order, and budgets' keys reordered too.
+    write(files.reordered, {
+      anchors: { light: { accent: '#aa3300' } },
+      budgets: { js: 0, css: 3072 },
+      tier: 'stable',
+      id: 'a-scheme',
+    });
+    write(files.anchors, scheme({ anchors: { light: { accent: '#aa3301' } } }));
+    write(files.tier, scheme({ tier: 'extended' }));
+    write(files.fresh, scheme({}));
+    write(files.broken, '{ not json');
+    // Unreadable on both sides is never taken for metadata alone.
+    write(files.unreadable, '{ still not json');
+    write(files.css, '.a{color:red}');
+    git('add', '-A');
+    git('commit', '-q', '-m', 'branch');
+
+    const changed = changedFiles({ QUALITY_CHANGED_BASE: 'base' }, repo);
+    assert.deepEqual(
+      [...changed!.files].sort(),
+      [files.anchors, files.broken, files.css, files.fresh, files.tier, files.unreadable].sort(),
+    );
+    assert.equal(
+      changed!.source,
+      'git diff base...HEAD, less 2 manifest(s) whose change is metadata alone',
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+  // The keys that stay are the ones the cells and the registry read.
+  for (const key of [
+    'id',
+    'tier',
+    'budgets',
+    'anchors',
+    'derivation',
+    'tokens',
+    'stylesheet',
+    'lockedMode',
+    'tokenContract',
+  ]) {
+    assert.equal(METADATA_KEYS.has(key), false, key);
+  }
+  assert.equal(renderedKeys('[]'), null);
+  assert.equal(renderedKeys('{"name":"a","id":"x"}'), renderedKeys('{"id":"x","name":"b"}'));
 });
 
 test('the changed paths come from QUALITY_CHANGED_FILES, else a git base, else none, and a base git cannot read fails', () => {
