@@ -25,6 +25,12 @@
 // - The recipes are the prototype's, as they are, in
 //   packages/appearance/appearance-recipes.json. The defaults are already
 //   PLATFORM_DEFAULTS, which a test holds to the prototype's.
+// - A design language's `--appearance-<role>` references read as
+//   `--color-<role>`, and it takes the contract's signature-fill and
+//   emphasis-glow at the fallback language's values. neumorphic's controls
+//   gain a border-strong hairline (BORDER_FIXES). A language that fails
+//   check:appearance moves, as written, from packs/ to held/, which
+//   registry generation never reads; this never writes it again.
 // - Generated schemes (brand-seed, material-hct, profile-image,
 //   portfolio-artwork) need #20's generators and stored inputs, so PR 3
 //   seeds them, not this.
@@ -568,7 +574,9 @@ function main(args) {
   for (const { axis: fileAxis, file, data } of seedFiles()) {
     if (axis && fileAxis !== axis) continue;
     const full = path.join(ROOT, file);
-    if (fs.existsSync(full)) {
+    // A held pack (apps/web/scripts/catalog-held.ts) moved to held/ is kept there too.
+    const held = full.replace(`${path.sep}packs${path.sep}`, `${path.sep}held${path.sep}`);
+    if (fs.existsSync(full) || (held !== full && fs.existsSync(held))) {
       kept += 1;
       continue;
     }
