@@ -10,6 +10,7 @@ import {
   commandsFor,
   loadDurations,
   measure,
+  mergeDurations,
   parseShard,
   plan,
   specFiles,
@@ -199,6 +200,51 @@ test('unit durations are measured per package and per root script from a job log
     'pkg:packages/core': 30,
     'script:test:scripts': 40,
   });
+});
+
+test("pnpm 10's sequential output is measured too, and measuring merges into the weights instead of replacing them", () => {
+  const log = [
+    logLine(
+      'pnpm ci:unit',
+      '01:00.0',
+      '> @portfolio/schema@0.1.1 test /home/runner/work/site/site/packages/schema',
+    ),
+    logLine('pnpm ci:unit', '01:00.5', '> tsx --test src/**/*.test.ts'),
+    logLine(
+      'pnpm ci:unit',
+      '01:20.0',
+      '> @portfolio/web@0.1.1 test /home/runner/work/site/site/apps/web',
+    ),
+    logLine(
+      'pnpm ci:unit',
+      '07:30.0',
+      '> portfolio-monorepo@0.1.1 test:quality /home/runner/work/site/site',
+    ),
+    logLine('pnpm ci:unit', '09:12.0', '[ci] unit passed in 492.0s'),
+  ].join('\n');
+  const measured = measure('unit', log);
+  assert.deepEqual(measured, {
+    'pkg:packages/schema': 20,
+    'pkg:apps/web': 370,
+    'script:test:quality': 102,
+  });
+  // The weights a log doesn't measure stay, and the ones it does are replaced.
+  const section = {
+    'pkg:apps/web': 389.7,
+    'pkg:packages/core': 187.8,
+    'pkg:packages/kit': 65,
+    'pkg:packages/schema': 20.4,
+    'script:test:scripts': 330.8,
+  };
+  assert.deepEqual(mergeDurations(section, measured), {
+    'pkg:apps/web': 370,
+    'pkg:packages/core': 187.8,
+    'pkg:packages/kit': 65,
+    'pkg:packages/schema': 20,
+    'script:test:quality': 102,
+    'script:test:scripts': 330.8,
+  });
+  assert.deepEqual(Object.keys(mergeDurations(undefined, measured)), Object.keys(measured).sort());
 });
 
 test('Playwright durations are summed per spec file, or per project for variants', () => {
