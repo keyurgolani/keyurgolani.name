@@ -7,7 +7,9 @@
 // pickShardCount). It prints the count and each shard's estimate, and under
 // GitHub Actions writes `count` and `shards` (a JSON list, 1 to count) to
 // GITHUB_OUTPUT, which quality-pr's matrix and quality-pr-verdict read.
-// Needing more than MAX_SHARDS fails, naming the group that's to blame.
+// Needing more than MAX_SHARDS fails, naming the group that's to blame,
+// unless the pack sweep alone needs more (lib/pr-shards.ts's shardLimit),
+// when up to SWEEP_MAX_SHARDS may run, and the log says why.
 //
 // Locally, after `QUALITY_FIXTURES=1 APPEARANCE_FIXTURES=1 BUDGET_FIXTURES=1
 // pnpm --filter @portfolio/web build:registry --modules-only`:
@@ -20,6 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { RUN_ENGINES } from './lib/matrix';
 import {
   groupKey,
+  MAX_SHARDS,
   pickShardCount,
   planGroups,
   shardEstimate,
@@ -46,10 +49,13 @@ async function main(): Promise<number> {
     process.stderr.write(`[quality-pr-plan] ${(error as Error).message}\n`);
     return 1;
   }
-  const { count, slowest, shards } = picked;
+  const { count, slowest, shards, reason } = picked;
   console.log(
     `[quality-pr-plan] ${plan.tests.length} tests in ${count} shard(s), the slowest about ${Math.round(slowest)}s of ${SHARD_CEILING}s`,
   );
+  if (count > MAX_SHARDS) {
+    console.log(`[quality-pr-plan] ${count} shards, over the usual ${MAX_SHARDS}: ${reason}.`);
+  }
   for (const shard of shards) {
     console.log(`  ${shard.index}/${count}: about ${Math.round(shardEstimate(shard))}s`);
     for (const group of shard.groups) {

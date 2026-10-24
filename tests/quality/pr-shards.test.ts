@@ -27,11 +27,13 @@ import {
   shardTests,
   shardEstimate,
   shardFiles,
+  shardLimit,
   shardWall,
   SHARD_CEILING,
   SHARD_FIXED,
   SHARD_WORKERS,
   splitGroups,
+  SWEEP_MAX_SHARDS,
   testKey,
   testTag,
   testWeight,
@@ -179,6 +181,47 @@ test('the count is the fewest shards the weights allow within the ceiling, and m
   }
 });
 
+test('only the pack sweep raises the most past 12, to 16, when its groups alone need more, and the reason says so', () => {
+  const durations = { group: 5 };
+  const swept = (count: number, weight: number): ShardGroup[] =>
+    synthetic(count, weight).map((group, at) => ({
+      ...group,
+      project: `chromium sweep${at}`,
+      sweep: true,
+    }));
+  assert.equal(SWEEP_MAX_SHARDS, 16);
+  // No sweep load: needing 14 fails at 12, naming the heaviest group.
+  assert.deepEqual(shardLimit(synthetic(28, 200), durations), { max: MAX_SHARDS, reason: null });
+  assert.throws(
+    () => pickShardCount(synthetic(28, 200), durations),
+    /^Error: Even 12 shards leave one at about \d+s, over the 300s ceiling\. Its heaviest group is chromium s\d+ cells\.spec\.ts, at about 200s\.$/,
+  );
+  // The same load as the sweep's: 14, and why.
+  const picked = pickShardCount(swept(28, 200), durations);
+  assert.equal(picked.count, 14);
+  assert.equal(
+    picked.reason,
+    "the pack sweep's 28 group(s) alone need 14 shards, more than 12, so up to 16 are allowed",
+  );
+  // A sweep that alone fits 12 doesn't raise it, whatever else the PR holds.
+  const mixed = [...swept(20, 200), ...synthetic(8, 200)];
+  assert.deepEqual(shardLimit(mixed, durations), { max: MAX_SHARDS, reason: null });
+  assert.throws(() => pickShardCount(mixed, durations), /^Error: Even 12 shards/);
+  // Past 16, even the sweep fails, naming its reason.
+  assert.throws(
+    () => pickShardCount(swept(40, 200), durations),
+    /^Error: Even 16 shards leave one at about \d+s, over the 300s ceiling \(the pack sweep's 40 group\(s\) alone need more than 16 shards, more than 12, so up to 16 are allowed\)\./,
+  );
+});
+
+test('an ordinary PR plans 4 to 6 shards', () => {
+  for (const { name, plan } of plans.filter(({ plan }) => !plan.cells.some((cell) => cell.sweep))) {
+    const { count, reason } = pickShardCount(planGroups(plan, ENGINES));
+    assert.ok(count >= 4 && count <= 6, `${name}: ${count}`);
+    assert.equal(reason, null, name);
+  }
+});
+
 test('a cell group too heavy for one worker is split, by cell or by test, and its parts run each of its tests once', () => {
   const durations = { group: 5 };
   const viewports = ['1440x900', '1024x768', '390x844'];
@@ -259,6 +302,50 @@ test('a cell group too heavy for one worker is split, by cell or by test, and it
     () => splitGroups([{ ...synthetic(1, 250)[0]!, file: PERF_SPEC }], GROUP_BUDGET, durations),
     /only a cell group splits/,
   );
+});
+
+test('a group split N ways goes on N shards, each part on its own, and the planner picks N', () => {
+  const durations = { group: 5 };
+  // Five one-test cells, 100, 100, 100, 100, and 30 s: three parts, 205, 205, and 35 s.
+  const cells = [100, 100, 100, 100, 30].map((cost, at) => ({
+    key: testKey(`composition:x c${at} / tuple`, '1440x900', 'default', 'chromium'),
+    cost,
+  }));
+  const heavy: ShardGroup = {
+    project: 'chromium heavy',
+    file: CELL_SPEC,
+    tests: cells.map((each) => each.key),
+    costs: cells.map((each) => each.cost),
+    weight: cells.reduce((sum, each) => sum + each.cost, 5),
+  };
+  // Two whole groups beside it. Heaviest first onto the lightest shard, the
+  // 35 s part would land beside a 205 s part of its own file, and the two
+  // would run one after another, past the ceiling.
+  const others = [
+    { ...synthetic(1, 190)[0]!, project: 'chromium a' },
+    { ...synthetic(1, 150)[0]!, project: 'chromium b' },
+  ];
+  const parts = splitGroups([heavy], GROUP_BUDGET, durations);
+  assert.deepEqual(
+    parts.map((part) => part.weight),
+    [205, 205, 35],
+  );
+  const { count, shards } = pickShardCount([heavy, ...others], durations);
+  assert.equal(count, parts.length);
+  for (const shard of shards) {
+    const own = shard.groups.filter((group) => group.project === 'chromium heavy');
+    assert.ok(own.length <= 1, `shard ${shard.index} holds ${own.length} parts of one file`);
+    assert.ok(shardEstimate(shard) <= SHARD_CEILING, `shard ${shard.index}`);
+  }
+  // Every test still runs once.
+  assert.deepEqual(
+    shards.flatMap((shard) => shard.groups.flatMap((group) => group.tests)).sort(),
+    [...heavy.tests].sort(),
+  );
+  // With more parts than shards, two share one, and they're still weighed one after another.
+  const two = assignShards(parts, 2);
+  const shared = two.find((shard) => shard.groups.length > 1)!;
+  assert.equal(shardWall(shared.groups), shared.weight);
 });
 
 test("a split group's parts on one shard run on one worker, one after another, so they weigh together", () => {
