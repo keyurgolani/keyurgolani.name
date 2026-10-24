@@ -52,7 +52,7 @@ Your job is to move the site to `RELEASE_IMAGE` under the `owner` profile: Studi
 ## How commands work here
 
 - Your shell keeps no variables between commands. Step 2 creates `$RUN_DIR/vars.sh` and prints its path. Start every later command with `. <that path>;`, typing the literal path, and append each value you record with `printf "%s='%s'\n" NAME "value" >> "${RUN_DIR:?}/vars.sh"`. None of these values is a secret. If one contains a single quote, stop and ask the owner.
-- Never append a name the Inputs define. Each Inputs name is set exactly once, in step 2, and this check, which prints nothing when that holds, runs at the end of step 2 and again before steps 6, 9, and 15:
+- After step 2, never append a name the Inputs define. Each Inputs name is set exactly once, in step 2, and this check, which prints nothing when that holds, runs at the end of step 2 and again before steps 6, 9, and 15:
 
   ```sh
   for n in RELEASE_TAG RELEASE_IMAGE CANONICAL_ORIGIN TEMP_ORIGIN POSTURE_FILE CANDIDATE_DIR PROXY_HOPS APPEARANCE_VARIANT APPEARANCE_DESIGN_LANGUAGE APPEARANCE_COLOR_SCHEME APPEARANCE_TYPOGRAPHY APPEARANCE_DISPLAY_MODE VISITOR_CONTROLS; do [ "$(command grep -c "^$n=" "${RUN_DIR:?}/vars.sh")" = 1 ] || echo "$n"; done
@@ -290,7 +290,7 @@ List the media sources the converted portfolio names: `command grep -nE '^ *sour
 
 ## 11. Candidate
 
-Write `CANDIDATE_DIR/compose.candidate.yml`: the release's `deploy/compose.owner.yml` from the clone, with its `build:` removed and `image:` set to `RELEASE_IMAGE`, the service still `web` and the container named `portfolio-owner`, `../config` and `../assets` mounted as `./config` and `./assets`, since the file sits in `CANDIDATE_DIR`, and the port published as `127.0.0.1:${PORT}:3000`, or, for a proxy in a container, no `ports:` and `PROXY_NETWORK` joined as an external network. Keep its `read_only`, `cap_drop`, `security_opt`, `tmpfs`, `volumes`, `secrets`, and `healthcheck` as they are. Its `.env` holds `PORTFOLIO_ORIGIN=<TEMP_ORIGIN>`, `PORTFOLIO_TRUSTED_PROXY_HOPS=<PROXY_HOPS>`, and `PORT=<CANDIDATE_PORT>`.
+Write `CANDIDATE_DIR/compose.candidate.yml`: the release's `deploy/compose.owner.yml` from the clone, with its `build:` removed and `image:` set to `RELEASE_IMAGE`, the service still `web` and the container named `portfolio-owner`, the `../config` and `../assets` mount sources changed to `./config` and `./assets`, since the file sits in `CANDIDATE_DIR`, and the port published as `127.0.0.1:${PORT}:3000`, or, for a proxy in a container, no `ports:` and `PROXY_NETWORK` joined as an external network. Keep its `read_only`, `cap_drop`, `security_opt`, `tmpfs`, `volumes`, `secrets`, and `healthcheck` as they are. Its `.env` holds `PORTFOLIO_ORIGIN=<TEMP_ORIGIN>`, `PORTFOLIO_TRUSTED_PROXY_HOPS=<PROXY_HOPS>`, and `PORT=<CANDIDATE_PORT>`.
 
 ```sh
 command docker pull "${RELEASE_IMAGE:?}"
@@ -338,7 +338,7 @@ Every check goes through `TEMP_ORIGIN`, from this host, and from another network
 5. **Denied anonymous queries and commands:** with no cookie, `GET /api/studio/config.status` and `GET /api/studio/draft.getWorking` answer 401 with `authentication_required`, and `POST /api/studio/draft.save` with an `Origin` of `TEMP_ORIGIN` and a body of `{}` answers exactly 401 with `authentication_required`. Print the status and the code alone. `GET /studio` answers 303 to `/studio/sign-in`.
 6. **Authenticated Studio:** the owner signs in at `TEMP_ORIGIN/studio/sign-in` in his own browser, and confirms `/studio` shows his content, the Appearance task shows the Inputs' choices, and the site's images show on `TEMP_ORIGIN`. You never see the password.
 7. **Draft isolation:** the owner saves a draft in Studio's source mode with `M18-DRAFT-<RUN>` added to a text field. `/` and `/feed.xml` don't contain it, and `m18_store status` still names `REVISION_1`. Then the owner discards the draft.
-8. **Atomic publish and history:** copy `CANDIDATE_DIR/config` to `$RUN_DIR/validation-pair`. In its `site.yml`, flip the one `feed:` line under `features:`, `true` to `false` or back. If `features:` has no `feed:` line, add `  feed: false` right after it, since the feed is on by default. Then import it, with the pair mounted read-only beside the running server:
+8. **Atomic publish and history:** copy `CANDIDATE_DIR/config` to `$RUN_DIR/validation-pair`. In its `site.yml`, flip the one `feed:` line under `features:`, `true` to `false` or back. A valid `site.yml` always has that line, and `config:migrate` writes `feed: true` when the old file had none, so a file without it stops the run. Then import it, with the pair mounted read-only beside the running server:
 
    ```sh
    m18_compose run --rm --name portfolio-store -v "${RUN_DIR:?}/validation-pair:/validation:ro" web \
