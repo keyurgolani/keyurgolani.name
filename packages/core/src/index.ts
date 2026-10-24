@@ -22,6 +22,7 @@ export {
   sourceCatalogReader,
   sourceDigest,
   type OpenSourceResult,
+  type SampleFieldMatch,
   type SourceCatalogOptions,
   type SourceCatalogReader,
   type SourceFinding,

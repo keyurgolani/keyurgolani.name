@@ -232,6 +232,30 @@ export const STARTUP_ROWS = [
     fatal: [{ code: 'sample_identity', file: 'portfolio.yml', path: '/identity/name', line: 5 }],
   },
   {
+    group: PRODUCTION,
+    name: "the bundled sample's title and share image, under a name of your own",
+    documents: withSite({
+      'portfolio.yml': `${HEAD}${[
+        'identity:',
+        '  name: Rowan Hale',
+        'meta:',
+        '  title: Anamika Devi — Portfolio',
+        '  ogImage:',
+        '    asset: card',
+        'media:',
+        '  - id: card',
+        '    kind: image',
+        '    source: og/anamika.png',
+        '    alt: A card.',
+      ].join('\n')}\n${ABOUT}`,
+    }),
+    env: (paths) => readOnly(paths),
+    fatal: [
+      { code: 'sample_identity', file: 'portfolio.yml', path: '/meta/title', line: 7 },
+      { code: 'sample_identity', file: 'portfolio.yml', path: '/meta/ogImage', line: 9 },
+    ],
+  },
+  {
     group: SOURCE,
     name: 'missing',
     env: (paths) => readOnly(paths, { PORTFOLIO_SOURCE_DIR: paths.beside('canary-absent-dir') }),

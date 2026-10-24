@@ -121,6 +121,8 @@ const IDS_FIX_USAGE = 'Usage: pnpm config:ids-fix [dir | portfolio-file] [--writ
 
 /** Where `pnpm dev` reads the pair: the repository's config directory. */
 const CONFIG_DIR = fileURLToPath(new URL('../../../config', import.meta.url));
+/** The bundled sample's portfolio, which the sample's warnings are checked against. */
+const EXAMPLE_PORTFOLIO = fileURLToPath(new URL('../../../portfolio.example.yml', import.meta.url));
 
 class UsageError extends Error {}
 
@@ -488,7 +490,9 @@ async function validateCommand(args) {
     dir,
   );
   const sample = await sampleIdentity(loaded);
-  const result = sample ? { ...loaded, diagnostics: [...loaded.diagnostics, sample] } : loaded;
+  const result = sample.length
+    ? { ...loaded, diagnostics: [...loaded.diagnostics, ...sample] }
+    : loaded;
   const report = values.json
     ? `${JSON.stringify(jsonReport(result), null, 2)}\n`
     : textReport(result, shownPath(base, dir), origin !== undefined);
@@ -517,24 +521,30 @@ function withUnitFiles(loaded, dir) {
 }
 
 /**
- * A warning when the portfolio is still the bundled sample: the pair alone is
- * valid, and production refuses to start with it (#1), which no record says.
+ * A warning for each field the portfolio still shares with the bundled
+ * sample, its name, title, or share image: the pair alone is valid, and
+ * production refuses to start with any of them (#1, #12), which no record
+ * says. The sample's values come from the example itself.
  */
 async function sampleIdentity(result) {
-  if (!result.ok) return null;
-  const { isSampleIdentity } = await import('../src/lib/sample-identity.ts');
-  if (!isSampleIdentity(result.pair.portfolio.identity.name)) return null;
+  if (!result.ok) return [];
+  const { bundledSample, sampleFields } = await import('../src/lib/sample-identity.ts');
+  const sample = bundledSample(fs.readFileSync(EXAMPLE_PORTFOLIO, 'utf8'), 'portfolio.example.yml');
+  // The repository's own example, so only a broken checkout gets here.
+  if (!sample) throw new Error("The bundled sample doesn't read, so this checkout is broken.");
+  const fields = sampleFields(result.pair.portfolio, [sample]);
+  if (fields.length === 0) return [];
   const { text, format } = result.sources.portfolio;
   const parsed = parseSource(text, format);
-  return {
+  return fields.map(({ pointer, path: at }) => ({
     code: 'sample.identity',
     severity: 'warning',
     document: 'portfolio',
-    pointer: '/identity/name',
-    ...(parsed.ok ? parsed.locate(['identity', 'name']) : {}),
-    message: "/identity/name is the bundled sample's. Production refuses to start with it.",
-    remediation: 'Replace the sample with your own portfolio, starting with identity.name.',
-  };
+    pointer,
+    ...(parsed.ok ? parsed.locate(at) : {}),
+    message: `${pointer} is the bundled sample's. Production refuses to start with it.`,
+    remediation: `Replace the sample with your own portfolio, starting with ${at.join('.')}.`,
+  }));
 }
 
 /** The records as startup logs them and Studio shows them, with the file names. */

@@ -411,7 +411,15 @@ test('validate warns when the portfolio is still the bundled sample, which produ
     /^portfolio\.yml:\d+:\d+: sample\.identity \(warning\) at \/identity\/name\n/m,
   );
   assert.match(text.stdout, /Production refuses to start with it\./);
-  assert.match(text.stdout, /\nportfolio\.yml and site\.yml are valid, with 1 warning\.\n/);
+  assert.match(
+    text.stdout,
+    /^portfolio\.yml:\d+:\d+: sample\.identity \(warning\) at \/meta\/title\n/m,
+  );
+  assert.match(
+    text.stdout,
+    /^portfolio\.yml:\d+:\d+: sample\.identity \(warning\) at \/meta\/ogImage\n/m,
+  );
+  assert.match(text.stdout, /\nportfolio\.yml and site\.yml are valid, with 3 warnings\.\n/);
 
   const json = JSON.parse(validate(dir, '.', '--json').stdout);
   assert.equal(json.ok, true);
@@ -423,17 +431,31 @@ test('validate warns when the portfolio is still the bundled sample, which produ
       pointer,
     ]),
     // The example's variant, Editorial Evidence, is registered (#13).
-    [['sample.identity', 'warning', 'portfolio', '/identity/name']],
+    [
+      ['sample.identity', 'warning', 'portfolio', '/identity/name'],
+      ['sample.identity', 'warning', 'portfolio', '/meta/title'],
+      ['sample.identity', 'warning', 'portfolio', '/meta/ogImage'],
+    ],
   );
 
-  // With a name of your own, the sample's warning is gone.
-  const own = readFileSync(path.join(dir, 'portfolio.yml'), 'utf8').replace(
-    'name: Anamika Devi',
-    'name: Rowan Hale',
+  // With only a name of your own, the title and the share image still warn.
+  const sample = readFileSync(path.join(dir, 'portfolio.yml'), 'utf8');
+  const named = sample.replace('  name: Anamika Devi\n', '  name: Rowan Hale\n');
+  assert.notEqual(named, sample);
+  writeFileSync(path.join(dir, 'portfolio.yml'), named);
+  const renamed = JSON.parse(validate(dir, '.', '--json').stdout).diagnostics;
+  assert.deepEqual(
+    renamed.map(({ pointer }) => pointer),
+    ['/meta/title', '/meta/ogImage'],
   );
+
+  // With all three of your own, the sample's warnings are gone.
+  const own = named
+    .replace('  title: Anamika Devi — Portfolio\n', '  title: Rowan Hale, engineer\n')
+    .replace('    source: og/anamika.png\n', '    source: og/rowan.png\n');
   writeFileSync(path.join(dir, 'portfolio.yml'), own);
-  const renamed = validate(dir, '.', '--json');
-  assert.deepEqual(JSON.parse(renamed.stdout).diagnostics, []);
+  const reidentified = validate(dir, '.', '--json');
+  assert.deepEqual(JSON.parse(reidentified.stdout).diagnostics, []);
 });
 
 function idsFix(cwd, ...args) {
