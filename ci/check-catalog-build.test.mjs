@@ -151,6 +151,70 @@ test("a common-word id counts in any form only where an output carries the regis
   assert.deepEqual(APPEARANCE_MARKERS, packDefaults);
 });
 
+test('a distinctive id counts in any quoted or attribute form in every output, and a common word only where an output carries the registry', () => {
+  const records = [
+    ...RECORDS,
+    { id: 'fixture-research', reason: 'A test fixture.', file: 'x/research/fixture-research.json' },
+  ];
+  const at = (files) => {
+    const web = build(files);
+    try {
+      return researchInBuild(web, records).map(({ id, where }) => `${id} ${where}`);
+    } finally {
+      rmSync(web, { recursive: true, force: true });
+    }
+  };
+  // None of these chunks names a platform default pack, so none carries the registry.
+  for (const chunk of [
+    'var t={scheme:"nord",language:"fixture-research"};',
+    'var t=["nord","fixture-research"];',
+    'var t={"fixture-research":1,"nord":2};',
+    "var t='fixture-research';",
+  ]) {
+    assert.ok(!carriesRegistry(chunk));
+    assert.deepEqual(
+      at({ '.next/static/chunks/a.js': chunk }),
+      ['fixture-research .next/static'],
+      chunk,
+    );
+    assert.deepEqual(
+      at({ '.next/standalone/apps/web/.next/server/chunks/a.js': chunk }),
+      ['fixture-research the image'],
+      chunk,
+    );
+    assert.deepEqual(at({ 'public/vendor/a.js': chunk }), ['fixture-research the image'], chunk);
+  }
+  // An attribute selector, quoted or not, in a stylesheet.
+  for (const css of [
+    '[data-color-scheme="fixture-research"]{color:red}',
+    "[data-color-scheme='fixture-research' i]{color:red}",
+    '[data-color-scheme=fixture-research]{color:red}',
+    '[data-design-language="art-deco"]{color:red}',
+  ]) {
+    const id = css.includes('art-deco') ? 'art-deco' : 'fixture-research';
+    assert.deepEqual(at({ '.next/static/css/a.css': css }), [`${id} .next/static`], css);
+  }
+  // A common word, in the same forms, counts only in a chunk that carries the registry.
+  for (const chunk of [
+    'var t={scheme:"nord"};',
+    'var t=["nord"];',
+    'var t={"nord":2};',
+    '[data-color-scheme="nord"]{color:red}',
+  ]) {
+    assert.deepEqual(at({ '.next/static/chunks/b.js': chunk }), [], chunk);
+    assert.deepEqual(
+      at({ '.next/static/chunks/b.js': `${REGISTRY_CHUNK}${chunk}` }),
+      ['nord .next/static'],
+      chunk,
+    );
+  }
+  // A longer id that starts with a distinctive one isn't it.
+  assert.deepEqual(
+    at({ '.next/static/chunks/c.js': 'var t=["fixture-research-2"];[data-x=art-deco-2]' }),
+    [],
+  );
+});
+
 test('a Research id as a registry key, or its record, in any .next/static chunk fails', () => {
   for (const chunk of [
     '{"id":"nord","name":"Nord"}',
@@ -234,11 +298,15 @@ test("a pack package's held/<id>/ packs are read as records, each with its gate'
     write('packages/langs/held/art-deco/gate.json', JSON.stringify({ reason: 'It fails.' }));
     write('packages/langs/held/art-deco/manifest.json', '{}');
     write('packages/langs/held/no-gate/manifest.json', '{}');
+    // The manifest's id is what would register, so a directory named otherwise is read as both.
+    write('packages/langs/held/misnamed/manifest.json', JSON.stringify({ id: 'other-id' }));
     // A package that isn't a pack package holds no held packs.
     write('packages/other/package.json', JSON.stringify({ name: '@acme/other' }));
     write('packages/other/held/x/gate.json', '{}');
     assert.deepEqual(heldRecords(root), [
       { id: 'art-deco', held: true, reason: 'It fails.', file: 'packages/langs/held/art-deco' },
+      { id: 'other-id', held: true, reason: null, file: 'packages/langs/held/misnamed' },
+      { id: 'misnamed', held: true, reason: null, file: 'packages/langs/held/misnamed' },
       { id: 'no-gate', held: true, reason: null, file: 'packages/langs/held/no-gate' },
     ]);
     // And a held id is held to what a Research id is.

@@ -19,6 +19,8 @@
 //
 // The records are each workspace pack package's research/<id>.json, and its
 // held/<id>/ packs, which fail their gate (their gate.json says why). A
+// distinctive id, hyphenated or with a digit, such as fixture-research or
+// tokyo-night, is read in any quoted or attribute form in every output. A
 // common word that's also a Research id, such as nord or horizon, is read
 // in any quoted form only where the platform writes appearance data: the
 // generated modules, public/_portfolio/, and a chunk or server file that
@@ -113,12 +115,17 @@ export function heldRecords(root = REPO_ROOT) {
     for (const entry of readdirSync(held, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
       const gate = readJson(path.join(held, entry.name, 'gate.json'));
-      records.push({
-        id: entry.name,
-        held: true,
-        reason: typeof gate?.reason === 'string' ? gate.reason : null,
-        file: relative(root, path.join(held, entry.name)),
-      });
+      const manifest = readJson(path.join(held, entry.name, 'manifest.json'));
+      // The manifest's id is what would register; a directory named otherwise is held too.
+      const ids = new Set([...(typeof manifest?.id === 'string' ? [manifest.id] : []), entry.name]);
+      for (const id of ids) {
+        records.push({
+          id,
+          held: true,
+          reason: typeof gate?.reason === 'string' ? gate.reason : null,
+          file: relative(root, path.join(held, entry.name)),
+        });
+      }
     }
   }
   return records.sort((a, b) => (a.file < b.file ? -1 : 1));
@@ -148,6 +155,20 @@ const quoted = (id) => new RegExp(`(?:\\\\*["'\`])${escape(id)}(?:\\\\*["'\`])`)
 const bareKey = (id) =>
   /^[A-Za-z_$][\w$]*$/.test(id) ? new RegExp(`(?<![\\w$.-])${escape(id)}\\s*:(?!:)`) : null;
 
+/** The id as an attribute selector's value, quoted or not, such as [data-color-scheme="<id>"]. */
+const attribute = (id) =>
+  new RegExp(
+    `\\[[\\w-]+[~|^$*]?=\\s*(?:\\\\*["'])?${escape(id)}(?:\\\\*["'])?(?:\\s+[is])?\\s*\\]`,
+  );
+
+/**
+ * Whether an id is distinctive: hyphenated or with a digit, such as
+ * fixture-research or tokyo-night, which no library writes by chance. A
+ * single plain word, such as nord, is common, and read in every form only
+ * where an output carries appearance data.
+ */
+export const distinctive = (id) => /[-\d]/.test(id);
+
 /** The id as a registry key: an id property set to it, however the output quotes or escapes it. */
 const keyed = (id) =>
   new RegExp(`(?:\\\\*["']?)id(?:\\\\*["']?)\\s*:\\s*(?:\\\\*["'\`])${escape(id)}(?:\\\\*["'\`])`);
@@ -169,14 +190,24 @@ export function researchInBuild(web, records) {
   const any = (record) => [
     ['its id', (text) => quoted(record.id).test(text)],
     ['its id as an object key', (text) => bareKey(record.id)?.test(text) ?? false],
+    ['its id as an attribute value', (text) => attribute(record.id).test(text)],
   ];
   const registryKey = (record) => [
     ['its id as a registry key', (text) => keyed(record.id).test(text)],
     ...(record.reason ? [['its record', (text) => text.includes(record.reason)]] : []),
   ];
-  /** Any form in an output that carries the registry, else the registry key and the reason alone. */
-  const byOutput = (text) => (record) =>
-    carriesRegistry(text) ? [...registryKey(record), ...any(record)] : registryKey(record);
+  /**
+   * A distinctive id in any form, everywhere. A common word in any form in
+   * an output that carries the registry, else as a registry key and by
+   * its reason alone.
+   */
+  const byOutput = (text) => {
+    const carries = carriesRegistry(text);
+    return (record) =>
+      carries || distinctive(record.id)
+        ? [...registryKey(record), ...any(record)]
+        : registryKey(record);
+  };
   const strict = () => (record) => [...registryKey(record), ...any(record)];
   const scan = (files, tests, where) => {
     for (const file of files) {
