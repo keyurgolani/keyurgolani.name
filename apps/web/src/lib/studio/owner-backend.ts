@@ -117,6 +117,8 @@ export function ownerBackend(studioFetch: Fetch, csrfToken: string): StudioBacke
         (data) => (data.draft ?? null) as StudioDraft | null,
       ),
     startDraft: () => write('draft.create', {}),
+    applyEdits: ({ draftId, expectedVersion, edits }) =>
+      write('draft.applyEdits', { draftId, expectedVersion, edits }),
     saveDraft: ({ draftId, expectedVersion, documents }) =>
       write('draft.save', { draftId, expectedVersion, documents: documents as SourceDocuments }),
     async signOut(choice) {

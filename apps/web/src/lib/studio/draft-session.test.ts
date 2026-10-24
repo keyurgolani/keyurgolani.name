@@ -92,6 +92,36 @@ test('keep mine saves on top of the newer version; take theirs puts it in the ed
   assert.equal(isDirty(taken), false);
 });
 
+test('applied edits take the editor, but text typed while they were in flight stays and meets them as a conflict', () => {
+  const applied = draft(3, 'schemaVersion: 3\n# applied\n');
+  const clean = run([loaded(2), { type: 'save-started' }, { type: 'applied', draft: applied }]);
+  assert.equal(clean.conflict, null);
+  assert.equal(clean.local!.portfolio.sourceText, 'schemaVersion: 3\n# applied\n');
+  assert.equal(expectedVersion(clean), 3);
+  assert.equal(isDirty(clean), false);
+
+  const typed = run([
+    loaded(2),
+    { type: 'save-started' },
+    mine('schemaVersion: 3\n# typed meanwhile\n'),
+    { type: 'applied', draft: applied },
+  ]);
+  // The typed text stays, and stays unsaved, so the journal keeps it.
+  assert.equal(typed.local!.portfolio.sourceText, 'schemaVersion: 3\n# typed meanwhile\n');
+  assert.equal(isDirty(typed), true);
+  assert.equal(typed.saving, false);
+  // The applied version is held whole until the owner chooses, as a stale save's is.
+  assert.equal(typed.conflict!.version, 3);
+  assert.equal(typed.conflict!.documents.portfolio.sourceText, 'schemaVersion: 3\n# applied\n');
+  assert.equal(expectedVersion(typed), 2, 'it still names the version it read');
+  const kept = run([{ type: 'keep-mine' }], typed);
+  assert.equal(expectedVersion(kept), 3);
+  assert.equal(kept.local!.portfolio.sourceText, 'schemaVersion: 3\n# typed meanwhile\n');
+  const taken = run([{ type: 'take-theirs' }], typed);
+  assert.equal(taken.local!.portfolio.sourceText, 'schemaVersion: 3\n# applied\n');
+  assert.equal(isDirty(taken), false);
+});
+
 test("this browser's journal comes back over the saved draft, and as a conflict when another tab saved since", () => {
   const documents = {
     ...sourceOf(draft(2)),
