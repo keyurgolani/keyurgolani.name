@@ -246,7 +246,7 @@ test('search filters by words, axis, tier, status, license, and mode', async () 
   assert.deepEqual(ids('axis=scheme&tier=experimental'), ['neon-city']);
   assert.deepEqual(ids('status=excluded'), []);
   assert.equal(ids('status=held').length, 27);
-  assert.deepEqual(ids('q=glass&status=held&axis=language'), ['glassmorphism', 'refractive-glass']);
+  assert.deepEqual(ids('q=refractive&status=held'), ['refractive-glass', 'holographic-iridescent']);
   assert.deepEqual(ids('q=nord&status=research'), ['nord']);
   assert.deepEqual(ids('q=nothing-matches-this'), []);
   assert.equal(ids('').length, entries.length);
