@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -66,9 +66,49 @@ test('the /studio page renders its shell through StudioEntry, with no lazy compo
   assert.doesNotMatch(page, /_components\/(?:shell\/studio-shell|demo\/demo-shell)/);
 });
 
+/** The sources the build's /studio chunks come from, whose newest change a build must postdate. */
+const SOURCES = [
+  'src/app/(studio)/studio/page.tsx',
+  'src/app/(studio)/_components',
+  'src/lib/demo',
+  'src/lib/studio',
+  'src/lib/studio-fetch.ts',
+].map((each) => path.join(WEB, each));
+
+/** The newest modification time among `paths`, directories walked, tests left out. */
+function newest(paths: readonly string[]): { readonly file: string; readonly at: number } {
+  let found = { file: '', at: 0 };
+  for (const each of paths) {
+    const stat = statSync(each);
+    const candidates = stat.isDirectory()
+      ? readdirSync(each, { recursive: true, withFileTypes: true })
+          .filter((entry) => entry.isFile() && !/\.test\.tsx?$/.test(entry.name))
+          .map((entry) => path.join(entry.parentPath, entry.name))
+      : [each];
+    for (const file of candidates) {
+      const at = statSync(file).mtimeMs;
+      if (at > found.at) found = { file, at };
+    }
+  }
+  return found;
+}
+
 test("a build's /studio entry holds neither shell, and each shell's chunks hold none of the other profile's code", (t) => {
+  // CI's build job sets EXPECT_BUILD=1 (pnpm check:studio-chunks), right after its build:
+  // there a missing or stale build fails rather than skips.
+  const expected = process.env.EXPECT_BUILD === '1';
   if (!existsSync(MANIFEST)) {
+    assert.ok(!expected, `EXPECT_BUILD=1, and there is no build at ${MANIFEST}`);
     t.skip('no build of apps/web in .next to read');
+    return;
+  }
+  const built = statSync(MANIFEST).mtimeMs;
+  const source = newest(SOURCES);
+  if (source.at > built) {
+    const stale = `the build in .next is older than ${path.relative(WEB, source.file)}: run pnpm build first`;
+    assert.ok(!expected, `EXPECT_BUILD=1, and ${stale}`);
+    console.warn(`STALE BUILD: ${stale}. Its /studio chunks aren't checked.`);
+    t.skip(stale);
     return;
   }
   const scope = globalThis as { __RSC_MANIFEST?: Record<string, unknown> };
