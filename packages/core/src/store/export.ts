@@ -7,7 +7,14 @@ import { documentFileName, sha256, type DocumentName, type UnitChecks } from '..
 import { exportBlobs, verifyExport } from './bundle-files';
 import { storageError } from './common';
 import type { CrashPoint, FsPort } from './fs-port';
-import { isRevisionId, isSha256, tempBeside, type RevisionId, type Sha256, type StorePaths } from './layout';
+import {
+  isRevisionId,
+  isSha256,
+  tempBeside,
+  type RevisionId,
+  type Sha256,
+  type StorePaths,
+} from './layout';
 import { DamagedPointerError, readEvents, readLive, type PublicationEvent } from './pointer';
 import { isTombstoned, readRevision, type Manifest, type RevisionDamage } from './revisions';
 
@@ -96,7 +103,14 @@ export type ExportOutcome =
 /** An event as an export carries it: the public fields alone. */
 export type ExportedEvent = Pick<
   PublicationEvent,
-  'seq' | 'type' | 'revisionId' | 'previousRevisionId' | 'actor' | 'at' | 'sourceHash' | 'restoredFrom'
+  | 'seq'
+  | 'type'
+  | 'revisionId'
+  | 'previousRevisionId'
+  | 'actor'
+  | 'at'
+  | 'sourceHash'
+  | 'restoredFrom'
 >;
 
 export interface ExportOptions {
@@ -181,8 +195,16 @@ async function readBlobs(
   paths: StorePaths,
   hashes: readonly Sha256[],
 ): Promise<
-  | { readonly ok: true; readonly blobs: readonly { file: string; sha256: Sha256; bytes: Buffer }[] }
-  | { readonly ok: false; readonly code: 'asset_missing' | 'too_large'; readonly blob: Sha256; readonly limit?: number }
+  | {
+      readonly ok: true;
+      readonly blobs: readonly { file: string; sha256: Sha256; bytes: Buffer }[];
+    }
+  | {
+      readonly ok: false;
+      readonly code: 'asset_missing' | 'too_large';
+      readonly blob: Sha256;
+      readonly limit?: number;
+    }
 > {
   const blobs: { file: string; sha256: Sha256; bytes: Buffer }[] = [];
   let total = 0;
@@ -331,12 +353,14 @@ export async function exportRevision(
         over: files.some(
           ({ file, bytes }) =>
             !file.startsWith('media/blobs/') &&
-            bytes.byteLength > (file === BUNDLE_FILE ? BUNDLE_LIMITS.bundleBytes : BUNDLE_LIMITS.documentBytes),
+            bytes.byteLength >
+              (file === BUNDLE_FILE ? BUNDLE_LIMITS.bundleBytes : BUNDLE_LIMITS.documentBytes),
         ),
         limit: BUNDLE_LIMITS.documentBytes,
       },
       {
-        over: files.reduce((sum, { bytes }) => sum + bytes.byteLength, 0) > BUNDLE_LIMITS.totalBytes,
+        over:
+          files.reduce((sum, { bytes }) => sum + bytes.byteLength, 0) > BUNDLE_LIMITS.totalBytes,
         limit: BUNDLE_LIMITS.totalBytes,
       },
     ];
