@@ -44,6 +44,9 @@ const BUILD: VariantRegistry = [
   fixture('notes'),
 ];
 
+/** The demo deployment's PORTFOLIO_ORIGIN, which /sample's canonical redirect is built on (#9). */
+const DEMO_ORIGIN = 'https://demo.rowan.test';
+
 const PAIR = (() => {
   const result = readPair({
     portfolio: fileURLToPath(new URL('../../../../portfolio.example.yml', import.meta.url)),
@@ -64,15 +67,21 @@ function revision(variant: string): LiveRevision {
   };
 }
 
-/** read-only, with a reader that hands out `live()`'s revision and records its composition. */
-function deploy(t: TestContext, live: () => LiveRevision) {
+/** read-only, or demo, with a reader that hands out `live()`'s revision and records its composition. */
+function deploy(
+  t: TestContext,
+  live: () => LiveRevision,
+  profile: 'read-only' | 'demo' = 'read-only',
+) {
   const read = readDeploymentConfig(
-    {
-      NODE_ENV: 'production',
-      PORTFOLIO_PROFILE: 'read-only',
-      PORTFOLIO_ORIGIN: 'https://rowan.test',
-      PORTFOLIO_SOURCE_DIR: '/srv/config',
-    },
+    profile === 'demo'
+      ? { NODE_ENV: 'production', PORTFOLIO_PROFILE: 'demo', PORTFOLIO_ORIGIN: DEMO_ORIGIN }
+      : {
+          NODE_ENV: 'production',
+          PORTFOLIO_PROFILE: 'read-only',
+          PORTFOLIO_ORIGIN: 'https://rowan.test',
+          PORTFOLIO_SOURCE_DIR: '/srv/config',
+        },
     { cwd: '/' },
   );
   assert.ok(read.ok, JSON.stringify(read.issues));
@@ -103,7 +112,15 @@ const page = (id: string) =>
   );
 
 /** What the page answers for `route` below its segment: a React element, or the error Next throws. */
-async function answer(id: string, route: string[] = [], search: Record<string, string> = {}) {
+async function answer(
+  id: string,
+  route: string[] = [],
+  search: Readonly<Record<string, string | readonly string[]>> = {},
+): Promise<{ element?: unknown; digest?: string }> {
+  return answerAs(id, route, search as Record<string, string | string[]>);
+}
+
+async function answerAs(id: string, route: string[], search: Record<string, string | string[]>) {
   try {
     return {
       element: await page(id)({
@@ -233,4 +250,83 @@ test('a case study a publish dropped after proxy.ts read the slugs is the 404 pa
     const answered = await answer(FALLBACK_ID, ['work', slug]);
     assert.match(answered.digest ?? '', /^NEXT_HTTP_ERROR_FALLBACK;404$/, `request ${request}`);
   }
+});
+
+/** Next's digest for a 307 to `location`, as redirect() from a page throws it. */
+const redirectTo = (location: string) => `NEXT_REDIRECT;replace;${location};307;`;
+
+test("under demo, /sample with its canonical query renders, in the segment of the variant it names or the sample's own", async (t) => {
+  deploy(t, () => revision('fixture-notes'), 'demo');
+  setLiveComposition('fixture-notes');
+  for (const [id, search] of [
+    ['fixture-notes', {}],
+    ['fixture-notes', { mode: 'dark' }],
+    ['fixture-chapters', { variant: 'fixture-chapters', mode: 'dark', motion: 'reduce' }],
+  ] as const) {
+    const rendered = await answer(id, ['sample'], search);
+    assert.ok(rendered.element && isValidElement(rendered.element), JSON.stringify(search));
+  }
+});
+
+test("under demo, /sample with any other query answers a 307 to the canonical one on PORTFOLIO_ORIGIN, whatever the request's host", async (t) => {
+  deploy(t, () => revision('fixture-notes'), 'demo');
+  setLiveComposition('fixture-notes');
+  for (const [search, location] of [
+    // An unknown variant falls back to the sample's own, and drops (#9).
+    [{ variant: 'canary-variant' }, '/sample'],
+    [{ variant: FALLBACK_ID, mode: 'dark' }, '/sample?mode=dark'],
+    [{ variant: ['fixture-chapters', 'fixture-chapters'] }, '/sample'],
+    // A value no axis accepts, a key outside the six, another order.
+    [{ mode: 'sepia', language: 'no-such-language' }, '/sample'],
+    [{ utm_source: 'mail', mode: 'dark' }, '/sample?mode=dark'],
+    [{ motion: 'full' }, '/sample'],
+    [{ mode: 'dark', variant: 'fixture-chapters' }, '/sample?variant=fixture-chapters&mode=dark'],
+    // Text that looks like a URL or markup never reaches the location.
+    [{ mode: '//evil.example', scheme: 'https://evil.example' }, '/sample'],
+    [{ type: '<script>' }, '/sample'],
+  ] as const) {
+    const answered = await answer('fixture-notes', ['sample'], search);
+    assert.equal(answered.digest, redirectTo(`${DEMO_ORIGIN}${location}`), JSON.stringify(search));
+  }
+});
+
+test("under demo, the showroom at / reads the same keys but variant, which only /sample's picks, and sends any other query to the canonical one", async (t) => {
+  deploy(t, () => revision('fixture-notes'), 'demo');
+  setLiveComposition('fixture-notes');
+  const rendered = await answer('fixture-notes', [], { mode: 'dark', motion: 'reduce' });
+  assert.ok(rendered.element && isValidElement(rendered.element));
+  for (const [search, location] of [
+    [{ variant: 'fixture-chapters' }, '/'],
+    [{ variant: 'fixture-chapters', mode: 'dark' }, '/?mode=dark'],
+    [{ mode: 'sepia', x: '//evil.example' }, '/'],
+  ] as const) {
+    const answered = await answer('fixture-notes', [], search);
+    assert.equal(answered.digest, redirectTo(`${DEMO_ORIGIN}${location}`), JSON.stringify(search));
+  }
+});
+
+test('under read-only, the root reads no query, and sends none anywhere', async (t) => {
+  deploy(t, () => revision('fixture-notes'));
+  setLiveComposition('fixture-notes');
+  const rendered = await answer('fixture-notes', [], { mode: 'sepia', variant: 'x' });
+  assert.ok(rendered.element && isValidElement(rendered.element));
+});
+
+test('under demo, a /sample path with a dot segment and a query to drop is the 404 page, never a redirect', async (t) => {
+  deploy(t, () => revision('fixture-notes'), 'demo');
+  setLiveComposition('fixture-notes');
+  for (const route of [
+    ['sample', '..'],
+    ['sample', '.', 'notes'],
+  ]) {
+    const answered = await answer('fixture-notes', route, { mode: 'sepia' });
+    assert.match(answered.digest ?? '', /^NEXT_HTTP_ERROR_FALLBACK;404$/, route.join('/'));
+  }
+});
+
+test('under read-only, /sample is no page at all, whatever its query', async (t) => {
+  deploy(t, () => revision('fixture-notes'));
+  setLiveComposition('fixture-notes');
+  const answered = await answer('fixture-notes', ['sample'], { mode: 'sepia' });
+  assert.match(answered.digest ?? '', /^NEXT_HTTP_ERROR_FALLBACK;404$/);
 });

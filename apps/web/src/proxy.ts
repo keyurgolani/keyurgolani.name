@@ -9,6 +9,7 @@ import {
   servableAgain,
 } from './server/config-store';
 import { isExperiencePath, segmentFor } from './server/experience';
+import { demoCsp, demoPagePath } from './server/demo-headers';
 import { isPreviewPath, previewCsp, previewHeaders } from './server/preview-headers';
 import { publicCsp } from './server/public-headers';
 import { PORTFOLIO_FILES } from './server/portfolio-files';
@@ -123,6 +124,11 @@ import {
 // /no-such-page does: none of Studio's headers, Next's 404 page for GET and
 // HEAD, and the plain 404 for the rest.
 //
+// Under demo (#9), the showroom at /, every path under /sample, and Demo
+// Studio's paths get the demo policy from server/demo-headers.ts in place of
+// the public one or Studio's: Studio's, with worker-src 'self' and
+// form-action 'none', and frame-ancestors 'self' on /sample alone.
+//
 // A route no profile of this build serves, such as /_fixtures/appearance in
 // a build without APPEARANCE_FIXTURES=1 (#19, Slice 3), answers as
 // /no-such-page does too, in every profile: Next's 404 page for GET and
@@ -169,14 +175,20 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   }
   const studioPath = isStudioPath(pathname);
   const studio = studioPath && hasStudio(deployment.profile);
+  // Under demo (#9), the showroom, the sample, and Demo Studio get the demo
+  // policy, which only /sample's lets the demo's own pages frame.
+  const demoPage =
+    deployment.profile === 'demo' && !preview ? (studio ? 'studio' : demoPagePath(pathname)) : null;
   // Every other path, a Studio path under a profile with none among them,
   // gets the public site's policy (#6, item 8), its nonce on the request
   // too, so Next puts it on the scripts it renders.
-  const csp = studio
-    ? studioCsp(newNonce(), COMPILED_MODE, deployment.previewOrigin)
-    : preview
-      ? previewCsp(newNonce(), { mode: COMPILED_MODE, studioOrigin: deployment.origin })
-      : publicCsp(newNonce(), COMPILED_MODE);
+  const csp = demoPage
+    ? demoCsp(newNonce(), COMPILED_MODE, demoPage === 'sample' ? "'self'" : "'none'")
+    : studio
+      ? studioCsp(newNonce(), COMPILED_MODE, deployment.previewOrigin)
+      : preview
+        ? previewCsp(newNonce(), { mode: COMPILED_MODE, studioOrigin: deployment.origin })
+        : publicCsp(newNonce(), COMPILED_MODE);
   if (studio) {
     Object.assign(extra, STUDIO_RESPONSE_HEADERS, { 'content-security-policy': csp });
   } else if (preview) {

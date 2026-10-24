@@ -29,10 +29,18 @@ export async function visitorPageAppearance(
   site: Pick<Site, 'appearance' | 'visitorControls' | 'motionPolicy'> | null,
   variant: string,
   query?: SelectionText,
+  /** Demo's /sample with `motion=reduce` (#9), which demo alone reads. */
+  reduceMotion = false,
 ): Promise<ResolvedAppearance> {
   const { profile } = requireDeploymentConfig();
   if (profile === 'demo') {
-    return documentAppearance({ site, variant, profile, ...(query ? { query } : {}) });
+    return documentAppearance({
+      site,
+      variant,
+      profile,
+      ...(query ? { query } : {}),
+      ...(reduceMotion ? { reduceMotion } : {}),
+    });
   }
   const cookie = await preferenceCookie.read();
   return documentAppearance({ site, variant, profile, cookie });

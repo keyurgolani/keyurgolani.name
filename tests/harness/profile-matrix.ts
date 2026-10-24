@@ -414,18 +414,26 @@ async function expectStatusDocument(
 
 /**
  * The headers its path gets (route-headers.mjs): the baseline ones, Studio's
- * (#2) where the profile has Studio, or the preview's (#7). No cookie, and
- * noindex exactly where the profile can't be indexed, or noindex, nofollow
- * on every preview path.
+ * (#2) where the profile has Studio, the demo's on its showroom, /sample,
+ * and Studio (#9), or the preview's (#7). No cookie, no x-portfolio-path,
+ * and noindex exactly where the profile can't be indexed, or noindex,
+ * nofollow on every preview path.
  */
 function expectProfileHeaders(profile: Profile, response: APIResponse, what: string) {
   const headers = response.headers();
   // Every request goes to the app's own address, its PORTFOLIO_ORIGIN.
   const { pathname, origin } = new URL(response.url());
-  expect(headerProblems(pathname, headers, { studio: hasStudio(profile), origin }), what).toEqual(
-    [],
-  );
+  expect(
+    headerProblems(pathname, headers, {
+      studio: hasStudio(profile),
+      origin,
+      demo: profile === 'demo',
+    }),
+    what,
+  ).toEqual([]);
   expect(headers['set-cookie'], `${what}: no cookie`).toBeUndefined();
+  // The baseline's storage path header (#1, #9 A2) is on no response, in any profile.
+  expect(headers['x-portfolio-path'], `${what}: x-portfolio-path`).toBeUndefined();
   expect(headers['x-robots-tag'], `${what}: X-Robots-Tag`).toBe(
     isPreviewPath(pathname) ? 'noindex, nofollow' : INDEXABLE[profile] ? undefined : 'noindex',
   );

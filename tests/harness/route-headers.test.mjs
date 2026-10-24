@@ -206,6 +206,45 @@ test("Studio's transport needs Referrer-Policy and Cross-Origin-Resource-Policy:
   );
 });
 
+/** The demo policy (#9), framed as `framing` says. */
+const demoPolicy = (/** @type {string} */ framing) =>
+  `default-src 'self'; script-src 'self' 'nonce-MVlEoQyHU2PoMq1Imu8oSA==' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; frame-src 'self'; frame-ancestors ${framing}; form-action 'none'; base-uri 'none'; object-src 'none'`;
+
+test("under demo, the showroom and every /sample path need the demo policy, which only /sample's lets the demo frame, and every other path the public one (#9)", () => {
+  const page = (/** @type {string} */ framing) => ({
+    ...BASELINE_HEADERS,
+    'content-security-policy': demoPolicy(framing),
+  });
+  assert.deepEqual(headerProblems('/', page("'none'"), { demo: true, studio: false }), []);
+  for (const path of ['/sample', '/sample/chapters/about', '/%73ample']) {
+    assert.deepEqual(headerProblems(path, page("'self'"), { demo: true, studio: false }), [], path);
+    // Framed by no one, or by the showroom's rule, it fails.
+    assert.notDeepEqual(headerProblems(path, page("'none'"), { demo: true }), [], path);
+    assert.notDeepEqual(headerProblems(path, { ...BASELINE_HEADERS }, { demo: true }), [], path);
+  }
+  assert.notDeepEqual(headerProblems('/', page("'self'"), { demo: true }), []);
+  // Every other demo path keeps the public policy.
+  for (const path of ['/robots.txt', '/samples', '/x/sample', '/Sample', '/api/health']) {
+    assert.deepEqual(headerProblems(path, { ...BASELINE_HEADERS }, { demo: true }), [], path);
+    assert.notDeepEqual(headerProblems(path, page("'none'"), { demo: true }), [], path);
+  }
+  // Outside demo nothing sends it.
+  assert.notDeepEqual(headerProblems('/sample', page("'self'")), []);
+  assert.deepEqual(headerProblems('/sample', { ...BASELINE_HEADERS }), []);
+  // Demo Studio, once demo serves it, frames nothing in: the demo policy with 'none'.
+  const studio = { ...STUDIO_PAGE, 'content-security-policy': demoPolicy("'none'") };
+  assert.deepEqual(headerProblems('/studio', studio, { demo: true }), []);
+  assert.notDeepEqual(
+    headerProblems(
+      '/studio',
+      { ...studio, 'content-security-policy': demoPolicy("'self'") },
+      { demo: true },
+    ),
+    [],
+  );
+  assert.notDeepEqual(headerProblems('/studio', STUDIO_PAGE, { demo: true }), []);
+});
+
 test('two answers that differ in their nonces alone compare equal, and nothing else is taken for a nonce', () => {
   const nonce = 'MVlEoQyHU2PoMq1Imu8oSA==';
   const other = 'WFUrZAL3dO/g3rt7Jm3XSA==';

@@ -1,16 +1,18 @@
 import { expect, test } from '../harness/fixtures';
 import { DEMO_APP, profileMatrix } from '../harness/profile-matrix';
 import { FALLBACK_ID, VARIANTS } from '../harness/registry';
+import { withoutNonces } from '../harness/route-headers.mjs';
 import { withRscHash } from '../harness/rsc';
 
-// The demo profile (#1, slice 3): the bundled sample at / and /sample, with
-// nothing for crawlers to index and no cookie, and the route-level matrix
-// (AC4) for demo. The sample site selects Editorial Evidence, which this
-// build doesn't register until #13, so both render the fallback composition
-// in its place (#5). /sample?variant= renders a variant this build
-// registers, and anything else it names is a 404. The sample's case study
-// renders at /sample/work/<slug>, from the sample's own slugs, and the
-// root's works list links it there (#10b).
+// The demo profile (#1, slice 3; #9): the bundled sample at / and /sample,
+// with nothing for crawlers to index, no cookie, no structured data, and the
+// same body for the same URL, and the route-level matrix (AC4) for demo. The
+// sample site selects Editorial Evidence, which this build doesn't register
+// until #13, so both render the fallback composition in its place (#5).
+// /sample?variant= renders a variant this build registers, and anything else
+// it names falls back to the sample's own at the canonical URL (#9). The
+// sample's case study renders at /sample/work/<slug>, from the sample's own
+// slugs, and the root's works list links it there (#10b).
 const DEMO = { type: 'profile', description: 'demo' };
 // identity.name in portfolio.example.yml.
 const SAMPLE_NAME = 'Anamika Devi';
@@ -37,31 +39,70 @@ for (const route of ['/', '/sample']) {
 }
 
 test(
-  '/sample?variant= naming the fallback, an unregistered id, nothing, or two ids is a 404 that names none',
+  "/sample?variant= naming the fallback, an unregistered id, nothing, or two ids falls back to the sample's own selection at the canonical URL, and the page names none of it (#9)",
   { annotation: [{ type: 'route', description: '/sample' }, DEMO] },
-  async ({ page }) => {
+  async ({ page, app }) => {
     for (const query of [
       'variant=fallback',
       'variant=canary-variant',
       'variant=',
       'variant=fallback&variant=fallback',
+      'variant=canary-variant&canary-key=canary-value',
     ]) {
       const response = await page.goto(`/sample?${query}`);
-      expect(response?.status(), query).toBe(404);
-      await expect(page.getByRole('heading', { level: 1 }), query).toHaveText('Page not found');
-      await expect(page.locator('body'), query).not.toContainText(
-        /canary|fallback|editorial|variant|studio|config/i,
-        { useInnerText: true },
+      expect(response?.status(), query).toBe(200);
+      // One 307, to /sample on the deployment's origin.
+      const sent = response?.request().redirectedFrom();
+      expect(sent?.url(), query).toBe(`${app.origin}/sample?${query}`);
+      expect((await sent?.response())?.status(), query).toBe(307);
+      expect(page.url(), query).toBe(`${app.origin}/sample`);
+      await expect(page.locator('[data-variant]'), query).toHaveAttribute(
+        'data-requested-variant',
+        'editorial-evidence',
       );
-      // Its boundary's skip link goes to its own main, and the page links home alone.
-      await expect(page.locator('[data-ui-slot="skip-link"]'), query).toHaveAttribute(
-        'href',
-        '#main',
-      );
-      const links = await page
-        .locator('a[href]:not([data-ui-slot="skip-link"])')
-        .evaluateAll((anchors) => anchors.map((anchor) => anchor.getAttribute('href')));
-      expect(links, query).toEqual(['/']);
+      await expect(page.getByRole('heading', { level: 1 }), query).toHaveText(SAMPLE_NAME);
+      // Nothing the request sent that the registry refused is in the page, its payload included.
+      expect(await page.content(), query).not.toMatch(/canary/i);
+    }
+  },
+);
+
+test(
+  'identical URLs return identical bodies apart from the nonce, and no response sets a cookie (#9, A7)',
+  { annotation: [{ type: 'route', description: '/sample' }, DEMO] },
+  async ({ playwright, app }) => {
+    // Two visitors with nothing in common, one sending cookies and headers of its own.
+    const first = await playwright.request.newContext({ baseURL: app.origin });
+    const second = await playwright.request.newContext({
+      baseURL: app.origin,
+      extraHTTPHeaders: {
+        cookie: 'portfolio_appearance=mode%3Ddark; studio_session=canary-session',
+        'accept-language': 'fr-FR',
+        'user-agent': 'canary-agent',
+      },
+    });
+    try {
+      const paths = [
+        '/',
+        '/sample',
+        '/sample?mode=dark',
+        `/sample?variant=${VARIANTS.find(({ manifest }) => manifest.id !== FALLBACK_ID)?.manifest.id ?? FALLBACK_ID}&mode=light&motion=reduce`,
+        '/sample/no-such-view',
+        '/robots.txt',
+      ];
+      for (const path of paths) {
+        const bodies: string[] = [];
+        for (const context of [first, second, first]) {
+          const response = await context.get(path, { maxRedirects: 0 });
+          expect(response.headers()['set-cookie'], path).toBeUndefined();
+          bodies.push(withoutNonces(await response.text()));
+        }
+        expect(new Set(bodies).size, path).toBe(1);
+        expect(bodies[0], path).not.toMatch(/canary/i);
+      }
+    } finally {
+      await first.dispose();
+      await second.dispose();
     }
   },
 );

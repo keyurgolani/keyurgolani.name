@@ -6,7 +6,6 @@ import {
 } from '@portfolio/variant-contract/segments';
 import { VARIANTS } from '../lib/generated/registry.meta';
 import { environmentValues } from '../lib/preview-environment';
-import { sampleSelection } from '../lib/sample';
 import { accessIn, PROFILES, type Access, type Capability, type Profile } from './capabilities';
 import { liveCaseStudies } from './config-store';
 import { experiencePattern } from './experience';
@@ -169,12 +168,6 @@ function namesWork(
   return rest.length === 0 || declaresView(installed, 'work', rest);
 }
 
-/** /sample's `variant` parameter as a page reads it: absent, one value, or several. */
-function variantParameter(query: URLSearchParams) {
-  const values = query.getAll('variant');
-  return { variant: values.length === 0 ? undefined : values.length === 1 ? values[0] : values };
-}
-
 /**
  * Whether this build serves the preview's dev fixture route (#7, Slice 1,
  * item 8): only under `next dev`. Next writes NODE_ENV into the code as it
@@ -251,10 +244,10 @@ const ROUTES = [
     capability: 'sample.read',
     visitor: true,
     experience: true,
-    // The variant ?variant= names, which the page renders, and a page below /sample.
-    names: ({ segments, query }, installed) =>
-      sampleSelection(variantParameter(query), installed) !== null &&
-      namesPage(installed, segments.slice(1)),
+    // A page below /sample. The query never makes it missing: a value the
+    // registry doesn't accept falls back on its axis, and the page answers
+    // a 307 to the canonical query (#9).
+    names: ({ segments }, installed) => namesPage(installed, segments.slice(1)),
   },
   // Studio (#2): the Owner Studio shell (#8), and sign-in.
   // Neither reads the published site, so neither is a visitor route.

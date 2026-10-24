@@ -1679,7 +1679,7 @@ test('the live slug set fails closed: none before the first read, and none while
   assert.equal(fixtureEntry('read-only', '/work/tide-tables'), '/work/[slug]');
 });
 
-test('/sample serves what the page renders: a registered variant, at home or a declared view', () => {
+test('/sample serves what the page renders: home or a declared view, whatever the query says (#9)', () => {
   for (const pathname of [
     '/sample',
     '/sample?variant=fixture-chapters',
@@ -1688,14 +1688,17 @@ test('/sample serves what the page renders: a registered variant, at home or a d
     '/sample/notes?variant=fixture-chapters',
     '/sample/chapters/one',
     '/sample?variant=fixture-notes&utm=x',
-  ]) {
-    assert.equal(fixtureEntry('demo', pathname), '/sample/[[...path]]', pathname);
-  }
-  for (const pathname of [
+    // A value the registry doesn't accept falls back on its axis, and the
+    // page sends the visitor to the canonical query: never a 404.
     '/sample?variant=fallback',
     '/sample?variant=canary-variant',
     '/sample?variant=',
     '/sample?variant=fixture-notes&variant=fixture-notes',
+    '/sample?mode=sepia&language=no-such-pack',
+  ]) {
+    assert.equal(fixtureEntry('demo', pathname), '/sample/[[...path]]', pathname);
+  }
+  for (const pathname of [
     '/sample/nowhere?variant=fixture-chapters',
     '/sample/chapters?variant=fixture-chapters',
     '/sample/work/tide-tables?variant=fixture-chapters',
@@ -1705,7 +1708,8 @@ test('/sample serves what the page renders: a registered variant, at home or a d
   }
   // Under the other profiles a /sample path that names something is absent, as the entry is.
   assert.equal(fixtureEntry('owner', '/sample?variant=fixture-chapters'), 'absent');
-  assert.equal(fixtureEntry('owner', '/sample?variant=canary-variant'), 'missing');
+  assert.equal(fixtureEntry('owner', '/sample?variant=canary-variant'), 'absent');
+  assert.equal(fixtureEntry('owner', '/sample/nowhere'), 'missing');
 });
 
 test('every top-level public/ entry is a name no view or route takes, so a file there is served', () => {
