@@ -189,7 +189,7 @@ test(
     await slot.getByRole('radio', { name: 'Dark' }).check();
     const answer = await saved;
     expect(answer.status()).toBe(200);
-    expect(answer.headers()['cache-control']).toBe('private, no-store');
+    expect(answer.headers()['cache-control']).toBe('no-store');
     // The answer names the saved packs' stylesheets, which the control preloads
     // before it refreshes: the page names none it doesn't render (#6's purity).
     // The page already links warm-parchment's, so a mode alone preloads nothing.

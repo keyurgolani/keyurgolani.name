@@ -45,7 +45,7 @@ import { APPEARANCE_COOKIE } from '~/lib/document-appearance';
 // said, so the control preloads them before it refreshes and the page
 // carries no stylesheet URL of its own for that (#6's purity check). A
 // reset, or an id this build doesn't register, adds none. Every answer is
-// private, no-store. A name given twice is refused, in a form or in JSON.
+// no-store. A name given twice is refused, in a form or in JSON.
 // Anything else is refused with nothing set: 403 for the origin, 413 past
 // the cap, 415 for another body type, and 400 for a body the schema doesn't
 // take.
@@ -89,7 +89,7 @@ export interface PreferenceOptions {
 }
 
 /** Every answer's Cache-Control: the preference is the visitor's own. */
-export const PREFERENCE_CACHE = 'private, no-store';
+export const PREFERENCE_CACHE = 'no-store';
 
 export async function appearancePreference(
   request: Request,

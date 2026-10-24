@@ -66,7 +66,7 @@ test('a form post sets the ids it names, and goes back to its page on the canoni
   );
   assert.equal(response.status, 303);
   assert.equal(response.headers.get('location'), `${ORIGIN}/work/tide?view=all#notes`);
-  assert.equal(response.headers.get('cache-control'), 'private, no-store');
+  assert.equal(response.headers.get('cache-control'), 'no-store');
   // The form path names no stylesheet: the page it goes back to links its own.
   assert.equal(await response.text(), '');
   assert.equal(
@@ -87,7 +87,7 @@ test("the JSON save sets the same cookie and answers 200 with the saved packs' s
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('location'), null);
   assert.equal(response.headers.get('cache-control'), PREFERENCE_CACHE);
-  assert.equal(PREFERENCE_CACHE, 'private, no-store');
+  assert.equal(PREFERENCE_CACHE, 'no-store');
   assert.equal(
     response.headers.get('set-cookie'),
     `portfolio_appearance=scheme=warm-parchment&mode=dark; ${COOKIE_ATTRIBUTES}`,
@@ -132,7 +132,7 @@ test("the stylesheets are the registry's own URLs for the packs saved, in axis o
   assert.match(built[0]!, /^\/_portfolio\/pack\/warm-parchment\.[0-9a-f]{12}\.css$/);
 });
 
-test('a refused save names no stylesheet, and still answers private and no-store', async () => {
+test('a refused save names no stylesheet, and still answers no-store', async () => {
   for (const request of [
     post('{"scheme":"warm-parchment"}', { type: 'application/json', origin: 'https://evil.test' }),
     post('{"scheme":"Warm Parchment"}', { type: 'application/json' }),
@@ -141,7 +141,7 @@ test('a refused save names no stylesheet, and still answers private and no-store
   ]) {
     const response = await answer(request);
     assert.ok(response.status >= 400, String(response.status));
-    assert.equal(response.headers.get('cache-control'), 'private, no-store');
+    assert.equal(response.headers.get('cache-control'), 'no-store');
     assert.equal(response.headers.get('set-cookie'), null);
     assert.doesNotMatch(await response.text(), /_portfolio|stylesheets/);
   }
@@ -199,7 +199,7 @@ test('a request from anywhere but the canonical origin is a 403 that sets nothin
     const response = await answer(request);
     assert.equal(response.status, 403, what);
     assert.equal(response.headers.get('set-cookie'), null, what);
-    assert.equal(response.headers.get('cache-control'), 'private, no-store', what);
+    assert.equal(response.headers.get('cache-control'), 'no-store', what);
   }
   const same = await answer(post('mode=dark', { site: 'same-origin' }));
   assert.equal(same.status, 303);
@@ -258,7 +258,7 @@ test('a body the schema refuses is a 400 that sets nothing', async () => {
     const response = await answer(request);
     assert.equal(response.status, 400, what);
     assert.equal(response.headers.get('set-cookie'), null, what);
-    assert.equal(response.headers.get('cache-control'), 'private, no-store', what);
+    assert.equal(response.headers.get('cache-control'), 'no-store', what);
   }
 });
 
