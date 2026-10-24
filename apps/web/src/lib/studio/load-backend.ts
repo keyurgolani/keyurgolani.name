@@ -11,7 +11,9 @@ type DemoModule = typeof import('~/lib/demo/browser-backend');
 /** The module of the profile's backend, or null under a profile with none. */
 export function loadBackend(profile: 'owner'): Promise<OwnerModule>;
 export function loadBackend(profile: 'demo'): Promise<DemoModule>;
-export function loadBackend(profile: StudioPolicy['profile']): Promise<OwnerModule | DemoModule> | null;
+export function loadBackend(
+  profile: StudioPolicy['profile'],
+): Promise<OwnerModule | DemoModule> | null;
 export function loadBackend(
   profile: StudioPolicy['profile'],
 ): Promise<OwnerModule | DemoModule> | null {

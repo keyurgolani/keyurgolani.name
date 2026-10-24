@@ -153,11 +153,17 @@ test('Demo Studio has its two tasks in the frame, and the sandbox line where Own
   const html = renderToStaticMarkup(
     <DemoStudio catalog={CATALOG} policy={POLICY} backend={backend()} task="appearance" />,
   );
-  assert.ok(html.includes('<h1 class="studio-shell__name">Portfolio Studio</h1><p class="studio-shell__signed-in">Demo sandbox — only you can see these changes</p></header>'));
-  assert.deepEqual(
-    [...html.matchAll(/<a href="#([a-z-]+)" class="studio-shell__task"(?: aria-current="page")?>([^<]+)<\/a>/g)].map(
-      ([, id, label]) => `${id} ${label}`,
+  assert.ok(
+    html.includes(
+      '<h1 class="studio-shell__name">Portfolio Studio</h1><p class="studio-shell__signed-in">Demo sandbox — only you can see these changes</p></header>',
     ),
+  );
+  assert.deepEqual(
+    [
+      ...html.matchAll(
+        /<a href="#([a-z-]+)" class="studio-shell__task"(?: aria-current="page")?>([^<]+)<\/a>/g,
+      ),
+    ].map(([, id, label]) => `${id} ${label}`),
     ['appearance Appearance', 'preview Preview'],
   );
   assert.match(html, /<a href="#appearance" class="studio-shell__task" aria-current="page">/);
@@ -169,7 +175,11 @@ test('Demo Studio has its two tasks in the frame, and the sandbox line where Own
   // A policy without sandbox.view lists no task.
   assert.doesNotMatch(
     renderToStaticMarkup(
-      <DemoStudio catalog={CATALOG} policy={{ profile: 'demo', allowed: [] }} backend={backend()} />,
+      <DemoStudio
+        catalog={CATALOG}
+        policy={{ profile: 'demo', allowed: [] }}
+        backend={backend()}
+      />,
     ),
     /studio-shell__task|<iframe/,
   );
@@ -230,10 +240,11 @@ test("nothing Demo Studio loads reaches Owner Studio's adapter, its transport, o
     queue.push(...importsOf(file));
   }
   const reached = [...seen].map((file) => path.relative(WEB_SRC, file));
-  const forbidden = reached.filter((file) =>
-    /^(?:lib\/studio\/owner-backend\.ts|lib\/studio-fetch\.ts|lib\/studio\/load-backend\.ts|server\/|app\/\(studio\)\/_components\/preview\/)/.test(
-      file,
-    ) ||
+  const forbidden = reached.filter(
+    (file) =>
+      /^(?:lib\/studio\/owner-backend\.ts|lib\/studio-fetch\.ts|lib\/studio\/load-backend\.ts|server\/|app\/\(studio\)\/_components\/preview\/)/.test(
+        file,
+      ) ||
       // Of the owner's shell, only the frame and the axis field it shares.
       (/^app\/\(studio\)\/_components\/shell\//.test(file) &&
         !/\/(?:studio-frame|axis-field)\.tsx$/.test(file)),
@@ -241,5 +252,8 @@ test("nothing Demo Studio loads reaches Owner Studio's adapter, its transport, o
   assert.deepEqual(forbidden, []);
   // The walk did follow imports into Studio's shared libraries and its shared frame.
   assert.ok(reached.includes('lib/studio/appearance.ts'), reached.join(', '));
-  assert.ok(reached.includes('app/(studio)/_components/shell/studio-frame.tsx'), reached.join(', '));
+  assert.ok(
+    reached.includes('app/(studio)/_components/shell/studio-frame.tsx'),
+    reached.join(', '),
+  );
 });

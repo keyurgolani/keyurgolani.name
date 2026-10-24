@@ -213,7 +213,10 @@ test('a signed-in Studio surface may say it needs its script, with why; nothing 
     [{ ...demo, routes: ['/studio/preview'] }, 'another Studio page under demo'],
     [{ ...demo, profile: 'owner' }, '/studio signed out under owner'],
     [{ ...demo, profile: 'read-only' }, '/studio under read-only'],
-    [{ ...LOGIN, profile: 'demo', requiresScript: demo.requiresScript }, 'the login surface under demo'],
+    [
+      { ...LOGIN, profile: 'demo', requiresScript: demo.requiresScript },
+      'the login surface under demo',
+    ],
     [{ ...demo, routes: [] }, 'no route'],
   ] as const) {
     assert.ok(
