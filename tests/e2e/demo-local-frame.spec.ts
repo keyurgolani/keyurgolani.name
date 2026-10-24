@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
-import type { Frame, Page } from '@playwright/test';
+import type { Frame, Page, Request, Response } from '@playwright/test';
 import { expect, test } from '../harness/fixtures';
 import { recordViolations, violations } from '../harness/preview-document';
 import { DEMO_APP } from '../harness/profile-matrix';
@@ -85,6 +85,41 @@ function documentOf(
 interface Captured {
   readonly url: string;
   readonly text: string;
+  /** The error a request failed with, such as net::ERR_BLOCKED_BY_CSP, or null while it hasn't. */
+  failure: string | null;
+  /** Whether a response came back, or the request finished. */
+  answered: boolean;
+}
+
+/** What a CSP-blocked load fails with: the browser refused it, and nothing went out. */
+const BLOCKED = 'net::ERR_BLOCKED_BY_CSP';
+
+/**
+ * Every captured request that carries one of `markers` and wasn't refused by
+ * the policy before it left: one that got a response or finished, or failed
+ * any other way. A load the frame's CSP blocks still fires `request`, then
+ * `requestfailed` with net::ERR_BLOCKED_BY_CSP, and never reaches a server.
+ */
+function escaped(requests: readonly Captured[], markers: readonly string[]): string[] {
+  return requests
+    .filter(({ text }) => markers.some((marker) => text.includes(marker)))
+    .filter(({ failure, answered }) => answered || failure !== BLOCKED)
+    .map(
+      ({ url, failure, answered }) => `${url} (${answered ? 'answered' : (failure ?? 'pending')})`,
+    );
+}
+
+/** Waits until every captured request carrying one of `markers` has failed or been answered. */
+async function settled(requests: readonly Captured[], markers: readonly string[]) {
+  await expect
+    .poll(
+      () =>
+        requests.filter(
+          ({ text, failure, answered }) =>
+            markers.some((marker) => text.includes(marker)) && failure === null && !answered,
+        ).length,
+    )
+    .toBe(0);
 }
 
 /**
@@ -94,16 +129,35 @@ interface Captured {
  */
 async function openFrame(page: Page) {
   const requests: Captured[] = [];
+  const byRequest = new Map<Request, Captured>();
   const hits: string[] = [];
   const dialogs: string[] = [];
   const errors: string[] = [];
-  page.context().on('request', (request) =>
-    requests.push({
+  const context = page.context();
+  context.on('request', (request) => {
+    const captured: Captured = {
       url: request.url(),
       text: [request.url(), JSON.stringify(request.headers()), request.postData() ?? ''].join('\n'),
-    }),
+      failure: null,
+      answered: false,
+    };
+    byRequest.set(request, captured);
+    requests.push(captured);
+  });
+  context.on('requestfailed', (request) => {
+    const captured = byRequest.get(request);
+    if (captured) captured.failure = request.failure()?.errorText ?? 'failed';
+  });
+  const answered = (request: Request) => {
+    const captured = byRequest.get(request);
+    if (captured) captured.answered = true;
+  };
+  context.on('response', (response: Response) => answered(response.request()));
+  context.on('requestfinished', answered);
+  // A socket that opens is answered: nothing the frame's policy blocks gets one.
+  page.on('websocket', (socket) =>
+    requests.push({ url: socket.url(), text: socket.url(), failure: null, answered: true }),
   );
-  page.on('websocket', (socket) => requests.push({ url: socket.url(), text: socket.url() }));
   page.on('dialog', (dialog) => {
     dialogs.push(dialog.type());
     void dialog.dismiss();
@@ -221,8 +275,27 @@ test(
             image.src = `${remote}/__canary/image.png?${planted}`;
           }),
         );
-        // A beacon goes out after the call returns, if it goes at all.
-        await new Promise((done) => setTimeout(done, 1000));
+        // What a page loads without a script asking: a CSS url(), a prefetch, and a link's ping.
+        document.body.style.backgroundImage = `url("${remote}/__canary/css.png?${planted}")`;
+        const prefetch = document.createElement('link');
+        prefetch.rel = 'prefetch';
+        prefetch.href = `${remote}/__canary/prefetch?${planted}`;
+        document.head.append(prefetch);
+        const ownPrefetch = document.createElement('link');
+        ownPrefetch.rel = 'prefetch';
+        ownPrefetch.href = `${origin}/__canary/prefetch-own?${planted}`;
+        document.head.append(ownPrefetch);
+        const pinged = document.createElement('a');
+        pinged.href = '#canary-ping';
+        pinged.setAttribute(
+          'ping',
+          `${remote}/__canary/ping?${planted} ${origin}/__canary/ping-own?${planted}`,
+        );
+        pinged.textContent = 'ping';
+        document.body.append(pinged);
+        pinged.click();
+        // A beacon, a prefetch, or a ping goes out after the call returns, if it goes at all.
+        await new Promise((done) => setTimeout(done, 1500));
         return out;
       },
       { origin: app.origin, host, remote: REMOTE, marker },
@@ -237,11 +310,11 @@ test(
     });
     expect(hits, 'nothing reached a server').toEqual([]);
     expect(blockedRequests.filter((url) => url.includes(marker))).toEqual([]);
-    // No request the browser made, finished or not, carried the marker.
-    expect(
-      requests.filter(({ text }) => text.includes(marker)).map(({ url }) => url),
-      'a request with the marker',
-    ).toEqual([]);
+    // A request the browser began with the marker was refused by the policy
+    // before it left: it failed with net::ERR_BLOCKED_BY_CSP, and got no
+    // response and never finished.
+    await settled(requests, [marker]);
+    expect(escaped(requests, [marker]), 'a request with the marker that left').toEqual([]);
     // And the frame's policy is what stopped each: connect-src for the
     // connections, img-src for the image.
     const seen = await violations(frame);
@@ -338,6 +411,8 @@ test(
     }
 
     const all = [...Object.values(MARKERS), H.CANARY];
+    await settled(requests, all);
+    expect(escaped(requests, all), 'a request with a marker that left').toEqual([]);
     expect(
       requests
         .filter(({ text }) => all.some((marker) => text.includes(marker)))
