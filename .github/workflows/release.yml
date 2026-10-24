@@ -2,13 +2,18 @@
 # starts a release, and there is no manual trigger.
 #
 # A release candidate, vX.Y.Z-rc.N: rc-verify refuses a commit that isn't on
-# main or has no green complete ci run, rc-build builds amd64 and arm64 once
+# main or has no green complete ci run. rc-quality runs #11's complete
+# quality matrix on the commit, every cell, in the shards rc-quality-plan
+# counts, eight at a time, and
+# rc-quality-verdict judges them whole with the release gates
+# (pnpm quality:release). rc-build builds amd64 and arm64 once
 # each, natively on its own runner, with BuildKit provenance (mode=max) and
 # an SBOM, and pushes each platform's index to GHCR by digest with no tag.
 # rc-merge merges the two into one index, pushes that by digest with no tag,
 # checks it, and attests it, and rc-scan runs Grype on that digest and on
-# the production dependencies. Only then does rc-tag tag the digest
-# X.Y.Z-rc.N and rc-release write the pre-release notes.
+# the production dependencies. Only when the scan and the quality verdict
+# both pass does rc-tag tag the digest X.Y.Z-rc.N and rc-release write the
+# pre-release notes.
 #
 # A final release, vX.Y.Z on the newest candidate's commit: promote-verify
 # refuses unless that candidate's release run passed its scan, promote-scan
@@ -322,6 +327,145 @@ jobs:
           SHA: ${{ github.sha }}
         run: node ci/release/verify-rc.mjs
 
+  # How many shards #11's release plan runs in: the smallest of 32, 64, and
+  # 128 that keeps each within the release ceiling (releaseFor,
+  # tests/quality/lib/full-shards.ts), from the plan of a worktree with the
+  # reference variant installed and its registry generated with the quality
+  # flags, as each shard plans (tests/quality/full-plan.ts). A plan past 128
+  # fails here, naming its heaviest group. It installs fresh, with no cache,
+  # and holds contents: read and no secret.
+  rc-quality-plan:
+    name: rc-quality-plan
+    needs: [classify, rc-verify]
+    if: ${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      count: ${{ steps.count.outputs.count }}
+      shards: ${{ steps.count.outputs.shards }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install, with no cache
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: Count the release plan's shards
+        id: count
+        run: pnpm exec tsx tests/quality/full-plan.ts
+
+  # #11's release plan: quality:full over every cell, against a worktree
+  # with the reference variant installed from its tarball, in as many shards
+  # as rc-quality-plan counts, by measured weight. They run eight at a time,
+  # the cap (FULL_SHARDS), so in waves, and PR CI keeps the rest of the
+  # account's job slots. The timeout is releaseTimeoutMinutes(), the release
+  # ceiling with its margin, and each shard fails before any test when the
+  # plan leaves a shard over that ceiling, naming its heaviest group. It
+  # installs fresh, with no cache, in the pinned Playwright image, and holds
+  # contents: read and no secret. Each shard's reports are scrubbed however
+  # the run ended, and upload only when that scrub succeeds, for one day,
+  # as every reports upload here does.
+  rc-quality:
+    name: rc-quality (${{ matrix.shard }}/${{ needs.rc-quality-plan.outputs.count }})
+    needs: [classify, rc-quality-plan]
+    if: ${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        shard: ${{ fromJSON(needs.rc-quality-plan.outputs.shards) }}
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      # The image this job runs in, so the visual cells know they're in it.
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install, with no cache
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: pnpm ci:quality-full --shard=${{ matrix.shard }}/${{ needs.rc-quality-plan.outputs.count }}
+        env:
+          SHARD: ${{ matrix.shard }}/${{ needs.rc-quality-plan.outputs.count }}
+          CI_REPRO_COMMAND: pnpm ci:quality-full --shard=${{ matrix.shard }}/${{ needs.rc-quality-plan.outputs.count }}
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+        run: pnpm ci:quality-full "--shard=$SHARD"
+      # The reports upload only when this succeeds: it deletes what it can't
+      # read, and fails when it did, or when the canary is still in any.
+      - name: Scrub reports
+        id: scrub
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-quality-release-${{ matrix.shard }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 1
+
+  # The release's quality gate over every shard's reports: the merged
+  # verdict, which must be the whole plan, not a night's slice, then the
+  # release-only gates (pnpm quality:release -- --merged), over every
+  # shard rc-quality-plan counted, every wave's. It runs only when every shard passed, so any shard
+  # that fails or times out stops the release, and rc-tag waits on it.
+  rc-quality-verdict:
+    name: rc-quality-verdict
+    needs: [classify, rc-quality-plan, rc-quality]
+    if: ${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install, with no cache
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: Download the shards' reports
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: reports-quality-release-*
+          path: ${{ runner.temp }}/quality-shards
+      - name: pnpm ci:quality-release --merged
+        env:
+          SHARDS: ${{ runner.temp }}/quality-shards
+          SHARD_COUNT: ${{ needs.rc-quality-plan.outputs.count }}
+        run: pnpm ci:quality-release --merged "$SHARDS" --shards "$SHARD_COUNT"
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-quality-release-verdict
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 1
+
   # Each platform builds natively on its own runner and pushes its index,
   # attestations included, to GHCR by digest with no tag.
   rc-build:
@@ -548,10 +692,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 90
 
-  # The scanned digest gets its candidate tag, X.Y.Z-rc.N.
+  # The scanned digest gets its candidate tag, X.Y.Z-rc.N, once the quality
+  # gate passed too.
   rc-tag:
     name: rc-tag
-    needs: [classify, rc-merge, rc-scan]
+    needs: [classify, rc-merge, rc-scan, rc-quality-verdict]
     if: ${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10

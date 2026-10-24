@@ -8,7 +8,11 @@
 //   run does (run.ts full --external-variant).
 // - With --merged <dir>, it judges a sharded run instead: <dir> holds each
 //   shard's reports artifact, which `pnpm quality:merge` reads
-//   (lib/shards.ts), and --shards names how many the run had.
+//   (lib/shards.ts), and --shards names how many the run had. This is the
+//   RC path: release.yml's rc-quality runs the release plan's FULL_SHARDS
+//   shards (lib/full-shards.ts), each failing before any test when the plan
+//   is over RELEASE_CEILING, and rc-quality-verdict runs this over their
+//   reports. The run must be the whole plan: a night's slice fails it.
 //
 // RELEASE_GATES holds the gates only a release run holds: the matrix
 // first, then 11-3's timing gate, the median of each perf cell's lab vitals
@@ -205,6 +209,15 @@ export function runMatrix(
   );
 }
 
+/**
+ * A sharded release's matrix: the merged verdict of the shards' reports
+ * under `dir`, which must be quality:full's whole plan, so a night's slice
+ * fails it (not-whole).
+ */
+export function mergedMatrix(dir: string, shards?: number): Verdict {
+  return mergeRun(dir, shards, 'quality:release merged verdict', 'full', undefined, true);
+}
+
 async function main(argv: readonly string[]): Promise<number> {
   let options: ReturnType<typeof parseReleaseArgs>;
   try {
@@ -213,9 +226,7 @@ async function main(argv: readonly string[]): Promise<number> {
     console.error(`[quality:release] ${(error as Error).message}`);
     return 2;
   }
-  const matrix = options.merged
-    ? mergeRun(options.merged, options.shards, 'quality:release merged verdict', 'full')
-    : runMatrix();
+  const matrix = options.merged ? mergedMatrix(options.merged, options.shards) : runMatrix();
   const verdict = await judgeRelease(matrix);
   const quality = path.join(reportsDir(), 'quality');
   mkdirSync(quality, { recursive: true });

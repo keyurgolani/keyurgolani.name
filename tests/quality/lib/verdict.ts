@@ -22,6 +22,10 @@
 //   didn't run exactly once on each engine, a perf test ran that the plan
 //   has no perf cell for, or a target has no perf cell. It runs when the
 //   plan names its perf cells, as run.ts's and plan.json's do.
+// - visual-coverage: a planned visual test (visual.spec.ts) didn't run
+//   exactly once on each engine, or a visual test ran that the plan doesn't
+//   have. It runs when the plan names its visual tests, as a full run's
+//   plan.json does.
 // - unchecked-cell: a cell or visual test passed without every check its
 //   kind runs, a cell test every check its row and viewport owe
 //   (checks.ts's requiredChecks), a swept cell's the sweep's.
@@ -41,7 +45,7 @@
 import type { Plan, PlannedTest } from '../cells';
 import { isReason, KIND_CHECKS, PERF_KIND, requiredChecks, type TestKind } from './checks';
 import type { Summary, SummaryTest } from '../reporter';
-import { VISUAL_SKIP } from './visual';
+import { VISUAL_SKIP, type PlannedVisual } from './visual';
 
 /** The harness's own skip reasons, which only its own tests may skip with. */
 export const HARNESS_SKIPS: readonly string[] = [];
@@ -75,6 +79,8 @@ export interface VerdictInput {
     readonly tests: readonly VerdictTest[];
     /** The perf cells, when the plan has them: perf-coverage holds the run to them. */
     readonly perf?: readonly PlannedPerf[];
+    /** The visual tests, when the plan has them: visual-coverage holds the run to them. */
+    readonly visual?: readonly PlannedVisual[];
   };
   /** The engines the run plans, each of which runs every planned test once. */
   readonly engines: readonly string[];
@@ -223,6 +229,7 @@ export function judge({ plan, engines, summary, missingBrowsers, canary }: Verdi
   }
 
   if (plan.perf) failures.push(...perfCoverage(plan.perf, plan.targets, engines, summary));
+  if (plan.visual) failures.push(...visualCoverage(plan.visual, engines, summary));
 
   for (const test of tests) {
     if (!test.kind || test.status !== 'passed') continue;
@@ -315,6 +322,39 @@ export function perfCoverage(
       else if (count === 0 && !sharded) {
         fail(`The perf test of ${cell} is planned on ${engine}, and didn't run.`);
       }
+    }
+  }
+  return failures;
+}
+
+/**
+ * visual-coverage: each planned visual test ran exactly once on each
+ * engine, and no visual test ran that the plan doesn't have. A shard holds
+ * only some of them, so only the repeats and strays count there.
+ */
+export function visualCoverage(
+  visual: readonly PlannedVisual[],
+  engines: readonly string[],
+  summary: Pick<Summary, 'tests' | 'shard'>,
+): Failure[] {
+  const failures: Failure[] = [];
+  const fail = (message: string) => failures.push({ rule: 'visual-coverage', message });
+  const sharded = summary.shard !== null;
+  const ran = summary.tests.filter((test) => test.kind === 'visual');
+  const planned = (cell?: string, viewport?: string) =>
+    visual.some((each) => each.cell === cell && each.viewport === viewport);
+  for (const test of ran) {
+    if (!planned(test.cell, test.viewport))
+      fail(`${test.title} ran, and the plan has no such visual test.`);
+  }
+  for (const { cell, viewport } of visual) {
+    for (const engine of engines) {
+      const count = ran.filter(
+        (test) => test.cell === cell && test.viewport === viewport && test.engine === engine,
+      ).length;
+      const name = `The visual test of ${cell} at ${viewport} on ${engine}`;
+      if (count > 1) fail(`${name} ran ${count} times, not once.`);
+      else if (count === 0 && !sharded) fail(`${name} is planned, and didn't run.`);
     }
   }
   return failures;

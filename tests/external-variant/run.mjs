@@ -355,6 +355,16 @@ export function removeReference(work) {
   git(['worktree', 'prune'], REPO_ROOT);
 }
 
+/**
+ * Generates the worktree's registry alone, under `env`'s build-time flags,
+ * with no build: what #11's quality runs plan from before they build, so a
+ * plan over budget fails in seconds (tests/quality/run.ts).
+ */
+export function generateReferenceRegistry(host, env = {}) {
+  step('pnpm build:registry --modules-only');
+  pnpm(['--filter', HOST_PACKAGE, 'build:registry', '--modules-only'], { cwd: host, env });
+}
+
 /** Builds the worktree's host, under `env`'s build-time flags, such as #11's quality flags. */
 export function buildReferenceHost(host, env = {}) {
   step('pnpm build');

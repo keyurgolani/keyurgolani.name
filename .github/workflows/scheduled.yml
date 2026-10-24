@@ -15,8 +15,9 @@
 # report's EXPECTED_SKIPS names: links, on the nights it doesn't run. Only
 # `report` holds `issues: write`.
 #
-# Cross-product jobs join here: #11's quality matrix (quality-full, judged
-# whole by quality-verdict), #20's catalog cross-product (catalog-full),
+# Cross-product jobs join here: #11's quality matrix (quality-full, a
+# night's slice of it, judged whole by quality-verdict), #20's catalog
+# cross-product (catalog-full),
 # and #20's report-only catalog provenance refresh once its catalog
 # exists. Each one
 # sets timeout-minutes, uploads its reports as reports-<job>, runs its check
@@ -77,23 +78,54 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-  # #11's complete quality matrix: quality:full over every cell, viewport,
-  # and preference row, the covering array's appearance rows, every pair the
-  # [37] change-directed rule could plan, and the visual cells, against a
-  # worktree with the reference variant installed from its tarball
-  # (--external-variant), in six shards in the pinned Playwright image the
-  # variants job uses. Each shard's reports are scrubbed of cookies,
-  # Authorization, and CSRF values however the run ended, and upload only
-  # when that scrub succeeds. A shard judges only what a shard can;
-  # quality-verdict judges the run whole.
-  quality-full:
-    name: quality-full (${{ matrix.shard }}/6)
+  # The night every quality-full shard reads its slice from, a UTC date
+  # taken once, so the shards agree however late each one starts.
+  quality-night:
+    name: quality-night
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 5
+    outputs:
+      night: ${{ steps.night.outputs.night }}
+    steps:
+      - name: Take the night's date
+        id: night
+        run: echo "night=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+  # #11's complete quality matrix, a night at a time: quality:full over
+  # every cell, viewport, and preference row, the covering array's
+  # appearance rows, every pair the [37] change-directed rule could plan,
+  # and the visual cells, against a worktree with the reference variant
+  # installed from its tarball (--external-variant), in the pinned
+  # Playwright image the variants job uses. It's more than one night's work,
+  # so it runs over a cycle of 7, 14, 28, or 56 nights, the fewest whose
+  # every night fits this timeout (rotationFor, tests/quality/lib/full-shards.ts),
+  # which each shard works out from the plan and prints:
+  # the harness and the perf cells every night, and each server's cell
+  # tests in four buckets, each on one night of the cycle from a hash of the
+  # server and bucket (its visual tests with bucket 0), so a cycle runs every
+  # test once and a plan change moves no other test. The night is its day
+  # number modulo the cycle's length. Each shard prints the night, its
+  # cells, and its groups, and fails before any test, and before the host's
+  # build, when a night is over this timeout's budget, naming that night.
+  # Eight shards, the cap (FULL_SHARDS), and never more at once, so PR CI
+  # keeps the rest of the account's job slots. Each shard's reports are
+  # scrubbed of cookies, Authorization, and CSRF values however the run
+  # ended, and upload only when that scrub succeeds. A shard judges only
+  # what a shard can; quality-verdict judges the night whole. Every shard's
+  # reports hold quality/fonts.observed.txt, the image's fonts, for
+  # fonts.txt's bootstrap (CONTRIBUTING.md).
+  quality-full:
+    name: quality-full (${{ matrix.shard }}/8)
+    needs: [quality-night]
+    runs-on: ubuntu-24.04
+    # NIGHTLY_TIMEOUT_MINUTES (tests/quality/lib/full-shards.ts): the lead's
+    # bound for a night, which the cycle's length is sized to, with a 1.5x margin.
+    timeout-minutes: 90
     strategy:
       fail-fast: false
+      max-parallel: 8
       matrix:
-        shard: [1, 2, 3, 4, 5, 6]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
       options: --user 1001 --ipc=host --init
@@ -109,13 +141,14 @@ jobs:
         uses: ./.github/actions/install # zizmor: ignore[self-repository]
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - name: pnpm ci:quality-full --shard=${{ matrix.shard }}/6
+      - name: pnpm ci:quality-full --shard=${{ matrix.shard }}/8 --night=${{ needs.quality-night.outputs.night }}
         env:
-          SHARD: ${{ matrix.shard }}/6
-          CI_REPRO_COMMAND: pnpm ci:quality-full --shard=${{ matrix.shard }}/6
+          SHARD: ${{ matrix.shard }}/8
+          NIGHT: ${{ needs.quality-night.outputs.night }}
+          CI_REPRO_COMMAND: pnpm ci:quality-full --shard=${{ matrix.shard }}/8 --night=${{ needs.quality-night.outputs.night }}
           QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
           QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
-        run: pnpm ci:quality-full "--shard=$SHARD"
+        run: pnpm ci:quality-full "--shard=$SHARD" "--night=$NIGHT"
       # The reports upload only when this succeeds: it deletes what it can't
       # read, and fails when it did, or when the canary is still in any.
       - name: Scrub reports
@@ -137,12 +170,19 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-  # The sharded run's verdict, judged whole (tests/quality/lib/shards.ts):
-  # zero tests, the plan's coverage, empty projects, the canary probe, and
-  # registered targets with no result, across every shard together, and a
-  # missing, unjudged, or mismatched shard. It runs however the shards
-  # ended, and reads only the shards' scrubbed reports, downloaded into a
-  # directory of their own.
+  # The night's verdict, judged whole (tests/quality/lib/shards.ts) against
+  # its slice: zero tests, the slice's coverage, empty projects, the canary
+  # probe, and the slice's targets with no result, across every shard
+  # together, and a missing, unjudged, or mismatched shard. It runs however
+  # the shards ended, and reads only the shards' scrubbed reports, downloaded
+  # into a directory of their own. Its reports-quality-verdict artifact and
+  # job summary hold the rotation report (rotation.json): which night of
+  # the cycle ran, the plan's fingerprint, and each cell's result tonight and
+  # the nights the rotation scheduled it. Knowing when a cell outside
+  # tonight's slice last passed would need an earlier night's artifact, and
+  # reading another run's artifact needs actions: read, which this job
+  # doesn't hold, so the report gives the last night the rotation scheduled
+  # it instead, which is no proof that it passed.
   quality-verdict:
     name: quality-verdict
     needs: [quality-full]
@@ -169,7 +209,7 @@ jobs:
       - name: pnpm ci:quality-verdict
         env:
           SHARDS: ${{ runner.temp }}/quality-shards
-        run: pnpm ci:quality-verdict "$SHARDS" --shards 6 --mode full
+        run: pnpm ci:quality-verdict "$SHARDS" --shards 8 --mode full
       - name: Failure summary
         if: ${{ always() }}
         run: node ci/summarize.mjs
@@ -195,6 +235,10 @@ jobs:
   # fails at its first step instead.
   catalog-full:
     name: catalog-full (${{ matrix.shard }}/4)
+    # After quality-full, however it ended, so the night holds about eight
+    # job slots at its peak, not twelve.
+    needs: [quality-full]
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 32
     strategy:
@@ -243,10 +287,10 @@ jobs:
 
   report:
     name: report
-    needs: [links, quality-full, quality-verdict, catalog-full]
+    needs: [links, quality-night, quality-full, quality-verdict, catalog-full]
     if: ${{ always() && github.event_name == 'schedule' }}
     runs-on: ubuntu-24.04
-    # It downloads every job's reports, the six quality shards' among them.
+    # It downloads every job's reports, the eight quality shards' among them.
     timeout-minutes: 15
     permissions:
       contents: read # check out the reporter

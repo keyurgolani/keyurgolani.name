@@ -20,6 +20,11 @@
 //   reported twice.
 // - shard-job: the caller says the shard jobs didn't all succeed
 //   (quality-pr-verdict passes `needs`' result).
+// - not-whole: the caller needs the whole plan, as a release does, and the
+//   shards ran a night's slice of it (lib/full-shards.ts).
+//
+// A night's shards share a plan record that holds only its slice's tests
+// and targets, so the run is judged whole against the slice.
 //
 // quality:pr's shards (lib/pr-shards.ts) merge the same way: each lists
 // every project and plans the whole PR set, and runs only its own groups.
@@ -28,7 +33,9 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Plan, RunMode } from '../cells';
 import type { Summary } from '../reporter';
+import type { NightSlice } from './full-shards';
 import { plannedPerf } from './perf/plan';
+import { plannedVisual, type PlannedVisual } from './visual';
 import {
   judge,
   type ArtifactHit,
@@ -61,6 +68,10 @@ export interface PlanRecord {
   }[];
   /** The perf cells (lib/perf/plan.ts), which perf-coverage holds the run to. run.ts always writes them. */
   readonly perf?: readonly PlannedPerf[];
+  /** The visual tests (lib/visual.ts), which visual-coverage holds the run to. A full run's record has them. */
+  readonly visual?: readonly PlannedVisual[];
+  /** A night's slice of the full plan (lib/full-shards.ts), which `planned`, `targets`, and `visual` then hold only. */
+  readonly slice?: NightSlice;
 }
 
 /** What plan.json keeps of a plan: no file contents. */
@@ -91,6 +102,8 @@ export function planRecord(plan: Plan): PlanRecord {
       ...(test.cell.sweep ? { sweep: true as const } : {}),
     })),
     perf: plannedPerf(plan),
+    // Only quality:full runs visual.spec.ts.
+    ...(plan.mode === 'full' ? { visual: plannedVisual(plan) } : {}),
   };
 }
 
@@ -221,6 +234,7 @@ const REJUDGED = new Set([
   'run-errors',
   'canary-leaked',
   'perf-coverage',
+  'visual-coverage',
 ]);
 
 /**
@@ -267,7 +281,13 @@ const parseShard = (shard: string | null | undefined) => {
  */
 export function mergeShards(
   shards: readonly ShardReport[],
-  options: { readonly expected?: number; readonly mode?: RunMode; readonly jobs?: string } = {},
+  options: {
+    readonly expected?: number;
+    readonly mode?: RunMode;
+    readonly jobs?: string;
+    /** The run must be the whole plan, as a release's is: a night's slice fails it. */
+    readonly whole?: boolean;
+  } = {},
 ): MergedVerdict {
   const failures: Failure[] = [];
   const fail = (rule: string, message: string) => failures.push({ rule, message });
@@ -379,6 +399,13 @@ export function mergeShards(
   }
   if (!plan)
     fail('shard-mismatch', 'No shard kept its plan.json, so nothing says what was planned.');
+  if (options.whole && plan?.slice) {
+    const { night, index, nights } = plan.slice;
+    fail(
+      'not-whole',
+      `The shards ran the night of ${night}'s slice, ${index} of ${nights}, not the whole plan.`,
+    );
+  }
 
   // A shard's failures the joined summary can't show again, naming the shard.
   for (const shard of shards) {
@@ -395,6 +422,7 @@ export function mergeShards(
       targets: plan?.targets ?? [],
       tests: plan ? plannedTests(plan) : [],
       ...(plan?.perf !== undefined ? { perf: plan.perf } : {}),
+      ...(plan?.visual !== undefined ? { visual: plan.visual } : {}),
     },
     engines,
     summary: joined,

@@ -1,9 +1,11 @@
 // pnpm quality:pr and pnpm quality:full, each optionally with
 // -- --shard=<n>/<m> (#11, Slice 1, item 2): the quality cells, through
-// Playwright with tests/quality/playwright.config.ts, judged here.
-// quality:full's shard is Playwright's own; quality:pr's is the runner's,
-// by measured duration (lib/pr-shards.ts). Either way `pnpm quality:merge`
-// judges the shards whole.
+// Playwright with tests/quality/playwright.config.ts, judged here. A shard
+// is the runner's own, by measured duration: quality:pr's of the PR set
+// (lib/pr-shards.ts), and quality:full's of the release plan, or with
+// --night=<YYYY-MM-DD> of that night's slice of the full plan
+// (lib/full-shards.ts), which fails before any test when its plan is over
+// budget. `pnpm quality:merge` judges the shards whole.
 //
 //   1. Every engine the mode plans must launch (missing-browser).
 //   2. The quality host is built (lib/build.mjs), unless QUALITY_WEB names
@@ -24,8 +26,8 @@
 //      A shard's verdict.json also keeps what `pnpm quality:merge` needs
 //      to judge the shards whole (lib/shards.ts).
 //
-// Anything after the mode, or after `--`, goes to Playwright, such as
-// --shard=1/3 or --grep. The quality host is removed once the run is done.
+// Anything else after the mode, or after `--`, goes to Playwright, such as
+// --grep. The quality host is removed once the run is done.
 
 import { spawnSync } from 'node:child_process';
 import {
@@ -54,12 +56,27 @@ import { missingBrowsers } from './lib/browsers.mjs';
 import { buildQualityHost, QUALITY_BUILD_ENV } from './lib/build.mjs';
 import { changedFiles } from './lib/changes';
 import { cleanupOnInterrupt } from './lib/interrupt.mjs';
-import { buildReferenceHost, installReference, removeReference } from '../external-variant/run.mjs';
-import { RUN_ENGINES } from './lib/matrix';
+import {
+  buildReferenceHost,
+  generateReferenceRegistry,
+  installReference,
+  removeReference,
+} from '../external-variant/run.mjs';
+import { RUN_ENGINES, type Engine } from './lib/matrix';
 import { RECORD_VERSION } from './lib/failure-records';
-import { prShard } from './lib/pr-shards';
-import { planRecord, type RunVerdict } from './lib/shards';
+import { prShard, type ShardDurations } from './lib/pr-shards';
+import { planRecord, plannedTests, type PlanRecord, type RunVerdict } from './lib/shards';
+import {
+  dayNumber,
+  fullEstimate,
+  fullShard,
+  NIGHTLY_CEILING,
+  RELEASE_CEILING,
+  sliceRecord,
+  type FullShard,
+} from './lib/full-shards';
 import { judge, type Failure, type Verdict } from './lib/verdict';
+import { writeObservedFonts } from './lib/visual';
 import { budgetResults } from './lib/perf/budgets';
 import { plannedPerf } from './lib/perf/plan';
 import { timingMarkdown, timingTrend } from './lib/perf/timing';
@@ -73,13 +90,15 @@ const PLAYWRIGHT = createRequire(import.meta.url).resolve('@playwright/test/cli'
 export interface RunOptions {
   readonly mode: RunMode;
   readonly shard: string | null;
+  /** quality:full's night, a UTC date: the run is that night's slice of the full plan (lib/full-shards.ts). */
+  readonly night: string | null;
   /**
    * Run against a worktree with the reference third-party variant installed
    * from its tarball, as test:external-variant installs it: the close and
    * scheduled runs' build. Full runs only.
    */
   readonly externalVariant: boolean;
-  /** What goes to Playwright as it is, --shard included. */
+  /** What goes to Playwright as it is: neither the runner's --shard nor its --night. */
   readonly playwright: readonly string[];
 }
 
@@ -91,7 +110,7 @@ export function parseRunArgs(argv: readonly string[]): RunOptions {
   const [mode, ...rest] = argv;
   if (!(RUN_MODES as readonly (string | undefined)[]).includes(mode)) {
     throw new Error(
-      `usage: run.ts <${RUN_MODES.join('|')}> [-- [${EXTERNAL_VARIANT_FLAG}] --shard=<n>/<m>] [playwright args]`,
+      `usage: run.ts <${RUN_MODES.join('|')}> [-- [${EXTERNAL_VARIANT_FLAG}] [--shard=<n>/<m>] [--night=<YYYY-MM-DD>]] [playwright args]`,
     );
   }
   const args = rest[0] === '--' ? rest.slice(1) : [...rest];
@@ -110,36 +129,71 @@ export function parseRunArgs(argv: readonly string[]): RunOptions {
     if (shard !== null) throw new Error('--shard is given twice.');
     shard = value;
   }
-  // quality:full shards through Playwright's --shard; quality:pr's shard is
-  // the runner's own, by measured duration (lib/pr-shards.ts), so it stays here.
+  let night: string | null = null;
+  for (const arg of args) {
+    const value = /^--night=(.*)$/.exec(arg)?.[1];
+    if (value === undefined) continue;
+    if (mode !== 'full') throw new Error("--night is quality:full's: the nightly rotation.");
+    if (night !== null) throw new Error('--night is given twice.');
+    dayNumber(value);
+    night = value;
+  }
+  // Both shards are the runner's own, by measured duration
+  // (lib/pr-shards.ts, lib/full-shards.ts), so they stay here.
   const playwright = args.filter(
-    (arg) => arg !== EXTERNAL_VARIANT_FLAG && !(mode === 'pr' && arg.startsWith('--shard=')),
+    (arg) =>
+      arg !== EXTERNAL_VARIANT_FLAG && !arg.startsWith('--shard=') && !arg.startsWith('--night='),
   );
-  return { mode: mode as RunMode, shard, externalVariant, playwright };
+  return { mode: mode as RunMode, shard, night, externalVariant, playwright };
 }
+
+/** The reference host's steps, tests/external-variant/run.mjs's own, as externalVariantHost() takes them. */
+export interface ReferenceSteps {
+  readonly install: typeof installReference;
+  readonly generate: (host: string, env: Record<string, string>) => void;
+  readonly build: (host: string, env: Record<string, string>) => void;
+  readonly remove: (work: string) => void;
+}
+
+const REFERENCE_STEPS: ReferenceSteps = {
+  install: installReference,
+  generate: generateReferenceRegistry,
+  build: buildReferenceHost,
+  remove: removeReference,
+};
 
 /**
  * The close and scheduled runs' host: a worktree of HEAD with the reference
  * variant installed from its tarball by tests/external-variant/run.mjs's
- * own steps, built with the quality flags.
+ * own steps, and its registry generated with the quality flags. `build()`
+ * then builds it, once the run has planned from that registry, with the
+ * same flags, one env, so the run tests the plan it budgeted.
  */
-function externalVariantHost(): { web: string; remove: () => void } {
-  const work = mkdtempSync(path.join(tmpdir(), 'portfolio-quality-external-'));
+export function externalVariantHost(
+  steps: ReferenceSteps = REFERENCE_STEPS,
+  work: string = mkdtempSync(path.join(tmpdir(), 'portfolio-quality-external-')),
+): { web: string; env: Readonly<Record<string, string>>; build: () => void; remove: () => void } {
   // Ctrl-C mid-run removes the worktree and the installed variant too.
-  const stop = cleanupOnInterrupt(() => removeReference(work));
+  const stop = cleanupOnInterrupt(() => steps.remove(work));
   const remove = () => {
     stop();
-    removeReference(work);
+    steps.remove(work);
   };
   let added = false;
   try {
-    const { host } = installReference(work, {
+    const { host } = steps.install(work, {
       onAdded: () => {
         added = true;
       },
     });
-    buildReferenceHost(host, { ...QUALITY_BUILD_ENV });
-    return { web: path.join(host, 'apps', 'web'), remove };
+    const env: Readonly<Record<string, string>> = { ...QUALITY_BUILD_ENV };
+    steps.generate(host, { ...env });
+    return {
+      web: path.join(host, 'apps', 'web'),
+      env,
+      build: () => steps.build(host, { ...env }),
+      remove,
+    };
   } catch (error) {
     if (added)
       console.error('[quality] the reference variant was still installed when the run stopped.');
@@ -147,6 +201,68 @@ function externalVariantHost(): { web: string; remove: () => void } {
     throw error;
   }
 }
+
+/** What a full run's shard or night is: its slice and cycle, and its groups. */
+function printFull(full: FullShard, options: RunOptions): void {
+  const { shard, slice, slowest } = full;
+  if (slice) {
+    console.log(
+      `[quality] night ${slice.night}: slice ${slice.index} of ${slice.nights}, so a cycle runs every cell within ${slice.nights} night(s); ${slice.cells.length} cell(s) tonight, the slowest shard about ${Math.round(slowest)}s of ${NIGHTLY_CEILING}s`,
+    );
+    for (const cell of slice.cells) console.log(`  ${cell}`);
+  } else {
+    console.log(
+      `[quality] the release plan: the slowest shard about ${Math.round(slowest)}s of ${RELEASE_CEILING}s`,
+    );
+  }
+  console.log(
+    `[quality] ${options.shard ? `shard ${options.shard}` : 'every shard here'}: ${shard.groups.length} test group(s), about ${Math.round(fullEstimate(shard))}s`,
+  );
+  for (const group of shard.groups) {
+    console.log(
+      `  ${group.project} ${group.file}${group.part === undefined ? '' : ` #${group.part}`}`,
+    );
+  }
+}
+
+/**
+ * A full run's shard or night, planned (lib/full-shards.ts): its plan
+ * record, a night's slice of it, and a plan-budget failure when the plan
+ * is over its budget, which stops the run before any test. Other runs keep
+ * the plan's record whole.
+ */
+export function planFullRun(
+  plan: Plan,
+  engines: readonly Engine[],
+  options: Pick<RunOptions, 'mode' | 'shard' | 'night'>,
+  durations?: ShardDurations,
+): { record: PlanRecord; full: FullShard | null; budget: Failure | null } {
+  const record = planRecord(plan);
+  if (options.mode !== 'full' || (!options.shard && !options.night)) {
+    return { record, full: null, budget: null };
+  }
+  try {
+    const full = fullShard(plan, engines, options.shard, options.night, durations);
+    return {
+      record:
+        full.slice && full.tonight
+          ? sliceRecord(record, plan, full.slice, engines, full.tonight)
+          : record,
+      full,
+      budget: null,
+    };
+  } catch (error) {
+    return {
+      record,
+      full: null,
+      budget: { rule: 'plan-budget', message: (error as Error).message.split('\n')[0]! },
+    };
+  }
+}
+
+/** Whether Playwright runs: every engine launches, and the plan is within its budget. */
+export const runsPlaywright = (missing: readonly unknown[], budget: Failure | null): boolean =>
+  missing.length === 0 && budget === null;
 
 function readSummary(): Summary | null {
   try {
@@ -161,7 +277,7 @@ function print(verdict: Verdict, options: RunOptions): void {
     .map(([key, value]) => `${key} ${value}`)
     .join(', ');
   console.log(
-    `\n[quality] ${options.mode}${options.shard ? ` shard ${options.shard}` : ''}: ${counts}`,
+    `\n[quality] ${options.mode}${options.night ? ` night ${options.night}` : ''}${options.shard ? ` shard ${options.shard}` : ''}: ${counts}`,
   );
   for (const title of verdict.flaky) console.log(`[quality] flaky (reported only): ${title}`);
   for (const { rule, message } of verdict.failures) {
@@ -215,15 +331,30 @@ async function main(argv: readonly string[]): Promise<number> {
   const secretsFile = process.env.QUALITY_SECRETS_FILE ?? path.join(scratch!, 'secrets');
   writeFileSync(secretsFile, '', { mode: 0o600 });
   const setup: Failure[] = [];
+  // In the pinned image, every run's reports hold the image's fonts, for
+  // fonts.txt's bootstrap, whatever tests it runs (lib/visual.ts).
+  try {
+    writeObservedFonts(quality);
+  } catch (error) {
+    setup.push({
+      rule: 'fonts',
+      message: `could not list the image's fonts: ${(error as Error).message.split('\n')[0]}`,
+    });
+  }
   let plan: Plan | null = null;
+  // What the verdict holds the run to: the plan, or a night's slice of it.
+  let verdictPlan: PlanRecord | null = null;
+  let budget: Failure | null = null;
   let host: { remove: () => void } | null = null;
   try {
     let web = process.env.QUALITY_WEB;
+    let build: (() => void) | null = null;
     if (options.externalVariant) {
       console.log('[quality] installing the reference variant, as test:external-variant does');
       const installed = externalVariantHost();
       host = installed;
       web = installed.web;
+      build = installed.build;
     } else if (!web) {
       console.log('[quality] building the quality host');
       const built = buildQualityHost({ log: path.join(quality, 'quality-host.log') });
@@ -242,15 +373,22 @@ async function main(argv: readonly string[]): Promise<number> {
       QUALITY_CANARY: canary,
       QUALITY_SECRETS_FILE: secretsFile,
       ...(changed ? { QUALITY_CHANGED_FILES: JSON.stringify(changed.files) } : {}),
-      // A PR shard's own (lib/pr-shards.ts): the config and the reporter read it.
-      QUALITY_SHARD: options.mode === 'pr' && options.shard ? options.shard : '',
+      // The runner's own shard and night (lib/pr-shards.ts, lib/full-shards.ts):
+      // the config and the reporter read them.
+      QUALITY_SHARD: options.shard ?? '',
+      QUALITY_NIGHT: options.night ?? '',
     };
+    // The reference variant's host plans from its registry before it builds,
+    // so a plan over budget fails in seconds, not after the build.
     plan = await loadPlan(env);
-    writeFileSync(
-      path.join(quality, 'plan.json'),
-      `${JSON.stringify(planRecord(plan), null, 2)}\n`,
-    );
     console.log(`[quality] ${plan.cells.length} cells, ${plan.tests.length} tests planned`);
+    const planned = planFullRun(plan, engines, options);
+    budget = planned.budget;
+    if (budget) setup.push(budget);
+    if (planned.full) printFull(planned.full, options);
+    writeFileSync(path.join(quality, 'plan.json'), `${JSON.stringify(planned.record, null, 2)}\n`);
+    verdictPlan = planned.record;
+    if (build && budget === null) build();
     if (options.mode === 'pr' && options.shard) {
       const mine = prShard(plan, engines, options.shard);
       console.log(
@@ -264,7 +402,7 @@ async function main(argv: readonly string[]): Promise<number> {
       ).length;
       console.log(`[quality] the [37] rule: ${axis} ${id} changed, in ${cells} cell(s)`);
     }
-    if (missing.length === 0) {
+    if (runsPlaywright(missing, budget)) {
       const result = spawnSync(
         process.execPath,
         [PLAYWRIGHT, 'test', '--config', CONFIG, ...options.playwright],
@@ -306,7 +444,21 @@ async function main(argv: readonly string[]): Promise<number> {
 
   const summary = missing.length === 0 ? readSummary() : null;
   const judged = judge({
-    plan: plan ? { ...plan, perf: plannedPerf(plan) } : { targets: [], tests: [] },
+    plan:
+      plan && verdictPlan?.slice
+        ? {
+            targets: verdictPlan.targets,
+            tests: plannedTests(verdictPlan),
+            perf: plannedPerf(plan),
+            ...(verdictPlan.visual ? { visual: verdictPlan.visual } : {}),
+          }
+        : plan
+          ? {
+              ...plan,
+              perf: plannedPerf(plan),
+              ...(verdictPlan?.visual ? { visual: verdictPlan.visual } : {}),
+            }
+          : { targets: [], tests: [] },
     engines,
     summary,
     missingBrowsers: missing,
