@@ -1297,6 +1297,8 @@ test("what every profile serves, with #2's Studio pages under owner alone", () =
     '/api/studio/[name]',
     // The live media's renditions (#10), for whatever the profile's catalog serves.
     '/media/[...path]',
+    // The live revision's generated schemes' stylesheets (#20), likewise.
+    '/_portfolio/scheme/[file]',
     '/opengraph-image-12o0cb',
     '/robots.txt',
     '/sitemap.xml',
@@ -1312,8 +1314,13 @@ test("what every profile serves, with #2's Studio pages under owner alone", () =
     '/work/[slug]',
     '/work/[slug]/[...view]',
   ];
-  // A preview grant's frame and its draft-only assets (#7, Slice 2): owner alone mints grants.
-  const grants = ['/preview/[grant]/[[...route]]', '/preview-assets/[grant]/[...path]'];
+  // A preview grant's frame and its draft-only assets (#7, Slice 2), and its
+  // generated schemes' stylesheets (#20): owner alone mints grants.
+  const grants = [
+    '/preview/[grant]/[[...route]]',
+    '/preview-assets/[grant]/[...path]',
+    '/preview-assets/[grant]/_appearance/[file]',
+  ];
   // /studio/preview (#7, Slice 4) is owner's alone: demo's preview is #9's.
   // So is #6's catalog fixture, in a build made with BUDGET_FIXTURES.
   const catalog = ASKED.budget ? ['/studio/_catalog-fixture'] : [];
