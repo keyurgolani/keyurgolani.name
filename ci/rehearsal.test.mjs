@@ -25,7 +25,6 @@ import {
   PENDING_ROWS,
   pendingProblems,
   registeredVariants,
-  rehearsalComposition,
   renderSummary,
   servingRevision,
   REVISION_ONE_NAME,
@@ -48,10 +47,12 @@ const MANIFEST = 'apps/web/src/lib/generated/asset-manifest.json';
 const manifest = (units) => JSON.stringify({ version: 1, units, platform: {} });
 
 test('a pending row fails the run once what it waits on has landed: the sample pair imports', () => {
-  assert.deepEqual(pendingProblems(PENDING_ROWS, { sampleImports: false }), []);
-  const problems = pendingProblems(PENDING_ROWS, { sampleImports: true });
-  assert.equal(problems.length, PENDING_ROWS.length, 'every row waiting on it fails');
-  for (const row of PENDING_ROWS) {
+  // None waits today; the machinery stays for the next row that does.
+  const rows = [{ id: 'a-row', title: 'x', waitsOn: 'default-composition' }];
+  assert.deepEqual(pendingProblems(rows, { sampleImports: false }), []);
+  const problems = pendingProblems(rows, { sampleImports: true });
+  assert.equal(problems.length, rows.length, 'every row waiting on it fails');
+  for (const row of rows) {
     assert.ok(
       problems.some(
         (p) => p.startsWith(`${row.id} is still pending`) && /Make it a real row/.test(p),
@@ -98,7 +99,7 @@ test('the final verdict fails on a planted canary, a lost owner secret, and a la
     hash: '$scrypt$h',
   };
   const input = {
-    pendingRows: PENDING_ROWS,
+    pendingRows: [{ id: 'default-composition', title: 'x', waitsOn: 'default-composition' }],
     landedState: { sampleImports: false },
     reports,
     secrets,
@@ -152,15 +153,16 @@ test('the rows cover the rehearsal the scope names, in order', () => {
       'image-hermetic',
       'image-old-config',
       'image-import',
+      'owner-identity',
       'in-app-rollback',
       'server-last-known-good',
       'previous-digest',
+      'read-only-identity',
+      'demo-identity',
     ],
   );
-  assert.deepEqual(
-    PENDING_ROWS.map((row) => row.id),
-    ['default-composition'],
-  );
+  // #13 registered the default composition: nothing waits any more.
+  assert.deepEqual(PENDING_ROWS, []);
 });
 
 test("every docker run in the rehearsal names --pull=never, and every container's network is internal", () => {
@@ -189,15 +191,6 @@ test('registered variants come from the generated asset manifest, without fallba
   });
   assert.deepEqual(registeredVariants(root), ['editorial-evidence', 'kinetic-cosmos']);
   assert.equal(defaultComposition(root), 'editorial-evidence');
-});
-
-test('the rehearsal runs on the default composition once registered, and a stand-in until then', () => {
-  assert.equal(
-    rehearsalComposition(['editorial-evidence', 'kinetic-cosmos'], 'editorial-evidence'),
-    'editorial-evidence',
-  );
-  assert.equal(rehearsalComposition(['kinetic-cosmos'], 'editorial-evidence'), 'kinetic-cosmos');
-  assert.throws(() => rehearsalComposition([], 'editorial-evidence'), /registers no composition/);
 });
 
 test("the default composition is the sample site's selection", () => {

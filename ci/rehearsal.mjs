@@ -10,10 +10,9 @@
 //   old-config     Each frozen baseline config (ci/fixtures/rehearsal/
 //                  baseline/: 62a0f06's one-file portfolio as YAML and JSON,
 //                  and one in TOML) is refused with #4's legacy.document, or
-//                  as TOML, and nothing is published: the data directory
-//                  holds nothing but the empty layout, and `status` says
-//                  empty. The layout a refused import writes is stream B's
-//                  (#3) to remove, and EMPTY_LAYOUT_FILES allows it.
+//                  as TOML, and nothing is written: portfolio-store reads
+//                  the source before it touches the data directory (#130),
+//                  which stays empty, and `status` says empty.
 //   migrate        `pnpm config:migrate` writes the new pair from the YAML
 //                  and the JSON one. A second run over the new pair is a
 //                  no-op that writes nothing, a second migration of the old
@@ -43,16 +42,20 @@
 // network, hardened, never pulling (CONTAINER_ROWS): the network reaches
 // no public address; the image refuses the old config under owner and
 // read-only; its own portfolio-store imports and publishes the migrated
-// pair and owner reaches ready; the owner signs in and rolls back in the
-// app; owner restarts degraded on the last known good when the live
-// revision is damaged; and the previous image, from REHEARSAL_PREVIOUS_IMAGE
-// or built here from REHEARSAL_PREVIOUS_REF, serves the old site from its
-// pre-upgrade backup after the new image published.
+// pair and owner reaches ready; owner's name, canonical link, og:url, Open
+// Graph image, sitemap, robots host, feed, and JSON-LD follow the pair's
+// identity and the origin (lib/identity.mjs); the owner signs in and rolls
+// back in the app; owner restarts degraded on the last known good when
+// the live revision is damaged; the previous image, from
+// REHEARSAL_PREVIOUS_IMAGE or built here from REHEARSAL_PREVIOUS_REF,
+// serves the old site from its pre-upgrade backup after the new image
+// published; read-only on the same pair publishes the same identity; and
+// demo shows the bundled sample alone, out of search.
 //
-// The pair selects the default composition once the bundled sample pair
-// imports in this build, and a registered stand-in until then; the
-// `default-composition` pending row fails the run once the sample imports
-// (lib/pending.mjs), so the stand-in can't outlive #13.
+// Every row runs on the default composition, which the run first proves
+// registered by importing the bundled sample pair. PENDING_ROWS is empty:
+// a row that has to wait on something again goes there with what it waits
+// on (lib/pending.mjs), and fails the run once that lands.
 //
 // Hermetic: every command runs with an empty HOME and TMPDIR of its own,
 // TZ=UTC, the harness egress guard preloaded (which refuses any socket or
@@ -98,7 +101,14 @@ import {
   registeredVariants,
   sampleImport,
 } from './lib/pending.mjs';
-import { DATA_DIR, fatalCodes, HARDENING, maskCommands } from './lib/profile-checks.mjs';
+import { IDENTITY_PATHS, identityProblems, ogImagePath } from './lib/identity.mjs';
+import {
+  DATA_DIR,
+  fatalCodes,
+  HARDENING,
+  maskCommands,
+  mediaCacheFor,
+} from './lib/profile-checks.mjs';
 import { finalVerdict } from './lib/verdict.mjs';
 import {
   currentGate,
@@ -149,29 +159,12 @@ export const MISPLACED_SCHEME = 'humanist-ui';
 export { defaultComposition, LANDED, pendingProblems, registeredVariants };
 
 /**
- * The composition the rehearsal's pair selects: the default when this build
- * registers it, or the first one it does register, as a stand-in, until the
- * default is.
- */
-export function rehearsalComposition(registered, fallbackDefault) {
-  if (registered.includes(fallbackDefault)) return fallbackDefault;
-  if (registered.length === 0)
-    throw new Error('this build registers no composition to rehearse on');
-  return registered[0];
-}
-
-/**
  * Rows declared but not yet run, each with what it waits on. `waitsOn` is a
- * key of LANDED: once that's true, the row has to become a real one.
+ * key of LANDED: once that's true, the row has to become a real one. None
+ * waits now: #13 registered the default composition, and every row runs
+ * on it.
  */
-export const PENDING_ROWS = Object.freeze([
-  {
-    id: 'default-composition',
-    title:
-      'every row runs on the default composition, the one the bundled sample selects, instead of a registered stand-in',
-    waitsOn: 'default-composition',
-  },
-]);
+export const PENDING_ROWS = Object.freeze([]);
 
 // ---- running commands --------------------------------------------------------
 
@@ -294,9 +287,6 @@ export function filesUnder(dir) {
   return out.sort();
 }
 
-/** What a refused import may leave: the empty layout preflight writes, and nothing published. */
-export const EMPTY_LAYOUT_FILES = Object.freeze(['store.json']);
-
 const sha256 = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
 
 /** The pair in `dir`, its portfolio.yml's identity given `tagline` or `name`, written into `into`. */
@@ -355,8 +345,8 @@ export const NATIVE_ROWS = [
   },
   {
     id: 'old-config',
-    title: "each frozen baseline config is refused with #4's diagnostic, and nothing is published",
-    run(run, state) {
+    title: "each frozen baseline config is refused with #4's diagnostic, and nothing is written",
+    run(run) {
       for (const { format, file } of BASELINES) {
         const dataDir = run.dataDir(`old-${format}`);
         const result = run.store(dataDir, ['import', '--from', path.dirname(file)]);
@@ -375,10 +365,12 @@ export const NATIVE_ROWS = [
           `the ${format} refusal says nothing was imported`,
           result.out,
         );
-        const left = filesUnder(dataDir);
+        // portfolio-store reads the source before it touches the data
+        // directory (#130), so a refusal leaves it as it was: empty.
+        const left = readdirSync(dataDir);
         expect(
-          left.every((f) => EMPTY_LAYOUT_FILES.includes(f)),
-          `after the ${format} refusal the data directory holds only the empty layout, not ${left.join(', ')}`,
+          left.length === 0,
+          `after the ${format} refusal the data directory is empty, not ${left.join(', ')}`,
         );
         const status = run.store(dataDir, ['status']);
         expect(
@@ -387,15 +379,15 @@ export const NATIVE_ROWS = [
           status.out,
         );
       }
-      state.notes.push(
-        'a refused import lays out the empty store (store.json and its directories) before it reads the source',
-      );
     },
   },
   {
     id: 'migrate',
     title: 'config:migrate writes the new pair, and a second run is a no-op',
     run(run, state) {
+      // The old `editorial` keeps its id in the migrated site, and
+      // legacy.document names its new one, the default composition, which
+      // the owner passes, as here.
       const sets = [...APPEARANCE_SETS, `site.appearance.variant=${state.composition}`].flatMap(
         (s) => ['--set', s],
       );
@@ -424,6 +416,16 @@ export const NATIVE_ROWS = [
           JSON.stringify(readdirSync(out).sort()) === JSON.stringify(written),
           `the ${format} migration writes ${written.join(' and ')}`,
           first.out,
+        );
+        const site = readFileSync(path.join(out, `site.${ext}`), 'utf8');
+        const variant =
+          format === 'json'
+            ? JSON.parse(site).appearance?.variant
+            : /^appearance:\n(?:[ \t]+[^\n]*\n)*?[ \t]+variant: (\S+)/m.exec(site)?.[1];
+        expect(
+          variant === state.composition,
+          `the ${format} migration selects ${state.composition}, the default composition, not ${variant}`,
+          site,
         );
         const before = written.map((name) => sha256(path.join(out, name)));
         const again = run.migrate([
@@ -819,6 +821,12 @@ export const CONTAINER_ROWS = [
     run: imageImport,
   },
   {
+    id: 'owner-identity',
+    title:
+      "owner's name, canonical link, og:url, Open Graph image, sitemap, robots host, feed, and JSON-LD follow revision 2's identity and the origin, never the sample, example.com, the build host, or a container path",
+    run: (ctx) => identityRow(ctx, ctx.owner, 'owner', ORIGIN, REVISION_TWO_NAME),
+  },
+  {
     id: 'in-app-rollback',
     title: 'the owner signs in and rolls back to revision 1 in the app, which then serves it',
     run: inAppRollback,
@@ -835,7 +843,24 @@ export const CONTAINER_ROWS = [
       "the previous commit's image, restored from its pre-upgrade backup after the upgrade published, serves the old site",
     run: previousDigest,
   },
+  {
+    id: 'read-only-identity',
+    title:
+      "read-only, on revision 2's pair, publishes the same identity on its origin, never the sample, example.com, the build host, or a container path",
+    run: readOnlyIdentity,
+  },
+  {
+    id: 'demo-identity',
+    title:
+      'demo shows the bundled sample alone, on the demo origin, out of search, naming no fixture',
+    run: demoIdentity,
+  },
 ];
+
+/** The demo's origin, another than the fixtures'. */
+export const DEMO_ORIGIN = 'https://demo.jane-rehearsal.test';
+/** The bundled sample's identity.name, the persona no fixture site may show. */
+export const SAMPLE_NAME = 'Anamika Devi';
 
 /** identity.name in the container rows' revision 2, which the old site never shows. */
 export const REVISION_TWO_NAME = 'Rowan Revision-Two';
@@ -884,6 +909,7 @@ function runArgs(
     detach = false,
     rm = !name,
     interactive = false,
+    extra = [],
     mounts = [],
     env = {},
     entrypoint,
@@ -900,6 +926,7 @@ function runArgs(
     '--network',
     ctx.network,
     ...HARDENING,
+    ...extra,
     ...mounts.flatMap((mount) => ['-v', mount]),
     ...Object.entries(env).flatMap(([key, value]) => ['-e', `${key}=${value}`]),
     '-e',
@@ -1326,6 +1353,80 @@ async function previousDigest(ctx) {
 }
 
 /**
+ * Fetches what the identity rows read from inside `name`, the Open Graph
+ * image included, and checks it (lib/identity.mjs). The container's own
+ * hostname is a build host the answers may not name.
+ */
+function identityRow(ctx, name, profile, origin, identityName) {
+  const [page, sitemap, robots, feed] = send(
+    ctx,
+    name,
+    Object.values(IDENTITY_PATHS).map((p) => ({ method: 'GET', path: p })),
+  );
+  const imagePath = page.status === 200 ? ogImagePath(page.body, origin) : null;
+  const [ogImage] = imagePath ? send(ctx, name, [{ method: 'GET', path: imagePath }]) : [undefined];
+  const hostname = container(ctx.run, ['inspect', '--format', '{{.Config.Hostname}}', name], {
+    withheld: '[hostname]',
+  }).stdout.trim();
+  const forbidden =
+    profile === 'demo'
+      ? ['Jane Rehearsal', REVISION_ONE_NAME, REVISION_TWO_NAME, ORIGIN, hostname]
+      : [SAMPLE_NAME, DEMO_ORIGIN, hostname];
+  const problems = identityProblems({
+    profile,
+    origin,
+    name: identityName,
+    page,
+    sitemap,
+    robots,
+    feed,
+    ogImage: ogImage ?? { status: 0 },
+    forbidden: forbidden.filter(Boolean),
+  });
+  expect(problems.length === 0, `${profile}'s identity: ${problems.join('; ')}`);
+}
+
+/** Starts a read-only or demo server, detached, hardened as the Compose examples run it. */
+function startServer(ctx, name, profile, { pair, origin }) {
+  ctx.names.push(name);
+  const started = container(
+    ctx.run,
+    runArgs(ctx, {
+      name,
+      detach: true,
+      rm: false,
+      extra: mediaCacheFor(profile),
+      mounts: pair ? [`${pair}:/config:ro`, `${MEDIA_ROOT}:/media:ro`] : [],
+      env: {
+        PORTFOLIO_PROFILE: profile,
+        PORTFOLIO_ORIGIN: origin,
+        ...(pair ? { PORTFOLIO_SOURCE_DIR: '/config', PORTFOLIO_MEDIA_ROOT: '/media' } : {}),
+        NODE_ENV: 'production',
+        TZ: 'UTC',
+      },
+    }),
+  );
+  expect(started.status === 0, `${profile}'s container ${name} starts`, started.out);
+}
+
+async function readOnlyIdentity(ctx) {
+  const { two } = imagePairs(ctx);
+  const name = `${ctx.prefix}-read-only`;
+  startServer(ctx, name, 'read-only', { pair: two, origin: ORIGIN });
+  await waitHealthy(ctx, name);
+  identityRow(ctx, name, 'read-only', ORIGIN, REVISION_TWO_NAME);
+  container(ctx.run, ['rm', '-f', name]);
+}
+
+async function demoIdentity(ctx) {
+  const name = `${ctx.prefix}-demo`;
+  startServer(ctx, name, 'demo', { origin: DEMO_ORIGIN });
+  await waitHealthy(ctx, name);
+  identityRow(ctx, name, 'demo', DEMO_ORIGIN, SAMPLE_NAME);
+  container(ctx.run, ['rm', '-f', name]);
+}
+
+/**
  * The previous image: REHEARSAL_PREVIOUS_IMAGE, or one built here from
  * REHEARSAL_PREVIOUS_REF in a worktree of its own, never pulled.
  */
@@ -1504,14 +1605,15 @@ async function main() {
     console.log(line.split('\n').pop());
     landedState = probeSampleImport(run);
     if (landedState.error) fail('pending', landedState.error);
-    const defaultId = defaultComposition();
-    const composition = landedState.sampleImports
-      ? defaultId
-      : rehearsalComposition(registeredVariants(), defaultId);
-    const state = { secrets, notes: [], composition };
-    console.log(
-      `[rehearsal] composition: ${composition}${composition === defaultId ? '' : ` (a stand-in: the bundled sample's ${defaultId} doesn't import in this build)`}`,
+    // The rows run on the default composition, which the bundled sample's
+    // own import proves this build registers.
+    expect(
+      landedState.sampleImports,
+      'the bundled sample pair imports, so the default composition is registered',
     );
+    const composition = defaultComposition();
+    const state = { secrets, notes: [], composition };
+    console.log(`[rehearsal] composition: ${composition}, the default`);
 
     const native = await runRows(NATIVE_ROWS, (row) => row.run(run, state), { results, fail });
 
