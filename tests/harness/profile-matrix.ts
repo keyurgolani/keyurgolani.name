@@ -396,6 +396,17 @@ const hasStudio = (profile: Profile) =>
   );
 
 /**
+ * Whether another entry serves `entry`'s path under `profile`, as each of
+ * /studio's two entries, the owner's and Demo Studio's (#9), does for the
+ * other: that entry's checks cover the path there.
+ */
+const shadowed = (profile: Profile, entry: Routes.RouteEntry) =>
+  routeAccess(profile, entry) === 'absent' &&
+  listRoutes().some(
+    (other) => other.pattern === entry.pattern && routeAccess(profile, other) !== 'absent',
+  );
+
+/**
  * Whether `profile` serves a grant route, as owner does (#7, Slice 2): there
  * proxy.ts checks the grant of every request under the preview prefixes,
  * and gives each one it turns away the status document.
@@ -600,7 +611,9 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
     expect(app.env.PORTFOLIO_PROFILE).toBe(profile);
   });
 
-  for (const entry of listRoutes().filter((route) => route.capability !== 'operations')) {
+  for (const entry of listRoutes().filter(
+    (route) => route.capability !== 'operations' && !shadowed(profile, route),
+  )) {
     const access = routeAccess(profile, entry);
     const served = access !== 'absent';
     // A grant's authority is the grant in its path, never a session (#7).
@@ -1174,7 +1187,7 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
       // fixed segment as sent and would hand it to the views catch-all,
       // whose 404 needs JavaScript (#5, Slice 4).
       let spellings = 0;
-      for (const entry of listRoutes()) {
+      for (const entry of listRoutes().filter((route) => !shadowed(profile, route))) {
         const access = routeAccess(profile, entry);
         // A grant route takes no other spelling, whatever its grant, and
         // under a profile with grant routes no preview path gets past the
