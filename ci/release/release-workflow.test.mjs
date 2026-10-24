@@ -15,7 +15,17 @@ const WORKFLOW = parse(SOURCE);
 const JOBS = WORKFLOW.jobs;
 const TAG_IF =
   /^\$\{\{ github\.ref_type == 'tag'( && needs\.classify\.outputs\.kind == '(rc|final)')? \}\}$/;
-const RC_JOBS = ['rc-verify', 'rc-build', 'rc-merge', 'rc-scan', 'rc-tag', 'rc-release'];
+const RC_JOBS = [
+  'rc-verify',
+  'rc-quality-plan',
+  'rc-quality',
+  'rc-quality-verdict',
+  'rc-build',
+  'rc-merge',
+  'rc-scan',
+  'rc-tag',
+  'rc-release',
+];
 const FINAL_JOBS = ['promote-verify', 'promote-scan', 'promote', 'promote-release'];
 const DRY_RUN_JOBS = ['dry-run-build', 'dry-run'];
 // Each platform's build leg, and the job that merges the two legs' indexes.
@@ -105,6 +115,20 @@ test('the dry run holds contents: read, no secret, and never reaches GHCR', () =
   assert.deepEqual(job.services.registry.ports, ['127.0.0.1:5000:5000']);
   // The workflow's env names no secret either.
   assert.doesNotMatch(JSON.stringify(WORKFLOW.env), /secrets/);
+});
+
+test("the candidate's quality gate holds contents: read and no secret, and rc-tag waits on it", () => {
+  for (const id of ['rc-quality-plan', 'rc-quality', 'rc-quality-verdict']) {
+    assert.equal(JOBS[id].permissions, undefined, `${id} keeps the workflow's contents: read`);
+    assert.doesNotMatch(
+      JSON.stringify(JOBS[id]),
+      /secrets\.|github\.token|GITHUB_TOKEN|GH_TOKEN/,
+      id,
+    );
+    assert.deepEqual(uses(id, 'docker/login-action'), [], id);
+  }
+  // tests/quality/full-shards.test.ts holds its shards, timeout, and commands.
+  assert.ok(JOBS['rc-tag'].needs.includes('rc-quality-verdict'));
 });
 
 test('each platform builds once, natively on its own runner, with mode=max provenance and an SBOM', () => {
@@ -241,7 +265,10 @@ test('each step waits on the one before it', () => {
   assert.deepEqual(needs('rc-build'), ['classify', 'rc-verify']);
   assert.deepEqual(needs('rc-merge'), ['classify', 'rc-build']);
   assert.deepEqual(needs('rc-scan'), ['classify', 'rc-merge']);
-  assert.deepEqual(needs('rc-tag'), ['classify', 'rc-merge', 'rc-scan']);
+  assert.deepEqual(needs('rc-quality-plan'), ['classify', 'rc-verify']);
+  assert.deepEqual(needs('rc-quality'), ['classify', 'rc-quality-plan']);
+  assert.deepEqual(needs('rc-quality-verdict'), ['classify', 'rc-quality', 'rc-quality-plan']);
+  assert.deepEqual(needs('rc-tag'), ['classify', 'rc-merge', 'rc-quality-verdict', 'rc-scan']);
   assert.deepEqual(needs('rc-release'), ['classify', 'rc-merge', 'rc-scan', 'rc-tag']);
   assert.deepEqual(needs('dry-run'), ['dry-run-build']);
   assert.deepEqual(needs('promote-verify'), ['classify']);
@@ -253,8 +280,9 @@ test('each step waits on the one before it', () => {
     'promote-scan',
     'promote-verify',
   ]);
-  // promote-verify's names for rc-scan and rc-tag are these jobs' names.
+  // promote-verify's names for rc-scan, rc-quality-verdict, and rc-tag are these jobs' names.
   assert.equal(JOBS['rc-scan'].name, 'rc-scan');
+  assert.equal(JOBS['rc-quality-verdict'].name, 'rc-quality-verdict');
   assert.equal(JOBS['rc-tag'].name, 'rc-tag');
 });
 
@@ -291,7 +319,10 @@ test('scan findings upload for one day only, and the logs get counts from scan-g
       .map((s) => ({ id, ...s.with })),
   );
   const reports = uploads.filter((u) => u.path === 'reports/');
+  // The quality gate's shards and verdict, which keep the release's one day too.
   assert.deepEqual(reports.map((u) => u.name).sort(), [
+    'reports-quality-release-${{ matrix.shard }}',
+    'reports-quality-release-verdict',
     'reports-release-dry-run',
     'reports-release-promote-scan',
     'reports-release-scan',

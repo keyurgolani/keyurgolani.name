@@ -1,7 +1,5 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
-import path from 'node:path';
-import { reportsDir } from '../../ci/lib/reports.mjs';
 import { CHECKS_ANNOTATION, KIND_ANNOTATION, type VisualCheck } from './lib/checks';
+import { VISUAL_TAG } from './lib/pr-shards';
 import { cellServer, serverTag } from './lib/server';
 import { VIEWPORTS } from './lib/matrix';
 import {
@@ -9,10 +7,11 @@ import {
   fontDifference,
   imageFonts,
   inPinnedImage,
-  observedFontsText,
   RANDOM_SEED,
   seedRandomScript,
   VISUAL_SKIP,
+  VISUAL_VIEWPORTS,
+  visualCells,
 } from './lib/visual';
 import { expect, test } from './fixtures';
 import { loadPlan } from './plan';
@@ -24,23 +23,17 @@ import { loadPlan } from './plan';
 // tests/variants doesn't cover.
 
 const plan = await loadPlan();
-const cells = plan.cells.filter(
-  (cell) =>
-    cell.kind === 'composition' && cell.sentinel && cell.state === 'complete' && cell.path === '/',
-);
-const viewports = VIEWPORTS.filter(({ id }) => id === '1440x900' || id === '390x844');
+const cells = visualCells(plan);
+const viewports = VIEWPORTS.filter(({ id }) => VISUAL_VIEWPORTS.includes(id));
 
-/** The image's fonts against fonts.txt, read once per worker, and written out for the next list. */
+/**
+ * The image's fonts against fonts.txt, read once per worker. run.ts writes
+ * the list it found as quality/fonts.observed.txt on every run in the image,
+ * whatever the run's tests (writeObservedFonts).
+ */
 let fontCheck: { missing: string[]; extra: string[] } | undefined;
 function checkFonts(): { missing: string[]; extra: string[] } {
-  if (!fontCheck) {
-    const actual = imageFonts();
-    const dir = path.join(reportsDir(), 'quality');
-    mkdirSync(dir, { recursive: true });
-    // fonts.txt's header, then the list, so the file is committed as it is.
-    writeFileSync(path.join(dir, 'fonts.observed.txt'), observedFontsText(actual));
-    fontCheck = fontDifference(expectedFonts(), actual);
-  }
+  fontCheck ??= fontDifference(expectedFonts(), imageFonts());
   return fontCheck;
 }
 
@@ -60,7 +53,7 @@ test.describe('visual', () => {
           test(
             `${cell.target} ${cell.state} at ${viewport.id}, seeded, in the pinned image`,
             {
-              tag,
+              tag: [tag, VISUAL_TAG],
               annotation: [
                 { type: KIND_ANNOTATION, description: 'visual' },
                 { type: 'route', description: cell.route },

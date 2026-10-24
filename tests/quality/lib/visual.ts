@@ -7,8 +7,10 @@
 // commits their baselines.
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { Cell, Plan } from '../cells';
 
 /** The image CI's variants job runs in, and the quality jobs too, by digest. */
 export const VISUAL_IMAGE =
@@ -128,4 +130,50 @@ export function seedRandomScript(seed: number): void {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+/** The viewports a visual cell runs at. */
+export const VISUAL_VIEWPORTS: readonly string[] = ['1440x900', '390x844'];
+
+/** The cells visual.spec.ts tests: each composition sentinel's complete cell at /. */
+export function visualCells<C extends Pick<Cell, 'kind' | 'sentinel' | 'state' | 'path'>>(plan: {
+  readonly cells: readonly C[];
+}): C[] {
+  return plan.cells.filter(
+    (cell) =>
+      cell.kind === 'composition' &&
+      cell.sentinel &&
+      cell.state === 'complete' &&
+      cell.path === '/',
+  );
+}
+
+/** A planned visual test, as plan.json and the verdict name one. */
+export interface PlannedVisual {
+  readonly cell: string;
+  readonly viewport: string;
+}
+
+/** Every visual test the plan holds, each cell at each viewport. */
+export function plannedVisual(plan: Pick<Plan, 'cells'>): PlannedVisual[] {
+  return visualCells(plan).flatMap((cell) =>
+    VISUAL_VIEWPORTS.map((viewport) => ({ cell: cell.id, viewport })),
+  );
+}
+
+/**
+ * run.ts's fonts check for the bootstrap: in the pinned image, every run
+ * writes the image's fonts to `dir`/fonts.observed.txt, whatever its tests,
+ * so every nightly shard's reports hold the list. Elsewhere it writes none.
+ */
+export function writeObservedFonts(
+  dir: string,
+  env: NodeJS.ProcessEnv = process.env,
+  fonts: () => string[] = imageFonts,
+): string | null {
+  if (!inPinnedImage(env)) return null;
+  const file = path.join(dir, 'fonts.observed.txt');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(file, observedFontsText(fonts()));
+  return file;
 }

@@ -1,5 +1,5 @@
 {
-  "total_count": 6,
+  "total_count": 7,
   "jobs": [
     {
       "id": 1,
@@ -24,6 +24,12 @@
       "name": "rc-scan",
       "status": "completed",
       "conclusion": "skipped"
+    },
+    {
+      "id": 7,
+      "name": "rc-quality-verdict",
+      "status": "completed",
+      "conclusion": "success"
     },
     {
       "id": 5,

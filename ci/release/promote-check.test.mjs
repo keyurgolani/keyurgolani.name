@@ -3,7 +3,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { candidatesFor, evaluatePromotion, parseTagRefs, passedRuns } from './promote-check.mjs';
+import {
+  candidatesFor,
+  evaluatePromotion,
+  parseTagRefs,
+  passedRuns,
+  REQUIRED_RC_JOBS,
+} from './promote-check.mjs';
 
 const fixture = (name) =>
   JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url), 'utf8'));
@@ -58,6 +64,16 @@ test('promotion is refused when the newest candidate is on another commit', () =
   const verdict = evaluatePromotion(input({ tagRefs: refs }));
   assert.equal(verdict.ok, false);
   assert.match(verdict.reasons.join(), /newest candidate, v1\.2\.0-rc\.3, is on 2{40}/);
+});
+
+test('promotion is refused unless the candidate passed its quality gate', () => {
+  const jobs = fixture('release-jobs-passed').jobs.map((job) =>
+    job.name === 'rc-quality-verdict' ? { ...job, conclusion: 'skipped' } : job,
+  );
+  const verdict = evaluatePromotion(input({ jobsByRun: { 202: jobs } }));
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.reasons.join(), /v1\.2\.0-rc\.2 has no passed release run/);
+  assert.ok(REQUIRED_RC_JOBS.includes('rc-quality-verdict'));
 });
 
 test('promotion is refused unless the candidate passed its scan', () => {
