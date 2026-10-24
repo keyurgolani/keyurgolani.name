@@ -1,11 +1,15 @@
 import { createHash } from 'node:crypto';
 import {
+  ADAPTER_SNAPSHOT_KINDS,
   canonicalize,
   DOCUMENT_MAX_BYTES,
+  parseSnapshot,
   parseSource,
+  publishDiagnostics,
   type Diagnostic,
   type DocumentFormat,
   type ParsedPair,
+  type Publication,
   type PublicationUnitResult,
   type SourceDocument,
 } from '@portfolio/schema';
@@ -52,6 +56,12 @@ export interface UnitInput {
   readonly portfolio: DocumentInput;
   readonly site: DocumentInput;
   readonly media?: DocumentInput;
+  /**
+   * What an adapter froze for the unit, by kind (#10): a draft's refreshed
+   * `github` records, which a publish takes as they are. Only an adapter's
+   * kinds, each checked against its schema.
+   */
+  readonly snapshots?: Readonly<Record<string, unknown>>;
 }
 
 /** A document of a unit that validated: its text, its normalized model, and their hashes. */
@@ -97,10 +107,18 @@ export interface UnitChecks {
    * validatePublicationUnit with the build's context (#4, #5), as a publish
    * checks a unit: what can go live. An unregistered variant blocks it.
    */
-  validate(pair: {
-    readonly portfolio: SourceDocument;
-    readonly site: SourceDocument;
-  }): PublicationUnitResult;
+  validate(
+    pair: {
+      readonly portfolio: SourceDocument;
+      readonly site: SourceDocument;
+    },
+    /**
+     * At publish and import, what #3 knows beside the pair (#10): the live
+     * revision, and the draft's derived block and documents. With it, the
+     * publish validators run too: id.reused and derived.unapproved.
+     */
+    publication?: Publication,
+  ): PublicationUnitResult;
   /**
    * The same, as serving checks a revision that is live already (#5's live
    * validators): an unregistered variant or stale controls only warn, since
@@ -238,13 +256,24 @@ export const NO_RENDERING: Rendering = Object.freeze({
  * it: models, snapshots, and hashes. It fails on any `blocks-preview` or
  * `blocks-publish` finding; warnings come back with the unit.
  */
-export function checkUnit(input: UnitInput, checks: UnitChecks): CheckedUnit {
-  const result = checks.validate({
+export function checkUnit(
+  input: UnitInput,
+  checks: UnitChecks,
+  publication?: Publication,
+): CheckedUnit {
+  const sources = {
     portfolio: sourceOf('portfolio', input.portfolio),
     site: sourceOf('site', input.site),
-  });
+  };
+  const result = checks.validate(sources, ...(publication ? [publication] : []));
   const media = input.media ? mediaDiagnostics(input.media) : undefined;
-  const diagnostics: UnitDiagnostic[] = [...result.diagnostics, ...(media?.diagnostics ?? [])];
+  const adapter = adapterSnapshots(input.snapshots);
+  const diagnostics: UnitDiagnostic[] = [
+    ...result.diagnostics,
+    ...(publication ? gateDiagnostics(sources, publication, result.diagnostics) : []),
+    ...(media?.diagnostics ?? []),
+    ...adapter.diagnostics,
+  ];
   if (!result.pair || diagnostics.some(blocks)) return { ok: false, diagnostics };
 
   const documentOf = (source: DocumentInput, model: unknown): UnitDocument => ({
@@ -259,7 +288,10 @@ export function checkUnit(input: UnitInput, checks: UnitChecks): CheckedUnit {
   const portfolio = documentOf(input.portfolio, plainModel(result.pair.portfolio));
   const site = documentOf(input.site, plainModel(result.pair.site));
   const mediaDocument = input.media && media ? documentOf(input.media, media.model) : undefined;
-  const snapshots = checks.snapshots?.(result.pair, mediaDocument?.model) ?? {};
+  const snapshots = {
+    ...adapter.snapshots,
+    ...(checks.snapshots?.(result.pair, mediaDocument?.model) ?? {}),
+  };
   const snapshotHashes: Record<string, Sha256> = {};
   for (const [kind, value] of Object.entries(snapshots)) {
     if (!isSnapshotKind(kind)) throw new TypeError(`Not a snapshot kind: ${kind}.`);
@@ -273,6 +305,56 @@ export function checkUnit(input: UnitInput, checks: UnitChecks): CheckedUnit {
   });
   const rendering = checks.rendering?.(result.pair) ?? NO_RENDERING;
   return { ok: true, unit, rendering, diagnostics };
+}
+
+/**
+ * The publish validators' records (#10), run here whatever `checks` did with
+ * the publication, so no build's checks can leave out the gate or
+ * id.reused. A record the build's checks raised already isn't repeated.
+ */
+function gateDiagnostics(
+  sources: { readonly portfolio: SourceDocument; readonly site: SourceDocument },
+  publication: Publication,
+  raised: readonly Diagnostic[],
+): readonly Diagnostic[] {
+  const key = (record: Diagnostic) =>
+    [record.code, record.document, record.pointer, record.message].join('\u0000');
+  const seen = new Set(raised.map(key));
+  return publishDiagnostics(sources, publication).filter((record) => !seen.has(key(record)));
+}
+
+/**
+ * A unit input's adapter snapshots, each checked against its kind's schema:
+ * what a draft's refreshes froze. Any other kind, or data that doesn't check,
+ * is a finding, so a publish never freezes it.
+ */
+function adapterSnapshots(snapshots: UnitInput['snapshots']): {
+  readonly snapshots: Readonly<Record<string, unknown>>;
+  readonly diagnostics: readonly UnitDiagnostic[];
+} {
+  const checked: Record<string, unknown> = {};
+  const diagnostics: UnitDiagnostic[] = [];
+  for (const [kind, value] of Object.entries(snapshots ?? {})) {
+    const parsed = (ADAPTER_SNAPSHOT_KINDS as readonly string[]).includes(kind)
+      ? parseSnapshot(kind, value)
+      : null;
+    if (parsed?.ok) {
+      checked[kind] = plainModel(parsed.value);
+      continue;
+    }
+    diagnostics.push({
+      code: 'snapshot.invalid',
+      severity: 'blocks-preview',
+      document: 'snapshots',
+      pointer: '',
+      message: parsed
+        ? `The draft's ${kind} snapshot doesn't check: ${parsed.problems[0]?.message ?? 'it is malformed'}`
+        : 'The draft holds a snapshot of a kind no adapter writes.',
+      remediation:
+        'Refresh the draft from its sources again, with portfolio-store sources refresh.',
+    });
+  }
+  return { snapshots: checked, diagnostics };
 }
 
 /**

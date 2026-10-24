@@ -91,8 +91,8 @@ export interface UnitValidator {
 
 /**
  * What #3 knows at publish and import: the live revision and the draft's
- * derived block. The publication validators (urls.vanished, id.reused) read
- * it; without it, they report `notChecked`.
+ * derived block. The publication validators (urls.vanished, id.reused,
+ * derived.unapproved) read it; without it, they report `notChecked`.
  */
 export interface Publication {
   /** The live revision: null for an empty store. */
@@ -103,6 +103,15 @@ export interface Publication {
   } | null;
   /** The draft's derived block; absent for an import, which counts as accepting derived values. */
   readonly derived?: unknown;
+  /**
+   * The draft's derived documents beside its pair (#10): its media document
+   * and the adapter snapshots its refreshes wrote, which derived.unapproved
+   * compares with the live revision's.
+   */
+  readonly draft?: {
+    readonly media?: unknown;
+    readonly snapshots?: Readonly<Record<string, unknown>>;
+  };
   /**
    * The view paths each side's variant serves, which the schema can't read
    * from manifests. Without them, only the home page and the case-study
@@ -161,6 +170,7 @@ export const DIAGNOSTIC_SEVERITIES = {
   'curation.overlap': 'blocks-publish',
   'slug.duplicate': 'blocks-publish',
   'urls.vanished': 'blocks-publish',
+  'derived.unapproved': 'blocks-publish',
   'metric.conflict': 'blocks-publish',
   'anchor.broken': 'blocks-publish',
   'secret.detected': 'blocks-publish',

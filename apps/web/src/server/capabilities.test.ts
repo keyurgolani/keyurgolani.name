@@ -84,6 +84,7 @@ const TABLE: ReadonlyArray<readonly [Capability, owner: Cell, demo: Cell, readOn
   ['asset.write', 'session', 'absent', 'absent'],
   ['media.ingest', 'session', 'absent', 'absent'],
   ['media.fetchRemote', 'session', 'absent', 'absent'],
+  ['source.refresh', 'session', 'absent', 'absent'],
   ['preview.grant', 'session', 'absent', 'absent'],
   ['appearance.fixtures', ...fixtureCells('appearance.fixtures')],
   ['catalog.fixtures', ...fixtureCells('catalog.fixtures')],

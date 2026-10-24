@@ -1,4 +1,5 @@
 import 'server-only';
+import { githubAdapter, type FetchLike, type GitHubAdapter } from '@portfolio/core/owner';
 import type { DeploymentConfig } from '../config';
 import type { CatalogAdapter } from '../config-summary';
 import type { Handler } from '../dispatcher';
@@ -18,6 +19,16 @@ recordOwnerModule('server/owner/index');
 export { mintSession } from './session-mint';
 /** The revision store and owner's reader (#3), which the owner requirements share. */
 export { ownerStore, type OwnerStore, type OwnerStoreInput } from './store';
+
+/**
+ * The GitHub adapter (#10) for this deployment: GITHUB_TOKEN, which only
+ * owner may set, goes here and nowhere else. Tests pass a fetch that never
+ * leaves the process.
+ */
+export function githubAdapterFor(config: DeploymentConfig, fetch?: FetchLike): GitHubAdapter {
+  const token = config.secrets.githubToken;
+  return githubAdapter({ ...(token ? { token } : {}), ...(fetch ? { fetch } : {}) });
+}
 
 /** #7's preview grants, which composition.ts binds to the provider's sessions. */
 export { ownerPreviews, type OwnerPreviewInput, type OwnerPreviews } from './preview';

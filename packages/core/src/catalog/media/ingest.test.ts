@@ -576,7 +576,8 @@ test('a published revision keeps its media, bytes and all, through a replacement
   );
   assert.deepEqual(bytesAfter, bytesBefore);
 
-  // The draft took the replacement, kept the lost one's last revision, and can publish.
+  // The draft took the replacement, kept the lost one's last revision, and
+  // publishes once the owner accepts the replacement (#10).
   assert.notEqual(
     record(next.document, 'nets-on-the-quay').sha256,
     record(first, 'nets-on-the-quay').sha256,
@@ -586,10 +587,26 @@ test('a published revision keeps its media, bytes and all, through a replacement
     record(first, 'ferry-at-dawn').sha256,
   );
   if (created.kind !== 'saved') return;
-  const second = await owned(s.store).publish(
+  const changes = created.draft.derived?.changes ?? [];
+  assert.deepEqual(
+    changes.map(({ cause, subject }) => [cause, subject]),
+    [['source-replaced', { kind: 'media', assetId: 'nets-on-the-quay' }]],
+  );
+  const accepted = await s.store.drafts.decideChanges(
     {
       draftId: created.draft.draftId,
-      draftVersion: created.draft.version,
+      expectedVersion: created.draft.version,
+      changeIds: changes.map(({ id }) => id),
+      decision: 'accepted',
+    },
+    'owner',
+  );
+  assert.equal(accepted.kind, 'saved', JSON.stringify(accepted));
+  if (accepted.kind !== 'saved') return;
+  const second = await owned(s.store).publish(
+    {
+      draftId: accepted.draft.draftId,
+      draftVersion: accepted.draft.version,
       expectedLiveRevisionId: revisionId,
     },
     'owner',

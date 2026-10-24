@@ -3,6 +3,7 @@ import type { RenderDrift, Rendering, UnitChecks } from '@portfolio/core';
 import {
   routedSlugs,
   validatePublicationUnit,
+  withPublication,
   type AppearanceCatalog,
   type ContentExtension,
   type UnitValidator,
@@ -316,6 +317,11 @@ export interface CompositionInput {
   readonly unitChecks?: (origin: string) => UnitChecks;
   /** Where a live manifest's rendering differs from the build's (#3, item 21). */
   readonly renderDrift?: (rendering: Rendering) => readonly RenderDrift[];
+  /**
+   * How owner's GitHub adapter fetches (#10). Node's fetch by default; tests
+   * pass one that never leaves the process.
+   */
+  readonly githubFetch?: (url: string, init: RequestInit) => Promise<Response>;
 }
 
 export type Composition =
@@ -384,6 +390,7 @@ export async function compose(input: CompositionInput): Promise<Composition> {
         pairContext: { catalog: input.catalog, extensions: input.extensions },
         ...(input.renderDrift ? { renderDrift: input.renderDrift } : {}),
         setServable,
+        github: owner.githubAdapterFor(config, input.githubFetch),
       });
       const late = await runRequirements(requirements, { ...context, owner: store }, async (row) =>
         row.load?.(),
@@ -480,7 +487,11 @@ function unitChecks(input: CompositionInput): UnitChecks {
     validators: input.validators,
     canonicalOrigin: input.config.origin,
   };
-  return { validate: (pair) => validatePublicationUnit(pair, context), appVersion: '' };
+  return {
+    validate: (pair, publication) =>
+      validatePublicationUnit(pair, publication ? withPublication(context, publication) : context),
+    appVersion: '',
+  };
 }
 
 function openDocuments(input: CompositionInput): OpenDocumentsResult {

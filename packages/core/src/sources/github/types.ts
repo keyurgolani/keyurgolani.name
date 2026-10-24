@@ -1,6 +1,10 @@
+import { recordOwnerModule } from '../../load-trace';
+recordOwnerModule('core/sources/github/types');
+
 /**
- * Types for the GitHub data fetched server-side. Renderers consume these
- * shapes regardless of which transport (GraphQL/REST) produced them.
+ * Types for the GitHub data the adapter fetches, whichever transport
+ * (GraphQL or REST) produced it. A refresh checks it against the schema's
+ * GitHubSnapshotDataSchema before it freezes it into a draft.
  */
 
 export type ContributionLevel = 0 | 1 | 2 | 3 | 4;

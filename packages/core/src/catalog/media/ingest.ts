@@ -115,7 +115,7 @@ export interface MediaIngestionOptions {
 }
 
 /** An authored media entry as far as ingestion reads it. */
-interface Entry {
+export interface Entry {
   readonly id: string;
   readonly source: MediaRecordSource;
   /** Its id and hash stay out of the log. */
@@ -125,7 +125,7 @@ interface Entry {
 const hexOf = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 
 /** The image entries of a portfolio model, in order, each id once; anything malformed is skipped. */
-function imageEntries(portfolio: unknown): Entry[] {
+export function imageEntries(portfolio: unknown): readonly Entry[] {
   const media = isPlainObject(portfolio) ? portfolio.media : undefined;
   if (!Array.isArray(media)) return [];
   const seen = new Set<string>();

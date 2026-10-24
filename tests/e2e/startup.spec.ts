@@ -202,9 +202,9 @@ test.describe('the shared fixtures', () => {
   const LIVE_CODES: Readonly<Record<string, string>> = {
     'appearance.unknown': 'appearance.unavailable',
   };
-  // Startup can't raise the two that compare a draft with the live revision
-  // (#10), which publish and import check.
-  const UNCHECKED = ['id.reused', 'urls.vanished'];
+  // Startup can't raise the three that compare a draft with the live
+  // revision (#10), which publish and import check.
+  const UNCHECKED = ['derived.unapproved', 'id.reused', 'urls.vanished'];
   const UNAVAILABLE = 'variant.unavailable';
   const RECORD_ORIGIN = 'https://rowan.name';
   const invalid = readdirSync(path.join(FIXTURES, 'invalid')).sort();

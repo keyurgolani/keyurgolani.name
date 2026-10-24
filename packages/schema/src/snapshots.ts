@@ -83,9 +83,9 @@ export const LanguageBreakdownEntrySchema = z
   .strict();
 
 /**
- * What the GitHub section shows, as the adapter froze it: the shape the kit's
- * GitHub section renders (`packages/kit/src/github/types.ts`), without its
- * fetchedAt, which the record carries.
+ * What the GitHub section shows, as the owner's refresh froze it: the shape
+ * the kit's GitHub section renders, without its fetchedAt, which the record
+ * carries.
  */
 export const GitHubSnapshotDataSchema = z
   .object({

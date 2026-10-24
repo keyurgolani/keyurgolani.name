@@ -17,7 +17,8 @@ What the platform can do today.
 - **Loose date strings.** `period: { start: "Jan 2024", end: "present" }` is fine, since people read this output, not parsers. ISO dates work too.
 - **Markdown in prose fields.** `lede.body`, `experience.items[].highlights[]`, and others honor a curated subset of Markdown.
 - **Media by id.** An image is a media asset, with its alt text, credit, and focal point, which a placement names and may override. Its renditions are derived data, served from `/media`: until they derive, or when the source is gone, an image renders as `Image unavailable`, keeping its box, caption, and credit, and a decorative one renders nothing.
-- **Snapshots, not fetches.** Data from outside the documents, such as a GitHub profile, is a snapshot in `snapshots/<kind>.json` beside the two documents, frozen when it's taken. Nothing a visitor requests reaches a source.
+- **Snapshots, not fetches.** Data from outside the documents, such as a GitHub profile, is a snapshot in `snapshots/<kind>.json` beside the two documents, frozen when it's taken. Nothing a visitor requests reaches a source. Under `owner`, a refresh fetches a GitHub section into the draft, and a publish freezes it into the revision; only the refresh reads `GITHUB_TOKEN`.
+- **Authored and derived changes, apart.** A draft keeps what changed that no edit made, a renamed or replaced image or refreshed GitHub data, beside the owner's edits. A publish can't carry a derived change the owner hasn't accepted, and dismissing one keeps the live value. `portfolio-store media check` reports what a source change would do without writing anything.
 
 ## Variants and appearance
 
@@ -75,7 +76,7 @@ These keep the system honest:
 
 - **TDD-friendly.** The schema, the variant contract, kit helpers, and check scripts all have `node:test` suites. Run them with `tsx --test`.
 - **Type-safe.** Discriminated unions on `kind` mean adding a section kind is one schema entry plus a shared renderer in the kit, which every variant then renders.
-- **Small kit, focused submodules.** `@portfolio/kit/github`, `@portfolio/kit/seo`, and the rest, so variants only pull in what they need.
+- **Small kit, focused submodules.** `@portfolio/kit/sections`, `@portfolio/kit/seo`, and the rest, so variants only pull in what they need.
 - **Visual companion in two modes.** Mockup mode (no Next.js needed) for fast prototyping, and preview mode for the bundled sample in a live dev server. `pnpm test:variants` takes the screenshots.
 
 ## Roadmap (deferred, not yet shipped)
@@ -83,7 +84,6 @@ These keep the system honest:
 - The appearance axes, and a visitor control for each, applying `visitorControls` (#19).
 - The five approved compositions, starting with Editorial Evidence and Kinetic Cosmos (#13 to #17).
 - Redirects for a changed slug, and 410 for a removed case study (#10, #22).
-- Media ingestion and renditions (#10, slice 2), and snapshot refresh (#10, slice 3).
 - CI/CD workflow templates.
 
 If you want a feature that isn't shipped, open an issue.

@@ -1023,6 +1023,12 @@ test('every diagnostic code comes with a line and column, in YAML and JSON', () 
       ['  - kind: works', '    id: work', '    items: [atlas]'],
     ),
   ).pair!;
+  /** The section code's GitHub record, as a refresh froze it. */
+  const refreshed = (stars: number) => ({
+    records: [
+      { adapter: 'github', sectionId: 'code', fetchedAt: '2026-10-20T00:00:00Z', data: { stars } },
+    ],
+  });
   const publishing: Context = {
     ...CONTEXT,
     validators: PUBLICATION_VALIDATORS,
@@ -1042,6 +1048,18 @@ test('every diagnostic code comes with a line and column, in YAML and JSON', () 
     {
       portfolio: PORTFOLIO.concat(lines('  - kind: lede', '    id: atlas', '    body: Hi')),
       ctx: publishing,
+    },
+    // At publish: the draft's GitHub snapshot differs from the live one's, and no one accepted it.
+    {
+      portfolio: PORTFOLIO.concat(lines('  - kind: github', '    id: code', '    username: rowan')),
+      ctx: {
+        ...publishing,
+        publication: {
+          live: { pair: live, snapshots: { github: refreshed(12) } },
+          draft: { snapshots: { github: refreshed(15) } },
+          derived: { changes: [] },
+        },
+      },
     },
     { site: `${SITE}sections:\n  gone: { hidden: true }\n` },
     {

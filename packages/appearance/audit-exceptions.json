@@ -1,11 +1,5 @@
 [
   {
-    "path": "packages/kit/src/github/colors.ts",
-    "rule": "color-literal",
-    "reason": "GitHub's own language colors, which kit/github's REST fetcher attaches to each repository's language at render time (#10 moves them into snapshots). They describe the repository, not the site's palette.",
-    "reviewer": "#102 independent medium review, 2026-10-23, at 68a1deb"
-  },
-  {
     "path": "packages/kit/src/social-brand/index.ts",
     "rule": "color-literal",
     "reason": "Each platform's own brand colors, for a link card that shows the platform's identity rather than the site's, plus a default and an email entry in the retired v1 palette; nothing imports the module, and it retires with them.",

@@ -1,5 +1,6 @@
+import { recordOwnerModule } from '../../load-trace';
 import { languageColor } from './colors';
-import { revalidatedFetch } from './fetch';
+import { readJson, timedFetch, type FetchLike } from './fetch';
 import type {
   GitHubData,
   PinnedRepo,
@@ -7,6 +8,8 @@ import type {
   FetchGitHubDataInput,
   LanguageBreakdownEntry,
 } from './types';
+
+recordOwnerModule('core/sources/github/rest');
 
 const REST_URL = 'https://api.github.com';
 
@@ -40,42 +43,42 @@ interface RESTUser {
  */
 export async function fetchViaREST(
   input: FetchGitHubDataInput,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  fetchFn: FetchLike,
 ): Promise<GitHubData | null> {
   const headers: HeadersInit = {
     Accept: 'application/vnd.github+json',
     'X-GitHub-Api-Version': '2022-11-28',
   };
+  const user = encodeURIComponent(input.username);
 
-  const userRes = await revalidatedFetch(`${REST_URL}/users/${input.username}`, {
-    headers,
-    signal,
-    next: { revalidate: 3600 },
-  });
+  const userRes = await timedFetch(fetchFn, `${REST_URL}/users/${user}`, { headers, signal });
   if (!userRes.ok) return null;
-  const user = (await userRes.json()) as RESTUser;
+  const profile = (await readJson(userRes)) as RESTUser;
 
-  const reposRes = await revalidatedFetch(
-    `${REST_URL}/users/${input.username}/repos?per_page=100&sort=updated`,
-    { headers, signal, next: { revalidate: 3600 } },
+  const reposRes = await timedFetch(
+    fetchFn,
+    `${REST_URL}/users/${user}/repos?per_page=100&sort=updated`,
+    { headers, signal },
   );
   if (!reposRes.ok) return null;
 
   const exclude = new Set(input.excludeRepos ?? []);
   const featured = new Set(input.featuredRepos ?? []);
-  const repos = ((await reposRes.json()) as RESTRepo[]).filter(
+  const repos = ((await readJson(reposRes)) as RESTRepo[]).filter(
     (r) => !r.fork && !exclude.has(r.name),
   );
 
   const recentLimit = clampLimit(input.recentlyActiveLimit ?? 10);
   let recentlyActive: RecentlyActiveRepo[] = [];
   if (input.showRecentlyActive !== false) {
-    const recentRes = await revalidatedFetch(
-      `${REST_URL}/users/${input.username}/repos?type=owner&sort=pushed&direction=desc&per_page=${recentLimit}`,
-      { headers, signal, next: { revalidate: 3600 } },
+    const recentRes = await timedFetch(
+      fetchFn,
+      `${REST_URL}/users/${user}/repos?type=owner&sort=pushed&direction=desc&per_page=${recentLimit}`,
+      { headers, signal },
     );
     if (recentRes.ok) {
-      const recentJson = (await recentRes.json()) as RESTRepo[];
+      const recentJson = (await readJson(recentRes)) as RESTRepo[];
       recentlyActive = recentJson
         .filter((r) => !r.fork && !exclude.has(r.name))
         .map((r) => ({
@@ -125,9 +128,9 @@ export async function fetchViaREST(
 
   return {
     username: input.username,
-    profileUrl: user.html_url,
+    profileUrl: profile.html_url,
     source: 'rest',
-    totalRepos: user.public_repos,
+    totalRepos: profile.public_repos,
     totalStarsReceived,
     starsGiven: null,
     contributionsLastYear: null,

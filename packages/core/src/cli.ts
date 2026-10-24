@@ -20,7 +20,12 @@ import type { PublicationOutcome } from './store/publication';
 import { runRetention, type Protection } from './store/retention';
 import { liveMedia, mountedSource, withMountedMedia, type SourceReader } from './store/source';
 import { loadSharp } from './catalog/media/derive';
-import { mediaIngestion, type MediaFinding } from './catalog/media/ingest';
+import { imageEntries, mediaIngestion, type MediaFinding } from './catalog/media/ingest';
+import { MediaSourceError } from './catalog/media/limits';
+import { githubAdapter, githubTokenFrom, type FetchLike } from './sources/github/index';
+import type { Draft } from './store/drafts';
+import { createHash } from 'node:crypto';
+import { isPlainObject, recordedChanges, type MediaRecordSource } from '@portfolio/schema';
 import { localMediaRoot } from './catalog/media/local';
 import { remoteImageFetcher, type RemoteFetcher } from './catalog/media/remote';
 import { openStore, type Store } from './store/store';
@@ -49,6 +54,9 @@ import { verifyStore, type VerifyReport } from './store/verify';
 //   backup --out <dir>
 //   restore --from <dir> --into <dir>
 //   retention [--keep <n>] [--remove <revisionId>] [--dry-run]
+//   media check [--fetch-remote]
+//   sources refresh
+//   changes list | changes accept <id...> | changes dismiss <id...>
 //
 // Exit status: 0 when the command did what it says; 1 when it was refused
 // or failed, `status` on a store that isn't live, and `verify` with a
@@ -74,6 +82,15 @@ const USAGE = `Usage: portfolio-store <command> [options]
   retention [--keep <n>] [--remove <revisionId>] [--dry-run]
                                            Deletes old unreferenced blobs and audit files, and with
                                            --keep or --remove, unprotected revisions.
+  media check [--fetch-remote]             Reads each image source again and reports, against the
+                                           live revision and the working draft, what changed:
+                                           source-moved, source-replaced, missing, or restored.
+                                           Writes nothing.
+  sources refresh                          Fetches the working draft's GitHub sections with
+                                           GITHUB_TOKEN into the draft, as Studio's refresh does.
+  changes list                             The working draft's derived changes, and each decision.
+  changes accept <id...>                   Accepts derived changes, so a publish may carry them.
+  changes dismiss <id...>                  Dismisses them, putting back the live revision's value.
 
 PORTFOLIO_DATA_DIR, or PORTFOLIO_DATA_DIR_FILE, names the store.`;
 
@@ -105,6 +122,8 @@ export interface CliOptions {
   readonly fetchRemote?: RemoteFetcher;
   /** Where sharp is when a bare import can't find it, such as the server build's .next/node_modules. */
   readonly sharpDirectories?: readonly string[];
+  /** How `sources refresh` calls GitHub (#10). Tests pass a stub; the default is Node's fetch. */
+  readonly githubFetch?: FetchLike;
 }
 
 class UsageError extends Error {}
@@ -123,6 +142,9 @@ const COMMANDS = [
   'backup',
   'restore',
   'retention',
+  'media',
+  'sources',
+  'changes',
 ] as const;
 type Command = (typeof COMMANDS)[number];
 
@@ -370,7 +392,265 @@ class Commands {
         return this.restore(args);
       case 'retention':
         return this.retention(args);
+      case 'media':
+        return this.media(args);
+      case 'sources':
+        return this.sources(args);
+      case 'changes':
+        return this.changes(args);
     }
+  }
+
+  /** `<command> <subcommand>`: the subcommand, one of `names`, and the rest. */
+  private subcommand<T extends string>(
+    command: string,
+    args: readonly string[],
+    names: readonly T[],
+  ): [T, readonly string[]] {
+    const [name, ...rest] = args;
+    if (!name || !(names as readonly string[]).includes(name)) {
+      throw new UsageError(`${command} takes ${names.join(', ')}.`);
+    }
+    return [name as T, rest];
+  }
+
+  /**
+   * `media check` (#10, VR2): reads each image source again, as an import or
+   * a draft save would, and reports for the live revision and the working
+   * draft what it would change. A rename is source-moved, new bytes
+   * source-replaced, a source that's gone missing with its last revision
+   * kept, and one back with the same bytes restored. It derives nothing and
+   * writes nothing: a draft save or an import does that, and a publish only
+   * carries a change the owner accepted.
+   */
+  private async media(args: readonly string[]): Promise<number> {
+    const [, rest] = this.subcommand('media', args, ['check'] as const);
+    const { values } = this.parse(rest, { 'fetch-remote': { type: 'boolean' } });
+    const store = await this.readable();
+    const live = await this.pointer(store);
+    const draft = await store.drafts.getWorking();
+    if (!live && !draft) {
+      this.say('Nothing to check: no revision is live, and there is no working draft.');
+      return 0;
+    }
+    const mediaRoot = setting(this.options.env, 'PORTFOLIO_MEDIA_ROOT');
+    const root = mediaRoot ? localMediaRoot(path.resolve(this.options.envBase, mediaRoot)) : null;
+    const fetchRemote = values['fetch-remote']
+      ? (this.options.fetchRemote ?? remoteImageFetcher())
+      : null;
+    const read = async (source: MediaRecordSource): Promise<string> => {
+      let bytes: Uint8Array;
+      if (source.kind === 'local') {
+        if (!root)
+          throw new MediaSourceError(
+            'unreachable',
+            'root_unset',
+            'PORTFOLIO_MEDIA_ROOT is not set.',
+          );
+        bytes = await root.read(source.path);
+      } else {
+        if (!fetchRemote)
+          throw new MediaSourceError(
+            'unreachable',
+            'fetch_denied',
+            'Give --fetch-remote to read https sources.',
+          );
+        bytes = await fetchRemote(source.url);
+      }
+      return createHash('sha256').update(bytes).digest('hex');
+    };
+    const sides: { name: string; portfolio: unknown; media: unknown; changes: Draft['derived'] }[] =
+      [];
+    if (live) {
+      const revision = await store.revisions.read(live.revisionId);
+      if (revision.ok) {
+        const { unit } = revision.revision;
+        sides.push({
+          name: 'live',
+          portfolio: unit.portfolio.model,
+          media: unit.media?.model,
+          changes: undefined,
+        });
+      }
+    }
+    if (draft) {
+      sides.push({
+        name: 'draft',
+        portfolio: draft.documents.portfolio.model,
+        media: draft.documents.media?.model,
+        changes: draft.derived,
+      });
+    }
+    for (const side of sides) {
+      const records = new Map<string, Record<string, unknown>>();
+      const assets =
+        isPlainObject(side.media) && Array.isArray(side.media.assets) ? side.media.assets : [];
+      for (const record of assets) {
+        if (isPlainObject(record) && typeof record.assetId === 'string')
+          records.set(record.assetId, record);
+      }
+      const recorded = recordedChanges(side.changes);
+      const entries = imageEntries(side.portfolio);
+      if (entries.length === 0) this.say(`${side.name}: no image to check.`);
+      for (const entry of entries) {
+        const record = records.get(entry.id);
+        const decided = recorded.find(
+          (change) => change.subject.kind === 'media' && change.subject.assetId === entry.id,
+        );
+        const noted = decided ? ` (${decided.id}, ${decided.decision.state})` : '';
+        if (!record) {
+          this.say(
+            `${side.name} ${entry.id}: no revision yet; a draft save or an import derives one.`,
+          );
+          continue;
+        }
+        let hash: string;
+        try {
+          hash = await read(entry.source);
+        } catch (error) {
+          if (!(error instanceof MediaSourceError)) throw error;
+          this.say(
+            `${side.name} ${entry.id}: missing, source ${error.reason} (${error.code}); its last revision is kept.`,
+          );
+          continue;
+        }
+        const sameSource = JSON.stringify(record.source) === JSON.stringify(entry.source);
+        const availability = isPlainObject(record.availability)
+          ? record.availability.state
+          : undefined;
+        if (hash !== record.sha256) {
+          this.say(
+            `${side.name} ${entry.id}: source-replaced, new bytes ${hash.slice(0, 12)}${noted}.`,
+          );
+        } else if (!sameSource) {
+          this.say(
+            `${side.name} ${entry.id}: source-moved, the same bytes from another source${noted}.`,
+          );
+        } else if (availability === 'unavailable') {
+          this.say(`${side.name} ${entry.id}: restored, the same bytes are back.`);
+        } else {
+          this.say(`${side.name} ${entry.id}: unchanged.`);
+        }
+      }
+    }
+    this.say(
+      'Nothing was written: a draft save or an import records these, and a publish carries only accepted ones.',
+    );
+    return 0;
+  }
+
+  /** The working draft, or a refusal saying how to start one. */
+  private async working(store: Store): Promise<Draft> {
+    const draft = await store.drafts.getWorking();
+    if (!draft) {
+      throw new Refusal(
+        'no_working_draft: there is no working draft. Start one in Studio. Nothing was changed.',
+      );
+    }
+    return draft;
+  }
+
+  /** `sources refresh` (#10): Studio's refresh, as the operator. */
+  private async sources(args: readonly string[]): Promise<number> {
+    const [, rest] = this.subcommand('sources', args, ['refresh'] as const);
+    this.parse(rest, {});
+    const store = await this.writable();
+    const draft = await this.working(store);
+    const token = githubTokenFrom(this.options.env);
+    const adapter = githubAdapter({
+      ...(token ? { token } : {}),
+      ...(this.options.githubFetch ? { fetch: this.options.githubFetch } : {}),
+      now: this.now,
+    });
+    const result = await adapter.refresh(
+      draft.documents.portfolio.model,
+      draft.derived?.snapshots?.github,
+    );
+    for (const finding of result.findings) {
+      this.say(
+        finding.code === 'token_unset'
+          ? 'token_unset: GITHUB_TOKEN is not set, so nothing was refreshed.'
+          : `github ${finding.sectionId}: ${finding.code}; it keeps the data it had.`,
+      );
+    }
+    if (result.snapshot === null || result.refreshed.length === 0) {
+      this.say('The draft is as it was.');
+      return 0;
+    }
+    const outcome = await store.drafts.refreshSources(
+      {
+        draftId: draft.draftId,
+        expectedVersion: draft.version,
+        snapshots: { github: result.snapshot },
+      },
+      'operator',
+    );
+    if (outcome.kind !== 'saved') return this.draftRefused(outcome);
+    for (const id of result.refreshed) this.say(`github ${id}: refreshed into the draft.`);
+    this.changeLines(outcome.draft);
+    return 0;
+  }
+
+  /** `changes list|accept|dismiss` (#10): the working draft's derived changes, and the owner's decisions. */
+  private async changes(args: readonly string[]): Promise<number> {
+    const [name, rest] = this.subcommand('changes', args, ['list', 'accept', 'dismiss'] as const);
+    if (name === 'list') {
+      this.parse(rest, {});
+      const draft = await this.working(await this.readable());
+      this.changeLines(draft);
+      return 0;
+    }
+    const { positionals } = this.parse(rest, {}, 1000);
+    if (positionals.length === 0) throw new UsageError(`changes ${name} names the changes by id.`);
+    if (!positionals.every((id) => /^dch_[0-9a-f]{32}$/.test(id))) {
+      throw new UsageError('A change id is dch_ and 32 hex digits, as `changes list` prints it.');
+    }
+    const store = await this.writable();
+    const draft = await this.working(store);
+    const outcome = await store.drafts.decideChanges(
+      {
+        draftId: draft.draftId,
+        expectedVersion: draft.version,
+        changeIds: positionals,
+        decision: name === 'accept' ? 'accepted' : 'dismissed',
+      },
+      'operator',
+    );
+    if (outcome.kind !== 'saved') return this.draftRefused(outcome);
+    this.changeLines(outcome.draft);
+    return 0;
+  }
+
+  /** One line per derived change the draft records. */
+  private changeLines(draft: Draft): void {
+    const changes = recordedChanges(draft.derived);
+    if (changes.length === 0) this.say('The draft has no derived change.');
+    for (const change of changes) {
+      const subject =
+        change.subject.kind === 'media'
+          ? `media ${change.subject.assetId}`
+          : `github ${change.subject.sectionId}`;
+      this.say(
+        `${change.id} ${change.cause} ${subject}: ${change.decision.state} (${change.fields.join(', ')})`,
+      );
+    }
+  }
+
+  /** A draft write that didn't save, and exit 1. */
+  private draftRefused(outcome: { kind: string; code: string }): number {
+    if (outcome.code === 'draft_conflict') {
+      this.complain(
+        'draft_conflict: the working draft changed while this ran. Nothing was changed; run it again.',
+      );
+      return 1;
+    }
+    if (outcome.code === 'not_found') {
+      this.complain(
+        'not_found: the working draft records no change with that id. Nothing was changed.',
+      );
+      return 1;
+    }
+    return this.rejected(outcome, 'Nothing was changed.');
   }
 
   /** The command's flags, strictly: one it doesn't take is a usage error. */
@@ -647,6 +927,9 @@ class Commands {
       );
       for (const line of liveLines(await this.pointer(store))) this.say(line);
       this.say(`source hash: ${sourceHash}`);
+      for (const warning of outcome.warnings ?? []) {
+        for (const line of recordLines(warning)) this.say(line);
+      }
       return 0;
     }
     return this.rejected(outcome, 'Nothing was imported.');
@@ -711,6 +994,12 @@ class Commands {
       case 'idempotency_conflict':
         this.complain(
           `idempotency_conflict: an earlier request, not this one, used its key. ${nothing}`,
+        );
+        return 1;
+      case 'live_unreadable':
+        this.complain(
+          "live_unreadable: the live revision is damaged, and no earlier revision is healthy, so the publish has nothing to check the draft's derived changes against. " +
+            `${nothing} \`verify\` says what's wrong; \`recover\`, \`restore\`, or \`import\` repairs it.`,
         );
         return 1;
       default:

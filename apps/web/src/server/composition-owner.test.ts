@@ -147,12 +147,50 @@ let state: DeploymentState;
 let sourceDir: string;
 let dataDir: string;
 
+/** Every request owner's GitHub adapter made, which a stub answers in process (#10). */
+const githubRequests: string[] = [];
+
+/** GitHub as the adapter sees it here: a fixed profile, from a stub that never leaves the process. */
+async function stubGitHub(url: string): Promise<Response> {
+  githubRequests.push(url);
+  return Response.json({
+    data: {
+      user: {
+        url: 'https://github.com/rowan',
+        repositories: {
+          totalCount: 1,
+          nodes: [{ name: 'tides', stargazerCount: 5, languages: { edges: [] } }],
+        },
+        recentlyActive: { nodes: [] },
+        starredRepositories: { totalCount: 2 },
+        contributionsCollection: { contributionCalendar: { totalContributions: 3, weeks: [] } },
+        pinnedItems: { nodes: [] },
+      },
+    },
+  });
+}
+
+/** A GitHub snapshot record for the section `code`, as a refresh writes one. */
+function githubSnapshot(stars: number) {
+  return {
+    records: [
+      {
+        adapter: 'github',
+        sectionId: 'code',
+        fetchedAt: '2026-10-20T00:00:00.000Z',
+        data: { username: 'rowan', totalStarsReceived: stars },
+      },
+    ],
+  };
+}
+
 function input(overrides: Partial<CompositionInput> = {}): CompositionInput {
   return {
     config,
     examples: EXAMPLES,
     report: () => {},
     authProviders: [PROVIDER],
+    githubFetch: stubGitHub,
     // #5's fixture a fixture grant renders (#7): the test pair.
     previewFixtures: (id) =>
       id === 'complete'
@@ -277,9 +315,15 @@ test('owner loads its modules only through the composition root', () => {
     'core/preview/grant-store',
     'core/preview/grants',
     'core/preview/token',
+    'core/sources/github/colors',
+    'core/sources/github/fetch',
+    'core/sources/github/graphql',
+    'core/sources/github/index',
+    'core/sources/github/rest',
     'core/store/assets',
     'core/store/commit',
     'core/store/common',
+    'core/store/derived',
     'core/store/drafts',
     'core/store/fs-port',
     'core/store/health-cache',
@@ -399,6 +443,57 @@ test('every registered operation fails closed without a session and runs with on
         baseRevisionId: await live(),
       };
     },
+    'draft.diff': async () => ({ draftId: (await working()).draftId }),
+    // No GitHub section in the draft: the refresh fetches nothing, and answers the draft.
+    'draft.refreshSources': async () => {
+      const draft = await working();
+      return { draftId: draft.draftId, expectedVersion: draft.version };
+    },
+    // A change each to decide, from a refresh recorded beside the server,
+    // for a GitHub section the draft has: a record for none is dropped.
+    ...Object.fromEntries(
+      (['draft.changes.accept', 'draft.changes.dismiss'] as const).map((name, index) => [
+        name,
+        async () => {
+          const draft = await working();
+          const withSection = await side.drafts.save(
+            {
+              draftId: draft.draftId,
+              expectedVersion: draft.version,
+              documents: {
+                ...documents('Rowan Decides'),
+                portfolio: {
+                  format: 'yaml',
+                  sourceText: `${PORTFOLIO}  - kind: github\n    id: code\n    title: Code\n    username: rowan\n`,
+                },
+              },
+            },
+            'owner',
+          );
+          assert.equal(withSection.kind, 'saved', name);
+          if (withSection.kind !== 'saved') return {};
+          const refreshed = await side.drafts.refreshSources(
+            {
+              draftId: withSection.draft.draftId,
+              expectedVersion: withSection.draft.version,
+              snapshots: { github: githubSnapshot(10 + index) },
+            },
+            'owner',
+          );
+          assert.equal(refreshed.kind, 'saved', name);
+          if (refreshed.kind !== 'saved') return {};
+          const pending = refreshed.draft.derived?.changes.find(
+            ({ decision }) => decision.state === 'pending',
+          );
+          assert.ok(pending, name);
+          return {
+            draftId: refreshed.draft.draftId,
+            expectedVersion: refreshed.draft.version,
+            changeIds: [pending.id],
+          };
+        },
+      ]),
+    ),
     'draft.discard': async () => {
       const draft = await working();
       return { draftId: draft.draftId, expectedVersion: draft.version };
@@ -764,4 +859,91 @@ test('a Studio publish that adds a case study serves its /work/<slug> on the nex
   // request's route table serves the page, with nothing read since.
   assert.deepEqual([...liveCaseStudies()], [slug]);
   assert.equal(resolveRoute('owner', `/work/${slug}`).status, 'served');
+});
+
+test('a Studio refresh fetches GitHub through the adapter alone, its change holds the publish until the owner accepts it, and the publish freezes it (#10)', async () => {
+  githubRequests.length = 0;
+  const owner = { origin: ORIGIN, 'content-type': 'application/json', 'x-test-session': 'owner' };
+  const side = await sideStore();
+  const working = await side.drafts.getWorking();
+  const portfolio = `${PORTFOLIO}  - kind: github\n    id: code\n    title: Code\n    username: rowan\n`;
+  const created = await side.drafts.create(
+    {
+      documents: {
+        ...documents('Rowan Refresh'),
+        portfolio: { format: 'yaml', sourceText: portfolio },
+      },
+      ...(working ? { expectedVersion: working.version } : {}),
+    },
+    'owner',
+  );
+  assert.equal(created.kind, 'saved');
+  if (created.kind !== 'saved') return;
+  /** What the answers this test reads carry. */
+  interface Answer {
+    readonly data: {
+      readonly draft: {
+        readonly draftId: string;
+        readonly version: number;
+        readonly derived: {
+          readonly changes: readonly {
+            readonly id: string;
+            readonly cause: string;
+            readonly decision: { readonly state: string };
+          }[];
+        };
+      };
+      readonly findings: readonly unknown[];
+      readonly revisionId: string;
+    };
+    readonly error: { readonly details: { readonly diagnostics: readonly { code: string }[] } };
+  }
+  const body = async (response: Response) => JSON.parse(await response.text()) as Answer;
+
+  const refreshed = await body(
+    await studio('POST', 'draft.refreshSources', owner, {
+      draftId: created.draft.draftId,
+      expectedVersion: created.draft.version,
+    }),
+  );
+  assert.deepEqual(refreshed.data.findings, []);
+  const draft = refreshed.data.draft;
+  assert.ok(
+    githubRequests.length > 0 &&
+      githubRequests.every((url) => url.startsWith('https://api.github.com/')),
+  );
+  const [change] = draft.derived.changes;
+  assert.ok(change, 'the refresh raised a change');
+  assert.equal(change.cause, 'integration-refreshed');
+  assert.equal(change.decision.state, 'pending');
+
+  const live = (await side.publication.status()).liveRevisionId;
+  const publish = (version: number) =>
+    studio('POST', 'publish', owner, {
+      draftId: draft.draftId,
+      draftVersion: version,
+      expectedLiveRevisionId: live,
+    });
+  const refused = await publish(draft.version);
+  assert.equal(refused.status, 422, await refused.clone().text());
+  const codes = (await body(refused)).error.details.diagnostics.map(({ code }) => code);
+  assert.deepEqual(codes, ['derived.unapproved']);
+
+  const accepted = await body(
+    await studio('POST', 'draft.changes.accept', owner, {
+      draftId: draft.draftId,
+      expectedVersion: draft.version,
+      changeIds: [change.id],
+    }),
+  );
+  const committed = await publish(accepted.data.draft.version);
+  assert.equal(committed.status, 200, await committed.clone().text());
+  const { revisionId } = (await body(committed)).data;
+  const frozen = JSON.parse(
+    readFileSync(path.join(dataDir, 'revisions', revisionId, 'snapshots', 'github.json'), 'utf8'),
+  );
+  assert.equal(frozen.records[0].sectionId, 'code');
+  assert.equal(frozen.records[0].data.totalStarsReceived, 5);
+  // Nothing the owner was sent, or the store wrote, holds the token.
+  assert.doesNotMatch(JSON.stringify({ refreshed, accepted, frozen }), /canary-github-token/);
 });

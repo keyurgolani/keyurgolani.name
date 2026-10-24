@@ -315,7 +315,7 @@ test('validate exits 0 on a valid pair, warnings or not, and lists what it could
  * Codes that compare a draft with the live revision, which only publish and
  * import have (the schema's node.test.ts checks each against its live/).
  */
-const PUBLICATION_CODES = ['urls.vanished', 'id.reused'];
+const PUBLICATION_CODES = ['urls.vanished', 'id.reused', 'derived.unapproved'];
 
 test('validate refuses every blocking invalid pair and loads every warning one, as JSON', () => {
   for (const code of readdirSync(path.join(ALL_FIXTURES, 'invalid'))) {

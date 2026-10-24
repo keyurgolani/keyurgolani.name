@@ -53,6 +53,15 @@ import {
   type LivePointer,
   type PublicationEvent,
 } from './pointer';
+import {
+  ADAPTER_SNAPSHOT_KINDS,
+  githubRecordsFor,
+  parseSnapshot,
+  parseSource,
+  type ParsedPair,
+  type Publication,
+} from '@portfolio/schema';
+import { asDraftDerived } from './derived';
 import { manifestFor, readManifest, readRevision, revisionIds, type Manifest } from './revisions';
 import {
   checkUnit,
@@ -136,7 +145,14 @@ export type PublicationRejectionCode =
    * it, as after a stall past 2 minutes; the pointer didn't move. A retry is
    * safe: 503 with Retry-After, as lock_timeout.
    */
-  | 'lock_lost';
+  | 'lock_lost'
+  /**
+   * The live revision is damaged for good, and no earlier revision is
+   * healthy (#10): the publish has nothing to check its derived changes
+   * against, so it refuses rather than publish unchecked. `verify` says
+   * what's wrong; `recover`, `restore`, or `import` repairs it.
+   */
+  | 'live_unreadable';
 
 export interface PublicationRejection extends Rejection<PublicationRejectionCode> {
   /** For revision_incompatible: why, such as `schema.version` or `damaged:hash_mismatch`. */
@@ -146,7 +162,13 @@ export interface PublicationRejection extends Rejection<PublicationRejectionCode
 }
 
 export type PublicationOutcome =
-  | { readonly kind: 'committed'; readonly revisionId: RevisionId; readonly seq: number }
+  | {
+      readonly kind: 'committed';
+      readonly revisionId: RevisionId;
+      readonly seq: number;
+      /** For an import: what it left out and why, such as a snapshot this build's schema refuses. */
+      readonly warnings?: readonly UnitDiagnostic[];
+    }
   | PublicationRejection
   | LiveConflict
   | DraftConflict;
@@ -301,8 +323,12 @@ export interface PublicationService {
    */
   revisions(page?: ListPage): Promise<readonly RevisionSummary[]>;
   revision(revisionId: RevisionId): Promise<RevisionDetail | null>;
-  /** The most recently live revision this build can serve, or null. */
-  lastKnownGood(): Promise<RevisionId | null>;
+  /**
+   * The most recently live revision this build can serve, or null. One in
+   * `except` is passed over: a revision a read has just proven damaged,
+   * which the health cache may still hold as healthy.
+   */
+  lastKnownGood(options?: { readonly except?: readonly RevisionId[] }): Promise<RevisionId | null>;
   /**
    * Whether the store is empty: no live.json, and no history, which is an
    * event, a moved-aside one, or a tombstone (hasHistory()). A revision
@@ -456,6 +482,95 @@ export function filesystemPublicationService({
       }
     }
     return null;
+  }
+
+  /**
+   * The live revision's adapter snapshots an import keeps (#10): each that
+   * checks against this build's schema, with only the GitHub records whose
+   * section the imported portfolio has, for the account it names. A
+   * snapshot that no longer checks, after a build tightens its schema, is
+   * left out with a warning, so the import doesn't block on what the
+   * operator's files don't hold.
+   */
+  function carriedSnapshots(
+    documents: UnitInput,
+    adapterSnapshots: Readonly<Record<string, unknown>>,
+  ): { snapshots: Record<string, unknown>; warnings: UnitDiagnostic[] } {
+    const parsed = parseSource(documents.portfolio.sourceText, documents.portfolio.format);
+    const portfolio = parsed.ok ? parsed.data : null;
+    const snapshots: Record<string, unknown> = {};
+    const warnings: UnitDiagnostic[] = [];
+    for (const [kind, value] of Object.entries(adapterSnapshots)) {
+      if (!parseSnapshot(kind, value).ok) {
+        warnings.push({
+          code: 'snapshot.dropped',
+          severity: 'warning',
+          document: 'snapshots',
+          pointer: '',
+          message: `The live revision's ${kind} snapshot doesn't check against this build's schema, so the import left it out.`,
+          remediation:
+            'Nothing to do for the import. Refresh a draft from its sources, with portfolio-store sources refresh or in Studio, to fetch it again.',
+        });
+        continue;
+      }
+      snapshots[kind] = kind === 'github' ? githubRecordsFor(portfolio, value) : value;
+    }
+    return { snapshots, warnings };
+  }
+
+  /**
+   * The live revision as the publish validators read it (#10): its pair,
+   * media document, and snapshots, or null for an empty store. A live
+   * revision damaged for good reads as the last known good, what visitors
+   * get in its place and what a draft based on it compared against, so the
+   * gate still holds what no one accepted. With no last known good, it's
+   * `unreadable`: a publish refuses, and an import, one of the repairs, goes
+   * on with nothing to compare.
+   */
+  async function liveContext(pointer: LivePointer | null): Promise<
+    | {
+        readonly context: Publication['live'];
+        readonly adapterSnapshots: Readonly<Record<string, unknown>>;
+      }
+    | 'unreadable'
+  > {
+    const live = pointer?.revisionId ?? null;
+    if (live === null) return { context: null, adapterSnapshots: {} };
+    let read = await readRevision(fs, paths, live);
+    // A read that may work next time stops the publish, so the checks
+    // never pass for want of a moment's I/O.
+    const transient = () =>
+      new StoreError('storage_unavailable', "The live revision can't be read just now.");
+    // Each revision a read proves damaged is passed over, though the health
+    // cache, which a running server keeps, may still hold it as healthy.
+    const damaged = new Set<RevisionId>([live]);
+    while (!read.ok) {
+      if (read.transient) throw transient();
+      const good = await walkLastKnownGood(pointer, damaged);
+      log({
+        level: 'warn',
+        event: 'store.publish.live_unread',
+        code: read.damage,
+        ...(good ? { servingRevisionId: good } : {}),
+      });
+      if (!good) return 'unreadable';
+      damaged.add(good);
+      read = await readRevision(fs, paths, good);
+    }
+    const { unit } = read.revision;
+    const adapterSnapshots = Object.fromEntries(
+      Object.entries(unit.snapshots).filter(([kind]) =>
+        (ADAPTER_SNAPSHOT_KINDS as readonly string[]).includes(kind),
+      ),
+    );
+    return {
+      context: {
+        pair: { portfolio: unit.portfolio.model, site: unit.site.model } as ParsedPair,
+        ...(unit.media ? { media: unit.media.model } : {}),
+        snapshots: unit.snapshots,
+      },
+      adapterSnapshots,
+    };
   }
 
   async function hashOf(id: RevisionId | null): Promise<Sha256 | null> {
@@ -779,8 +894,12 @@ export function filesystemPublicationService({
     return order;
   }
 
-  async function walkLastKnownGood(pointer: LivePointer | null): Promise<RevisionId | null> {
+  async function walkLastKnownGood(
+    pointer: LivePointer | null,
+    except: ReadonlySet<RevisionId> = new Set(),
+  ): Promise<RevisionId | null> {
     for (const id of await liveOrder(pointer)) {
+      if (except.has(id)) continue;
       if ((await health(id, 'serve')).state === 'ok') return id;
     }
     return null;
@@ -897,7 +1016,28 @@ export function filesystemPublicationService({
         }
 
         stage('validate');
-        const checked = checkUnit(draftInput(draft), checks);
+        // What the draft's refreshes froze goes live with it, and the
+        // publish checks see the live revision and the draft's derived
+        // block: an id the live revision gives another type, and a derived
+        // change no one accepted, block it (#10). A draft with no derived
+        // block has no decision either, so every change it carries is held.
+        const derived = asDraftDerived(draft.derived);
+        const against = await liveContext(pointer);
+        if (against === 'unreadable') return rejected('live_unreadable');
+        const { context: liveRevision } = against;
+        const publication: Publication = {
+          live: liveRevision,
+          derived: derived ?? { changes: [] },
+          draft: {
+            media: draft.documents.media?.model,
+            ...(derived?.snapshots ? { snapshots: derived.snapshots } : {}),
+          },
+        };
+        const checked = checkUnit(
+          { ...draftInput(draft), ...(derived?.snapshots ? { snapshots: derived.snapshots } : {}) },
+          checks,
+          publication,
+        );
         if (!checked.ok) return rejected('validation_failed', checked.diagnostics);
         const { unit, rendering } = checked;
         const manifestFields = {
@@ -979,7 +1119,22 @@ export function filesystemPublicationService({
         if (expected !== live) return liveConflict(pointer, expected);
 
         stage('validate');
-        const checked = checkUnit(documents, checks);
+        // An import checks against the live revision too (#10), with no
+        // derived block: what it brings counts as accepted, as an operator's
+        // files are. It keeps what the live revision's refreshes froze, so an
+        // import never drops the GitHub data the owner published.
+        const against = await liveContext(pointer);
+        const { context: liveRevision, adapterSnapshots } =
+          against === 'unreadable' ? { context: null, adapterSnapshots: {} } : against;
+        const { snapshots: carried, warnings } = carriedSnapshots(documents, adapterSnapshots);
+        const checked = checkUnit(
+          {
+            ...documents,
+            ...(Object.keys(carried).length > 0 ? { snapshots: carried } : {}),
+          },
+          checks,
+          { live: liveRevision },
+        );
         if (!checked.ok) return rejected('validation_failed', checked.diagnostics);
         const { unit, rendering } = checked;
         const manifest = manifestFor(
@@ -1026,7 +1181,10 @@ export function filesystemPublicationService({
           ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
           sourceHash: input.sourceHash,
         };
-        return commit('import', event, unit.unitHash, context);
+        const committed = await commit('import', event, unit.unitHash, context);
+        return committed.kind === 'committed' && warnings.length > 0
+          ? { ...committed, warnings }
+          : committed;
       });
     },
 
@@ -1145,9 +1303,9 @@ export function filesystemPublicationService({
       }
     },
 
-    async lastKnownGood() {
+    async lastKnownGood(options = {}) {
       try {
-        return await walkLastKnownGood(await readPointer());
+        return await walkLastKnownGood(await readPointer(), new Set(options.except ?? []));
       } catch (error) {
         throw storageError(error);
       }

@@ -69,12 +69,17 @@ export function openStore({
     ...(now ? { now } : {}),
     ...(log ? { log } : {}),
   };
+  const publication = filesystemPublicationService({ ...shared, ...(audit ? { audit } : {}) });
   return Object.freeze({
     paths,
     lock,
     assets,
-    drafts: filesystemDraftStore(shared),
+    // A draft on a damaged base compares as the publish gate does (#10).
+    drafts: filesystemDraftStore({
+      ...shared,
+      lastKnownGood: (except) => publication.lastKnownGood({ except }),
+    }),
     revisions: filesystemRevisionStore({ fs, paths, checks, hasBlob: (hash) => assets.has(hash) }),
-    publication: filesystemPublicationService({ ...shared, ...(audit ? { audit } : {}) }),
+    publication,
   });
 }

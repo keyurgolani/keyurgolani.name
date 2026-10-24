@@ -18,7 +18,7 @@ import type { Handler, HandlerContext } from '../dispatcher';
 import { recordOwnerModule } from '../load-trace';
 import { PAGE_LIMIT } from '../store-schemas';
 import { errorResult, type StudioResult } from '../studio-result';
-import type { MediaGrant, OwnerMoveContext, StudioStore } from './store';
+import type { MediaGrant, OwnerMoveContext, RefreshOutcome, StudioStore } from './store';
 
 // The revision store's operations for Studio (#3, item 22), each checking
 // its authorize() token first. The store makes the version checks, under
@@ -68,6 +68,8 @@ function rejection(outcome: Rejected): StudioResult {
       return errorResult('lock_lost', RETRY);
     case 'idempotency_conflict':
       return errorResult('idempotency_conflict');
+    case 'live_unreadable':
+      return errorResult('live_unreadable');
     case 'validation_failed':
       return errorResult('validation_failed', { details: { diagnostics: outcome.diagnostics } });
     case 'asset_missing':
@@ -99,6 +101,12 @@ function rejection(outcome: Rejected): StudioResult {
       throw new Error(`The store answered with ${code}, which no entry declares.`);
     }
   }
+}
+
+/** A refresh's answer: the draft, saved or as it was, with what the adapter found. */
+function refreshAnswer(outcome: RefreshOutcome): unknown {
+  if (outcome.kind === 'saved') return { draft: outcome.draft, findings: outcome.findings };
+  return draftAnswer(outcome);
 }
 
 function draftAnswer(outcome: DraftOutcome): unknown {
@@ -248,6 +256,29 @@ export function storeHandlers(studio: StudioStore): Readonly<Record<string, Hand
       'draft.write',
       async (input: Parameters<StudioStore['rebaseDraft']>[0], _context, authorized) =>
         draftAnswer(await studio.rebaseDraft(input, mediaGrant(authorized))),
+    ),
+    // #10: a draft's authored and derived changes, its sources refreshed,
+    // and a derived change accepted or dismissed. The adapter's own
+    // capability, source.refresh, gates the one that calls GitHub.
+    'draft.diff': handler(
+      'draft.read',
+      async (input: { draftId: Parameters<StudioStore['diffDraft']>[0] }) =>
+        (await studio.diffDraft(input.draftId)) ?? errorResult('not_found'),
+    ),
+    'draft.refreshSources': handler(
+      'source.refresh',
+      async (input: Parameters<StudioStore['refreshSources']>[0]) =>
+        refreshAnswer(await studio.refreshSources(input)),
+    ),
+    ...Object.fromEntries(
+      (['accepted', 'dismissed'] as const).map((decision) => [
+        decision === 'accepted' ? 'draft.changes.accept' : 'draft.changes.dismiss',
+        handler(
+          'draft.write',
+          async (input: Omit<Parameters<StudioStore['decideChanges']>[0], 'decision'>) =>
+            draftAnswer(await studio.decideChanges({ ...input, decision })),
+        ),
+      ]),
     ),
     'draft.discard': handler(
       'draft.write',

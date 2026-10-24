@@ -21,7 +21,6 @@
     "./spatial": "./src/spatial/index.ts",
     "./spatial-r3f": "./src/spatial-r3f/index.ts",
     "./spatial-canvas": "./src/spatial-r3f/spatial-canvas.tsx",
-    "./github": "./src/github/index.ts",
     "./seo": "./src/seo/index.ts",
     "./timeline": "./src/timeline/index.ts",
     "./motion-fx": "./src/motion-fx/index.ts",

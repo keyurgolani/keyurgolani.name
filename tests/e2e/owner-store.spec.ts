@@ -417,7 +417,7 @@ test(
 );
 
 test(
-  'with nothing servable, a publish from another process serves on the next visitor request, with nothing else asking the reader between',
+  'with nothing servable, a publish is refused with live_unreadable, and an import from another process serves on the next visitor request, with nothing else asking the reader between',
   {
     annotation: [
       { type: 'route', description: '/' },
@@ -434,8 +434,44 @@ test(
       for (const route of ['/', '/feed.xml']) {
         expect((await request.get(`${app.origin}${route}`)).status(), route).toBe(503);
       }
-      await publish(dataDir, 'Rowan Fixed');
-      // No readiness call, nor anything else, between the publish and these.
+      // With nothing healthy, a publish has nothing to check the draft's
+      // derived changes against, so it's refused (#10). `recover` has no
+      // healthy revision to make live either: the repair is an import.
+      const refused = await runChild({
+        kind: 'run',
+        dataDir,
+        steps: [{ op: 'publishDocuments', documents: documents('Rowan Refused') }],
+      } as never);
+      const [attempt] = (
+        (refused.result ?? { results: [] }) as {
+          results: { outcome?: { kind?: string; code?: string } | null }[];
+        }
+      ).results;
+      expect(attempt?.outcome, JSON.stringify(refused)).toMatchObject({
+        kind: 'rejected',
+        code: 'live_unreadable',
+      });
+      const imported = await runChild({
+        kind: 'run',
+        dataDir,
+        steps: [
+          {
+            op: 'import',
+            input: {
+              documents: documents('Rowan Fixed'),
+              sourceHash: `sha256:${'1'.repeat(64)}`,
+              expectedLiveRevisionId: only,
+            },
+          },
+        ],
+      } as never);
+      const [landed] = (
+        (imported.result ?? { results: [] }) as {
+          results: { outcome?: { kind?: string } | null }[];
+        }
+      ).results;
+      expect(landed?.outcome?.kind, JSON.stringify(imported)).toBe('committed');
+      // No readiness call, nor anything else, between the import and these.
       const home = await request.get(`${app.origin}/`);
       expect(home.status()).toBe(200);
       expect(names(await home.text()).title).toContain('Rowan Fixed');

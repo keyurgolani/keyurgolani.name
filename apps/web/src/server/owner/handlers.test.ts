@@ -70,6 +70,18 @@ const SAMPLE_INPUT: Record<string, unknown> = {
     documents: DOCUMENTS,
     baseRevisionId: null,
   },
+  'draft.diff': { draftId: DRAFT },
+  'draft.refreshSources': { draftId: DRAFT, expectedVersion: 1 },
+  'draft.changes.accept': {
+    draftId: DRAFT,
+    expectedVersion: 1,
+    changeIds: [`dch_${'0'.repeat(32)}`],
+  },
+  'draft.changes.dismiss': {
+    draftId: DRAFT,
+    expectedVersion: 1,
+    changeIds: [`dch_${'0'.repeat(32)}`],
+  },
   'draft.discard': { draftId: DRAFT },
   publish: { draftId: DRAFT, draftVersion: 1, expectedLiveRevisionId: null },
   rollback: { targetRevisionId: REVISION, expectedLiveRevisionId: null },
