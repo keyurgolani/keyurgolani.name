@@ -1,12 +1,12 @@
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import type { Worker } from '@playwright/test';
 import { expect, test } from '../harness/fixtures';
 import { DEMO_APP } from '../harness/profile-matrix';
-import { CANARY, HOSTILE_FIXTURES } from '../../apps/web/src/lib/demo/import/test-support/hostile';
+import type * as Hostile from '../../apps/web/src/lib/demo/import/test-support/hostile';
 
 // The demo's import in a browser (#9, PR 3; A8 and A9): each hostile fixture
 // goes through importFiles() and the real module worker, and comes back
@@ -30,9 +30,32 @@ const DEMO = { type: 'profile', description: 'demo' };
 test.use({ appOptions: DEMO_APP, bypassCSP: true });
 
 let outdir: string | undefined;
+let CANARY: string;
+let HOSTILE_FIXTURES: typeof Hostile.HOSTILE_FIXTURES;
 
 test.beforeAll(async () => {
   outdir = mkdtempSync(path.join(tmpdir(), 'kgn-demo-import-'));
+  // The fixtures come from the unit tests' own helper. Playwright's loader
+  // reads a TypeScript file beyond tests/ as CommonJS, and the helper reads
+  // @portfolio/schema's TypeScript source, so esbuild bundles it for Node
+  // into the same temp directory, keeping its own URL for the example files
+  // it reads.
+  const hostile = path.join(IMPORT_DIR, 'test-support', 'hostile.ts');
+  const hostileOut = path.join(outdir, 'hostile.mjs');
+  await build({
+    entryPoints: [hostile],
+    bundle: true,
+    format: 'esm',
+    platform: 'node',
+    target: 'node22',
+    outfile: hostileOut,
+    banner: {
+      js: "import { createRequire as __kgnCreateRequire } from 'node:module'; const require = __kgnCreateRequire(import.meta.url);",
+    },
+    define: { 'import.meta.url': JSON.stringify(pathToFileURL(hostile).href) },
+    logLevel: 'silent',
+  });
+  ({ CANARY, HOSTILE_FIXTURES } = (await import(pathToFileURL(hostileOut).href)) as typeof Hostile);
   await build({
     entryPoints: {
       index: path.join(IMPORT_DIR, 'index.ts'),
