@@ -131,6 +131,142 @@ test("sanitize-html's code or a map of it under static fails, and so does a miss
   );
 });
 
+/** A client reference manifest for `entry`, as Next writes it, naming `entryFiles` and each client module's `chunks`. */
+const manifest = (entry, entryFiles, ...modules) =>
+  `globalThis.__RSC_MANIFEST = globalThis.__RSC_MANIFEST || {};\nglobalThis.__RSC_MANIFEST[${JSON.stringify(`/${entry}`)}] = ${JSON.stringify(
+    {
+      moduleLoading: { prefix: '' },
+      clientModules: Object.fromEntries(
+        modules.map((chunks, index) => [
+          `[project]/m${index}.tsx`,
+          { id: index, name: '*', chunks, async: false },
+        ]),
+      ),
+      entryCSSFiles: {},
+      entryJSFiles: { [`[project]/apps/web/src/app/${entry}`]: entryFiles },
+    },
+  )};\n`;
+
+/** Turbopack's on-demand load of `chunks`, as a browser chunk holds it. */
+const loads = (...chunks) =>
+  `e.v(t=>Promise.all(${JSON.stringify(chunks)}.map(t=>e.l(t))).then(()=>t(1)))`;
+
+/**
+ * A build with Demo Studio's local frame (#9): its page renders no Markdown on
+ * the server, and in the browser its shell loads the post-pass on demand,
+ * which no other page or route reaches.
+ */
+const LOCAL = {
+  ...WIRED,
+  'build-manifest.json': JSON.stringify({ rootMainFiles: ['static/chunks/main.js'] }),
+  'static/chunks/main.js': 'console.log("main")',
+  'server/app/(preview)/preview/local/page.js': page('l.js'),
+  'server/chunks/ssr/l.js': '',
+  'server/chunks/ssr/l.js.map': map('../../../../apps/web/src/app/(preview)/_local/local-preview.tsx'),
+  'server/app/(preview)/preview/local/page_client-reference-manifest.js': manifest(
+    '(preview)/preview/local/page',
+    ['static/chunks/shell.js'],
+    ['/_next/static/chunks/shell.js', '/_next/static/chunks/frame.js'],
+  ),
+  'static/chunks/shell.js': 'console.log("shell")',
+  'static/chunks/frame.js': loads('static/chunks/pass.js'),
+  'static/chunks/pass.js': 'a.recursiveEscape=1;a.allowedSchemesAppliedToAttributes=2',
+  'static/chunks/pass.js.map': map('../node_modules/sanitize-html/index.js'),
+  'server/app/(site)/page_client-reference-manifest.js': manifest(
+    '(site)/page',
+    ['static/chunks/app.js'],
+    ['/_next/static/chunks/app.js'],
+  ),
+  'server/app/(studio)/studio/page_client-reference-manifest.js': manifest(
+    '(studio)/studio/page',
+    ['static/chunks/studio.js'],
+  ),
+  'static/chunks/studio.js': loads('static/chunks/studio-later.js'),
+  'static/chunks/studio-later.js': 'console.log("later")',
+  'server/app/api/health/route_client-reference-manifest.js': manifest('api/health/route', []),
+};
+
+test("the post-pass may sit under static only in chunks Demo Studio's local frame alone reaches, by the build's client reference manifests, and its page loads no renderer on the server (#9)", (t) => {
+  assert.equal(checkMarkdownPass(nextTree(t, LOCAL)), null);
+  // With no local frame in the build, nothing under static may hold it.
+  const without = nextTree(
+    t,
+    Object.fromEntries(Object.entries(LOCAL).filter(([file]) => !file.includes('preview/local'))),
+  );
+  assert.match(checkMarkdownPass(without), /static\/chunks\/pass\.js holds sanitize-html's code \(recursiveEscape\)/);
+  assert.match(checkMarkdownPass(without), /static\/chunks\/pass\.js\.map maps sanitize-html/);
+  // A marker chunk no manifest reaches isn't the local frame's.
+  const stray = nextTree(t, { ...LOCAL, 'static/chunks/stray.js': 'a.recognizeSelfClosing=1' });
+  assert.match(
+    checkMarkdownPass(stray),
+    /static\/chunks\/stray\.js holds sanitize-html's code \(recognizeSelfClosing\)/,
+  );
+  // The local page's server render with the renderer fails, by name.
+  const rendered = nextTree(t, {
+    ...LOCAL,
+    'server/chunks/ssr/l.js.map': map('../../../../packages/kit/src/markdown.ts', PASS),
+  });
+  assert.match(
+    checkMarkdownPass(rendered),
+    /server\/app\/\(preview\)\/preview\/local\/page\.js, Demo Studio's local frame, loads a server chunk with the renderer \(packages\/kit\/src\/markdown\.ts\)/,
+  );
+});
+
+test("a chunk with the post-pass that the local frame shares with any other page or route fails, however the other reaches it (#9)", (t) => {
+  const shared = 'reaches it beside server/app/\\(preview\\)/preview/local/page';
+  const cases = {
+    // Another page's manifest names it for a client module.
+    'a client module of another page': {
+      'server/app/(site)/page_client-reference-manifest.js': manifest(
+        '(site)/page',
+        ['static/chunks/app.js'],
+        ['/_next/static/chunks/app.js', '/_next/static/chunks/pass.js'],
+      ),
+    },
+    // Another page's entry names it.
+    "another page's entry": {
+      'server/app/(site)/page_client-reference-manifest.js': manifest('(site)/page', [
+        'static/chunks/app.js',
+        'static/chunks/pass.js',
+      ]),
+    },
+    // Studio's chunk loads it on demand, a step further out.
+    "Studio's chunk, on demand": {
+      'static/chunks/studio-later.js': loads('static/chunks/frame.js'),
+    },
+    // A route handler's manifest names it.
+    "a route's manifest": {
+      'server/app/api/health/route_client-reference-manifest.js': manifest('api/health/route', [
+        'static/chunks/pass.js',
+      ]),
+    },
+  };
+  for (const [what, files] of Object.entries(cases)) {
+    const problem = checkMarkdownPass(nextTree(t, { ...LOCAL, ...files }));
+    assert.match(problem ?? '', new RegExp(`static/chunks/pass\\.js holds sanitize-html's code \\(recursiveEscape\\), and \\S+ ${shared}`), what);
+    assert.match(problem ?? '', new RegExp(`static/chunks/pass\\.js\\.map maps sanitize-html, and \\S+ ${shared}`), what);
+  }
+  // The chunk every page loads reaching it reaches it from every page.
+  const everywhere = checkMarkdownPass(
+    nextTree(t, { ...LOCAL, 'static/chunks/main.js': loads('static/chunks/pass.js') }),
+  );
+  assert.match(
+    everywhere ?? '',
+    /static\/chunks\/pass\.js holds sanitize-html's code \(recursiveEscape\), and server\/app\/\(site\)\/page, server\/app\/\(studio\)\/studio\/page, server\/app\/api\/health\/route reaches it beside/,
+  );
+  // A manifest the check can't read could reach it, so it fails too.
+  const unreadable = checkMarkdownPass(
+    nextTree(t, {
+      ...LOCAL,
+      'server/app/(studio)/studio/page_client-reference-manifest.js': 'self.__RSC_MANIFEST=x',
+    }),
+  );
+  assert.match(
+    unreadable ?? '',
+    /static\/chunks\/pass\.js holds sanitize-html's code \(recursiveEscape\), and server\/app\/\(studio\)\/studio\/page has a client reference manifest the check can't read/,
+  );
+});
+
 test("CI's build job runs the check right after the standalone check", () => {
   const workflow = parseYaml(
     readFileSync(path.join(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8'),
