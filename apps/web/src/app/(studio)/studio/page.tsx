@@ -1,5 +1,9 @@
-import { getDeploymentState } from '~/server/config-store';
+import { frameSandbox } from '~/lib/preview-frame';
+import { getDeploymentState, requireDeploymentConfig } from '~/server/config-store';
 import { servedPage } from '~/server/page-guard';
+import { previewAppearanceOptions } from '~/server/preview-options';
+import { signInLocation } from '~/server/return-to';
+import { appearanceCatalog } from '~/server/studio-appearance';
 import { studioPolicy } from '~/server/studio-policy';
 import { requireOwnerPage } from '~/server/studio-guard';
 import { StudioShell } from '../_components/shell/studio-shell';
@@ -17,7 +21,25 @@ async function Studio() {
   const { authorized, csrfToken } = await requireOwnerPage('studio.view');
   const state = getDeploymentState();
   const policy = studioPolicy(state?.config.profile ?? 'owner', authorized.session);
-  return <StudioShell csrfToken={csrfToken} policy={policy} />;
+  const config = requireDeploymentConfig();
+  const previewOrigin = config.previewOrigin ?? null;
+  // The Appearance workspace's preview, as /studio/preview decides it: only for a session that may preview.
+  const preview = policy.allowed.includes('preview.grant')
+    ? {
+        sandbox: frameSandbox(config.profile, previewOrigin, true),
+        previewOrigin,
+        appearanceOptions: previewAppearanceOptions(),
+        signIn: signInLocation('session_ended', '/studio#appearance'),
+      }
+    : null;
+  return (
+    <StudioShell
+      csrfToken={csrfToken}
+      policy={policy}
+      appearance={appearanceCatalog()}
+      preview={preview}
+    />
+  );
 }
 
 export default servedPage('/studio', Studio);

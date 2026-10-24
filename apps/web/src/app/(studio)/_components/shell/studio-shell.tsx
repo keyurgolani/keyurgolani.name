@@ -38,6 +38,8 @@ import { ConflictPanel, OrphanPanel } from './conflict-panel';
 import { SignOut } from './sign-out';
 import { SourceMode } from './source-mode';
 import { ValidationSummary } from './validation-summary';
+import { AppearanceWorkspace, type PreviewSetup } from './appearance-workspace';
+import type { AppearanceCatalog, SiteEdit } from '~/lib/studio/appearance';
 
 // The Owner Studio shell (#8, Slice 1): the task navigation, the textual
 // state model, always on screen, and the content task's expert source mode
@@ -77,7 +79,19 @@ function tabStorage(): Storage | null {
   }
 }
 
-export function StudioShell({ csrfToken, policy }: { csrfToken: string; policy: StudioPolicy }) {
+export function StudioShell({
+  csrfToken,
+  policy,
+  appearance,
+  preview,
+}: {
+  csrfToken: string;
+  policy: StudioPolicy;
+  /** What the Appearance workspace may offer, from this build's registry. */
+  appearance: AppearanceCatalog;
+  /** The preview's sandbox, origin, and override options, or null when the session can't preview. */
+  preview: PreviewSetup | null;
+}) {
   const tasks = useMemo(() => tasksFor(policy.allowed), [policy.allowed]);
   const [task, setTask] = useState<TaskId>(tasks[0]?.id ?? 'content');
   const [session, dispatch] = useReducer(draftSession, INITIAL_SESSION);
@@ -299,6 +313,30 @@ export function StudioShell({ csrfToken, policy }: { csrfToken: string; policy: 
     }
   }
 
+  /** Applies the Appearance workspace's edits as a new draft version, through #4's applyEdits. */
+  async function applyAppearance(edits: SiteEdit[]) {
+    const current = latest.current;
+    if (!backend || !current.draft || current.saving || isDirty(current) || edits.length === 0)
+      return;
+    dispatch({ type: 'save-started' });
+    const result = await backend.applyEdits({
+      draftId: current.draft.draftId,
+      expectedVersion: current.draft.version,
+      edits,
+    });
+    if (result.kind === 'saved') {
+      dispatch({ type: 'applied', draft: result.draft });
+      setNotice(`Applied the appearance as draft version ${result.draft.version}.`);
+    } else if (result.kind === 'conflict') {
+      // Nothing of this tab's is unsaved, so the newer version just loads.
+      setNotice(`Not applied: version ${result.theirs.version} was saved first. It shows now.`);
+      await load(backend);
+    } else if (result.kind === 'failed') {
+      dispatch({ type: 'failed', error: result.message });
+      setNotice(`Not applied. ${result.message}`);
+    }
+  }
+
   async function start() {
     if (!backend || session.saving) return;
     dispatch({ type: 'save-started' });
@@ -451,6 +489,17 @@ export function StudioShell({ csrfToken, policy }: { csrfToken: string; policy: 
               <p className="studio-task__pending">{active.pending}</p>
             ) : active.id === 'validation' ? (
               <ValidationSummary draft={session.draft} dirty={dirty} />
+            ) : active.id === 'appearance' ? (
+              <AppearanceWorkspace
+                draft={session.draft}
+                dirty={dirty}
+                saving={session.saving}
+                canWrite={canWrite && session.conflict === null && session.orphan === null}
+                catalog={appearance}
+                csrfToken={csrfToken}
+                preview={preview}
+                onApply={(edits) => void applyAppearance(edits)}
+              />
             ) : session.draft && session.local ? (
               <SourceMode
                 documents={session.local}

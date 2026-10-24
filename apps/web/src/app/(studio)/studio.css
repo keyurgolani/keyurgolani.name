@@ -595,3 +595,92 @@
   margin: 0 0 0.5rem;
   font-size: 1.125rem;
 }
+
+/* Item focus (#8, Slice 4 item 6): the section a form item selected,
+   outlined over the frame, outside its document, for a moment. */
+.preview-surface__focus {
+  position: absolute;
+  box-sizing: border-box;
+  border: 3px solid var(--studio-ink);
+  outline: 2px solid var(--studio-canvas);
+  pointer-events: none;
+}
+
+/* The Appearance workspace (#8, Slice 5). */
+.studio-appearance {
+  display: grid;
+  gap: 2rem;
+}
+
+.studio-appearance__form {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.studio-appearance__axis {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--studio-rule);
+  background: var(--studio-surface);
+}
+
+.studio-appearance__axis legend {
+  padding: 0 0.25rem;
+  font-weight: 650;
+}
+
+.studio-appearance__axis .studio-input {
+  max-width: 28rem;
+}
+
+.studio-appearance__facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.25rem 1rem;
+  margin: 0;
+  color: var(--studio-muted);
+}
+
+.studio-appearance__facts dt {
+  font-weight: 600;
+}
+
+.studio-appearance__facts dd {
+  margin: 0;
+}
+
+.studio-appearance__fact {
+  margin: 0;
+  font-weight: 600;
+}
+
+.studio-appearance__control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+}
+
+.studio-appearance__radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+}
+
+.studio-appearance__findings h3,
+.studio-appearance__preview h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.125rem;
+}
+
+.studio-appearance__findings ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.studio-appearance__preview {
+  display: grid;
+  gap: 0.75rem;
+}

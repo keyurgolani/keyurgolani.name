@@ -36,8 +36,7 @@ export const STUDIO_TASKS: readonly StudioTask[] = Object.freeze([
     id: 'appearance',
     label: 'Appearance',
     capability: 'draft.write',
-    pending:
-      "The appearance workspace, with a preview of the draft, arrives with a later Studio release. Until then, edit the site document's appearance in the content source.",
+    pending: null,
   },
   {
     id: 'site',

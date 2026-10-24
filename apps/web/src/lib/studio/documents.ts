@@ -40,9 +40,11 @@ export interface DraftFinding {
   readonly remediation: string;
 }
 
-/** A draft's document, with the store's findings on it. */
+/** A draft's document, with the store's findings on it and the model it parsed to, if it did. */
 export interface DraftDocument extends SourceDocument {
   readonly diagnostics: readonly DraftFinding[];
+  /** What #4 parsed the text to, or null when it didn't parse. Studio reads it, and never writes it back. */
+  readonly model?: unknown;
 }
 
 /** #3's working draft, as far as Studio reads it. */

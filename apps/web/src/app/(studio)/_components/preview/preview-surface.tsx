@@ -95,7 +95,16 @@ export interface PreviewSurfaceProps {
 export interface PreviewSurfaceHandle {
   navigate(route: string): boolean;
   scrollTo(position: ScrollPosition): boolean;
+  /**
+   * Item focus (#8, Slice 4 item 6): scrolls `anchor`'s section to the top
+   * of the frame and outlines it there, from the frame's own `rect`. The
+   * frame's document is left as a visitor's: nothing in it changes.
+   */
+  focus(anchor: string): boolean;
 }
+
+/** How long a focused section's outline shows. */
+const FOCUS_OUTLINE_MS = 2500;
 
 type Phase = 'loading' | 'ready' | 'failed' | 'blocked' | 'outdated' | 'expired';
 
@@ -202,6 +211,14 @@ export function PreviewSurface(props: PreviewSurfaceProps) {
   const [link, setLink] = useState<LinkTarget | null>(null);
   const [frameKey, setFrameKey] = useState(0);
   const [scale, setScale] = useState(1);
+  /** The section item focus asked for, and where the frame says it is, in its own viewport. */
+  const focusing = useRef<string | null>(null);
+  const [outline, setOutline] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
 
   const settle = useCallback((next: Phase) => {
     clearTimeout(timers.current.ready);
@@ -239,6 +256,11 @@ export function PreviewSurface(props: PreviewSurfaceProps) {
               },
               navigated: ({ route }) => latest.current.props.onNavigated?.(route),
               scrolled: (position) => latest.current.props.onScrolled?.(position),
+              rect: ({ anchor, rect }) => {
+                if (focusing.current !== anchor) return;
+                focusing.current = null;
+                setOutline(rect);
+              },
               status: ({ state }) => {
                 if (state === 'ready') settle('ready');
                 else if (state === 'version_mismatch') settle('outdated');
@@ -361,9 +383,24 @@ export function PreviewSurface(props: PreviewSurfaceProps) {
           progress,
           seq: (scrollSteps.current += 1),
         }),
+      focus: (anchor) => {
+        focusing.current = anchor;
+        return sendSafely(channel.current, 'scroll-to', {
+          anchor,
+          progress: 0,
+          seq: (scrollSteps.current += 1),
+        });
+      },
     }),
     [],
   );
+
+  // A focused section's outline fades after a moment, and goes with the frame's next load.
+  useEffect(() => {
+    if (!outline) return;
+    const timer = setTimeout(() => setOutline(null), FOCUS_OUTLINE_MS);
+    return () => clearTimeout(timer);
+  }, [outline]);
 
   // JavaScript on or off is a frame of its own, with its own sandbox, for the same grant.
   const wasJavaScript = useRef(javascript);
@@ -488,6 +525,19 @@ export function PreviewSurface(props: PreviewSurfaceProps) {
             transform: `scale(${scale})`,
           }}
         />
+        {outline && phase === 'ready' ? (
+          <div
+            className="preview-surface__focus"
+            aria-hidden="true"
+            data-testid="preview-focus"
+            style={{
+              insetInlineStart: `${Math.max(0, outline.x) * scale}px`,
+              insetBlockStart: `${Math.max(0, outline.y) * scale}px`,
+              inlineSize: `${outline.width * scale}px`,
+              blockSize: `${Math.min(outline.height, viewport.height) * scale}px`,
+            }}
+          />
+        ) : null}
       </div>
       {phase === 'failed' ? (
         <div className="preview-surface__state">

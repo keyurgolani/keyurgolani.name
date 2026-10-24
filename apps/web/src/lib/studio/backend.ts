@@ -44,6 +44,17 @@ export interface StudioBackend {
     readonly expectedVersion: number;
     readonly documents: SourceDocuments;
   }): Promise<SaveResult>;
+  /** Applies #4 edits by JSON pointer over version `expectedVersion` of the working draft. */
+  applyEdits(input: {
+    readonly draftId: string;
+    readonly expectedVersion: number;
+    readonly edits: readonly {
+      readonly document: 'portfolio' | 'site' | 'media';
+      readonly pointer: string;
+      readonly op: 'set' | 'delete';
+      readonly value?: unknown;
+    }[];
+  }): Promise<SaveResult>;
   /** Ends the session, telling the other tabs the owner's choice for the journal. True when the server ended it. */
   signOut(choice: 'keep' | 'discard'): Promise<boolean>;
 }

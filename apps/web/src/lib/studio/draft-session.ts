@@ -63,6 +63,8 @@ export type SessionAction =
   | { readonly type: 'edited'; readonly name: DocumentName; readonly sourceText: string }
   | { readonly type: 'save-started' }
   | { readonly type: 'saved'; readonly draft: StudioDraft }
+  /** The store changed the draft itself, as applyEdits does: the editor takes its text. */
+  | { readonly type: 'applied'; readonly draft: StudioDraft }
   | { readonly type: 'conflicted'; readonly theirs: ConflictingDraft }
   | { readonly type: 'keep-mine' }
   | { readonly type: 'take-theirs' }
@@ -134,6 +136,15 @@ export function draftSession(session: DraftSession, action: SessionAction): Draf
         saving: false,
         draft: action.draft,
         local: session.local ?? sourceOf(action.draft),
+        conflict: null,
+        restored: false,
+      };
+    case 'applied':
+      return {
+        ...session,
+        saving: false,
+        draft: action.draft,
+        local: sourceOf(action.draft),
         conflict: null,
         restored: false,
       };
