@@ -205,16 +205,19 @@ test('every focusable part draws its focus ring in the accessibility layer, past
     outline: 'var(--ui-focus-width) var(--ui-focus-style) var(--color-focus)',
     'outline-offset': 'var(--ui-focus-offset)',
   });
-  // A language may set the outline a focused part draws, even none, and the
-  // compiler puts its rules in the language layer, which comes before the
-  // accessibility layer: the ring wins, and the language shapes it only
-  // through the focus tokens. tests/appearance renders the same case.
+  // #20's lint refuses a language that turns the outline off. Past it, the
+  // compiler puts a language's rules in the language layer, which comes
+  // before the accessibility layer, so the ring would still win, and a
+  // language shapes it only through the focus tokens. tests/appearance
+  // renders that case.
   for (const hiding of [
     '[data-ui-slot]:focus-visible { outline-style: none; }',
     "[data-ui-slot='action']:focus-visible { outline: none; }",
   ]) {
-    assert.ok(readLanguageStylesheet(hiding).ok, hiding);
+    const read = readLanguageStylesheet(hiding);
+    assert.ok(!read.ok && read.problems.some(({ rule }) => rule === 'focus-outline'), hiding);
   }
+  assert.ok(readLanguageStylesheet('[data-ui-slot]:focus-visible { outline-offset: 4px; }').ok);
   const order = LAYER_ORDER.replace(/^@layer |;$/g, '').split(', ');
   assert.ok(order.indexOf('language') < order.indexOf('accessibility'));
   assert.equal(order.at(-1), 'accessibility');

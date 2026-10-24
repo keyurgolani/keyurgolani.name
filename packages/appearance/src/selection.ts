@@ -40,7 +40,7 @@ const INSTALL = 'pnpm --filter @portfolio/web add <package>';
 
 /**
  * Why `value` can't go on `axis` of `current`, or null when it can: it must
- * be well formed, registered on that axis (a Research pack counts), and,
+ * be well formed, registered on that axis (a Research record never is), and,
  * between a scheme and an explicit light or dark mode, compatible with the
  * other. A mode the scheme lacks is refused, never fixed by changing
  * another value. Messages repeat only ids the registry registers.

@@ -74,7 +74,7 @@ test("each scheme's base sets are derived once, and a generator scheme has both 
   );
 });
 
-test('the selectable ids leave out the fallback composition and Research packs', () => {
+test('the selectable ids leave out the fallback composition, and no Research record registers', () => {
   const registry = testRegistry();
   assert.deepEqual(selectableIds(registry, 'variant'), ['acme-gallery', 'editorial-evidence']);
   assert.deepEqual(selectableIds(registry, 'colorScheme'), [

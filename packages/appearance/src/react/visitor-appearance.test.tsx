@@ -80,7 +80,7 @@ test('the model has one control per selectable axis, in axis order, and none und
   assert.deepEqual(model({ visitorControls: locked }).controls, []);
 });
 
-test('packs are grouped by tier with Stable first, Research packs and unrenderable generated schemes left out', () => {
+test('packs are grouped by tier with Stable first, unrenderable generated schemes left out', () => {
   const scheme = model().controls[0]!;
   assert.deepEqual(
     scheme.groups.map((group) => [group.label, group.choices.map((choice) => choice.value)]),
@@ -90,7 +90,7 @@ test('packs are grouped by tier with Stable first, Research packs and unrenderab
       ['Experimental', ['fixture-dark-only']],
     ],
   );
-  // fixture-seed and fixture-asset are generated, and nothing generated them; fixture-research is Research.
+  // fixture-seed and fixture-asset are generated, and nothing generated them.
   const generated = model({
     generated: {
       'fixture-seed': {
