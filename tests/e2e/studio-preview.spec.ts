@@ -361,9 +361,14 @@ test(
     await expect(page.locator('.preview-surface')).toHaveCount(0);
     release();
     await expect.poll(() => revoked).toContain(minted);
-    // The server agrees: the grant is no longer active.
-    const status = await command(page, csrf, 'preview.grant.status', { grant: minted });
-    expect(status.body.data?.status).not.toBe('active');
+    // The server agrees: the grant is no longer active, once the revoke the
+    // page sent has been answered.
+    await expect
+      .poll(
+        async () =>
+          (await command(page, csrf, 'preview.grant.status', { grant: minted })).body.data?.status,
+      )
+      .not.toBe('active');
   },
 );
 
