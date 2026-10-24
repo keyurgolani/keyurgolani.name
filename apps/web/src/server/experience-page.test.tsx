@@ -14,6 +14,7 @@ import {
 } from '@portfolio/appearance';
 import { REGISTRY } from '~/lib/variants';
 import { GET as schemeRoute } from '../app/(site)/%5Fportfolio/scheme/[file]/route';
+import { appearancePreference } from './appearance-preference';
 import type { LiveRevision } from './catalog-port';
 import { recordingLive } from './composition';
 import { readDeploymentConfig } from './config';
@@ -455,12 +456,20 @@ test('a site with a generated scheme renders it with its stylesheet linked from 
   const href = hrefs.find((each) => each.startsWith('/_portfolio/scheme/brand-seed.'));
   assert.ok(href, JSON.stringify(hrefs));
   assert.match(href, /^\/_portfolio\/scheme\/brand-seed\.[0-9a-f]{12}\.css$/);
-  // The control loads that file before it applies the scheme.
-  const choice = control?.model.controls
-    .find((each) => each.axis === 'colorScheme')
-    ?.groups.flatMap((group) => group.choices)
-    .find((each) => each.value === 'brand-seed');
-  assert.equal(choice?.stylesheet, href);
+  // The control's model names no stylesheet (#132), and a save of the
+  // scheme answers with that same file, which the control preloads.
+  assert.ok(control, 'the page has its control');
+  assert.doesNotMatch(JSON.stringify(control.model), /_portfolio\/scheme\//);
+  const saved = await appearancePreference(
+    new Request('https://rowan.test/api/appearance', {
+      method: 'POST',
+      headers: { origin: 'https://rowan.test', 'content-type': 'application/json' },
+      body: JSON.stringify({ scheme: 'brand-seed' }),
+    }),
+    { origin: 'https://rowan.test' },
+  );
+  assert.equal(saved.status, 200);
+  assert.deepEqual(await saved.json(), { stylesheets: [href] });
   // And the link serves the stored sets, compiled.
   const file = href.slice('/_portfolio/scheme/'.length);
   const response = await schemeRoute(new Request(`https://rowan.test${href}`), {
