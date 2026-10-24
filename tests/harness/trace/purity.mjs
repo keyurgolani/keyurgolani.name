@@ -531,8 +531,8 @@ export function purityProblems(page) {
  * The pack stylesheets a page's RSC payload names that it doesn't render
  * (#19): every /_portfolio/pack/ file in the payload, less the platform
  * stylesheet, the packs the document boundary's data-<kind> attributes
- * name, and the error page's fallback packs, which a page in a document
- * boundary names for the error page it may need. The visitor control's
+ * name, and, in a document boundary, the error page's fallback packs, which
+ * it names for the error page it may need, exactly as purityProblems() allows. The visitor control's
  * model once named every registered pack's stylesheet here, so a page
  * carried the whole catalog's URLs; it names none now, and the preference
  * route answers a save with the new selection's.
@@ -545,12 +545,16 @@ export function purityProblems(page) {
  */
 export function unrenderedPayloadPacks(html, manifest, boundary, errorPacks = {}) {
   const allowed = new Set();
-  if (manifest.platform?.url && boundary?.['data-appearance-boundary'] === 'document') {
-    allowed.add(manifest.platform.url);
-  }
+  // Only a document boundary links the platform stylesheet and names the
+  // error page's packs, as purityProblems() allows them.
+  const document = boundary?.['data-appearance-boundary'] === 'document';
+  if (manifest.platform?.url && document) allowed.add(manifest.platform.url);
   for (const unit of manifest.units) {
     if (!PACK_KINDS.includes(unit.kind) || !unit.stylesheet) continue;
-    if (boundary?.[`data-${unit.kind}`] === unit.id || errorPacks[unit.kind] === unit.id) {
+    if (
+      boundary?.[`data-${unit.kind}`] === unit.id ||
+      (document && errorPacks[unit.kind] === unit.id)
+    ) {
       allowed.add(unit.stylesheet.url);
     }
   }

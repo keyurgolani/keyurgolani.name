@@ -192,13 +192,15 @@ test(
     expect(answer.headers()['cache-control']).toBe('private, no-store');
     // The answer names the saved packs' stylesheets, which the control preloads
     // before it refreshes: the page names none it doesn't render (#6's purity).
+    // The page already links warm-parchment's, so a mode alone preloads nothing.
     const { stylesheets } = (await answer.json()) as { stylesheets: string[] };
     expect(stylesheets).toEqual([
       expect.stringMatching(/^\/_portfolio\/pack\/warm-parchment\.[0-9a-f]{12}\.css$/),
     ]);
+    await expect(page.locator(`link[rel~="stylesheet"][href="${stylesheets[0]}"]`)).toHaveCount(1);
     await expect(
-      page.locator(`link[rel="preload"][as="style"][href="${stylesheets[0]}"]`),
-    ).toHaveCount(1);
+      page.locator('link[rel="preload"][as="style"][href^="/_portfolio/pack/"]'),
+    ).toHaveCount(0);
     await expect(page.locator(BOUNDARY)).toHaveAttribute('data-display-mode', 'dark');
     expect(loads).toBe(0);
     const stored = (await page.context().cookies(app.origin)).find(

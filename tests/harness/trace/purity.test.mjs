@@ -685,4 +685,12 @@ test("a page's RSC payload names no pack stylesheet but those it renders, the pl
     '/_portfolio/pack/night-ink.ffffffffffff.css',
     '/_portfolio/pack/warm-parchment.eeeeeeeeeeee.css',
   ]);
+  // Nor the error page's packs, as purityProblems() allows them only in a document boundary.
+  assert.deepEqual(
+    unrenderedPayloadPacks(rendered, MANIFEST, { 'data-color-scheme': 'night-ink' }, errorPacks),
+    [
+      '/_portfolio/pack/_platform.111111111111.css',
+      '/_portfolio/pack/warm-parchment.eeeeeeeeeeee.css',
+    ],
+  );
 });

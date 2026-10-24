@@ -12,7 +12,7 @@ import {
 import { elements, html, one, slotted, text } from '../test-support/markup';
 import { testRegistry } from '../test-support/packs';
 import { PresentationBoundary, saveAppearance, VisitorAppearance, type SaveDeps } from '.';
-import { packStylesheets } from './save';
+import { MAX_PRELOADS, packStylesheets, postJson, preloadStylesheet } from './save';
 
 // VisitorAppearance (#19, Slice 3, item 3), on its own: Slice 4 adds POST
 // /api/appearance and renders it in #5's VisitorControlSlot, so these tests
@@ -344,6 +344,12 @@ test('it preloads only same-origin pack paths from the answer, each once', async
     '/_portfolio/pack/../../x.css',
     '/elsewhere.css',
     7 as never,
+    // Each reaches one anchor of the pack path's pattern: the start, then the end.
+    `https://evil.example${pack('nord')}`,
+    `//evil.example${pack('nord')}`,
+    `${pack('nord')}?x`,
+    `${pack('nord')}/x`,
+    'data:text/css,',
   ]);
   const saving = saveAppearance({ action: '/a', body: { mode: 'dark' } }, deps);
   await flush();
@@ -434,4 +440,108 @@ test('a newer save supersedes an older one, before or after its post', async () 
   await flush();
   preloading.abort();
   assert.equal(await saving, 'superseded');
+});
+
+/** A minimal document: its head, the links it holds, and a nonce'd element when `nonce` is given. */
+function fakeDocument({ nonce, linked = [] }: { nonce?: string; linked?: readonly string[] } = {}) {
+  type Listener = () => void;
+  const head: FakeLink[] = linked.map((href) => link({ rel: 'stylesheet', href }));
+  function link(attributes: Record<string, string> = {}) {
+    const listeners = new Map<string, Listener>();
+    const element = {
+      rel: attributes.rel ?? '',
+      as: '',
+      href: attributes.href ?? '',
+      nonce: '',
+      getAttribute: (name: string) => (name === 'href' ? element.href : null),
+      addEventListener: (type: string, listener: Listener) => listeners.set(type, listener),
+      remove: () => head.splice(head.indexOf(element), 1),
+      fire: (type: string) => listeners.get(type)?.(),
+    };
+    return element;
+  }
+  type FakeLink = ReturnType<typeof link>;
+  const carrier = nonce ? { nonce } : null;
+  return {
+    head: { append: (element: FakeLink) => head.push(element) },
+    createElement: () => link(),
+    querySelector: (selector: string) => (selector.includes('[nonce]') ? carrier : null),
+    querySelectorAll: (selector: string) =>
+      selector.startsWith('link[rel~="stylesheet"]')
+        ? head.filter(({ rel }) => rel === 'stylesheet')
+        : [],
+    links: head,
+  };
+}
+
+/** Runs `run` with `fake` as the global document. */
+async function withDocument<T>(fake: unknown, run: () => Promise<T>): Promise<T> {
+  const before = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  Object.defineProperty(globalThis, 'document', {
+    value: fake,
+    configurable: true,
+    writable: true,
+  });
+  try {
+    return await run();
+  } finally {
+    if (before) Object.defineProperty(globalThis, 'document', before);
+    else delete (globalThis as { document?: unknown }).document;
+  }
+}
+
+test("a preload link takes the page's CSP nonce, where the page has one, and only that link does", async () => {
+  for (const nonce of ['abc123', undefined]) {
+    const fake = fakeDocument(nonce ? { nonce } : {});
+    await withDocument(fake, async () => {
+      const loading = preloadStylesheet(pack('nord'), new AbortController().signal);
+      const [added] = fake.links;
+      assert.equal(added?.rel, 'preload');
+      assert.equal(added?.as, 'style');
+      assert.equal(added?.href, pack('nord'));
+      assert.equal(added?.nonce, nonce ?? '', 'the nonce the page carries, or none');
+      added!.fire('load');
+      await loading;
+    });
+  }
+});
+
+test('a stylesheet the page already links preloads nothing, so a mode alone adds no link', async () => {
+  const fake = fakeDocument({ linked: [pack('warm-parchment')] });
+  await withDocument(fake, async () => {
+    const linked = preloadStylesheet(pack('warm-parchment'), new AbortController().signal);
+    assert.equal(fake.links.length, 1, "only the page's own link");
+    await linked;
+    const loading = preloadStylesheet(pack('nord'), new AbortController().signal);
+    assert.equal(fake.links.length, 2);
+    fake.links[1]!.fire('load');
+    await loading;
+  });
+});
+
+test("postJson reads the answer's pack paths alone, at most one per pack axis, whatever else it holds", async () => {
+  const before = globalThis.fetch;
+  const answer = (body: string, ok = true) => {
+    globalThis.fetch = (async () => new Response(body, { status: ok ? 200 : 400 })) as typeof fetch;
+  };
+  try {
+    const signal = new AbortController().signal;
+    answer(JSON.stringify({ stylesheets: [pack('nord')], extra: { stylesheets: ['/x.css'] } }));
+    assert.deepEqual(await postJson('/a', '{}', signal), { ok: true, stylesheets: [pack('nord')] });
+    answer(JSON.stringify({ stylesheets: pack('nord') }));
+    assert.deepEqual(await postJson('/a', '{}', signal), { ok: true, stylesheets: [] });
+    answer('not json');
+    assert.deepEqual(await postJson('/a', '{}', signal), { ok: true, stylesheets: [] });
+    answer('[1,2]');
+    assert.deepEqual(await postJson('/a', '{}', signal), { ok: true, stylesheets: [] });
+    const many = Array.from({ length: 1000 }, (_, index) => pack(`pack-${index}`));
+    answer(JSON.stringify({ stylesheets: many }));
+    const read = await postJson('/a', '{}', signal);
+    assert.equal(read.stylesheets!.length, MAX_PRELOADS);
+    assert.equal(MAX_PRELOADS, 3);
+    answer('{}', false);
+    assert.deepEqual(await postJson('/a', '{}', signal), { ok: false });
+  } finally {
+    globalThis.fetch = before;
+  }
 });

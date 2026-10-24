@@ -47,14 +47,17 @@ export const SAVE_TIMEOUT = 10_000;
 /** The stylesheet URLs a save takes from the route's answer: this origin's compiled pack files. */
 const PACK_PATH = /^\/_portfolio\/pack\/[a-z0-9][a-z0-9-]*\.[0-9a-f]{12}\.css$/;
 
-/** The answer's stylesheets that are pack paths on this origin, each once, and nothing else. */
+/** The most stylesheets a save preloads: one per pack axis, as the route names them. */
+export const MAX_PRELOADS = 3;
+
+/** The answer's stylesheets that are pack paths on this origin, each once, at most MAX_PRELOADS, and nothing else. */
 export function packStylesheets(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return [
     ...new Set(
       value.filter((href): href is string => typeof href === 'string' && PACK_PATH.test(href)),
     ),
-  ];
+  ].slice(0, MAX_PRELOADS);
 }
 
 class SaveTimeout extends Error {
@@ -121,13 +124,22 @@ function pageNonce(): string | undefined {
  * Loads a stylesheet through <link rel="preload" as="style">, which fetches
  * it without applying it, and resolves on the link's load event. Once the
  * page renders the new selection, its stylesheet link finds the file
- * already loaded. The link carries the page's CSP nonce, where the page has
- * one, as the page's own stylesheet links do.
+ * already loaded. A stylesheet the page already links resolves at once,
+ * with no link added. The link carries the page's CSP nonce, where the page
+ * has one, as the page's own stylesheet links do.
  */
 export function preloadStylesheet(href: string, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal.aborted) {
       reject(signal.reason);
+      return;
+    }
+    // A stylesheet the page already links is loaded: a mode alone preloads nothing.
+    const linked = [...document.querySelectorAll('link[rel~="stylesheet"]')].some(
+      (link) => link.getAttribute('href') === href,
+    );
+    if (linked) {
+      resolve();
       return;
     }
     const link = document.createElement('link');
