@@ -1,7 +1,8 @@
 import type { BackendFailure, SaveResult, StudioBackend } from '../studio/backend';
 import type { DraftDocument, LiveState, StudioDraft } from '../studio/documents';
 import { AXES, type CatalogAxis } from '../studio/appearance';
-import { SELECTION_KEY, type DemoStore } from './storage';
+import { importFiles as workerImport, type ImportInput, type ImportResult } from './import';
+import { SELECTION_KEY, WORKING_KEY, type DemoStore } from './storage';
 import {
   modeFits,
   selectionFrom,
@@ -15,19 +16,39 @@ import {
 // StudioBackend, kept in the visitor's browser. Nothing here reaches a
 // server: no fetch, no Studio operation, no owner session, and nothing to
 // publish, roll back, or read history from, which owner's adapter alone has.
-// The working copy is the bundled sample the page read through `sample.read`,
-// the same public documents /sample renders, with the visitor's selection on
-// its site appearance. This pull request edits the appearance alone: an edit
-// sets one of the five `/appearance/<axis>` pointers of the site document to
-// a value the catalog offers, and anything else is refused. Saving or
-// starting a draft isn't offered until the demo's local source (#9's import)
-// lands. Every selection change goes to the demo's own storage.
+// The source is the bundled sample the page read through `sample.read`, the
+// same public documents /sample renders, until the visitor imports a pair of
+// their own: then it's the local source, the working copy, kept in this tab's
+// sessionStorage under `portfolio-demo:v1:working` and nowhere else.
+// startDraft() starts that copy from the sample's documents, and saveDraft()
+// and importFiles() replace it with documents #4's validator took, in the
+// import's module worker: nothing parses on this thread. The visitor's
+// selection stays apart from both, so an edit sets one of the five
+// `/appearance/<axis>` pointers of the site to a value the catalog offers,
+// and anything else is refused. Every selection change goes to the demo's
+// own storage, and the URL never carries a source.
 
 /** The bundled sample as the page hands it over: the revision it is, and its documents with their models. */
 export interface DemoUnit {
   readonly revisionId: string;
   readonly documents: StudioDraft['documents'];
 }
+
+/** A document of the local source, as the import gave it: its name, format, and text. */
+export interface LocalSource {
+  readonly name: string;
+  readonly format: 'yaml' | 'json';
+  readonly text: string;
+}
+
+/** The local source's two documents, the frame's `document` message's own shape. */
+export interface LocalSources {
+  readonly portfolio: LocalSource;
+  readonly site: LocalSource;
+}
+
+/** How a pair of files is checked: the import's module worker, or a test's stand-in. */
+export type Importer = (files: readonly ImportInput[]) => Promise<ImportResult>;
 
 export interface BrowserBackendOptions extends SelectionRules {
   readonly unit: DemoUnit;
@@ -38,6 +59,8 @@ export interface BrowserBackendOptions extends SelectionRules {
   readonly initial?: DemoSelection;
   /** The working draft's date, for its record. */
   readonly now?: () => Date;
+  /** What checks an import or a save: the import's module worker when absent. */
+  readonly importer?: Importer;
 }
 
 /** Demo Studio's backend: the StudioBackend, and the selection's own reads and resets. */
@@ -56,16 +79,31 @@ export interface DemoBackend extends StudioBackend {
    * sample.
    */
   showSource(defaults: DemoSelection | null, selection?: DemoSelection): DemoSelection;
-  /** Every `portfolio-demo:` key gone from both stores, and the sample's own selection back. */
+  /** Every `portfolio-demo:` key gone from both stores, the local source dropped, and the sample's own selection back. */
   resetAll(): DemoSelection;
+  /** The local source's documents while there is one, else null: the frame shows the sample. */
+  localSources(): LocalSources | null;
+  /** The documents an export writes: the local source's, else the sample's. */
+  sources(): LocalSources;
+  /**
+   * Imports a pair of files through the worker. What it imports becomes the
+   * local source, in place of any before it; what it refuses changes nothing.
+   */
+  importFiles(files: readonly ImportInput[]): Promise<ImportResult>;
 }
 
-/** The draft ID of the demo's one working copy. */
+/** The draft ID of the demo's sample, the source until an import. */
 export const DEMO_DRAFT_ID = 'demo-sample';
+/** The draft ID of the local source, the visitor's own imported pair. */
+export const LOCAL_DRAFT_ID = 'demo-local';
 
 /** What an edit, a save, or a draft the demo doesn't offer gets. */
 export const NOT_OFFERED =
   "The demo changes the appearance only. Editing content isn't part of the demo yet.";
+
+/** What a save gets while there is no local source to save over. */
+export const NOT_STARTED =
+  'Import a pair of documents first: the sample itself is never saved over.';
 
 const notOffered = (message = NOT_OFFERED): BackendFailure => ({
   kind: 'failed',
@@ -74,6 +112,54 @@ const notOffered = (message = NOT_OFFERED): BackendFailure => ({
 });
 
 const POINTER = /^\/appearance\/([A-Za-z]+)$/;
+
+const isSource = (value: unknown): value is LocalSource => {
+  const entry = record(value);
+  return (
+    typeof entry.name === 'string' &&
+    (entry.format === 'yaml' || entry.format === 'json') &&
+    typeof entry.text === 'string'
+  );
+};
+
+/** The working copy as stored, or null when there is none or it isn't one: read by shape, never parsed as a document. */
+export function storedWorking(store: DemoStore): LocalSources | null {
+  const text = store.read(WORKING_KEY);
+  if (text === null) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const sources = record(record(parsed).sources);
+  return isSource(sources.portfolio) && isSource(sources.site)
+    ? { portfolio: sources.portfolio, site: sources.site }
+    : null;
+}
+
+/** A pair of documents as the files the import reads: their own text as UTF-8 bytes. */
+function filesOf(documents: {
+  readonly portfolio: { readonly format: 'yaml' | 'json'; readonly text: string };
+  readonly site: { readonly format: 'yaml' | 'json'; readonly text: string };
+}): ImportInput[] {
+  const encoder = new TextEncoder();
+  return (['portfolio', 'site'] as const).map((name) => ({
+    name: `${name}.${documents[name].format === 'json' ? 'json' : 'yml'}`,
+    bytes: encoder.encode(documents[name].text),
+  }));
+}
+
+/** What a refused save says: the refusal's code, and how many findings, never a value from the files. */
+function refusal(result: Extract<ImportResult, { kind: 'refused' }>): BackendFailure {
+  const count = result.diagnostics.length;
+  const findings = count > 0 ? `, with ${count} finding${count === 1 ? '' : 's'}` : '';
+  return {
+    kind: 'failed',
+    code: 'validation_failed',
+    message: `The documents weren't saved: ${result.code.replace(/_/g, ' ')}${findings}.`,
+  };
+}
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -109,9 +195,13 @@ export function browserBackend(options: BrowserBackendOptions): DemoBackend {
   let defaults: DemoSelection = options.defaults;
   const rules: SelectionRules = { catalog: options.catalog, schemeModes: options.schemeModes };
   const now = options.now ?? (() => new Date());
+  const importer: Importer = options.importer ?? ((files) => workerImport(files));
   let selection: DemoSelection = options.initial ?? defaults;
   let version = 1;
   let updatedAt = now().toISOString();
+  // The local source: a reload in this tab brings back what the tab holds.
+  let local: LocalSources | null = storedWorking(store);
+  let models: { readonly portfolio?: unknown; readonly site?: unknown } = {};
 
   // While the reference shows, edits stay in the page: the stored selection
   // is the sample's, which a bare /studio opens on, never the reference's look.
@@ -120,7 +210,44 @@ export function browserBackend(options: BrowserBackendOptions): DemoBackend {
     if (!showingReference) store.write(SELECTION_KEY, JSON.stringify(selection));
   };
 
+  const sampleSource = (name: 'portfolio' | 'site'): LocalSource => {
+    const { format, sourceText } = unit.documents[name];
+    return { name: `${name}.${format === 'json' ? 'json' : 'yml'}`, format, text: sourceText };
+  };
+  const sampleSources = (): LocalSources => ({
+    portfolio: sampleSource('portfolio'),
+    site: sampleSource('site'),
+  });
+
+  /** `sources` as the working copy: in this tab's sessionStorage, and in memory. */
+  function adopt(sources: LocalSources, parsed: typeof models): StudioDraft {
+    local = { portfolio: sources.portfolio, site: sources.site };
+    models = parsed;
+    store.write(WORKING_KEY, JSON.stringify({ sources: local }));
+    version += 1;
+    updatedAt = now().toISOString();
+    return draft();
+  }
+
   function draft(): StudioDraft {
+    if (local) {
+      const document = (source: LocalSource, model: unknown): DraftDocument => ({
+        format: source.format,
+        sourceText: source.text,
+        diagnostics: [],
+        ...(model === undefined ? {} : { model }),
+      });
+      return {
+        draftId: LOCAL_DRAFT_ID,
+        version,
+        baseRevisionId: null,
+        updatedAt,
+        documents: {
+          portfolio: document(local.portfolio, models.portfolio),
+          site: document(local.site, models.site),
+        },
+      };
+    }
     const site: DraftDocument = unit.documents.site;
     const model = record(site.model);
     return {
@@ -130,14 +257,32 @@ export function browserBackend(options: BrowserBackendOptions): DemoBackend {
       updatedAt,
       documents: {
         ...unit.documents,
-        // The site's model carries the selection. Its text stays the sample's
-        // until the local source serializes a working copy (#9's import).
+        // The site's model carries the selection; its text stays the sample's.
         site: {
           ...site,
           model: { ...model, appearance: { ...record(model.appearance), ...selection } },
         },
       },
     };
+  }
+
+  /** Why an edit or a save naming `draftId` at `expectedVersion` can't go, or null when it can. */
+  function stale(draftId: string, expectedVersion: number): SaveResult | null {
+    if (draftId !== (local ? LOCAL_DRAFT_ID : DEMO_DRAFT_ID)) {
+      return { kind: 'failed', code: 'not_found', message: 'There is no such draft here.' };
+    }
+    if (expectedVersion !== version) {
+      const current = draft();
+      return {
+        kind: 'conflict',
+        theirs: {
+          draftId: current.draftId,
+          version: current.version,
+          documents: current.documents,
+        },
+      };
+    }
+    return null;
   }
 
   function moved(next: DemoSelection): DemoSelection {
@@ -159,23 +304,37 @@ export function browserBackend(options: BrowserBackendOptions): DemoBackend {
       } satisfies LiveState,
     }),
     workingDraft: async () => ({ kind: 'read', value: draft() }),
-    startDraft: async () => notOffered(),
-    saveDraft: async () => notOffered(),
+    // The local source, from the sample's own documents when there is none yet.
+    async startDraft(): Promise<SaveResult> {
+      if (local) return { kind: 'saved', draft: draft() };
+      return { kind: 'saved', draft: adopt(sampleSources(), {}) };
+    },
+    async saveDraft({ draftId, expectedVersion, documents }): Promise<SaveResult> {
+      if (!local) return notOffered(NOT_STARTED);
+      const problem = stale(draftId, expectedVersion);
+      if (problem) return problem;
+      const result = await importer(
+        filesOf({
+          portfolio: { format: documents.portfolio.format, text: documents.portfolio.sourceText },
+          site: { format: documents.site.format, text: documents.site.sourceText },
+        }),
+      );
+      if (result.kind !== 'imported') return refusal(result);
+      // Another save or an import may have moved it while the worker checked.
+      const later = stale(draftId, expectedVersion);
+      if (later) return later;
+      return { kind: 'saved', draft: adopt(result.unit.sources, result.unit.models) };
+    },
+    async importFiles(files) {
+      const result = await importer(files);
+      if (result.kind === 'imported') adopt(result.unit.sources, result.unit.models);
+      return result;
+    },
+    localSources: () => local,
+    sources: () => local ?? sampleSources(),
     async applyEdits({ draftId, expectedVersion, edits }): Promise<SaveResult> {
-      if (draftId !== DEMO_DRAFT_ID) {
-        return { kind: 'failed', code: 'not_found', message: 'There is no such draft here.' };
-      }
-      if (expectedVersion !== version) {
-        const current = draft();
-        return {
-          kind: 'conflict',
-          theirs: {
-            draftId: current.draftId,
-            version: current.version,
-            documents: current.documents,
-          },
-        };
-      }
+      const problem = stale(draftId, expectedVersion);
+      if (problem) return problem;
       // Every edit is checked before any applies, against the selection as it builds.
       let next: Record<CatalogAxis, string> = { ...selection };
       for (const edit of edits) {
@@ -215,6 +374,8 @@ export function browserBackend(options: BrowserBackendOptions): DemoBackend {
       store.clearAll();
       showingReference = false;
       defaults = options.defaults;
+      local = null;
+      models = {};
       return moved(defaults);
     },
   };
