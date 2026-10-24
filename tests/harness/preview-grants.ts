@@ -131,12 +131,21 @@ export async function seedDraftWith(
   })) as Draft;
 }
 
-/** Publishes `draft` as the operator would, which removes it. Returns the new revision. */
-export async function publish(app: App, draft: Draft): Promise<RevisionId> {
+/**
+ * Publishes `draft` as the operator would, which removes it, with
+ * `snapshots` frozen into the revision beside its documents. Returns the
+ * new revision.
+ */
+export async function publish(
+  app: App,
+  draft: Draft,
+  snapshots?: Readonly<Record<string, unknown>>,
+): Promise<RevisionId> {
   return (await storeStep(app, {
     op: 'publish',
     draftId: draft.draftId,
     draftVersion: draft.version,
+    ...(snapshots ? { snapshots } : {}),
   })) as RevisionId;
 }
 
