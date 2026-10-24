@@ -24,6 +24,7 @@ import {
   SAMPLE_NAME,
   defaultComposition,
   egressRefusals,
+  emptyStoreEntries,
   field,
   LANDED,
   liveRevision,
@@ -421,16 +422,53 @@ test('each identity row starts its profile and runs the identity check on it', (
   assert.match(check, /expect\(problems\.length === 0/);
 });
 
-test("the native old-config row requires an empty data directory, and the image's allows only the empty store's store.json", () => {
+test("the native old-config row requires an empty data directory, and the image's allows exactly an empty store", () => {
   const native = NATIVE_ROWS.find((r) => r.id === 'old-config').run.toString();
   assert.match(native, /const left = readdirSync\(dataDir\);\s*expect\(\s*left\.length === 0/);
   assert.doesNotMatch(native, /EMPTY_LAYOUT|store\.json/);
-  assert.deepEqual(refusedVolumeProblems([]), []);
-  assert.deepEqual(refusedVolumeProblems(['store.json']), []);
-  assert.equal(refusedVolumeProblems(['store.json', 'revisions/rev_1/portfolio.yml']).length, 1);
-  assert.equal(refusedVolumeProblems(['drafts/d.json']).length, 1);
+
+  // From the store's own layout, read through tsx: store.json, the server's claim, and its directories.
+  const empty = emptyStoreEntries();
+  assert.deepEqual(empty.files, ['store.json', 'publication/server.json']);
+  for (const dir of ['drafts', 'revisions', 'publication', 'publication/events', 'assets/sha256'])
+    assert.ok(empty.dirs.includes(dir), dir);
+
+  const EMPTY_STATUS = 'state: empty\n';
+  const ok = (files, dirs = []) => refusedVolumeProblems({ files, dirs }, empty, EMPTY_STATUS);
+  assert.deepEqual(ok([]), []);
+  assert.deepEqual(ok(['store.json']), []);
+  assert.deepEqual(ok(['store.json', 'publication/server.json'], empty.dirs), []);
+  const rev = `rev_${'a'.repeat(32)}`;
+  for (const file of [
+    `revisions/${rev}/manifest.json`,
+    `revisions/.staging-${rev}/manifest.json`,
+    `revisions/${rev}.tombstone.json`,
+    'publication/live.json',
+    'publication/events/1.json',
+    `drafts/drf_${'b'.repeat(32)}.json`,
+    `assets/sha256/ab/${'c'.repeat(64)}`,
+    'publication/lock',
+  ]) {
+    const problems = ok(['store.json', file], empty.dirs);
+    assert.equal(problems.length, 1, file);
+    assert.match(problems[0], /beyond an empty store: .*#3, item 3/, file);
+  }
+  assert.equal(ok(['store.json'], ['backups']).length, 1, 'a directory no empty store has');
+  assert.equal(
+    refusedVolumeProblems(
+      { files: ['store.json'], dirs: [] },
+      empty,
+      `state: live\nlive revision: ${rev}\n`,
+    ).length,
+    1,
+    'a status naming a live revision',
+  );
   const image = CONTAINER_ROWS.find((r) => r.id === 'image-old-config').run.toString();
-  assert.match(image, /refusedVolumeProblems\(files\)/);
+  assert.match(image, /imageStore\(ctx, volume, \['status'\]\)/);
+  assert.match(
+    image,
+    /refusedVolumeProblems\(entries, emptyStoreEntries\(ctx\.run\), status\.out\)/,
+  );
 });
 
 test('every row runs on the default composition, and the run stops when the bundled sample does not import', () => {

@@ -41,8 +41,8 @@
 // rehearsal job and release.yml's rc-rehearsal give it, on an internal
 // network, hardened, never pulling (CONTAINER_ROWS): the network reaches
 // no public address; the image refuses the old config under owner and
-// read-only, leaving owner's volume nothing but the empty store's
-// store.json; its own portfolio-store imports and publishes the migrated
+// read-only, leaving owner's volume nothing but a valid empty store
+// (#3, item 3); its own portfolio-store imports and publishes the migrated
 // pair and owner reaches ready; owner's name, canonical link, og:url, Open
 // Graph image, sitemap, robots host, feed, and JSON-LD follow the pair's
 // identity and the origin (lib/identity.mjs); the owner signs in and rolls
@@ -130,6 +130,7 @@ export const BASELINES = Object.freeze([
 const MEDIA_ROOT = path.join(REPO_ROOT, 'example-media');
 const EGRESS_GUARD = path.join(REPO_ROOT, 'tests', 'harness', 'egress-guard.cjs');
 const STORE_CLI = path.join(REPO_ROOT, 'apps', 'web', 'scripts', 'portfolio-store.ts');
+const STORE_LAYOUT_MODULE = path.join(REPO_ROOT, 'packages', 'core', 'src', 'store', 'layout.ts');
 const CONFIG_CLI = path.join(REPO_ROOT, 'apps', 'web', 'scripts', 'config.mjs');
 const STORE_CHILD = path.join(
   REPO_ROOT,
@@ -812,7 +813,7 @@ export const CONTAINER_ROWS = [
   {
     id: 'image-old-config',
     title:
-      "the image refuses the frozen YAML config under owner and read-only, and leaves owner's data volume only the empty store's store.json",
+      "the image refuses the frozen YAML config under owner and read-only, and leaves owner's data volume a valid empty store and nothing more",
     run: imageOldConfig,
   },
   {
@@ -1145,27 +1146,82 @@ async function imageOldConfig(ctx) {
   const listed = container(ctx.run, [
     ...runArgs(ctx, { mounts: [`${volume}:${DATA_DIR}:ro`], entrypoint: 'node' }),
     '-e',
-    `const fs=require('node:fs'),p=require('node:path');const out=[];const w=(d)=>{for(const e of fs.readdirSync(d,{withFileTypes:true})){const f=p.join(d,e.name);e.isDirectory()?w(f):out.push(p.relative('${DATA_DIR}',f))}};w('${DATA_DIR}');process.stdout.write(JSON.stringify(out.sort()))`,
+    `const fs=require('node:fs'),p=require('node:path');const files=[],dirs=[];const w=(d)=>{for(const e of fs.readdirSync(d,{withFileTypes:true})){const f=p.join(d,e.name),r=p.relative('${DATA_DIR}',f);e.isDirectory()?(dirs.push(r),w(f)):files.push(r)}};w('${DATA_DIR}');process.stdout.write(JSON.stringify({files:files.sort(),dirs:dirs.sort()}))`,
   ]);
-  const files = parseJson(listed.stdout);
-  expect(Array.isArray(files), "owner's data volume could be listed", listed.out);
-  const problems = refusedVolumeProblems(files);
-  expect(problems.length === 0, problems.join('; '));
+  const entries = parseJson(listed.stdout);
+  expect(
+    Array.isArray(entries?.files) && Array.isArray(entries?.dirs),
+    "owner's data volume could be listed",
+    listed.out,
+  );
+  const status = imageStore(ctx, volume, ['status']);
+  const problems = refusedVolumeProblems(entries, emptyStoreEntries(ctx.run), status.out);
+  expect(problems.length === 0, problems.join('; '), status.out);
+}
+
+/**
+ * What an empty store may hold, from the store's own layout
+ * (packages/core/src/store/layout.ts's storePaths), relative to its data
+ * directory: store.json and the server's claim, and the store's
+ * directories. Read through tsx once per run.
+ */
+export function emptyStoreEntries(run) {
+  const code = `import { storePaths } from ${JSON.stringify(STORE_LAYOUT_MODULE)};
+const p = storePaths('/s');
+const rel = (f) => f.slice('/s/'.length);
+const dirs = new Set();
+for (const d of [p.drafts, p.revisions, p.publication, p.events, p.assets, p.audit, p.ephemeral])
+  for (let at = d; at !== p.root; at = at.slice(0, at.lastIndexOf('/'))) dirs.add(rel(at));
+process.stdout.write(JSON.stringify({ files: [rel(p.storeFile), rel(p.server)], dirs: [...dirs].sort() }));`;
+  const result = run
+    ? run.node(['--import', 'tsx', '--input-type=module', '-e', code])
+    : (() => {
+        const r = spawnSync(
+          process.execPath,
+          ['--import', 'tsx', '--input-type=module', '-e', code],
+          {
+            cwd: REPO_ROOT,
+            encoding: 'utf8',
+          },
+        );
+        return { status: r.status, out: `${r.stdout}${r.stderr}` };
+      })();
+  const entries = parseJson(result.out);
+  expect(
+    result.status === 0 && Array.isArray(entries?.files) && Array.isArray(entries?.dirs),
+    "the store's layout could be read",
+    result.out,
+  );
+  return entries;
 }
 
 /**
  * What owner's server may leave on its data volume when it refuses an old
- * config at start: nothing, or the empty store's store.json. Unlike
- * portfolio-store, which reads the source before it touches the data
- * directory (#130, the native old-config row), the server opens its store
- * before it reads the source, so a refused start writes store.json and
- * nothing else; a native owner start on the frozen YAML leaves exactly that.
+ * config at start: a valid empty store and nothing more (#3, item 3: a
+ * refused start leaves a valid empty store, and the next start's first-start
+ * import takes it over, with any stale claim). That is store.json, the
+ * server's claim, and the store's 0700 directories, all of them empty, and
+ * `status` naming no live revision. Unlike portfolio-store, which reads the
+ * source before it touches the data directory (#130, the native old-config
+ * row), the server opens its store before it reads the source.
  */
-export function refusedVolumeProblems(files) {
-  const extra = files.filter((f) => f !== 'store.json');
-  return extra.length === 0
-    ? []
-    : [`owner's data volume holds only the empty store's store.json, not ${extra.join(', ')}`];
+export function refusedVolumeProblems({ files, dirs }, empty, statusOut) {
+  const why =
+    "a refused start leaves a valid empty store, which the next start's first-start import takes over (#3, item 3)";
+  const problems = [];
+  const files_ = files.filter((f) => !empty.files.includes(f));
+  if (files_.length > 0)
+    problems.push(`owner's data volume holds ${files_.join(', ')}, beyond an empty store: ${why}`);
+  const dirs_ = dirs.filter((d) => !empty.dirs.includes(d));
+  if (dirs_.length > 0)
+    problems.push(
+      `owner's data volume holds the directories ${dirs_.join(', ')}, which no empty store has: ${why}`,
+    );
+  if (statusOut !== undefined) {
+    if (field(statusOut, 'state') !== 'empty' || liveRevision(statusOut) !== null)
+      problems.push(`portfolio-store status on owner's data volume isn't an empty store: ${why}`);
+  }
+  return problems;
 }
 
 async function imageImport(ctx) {
