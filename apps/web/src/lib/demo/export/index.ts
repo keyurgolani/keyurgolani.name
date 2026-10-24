@@ -1,4 +1,7 @@
 import {
+  allowedKeysAt,
+  DEFAULT_SCHEMAS,
+  DOCUMENT_MAX_BYTES,
   parseSource,
   serialize,
   yamlComments,
@@ -13,13 +16,17 @@ import {
 //
 // `files` is two separate documents, portfolio first, named portfolio.yml
 // and site.yml or portfolio.json and site.json. Each is written from its
-// source's data by #4's serialize(): keys in schema order (sorted inside
-// extension data, authored order for anything else), two-space indent, LF
-// line ends, and a trailing newline. It's pure and byte-deterministic: the
-// same sources give the same bytes, whatever their own formatting or key
-// order, and an exported pair imports to the same models in both formats.
-// Each document states its schemaVersion, and `disclosure.schemaVersions`
-// repeats them.
+// source's data by #4's serialize(): keys in schema order, two-space indent,
+// LF line ends, and a trailing newline. Keys the schema doesn't name, such
+// as the ids that key site.sections, routes, appearanceInputs, and
+// variantControls and its values, are sorted by UTF-16 code unit first, as
+// #4's canonicalize() sorts them. No reader gives their order a meaning:
+// each map is read by key, and a revision's content hash is over the
+// canonical form, where both orders are the same. So the export is pure and
+// byte-deterministic: the same models give the same bytes, whatever their
+// sources' formatting, key order, or format, and an exported pair imports
+// to the same models in both formats. Each document states its
+// schemaVersion, and `disclosure.schemaVersions` repeats them.
 //
 // `disclosure.omitted` lists what the files leave out, as fixed strings:
 //
@@ -30,6 +37,11 @@ import {
 //   from them. They never leave the browser.
 // - `yaml-comments`: comments in a YAML source. Only listed when a source
 //   has one, since the files are written from the data.
+//
+// `disclosure.overImportCap` lists each exported document over #4's 1 MiB
+// cap, in UTF-8 bytes. Writing a document out can make it longer than its
+// source, say pretty JSON from minified, and a file over the cap won't
+// import here again, nor into Owner Studio.
 //
 // The sources are the unit's own, which the import has already read under
 // #4's limits, or the sample's. A source that doesn't parse, or has no
@@ -49,6 +61,8 @@ export type ExportResult = {
   readonly disclosure: {
     readonly schemaVersions: { readonly portfolio: number; readonly site: number };
     readonly omitted: readonly ExportOmission[];
+    /** Each exported document over the 1 MiB import cap, which won't import again. */
+    readonly overImportCap: readonly ('portfolio' | 'site')[];
   };
 };
 
@@ -57,6 +71,11 @@ export const BROWSER_ONLY_OMISSIONS: readonly ExportOmission[] = [
   'appearance-selection',
   'local-images',
 ];
+
+const SCHEMAS = {
+  portfolio: DEFAULT_SCHEMAS.PortfolioSchema,
+  site: DEFAULT_SCHEMAS.SiteSchema,
+} as const;
 
 export function exportUnit(
   input: { readonly sources: { portfolio: SourceDocument; site: SourceDocument } },
@@ -68,16 +87,47 @@ export function exportUnit(
   const commented = [input.sources.portfolio, input.sources.site].some(
     (source) => source.format === 'yaml' && yamlComments(source.text).length > 0,
   );
+  const texts = {
+    portfolio: serialize(sortedUnnamed(portfolio.data, 'portfolio'), format),
+    site: serialize(sortedUnnamed(site.data, 'site'), format),
+  };
+  const encoder = new TextEncoder();
+  const overImportCap = (['portfolio', 'site'] as const).filter(
+    (document) => encoder.encode(texts[document]).byteLength > DOCUMENT_MAX_BYTES,
+  );
   return {
     files: [
-      { name: `portfolio.${extension}`, text: serialize(portfolio.data, format) },
-      { name: `site.${extension}`, text: serialize(site.data, format) },
+      { name: `portfolio.${extension}`, text: texts.portfolio },
+      { name: `site.${extension}`, text: texts.site },
     ],
     disclosure: {
       schemaVersions: { portfolio: portfolio.version, site: site.version },
       omitted: [...BROWSER_ONLY_OMISSIONS, ...(commented ? (['yaml-comments'] as const) : [])],
+      overImportCap,
     },
   };
+}
+
+/**
+ * The data with the keys of every object the schema doesn't describe sorted
+ * by UTF-16 code unit: record maps, and whatever lies inside them. Objects
+ * the schema names keys for keep theirs for serialize() to order.
+ */
+function sortedUnnamed(data: unknown, document: 'portfolio' | 'site'): unknown {
+  const schema = SCHEMAS[document];
+  const walk = (node: unknown, path: readonly (string | number)[]): unknown => {
+    if (Array.isArray(node)) return node.map((child, index) => walk(child, [...path, index]));
+    if (typeof node !== 'object' || node === null) return node;
+    const keys = Object.keys(node);
+    const order = allowedKeysAt(schema, data, path)
+      ? keys
+      : [...keys].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    // fromEntries, so an own __proto__ key stays a key.
+    return Object.fromEntries(
+      order.map((key) => [key, walk((node as Record<string, unknown>)[key], [...path, key])]),
+    );
+  };
+  return walk(data, []);
 }
 
 function dataOf(
