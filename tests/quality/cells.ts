@@ -12,7 +12,9 @@
 // - Each registered surface's routes in each of its states.
 //
 // `pr` plans the sentinels: each composition's published default
-// appearance, each tier fixture pack on the fallback composition, each
+// appearance, each tier fixture pack on the fallback composition (from a
+// covering array over the platform defaults and the tier packs alone, so
+// the sentinels don't grow with #20's catalog), each
 // state fixture, and each surface's default state, at every viewport in the
 // default row, plus every other row once at 1440x900, on the first
 // composition and on each tier pack's sentinel, so each tier's packs meet
@@ -319,12 +321,20 @@ export function planCells({ meta, registrations, mode, changes = [] }: PlanInput
       id: pack.manifest.id,
     }));
 
+  // A PR's covering array holds the platform defaults and the tier packs
+  // alone, so its sentinel rows don't grow with #20's catalog: there, a real
+  // pack's rendered coverage is the [37] rule's directed cells, and every
+  // pack's static gates run in check:appearance. `full` covers every pack.
+  const covered = (kind: string, platform: string) =>
+    mode === 'full'
+      ? packIds(kind)
+      : packIds(kind).filter((id) => id === platform || TIER_PACK.test(id));
   const coverage = pairwise({
     values: {
       variant: variants.map((manifest) => manifest.id),
-      designLanguage: packIds('design-language'),
-      colorScheme: packIds('color-scheme'),
-      typography: packIds('typography'),
+      designLanguage: covered('design-language', PLATFORM_DEFAULTS.designLanguage),
+      colorScheme: covered('color-scheme', PLATFORM_DEFAULTS.colorScheme),
+      typography: covered('typography', PLATFORM_DEFAULTS.typography),
       displayMode: [...DISPLAY_MODES],
     },
     accepts: (tuple) => accepts(registry, tuple, 'read-only'),

@@ -1,0 +1,27 @@
+{
+  "id": "kanagawa",
+  "name": "Kanagawa",
+  "kind": "color-scheme",
+  "tier": "research",
+  "source": {
+    "name": "Kanagawa",
+    "url": "https://github.com/rebelot/kanagawa.nvim"
+  },
+  "license": "unverified",
+  "researchedAt": "2026-10-17",
+  "reason": "Its upstream license isn't verified, so it doesn't ship. Promoting it is its own owner-approved PR with a source URL, an SPDX license, attribution, a pinned upstream version, and a naming decision.",
+  "anchors": {
+    "light": {
+      "canvas": "#f2ecbc",
+      "text": "#545464",
+      "accent": "#c84053",
+      "secondary": "#6f894e"
+    },
+    "dark": {
+      "canvas": "#1f1f28",
+      "text": "#dcd7ba",
+      "accent": "#e46876",
+      "secondary": "#98bb6c"
+    }
+  }
+}

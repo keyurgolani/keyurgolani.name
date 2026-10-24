@@ -1,0 +1,27 @@
+{
+  "id": "ayu",
+  "name": "ayu",
+  "kind": "color-scheme",
+  "tier": "research",
+  "source": {
+    "name": "ayu",
+    "url": "https://github.com/ayu-theme/ayu-colors"
+  },
+  "license": "unverified",
+  "researchedAt": "2026-10-17",
+  "reason": "Its upstream license isn't verified, so it doesn't ship. Promoting it is its own owner-approved PR with a source URL, an SPDX license, attribution, a pinned upstream version, and a naming decision.",
+  "anchors": {
+    "light": {
+      "canvas": "#fafafa",
+      "text": "#5c6166",
+      "accent": "#ff9940",
+      "secondary": "#399ee6"
+    },
+    "dark": {
+      "canvas": "#0b0e14",
+      "text": "#bfbdb6",
+      "accent": "#ffb454",
+      "secondary": "#59c2ff"
+    }
+  }
+}

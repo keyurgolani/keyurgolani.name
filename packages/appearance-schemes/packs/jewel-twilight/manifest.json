@@ -1,0 +1,55 @@
+{
+  "id": "jewel-twilight",
+  "name": "Jewel Twilight",
+  "description": "Amethyst and emerald teal on a twilight ground.",
+  "version": "1.0.0",
+  "tokenContract": 1,
+  "tier": "stable",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v1 from the reviewed prototype's jewel-twilight anchors."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [],
+  "derivation": "anchor-v1",
+  "anchors": {
+    "light": {
+      "canvas": "#f4eef8",
+      "text": "#251b35",
+      "accent": "#7b3fa1",
+      "secondary": "#087f78"
+    },
+    "dark": {
+      "canvas": "#171020",
+      "text": "#f5ecfb",
+      "accent": "#c47ee8",
+      "secondary": "#42c9bd"
+    }
+  },
+  "swatches": ["#f4eef8", "#251b35", "#7b3fa1", "#087f78"]
+}
