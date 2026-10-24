@@ -25,7 +25,13 @@ import type { FetchGitHubDataInput, GitHubData } from './types';
 
 recordOwnerModule('core/sources/github/index');
 
-export { GITHUB_FETCH_TIMEOUT_MS, GITHUB_REFRESH_BUDGET_MS, timedFetch } from './fetch';
+export {
+  GITHUB_BODY_MAX_BYTES,
+  GITHUB_FETCH_TIMEOUT_MS,
+  GITHUB_REFRESH_BUDGET_MS,
+  readJson,
+  timedFetch,
+} from './fetch';
 export type { FetchLike } from './fetch';
 
 /** Why a refresh, or one section's, didn't change what the draft holds. */
@@ -149,8 +155,18 @@ export function githubAdapter({
       for (const { id, input } of githubSections(portfolio)) {
         const keep = (code: GitHubRefreshFinding['code']) => {
           findings.push({ code, sectionId: id });
+          // Only the same account's: after a username edit, the last record
+          // is another account's data.
           const last = before.get(id);
-          if (last) records.push(last as unknown as SnapshotRecord<GitHubSnapshotData>);
+          const account = (value: unknown) =>
+            typeof value === 'string' ? value.trim().toLowerCase() : null;
+          if (
+            last &&
+            isPlainObject(last.data) &&
+            account(last.data.username) === account(input.username)
+          ) {
+            records.push(last as unknown as SnapshotRecord<GitHubSnapshotData>);
+          }
         };
         const fetched = await fetchOne(input, token);
         if (!fetched) {

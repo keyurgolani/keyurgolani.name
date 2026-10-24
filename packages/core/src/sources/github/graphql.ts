@@ -1,5 +1,5 @@
 import { recordOwnerModule } from '../../load-trace';
-import { timedFetch, type FetchLike } from './fetch';
+import { readJson, timedFetch, type FetchLike } from './fetch';
 import type {
   ContributionDay,
   ContributionLevel,
@@ -159,7 +159,7 @@ export async function fetchViaGraphQL(
 
   if (!response.ok) return null;
 
-  const json = (await response.json()) as GraphQLResponse;
+  const json = (await readJson(response)) as GraphQLResponse;
   if (json.errors?.length || !json.data?.user) return null;
 
   const user = json.data.user;

@@ -1,6 +1,6 @@
 import { recordOwnerModule } from '../../load-trace';
 import { languageColor } from './colors';
-import { timedFetch, type FetchLike } from './fetch';
+import { readJson, timedFetch, type FetchLike } from './fetch';
 import type {
   GitHubData,
   PinnedRepo,
@@ -54,7 +54,7 @@ export async function fetchViaREST(
 
   const userRes = await timedFetch(fetchFn, `${REST_URL}/users/${user}`, { headers, signal });
   if (!userRes.ok) return null;
-  const profile = (await userRes.json()) as RESTUser;
+  const profile = (await readJson(userRes)) as RESTUser;
 
   const reposRes = await timedFetch(
     fetchFn,
@@ -65,7 +65,7 @@ export async function fetchViaREST(
 
   const exclude = new Set(input.excludeRepos ?? []);
   const featured = new Set(input.featuredRepos ?? []);
-  const repos = ((await reposRes.json()) as RESTRepo[]).filter(
+  const repos = ((await readJson(reposRes)) as RESTRepo[]).filter(
     (r) => !r.fork && !exclude.has(r.name),
   );
 
@@ -78,7 +78,7 @@ export async function fetchViaREST(
       { headers, signal },
     );
     if (recentRes.ok) {
-      const recentJson = (await recentRes.json()) as RESTRepo[];
+      const recentJson = (await readJson(recentRes)) as RESTRepo[];
       recentlyActive = recentJson
         .filter((r) => !r.fork && !exclude.has(r.name))
         .map((r) => ({

@@ -1,11 +1,16 @@
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import {
+  GITHUB_BODY_MAX_BYTES,
   GITHUB_FETCH_TIMEOUT_MS,
   GITHUB_REFRESH_BUDGET_MS,
+  readJson,
   timedFetch,
   type FetchLike,
 } from './fetch';
+import { fetchViaGraphQL } from './graphql';
 import { githubAdapter, githubTokenFrom } from './index';
 import { fetchViaREST } from './rest';
 
@@ -156,7 +161,8 @@ test('with no token a refresh fetches nothing and says so, and a failed fetch ke
         adapter: 'github',
         sectionId: 'code',
         fetchedAt: '2026-10-01T00:00:00Z',
-        data: { kept: true },
+        // The same account, as GitHub compares a login: in any case.
+        data: { username: 'Rowan', kept: true },
       },
     ],
   };
@@ -178,6 +184,165 @@ test('with no token a refresh fetches nothing and says so, and a failed fetch ke
   );
   assert.equal(invalid.findings[0]?.sectionId, 'code');
   assert.deepEqual(invalid.snapshot, previous);
+});
+
+test("a failed fetch keeps no record of another account's: after a username edit, the section has none", async () => {
+  const previous = {
+    records: [
+      {
+        adapter: 'github',
+        sectionId: 'code',
+        fetchedAt: '2026-10-01T00:00:00Z',
+        data: { username: 'ines', kept: true },
+      },
+    ],
+  };
+  const failing: FetchLike = async () => new Response('', { status: 502 });
+  const failed = await githubAdapter({ token: 'test-token-value', fetch: failing }).refresh(
+    PORTFOLIO,
+    previous,
+  );
+  assert.deepEqual(failed.findings, [{ code: 'fetch_failed', sectionId: 'code' }]);
+  assert.deepEqual(failed.snapshot, { records: [] });
+});
+
+test('the REST fallback asks only api.github.com, with the username encoded as one path segment', async () => {
+  const urls: string[] = [];
+  const recording: FetchLike = async (url) => {
+    urls.push(url);
+    return url.includes('/repos') ? Response.json([]) : Response.json({ login: 'a b/c' });
+  };
+  await fetchViaREST({ username: 'a b/c?d' }, undefined, recording);
+  assert.ok(urls.length >= 2, 'it asked for the profile and the repositories');
+  for (const url of urls) {
+    assert.ok(url.startsWith('https://api.github.com/users/a%20b%2Fc%3Fd'), url);
+  }
+});
+
+// A request with neither would hang, so the test has its own limit.
+test(
+  "GraphQL's requests keep the timeout and join the section's budget",
+  { timeout: 5000 },
+  async () => {
+    const started = Date.now();
+    await whileAlive(() =>
+      assert.rejects(
+        fetchViaGraphQL(
+          { username: 'x' },
+          'test-token-value',
+          AbortSignal.timeout(100),
+          hangingFetch,
+        ),
+        { name: 'TimeoutError' },
+      ),
+    );
+    assert.ok(Date.now() - started < 1000, 'the budget ended it');
+    // With no budget, the request's own timeout does.
+    const seen: (AbortSignal | null | undefined)[] = [];
+    const watching: FetchLike = (url, init) => {
+      seen.push(init.signal);
+      return hangingFetch(url, init);
+    };
+    const pending = fetchViaGraphQL({ username: 'x' }, 'test-token-value', undefined, watching);
+    pending.catch(() => {});
+    assert.ok(seen[0] instanceof AbortSignal, 'the request carries a signal');
+    assert.equal(seen[0]?.aborted, false);
+  },
+);
+
+/**
+ * A server on 127.0.0.1 that answers every request with `answer`, closed
+ * when the test ends, and a fetch that sends the adapter's requests there:
+ * Node's own fetch, as production uses, with GitHub's origin swapped for it.
+ */
+async function loopback(
+  t: TestContext,
+  answer: (request: IncomingMessage, response: ServerResponse) => void,
+): Promise<{ fetch: FetchLike; paths: string[] }> {
+  const paths: string[] = [];
+  const server = createServer((request, response) => {
+    paths.push(request.url ?? '');
+    answer(request, response);
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+  const { port } = server.address() as AddressInfo;
+  return {
+    paths,
+    fetch: (url, init) =>
+      fetch(url.replace('https://api.github.com', `http://127.0.0.1:${port}`), init),
+  };
+}
+
+const KEPT = {
+  records: [
+    {
+      adapter: 'github',
+      sectionId: 'code',
+      fetchedAt: '2026-10-01T00:00:00Z',
+      data: { username: 'rowan', kept: true },
+    },
+  ],
+};
+
+test('the adapter follows no redirect: the section keeps its record, and the other place is never asked', async (t) => {
+  const { fetch: redirected, paths } = await loopback(t, (request, response) => {
+    if (request.url === '/elsewhere') {
+      response.end('{}');
+      return;
+    }
+    response.writeHead(307, { location: '/elsewhere' }).end();
+  });
+  const result = await githubAdapter({ token: 'test-token-value', fetch: redirected }).refresh(
+    PORTFOLIO,
+    KEPT,
+  );
+  assert.deepEqual(result.findings, [{ code: 'fetch_failed', sectionId: 'code' }]);
+  assert.deepEqual(result.snapshot, KEPT);
+  assert.ok(paths.length > 0);
+  assert.ok(!paths.includes('/elsewhere'), 'no request followed the redirect');
+});
+
+test('an answer past 5 MiB is read no further: the section keeps its record', async (t) => {
+  assert.equal(GITHUB_BODY_MAX_BYTES, 5 * 1024 * 1024);
+  // A good GraphQL answer behind 8 MiB of padding, with no content-length,
+  // so the read has to count: without the cap, the refresh would take it.
+  const good = await (await stubGitHub([])('https://api.github.com/graphql', {})).text();
+  const { fetch: flooding } = await loopback(t, (_request, response) => {
+    response.writeHead(200, { 'content-type': 'application/json' });
+    const chunk = Buffer.alloc(1024 * 1024, 0x61);
+    let written = 0;
+    response.write('{"pad":"');
+    const more = () => {
+      if (response.destroyed) return;
+      if (written >= 8 * 1024 * 1024) {
+        response.end(`",${good.slice(1)}`);
+        return;
+      }
+      written += chunk.length;
+      if (response.write(chunk)) setImmediate(more);
+      else response.once('drain', more);
+    };
+    more();
+  });
+  const result = await githubAdapter({ token: 'test-token-value', fetch: flooding }).refresh(
+    PORTFOLIO,
+    KEPT,
+  );
+  assert.deepEqual(result.findings, [{ code: 'fetch_failed', sectionId: 'code' }]);
+  assert.deepEqual(result.snapshot, KEPT);
+  // A declared length past the cap is refused before any of it is read.
+  const { fetch: declaring } = await loopback(t, (_request, response) => {
+    response.writeHead(200, { 'content-length': String(64), 'content-type': 'application/json' });
+    response.end(' '.repeat(64));
+  });
+  const answer = await declaring('https://api.github.com/users/x', {});
+  await assert.rejects(readJson(answer, 16), /over the size limit/);
+  // Under the cap, it's the JSON.
+  const { fetch: small } = await loopback(t, (_request, response) => response.end('{"ok":true}'));
+  assert.deepEqual(await readJson(await small('https://api.github.com/users/x', {}), 16), {
+    ok: true,
+  });
 });
 
 test('the command line reads the token from GITHUB_TOKEN, or the file GITHUB_TOKEN_FILE names', () => {
