@@ -140,7 +140,9 @@ test('each held language records the gate it fails, its worst pair and scheme, a
     assert.equal(record.id, pack.id);
     assert.ok(record.pairs.length > 0 && record.schemes.failing > 0, pack.id);
     assert.ok(record.worst.ratio < record.worst.target, pack.id);
-    assert.deepEqual(record.worst, (({ failing: _failing, ...worst }) => worst)(record.pairs[0]!));
+    const first: Record<string, unknown> = { ...record.pairs[0]! };
+    delete first.failing;
+    assert.deepEqual(record.worst, first);
     assert.ok(record.unblockedBy.length > 0, pack.id);
   }
   const glass = JSON.parse(
