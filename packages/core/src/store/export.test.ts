@@ -79,12 +79,14 @@ const bytesOf = (label: string, size = 96) =>
   Buffer.concat([Buffer.from(`${label}:`), Buffer.alloc(size, label.length)]);
 
 /**
- * The blobs the store holds for the test's media: a public cover, a private
- * portrait, an image nothing places, each with one rendition, and a PDF.
+ * The blobs the store holds for the test's media: a public cover with two
+ * renditions, a private portrait and an image nothing places with one
+ * each, and a PDF.
  */
 const BLOBS = {
   coverSource: bytesOf('cover-source'),
   coverRendition: bytesOf('cover-w4'),
+  coverWideRendition: bytesOf('cover-w8', 160),
   portraitSource: bytesOf('portrait-source'),
   portraitRendition: bytesOf('portrait-w4'),
   unplacedSource: bytesOf('unplaced-source'),
@@ -92,7 +94,7 @@ const BLOBS = {
   pdf: bytesOf('reading-list-pdf'),
 };
 
-function image(assetId: string, source: Buffer, rendition: Buffer): MediaRecord {
+function image(assetId: string, source: Buffer, ...renditions: Buffer[]): MediaRecord {
   return {
     assetId,
     sha256: hexOf(source),
@@ -100,17 +102,15 @@ function image(assetId: string, source: Buffer, rendition: Buffer): MediaRecord 
     bytes: source.byteLength,
     width: 4,
     height: 4,
-    renditions: [
-      {
-        name: 'w4-a1',
-        ext: 'webp',
-        mime: 'image/webp',
-        bytes: rendition.byteLength,
-        width: 4,
-        height: 4,
-        sha256: hexOf(rendition),
-      },
-    ],
+    renditions: renditions.map((rendition, index) => ({
+      name: `w${4 * (index + 1)}-a1`,
+      ext: 'webp',
+      mime: 'image/webp',
+      bytes: rendition.byteLength,
+      width: 4 * (index + 1),
+      height: 4 * (index + 1),
+      sha256: hexOf(rendition),
+    })),
     derivedAt: '2026-10-24T08:00:00.000Z',
     algorithmVersion: 1,
     source: { kind: 'local', path: `${assetId}.png` },
@@ -120,7 +120,7 @@ function image(assetId: string, source: Buffer, rendition: Buffer): MediaRecord 
 
 const MEDIA = {
   assets: [
-    image('cover', BLOBS.coverSource, BLOBS.coverRendition),
+    image('cover', BLOBS.coverSource, BLOBS.coverRendition, BLOBS.coverWideRendition),
     image('portrait', BLOBS.portraitSource, BLOBS.portraitRendition),
     image('unplaced', BLOBS.unplacedSource, BLOBS.unplacedRendition),
     {
@@ -457,11 +457,15 @@ test("the blobs are the renditions the public view serves, by bare hex, each wit
     { mediaBase: '/media' },
   );
   assert.deepEqual(Object.keys(view.media).sort(), ['cover', 'reading-list']);
-  const expected = [BLOBS.coverRendition].map((bytes) => ({
-    file: `media/blobs/${hexOf(bytes)}`,
-    sha256: `sha256:${hexOf(bytes)}`,
-    size: bytes.byteLength,
-  }));
+  // Both of the cover's renditions, not only its first.
+  const expected = [BLOBS.coverRendition, BLOBS.coverWideRendition]
+    .map((bytes) => ({
+      file: `media/blobs/${hexOf(bytes)}`,
+      sha256: `sha256:${hexOf(bytes)}`,
+      size: bytes.byteLength,
+    }))
+    .sort((a, b) => (a.sha256 < b.sha256 ? -1 : 1));
+  assert.equal(expected.length, 2);
   assert.deepEqual(bundle.blobs, expected);
   assert.deepEqual(
     servedBlobs(unit),
@@ -473,7 +477,10 @@ test("the blobs are the renditions the public view serves, by bare hex, each wit
       readFileSync(seededStore.store.paths.blob(blob.sha256 as Sha256)),
     );
   }
-  assert.deepEqual(readdirSync(path.join(out, 'media', 'blobs')), [hexOf(BLOBS.coverRendition)]);
+  assert.deepEqual(
+    readdirSync(path.join(out, 'media', 'blobs')).sort(),
+    expected.map(({ sha256: hash }) => hash.slice('sha256:'.length)),
+  );
   for (const absent of [
     BLOBS.portraitRendition,
     BLOBS.unplacedRendition,
