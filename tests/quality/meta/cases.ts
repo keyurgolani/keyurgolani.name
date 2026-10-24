@@ -280,9 +280,9 @@ export const APPEARANCE_CASES: readonly MetaCase[] = [
     input:
       'pnpm check:appearance with QUALITY_FIXTURES=meta: fixture-scheme-experimental-low-contrast',
     expect: 'fail',
-    // Its light text-muted under 4.5:1, on the canvas or a surface, in every tuple.
+    // Its light text-muted under 4.5:1 (4.95:1 under a texture), on the canvas or a surface, in every tuple.
     reason:
-      /^[a-z0-9-]+ \+ fixture-scheme-experimental-low-contrast \+ [a-z0-9-]+ \(system, light, dark\), light: text-muted on (?:canvas|surface-[a-z]+) is \d\.\d+:1, under 4\.5:1 \(text\)\.$/,
+      /^[a-z0-9-]+ \+ fixture-scheme-experimental-low-contrast \+ [a-z0-9-]+ \(system, light, dark\), light: text-muted on (?:canvas|surface-[a-z]+)(?: over #(?:000000|ffffff))? is \d\.\d+:1, under (?:4\.5|4\.95):1 \(text\)\.$/,
     run: () => checkAppearance({ QUALITY_FIXTURES: 'meta' }),
   },
 ];

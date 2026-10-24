@@ -2,7 +2,7 @@
   "id": "fixture-scheme-experimental",
   "name": "Fixture Scheme Experimental",
   "description": "A tier fixture: an Experimental color scheme, high-chroma magenta and cyan on near-white and near-black, for the quality gates to run as a shipping Experimental pack. Its accessible minimums are the same as a Stable pack.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "experimental",
   "provenance": {
@@ -14,7 +14,7 @@
     "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
     "researchedAt": "2026-10-22",
     "maintainer": "keyurgolani",
-    "derivation": "anchor-v1 from high-chroma magenta and cyan anchors in light and dark."
+    "derivation": "anchor-v2 from high-chroma magenta and cyan anchors in light and dark. The anchors stay as approved. adjustments lists the 9 roles it moves from anchor-v1."
   },
   "modes": ["light", "dark"],
   "accessibility": {
@@ -33,10 +33,10 @@
     "enhancement": 0
   },
   "fallbacks": [
-    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
   ],
   "caveats": ["A test fixture: it registers only when QUALITY_FIXTURES is 1 or meta."],
-  "derivation": "anchor-v1",
+  "derivation": "anchor-v2",
   "anchors": {
     "light": {
       "canvas": "#fff7fd",
@@ -49,6 +49,25 @@
       "text": "#f8e9ff",
       "accent": "#ff5ccf",
       "secondary": "#3fe0ff"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#655068", "#614c65"],
+      "text-muted": ["#705b73", "#6c576f"],
+      "border-strong": ["#8b7a8d", "#837286"],
+      "accent-text": ["#b61787", "#ab1680"],
+      "data-categorical-6": ["#655068", "#614c65"]
+    },
+    "dark": {
+      "border-strong": ["#807388", "#8a7c92"],
+      "accent-text": ["#ff5ccf", "#ff62d1"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#7e105d", "#790f59"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#ff7dd9", "#ff8dde"]
     }
   },
   "swatches": ["#fff7fd", "#2a1030", "#c2188f", "#07798f"]
