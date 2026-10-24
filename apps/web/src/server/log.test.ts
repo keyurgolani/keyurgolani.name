@@ -125,6 +125,29 @@ test("a preview grant's events add its ref, its session's, and a count, and no o
   ]);
 });
 
+test("a dropped pinned scheme's line adds the grant's ref and the scheme's id, and nothing it was given besides (#10)", () => {
+  const line = parse(
+    logLine(
+      {
+        level: 'warn',
+        event: 'preview.scheme_dropped',
+        grantRef: '0123abcd',
+        schemeId: 'fixture-seed',
+        sessionRef: '89abcdef',
+        tokens: { light: {} },
+      },
+      NOW,
+    ),
+  );
+  assert.deepEqual(line, {
+    ts: line.ts,
+    level: 'warn',
+    event: 'preview.scheme_dropped',
+    grantRef: '0123abcd',
+    schemeId: 'fixture-seed',
+  });
+});
+
 test("media ingestion's events add the asset, its hash, and a reason, never a path or a URL (#10)", () => {
   const fields = { assetId: 'atlas-cover', sha256: 'a'.repeat(64), reason: 'missing', code: 'x' };
   for (const event of ['media.asset.derived', 'media.source.unused']) {

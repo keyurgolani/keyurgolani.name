@@ -21,6 +21,8 @@ import {
   type Draft,
   type Store,
 } from '@portfolio/core/owner';
+import type { SchemeGenerators } from '@portfolio/core';
+import { APPEARANCE_REGISTRY } from '~/lib/appearance-registry';
 import { liveContext } from '~/lib/variants';
 import { PREVIEW_STATUS, PREVIEW_STATUS_DOCUMENT } from '~/preview/status';
 import {
@@ -34,6 +36,7 @@ import { authorize } from '../authorize';
 import { listOperations } from '../operations';
 import { previewAsset } from '../preview-asset';
 import type { GrantSessionPort } from '../preview-port';
+import { schemeGenerators } from '../scheme-generators';
 import type { Session } from '../session';
 import { isStudioResult } from '../studio-result';
 import { activityOf } from './auth';
@@ -84,7 +87,10 @@ interface Setup {
   endSession(): Promise<void>;
 }
 
-async function setup(t: TestContext): Promise<Setup> {
+async function setup(
+  t: TestContext,
+  options: { readonly schemes?: SchemeGenerators } = {},
+): Promise<Setup> {
   const dataDir = mkdtempSync(path.join(tmpdir(), 'owner-preview-'));
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
   assert.equal(await preflight({ dataDir }), null);
@@ -105,7 +111,11 @@ async function setup(t: TestContext): Promise<Setup> {
   const context = { ...liveContext(), canonicalOrigin: ORIGIN };
   const store = openStore({
     dataDir,
-    checks: { validate: (unit) => validatePublicationUnit(unit, context), appVersion: 'test' },
+    checks: {
+      validate: (unit) => validatePublicationUnit(unit, context),
+      appVersion: 'test',
+      ...(options.schemes ? { schemes: options.schemes } : {}),
+    },
   });
   const sessions = createSessions({
     store: filesystemSessionStore(dataDir),
@@ -528,6 +538,75 @@ test("a grant whose content no longer renders fails with a neutral error, never 
   assert.ok(!logged.includes(grant), 'no log line holds the token');
   assert.ok(!logged.includes(grantDigest(grant)), 'no log line holds the whole digest');
   assert.ok(!logged.includes('neon') && !logged.includes('Draft Person'), 'no content');
+});
+
+test("a draft grant pins the draft's generated schemes at mint, each checked as it opens: a later save doesn't change them, and one that isn't whole is left out and logged by id (#10)", async (t) => {
+  // The build's generators, with fixture-seed declared as its manifest does.
+  const build = schemeGenerators(APPEARANCE_REGISTRY);
+  const schemes: SchemeGenerators = {
+    ...build,
+    declared: (schemeId) =>
+      schemeId === 'fixture-seed'
+        ? { id: 'fixture-seed', version: 1, input: 'seed-color' }
+        : build.declared(schemeId),
+  };
+  const { store, previews, command } = await setup(t, { schemes });
+  const lines: string[] = [];
+  t.mock.method(console, 'log', (line: unknown) => lines.push(String(line)));
+  const seeded = (seedColor: string) =>
+    pair(
+      portfolio('Draft Person'),
+      applyEdits(SITE, 'yaml', [
+        { op: 'set', pointer: '/appearanceInputs', value: { 'fixture-seed': { seedColor } } },
+      ]),
+    );
+  const draft = await createDraft(store, seeded('#3366ff'));
+  const pinned = draft.derived?.schemes?.['fixture-seed'];
+  assert.ok(pinned, 'the save made the scheme');
+  const grant = minted(
+    await command('preview.grant.mint', {
+      subject: { draft: draft.draftId, version: draft.version },
+      environment: ENVIRONMENT,
+    }),
+  );
+  assert.deepEqual((await previews.port.open(grant))?.schemes, { 'fixture-seed': pinned });
+
+  // The draft moves on to another seed: the open grant keeps what it pinned.
+  const saved = await store.drafts.save(
+    { draftId: draft.draftId, expectedVersion: draft.version, documents: seeded('#aa5500') },
+    'owner',
+  );
+  assert.equal(saved.kind, 'saved', JSON.stringify(saved));
+  const moved = (saved as { draft: Draft }).draft.derived?.schemes?.['fixture-seed'];
+  assert.ok(moved);
+  assert.notDeepEqual(moved, pinned);
+  assert.deepEqual((await previews.port.open(grant))?.schemes, { 'fixture-seed': pinned });
+
+  // A pinned entry damaged on disk is left out, and the whole one beside it stays.
+  const file = path.join(previewPaths(store.paths.root).grants, `${grantDigest(grant)}.json`);
+  const record = JSON.parse(readFileSync(file, 'utf8')) as {
+    schemes: Record<string, { inputsHash: string }>;
+  };
+  record.schemes.copy = structuredClone(record.schemes['fixture-seed']!);
+  record.schemes['fixture-seed']!.inputsHash = 'not a hash';
+  writeFileSync(file, `${JSON.stringify(record)}\n`);
+  assert.deepEqual((await previews.port.open(grant))?.schemes, { copy: pinned });
+  const dropped = lines
+    .map((line) => JSON.parse(line) as Record<string, unknown>)
+    .filter((entry) => entry.event === 'preview.scheme_dropped');
+  assert.deepEqual(
+    dropped.map(({ level, grantRef, schemeId }) => [level, grantRef, schemeId]),
+    [['warn', grantDigest(grant).slice(0, 8), 'fixture-seed']],
+  );
+  // A grant on a draft with no generated scheme opens with none.
+  const plain = await createDraft(store);
+  const bare = minted(
+    await command('preview.grant.mint', {
+      subject: { draft: plain.draftId, version: plain.version },
+      environment: ENVIRONMENT,
+    }),
+  );
+  assert.equal((await previews.port.open(bare))?.schemes, undefined);
 });
 
 test("the config's grant lifetimes are the ones @portfolio/core enforces (#7)", () => {

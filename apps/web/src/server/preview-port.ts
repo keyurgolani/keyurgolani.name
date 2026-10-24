@@ -1,4 +1,5 @@
 import type { Readable } from 'node:stream';
+import type { DerivedScheme } from '@portfolio/appearance';
 import type { AppearanceSelection, PublicView } from '@portfolio/schema';
 import type { Session } from './session';
 
@@ -59,6 +60,13 @@ export interface OpenedGrant {
   readonly renderedVersion: number | null;
   /** What a log line calls the grant: the first 8 hex characters of its digest. */
   readonly ref: string;
+  /**
+   * The generated color schemes the frame renders with, by scheme id, each
+   * checked with readDerivedSchemes() (#10, 10h): a draft grant's pinned at
+   * mint. #20's PR 3 fills a revision's and a fixture's from their
+   * snapshots.schemes. Absent when there are none.
+   */
+  readonly schemes?: Readonly<Record<string, DerivedScheme>>;
 }
 
 /** The grants, as the owner composition binds them into the deployment state (#7, Slice 2). */
