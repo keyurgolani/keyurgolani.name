@@ -46,10 +46,10 @@ Start from the bones of the two examples:
 ```sh
 cp portfolio.example.yml config/portfolio.yml
 cp site.example.yml config/site.yml
-# edit config/portfolio.yml
+# edit config/portfolio.yml: identity.name, meta.title, meta.ogImage
 ```
 
-`portfolio.yml` holds the content, and `site.yml` how it looks and which sections show. Edit the content first. Start with `identity`, and its `name` above all: `pnpm dev` renders the sample's, but a production server refuses to start while `identity.name` is still `Anamika Devi`, the bundled sample's. Then `sections`. Save, then reload the page. `config/` is gitignored, so your content stays out of commits.
+`portfolio.yml` holds the content, and `site.yml` how it looks and which sections show. Edit the content first. Start with the three fields that say whose site it is. `identity.name` above all: `pnpm dev` renders the sample's, but a production server refuses to start while it's still `Anamika Devi`, the bundled sample's. Then `meta.title`, which titles every page, the feed, and each link preview, and still names the sample. And `meta.ogImage`, which places the sample's own picture (`og-image`): point it at a picture of yours under `media`, or delete it. Then `sections`. Save, then reload the page. `config/` is gitignored, so your content stays out of commits.
 
 `portfolio.example.yml` exercises every section kind. Cherry-pick the ones you need; delete the rest.
 

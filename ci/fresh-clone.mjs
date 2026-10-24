@@ -18,12 +18,15 @@
 //   - the guide's validation of the copied sample, and `pnpm build`;
 //   - the guide's production `pnpm start` under read-only on the untouched
 //     sample, which refuses it (sample_identity), then the guide's identity
-//     step, after which it starts and renders the new name;
+//     step, which edits the fields its comment names (identity.name,
+//     meta.title, meta.ogImage) and fails when any of the sample's is left,
+//     after which it starts and renders the new name;
 //   - deployment.md's demo `pnpm start` on the sample.
 // Each server that starts after the identity step, and each demo, is held
 // to lib/identity.mjs on its origin: read-only and owner publish the new
-// name and that origin in their canonical link, og:url, Open Graph image,
-// sitemap, robots, feed, and JSON-LD, and demo shows the sample alone.
+// name and that origin in their titles, canonical link, og:url, Open Graph
+// image, sitemap, robots, feed, and JSON-LD, never the sample's persona or
+// one of its pictures, and demo shows the sample alone.
 // In containers, only where FRESH_CLONE_CONTAINERS=1 (CI), with Docker,
 // each profile's section of deployment.md from the repository, its cd
 // steps resolved from where the run is, as a shell would:
@@ -53,7 +56,7 @@
 //   FRESH_CLONE_PNPM_STORE  a pnpm store for the install to reuse, for a local run only
 //   FRESH_CLONE_KEEP        keep the clone, for a look after
 import { spawn, spawnSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import {
   chmodSync,
   readdirSync,
@@ -219,10 +222,10 @@ export const STEPS = [
   {
     id: 'identity',
     doc: 'docs/getting-started.md',
-    command: '# edit config/portfolio.yml',
+    command: '# edit config/portfolio.yml: identity.name, meta.title, meta.ogImage',
     kind: 'identity',
     file: 'config/portfolio.yml',
-    scripted: `sets identity.name to ${FIXTURE_NAME}, the guide's first edit`,
+    scripted: `makes the fields the guide's comment names the fixture's: identity.name ${FIXTURE_NAME}, meta.title ${FIXTURE_NAME}, meta.ogImage deleted`,
   },
   {
     id: 'read-only-starts',
@@ -234,7 +237,12 @@ export const STEPS = [
     // The sample's content names its author in other places too (a quote,
     // the authors of a paper), so only the new name is checked here.
     expect: { status: 200, includes: [FIXTURE_NAME] },
-    identity: { profile: 'read-only', origin: 'https://jane.name', name: FIXTURE_NAME },
+    identity: {
+      profile: 'read-only',
+      origin: 'https://jane.name',
+      name: FIXTURE_NAME,
+      title: FIXTURE_NAME,
+    },
   },
   {
     id: 'demo-starts',
@@ -297,10 +305,10 @@ export const STEPS = [
   {
     id: 'compose-identity',
     doc: 'docs/getting-started.md',
-    command: '# edit config/portfolio.yml',
+    command: '# edit config/portfolio.yml: identity.name, meta.title, meta.ogImage',
     kind: 'identity',
     file: 'config/portfolio.yml',
-    scripted: `sets identity.name to ${FIXTURE_NAME}, the guide's first edit`,
+    scripted: `makes the fields the guide's comment names the fixture's: identity.name ${FIXTURE_NAME}, meta.title ${FIXTURE_NAME}, meta.ogImage deleted`,
     container: true,
   },
   {
@@ -312,7 +320,12 @@ export const STEPS = [
     path: '/',
     expect: { status: 200, includes: [FIXTURE_NAME] },
     container: true,
-    identity: { profile: 'read-only', origin: 'https://jane.name', name: FIXTURE_NAME },
+    identity: {
+      profile: 'read-only',
+      origin: 'https://jane.name',
+      name: FIXTURE_NAME,
+      title: FIXTURE_NAME,
+    },
   },
   {
     id: 'owner-path',
@@ -392,10 +405,10 @@ export const STEPS = [
   {
     id: 'owner-identity',
     doc: 'docs/getting-started.md',
-    command: '# edit config/portfolio.yml',
+    command: '# edit config/portfolio.yml: identity.name, meta.title, meta.ogImage',
     kind: 'identity',
     file: '../config/portfolio.yml',
-    scripted: `sets identity.name to ${FIXTURE_NAME}, the guide's first edit`,
+    scripted: `makes the fields the guide's comment names the fixture's: identity.name ${FIXTURE_NAME}, meta.title ${FIXTURE_NAME}, meta.ogImage deleted`,
     container: true,
   },
   {
@@ -410,7 +423,12 @@ export const STEPS = [
     path: '/',
     expect: { status: 200, includes: [FIXTURE_NAME] },
     ready: true,
-    identity: { profile: 'owner', origin: 'https://jane.name', name: FIXTURE_NAME },
+    identity: {
+      profile: 'owner',
+      origin: 'https://jane.name',
+      name: FIXTURE_NAME,
+      title: FIXTURE_NAME,
+    },
     container: true,
   },
   {
@@ -576,6 +594,157 @@ export function withIdentityName(text, name) {
   return pattern.test(text) ? text.replace(pattern, `$1${name}`) : null;
 }
 
+/** The fields the guide's identity step names: `# edit <file>: a.b, c.d` gives [a.b, c.d]. */
+export function identityFields(command) {
+  const list = /^# edit \S+:\s*(.+)$/.exec(command)?.[1] ?? '';
+  return list
+    .split(',')
+    .map((field) => field.trim())
+    .filter(Boolean);
+}
+
+/** A top-level block's lines, `key:` and every line under it, as [start, end) of `lines`. */
+function blockRange(lines, key) {
+  const start = lines.findIndex((line) => line === `${key}:` || line.startsWith(`${key}: `));
+  if (start < 0) return null;
+  let end = start + 1;
+  while (end < lines.length && /^([ \t]|#|$)/.test(lines[end])) end += 1;
+  return [start, end];
+}
+
+/** meta.title's value, or null. */
+export function metaTitle(text) {
+  const lines = text.split('\n');
+  const range = blockRange(lines, 'meta');
+  if (!range) return null;
+  const line = lines.slice(...range).find((l) => /^[ \t]+title:/.test(l));
+  return line ? line.replace(/^[ \t]+title:[ \t]*/, '').trim() : null;
+}
+
+/** The media id meta.ogImage places, or null when meta has no ogImage. */
+export function metaOgAsset(text) {
+  const lines = text.split('\n');
+  const range = blockRange(lines, 'meta');
+  if (!range) return null;
+  const block = lines.slice(...range);
+  const at = block.findIndex((l) => /^[ \t]+ogImage:/.test(l));
+  if (at < 0) return null;
+  const inline = /asset:[ \t]*([\w-]+)/.exec(block[at]);
+  if (inline) return inline[1];
+  const nested = block.slice(at + 1).find((l) => /^[ \t]+asset:/.test(l));
+  return nested ? nested.replace(/^[ \t]+asset:[ \t]*/, '').trim() : '(unread)';
+}
+
+/** The source of the media item `id`, or null. */
+function mediaSource(text, id) {
+  const lines = text.split('\n');
+  const range = blockRange(lines, 'media');
+  if (!range) return null;
+  const block = lines.slice(...range);
+  const at = block.findIndex((l) => new RegExp(`^[ \\t]*-[ \\t]+id:[ \\t]*${id}[ \\t]*$`).test(l));
+  if (at < 0) return null;
+  const source = block.slice(at + 1).find((l) => /^[ \t]+source:/.test(l) || /^[ \t]*-/.test(l));
+  return source && /source:/.test(source)
+    ? source.replace(/^[ \t]+source:[ \t]*/, '').trim()
+    : null;
+}
+
+/** Every media item's source. */
+function mediaSources(text) {
+  const lines = text.split('\n');
+  const range = blockRange(lines, 'media');
+  if (!range) return [];
+  return lines
+    .slice(...range)
+    .filter((l) => /^[ \t]+source:/.test(l))
+    .map((l) => l.replace(/^[ \t]+source:[ \t]*/, '').trim());
+}
+
+/** The copied sample with meta.title `title`, the rest byte for byte, or null when meta has no title. */
+export function withMetaTitle(text, title) {
+  const lines = text.split('\n');
+  const range = blockRange(lines, 'meta');
+  if (!range) return null;
+  const at = lines.findIndex((l, i) => i >= range[0] && i < range[1] && /^[ \t]+title:/.test(l));
+  if (at < 0) return null;
+  lines[at] = `${/^[ \t]+title:/.exec(lines[at])[0]} ${title}`;
+  return lines.join('\n');
+}
+
+/** The copied sample without meta.ogImage and the lines under it, or null when meta has none. */
+export function withoutOgImage(text) {
+  const lines = text.split('\n');
+  const range = blockRange(lines, 'meta');
+  if (!range) return null;
+  const at = lines.findIndex((l, i) => i >= range[0] && i < range[1] && /^[ \t]+ogImage:/.test(l));
+  if (at < 0) return null;
+  const indent = /^[ \t]*/.exec(lines[at])[0].length;
+  let end = at + 1;
+  while (
+    end < range[1] &&
+    lines[end].trim() !== '' &&
+    /^[ \t]*/.exec(lines[end])[0].length > indent
+  )
+    end += 1;
+  lines.splice(at, end - at);
+  return lines.join('\n');
+}
+
+const IDENTITY_EDITS = {
+  'identity.name': (text) => withIdentityName(text, FIXTURE_NAME),
+  'meta.title': (text) => withMetaTitle(text, FIXTURE_NAME),
+  'meta.ogImage': (text) => withoutOgImage(text),
+};
+
+/**
+ * What still makes a portfolio the sample's after the guide's identity
+ * step: its identity.name, a meta.title naming its persona, or a
+ * meta.ogImage placing one of its own pictures.
+ */
+export function sampleLeftovers(text, sample) {
+  const left = [];
+  if (withIdentityName(text, FIXTURE_NAME) !== null)
+    left.push("identity.name is still the sample's");
+  if ((metaTitle(text) ?? '').includes(SAMPLE_NAME))
+    left.push(`meta.title still names ${SAMPLE_NAME}`);
+  const asset = metaOgAsset(text);
+  if (asset !== null) {
+    // A picture the run can't resolve counts as the sample's: it can't be told apart.
+    const source = mediaSource(text, asset);
+    if (source === null || mediaSources(sample).includes(source))
+      left.push(
+        `meta.ogImage still places the sample's picture (${asset}${source ? `, ${source}` : ''})`,
+      );
+  }
+  return left;
+}
+
+/**
+ * The guide's identity step on a copied sample: each field the guide's
+ * comment names becomes the fixture's, the rest byte for byte, and then
+ * nothing of the sample's identity may be left.
+ */
+export function identityEdit(text, fields, sample) {
+  const problems = [];
+  let out = text;
+  for (const field of fields) {
+    const change = IDENTITY_EDITS[field];
+    if (!change) {
+      problems.push(`the run has no edit for ${field}, which the guide names`);
+      continue;
+    }
+    const next = change(out);
+    if (next === null) problems.push(`${field} isn't the sample's to change`);
+    else out = next;
+  }
+  problems.push(
+    ...sampleLeftovers(out, sample).map(
+      (left) => `${left}: the guide's identity step doesn't name it`,
+    ),
+  );
+  return { text: out, problems };
+}
+
 /** The shell text a command runs as: a comment-only line runs nothing, and a trailing comment goes. */
 export const runnable = (command) => command.replace(/\s+#.*$/, '');
 
@@ -609,10 +778,12 @@ export function responseProblems(response, expect) {
 async function get(url) {
   try {
     const response = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(120_000) });
+    const bytes = Buffer.from(await response.arrayBuffer());
     return {
       status: response.status,
       headers: Object.fromEntries(response.headers),
-      body: await response.text(),
+      body: bytes.toString('utf8'),
+      sha256: createHash('sha256').update(bytes).digest('hex'),
     };
   } catch (error) {
     return { status: 0, body: String(error.cause?.code ?? error.message) };
@@ -982,11 +1153,16 @@ async function runStep(clone, step) {
     }
     case 'identity': {
       const file = path.resolve(clone.cwd, step.file);
-      const before = readFileSync(file, 'utf8');
-      const after = withIdentityName(before, FIXTURE_NAME);
-      expect(after !== null, `${step.file} starts with the sample's identity.name`);
-      writeFileSync(file, after);
-      clone.log.push(`# the identity step: ${step.file} identity.name is ${FIXTURE_NAME}\n`);
+      const { text, problems } = identityEdit(
+        readFileSync(file, 'utf8'),
+        identityFields(command),
+        readFileSync(path.join(clone.root, 'portfolio.example.yml'), 'utf8'),
+      );
+      expect(problems.length === 0, `${step.file} after "${command}": ${problems.join('; ')}`);
+      writeFileSync(file, text);
+      clone.log.push(
+        `# the identity step: ${identityFields(command).join(', ')} in ${step.file}\n`,
+      );
       return;
     }
     case 'refuse': {
@@ -1017,7 +1193,7 @@ async function runStep(clone, step) {
           if (response.status !== 0) break;
           await sleep(1000);
         }
-        if (response.status !== 0) await afterServed(step, `http://127.0.0.1:${port}`);
+        if (response.status !== 0) await afterServed(clone, step, `http://127.0.0.1:${port}`);
       } finally {
         await server.stop();
       }
@@ -1057,7 +1233,7 @@ async function runStep(clone, step) {
  * answers 200 and ready; `identity`, what it publishes follows the
  * identity and the origin it was given (lib/identity.mjs).
  */
-async function afterServed(step, base) {
+async function afterServed(clone, step, base) {
   if (step.ready) {
     const ready = await get(`${base}/api/ready`);
     let status;
@@ -1072,7 +1248,7 @@ async function afterServed(step, base) {
     );
   }
   if (step.identity) {
-    const { profile, origin, name } = step.identity;
+    const { profile, origin, name, title } = step.identity;
     const [page, sitemap, robots, feed] = await Promise.all(
       Object.values(IDENTITY_PATHS).map((p) => get(`${base}${p}`)),
     );
@@ -1088,6 +1264,8 @@ async function afterServed(step, base) {
       feed,
       ogImage,
       forbidden: identityForbidden(profile),
+      title,
+      sampleImages: profile === 'demo' ? [] : samplePictures(clone.root),
     });
     expect(problems.length === 0, `${profile}'s identity: ${problems.join('; ')}`);
   }
@@ -1096,13 +1274,25 @@ async function afterServed(step, base) {
 /**
  * What the guide's servers may not name, beyond the build's own leaks.
  * Under demo, the fixture's name and the other origin. Under owner and
- * read-only, the demo's origin; the copied sample keeps its meta.title and
- * Open Graph picture, which the guide's identity step leaves alone, so the
- * persona is held off the identity fields JSON-LD and the URLs carry, not
- * the title.
+ * read-only, the sample's persona, in the titles, the feed's channel, and
+ * the JSON-LD alike, and the demo's origin.
  */
 export function identityForbidden(profile) {
-  return profile === 'demo' ? [FIXTURE_NAME, 'https://jane.name'] : ['https://demo.jane.name'];
+  return profile === 'demo'
+    ? [FIXTURE_NAME, 'https://jane.name']
+    : [SAMPLE_NAME, 'https://demo.jane.name'];
+}
+
+/** The sha256 of every picture the clone's sample bundles, none of which owner's or read-only's Open Graph image may be. */
+export function samplePictures(root) {
+  const dir = path.join(root, 'example-media');
+  return readdirSync(dir, { recursive: true })
+    .filter((file) => /\.(png|jpe?g|webp|avif|gif)$/i.test(file))
+    .map((file) =>
+      createHash('sha256')
+        .update(readFileSync(path.join(dir, file)))
+        .digest('hex'),
+    );
 }
 
 /** The hash file, which the server's user owns, mode 0400. */
@@ -1151,7 +1341,7 @@ async function composeStep(clone, step, command) {
         expect(up.exited() === undefined, `"${step.command}" ended before it served`, up.output());
         await sleep(3000);
       }
-      if (response.status !== 0) await afterServed(step, 'http://127.0.0.1:3000');
+      if (response.status !== 0) await afterServed(clone, step, 'http://127.0.0.1:3000');
       const logs = compose(['logs', '--no-color', '--no-log-prefix']).out;
       expect(
         response.status !== 0,

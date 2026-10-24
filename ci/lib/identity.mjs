@@ -3,7 +3,9 @@
 // og:url, the Open Graph image, the sitemap, the robots host, the feed, and
 // the JSON-LD follow the mounted identity and the origin the server was
 // given, and never name the bundled sample's persona, example.com, the
-// build host, or a container path. Under demo the site is the sample's
+// build host, or a container path. Given a `title`, the page's titles
+// carry it, and given the sample's pictures, the Open Graph image is none
+// of them. Under demo the site is the sample's
 // alone: its persona, on the demo origin, out of search.
 //
 // Only what the server derives from the identity and the origin is held to
@@ -64,7 +66,7 @@ export function pageIdentity(html) {
       .filter((l) => l.rel === 'canonical')
       .map((l) => l.href),
     ogUrl: meta('og:url'),
-    ogTitle: meta('og:title'),
+    titles: [...meta('og:title'), ...meta('twitter:title'), ...meta('og:site_name')],
     images: [...meta('og:image'), ...meta('twitter:image')],
     robots: meta('robots'),
     jsonLd,
@@ -102,12 +104,17 @@ const onOrigin = (value, origin) => value === origin || String(value).startsWith
  *   sitemap: { status: number, body: string },
  *   robots: { status: number, body: string },
  *   feed: { status: number, body: string },
- *   ogImage?: { status: number, headers?: Record<string, string> },
+ *   ogImage?: { status: number, headers?: Record<string, string>, sha256?: string },
  *   forbidden?: readonly string[],
+ *   title?: string,
+ *   sampleImages?: readonly string[],
  * }} input `name` is the identity's: the fixture's under owner and
  *   read-only, the sample's under demo. `forbidden` adds to BUILD_LEAKS:
  *   the sample's name, or under demo, the fixtures', and the container's
- *   hostname.
+ *   hostname. Under owner and read-only, `title` is what the page's
+ *   <title>, og:title, twitter:title, and og:site_name must each carry,
+ *   and `sampleImages` the sha256 of each of the sample's own pictures,
+ *   none of which the Open Graph image may be.
  * @returns {string[]}
  */
 export function identityProblems({
@@ -120,6 +127,8 @@ export function identityProblems({
   feed,
   ogImage,
   forbidden = [],
+  title,
+  sampleImages = [],
 }) {
   const problems = [];
   if (page.status !== 200) return [`/ answered ${page.status}`];
@@ -128,7 +137,7 @@ export function identityProblems({
     { where: 'title', value: head.title },
     ...head.canonical.map((value) => ({ where: 'canonical link', value })),
     ...head.ogUrl.map((value) => ({ where: 'og:url', value })),
-    ...head.ogTitle.map((value) => ({ where: 'og:title', value })),
+    ...head.titles.map((value) => ({ where: 'a title meta tag', value })),
     ...head.images.map((value) => ({ where: 'og:image', value })),
   ];
 
@@ -188,6 +197,24 @@ export function identityProblems({
       if (leak && page.body.includes(leak)) problems.push(`the page names ${leak}`);
     }
   } else {
+    if (title !== undefined) {
+      for (const [where, value] of [
+        ['the title', head.title],
+        ...head.titles.map((value) => ['a title meta tag', value]),
+      ]) {
+        if (!value.includes(title))
+          problems.push(`${where} is ${JSON.stringify(value)}, not the identity's ${title}`);
+      }
+      if (head.titles.length === 0)
+        problems.push('the page carries no og:title, twitter:title, or og:site_name');
+    }
+    if (ogImage?.sha256 !== undefined && sampleImages.includes(ogImage.sha256)) {
+      problems.push(`the Open Graph image is the sample's own picture (sha256 ${ogImage.sha256})`);
+    } else if (ogImage && sampleImages.length > 0 && ogImage.sha256 === undefined) {
+      problems.push(
+        "the Open Graph image's bytes weren't read, so it can't be told from the sample's",
+      );
+    }
     const derived = derivedJsonLd(head.jsonLd);
     fields.push(...derived);
     const person = head.jsonLd.find((o) => o['@type'] === 'Person');
