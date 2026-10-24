@@ -1,0 +1,55 @@
+{
+  "id": "paper-ink",
+  "name": "Paper Ink",
+  "description": "Off-white paper and dark ink with a brick-red accent and a teal secondary.",
+  "version": "1.0.0",
+  "tokenContract": 1,
+  "tier": "stable",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v1 from the reviewed prototype's paper-ink anchors."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0,
+    "css": 3072
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [],
+  "derivation": "anchor-v1",
+  "anchors": {
+    "light": {
+      "canvas": "#fbf7ef",
+      "text": "#1f1c18",
+      "accent": "#a4432d",
+      "secondary": "#315b62"
+    },
+    "dark": {
+      "canvas": "#1c1915",
+      "text": "#f7efe1",
+      "accent": "#e28b6d",
+      "secondary": "#7fb0b7"
+    }
+  },
+  "swatches": ["#fbf7ef", "#1f1c18", "#a4432d", "#315b62"]
+}

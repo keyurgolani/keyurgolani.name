@@ -1,0 +1,55 @@
+{
+  "id": "zinc",
+  "name": "Zinc",
+  "description": "Tailwind CSS's zinc neutrals with its violet as the accent.",
+  "version": "1.0.0",
+  "tokenContract": 1,
+  "tier": "extended",
+  "provenance": {
+    "source": {
+      "name": "Tailwind CSS colors",
+      "url": "https://tailwindcss.com/docs/colors"
+    },
+    "license": "MIT",
+    "attribution": "Tailwind Labs, Inc., Tailwind CSS v3 zinc and violet color scales, under the MIT License.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v1 from Tailwind CSS v3 zinc-50, zinc-900, zinc-600, and violet-600 (light) and zinc-950, zinc-50, zinc-400, and violet-400 (dark)."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0,
+    "css": 3072
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [],
+  "derivation": "anchor-v1",
+  "anchors": {
+    "light": {
+      "canvas": "#fafafa",
+      "text": "#18181b",
+      "accent": "#52525b",
+      "secondary": "#7c3aed"
+    },
+    "dark": {
+      "canvas": "#09090b",
+      "text": "#fafafa",
+      "accent": "#a1a1aa",
+      "secondary": "#a78bfa"
+    }
+  },
+  "swatches": ["#fafafa", "#18181b", "#52525b", "#7c3aed"]
+}

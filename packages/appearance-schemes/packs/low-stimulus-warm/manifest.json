@@ -1,0 +1,55 @@
+{
+  "id": "low-stimulus-warm",
+  "name": "Low Stimulus Warm",
+  "description": "Soft warm greys and low-chroma accents for long, calm reading.",
+  "version": "1.0.0",
+  "tokenContract": 1,
+  "tier": "stable",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v1 from the reviewed prototype's low-stimulus-warm anchors."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0,
+    "css": 3072
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [],
+  "derivation": "anchor-v1",
+  "anchors": {
+    "light": {
+      "canvas": "#f4efe6",
+      "text": "#342f29",
+      "accent": "#806857",
+      "secondary": "#6d7567"
+    },
+    "dark": {
+      "canvas": "#26231f",
+      "text": "#e8e0d4",
+      "accent": "#b89c86",
+      "secondary": "#a5ad9b"
+    }
+  },
+  "swatches": ["#f4efe6", "#342f29", "#806857", "#6d7567"]
+}

@@ -1,0 +1,27 @@
+{
+  "id": "papercolor",
+  "name": "PaperColor",
+  "kind": "color-scheme",
+  "tier": "research",
+  "source": {
+    "name": "PaperColor",
+    "url": null
+  },
+  "license": "unverified",
+  "researchedAt": "2026-10-17",
+  "reason": "Its upstream license isn't verified, so it doesn't ship. Promoting it is its own owner-approved PR with a source URL, an SPDX license, attribution, a pinned upstream version, and a naming decision.",
+  "anchors": {
+    "light": {
+      "canvas": "#eeeeee",
+      "text": "#444444",
+      "accent": "#0087af",
+      "secondary": "#8700af"
+    },
+    "dark": {
+      "canvas": "#1c1c1c",
+      "text": "#d0d0d0",
+      "accent": "#5fafd7",
+      "secondary": "#af87d7"
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "id": "tailwind-oklch",
+  "name": "Tailwind OKLCH",
+  "kind": "color-scheme",
+  "tier": "research",
+  "source": {
+    "name": "Tailwind OKLCH",
+    "url": "https://tailwindcss.com/docs/colors"
+  },
+  "license": "unverified",
+  "researchedAt": "2026-10-17",
+  "reason": "Its upstream license isn't verified, so it doesn't ship. Promoting it is its own owner-approved PR with a source URL, an SPDX license, attribution, a pinned upstream version, and a naming decision.",
+  "anchors": {
+    "light": {
+      "canvas": "#f8fafc",
+      "text": "#0f172a",
+      "accent": "#4f46e5",
+      "secondary": "#0d9488"
+    },
+    "dark": {
+      "canvas": "#0f172a",
+      "text": "#f8fafc",
+      "accent": "#818cf8",
+      "secondary": "#2dd4bf"
+    }
+  }
+}
