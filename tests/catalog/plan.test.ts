@@ -285,7 +285,11 @@ test("the static smoke checks every tuple's packs, compiled files, and contrast,
   assert.equal(findings[0]!.axis, 'colorScheme');
   assert.equal(findings[0]!.id, 'warm-parchment');
   assert.match(findings[0]!.message, /isn't the file registry generation hashed/);
-  assert.equal(findings[0]!.tuples.length, tuples.length);
+  // Every tuple warm-parchment is in, and only those.
+  assert.equal(
+    findings[0]!.tuples.length,
+    tuples.filter((tuple) => tuple.colorScheme === 'warm-parchment').length,
+  );
   // A scheme under its contrast targets fails the contrast table in every tuple and mode it renders.
   const low = JSON.parse(
     readFileSync(

@@ -133,11 +133,19 @@ test('an installed third-party MIT pack gets its notice, with its copyright and 
     assert.deepEqual(governance(stale.lines), [
       'apps/web/public/third-party-notices.txt is stale. Run pnpm catalog:lock and commit it.',
     ]);
-    // With the notices regenerated, it passes, and the lock pins the first-party three alone.
+    // With the notices regenerated, it passes, and the lock pins the first-party packs alone.
     fs.writeFileSync(path.join(root, NOTICES_FILE), notices);
     const current = catalogFindings(root, result, []);
     assert.deepEqual(governance(current.lines), []);
-    assert.equal(current.counts.locked, 3);
+    const firstParty = [
+      'appearance-languages',
+      'appearance-schemes',
+      'appearance-typography',
+    ].reduce(
+      (count, dir) => count + fs.readdirSync(path.join(REPO_ROOT, 'packages', dir, 'packs')).length,
+      0,
+    );
+    assert.equal(current.counts.locked, firstParty);
     assert.ok(
       !fs
         .readFileSync(path.join(root, 'packages/appearance/appearance-catalog.lock.json'), 'utf8')
