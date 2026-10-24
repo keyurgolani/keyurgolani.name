@@ -120,6 +120,21 @@ export function pixelsSha256(raster: Raster): string {
   return hash.update(rgb).digest('hex');
 }
 
+/** The inputsHash of a seed color (#10's DerivedScheme): SHA-256 hex of the seed, lowercased. */
+export function seedInputsHash(seedColor: string): string {
+  return createHash('sha256').update(seedColor.toLowerCase()).digest('hex');
+}
+
+/**
+ * The inputsHash #10's draft save stores beside a generator's result: a
+ * seed's seedInputsHash(), or an asset's pixelsSha256, which the caller
+ * hashed from the pixels it decoded. Null for an asset result without it.
+ */
+export function inputsHash(input: GeneratorResult['input']): string | null {
+  if ('seedColor' in input) return seedInputsHash(input.seedColor);
+  return input.pixelsSha256 ?? null;
+}
+
 /** Where a package keeps its generated schemes' reference records and the owner's acceptance. */
 export const GENERATED_DIR = 'generated';
 export const ACCEPTANCE_FILE = 'acceptance.json';

@@ -96,6 +96,7 @@ export {
 export {
   ACCEPTANCE_FILE,
   GENERATED_DIR,
+  inputsHash,
   pixelsSha256,
   readAcceptance,
   readPng,
@@ -105,6 +106,7 @@ export {
   referenceRecord,
   renderReference,
   reviewExclusion,
+  seedInputsHash,
   type Acceptance,
   type DecodedPng,
   type DeclaredGenerator,
