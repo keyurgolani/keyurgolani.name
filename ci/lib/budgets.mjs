@@ -277,8 +277,9 @@ const isEntry = (source, entry) =>
   entry !== null && (source === entry || source.endsWith(`/${entry.replace(/^\.\//, '')}`));
 
 /**
- * The build's chunks that hold each of `unit`'s enhancements, with the
- * unit's own gzip bytes in each. `chunks` is the build's attributed chunks,
+ * The build's chunks that hold each of `unit`'s enhancements, with every
+ * gzip byte in each, the unit's own and every package's beside it, so a 3D
+ * library an enhancement loads counts against it. `chunks` is the build's attributed chunks,
  * each with the path it's served at; `entries` maps an enhancement id to
  * the file its export resolves to in the package, or null for none.
  *
@@ -297,11 +298,11 @@ export function enhancementChunks(unit, chunks, entries) {
     return {
       id: enhancement.id,
       entry,
+      // Everything in the chunk is the enhancement's to load: its own code, and the kit's,
+      // three.js's, or any library's beside it, which nothing else on the page needed.
       chunks: holding.map((chunk) => ({
         path: chunk.path,
-        gzipBytes: chunk.modules
-          .filter((module) => module.package === unit.packageName)
-          .reduce((total, module) => total + module.gzipBytes, 0),
+        gzipBytes: chunk.modules.reduce((total, module) => total + module.gzipBytes, 0),
       })),
     };
   });

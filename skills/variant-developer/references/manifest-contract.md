@@ -87,7 +87,7 @@ The five first-party compositions have pinned values: `editorial-evidence` is li
 - `css`: gzip bytes of your compiled stylesheet, the kit's shared renderers' layout included.
 - `image` and `font`: bytes of the image and font files you ship.
 - `animation`: how many frame loops, recurring timers, and infinite animations an idle page runs, as `pnpm test:trace` counts them.
-- `enhancement`: gzip bytes of your code in the chunks that hold one of your enhancements, each enhancement on its own.
+- `enhancement`: gzip bytes of everything in the chunks that hold one of your enhancements, your code and the kit's and every library's beside it, such as `three`, each enhancement on its own.
 
 A kind you leave out is your tier's ceiling in `runtime-budgets.json`'s `budgets` block: light, medium, and heavy each have one. `pnpm check:budgets`, which CI runs on a traced build, fails a declared budget over its ceiling, a unit over what it declares, and a stylesheet with an `@import` or `url()` to another host, each as a record naming the asset that carries the most of it. Declare what you measured, with room to grow, so a regression shows up as yours.
 

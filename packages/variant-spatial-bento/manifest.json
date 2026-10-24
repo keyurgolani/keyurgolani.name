@@ -2,19 +2,29 @@
   "id": "spatial-bento",
   "name": "Spatial Bento",
   "promise": "The whole portfolio as a bento of tiles you can read, select, and follow, with a still of its spatial stage beside the opening.",
-  "description": "A bento document: the opening and a server-rendered still of the spatial stage share the first tile, and every other section is a tile of its own, in content order, through the kit's shared renderers. Every title, description, link, work, case study, and action is selectable HTML. This first build is the static document mode, complete on its own; the spatial stage that enhances it on capable devices follows.",
+  "description": "A bento document: the opening and a server-rendered still of the spatial stage share the first tile, and every other section is a tile of its own, in content order, through the kit's shared renderers. Every title, description, link, work, case study, and action is selectable HTML. The static document is complete on its own; on a device that meets the stage's capability policy, a bounded spatial stage draws over the still, with an exit back to the document, and any failure tears it down to the still.",
   "contract": "2.0",
   "schemas": { "portfolio": { "min": 3, "max": 3 }, "site": { "min": 2, "max": 2 } },
   "tokenContract": 1,
   "compositionFamily": "bento",
   "motionIntent": "adaptive",
   "performanceTier": "heavy",
-  "budgets": { "js": 1024, "css": 2048, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
+  "budgets": {
+    "js": 8192,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 1,
+    "enhancement": 307200
+  },
   "renderedKinds": ["hero"],
   "unsupportedKinds": [],
   "contentSlots": [],
   "routes": { "home": "shared", "work": "shared", "views": [] },
   "controls": { "version": 1, "items": [], "migrations": [] },
+  "enhancements": [
+    { "id": "stage", "export": "./enhancements/stage", "requires": ["webgl2", "min-width:768"] }
+  ],
   "visitorControl": { "placement": "header" },
   "textDirection": ["ltr", "rtl"],
   "provenance": {
@@ -23,7 +33,7 @@
       {
         "source": "The bento and spatial lineages the scope names for Spatial Bento",
         "disposition": "reused-interaction",
-        "note": "Tiles in content order on the shared renderers; the spatial stage is #16's second pull request."
+        "note": "Tiles in content order on the shared renderers, and a bounded stage that only adds to them."
       }
     ]
   }

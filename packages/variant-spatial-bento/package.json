@@ -11,6 +11,7 @@
     ".": "./src/index.tsx",
     "./manifest": "./manifest.json",
     "./styles.css": "./src/styles.css",
+    "./enhancements/stage": "./src/stage-canvas.tsx",
     "./package.json": "./package.json"
   },
   "scripts": {

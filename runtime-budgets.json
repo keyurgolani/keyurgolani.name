@@ -36,7 +36,7 @@
       "image": "bytes of the image files the unit ships",
       "font": "bytes of the font files the unit ships",
       "animation": "continuous work on an active, idle page, as the trace probes count it: frame loops, recurring timers, and running infinite animations",
-      "enhancement": "gzip bytes of the unit's own code in the build's chunks that hold one of its enhancements"
+      "enhancement": "gzip bytes of everything in the build's chunks that hold one of the unit's enhancements: its own code, and the kit's and every library's beside it"
     },
     "headroom": "Kind by kind. JS: light 30,720, under the 43,879 of variant code v1 Editorial's page carried over the fallback route's, and medium and heavy 92,160, twice that; slice 2's largest variant, fixture-variant-medium, measured 926. CSS: light 10,240, two thirds of v1's one 14,494 B file of every variant's CSS, and medium and heavy 15,360, above that whole file; slice 2's largest, fixture-variant-medium, compiled 1,184. Image and font: v1 has no measurement of either, since its images were data URLs and its fonts came from Google, so they start at #6's original 102,400, with 204,800 and 409,600 for medium and heavy images. Animation: light 0, as v1 Editorial ran nothing while idle; medium 3, one over the 2 CI measured for fixture-variant-medium, its shader's frame loop and one infinite CSS animation; heavy 4. Heavy shares medium's JS, CSS, and font ceilings because slice 1 traced no heavy composition to set its own from. Pack rows rest on the same measurements, per the basis below.",
     "tiers": {

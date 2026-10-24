@@ -550,10 +550,10 @@ test("a variant the trace didn't render, or rendered without source maps, is a r
   assert.equal(records[0].asset, '/_next/static/chunks/x.js');
 });
 
-test("an enhancement's chunks count against enhancement, not js, and one no chunk holds is a record", () => {
+test("an enhancement's chunks count against enhancement, not js, with everything in them, and one no chunk holds is a record", () => {
   const medium = variant('medium', {
     performanceTier: 'medium',
-    budgets: { js: 4096, enhancement: 4096 },
+    budgets: { js: 4096, enhancement: 16384 },
     enhancements: [{ id: 'glint', export: './enhancements/glint', requires: [] }],
   });
   const glint = {
@@ -566,6 +566,11 @@ test("an enhancement's chunks count against enhancement, not js, and one no chun
       },
       { source: 'packages/acme/medium/src/shared.ts', package: '@acme/medium', gzipBytes: 2000 },
       { source: 'packages/kit/src/enhancement.ts', package: '@portfolio/kit', gzipBytes: 9000 },
+      {
+        source: 'node_modules/three/build/three.module.js',
+        package: 'three',
+        gzipBytes: 150000,
+      },
     ],
   };
   const entries = { medium: { glint: './src/enhancements/glint.tsx' } };
@@ -585,9 +590,13 @@ test("an enhancement's chunks count against enhancement, not js, and one no chun
   );
   assert.equal(records.length, 1);
   assert.equal(records[0].metric, 'enhancement');
-  assert.equal(records[0].actual, 5000);
+  // Its own 5000, the kit's 9000, and three.js's 150000: the whole chunk it loads, not its package alone.
+  assert.equal(records[0].actual, 164000);
   assert.equal(records[0].asset, '/_next/static/chunks/glint.js');
-  assert.match(records[0].test, /in enhancement glint is 5000, over its declared budget of 4096/);
+  assert.match(
+    records[0].test,
+    /in enhancement glint is 164000, over its declared budget of 16384/,
+  );
   const missing = check([medium], cases, { chunks: [], entries });
   assert.ok(
     missing.records.some((record) =>

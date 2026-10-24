@@ -42,7 +42,7 @@ const CEILINGS = JSON.parse(
 ).budgets.tiers;
 const { PortfolioSchema } = composeSchemas();
 
-test("its manifest validates with nothing to report, holds the catalog's pins, and declares medium budgets", () => {
+test("its manifest validates with nothing to report, holds the catalog's pins, and declares the stage's heavy budgets", () => {
   const result = validateManifest(RAW, { packageName: PACKAGE.name, exports: PACKAGE.exports });
   assert.ok(result.ok, JSON.stringify(result.diagnostics));
   assert.deepEqual(result.diagnostics, []);
@@ -55,17 +55,26 @@ test("its manifest validates with nothing to report, holds the catalog's pins, a
   assert.deepEqual(manifest.renderedKinds, ['hero']);
   assert.deepEqual(manifest.unsupportedKinds, []);
   assert.deepEqual(manifest.textDirection, ['ltr', 'rtl']);
-  // The heavy tier is the catalog's, for the stage that follows; this build declares the medium one's.
+  // The heavy tier, for the stage: its chunk, three.js and R3F in it, is the enhancement's budget,
+  // and the static path's JavaScript stays inside the medium tier's.
   const budgets: Record<string, number> = { ...manifest.budgets };
   assert.equal(Object.keys(budgets).length, 6);
   for (const [kind, declared] of Object.entries(budgets)) {
     assert.ok(
-      declared <= CEILINGS.medium[kind],
-      `${kind}: ${declared} over medium's ${CEILINGS.medium[kind]}`,
+      declared <= CEILINGS.heavy[kind],
+      `${kind}: ${declared} over heavy's ${CEILINGS.heavy[kind]}`,
     );
   }
-  assert.equal(budgets.animation, 0);
-  assert.equal(budgets.enhancement, 0);
+  assert.ok(budgets.js! <= CEILINGS.medium.js);
+  assert.ok(
+    budgets.enhancement! > CEILINGS.medium.enhancement,
+    'the stage is why the tier is heavy',
+  );
+  // The stage is the one enhancement: WebGL2 and the width it needs, its export the lazily loaded module.
+  assert.deepEqual(manifest.enhancements, [
+    { id: 'stage', export: './enhancements/stage', requires: ['webgl2', 'min-width:768'] },
+  ]);
+  assert.equal(PACKAGE.exports['./enhancements/stage'], './src/stage-canvas.tsx');
   assert.deepEqual(PACKAGE.portfolio, { kind: 'variant', manifest: './manifest.json' });
   // Its tests run under the root's pnpm test.
   assert.match(PACKAGE.scripts.test, /tsx --test/);
