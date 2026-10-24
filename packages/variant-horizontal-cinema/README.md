@@ -23,7 +23,7 @@ What each chapter holds, from the published view alone:
 
 A works section's other works and an extension's sections read in the index. A works section the frames show whole keeps its id, on Journey. A section or record whose id is one of the six anchors (`chapter-prologue` to `chapter-epilogue`, and `chapter-index`) renders in place with no anchor of its own, so the chapter keeps its URL.
 
-A frame is the work's cover, else its first meaningful image, on a matte beside the title, the summary, the evidence the work cites, and its links. A case study gets no link yet: the host answers `/work/<slug>` with its 404 until #10's case-study pages land, and `routes.work` is `shared`, so that page is the host's then. Decoration is never a frame's media. Nothing is cropped, and the caption, credit, and rights are the owner's, as #10 holds them, below the image. An image that isn't there yet keeps its box and says so, and the words, the evidence, and the links stay. Audio and video are links: nothing plays in the page, and there are no frames from other sites.
+A frame is the work's cover, else its first meaningful image, on a matte beside the title, the summary, the evidence the work cites, and its links, and a case study's link to `/work/<slug>`, the host's shared page (`routes.work: shared`). Decoration is never a frame's media. Nothing is cropped, and the caption, credit, and rights are the owner's, as #10 holds them, below the image. An image that isn't there yet keeps its box and says so, and the words, the evidence, and the links stay. Audio and video are links: nothing plays in the page, and there are no frames from other sites.
 
 ## Layout
 

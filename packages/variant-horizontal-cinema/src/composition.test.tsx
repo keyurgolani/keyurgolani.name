@@ -395,8 +395,8 @@ test('a frame shows its media beside its evidence, decoration never, and a faile
   assert.match(frame, /data-media-state="unavailable"/);
   assert.match(text(frame), /Image unavailable/);
   assert.match(text(frame), new RegExp(signature.title));
-  // No link to /work/<slug>, which the host answers 404 until #10's case-study pages land.
-  assert.doesNotMatch(markup, /href="\/work\//);
+  // A case study is the host's shared page, at its slug.
+  assert.match(frame, new RegExp(`href="/work/${signature.slug}"`));
 
   // Behind a decorative cover, the first meaningful image leads; with none, no matte at all.
   const decorative = portfolioInput({
@@ -464,6 +464,7 @@ test('internal links keep the mount: below /sample, with its variant query', () 
   });
   const markup = html(input);
   assert.match(markup, /<a class="hc-chrome__name" href="\/sample\?variant=horizontal-cinema"/);
+  assert.match(markup, /href="\/sample\/work\/project-name\?variant=horizontal-cinema"/);
   for (const [, href] of markup.matchAll(/\shref="(\/[^"]*)"/g)) {
     assert.ok(href!.startsWith('/sample'), href);
   }
