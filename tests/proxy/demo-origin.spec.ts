@@ -51,20 +51,37 @@ interface Answer {
   readonly code: string | null;
   /** Its Access-Control-* headers, which would let another origin read it. */
   readonly cors: readonly string[];
-  /** Set when CDP kept no body to read the code from. */
-  readonly unread?: true;
+  /**
+   * How it was read: `checked`, a body was handed back, so its code counts;
+   * `opaque-empty`, an opaque answer with no body at all, so only its status
+   * does.
+   */
+  readonly body: 'checked' | 'opaque-empty';
 }
 
-/** `answer` is the refusal #2's Origin check gives, by its code too when its body was kept. */
-function expectOriginRefusal(answer: Answer, what: string) {
-  expect(answer.status, what).toBe(403);
-  if (answer.unread) {
-    test.info().annotations.push({ type: 'unread body', description: what });
-  } else {
-    expect(answer.code, what).toBe('request_origin_rejected');
-  }
+/**
+ * `answer` has `status` and, whenever a body came back, exactly `code`: a
+ * missing or another code fails. Only an opaque answer with an empty body is
+ * judged by its status alone. Each send's path is recorded on the test.
+ */
+function expectAnswer(
+  answer: Answer,
+  { what, status, code, opaque }: { what: string; status: number; code: string; opaque: boolean },
+) {
+  test.info().annotations.push({
+    type: 'answer',
+    description: `${what}: ${answer.status}, ${answer.body === 'checked' ? `body checked, ${answer.code}` : 'opaque and empty'}`,
+  });
+  expect(answer.status, what).toBe(status);
+  // A request that isn't no-cors has a readable body: an empty one fails too.
+  if (!opaque) expect(answer.body, `${what}: a body`).toBe('checked');
+  if (answer.body === 'checked') expect(answer.code, what).toBe(code);
   expect(answer.cors, what).toEqual([]);
 }
+
+/** `answer` is the refusal #2's Origin check gives. */
+const expectOriginRefusal = (answer: Answer, what: string, opaque: boolean) =>
+  expectAnswer(answer, { what, status: 403, code: 'request_origin_rejected', opaque });
 
 const corsOf = (names: Iterable<string>) =>
   [...names].map((name) => name.toLowerCase()).filter((name) => name.startsWith('access-control-'));
@@ -90,7 +107,7 @@ async function sameOrigin(page: Page, pathname: string, init: RequestInit = {}):
     },
     [pathname, init] as const,
   );
-  return { status, code: codeOf(text), cors: corsOf(names) };
+  return { status, code: codeOf(text), cors: corsOf(names), body: 'checked' };
 }
 
 interface Seen {
@@ -123,20 +140,18 @@ async function crossOrigin(page: Page, prefix: string) {
     await send();
     await expect.poll(() => fresh().length, { timeout: 15_000 }).toBe(1);
     const [requestId, seen] = fresh()[0]!;
-    // An opaque answer's body may not be kept for CDP: then its code is
-    // unknown, and its status says what the server did.
+    // CDP may keep no data for an opaque answer, and says so; any body it
+    // does hand back is read for its code.
     const text = await cdp
       .send('Network.getResponseBody', { requestId })
       .then(({ body, base64Encoded }) =>
         base64Encoded ? Buffer.from(body, 'base64').toString('utf8') : body,
       )
-      .catch(() => null);
-    return {
-      status: seen.status,
-      code: text === null ? null : codeOf(text),
-      cors: corsOf(Object.keys(seen.headers)),
-      ...(text === null ? { unread: true } : {}),
-    };
+      .catch(() => '');
+    const cors = corsOf(Object.keys(seen.headers));
+    return text === ''
+      ? { status: seen.status, code: null, cors, body: 'opaque-empty' }
+      : { status: seen.status, code: codeOf(text), cors, body: 'checked' };
   };
 }
 
@@ -213,14 +228,15 @@ test(
       'the one cookie it sends the owner is the planted one',
     ).toEqual([{ name: 'studio_session', value: owner.token }]);
     const session = await sameOrigin(page, '/api/studio/auth.session');
-    expect([session.status, session.code]).toEqual([401, 'authentication_required']);
+    const signedOut = { status: 401, code: 'authentication_required', opaque: false };
+    expectAnswer(session, { what: 'auth.session', ...signedOut });
     for (const name of ['auth.session.extend', 'auth.sessions.revokeAll']) {
       const answer = await sameOrigin(page, `/api/studio/${name}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-csrf-token': owner.csrf },
         body: '{}',
       });
-      expect([answer.status, answer.code], name).toEqual([401, 'authentication_required']);
+      expectAnswer(answer, { what: name, ...signedOut });
     }
     // Beside the owner's own cookie it changes nothing.
     expect(await sessionStatus(owner.page)).toBe(200);
@@ -297,15 +313,19 @@ test(
     const control = await strangerNext(() =>
       command(strangerPage, 'auth.session.extend', 'no-cors'),
     );
-    expect(control.status, 'no cookie').toBe(401);
-    if (!control.unread) expect(control.code, 'no cookie').toBe('authentication_required');
+    expectAnswer(control, {
+      what: 'auth.session.extend, no cookie',
+      status: 401,
+      code: 'authentication_required',
+      opaque: true,
+    });
     await stranger.close();
 
     // no-cors, as a script that only wants the side effect sends it. A
     // cors-mode fetch reads nothing either, with no Access-Control-* header
     // on any answer, which each check below holds.
     for (const name of ['auth.session.extend', 'auth.sessions.revokeAll', 'auth.logout']) {
-      expectOriginRefusal(await next(() => command(demo, name, 'no-cors')), name);
+      expectOriginRefusal(await next(() => command(demo, name, 'no-cors')), name, true);
     }
     // A text/plain form posted to auth.logout, a navigation the browser
     // sends with the owner's cookie and no preflight.
@@ -323,7 +343,7 @@ test(
         form.submit();
       }, `${OWNER}/api/studio/auth.logout`),
     );
-    expectOriginRefusal(posted, 'auth.logout, a form');
+    expectOriginRefusal(posted, 'auth.logout, a form', false);
     // auth.logout sent either way ended nothing.
     expect(await sessionStatus(owner.page)).toBe(200);
     await owner.context.close();
