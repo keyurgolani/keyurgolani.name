@@ -115,6 +115,65 @@ test('the array stays near the pairwise bound, far below the cross-product', () 
   assert.ok(tuples === 2 * 3 * 4 * 2 * 4);
 });
 
+/** The rows a plain greedy scan picks: every candidate counted on every pick, the earliest on a tie. */
+function scanned(input: CoverageInput): Tuple[] {
+  const sorted = Object.fromEntries(
+    TUPLE_AXES.map((axis) => [axis, [...new Set(input.values[axis])].sort()]),
+  ) as unknown as CoverageInput['values'];
+  const accepted = everyTuple(sorted).filter(input.accepts);
+  const uncovered = new Set(accepted.flatMap(pairs));
+  const rows: Tuple[] = [];
+  const pick = (candidates: Tuple[]) => {
+    let best: Tuple | undefined;
+    let most = -1;
+    for (const tuple of candidates) {
+      if (rows.includes(tuple)) continue;
+      const gain = pairs(tuple).filter((pair) => uncovered.has(pair)).length;
+      if (gain > most) {
+        best = tuple;
+        most = gain;
+      }
+    }
+    if (!best) return false;
+    rows.push(best);
+    for (const pair of pairs(best)) uncovered.delete(pair);
+    return true;
+  };
+  const order = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+  const packs = [...input.fixturePacks].sort((a, b) => order(a.axis, b.axis) || order(a.id, b.id));
+  for (const { axis, id } of packs) {
+    const met = (tuple: Tuple) => tuple.variant === input.fallbackVariant && tuple[axis] === id;
+    if (!rows.some(met)) pick(accepted.filter(met));
+  }
+  while (uncovered.size > 0 && pick(accepted)) {
+    // Each pick covers at least one pair, or the loop ends.
+  }
+  return rows;
+}
+
+test('each row is the one a plain greedy scan picks, in the same order (#20)', () => {
+  const wider: CoverageInput = {
+    ...INPUT,
+    values: {
+      variant: ['fallback', 'kinetic', 'notes'],
+      designLanguage: ['glass', 'platform-neutral', 'mono', 'fixture-language-stable', 'paper'],
+      colorScheme: [...VALUES.colorScheme, 'ocean', 'ember', 'moss'],
+      typography: ['humanist-ui', 'fixture-typography-stable', 'serif'],
+      displayMode: VALUES.displayMode,
+    },
+  };
+  for (const input of [INPUT, { ...INPUT, fixturePacks: [] }, wider]) {
+    const { rows } = pairwise(input);
+    assert.deepEqual(rows.map(tupleKey), scanned(input).map(tupleKey));
+    // And on its own terms: every pair an accepted tuple holds is in a row,
+    // so a change to scanned() can't agree with a pairwise() that drops one.
+    const covered = new Set(rows.flatMap(pairs));
+    for (const pair of new Set(everyTuple(input.values).filter(input.accepts).flatMap(pairs))) {
+      assert.ok(covered.has(pair), pair);
+    }
+  }
+});
+
 test('an empty axis gives an empty array', () => {
   const coverage = pairwise({ ...INPUT, values: { ...VALUES, typography: [] }, fixturePacks: [] });
   assert.deepEqual(coverage.rows, []);
