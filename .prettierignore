@@ -29,3 +29,5 @@ packages/*/generated/*.json
 !packages/*/generated/acceptance.json
 # The release rehearsal's frozen old configs, which stand for an owner's files
 ci/fixtures/rehearsal/
+# A built server's own answers, byte for byte, for ci/identity.test.mjs
+ci/fixtures/identity/
