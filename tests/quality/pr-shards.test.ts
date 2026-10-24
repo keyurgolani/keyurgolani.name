@@ -14,6 +14,7 @@ import {
   groupKey,
   HARNESS_SPECS,
   harnessProject,
+  isDirected,
   loadDurations,
   MAX_SHARDS,
   onPack,
@@ -181,41 +182,69 @@ test('the count is the fewest shards the weights allow within the ceiling, and m
   }
 });
 
-test('a pack sweep adds the shards it alone needs to the usual 12, up to 16, and nothing else raises it', () => {
+test("a PR's directed load, its pack sweep and its changed variants, adds the shards it alone needs to the usual 12, up to 16, and nothing else raises it", () => {
   const durations = { group: 5 };
   // A shard holds two 200 s groups, one a worker.
-  const swept = (count: number, weight: number): ShardGroup[] =>
+  const directed = (count: number, weight: number, kind: 'sweep' | 'variant'): ShardGroup[] =>
     synthetic(count, weight).map((group, at) => ({
       ...group,
-      project: `chromium sweep${at}`,
-      sweep: true,
+      project: `chromium ${kind}${at}`,
+      [kind]: true,
     }));
+  const swept = (count: number, weight: number) => directed(count, weight, 'sweep');
+  const varied = (count: number, weight: number) => directed(count, weight, 'variant');
   assert.equal(SWEEP_MAX_SHARDS, 16);
-  // No sweep load: needing 14 fails at 12, naming the heaviest group.
+  // No directed load: needing 14 fails at 12, naming the heaviest group.
   assert.deepEqual(shardLimit(synthetic(28, 200), durations), {
     max: MAX_SHARDS,
+    directedShards: 0,
     sweepShards: 0,
+    variantShards: 0,
     reason: null,
   });
   assert.throws(
     () => pickShardCount(synthetic(28, 200), durations),
     /^Error: Even 12 shards leave one at about \d+s, over the 300s ceiling\. Its heaviest group is chromium s\d+ cells\.spec\.ts, at about 200s\.$/,
   );
-  // 2a's shape: a sweep that alone needs 8 beside the rest's 6, so up to 16, and 14 picked.
+  // 2a's shape: a sweep that alone needs 8 beside the base's 6, so up to 16, and 14 picked.
   const catalog = pickShardCount([...synthetic(12, 200), ...swept(16, 200)], durations);
-  assert.equal(catalog.sweepShards, 8);
-  assert.equal(catalog.max, 16);
-  assert.equal(catalog.count, 14);
+  assert.deepEqual(
+    [
+      catalog.directedShards,
+      catalog.sweepShards,
+      catalog.variantShards,
+      catalog.max,
+      catalog.count,
+    ],
+    [8, 8, 0, 16, 14],
+  );
   assert.equal(
     catalog.reason,
-    "the pack sweep's 16 group(s) alone need 8 shard(s), so the most is 16",
+    "the directed groups alone need 8 shard(s) (the pack sweep's 8, the changed variants' 0), so the most is 16",
   );
+  // A changed variant's cells raise it the same way: 2c's shape, which needs 13.
+  const variant = pickShardCount([...synthetic(13, 200), ...varied(12, 200)], durations);
+  assert.deepEqual(
+    [
+      variant.directedShards,
+      variant.sweepShards,
+      variant.variantShards,
+      variant.max,
+      variant.count,
+    ],
+    [6, 0, 6, 16, 13],
+  );
+  // Both kinds count together, once.
+  assert.equal(shardLimit([...swept(4, 200), ...varied(4, 200)], durations).directedShards, 4);
   // One small pack raises the most to 13, and the count is still the fewest that fit.
   const small = [...synthetic(8, 200), ...swept(1, 50)];
   assert.deepEqual(shardLimit(small, durations), {
     max: 13,
+    directedShards: 1,
     sweepShards: 1,
-    reason: "the pack sweep's 1 group(s) alone need 1 shard(s), so the most is 13",
+    variantShards: 0,
+    reason:
+      "the directed groups alone need 1 shard(s) (the pack sweep's 1, the changed variants' 0), so the most is 13",
   });
   const fewest = pickShardCount(small, durations);
   assert.equal(fewest.count, 5);
@@ -223,34 +252,80 @@ test('a pack sweep adds the shards it alone needs to the usual 12, up to 16, and
     ...assignShards(splitGroups(small, GROUP_BUDGET, durations), 4).map(shardEstimate),
   );
   assert.ok(fewer > SHARD_CEILING, `4 shards: ${fewer}s`);
-  // One pack can't make room for the rest: without the sweep it needs 13, so it fails at 12.
-  assert.throws(
-    () => pickShardCount([...synthetic(26, 200), ...swept(1, 50)], durations),
-    /^Error: Even 12 shards leave one at about \d+s, over the 300s ceiling \(the groups outside the pack sweep, alone\)\. Its heaviest group is chromium s\d+ cells\.spec\.ts, at about 200s\.$/,
-  );
-  // The most is never over 16, however much the sweep needs.
+  // Directed load can't make room for the base: without it the base needs 13, so it fails at 12,
+  // with a small directed load and with a large one.
+  for (const load of [swept(1, 50), varied(1, 50), [...swept(8, 200), ...varied(8, 200)]]) {
+    assert.throws(
+      () => pickShardCount([...synthetic(26, 200), ...load], durations),
+      /^Error: Even 12 shards leave one at about \d+s, over the 300s ceiling \(the undirected base, alone\)\. Its heaviest group is chromium s\d+ cells\.spec\.ts, at about 200s\.$/,
+    );
+  }
+  // The most is never over 16, however much the directed load needs.
   for (const count of [1, 8, 16, 24, 40]) {
     assert.ok(shardLimit(swept(count, 200), durations).max <= SWEEP_MAX_SHARDS, `${count}`);
+    assert.ok(shardLimit(varied(count, 200), durations).max <= SWEEP_MAX_SHARDS, `${count}`);
   }
   assert.throws(
-    () => pickShardCount(swept(40, 200), durations),
-    /^Error: Even 16 shards leave one at about \d+s, over the 300s ceiling \(the pack sweep's 40 group\(s\) alone need more than 16 shards, so the most is 16\)\./,
+    () => pickShardCount(varied(40, 200), durations),
+    /^Error: Even 16 shards leave one at about \d+s, over the 300s ceiling \(the directed groups alone need more than 16 shards \(the pack sweep's 0, the changed variants' 16\), so the most is 16\)\./,
   );
 });
 
-test('an ordinary PR plans 4 to 7 shards, as the base PR set plans 7, one that changes a variant at most 12, and one that changes a pack 7, its most 13', () => {
-  for (const { name, plan } of plans.filter(({ plan }) => !plan.cells.some((cell) => cell.sweep))) {
-    const { count, reason } = pickShardCount(planGroups(plan, ENGINES));
-    // A changed variant meets every stable design language, which the catalog adds to (#20).
-    const most = plan.cells.some((cell) => cell.changed) ? MAX_SHARDS : 7;
-    assert.ok(count >= 4 && count <= most, `${name}: ${count}`);
+test('an ordinary PR plans 4 to 7 shards, as the base PR set does, and one with directed cells at most its own limit: a changed variant over 12, within 16, a changed pack 7 of 13', (t) => {
+  const directed = (plan: Plan) => plan.cells.some((cell) => cell.changed);
+  // The base sets: no directed cell, so 4 to 7 and the usual 12.
+  for (const { name, plan } of plans.filter(({ plan }) => !directed(plan))) {
+    const { count, max, reason } = pickShardCount(planGroups(plan, ENGINES));
+    assert.ok(count >= 4 && count <= 7, `${name}: ${count}`);
+    assert.equal(max, MAX_SHARDS, name);
     assert.equal(reason, null, name);
   }
-  const onePack = plans.find(
-    ({ name }) => name === 'the PR set with one changed non-default pack',
-  )!;
-  const { count, sweepShards, max } = pickShardCount(planGroups(onePack.plan, ENGINES));
-  assert.deepEqual({ count, sweepShards, max }, { count: 7, sweepShards: 1, max: 13 });
+  // With directed cells: within the plan's own limit, never past 16.
+  for (const { name, plan } of plans.filter(({ plan }) => directed(plan))) {
+    const { count, max } = pickShardCount(planGroups(plan, ENGINES));
+    assert.ok(count >= 4 && count <= max && max <= SWEEP_MAX_SHARDS, `${name}: ${count} of ${max}`);
+  }
+  const pick = (name: string) => {
+    const { count, directedShards, sweepShards, variantShards, max } = pickShardCount(
+      planGroups(plans.find((each) => each.name === name)!.plan, ENGINES),
+    );
+    return { count, directedShards, sweepShards, variantShards, max };
+  };
+  // 2c's and 2d's stable languages: a changed variant's cells alone need 7 or 8 (5 or more
+  // takes the most to 16). The count rides on the base, which grows with the catalog, so it's
+  // over 12 and within 16, not one number; the base's own count is printed, so a base nearing
+  // 12 shows in the log before it fails.
+  const name = 'the PR set with a changed variant';
+  const variant = pick(name);
+  assert.ok(variant.variantShards >= 5, `${variant.variantShards}`);
+  assert.ok(
+    variant.count > MAX_SHARDS && variant.count <= variant.max,
+    `${variant.count} of ${variant.max}`,
+  );
+  assert.deepEqual(
+    { ...variant, count: undefined },
+    {
+      count: undefined,
+      directedShards: variant.variantShards,
+      sweepShards: 0,
+      variantShards: variant.variantShards,
+      max: 16,
+    },
+  );
+  const base = pickShardCount(
+    planGroups(plans.find((each) => each.name === name)!.plan, ENGINES).filter(
+      (group) => !isDirected(group),
+    ),
+  );
+  assert.ok(base.count <= MAX_SHARDS, `the undirected base alone picks ${base.count}`);
+  t.diagnostic(`${name}: the undirected base alone picks ${base.count} of ${MAX_SHARDS}`);
+  assert.deepEqual(pick('the PR set with one changed non-default pack'), {
+    count: 7,
+    directedShards: 1,
+    sweepShards: 1,
+    variantShards: 0,
+    max: 13,
+  });
 });
 
 test('a cell group too heavy for one worker is split, by cell or by test, and its parts run each of its tests once', () => {
@@ -533,8 +608,10 @@ test("the planner's estimate of each shard of a recorded CI run is within 15% of
 test("CI's PR set, split and sharded at the count the planner picks, holds the ceiling, where Playwright's split doesn't", () => {
   for (const { name, plan } of plans) {
     const groups = planGroups(plan, ENGINES);
-    const { count, slowest, shards } = pickShardCount(groups);
-    assert.ok(count >= 1 && count <= MAX_SHARDS, `${name}: ${count}`);
+    const { count, slowest, shards, max } = pickShardCount(groups);
+    // Within the plan's own limit: 12, or more for its directed load, never past 16.
+    assert.ok(count >= 1 && count <= max && max <= SWEEP_MAX_SHARDS, `${name}: ${count} of ${max}`);
+    if (!plan.cells.some((cell) => cell.changed)) assert.equal(max, MAX_SHARDS, name);
     assert.ok(slowest <= SHARD_CEILING, `${name}: the slowest shard takes about ${slowest}s`);
     for (const shard of shards) assert.ok(shardEstimate(shard) <= SHARD_CEILING, name);
     if (count > 1) {
