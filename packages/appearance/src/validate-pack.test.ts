@@ -219,7 +219,8 @@ test('an anchor-v2 scheme records exactly the roles anchor-v2 moves, and no othe
   assert.ok(missing.length > 0);
   assert.ok(
     missing.every(
-      ([code, pointer]) => code === 'manifest.invalid' && pointer.startsWith('/adjustments/'),
+      ([code, pointer]) =>
+        code === 'manifest.invalid' && String(pointer).startsWith('/adjustments/'),
     ),
   );
 
