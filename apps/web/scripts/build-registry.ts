@@ -54,7 +54,7 @@ async function main(): Promise<number> {
     process.stderr.write(USAGE);
     return 2;
   }
-  const { result, files, packs, fonts, variants, assets, stills, segments, written } =
+  const { result, excluded, files, packs, fonts, variants, assets, stills, segments, written } =
     await generateRegistry(process.env, {
       write: !options.check,
       modulesOnly: options.modulesOnly,
@@ -79,6 +79,7 @@ async function main(): Promise<number> {
         version,
         fixture,
       })),
+      excluded: excluded ?? [],
       fixtures: result.fixtures,
       diagnostics: result.diagnostics,
       ...(written
@@ -107,6 +108,11 @@ async function main(): Promise<number> {
     const errors = result.diagnostics.filter(({ severity }) => severity === 'error').length;
     process.stderr.write(`[registry] ${plural(errors, 'error')}, so nothing was generated.\n`);
     return 1;
+  }
+  for (const { kind, id, packageName, reason } of excluded ?? []) {
+    process.stderr.write(
+      `[registry] warning: left the ${kind} pack ${id} in ${packageName} out of this build: ${reason} Selecting it renders its axis's fallback.\n`,
+    );
   }
   const modules = written
     ? `Wrote ${written.modules.written.length} of ${files!.size} files in src/lib/generated, ` +
