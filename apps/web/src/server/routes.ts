@@ -225,7 +225,7 @@ const ROUTES = [
       sampleSelection(variantParameter(query), installed) !== null &&
       namesPage(installed, segments.slice(1)),
   },
-  // Studio (#2): the owner's placeholder, which #8 replaces, and sign-in.
+  // Studio (#2): the Owner Studio shell (#8), and sign-in.
   // Neither reads the published site, so neither is a visitor route.
   { pattern: '/studio', kind: 'page', capability: 'studio.view' },
   { pattern: '/studio/sign-in', kind: 'page', capability: 'auth.session' },

@@ -6,7 +6,7 @@ import { headerProblems, STUDIO_CSP } from '../harness/route-headers.mjs';
 
 // Studio's pages under owner (#2), against the built server with the
 // password provider: the sign-in page, with and without JavaScript, its
-// rate limit's announcements, the placeholder /studio behind
+// rate limit's announcements, the Studio shell at /studio behind
 // requireOwnerPage, Studio's headers, and signing out of every tab at once.
 const STUDIO = { type: 'route', description: '/studio' };
 const SIGN_IN = { type: 'route', description: '/studio/sign-in' };

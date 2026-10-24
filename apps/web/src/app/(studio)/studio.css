@@ -322,3 +322,276 @@
 .catalog-fixture .catalog-plate + .catalog-plate {
   margin-block-start: 300vh;
 }
+
+/* The Owner Studio shell (#8, Slice 1): a header, the task navigation, and
+   the state model above the task, one column on a narrow screen and the
+   navigation beside the work from 64rem. A state line's tone is a rule on
+   its edge; its words say what it means. */
+.studio-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'header' 'nav' 'main';
+  max-width: 96rem;
+  margin: 0 auto;
+}
+
+@media (min-width: 64rem) {
+  .studio-shell {
+    grid-template-columns: 15rem minmax(0, 1fr);
+    grid-template-areas: 'header header' 'nav main';
+  }
+}
+
+.studio-shell__header {
+  grid-area: header;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--studio-rule);
+}
+
+.studio-shell__name {
+  margin: 0 auto 0 0;
+  font-size: 1.125rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.studio-shell__signed-in {
+  margin: 0;
+  color: var(--studio-muted);
+}
+
+.studio-shell__header .studio-alert {
+  flex-basis: 100%;
+}
+
+.studio-shell__nav {
+  grid-area: nav;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--studio-rule);
+}
+
+@media (min-width: 64rem) {
+  .studio-shell__nav {
+    border-bottom: 0;
+    border-right: 1px solid var(--studio-rule);
+  }
+}
+
+.studio-shell__nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 64rem) {
+  .studio-shell__nav ul {
+    flex-direction: column;
+  }
+}
+
+.studio-shell__task {
+  display: block;
+  min-height: 2.75rem;
+  padding: 0.625rem 0.75rem;
+  border-left: 3px solid transparent;
+  color: inherit;
+  text-decoration: none;
+}
+
+.studio-shell__task:hover {
+  text-decoration: underline;
+}
+
+.studio-shell__task[aria-current='page'] {
+  border-left-color: var(--studio-ink);
+  font-weight: 650;
+}
+
+.studio-shell__task:focus-visible,
+.studio-shell__main:focus-visible,
+.studio-conflict:focus-visible,
+.studio-source__text:focus-visible {
+  outline: 2px solid var(--studio-ink);
+  outline-offset: 2px;
+}
+
+.studio-shell__main {
+  grid-area: main;
+  min-width: 0;
+  padding: 1.5rem;
+}
+
+.studio-state {
+  margin-bottom: 2rem;
+}
+
+.studio-state__heading,
+.studio-task__heading {
+  margin: 0 0 0.75rem;
+  font-size: 1.125rem;
+  font-weight: 650;
+}
+
+.studio-task__heading {
+  font-size: 1.5rem;
+  letter-spacing: -0.015em;
+}
+
+.studio-state__lines {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.studio-state__line {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--studio-rule);
+  border-left-width: 4px;
+  background: var(--studio-surface);
+}
+
+.studio-state__line[data-tone='attention'] {
+  border-left-color: var(--studio-ink);
+}
+
+.studio-state__line[data-tone='ok'] {
+  border-left-color: var(--studio-edge);
+}
+
+.studio-state__line dt {
+  font-weight: 650;
+}
+
+.studio-state__line dd {
+  margin: 0;
+}
+
+.studio-state__waiting,
+.studio-state__notice {
+  margin: 0.75rem 0 0;
+}
+
+.studio-state__notice:empty {
+  display: none;
+}
+
+.studio-task__pending,
+.studio-task__empty p,
+.studio-source__lede,
+.studio-source__note,
+.studio-conflict__note,
+.studio-validation__fix {
+  color: var(--studio-muted);
+}
+
+.studio-task__empty {
+  display: grid;
+  gap: 1rem;
+}
+
+.studio-source {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.studio-source__lede {
+  margin: 0;
+}
+
+.studio-source__document {
+  display: grid;
+  gap: 0.375rem;
+}
+
+.studio-source__text {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 12rem;
+  padding: 0.75rem;
+  border: 1px solid var(--studio-edge);
+  border-radius: 2px;
+  background: var(--studio-surface);
+  color: inherit;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  resize: vertical;
+  tab-size: 2;
+}
+
+.studio-source__text[readonly] {
+  background: transparent;
+}
+
+.studio-source__actions,
+.studio-conflict__actions,
+.studio-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.studio-source__note,
+.studio-conflict__note {
+  margin: 0;
+}
+
+.studio-conflict {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--studio-ink);
+  border-left-width: 4px;
+  background: var(--studio-surface);
+}
+
+.studio-conflict h3 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.studio-conflict p {
+  margin: 0;
+}
+
+.studio-conflict__theirs summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.studio-validation__list {
+  display: grid;
+  gap: 1rem;
+  padding-left: 1.5rem;
+}
+
+.studio-validation__list p {
+  margin: 0;
+}
+
+.studio-dialog {
+  max-width: min(32rem, calc(100vw - 2rem));
+  padding: 1.25rem 1.5rem;
+  border: 1px solid var(--studio-ink);
+  background: var(--studio-surface);
+  color: var(--studio-ink);
+}
+
+.studio-dialog::backdrop {
+  background: rgb(0 0 0 / 0.4);
+}
+
+.studio-dialog h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.125rem;
+}

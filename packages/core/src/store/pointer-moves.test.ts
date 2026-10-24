@@ -27,6 +27,7 @@ import {
   tempDir,
   testChecks,
 } from './test-support/fixtures';
+import { fsWrites, pointerReads, syntaxOf } from './test-support/fs-guard';
 import { relativeImports } from './test-support/imports';
 
 // What moves the published pointer (#3, item 20; threat publish-3): the
@@ -62,7 +63,75 @@ const code = (file: string) => readFileSync(file, 'utf8').replace(/^\s*(?:\/\/|\
 const relativeTo = (file: string) => path.relative(REPO, file).split(path.sep).join('/');
 
 /** The calls that make or replace a file or a directory where they're pointed. */
-const MOVES = /\b(?:rename|link|symlink|writeFile|copyFile|cp)(?:Sync)?\s*\(/g;
+const MOVES =
+  /\b(?:rename|link|symlink|writeFile|copyFile|cp|rm|unlink|rmdir|truncate|open|appendFile|createWriteStream)(?:Sync)?\s*\(/g;
+
+/**
+ * The modules that may write the filesystem themselves (#8 review, finding
+ * 5): each imports a write API from fs, or fs whole. Any other module that
+ * does fails, so a move of the pointer can't hide in a new one.
+ */
+const FS_WRITERS = [
+  'apps/web/bin/owner.mjs',
+  'apps/web/scripts/check-variants.ts',
+  'apps/web/scripts/config.mjs',
+  'apps/web/scripts/experience-segments.ts',
+  'apps/web/scripts/fixture-gate.ts',
+  'apps/web/scripts/fixture-routes.ts',
+  'apps/web/scripts/migrate-controls.ts',
+  'apps/web/scripts/registry-options.ts',
+  'apps/web/src/server/config.ts',
+  'packages/appearance/src/node/check.ts',
+  'packages/appearance/src/node/compile.ts',
+  'packages/appearance/src/node/source-audit.ts',
+  'packages/budget-fixtures/ballast.mjs',
+  'packages/core/src/audit/record.mjs',
+  'packages/core/src/auth/session-files.mjs',
+  'packages/core/src/catalog/media/local.ts',
+  'packages/core/src/catalog/media/startup.ts',
+  'packages/core/src/catalog/source.ts',
+  'packages/core/src/cli.ts',
+  'packages/core/src/data/layout.mjs',
+  'packages/core/src/preview/grant-store.ts',
+  'packages/core/src/store/fs-port.ts',
+  'packages/core/src/store/read-fs.ts',
+  'packages/core/src/store/server-claim.ts',
+  'packages/schema/src/node.ts',
+  'packages/variant-contract/src/node/audit.ts',
+  'packages/variant-contract/src/node/codegen.ts',
+  'packages/variant-contract/src/node/fixtures.ts',
+  'packages/variant-contract/src/node/packages.ts',
+  'packages/variant-contract/src/node/registry.ts',
+  'packages/variant-contract/src/node/stills.ts',
+  'packages/variant-contract/src/node/test-hosts.ts',
+  'packages/variant-contract/src/node/variant-stylesheet.ts',
+];
+
+/**
+ * Every read of `live`, `liveTemp`, or `publication` off any object in those
+ * modules, on the syntax tree: the CLI calling the PublicationService
+ * through the Store, and reading a backup manifest's `live`. FsPort guards
+ * the pointer's paths by their file names, not by reading them.
+ */
+const POINTER_READS = [
+  ...Array<string>(7).fill('packages/core/src/cli.ts: store.publication'),
+  ...Array<string>(3).fill('packages/core/src/cli.ts: manifest.live'),
+];
+
+/** What the fs guard finds in `files`: a writer off the list, or a read of the pointer's keys in one. */
+function fsGuard(files: readonly string[]): { writers: string[]; reads: string[] } {
+  const writers: string[] = [];
+  const reads: string[] = [];
+  for (const file of files) {
+    const tree = syntaxOf(file);
+    if (fsWrites(tree).length === 0) continue;
+    writers.push(relativeTo(file));
+    for (const read of pointerReads(tree)) {
+      reads.push(`${relativeTo(file)}: ${read.replace(/^\d+: /, '')}`);
+    }
+  }
+  return { writers: writers.sort(), reads: reads.sort() };
+}
 
 /**
  * Each call in `text` that makes or replaces something at a target naming
@@ -217,12 +286,18 @@ test('no code outside PublicationService moves the published pointer', async (t)
     'packages/core/src/store/preflight.ts',
     'packages/core/src/store/publication.ts',
   ]);
-  // Nor does any module take either out of the store's paths, or out of
-  // anything, under another name, but Studio's store, which takes the
-  // PublicationService out of the Store.
-  assert.deepEqual(files.flatMap(destructuresThePointer), [
-    'apps/web/src/server/owner/store.ts: { drafts, publication } = store',
-  ]);
+  // Only the modules on the list write the filesystem themselves, and in
+  // them every read of the pointer's keys, an alias's included, is one the
+  // list names. A module that can't reach the filesystem may read a field
+  // named `live` of its own, as Studio's status line does.
+  const guard = fsGuard(files);
+  assert.deepEqual(guard.writers, [...FS_WRITERS].sort());
+  assert.deepEqual(guard.reads, [...POINTER_READS].sort());
+  // Nor does a writer take either out of anything under another name.
+  assert.deepEqual(
+    files.filter((file) => FS_WRITERS.includes(relativeTo(file))).flatMap(destructuresThePointer),
+    [],
+  );
   // The health cache and the reader only read: they import nothing that writes.
   for (const reader of ['health-cache.ts', 'reader.ts']) {
     const imports = relativeImports(path.join(STORE, reader)).map(relativeTo);
@@ -426,4 +501,18 @@ test("without the pass, the store's FsPort makes no directory at live.json's nam
   // And the next publish writes its pointer and its event where they go.
   await publishInput(store, pairInput('engineering'));
   assert.deepEqual(readdirSync(paths.events), ['1.json']);
+});
+
+test('the fs guard refuses a module that moves the pointer by an alias, with node:fs directly (#8 review, finding 5)', () => {
+  const aliased = path.join(STORE, 'test-support', 'aliased-move.ts.fixture');
+  const guard = fsGuard([aliased]);
+  // It writes the filesystem and isn't on the list,
+  assert.deepEqual(guard.writers, ['packages/core/src/store/test-support/aliased-move.ts.fixture']);
+  assert.ok(!FS_WRITERS.includes(guard.writers[0]!));
+  // and the alias is a read of the pointer the list doesn't name.
+  assert.deepEqual(guard.reads, [
+    'packages/core/src/store/test-support/aliased-move.ts.fixture: layout.live',
+  ]);
+  // The text rule alone misses it: the move names neither key.
+  assert.deepEqual(movesNamingThePointer(code(aliased)), []);
 });

@@ -1,5 +1,6 @@
 import { servedPage } from '~/server/page-guard';
 import { safeReturnTo, signInStateOf } from '~/server/return-to';
+import { PruneJournal } from '../../_components/prune-journal';
 import { SignInForm } from '../../_components/sign-in-form';
 
 // /studio/sign-in (#2), outside the Studio shell, under owner only: the
@@ -32,6 +33,7 @@ async function SignIn({ searchParams }: { searchParams: Query }) {
         returnTo={safeReturnTo(one(query.returnTo))}
         retryAfter={state === 'rate_limited' ? seconds(one(query.retryAfter)) : null}
       />
+      <PruneJournal />
     </main>
   );
 }
