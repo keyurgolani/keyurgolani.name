@@ -4,8 +4,10 @@
 // the JSON-LD follow the mounted identity and the origin the server was
 // given, and never name the bundled sample's persona, example.com, the
 // build host, or a container path. Given a `title`, the page's titles
-// carry it, and given the sample's pictures, the Open Graph image is none
-// of them. Under demo the site is the sample's
+// carry it. The Open Graph image is the card the server draws from
+// identity.name on the origin; meta.ogImage isn't rendered yet, so its
+// picture is held to the identity in the guide's config (fresh-clone's
+// sampleLeftovers), not here. Under demo the site is the sample's
 // alone: its persona, on the demo origin, out of search.
 //
 // Only what the server derives from the identity and the origin is held to
@@ -104,17 +106,14 @@ const onOrigin = (value, origin) => value === origin || String(value).startsWith
  *   sitemap: { status: number, body: string },
  *   robots: { status: number, body: string },
  *   feed: { status: number, body: string },
- *   ogImage?: { status: number, headers?: Record<string, string>, sha256?: string },
+ *   ogImage?: { status: number, headers?: Record<string, string> },
  *   forbidden?: readonly string[],
  *   title?: string,
- *   sampleImages?: readonly string[],
  * }} input `name` is the identity's: the fixture's under owner and
  *   read-only, the sample's under demo. `forbidden` adds to BUILD_LEAKS:
  *   the sample's name, or under demo, the fixtures', and the container's
  *   hostname. Under owner and read-only, `title` is what the page's
- *   <title>, og:title, twitter:title, and og:site_name must each carry,
- *   and `sampleImages` the sha256 of each of the sample's own pictures,
- *   none of which the Open Graph image may be.
+ *   <title>, og:title, twitter:title, and og:site_name must each carry.
  * @returns {string[]}
  */
 export function identityProblems({
@@ -128,7 +127,6 @@ export function identityProblems({
   ogImage,
   forbidden = [],
   title,
-  sampleImages = [],
 }) {
   const problems = [];
   if (page.status !== 200) return [`/ answered ${page.status}`];
@@ -167,6 +165,9 @@ export function identityProblems({
       `the Open Graph image answered ${ogImage.status} ${ogImage.headers?.['content-type'] ?? ''}`,
     );
   }
+  // Every profile answers both; a 500 or a failed fetch is a problem, not an empty list.
+  if (sitemap.status !== 200) problems.push(`/sitemap.xml answered ${sitemap.status}`);
+  if (robots.status !== 200) problems.push(`/robots.txt answered ${robots.status}`);
   const locs = [...String(sitemap.body).matchAll(/<loc>([^<]*)<\/loc>/g)].map((m) => decode(m[1]));
   const robotsUrls = [...String(robots.body).matchAll(/^(Host|Sitemap):\s*(\S+)/gim)].map((m) => ({
     key: m[1],
@@ -207,13 +208,6 @@ export function identityProblems({
       }
       if (head.titles.length === 0)
         problems.push('the page carries no og:title, twitter:title, or og:site_name');
-    }
-    if (ogImage?.sha256 !== undefined && sampleImages.includes(ogImage.sha256)) {
-      problems.push(`the Open Graph image is the sample's own picture (sha256 ${ogImage.sha256})`);
-    } else if (ogImage && sampleImages.length > 0 && ogImage.sha256 === undefined) {
-      problems.push(
-        "the Open Graph image's bytes weren't read, so it can't be told from the sample's",
-      );
     }
     const derived = derivedJsonLd(head.jsonLd);
     fields.push(...derived);
@@ -259,6 +253,10 @@ export function identityProblems({
       const guids = [...String(feed.body).matchAll(/<guid[^>]*>([^<]*)<\/guid>/g)].map((m) =>
         decode(m[1]),
       );
+      const items = String(feed.body).split('<item>').length - 1;
+      if (items === 0) problems.push('the feed lists no item');
+      if (guids.length !== items)
+        problems.push(`the feed has ${items} items and ${guids.length} guids`);
       for (const guid of guids)
         if (!onOrigin(guid, origin)) problems.push(`a feed item's guid is ${guid}, off ${origin}`);
       fields.push(
