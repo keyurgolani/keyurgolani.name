@@ -152,7 +152,7 @@ export interface AuditInput {
     readonly kind: PackKind;
     readonly manifest: PackManifest;
     /** Its stylesheet's text, for a language that has one. */
-    readonly stylesheet?: string;
+    readonly stylesheetText?: string;
   }[];
   /** Every Research record. */
   readonly research: readonly ResearchRecord[];
@@ -273,7 +273,7 @@ export function auditCatalog(input: AuditInput): AuditReport {
   const entries: AuditEntry[] = [];
   const findings: AuditFinding[] = [];
 
-  for (const { kind, manifest, stylesheet } of input.packs) {
+  for (const { kind, manifest, stylesheetText } of input.packs) {
     const axis = AXIS_BY_KIND[kind];
     const subject = `The ${AXIS_NAMES[axis]} ${manifest.id}`;
     const { license, source, attribution } = manifest.provenance;
@@ -378,7 +378,7 @@ export function auditCatalog(input: AuditInput): AuditReport {
     // A language names no typeface in what it ships: its tokens, and its stylesheet when it has one.
     if (kind === 'design-language') {
       const shipped =
-        `${JSON.stringify((manifest as { tokens?: unknown }).tokens ?? {})} ${stylesheet ?? ''}`
+        `${JSON.stringify((manifest as { tokens?: unknown }).tokens ?? {})} ${stylesheetText ?? ''}`
           .split(manifest.id)
           .join(' ');
       for (const { term, owner } of BRANDED_TERMS.filter(({ owner }) =>

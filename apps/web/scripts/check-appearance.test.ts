@@ -24,6 +24,8 @@ function check(args: readonly string[], flags: Record<string, string> = {}) {
   for (const name of Object.keys(env)) if (FIXTURE_FLAG.test(name)) delete env[name];
   return spawnSync(process.execPath, [TSX, SCRIPT, ...args], {
     encoding: 'utf8',
+    // A failing run over the whole catalog prints a line per pair, well past the 1 MiB default.
+    maxBuffer: 256 * 1024 * 1024,
     env: { ...env, ...flags },
   });
 }
@@ -102,7 +104,7 @@ test("with QUALITY_FIXTURES=meta it fails on the low-contrast scheme's light tex
   for (const line of lines) {
     assert.match(
       line,
-      /^\[check:appearance\] [a-z-]+ \+ fixture-scheme-experimental-low-contrast \+ [a-z-]+ \(system, light, dark\), light: text-muted on (?:canvas|surface-[a-z]+) is \d\.\d+:1, under 4\.5:1 \(text\)\.$/,
+      /^\[check:appearance\] [a-z0-9-]+ \+ fixture-scheme-experimental-low-contrast \+ [a-z0-9-]+ \(system, light, dark\), light: text-muted on (?:canvas|surface-[a-z]+) is \d\.\d+:1, under 4\.5:1 \(text\)\.$/,
     );
   }
   // On the canvas and on every surface.

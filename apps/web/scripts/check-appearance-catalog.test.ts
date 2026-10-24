@@ -83,7 +83,11 @@ test('the repository passes every governance check', async () => {
     gated: shipping,
     locked: shipping,
     research: 24,
-    audited: shipping + 23,
+    // The held languages too (#20, PR 2b).
+    audited:
+      shipping +
+      23 +
+      fs.readdirSync(path.join(REPO_ROOT, 'packages/appearance-languages/held')).length,
   });
 });
 

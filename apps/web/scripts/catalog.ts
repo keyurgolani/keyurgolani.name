@@ -7,7 +7,7 @@
 //   pnpm catalog audit                                       the branded-name audit, entry by entry
 //
 // search takes the filters as a URL query: q (words), axis (language,
-// scheme, or type), tier, status (shipping, excluded, or research),
+// scheme, or type), tier, status (shipping, excluded, held, or research),
 // license, and mode (light or dark), and prints the query it read back in
 // its one canonical form. Add --json for the entries as JSON.
 
@@ -93,7 +93,10 @@ async function main(args: readonly string[]): Promise<number> {
     }
     case 'audit': {
       const report = auditCatalog({
-        packs: read.packs.filter(({ fixture }) => !fixture),
+        packs: [
+          ...read.packs.filter(({ fixture }) => !fixture),
+          ...(read.held ?? []).map(({ kind, manifest }) => ({ kind, manifest })),
+        ],
         research: read.research.map(({ record }) => record),
       });
       out([

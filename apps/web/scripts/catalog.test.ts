@@ -245,6 +245,8 @@ test('search filters by words, axis, tier, status, license, and mode', async () 
   assert.ok(ids('axis=scheme&mode=light').every((id) => id !== 'oled-black' && id !== 'neon-city'));
   assert.deepEqual(ids('axis=scheme&tier=experimental'), ['neon-city']);
   assert.deepEqual(ids('status=excluded'), []);
+  assert.equal(ids('status=held').length, 27);
+  assert.deepEqual(ids('q=glass&status=held&axis=language'), ['glassmorphism', 'refractive-glass']);
   assert.deepEqual(ids('q=nord&status=research'), ['nord']);
   assert.deepEqual(ids('q=nothing-matches-this'), []);
   assert.equal(ids('').length, entries.length);
@@ -345,18 +347,25 @@ const research: ResearchRecord = {
 };
 
 const audit = (packs: AuditInput['packs'], reviewed?: AuditInput['reviewed']) =>
-  auditCatalog({ packs, research: [research], ...(reviewed ? { reviewed } : {}) }).findings.map(
+  auditCatalog({ packs, research: [research], reviewed: reviewed ?? {} }).findings.map(
     ({ pack, rule }) => `${pack} ${rule}`,
   );
 
 test('the branded-name audit passes the shipping catalog', async () => {
   const read = await sources();
+  // Every shipping and held pack, and every Research record.
   const report = auditCatalog({
-    packs: read.packs.filter(({ fixture }) => !fixture),
+    packs: [
+      ...read.packs.filter(({ fixture }) => !fixture),
+      ...read.held.map(({ kind, manifest }) => ({ kind, manifest })),
+    ],
     research: read.research.map(({ record }) => record),
   });
   assert.deepEqual(report.findings, []);
-  assert.equal(report.entries.length, 57);
+  assert.equal(report.entries.length, 46 + 27 + 23);
+  const aero = report.entries.find(({ id }) => id === 'frutiger-aero')!;
+  assert.deepEqual(aero.names, ['Aero', 'Frutiger']);
+  assert.ok(aero.notes.every((note) => note.includes('reviewed')));
   const zinc = report.entries.find(({ id }) => id === 'zinc')!;
   assert.equal(zinc.status, 'upstream');
   assert.deepEqual(zinc.names, ['Tailwind']);
