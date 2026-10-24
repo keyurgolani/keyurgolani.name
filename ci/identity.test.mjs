@@ -160,6 +160,74 @@ test('under owner and read-only, the name is the fixture identity, never the sam
   );
 });
 
+test("given the identity's title, every title the page carries holds it, never the sample persona's", () => {
+  const titled = (change) => owner((a) => ({ ...change(a), title: 'Jane Rehearsal' }));
+  assert.deepEqual(
+    titled((a) => a),
+    [],
+  );
+  // The guide's identity step changed identity.name but left meta.title the sample's.
+  const kept = titled(edit('page', /Jane Rehearsal — Portfolio/g, 'Anamika Devi — Portfolio'));
+  for (const want of [
+    /^the title is "Anamika Devi — Portfolio", not the identity's Jane Rehearsal/,
+    /^a title meta tag is "Anamika Devi — Portfolio", not the identity's Jane Rehearsal/,
+    /^title names Anamika Devi/,
+  ]) {
+    assert.ok(
+      kept.some((p) => want.test(p)),
+      `${want}: ${kept.join(' | ')}`,
+    );
+  }
+  // One title tag left behind is enough to fail.
+  const one = titled(
+    edit(
+      'page',
+      'name="twitter:title" content="Jane Rehearsal — Portfolio"',
+      'name="twitter:title" content="Anamika Devi — Portfolio"',
+    ),
+  );
+  assert.ok(
+    one.some((p) => /^a title meta tag is "Anamika Devi/.test(p)),
+    one.join(' | '),
+  );
+  const untagged = titled(
+    edit('page', /<meta (property|name)="(og:title|og:site_name|twitter:title)"[^>]*>/g, ''),
+  );
+  assert.ok(
+    untagged.includes('the page carries no og:title, twitter:title, or og:site_name'),
+    untagged.join(' | '),
+  );
+});
+
+test("given the sample's pictures, an Open Graph image that is one of them fails", () => {
+  const SAMPLE_OG = 'a'.repeat(64);
+  const pictured = (sha256) =>
+    owner((a) => ({
+      ...a,
+      ogImage: { ...a.ogImage, sha256 },
+      sampleImages: [SAMPLE_OG],
+    }));
+  assert.deepEqual(pictured('b'.repeat(64)), []);
+  assert.ok(
+    pictured(SAMPLE_OG).some((p) => /^the Open Graph image is the sample's own picture/.test(p)),
+    pictured(SAMPLE_OG).join(' | '),
+  );
+  // Unread bytes can't pass for someone else's picture.
+  assert.ok(pictured(undefined).some((p) => /bytes weren't read/.test(p)));
+  // An og:image that points at the sample's placed picture, not the card, fails on its URL.
+  const placed = owner(
+    edit(
+      'page',
+      /content="https:\/\/jane-rehearsal\.test\/opengraph-image[^"]*"/g,
+      `content="${ORIGIN}/media/og-image/w1200.png"`,
+    ),
+  );
+  assert.ok(
+    placed.some((p) => p.startsWith(`the Open Graph image is ["${ORIGIN}/media/og-image`)),
+    placed.join(' | '),
+  );
+});
+
 test('the image must answer as an image, and an empty sitemap or a missing feed fails', () => {
   assert.ok(
     owner((a) => ({

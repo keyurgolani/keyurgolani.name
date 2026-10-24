@@ -23,6 +23,12 @@ import {
   SKIPPED,
   STEPS,
   withIdentityName,
+  identityEdit,
+  identityFields,
+  identityForbidden,
+  metaOgAsset,
+  metaTitle,
+  sampleLeftovers,
   cdTarget,
   DOCKER_POOLS,
   fatalSetProblems,
@@ -64,6 +70,27 @@ test('a guide command the run does not take, or a step the guide lost, fails the
   assert.ok(
     problems.some((p) => p.includes('has no sh command "cp site.example.yml config/site.yml"')),
     problems.join('\n'),
+  );
+  // The identity step's fields are the doc's: a guide that stops naming one no longer matches.
+  const fewer = {
+    ...docs,
+    'docs/getting-started.md': read('docs/getting-started.md').replace(
+      '# edit config/portfolio.yml: identity.name, meta.title, meta.ogImage',
+      '# edit config/portfolio.yml: identity.name',
+    ),
+  };
+  const drifted = guideProblems((doc) => fewer[doc]);
+  assert.ok(
+    drifted.some((p) =>
+      p.includes('has no sh command "# edit config/portfolio.yml: identity.name, meta.title'),
+    ),
+    drifted.join('\n'),
+  );
+  assert.ok(
+    drifted.some((p) =>
+      p.includes('"# edit config/portfolio.yml: identity.name" is a guide command'),
+    ),
+    drifted.join('\n'),
   );
   // A skip whose command the doc dropped is stale too.
   const readme = {
@@ -107,7 +134,10 @@ test('sh fences are read command by command, a continuation joined to its line',
     { text: 'echo inner', line: 14 },
   ]);
   assert.equal(runnable('cp a b   # then make it yours'), 'cp a b');
-  assert.equal(runnable('# edit config/portfolio.yml'), '# edit config/portfolio.yml');
+  assert.equal(
+    runnable('# edit config/portfolio.yml: identity.name, meta.title, meta.ogImage'),
+    '# edit config/portfolio.yml: identity.name, meta.title, meta.ogImage',
+  );
 });
 
 test('the run covers the guide the scope asks for: refusal and start under read-only and owner, and demo on the sample', () => {
@@ -166,7 +196,11 @@ test("the identity step's name is a fixture's, and the sample's is the one produ
   assert.ok(!names.includes(FIXTURE_NAME));
   assert.match(read('portfolio.example.yml'), new RegExp(`^  name: ${SAMPLE_NAME}$`, 'm'));
   for (const step of STEPS.filter((s) => s.kind === 'identity')) {
-    assert.equal(step.command, '# edit config/portfolio.yml', step.id);
+    assert.equal(
+      step.command,
+      '# edit config/portfolio.yml: identity.name, meta.title, meta.ogImage',
+      step.id,
+    );
     assert.ok(step.scripted, `${step.id} says it's scripted`);
   }
 });
@@ -188,6 +222,7 @@ test("owner's ready step is a real one now: nothing waits, and owner is ready af
     profile: 'owner',
     origin: 'https://jane.name',
     name: FIXTURE_NAME,
+    title: FIXTURE_NAME,
   });
   const ids = STEPS.map((s) => s.id);
   assert.ok(ids.indexOf('owner-identity') < ids.indexOf('compose-owner-ready'));
@@ -242,6 +277,81 @@ test("the identity step changes the copied sample's identity.name and nothing el
     withIdentityName(`links: []\nname: ${SAMPLE_NAME}\n`, 'x'),
     null,
     'only under identity',
+  );
+});
+
+test("the guide's identity step names identity.name, meta.title, and meta.ogImage, and the run edits exactly those", () => {
+  assert.deepEqual(
+    identityFields('# edit config/portfolio.yml: identity.name, meta.title, meta.ogImage'),
+    ['identity.name', 'meta.title', 'meta.ogImage'],
+  );
+  assert.deepEqual(identityFields('# edit config/portfolio.yml'), []);
+  const sample = read('portfolio.example.yml');
+  assert.match(metaTitle(sample), new RegExp(SAMPLE_NAME));
+  assert.equal(metaOgAsset(sample), 'og-image');
+  const { text, problems } = identityEdit(
+    sample,
+    identityFields('# edit config/portfolio.yml: identity.name, meta.title, meta.ogImage'),
+    sample,
+  );
+  assert.deepEqual(problems, []);
+  const [before, after] = [parse(sample), parse(text)];
+  assert.equal(after.identity.name, FIXTURE_NAME);
+  assert.equal(after.meta.title, FIXTURE_NAME);
+  assert.equal(after.meta.ogImage, undefined);
+  const { ogImage, ...meta } = before.meta;
+  assert.ok(ogImage);
+  assert.deepEqual(
+    {
+      ...after,
+      identity: { ...after.identity, name: SAMPLE_NAME },
+      meta: { ...after.meta, title: before.meta.title },
+    },
+    { ...before, meta },
+  );
+  assert.deepEqual(sampleLeftovers(text, sample), []);
+});
+
+test("a guide that stops naming meta.title or meta.ogImage leaves the sample's in place, and the step fails", () => {
+  const sample = read('portfolio.example.yml');
+  const named = (fields) => identityEdit(sample, fields, sample).problems;
+  assert.deepEqual(named(['identity.name', 'meta.ogImage']), [
+    `meta.title still names ${SAMPLE_NAME}: the guide's identity step doesn't name it`,
+  ]);
+  assert.deepEqual(named(['identity.name', 'meta.title']), [
+    "meta.ogImage still places the sample's picture (og-image, og/anamika.png): the guide's identity step doesn't name it",
+  ]);
+  assert.deepEqual(named([]).length, 3);
+  assert.ok(
+    named(['identity.name', 'meta.title', 'meta.ogImage', 'meta.color'])[0].includes(
+      'no edit for meta.color',
+    ),
+  );
+  // A picture of the author's own passes; the sample's, placed under another id, doesn't.
+  const own = identityEdit(sample, ['identity.name', 'meta.title'], sample).text.replace(
+    'source: og/anamika.png',
+    'source: og/rowan.png',
+  );
+  assert.deepEqual(sampleLeftovers(own, sample), []);
+  const renamed = identityEdit(sample, ['identity.name', 'meta.title'], sample).text.replace(
+    'asset: og-image',
+    'asset: portrait',
+  );
+  assert.equal(sampleLeftovers(renamed, sample).length, 1);
+});
+
+test("owner's and read-only's servers may not name the sample's persona anywhere the identity checks read", () => {
+  for (const profile of ['owner', 'read-only']) {
+    assert.ok(identityForbidden(profile).includes(SAMPLE_NAME), profile);
+    assert.ok(!identityForbidden(profile).includes(FIXTURE_NAME), profile);
+  }
+  assert.ok(identityForbidden('demo').includes(FIXTURE_NAME));
+  for (const step of STEPS.filter((s) => s.identity && s.identity.profile !== 'demo')) {
+    assert.equal(step.identity.title, FIXTURE_NAME, step.id);
+  }
+  assert.deepEqual(
+    STEPS.filter((s) => s.identity && s.identity.profile !== 'demo').map((s) => s.id),
+    ['read-only-starts', 'compose-read-only-starts', 'compose-owner-ready'],
   );
 });
 
