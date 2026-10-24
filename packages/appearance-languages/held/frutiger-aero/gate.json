@@ -3,8 +3,9 @@
   "id": "frutiger-aero",
   "kind": "design-language",
   "tier": "extended",
-  "reason": "It fails check:appearance with 25 of 25 color schemes: its floor is opaque: its 86% surfaces fall under the targets over a black or white backdrop at every opacity under 100%.",
+  "reason": "It fails check:appearance with 25 of 25 color schemes: its floor is opaque: its 86% surfaces fall under the targets over a black or white backdrop at every opacity under 100%, and without its texture they'd pass at 97%.",
   "causes": [
+    "texture",
     "translucency"
   ],
   "schemes": {

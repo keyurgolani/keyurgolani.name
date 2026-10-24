@@ -628,7 +628,6 @@ function checkScheme(manifest: ColorSchemeManifest, report: Report) {
   duplicates(manifest.swatches ?? [], ['swatches'], report, 'color');
 }
 
-/** The base modes a scheme manifest has: a generator gives both. */
 /**
  * An anchor-v2 scheme records every role the solver moved from anchor-v1
  * (#20 PR 2c), and the record is what anchor-v2 gives its anchors, so a
@@ -688,6 +687,7 @@ function checkApprovedOpacity(manifest: DesignLanguageManifest, report: Report) 
   }
 }
 
+/** The base modes a scheme manifest has: a generator gives both. */
 export function baseModes(manifest: ColorSchemeManifest): readonly ('light' | 'dark')[] {
   if (manifest.generator) return ['light', 'dark'];
   const source = manifest.anchors ?? manifest;
