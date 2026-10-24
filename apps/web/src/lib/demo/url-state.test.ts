@@ -22,7 +22,7 @@ const query = (text: string) => new URLSearchParams(text);
 test("the Studio URL and its frame's speak #19's query keys, the ones /sample reads", () => {
   const all = selectionQuery(
     {
-      variant: 'kinetic-cosmos',
+      variant: 'acme-orbit',
       designLanguage: 'platform-neutral',
       colorScheme: 'warm-parchment',
       typography: 'humanist-ui',
@@ -33,22 +33,22 @@ test("the Studio URL and its frame's speak #19's query keys, the ones /sample re
   assert.deepEqual([...all.keys()], Object.values(QUERY_KEYS));
   assert.equal(
     all.toString(),
-    'variant=kinetic-cosmos&language=platform-neutral&scheme=warm-parchment&type=humanist-ui&mode=dark',
+    'variant=acme-orbit&language=platform-neutral&scheme=warm-parchment&type=humanist-ui&mode=dark',
   );
 });
 
 test('a value the catalog offers counts on its own axis, and anything else keeps the fallback there', () => {
-  assert.deepEqual(selectionFrom(query('variant=obsidian-atelier&mode=dark'), DEFAULTS, RULES), {
+  assert.deepEqual(selectionFrom(query('variant=acme-gallery&mode=dark'), DEFAULTS, RULES), {
     ...DEFAULTS,
-    variant: 'obsidian-atelier',
+    variant: 'acme-gallery',
     displayMode: 'dark',
   });
   for (const text of [
     'variant=fallback',
     'variant=canary-variant',
     'variant=',
-    'variant=kinetic-cosmos&variant=kinetic-cosmos',
-    'variant=KINETIC-COSMOS',
+    'variant=acme-orbit&variant=acme-orbit',
+    'variant=ACME-ORBIT',
     'mode=sepia',
     'language=humanist-ui',
     'designLanguage=platform-neutral',
@@ -80,11 +80,11 @@ test('a scheme and a mode go together: a mode the scheme lacks gives way', () =>
     selectionProblem(RULES, DEFAULTS, 'variant', 'canary-variant') ?? '',
     /doesn't offer/,
   );
-  assert.equal(selectionProblem(RULES, DEFAULTS, 'variant', 'kinetic-cosmos'), null);
+  assert.equal(selectionProblem(RULES, DEFAULTS, 'variant', 'acme-orbit'), null);
 });
 
 test('a page load takes the URL, then the stored selection on a bare /studio alone, then the sample', () => {
-  const stored = { ...DEFAULTS, variant: 'obsidian-atelier' };
+  const stored = { ...DEFAULTS, variant: 'acme-gallery' };
   assert.deepEqual(
     loadSelection({ search: query('mode=dark'), stored, defaults: DEFAULTS, rules: RULES }),
     {
@@ -133,14 +133,14 @@ test("a value the catalog doesn't offer, such as the sample's own unregistered c
 });
 
 test('the frame loads /sample on the same origin with the selection, and motion=reduce only when asked', () => {
-  const chosen = { ...DEFAULTS, variant: 'kinetic-cosmos', displayMode: 'dark' };
+  const chosen = { ...DEFAULTS, variant: 'acme-orbit', displayMode: 'dark' };
   assert.equal(
     frameSource(chosen, RULES),
-    '/sample?variant=kinetic-cosmos&language=platform-neutral&scheme=warm-parchment&type=humanist-ui&mode=dark',
+    '/sample?variant=acme-orbit&language=platform-neutral&scheme=warm-parchment&type=humanist-ui&mode=dark',
   );
   assert.equal(
     frameSource(chosen, RULES, { reduceMotion: true }),
-    '/sample?variant=kinetic-cosmos&language=platform-neutral&scheme=warm-parchment&type=humanist-ui&mode=dark&motion=reduce',
+    '/sample?variant=acme-orbit&language=platform-neutral&scheme=warm-parchment&type=humanist-ui&mode=dark&motion=reduce',
   );
   assert.equal(frameSource(DEFAULTS, { catalog: { axes: [] } }), '/sample');
   for (const each of [chosen, DEFAULTS]) {
