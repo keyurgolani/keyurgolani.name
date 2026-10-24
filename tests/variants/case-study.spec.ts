@@ -14,9 +14,9 @@ import { FALLBACK_ID, projectTarget, READ_ONLY } from './target';
 // itself, as the fallback composition does its own; for one that says
 // `shared`, such as Kinetic Cosmos or the external reference variant, the
 // fallback composition renders it, so no composition shows its home at a
-// work's address. Its RSC
-// payload answers too, and neither names a private record or the hidden
-// canary. Any other slug, a private work's and one only a hidden section
+// work's address. Its canonical link and og:url are its own URL on the
+// origin, with no query (#22). Its RSC payload answers too, and neither
+// names a private record or the hidden canary. Any other slug, a private work's and one only a hidden section
 // reaches included, answers every method exactly as /no-such-page does, as a
 // page and as an RSC request, so nothing says it exists.
 
@@ -75,6 +75,19 @@ test(
         renders,
       );
       const html = await response!.text();
+      // Its canonical link and og:url are its own URL on the origin, with no
+      // query, whatever the request's (#22).
+      for (const asked of [path, `${path}?utm_source=feed`]) {
+        if (asked !== path) await page.goto(asked);
+        await expect(page.locator('head link[rel="canonical"]'), asked).toHaveAttribute(
+          'href',
+          `${app.origin}${path}`,
+        );
+        await expect(page.locator('head meta[property="og:url"]'), asked).toHaveAttribute(
+          'content',
+          `${app.origin}${path}`,
+        );
+      }
       const rsc = await request.get(await withRscHash(path, RSC), {
         headers: RSC,
         maxRedirects: 0,
