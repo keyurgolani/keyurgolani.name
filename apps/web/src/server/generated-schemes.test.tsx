@@ -328,6 +328,38 @@ test("the preview route serves only the active grant's own stored scheme, privat
   assert.equal(calls.length, before, 'a malformed name opens no grant');
 });
 
+test("a grant's schemes compile once per grant and scheme, by its digest, however often open() reads them afresh, and never serve another grant (#20)", async (t) => {
+  const first = 'DDDDDDDDDDDDDDDDDDDDDD';
+  const second = 'EEEEEEEEEEEEEEEEEEEEEE';
+  // Every open() reads the grant's schemes into a new object, as #10's
+  // readDerivedSchemes() will for a draft's pinned version.
+  const port: PreviewGrantsPort = {
+    admit: async () => true,
+    open: async (grant) =>
+      grant === first
+        ? ({ schemes: structuredClone({ 'brand-seed': OTHER }) } as unknown as OpenedGrant)
+        : grant === second
+          ? ({ schemes: structuredClone({ 'brand-seed': STORED }) } as unknown as OpenedGrant)
+          : null,
+    channel: () => assert.fail('no channel opens'),
+    asset: () => assert.fail('no rendition is read'),
+    previewable: () => assert.fail('nothing is offered'),
+  };
+  deploy(t, () => revision('r1', undefined), { profile: 'owner', previews: port });
+  const own = nameOf(OTHER.tokens).name;
+  const start = compileCount.value;
+  // The frame's page links it, then the frame loads it, again and again.
+  previewStylesheets(first, (await port.open(first))!.schemes);
+  for (let index = 0; index < 5; index++) {
+    assert.equal((await fetchPreview(first, own)).status, 200);
+  }
+  assert.equal(compileCount.value - start, 1, 'the grant compiled its scheme once');
+  // Another grant compiles its own, and never answers the first's name.
+  await assertStatusDocument(await fetchPreview(second, own), "the other grant's name");
+  assert.equal((await fetchPreview(second, nameOf(STORED.tokens).name)).status, 200);
+  assert.equal(compileCount.value - start, 2);
+});
+
 test('the preview route is absent under demo and read-only, and the status document under owner with no grants port (#20)', async (t) => {
   const name = nameOf(STORED.tokens).name;
   for (const profile of ['demo', 'read-only']) {
