@@ -61,7 +61,13 @@ export interface LocalFrameHostProps {
 
 type Phase = 'loading' | 'ready' | 'failed' | 'timeout';
 
-export function LocalFrameHost({ sources, selection, title, viewport, reduced }: LocalFrameHostProps) {
+export function LocalFrameHost({
+  sources,
+  selection,
+  title,
+  viewport,
+  reduced,
+}: LocalFrameHostProps) {
   const stage = useRef<HTMLDivElement | null>(null);
   const frame = useRef<HTMLIFrameElement | null>(null);
   const channel = useRef<StudioChannel | null>(null);

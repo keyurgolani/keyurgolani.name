@@ -161,7 +161,7 @@ test("a value the build doesn't offer says what shows in its place in the demo, 
 });
 
 test('no Demo Studio view offers publishing, a draft, signing in or out, or settings', () => {
-  for (const task of ['appearance', 'preview'] as const) {
+  for (const task of ['appearance', 'preview', 'content'] as const) {
     const html = renderToStaticMarkup(
       <DemoStudio catalog={CATALOG} policy={POLICY} backend={backend()} task={task} />,
     );
@@ -173,7 +173,7 @@ test('no Demo Studio view offers publishing, a draft, signing in or out, or sett
   }
 });
 
-test('Demo Studio has its two tasks in the frame, and the sandbox line where Owner Studio says who is signed in', () => {
+test('Demo Studio has its three tasks in the frame, and the sandbox line where Owner Studio says who is signed in', () => {
   const html = renderToStaticMarkup(
     <DemoStudio catalog={CATALOG} policy={POLICY} backend={backend()} task="appearance" />,
   );
@@ -188,7 +188,7 @@ test('Demo Studio has its two tasks in the frame, and the sandbox line where Own
         /<a href="#([a-z-]+)" class="studio-shell__task"(?: aria-current="page")?>([^<]+)<\/a>/g,
       ),
     ].map(([, id, label]) => `${id} ${label}`),
-    ['appearance Appearance', 'preview Preview'],
+    ['appearance Appearance', 'preview Preview', 'content Content'],
   );
   assert.match(html, /<a href="#appearance" class="studio-shell__task" aria-current="page">/);
   // Without JavaScript it says it needs it, and where the sample works without.
