@@ -241,12 +241,14 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     return unknownPath(request, requestId, extra, { csp, preview, studioCaching: studio });
   }
   if (decision.status === 'absent') {
-    // A Studio page under a profile with none, and a preview route this
+    // A Studio page the profile doesn't serve, and a preview route this
     // build doesn't serve, such as the dev fixture route outside `next dev`,
     // under a profile with no grant route, answer as a path no route
     // matches. Under one with grant routes, the gate above has answered.
-    if ((preview || (studioPath && !studio)) && pageLoad) {
-      return unknownPath(request, requestId, extra, { csp, preview });
+    // Under a profile with Studio, as demo's /studio/sign-in is (#9), it
+    // keeps the no-store next.config.ts asks of a Studio path.
+    if ((preview || studioPath) && pageLoad) {
+      return unknownPath(request, requestId, extra, { csp, preview, studioCaching: studio });
     }
     return plain(404, 'Not found.', requestId, extra);
   }

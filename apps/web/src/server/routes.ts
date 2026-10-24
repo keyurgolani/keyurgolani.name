@@ -292,9 +292,11 @@ const ROUTES = [
     capability: 'reference.read',
     readOnly: true,
   },
-  // Studio (#2): the Owner Studio shell (#8), and sign-in.
-  // Neither reads the published site, so neither is a visitor route.
+  // Studio (#2): the Owner Studio shell (#8), Demo Studio (#9) at the same
+  // path under demo, with no session, and sign-in. None reads the published
+  // site, so none is a visitor route.
   { pattern: '/studio', kind: 'page', capability: 'studio.view' },
+  { pattern: '/studio', kind: 'page', capability: 'sandbox.view' },
   { pattern: '/studio/sign-in', kind: 'page', capability: 'auth.session' },
   // The owner's preview page (#7, Slice 4), on PreviewSurface. Demo's preview
   // is #9's (Demo Studio), so under demo the path is as unknown as any.
