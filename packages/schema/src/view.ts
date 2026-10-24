@@ -62,13 +62,18 @@ declare const PUBLIC: unique symbol;
  */
 export type Public<T> = T & { readonly [PUBLIC]: true };
 
-/** Why a derived value isn't ready. */
+/**
+ * Why a derived value isn't ready. `not-loaded` is a host that never loads
+ * media, as Demo Studio's local frame (#9), which renders a visitor's own
+ * documents with no media document and no remote source.
+ */
 export const UNAVAILABLE_REASONS = [
   'processing',
   'failed',
   'unreachable',
   'never-refreshed',
   'purged',
+  'not-loaded',
 ] as const;
 export type UnavailableReason = (typeof UNAVAILABLE_REASONS)[number];
 
@@ -197,6 +202,12 @@ export interface ViewOptions {
   readonly mediaBase: string;
   /** The content extensions this build registers. Data from any other is dropped. */
   readonly extensions?: readonly ContentExtension[];
+  /**
+   * What a media asset with no record is: `processing` while derivation may
+   * still bring it, the default, or `not-loaded` where the host loads no
+   * media at all.
+   */
+  readonly unloadedMedia?: 'processing' | 'not-loaded';
 }
 
 /** The records the view keeps, by id, and the parts of the practice and the contact record. */
@@ -313,7 +324,14 @@ export function resolvePortfolioView(
     extensions: portfolio.extensions,
   });
 
-  const media = viewMedia(portfolio.media ?? [], reached.media, unit.media, base, registry);
+  const media = viewMedia(
+    portfolio.media ?? [],
+    reached.media,
+    unit.media,
+    base,
+    registry,
+    options.unloadedMedia ?? 'processing',
+  );
   const site = keptInputs(keptSettings(pair.site, reached.sections), media);
   return {
     portfolio: withoutUnregistered(view, registry) as PublicPortfolio,
@@ -501,6 +519,7 @@ function viewMedia(
   raw: unknown,
   base: string,
   registry: ExtensionRegistry,
+  unloaded: 'processing' | 'not-loaded',
 ): Record<string, ViewMediaAsset> {
   const parsed = raw === undefined ? undefined : parseMediaDocument(raw);
   const document: MediaDocument | undefined = parsed?.ok ? parsed.value : undefined;
@@ -513,7 +532,7 @@ function viewMedia(
       ? { state: 'ready', value: mediaValue(record, base), derivedAt: record.derivedAt }
       : parsed && !parsed.ok
         ? { state: 'unavailable', reason: 'failed', since: null }
-        : { state: 'unavailable', reason: 'processing', since: null };
+        : { state: 'unavailable', reason: unloaded, since: null };
     const entry: ViewMediaAsset = compact({
       id: asset.id,
       kind: asset.kind,

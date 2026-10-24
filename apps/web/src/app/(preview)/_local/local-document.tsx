@@ -115,7 +115,7 @@ export async function renderLocal({
   const view = resolvePortfolioView(
     { portfolio, site: withSelection(site, document.selection) },
     {},
-    { mediaBase: '/local-media', extensions: CONTENT_EXTENSIONS },
+    { mediaBase: '/local-media', extensions: CONTENT_EXTENSIONS, unloadedMedia: 'not-loaded' },
   );
   const segments = route === '/' ? [] : route.slice(1).split('/');
   const resolved = await resolveVisitorPathIn(

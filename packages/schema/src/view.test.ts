@@ -527,6 +527,19 @@ test('each asset carries its derived record: ready with rendition URLs, or unava
     reason: 'processing',
     since: null,
   });
+  // Where the host loads no media, as Demo Studio's local frame (#9), it's not loaded,
+  // and an asset the document does record stays as it is.
+  const local = view(
+    pair,
+    { media: MEDIA_DOCUMENT },
+    { ...OPTIONS, unloadedMedia: 'not-loaded' },
+  ).media;
+  assert.deepEqual(local.portrait!.derived, {
+    state: 'unavailable',
+    reason: 'not-loaded',
+    since: null,
+  });
+  assert.equal(local['atlas-cover']!.derived.state, 'ready');
   // A preview builds its URLs on its own media base.
   const preview = view(
     pair,
