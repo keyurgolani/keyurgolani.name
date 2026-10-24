@@ -591,13 +591,19 @@ test("a draft grant pins the draft's generated schemes at mint, each checked as 
   record.schemes['fixture-seed']!.inputsHash = 'not a hash';
   writeFileSync(file, `${JSON.stringify(record)}\n`);
   assert.deepEqual((await previews.port.open(grant))?.schemes, { copy: pinned });
+  // The line holds exactly these fields, and no message or token.
   const dropped = lines
     .map((line) => JSON.parse(line) as Record<string, unknown>)
-    .filter((entry) => entry.event === 'preview.scheme_dropped');
-  assert.deepEqual(
-    dropped.map(({ level, grantRef, schemeId }) => [level, grantRef, schemeId]),
-    [['warn', grantDigest(grant).slice(0, 8), 'fixture-seed']],
-  );
+    .filter((entry) => entry.event === 'preview.scheme_dropped')
+    .map(({ ts, ...entry }) => (assert.equal(typeof ts, 'string'), entry));
+  assert.deepEqual(dropped, [
+    {
+      level: 'warn',
+      event: 'preview.scheme_dropped',
+      grantRef: grantDigest(grant).slice(0, 8),
+      schemeId: 'fixture-seed',
+    },
+  ]);
   // A grant on a draft with no generated scheme opens with none.
   const plain = await createDraft(store);
   const bare = minted(

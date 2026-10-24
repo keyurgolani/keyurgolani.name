@@ -36,7 +36,13 @@ import { LockLostError, type PublicationLock } from './lock';
 import { DamagedPointerError, readLive, type LivePointer } from './pointer';
 import { readManifest, readRevision } from './revisions';
 import { loadSharp, type SharpLoad } from '../catalog/media/derive';
-import { assetReader, deriveSchemes, pixelsSha256, schemeDiagnostic } from './schemes';
+import {
+  assetReader,
+  deriveSchemes,
+  pixelsSha256,
+  schemeDiagnostic,
+  type PixelHash,
+} from './schemes';
 import type { AssetStore } from './assets';
 import {
   asDraftDerived,
@@ -519,6 +525,8 @@ export interface DraftStoreOptions {
   readonly lastKnownGood?: (except: readonly RevisionId[]) => Promise<RevisionId | null>;
   /** The media service's sharp, which decodes an image-derived scheme's asset (10h). */
   readonly sharp?: () => Promise<SharpLoad>;
+  /** The pixel hash, with its cache, which openStore() shares with the publication service. */
+  readonly pixelHash?: PixelHash;
 }
 
 export function filesystemDraftStore({
@@ -531,9 +539,8 @@ export function filesystemDraftStore({
   log = () => {},
   lastKnownGood = async () => null,
   sharp = () => loadSharp(),
+  pixelHash = pixelsSha256(sharp),
 }: DraftStoreOptions): DraftStore {
-  // An image-derived scheme's input is its decoded pixels' hash (10h).
-  const pixelHash = pixelsSha256(sharp);
   const stamp = () => new Date(now()).toISOString();
 
   async function live(): Promise<LivePointer | null> {
@@ -1014,7 +1021,13 @@ export function filesystemDraftStore({
           baseRevisionId: found.draft.baseRevisionId,
           ...(found.draft.sourceHash === undefined ? {} : { sourceHash: found.draft.sourceHash }),
           actor,
-          derived: { snapshots: { ...own?.snapshots, ...snapshots }, changes: own?.changes ?? [] },
+          // A refresh writes adapter snapshots only, and keeps the draft's
+          // generated schemes (10h) as they are.
+          derived: {
+            snapshots: { ...own?.snapshots, ...snapshots },
+            changes: own?.changes ?? [],
+            ...(own?.schemes ? { schemes: own.schemes } : {}),
+          },
         });
       });
     },

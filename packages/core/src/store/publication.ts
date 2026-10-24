@@ -68,6 +68,7 @@ import {
   deriveSchemes,
   frozenSchemes,
   pixelsSha256,
+  type PixelHash,
   schemeDiagnostic,
   schemeWarning,
 } from './schemes';
@@ -361,6 +362,8 @@ export interface PublicationOptions {
   readonly log?: StoreLog;
   /** The media service's sharp, which decodes an image-derived scheme's asset (10h). */
   readonly sharp?: () => Promise<SharpLoad>;
+  /** The pixel hash, with its cache, which openStore() shares with the draft store. */
+  readonly pixelHash?: PixelHash;
 }
 
 const AUDIT_TYPE: Readonly<Record<EventType, AuditType>> = Object.freeze({
@@ -428,10 +431,9 @@ export function filesystemPublicationService({
   now = Date.now,
   log = () => {},
   sharp = () => loadSharp(),
+  pixelHash = pixelsSha256(sharp),
 }: PublicationOptions): PublicationService {
   const stamp = () => new Date(now()).toISOString();
-  // An image-derived scheme's input is its decoded pixels' hash (10h).
-  const pixelHash = pixelsSha256(sharp);
   const hasBlob = (hash: Sha256) => assets.has(hash);
   const health = healthCache({ fs, paths, checks, hasBlob });
 

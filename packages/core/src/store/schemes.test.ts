@@ -27,7 +27,7 @@ import {
 } from './schemes';
 import type { AssetStore } from './assets';
 import { Readable } from 'node:stream';
-import { loadSharp } from '../catalog/media/derive';
+import { loadSharp, type SharpLoad } from '../catalog/media/derive';
 import type { Store } from './store';
 import { newStore, owned, pairInput, testChecks } from './test-support/fixtures';
 
@@ -744,4 +744,93 @@ test("the pixel hash asks sharp for the media service's pixel limit, and decodes
   assert.equal(decodes, 1);
   await hashOf('e'.repeat(64), bytes);
   assert.equal(decodes, 2, 'another file decodes');
+});
+
+test('an import drops a live image scheme once its scheme declares another generator version or id, though the pixels are the same', async (t) => {
+  for (const next of [
+    { id: 'test-image', version: 2 },
+    { id: 'test-image-2', version: 1 },
+  ]) {
+    const { generators } = testGenerators();
+    let declared = { id: 'test-image', version: 1 };
+    const build: SchemeGenerators = {
+      ...generators,
+      declared: (schemeId) =>
+        schemeId === 'gen-image'
+          ? { ...declared, input: 'asset' as const }
+          : generators.declared(schemeId),
+    };
+    const store = await newStore(t, { checks: testChecks({ schemes: build }) });
+    await importPair(store, await storedPortrait(store), 'first');
+    const draft = await save(store, await draftOf(store), await storedPortrait(store));
+    const outcome = await publish(store, await decide(store, draft, 'accepted'));
+    assert.equal(outcome.kind, 'committed', JSON.stringify(outcome));
+    declared = next;
+    const upgraded = await importPair(store, await storedPortrait(store), 'upgraded');
+    assert.equal(frozenSchemes(store, upgraded!.revisionId), null, JSON.stringify(next));
+    assert.deepEqual(
+      (upgraded?.warnings ?? []).map(({ code }) => code),
+      ['scheme.dropped'],
+      JSON.stringify(next),
+    );
+  }
+});
+
+test("a sources refresh keeps the draft's generated schemes, in a build without generators too", async (t) => {
+  const { generators } = testGenerators();
+  const store = await newStore(t, { checks: testChecks({ schemes: generators }) });
+  await importPair(store, pairInput('engineering'), 'base');
+  const draft = await save(store, await draftOf(store), seeded('#3366ff'));
+  const schemes = draft.derived?.schemes;
+  assert.ok(schemes?.['gen-seed']);
+  // The same data directory, under a build that hands the store no generators.
+  const plain = await newStore(t, { dataDir: store.paths.root });
+  const refreshed = saved(
+    await plain.drafts.refreshSources(
+      {
+        draftId: draft.draftId,
+        expectedVersion: draft.version,
+        snapshots: { github: { records: [] } },
+      },
+      'owner',
+    ),
+  );
+  assert.deepEqual(refreshed.derived?.schemes, schemes);
+  const again = saved(
+    await store.drafts.refreshSources(
+      {
+        draftId: draft.draftId,
+        expectedVersion: refreshed.version,
+        snapshots: { github: { records: [] } },
+      },
+      'owner',
+    ),
+  );
+  assert.deepEqual(again.derived?.schemes, schemes);
+});
+
+test("one store's drafts and publishes share the pixel hash: an image decodes once from its first save through the publish", async (t) => {
+  let decodes = 0;
+  const counted = async (): Promise<SharpLoad> => {
+    const real = await loadSharp();
+    if (!real.ok) return real;
+    return {
+      ok: true,
+      sharp: (input, options) => {
+        decodes += 1;
+        return real.sharp(input, options);
+      },
+    };
+  };
+  const { generators } = testGenerators();
+  const store = await newStore(t, {
+    checks: testChecks({ schemes: generators }),
+    sharp: counted,
+  });
+  await importPair(store, pairInput('engineering'), 'base');
+  const draft = await save(store, await draftOf(store), await storedPortrait(store));
+  assert.equal(decodes, 1, 'the save decodes it');
+  const outcome = await publish(store, await decide(store, draft, 'accepted'));
+  assert.equal(outcome.kind, 'committed', JSON.stringify(outcome));
+  assert.equal(decodes, 1, 'the decision and the publish reuse it');
 });
