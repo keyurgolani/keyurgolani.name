@@ -30,7 +30,8 @@ export function decide({ changed, text }) {
   if (text === null) return { run: false, reason: `the head commit removes ${REQUEST}` };
   try {
     const parsed = JSON.parse(text);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not an object');
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+      throw new Error('not an object');
   } catch (error) {
     return { run: false, reason: `${REQUEST} doesn't parse as a JSON object: ${error.message}` };
   }
