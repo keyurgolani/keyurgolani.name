@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import type { Page, Response } from '@playwright/test';
+import type { Frame, Page, Response } from '@playwright/test';
 import { fixtureSiteSelecting } from '../../packages/variant-contract/src/contract-fixtures';
 import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
 import { expect, test } from '../harness/fixtures';
@@ -349,3 +349,210 @@ test(
     expect(await reading(page)).toEqual(before);
   },
 );
+
+test(
+  'a resize under 768px ends the stage and hides the exit, and back over it the stage runs again',
+  { annotation },
+  async ({ page }) => {
+    await loadHome(page, '/');
+    await expectLive(page);
+    await page.setViewportSize({ width: 700, height: 800 });
+    await expect.poll(() => reason(page)).toBe('narrow');
+    await expect(page.locator('canvas[data-spatial-canvas]')).toHaveCount(0);
+    await expect(page.locator('.sb-stage__exit')).toBeHidden();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expectLive(page);
+    await expect(page.locator('.sb-stage__exit')).toBeVisible();
+  },
+);
+
+test(
+  'with a 20px default font, a 900px window runs the stage with its exit showing',
+  { annotation },
+  async ({ page }) => {
+    // The browser's own default font size, which rem media queries follow, as a visitor's setting would.
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Page.setFontSizes', { fontSizes: { standard: 20, fixed: 16 } });
+    await page.setViewportSize({ width: 900, height: 800 });
+    await loadHome(page, '/');
+    // A rem query would read 900px as narrow: 47.99rem is 960px here.
+    expect(await page.evaluate(() => matchMedia('(max-width: 47.99rem)').matches)).toBe(true);
+    await expectLive(page);
+    await expect(page.getByRole('button', { name: 'Spatial stage' })).toBeVisible();
+  },
+);
+
+test('focus stays on the exit when the stage fails under it', { annotation }, async ({ page }) => {
+  await loadHome(page, '/');
+  await expectLive(page);
+  const exit = page.getByRole('button', { name: 'Spatial stage' });
+  await exit.focus();
+  await page.locator('canvas[data-spatial-canvas]').evaluate((canvas) => {
+    const gl = (canvas as HTMLCanvasElement).getContext('webgl2');
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+  });
+  await expect.poll(() => reason(page)).toBe('failed');
+  await expectExitDisabled(page);
+  await expect(exit).toBeFocused();
+  // Disabled, a press does nothing.
+  await page.keyboard.press('Enter');
+  await expect(exit).toHaveAttribute('aria-pressed', 'false');
+  expect(await reason(page)).toBe('failed');
+});
+
+test(
+  'a null context: the renderer gets no WebGL2 context, and the stage tears down to the still',
+  { annotation },
+  async ({ page }) => {
+    // The runtime's probe still finds WebGL2; the stage's own canvas gets none.
+    await page.addInitScript(() => {
+      const original = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function (
+        this: HTMLCanvasElement,
+        ...args: Parameters<HTMLCanvasElement['getContext']>
+      ) {
+        if (this.hasAttribute('data-spatial-canvas')) return null;
+        return (original as (...rest: unknown[]) => RenderingContext | null).apply(this, args);
+      } as HTMLCanvasElement['getContext'];
+    });
+    await loadHome(page, '/');
+    const before = await reading(page);
+    await expect.poll(() => reason(page), { timeout: 20_000 }).toBe('failed');
+    await expectStill(page);
+    await expectExitDisabled(page);
+    expect(await reading(page)).toEqual(before);
+    expect(await frameLoops(page)).toBeLessThan(5);
+  },
+);
+
+test(
+  'a draw call that throws tears the stage down to the still',
+  { annotation },
+  async ({ page }) => {
+    await page.addInitScript(() => {
+      for (const name of ['drawArrays', 'drawElements'] as const) {
+        WebGL2RenderingContext.prototype[name] = () => {
+          throw new Error(`${name} fails, as a driver might`);
+        };
+      }
+    });
+    await loadHome(page, '/');
+    const before = await reading(page);
+    await expect.poll(() => reason(page), { timeout: 20_000 }).toBe('failed');
+    await expectStill(page);
+    await expectExitDisabled(page);
+    expect(await reading(page)).toEqual(before);
+    expect(await frameLoops(page)).toBeLessThan(5);
+  },
+);
+
+/**
+ * The page in a frame on its own origin, as a #7 preview frame holds it.
+ * The public page refuses every frame (frame-ancestors 'none'), and a
+ * preview's own route takes only Studio's, so the test serves a host page
+ * at /__stage-frame and lets that one origin frame the page: the stage reads
+ * only whether it's framed, #7's lifecycle, and the boundary's attributes.
+ */
+async function loadFramed(page: Page): Promise<Frame> {
+  await page.route(
+    (url) => url.pathname === '/',
+    async (route) => {
+      const response = await route.fetch();
+      const headers = { ...response.headers() };
+      delete headers['x-frame-options'];
+      const policy = headers['content-security-policy'];
+      if (policy) {
+        headers['content-security-policy'] = policy.replace(
+          "frame-ancestors 'none'",
+          "frame-ancestors 'self'",
+        );
+      }
+      await route.fulfill({ response, headers });
+    },
+  );
+  await page.route('**/__stage-frame', (route) =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: '<!doctype html><title>frame</title><iframe src="/" style="border:0;width:1280px;height:800px"></iframe>',
+    }),
+  );
+  await page.goto('/__stage-frame');
+  await expect.poll(() => page.frames().length).toBe(2);
+  const frame = page.frames().find((one) => one !== page.mainFrame())!;
+  await frame.waitForLoadState('networkidle');
+  await expect.poll(() => frameReason(frame)).not.toBe('pending');
+  return frame;
+}
+
+/** #7's lifecycle, as its frame agent dispatches it. */
+function lifecycle(frame: Frame, state: 'visible' | 'hidden', focused: boolean) {
+  return frame.evaluate(
+    ([state, focused]) => {
+      (window as unknown as Record<symbol, unknown>)[Symbol.for('kgn-preview.lifecycle')] = {
+        state,
+        focused,
+      };
+      window.dispatchEvent(new Event('kgn-preview-lifecycle'));
+    },
+    [state, focused] as const,
+  );
+}
+
+const frameReason = (frame: Frame) => frame.locator('.sb-stage').getAttribute('data-stage-reason');
+
+test(
+  "in a frame the stage waits for #7's lifecycle, and a lifecycle pause unmounts it",
+  { annotation },
+  async ({ page }) => {
+    const frame = await loadFramed(page);
+    // No lifecycle yet: inactive, with no canvas and so no WebGL context.
+    expect(await frameReason(frame)).toBe('lifecycle');
+    await expect(frame.locator('canvas[data-spatial-canvas]')).toHaveCount(0);
+    await lifecycle(frame, 'visible', true);
+    await expect.poll(() => frameReason(frame), { timeout: 20_000 }).toBe('running');
+    await expect(frame.locator('canvas[data-spatial-canvas]')).toHaveCount(1);
+    await lifecycle(frame, 'visible', false);
+    await expect.poll(() => frameReason(frame)).toBe('lifecycle');
+    await expect(frame.locator('canvas[data-spatial-canvas]')).toHaveCount(0);
+    await lifecycle(frame, 'visible', true);
+    await expect.poll(() => frameReason(frame), { timeout: 20_000 }).toBe('running');
+  },
+);
+
+for (const [name, off] of [
+  ['data-contrast', 'more'],
+  ['data-display-mode', 'high-contrast'],
+  ['data-motion', 'reduced'],
+  ['data-motion', 'static'],
+  ['data-enhancement', 'off'],
+] as const) {
+  test(
+    `in a frame, a preview's ${name}="${off}" ends the stage, and setting it back can't bring it back`,
+    { annotation },
+    async ({ page }) => {
+      const frame = await loadFramed(page);
+      await lifecycle(frame, 'visible', true);
+      await expect.poll(() => frameReason(frame), { timeout: 20_000 }).toBe('running');
+      const boundary = frame.locator('[data-variant]').first();
+      const was = await boundary.getAttribute(name);
+      // As the frame channel applies a studio's environment, on the boundary.
+      await boundary.evaluate(
+        (element, [attribute, value]) => element.setAttribute(attribute, value),
+        [name, off] as const,
+      );
+      await expect.poll(() => frameReason(frame)).not.toBe('running');
+      await expect(frame.locator('canvas[data-spatial-canvas]')).toHaveCount(0);
+      await boundary.evaluate(
+        (element, [attribute, value]) =>
+          value === null
+            ? element.removeAttribute(attribute)
+            : element.setAttribute(attribute, value),
+        [name, was] as const,
+      );
+      // Time for the slot to see the change and, if it would, mount the stage again.
+      await frame.evaluate(() => new Promise((resolve) => setTimeout(resolve, 1_000)));
+      expect(await frameReason(frame)).toBe('preview-off');
+      await expect(frame.locator('canvas[data-spatial-canvas]')).toHaveCount(0);
+    },
+  );
+}
