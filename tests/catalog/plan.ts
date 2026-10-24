@@ -380,12 +380,16 @@ export function browserPlan(
 export const REHEARSAL = {
   /** Shards of the two parts. */
   shards: 8,
-  /** Static smoke tuples a shard checks: its share of every tuple, about 11,000 at 8 shards. */
+  /** Static smoke tuples a shard checks: its share of every tuple, about 14,300 at 8 shards. */
   staticPerShard: 20_000,
-  /** Browser smoke tuples a shard loads: the coverage sample and a seeded draw. */
-  browserPerShard: 140,
+  /**
+   * Browser smoke tuples a shard loads: the coverage sample (70 a shard at 35
+   * languages) and a seeded draw. 136 keeps a shard at 17 minutes, so the
+   * state shard's 172 pages still fit under the cap.
+   */
+  browserPerShard: 136,
   seed: SAMPLE_SEED,
-  /** The screenshots' JPEG quality, so 1,120 of them stay near 100 MB. */
+  /** The screenshots' JPEG quality, so 1,088 of them stay near 100 MB. */
   jpegQuality: 80,
   /** The state shard's fixed part: the fixture host's own build, on top of a shard's. */
   statesBuildSeconds: 240,
