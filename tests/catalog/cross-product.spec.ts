@@ -3,7 +3,10 @@
 // variant and display mode and a seeded draw up to the shard's budget, each
 // loaded under the demo profile from the query. A tuple passes when its page
 // answers 200, renders the boundary it asked for on every axis, resolves
-// each axis's tokens, and throws nothing. Every tuple takes a screenshot.
+// each axis's tokens, and throws nothing, and its typography holds: the page
+// wraps within the viewport, with no horizontal scroll, and shifts its
+// layout under 0.1 while it loads. Every tuple takes a screenshot, a JPEG
+// under CATALOG_PLAN=rehearsal (#20 PR 3), which also takes its budget.
 // Every failing tuple is a failure record naming its pack, axis, variant,
 // viewport, display mode, and tuple, and the shard fails once, after every
 // tuple ran. A plan over its budget fails before the first load.
@@ -22,8 +25,11 @@ import {
   browserPlan,
   crossProduct,
   MEASURED,
+  planBudget,
+  readPlan,
   readSeed,
   readShard,
+  REHEARSAL,
   recordTuple,
   tuplePath,
   VIEWPORT,
@@ -31,6 +37,9 @@ import {
 
 const WEB = fileURLToPath(new URL('../../apps/web/', import.meta.url));
 const SHARD = readShard(process.env.CATALOG_SHARD);
+const PLAN = readPlan(process.env.CATALOG_PLAN);
+/** The cumulative layout shift a tuple's load may reach: web.dev's good threshold. */
+const MAX_LAYOUT_SHIFT = 0.1;
 const SCREENS = path.join(reportsDir(), 'catalog', 'screens', `shard-${SHARD.index}`);
 
 /** The boundary attribute each pack axis renders as. */
@@ -67,7 +76,7 @@ test(`the cross-product, shard ${SHARD.index} of ${SHARD.count}`, async ({ page 
   const tuples = browserPlan(
     crossProduct(readBuildMeta(WEB)),
     SHARD,
-    undefined,
+    planBudget(PLAN).browser,
     readSeed(process.env.CATALOG_SEED),
   );
   // Each tuple gets twice its measured time, and the server's start a minute.
@@ -77,6 +86,19 @@ test(`the cross-product, shard ${SHARD.index} of ${SHARD.count}`, async ({ page 
 
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
+  // Each load's layout shifts, from its first paint on.
+  await page.addInitScript(() => {
+    const shifts = { total: 0 };
+    Object.defineProperty(window, '__layoutShift', { value: shifts });
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries() as (PerformanceEntry & {
+        value: number;
+        hadRecentInput: boolean;
+      })[]) {
+        if (!entry.hadRecentInput) shifts.total += entry.value;
+      }
+    }).observe({ type: 'layout-shift', buffered: true });
+  });
   const failures: Failure[] = [];
 
   for (const tuple of tuples) {
@@ -120,13 +142,25 @@ test(`the cross-product, shard ${SHARD.index} of ${SHARD.count}`, async ({ page 
         problems.push(`rendered display mode ${rendered.mode}, not ${tuple.displayMode}`);
       }
       if (errors.length > 0) problems.push(`threw ${errors.join('; ')}`);
+      const layout = await page.evaluate(() => ({
+        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        shift: (window as unknown as { __layoutShift: { total: number } }).__layoutShift.total,
+      }));
+      if (layout.overflow > 0) {
+        mismatched.push('typography');
+        problems.push(`scrolls ${layout.overflow}px sideways: it doesn't wrap within the viewport`);
+      }
+      if (layout.shift >= MAX_LAYOUT_SHIFT) {
+        mismatched.push('typography');
+        problems.push(`shifted its layout by ${layout.shift.toFixed(3)} as it loaded`);
+      }
       fs.mkdirSync(SCREENS, { recursive: true });
-      await page.screenshot({
-        path: path.join(
-          SCREENS,
-          `${tuple.variant}--${recordTuple(tuple).replace(/\//g, '--')}.png`,
-        ),
-      });
+      const name = `${tuple.variant}--${recordTuple(tuple).replace(/\//g, '--')}`;
+      await page.screenshot(
+        PLAN === 'rehearsal'
+          ? { path: path.join(SCREENS, `${name}.jpg`), type: 'jpeg', quality: REHEARSAL.jpegQuality }
+          : { path: path.join(SCREENS, `${name}.png`) },
+      );
     } catch (error) {
       problems.push(`didn't load: ${(error as Error).message.split('\n')[0]}`);
     }

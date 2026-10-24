@@ -467,7 +467,7 @@
       "version": "1.0.0",
       "tier": "experimental",
       "license": "generated",
-      "digest": "sha256-c593aaebbbc2a8b7fc2bc7aaa9ca10c69f8c7f2c97cf025d846e5ef4491fc24c"
+      "digest": "sha256-895a620f606761a88db6a64c1539060cd0a3b0eefd593279c5fe51f096b9f0c7"
     },
     "primer-inspired": {
       "axis": "designLanguage",
@@ -483,7 +483,7 @@
       "version": "1.0.0",
       "tier": "experimental",
       "license": "generated",
-      "digest": "sha256-6a5f8e1dd40314a4d2500443383012cee69af2952adcb3172c4ef8a93400ebf9"
+      "digest": "sha256-3602439108cff206d4b61adb5d886423fa01fd9258a403aa52d79976b3ee1c63"
     },
     "radix-inspired": {
       "axis": "designLanguage",
