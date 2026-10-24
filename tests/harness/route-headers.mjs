@@ -10,7 +10,7 @@
 // private, no-store. Only the build's assets and /_portfolio allow any
 // origin. Under demo (#9), the showroom at /, every /sample and /reference
 // path, and Demo Studio's pages get the demo policy in place of the public
-// one or Studio's, with frame-ancestors 'self' on /sample alone. Paths match in any case, as
+// one or Studio's, with frame-ancestors 'self' on /sample and /reference alone. Paths match in any case, as
 // Next matches header sources. The
 // profile matrix and the profile smoke check responses against these.
 // headers.test.ts and proxy.test.ts check next.config.ts and proxy.ts
@@ -39,7 +39,7 @@ export const STUDIO_CSP =
 /**
  * The demo policy in production (#9): Studio's, with worker-src 'self' and
  * form-action 'none', on the showroom, every /sample path, and Demo Studio.
- * Its second group is who may frame the page: 'self' on /sample alone.
+ * Its second group is who may frame the page: 'self' on /sample and /reference alone.
  */
 export const DEMO_CSP =
   /^default-src 'self'; script-src 'self' 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; frame-src 'self'; frame-ancestors ('self'|'none'); form-action 'none'; base-uri 'none'; object-src 'none'$/;
@@ -194,7 +194,7 @@ export function headerProblems(
     }
   } else if (demoPage) {
     expect('referrer-policy', BASELINE_HEADERS['referrer-policy']);
-    demoPolicy(demoPage === 'sample' ? "'self'" : "'none'");
+    demoPolicy(demoPage === 'sample' || demoPage === 'reference' ? "'self'" : "'none'");
     expect('cross-origin-resource-policy', undefined);
   } else if (transport) {
     expect('referrer-policy', 'same-origin');
