@@ -9,12 +9,19 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { finalVerdict } from './lib/verdict.mjs';
 import { sampleImport } from './lib/pending.mjs';
+import { identityProblems } from './lib/identity.mjs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { parse } from 'yaml';
 import {
   BASELINES,
+  compositionFor,
   CONTAINER_ROWS,
+  DEMO_ORIGIN,
+  identityRow,
+  identityRowInput,
+  refusedVolumeProblems,
+  SAMPLE_NAME,
   defaultComposition,
   egressRefusals,
   field,
@@ -316,4 +323,122 @@ test("a page is revision 1 or 2 only with its own identity.name and without the 
     const text = readFileSync(file, 'utf8');
     assert.ok(!text.includes(REVISION_ONE_NAME) && !text.includes(REVISION_TWO_NAME), file);
   }
+});
+
+const fixture = (name) =>
+  readFileSync(new URL(`./fixtures/identity/${name}`, import.meta.url), 'utf8');
+const answersOf = (profile) => ({
+  page: {
+    status: 200,
+    body: fixture(`${profile}.html`),
+    headers: profile === 'demo' ? { 'x-robots-tag': 'noindex' } : {},
+  },
+  sitemap: { status: 200, body: fixture(`${profile}.sitemap.xml`) },
+  robots: { status: 200, body: fixture(`${profile}.robots.txt`) },
+  feed:
+    profile === 'demo'
+      ? { status: 404, body: '' }
+      : { status: 200, body: fixture(`${profile}.feed.xml`) },
+  ogImage: { status: 200, headers: { 'content-type': 'image/png' } },
+});
+
+test("an identity row needs the image to have answered, forbids the other side's names and the hostname, and demo's isn't a no-op", () => {
+  // The identity fixtures are read-only on the rehearsal's migrated pair, named Jane Rehearsal.
+  const row = (profile, answers, extra = {}) =>
+    identityProblems(
+      identityRowInput({
+        profile,
+        origin: profile === 'demo' ? DEMO_ORIGIN : ORIGIN,
+        identityName: profile === 'demo' ? SAMPLE_NAME : 'Jane Rehearsal',
+        hostname: 'c0ffee12',
+        answers,
+        ...extra,
+      }),
+    );
+  assert.deepEqual(row('owner', answersOf('read-only')), []);
+  assert.deepEqual(row('demo', answersOf('demo')), []);
+  const { ogImage, ...imageless } = answersOf('read-only');
+  assert.ok(ogImage);
+  assert.ok(row('owner', imageless).some((p) => p.startsWith('the Open Graph image answered 0')));
+  // Demo held to the owner's answers fails on every count it checks.
+  assert.ok(row('demo', answersOf('read-only')).length >= 5);
+  const input = identityRowInput({
+    profile: 'demo',
+    origin: DEMO_ORIGIN,
+    identityName: SAMPLE_NAME,
+    hostname: 'c0ffee12',
+    answers: answersOf('demo'),
+  });
+  for (const name of ['Jane Rehearsal', REVISION_ONE_NAME, REVISION_TWO_NAME, ORIGIN, 'c0ffee12'])
+    assert.ok(input.forbidden.includes(name), name);
+  const owner = identityRowInput({
+    profile: 'owner',
+    origin: ORIGIN,
+    identityName: REVISION_TWO_NAME,
+    hostname: '',
+    answers: answersOf('read-only'),
+  });
+  assert.deepEqual(owner.forbidden, [SAMPLE_NAME, DEMO_ORIGIN]);
+  const leaked = edit(
+    answersOf('read-only'),
+    'page',
+    '</head>',
+    '<link rel="canonical" href="https://c0ffee12/"></head>',
+  );
+  assert.ok(row('owner', leaked).some((p) => /names c0ffee12/.test(p)));
+});
+
+function edit(answers, key, from, to) {
+  return { ...answers, [key]: { ...answers[key], body: answers[key].body.replace(from, to) } };
+}
+
+test('each identity row starts its profile and runs the identity check on it', () => {
+  const source = (id) => CONTAINER_ROWS.find((r) => r.id === id).run.toString();
+  assert.match(
+    source('owner-identity'),
+    /identityRow\(ctx, ctx\.owner, 'owner', ORIGIN, REVISION_TWO_NAME\)/,
+  );
+  assert.match(
+    source('read-only-identity'),
+    /startServer\(ctx, name, 'read-only', \{ pair: two, origin: ORIGIN \}\)/,
+  );
+  assert.match(
+    source('read-only-identity'),
+    /identityRow\(ctx, name, 'read-only', ORIGIN, REVISION_TWO_NAME\)/,
+  );
+  assert.match(
+    source('demo-identity'),
+    /startServer\(ctx, name, 'demo', \{ origin: DEMO_ORIGIN \}\)/,
+  );
+  assert.match(
+    source('demo-identity'),
+    /identityRow\(ctx, name, 'demo', DEMO_ORIGIN, SAMPLE_NAME\)/,
+  );
+  const check = identityRow.toString();
+  assert.match(check, /ogImagePath\(page\.body, origin\)/);
+  assert.match(check, /identityProblems\(\s*identityRowInput\(/);
+  assert.match(check, /answers: \{ page, sitemap, robots, feed, ogImage \}/);
+  assert.match(check, /expect\(problems\.length === 0/);
+});
+
+test("the native old-config row requires an empty data directory, and the image's allows only the empty store's store.json", () => {
+  const native = NATIVE_ROWS.find((r) => r.id === 'old-config').run.toString();
+  assert.match(native, /const left = readdirSync\(dataDir\);\s*expect\(\s*left\.length === 0/);
+  assert.doesNotMatch(native, /EMPTY_LAYOUT|store\.json/);
+  assert.deepEqual(refusedVolumeProblems([]), []);
+  assert.deepEqual(refusedVolumeProblems(['store.json']), []);
+  assert.equal(refusedVolumeProblems(['store.json', 'revisions/rev_1/portfolio.yml']).length, 1);
+  assert.equal(refusedVolumeProblems(['drafts/d.json']).length, 1);
+  const image = CONTAINER_ROWS.find((r) => r.id === 'image-old-config').run.toString();
+  assert.match(image, /refusedVolumeProblems\(files\)/);
+});
+
+test('every row runs on the default composition, and the run stops when the bundled sample does not import', () => {
+  assert.equal(compositionFor({ sampleImports: true }), defaultComposition());
+  assert.throws(
+    () => compositionFor({ sampleImports: false }),
+    /the default composition is registered/,
+  );
+  assert.throws(() => compositionFor(undefined), /the default composition is registered/);
+  assert.throws(() => compositionFor({ sampleImports: 'yes' }), /registered/);
 });
