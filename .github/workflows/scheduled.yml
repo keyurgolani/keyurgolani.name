@@ -91,7 +91,13 @@ jobs:
     # EXPECTED_SKIPS names it, so that skip alone isn't a failure.
     if: ${{ github.event.schedule == '23 6 * * 1' }}
     runs-on: ubuntu-24.04
-    # Each source is at most three attempts of 12 s each with backoff, four at once.
+    # The worst case, when every host stalls: each URL has one 60 s deadline
+    # across its three attempts (HEAD, then GET, each up to 6 hops, every
+    # request and DNS lookup capped at 12 s) and their backoff, four URLs at
+    # once, so 25 URLs take at most 7 minutes. The upstream stage then runs
+    # serially, each of its up to 8 GETs per pinned repository (the tag, 5
+    # license file names, the latest release, the tags) under its own 60 s
+    # deadline: 8 minutes for the one repository pinned today.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
