@@ -197,7 +197,7 @@ async function send(page: Page, document: unknown): Promise<unknown> {
 }
 
 test(
-  "the local frame renders the document Studio sends, and a script in it reaches no host, the app's own included: fetch, sendBeacon, a WebSocket, and a remote image make no request (#9, #7 AC11)",
+  "the local frame renders the document Studio sends, and a script in it gets no HTTP or WebSocket request to any host, the app's own included: fetch, sendBeacon, a WebSocket, a remote image, a CSS url(), a prefetch, and a link's ping are refused before they leave (#9, #7 AC11)",
   { annotation: ANNOTATION },
   async ({ page, app, blockedRequests }) => {
     const { requests, hits, dialogs, errors } = await openFrame(page);
