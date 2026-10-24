@@ -112,17 +112,36 @@ test('EXPECTED_SKIPS naming a job report does not need is an error, through the 
   );
 });
 
-test("the workflow's EXPECTED_SKIPS names only links, and only on the nights links doesn't run", () => {
+test("the workflow's EXPECTED_SKIPS names only the Monday jobs, and only on the nights they don't run", () => {
   const workflow = readFileSync(
     path.join(HERE, '..', '.github', 'workflows', 'scheduled.yml'),
     'utf8',
   );
   assert.ok(
     workflow.includes(
-      "EXPECTED_SKIPS: ${{ github.event.schedule != '23 6 * * 1' && 'links' || '' }}",
+      "EXPECTED_SKIPS: ${{ github.event.schedule != '23 6 * * 1' && 'links catalog-provenance' || '' }}",
     ),
   );
-  assert.ok(workflow.includes("if: ${{ github.event.schedule == '23 6 * * 1' }}"));
+  assert.deepEqual(parseExpectedSkips('links catalog-provenance'), ['links', 'catalog-provenance']);
+  assert.equal(
+    workflow.split("if: ${{ github.event.schedule == '23 6 * * 1' }}").length - 1,
+    2,
+    'links and catalog-provenance each run on Mondays only',
+  );
+});
+
+test('a failed catalog-provenance names its own local command', () => {
+  const [action] = decide({
+    needs: { 'catalog-provenance': { result: 'failure' }, links: { result: 'success' } },
+    openIssues: [],
+    records: [],
+    runUrl: RUN_URL,
+    date: '2026-10-26',
+  });
+  assert.ok(
+    action.body.includes('| ` catalog-provenance ` | failed | ` pnpm check:catalog-provenance ` |'),
+    action.body,
+  );
 });
 
 test('records are read from failures/ directories of the downloaded artifacts only', () => {
