@@ -210,14 +210,18 @@ test('with no adapter and no network, every fixture and the sample render comple
         // Complete: every section lands on the page, its id an element's, and
         // shows its title. A works section's title may go, as when a
         // composition folds one into its chapters, as Obsidian Atelier does
-        // (#115). With no sections, the owner's name shows.
+        // (#115), and so may that of a section a composition folds whole into
+        // a region of its own, whose id it keeps as an empty anchor there, as
+        // Editorial Evidence's proof strip does with an evidence section (#13).
+        // With no sections, the owner's name shows.
         const { sections } = view.portfolio;
         const unplaced = sections
           .map(({ id }) => id)
           .filter((id) => !new RegExp(`\\bid="[^"]*${id}"`).test(html));
         assert.deepEqual(unplaced, [], where);
+        const folded = (id: string) => new RegExp(`\\bid="[^"]*${id}"[^>]*></`).test(html);
         const untitled = sections
-          .filter((section) => section.kind !== 'works')
+          .filter((section) => section.kind !== 'works' && !folded(section.id))
           .map((section) => (section as { title?: unknown }).title)
           .filter((title): title is string => typeof title === 'string')
           .filter((title) => !html.includes(escaped(title)));
