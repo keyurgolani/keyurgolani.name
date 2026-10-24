@@ -15,7 +15,8 @@
 // so the shards of one count always partition the suite.
 //
 // Durations come from ci/shard-durations.json, which `measure` writes from
-// `gh run view --job <id> --log` output of a finished run.
+// `gh run view --job <id> --log` output of a finished run, merging into the
+// suite's weights: an item the logs don't measure keeps its own.
 import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -356,24 +357,34 @@ export function measure(suite, text) {
   };
   if (suite === 'unit') {
     const starts = new Map();
-    let script = null;
-    const endScript = (time) => {
-      if (script) add(`script:${script.name}`, (time - script.start) / 1000);
-      script = null;
+    // What runs now, one at a time: a root test script, or a package under
+    // pnpm's sequential output, which runs until the next one starts.
+    let current = null;
+    const end = (time) => {
+      if (current) add(current.key, (time - current.start) / 1000);
+      current = null;
     };
     for (const { time, text: line } of lines) {
+      // pnpm's prefixed output, when packages run in parallel: `<dir> test$ ...` then `<dir> test: Done`.
       const start = /^(\S+) test\$ /.exec(line);
       if (start) starts.set(start[1], time);
       const done = /^(\S+) test: Done$/.exec(line);
       if (done && starts.has(done[1])) add(`pkg:${done[1]}`, (time - starts.get(done[1])) / 1000);
+      // pnpm 10's sequential output: `> @scope/name@version test <dir>`, a package's dir absolute.
+      const pkg = /^> @[^@\s]+@\S+ test (\S+)\s*$/.exec(line);
+      if (pkg) {
+        end(time);
+        const dir = /(?:^|\/)((?:apps|packages)\/[^/]+)\/?$/.exec(pkg[1])?.[1] ?? pkg[1];
+        current = { key: `pkg:${dir}`, start: time };
+      }
       const root = /^> [^@\s]+@\S+ ([\w:-]+) /.exec(line);
       if (root) {
-        endScript(time);
-        if (root[1].startsWith('test:')) script = { name: root[1], start: time };
+        end(time);
+        if (root[1].startsWith('test:')) current = { key: `script:${root[1]}`, start: time };
       }
-      if (/^\[ci\] \S+ (passed|failed)/.test(line)) endScript(time);
+      if (/^\[ci\] \S+ (passed|failed)/.test(line)) end(time);
     }
-    endScript(lines.at(-1)?.time ?? 0);
+    end(lines.at(-1)?.time ?? 0);
     return out;
   }
   for (const { text: line } of lines) {
@@ -383,6 +394,18 @@ export function measure(suite, text) {
     add(suite === 'variants' ? match[1] : match[2], seconds);
   }
   return out;
+}
+
+/**
+ * A suite's weights with `measured` over them: what the logs measured
+ * replaces its own items, and every item they didn't measure keeps its
+ * weight, so one log that misses a package doesn't drop it to the median.
+ * Sorted by item.
+ */
+export function mergeDurations(section, measured) {
+  return Object.fromEntries(
+    Object.entries({ ...(section ?? {}), ...measured }).sort(([a], [b]) => a.localeCompare(b)),
+  );
 }
 
 // ---- CLI --------------------------------------------------------------------
@@ -407,14 +430,13 @@ function main(argv) {
       }
     }
     // The median across the logs given, so one slow runner doesn't skew it.
-    durations[suite] = Object.fromEntries(
-      Object.entries(merged)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([item, list]) => [
-          item,
-          [...list].sort((a, b) => a - b)[Math.floor(list.length / 2)],
-        ]),
+    const medians = Object.fromEntries(
+      Object.entries(merged).map(([item, list]) => [
+        item,
+        [...list].sort((a, b) => a - b)[Math.floor(list.length / 2)],
+      ]),
     );
+    durations[suite] = mergeDurations(durations[suite], medians);
     writeFileSync(DURATIONS_FILE, `${JSON.stringify(durations, null, 2)}\n`);
     console.log(JSON.stringify(durations[suite], null, 2));
     return 0;
