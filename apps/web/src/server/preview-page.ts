@@ -66,6 +66,8 @@ export async function previewPage(grant: string, route: readonly string[]) {
       variant: resolved.composition.rendered.manifest.id,
       profile: requireDeploymentConfig().profile,
       environment: opened.environment,
+      // The grant's own stored generated schemes (#20 PR 3).
+      schemes: opened.schemes,
     }),
     linkBase: { basePath },
     route: resolved.target,
