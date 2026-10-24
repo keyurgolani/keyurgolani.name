@@ -1,10 +1,10 @@
 // What a browser test reads from a document to show Studio stayed out of a
-// preview (#7, AC1): the sentinel custom property only host-chrome.css
-// defines, every selector of every stylesheet the document loaded, its
+// preview (#7, AC1): the sentinel custom property only Studio's
+// stylesheet defines, every selector of every stylesheet the document loaded, its
 // scripts, and its markup, plus every CSP violation the page raised (AC6).
 import type { Frame, Page } from '@playwright/test';
 
-/** The custom property host-chrome.css defines on :root, and nothing else does. */
+/** The custom property Studio's stylesheet, studio.css, defines on :root, and nothing else does. */
 export const STUDIO_SENTINEL = '--studio-sentinel';
 
 declare global {
@@ -34,7 +34,7 @@ export const violations = (page: Page | Frame): Promise<string[]> =>
 
 /** What a loaded document holds, as AC1's inventory reads it. */
 export interface DocumentInventory {
-  /** The sentinel's value on the root element: empty unless host-chrome.css loaded. */
+  /** The sentinel's value on the root element: empty unless Studio's stylesheet loaded. */
   readonly sentinel: string;
   /** Every selector of every rule in every stylesheet it may read, inside at-rules too. */
   readonly selectors: readonly string[];

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { StudioFetchOptions } from '~/lib/studio-fetch';
+import { isOwnerBackend, type StudioBackend } from './backend';
 import { ownerBackend } from './owner-backend';
 import { draft, DRAFT_ID } from './test-support';
 
@@ -136,4 +137,169 @@ test("the session check is auth.session, and sign-out is auth.logout with the to
     ],
   );
   assert.equal(await backend(() => json(401, {})).studio.session(), false);
+});
+
+const REVISION = `rev_${'3'.repeat(32)}`;
+const LIVE_NOW = `rev_${'4'.repeat(32)}`;
+const failed = (status: number, code: string, details?: unknown) =>
+  json(status, { error: { code, message: 'm', requestId: 'r', ...(details ? { details } : {}) } });
+
+test('publish and rollback go as commands with the version, the expected live revision, and the key, and nothing else', async () => {
+  const { sent, studio } = backend(() => json(200, { data: { revisionId: REVISION, seq: 5 } }));
+  assert.deepEqual(
+    await studio.publish({
+      draftId: DRAFT_ID,
+      draftVersion: 3,
+      expectedLiveRevisionId: LIVE_NOW,
+      idempotencyKey: 'studio-key',
+    }),
+    { kind: 'committed', revisionId: REVISION, seq: 5 },
+  );
+  assert.deepEqual(
+    await studio.rollback({
+      targetRevisionId: REVISION,
+      expectedLiveRevisionId: LIVE_NOW,
+      idempotencyKey: 'studio-key-2',
+    }),
+    { kind: 'committed', revisionId: REVISION, seq: 5 },
+  );
+  assert.deepEqual(
+    sent.map(({ name, options }) => [name, options.csrfToken, options.body, options.query]),
+    [
+      [
+        'publish',
+        'csrf-token',
+        {
+          draftId: DRAFT_ID,
+          draftVersion: 3,
+          expectedLiveRevisionId: LIVE_NOW,
+          idempotencyKey: 'studio-key',
+        },
+        undefined,
+      ],
+      [
+        'rollback',
+        'csrf-token',
+        {
+          targetRevisionId: REVISION,
+          expectedLiveRevisionId: LIVE_NOW,
+          idempotencyKey: 'studio-key-2',
+        },
+        undefined,
+      ],
+    ],
+  );
+});
+
+test("a move's refusals come back by kind: live moved, a newer draft, #3's codes, and a lost connection", async () => {
+  const input = {
+    targetRevisionId: REVISION,
+    expectedLiveRevisionId: LIVE_NOW,
+    idempotencyKey: 'studio-key',
+  };
+  const answer = (response: Response) => backend(() => response).studio.rollback(input);
+  assert.deepEqual(
+    await answer(
+      failed(409, 'live_conflict', { liveRevisionId: REVISION, baseHash: null, liveHash: null }),
+    ),
+    { kind: 'live-moved', liveRevisionId: REVISION },
+  );
+  assert.deepEqual(
+    await answer(failed(409, 'draft_conflict', { draftId: DRAFT_ID, version: 7, documents: {} })),
+    { kind: 'draft-moved', version: 7 },
+  );
+  const incompatible = await answer(
+    failed(422, 'revision_incompatible', { reason: 'removed', diagnostics: [] }),
+  );
+  assert.equal(incompatible.kind, 'refused');
+  assert.equal(incompatible.kind === 'refused' && incompatible.code, 'revision_incompatible');
+  const lost = await backend(() => {
+    throw new TypeError('Failed to fetch');
+  }).studio.rollback(input);
+  assert.equal(lost.kind === 'failed' && lost.code, 'network');
+  assert.deepEqual(await answer(json(401, {})), { kind: 'signed-out' });
+});
+
+test("a read that fails says the store couldn't be read, never that changes are kept, which only a write has (#123 delta check)", async () => {
+  const reads = (studio: ReturnType<typeof backend>['studio']) => [
+    studio.workingDraft(),
+    studio.live(),
+    studio.revisions(0),
+    studio.history(0),
+    studio.revision(REVISION),
+  ];
+  for (const [answer, says] of [
+    [() => failed(503, 'storage_unavailable'), /^The store couldn't be read right now\./],
+    [
+      () => {
+        throw new TypeError('Failed to fetch');
+      },
+      /^Couldn't reach the server\. Try again/,
+    ],
+  ] as const) {
+    for (const result of await Promise.all(reads(backend(answer).studio))) {
+      assert.equal(result.kind, 'failed');
+      const { message } = result as { message: string };
+      assert.match(message, says);
+      assert.doesNotMatch(message, /kept in this browser/);
+    }
+  }
+  // A write keeps its own words: what it couldn't save is still in this browser.
+  const save = await backend(() => failed(503, 'storage_unavailable')).studio.saveDraft({
+    draftId: DRAFT_ID,
+    expectedVersion: 1,
+    documents: DOCUMENTS,
+  });
+  assert.match((save as { message: string }).message, /kept in this browser/);
+});
+
+test('history reads its pages by query, and a revision that is gone reads as none', async () => {
+  const { sent, studio } = backend(({ name }) =>
+    name === 'revision.get'
+      ? failed(404, 'not_found')
+      : json(200, { data: { revisions: [], events: [], nextOffset: null } }),
+  );
+  assert.deepEqual(await studio.revisions(50), {
+    kind: 'read',
+    value: { items: [], nextOffset: null },
+  });
+  assert.deepEqual(await studio.history(0), {
+    kind: 'read',
+    value: { items: [], nextOffset: null },
+  });
+  assert.deepEqual(await studio.revision(REVISION), { kind: 'read', value: null });
+  assert.deepEqual(
+    sent.map(({ name, options }) => [name, options.query, options.body]),
+    [
+      ['revision.list', { offset: '50' }, undefined],
+      ['history.list', { offset: '0' }, undefined],
+      ['revision.get', { revisionId: REVISION }, undefined],
+    ],
+  );
+});
+
+test("a plain StudioBackend, as #9's demo adapter is, has no publish, rollback, or history to reach; only the owner adapter is an OwnerBackend", () => {
+  const unused = async () => {
+    throw new Error('not called');
+  };
+  const plain: StudioBackend = {
+    session: unused,
+    live: unused,
+    workingDraft: unused,
+    startDraft: unused,
+    saveDraft: unused,
+    applyEdits: unused,
+    signOut: unused,
+  };
+  assert.equal(isOwnerBackend(plain), false);
+  // The type has none of them: each line below fails typecheck without its expectation.
+  // @ts-expect-error a plain StudioBackend can't reach publish
+  assert.equal(plain.publish, undefined);
+  // @ts-expect-error nor rollback
+  assert.equal(plain.rollback, undefined);
+  // @ts-expect-error nor the publication history
+  assert.equal(plain.revisions, undefined);
+  const owner = backend(() => json(200, {})).studio;
+  assert.equal(isOwnerBackend(owner), true);
+  assert.equal(typeof owner.publish, 'function');
 });

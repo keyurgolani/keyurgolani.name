@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A page that needs JavaScript, and hides that it does</title>
+    <!--
+      Known-bad (#11): a surface that declares requiresScript whose notice
+      says it needs JavaScript, in a #content that isn't shown.
+    -->
+  </head>
+  <body>
+    <a href="#content">Skip to the task</a>
+    <h1>Portfolio Studio</h1>
+    <main>
+      <div id="content" tabindex="-1" hidden>
+        <noscript><p>Studio needs JavaScript. Turn it on, then reload.</p></noscript>
+      </div>
+      <p>Where things stand</p>
+    </main>
+  </body>
+</html>

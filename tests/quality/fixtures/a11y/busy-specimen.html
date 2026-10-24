@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A fixture's specimens at work for good, known-good</title>
+    <!--
+      Known-good (#11): a fixture page that has loaded, whose loading Action
+      specimens say they're at work for good, inside the
+      data-quality-specimen="busy" marker the primitives fixture puts them
+      in. Their aria-busy is the specimen's, so the page settles.
+    -->
+  </head>
+  <body>
+    <main>
+      <h1>Specimens</h1>
+      <div data-quality-specimen="busy">
+        <button type="button" data-ui-slot="action" aria-busy="true" aria-disabled="true">
+          Validating
+        </button>
+      </div>
+      <form data-quality-specimen="busy">
+        <button type="submit" aria-busy="true" aria-disabled="true">Saving the revision</button>
+      </form>
+      <p>Everything here has loaded.</p>
+    </main>
+  </body>
+</html>

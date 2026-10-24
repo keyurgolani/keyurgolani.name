@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A page whose script didn't arrive, and says so</title>
+    <!--
+      What a Studio surface that declares requiresScript shows when the
+      script it needs fails to load (#11): one main and an h1, an alert that
+      it couldn't load with a control to try again, and nothing still
+      aria-busy.
+    -->
+  </head>
+  <body>
+    <a href="#content">Skip to the task</a>
+    <h1>Portfolio Studio</h1>
+    <main>
+      <div id="content" tabindex="-1"></div>
+      <div role="alert">
+        <p>Studio couldn't load. Check your connection, then reload Studio.</p>
+        <button type="button">Reload Studio</button>
+      </div>
+    </main>
+  </body>
+</html>

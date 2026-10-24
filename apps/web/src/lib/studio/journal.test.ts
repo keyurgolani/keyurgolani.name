@@ -2,11 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   clearJournal,
+  dropsOnWrite,
   entryFor,
   JOURNAL_CLOCK_SKEW_MS,
   JOURNAL_KEY,
   JOURNAL_MAX_ENTRIES,
   JOURNAL_RETENTION_MS,
+  newTabId,
   pruneJournal,
   readJournal,
   removeEntry,
@@ -154,6 +156,23 @@ test(`at most ${JOURNAL_MAX_ENTRIES} tabs' entries are kept, the oldest going fi
   assert.ok(!kept.some((each) => each.tabId === 'tab-00000000'));
 });
 
+test('a write that lets another tab go past the cap says which, oldest first, and one that replaces its own lets none go', () => {
+  const storage = memory();
+  const tab = (index: number) => `tab-${String(index).padStart(8, '0')}`;
+  for (let index = 0; index < JOURNAL_MAX_ENTRIES; index += 1) {
+    writeEntry(storage, entry(tab(index), NOW - 10_000 + index), NOW);
+  }
+  // A full journal: one more tab lets the oldest go, and rewriting a kept tab lets none.
+  assert.deepEqual(
+    dropsOnWrite(storage, entry('tab-newcomer'), NOW).map(({ tabId }) => tabId),
+    [tab(0)],
+  );
+  assert.deepEqual(dropsOnWrite(storage, entry(tab(3)), NOW), []);
+  // Below the cap, nothing goes.
+  removeEntry(storage, tab(0), NOW);
+  assert.deepEqual(dropsOnWrite(storage, entry('tab-newcomer'), NOW), []);
+});
+
 test("a tab restores its own entry, else another tab's for the working draft, else the newest as an orphan", () => {
   const mine = entry('tab-aaaaaaaa', NOW - 3000);
   const theirs = entry('tab-bbbbbbbb', NOW - 2000);
@@ -174,6 +193,10 @@ test("a tab's id is made once and kept in its sessionStorage", () => {
   assert.equal(session.items.get(TAB_KEY), 'madetab1');
   assert.equal(tabId(session, random), 'madetab1');
   assert.equal(made, 1);
+  // A duplicated tab's copy is replaced with a new id of its own.
+  assert.equal(newTabId(session, random), 'madetab2');
+  assert.equal(session.items.get(TAB_KEY), 'madetab2');
+  assert.equal(tabId(session, random), 'madetab2');
 });
 
 test('storage that refuses reads as none and writes nothing, without throwing', () => {

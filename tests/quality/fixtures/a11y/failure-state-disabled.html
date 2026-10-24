@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A page whose script didn't arrive, with Reload turned off</title>
+    <!--
+      Known-bad (#11): a surface that declares requiresScript whose script
+      failed to load, with an alert whose Reload is disabled, so it can't take
+      focus.
+    -->
+  </head>
+  <body>
+    <a href="#content">Skip to the task</a>
+    <h1>Portfolio Studio</h1>
+    <main>
+      <div id="content" tabindex="-1"></div>
+      <div role="alert">
+        <p>Studio couldn't load. Check your connection, then reload Studio.</p>
+        <button type="button" disabled>Reload Studio</button>
+      </div>
+    </main>
+  </body>
+</html>

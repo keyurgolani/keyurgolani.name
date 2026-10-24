@@ -7,11 +7,11 @@ import Link from 'next/link';
 // matches the server log.
 export default function StudioError({ error }: { error: Error & { digest?: string } }) {
   return (
-    <main className="host-chrome">
+    <main className="studio-chrome">
       <h1>Something went wrong</h1>
       <p>This page couldn&apos;t be shown.</p>
       {error.digest ? (
-        <p className="host-chrome__reference">
+        <p className="studio-chrome__reference">
           Reference: <code>{error.digest}</code>
         </p>
       ) : null}

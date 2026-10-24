@@ -11,14 +11,18 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { BrowserContextOptions, Page } from '@playwright/test';
+import type { BrowserContextOptions, CDPSession, Page } from '@playwright/test';
 import { axeFor } from '../lib/axe';
 import { checkEmulation } from '../lib/emulation';
 import { PREFERENCE_ROWS } from '../lib/matrix';
 import {
   enhancementFindings,
+  failureStateFindings,
   inventoryFindings,
+  notBusy,
   reflowFindings,
+  scriptRequiredFindings,
+  STILL_BUSY,
   scriptingMediaFindings,
   transparencyFindings,
 } from '../lib/a11y/conditions';
@@ -32,6 +36,7 @@ import {
 } from '../lib/a11y/interaction';
 import { killSwitches, MOTION_SAMPLER, motionFindings, osWinsFindings } from '../lib/a11y/motion';
 import { inPage } from '../lib/a11y/probe';
+import { applyRow, audit } from '../lib/run-cell';
 import type { MetaCase, MetaOutcome } from './cases';
 
 const FIXTURES = fileURLToPath(new URL('../fixtures/a11y/', import.meta.url));
@@ -53,6 +58,9 @@ interface PageOptions extends BrowserContextOptions {
   /** JavaScript off, through CDP, as run-cell.ts turns it off for the no-JavaScript row. */
   readonly noScript?: boolean;
 }
+
+/** The CDP session that turned script off on a fixture's page, when one did. */
+const scriptless = new WeakMap<Page, CDPSession>();
 
 /**
  * `file` served at / from a loopback host, open in Chromium at 1440x900
@@ -93,6 +101,7 @@ async function onPage(
     if (noScript) {
       const cdp = await page.context().newCDPSession(page);
       await cdp.send('Emulation.setScriptExecutionDisabled', { value: true });
+      scriptless.set(page, cdp);
     }
     await page.goto(at ?? '/', { waitUntil: 'load' });
     await frames(page);
@@ -160,7 +169,30 @@ function good(
   };
 }
 
+/** Whether the page settles, as settle() and the reload conditions wait for it. */
+const settled = async (page: Page): Promise<Finding[]> =>
+  (await notBusy(page)) ? [] : [{ gate: 'runner', rule: 'settled', actual: STILL_BUSY }];
 const keyboard = (page: Page) => keyboardFindings(page);
+/** A page whose script didn't arrive, as failed enhancement reads it; axe has cases of its own. */
+const failureState = (page: Page) => failureStateFindings(page, { axe: false });
+/** A page that needs JavaScript, as the no-JavaScript checks read it; axe has cases of its own. */
+const scriptRequired = (page: Page) =>
+  scriptRequiredFindings(page, null, 'no-javascript', { axe: false });
+/** The no-JavaScript row's axe pass on the page, as run-cell.ts runs it: script off, then audit(). */
+const rowAudit = async (page: Page): Promise<Finding[]> => {
+  const row = PREFERENCE_ROWS.find((each) => each.id === 'no-javascript')!;
+  await applyRow(page, row);
+  await page.reload({ waitUntil: 'load' });
+  const { results } = await audit(page, row);
+  return results.violations.map((rule) => ({
+    gate: 'axe',
+    rule: rule.id,
+    actual: `${rule.nodes.length} element(s): ${rule.help}`,
+  }));
+};
+/** The same, with axe, which turns script on for its pass through the page's own session. */
+const scriptRequiredAxe = (page: Page) =>
+  scriptRequiredFindings(page, scriptless.get(page) ?? null, 'no-javascript');
 const focus = async (page: Page) =>
   (await keyboardFindings(page, { focus: true })).filter((each) => each.gate === 'focus');
 const occlusion = async (page: Page) =>
@@ -377,6 +409,114 @@ export const A11Y_CASES: readonly MetaCase[] = [
   good('inventory', inventory),
   bad('needs-canvas', 'enhancement.html', 'enhancement', 'semantics|navigation', enhancement),
   good('enhancement', enhancement),
+  // A page that declares nothing is read after its skip link is followed, as a visitor has it.
+  bad('skip-changes', 'enhancement-skip-changes.html', 'enhancement', 'semantics', enhancement),
+  // A Studio surface that declares requiresScript: with JavaScript off it says so in #content.
+  bad(
+    'no-javascript-silent',
+    'no-javascript-silent.html',
+    'enhancement',
+    'notice',
+    scriptRequired,
+    {
+      noScript: true,
+    },
+  ),
+  // Its notice is shown, says it needs JavaScript, and axe reads it as a reader without it has it.
+  bad(
+    'no-javascript-hidden',
+    'no-javascript-hidden.html',
+    'enhancement',
+    'notice',
+    scriptRequired,
+    {
+      noScript: true,
+    },
+  ),
+  bad(
+    'no-javascript-unrelated',
+    'no-javascript-unrelated.html',
+    'enhancement',
+    'notice',
+    scriptRequired,
+    { noScript: true },
+  ),
+  // And when the script it needs doesn't arrive, it says it couldn't load, and stops loading.
+  bad(
+    'failure-state-silent',
+    'failure-state-silent.html',
+    'enhancement',
+    'failure-state',
+    failureState,
+  ),
+  bad(
+    'failure-state-busy',
+    'failure-state-busy.html',
+    'enhancement',
+    'failure-state',
+    failureState,
+  ),
+  // Its alert holds a control to try again, which takes focus.
+  bad(
+    'failure-state-no-control',
+    'failure-state-no-control.html',
+    'enhancement',
+    'failure-state',
+    failureState,
+  ),
+  bad(
+    'failure-state-disabled',
+    'failure-state-disabled.html',
+    'enhancement',
+    'failure-state',
+    failureState,
+  ),
+  bad(
+    'failure-state-unnamed',
+    'failure-state-unnamed.html',
+    'enhancement',
+    'failure-state',
+    failureState,
+  ),
+  // A Reload a script can focus but the keyboard never reaches.
+  {
+    ...bad(
+      'failure-state-unreachable',
+      'failure-state-unreachable.html',
+      'enhancement',
+      'failure-state',
+      failureState,
+    ),
+    reason: /^enhancement failure-state: its control is out of the tab order$/,
+  },
+  {
+    id: 'enhancement/failure-state',
+    gate: 'enhancement',
+    input: 'tests/quality/fixtures/a11y/failure-state.html',
+    expect: 'pass',
+    browser: true,
+    run: () => onPage('failure-state.html', failureState),
+  },
+  {
+    id: 'enhancement/no-javascript-notice',
+    gate: 'enhancement',
+    input: 'tests/quality/fixtures/a11y/no-javascript-notice.html',
+    expect: 'pass',
+    browser: true,
+    run: () =>
+      onPage(
+        'no-javascript-notice.html',
+        async (page) => [
+          // With axe, as the no-JavaScript and print conditions run it.
+          ...(await scriptRequiredAxe(page)),
+          // Its waiting line is hidden without script, so the page has settled.
+          ...((await notBusy(page))
+            ? []
+            : [{ gate: 'runner', rule: 'settled', actual: STILL_BUSY } as Finding]),
+        ],
+        { noScript: true },
+      ),
+  },
   bad('spinner', 'motion-spin.html', 'motion', 'animation', motionFindings, {
     ...REDUCED,
     init: MOTION_SAMPLER,
@@ -456,6 +596,27 @@ export const A11Y_CASES: readonly MetaCase[] = [
   bad('button-name', 'axe-semantics.html', 'axe', 'button-name', axeRule('button-name')),
   bad('target-size', 'axe-semantics.html', 'axe', 'target-size', axeRule('target-size')),
   bad('color-contrast', 'axe-semantics.html', 'axe', 'color-contrast', axeRule('color-contrast')),
+  // A page that requires script: axe reads its <noscript> notice as a reader without it has it.
+  bad(
+    'no-javascript-faint',
+    'no-javascript-faint.html',
+    'axe',
+    'color-contrast',
+    scriptRequiredAxe,
+    {
+      noScript: true,
+    },
+  ),
+  // And so does the no-JavaScript row's own axe pass, through run-cell's audit().
+  bad('no-javascript-row-faint', 'no-javascript-faint.html', 'axe', 'color-contrast', rowAudit),
+  {
+    id: 'axe/no-javascript-row-notice',
+    gate: 'axe',
+    input: 'tests/quality/fixtures/a11y/no-javascript-notice.html',
+    expect: 'pass',
+    browser: true,
+    run: () => onPage('no-javascript-notice.html', rowAudit),
+  },
   good('axe', axeAll),
   emulationCase('high-contrast', false),
   emulationCase('high-contrast', true),
@@ -481,5 +642,18 @@ export const A11Y_CASES: readonly MetaCase[] = [
     expect: 'pass',
     browser: true,
     run: () => onPage('good.html', scriptingMediaFindings, { noScript: true }),
+  },
+  // A page settles once nothing on it says it's at work but a fixture's marked specimens:
+  // a loading Action inside data-quality-specimen="busy" is at work for good by design; the
+  // same button unmarked, or a region or status line, is the page still loading.
+  bad('busy-region', 'busy-region.html', 'runner', 'settled', settled),
+  bad('busy-unmarked', 'busy-unmarked.html', 'runner', 'settled', settled),
+  {
+    id: 'runner/busy-specimen',
+    gate: 'runner',
+    input: 'tests/quality/fixtures/a11y/busy-specimen.html',
+    expect: 'pass',
+    browser: true,
+    run: () => onPage('busy-specimen.html', settled),
   },
 ];

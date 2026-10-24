@@ -3,7 +3,15 @@ import test from 'node:test';
 import { parse } from 'yaml';
 import { createAppearanceRegistry } from '../../packages/appearance/src/index';
 import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
-import { accepts, defaultTuple, planCells, siteTextFor, workRoutes, type BuildMeta } from './cells';
+import {
+  accepts,
+  cellAnnotations,
+  defaultTuple,
+  planCells,
+  siteTextFor,
+  workRoutes,
+  type BuildMeta,
+} from './cells';
 import { tupleKey } from './coverage';
 import { isReason } from './lib/checks';
 import { requiredChecks } from './lib/checks';
@@ -36,6 +44,7 @@ test('the PR plan: each sentinel at every viewport in the default row, and every
     'login signed-out /studio/sign-in system',
     'obsidian-atelier complete / system',
     'spatial-bento complete / system',
+    'studio content /studio system',
   ]);
   const extraRows = PREFERENCE_ROWS.length - 1;
   assert.equal(plan.tests.length, plan.cells.length * VIEWPORTS.length + extraRows);
@@ -65,6 +74,7 @@ test('the PR plan: each sentinel at every viewport in the default row, and every
     { kind: 'composition', id: 'obsidian-atelier' },
     { kind: 'composition', id: 'spatial-bento' },
     { kind: 'surface', id: 'login' },
+    { kind: 'surface', id: 'studio' },
   ]);
 });
 
@@ -363,4 +373,22 @@ test('the plan is the same each time', () => {
     a.tests.map((each) => `${each.cell.id} ${each.viewport.id} ${each.row.id}`),
     b.tests.map((each) => `${each.cell.id} ${each.viewport.id} ${each.row.id}`),
   );
+});
+
+test("a surface's requiresScript reason goes on each of its cells, and on no other", () => {
+  const plan = planCells({ meta: checkoutMeta(), registrations, mode: 'full' });
+  const reason = registrations.surfaces.find((each) => each.id === 'studio')?.requiresScript
+    ?.reason;
+  assert.ok(reason !== undefined && isReason(reason));
+  const studio = plan.cells.filter((cell) => cell.target === 'studio');
+  assert.ok(studio.length > 0);
+  for (const cell of studio) {
+    assert.equal(cell.requiresScript, reason, cell.id);
+    // Its report says why, from the start, so a cell that throws says so too.
+    assert.deepEqual(cellAnnotations(cell), [{ type: 'requires-script', description: reason }]);
+  }
+  for (const cell of plan.cells.filter((each) => each.target !== 'studio')) {
+    assert.equal(cell.requiresScript, undefined, cell.id);
+    assert.deepEqual(cellAnnotations(cell), [], cell.id);
+  }
 });

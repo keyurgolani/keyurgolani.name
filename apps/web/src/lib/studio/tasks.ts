@@ -50,8 +50,7 @@ export const STUDIO_TASKS: readonly StudioTask[] = Object.freeze([
     id: 'history',
     label: 'Publish history',
     capability: 'history.read',
-    pending:
-      'Publish history, with each revision and a rollback, arrives with a later Studio release.',
+    pending: null,
   },
 ]);
 

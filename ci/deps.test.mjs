@@ -24,7 +24,7 @@ const CRUISER = path.join(
 
 /** What every tree holds: the rules' targets, and owner code loaded as the composition root does. */
 const BASE = {
-  'apps/web/src/app/host-chrome.css': '.host-chrome {}\n',
+  'apps/web/src/app/(studio)/studio.css': '.studio {}\n',
   'apps/web/src/app/(studio)/layout.tsx':
     'export default function StudioLayout() {\n  return null;\n}\n',
   'apps/web/src/server/owner/auth.ts': 'export const auth = 1;\n',
@@ -89,10 +89,10 @@ test('check:deps passes the tree these tests start from', (t) => {
   assert.deepEqual(of(cruise(t, {}), ...RULES), []);
 });
 
-test("check:deps fails a preview module that imports Studio's route group or host-chrome.css, by its ~/ alias too (#7)", (t) => {
+test("check:deps fails a preview module that imports Studio's route group or its stylesheet, by its ~/ alias too (#7)", (t) => {
   const violations = cruise(t, {
     'apps/web/src/app/(preview)/document.tsx':
-      "import '~/app/host-chrome.css';\nexport const document = 1;\n",
+      "import '~/app/(studio)/studio.css';\nexport const document = 1;\n",
     'apps/web/src/preview/agent.tsx': "import '~/app/(studio)/layout';\nexport const agent = 1;\n",
     'apps/web/src/preview/status.ts':
       "import '../app/(studio)/layout';\nexport const status = 1;\n",
@@ -101,7 +101,7 @@ test("check:deps fails a preview module that imports Studio's route group or hos
     {
       rule: 'preview-imports-no-studio',
       from: 'apps/web/src/app/(preview)/document.tsx',
-      to: 'apps/web/src/app/host-chrome.css',
+      to: 'apps/web/src/app/(studio)/studio.css',
     },
     {
       rule: 'preview-imports-no-studio',
@@ -116,17 +116,17 @@ test("check:deps fails a preview module that imports Studio's route group or hos
   ]);
 });
 
-test('check:deps fails a preview module that reaches host-chrome.css through a shared module (#7)', (t) => {
+test("check:deps fails a preview module that reaches Studio's stylesheet through a shared module (#7)", (t) => {
   const violations = cruise(t, {
     'apps/web/src/lib/experience-head.ts':
-      "import '../app/host-chrome.css';\nexport const head = 1;\n",
+      "import '../app/(studio)/studio.css';\nexport const head = 1;\n",
   });
   // The shared module itself is no preview module, so only the document fails.
   assert.deepEqual(of(violations, 'preview-imports-no-studio'), [
     {
       rule: 'preview-imports-no-studio',
       from: 'apps/web/src/app/(preview)/document.tsx',
-      to: 'apps/web/src/app/host-chrome.css',
+      to: 'apps/web/src/app/(studio)/studio.css',
     },
   ]);
 });

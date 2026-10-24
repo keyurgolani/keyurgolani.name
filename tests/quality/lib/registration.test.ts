@@ -144,6 +144,65 @@ test('a unit exports only interactions, primaryActions, and notApplicable', () =
   assert.throws(() => validateUnit({}, 'quality/units/fallback.ts'), /exports none of/);
 });
 
+test('a signed-in Studio surface may say it needs its script, with why; nothing else may', async () => {
+  const file = 'quality/surfaces/studio.ts';
+  const studio = {
+    ...LOGIN,
+    id: 'studio',
+    routes: ['/studio'],
+    auth: 'session',
+    requiresScript: { reason: 'Studio draws its workspace with JavaScript.' },
+  };
+  assert.deepEqual(problems(studio, file), []);
+  assert.deepEqual(validateSurface(studio, file).requiresScript, {
+    reason: 'Studio draws its workspace with JavaScript.',
+  });
+  // The sign-in page is under /studio, and a visitor reaches it signed out: it may not.
+  assert.ok(
+    problems({ ...LOGIN, requiresScript: studio.requiresScript }).some((each) =>
+      each.includes("its auth isn't session"),
+    ),
+  );
+  // Without it, a surface's registration has none.
+  assert.equal(
+    validateSurface({ ...LOGIN }, 'quality/surfaces/login.ts').requiresScript,
+    undefined,
+  );
+  // The reason is required, and says why in a sentence.
+  for (const [bad, problem] of [
+    [{}, 'requiresScript.reason says why'],
+    [{ reason: '' }, 'requiresScript.reason says why'],
+    [{ reason: 'Script.' }, 'requiresScript.reason says why'],
+    [{ reason: 'Studio draws it.', expires: '2027-01-01' }, 'unknown fields: expires'],
+    [true, 'requiresScript is an object'],
+  ] as const) {
+    assert.ok(
+      problems({ ...studio, requiresScript: bad }, file).some((each) => each.includes(problem)),
+      problem,
+    );
+  }
+  // A surface whose pages aren't Studio's may not, and no composition may.
+  assert.ok(
+    problems({ ...studio, routes: ['/', '/studio'] }, file).some((each) =>
+      each.includes("its routes aren't Studio's"),
+    ),
+  );
+  assert.throws(
+    () =>
+      validateUnit(
+        { requiresScript: { reason: 'It draws with JavaScript.' } },
+        'quality/units/fallback.ts',
+      ),
+    /declares requiresScript, which only a Studio surface may/,
+  );
+  // The repository's Owner Studio declares it, with its reason, which its cells carry.
+  const { surfaces } = await loadRegistrations();
+  assert.match(
+    surfaces.find((surface) => surface.id === 'studio')?.requiresScript?.reason ?? '',
+    /JavaScript/,
+  );
+});
+
 test('a registration file with a problem fails the load', async () => {
   const root = mkdtempSync(path.join(tmpdir(), 'quality-registrations-'));
   try {

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A Save stuck at work, known-bad</title>
+    <!--
+      Known-bad (#11): the same loading button as busy-specimen.html with no
+      specimen marker, as a real page's Save that never finishes is. It says
+      the page is still at work, so the page never settles.
+    -->
+  </head>
+  <body>
+    <main>
+      <h1>Specimens</h1>
+      <div>
+        <button type="button" data-ui-slot="action" aria-busy="true" aria-disabled="true">
+          Validating
+        </button>
+      </div>
+      <p>Everything else here has loaded.</p>
+    </main>
+  </body>
+</html>

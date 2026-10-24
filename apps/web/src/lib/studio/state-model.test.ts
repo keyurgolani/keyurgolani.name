@@ -71,18 +71,17 @@ test('a preview is never live, and says what it shows', () => {
   );
 });
 
-test('validation failed and ready to publish read differently, and publishing says it is not open yet', () => {
+test('validation failed and ready to publish read differently, and only the saved version with live known is ready', () => {
   assert.equal(
     text(FAILED, 'checks'),
     'Validation failed: 1 finding in the saved draft blocks publishing.',
   );
   assert.equal(text(FAILED, 'publish'), 'Not ready to publish: validation failed.');
   assert.equal(text(SAVED, 'checks'), 'The saved draft validates.');
-  assert.equal(
-    text(SAVED, 'publish'),
-    "Ready to publish version 2. Publishing from Studio isn't open yet.",
-  );
+  assert.equal(text(SAVED, 'publish'), 'Ready to publish version 2.');
   assert.equal(text(DIRTY, 'publish'), 'Not ready to publish: it has unsaved changes.');
+  const unknown = session([{ type: 'loaded', draft: draft(2), live: null, journal: null }]);
+  assert.equal(text(unknown, 'publish'), 'Not ready to publish: the live revision is unknown.');
   assert.match(text(DIRTY, 'checks'), /Save to check your changes\.$/);
 });
 

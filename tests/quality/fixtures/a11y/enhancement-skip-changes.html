@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A public page that its skip link changes, known-bad</title>
+    <!--
+      Known-bad (#11): a page that declares nothing, whose own script takes a
+      line away once its skip link is followed. Failed enhancement reads such
+      a page after the skip link, as a visitor who follows it has it, so the
+      line is missing.
+    -->
+  </head>
+  <body>
+    <a href="#main">Skip to content</a>
+    <main id="main" tabindex="-1">
+      <h1>A page a fragment changes</h1>
+      <p id="note">This line is gone once the skip link is followed.</p>
+    </main>
+    <script>
+      addEventListener('hashchange', () => document.getElementById('note')?.remove());
+    </script>
+  </body>
+</html>

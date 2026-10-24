@@ -117,7 +117,8 @@ export function DocumentSpecimen({
         <h2 id={id('actions-title')} data-type-role="headline">
           Actions
         </h2>
-        <div className="fixtures-row" data-fixture="actions">
+        {/* The loading Actions say they're at work for good: #11's settle() waits on no specimen inside the marker. */}
+        <div className="fixtures-row" data-fixture="actions" data-quality-specimen="busy">
           <Action emphasis="primary">Publish revision</Action>
           <Action>Save draft</Action>
           <Action icon={<Arrow />}>Open the map</Action>
@@ -134,7 +135,12 @@ export function DocumentSpecimen({
             Fetching the forms
           </Action>
         </div>
-        <form className="fixtures-row" action="/_fixtures/appearance" method="get">
+        <form
+          className="fixtures-row"
+          action="/_fixtures/appearance"
+          method="get"
+          data-quality-specimen="busy"
+        >
           <input type="hidden" name="submitted" value="1" />
           <Action type="submit" emphasis="primary" loading>
             Saving the revision
@@ -407,7 +413,7 @@ export function PlateSpecimen({ ids }: { readonly ids: BoundaryIds }) {
           ))}
         </div>
       </Surface>
-      <div className="fixtures-row">
+      <div className="fixtures-row" data-quality-specimen="busy">
         <Action emphasis="primary">Publish revision</Action>
         <Action pressed>Selected</Action>
         <Action loading>Validating</Action>

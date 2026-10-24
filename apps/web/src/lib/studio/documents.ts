@@ -105,3 +105,13 @@ export function sameDocuments(a: SourceDocuments, b: SourceDocuments): boolean {
 export function findingsOf(draft: StudioDraft): readonly DraftFinding[] {
   return namesIn(draft.documents).flatMap((name) => draft.documents[name]?.diagnostics ?? []);
 }
+
+/** A revision ID as the owner reads it: `rev_` and its first 12 hex digits. */
+export function shortRevision(id: string): string {
+  return id.slice(0, 'rev_'.length + 12);
+}
+
+/** A document's file name as the owner knows it, such as portfolio.yml. */
+export function fileNameOf(name: DocumentName, format: DocumentFormat): string {
+  return `${name}.${format === 'yaml' ? 'yml' : 'json'}`;
+}

@@ -22,7 +22,11 @@ const StudioPreview = dynamic(
   () => import('../preview/studio-preview').then((module) => module.StudioPreview),
   {
     ssr: false,
-    loading: () => <p className="studio-source__note">Loading the preview…</p>,
+    loading: () => (
+      <p className="studio-source__note" aria-busy="true">
+        Loading the preview…
+      </p>
+    ),
   },
 );
 import type { AppearanceOptions } from '~/lib/preview-frame';

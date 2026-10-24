@@ -9,9 +9,10 @@ import {
   useRef,
   useState,
 } from 'react';
+import dynamic from 'next/dynamic';
 import { flushSync } from 'react-dom';
-import type { StudioBackend, StudioPolicy } from '~/lib/studio/backend';
-import { namesIn, type DocumentName } from '~/lib/studio/documents';
+import { isOwnerBackend, type StudioBackend, type StudioPolicy } from '~/lib/studio/backend';
+import { fileNameOf, namesIn } from '~/lib/studio/documents';
 import {
   draftSession,
   expectedVersion,
@@ -21,15 +22,19 @@ import {
 } from '~/lib/studio/draft-session';
 import {
   clearJournal,
+  dropsOnWrite,
   entryFor,
+  JOURNAL_MAX_ENTRIES,
+  newTabId,
   pruneJournal,
   readJournal,
   removeEntry,
   tabId,
   writeEntry,
+  type JournalEntry,
 } from '~/lib/studio/journal';
-import { pageCacheHandlers } from '~/lib/studio/page-cache';
-import { holdTab, mayRestore, openTabs } from '~/lib/studio/tab-presence';
+import { pageCacheHandlers, restoredMayKeep } from '~/lib/studio/page-cache';
+import { claimTab, mayRestore, openTabs } from '~/lib/studio/tab-presence';
 import { endSession, NEUTRAL_TITLE } from '~/lib/studio/session-end';
 import { stateLines } from '~/lib/studio/state-model';
 import { tasksFor, type StudioTask, type TaskId } from '~/lib/studio/tasks';
@@ -39,6 +44,16 @@ import { FindingsSummary } from '../fields/findings-summary';
 import { ConflictPanel, OrphanPanel } from './conflict-panel';
 import { SignOut } from './sign-out';
 import { AppearanceWorkspace, type PreviewSetup } from './appearance-workspace';
+
+// Publish history loads with its task, never with the rest of /studio.
+const HistoryTask = dynamic(() => import('./history-task').then((module) => module.HistoryTask), {
+  ssr: false,
+  loading: () => (
+    <p className="studio-source__note" aria-busy="true">
+      Loading the history…
+    </p>
+  ),
+});
 import type { AppearanceCatalog, SiteEdit } from '~/lib/studio/appearance';
 
 // The Owner Studio shell (#8, Slice 1): the task navigation, the textual
@@ -49,15 +64,29 @@ import type { AppearanceCatalog, SiteEdit } from '~/lib/studio/appearance';
 // authentication. It reaches storage only through the StudioBackend its
 // policy picks: the owner adapter, loaded only under owner.
 
+/**
+ * How long the owner adapter's chunk may take before Studio says it couldn't
+ * load. One that arrives later still loads Studio, and the message goes.
+ */
+const BACKEND_TIMEOUT_MS = 5_000;
+
 /** How long typing pauses before the journal takes the editor's text. */
 const JOURNAL_PAUSE_MS = 300;
 
 /** A document's file name as the owner knows it. */
-const fileName = (name: DocumentName, format: 'yaml' | 'json') =>
-  `${name}.${format === 'yaml' ? 'yml' : 'json'}`;
+const fileName = fileNameOf;
 
+/**
+ * The task the URL names: its fragment, as the task links set it, else a
+ * `task` query, which a link from outside Studio, or #11's quality cells,
+ * can carry, since a server never sees a fragment.
+ */
 function taskFromHash(tasks: readonly StudioTask[]): TaskId {
-  const id = typeof window === 'undefined' ? '' : window.location.hash.slice(1);
+  const id =
+    typeof window === 'undefined'
+      ? ''
+      : window.location.hash.slice(1) ||
+        (new URLSearchParams(window.location.search).get('task') ?? '');
   return (tasks.find((task) => task.id === id) ?? tasks[0]!).id;
 }
 
@@ -96,6 +125,12 @@ export function StudioShell({
   const [task, setTask] = useState<TaskId>(tasks[0]?.id ?? 'content');
   const [session, dispatch] = useReducer(draftSession, INITIAL_SESSION);
   const [backend, setBackend] = useState<StudioBackend | null>(null);
+  // The owner adapter's chunk didn't arrive: Studio can't reach its store.
+  const [backendFailed, setBackendFailed] = useState(false);
+  const reload = useRef<HTMLButtonElement>(null);
+  const retry = useRef<HTMLButtonElement>(null);
+  // The journal write waiting for a pause in typing, which a page going into the cache cancels.
+  const journalTimer = useRef<number | null>(null);
   // Only the owner adapter exists yet: #9 brings the demo's.
   const unavailable = policy.profile !== 'owner';
   // False while a back-forward cache restore re-checks the session: nothing shows until it does.
@@ -104,6 +139,8 @@ export function StudioShell({
   const latest = useRef<DraftSession>(session);
   // This tab's id in the journal, and when the editor's text last changed.
   const tab = useRef<string | null>(null);
+  // Settles once this tab holds its id's lock, which a load waits for.
+  const claimed = useRef<Promise<void>>(Promise.resolve());
   const editedAt = useRef<number | null>(null);
   // Before any other effect reads it: the session this render shows.
   useLayoutEffect(() => {
@@ -111,22 +148,40 @@ export function StudioShell({
   });
   // Before the shell loads anything: what may not stay in the journal goes.
   useLayoutEffect(() => {
-    tab.current = tabId(tabStorage());
-    holdTab(tab.current);
+    const own = tabStorage();
+    tab.current = tabId(own);
+    // A duplicated tab starts with a copy of its original's id: it takes one of its own.
+    claimed.current = claimTab(tab.current, () => newTabId(own)).then((id) => {
+      tab.current = id;
+    });
     const store = storage();
     if (store) pruneJournal(store, Date.now());
   }, []);
   const canWrite = policy.allowed.includes('draft.write');
 
   // The owner adapter, loaded only when the policy says the profile is owner.
+  // When its chunk doesn't arrive, refused or past BACKEND_TIMEOUT_MS, Studio
+  // says it couldn't load, rather than loading forever.
   useEffect(() => {
     let cancelled = false;
     if (unavailable) return;
-    void import('~/lib/studio/owner-backend').then(({ ownerBackend }) => {
-      if (!cancelled) setBackend(ownerBackend(studioFetch, csrfToken));
-    });
+    const failed = () => {
+      if (!cancelled) setBackendFailed(true);
+    };
+    const timer = window.setTimeout(failed, BACKEND_TIMEOUT_MS);
+    import('~/lib/studio/owner-backend').then(
+      ({ ownerBackend }) => {
+        window.clearTimeout(timer);
+        if (!cancelled) setBackend(ownerBackend(studioFetch, csrfToken));
+      },
+      () => {
+        window.clearTimeout(timer);
+        failed();
+      },
+    );
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [unavailable, csrfToken]);
 
@@ -144,17 +199,21 @@ export function StudioShell({
     if (current.orphan?.tabId === own) return;
     const now = Date.now();
     if (current.local && current.draft && isDirty(current)) {
-      writeEntry(
-        store,
-        {
-          tabId: own,
-          draftId: current.draft.draftId,
-          baseVersion: current.draft.version,
-          documents: current.local,
-          savedAt: editedAt.current ?? now,
-        },
-        now,
-      );
+      const entry: JournalEntry = {
+        tabId: own,
+        draftId: current.draft.draftId,
+        baseVersion: current.draft.version,
+        documents: current.local,
+        savedAt: editedAt.current ?? now,
+      };
+      // Past the cap, the oldest tab's text goes: say so, rather than let it go unseen.
+      const dropped = dropsOnWrite(store, entry, now).length;
+      writeEntry(store, entry, now);
+      if (dropped > 0) {
+        setNotice(
+          `This browser keeps unsaved text for at most ${JOURNAL_MAX_ENTRIES} Studio tabs, so the oldest ${dropped === 1 ? "tab's was" : `${dropped} tabs' were`} let go.`,
+        );
+      }
     } else if (current.draft) {
       removeEntry(store, own, now);
     }
@@ -168,10 +227,11 @@ export function StudioShell({
   }, []);
 
   const end = useCallback(
-    (why: 'session_ended' | 'signed_out') =>
+    (why: 'session_ended' | 'signed_out', { keep = true }: { keep?: boolean } = {}) =>
       endSession(
         {
-          flush,
+          // Text the owner let go elsewhere stays gone: nothing writes it back.
+          flush: keep ? flush : () => {},
           drop: () => dispatch({ type: 'expired' }),
           setTitle: (title) => {
             document.title = title;
@@ -185,7 +245,7 @@ export function StudioShell({
   );
 
   const load = useCallback(async (from: StudioBackend) => {
-    const [draft, live] = await Promise.all([from.workingDraft(), from.live()]);
+    const [draft, live] = await Promise.all([from.workingDraft(), from.live(), claimed.current]);
     if (draft.kind === 'signed-out' || live.kind === 'signed-out') return;
     if (draft.kind === 'failed') {
       dispatch({ type: 'failed', error: draft.message });
@@ -221,8 +281,15 @@ export function StudioShell({
   // The journal follows the editor: each pause in typing, and every save.
   // Leaving the page, or the session ending, writes it at once.
   useEffect(() => {
-    const timer = window.setTimeout(flush, JOURNAL_PAUSE_MS);
-    return () => window.clearTimeout(timer);
+    const timer = window.setTimeout(() => {
+      journalTimer.current = null;
+      flush();
+    }, JOURNAL_PAUSE_MS);
+    journalTimer.current = timer;
+    return () => {
+      window.clearTimeout(timer);
+      if (journalTimer.current === timer) journalTimer.current = null;
+    };
   }, [session.local, session.draft, session.conflict, session.orphan, flush]);
 
   // A 401 anywhere, or another tab's sign-out: keep the journal, then leave,
@@ -246,6 +313,10 @@ export function StudioShell({
     // restore shows nothing until the session checks out.
     const { pagehide, pageshow } = pageCacheHandlers({
       flush,
+      cancelPending: () => {
+        if (journalTimer.current !== null) window.clearTimeout(journalTimer.current);
+        journalTimer.current = null;
+      },
       hide: () => flushSync(() => setVerified(false)),
       recheck: () => {
         if (!backend) return;
@@ -254,7 +325,11 @@ export function StudioShell({
             setVerified(true);
             void load(backend);
           } else {
-            end('session_ended');
+            // It may have missed a discard while cached: its text goes back only while its entry is there.
+            const store = storage();
+            const keep =
+              store !== null && restoredMayKeep(readJournal(store, Date.now()), tab.current);
+            end('session_ended', { keep });
           }
         });
       },
@@ -276,6 +351,32 @@ export function StudioShell({
     window.addEventListener('hashchange', follow);
     return () => window.removeEventListener('hashchange', follow);
   }, [tasks]);
+
+  // Studio couldn't load: its Reload control takes focus, so the keyboard is where the way out is.
+  useEffect(() => {
+    if (backendFailed && backend === null) reload.current?.focus();
+  }, [backendFailed, backend]);
+
+  // The store couldn't read the draft as Studio loaded: its Try again control takes focus.
+  const loadFailed =
+    !unavailable && verified && session.phase === 'loading' && session.error !== null;
+  useEffect(() => {
+    if (loadFailed) retry.current?.focus();
+  }, [loadFailed]);
+
+  // A failure state that gives way, as a late chunk arriving or a retry does, takes its focused
+  // control with it: focus goes to the task area, not the page's body.
+  const stuck = (backendFailed && backend === null) || loadFailed;
+  const wasStuck = useRef(false);
+  useEffect(() => {
+    if (wasStuck.current && !stuck) {
+      const focused = document.activeElement;
+      if (focused === null || focused === document.body) {
+        document.getElementById('studio-main')?.focus();
+      }
+    }
+    wasStuck.current = stuck;
+  }, [stuck]);
 
   const active = tasks.find((each) => each.id === task) ?? tasks[0];
   useEffect(() => {
@@ -399,6 +500,7 @@ export function StudioShell({
 
   const lines = stateLines(session);
   const ready = session.phase === 'ready' && verified;
+  const failedToLoad = backendFailed && backend === null;
   const dirty = isDirty(session);
 
   return (
@@ -424,6 +526,27 @@ export function StudioShell({
         </ul>
       </nav>
       <main className="studio-shell__main" id="studio-main" tabIndex={-1}>
+        {/* Each task link's fragment names an element, with or without the shell's script. */}
+        <div className="studio-shell__anchors">
+          {tasks.map((each) =>
+            // Focusable, so a task link moves focus to the task area, as a skip link does.
+            each.id === 'content' ? (
+              <div key={each.id} id={each.id} tabIndex={-1}>
+                {/* Studio needs JavaScript by design, and says so where its first task starts.
+                    Without it the shell never loads, so its waiting line goes too. */}
+                <noscript>
+                  <style>{'.studio-state__waiting { display: none; }'}</style>
+                  <p className="studio-alert">
+                    Portfolio Studio needs JavaScript: it reads and saves the draft from the
+                    browser. Turn JavaScript on for this site, then reload the page.
+                  </p>
+                </noscript>
+              </div>
+            ) : (
+              <span key={each.id} id={each.id} tabIndex={-1} />
+            ),
+          )}
+        </div>
         <section className="studio-state" aria-labelledby="studio-state-heading">
           <h2 id="studio-state-heading" className="studio-state__heading">
             Where things stand
@@ -442,8 +565,42 @@ export function StudioShell({
                 </div>
               ))}
             </dl>
+          ) : failedToLoad ? (
+            <div className="studio-alert" role="alert">
+              <p>
+                Studio couldn&apos;t load: the part that reaches the draft and the live site
+                didn&apos;t arrive. Check your connection, then reload Studio.
+              </p>
+              <button
+                ref={reload}
+                type="button"
+                className="studio-button"
+                onClick={() => window.location.reload()}
+              >
+                Reload Studio
+              </button>
+            </div>
+          ) : loadFailed ? (
+            <div className="studio-alert" role="alert">
+              <p>Studio couldn&apos;t read the draft. {session.error}</p>
+              <button
+                ref={retry}
+                type="button"
+                className="studio-button"
+                onClick={() => {
+                  dispatch({ type: 'retry' });
+                  if (backend) void load(backend);
+                }}
+              >
+                Try again
+              </button>
+            </div>
           ) : (
-            <p className="studio-state__waiting">
+            <p
+              className="studio-state__waiting"
+              // Still loading or checking: assistive technology, and #11's cells, wait for it.
+              aria-busy={!unavailable && session.phase !== 'expired' ? true : undefined}
+            >
               {unavailable
                 ? "Studio's storage isn't available in this deployment."
                 : session.phase === 'expired'
@@ -462,6 +619,19 @@ export function StudioShell({
             </p>
           ) : null}
         </section>
+        {stuck && active ? (
+          // Which task couldn't load, so the owner knows where they were.
+          <section className="studio-task" aria-labelledby="studio-task-heading">
+            <h2 id="studio-task-heading" className="studio-task__heading">
+              {active.label}
+            </h2>
+            <p className="studio-task__pending">
+              {failedToLoad
+                ? "This task needs the part of Studio that couldn't load."
+                : "This task needs the draft, which Studio couldn't read."}
+            </p>
+          </section>
+        ) : null}
         {ready && active ? (
           <section className="studio-task" aria-labelledby="studio-task-heading">
             <h2 id="studio-task-heading" className="studio-task__heading">
@@ -500,6 +670,21 @@ export function StudioShell({
             ) : null}
             {active.pending ? (
               <p className="studio-task__pending">{active.pending}</p>
+            ) : active.id === 'history' ? (
+              // Publish history needs the owner's backend: a demo's has no publish or rollback.
+              backend && isOwnerBackend(backend) ? (
+                <HistoryTask
+                  backend={backend}
+                  session={session}
+                  canPublish={policy.allowed.includes('publish')}
+                  canRollback={policy.allowed.includes('rollback')}
+                  onMoved={() => load(backend)}
+                />
+              ) : backend ? (
+                <p className="studio-task__pending">
+                  Publish history needs the owner&apos;s store, which this Studio doesn&apos;t have.
+                </p>
+              ) : null
             ) : active.id === 'validation' ? (
               <FindingsSummary draft={session.draft} dirty={dirty} fileName={fileName} />
             ) : active.id === 'appearance' ? (

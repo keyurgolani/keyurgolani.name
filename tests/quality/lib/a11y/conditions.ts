@@ -19,9 +19,18 @@
 //   declared scroll region: one a keyboard reaches, with a name.
 // - transparency: under prefers-reduced-transparency, no backdrop-filter,
 //   and #19's Surface, Dialog, and Navigation slots opaque.
+// - A surface that needs its script by design, a Studio surface registering
+//   `requiresScript` (registration.ts): with JavaScript off, and in print
+//   over that page, its honest no-JavaScript state replaces the inventory
+//   comparison. The page settles, says in #content that it needs
+//   JavaScript, keeps one main, an h1, and its skip target, and passes axe.
+//   Under failed enhancement its failure state does: an alert that it
+//   couldn't load, a control to try again that takes focus, nothing still
+//   aria-busy, and axe, beside the landmark, fragment, and skip checks.
 
 import type { CDPSession, Page, Request } from '@playwright/test';
 import { loadThresholds, viewportSize } from '../../../../quality/thresholds';
+import { axeFor } from '../axe';
 import { frames, type Finding } from './interaction';
 import { decodePng } from '../pixels';
 import { inPage } from './probe';
@@ -204,9 +213,62 @@ export function conditions(): Condition[] {
   ];
 }
 
-async function load(page: Page, path: string): Promise<void> {
+/** The longest a page may say it's still loading, by aria-busy, before a check reads it anyway. */
+export const BUSY_LIMIT_MS = 10_000;
+
+/** What a page that never stops saying it's loading is, as a finding's words. */
+export const STILL_BUSY = `the page still says it's loading, aria-busy="true", after ${BUSY_LIMIT_MS / 1000} s`;
+
+/**
+ * Where aria-busy is a specimen's, not the page's: inside an element marked
+ * data-quality-specimen="busy", as the primitives fixture marks its loading
+ * Actions, which say they're at work for good. Only fixtures carry it
+ * (specimen-marker.test.ts), so a real page's stuck Save still keeps it
+ * from settling.
+ */
+export const BUSY_SPECIMEN = '[data-quality-specimen="busy"]';
+
+/**
+ * Waits until nothing on the page says it's still loading, a shown element
+ * with aria-busy="true", as a page that fetches its content after it loads
+ * does (#8's Studio), up to BUSY_LIMIT_MS, but for a fixture's specimens,
+ * inside BUSY_SPECIMEN, which say they're at work for good by design. One
+ * that isn't rendered, such as
+ * Studio's waiting line under (scripting: none), tells no one it's loading.
+ * False when the page is still busy then: the caller fails the cell with
+ * STILL_BUSY, and reads the page as it stands, so it never passes on a page
+ * that never settled.
+ */
+export async function notBusy(page: Page): Promise<boolean> {
+  return page
+    .waitForFunction(
+      (specimen) =>
+        ![...document.querySelectorAll('[aria-busy="true"]')].some(
+          (element) => element.getClientRects().length > 0 && !element.closest(specimen),
+        ),
+      BUSY_SPECIMEN,
+      { timeout: BUSY_LIMIT_MS },
+    )
+    .then(
+      () => true,
+      () => false,
+    );
+}
+
+/** A finding for a page a condition reloaded that never settled. */
+const stillBusy = (condition: string): Finding => ({
+  gate: 'runner',
+  rule: 'settled',
+  expected: `the page settles under ${condition}`,
+  actual: STILL_BUSY,
+});
+
+/** Loads `path`, and answers whether it settled. */
+async function load(page: Page, path: string): Promise<boolean> {
   await page.goto(path, { waitUntil: 'load' });
+  const settled = await notBusy(page);
   await frames(page);
+  return settled;
 }
 
 /** What `before` has and `now` lacks, as findings under `condition`. */
@@ -234,6 +296,7 @@ export async function inventoryFindings(
   path: string,
   baseline: readonly string[],
   only?: readonly string[],
+  scriptRequired = false,
 ): Promise<Finding[]> {
   const findings: Finding[] = [];
   const cdp = await page.context().newCDPSession(page);
@@ -241,7 +304,7 @@ export async function inventoryFindings(
     for (const condition of conditions().filter((each) => !only || only.includes(each.id))) {
       await condition.setup(page, cdp);
       try {
-        if (condition.reload) await load(page, path);
+        if (condition.reload && !(await load(page, path))) findings.push(stillBusy(condition.id));
         const problem = await condition.verify(page);
         if (problem) {
           // Slice 1's fail-closed rule: a condition that didn't take proves nothing.
@@ -251,6 +314,23 @@ export async function inventoryFindings(
             expected: `the ${condition.id} condition takes`,
             actual: `${condition.id}: ${problem}: the emulation was ignored`,
           });
+          continue;
+        }
+        // Without JavaScript, and in print over that page, a page that needs it says so instead.
+        if (scriptRequired && condition.id === 'no-javascript') {
+          findings.push(...(await scriptRequiredFindings(page, cdp, condition.id)));
+          continue;
+        }
+        if (scriptRequired && condition.id === 'print') {
+          // The no-JavaScript page in print: script back on would hide its <noscript>, so it
+          // loads again with script off, as the condition before left it, and reads in print.
+          await cdp.send('Emulation.setScriptExecutionDisabled', { value: true });
+          try {
+            if (!(await load(page, path))) findings.push(stillBusy(condition.id));
+            findings.push(...(await scriptRequiredFindings(page, cdp, condition.id)));
+          } finally {
+            await cdp.send('Emulation.setScriptExecutionDisabled', { value: false });
+          }
           continue;
         }
         findings.push(
@@ -270,7 +350,168 @@ export async function inventoryFindings(
   } finally {
     await cdp.detach();
   }
-  await load(page, path);
+  if (!(await load(page, path))) findings.push(stillBusy('the reload after the conditions'));
+  return findings;
+}
+
+/**
+ * A page that needs the script it couldn't load, as it stands under failed
+ * enhancement: an alert, shown and with words, that it couldn't load, a
+ * control in it to try again that takes focus, nothing still aria-busy, and
+ * axe. Its landmarks, fragments, and skip link are enhancementFindings' own.
+ */
+export async function failureStateFindings(
+  page: Page,
+  { axe = true }: { readonly axe?: boolean } = {},
+): Promise<Finding[]> {
+  const findings: Finding[] = [];
+  const fail = (expected: string, actual: string) =>
+    findings.push({ gate: 'enhancement', rule: 'failure-state', expected, actual });
+  // No named helper inside: esbuild's keepNames would wrap it in a __name the page lacks.
+  const state = await page.evaluate(
+    ([again, specimen]) => {
+      const alert = [...document.querySelectorAll('[role="alert"]')].find(
+        (element) =>
+          element.getClientRects().length > 0 && (element as HTMLElement).innerText.trim() !== '',
+      );
+      const control = alert?.querySelector<HTMLElement>('button, a[href], input, select') ?? null;
+      control?.focus();
+      const name = control
+        ? (control.getAttribute('aria-label') ?? control.innerText ?? '').trim()
+        : '';
+      return {
+        alert: Boolean(alert),
+        control: Boolean(control),
+        named: new RegExp(again, 'i').test(name),
+        reachable: control !== null && control.tabIndex >= 0,
+        focused: control !== null && document.activeElement === control,
+        busy: [...document.querySelectorAll('[aria-busy="true"]')].filter(
+          (element) => element.getClientRects().length > 0 && !element.closest(specimen),
+        ).length,
+      };
+    },
+    [TRY_AGAIN.source, BUSY_SPECIMEN] as const,
+  );
+  if (!state.alert) {
+    fail("an alert that it couldn't load, under failed enhancement", 'no alert says so');
+  } else if (!state.control) {
+    fail('a control in the alert to try again, which takes focus', 'the alert has no control');
+  } else if (!state.reachable) {
+    fail(
+      'a control in the alert to try again, which takes focus',
+      'its control is out of the tab order',
+    );
+  } else if (!state.focused) {
+    fail(
+      'a control in the alert to try again, which takes focus',
+      "its control doesn't take focus",
+    );
+  } else if (!state.named) {
+    fail(
+      'a control in the alert to try again, which takes focus',
+      'its control is named for something other than trying again',
+    );
+  }
+  if (state.busy > 0) {
+    fail('nothing still says it is loading', `${state.busy} element(s) are still aria-busy`);
+  }
+  if (axe) {
+    for (const rule of (await axeFor(page).analyze()).violations) {
+      findings.push({
+        gate: 'axe',
+        rule: rule.id,
+        expected: `no ${rule.id} violation, under failed enhancement`,
+        actual: `${rule.nodes.length} element(s): ${rule.help}`,
+      });
+    }
+  }
+  return findings;
+}
+
+/** What names a failure state's control: it tries again, as Studio's Reload Studio does. */
+const TRY_AGAIN = /reload|try again|retry/;
+
+/** Where a page that needs JavaScript says so, as Studio's <noscript> notice does. */
+export const NO_JAVASCRIPT_NOTICE = '#content';
+
+/** What its notice says it needs. */
+const NEEDS_JAVASCRIPT = /JavaScript/i;
+
+/**
+ * Each <noscript>'s content, which the parser made elements with script off,
+ * moved into a stand-in <div>. Script back on, as axe needs it, hides a
+ * noscript's content from rendering, and so from axe; in a div it stays as a
+ * reader without JavaScript has it. Run while script is still off.
+ */
+export async function revealNoscript(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    for (const noscript of [...document.querySelectorAll('noscript')]) {
+      const stand = document.createElement('div');
+      stand.setAttribute('data-quality-noscript', '');
+      stand.append(...noscript.childNodes);
+      noscript.replaceWith(stand);
+    }
+  });
+}
+
+/**
+ * A page that needs JavaScript, as it stands without it (`under` names the
+ * condition): its notice in NO_JAVASCRIPT_NOTICE, shown and with words, one
+ * main, an h1, a skip link whose target is there, and axe, which runs with
+ * script on for its pass alone. `cdp` is the page's session, which turns
+ * script off again after.
+ */
+export async function scriptRequiredFindings(
+  page: Page,
+  cdp: CDPSession | null,
+  under: string,
+  { axe = true }: { readonly axe?: boolean } = {},
+): Promise<Finding[]> {
+  const findings: Finding[] = [];
+  const fail = (rule: string, expected: string, actual: string) =>
+    findings.push({ gate: 'enhancement', rule, expected: `${expected}, ${under}`, actual });
+  // innerText of a shown element is its shown text alone; of a hidden one, all of it.
+  const notice = await page.evaluate((at) => {
+    const target = document.querySelector(at);
+    if (!target) return null;
+    return {
+      shown: target.getClientRects().length > 0,
+      text: (target as HTMLElement).innerText.trim(),
+    };
+  }, NO_JAVASCRIPT_NOTICE);
+  const expected = `a notice in ${NO_JAVASCRIPT_NOTICE}, shown, that it needs JavaScript`;
+  if (!notice) {
+    fail('notice', expected, `no ${NO_JAVASCRIPT_NOTICE}`);
+  } else if (!notice.shown) {
+    fail('notice', expected, `${NO_JAVASCRIPT_NOTICE} isn't shown`);
+  } else if (notice.text === '') {
+    fail('notice', expected, `${NO_JAVASCRIPT_NOTICE} says nothing`);
+  } else if (!NEEDS_JAVASCRIPT.test(notice.text)) {
+    fail('notice', expected, `${NO_JAVASCRIPT_NOTICE} doesn't say it needs JavaScript`);
+  }
+  const structure = await inPage<Structure>(page, { kind: 'structure' });
+  if (structure.mains !== 1) fail('semantics', 'one main landmark', `${structure.mains}`);
+  if (structure.h1s === 0) fail('semantics', 'an h1', 'none');
+  if (structure.skip && !structure.skipTarget) {
+    fail('navigation', 'the skip link names its target', `${structure.skip} names no element`);
+  }
+  if (axe) {
+    await revealNoscript(page);
+    await cdp?.send('Emulation.setScriptExecutionDisabled', { value: false });
+    try {
+      const results = await axeFor(page).analyze();
+      for (const rule of results.violations) {
+        findings.push({
+          gate: 'axe',
+          rule: rule.id,
+          expected: `no ${rule.id} violation, ${under}`,
+          actual: `${rule.nodes.length} element(s): ${rule.help}`,
+        });
+      }
+    } finally {
+      await cdp?.send('Emulation.setScriptExecutionDisabled', { value: true });
+    }
+  }
   return findings;
 }
 
@@ -288,6 +529,7 @@ export async function enhancementFindings(
   path: string,
   baseline: readonly string[],
   scripts: readonly string[],
+  scriptRequired = false,
 ): Promise<Finding[]> {
   const cdp = await page.context().newCDPSession(page);
   const own = new Set(scripts);
@@ -307,8 +549,24 @@ export async function enhancementFindings(
   });
   const findings: Finding[] = [];
   try {
-    await load(page, path);
+    if (!(await load(page, path))) findings.push(stillBusy('failed enhancement'));
     const structure = await inPage<Structure>(page, { kind: 'structure' });
+    const missing = async () =>
+      missingItems(
+        'semantics',
+        'enhancement',
+        'failed enhancement',
+        baseline,
+        await inPage<string[]>(page, { kind: 'inventory' }),
+      );
+    // A page that needs the script it lost works without it, or shows its failure state in
+    // place of the content it couldn't load. It's read as it loaded, before the skip link is
+    // followed, which may change it: Studio's first fragment link opens its Content task.
+    let read: Finding[] | null = null;
+    if (scriptRequired) {
+      const lost = await missing();
+      read = lost.length > 0 ? await failureStateFindings(page) : [];
+    }
     const semantics = (actual: string) =>
       findings.push({
         gate: 'enhancement',
@@ -344,21 +602,13 @@ export async function enhancementFindings(
       if (!landed)
         navigation(`the skip link leaves focus outside ${structure.skipTarget}`, structure.skip);
     }
-    findings.push(
-      ...missingItems(
-        'semantics',
-        'enhancement',
-        'failed enhancement',
-        baseline,
-        await inPage<string[]>(page, { kind: 'inventory' }),
-      ),
-    );
+    findings.push(...(read ?? (await missing())));
   } finally {
     await page.unrouteAll({ behavior: 'wait' });
     await cdp.send('Page.removeScriptToEvaluateOnNewDocument', { identifier });
     await cdp.detach();
   }
-  await load(page, path);
+  if (!(await load(page, path))) findings.push(stillBusy('the reload after failed enhancement'));
   return findings;
 }
 
@@ -400,7 +650,7 @@ export async function reflowFindings(
         deviceScaleFactor: condition.scale,
         mobile: false,
       });
-      await load(page, path);
+      if (!(await load(page, path))) findings.push(stillBusy(condition.rule));
       if (condition.text !== 1) {
         await page.evaluate(
           (scale) =>
@@ -440,7 +690,7 @@ export async function reflowFindings(
     await cdp.detach();
     await page.setViewportSize(original);
   }
-  await load(page, path);
+  if (!(await load(page, path))) findings.push(stillBusy('the reload after reflow'));
   return findings;
 }
 

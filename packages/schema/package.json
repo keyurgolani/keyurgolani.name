@@ -8,6 +8,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./diff": "./src/diff.ts",
     "./direction": "./src/direction.ts",
     "./ids": "./src/ids.ts",
     "./kinds": "./src/kinds/index.ts",

@@ -6,6 +6,13 @@
 // directories, so a new surface, variant, pack, route, or fixture adds cells
 // without a harness edit. A file that exports anything else, or leaves a
 // field out, fails the plan, and with it the run.
+//
+// A Studio surface, #8's Owner Studio and #9's Demo Studio, may also export
+// `requiresScript`, saying it needs its script by design and why: its cells
+// with JavaScript off then check its honest no-JavaScript state, a notice
+// it shows, and under failed enhancement its failure state, in place of
+// comparing its content (lib/a11y/conditions.ts). No composition may: a
+// visitor's page works without JavaScript.
 
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
@@ -58,6 +65,11 @@ export interface SurfaceState {
   readonly status: number;
 }
 
+/** A Studio surface's declaration that it needs its script by design, with why. */
+export interface RequiresScript {
+  readonly reason: string;
+}
+
 export interface SurfaceRegistration {
   readonly id: string;
   /** Who fixes what its cells find, such as an issue (#2) or a GitHub handle. */
@@ -76,6 +88,8 @@ export interface SurfaceRegistration {
   /** The accessible names of its primary touch controls, which need 44x44 targets. */
   readonly primaryActions: readonly string[];
   readonly notApplicable: readonly NotApplicable[];
+  /** Present for a Studio surface that needs its script by design. */
+  readonly requiresScript?: RequiresScript;
 }
 
 export interface UnitRegistration {
@@ -99,6 +113,27 @@ const SURFACE_EXPORTS = [
   'notApplicable',
 ] as const;
 const UNIT_EXPORTS = ['interactions', 'primaryActions', 'notApplicable'] as const;
+/** What a surface may export besides SURFACE_EXPORTS. */
+const OPTIONAL_SURFACE_EXPORTS = ['requiresScript'] as const;
+
+/** Whether `route` is Studio's: /studio, or a path under it. */
+const isStudioRoute = (route: unknown) =>
+  typeof route === 'string' && (route === '/studio' || route.startsWith('/studio/'));
+
+function requiresScript(value: unknown, problems: string[]): void {
+  const item = value as Record<string, unknown> | null;
+  if (item === null || typeof item !== 'object') {
+    problems.push('requiresScript is an object, { reason }');
+    return;
+  }
+  const unknown = Object.keys(item).filter((key) => key !== 'reason');
+  if (unknown.length > 0) problems.push(`requiresScript has unknown fields: ${unknown.join(', ')}`);
+  if (!isReason(item.reason)) {
+    problems.push(
+      'requiresScript.reason says why it needs its script, in a sentence of three words or more',
+    );
+  }
+}
 
 const ID = /^[a-z][a-z0-9-]*$/;
 /** A path the app serves: a slash, then no space, query, or fragment. */
@@ -207,7 +242,7 @@ function unexpectedExports(exports: Exports, allowed: readonly string[]): string
 
 /** Checks a surface module's exports, throwing a RegistrationError for any problem. */
 export function validateSurface(exports: Exports, file: string): SurfaceRegistration {
-  const problems = unexpectedExports(exports, SURFACE_EXPORTS);
+  const problems = unexpectedExports(exports, [...SURFACE_EXPORTS, ...OPTIONAL_SURFACE_EXPORTS]);
   for (const key of SURFACE_EXPORTS) {
     if (!(key in exports)) problems.push(`exports no ${key}`);
   }
@@ -254,13 +289,38 @@ export function validateSurface(exports: Exports, file: string): SurfaceRegistra
   interactions(exports.interactions, problems);
   strings(exports.primaryActions, 'primaryActions', problems);
   notApplicable(exports.notApplicable, problems);
+  if ('requiresScript' in exports) {
+    requiresScript(exports.requiresScript, problems);
+    // Only a Studio surface: every route of it /studio or under it, and signed in. A page a
+    // visitor reaches signed out, as the sign-in page is, works without JavaScript. #9's demo
+    // Studio, which has no session, widens this when it registers.
+    if (Array.isArray(exports.routes) && !exports.routes.every(isStudioRoute)) {
+      problems.push(
+        "declares requiresScript, which only a Studio surface may, and its routes aren't Studio's: a page outside /studio works without JavaScript",
+      );
+    }
+    if (exports.auth !== 'session') {
+      problems.push(
+        "declares requiresScript, which only a signed-in Studio surface may, and its auth isn't session: a page reached signed out works without JavaScript",
+      );
+    }
+  }
   if (problems.length > 0) throw new RegistrationError(file, problems);
-  return Object.fromEntries(SURFACE_EXPORTS.map((key) => [key, exports[key]])) as never;
+  return Object.fromEntries(
+    [...SURFACE_EXPORTS, ...OPTIONAL_SURFACE_EXPORTS]
+      .filter((key) => key in exports)
+      .map((key) => [key, exports[key]]),
+  ) as never;
 }
 
 /** Checks a unit module's exports, for the registry id `id`, its file's name. */
 export function validateUnit(exports: Exports, file: string): UnitRegistration {
   const problems = unexpectedExports(exports, UNIT_EXPORTS);
+  if ('requiresScript' in exports) {
+    problems.push(
+      "declares requiresScript, which only a Studio surface may: a composition's page works without JavaScript",
+    );
+  }
   if (UNIT_EXPORTS.every((key) => !(key in exports))) {
     problems.push(`exports none of ${UNIT_EXPORTS.join(', ')}`);
   }

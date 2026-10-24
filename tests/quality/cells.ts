@@ -113,6 +113,13 @@ export interface Cell {
   readonly owner: string;
   readonly profile: Profile;
   readonly performanceTier: PerformanceTier;
+  /** `session` for a surface that needs a #2 test session: its page loads signed in. */
+  readonly auth?: 'session';
+  /**
+   * Why a Studio surface needs its script by design, when it does: without
+   * it, its cells check its honest state, and their report says why.
+   */
+  readonly requiresScript?: string;
   readonly tuple: Tuple;
   /** The path the cell loads, its state's query included. */
   readonly path: string;
@@ -140,6 +147,19 @@ export interface ChangedBy {
   readonly id: string;
   /** For a changed variant, the stable design language the cell runs it against (#20). */
   readonly pack?: { readonly axis: PackAxis; readonly id: string };
+}
+
+/** The annotation that says why a cell's page requires script, in its report. */
+export const REQUIRES_SCRIPT_ANNOTATION = 'requires-script';
+
+/**
+ * What a cell's report says of the cell itself, before any check runs: why
+ * its no-JavaScript and failed-enhancement checks read its honest state.
+ */
+export function cellAnnotations(cell: Cell): { type: string; description: string }[] {
+  return cell.requiresScript === undefined
+    ? []
+    : [{ type: REQUIRES_SCRIPT_ANNOTATION, description: cell.requiresScript }];
 }
 
 export interface PlannedTest {
@@ -542,6 +562,8 @@ export function planCells({ meta, registrations, mode, changes = [] }: PlanInput
           owner: surface.owner,
           profile: surface.profile,
           performanceTier: surface.performanceTier,
+          ...(surface.auth === 'session' ? { auth: 'session' as const } : {}),
+          ...(surface.requiresScript ? { requiresScript: surface.requiresScript.reason } : {}),
           tuple,
           path: query ? `${route}?${query}` : route,
           route,

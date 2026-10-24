@@ -21,10 +21,6 @@
       {
         "glob": "apps/web/src/preview/**",
         "rationale": "The preview's agent and status document (#7): a frame's code, never a public page's."
-      },
-      {
-        "glob": "apps/web/src/app/host-chrome.css",
-        "rationale": "The host chrome's styles (#7), which Studio and the preview document link: a public page's CSS is experience-base.css and its units' alone."
       }
     ]
   },

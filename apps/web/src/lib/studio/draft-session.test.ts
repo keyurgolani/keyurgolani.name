@@ -209,3 +209,15 @@ test('an ended session drops the draft, the editor, and the live state, and take
   assert.equal(run([mine('y'), { type: 'saved', draft: draft(9) }], ended), ended);
   assert.equal(run([loaded()], ended).phase, 'ready');
 });
+
+test('a load the store refused leaves the session loading with its error, and a retry clears it to ask again (#123 review)', () => {
+  const failed = draftSession(INITIAL_SESSION, {
+    type: 'failed',
+    error: "Studio's storage isn't available right now.",
+  });
+  assert.equal(failed.phase, 'loading');
+  assert.equal(failed.error, "Studio's storage isn't available right now.");
+  const retried = draftSession(failed, { type: 'retry' });
+  assert.equal(retried.phase, 'loading');
+  assert.equal(retried.error, null);
+});

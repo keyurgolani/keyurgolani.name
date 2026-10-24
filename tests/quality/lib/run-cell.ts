@@ -22,9 +22,9 @@ import type { CDPSession, Page, TestInfo } from '@playwright/test';
 import { reportsDir } from '../../../ci/lib/reports.mjs';
 import { QUERY_KEYS } from '../../../packages/appearance/src/axes';
 import { COLOR_ROLES, TOKEN_PROPERTIES } from '../../../packages/appearance/src/roles';
-import type { Cell } from '../cells';
+import { cellAnnotations, type Cell } from '../cells';
 import { axeFor } from './axe';
-import { CHECKS_ANNOTATION, requiredChecks } from './checks';
+import { CHECKS_ANNOTATION, NOTICE_CHECK, requiredChecks } from './checks';
 import { FIXED_TIME } from './clock';
 import { checkEmulation } from './emulation';
 import type { PreferenceRow, Viewport } from './matrix';
@@ -46,7 +46,11 @@ import { APPEARANCE_STATE } from './state-fixtures';
 import { readVitals } from './vitals';
 import {
   enhancementFindings,
+  notBusy,
   PRINT_IGNORE,
+  revealNoscript,
+  scriptRequiredFindings,
+  STILL_BUSY,
   scriptingMediaFindings,
   inventoryFindings,
   reflowFindings,
@@ -64,12 +68,15 @@ import { MOTION_SAMPLER, motionFindings } from './a11y/motion';
 import { inPage } from './a11y/probe';
 
 /** Waits for the page to settle: loaded, its fonts in, and two frames drawn (or their time, without JavaScript). */
-async function settle(page: Page): Promise<void> {
+/** Waits for the page to load and settle, and answers whether it settled (notBusy()). */
+async function settle(page: Page): Promise<boolean> {
   await page.waitForLoadState('load');
+  const settled = await notBusy(page);
   await page.evaluate(async () => {
     await document.fonts.ready;
   });
   await frames(page);
+  return settled;
 }
 
 export interface CellRun {
@@ -114,7 +121,7 @@ function rowPath(cell: Cell, row: PreferenceRow): string {
 const scriptless = new WeakMap<Page, CDPSession>();
 
 /** Applies what a row sets on the page rather than the context: the media type, CDP features, JavaScript off, and the motion sampler. */
-async function applyRow(page: Page, row: PreferenceRow): Promise<void> {
+export async function applyRow(page: Page, row: PreferenceRow): Promise<void> {
   if (row.context.javaScriptEnabled === false) {
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setScriptExecutionDisabled', { value: true });
@@ -152,6 +159,8 @@ interface SuiteRun {
   readonly ran: Set<string>;
   /** Run the default row's content conditions: the inventory and failed enhancement. */
   readonly conditions: boolean;
+  /** A Studio surface that needs JavaScript: without it, its notice stands in for its content. */
+  readonly scriptRequired: boolean;
 }
 
 /** Slice 2's suites on the page `run.at` names, as `run.owed` says. Motion runs before axe, in runCell. */
@@ -199,10 +208,12 @@ async function suites(run: SuiteRun): Promise<Finding[]> {
     );
   }
   if (run.conditions && does('inventory')) {
-    findings.push(...(await inventoryFindings(page, at, baseline)));
+    findings.push(...(await inventoryFindings(page, at, baseline, undefined, run.scriptRequired)));
+    // Its no-JavaScript and print conditions read the notice in place of the content.
+    if (run.scriptRequired) ran.add(NOTICE_CHECK);
   }
   if (run.conditions && does('enhancement')) {
-    findings.push(...(await enhancementFindings(page, at, baseline, scripts)));
+    findings.push(...(await enhancementFindings(page, at, baseline, scripts, run.scriptRequired)));
   }
   return findings;
 }
@@ -216,11 +227,13 @@ async function suites(run: SuiteRun): Promise<Finding[]> {
 /** The longest axe waits for the page's finite animations to end. */
 const ANIMATION_WAIT_MS = 2_000;
 
-async function audit(page: Page, row: PreferenceRow) {
+export async function audit(page: Page, row: PreferenceRow) {
   const forced = row.context.forcedColors === 'active';
   const cdp = scriptless.get(page);
   // Read before script turns on: a query axe's pass would flip fails the row.
   const scripting = cdp ? await scriptingMediaFindings(page) : [];
+  // What a <noscript> holds stays in view for axe once script is on.
+  if (cdp) await revealNoscript(page);
   await cdp?.send('Emulation.setScriptExecutionDisabled', { value: false });
   try {
     // A finite animation, such as a toast's entrance fade, ends before axe
@@ -261,6 +274,8 @@ export async function runCell({
   expect,
 }: CellRun) {
   testInfo.setTimeout(CELL_TIMEOUT_MS);
+  // First, so a cell that throws carries them too.
+  testInfo.annotations.push(...cellAnnotations(cell));
   const ran = new Set<string>();
   const owed = new Set(requiredChecks(row.id, viewport.id, conditions));
   // The print row compares the page in print with the page on screen, so it loads on screen first.
@@ -270,7 +285,7 @@ export async function runCell({
   const response = await page.goto(at, { waitUntil: 'load' });
   const status = response?.status() ?? 0;
   ran.add('status');
-  await settle(page);
+  const settled = await settle(page);
   const screen = printRow ? await inPage<string[]>(page, { kind: 'inventory' }) : [];
   if (printRow) await page.emulateMedia({ media: 'print' });
 
@@ -337,6 +352,9 @@ export async function runCell({
     }
   };
 
+  // The no-JavaScript row on a surface that needs it reads its notice too.
+  const noticeRow = cell.requiresScript !== undefined && row.id === 'no-javascript';
+  if (noticeRow) ran.add(NOTICE_CHECK);
   // The page's own suites, then the primitives under the cell's tuple.
   const own = [
     ...motion,
@@ -349,7 +367,14 @@ export async function runCell({
       viewport,
       ran,
       conditions: row.id === 'default',
+      scriptRequired: cell.requiresScript !== undefined,
     })),
+    // The no-JavaScript row on a surface that needs it: its honest state, axe having run above.
+    ...(noticeRow
+      ? await scriptRequiredFindings(page, scriptless.get(page) ?? null, 'no-javascript', {
+          axe: false,
+        })
+      : []),
   ];
   ran.add('contrast');
   if (printRow) {
@@ -407,6 +432,7 @@ export async function runCell({
           viewport,
           ran: new Set(),
           conditions: false,
+          scriptRequired: false,
         })),
       );
     }
@@ -420,6 +446,7 @@ export async function runCell({
       ? []
       : [runnerFailure(context, 'status', `${status}, not ${cell.expectedStatus}`)]),
     ...emulation.map((problem) => runnerFailure(context, 'media-emulation', problem)),
+    ...(settled ? [] : [runnerFailure(context, 'settled', STILL_BUSY)]),
     ...(now === Date.parse(FIXED_TIME)
       ? []
       : [
@@ -441,6 +468,7 @@ export async function runCell({
   const about = (what: string) => (diagnostic ? `${what}. ${diagnostic}` : what);
 
   expect.soft(status, `${cell.path} answers ${cell.expectedStatus}`).toBe(cell.expectedStatus);
+  expect.soft(settled ? null : STILL_BUSY, `${cell.path} settles`).toBeNull();
   expect.soft(emulation, `the ${row.id} row's media emulation`).toEqual([]);
   expect.soft(new Date(now).toISOString(), "the page's clock").toBe(FIXED_TIME);
   expect

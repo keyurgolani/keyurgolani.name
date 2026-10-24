@@ -68,6 +68,13 @@ export function requiredChecks(row: string, viewport: string, conditions = true)
 /** The annotation a test lists the checks it ran in. */
 export const CHECKS_ANNOTATION = 'quality-checks';
 
+/**
+ * The check a page that requires script takes in place of its content
+ * without JavaScript: its notice, in the no-JavaScript row and the default
+ * row's no-JavaScript and print conditions.
+ */
+export const NOTICE_CHECK = 'notice';
+
 /** The annotation that says which kind of quality test a test is: cell, visual, or perf. */
 export const KIND_ANNOTATION = 'quality-kind';
 
