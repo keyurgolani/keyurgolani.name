@@ -211,12 +211,24 @@ test('the catalog fixture shows stills first, and live frames only on request or
     await page.locator('[data-plate-live]:not([data-plate-live="still"])').count(),
   ).toBeLessThanOrEqual(2);
 
-  // The catalog page itself downloads no unit's files but the plates' stills.
+  // The catalog page itself downloads no unit's files but the plates' stills: the two it
+  // showed, and any other the browser's lazy loading reached as the page scrolled, each a
+  // plate's own.
   const owners = unitOwners();
+  const onPage = (await plates(page).evaluateAll((all) =>
+    all.map((plate) => plate.getAttribute('data-plate')),
+  )) as string[];
   const pageFiles = portfolioFiles(requests, page.mainFrame());
   expect(pageFiles.length, 'the stills the page showed').toBeGreaterThan(0);
+  const shown = pageFiles.map((file) => owners.get(file));
+  expect(shown, "the first two plates' stills").toEqual(
+    expect.arrayContaining([`variant ${firstId}`, `variant ${secondId}`]),
+  );
   for (const file of pageFiles) {
     expect(file, 'a plate still').toMatch(/^\/_portfolio\/still\//);
-    expect([`variant ${firstId}`, `variant ${secondId}`], file).toContain(owners.get(file));
+    expect(
+      onPage.map((id) => `variant ${id}`),
+      file,
+    ).toContain(owners.get(file));
   }
 });
