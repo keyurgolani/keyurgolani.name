@@ -27,6 +27,7 @@ import {
   packPackages,
   renderNotices,
   researchRecords,
+  opaqueFailing,
   responsiblePack,
   type AppearanceCheck,
   type BaseLock,
@@ -121,8 +122,9 @@ export function contrastRecords(check: AppearanceCheck): CatalogRecord[] {
     string,
     { record: CatalogRecord; worst: number; tuples: number; label: string }
   >();
+  const opaque = opaqueFailing(check.failures);
   for (const failure of check.failures) {
-    const { axis, id } = responsiblePack(failure);
+    const { axis, id } = responsiblePack(failure, opaque);
     const { pair } = failure;
     const label = `contrast: ${pair.foreground}${pair.ground ? ` on ${pair.ground}` : ''}${
       pair.backdrop ? ` over ${pair.backdrop}` : ''

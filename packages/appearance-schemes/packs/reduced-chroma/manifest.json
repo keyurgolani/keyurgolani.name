@@ -2,7 +2,7 @@
   "id": "reduced-chroma",
   "name": "Reduced Chroma",
   "description": "Muted, low-saturation greys with a slate accent, for a quieter page.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "stable",
   "provenance": {
@@ -14,7 +14,7 @@
     "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
     "researchedAt": "2026-10-17",
     "maintainer": "keyurgolani",
-    "derivation": "anchor-v1 from the reviewed prototype's reduced-chroma anchors."
+    "derivation": "anchor-v2 from the reviewed prototype's reduced-chroma anchors. The anchors stay as approved. adjustments lists the 13 roles it moves from anchor-v1."
   },
   "modes": ["light", "dark"],
   "accessibility": {
@@ -33,10 +33,10 @@
     "enhancement": 0
   },
   "fallbacks": [
-    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
   ],
   "caveats": [],
-  "derivation": "anchor-v1",
+  "derivation": "anchor-v2",
   "anchors": {
     "light": {
       "canvas": "#f3f2ef",
@@ -49,6 +49,29 @@
       "text": "#e7e5e0",
       "accent": "#9ca6ad",
       "secondary": "#b2a49a"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#555658", "#505153"],
+      "text-muted": ["#606163", "#5a5b5d"],
+      "border-strong": ["#7a7a7b", "#757677"],
+      "accent-text": ["#5b6169", "#565b63"],
+      "data-categorical-6": ["#555658", "#505153"],
+      "signature-end": ["#85776e", "#80736a"]
+    },
+    "dark": {
+      "text-secondary": ["#bfbebb", "#c6c5c2"],
+      "text-muted": ["#b3b2af", "#bab9b6"],
+      "border-strong": ["#91918f", "#989895"],
+      "accent-text": ["#abb3b7", "#b5bbbe"],
+      "data-categorical-6": ["#bfbebb", "#c6c5c2"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#3f4449", "#3c4146"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#a6afb5", "#abb4b9"]
     }
   },
   "swatches": ["#f3f2ef", "#2e3033", "#69717a", "#85776e"]

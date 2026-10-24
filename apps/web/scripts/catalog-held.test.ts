@@ -16,6 +16,7 @@ import {
   heldRecord,
   readHeld,
   renderHeldRecord,
+  surfaceOpacityFloor,
   type HeldPack,
   type HeldRecord,
 } from './catalog-held';
@@ -24,9 +25,11 @@ import { generateRegistry, renderOptions, REPO_ROOT } from './registry-options';
 import { DESIGN_LANGUAGES } from '../../../scripts/catalog/seed/appearance-catalog.js';
 import { BORDER_FIXES, languageManifest } from '../../../scripts/catalog/seed.mjs';
 
-// #20, PR 2b: the 40 design languages. The 13 that pass check:appearance
-// ship; the 27 that fail it, on texture or translucency, are held with
-// their gate records until anchor-v2 and translucency floors land.
+// #20, PR 2b: the 40 design languages, with the ones that fail
+// check:appearance held with their gate records. PR 2c's anchor-v2 and
+// translucency floors ship 27: the 13 opaque textured languages as they
+// are, and glassmorphism at its floor. The 13 textured translucent ones
+// stay held: their floor is opaque.
 
 interface SeedLanguage {
   readonly id: string;
@@ -62,7 +65,7 @@ const tally = (tiers: readonly string[]) =>
     return counts;
   }, {});
 
-test('the 40 approved languages: 13 ship and 27 are held, each in its approved tier', async () => {
+test('the 40 approved languages: 27 ship and 13 are held, each in its approved tier', async () => {
   const { registry } = await production();
   const shipping = [...registry.packs.designLanguage.values()].filter((pack) => !pack.fixture);
   const holding = held();
@@ -75,32 +78,65 @@ test('the 40 approved languages: 13 ship and 27 are held, each in its approved t
     assert.equal(tier, language.status, `${language.id}'s tier`);
   }
   assert.deepEqual(tally(shipping.map(({ manifest }) => manifest.tier)), {
-    stable: 5,
-    extended: 7,
-    experimental: 1,
+    stable: 11,
+    extended: 11,
+    experimental: 5,
   });
   assert.deepEqual(tally(holding.map(({ manifest }) => manifest!.tier)), {
-    stable: 7,
-    extended: 11,
-    experimental: 9,
+    stable: 1,
+    extended: 7,
+    experimental: 5,
   });
   // Registry generation reads packs/ alone: no held id has a pack directory.
   for (const pack of holding) assert.ok(!fs.existsSync(path.join(PACKS, pack.id)), pack.id);
 });
 
-test('every seeded language, shipping or held, is the seed mapping of its prototype record, in full', () => {
+test('every seeded language, shipping or held, is the seed mapping of its prototype record, in full, less a translucency floor', () => {
+  const floored: string[] = [];
   for (const language of DESIGN_LANGUAGES as readonly SeedLanguage[]) {
     if (language.id === 'platform-neutral') continue; // #19's fallback, which predates the seed.
     const shipped = path.join(PACKS, language.id, 'manifest.json');
     const file = fs.existsSync(shipped)
       ? shipped
       : path.join(REPO_ROOT, 'packages/appearance-languages/held', language.id, 'manifest.json');
-    assert.deepEqual(
-      JSON.parse(fs.readFileSync(file, 'utf8')),
-      JSON.parse(JSON.stringify(languageManifest(language))),
-      language.id,
-    );
+    const manifest = JSON.parse(fs.readFileSync(file, 'utf8')) as DesignLanguageManifest;
+    const seeded = JSON.parse(JSON.stringify(languageManifest(language))) as DesignLanguageManifest;
+    if (manifest.approvedSurfaceOpacity !== undefined) {
+      // A floor (PR 2c) raises the approved opacity, records it, and bumps the minor version.
+      floored.push(language.id);
+      assert.equal(manifest.approvedSurfaceOpacity, seeded.tokens['surface-opacity'], language.id);
+      assert.equal(manifest.version, '1.1.0', language.id);
+      seeded.version = manifest.version;
+      seeded.tokens = { ...seeded.tokens, 'surface-opacity': manifest.tokens['surface-opacity'] };
+      seeded.approvedSurfaceOpacity = manifest.approvedSurfaceOpacity;
+    }
+    assert.deepEqual(manifest, seeded, language.id);
   }
+  assert.deepEqual(floored, ['glassmorphism']);
+});
+
+test('a translucent language ships at its floor, the least surface-opacity that passes over the worst backdrop', async () => {
+  const { registry } = await production();
+  const glass = registry.packs.designLanguage.get('glassmorphism')!.manifest;
+  assert.equal(glass.approvedSurfaceOpacity, '78%');
+  assert.equal(glass.tokens['surface-opacity'], '97%');
+  const at = (percent: number) => ({ ...glass.tokens, 'surface-opacity': `${percent}%` });
+  // The search starts at the approved value and stops at the first that passes.
+  assert.equal(surfaceOpacityFloor(registry, at(78), targets), 97);
+  assert.equal(surfaceOpacityFloor(registry, at(97), targets), 97);
+  assert.equal(heldRecord(registry, { ...glass, tokens: at(97) }, targets), null);
+  const below = heldRecord(registry, { ...glass, tokens: at(96) }, targets)!;
+  assert.ok(
+    below.pairs.every((pair) => pair.backdrop === '#000000' || pair.backdrop === '#ffffff'),
+  );
+  // Past 100%, there's no floor: an opaque surface that fails is a scheme or texture problem.
+  const unreadable = { ...glass.tokens, 'surface-opacity': 'none' };
+  assert.equal(surfaceOpacityFloor(registry, unreadable, targets), null);
+  // A textured translucent language passes only opaque, so its floor is 100%.
+  const fluent = held().find(({ id }) => id === 'fluent-2-inspired')!
+    .manifest as DesignLanguageManifest;
+  assert.equal(surfaceOpacityFloor(registry, fluent.tokens, targets), 100);
+  assert.equal(surfaceOpacityFloor(registry, { ...fluent.tokens, texture: 'none' }, targets), 97);
 });
 
 test('the languages take no script, no stylesheet, no ambient motion, and neumorphic controls gain a border', () => {
@@ -145,25 +181,28 @@ test('each held language records the gate it fails, its worst pair and scheme, a
     assert.deepEqual(record.worst, first);
     assert.ok(record.unblockedBy.length > 0, pack.id);
   }
-  const glass = JSON.parse(
-    held().find(({ id }) => id === 'glassmorphism')!.recorded!,
-  ) as HeldRecord;
-  assert.deepEqual(glass.causes, ['translucency']);
-  assert.deepEqual(glass.opacityFloor, { withTexture: 100, withoutTexture: 100 });
-  assert.match(glass.unblockedBy.join(' '), /Translucency floors/);
-  const carbon = JSON.parse(
-    held().find(({ id }) => id === 'carbon-inspired')!.recorded!,
-  ) as HeldRecord;
-  assert.deepEqual(carbon.causes, ['texture']);
-  assert.equal(carbon.opacityFloor, undefined);
-  assert.match(carbon.unblockedBy.join(' '), /anchor-v2 solver/);
+  // Every one still held is textured and translucent, and its floor is opaque.
+  for (const pack of held()) {
+    const record = JSON.parse(pack.recorded!) as HeldRecord;
+    const tokens = (pack.manifest as DesignLanguageManifest).tokens;
+    assert.notEqual(tokens.texture, 'none', pack.id);
+    assert.notEqual(tokens['surface-opacity'], '100%', pack.id);
+    assert.deepEqual(record.causes, ['translucency'], pack.id);
+    assert.equal(record.opacityFloor?.withTexture, 100, pack.id);
+    assert.match(record.reason, /its floor is opaque/, pack.id);
+    assert.match(record.unblockedBy.join(' '), /the owner's call/, pack.id);
+    assert.ok(
+      record.pairs.every((pair) => pair.backdrop !== undefined),
+      pack.id,
+    );
+  }
 });
 
 test('check:appearance reads every held pack as held, with no finding', async () => {
   const { registry } = await production();
   const report = heldFindings(registry, held(), targets);
   assert.deepEqual(report.findings, []);
-  assert.equal(report.held.length, 27);
+  assert.equal(report.held.length, 13);
   for (const line of report.held)
     assert.match(
       line,
@@ -174,9 +213,9 @@ test('check:appearance reads every held pack as held, with no finding', async ()
 test('a held pack that registers, one whose record is stale, or one that passes now, is a finding', async () => {
   const { registry, meta } = await production();
   const all = held();
-  const glass = all.find(({ id }) => id === 'glassmorphism')!;
+  const glass = all.find(({ id }) => id === 'fluent-2-inspired')!;
   const base = meta.find((pack) => pack.manifest.id === 'platform-neutral')!;
-  // The mutant: glassmorphism registered beside the shipping languages.
+  // The mutant: fluent-2-inspired registered beside the shipping languages.
   const mutant = createAppearanceRegistry({
     VARIANTS: [...registry.variants],
     PACKS: [...meta, { ...base, manifest: glass.manifest } as MetaPack],
@@ -184,7 +223,7 @@ test('a held pack that registers, one whose record is stale, or one that passes 
   const registered = heldFindings(mutant, [glass], targets).findings.map(({ message }) => message);
   assert.ok(
     registered.some((message) =>
-      /The held design language glassmorphism is registered/.test(message),
+      /The held design language fluent-2-inspired is registered/.test(message),
     ),
     registered.join('\n'),
   );

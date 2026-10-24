@@ -2,7 +2,7 @@
   "id": "paper-ink",
   "name": "Paper Ink",
   "description": "Off-white paper and dark ink with a brick-red accent and a teal secondary.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "stable",
   "provenance": {
@@ -14,7 +14,7 @@
     "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
     "researchedAt": "2026-10-17",
     "maintainer": "keyurgolani",
-    "derivation": "anchor-v1 from the reviewed prototype's paper-ink anchors."
+    "derivation": "anchor-v2 from the reviewed prototype's paper-ink anchors. The anchors stay as approved. adjustments lists the 12 roles it moves from anchor-v1."
   },
   "modes": ["light", "dark"],
   "accessibility": {
@@ -33,10 +33,10 @@
     "enhancement": 0
   },
   "fallbacks": [
-    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
   ],
   "caveats": [],
-  "derivation": "anchor-v1",
+  "derivation": "anchor-v2",
   "anchors": {
     "light": {
       "canvas": "#fbf7ef",
@@ -49,6 +49,28 @@
       "text": "#f7efe1",
       "accent": "#e28b6d",
       "secondary": "#7fb0b7"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#595550", "#54504c"],
+      "text-muted": ["#65615c", "#5f5b57"],
+      "border-strong": ["#817d77", "#7b7771"],
+      "accent-text": ["#a4432d", "#99402b"],
+      "data-categorical-6": ["#595550", "#54504c"]
+    },
+    "dark": {
+      "text-secondary": ["#bab3a8", "#c3bbb0"],
+      "text-muted": ["#ada69c", "#b6afa4"],
+      "border-strong": ["#8c877d", "#958f85"],
+      "accent-text": ["#e49376", "#e69e83"],
+      "data-categorical-6": ["#bab3a8", "#c3bbb0"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#732f20", "#6c2c1e"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#e5977c", "#e8a38c"]
     }
   },
   "swatches": ["#fbf7ef", "#1f1c18", "#a4432d", "#315b62"]

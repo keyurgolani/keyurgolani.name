@@ -2,7 +2,7 @@
   "id": "coral-lagoon",
   "name": "Coral Lagoon",
   "description": "Coral and lagoon teal on a bright, warm ground.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "extended",
   "provenance": {
@@ -14,7 +14,7 @@
     "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
     "researchedAt": "2026-10-17",
     "maintainer": "keyurgolani",
-    "derivation": "anchor-v1 from the reviewed prototype's coral-lagoon anchors, with the light accent #e85d55 to #d45952, 10% toward text, so the signature fill reaches 3:1 on every surface."
+    "derivation": "anchor-v2 from the reviewed prototype's coral-lagoon anchors. It puts the light accent #d45952 back to #e85d55, undoing PR 2a's nudges: anchor-v2 solves the signature fill itself. adjustments lists the 17 roles it moves from anchor-v1."
   },
   "modes": ["light", "dark"],
   "accessibility": {
@@ -33,15 +33,15 @@
     "enhancement": 0
   },
   "fallbacks": [
-    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
   ],
   "caveats": [],
-  "derivation": "anchor-v1",
+  "derivation": "anchor-v2",
   "anchors": {
     "light": {
       "canvas": "#fff3ef",
       "text": "#24343a",
-      "accent": "#d45952",
+      "accent": "#e85d55",
       "secondary": "#078f96"
     },
     "dark": {
@@ -51,5 +51,32 @@
       "secondary": "#4cc7cb"
     }
   },
-  "swatches": ["#fff3ef", "#24343a", "#d45952", "#078f96"]
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#4f595e", "#495459"],
+      "text-muted": ["#5a6367", "#555e63"],
+      "border-strong": ["#787e80", "#71787a"],
+      "accent-text": ["#964c4a", "#8b4a48"],
+      "focus": ["#d05852", "#c25550"],
+      "data-categorical-1": ["#d85a53", "#d34943"],
+      "data-categorical-2": ["#078f96", "#00898f"],
+      "data-categorical-6": ["#4f595e", "#495459"],
+      "signature-start": ["#e85d55", "#c15550"],
+      "signature-end": ["#078f96", "#0a848b"]
+    },
+    "dark": {
+      "text-secondary": ["#b6c5c6", "#bfcdce"],
+      "text-muted": ["#a9b9ba", "#b2c1c2"],
+      "border-strong": ["#86989a", "#8fa0a2"],
+      "accent-text": ["#fd9e94", "#fcaaa1"],
+      "data-categorical-6": ["#b6c5c6", "#bfcdce"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#742f2b", "#6b2b28"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#ff8b80", "#ff978d"]
+    }
+  },
+  "swatches": ["#fff3ef", "#24343a", "#e85d55", "#078f96"]
 }

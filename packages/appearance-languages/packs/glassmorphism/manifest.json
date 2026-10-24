@@ -2,7 +2,7 @@
   "id": "glassmorphism",
   "name": "Glassmorphism",
   "description": "Soft radii, hairline borders, frosted-glass surfaces, normal density, medium elevation, fluid motion, and no texture.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "stable",
   "provenance": {
@@ -55,7 +55,7 @@
     "shadow-overlay": "0 22px 60px color-mix(in srgb, var(--color-text-primary) 22%, transparent)",
     "shadow-raised": "0 22px 60px color-mix(in srgb, var(--color-text-primary) 22%, transparent)",
     "shadow-inset": "inset 2px 2px 5px color-mix(in srgb, var(--color-text-primary) 16%, transparent)",
-    "surface-opacity": "78%",
+    "surface-opacity": "97%",
     "backdrop-blur": "18px",
     "control-height": "2.5rem",
     "space-control-inline": "0.875rem",
@@ -83,5 +83,6 @@
     "texture": "none",
     "signature-fill": "linear-gradient(90deg, var(--color-signature-start), var(--color-signature-end))",
     "emphasis-glow": "none"
-  }
+  },
+  "approvedSurfaceOpacity": "78%"
 }

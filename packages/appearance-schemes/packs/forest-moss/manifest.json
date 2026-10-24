@@ -2,7 +2,7 @@
   "id": "forest-moss",
   "name": "Forest Moss",
   "description": "Moss green and bark brown on a pale green ground.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "stable",
   "provenance": {
@@ -14,7 +14,7 @@
     "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
     "researchedAt": "2026-10-17",
     "maintainer": "keyurgolani",
-    "derivation": "anchor-v1 from the reviewed prototype's forest-moss anchors."
+    "derivation": "anchor-v2 from the reviewed prototype's forest-moss anchors. The anchors stay as approved. adjustments lists the 12 roles it moves from anchor-v1."
   },
   "modes": ["light", "dark"],
   "accessibility": {
@@ -33,10 +33,10 @@
     "enhancement": 0
   },
   "fallbacks": [
-    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
   ],
   "caveats": [],
-  "derivation": "anchor-v1",
+  "derivation": "anchor-v2",
   "anchors": {
     "light": {
       "canvas": "#f2f5ec",
@@ -49,6 +49,28 @@
       "text": "#edf4e9",
       "accent": "#7fb487",
       "secondary": "#c29a62"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#4f5a4f", "#495449"],
+      "text-muted": ["#5b645a", "#555e54"],
+      "border-strong": ["#757d73", "#70786e"],
+      "accent-text": ["#3f6b45", "#3c6541"],
+      "data-categorical-6": ["#4f5a4f", "#495449"]
+    },
+    "dark": {
+      "text-secondary": ["#b2bbb0", "#bac3b8"],
+      "text-muted": ["#a6afa5", "#afb7ad"],
+      "border-strong": ["#858f85", "#8d978d"],
+      "accent-text": ["#86b88d", "#92bf98"],
+      "data-categorical-6": ["#b2bbb0", "#bac3b8"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#2c4b30", "#29472d"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#85b88d", "#8fbe96"]
     }
   },
   "swatches": ["#f2f5ec", "#1f2b20", "#3f6b45", "#8a6b3f"]

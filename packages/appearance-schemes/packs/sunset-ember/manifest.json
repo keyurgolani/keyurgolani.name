@@ -2,7 +2,7 @@
   "id": "sunset-ember",
   "name": "Sunset Ember",
   "description": "Ember orange and dusk violet on a warm ground.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "stable",
   "provenance": {
@@ -14,7 +14,7 @@
     "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
     "researchedAt": "2026-10-17",
     "maintainer": "keyurgolani",
-    "derivation": "anchor-v1 from the reviewed prototype's sunset-ember anchors, with the light accent #e4583e to #d6533c, 8% toward text, so the signature fill reaches 3:1 on every surface."
+    "derivation": "anchor-v2 from the reviewed prototype's sunset-ember anchors. It puts the light accent #d6533c back to #e4583e, undoing PR 2a's nudges: anchor-v2 solves the signature fill itself. adjustments lists the 15 roles it moves from anchor-v1."
   },
   "modes": ["light", "dark"],
   "accessibility": {
@@ -33,15 +33,15 @@
     "enhancement": 0
   },
   "fallbacks": [
-    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
   ],
   "caveats": [],
-  "derivation": "anchor-v1",
+  "derivation": "anchor-v2",
   "anchors": {
     "light": {
       "canvas": "#fff1e6",
       "text": "#3a1d26",
-      "accent": "#d6533c",
+      "accent": "#e4583e",
       "secondary": "#7c4ea3"
     },
     "dark": {
@@ -51,5 +51,30 @@
       "secondary": "#b690e8"
     }
   },
-  "swatches": ["#fff1e6", "#3a1d26", "#d6533c", "#7c4ea3"]
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#684f53", "#634a4f"],
+      "text-muted": ["#735a5d", "#6e5559"],
+      "border-strong": ["#8d7677", "#866f71"],
+      "accent-text": ["#a34235", "#993e34"],
+      "focus": ["#d3523c", "#c74e3a"],
+      "data-categorical-1": ["#da543d", "#d64b31"],
+      "data-categorical-6": ["#684f53", "#634a4f"],
+      "signature-start": ["#e4583e", "#c54d3a"]
+    },
+    "dark": {
+      "text-secondary": ["#c1b1ac", "#c5b5af"],
+      "text-muted": ["#b4a4a0", "#b9a9a4"],
+      "border-strong": ["#91817f", "#988885"],
+      "accent-text": ["#ff7963", "#ff8a75"],
+      "data-categorical-6": ["#c1b1ac", "#c5b5af"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#722c1f", "#6d2a1e"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#ff8d7a", "#ff9685"]
+    }
+  },
+  "swatches": ["#fff1e6", "#3a1d26", "#e4583e", "#7c4ea3"]
 }

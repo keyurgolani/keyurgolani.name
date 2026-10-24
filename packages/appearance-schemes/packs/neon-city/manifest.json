@@ -2,7 +2,7 @@
   "id": "neon-city",
   "name": "Neon City",
   "description": "Hot pink and electric cyan on a near-black night ground. Dark only.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "experimental",
   "provenance": {
@@ -14,7 +14,7 @@
     "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
     "researchedAt": "2026-10-17",
     "maintainer": "keyurgolani",
-    "derivation": "anchor-v1 from the reviewed prototype's neon-city anchors."
+    "derivation": "anchor-v2 from the reviewed prototype's neon-city anchors. The anchors stay as approved. adjustments lists the 3 roles it moves from anchor-v1."
   },
   "modes": ["dark"],
   "lockedMode": "dark",
@@ -34,19 +34,28 @@
     "enhancement": 0
   },
   "fallbacks": [
-    "Every display mode renders the dark set, high contrast renders the sets high-contrast-v1 derives from it, and print renders the light high-contrast set, since print is always light."
+    "Every display mode renders the dark set, high contrast renders the sets high-contrast-v2 derives from it, and print renders the light high-contrast set, since print is always light."
   ],
   "caveats": [
     "Dark only: it keeps its native dark mode, so light isn't offered with it.",
     "Saturated neon accents on near black can tire the eyes over long reading."
   ],
-  "derivation": "anchor-v1",
+  "derivation": "anchor-v2",
   "anchors": {
     "dark": {
       "canvas": "#090814",
       "text": "#f4f3ff",
       "accent": "#ff42b3",
       "secondary": "#28e7f2"
+    }
+  },
+  "adjustments": {
+    "dark": {
+      "border-strong": ["#7a7985", "#81808c"],
+      "accent-text": ["#fe57bc", "#fd6ac4"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#ff84ce", "#ff8ed2"]
     }
   },
   "swatches": ["#090814", "#f4f3ff", "#ff42b3", "#28e7f2"]
