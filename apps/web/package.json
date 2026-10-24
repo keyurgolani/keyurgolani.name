@@ -41,6 +41,7 @@
     "@portfolio/schema": "workspace:*",
     "@portfolio/variant-contract": "workspace:*",
     "@portfolio/variant-kinetic-cosmos": "workspace:*",
+    "@portfolio/variant-obsidian-atelier": "workspace:*",
     "@portfolio/variant-spatial-bento": "workspace:*",
     "next": "16.4.1",
     "react": "^19.0.0",
