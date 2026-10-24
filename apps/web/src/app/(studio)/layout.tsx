@@ -12,8 +12,14 @@ import './studio.css';
 // that nonce is.
 export const dynamic = 'force-dynamic';
 
-// No share metadata: Studio's pages have nothing to share.
-export const metadata: Metadata = { title: 'Portfolio Studio', openGraph: null, twitter: null };
+// No share metadata: Studio's pages have nothing to share, and none is for
+// a crawler to index or follow (#8, Slice 1), whatever robots.txt says.
+export const metadata: Metadata = {
+  title: 'Portfolio Studio',
+  openGraph: null,
+  twitter: null,
+  robots: { index: false, follow: false },
+};
 
 export default function StudioLayout({ children }: { children: ReactNode }) {
   return (

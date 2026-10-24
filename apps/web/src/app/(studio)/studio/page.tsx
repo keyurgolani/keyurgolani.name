@@ -1,22 +1,23 @@
+import { getDeploymentState } from '~/server/config-store';
 import { servedPage } from '~/server/page-guard';
+import { studioPolicy } from '~/server/studio-policy';
 import { requireOwnerPage } from '~/server/studio-guard';
-import { SignedIn } from '../_components/signed-in';
+import { StudioShell } from '../_components/shell/studio-shell';
 
-// /studio (#2): the placeholder #8 replaces with the Studio shell. Under
-// owner only, with a session: requireOwnerPage sends a request without one
-// to sign-in before anything renders.
+// /studio (#8, Slice 1): the Owner Studio shell. Under owner only, with a
+// session: requireOwnerPage sends a request without one to sign-in before
+// anything renders, so neither the shell nor the local journal it reads
+// renders before authentication. The shell gets the page's CSRF token, for
+// its commands, and what the deployment's CapabilityPolicy grants this
+// session, which picks its tasks and its backend.
 
 export const metadata = { title: 'Portfolio Studio' };
 
 async function Studio() {
-  const { csrfToken } = await requireOwnerPage('studio.view');
-  return (
-    <main className="studio-sign-in">
-      <h1 className="studio-sign-in__title">Portfolio Studio</h1>
-      <p className="studio-status">Signed in</p>
-      <SignedIn csrfToken={csrfToken} />
-    </main>
-  );
+  const { authorized, csrfToken } = await requireOwnerPage('studio.view');
+  const state = getDeploymentState();
+  const policy = studioPolicy(state?.config.profile ?? 'owner', authorized.session);
+  return <StudioShell csrfToken={csrfToken} policy={policy} />;
 }
 
 export default servedPage('/studio', Studio);
