@@ -4,8 +4,14 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gzipSync } from 'node:zlib';
 import { parse as parseYaml } from 'yaml';
-import { checkMarkdownPass, MARKERS } from './check-markdown-pass.mjs';
+import {
+  checkMarkdownPass,
+  localFrameBytes,
+  localRouteBudget,
+  MARKERS,
+} from './check-markdown-pass.mjs';
 
 // The build gives React Server Components the Markdown post-pass and the
 // browser none of it (#10). CI's build job runs the check after its build
@@ -162,7 +168,9 @@ const LOCAL = {
   'static/chunks/main.js': 'console.log("main")',
   'server/app/(preview)/preview/local/page.js': page('l.js'),
   'server/chunks/ssr/l.js': '',
-  'server/chunks/ssr/l.js.map': map('../../../../apps/web/src/app/(preview)/_local/local-preview.tsx'),
+  'server/chunks/ssr/l.js.map': map(
+    '../../../../apps/web/src/app/(preview)/_local/local-preview.tsx',
+  ),
   'server/app/(preview)/preview/local/page_client-reference-manifest.js': manifest(
     '(preview)/preview/local/page',
     ['static/chunks/shell.js'],
@@ -177,10 +185,9 @@ const LOCAL = {
     ['static/chunks/app.js'],
     ['/_next/static/chunks/app.js'],
   ),
-  'server/app/(studio)/studio/page_client-reference-manifest.js': manifest(
-    '(studio)/studio/page',
-    ['static/chunks/studio.js'],
-  ),
+  'server/app/(studio)/studio/page_client-reference-manifest.js': manifest('(studio)/studio/page', [
+    'static/chunks/studio.js',
+  ]),
   'static/chunks/studio.js': loads('static/chunks/studio-later.js'),
   'static/chunks/studio-later.js': 'console.log("later")',
   'server/app/api/health/route_client-reference-manifest.js': manifest('api/health/route', []),
@@ -193,7 +200,10 @@ test("the post-pass may sit under static only in chunks Demo Studio's local fram
     t,
     Object.fromEntries(Object.entries(LOCAL).filter(([file]) => !file.includes('preview/local'))),
   );
-  assert.match(checkMarkdownPass(without), /static\/chunks\/pass\.js holds sanitize-html's code \(recursiveEscape\)/);
+  assert.match(
+    checkMarkdownPass(without),
+    /static\/chunks\/pass\.js holds sanitize-html's code \(recursiveEscape\)/,
+  );
   assert.match(checkMarkdownPass(without), /static\/chunks\/pass\.js\.map maps sanitize-html/);
   // A marker chunk no manifest reaches isn't the local frame's.
   const stray = nextTree(t, { ...LOCAL, 'static/chunks/stray.js': 'a.recognizeSelfClosing=1' });
@@ -212,7 +222,7 @@ test("the post-pass may sit under static only in chunks Demo Studio's local fram
   );
 });
 
-test("a chunk with the post-pass that the local frame shares with any other page or route fails, however the other reaches it (#9)", (t) => {
+test('a chunk with the post-pass that the local frame shares with any other page or route fails, however the other reaches it (#9)', (t) => {
   const shared = 'reaches it beside server/app/\\(preview\\)/preview/local/page';
   const cases = {
     // Another page's manifest names it for a client module.
@@ -243,8 +253,18 @@ test("a chunk with the post-pass that the local frame shares with any other page
   };
   for (const [what, files] of Object.entries(cases)) {
     const problem = checkMarkdownPass(nextTree(t, { ...LOCAL, ...files }));
-    assert.match(problem ?? '', new RegExp(`static/chunks/pass\\.js holds sanitize-html's code \\(recursiveEscape\\), and \\S+ ${shared}`), what);
-    assert.match(problem ?? '', new RegExp(`static/chunks/pass\\.js\\.map maps sanitize-html, and \\S+ ${shared}`), what);
+    assert.match(
+      problem ?? '',
+      new RegExp(
+        `static/chunks/pass\\.js holds sanitize-html's code \\(recursiveEscape\\), and \\S+ ${shared}`,
+      ),
+      what,
+    );
+    assert.match(
+      problem ?? '',
+      new RegExp(`static/chunks/pass\\.js\\.map maps sanitize-html, and \\S+ ${shared}`),
+      what,
+    );
   }
   // The chunk every page loads reaching it reaches it from every page.
   const everywhere = checkMarkdownPass(
@@ -265,6 +285,47 @@ test("a chunk with the post-pass that the local frame shares with any other page
     unreadable ?? '',
     /static\/chunks\/pass\.js holds sanitize-html's code \(recursiveEscape\), and server\/app\/\(studio\)\/studio\/page has a client reference manifest the check can't read/,
   );
+});
+
+test("the local frame's post-pass counts toward its route budget in runtime-budgets.json, and a build over either ceiling, or with no row, fails (#9)", (t) => {
+  const dir = nextTree(t, LOCAL);
+  const weighed = localFrameBytes(dir);
+  // Every chunk it reaches: its entry, its modules, the root's, and what they load on demand.
+  const gz = (file) => gzipSync(readFileSync(path.join(dir, file)), { level: 9 }).length;
+  const reached = ['main.js', 'shell.js', 'frame.js', 'pass.js'].map(
+    (file) => `static/chunks/${file}`,
+  );
+  assert.deepEqual(weighed, {
+    js: reached.reduce((sum, file) => sum + gz(file), 0),
+    postPass: gz('static/chunks/pass.js'),
+  });
+  const budgets = (row) => {
+    const file = path.join(dir, 'budgets.json');
+    writeFileSync(file, JSON.stringify({ budgets: { routes: { '/preview/local': row } } }));
+    return { budgets: file };
+  };
+  assert.equal(
+    checkMarkdownPass(dir, budgets({ js: weighed.js, postPass: weighed.postPass })),
+    null,
+  );
+  assert.match(
+    checkMarkdownPass(dir, budgets({ js: weighed.js - 1, postPass: weighed.postPass })),
+    new RegExp(`browser JavaScript is ${weighed.js} gzip bytes, over its ${weighed.js - 1}`),
+  );
+  assert.match(
+    checkMarkdownPass(dir, budgets({ js: weighed.js, postPass: weighed.postPass - 1 })),
+    new RegExp(`post-pass is ${weighed.postPass} gzip bytes, over its ${weighed.postPass - 1}`),
+  );
+  for (const row of [undefined, { js: 1 }, { js: 'many', postPass: 1 }]) {
+    assert.match(
+      checkMarkdownPass(dir, budgets(row)),
+      /budgets\.routes\["\/preview\/local"\] sets no js and postPass ceilings/,
+      JSON.stringify(row),
+    );
+  }
+  // The repository's own row is there, and a build with no local frame needs none.
+  assert.ok(localRouteBudget(), 'runtime-budgets.json has the local frame row');
+  assert.equal(checkMarkdownPass(nextTree(t, WIRED), budgets(undefined)), null);
 });
 
 test("CI's build job runs the check right after the standalone check", () => {

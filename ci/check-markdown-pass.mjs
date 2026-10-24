@@ -23,6 +23,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gzipSync } from 'node:zlib';
 import { currentGate, REPO_ROOT, reportError, writeFailureRecord } from './lib/reports.mjs';
 
 export const NEXT_DIR = path.join(REPO_ROOT, 'apps', 'web', '.next');
@@ -148,6 +149,47 @@ export function clientChunksOf(nextDir, manifest) {
   return found;
 }
 
+/** Where the local frame's route budget sits (#6, #9). */
+export const RUNTIME_BUDGETS = path.join(REPO_ROOT, 'runtime-budgets.json');
+/** The local frame's row in runtime-budgets.json's budgets.routes. */
+export const LOCAL_ROUTE = '/preview/local';
+
+/** runtime-budgets.json's row for the local frame, or null when it has none. */
+export function localRouteBudget(file = RUNTIME_BUDGETS) {
+  if (!existsSync(file)) return null;
+  const row = JSON.parse(readFileSync(file, 'utf8')).budgets?.routes?.[LOCAL_ROUTE];
+  return row && Number.isInteger(row.js) && Number.isInteger(row.postPass) ? row : null;
+}
+
+/** Gzip bytes at level 9, as the trace measures a chunk (tests/harness/trace/attribution.mjs). */
+const gzipBytes = (content) => gzipSync(content, { level: 9 }).length;
+
+/**
+ * What the local frame's browser JavaScript weighs, in gzip bytes: every
+ * chunk its client manifest reaches, at once or on demand, every
+ * composition's included (`js`), and of those, the ones with the post-pass
+ * (`postPass`). Null when the build has no local frame, or its manifest
+ * can't be read.
+ */
+export function localFrameBytes(nextDir) {
+  const manifests = clientManifests(nextDir);
+  if (!manifests.has(LOCAL_PAGE)) return null;
+  const chunks = clientChunksOf(nextDir, manifests.get(LOCAL_PAGE));
+  if (chunks === null) return null;
+  let js = 0;
+  let postPass = 0;
+  for (const chunk of chunks) {
+    const file = path.join(nextDir, chunk);
+    if (!existsSync(file)) continue;
+    const content = readFileSync(file);
+    const bytes = gzipBytes(content);
+    js += bytes;
+    const text = content.toString('utf8');
+    if (MARKERS.some((name) => text.includes(name))) postPass += bytes;
+  }
+  return { js, postPass };
+}
+
 /** The sources a chunk's source map names, or null when it has none. */
 export function mapSources(nextDir, chunk) {
   const map = path.join(nextDir, `${chunk}.map`);
@@ -162,7 +204,7 @@ export function mapSources(nextDir, chunk) {
  *
  * @param {string} nextDir the web app's .next
  */
-export function checkMarkdownPass(nextDir) {
+export function checkMarkdownPass(nextDir, { budgets = RUNTIME_BUDGETS } = {}) {
   const shown = path.relative(REPO_ROOT, nextDir) || nextDir;
   if (!existsSync(path.join(nextDir, 'server')))
     return `No build at ${shown}. Run pnpm build first.`;
@@ -236,6 +278,23 @@ export function checkMarkdownPass(nextDir) {
       if (problem) problems.push(problem);
     }
   }
+  // The post-pass the local frame loads counts toward its route budget (#6, #9).
+  const weighed = localFrameBytes(nextDir);
+  if (weighed) {
+    const row = localRouteBudget(budgets);
+    const where = `${path.relative(REPO_ROOT, budgets) || budgets}'s budgets.routes["${LOCAL_ROUTE}"]`;
+    if (!row) {
+      problems.push(`${where} sets no js and postPass ceilings for the local frame`);
+    } else {
+      for (const kind of ['js', 'postPass']) {
+        if (weighed[kind] > row[kind]) {
+          problems.push(
+            `${LOCAL_PAGE}'s ${kind === 'js' ? 'browser JavaScript' : 'post-pass'} is ${weighed[kind]} gzip bytes, over its ${row[kind]} in ${where}`,
+          );
+        }
+      }
+    }
+  }
   if (problems.length === 0) return null;
   return `The Markdown post-pass isn't wired as #10 has it: ${problems.slice(0, 10).join('; ')}${problems.length > 10 ? `; and ${problems.length - 10} more` : ''}. React Server Components get it through @portfolio/kit/markdown's react-server condition (packages/kit/src/markdown.server.ts), and no browser bundle may carry it but the chunks Demo Studio's local frame (${LOCAL_PAGE}) alone loads, through @portfolio/kit/markdown-local.`;
 }
@@ -246,9 +305,15 @@ function main(argv) {
   if (!problem) {
     const pages = pageEntries(dir);
     const local = pages.includes(`${LOCAL_PAGE}.js`);
+    const weighed = localFrameBytes(dir);
     console.log(
       `[markdown-pass] ${pages.length - (local ? 1 : 0)} site and preview pages load the post-pass, every server chunk with the renderer holds it, and nothing under static carries sanitize-html${local ? ' but what the local frame alone loads, which renders no Markdown on the server' : ''}`,
     );
+    if (weighed) {
+      console.log(
+        `[markdown-pass] ${LOCAL_ROUTE} reaches ${weighed.js} gzip bytes of browser JavaScript, ${weighed.postPass} of them the post-pass, within runtime-budgets.json's ceilings`,
+      );
+    }
     return 0;
   }
   reportError(problem, { title: 'Markdown post-pass' });

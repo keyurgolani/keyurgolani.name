@@ -120,7 +120,10 @@ export async function renderLocal({
   );
   if (resolved.kind === 'not-found') return { kind: 'not-found' };
   if (resolved.kind === 'redirect') {
-    return { kind: 'redirect', route: routeOf(new URL(resolved.location, origin).pathname, LOCAL_LINK_BASE) };
+    return {
+      kind: 'redirect',
+      route: routeOf(new URL(resolved.location, origin).pathname, LOCAL_LINK_BASE),
+    };
   }
   const { manifest } = resolved.composition.rendered;
   const appearance = resolveDocumentAppearance({
@@ -206,7 +209,12 @@ export interface Shown {
 }
 
 /** The local frame: its channel to Studio, the post-pass, and the document Studio sent. */
-export function LocalFrame({ catalog, studioOrigin, nonce, install = installPostPass }: LocalFrameProps) {
+export function LocalFrame({
+  catalog,
+  studioOrigin,
+  nonce,
+  install = installPostPass,
+}: LocalFrameProps) {
   const registries = useMemo(() => localRegistries(catalog), [catalog]);
   const [postPass, setPostPass] = useState<'loading' | 'ready' | 'failed'>('loading');
   const [document, setDocument] = useState<LocalDocumentMessage | null>(null);
@@ -277,7 +285,8 @@ export function LocalFrame({ catalog, studioOrigin, nonce, install = installPost
 
   const view = frameView(postPass, shown, failed);
   if (view.kind === 'unavailable') return <FrameStatus text="This preview couldn't load." />;
-  if (view.kind === 'not-rendered') return <FrameStatus text="This document doesn't render here." />;
+  if (view.kind === 'not-rendered')
+    return <FrameStatus text="This document doesn't render here." />;
   if (view.kind === 'waiting') return <FrameStatus text="Waiting for the document…" busy />;
   return (
     <LocalDocumentView
