@@ -101,6 +101,34 @@ test.before(async () => {
     'the changed pack directs pack cells',
   );
   plans.push({ name: 'the PR set with one changed non-default pack', plan: packPlan });
+  // And the same after a fifth composition registers (#17): every variant runs on the changed pack.
+  const base = onePack.VARIANTS.find(({ manifest }) => manifest.id === 'obsidian-atelier')!;
+  const fifth = {
+    ...onePack,
+    VARIANTS: [
+      ...onePack.VARIANTS,
+      { ...base, manifest: { ...base.manifest, id: 'fifth-composition', name: 'Fifth' } },
+    ],
+  };
+  // Its quality unit, as every composition's: the same as Obsidian Atelier's.
+  const unit = registrations.units.find(({ id }) => id === 'obsidian-atelier')!;
+  const fifthPlan = planCells({
+    meta: fifth,
+    registrations: {
+      ...registrations,
+      units: [...registrations.units, { ...unit, id: 'fifth-composition' }],
+    },
+    mode: 'pr',
+    changes: [{ axis: 'designLanguage', id: 'second-language', paths: [] }],
+  });
+  assert.ok(
+    fifthPlan.targets.some((target) => target.id === 'fifth-composition'),
+    'the fifth composition is planned',
+  );
+  plans.push({
+    name: 'a fifth composition, and one changed non-default pack',
+    plan: fifthPlan,
+  });
 });
 
 /** The count the planner picks for the PR set, as quality-pr-plan emits it. */
@@ -127,9 +155,10 @@ test('the count is the fewest shards the weights allow within the ceiling, and m
   // 95 s fixed and two workers a shard: two 100 s groups fit one shard, and two 200 s groups a shard.
   assert.equal(pickShardCount(synthetic(2, 100), durations).count, 1);
   assert.equal(pickShardCount(synthetic(8, 200), durations).count, 4);
-  assert.equal(pickShardCount(synthetic(16, 200), durations).count, MAX_SHARDS);
+  assert.equal(MAX_SHARDS, 12);
+  assert.equal(pickShardCount(synthetic(24, 200), durations).count, MAX_SHARDS);
   assert.throws(
-    () => pickShardCount(synthetic(17, 200), durations),
+    () => pickShardCount(synthetic(25, 200), durations),
     new RegExp(
       `Even ${MAX_SHARDS} shards leave one at about 495s, over the ${SHARD_CEILING}s ceiling\\. Its heaviest group is chromium s\\d+ ${CELL_SPEC}, at about 200s\\.`,
     ),
@@ -137,7 +166,7 @@ test('the count is the fewest shards the weights allow within the ceiling, and m
   // One fewer always breaks the ceiling: the count is the least that holds.
   for (const [groups, count] of [
     [synthetic(8, 200), 4],
-    [synthetic(16, 200), 8],
+    [synthetic(24, 200), 12],
   ] as const) {
     const slowest = Math.max(...assignShards(groups, count - 1).map(shardEstimate));
     assert.ok(slowest > SHARD_CEILING, `${count - 1} shards: ${slowest}s`);

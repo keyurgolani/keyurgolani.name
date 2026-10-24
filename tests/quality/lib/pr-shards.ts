@@ -59,8 +59,8 @@ export const SHARD_CEILING = 300;
 export const SHARD_FIXED = 95;
 /** Playwright's workers in one shard (playwright.config.ts). */
 export const SHARD_WORKERS = 2;
-/** The most shards quality-pr-plan hands out. */
-export const MAX_SHARDS = 8;
+/** The most shards quality-pr-plan hands out: more only add parallel runners, and 12 fits the repository's concurrency beside the other jobs. */
+export const MAX_SHARDS = 12;
 /** The most one group may weigh: a group runs on one worker, so it alone sets its shard's floor. */
 export const GROUP_BUDGET = SHARD_CEILING - SHARD_FIXED;
 
