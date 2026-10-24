@@ -355,12 +355,10 @@ jobs:
       - name: Build the image from the tagged commit
         timeout-minutes: 25
         run: docker build --no-cache --pull --platform linux/amd64 -t "$REHEARSAL_IMAGE" .
-      # The newest final release before this commit, or its parent before
-      # the first one.
+      # The newest final release in this commit's history, or its parent
+      # before the first one; it fails when releases exist but none is there.
       - name: Find the previous release
-        run: |
-          previous=$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*' HEAD^ 2>/dev/null || git rev-parse HEAD^1)
-          echo "REHEARSAL_PREVIOUS_REF=$previous" >> "$GITHUB_ENV"
+        run: node ci/release/previous-release.mjs
       - name: pnpm ci:rehearsal
         env:
           REHEARSAL_CONTAINER: required
