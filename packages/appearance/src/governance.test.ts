@@ -214,7 +214,7 @@ test('a derived counterpart takes a distinct name and says how it was derived', 
   assert.deepEqual(records({ ...derived, name: 'pearl' }, 'color-scheme'), [
     ['manifest.invalid', '/name'],
   ]);
-  const unexplained = clone(derived);
+  const unexplained = clone(derived) as { provenance: { derivation?: string } };
   delete unexplained.provenance.derivation;
   assert.deepEqual(records(unexplained, 'color-scheme'), [
     ['manifest.missing', '/provenance/derivation'],

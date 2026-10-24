@@ -10,9 +10,11 @@ export {
   compileSchemeStylesheet,
   MAX_FONT_BYTES,
   namespacedStack,
+  FONT_URL,
   PACK_URL,
   packFile,
   schemeBaseSets,
+  scriptFiles,
   type CompiledPack,
   type CompileProblem,
   type CompileResult,
@@ -21,13 +23,18 @@ export {
 } from './compile';
 export { compilePlatform, platformStylesheet } from './platform';
 export {
+  decodeEscapes,
+  LINT_RULES,
   MAX_STYLESHEET_BYTES,
   readLanguageStylesheet,
+  testsFocus,
   writeStyleNodes,
+  type LintRule,
   type StyleDeclaration,
   type StyleGroup,
   type StyleNode,
   type StyleRule,
+  type StylesheetOptions,
   type StylesheetProblem,
   type StylesheetResult,
 } from './stylesheet';

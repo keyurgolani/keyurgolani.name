@@ -29,6 +29,7 @@ import {
   stylesheetsUnder,
   unmetExpectations,
 } from './check';
+import { LINT_RULES } from './stylesheet';
 
 // `pnpm check:appearance` (#19, Slice 2, item 8): the computed gate over every
 // registered combination, the hierarchy check, the layer-order check, and
@@ -182,6 +183,30 @@ test('every refusal the refined body lists for a language stylesheet has its kno
   }
 });
 
+test('every pack CSS lint rule has a known-bad input that requires that rule, and fails for it (#20)', () => {
+  const registry = createAppearanceRegistry(META);
+  for (const rule of LINT_RULES) {
+    const name = `lint-${rule}`;
+    assert.ok(knownBadNames().includes(name), name);
+    const read = readKnownBadFixture(name, registry);
+    assert.ok(read.ok, name);
+    assert.deepEqual(read.fixture.expect, [{ lint: rule }], name);
+    const run = runKnownBad(read.fixture, META);
+    assert.deepEqual(
+      unmetExpectations(read.fixture, run),
+      [],
+      `${name}: ${run.problems.join(' | ')}`,
+    );
+    // Its expectation is the rule itself: another rule's wouldn't be met.
+    const other = LINT_RULES.find((each) => each !== rule && !(run.rules ?? []).includes(each))!;
+    assert.equal(
+      unmetExpectations({ ...read.fixture, expect: [{ lint: other }] }, run).length,
+      1,
+      `${name} against ${other}`,
+    );
+  }
+});
+
 test('every hiding and layout vector the review of PR #57 lists has its known-bad input', () => {
   const audits = knownBadNames().filter((name) => name.startsWith('audit-'));
   for (const vector of [
@@ -246,8 +271,10 @@ test('every layered stylesheet must start with the layer order, after nothing bu
       { path: 'unlayered.css', css: '.a { color: red; }' },
       { path: 'late.css', css: `.a {}\n${LAYER_ORDER}` },
       { path: 'block.css', css: '@layer variant-layout { .a {} }' },
+      // A browser reads at-rule names in any case, so the check does too.
+      { path: 'caps.css', css: '@LAYER variant-layout { .a {} }' },
     ]),
-    ['late.css', 'block.css'],
+    ['late.css', 'block.css', 'caps.css'],
   );
   // The repository's own stylesheets: today none is layered, and each compiled one is.
   const root = fileURLToPath(new URL('../../../../', import.meta.url));
@@ -256,6 +283,8 @@ test('every layered stylesheet must start with the layer order, after nothing bu
   assert.ok(files.every((file) => !file.path.includes('node_modules')));
   assert.deepEqual(layerOrderProblems(files), []);
   assert.ok(fs.existsSync(KNOWN_BAD_DIR));
+  // The known-bad inputs never ship, and lint-layer-scope opens a layer of its own on purpose.
+  assert.ok(files.every((file) => !file.path.startsWith('packages/appearance/test/fixtures/')));
 });
 
 test('the gate reads what HUMANIST_UI declares: its display and headline are large text', () => {

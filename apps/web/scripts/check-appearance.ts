@@ -124,6 +124,7 @@ function describe(check: AppearanceCheck): string[] {
 
 function expectation(item: KnownBadExpectation): string {
   if ('problem' in item) return `a problem naming "${item.problem}"`;
+  if ('lint' in item) return `a refusal under the pack lint rule ${item.lint}`;
   if ('hierarchy' in item) return `${item.hierarchy.first} and ${item.hierarchy.second} held apart`;
   const { set, foreground, ground } = item.pair;
   return `${foreground}${ground ? ` on ${ground}` : ''}${set ? ` in ${set}` : ''} failing`;
@@ -216,7 +217,7 @@ async function main(): Promise<number> {
     }));
   const sources = stylesheetsUnder(REPO_ROOT, ['apps', 'packages']);
   const unordered = layerOrderProblems([...compiled, ...sources]);
-  const layered = [...compiled, ...sources].filter(({ css }) => /@layer\b/.test(css)).length;
+  const layered = [...compiled, ...sources].filter(({ css }) => /@layer\b/i.test(css)).length;
   const misses = knownBadMisses(registry, meta, targets);
   const audit = sourceAuditReport(
     REPO_ROOT,

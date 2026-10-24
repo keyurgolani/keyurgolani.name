@@ -12,5 +12,8 @@ docs/screenshots/
 # copies of #4's pairs
 **/__fixtures__/
 packages/variant-contract/fixtures/
+# #20's known-bad pack CSS, spelled to slip past a check: Prettier would
+# lowercase an @IMPORT or rewrite an escape, and undo what each one tests
+packages/appearance/test/fixtures/lint-*/styles.css
 # pnpm-lock.yaml excerpts, byte for byte, for ci/lib/lockfile-drift.mjs's tests
 ci/fixtures/lockfile-drift/

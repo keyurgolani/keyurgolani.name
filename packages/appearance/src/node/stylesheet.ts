@@ -20,10 +20,56 @@ import { MAX_LENGTH_PX, MAX_RADIUS_PX } from '../language-grammar';
 import { LANGUAGE_KEYS } from '../tokens';
 import { stylesheetValueProblem } from '../values';
 
+/**
+ * #20's pack CSS lint, the rules a language stylesheet can't break to
+ * escape its boundary or load anything. The reader refuses each, among
+ * everything else it refuses, and names the rule, so a known-bad input can
+ * require its own rule and not just any refusal:
+ *
+ * - `url`: no `url()`, `src()`, `image-set()`, `image()`, `cross-fade()`,
+ *   or `element()` outside declared assets, and a language declares none;
+ * - `import`: no `@import`;
+ * - `layer-scope`: no `@layer` or `@scope` of its own, since the compiler
+ *   writes the pack's;
+ * - `universal`: no `*`, bare or in a compound;
+ * - `prefixed-names`: `@keyframes`, `@counter-style`, and
+ *   `view-transition-name` names start with the pack's id and a hyphen.
+ *   The reader refuses all three outright, which is stricter, and still
+ *   names an unprefixed one under this rule;
+ * - `focus-outline`: focus is drawn with `outline`, which the platform
+ *   stylesheet draws from the focus tokens: nothing removes an outline
+ *   (`none`, `hidden`, or a zero width), and a rule that tests :focus,
+ *   :focus-visible, or :focus-within draws no ring as a `box-shadow`;
+ * - `javascript`: no script through CSS: `expression()`, `javascript:` or
+ *   `vbscript:` URLs, `behavior`, or `-moz-binding`.
+ *
+ * The rules hold however a name is written: in any case, behind a comment,
+ * or behind a `\` escape. The reader refuses every escape, then reads the
+ * stylesheet again as a browser decodes it and names any rule an escape hid.
+ */
+export const LINT_RULES = [
+  'url',
+  'import',
+  'layer-scope',
+  'universal',
+  'prefixed-names',
+  'focus-outline',
+  'javascript',
+] as const;
+export type LintRule = (typeof LINT_RULES)[number];
+
 export interface StylesheetProblem {
   readonly line: number;
   readonly column: number;
   readonly message: string;
+  /** The pack CSS lint rule it breaks, when it breaks one (#20). */
+  readonly rule?: LintRule;
+}
+
+/** What reading a language's stylesheet needs to know of its pack. */
+export interface StylesheetOptions {
+  /** The pack's id, which its keyframes, counter styles, and view transition names start with. */
+  readonly packId?: string;
 }
 
 export interface StyleDeclaration {
@@ -516,11 +562,61 @@ interface Text {
 }
 
 /** Reads a language's stylesheet, or says everything that's wrong with it. */
-export function readLanguageStylesheet(source: string): StylesheetResult {
+export function readLanguageStylesheet(
+  source: string,
+  options: StylesheetOptions = {},
+): StylesheetResult {
+  const read = readOnce(source, options);
+  if (read.ok || !source.includes('\\')) return read;
+  // The reader refuses every escape, which hides what a name or value is.
+  // Read it as a browser decodes it too, so a rule an escape hid is named.
+  const decoded = decodeEscapes(source);
+  const hidden = readOnce(decoded, options);
+  if (hidden.ok) return read;
+  const named = new Set(read.problems.map(({ rule }) => rule).filter(Boolean));
+  const extra = hidden.problems
+    .filter((problem) => problem.rule !== undefined && !named.has(problem.rule))
+    .map((problem) => ({
+      ...problem,
+      message: `once its escapes are decoded, ${problem.message}`,
+    }));
+  return { ok: false, problems: [...read.problems, ...extra].slice(0, MAX_PROBLEMS) };
+}
+
+/**
+ * `source` with each CSS escape decoded as CSS Syntax 3 reads it: a
+ * backslash and one to six hex digits, with one whitespace after, is that
+ * code point (0, a surrogate, or past U+10FFFF is U+FFFD); a backslash
+ * before a newline is nothing; a backslash before anything else is that
+ * character.
+ */
+export function decodeEscapes(source: string): string {
+  return source.replace(
+    /\\(?:([0-9a-fA-F]{1,6})(?:\r\n|[ \t\r\n\f])?|(\r\n|[\n\r\f])|([\s\S]))/g,
+    (_, hex: string | undefined, newline: string | undefined, other: string | undefined) => {
+      if (hex !== undefined) {
+        const code = Number.parseInt(hex, 16);
+        return code === 0 || (code >= 0xd800 && code <= 0xdfff) || code > 0x10ffff
+          ? '�'
+          : String.fromCodePoint(code);
+      }
+      if (newline !== undefined) return '';
+      return other ?? '';
+    },
+  );
+}
+
+function readOnce(source: string, options: StylesheetOptions): StylesheetResult {
   const problems: StylesheetProblem[] = [];
   const lines = lineStarts(source);
-  const report = (offset: number, message: string) => {
-    if (problems.length < MAX_PROBLEMS) problems.push({ ...position(lines, offset), message });
+  const report: Report = (offset, message, rule) => {
+    if (problems.length < MAX_PROBLEMS) {
+      problems.push({
+        ...position(lines, offset),
+        message: rule ? `${message} (pack lint: ${rule})` : message,
+        ...(rule ? { rule } : {}),
+      });
+    }
   };
 
   if (new TextEncoder().encode(source).length > MAX_STYLESHEET_BYTES) {
@@ -532,9 +628,24 @@ export function readLanguageStylesheet(source: string): StylesheetResult {
   const text = blankComments(source, report);
   if (text === null || problems.length > 0) return { ok: false, problems };
 
-  const reader = new Reader({ source, text, lines }, report);
+  const reader = new Reader({ source, text, lines }, report, options);
   const nodes = reader.items(0, text.length, 0);
   return problems.length > 0 ? { ok: false, problems } : { ok: true, nodes };
+}
+
+type Report = (offset: number, message: string, rule?: LintRule) => void;
+
+/** Functions that load a resource, which no language may call: it declares no asset. */
+const LOADS = /(?<![\w-])(?:-(?:webkit|moz)-)?(?:url|src|image-set|image|cross-fade|element)\(/i;
+/** What runs script through CSS, in a value. */
+const SCRIPTED = /(?<![\w-])expression\(|(?:java|vb)script:/i;
+/** Properties that run script through CSS. */
+const SCRIPT_PROPERTIES: ReadonlySet<string> = new Set(['behavior', 'binding']);
+
+/** A name a pack must prefix with its id: what a @keyframes or @counter-style prelude, or a view-transition-name, names. */
+function unprefixed(name: string, packId: string | undefined): boolean {
+  if (name === '' || name === 'none') return false;
+  return packId === undefined || !name.startsWith(`${packId}-`);
 }
 
 function checkCharacters(source: string, report: (offset: number, message: string) => void) {
@@ -622,7 +733,8 @@ const normalize = (text: string) => text.trim().replace(/\s+/g, ' ');
 class Reader {
   constructor(
     private readonly input: Text,
-    private readonly report: (offset: number, message: string) => void,
+    private readonly report: Report,
+    private readonly options: StylesheetOptions = {},
   ) {}
 
   /** The rules and groups between `start` and `end`. */
@@ -718,13 +830,27 @@ class Reader {
   private atRuleProblem(prelude: string, offset: number) {
     const name = /^@([a-z-]*)/i.exec(prelude)?.[1]?.toLowerCase() ?? '';
     const bare = name.replace(/^-(?:webkit|moz)-/, '');
-    this.report(
-      offset,
-      `@${name} ${
-        REFUSED_AT_RULES[bare] ??
-        "isn't an at-rule a language can use: only @media, @supports, and @container blocks."
-      }`,
-    );
+    const refusal =
+      REFUSED_AT_RULES[bare] ??
+      "isn't an at-rule a language can use: only @media, @supports, and @container blocks.";
+    if (bare === 'import') {
+      this.report(offset, `@${name} ${refusal}`, 'import');
+    } else if (bare === 'layer' || bare === 'scope') {
+      this.report(offset, `@${name} ${refusal}`, 'layer-scope');
+    } else if (bare === 'keyframes' || bare === 'counter-style') {
+      const named = normalize(prelude.slice(name.length + 1)).replace(/^["']|["']$/g, '');
+      if (unprefixed(named, this.options.packId)) {
+        this.report(
+          offset,
+          `@${name} ${refusal} Its name, ${JSON.stringify(named)}, doesn't start with the pack's id either, as every name a pack shares with the page does: ${this.options.packId ?? '<pack id>'}-.`,
+          'prefixed-names',
+        );
+      } else {
+        this.report(offset, `@${name} ${refusal}`);
+      }
+    } else {
+      this.report(offset, `@${name} ${refusal}`);
+    }
   }
 
   private group(
@@ -745,6 +871,14 @@ class Reader {
       return null;
     }
     const condition = normalize(prelude.slice(name.length + 1));
+    if (LOADS.test(condition)) {
+      this.report(
+        offset,
+        `@${name} names a file in its condition, and a language declares no asset to load.`,
+        'url',
+      );
+      return null;
+    }
     const problem =
       name === 'media'
         ? mediaProblem(condition)
@@ -766,12 +900,14 @@ class Reader {
     for (const selector of splitTopLevel(prelude, ',')) {
       const read = readSelector(normalize(selector), 'complex');
       if ('message' in read) {
-        this.report(offset, `${JSON.stringify(normalize(selector))} ${read.message}`);
+        this.report(offset, `${JSON.stringify(normalize(selector))} ${read.message}`, read.rule);
         valid = false;
       } else {
         selectors.push(read.text);
       }
     }
+    // Focus is drawn with an outline (#20): a focus rule draws no shadow ring.
+    const focus = splitTopLevel(prelude, ',').some((selector) => testsFocus(normalize(selector)));
     if (selectors.length === 0 && valid) {
       this.report(offset, 'is a rule with no selector.');
       return null;
@@ -789,9 +925,16 @@ class Reader {
       const at = cursor + (piece.length - piece.trimStart().length);
       cursor += piece.length + 1;
       if (piece.trim() === '') continue;
-      const declaration = readDeclaration(piece, dims);
+      const declaration = readDeclaration(piece, dims, this.options);
       if ('message' in declaration) {
-        this.report(at, declaration.message);
+        this.report(at, declaration.message, declaration.rule);
+        valid = false;
+      } else if (focus && /^(?:-(?:webkit|moz)-)?box-shadow$/.test(declaration.property)) {
+        this.report(
+          at,
+          `${declaration.property}: ${declaration.value} draws a focused part's ring as a shadow, and focus is drawn with outline: a rule that tests :focus, :focus-visible, or :focus-within sets no box-shadow.`,
+          'focus-outline',
+        );
         valid = false;
       } else {
         declarations.push(declaration);
@@ -824,7 +967,37 @@ function splitTopLevel(text: string, separator: string): string[] {
   return parts;
 }
 
-type Read = { readonly text: string; readonly slot: boolean } | { readonly message: string };
+type Read =
+  | { readonly text: string; readonly slot: boolean }
+  | { readonly message: string; readonly rule?: LintRule };
+
+/**
+ * Whether a selector tests focus anywhere but inside :not(), where it
+ * selects what isn't focused: :focus, :focus-visible, or :focus-within, on
+ * the part or on an ancestor.
+ */
+export function testsFocus(selector: string): boolean {
+  let text = selector.toLowerCase();
+  for (let start = text.indexOf(':not('); start >= 0; start = text.indexOf(':not(')) {
+    const close = closingParenthesis(text, start + 4);
+    if (close < 0) break;
+    text = `${text.slice(0, start)}${text.slice(close + 1)}`;
+  }
+  return /:focus(?:-visible|-within)?(?![\w-])/.test(text);
+}
+
+/** An outline that draws nothing: none or hidden as its style, or a zero width. */
+function removesOutline(base: string, value: string): boolean {
+  const words = value.toLowerCase().split(/\s+/);
+  if (base === 'outline') {
+    return words.some(
+      (word) => word === 'none' || word === 'hidden' || /^0(?:\.0*)?(?:[a-z]+)?$/.test(word),
+    );
+  }
+  if (base === 'outline-style') return words.includes('none') || words.includes('hidden');
+  if (base === 'outline-width') return /^0(?:\.0*)?(?:[a-z]+)?$/.test(value.trim());
+  return false;
+}
 
 /**
  * One selector, checked, in canonical form. `complex` is a rule's selector,
@@ -923,7 +1096,10 @@ function readSelector(selector: string, mode: 'complex' | 'argument' | 'relative
         compound += `:${name}`;
       }
     } else if (character === '*') {
-      return { message: 'uses *, and a language targets [data-ui-slot] parts, not every element.' };
+      return {
+        message: 'uses *, and a language targets [data-ui-slot] parts, not every element.',
+        rule: 'universal',
+      };
     } else if (character === '.') {
       return {
         message:
@@ -1027,7 +1203,8 @@ function pseudoClassArgument(
 function readDeclaration(
   piece: string,
   dims: boolean,
-): StyleDeclaration | { readonly message: string } {
+  options: StylesheetOptions = {},
+): StyleDeclaration | { readonly message: string; readonly rule?: LintRule } {
   const colon = piece.indexOf(':');
   if (colon < 0)
     return {
@@ -1035,6 +1212,34 @@ function readDeclaration(
     };
   const property = piece.slice(0, colon).trim();
   const value = normalize(piece.slice(colon + 1));
+  // #20's lint rules first, so each names its rule whatever else the declaration breaks.
+  const lowered = property.toLowerCase().replace(/^-(?:webkit|moz)-/, '');
+  if (SCRIPT_PROPERTIES.has(lowered) || SCRIPTED.test(value)) {
+    return {
+      message: `${property}: ${value} runs script through CSS, and no pack ships JavaScript.`,
+      rule: 'javascript',
+    };
+  }
+  if (LOADS.test(value)) {
+    return {
+      message: `${property}: ${value} loads a file, and a language declares no asset: url(), src(), image-set(), image(), cross-fade(), and element() aren't allowed.`,
+      rule: 'url',
+    };
+  }
+  if (lowered === 'view-transition-name' || lowered === 'view-transition-class') {
+    if (value.split(/\s+/).some((name) => unprefixed(name, options.packId))) {
+      return {
+        message: `${property}: ${value} names a view transition every boundary on the page shares without the pack's id: a pack's names start with ${options.packId ?? '<pack id>'}-, and a language sets no view transition.`,
+        rule: 'prefixed-names',
+      };
+    }
+  }
+  if (/^outline(?:-style|-width)?$/.test(lowered) && removesOutline(lowered, value)) {
+    return {
+      message: `${property}: ${value} removes the outline focus is drawn with.`,
+      rule: 'focus-outline',
+    };
+  }
   if (property.startsWith('--')) {
     return {
       message: `${property} defines a custom property, and a language gives its values as tokens: --ui-* from the manifest, and --color-*, --type-*, and --layout-* belong to other axes.`,
