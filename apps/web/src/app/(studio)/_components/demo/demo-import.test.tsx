@@ -6,14 +6,20 @@ import { browserBackend, type LocalSources } from '~/lib/demo/browser-backend';
 import { exportUnit } from '~/lib/demo/export';
 import type { ImportRefusal, ImportResult } from '~/lib/demo/import';
 import { runImport } from '~/lib/demo/import/pipeline';
-import { EXAMPLE, pairFiles } from '~/lib/demo/import/test-support/hostile';
+import {
+  CANARY,
+  EXAMPLE,
+  HOSTILE_FIXTURES,
+  pairFiles,
+} from '~/lib/demo/import/test-support/hostile';
 import { demoStore, WORKING_KEY } from '~/lib/demo/storage';
 import { CATALOG, DEFAULTS, FakeStorage, SCHEME_MODES, UNIT } from '~/lib/demo/test-support';
 import { VIEWPORTS } from '~/lib/preview-frame';
-import { envelope, readMessage, TO_FRAME } from '~/preview/protocol';
+import { envelope, LIMITS, readMessage, sizeOf, TO_FRAME } from '~/preview/protocol';
 import { ContentTask, ExportDisclosure, ImportReport, REFUSAL_TEXT } from './demo-content';
 import {
   documentMessage,
+  frameBudget,
   isLocalFrameSource,
   LocalFrameHost,
   localNonce,
@@ -205,4 +211,97 @@ test('while this tab holds an imported pair the frame is /preview/local, otherwi
     // Nothing of the documents is on the page: they go over the port alone.
     assert.equal(html.includes('Anamika'), false, task);
   }
+});
+
+/** A Worker the page's policy blocks, or that fails to load: it says so as an error, with the input nowhere in it. */
+function brokenWorker(t: test.TestContext, how: 'blocked' | 'fails') {
+  const had = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
+  const prevented: boolean[] = [];
+  class Failing {
+    onmessage: unknown = null;
+    onerror: ((event: { preventDefault(): void; message: string }) => void) | null = null;
+    onmessageerror: unknown = null;
+    constructor() {
+      if (how === 'blocked') throw new Error("SecurityError: blocked by the page's policy");
+    }
+    postMessage() {
+      queueMicrotask(() => {
+        let done = false;
+        this.onerror?.({
+          message: 'Failed to load the worker script',
+          preventDefault: () => {
+            done = true;
+          },
+        });
+        prevented.push(done);
+      });
+    }
+    terminate() {}
+  }
+  Object.defineProperty(globalThis, 'Worker', {
+    value: Failing,
+    configurable: true,
+    writable: true,
+  });
+  t.after(() => {
+    if (had) Object.defineProperty(globalThis, 'Worker', had);
+    else delete (globalThis as { Worker?: unknown }).Worker;
+  });
+  return prevented;
+}
+
+test('with the worker blocked, or failing to load, the import says worker_unavailable as text, keeps nothing, and logs nothing (risk 8)', async (t) => {
+  const logged: unknown[] = [];
+  for (const method of ['log', 'info', 'warn', 'error', 'debug'] as const) {
+    t.mock.method(console, method, (...args: unknown[]) => logged.push(args));
+  }
+  const fixture = HOSTILE_FIXTURES.find(({ expect }) => expect === 'imported')!;
+  for (const how of ['blocked', 'fails'] as const) {
+    const prevented = brokenWorker(t, how);
+    const session = new FakeStorage();
+    // The backend's own importer: the module worker, as the page has it.
+    const demo = browserBackend({
+      unit: UNIT,
+      catalog: CATALOG,
+      schemeModes: SCHEME_MODES,
+      defaults: DEFAULTS,
+      store: demoStore(new FakeStorage(), session),
+    });
+    const result = await demo.importFiles(fixture.files);
+    assert.deepEqual(result, { kind: 'refused', code: 'worker_unavailable', diagnostics: [] }, how);
+    assert.equal(demo.localSources(), null, how);
+    assert.deepEqual([...session.items.keys()], [], how);
+    // A failed load's error is handled, so the browser adds no line of its own for it.
+    if (how === 'fails') assert.deepEqual(prevented, [true]);
+    const html = renderToStaticMarkup(<ImportReport result={result} />);
+    assert.match(
+      html,
+      /<p role="status">The import couldn&#x27;t start in this browser, so nothing was read\.<\/p>/,
+      how,
+    );
+    assert.equal(html.includes(CANARY), false, how);
+  }
+  assert.deepEqual(logged, []);
+});
+
+test("a frame document takes documents up to #7's 100 MiB in all, and the next one goes to a new frame document instead of being dropped", () => {
+  const sources: LocalSources = {
+    portfolio: { name: 'portfolio.yml', format: 'yaml', text: EXAMPLE.portfolio },
+    site: { name: 'site.yml', format: 'yaml', text: EXAMPLE.site },
+  };
+  const message = documentMessage(sources, DEFAULTS);
+  const bytes = sizeOf(message, LIMITS.document);
+  assert.ok(bytes > 0);
+  // The frame's own limit by default, counted as the frame counts it.
+  const budget = frameBudget();
+  const fits = Math.floor(LIMITS.frame / bytes);
+  for (let index = 0; index < fits; index++) assert.equal(budget.take(message), true, `${index}`);
+  assert.equal(budget.take(message), false, "one past the frame's total");
+  // A refused one counts nothing, and a fresh budget, a new frame document's, takes it.
+  const small = frameBudget(bytes * 2);
+  assert.equal(small.take(message), true);
+  assert.equal(small.take(message), true);
+  assert.equal(small.take(message), false);
+  assert.equal(small.take(message), false);
+  assert.equal(frameBudget(bytes * 2).take(message), true);
 });

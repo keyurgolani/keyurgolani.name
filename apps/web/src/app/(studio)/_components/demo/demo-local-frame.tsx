@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { LocalSources } from '~/lib/demo/browser-backend';
 import type { DemoSelection } from '~/lib/demo/url-state';
 import { fitScale, FRAME_ATTRIBUTES, type Viewport } from '~/lib/preview-frame';
+import { LIMITS, sizeOf } from '~/preview/protocol';
 import { openStudioChannel, type StudioChannel } from '~/preview/studio-channel';
 import { DEMO_FRAME_SANDBOX } from './demo-frame';
 
@@ -50,6 +51,25 @@ export function documentMessage(sources: LocalSources, selection: DemoSelection)
 
 const DISPLAY_MODES = new Set(['system', 'light', 'dark', 'high-contrast']);
 
+/**
+ * What one frame document may still take: #7's frame counts every
+ * `document` it's sent against LIMITS.frame, 100 MiB in all, and drops one
+ * past it without a word. So Studio counts the same way, and a document
+ * that wouldn't fit goes to a new frame document, with a new nonce, instead.
+ */
+export function frameBudget(limit: number = LIMITS.frame) {
+  let used = 0;
+  return {
+    /** Counts `payload` and says true, or says false when it wouldn't fit, counting nothing. */
+    take(payload: unknown): boolean {
+      const bytes = sizeOf(payload, LIMITS.document);
+      if (bytes < 0 || used + bytes > limit) return false;
+      used += bytes;
+      return true;
+    },
+  };
+}
+
 export interface LocalFrameHostProps {
   readonly sources: LocalSources;
   readonly selection: DemoSelection;
@@ -72,8 +92,10 @@ export function LocalFrameHost({
   const frame = useRef<HTMLIFrameElement | null>(null);
   const channel = useRef<StudioChannel | null>(null);
   const [scale, setScale] = useState(1);
-  const [nonce] = useState(localNonce);
+  const [nonce, setNonce] = useState(localNonce);
   const [phase, setPhase] = useState<Phase>('loading');
+  // What this frame document has taken so far, which a new nonce starts again.
+  const budget = useRef(frameBudget());
   // What the next `ready` gets: the latest source and selection.
   const latest = useRef({ sources, selection, reduced });
   useEffect(() => {
@@ -92,15 +114,24 @@ export function LocalFrameHost({
 
   const src = `/preview/local#nonce=${nonce}`;
 
+  /** A new frame document, with a new nonce, which says ready and gets the latest document. */
+  function remount() {
+    setPhase('loading');
+    setNonce(localNonce());
+  }
+
   // The channel opens before the frame loads, as #7's Studio half asks.
   useEffect(() => {
     const iframe = frame.current;
     if (!iframe || !isLocalFrameSource(src)) return;
+    budget.current = frameBudget();
     const send = () => {
       const open = channel.current;
       if (!open?.connected) return;
       const { sources: now, selection: chosen, reduced: still } = latest.current;
-      open.send('document', documentMessage(now, chosen));
+      const message = documentMessage(now, chosen);
+      if (!budget.current.take(message)) return remount();
+      open.send('document', message);
       if (still) {
         open.send('environment', {
           displayMode: DISPLAY_MODES.has(chosen.displayMode)
@@ -130,11 +161,14 @@ export function LocalFrameHost({
     };
   }, [nonce, src]);
 
-  // Every new source or selection goes to the frame as a document of its own.
+  // Every new source or selection goes to the frame as a document of its own,
+  // or to a new frame document once this one has taken all it may.
   useEffect(() => {
     const open = channel.current;
     if (!open?.connected) return;
-    open.send('document', documentMessage(sources, selection));
+    const message = documentMessage(sources, selection);
+    if (budget.current.take(message)) open.send('document', message);
+    else remount();
   }, [sources, selection]);
 
   // A frame that never says it rendered says so, rather than loading forever.
