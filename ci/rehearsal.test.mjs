@@ -165,6 +165,11 @@ test("every docker run in the rehearsal names --pull=never, and every container'
   assert.doesNotMatch(source, /\[\s*'run',(?!\s*'--pull=never')/);
   assert.match(source, /'run',\s*'--pull=never',/);
   assert.match(source, /'network', 'create', '--internal'/);
+  // hash-password --stdin reads the password from standard input, which needs -i.
+  assert.match(
+    source,
+    /runArgs\(ctx, \{ interactive: true \}\),\s*'node',\s*'apps\/web\/bin\/owner\.mjs',\s*'hash-password',\s*'--stdin'/,
+  );
 });
 
 test('registered variants come from the generated asset manifest, without fallback or fixtures', (t) => {
