@@ -15,12 +15,22 @@
 // partition the groups, so they run every planned test exactly once
 // between them.
 //
+// How many shards: the fewest, from 1 to MAX_SHARDS, whose slowest shard,
+// its fixed part plus its groups on Playwright's two workers, stays within
+// SHARD_CEILING (pickShardCount). CI's quality-pr-plan job works it out for
+// each PR (pr-count.ts), and every shard is handed that count. A cell group
+// too heavy for one worker's share of a shard is split first, by cell, into
+// parts (splitGroups), each run through a grep of its cells' tags
+// (playwright.config.ts), so a split moves cells between shards and never
+// adds or drops one.
+//
 // The weights: a skipped test none; a cell test that runs the default row's
 // reload conditions (cells.ts) its viewport and row's mean; any other cell
 // test `plain`; a perf test `perf`; a harness spec its own total. They were
 // measured from the list reporter's durations in #84's and #89's quality-pr
 // job logs (`gh api .../actions/jobs/<id>/logs`), each the mean of its tests.
 
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { assign, parseShard } from '../../../ci/shards.mjs';
 import type { Plan } from '../cells';
@@ -36,6 +46,17 @@ export const PERF_SPEC = 'perf.spec.ts';
 /** The project names playwright.config.ts gives: one harness project and one per server, per engine. */
 export const harnessProject = (engine: string) => `${engine} harness`;
 export const serverProject = (engine: string, id: string) => `${engine} ${id}`;
+
+/** The slowest a shard may take, in seconds, its fixed part included. */
+export const SHARD_CEILING = 300;
+/** A shard job's fixed part: container, checkout, install, the quality host's build, and Playwright's start, about 95 s on #84 and #89. */
+export const SHARD_FIXED = 95;
+/** Playwright's workers in one shard (playwright.config.ts). */
+export const SHARD_WORKERS = 2;
+/** The most shards quality-pr-plan hands out. */
+export const MAX_SHARDS = 8;
+/** The most one group may weigh: a group runs on one worker, so it alone sets its shard's floor. */
+export const GROUP_BUDGET = SHARD_CEILING - SHARD_FIXED;
 
 export interface ShardDurations {
   /** A group's own cost: its worker's server start. */
@@ -63,11 +84,16 @@ export interface ShardGroup {
   readonly file: string;
   /** Its planned cell tests' keys (cell, viewport, row, engine), none for a harness or perf group. */
   readonly tests: readonly string[];
+  /** Each test's own weight, in the order of `tests`. */
+  readonly costs?: readonly number[];
   readonly weight: number;
+  /** A part of a split cell group, from 1: it runs only `cells` of its project's cells.spec.ts. */
+  readonly part?: number;
+  readonly cells?: readonly string[];
 }
 
-export const groupKey = (group: Pick<ShardGroup, 'project' | 'file'>) =>
-  `${group.project} ${group.file}`;
+export const groupKey = (group: Pick<ShardGroup, 'project' | 'file' | 'part'>) =>
+  `${group.project} ${group.file}${group.part === undefined ? '' : ` #${group.part}`}`;
 export const testKey = (cell: string, viewport: string, row: string, engine: string) =>
   JSON.stringify([cell, viewport, row, engine]);
 
@@ -96,21 +122,19 @@ export function planGroups(
     }
     for (const { id } of planServers(plan)) {
       const own = plan.tests.filter((test) => serverId(cellServer(test.cell)) === id);
-      let weight = durations.group;
-      for (const test of own) {
-        if (test.skip !== undefined || test.engineSkips[engine] !== undefined) {
-          weight += durations.skipped;
-        } else if (test.conditions) {
-          weight += durations.conditions[`${test.viewport.id} ${test.row.id}`] ?? fallback;
-        } else {
-          weight += durations.plain;
-        }
-      }
+      const costs = own.map((test) =>
+        test.skip !== undefined || test.engineSkips[engine] !== undefined
+          ? durations.skipped
+          : test.conditions
+            ? (durations.conditions[`${test.viewport.id} ${test.row.id}`] ?? fallback)
+            : durations.plain,
+      );
       groups.push({
         project: serverProject(engine, id),
         file: CELL_SPEC,
         tests: own.map((test) => testKey(test.cell.id, test.viewport.id, test.row.id, engine)),
-        weight,
+        costs,
+        weight: costs.reduce((sum, cost) => sum + cost, durations.group),
       });
       const perfHere = perf.filter((cell) => serverId(cellServer(cell)) === id).length;
       if (perfHere > 0) {
@@ -124,6 +148,67 @@ export function planGroups(
     }
   }
   return groups;
+}
+
+/** The cell a test key names. */
+const cellOfTest = (key: string) => (JSON.parse(key) as string[])[0]!;
+
+/**
+ * `groups`, with each cell group heavier than `budget` split by cell into
+ * parts, in the plan's order, each as full as fits. Each cell's tests stay
+ * together, and each test is in exactly one part. A cell that alone weighs
+ * more than `budget`, or a harness or perf group that does, can't be split,
+ * so it throws, naming it and what it weighs.
+ */
+export function splitGroups(
+  groups: readonly ShardGroup[],
+  budget: number = GROUP_BUDGET,
+  durations: Pick<ShardDurations, 'group'> = loadDurations(),
+): ShardGroup[] {
+  return groups.flatMap((group): ShardGroup[] => {
+    if (group.weight <= budget) return [group];
+    if (group.file !== CELL_SPEC || !group.costs) {
+      throw new Error(
+        `${groupKey(group)} takes about ${Math.round(group.weight)}s, over the ${budget}s one worker has in a shard, and only a cell group splits.`,
+      );
+    }
+    const byCell = new Map<string, { tests: string[]; weight: number }>();
+    group.tests.forEach((key, at) => {
+      const cell = cellOfTest(key);
+      const entry = byCell.get(cell) ?? { tests: [], weight: 0 };
+      entry.tests.push(key);
+      entry.weight += group.costs![at]!;
+      byCell.set(cell, entry);
+    });
+    const parts: { cells: string[]; tests: string[]; weight: number }[] = [];
+    for (const [cell, entry] of byCell) {
+      if (durations.group + entry.weight > budget) {
+        throw new Error(
+          `The cell ${cell} alone takes about ${Math.round(durations.group + entry.weight)}s on ${group.project}, over the ${budget}s one worker has in a shard.`,
+        );
+      }
+      const last = parts.at(-1);
+      if (last && last.weight + entry.weight <= budget) {
+        last.cells.push(cell);
+        last.tests.push(...entry.tests);
+        last.weight += entry.weight;
+      } else {
+        parts.push({
+          cells: [cell],
+          tests: [...entry.tests],
+          weight: durations.group + entry.weight,
+        });
+      }
+    }
+    return parts.map((part, at) => ({
+      project: group.project,
+      file: group.file,
+      part: at + 1,
+      cells: part.cells,
+      tests: part.tests,
+      weight: part.weight,
+    }));
+  });
 }
 
 export interface PrShard {
@@ -149,22 +234,95 @@ export function assignShards(groups: readonly ShardGroup[], count: number): PrSh
   );
 }
 
-/** The shard `text` (<n>/<m>) names, of the PR plan on `engines`. */
+/** The longest a shard's workers take, placing its groups heaviest first on the freer worker. */
+export function shardWall(groups: readonly ShardGroup[], workers: number = SHARD_WORKERS): number {
+  const load = Array.from({ length: workers }, () => 0);
+  for (const group of [...groups].sort((a, b) => b.weight - a.weight)) {
+    const freer = load.indexOf(Math.min(...load));
+    load[freer] = load[freer]! + group.weight;
+  }
+  return Math.max(...load);
+}
+
+/** About how long a shard job takes, in seconds: its fixed part, and its groups on its workers. */
+export const shardEstimate = (shard: Pick<PrShard, 'groups'>) =>
+  SHARD_FIXED + shardWall(shard.groups);
+
+/**
+ * The fewest shards, 1 to MAX_SHARDS, that keep every shard within
+ * SHARD_CEILING, from `groups` as planGroups() weighs them, split first.
+ * Needing more than MAX_SHARDS throws, naming the slowest shard's heaviest
+ * group and about how long that shard would take.
+ */
+export function pickShardCount(
+  groups: readonly ShardGroup[],
+  durations: Pick<ShardDurations, 'group'> = loadDurations(),
+): { readonly count: number; readonly slowest: number; readonly shards: PrShard[] } {
+  const split = splitGroups(groups, GROUP_BUDGET, durations);
+  let shards: PrShard[] = [];
+  let slowest = 0;
+  for (let count = 1; count <= MAX_SHARDS; count += 1) {
+    shards = assignShards(split, count);
+    slowest = Math.max(...shards.map(shardEstimate));
+    if (slowest <= SHARD_CEILING) return { count, slowest, shards };
+  }
+  const worst = shards.reduce((a, b) => (shardEstimate(b) > shardEstimate(a) ? b : a));
+  const heaviest = [...worst.groups].sort((a, b) => b.weight - a.weight)[0]!;
+  throw new Error(
+    `Even ${MAX_SHARDS} shards leave one at about ${Math.round(slowest)}s, over the ${SHARD_CEILING}s ceiling. Its heaviest group is ${groupKey(heaviest)}, at about ${Math.round(heaviest.weight)}s.`,
+  );
+}
+
+/** The shard `text` (<n>/<m>) names, of the PR plan on `engines`, its groups split as pickShardCount() splits them. */
 export function prShard(
   plan: Pick<Plan, 'cells' | 'tests' | 'targets'>,
   engines: readonly Engine[],
   text: string,
-  durations?: ShardDurations,
+  durations: ShardDurations = loadDurations(),
 ): PrShard {
   const { index, count } = parseShard(text) as { index: number; count: number };
-  return assignShards(planGroups(plan, engines, durations), count)[index - 1]!;
+  const split = splitGroups(planGroups(plan, engines, durations), GROUP_BUDGET, durations);
+  return assignShards(split, count)[index - 1]!;
 }
 
 /** The spec files each project runs in `shard`: every project is listed, an unassigned one with none. */
 export function shardFiles(shard: PrShard): Map<string, string[]> {
   const files = new Map<string, string[]>();
   for (const group of shard.groups) {
-    files.set(group.project, [...(files.get(group.project) ?? []), group.file]);
+    const own = files.get(group.project) ?? [];
+    if (!own.includes(group.file)) own.push(group.file);
+    files.set(group.project, own);
   }
   return files;
+}
+
+/** The tag perf tests carry, so a project whose cells are split still runs them. */
+export const PERF_TAG = '@perf';
+
+/** The tag each of a cell's tests carries, so a shard can run some of a project's cells and not the rest. */
+export const cellTag = (cellId: string) =>
+  `@cell-${createHash('sha256').update(cellId).digest('hex').slice(0, 12)}`;
+
+/** The cells each project with a split cell group runs in `shard`. A project left out runs its cell group whole, or not at all. */
+export function shardCells(shard: PrShard): Map<string, string[]> {
+  const cells = new Map<string, string[]>();
+  for (const group of shard.groups) {
+    if (group.cells === undefined) continue;
+    cells.set(group.project, [...(cells.get(group.project) ?? []), ...group.cells]);
+  }
+  return cells;
+}
+
+/**
+ * A server project's grep: its server's tests, and with `cells`, only those
+ * cells' tests and its perf tests, as Playwright matches a test's title and
+ * tags.
+ */
+export function projectGrep(id: string, cells?: readonly string[]): RegExp {
+  const server = `@server-${id}(?![0-9a-f])`;
+  if (cells === undefined) return new RegExp(server);
+  const tags = cells.map((cell) => cellTag(cell).slice('@cell-'.length)).join('|');
+  return new RegExp(
+    `^(?=.*${server})(?=.*(?:${PERF_TAG}(?![\\w-])|@cell-(?:${tags})(?![0-9a-f])))`,
+  );
 }

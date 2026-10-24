@@ -28,7 +28,7 @@ interface Job {
   readonly env?: Record<string, string>;
   readonly strategy?: {
     readonly 'fail-fast'?: boolean;
-    readonly matrix?: { readonly shard?: readonly number[] };
+    readonly matrix?: { readonly shard?: readonly number[] | string };
   };
   readonly steps: readonly Step[];
 }
@@ -91,10 +91,10 @@ test('quality-full shards quality:full in the pinned image, scrubs however it en
   assert.equal(job.env?.QUALITY_CONTAINER, VISUAL_IMAGE);
   assert.equal(job.permissions, undefined, "it keeps the workflow's contents: read");
   const shards = job.strategy?.matrix?.shard ?? [];
-  assert.ok(shards.length > 1, 'it shards');
+  assert.ok(Array.isArray(shards) && shards.length > 1, 'it shards, by a list of its own');
   assert.deepEqual(
     shards,
-    shards.map((_, index) => index + 1),
+    (shards as readonly number[]).map((_, index) => index + 1),
   );
   const total = shards.length;
   assert.equal(job.name, `quality-full (\${{ matrix.shard }}/${total})`);
@@ -180,13 +180,12 @@ test('quality-pr shards quality:pr in the pinned image, scrubs however it ended,
   assert.equal(job.env?.QUALITY_CONTAINER, VISUAL_IMAGE);
   assert.equal(job.permissions, undefined, "it keeps the workflow's contents: read");
   assert.equal(job.strategy?.['fail-fast'], false, 'one shard failing never cancels another');
-  const shards = job.strategy?.matrix?.shard ?? [];
-  assert.ok(shards.length > 1, 'it shards');
-  assert.deepEqual(
-    shards,
-    shards.map((_, index) => index + 1),
+  // As many shards as quality-pr-plan counts: pr-shards.test.ts holds the count and its wiring.
+  assert.equal(
+    job.strategy?.matrix?.shard,
+    '${{ fromJSON(needs.quality-pr-plan.outputs.shards) }}',
   );
-  const total = shards.length;
+  const total = '${{ needs.quality-pr-plan.outputs.count }}';
   assert.equal(job.name, `quality-pr (\${{ matrix.shard }}/${total})`);
   const run = step(job, (each) => /pnpm ci:quality-pr /.test(each.run ?? ''), 'the run step');
   assert.equal(run.run, 'pnpm ci:quality-pr "--shard=$SHARD"');
@@ -215,7 +214,7 @@ test('quality-pr shards quality:pr in the pinned image, scrubs however it ended,
 test("quality-pr-verdict judges quality-pr's shards whole, however they ended, from their own directory", () => {
   const job = CI.jobs['quality-pr-verdict'];
   assert.ok(job, 'ci.yml has quality-pr-verdict');
-  assert.deepEqual(job.needs, ['changes', 'quality-pr']);
+  assert.deepEqual(job.needs, ['changes', 'quality-pr-plan', 'quality-pr']);
   assert.equal(
     job.if,
     // A failed or skipped shard still reaches it; a cancelled run, such as a superseded push, skips it.
@@ -223,7 +222,6 @@ test("quality-pr-verdict judges quality-pr's shards whole, however they ended, f
   );
   assert.equal(job.permissions, undefined);
   assert.equal(job.container, undefined, 'it runs no browser');
-  const total = CI.jobs['quality-pr']!.strategy!.matrix!.shard!.length;
   const download = step(
     job,
     (each) => /^actions\/download-artifact@/.test(each.uses ?? ''),
@@ -235,9 +233,11 @@ test("quality-pr-verdict judges quality-pr's shards whole, however they ended, f
   const merge = step(job, (each) => /pnpm ci:quality-pr-verdict/.test(each.run ?? ''), 'the merge');
   assert.equal(merge.env?.SHARDS, download.with?.path);
   assert.equal(merge.env?.SHARD_JOBS, '${{ needs.quality-pr.result }}');
+  // Exactly the shards quality-pr-plan counted: one dropped or one extra fails the merge.
+  assert.equal(merge.env?.SHARD_COUNT, '${{ needs.quality-pr-plan.outputs.count }}');
   assert.equal(
     merge.run,
-    `pnpm ci:quality-pr-verdict "$SHARDS" --shards ${total} --mode pr --jobs "$SHARD_JOBS"`,
+    'pnpm ci:quality-pr-verdict "$SHARDS" --shards "$SHARD_COUNT" --mode pr --jobs "$SHARD_JOBS"',
   );
   assert.equal(
     SCRIPTS['ci:quality-pr-verdict'],

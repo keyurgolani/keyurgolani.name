@@ -10,18 +10,30 @@ import { perfCells } from './lib/perf/plan';
 import {
   assignShards,
   CELL_SPEC,
+  cellTag,
+  GROUP_BUDGET,
   groupKey,
   HARNESS_SPECS,
   harnessProject,
   loadDurations,
+  MAX_SHARDS,
   PERF_SPEC,
+  PERF_TAG,
+  pickShardCount,
   planGroups,
+  projectGrep,
   prShard,
   serverProject,
+  shardCells,
+  shardEstimate,
   shardFiles,
+  shardWall,
+  SHARD_CEILING,
+  splitGroups,
   testKey,
   type ShardGroup,
 } from './lib/pr-shards';
+import { shardOutputs } from './pr-count';
 import { loadRegistrations, type Registrations } from './lib/registration';
 import { cellServer, planServers, serverId } from './lib/server';
 import { parseRunArgs } from './run';
@@ -32,11 +44,21 @@ import { checkoutMeta, withTierPacks } from './plan-fixtures';
 // run's tests, each exactly once.
 
 const ENGINES = RUN_ENGINES.pr;
-const CI = parse(
-  readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8'),
-) as { jobs: Record<string, { strategy?: { matrix?: { shard?: number[] } } }> };
-/** The shard count ci.yml's quality-pr matrix runs. */
-const COUNT = CI.jobs['quality-pr']?.strategy?.matrix?.shard?.length ?? 0;
+const RAW_CI = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
+interface Job {
+  readonly name?: string;
+  readonly if?: string;
+  readonly needs?: readonly string[];
+  readonly outputs?: Readonly<Record<string, string>>;
+  readonly strategy?: { readonly matrix?: { readonly shard?: unknown } };
+  readonly steps?: readonly {
+    readonly id?: string;
+    readonly name?: string;
+    readonly run?: string;
+    readonly env?: Readonly<Record<string, string>>;
+  }[];
+}
+const CI = parse(RAW_CI) as { jobs: Record<string, Job> };
 
 let registrations: Registrations;
 const plans: { name: string; plan: Plan }[] = [];
@@ -59,45 +81,191 @@ test.before(async () => {
   );
 });
 
+/** The count the planner picks for the PR set, as quality-pr-plan emits it. */
+const picked = () => pickShardCount(planGroups(plans[0]!.plan, ENGINES)).count;
+
 /** Every planned cell test once per engine, as the unsharded run's verdict holds it to them. */
 const unsharded = (plan: Plan) =>
   plan.tests.flatMap((each) =>
     ENGINES.map((engine) => testKey(each.cell.id, each.viewport.id, each.row.id, engine)),
   );
 
-test('ci.yml runs quality-pr in shards', () => {
-  assert.ok(COUNT > 1, 'quality-pr has a shard matrix');
+/** `count` synthetic cell groups of `weight` seconds each, none of them split. */
+const synthetic = (count: number, weight: number): ShardGroup[] =>
+  Array.from({ length: count }, (_, at) => ({
+    project: `chromium s${at}`,
+    file: CELL_SPEC,
+    tests: [],
+    costs: [],
+    weight,
+  }));
+
+test('the count is the fewest shards the weights allow within the ceiling, and more than the most fails, naming the group', () => {
+  const durations = { group: 5 };
+  // 95 s fixed and two workers a shard: two 100 s groups fit one shard, and two 200 s groups a shard.
+  assert.equal(pickShardCount(synthetic(2, 100), durations).count, 1);
+  assert.equal(pickShardCount(synthetic(8, 200), durations).count, 4);
+  assert.equal(pickShardCount(synthetic(16, 200), durations).count, MAX_SHARDS);
+  assert.throws(
+    () => pickShardCount(synthetic(17, 200), durations),
+    new RegExp(
+      `Even ${MAX_SHARDS} shards leave one at about 495s, over the ${SHARD_CEILING}s ceiling\\. Its heaviest group is chromium s\\d+ ${CELL_SPEC}, at about 200s\\.`,
+    ),
+  );
+  // One fewer always breaks the ceiling: the count is the least that holds.
+  for (const [groups, count] of [
+    [synthetic(8, 200), 4],
+    [synthetic(16, 200), 8],
+  ] as const) {
+    const slowest = Math.max(...assignShards(groups, count - 1).map(shardEstimate));
+    assert.ok(slowest > SHARD_CEILING, `${count - 1} shards: ${slowest}s`);
+  }
 });
 
-test('quality-pr runs in four shards, and gate, selected, and its verdict require every one', () => {
-  const raw = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
-  const jobs = CI.jobs as Record<string, { needs?: string[]; strategy?: unknown }>;
-  // Four since the fourth composition registered: three took the slowest shard past 5 minutes.
-  assert.deepEqual(CI.jobs['quality-pr']?.strategy?.matrix?.shard, [1, 2, 3, 4]);
-  // Every place the job spells its count says the matrix's, and so does the verdict's --shards.
-  const job = raw.slice(raw.indexOf('\n  quality-pr:\n'), raw.indexOf('\n  quality-pr-verdict:\n'));
-  const spelled = [...job.matchAll(/matrix\.shard \}\}\/(\d+)/g)].map(([, count]) => Number(count));
-  assert.deepEqual(spelled, [COUNT, COUNT, COUNT, COUNT]);
-  assert.match(
-    raw,
-    new RegExp(`pnpm ci:quality-pr-verdict "\\$SHARDS" --shards ${COUNT} --mode pr`),
+test('a cell group too heavy for one worker is split by cell, and its parts run each of its tests once', () => {
+  const durations = { group: 5 };
+  const cells = Array.from({ length: 6 }, (_, at) => `composition:x c${at} / tuple`);
+  const tests = cells.flatMap((cell) =>
+    ['1440x900', '1024x768', '390x844'].map((viewport) =>
+      testKey(cell, viewport, 'default', 'chromium'),
+    ),
   );
-  // gate, selected, and the verdict need the matrix job by its id, whose result
-  // is a failure when any shard fails, is cancelled, or never ran, never one
-  // shard by its display name.
-  for (const name of ['gate', 'selected']) {
-    assert.ok(jobs[name]?.needs?.includes('quality-pr'), `${name} needs quality-pr`);
-    assert.ok(jobs[name]?.needs?.includes('quality-pr-verdict'), `${name} needs its verdict`);
+  const heavy: ShardGroup = {
+    project: 'chromium heavy',
+    file: CELL_SPEC,
+    tests,
+    costs: tests.map(() => 30),
+    weight: 5 + 30 * tests.length,
+  };
+  const light = synthetic(1, 50)[0]!;
+  const split = splitGroups([heavy, light], GROUP_BUDGET, durations);
+  // The light group is as it was; the heavy one is three parts of two cells each.
+  assert.deepEqual(split.at(-1), light);
+  const parts = split.slice(0, -1);
+  assert.deepEqual(
+    parts.map(groupKey),
+    [1, 2, 3].map((part) => `chromium heavy ${CELL_SPEC} #${part}`),
+  );
+  for (const part of parts) assert.ok(part.weight <= GROUP_BUDGET, `${part.weight}s`);
+  assert.deepEqual(
+    parts.flatMap((part) => part.tests),
+    tests,
+  );
+  assert.deepEqual(
+    parts.flatMap((part) => part.cells),
+    cells,
+  );
+  // Every count still partitions the tests, and each shard's grep takes its parts' cells alone.
+  const { count, shards } = pickShardCount([heavy, light], durations);
+  assert.ok(count > 1);
+  assert.deepEqual(
+    shards.flatMap((shard) => shard.groups.flatMap((group) => group.tests)).sort(),
+    [...tests].sort(),
+  );
+  for (const shard of shards) {
+    const mine = shardCells(shard).get('chromium heavy') ?? [];
+    const grep = projectGrep('abc', mine);
+    for (const cell of cells) {
+      const title = `${cell} 1440x900 default @server-abc ${cellTag(cell)}`;
+      assert.equal(grep.test(title), mine.includes(cell), `${cell} on shard ${shard.index}`);
+    }
+    assert.equal(grep.test(`perf @server-abc ${PERF_TAG}`), true, 'its perf tests still run');
+    assert.equal(
+      grep.test(`${cells[0]} @server-abd ${cellTag(cells[0]!)}`),
+      false,
+      'another server',
+    );
   }
-  assert.deepEqual(jobs['quality-pr-verdict']?.needs, ['changes', 'quality-pr']);
-  assert.doesNotMatch(raw, /quality-pr \(\d/);
+  // A cell that alone breaks the ceiling can't be split, and neither can a harness or perf group.
+  const lone: ShardGroup = {
+    ...heavy,
+    tests: [testKey('composition:x huge / tuple', '1440x900', 'default', 'chromium')],
+    costs: [250],
+    weight: 255,
+  };
+  assert.throws(
+    () => splitGroups([lone], GROUP_BUDGET, durations),
+    /The cell composition:x huge \/ tuple alone takes about 255s on chromium heavy, over the 205s/,
+  );
+  assert.throws(
+    () => splitGroups([{ ...synthetic(1, 250)[0]!, file: PERF_SPEC }], GROUP_BUDGET, durations),
+    /only a cell group splits/,
+  );
+});
+
+test("CI's PR set, split and sharded at the count the planner picks, holds the ceiling, where Playwright's split doesn't", () => {
+  for (const { name, plan } of plans) {
+    const groups = planGroups(plan, ENGINES);
+    const { count, slowest, shards } = pickShardCount(groups);
+    assert.ok(count >= 1 && count <= MAX_SHARDS, `${name}: ${count}`);
+    assert.ok(slowest <= SHARD_CEILING, `${name}: the slowest shard takes about ${slowest}s`);
+    for (const shard of shards) assert.ok(shardEstimate(shard) <= SHARD_CEILING, name);
+    if (count > 1) {
+      const fewer = Math.max(...assignShards(splitGroups(groups), count - 1).map(shardEstimate));
+      assert.ok(fewer > SHARD_CEILING, `${name}: ${count - 1} shards would do, at ${fewer}s`);
+      const theirs = Math.max(...byCount(groups, count).map((part) => shardWall(part)));
+      assert.ok(
+        slowest - 95 < theirs,
+        `${name}: by duration ${slowest}s, by test count ${theirs}s`,
+      );
+    }
+  }
+});
+
+test('quality-pr-plan emits the count, and the matrix, the verdict, gate, and selected all read it', () => {
+  const jobs = CI.jobs;
+  const plan = jobs['quality-pr-plan'];
+  assert.ok(plan, 'ci.yml has quality-pr-plan');
+  // Selected by name, as every check job is; select-jobs.test.mjs holds every rule to select it with quality-pr.
+  assert.equal(plan.if, "${{ contains(fromJSON(needs.changes.outputs.jobs), 'quality-pr-plan') }}");
+  assert.deepEqual(plan.needs, ['changes']);
+  const step = plan.steps?.find((each) => each.id === 'count');
+  assert.match(step?.run ?? '', /tsx tests\/quality\/pr-count\.ts$/);
+  assert.equal(step?.env?.QUALITY_CHANGED_BASE, 'HEAD^1');
+  assert.deepEqual(plan.outputs, {
+    count: '${{ steps.count.outputs.count }}',
+    shards: '${{ steps.count.outputs.shards }}',
+  });
+  const count = '${{ needs.quality-pr-plan.outputs.count }}';
+  const pr = jobs['quality-pr']!;
+  assert.deepEqual(pr.needs, ['changes', 'quality-pr-plan']);
+  assert.equal(pr.strategy?.matrix?.shard, '${{ fromJSON(needs.quality-pr-plan.outputs.shards) }}');
+  assert.equal(pr.name, `quality-pr (\${{ matrix.shard }}/${count})`);
+  const run = pr.steps?.find((each) => /pnpm ci:quality-pr /.test(each.run ?? ''));
+  assert.equal(run?.env?.SHARD, `\${{ matrix.shard }}/${count}`);
+  assert.equal(
+    run?.env?.CI_REPRO_COMMAND,
+    `pnpm ci:quality-pr --shard=\${{ matrix.shard }}/${count}`,
+  );
+  // No count is written down anywhere in the two jobs: it's the planner's alone.
+  const block = RAW_CI.slice(
+    RAW_CI.indexOf('\n  quality-pr-plan:\n'),
+    RAW_CI.indexOf('\n  quality-meta:\n'),
+  );
+  assert.doesNotMatch(block, /matrix\.shard \}\}\/\d|--shards \d|shard: \[/);
+  const verdict = jobs['quality-pr-verdict']!;
+  assert.deepEqual(verdict.needs, ['changes', 'quality-pr-plan', 'quality-pr']);
+  const merge = verdict.steps?.find((each) => /pnpm ci:quality-pr-verdict/.test(each.run ?? ''));
+  assert.equal(merge?.env?.SHARD_COUNT, count);
+  assert.match(merge?.run ?? '', /--shards "\$SHARD_COUNT"/);
+  // gate and selected need the planner, the matrix job by its id, whose result
+  // fails when any shard fails, is cancelled, or never ran, and the verdict.
+  for (const name of ['gate', 'selected']) {
+    for (const job of ['quality-pr-plan', 'quality-pr', 'quality-pr-verdict']) {
+      assert.ok(jobs[name]?.needs?.includes(job), `${name} needs ${job}`);
+    }
+  }
+  assert.doesNotMatch(RAW_CI, /quality-pr \(\d/);
+  // What the planner writes is what the matrix and the verdict read.
+  assert.deepEqual(shardOutputs(3), { count: '3', shards: '[1,2,3]' });
+  assert.deepEqual(JSON.parse(shardOutputs(picked()).shards).length, picked());
 });
 
 test("the shards' groups and cell tests union exactly to the unsharded plan's, for any count", () => {
   for (const { name, plan } of plans) {
-    const groups = planGroups(plan, ENGINES);
+    const groups = splitGroups(planGroups(plan, ENGINES));
     const all = groups.map(groupKey).sort();
-    for (const count of [1, 2, 3, 4, 6, COUNT]) {
+    for (let count = 1; count <= MAX_SHARDS; count += 1) {
       const shards = assignShards(groups, count);
       assert.equal(shards.length, count);
       const keys = shards.flatMap((shard) => shard.groups.map(groupKey));
@@ -135,49 +303,43 @@ test('every project the config makes, and every spec it runs there, is one group
 
 test('the assignment is the same on every runner, whatever order the groups come in', () => {
   const { plan } = plans[0]!;
-  const groups = planGroups(plan, ENGINES);
+  const count = picked();
+  const groups = splitGroups(planGroups(plan, ENGINES));
   const names = (shards: ReturnType<typeof assignShards>) =>
     shards.map((shard) => shard.groups.map(groupKey));
   assert.deepEqual(
-    names(assignShards([...groups].reverse(), COUNT)),
-    names(assignShards(groups, COUNT)),
+    names(assignShards([...groups].reverse(), count)),
+    names(assignShards(groups, count)),
   );
-  for (let index = 1; index <= COUNT; index += 1) {
+  for (let index = 1; index <= count; index += 1) {
     assert.deepEqual(
-      prShard(plan, ENGINES, `${index}/${COUNT}`).groups.map(groupKey),
-      names(assignShards(groups, COUNT))[index - 1],
+      prShard(plan, ENGINES, `${index}/${count}`).groups.map(groupKey),
+      names(assignShards(groups, count))[index - 1],
     );
   }
-  assert.throws(() => assignShards([...groups, groups[0]!], COUNT), /share a project and file/);
+  assert.throws(() => assignShards([...groups, groups[0]!], count), /share a project and file/);
 });
 
 test("shardFiles gives each project its own spec files, and none of another shard's", () => {
   const { plan } = plans[0]!;
-  const shards = Array.from({ length: COUNT }, (_, at) =>
-    prShard(plan, ENGINES, `${at + 1}/${COUNT}`),
+  const count = picked();
+  const shards = Array.from({ length: count }, (_, at) =>
+    prShard(plan, ENGINES, `${at + 1}/${count}`),
   );
   const owners = new Map<string, number>();
   shards.forEach((shard, at) => {
+    const cells = shardCells(shard);
     for (const [project, files] of shardFiles(shard)) {
       for (const file of files) {
-        const key = `${project} ${file}`;
+        // A split cell group's parts may share a file across shards, each with its own cells.
+        const key = `${project} ${file}${file === CELL_SPEC && cells.has(project) ? ` ${cells.get(project)!.join(',')}` : ''}`;
         assert.equal(owners.get(key), undefined, `${key} is in two shards`);
         owners.set(key, at);
       }
     }
   });
-  assert.equal(owners.size, planGroups(plan, ENGINES).length);
+  assert.equal(owners.size, splitGroups(planGroups(plan, ENGINES)).length);
 });
-
-/** The longest a shard's two workers take, placing its groups heaviest first on the freer worker. */
-function wall(groups: readonly ShardGroup[], workers = 2): number {
-  const load = Array.from({ length: workers }, () => 0);
-  for (const group of [...groups].sort((a, b) => b.weight - a.weight)) {
-    const freer = load.indexOf(Math.min(...load));
-    load[freer] = load[freer]! + group.weight;
-  }
-  return Math.max(...load);
-}
 
 /** Playwright's own --shard on the same groups: equal test counts, groups in order. */
 function byCount(groups: readonly ShardGroup[], count: number): ShardGroup[][] {
@@ -197,18 +359,6 @@ function byCount(groups: readonly ShardGroup[], count: number): ShardGroup[][] {
   }
   return out;
 }
-
-test("the measured weights keep CI's PR set within about 5 minutes a shard, where Playwright's split doesn't", () => {
-  const { plan } = plans[0]!;
-  const groups = planGroups(plan, ENGINES);
-  const shards = assignShards(groups, COUNT);
-  const ours = Math.max(...shards.map((shard) => wall(shard.groups)));
-  // A shard job's fixed part (container, checkout, install, the quality host's
-  // build, Playwright's start) took about 95 seconds on #84 and #89.
-  assert.ok(95 + ours <= 300, `the slowest shard takes about ${95 + ours}s`);
-  const theirs = Math.max(...byCount(groups, COUNT).map((part) => wall(part)));
-  assert.ok(ours < theirs, `by duration ${ours}s, by test count ${theirs}s`);
-});
 
 test('the weights file has every row a conditions test can plan, and a perf, harness, and group weight', () => {
   const durations = loadDurations();

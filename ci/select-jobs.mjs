@@ -51,8 +51,9 @@ export const CHECK_JOBS = [
   'profiles',
   'docs',
   // #11's quality cells and the quality gates' own proof (#74). quality-pr
-  // runs in shards, and quality-pr-verdict judges them whole, so every rule
-  // that selects one selects the other.
+  // runs in the shards quality-pr-plan counts, and quality-pr-verdict judges
+  // them whole, so every rule that selects one selects all three.
+  'quality-pr-plan',
   'quality-pr',
   'quality-pr-verdict',
   'quality-meta',
@@ -206,6 +207,7 @@ export const RULES = [
       'unit',
       'build',
       'appearance-browser',
+      'quality-pr-plan',
       'quality-pr',
       'quality-pr-verdict',
       'quality-meta',
@@ -230,6 +232,7 @@ export const RULES = [
       'external-variant',
       'preview-fixtures-browser',
       'trace',
+      'quality-pr-plan',
       'quality-pr',
       'quality-pr-verdict',
     ],
@@ -249,6 +252,7 @@ export const RULES = [
       'image',
       'profiles',
       'preview-fixtures-browser',
+      'quality-pr-plan',
       'quality-pr',
       'quality-pr-verdict',
     ],
@@ -293,7 +297,7 @@ export const RULES = [
   },
   {
     class: 'quality',
-    jobs: ['unit', 'quality-pr', 'quality-pr-verdict', 'quality-meta'],
+    jobs: ['unit', 'quality-pr-plan', 'quality-pr', 'quality-pr-verdict', 'quality-meta'],
     paths: ['tests/quality/**', 'quality/**'],
   },
   // Every browser suite and the image share the harness and the fixtures.
