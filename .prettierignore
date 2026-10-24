@@ -27,3 +27,5 @@ packages/*/held/*/gate.json
 # #20's generated schemes' reference records, which pnpm catalog:generated writes and check:appearance compares byte for byte
 packages/*/generated/*.json
 !packages/*/generated/acceptance.json
+# The release rehearsal's frozen old configs, which stand for an owner's files
+ci/fixtures/rehearsal/

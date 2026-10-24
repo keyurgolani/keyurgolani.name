@@ -20,6 +20,7 @@ const RC_JOBS = [
   'rc-quality-plan',
   'rc-quality',
   'rc-quality-verdict',
+  'rc-rehearsal',
   'rc-build',
   'rc-merge',
   'rc-scan',
@@ -162,9 +163,10 @@ test('each platform builds once, natively on its own runner, with mode=max prove
     'type=oci,dest=${{ runner.temp }}/oci,tar=false',
   );
   assert.equal(WORKFLOW.env.PLATFORMS, 'linux/amd64,linux/arm64');
-  // Nothing else builds an image.
+  // Nothing else builds an image, but rc-rehearsal's local one of the
+  // tagged commit, which it never pushes (its own test, below).
   for (const id of Object.keys(JOBS)) {
-    if (id in BUILD_JOBS) continue;
+    if (id in BUILD_JOBS || id === 'rc-rehearsal') continue;
     assert.deepEqual(uses(id, 'docker/build-push-action'), [], id);
     assert.doesNotMatch(JSON.stringify(JOBS[id]), /docker (build|push) |buildx build /, id);
   }
@@ -268,7 +270,14 @@ test('each step waits on the one before it', () => {
   assert.deepEqual(needs('rc-quality-plan'), ['classify', 'rc-verify']);
   assert.deepEqual(needs('rc-quality'), ['classify', 'rc-quality-plan']);
   assert.deepEqual(needs('rc-quality-verdict'), ['classify', 'rc-quality', 'rc-quality-plan']);
-  assert.deepEqual(needs('rc-tag'), ['classify', 'rc-merge', 'rc-quality-verdict', 'rc-scan']);
+  assert.deepEqual(needs('rc-rehearsal'), ['classify', 'rc-verify']);
+  assert.deepEqual(needs('rc-tag'), [
+    'classify',
+    'rc-merge',
+    'rc-quality-verdict',
+    'rc-rehearsal',
+    'rc-scan',
+  ]);
   assert.deepEqual(needs('rc-release'), ['classify', 'rc-merge', 'rc-scan', 'rc-tag']);
   assert.deepEqual(needs('dry-run'), ['dry-run-build']);
   assert.deepEqual(needs('promote-verify'), ['classify']);
@@ -325,6 +334,7 @@ test('scan findings upload for one day only, and the logs get counts from scan-g
     'reports-quality-release-verdict',
     'reports-release-dry-run',
     'reports-release-promote-scan',
+    'reports-release-rehearsal',
     'reports-release-scan',
   ]);
   for (const upload of reports) assert.equal(upload['retention-days'], 1, upload.name);
@@ -452,4 +462,24 @@ test('every setup-buildx pins its buildx version, and no build uploads a build r
     }
   }
   assert.equal(inspected, 6, 'dry-run, rc-merge, and promote-scan each read both');
+});
+
+test('rc-rehearsal rehearses an image of the tagged commit it builds itself, with no cache, push, or token', () => {
+  const job = JOBS['rc-rehearsal'];
+  assert.match(job.if, /kind == 'rc'/);
+  assert.equal(job.permissions, undefined, "rc-rehearsal keeps the workflow's contents: read");
+  const text = JSON.stringify(job);
+  assert.doesNotMatch(text, /secrets\.|github\.token|GITHUB_TOKEN|GH_TOKEN|ghcr\.io/);
+  assert.deepEqual(uses('rc-rehearsal', 'docker/login-action'), []);
+  const build = stepsOf('rc-rehearsal').find((s) => /docker build/.test(s.run ?? ''));
+  assert.ok(build, 'it builds the image');
+  assert.match(build.run, /--no-cache/);
+  assert.doesNotMatch(build.run, /--push|--cache-from|--cache-to/);
+  assert.ok(build['timeout-minutes'] <= 25 && job['timeout-minutes'] > build['timeout-minutes']);
+  const run = stepsOf('rc-rehearsal').find((s) => s.run === 'pnpm ci:rehearsal');
+  assert.ok(run, 'it runs pnpm ci:rehearsal');
+  assert.equal(run.env.REHEARSAL_CONTAINER, 'required', 'the container rows must run');
+  assert.equal(job.env.REHEARSAL_IMAGE, 'portfolio:rehearsal');
+  assert.match(build.run, /"\$REHEARSAL_IMAGE"/);
+  assert.ok(JOBS['rc-tag'].needs.includes('rc-rehearsal'), 'no candidate is tagged without it');
 });

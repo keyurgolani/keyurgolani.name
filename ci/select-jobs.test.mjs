@@ -171,8 +171,36 @@ const CLASSES = [
   },
   {
     name: 'profile smoke',
-    files: ['ci/smoke-profiles.mjs', 'ci/lib/profile-checks.mjs', 'ci/profile-checks.test.mjs'],
+    files: ['ci/smoke-profiles.mjs', 'ci/profile-checks.test.mjs'],
     jobs: ['static', 'unit', 'image', 'profiles'],
+  },
+  {
+    name: "profile smoke's checks, which the rehearsal uses too",
+    files: ['ci/lib/profile-checks.mjs'],
+    jobs: ['static', 'unit', 'image', 'profiles', 'rehearsal'],
+  },
+  {
+    name: 'release rehearsal',
+    files: ['ci/rehearsal.mjs', 'ci/fixtures/rehearsal/baseline/yaml/portfolio.yml'],
+    jobs: ['static', 'unit', 'image', 'rehearsal'],
+  },
+  {
+    name: 'revision store',
+    files: ['packages/core/src/store/backup.ts', 'packages/core/src/cli.ts'],
+    jobs: [
+      'static',
+      'unit',
+      'build',
+      'browser',
+      'routes',
+      'image',
+      'profiles',
+      'rehearsal',
+      'preview-fixtures-browser',
+      'quality-pr-plan',
+      'quality-pr',
+      'quality-pr-verdict',
+    ],
   },
   {
     name: 'one Compose example under deploy/',
@@ -361,10 +389,27 @@ test('the image, the Dockerfile, .dockerignore, deploy/, the profile smoke, and 
   }
 });
 
-test('every rule that selects profiles selects image, whose saved image profiles loads', () => {
+test('every rule that selects profiles or rehearsal selects image, whose saved image both load', () => {
   for (const rule of RULES) {
-    if (rule.complete || !rule.jobs.includes('profiles')) continue;
+    if (rule.complete) continue;
+    if (!rule.jobs.includes('profiles') && !rule.jobs.includes('rehearsal')) continue;
     assert.ok(rule.jobs.includes('image'), `${rule.class} (${rule.paths[0]}) leaves out image`);
+  }
+});
+
+test('the rehearsal, the store, and the command lines select rehearsal', () => {
+  for (const file of [
+    'ci/rehearsal.mjs',
+    'ci/rehearsal.test.mjs',
+    'ci/fixtures/rehearsal/baseline/toml/portfolio.toml',
+    'packages/core/src/store/publication.ts',
+    'packages/core/src/cli.ts',
+    'apps/web/scripts/portfolio-store.ts',
+    'apps/web/scripts/config.mjs',
+    'packages/schema/src/migrate/index.ts',
+  ]) {
+    const selection = draft([file]);
+    assert.ok(selection.jobs.includes('rehearsal') && selection.jobs.includes('image'), file);
   }
 });
 
