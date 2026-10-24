@@ -149,6 +149,19 @@ export interface ChangedBy {
   readonly pack?: { readonly axis: PackAxis; readonly id: string };
 }
 
+/** The annotation that says why a cell's page requires script, in its report. */
+export const REQUIRES_SCRIPT_ANNOTATION = 'requires-script';
+
+/**
+ * What a cell's report says of the cell itself, before any check runs: why
+ * its no-JavaScript and failed-enhancement checks read its honest state.
+ */
+export function cellAnnotations(cell: Cell): { type: string; description: string }[] {
+  return cell.requiresScript === undefined
+    ? []
+    : [{ type: REQUIRES_SCRIPT_ANNOTATION, description: cell.requiresScript }];
+}
+
 export interface PlannedTest {
   readonly cell: Cell;
   readonly viewport: Viewport;

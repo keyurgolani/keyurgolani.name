@@ -11,7 +11,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { BrowserContextOptions, Page } from '@playwright/test';
+import type { BrowserContextOptions, CDPSession, Page } from '@playwright/test';
 import { axeFor } from '../lib/axe';
 import { checkEmulation } from '../lib/emulation';
 import { PREFERENCE_ROWS } from '../lib/matrix';
@@ -58,6 +58,9 @@ interface PageOptions extends BrowserContextOptions {
   readonly noScript?: boolean;
 }
 
+/** The CDP session that turned script off on a fixture's page, when one did. */
+const scriptless = new WeakMap<Page, CDPSession>();
+
 /**
  * `file` served at / from a loopback host, open in Chromium at 1440x900
  * with `options`, and `check` run on it. The stand-in serves no other path.
@@ -97,6 +100,7 @@ async function onPage(
     if (noScript) {
       const cdp = await page.context().newCDPSession(page);
       await cdp.send('Emulation.setScriptExecutionDisabled', { value: true });
+      scriptless.set(page, cdp);
     }
     await page.goto(at ?? '/', { waitUntil: 'load' });
     await frames(page);
@@ -170,6 +174,9 @@ const failureState = (page: Page) => failureStateFindings(page, { axe: false });
 /** A page that needs JavaScript, as the no-JavaScript checks read it; axe has cases of its own. */
 const scriptRequired = (page: Page) =>
   scriptRequiredFindings(page, null, 'no-javascript', { axe: false });
+/** The same, with axe, which turns script on for its pass through the page's own session. */
+const scriptRequiredAxe = (page: Page) =>
+  scriptRequiredFindings(page, scriptless.get(page) ?? null, 'no-javascript');
 const focus = async (page: Page) =>
   (await keyboardFindings(page, { focus: true })).filter((each) => each.gate === 'focus');
 const occlusion = async (page: Page) =>
@@ -397,6 +404,25 @@ export const A11Y_CASES: readonly MetaCase[] = [
       noScript: true,
     },
   ),
+  // Its notice is shown, says it needs JavaScript, and axe reads it as a reader without it has it.
+  bad(
+    'no-javascript-hidden',
+    'no-javascript-hidden.html',
+    'enhancement',
+    'notice',
+    scriptRequired,
+    {
+      noScript: true,
+    },
+  ),
+  bad(
+    'no-javascript-unrelated',
+    'no-javascript-unrelated.html',
+    'enhancement',
+    'notice',
+    scriptRequired,
+    { noScript: true },
+  ),
   // And when the script it needs doesn't arrive, it says it couldn't load, and stops loading.
   bad(
     'failure-state-silent',
@@ -408,6 +434,28 @@ export const A11Y_CASES: readonly MetaCase[] = [
   bad(
     'failure-state-busy',
     'failure-state-busy.html',
+    'enhancement',
+    'failure-state',
+    failureState,
+  ),
+  // Its alert holds a control to try again, which takes focus.
+  bad(
+    'failure-state-no-control',
+    'failure-state-no-control.html',
+    'enhancement',
+    'failure-state',
+    failureState,
+  ),
+  bad(
+    'failure-state-disabled',
+    'failure-state-disabled.html',
+    'enhancement',
+    'failure-state',
+    failureState,
+  ),
+  bad(
+    'failure-state-unnamed',
+    'failure-state-unnamed.html',
     'enhancement',
     'failure-state',
     failureState,
@@ -430,7 +478,8 @@ export const A11Y_CASES: readonly MetaCase[] = [
       onPage(
         'no-javascript-notice.html',
         async (page) => [
-          ...(await scriptRequired(page)),
+          // With axe, as the no-JavaScript and print conditions run it.
+          ...(await scriptRequiredAxe(page)),
           // Its waiting line is hidden without script, so the page has settled.
           ...((await notBusy(page))
             ? []
@@ -518,6 +567,17 @@ export const A11Y_CASES: readonly MetaCase[] = [
   bad('button-name', 'axe-semantics.html', 'axe', 'button-name', axeRule('button-name')),
   bad('target-size', 'axe-semantics.html', 'axe', 'target-size', axeRule('target-size')),
   bad('color-contrast', 'axe-semantics.html', 'axe', 'color-contrast', axeRule('color-contrast')),
+  // A page that requires script: axe reads its <noscript> notice as a reader without it has it.
+  bad(
+    'no-javascript-faint',
+    'no-javascript-faint.html',
+    'axe',
+    'color-contrast',
+    scriptRequiredAxe,
+    {
+      noScript: true,
+    },
+  ),
   good('axe', axeAll),
   emulationCase('high-contrast', false),
   emulationCase('high-contrast', true),

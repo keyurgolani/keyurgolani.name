@@ -3,7 +3,15 @@ import test from 'node:test';
 import { parse } from 'yaml';
 import { createAppearanceRegistry } from '../../packages/appearance/src/index';
 import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
-import { accepts, defaultTuple, planCells, siteTextFor, workRoutes, type BuildMeta } from './cells';
+import {
+  accepts,
+  cellAnnotations,
+  defaultTuple,
+  planCells,
+  siteTextFor,
+  workRoutes,
+  type BuildMeta,
+} from './cells';
 import { tupleKey } from './coverage';
 import { isReason } from './lib/checks';
 import { requiredChecks } from './lib/checks';
@@ -374,8 +382,13 @@ test("a surface's requiresScript reason goes on each of its cells, and on no oth
   assert.ok(reason !== undefined && isReason(reason));
   const studio = plan.cells.filter((cell) => cell.target === 'studio');
   assert.ok(studio.length > 0);
-  for (const cell of studio) assert.equal(cell.requiresScript, reason, cell.id);
+  for (const cell of studio) {
+    assert.equal(cell.requiresScript, reason, cell.id);
+    // Its report says why, from the start, so a cell that throws says so too.
+    assert.deepEqual(cellAnnotations(cell), [{ type: 'requires-script', description: reason }]);
+  }
   for (const cell of plan.cells.filter((each) => each.target !== 'studio')) {
     assert.equal(cell.requiresScript, undefined, cell.id);
+    assert.deepEqual(cellAnnotations(cell), [], cell.id);
   }
 });

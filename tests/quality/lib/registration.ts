@@ -291,10 +291,17 @@ export function validateSurface(exports: Exports, file: string): SurfaceRegistra
   notApplicable(exports.notApplicable, problems);
   if ('requiresScript' in exports) {
     requiresScript(exports.requiresScript, problems);
-    // Only a Studio surface: every route of it /studio or under it.
+    // Only a Studio surface: every route of it /studio or under it, and signed in. A page a
+    // visitor reaches signed out, as the sign-in page is, works without JavaScript. #9's demo
+    // Studio, which has no session, widens this when it registers.
     if (Array.isArray(exports.routes) && !exports.routes.every(isStudioRoute)) {
       problems.push(
         "declares requiresScript, which only a Studio surface may, and its routes aren't Studio's: a page outside /studio works without JavaScript",
+      );
+    }
+    if (exports.auth !== 'session') {
+      problems.push(
+        "declares requiresScript, which only a signed-in Studio surface may, and its auth isn't session: a page reached signed out works without JavaScript",
       );
     }
   }

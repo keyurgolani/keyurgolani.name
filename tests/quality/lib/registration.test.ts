@@ -144,15 +144,25 @@ test('a unit exports only interactions, primaryActions, and notApplicable', () =
   assert.throws(() => validateUnit({}, 'quality/units/fallback.ts'), /exports none of/);
 });
 
-test('a Studio surface may say it needs its script, with why; nothing else may', async () => {
+test('a signed-in Studio surface may say it needs its script, with why; nothing else may', async () => {
+  const file = 'quality/surfaces/studio.ts';
   const studio = {
     ...LOGIN,
+    id: 'studio',
+    routes: ['/studio'],
+    auth: 'session',
     requiresScript: { reason: 'Studio draws its workspace with JavaScript.' },
   };
-  assert.deepEqual(problems(studio), []);
-  assert.deepEqual(validateSurface(studio, 'quality/surfaces/login.ts').requiresScript, {
+  assert.deepEqual(problems(studio, file), []);
+  assert.deepEqual(validateSurface(studio, file).requiresScript, {
     reason: 'Studio draws its workspace with JavaScript.',
   });
+  // The sign-in page is under /studio, and a visitor reaches it signed out: it may not.
+  assert.ok(
+    problems({ ...LOGIN, requiresScript: studio.requiresScript }).some((each) =>
+      each.includes("its auth isn't session"),
+    ),
+  );
   // Without it, a surface's registration has none.
   assert.equal(
     validateSurface({ ...LOGIN }, 'quality/surfaces/login.ts').requiresScript,
@@ -167,13 +177,13 @@ test('a Studio surface may say it needs its script, with why; nothing else may',
     [true, 'requiresScript is an object'],
   ] as const) {
     assert.ok(
-      problems({ ...LOGIN, requiresScript: bad }).some((each) => each.includes(problem)),
+      problems({ ...studio, requiresScript: bad }, file).some((each) => each.includes(problem)),
       problem,
     );
   }
   // A surface whose pages aren't Studio's may not, and no composition may.
   assert.ok(
-    problems({ ...studio, routes: ['/', '/studio'] }).some((each) =>
+    problems({ ...studio, routes: ['/', '/studio'] }, file).some((each) =>
       each.includes("its routes aren't Studio's"),
     ),
   );

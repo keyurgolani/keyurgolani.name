@@ -339,7 +339,7 @@ export async function inventoryFindings(
   } finally {
     await cdp.detach();
   }
-  await load(page, path);
+  if (!(await load(page, path))) findings.push(stillBusy('the reload after the conditions'));
   return findings;
 }
 
@@ -357,28 +357,39 @@ export async function failureStateFindings(
   const fail = (expected: string, actual: string) =>
     findings.push({ gate: 'enhancement', rule: 'failure-state', expected, actual });
   // No named helper inside: esbuild's keepNames would wrap it in a __name the page lacks.
-  const state = await page.evaluate(() => {
+  const state = await page.evaluate((again) => {
     const alert = [...document.querySelectorAll('[role="alert"]')].find(
       (element) =>
         element.getClientRects().length > 0 && (element as HTMLElement).innerText.trim() !== '',
     );
     const control = alert?.querySelector<HTMLElement>('button, a[href], input, select') ?? null;
     control?.focus();
+    const name = control
+      ? (control.getAttribute('aria-label') ?? control.innerText ?? '').trim()
+      : '';
     return {
       alert: Boolean(alert),
       control: Boolean(control),
-      focused: control !== null && document.activeElement === control,
+      named: new RegExp(again, 'i').test(name),
+      focused: control !== null && control.tabIndex >= 0 && document.activeElement === control,
       busy: [...document.querySelectorAll('[aria-busy="true"]')].filter(
         (element) => element.getClientRects().length > 0,
       ).length,
     };
-  });
+  }, TRY_AGAIN.source);
   if (!state.alert) {
     fail("an alert that it couldn't load, under failed enhancement", 'no alert says so');
+  } else if (!state.control) {
+    fail('a control in the alert to try again, which takes focus', 'the alert has no control');
   } else if (!state.focused) {
     fail(
       'a control in the alert to try again, which takes focus',
-      state.control ? "its control doesn't take focus" : 'the alert has no control',
+      "its control doesn't take focus",
+    );
+  } else if (!state.named) {
+    fail(
+      'a control in the alert to try again, which takes focus',
+      'its control is named for something other than trying again',
     );
   }
   if (state.busy > 0) {
@@ -397,8 +408,31 @@ export async function failureStateFindings(
   return findings;
 }
 
+/** What names a failure state's control: it tries again, as Studio's Reload Studio does. */
+const TRY_AGAIN = /reload|try again|retry/;
+
 /** Where a page that needs JavaScript says so, as Studio's <noscript> notice does. */
 export const NO_JAVASCRIPT_NOTICE = '#content';
+
+/** What its notice says it needs. */
+const NEEDS_JAVASCRIPT = /JavaScript/i;
+
+/**
+ * Each <noscript>'s content, which the parser made elements with script off,
+ * moved into a stand-in <div>. Script back on, as axe needs it, hides a
+ * noscript's content from rendering, and so from axe; in a div it stays as a
+ * reader without JavaScript has it. Run while script is still off.
+ */
+export async function revealNoscript(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    for (const noscript of [...document.querySelectorAll('noscript')]) {
+      const stand = document.createElement('div');
+      stand.setAttribute('data-quality-noscript', '');
+      stand.append(...noscript.childNodes);
+      noscript.replaceWith(stand);
+    }
+  });
+}
 
 /**
  * A page that needs JavaScript, as it stands without it (`under` names the
@@ -416,24 +450,24 @@ export async function scriptRequiredFindings(
   const findings: Finding[] = [];
   const fail = (rule: string, expected: string, actual: string) =>
     findings.push({ gate: 'enhancement', rule, expected: `${expected}, ${under}`, actual });
+  // innerText of a shown element is its shown text alone; of a hidden one, all of it.
   const notice = await page.evaluate((at) => {
     const target = document.querySelector(at);
     if (!target) return null;
-    const text = (target as HTMLElement).innerText.trim();
-    return { text, shown: target.getClientRects().length > 0 || text.length > 0 };
+    return {
+      shown: target.getClientRects().length > 0,
+      text: (target as HTMLElement).innerText.trim(),
+    };
   }, NO_JAVASCRIPT_NOTICE);
+  const expected = `a notice in ${NO_JAVASCRIPT_NOTICE}, shown, that it needs JavaScript`;
   if (!notice) {
-    fail(
-      'notice',
-      `a notice in ${NO_JAVASCRIPT_NOTICE} that it needs JavaScript`,
-      `no ${NO_JAVASCRIPT_NOTICE}`,
-    );
-  } else if (!notice.shown || notice.text === '') {
-    fail(
-      'notice',
-      `a notice in ${NO_JAVASCRIPT_NOTICE} that it needs JavaScript`,
-      `${NO_JAVASCRIPT_NOTICE} says nothing`,
-    );
+    fail('notice', expected, `no ${NO_JAVASCRIPT_NOTICE}`);
+  } else if (!notice.shown) {
+    fail('notice', expected, `${NO_JAVASCRIPT_NOTICE} isn't shown`);
+  } else if (notice.text === '') {
+    fail('notice', expected, `${NO_JAVASCRIPT_NOTICE} says nothing`);
+  } else if (!NEEDS_JAVASCRIPT.test(notice.text)) {
+    fail('notice', expected, `${NO_JAVASCRIPT_NOTICE} doesn't say it needs JavaScript`);
   }
   const structure = await inPage<Structure>(page, { kind: 'structure' });
   if (structure.mains !== 1) fail('semantics', 'one main landmark', `${structure.mains}`);
@@ -442,6 +476,7 @@ export async function scriptRequiredFindings(
     fail('navigation', 'the skip link names its target', `${structure.skip} names no element`);
   }
   if (axe) {
+    await revealNoscript(page);
     await cdp?.send('Emulation.setScriptExecutionDisabled', { value: false });
     try {
       const results = await axeFor(page).analyze();
@@ -496,10 +531,22 @@ export async function enhancementFindings(
   try {
     if (!(await load(page, path))) findings.push(stillBusy('failed enhancement'));
     const structure = await inPage<Structure>(page, { kind: 'structure' });
-    // Read before the skip link is followed: following an in-page link may change the page
-    // (Studio's first fragment link opens its Content task), and the inventory is the page as
-    // it loaded.
-    const inventory = await inPage<string[]>(page, { kind: 'inventory' });
+    const missing = async () =>
+      missingItems(
+        'semantics',
+        'enhancement',
+        'failed enhancement',
+        baseline,
+        await inPage<string[]>(page, { kind: 'inventory' }),
+      );
+    // A page that needs the script it lost works without it, or shows its failure state in
+    // place of the content it couldn't load. It's read as it loaded, before the skip link is
+    // followed, which may change it: Studio's first fragment link opens its Content task.
+    let read: Finding[] | null = null;
+    if (scriptRequired) {
+      const lost = await missing();
+      read = lost.length > 0 ? await failureStateFindings(page) : [];
+    }
     const semantics = (actual: string) =>
       findings.push({
         gate: 'enhancement',
@@ -535,24 +582,13 @@ export async function enhancementFindings(
       if (!landed)
         navigation(`the skip link leaves focus outside ${structure.skipTarget}`, structure.skip);
     }
-    // A page that needs the script it lost works without it, or shows its failure state in
-    // place of the content it couldn't load.
-    const missing = missingItems(
-      'semantics',
-      'enhancement',
-      'failed enhancement',
-      baseline,
-      inventory,
-    );
-    findings.push(
-      ...(scriptRequired && missing.length > 0 ? await failureStateFindings(page) : missing),
-    );
+    findings.push(...(read ?? (await missing())));
   } finally {
     await page.unrouteAll({ behavior: 'wait' });
     await cdp.send('Page.removeScriptToEvaluateOnNewDocument', { identifier });
     await cdp.detach();
   }
-  await load(page, path);
+  if (!(await load(page, path))) findings.push(stillBusy('the reload after failed enhancement'));
   return findings;
 }
 
@@ -594,7 +630,7 @@ export async function reflowFindings(
         deviceScaleFactor: condition.scale,
         mobile: false,
       });
-      await load(page, path);
+      if (!(await load(page, path))) findings.push(stillBusy(condition.rule));
       if (condition.text !== 1) {
         await page.evaluate(
           (scale) =>
@@ -634,7 +670,7 @@ export async function reflowFindings(
     await cdp.detach();
     await page.setViewportSize(original);
   }
-  await load(page, path);
+  if (!(await load(page, path))) findings.push(stillBusy('the reload after reflow'));
   return findings;
 }
 

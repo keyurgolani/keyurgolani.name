@@ -4,25 +4,25 @@
     <meta charset="utf-8" />
     <title>A page that needs JavaScript, and says so</title>
     <!--
-      What a Studio surface that declares noJavaScript shows with JavaScript
-      off (#11): a skip link to #content, one main and an h1, and in
-      #content a notice that it needs JavaScript. Its waiting line is
-      aria-busy only where script runs.
+      What a Studio surface that declares requiresScript shows with
+      JavaScript off (#11): a skip link to #content, one main and an h1, and
+      in #content a notice that it needs JavaScript. The notice's own style
+      hides the waiting line, which is aria-busy only where script runs.
     -->
-    <style>
-      @media (scripting: none) {
-        .waiting {
-          display: none;
-        }
-      }
-    </style>
   </head>
   <body>
     <a href="#content">Skip to the task</a>
     <h1>Portfolio Studio</h1>
     <main>
       <div id="content" tabindex="-1">
-        <noscript><p>Studio needs JavaScript. Turn it on, then reload.</p></noscript>
+        <noscript>
+          <style>
+            .waiting {
+              display: none;
+            }
+          </style>
+          <p>Studio needs JavaScript. Turn it on, then reload.</p>
+        </noscript>
       </div>
       <p class="waiting" aria-busy="true">Loading the draft…</p>
     </main>

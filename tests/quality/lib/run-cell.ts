@@ -22,9 +22,9 @@ import type { CDPSession, Page, TestInfo } from '@playwright/test';
 import { reportsDir } from '../../../ci/lib/reports.mjs';
 import { QUERY_KEYS } from '../../../packages/appearance/src/axes';
 import { COLOR_ROLES, TOKEN_PROPERTIES } from '../../../packages/appearance/src/roles';
-import type { Cell } from '../cells';
+import { cellAnnotations, type Cell } from '../cells';
 import { axeFor } from './axe';
-import { CHECKS_ANNOTATION, requiredChecks } from './checks';
+import { CHECKS_ANNOTATION, NOTICE_CHECK, requiredChecks } from './checks';
 import { FIXED_TIME } from './clock';
 import { checkEmulation } from './emulation';
 import type { PreferenceRow, Viewport } from './matrix';
@@ -48,6 +48,7 @@ import {
   enhancementFindings,
   notBusy,
   PRINT_IGNORE,
+  revealNoscript,
   scriptRequiredFindings,
   STILL_BUSY,
   scriptingMediaFindings,
@@ -208,6 +209,8 @@ async function suites(run: SuiteRun): Promise<Finding[]> {
   }
   if (run.conditions && does('inventory')) {
     findings.push(...(await inventoryFindings(page, at, baseline, undefined, run.scriptRequired)));
+    // Its no-JavaScript and print conditions read the notice in place of the content.
+    if (run.scriptRequired) ran.add(NOTICE_CHECK);
   }
   if (run.conditions && does('enhancement')) {
     findings.push(...(await enhancementFindings(page, at, baseline, scripts, run.scriptRequired)));
@@ -229,6 +232,8 @@ async function audit(page: Page, row: PreferenceRow) {
   const cdp = scriptless.get(page);
   // Read before script turns on: a query axe's pass would flip fails the row.
   const scripting = cdp ? await scriptingMediaFindings(page) : [];
+  // What a <noscript> holds stays in view for axe once script is on.
+  if (cdp) await revealNoscript(page);
   await cdp?.send('Emulation.setScriptExecutionDisabled', { value: false });
   try {
     // A finite animation, such as a toast's entrance fade, ends before axe
@@ -269,6 +274,8 @@ export async function runCell({
   expect,
 }: CellRun) {
   testInfo.setTimeout(CELL_TIMEOUT_MS);
+  // First, so a cell that throws carries them too.
+  testInfo.annotations.push(...cellAnnotations(cell));
   const ran = new Set<string>();
   const owed = new Set(requiredChecks(row.id, viewport.id, conditions));
   // The print row compares the page in print with the page on screen, so it loads on screen first.
@@ -345,6 +352,9 @@ export async function runCell({
     }
   };
 
+  // The no-JavaScript row on a surface that needs it reads its notice too.
+  const noticeRow = cell.requiresScript !== undefined && row.id === 'no-javascript';
+  if (noticeRow) ran.add(NOTICE_CHECK);
   // The page's own suites, then the primitives under the cell's tuple.
   const own = [
     ...motion,
@@ -360,7 +370,7 @@ export async function runCell({
       scriptRequired: cell.requiresScript !== undefined,
     })),
     // The no-JavaScript row on a surface that needs it: its honest state, axe having run above.
-    ...(cell.requiresScript !== undefined && row.id === 'no-javascript'
+    ...(noticeRow
       ? await scriptRequiredFindings(page, scriptless.get(page) ?? null, 'no-javascript', {
           axe: false,
         })
@@ -452,10 +462,6 @@ export async function runCell({
   await keep(RECORDS_ATTACHMENT, failures);
   if (owed.has('motion')) ran.add('motion');
   testInfo.annotations.push({ type: CHECKS_ANNOTATION, description: [...ran].join(' ') });
-  // Why its no-JavaScript and failed-enhancement checks read its honest state, in its report.
-  if (cell.requiresScript !== undefined) {
-    testInfo.annotations.push({ type: 'requires-script', description: cell.requiresScript });
-  }
   // A change-directed cell's failures name the changed axis, and the tokens it resolved.
   const diagnostic = changeDiagnostic(cell, tokenPages);
   if (diagnostic) testInfo.annotations.push({ type: 'changed', description: diagnostic });
