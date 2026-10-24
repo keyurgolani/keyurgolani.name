@@ -317,6 +317,19 @@ interface RecordedRun {
 const RECORDED = JSON.parse(
   readFileSync(new URL('./fixtures/shard-run-40066815817.json', import.meta.url), 'utf8'),
 ) as RecordedRun;
+/**
+ * A recorded cell as this checkout plans it. The run was recorded while the
+ * fallback composition carried each state's sentinel (#11); once a
+ * registered composition is the plan's first, #13's Editorial Evidence, the
+ * sentinels are its, the same states on the same viewports and rows, so a
+ * recorded fallback state cell is that composition's.
+ */
+function asPlanned(cell: string, sentinel: string): string {
+  const match = /^composition:fallback (\S+) (.*)$/.exec(cell);
+  if (!match || match[1] === 'complete' || sentinel === 'fallback') return cell;
+  return `composition:${sentinel} ${match[1]} ${match[2]!.replaceAll('fallback/', `${sentinel}/`)}`;
+}
+
 /** How far the planner's estimate of a recorded shard may be from its job's wall time. */
 const RECORDED_MARGIN = 0.15;
 
@@ -330,13 +343,18 @@ function recordedEstimate(
       plan.tests.map((each) => [`${each.cell.id} ${each.viewport.id} ${each.row.id}`, each]),
     ),
   );
+  // The composition that carries the state sentinels in this checkout's plan.
+  const sentinel =
+    /^composition:(\S+) missing-media /.exec(
+      [...planned.keys()].find((key) => / missing-media /.test(key)) ?? '',
+    )?.[1] ?? 'fallback';
   const byFile = new Map<string, number>();
   let matched = 0;
   for (const test of shard.tests) {
     const key = `${test.project} ${test.file}`;
     let weight: number;
     if (test.file === CELL_SPEC) {
-      const each = planned.get(`${test.cell} ${test.viewport} ${test.row}`);
+      const each = planned.get(`${asPlanned(test.cell!, sentinel)} ${test.viewport} ${test.row}`);
       if (!each) continue;
       matched += 1;
       weight = testWeight(each, ENGINES[0]!, durations);
