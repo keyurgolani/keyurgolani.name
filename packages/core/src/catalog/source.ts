@@ -66,10 +66,21 @@ export interface SourceCatalogOptions {
   readonly checks: UnitChecks;
   /** The ids an old-format record suggests, as #4's findPair takes them. */
   readonly context?: Context;
-  /** Whether a portfolio's name is a bundled sample's, which production refuses. */
-  readonly isSampleIdentity?: (name: string) => boolean;
+  /**
+   * Each field of a portfolio that is a bundled sample's, such as its
+   * identity.name or meta.title: production refuses each, and next dev warns.
+   */
+  readonly sampleFields?: (portfolio: Portfolio) => readonly SampleFieldMatch[];
   /** Receives the findings of every re-reading under next dev. */
   readonly report: (finding: SourceFinding) => void;
+}
+
+/** A field of the portfolio that is a bundled sample's. */
+export interface SampleFieldMatch {
+  /** JSON pointer into the portfolio document, such as /identity/name. */
+  readonly pointer: string;
+  /** The same field, as a parsed source's locate() takes it. */
+  readonly path: readonly string[];
 }
 
 /** read-only's CatalogReader. Its revision is always `live`. */
@@ -224,23 +235,28 @@ function load(options: SourceCatalogOptions): Loaded {
   findings.push(...records, ...extras.findings);
   const { unit } = checked;
 
-  const identity = (unit.portfolio.model as Portfolio).identity.name;
-  if (!usingExamples && options.isSampleIdentity?.(identity)) {
+  // The bundled sample's name, title, or share image: a finding for each.
+  const sampled = usingExamples
+    ? []
+    : (options.sampleFields?.(unit.portfolio.model as Portfolio) ?? []);
+  if (sampled.length > 0) {
     const parsed = parseSource(portfolio.input.sourceText, portfolio.input.format);
-    const sample = fatal(
-      'sample_identity',
-      mode === 'production'
-        ? '/identity/name is the bundled sample. Replace the sample with your own portfolio.'
-        : '/identity/name is the bundled sample. Production refuses to start with it.',
-      {
-        file: names.portfolio,
-        document: 'portfolio',
-        path: '/identity/name',
-        ...(parsed.ok ? parsed.locate(['identity', 'name']) : {}),
-      },
+    const samples = sampled.map(({ pointer, path: at }) =>
+      fatal(
+        'sample_identity',
+        mode === 'production'
+          ? `${pointer} is the bundled sample's. Replace the sample with your own portfolio.`
+          : `${pointer} is the bundled sample's. Production refuses to start with it.`,
+        {
+          file: names.portfolio,
+          document: 'portfolio',
+          path: pointer,
+          ...(parsed.ok ? parsed.locate(at) : {}),
+        },
+      ),
     );
-    if (mode === 'production') return fail(sample);
-    findings.push({ ...sample, severity: 'warning' });
+    if (mode === 'production') return fail(...samples);
+    findings.push(...samples.map((sample) => ({ ...sample, severity: 'warning' as const })));
   }
 
   const revision: LiveRevision = Object.freeze({

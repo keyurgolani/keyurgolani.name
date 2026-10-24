@@ -34,9 +34,11 @@ test('the old example, migrated, renders the baseline section ids, for its selec
       'site.appearance.colorScheme=warm',
       '--set',
       'site.appearance.typography=classic',
-      // A production server refuses the bundled sample's name.
+      // A production server refuses the bundled sample's name and title.
       '--set',
       'portfolio.identity.name=Rowan Baseline',
+      '--set',
+      'portfolio.meta.title=Rowan Baseline, engineer',
       '--write',
       '--out',
       out,
