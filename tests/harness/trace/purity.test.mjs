@@ -436,6 +436,74 @@ test("a selected pack's stylesheet and the platform's are allowed once the bound
   ]);
 });
 
+test("a page's own generated scheme stylesheet is its unit's, and another site's, another revision's, another scheme's, or a draft's fails it (#20)", () => {
+  const page = lightPage();
+  const own = `${APP}/_portfolio/scheme/brand-seed.aaaaaaaaaaaa.css`;
+  const boundary = {
+    'data-appearance-boundary': 'document',
+    'data-variant': 'fixture-variant-light',
+    'data-color-scheme': 'brand-seed',
+  };
+  const generatedSchemes = {
+    'brand-seed': '/_portfolio/scheme/brand-seed.aaaaaaaaaaaa.css',
+    'hct-tonal': '/_portfolio/scheme/hct-tonal.cccccccccccc.css',
+  };
+  const html = `<link rel="stylesheet" href="/_portfolio/scheme/brand-seed.aaaaaaaaaaaa.css">`;
+  const references = documentReferences(html, `${APP}/`);
+  assert.deepEqual(references.unitFiles, [own], 'a scheme file is a unit file, not a chunk');
+  assert.deepEqual(references.chunks, []);
+  const loading = (url, overrides = {}) =>
+    purityProblems({
+      ...page,
+      requests: [...page.requests, request(url, 'stylesheet')],
+      references: {
+        ...page.references,
+        unitFiles: [...page.references.unitFiles, ...(url.includes('/_portfolio/') ? [url] : [])],
+      },
+      dom: { ...page.dom, boundary, stylesheets: [...page.dom.stylesheets, url] },
+      generatedSchemes,
+      ...overrides,
+    }).problems;
+  assert.deepEqual(loading(own), [], 'its own revision stylesheet, for the scheme it renders');
+  // Another site's, or an earlier revision's: the same scheme, another hash.
+  assert.deepEqual(loading(`${APP}/_portfolio/scheme/brand-seed.bbbbbbbbbbbb.css`), [
+    "/_portfolio/scheme/brand-seed.bbbbbbbbbbbb.css is no generated scheme the page renders: only its own revision's brand-seed stylesheet is.",
+  ]);
+  // Another generated scheme of the same revision, which the page doesn't render.
+  assert.deepEqual(loading(`${APP}/_portfolio/scheme/hct-tonal.cccccccccccc.css`), [
+    "/_portfolio/scheme/hct-tonal.cccccccccccc.css is no generated scheme the page renders: only its own revision's brand-seed stylesheet is.",
+  ]);
+  // A draft's, from a grant's path.
+  const draft = `${APP}/preview-assets/AAAAAAAAAAAAAAAAAAAAAA/_appearance/brand-seed.dddddddddddd.css`;
+  assert.deepEqual(loading(draft), [
+    'A stylesheet from neither experience-base.css nor a selected unit: /preview-assets/AAAAAAAAAAAAAAAAAAAAAA/_appearance/brand-seed.dddddddddddd.css',
+  ]);
+  // Its own file, but the boundary renders another scheme, or the trace
+  // names no generated scheme for the page.
+  assert.equal(
+    loading(own, {
+      dom: {
+        ...page.dom,
+        stylesheets: [...page.dom.stylesheets, own],
+        boundary: { ...boundary, 'data-color-scheme': 'warm-parchment' },
+      },
+    }).length,
+    1,
+  );
+  assert.equal(loading(own, { generatedSchemes: undefined }).length, 1);
+  // Only an own property of the map counts.
+  assert.equal(
+    loading(own, {
+      dom: {
+        ...page.dom,
+        stylesheets: [...page.dom.stylesheets, own],
+        boundary: { ...boundary, 'data-color-scheme': 'constructor' },
+      },
+    }).length,
+    1,
+  );
+});
+
 test("the error page's fallback packs may be named in a document boundary's payload, and never loaded, linked, or named elsewhere", () => {
   const page = lightPage();
   const parchment = `${APP}/_portfolio/pack/warm-parchment.eeeeeeeeeeee.css`;
