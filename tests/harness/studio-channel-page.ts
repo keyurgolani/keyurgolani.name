@@ -4,7 +4,8 @@
 // with Studio's half of the channel (apps/web/src/preview/studio-channel.ts)
 // bundled for it by esbuild, already in the lockfile. The owner signs in
 // through #2's form first, and the page mints real grants through
-// preview.grant.mint, as Studio does. mount() puts a frame on it with
+// preview.grant.mint, as Studio does. Under demo (#9) nobody signs in, and
+// the page opens a local frame with a nonce of its own. mount() puts a frame on it with
 // Studio's sandbox, or one a test names, and opens the channel to it,
 // recording every callback, and whether the channel is open as each of the
 // frame's loads ends.
@@ -117,6 +118,22 @@ declare global {
  */
 export async function openStudioPage(page: Page, app: App, password: string): Promise<string> {
   const csrf = await signIn(page, app, password);
+  await serveStudioPage(page, app);
+  return csrf;
+}
+
+/**
+ * Opens the test's Studio page as Demo Studio's side of a local frame (#9):
+ * on the demo app's origin, which is Studio's, with no session, since
+ * Demo Studio has none, and no grant: a local frame's nonce is the one
+ * Studio puts in its fragment.
+ */
+export async function openDemoStudioPage(page: Page, app: App): Promise<void> {
+  await serveStudioPage(page, app);
+}
+
+/** Serves the test's Studio page and its script on the app's origin, and opens it. */
+async function serveStudioPage(page: Page, app: App): Promise<void> {
   const script = await studioScript();
   await page.route(`${app.origin}${STUDIO_PAGE}`, (route) =>
     route.fulfill({
@@ -130,7 +147,6 @@ export async function openStudioPage(page: Page, app: App, password: string): Pr
     route.fulfill({ status: 200, contentType: 'text/javascript; charset=utf-8', body: script }),
   );
   await page.goto(STUDIO_PAGE);
-  return csrf;
 }
 
 /** Records every message either side drops, in the page and in every frame, through the test hook. */

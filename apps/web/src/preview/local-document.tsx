@@ -259,7 +259,8 @@ export function LocalFrame({
   useEffect(() => {
     if (!document || postPass !== 'ready') return;
     let cancelled = false;
-    void renderLocal({ document, route, registries, origin: window.location.origin })
+    // The frame's own origin is opaque, "null": the site's is the deployment's, Studio's.
+    void renderLocal({ document, route, registries, origin: studioOrigin })
       .then(async (render) => {
         if (cancelled) return;
         if (render.kind === 'redirect') return setRoute(render.route);
@@ -281,7 +282,7 @@ export function LocalFrame({
     return () => {
       cancelled = true;
     };
-  }, [document, route, postPass, registries]);
+  }, [document, route, postPass, registries, studioOrigin]);
 
   const view = frameView(postPass, shown, failed);
   if (view.kind === 'unavailable') return <FrameStatus text="This preview couldn't load." />;
