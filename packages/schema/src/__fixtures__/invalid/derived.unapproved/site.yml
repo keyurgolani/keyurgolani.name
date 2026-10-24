@@ -1,0 +1,17 @@
+# A valid site document. derived.unapproved is in the snapshot beside the pair.
+schemaVersion: 2
+appearance:
+  variant: missing-variant
+  designLanguage: platform-neutral
+  colorScheme: warm-parchment
+  typography: humanist-ui
+  displayMode: system
+visitorControls:
+  variant: locked
+  designLanguage: locked
+  colorScheme: selectable
+  typography: locked
+  displayMode: selectable
+motionPolicy: respect-os
+features:
+  feed: true

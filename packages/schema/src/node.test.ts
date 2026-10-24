@@ -15,7 +15,7 @@ import {
   readUnitFiles,
   type LoadPairResult,
 } from './node';
-import { PUBLICATION_VALIDATORS } from './published-urls';
+import { PUBLICATION_VALIDATORS, PUBLISH_VALIDATORS } from './published-urls';
 import { canonicalize, serialize } from './serialize';
 import { parseSource } from './source';
 import { lockedModes, lockMode, MADE, tempDir } from './test-support/scratch';
@@ -139,6 +139,8 @@ const UNIT_FILE_CODES: readonly DiagnosticCode[] = [
 ];
 /** Codes the publication validators raise, with the live revision in `live/`. */
 const PUBLICATION_CODES: readonly DiagnosticCode[] = ['urls.vanished', 'id.reused'];
+/** The derived-change gate's code: its draft and live revision differ in a snapshot beside each pair. */
+const DERIVED_CODES: readonly DiagnosticCode[] = ['derived.unapproved'];
 
 test('every diagnostic code has an invalid pair, refused or loaded by its severity', () => {
   const all = Object.keys(DIAGNOSTIC_SEVERITIES) as DiagnosticCode[];
@@ -147,7 +149,7 @@ test('every diagnostic code has an invalid pair, refused or loaded by its severi
     all.filter((code) => !BUILT_AT_RUN_TIME.includes(code)).sort(),
   );
   for (const code of fs.readdirSync(fixture('invalid')) as DiagnosticCode[]) {
-    if (UNIT_FILE_CODES.includes(code) || PUBLICATION_CODES.includes(code)) continue;
+    if ([...UNIT_FILE_CODES, ...PUBLICATION_CODES, ...DERIVED_CODES].includes(code)) continue;
     const result = loadPair(fixture('invalid', code), INVALID_CONTEXT);
     assert.deepEqual([...new Set(codes(result))], [code], code);
     for (const diagnostic of result.diagnostics) {
@@ -217,6 +219,44 @@ test('each publication code has a draft pair, refused against the live revision 
       assert.ok(Number.isInteger(diagnostic.line) && Number.isInteger(diagnostic.column), code);
     }
   }
+});
+
+test('the derived-change code has a draft whose snapshot differs from the live revision beside it, refused until the change is accepted (#10)', () => {
+  const [code] = DERIVED_CODES;
+  const dir = fixture('invalid', code!);
+  const live = loadPair(fixture('invalid', code!, 'live'), INVALID_CONTEXT);
+  assert.ok(live.ok);
+  if (!live.ok) return;
+  const publication = {
+    live: {
+      pair: live.pair,
+      snapshots: readUnitFiles(fixture('invalid', code!, 'live')).snapshots,
+    },
+    draft: { snapshots: readUnitFiles(dir).snapshots },
+  };
+  const check = (derived: unknown) =>
+    loadPair(dir, {
+      ...INVALID_CONTEXT,
+      validators: PUBLISH_VALIDATORS,
+      publication: { ...publication, derived },
+    });
+  // The pair alone is clean, and without the live revision the gate waits.
+  const alone = loadPair(dir, { ...INVALID_CONTEXT, validators: PUBLISH_VALIDATORS });
+  assert.ok(alone.ok);
+  assert.ok(alone.notChecked.includes(code!));
+  const refused = check({ changes: [] });
+  assert.deepEqual([...new Set(codes(refused))], [code]);
+  assert.equal(refused.ok, false);
+  for (const diagnostic of refused.diagnostics) {
+    assert.equal(diagnostic.severity, DIAGNOSTIC_SEVERITIES[code!]);
+    // On the GitHub section the snapshot is for, with its line.
+    assert.equal(diagnostic.document, 'portfolio');
+    assert.equal(diagnostic.pointer, '/sections/1');
+    assert.ok(Number.isInteger(diagnostic.line) && Number.isInteger(diagnostic.column));
+    assert.ok(diagnostic.remediation.includes('portfolio-store changes accept'));
+  }
+  // An import brings no derived block, and counts as accepting what it brings.
+  assert.ok(check(undefined).ok);
 });
 
 test('a secret-shaped value refuses the pair without the value in any record', (t) => {

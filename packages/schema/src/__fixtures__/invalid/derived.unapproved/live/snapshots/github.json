@@ -1,0 +1,22 @@
+{
+  "records": [
+    {
+      "adapter": "github",
+      "sectionId": "code",
+      "fetchedAt": "2026-10-01T00:00:00Z",
+      "data": {
+        "username": "rowan",
+        "profileUrl": "https://github.com/rowan",
+        "source": "rest",
+        "totalRepos": 3,
+        "totalStarsReceived": 12,
+        "starsGiven": null,
+        "contributionsLastYear": null,
+        "pinnedRepos": [],
+        "recentlyActive": [],
+        "contributionCalendar": [],
+        "languageBreakdown": []
+      }
+    }
+  ]
+}

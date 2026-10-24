@@ -20,6 +20,7 @@ export * from './media-catalog';
 export * from './snapshots';
 export * from './view';
 export * from './record-ids';
+export * from './derived-changes';
 export * from './ids-fix';
 export * from './published-urls';
 export * from './validate';

@@ -114,6 +114,8 @@ export const DIAGNOSTIC_REMEDIATIONS: Readonly<Record<DiagnosticCode, string>> =
     'Give each case study a slug of its own. A slug may change; publish redirects the old one.',
   'urls.vanished':
     'Acknowledge the URL with portfolio-store urls ack <url> so it answers 410, or redirect it to a live URL with --redirect <path>.',
+  'derived.unapproved':
+    'Review the change, then accept it or dismiss it: in Studio, or with portfolio-store changes accept <id> or portfolio-store changes dismiss <id>. Dismissing it keeps the live value.',
   'metric.conflict': 'Give both the same value, or give the evidence different metric keys.',
   'anchor.broken': 'Point the link at a visible section or record id, or drop the #fragment.',
   'secret.detected':

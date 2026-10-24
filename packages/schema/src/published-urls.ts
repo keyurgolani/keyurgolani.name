@@ -2,7 +2,8 @@ import { isSectionId, workPath } from './ids';
 import { idReused } from './record-ids';
 import { isPlainObject } from './json';
 import { readSourceSnapshots, isSitePath, type UrlTable } from './snapshots';
-import type { Context, Diagnostic, UnitValidator } from './diagnostics';
+import { assertDerivedChangesApproved } from './derived-changes';
+import type { Context, Diagnostic, Publication, UnitValidator } from './diagnostics';
 import { resolvePortfolioView, type ParsedPair, type PublicView } from './view';
 
 // Published URLs (#10, item 4, the schema half): which URLs a revision serves,
@@ -298,7 +299,35 @@ function shownPath(path: string): string {
 }
 
 /**
- * The checks #3 runs at publish and import, with `ctx.publication` set: the
- * vanished URLs and an id the live revision gives another type.
+ * Every check that reads `ctx.publication`: the vanished URLs, an id the
+ * live revision gives another type, and an unapproved derived change.
  */
-export const PUBLICATION_VALIDATORS: readonly UnitValidator[] = [urlsVanished, idReused];
+export const PUBLICATION_VALIDATORS: readonly UnitValidator[] = [
+  urlsVanished,
+  idReused,
+  assertDerivedChangesApproved,
+];
+
+/**
+ * The checks #3 runs at publish and import, with `ctx.publication` set (#10):
+ * an id the live revision gives another type, and a derived change the owner
+ * hasn't accepted. `urls.vanished` stays out until its acknowledgement flow
+ * ships: wired now, it would leave a removed case study unpublishable.
+ */
+export const PUBLISH_VALIDATORS: readonly UnitValidator[] = [
+  idReused,
+  assertDerivedChangesApproved,
+];
+
+/**
+ * `context` as #3's publish and import check a unit (#10): with what they
+ * know beside the pair, and the checks that read it, PUBLISH_VALIDATORS,
+ * after the context's own.
+ */
+export function withPublication(context: Context, publication: Publication): Context {
+  return {
+    ...context,
+    publication,
+    validators: [...(context.validators ?? []), ...PUBLISH_VALIDATORS],
+  };
+}
