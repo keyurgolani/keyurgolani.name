@@ -4,6 +4,7 @@ import { DEFAULT_PORTFOLIO } from '../harness/app-server.mjs';
 import { expect, test } from '../harness/fixtures';
 import { ownerSecret } from '../harness/owner-secret.mjs';
 import { seedDraft, signIn } from '../harness/preview-grants';
+import { openTask } from '../harness/studio-tasks';
 import { ownerApp } from '../harness/profile-matrix';
 
 // Studio's Publish history task (#8, Slice 6), against the built server
@@ -64,7 +65,7 @@ const history = (page: Page) => page.getByRole('region', { name: 'Publish histor
  * checks. Returns that version.
  */
 async function choosePublishable(page: Page, version: number): Promise<number> {
-  await page.goto('/studio#appearance');
+  await openTask(page, 'Appearance');
   const form = page.getByRole('form', { name: 'Appearance' });
   const composition = form.getByRole('combobox', { name: 'Composition the site shows' });
   // The workspace renders its options once the draft is in: wait for one, as #124 does.
@@ -84,7 +85,7 @@ async function choosePublishable(page: Page, version: number): Promise<number> {
 }
 
 async function openHistory(page: Page) {
-  await page.goto('/studio#history');
+  await openTask(page, 'Publish history');
   await expect(page.getByRole('heading', { level: 3, name: 'Publish' })).toBeVisible();
 }
 

@@ -1,9 +1,10 @@
-import type { Locator, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { expect, test } from '../harness/fixtures';
 import { ownerSecret } from '../harness/owner-secret.mjs';
 import { seedDraft, signIn } from '../harness/preview-grants';
 import { ownerApp } from '../harness/profile-matrix';
 import { frameElement, grantFrame, recordGrantCommands, stage } from '../harness/studio-preview';
+import { openTask, shows } from '../harness/studio-tasks';
 
 // Studio's Appearance workspace (#8, Slice 5) and its preview (Slice 4),
 // against the built server with the password provider: five selectors and
@@ -37,35 +38,6 @@ features:
   feed: false
 `;
 
-/**
- * Opens the Appearance task through its link, as the owner would, once the
- * shell has loaded the draft, and shows the task. A run where the task's
- * preview never appeared after a fragment-only navigation gave no page state,
- * so each step here fails on its own, with what the page shows.
- */
-async function openAppearance(page: Page) {
-  await shows(page, page.locator('.studio-state__lines'), 'the shell loads the draft');
-  const link = page
-    .getByRole('navigation', { name: 'Studio tasks' })
-    .getByRole('link', { name: 'Appearance', exact: true });
-  await link.click();
-  await expect(link).toHaveAttribute('aria-current', 'page');
-}
-
-/** Waits for `target`, and on failure, logs the step and the main region's text. */
-async function shows(page: Page, target: Locator, step: string) {
-  try {
-    await expect(target).toBeVisible();
-  } catch (error) {
-    const text = await page
-      .locator('main')
-      .innerText()
-      .catch(() => '(no main)');
-    console.log(`studio-appearance: ${step} failed; the page shows:\n${text}`);
-    throw error;
-  }
-}
-
 const workspace = (page: Page) => page.getByRole('form', { name: 'Appearance' });
 const line = (page: Page, label: string) =>
   page
@@ -79,7 +51,7 @@ test(
   async ({ page, app }) => {
     await seedDraft(app, 'Rowan Appearance', SITE);
     await signIn(page, app, secret.password);
-    await openAppearance(page);
+    await openTask(page, 'Appearance');
     const form = workspace(page);
     await expect(form.getByRole('group')).toHaveCount(5);
     for (const legend of [
@@ -142,7 +114,7 @@ test(
   async ({ page, app }) => {
     const draft = await seedDraft(app, 'Rowan Appearance', SITE);
     await signIn(page, app, secret.password);
-    await openAppearance(page);
+    await openTask(page, 'Appearance');
     const form = workspace(page);
     const composition = form.getByRole('combobox', { name: 'Composition the site shows' });
     await expect(
@@ -194,7 +166,7 @@ test(
     const draft = await seedDraft(app, 'Rowan Appearance', SITE);
     const commands = recordGrantCommands(page);
     await signIn(page, app, secret.password);
-    await openAppearance(page);
+    await openTask(page, 'Appearance');
     const preview = page.getByRole('region', { name: 'Preview of the saved draft' });
     await shows(page, preview, 'the preview region renders');
     await grantFrame(page);
@@ -226,7 +198,7 @@ test(
     await seedDraft(app, 'Rowan Appearance', SITE);
     const page = await context.newPage();
     await signIn(page, app, secret.password);
-    await openAppearance(page);
+    await openTask(page, 'Appearance');
     await grantFrame(page);
     // What the page showed as it left, recorded by the document itself, so it's the page's own doing.
     await page.evaluate(() => {
