@@ -221,6 +221,16 @@ test('a changed scheme or profile maps to its pack, and a Research record to not
   );
 });
 
+/**
+ * Every composition the plan meets, as the registry lists it: the
+ * checkout's variants, less the fixture ones, and what the test adds. Read
+ * from the registry, so a variant `next` brings in doesn't change a count.
+ */
+const registeredVariants = (meta: BuildMeta) =>
+  meta.VARIANTS.map(({ manifest }) => manifest.id)
+    .filter((id) => !id.startsWith('fixture-'))
+    .sort();
+
 test('a PR that changes a scheme runs it against every variant, and a changed variant meets only the stable languages (#20)', () => {
   const meta = wider(checkoutMeta());
   const plan = (changes: Parameters<typeof planCells>[0]['changes']) =>
@@ -229,13 +239,7 @@ test('a PR that changes a scheme runs it against every variant, and a changed va
   const byScheme = scheme.cells.filter((cell) =>
     cell.changed?.some((by) => by.axis === 'colorScheme'),
   );
-  assert.deepEqual(byScheme.map((cell) => cell.target).sort(), [
-    'fallback',
-    'kinetic-cosmos',
-    'obsidian-atelier',
-    'second-variant',
-    'spatial-bento',
-  ]);
+  assert.deepEqual(byScheme.map((cell) => cell.target).sort(), registeredVariants(meta));
   for (const cell of byScheme) assert.equal(cell.tuple.colorScheme, 'warm-parchment');
   assert.deepEqual(changeFields(byScheme[0]!), { axis: 'colorScheme', pack: 'warm-parchment' });
 
@@ -247,10 +251,13 @@ test('a PR that changes a scheme runs it against every variant, and a changed va
   // One cell per stable shipping language: no scheme or profile pairs, no
   // extended tier, no fixture pack.
   assert.deepEqual(met, ['designLanguage:platform-neutral', 'designLanguage:second-language']);
-  assert.equal(byScheme.length, 5);
+  assert.equal(byScheme.length, registeredVariants(meta).length);
   // A changed profile runs against every variant too.
   const profile = plan([{ axis: 'typography', id: 'humanist-ui', paths: [] }]);
-  assert.equal(profile.cells.filter((cell) => cell.changed).length, 5);
+  assert.equal(
+    profile.cells.filter((cell) => cell.changed).length,
+    registeredVariants(meta).length,
+  );
 });
 
 test('a PR that changes a variant runs it against every stable language, and one that changes a language against every variant', () => {
@@ -297,13 +304,7 @@ test('a PR that changes a variant runs it against every stable language, and one
 
   const language = plan([{ axis: 'designLanguage', id: 'extended-language', paths: [] }]);
   const byLanguage = language.cells.filter((cell) => cell.changed);
-  assert.deepEqual(byLanguage.map((cell) => cell.target).sort(), [
-    'fallback',
-    'kinetic-cosmos',
-    'obsidian-atelier',
-    'second-variant',
-    'spatial-bento',
-  ]);
+  assert.deepEqual(byLanguage.map((cell) => cell.target).sort(), registeredVariants(meta));
   for (const cell of byLanguage) {
     assert.equal(cell.tuple.designLanguage, 'extended-language');
     assert.deepEqual(cell.changed, [{ axis: 'designLanguage', id: 'extended-language' }]);
