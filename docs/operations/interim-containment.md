@@ -1,6 +1,6 @@
 # Interim containment prompt
 
-This is the prompt the owner hands to an agent on the homelab host to move the live site onto the interim containment from #21. The agent denies the authoring paths at the reverse proxy, runs the `v0.1.1` image pinned by digest with `portfolio.yml` mounted read-only, proves both with `apps/web/scripts/check-containment.mjs`, and writes `posture.md` next to its backups. #18 (homelab migration) starts its inventory from that file.
+This is the prompt the owner hands to an agent on the homelab host to move the live site onto the interim containment from #21. The agent denies the authoring paths at the reverse proxy, runs the `v0.1.1` image pinned by digest with `portfolio.yml` mounted read-only, proves both with `apps/web/scripts/check-containment.mjs`, and writes `posture.md` next to its backups. #18 (homelab migration) starts its inventory from that file: [Owner migration prompt](owner-migration.md).
 
 To run it:
 
