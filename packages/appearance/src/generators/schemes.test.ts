@@ -6,7 +6,7 @@ import { generatedSets } from '../resolve-tokens';
 import { COLOR_SET_NAMES } from '../sets';
 import { COLOR_ROLES } from '../tokens';
 import { randomHex, seeded } from '../test-support/packs';
-import { generatorAccent, readableAccent, ON_ACCENT_TARGET } from './compose';
+import { ACCENT_LIGHTNESS, generatorAccent, ON_ACCENT_TARGET } from './compose';
 import { CLIP_TONE, fromHct, hctOf, toneOf } from './hct';
 import {
   APPROVED_ANCHORS,
@@ -149,23 +149,21 @@ test("the approved anchors are the reviewed catalog's, and brand-seed takes the 
   }
 });
 
-test('readableAccent leaves an accent black or white reads on, and otherwise takes the first 2% step away from the better one', () => {
-  assert.equal(readableAccent('#1d4ed8'), '#1d4ed8');
-  for (const start of ['#808080', '#e05555', '#3e9e6e', '#7777dd']) {
-    const best = (color: string) => Math.max(contrast(BLACK, color), contrast(WHITE, color));
-    if (best(start) >= ON_ACCENT_TARGET) continue;
-    const solved = readableAccent(start);
-    assert.ok(best(solved) >= ON_ACCENT_TARGET, start);
-    const lighter = contrast(BLACK, start) >= contrast(WHITE, start);
-    assert.equal(
-      lightness(solved) > lightness(start),
-      lighter,
-      `${start} moves away from on-accent`,
-    );
-    // The step before it didn't read.
-    const steps = Math.round(Math.abs(lightness(solved) - lightness(start)) / 0.02);
-    assert.ok(steps >= 1, start);
-  }
+test('black or white reads at 4.5:1 on every color, so no accent needs an on-accent step, and the accent holds its lightness bounds', () => {
+  const best = (color: string) => Math.max(contrast(BLACK, color), contrast(WHITE, color));
+  let floor = Infinity;
+  const hex = (value: number) => value.toString(16).padStart(2, '0');
+  for (let gray = 0; gray < 256; gray += 1)
+    floor = Math.min(floor, best(`#${hex(gray).repeat(3)}`));
+  for (let r = 0; r < 256; r += 15)
+    for (let g = 0; g < 256; g += 15)
+      for (let b = 0; b < 256; b += 15)
+        floor = Math.min(floor, best(`#${hex(r)}${hex(g)}${hex(b)}`));
+  assert.ok(floor >= ON_ACCENT_TARGET, `the floor is ${floor}`);
+  assert.ok(floor < 4.6, 'and only just');
+  assert.equal(generatorAccent('#1d4ed8'), '#1d4ed8');
+  assert.ok(Math.abs(lightness(generatorAccent('#000000')) - ACCENT_LIGHTNESS.least) < 0.01);
+  assert.ok(Math.abs(lightness(generatorAccent('#ffffff')) - ACCENT_LIGHTNESS.most) < 0.01);
 });
 
 test('property: every seed gives both seed generators a scheme that passes its report at the strictest shipping readings, the same bytes each time', () => {
@@ -227,7 +225,7 @@ test('property: every seed gives both seed generators a scheme that passes its r
       assert.ok(generatedSets({ [id]: tokens }, id));
     }
   }
-  assert.ok(stepped > 0, 'some seeds needed the on-accent step');
+  assert.ok(stepped > 0, 'black and white seeds have their accent held within its bounds');
 });
 
 test('the strictest readings are a textured opaque language and a 97% translucent one, with large signature text', () => {
@@ -277,14 +275,15 @@ test('an image gives its two best colors at least 30 degrees of hue apart, else 
   assert.deepEqual(two.input, { sourceAsset: 'art', pixelsSha256: 'a'.repeat(64) });
   assert.equal(two.algorithm, 'image-palette@1, anchor-v2');
   // Two reds closer than 30 degrees of hue: the approved secondary.
-  const reds = run(raster(64, 64, (x) => rgba(x < 40 ? '#c0392b' : '#d35400')));
+  const reds = run(raster(64, 64, (x) => rgba(x < 40 ? '#c0392b' : '#7a1a12')));
   assert.equal(
     reds.anchors!.picked.dark.secondary,
     APPROVED_ANCHORS['portfolio-artwork']!.dark.secondary,
   );
   assert.match(reds.notes![0]!, new RegExp(`${SECONDARY_HUE_APART} degrees`));
   // Greys alone: the approved accent and secondary.
-  const grey = run(raster(16, 16, (x) => rgba(x < 8 ? '#333333' : '#cccccc')));
+  // Near-neutrals, under MIN_CHROMA, never score.
+  const grey = run(raster(16, 16, (x) => rgba(x < 8 ? '#3a3d42' : '#c8cacd')));
   assert.deepEqual(grey.anchors!.picked, APPROVED_ANCHORS['portfolio-artwork']);
   assert.match(grey.notes![0]!, /No color scored/);
   for (const result of [two, reds, grey]) {
