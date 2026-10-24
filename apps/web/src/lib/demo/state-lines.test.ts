@@ -11,7 +11,7 @@ test('the sandbox line is the approved string, with a spaced em dash', () => {
 });
 
 test('the lines name the sample, the five values, and where they are kept', () => {
-  const lines = demoStateLines(CATALOG, { ...DEFAULTS, variant: 'kinetic-cosmos' }, true);
+  const lines = demoStateLines(CATALOG, { ...DEFAULTS, variant: 'acme-orbit' }, true);
   assert.deepEqual(
     lines.map(({ id }) => id),
     ['content', 'appearance', 'storage'],
@@ -19,11 +19,11 @@ test('the lines name the sample, the five values, and where they are kept', () =
   assert.match(lines[0]!.text, /neutral sample portfolio, read-only/);
   assert.equal(
     lines[1]!.text,
-    'Composition: Kinetic Cosmos; Design language: Platform Neutral; Color scheme: Warm Parchment; Typography: Humanist UI; Display mode: System',
+    'Composition: Acme Orbit; Design language: Platform Neutral; Color scheme: Warm Parchment; Typography: Humanist UI; Display mode: System',
   );
   assert.match(lines[2]!.text, /kept in this browser/);
   // A value the build doesn't offer says what shows in its place.
-  assert.match(demoStateLines(CATALOG, DEFAULTS, true)[1]!.text, /editorial-evidence, shown as/);
+  assert.match(demoStateLines(CATALOG, DEFAULTS, true)[1]!.text, /acme-default, shown as/);
 });
 
 test("in memory alone, the storage line says a reload won't keep it", () => {

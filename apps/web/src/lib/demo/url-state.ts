@@ -66,16 +66,16 @@ export function carriesSelection(search: URLSearchParams): boolean {
 }
 
 /**
- * The selection `search` carries, axis by axis over `fallback`: each key
+ * The selection `search` carries, axis by axis over `base`: each key
  * given once, with a value the rules accept, wins on its axis, scheme and
- * mode checked as a pair; every other axis keeps `fallback`'s value.
+ * mode checked as a pair; every other axis keeps `base`'s value.
  */
 export function selectionFrom(
   search: URLSearchParams,
-  fallback: DemoSelection,
+  base: DemoSelection,
   rules: SelectionRules,
 ): DemoSelection {
-  const next: Record<CatalogAxis, string> = { ...fallback };
+  const next: Record<CatalogAxis, string> = { ...base };
   for (const axis of AXES) {
     const given = search.getAll(QUERY_KEYS[axis]);
     const [only] = given;
@@ -84,8 +84,8 @@ export function selectionFrom(
   }
   // A scheme and a mode that don't fit each other: the mode gives way first.
   if (!modeFits(rules.schemeModes, next.colorScheme, next.displayMode)) {
-    next.displayMode = modeFits(rules.schemeModes, next.colorScheme, fallback.displayMode)
-      ? fallback.displayMode
+    next.displayMode = modeFits(rules.schemeModes, next.colorScheme, base.displayMode)
+      ? base.displayMode
       : 'system';
   }
   return next;

@@ -22,11 +22,11 @@ test('the selection goes to localStorage and the working copy to sessionStorage'
   const local = new FakeStorage();
   const session = new FakeStorage();
   const store = demoStore(local, session);
-  store.write(SELECTION_KEY, '{"variant":"kinetic-cosmos"}');
+  store.write(SELECTION_KEY, '{"variant":"acme-orbit"}');
   store.write(WORKING_KEY, '{"draft":1}');
   assert.deepEqual([...local.items.keys()], [SELECTION_KEY]);
   assert.deepEqual([...session.items.keys()], [WORKING_KEY]);
-  assert.equal(store.read(SELECTION_KEY), '{"variant":"kinetic-cosmos"}');
+  assert.equal(store.read(SELECTION_KEY), '{"variant":"acme-orbit"}');
   assert.equal(store.persistent(), true);
 });
 
