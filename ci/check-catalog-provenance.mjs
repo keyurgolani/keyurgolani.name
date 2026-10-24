@@ -666,7 +666,7 @@ export function renderSummary({ findings, checked }) {
   const lines = [
     `### catalog provenance: ${failing.length === 0 ? 'passed' : `${failing.length} failing`}, ${findings.length - failing.length} informational`,
     '',
-    `${checked.urls} source URLs checked across ${checked.packs} packs and records.`,
+    `${checked.urls} source ${checked.urls === 1 ? 'URL' : 'URLs'} checked across ${checked.packs} packs and records.`,
     '',
   ];
   if (findings.length > 0) {
