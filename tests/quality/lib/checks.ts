@@ -46,8 +46,11 @@ const ROW_CHECKS: Readonly<Record<PreferenceMode, readonly SuiteCheck[]>> = {
   'no-javascript': ['keyboard'],
 };
 
+/** The runner's check that a swept page rendered the pack its cookie asked for (lib/sweep.ts's packFindings). */
+export const SWEEP_PACK_CHECK = 'sweep-pack';
+
 /**
- * What a swept cell's test owes beside CELL_CHECKS (lib/sweep.ts): the
+ * What a swept cell's test owes beside CELL_CHECKS and SWEEP_PACK_CHECK (lib/sweep.ts): the
  * [37] rule's five checks alone, by the row each runs in. Its axe run is
  * the contrast rules, since a pack changes how the page looks and never
  * what it is.
@@ -73,7 +76,7 @@ export function requiredChecks(
   conditions = true,
   sweep = false,
 ): string[] {
-  if (sweep) return [...CELL_CHECKS, ...(SWEEP_ROW_CHECKS[row] ?? [])];
+  if (sweep) return [...CELL_CHECKS, SWEEP_PACK_CHECK, ...(SWEEP_ROW_CHECKS[row] ?? [])];
   const at = VIEWPORTS.find((each) => each.id === viewport);
   const checks: string[] = [...CELL_CHECKS, ...(ROW_CHECKS[row as PreferenceMode] ?? [])];
   if (row === 'default' && at) {

@@ -275,11 +275,16 @@ test("a swept test that didn't run fails plan-coverage, naming its pack and vari
   // The cell's id names the variant and the tuple the pack is in.
   assert.ok(missing[0]!.startsWith(`${dropped.cell.id} at 1440x900, forced-colors`), missing[0]);
   assert.match(missing[0]!, /is planned, and didn't run/);
-  // A swept test that passed without its focus check fails unchecked-cell.
-  const unfocused = all.map((each) =>
-    each.cell === dropped.cell.id && each.row === 'forced-colors'
-      ? { ...each, checks: each.checks.filter((check) => check !== 'focus') }
-      : each,
-  );
-  assert.equal(rules(verdict(unfocused), 'unchecked-cell').length, 1);
+  // A swept test that passed without its focus check, or without checking
+  // the page rendered its pack, fails unchecked-cell.
+  for (const check of ['focus', 'sweep-pack']) {
+    const without = all.map((each) =>
+      each.cell === dropped.cell.id && each.row === 'forced-colors'
+        ? { ...each, checks: each.checks.filter((ran) => ran !== check) }
+        : each,
+    );
+    const unchecked = rules(verdict(without), 'unchecked-cell');
+    assert.equal(unchecked.length, 1, check);
+    assert.match(unchecked[0]!, new RegExp(`without its ${check} check`));
+  }
 });
