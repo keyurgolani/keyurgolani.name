@@ -71,14 +71,15 @@ const fillWorst = (set: ColorTokens, start: string, end: string) =>
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SCHEMES = path.resolve(here, '../../appearance-schemes/packs');
-/** Every shipping scheme's anchors, from its manifest. */
+/** Every shipping anchored scheme's anchors, from its manifest. The generated ones have none (#20 PR 3). */
 const SHIPPING = fs
   .readdirSync(SCHEMES)
   .sort()
   .map((id) => {
     const manifest = JSON.parse(fs.readFileSync(path.join(SCHEMES, id, 'manifest.json'), 'utf8'));
     return { id, manifest, anchors: manifest.anchors as { light?: Anchors; dark?: Anchors } };
-  });
+  })
+  .filter(({ manifest }) => manifest.generator === undefined);
 
 /** Random anchors whose text reads at the raised target on every ground, the one role anchor-v2 can't move. */
 function randomAnchors(random: () => number, mode: 'light' | 'dark'): Anchors {
