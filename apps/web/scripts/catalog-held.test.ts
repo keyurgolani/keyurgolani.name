@@ -187,7 +187,10 @@ test('each held language records the gate it fails, its worst pair and scheme, a
     const tokens = (pack.manifest as DesignLanguageManifest).tokens;
     assert.notEqual(tokens.texture, 'none', pack.id);
     assert.notEqual(tokens['surface-opacity'], '100%', pack.id);
-    assert.deepEqual(record.causes, ['translucency'], pack.id);
+    // Untextured it would pass under 100%, so the texture is a cause too.
+    assert.ok((record.opacityFloor?.withoutTexture ?? 100) < 100, pack.id);
+    assert.deepEqual(record.causes, ['texture', 'translucency'], pack.id);
+    assert.match(record.reason, /without its texture they'd pass at \d+%/, pack.id);
     assert.equal(record.opacityFloor?.withTexture, 100, pack.id);
     assert.match(record.reason, /its floor is opaque/, pack.id);
     assert.match(record.unblockedBy.join(' '), /the owner's call/, pack.id);

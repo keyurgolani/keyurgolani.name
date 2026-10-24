@@ -17,9 +17,11 @@
 //   toward text in anchor-v1's 2% steps, from anchor-v1's value. Toward
 //   text only adds contrast, and text-secondary still keeps clear of
 //   text-muted.
-// - The signature fill moves the fewest of its two ends, then the least
-//   distance, toward text in 2% steps, until every tenth of the way between
-//   them passes on canvas and every surface. The accent and secondary
+// - The signature fill moves the fewest of its two ends toward text in 2%
+//   steps: one end by the least step (the start on a tie), else both by
+//   the least total of their steps (the start's the lesser at that total),
+//   until every tenth of the way between them passes on canvas and every
+//   surface. The accent and secondary
 //   anchors themselves never move.
 // - The categorical walk: the six categorical colors start from accent,
 //   secondary, the three solved statuses, and text-secondary, and resolve
