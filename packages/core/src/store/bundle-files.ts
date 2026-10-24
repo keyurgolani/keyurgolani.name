@@ -1,5 +1,5 @@
-import { constants } from 'node:fs';
-import { lstat, open, readdir, realpath } from 'node:fs/promises';
+import { constants, createReadStream } from 'node:fs';
+import { lstat, readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { parseMediaDocument } from '@portfolio/schema';
 import { recordOwnerModule } from '../load-trace';
@@ -35,8 +35,6 @@ const LAYOUT_DIRECTORIES: ReadonlySet<string> = new Set(['snapshots', 'media', '
 
 /** Read only, never through a link, and a FIFO opens at once rather than wait for a writer. */
 const READ_FLAGS = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
-
-const CHUNK = 64 * 1024;
 
 /** A path bundle.json may name: names joined by /, none empty, `.`, or `..`. */
 const isRelativePath = (file: string) =>
@@ -82,23 +80,23 @@ export function bundleDirectory(dir: string): BundleFiles {
           throw new Error('Not a directory in the bundle.');
         }
       }
-      const handle = await open(at(file), READ_FLAGS);
-      try {
-        if (!(await handle.stat()).isFile()) throw new Error('Not a regular file.');
-        const cap = limit + 1;
-        const chunks: Buffer[] = [];
-        let length = 0;
-        while (length < cap) {
-          const chunk = Buffer.alloc(Math.min(CHUNK, cap - length));
-          const { bytesRead } = await handle.read(chunk, 0, chunk.length, length);
-          if (bytesRead === 0) break;
-          chunks.push(chunk.subarray(0, bytesRead));
-          length += bytesRead;
-        }
-        return new Uint8Array(Buffer.concat(chunks, length));
-      } finally {
-        await handle.close();
+      // A regular file at the last name, then opened without following a
+      // link, and a FIFO swapped in since opens and ends at once.
+      if (!(await lstat(at(file))).isFile()) throw new Error('Not a regular file.');
+      const chunks: Buffer[] = [];
+      let length = 0;
+      const stream = createReadStream(at(file), {
+        // node:fs opens with numeric flags as well as strings, which is all
+        // its types allow here: O_NOFOLLOW has no string form.
+        flags: READ_FLAGS as unknown as string,
+        start: 0,
+        end: limit,
+      });
+      for await (const chunk of stream) {
+        chunks.push(chunk as Buffer);
+        length += (chunk as Buffer).byteLength;
       }
+      return new Uint8Array(Buffer.concat(chunks, length));
     },
   };
 }
