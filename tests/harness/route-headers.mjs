@@ -8,9 +8,9 @@
 // profile, and every Studio response asks for no-store. Every preview path,
 // in every profile, gets the preview's nonce CSP, noindex, no-referrer, and
 // private, no-store. Only the build's assets and /_portfolio allow any
-// origin. Under demo (#9), the showroom at /, every /sample path, and Demo
-// Studio's pages get the demo policy in place of the public one or Studio's,
-// with frame-ancestors 'self' on /sample alone. Paths match in any case, as
+// origin. Under demo (#9), the showroom at /, every /sample and /reference
+// path, and Demo Studio's pages get the demo policy in place of the public
+// one or Studio's, with frame-ancestors 'self' on /sample alone. Paths match in any case, as
 // Next matches header sources. The
 // profile matrix and the profile smoke check responses against these.
 // headers.test.ts and proxy.test.ts check next.config.ts and proxy.ts
@@ -46,15 +46,17 @@ export const DEMO_CSP =
 
 /**
  * Whether `pathname`, read percent-decoded, is a demo page outside Studio
- * (#9): the showroom at / or a path under /sample, as proxy.ts reads it.
+ * (#9): the showroom at /, a path under /sample, or one under /reference,
+ * the read-only reference's pages and renditions, as proxy.ts reads it.
  *
  * @param {string} pathname
- * @returns {'showroom' | 'sample' | null}
+ * @returns {'showroom' | 'sample' | 'reference' | null}
  */
 export function demoPagePath(pathname) {
   const path = decoded(pathname);
   if (path === '/') return 'showroom';
-  return /^\/sample(?:\/|$)/.test(path) ? 'sample' : null;
+  if (/^\/sample(?:\/|$)/.test(path)) return 'sample';
+  return /^\/reference(?:\/|$)/.test(path) ? 'reference' : null;
 }
 
 /**

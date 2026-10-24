@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
+import { REFERENCE_CANARIES as SCANNED } from '../../../tests/harness/canaries.mjs';
 import {
   buildReferenceFixture,
   FIXTURE_DIR,
@@ -51,4 +52,18 @@ test('png() makes the same bytes every time, a PNG signature first', () => {
   assert.ok(a.equals(png(4, [1, 2, 3], 'note')));
   assert.deepEqual([...a.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   assert.ok(!a.equals(png(4, [1, 2, 3])));
+});
+
+test('the leak scans look for every canary the fixture holds, and for the mount’s own name', () => {
+  for (const canary of [
+    REFERENCE_CANARIES.privateRecord,
+    REFERENCE_CANARIES.hiddenSection,
+    REFERENCE_CANARIES.privateMedia,
+    REFERENCE_CANARIES.event,
+    REFERENCE_CANARIES.privateSlug,
+  ]) {
+    assert.ok(SCANNED.includes(canary), canary);
+  }
+  assert.ok(REFERENCE_CANARIES.privateAsset.startsWith(REFERENCE_CANARIES.privateSlug));
+  assert.ok(SCANNED.includes(path.basename(FIXTURE_DIR)));
 });
