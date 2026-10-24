@@ -20,19 +20,22 @@
 // reduced-transparency rows on every PR (#11, Slice 2, the owner's [37]).
 // `full` plans every cell in every row.
 //
-// The owner's [37] change-directed rule (11-4), on every pack axis since
-// #20: a changed variant runs against every shipping pack, design
-// language, color scheme, and typography profile, and a changed pack
-// against every registered variant, each pair in the first tuple the
-// resolver renders as asked, from the platform defaults on. lib/changes.ts
+// The owner's [37] change-directed rule (11-4): a changed variant runs
+// against every stable design language, on its default scheme and
+// typography, and a changed pack, a language, or since #20 a color scheme
+// or typography profile, against every registered variant, each pair in
+// the first tuple the resolver renders as asked, from the platform
+// defaults on. A generator scheme pairs with nothing: it renders only
+// from a site's input. lib/changes.ts
 // maps a run's changed paths to the variants and packs they belong to. A PR
 // plans those cells beside the sentinels, at every viewport in the default
 // row and in every row at 1440x900, as the tier packs' sentinels run, and
 // each cell names the axis and the pack that brought it in, so its failures
 // do too. `full` plans them as if every variant and pack changed, so the
-// scheduled and release runs hold every pair a PR could. A shipping pack is
-// a registered one outside a fixture package, in any tier; variants carry
-// no tier, so every registered non-fixture composition counts. The 40-cell
+// scheduled and release runs hold every pair a PR could. A stable language
+// is a shipping (non-fixture) one of the stable tier, and a shipping pack a
+// registered one outside a fixture package, in any tier; variants carry no
+// tier, so every registered non-fixture composition counts. The 40-cell
 // PR cap and its sentinel ordering wait in the backlog.
 
 // First: readBuildMeta() loads the generated registry, which imports
@@ -135,7 +138,7 @@ export interface Cell {
 export interface ChangedBy {
   readonly axis: ChangeAxis;
   readonly id: string;
-  /** For a changed variant, the shipping pack the cell runs it against (#20). */
+  /** For a changed variant, the stable design language the cell runs it against (#20). */
   readonly pack?: { readonly axis: PackAxis; readonly id: string };
 }
 
@@ -255,16 +258,17 @@ export interface PlanInput {
 }
 
 /**
- * The [37] rule's pairs, on every pack axis (#20): each changed variant
- * with each shipping pack on each axis, and each changed pack with each
- * registered variant. A variant's pair names the pack it meets, so its
+ * The [37] rule's pairs: each changed variant with each stable design
+ * language, and each changed pack, on any axis since #20, with each
+ * registered variant. A variant's pair names the language it meets, so its
  * failures name that pack too.
  */
 export function changePairs(
   changes: readonly Pick<Change, 'axis' | 'id'>[],
   targets: {
     readonly variants: readonly string[];
-    readonly packs: { readonly [A in PackAxis]: readonly string[] };
+    /** The stable design languages a changed variant meets, one cell each. */
+    readonly languages: readonly string[];
   },
 ): {
   readonly variant: string;
@@ -274,14 +278,16 @@ export function changePairs(
 }[] {
   return changes.flatMap((change) =>
     change.axis === 'variant'
-      ? PACK_AXES.flatMap((axis) =>
-          targets.packs[axis].map((pack) => ({
-            variant: change.id,
-            axis,
-            pack,
-            by: { axis: change.axis, id: change.id, pack: { axis, id: pack } },
-          })),
-        )
+      ? targets.languages.map((pack) => ({
+          variant: change.id,
+          axis: 'designLanguage' as const,
+          pack,
+          by: {
+            axis: change.axis,
+            id: change.id,
+            pack: { axis: 'designLanguage' as const, id: pack },
+          },
+        }))
       : targets.variants.map((variant) => ({
           variant,
           axis: change.axis as PackAxis,
@@ -426,13 +432,25 @@ export function planCells({ meta, registrations, mode, changes = [] }: PlanInput
     }
   }
 
-  // The [37] rule's cells, on every pack axis (#20): every changed variant
-  // against every shipping pack, and every changed pack against every
-  // registered variant. A shipping pack is a registered one outside a
-  // fixture package, in any tier: no Research record registers.
+  // The [37] rule's cells: every changed variant against every stable
+  // design language, on its default scheme and typography, and every
+  // changed pack, a language, a scheme, or a profile since #20, against
+  // every registered variant. A shipping pack is a registered one outside
+  // a fixture package, in any tier: no Research record registers. A
+  // generator scheme renders as asked only from a site's input, which a
+  // cell has none of, so no pair takes one (#20): check:appearance's pack
+  // gates are its PR check.
+  const generated = new Set(
+    (meta.PACKS ?? [])
+      .filter(
+        (pack) =>
+          pack.kind === 'color-scheme' && 'generator' in pack.manifest && pack.manifest.generator,
+      )
+      .map((pack) => pack.manifest.id),
+  );
   const shippingPacks = (kind: string) =>
     (meta.PACKS ?? [])
-      .filter((pack) => pack.kind === kind && !pack.fixture)
+      .filter((pack) => pack.kind === kind && !pack.fixture && !generated.has(pack.manifest.id))
       .map((pack) => pack.manifest.id)
       .sort();
   const stablePacks = (kind: string) =>
@@ -454,7 +472,8 @@ export function planCells({ meta, registrations, mode, changes = [] }: PlanInput
     colorScheme: shippingPacks('color-scheme'),
     typography: shippingPacks('typography'),
   } as const satisfies Record<PackAxis, readonly string[]>;
-  const registered = (axis: PackAxis, id: string) => registry.packs[axis].has(id);
+  const registered = (axis: PackAxis, id: string) =>
+    registry.packs[axis].has(id) && !generated.has(id);
   const directed: readonly Change[] =
     mode === 'full'
       ? [
@@ -470,7 +489,7 @@ export function planCells({ meta, registrations, mode, changes = [] }: PlanInput
         );
   for (const { variant, axis, pack, by } of changePairs(directed, {
     variants: variants.map((manifest) => manifest.id),
-    packs: shipping,
+    languages: stablePacks('design-language'),
   })) {
     const manifest = variants.find((each) => each.id === variant)!;
     // The pair's pack on its axis, and the first tuple around it the resolver renders as asked.
@@ -491,7 +510,7 @@ export function planCells({ meta, registrations, mode, changes = [] }: PlanInput
     }
     if (!tuple) {
       throw new Error(
-        `The ${by.axis === 'variant' ? `changed variant ${by.id}` : `changed ${AXIS_NAMES[by.axis]} ${by.id}`} meets ${by.axis === 'variant' ? `the shipping ${AXIS_NAMES[axis]} ${pack}` : `the variant ${variant}`} in no tuple the resolver renders as asked, so the [37] rule can't run it.`,
+        `The ${by.axis === 'variant' ? `changed variant ${by.id}` : `changed ${AXIS_NAMES[by.axis]} ${by.id}`} meets ${by.axis === 'variant' ? `the stable ${AXIS_NAMES[axis]} ${pack}` : `the variant ${variant}`} in no tuple the resolver renders as asked, so the [37] rule can't run it.`,
       );
     }
     add({

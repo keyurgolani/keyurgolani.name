@@ -10,7 +10,7 @@
 // rerun with nothing changed writes nothing new.
 
 import { createHash } from 'node:crypto';
-import fs from 'node:fs';
+import { existsSync, readdirSync, readFileSync, type Dirent } from 'node:fs';
 import path from 'node:path';
 import { AXIS_NAMES, type PackAxis, type PackKind } from '../axes';
 import { isUpstreamLicense } from '../governance';
@@ -58,9 +58,9 @@ export function packPackages(root: string): PackPackage[] {
   const found: PackPackage[] = [];
   const base = path.join(root, 'packages');
   const walk = (dir: string, depth: number) => {
-    let entries: fs.Dirent[];
+    let entries: Dirent[];
     try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
+      entries = readdirSync(dir, { withFileTypes: true });
     } catch {
       return;
     }
@@ -69,8 +69,8 @@ export function packPackages(root: string): PackPackage[] {
         continue;
       const full = path.join(dir, entry.name);
       const manifest = path.join(full, 'package.json');
-      if (fs.existsSync(manifest)) {
-        const pkg = JSON.parse(fs.readFileSync(manifest, 'utf8')) as {
+      if (existsSync(manifest)) {
+        const pkg = JSON.parse(readFileSync(manifest, 'utf8')) as {
           name?: string;
           portfolio?: { kind?: string; packs?: string; fixture?: boolean };
         };
@@ -98,7 +98,7 @@ export function packPackages(root: string): PackPackage[] {
 function filesUnder(dir: string): string[] {
   const files: string[] = [];
   const walk = (current: string) => {
-    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
       const full = path.join(current, entry.name);
       if (entry.isDirectory()) walk(full);
       else files.push(posix(path.relative(dir, full)));
@@ -116,7 +116,7 @@ function filesUnder(dir: string): string[] {
 export function packDigest(dir: string): string {
   const hash = createHash('sha256');
   for (const file of filesUnder(dir)) {
-    const bytes = fs.readFileSync(path.join(dir, file));
+    const bytes = readFileSync(path.join(dir, file));
     hash.update(`${file}\0${createHash('sha256').update(bytes).digest('hex')}\n`);
   }
   return `sha256-${hash.digest('hex')}`;
@@ -128,13 +128,13 @@ export function catalogPacks(root: string, packages: readonly PackPackage[]): Ca
   for (const pkg of packages) {
     if (!pkg.packs) continue;
     const packsDir = path.join(root, pkg.packs);
-    if (!fs.existsSync(packsDir)) continue;
-    for (const entry of fs.readdirSync(packsDir, { withFileTypes: true })) {
+    if (!existsSync(packsDir)) continue;
+    for (const entry of readdirSync(packsDir, { withFileTypes: true })) {
       if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
       const dir = path.join(packsDir, entry.name);
       let manifest: Record<string, unknown> | null = null;
       try {
-        manifest = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8')) as Record<
+        manifest = JSON.parse(readFileSync(path.join(dir, 'manifest.json'), 'utf8')) as Record<
           string,
           unknown
         >;
@@ -352,8 +352,8 @@ export function researchRecords(root: string, packages: readonly PackPackage[]):
   const found: ResearchFile[] = [];
   for (const pkg of packages) {
     const dir = path.join(root, pkg.dir, 'research');
-    if (!fs.existsSync(dir)) continue;
-    for (const name of fs.readdirSync(dir).sort()) {
+    if (!existsSync(dir)) continue;
+    for (const name of readdirSync(dir).sort()) {
       const file = posix(path.join(pkg.dir, 'research', name));
       const problems: string[] = [];
       let record: ResearchRecord | null = null;
@@ -369,7 +369,7 @@ export function researchRecords(root: string, packages: readonly PackPackage[]):
       }
       try {
         const parsed = ResearchRecordSchema.safeParse(
-          JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8')),
+          JSON.parse(readFileSync(path.join(dir, name), 'utf8')),
         );
         if (parsed.success) record = parsed.data;
         else {

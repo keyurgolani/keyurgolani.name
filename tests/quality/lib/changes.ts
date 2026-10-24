@@ -1,7 +1,7 @@
 // The owner's [37] change-directed rule (#11, 11-4, and #20 on every pack
-// axis): a PR that changes a variant runs it against every shipping pack,
-// and one that changes a pack, a design language, a color scheme, or a
-// typography profile, runs it against every registered variant. This
+// axis): a PR that changes a variant runs it against every stable design
+// language, and one that changes a pack, a design language, a color scheme,
+// or a typography profile, runs it against every registered variant. This
 // module reads which paths a run changes and maps them to the variants and
 // packs they belong to; cells.ts plans the cells.
 //
