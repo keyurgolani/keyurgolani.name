@@ -18,12 +18,18 @@ import {
   type Raster,
 } from './index';
 import { imagePalette, MIN_CHROMA } from './palette';
-import { COLOR_SCHEMES } from '../../../../scripts/catalog/seed/appearance-catalog.js';
 
 // #20 PR 3's generators: hct@1's HCT against published values, the four
 // schemes' anchors against the reviewed catalog, image-palette@1 on small
 // rasters, and every generated scheme passing its own report at the
 // strictest shipping reading, deterministically.
+
+/** The reviewed catalog's schemes, from the seed file #20 PR 2a copied byte for byte. */
+const SEED = new URL('../../../../scripts/catalog/seed/appearance-catalog.js', import.meta.url)
+  .href;
+const { COLOR_SCHEMES } = (await import(SEED)) as {
+  COLOR_SCHEMES: readonly { id: string; modes: Record<string, Record<string, string>> }[];
+};
 
 const declared = (id: string) => {
   const generator = GENERATORS[id]!;
@@ -91,7 +97,10 @@ test("hct-tonal's anchors from #6750a4 are within one 8-bit step of M3's publish
   assert.ok(run.ok);
   for (const mode of ['light', 'dark'] as const) {
     for (const [role, expected] of Object.entries(baseline[mode])) {
-      const actual = run.result.anchors!.picked[mode][role as keyof typeof expected & 'canvas'];
+      const picked = run.result.anchors!.picked[mode] as unknown as Readonly<
+        Record<string, string>
+      >;
+      const actual = picked[role]!;
       for (const at of [1, 3, 5]) {
         const step = Math.abs(
           Number.parseInt(actual.slice(at, at + 2), 16) -
@@ -115,9 +124,7 @@ test("hct-tonal's anchors from #6750a4 are within one 8-bit step of M3's publish
 
 test("the approved anchors are the reviewed catalog's, and brand-seed takes the seed as the accent alone", () => {
   for (const id of ['brand-seed', 'profile-image', 'portfolio-artwork']) {
-    const seed = (
-      COLOR_SCHEMES as readonly { id: string; modes: Record<string, Record<string, string>> }[]
-    ).find((scheme) => scheme.id === id)!;
+    const seed = COLOR_SCHEMES.find((scheme) => scheme.id === id)!;
     for (const mode of ['light', 'dark'] as const) {
       assert.deepEqual(
         APPROVED_ANCHORS[id]![mode],
@@ -209,14 +216,14 @@ test('property: every seed gives both seed generators a scheme that passes its r
             `${id} ${seedColor} ${mode} ${first}`,
           );
         }
-        const moved = run.result.adjustments!.generator[mode]?.accent;
+        const moved: readonly [string, string] | undefined =
+          run.result.adjustments!.generator[mode]?.accent;
         if (moved) {
           stepped += 1;
           assert.equal(moved[1], run.result.anchors!.used[mode].accent);
           assert.equal(moved[1], generatorAccent(moved[0]));
         }
       }
-      assert.equal(tokens.review, undefined, 'a seed needs no review');
       assert.ok(generatedSets({ [id]: tokens }, id));
     }
   }
@@ -282,15 +289,7 @@ test('an image gives its two best colors at least 30 degrees of hue apart, else 
   assert.match(grey.notes![0]!, /No color scored/);
   for (const result of [two, reds, grey]) {
     assert.equal(result.contrastReport.passes, true);
-    assert.equal(result.tokens.review, 'pending');
-    // A pending output never renders, so it can't publish.
-    assert.equal(
-      generatedSets({ 'portfolio-artwork': result.tokens }, 'portfolio-artwork'),
-      undefined,
-    );
-    const { review, ...accepted } = result.tokens;
-    void review;
-    assert.ok(generatedSets({ 'portfolio-artwork': accepted }, 'portfolio-artwork'));
+    assert.ok(generatedSets({ 'portfolio-artwork': result.tokens }, 'portfolio-artwork'));
   }
 });
 

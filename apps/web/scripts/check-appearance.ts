@@ -223,10 +223,7 @@ async function main(): Promise<number> {
   const check = checkAppearance(registry, {
     targets,
     gateFixture: ({ packageName }) => gated.has(packageName),
-    generated: referenceSets(
-      references,
-      new Set(references.map(({ id }) => id).filter((id) => registry.packs.colorScheme.has(id))),
-    ),
+    generated: referenceSets(references),
   });
   const compiled = (packs ?? [])
     .filter(({ name }) => name.endsWith('.css'))

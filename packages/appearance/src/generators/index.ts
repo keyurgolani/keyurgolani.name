@@ -10,8 +10,8 @@
 // input. Each result is the record #10's draft save stores: the input, the
 // algorithm and its version, what it extracted and chose, every adjustment,
 // all four sets, and the contrast report at the strictest shipping reading.
-// An image-derived result is `review: pending` until the owner accepts it,
-// and generatedSets() never renders a pending one.
+// A site's image-derived output waits for the owner as #113's derived
+// changes do, and the catalog's own image schemes wait on acceptance.json.
 
 import type { BaseMode } from '../axes';
 import { BLACK, contrast, lightness, mix, WHITE, withLightness } from '../color';
@@ -217,7 +217,7 @@ function rasterOf(id: string, input: GeneratorInput, raster: Raster | undefined)
   return raster;
 }
 
-/** A #20 generator from its composition: compose() solves it, and an image's output waits for review. */
+/** A #20 generator from its composition, which compose() solves. */
 function composed(
   id: string,
   input: 'seed-color' | 'asset',
@@ -229,8 +229,7 @@ function composed(
     input,
     compose: choose,
     generate(read: GeneratorInput, raster?: Raster): GeneratedScheme {
-      const { tokens } = compose(choose(read, raster));
-      return input === 'asset' ? { ...tokens, review: 'pending' } : tokens;
+      return compose(choose(read, raster)).tokens;
     },
   });
 }
@@ -343,8 +342,7 @@ export function runGenerator(
     };
   }
   const solved = compose(composition);
-  const tokens: GeneratedScheme =
-    generator.input === 'asset' ? { ...solved.tokens, review: 'pending' } : solved.tokens;
+  const tokens: GeneratedScheme = solved.tokens;
   const recorded: RecordedInput =
     'sourceAsset' in read && asset?.pixelsSha256 !== undefined
       ? { sourceAsset: read.sourceAsset, pixelsSha256: asset.pixelsSha256 }

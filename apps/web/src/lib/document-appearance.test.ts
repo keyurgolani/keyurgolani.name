@@ -274,7 +274,7 @@ test("a site's stored generated scheme renders its own sets, and render never ru
   assert.ok(!selectable(visitorControlModel(BRANDED, 'read-only', resolved)));
 });
 
-test('a stored scheme that is missing, malformed, from another generator or version, or waiting for review falls back on its axis, with a diagnostic', () => {
+test('a stored scheme that is missing, malformed, or from another generator or version falls back on its axis, with a diagnostic', () => {
   const stored = brandSeed();
   const { light, ...noLight } = stored.tokens;
   void light;
@@ -293,9 +293,6 @@ test('a stored scheme that is missing, malformed, from another generator or vers
     },
     'another version': {
       'brand-seed': { ...stored, generator: { id: 'brand-seed', version: 2 } },
-    },
-    'waiting for review': {
-      'brand-seed': { ...stored, tokens: { ...stored.tokens, review: 'pending' } },
     },
   };
   for (const [what, schemes] of Object.entries(cases)) {
