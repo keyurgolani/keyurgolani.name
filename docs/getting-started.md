@@ -49,7 +49,7 @@ cp site.example.yml config/site.yml
 # edit config/portfolio.yml
 ```
 
-`portfolio.yml` holds the content, and `site.yml` how it looks and which sections show. Edit the content first. Start with `identity` and `sections`. Save, then reload the page. `config/` is gitignored, so your content stays out of commits.
+`portfolio.yml` holds the content, and `site.yml` how it looks and which sections show. Edit the content first. Start with `identity`, and its `name` above all: `pnpm dev` renders the sample's, but a production server refuses to start while `identity.name` is still `Anamika Devi`, the bundled sample's. Then `sections`. Save, then reload the page. `config/` is gitignored, so your content stays out of commits.
 
 `portfolio.example.yml` exercises every section kind. Cherry-pick the ones you need; delete the rest.
 

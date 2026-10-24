@@ -92,7 +92,15 @@ docker compose -f compose.demo.yml up --build
 
 At its first start, on an empty volume, the server publishes `../config` as revision 1, or refuses to start on a pair a publish refuses ([Importing](#importing)). From then on the data directory is what visitors see, and `../config` is import input: an edit there changes nothing live until `portfolio-store import` or a Studio publish. The image ships the store's command line as `/app/bin/portfolio-store.mjs` ([The revision store](#the-revision-store)).
 
-It needs the owner password's hash before it starts ([Owner authentication](#owner-authentication)). Set `PORTFOLIO_TRUSTED_PROXY_HOPS` in `deploy/.env` to the number of proxies in front that append to `X-Forwarded-For`, usually `1`: `compose.owner.yml` passes it through, and leaves it at `0` when it's unset, which gives sign-in only its global limits ([Signing in](#signing-in)).
+It needs the owner password's hash before it starts: write it into `deploy/secrets/` first ([Writing the hash](#writing-the-hash)). Then, with both documents in `config/`:
+
+```sh
+cd deploy
+echo 'PORTFOLIO_ORIGIN=https://jane.name' > .env
+docker compose -f compose.owner.yml up --build
+```
+
+Like every production server, it refuses to start while `identity.name` in `config/portfolio.yml` is the bundled sample's. Set `PORTFOLIO_TRUSTED_PROXY_HOPS` in `deploy/.env` to the number of proxies in front that append to `X-Forwarded-For`, usually `1`: `compose.owner.yml` passes it through, and leaves it at `0` when it's unset, which gives sign-in only its global limits ([Signing in](#signing-in)).
 
 ### What the image does
 

@@ -52,6 +52,8 @@ export const CHECK_JOBS = [
   // The release-candidate rehearsal (#12, 12-5), its container rows on the
   // same saved image.
   'rehearsal',
+  // The public guide from a fresh clone (#12, 12-5).
+  'fresh-clone',
   'docs',
   // #11's quality cells and the quality gates' own proof (#74). quality-pr
   // runs in the shards quality-pr-plan counts, and quality-pr-verdict judges
@@ -131,18 +133,18 @@ export const RULES = [
     // The profile smoke and the Compose examples it reads. profiles runs on
     // the image job's image, so image runs too.
     class: 'container',
+    jobs: ['unit', 'image', 'profiles', 'fresh-clone'],
+    paths: ['docker-compose.yml', 'deploy/**'],
+  },
+  {
+    class: 'container',
     jobs: ['unit', 'image', 'profiles'],
-    paths: [
-      'docker-compose.yml',
-      'deploy/**',
-      'ci/smoke-profiles.mjs',
-      'ci/profile-checks.test.mjs',
-    ],
+    paths: ['ci/smoke-profiles.mjs', 'ci/profile-checks.test.mjs'],
   },
   {
     // The profile smoke's checks, which the rehearsal's container rows use too.
     class: 'container',
-    jobs: ['unit', 'image', 'profiles', 'rehearsal'],
+    jobs: ['unit', 'image', 'profiles', 'rehearsal', 'fresh-clone'],
     paths: ['ci/lib/profile-checks.mjs'],
   },
   {
@@ -151,6 +153,18 @@ export const RULES = [
     class: 'rehearsal',
     jobs: ['unit', 'image', 'rehearsal'],
     paths: ['ci/rehearsal.mjs', 'ci/rehearsal.test.mjs', 'ci/fixtures/rehearsal/**'],
+  },
+  {
+    // The fresh-clone run.
+    class: 'fresh clone',
+    jobs: ['unit', 'fresh-clone'],
+    paths: ['ci/fresh-clone.mjs', 'ci/fresh-clone-guide.test.mjs'],
+  },
+  {
+    // The pending rows the fresh-clone run shares with the rehearsal.
+    class: 'fresh clone',
+    jobs: ['unit', 'image', 'rehearsal', 'fresh-clone'],
+    paths: ['ci/lib/pending.mjs'],
   },
   {
     class: 'container',
@@ -185,11 +199,13 @@ export const RULES = [
   { class: 'ci script', complete: true, paths: ['ci/**'] },
   {
     class: 'docs',
-    // ci/ tests read the guide and the threat model, so unit runs too.
-    jobs: ['unit', 'docs'],
+    // ci/ tests read the guide and the threat model, so unit runs too, and
+    // fresh-clone follows the guide.
+    jobs: ['unit', 'docs', 'fresh-clone'],
     paths: ['docs/**', 'README.md', 'CONTRIBUTING.md', 'SHOWCASE.md', 'LICENSE'],
   },
-  { class: 'skills', jobs: ['unit', 'docs'], paths: ['skills/**'] },
+  // The guide validates with skills/portfolio-author/scripts/validate.mjs.
+  { class: 'skills', jobs: ['unit', 'docs', 'fresh-clone'], paths: ['skills/**'] },
   // The schemas feed validation, every render, and startup in every profile.
   { class: 'schema', jobs: PRODUCT, paths: ['packages/schema/**'] },
   {
@@ -263,6 +279,7 @@ export const RULES = [
       'image',
       'profiles',
       'rehearsal',
+      'fresh-clone',
       'preview-fixtures-browser',
       'quality-pr-plan',
       'quality-pr',
@@ -487,6 +504,7 @@ export const LOCAL_COMMANDS = {
   image: 'pnpm ci:image && pnpm ci:proxy && pnpm ci:security-proxy (needs Docker)',
   profiles: 'pnpm smoke:profiles (needs Docker; SMOKE_PROFILES=<part> for one part)',
   rehearsal: 'pnpm rehearse (its container rows need Docker and REHEARSAL_IMAGE)',
+  'fresh-clone': 'pnpm fresh-clone (its container steps need Docker and FRESH_CLONE_CONTAINERS=1)',
   docs: 'pnpm check:docs',
   trace: 'pnpm ci:budgets',
 };

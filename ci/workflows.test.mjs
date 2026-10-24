@@ -370,3 +370,26 @@ test('rehearsal loads the image the image job saved, builds nothing, holds no to
     assert.ok(CI.jobs[control].needs.includes('rehearsal'), control);
   }
 });
+
+test('fresh-clone reads no cache, installs nothing itself, holds no token, and runs the container steps', () => {
+  const job = CI.jobs['fresh-clone'];
+  assert.ok(job, 'ci.yml has a fresh-clone job');
+  assert.deepEqual(job.needs, ['changes']);
+  assert.match(job.if, /contains\(fromJSON\(needs\.changes\.outputs\.jobs\), 'fresh-clone'\)/);
+  assert.deepEqual(
+    job.steps.filter(usesCache).map((s) => s.name ?? s.uses),
+    [],
+  );
+  const text = JSON.stringify(job);
+  assert.doesNotMatch(text, /secrets\.|GITHUB_TOKEN|github\.token|pnpm install/);
+  assert.equal(job.permissions, undefined, "fresh-clone keeps the workflow's contents: read");
+  for (const checkout of job.steps.filter((s) => /^actions\/checkout@/.test(s.uses ?? ''))) {
+    assert.equal(checkout.with['persist-credentials'], false);
+  }
+  const run = job.steps.find((s) => /ci\/fresh-clone\.mjs/.test(s.run ?? ''));
+  assert.equal(run.run, 'node ci/run.mjs fresh-clone -- node ci/fresh-clone.mjs');
+  assert.equal(run.env.FRESH_CLONE_CONTAINERS, '1');
+  for (const control of ['gate', 'selected']) {
+    assert.ok(CI.jobs[control].needs.includes('fresh-clone'), control);
+  }
+});

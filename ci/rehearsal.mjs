@@ -78,8 +78,9 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parse as parseYaml, parseDocument } from 'yaml';
+import { parseDocument } from 'yaml';
 import { buildRegistry } from './lib/registry.mjs';
+import { defaultComposition, LANDED, pendingProblems, registeredVariants } from './lib/pending.mjs';
 import {
   DATA_DIR,
   fatalCodes,
@@ -133,20 +134,7 @@ export const MISPLACED_SCHEME = 'humanist-ui';
 
 // ---- what's registered, and what's pending ----------------------------------
 
-/** The variant ids this build registers but fixtures, from the generated asset manifest. */
-export function registeredVariants(root = REPO_ROOT) {
-  const file = path.join(root, 'apps', 'web', 'src', 'lib', 'generated', 'asset-manifest.json');
-  const manifest = JSON.parse(readFileSync(file, 'utf8'));
-  return manifest.units
-    .filter((unit) => unit.kind === 'variant' && !unit.fixture && unit.id !== 'fallback')
-    .map((unit) => unit.id)
-    .sort();
-}
-
-/** The composition the sample site selects, the default a new owner starts on. */
-export function defaultComposition(root = REPO_ROOT) {
-  return parseYaml(readFileSync(path.join(root, 'site.example.yml'), 'utf8')).appearance.variant;
-}
+export { defaultComposition, LANDED, pendingProblems, registeredVariants };
 
 /**
  * The composition the rehearsal's pair selects: the default when this build
@@ -188,29 +176,6 @@ export const PENDING_ROWS = Object.freeze([
     waitsOn: 'default-composition',
   },
 ]);
-
-/** What each pending row's `waitsOn` means, and how to tell it has landed. */
-export const LANDED = Object.freeze({
-  'default-composition': {
-    what: 'the default composition, the one site.example.yml selects, registered (#13, #111)',
-    landed: ({ registered, defaultId }) => registered.includes(defaultId),
-  },
-});
-
-/** Problems with the pending rows: one per row whose blocker has landed, and one per unknown blocker. */
-export function pendingProblems(rows, state) {
-  const problems = [];
-  for (const row of rows) {
-    const blocker = LANDED[row.waitsOn];
-    if (!blocker) problems.push(`${row.id} waits on ${row.waitsOn}, which LANDED doesn't define`);
-    else if (blocker.landed(state)) {
-      problems.push(
-        `${row.id} is still pending, but what it waits on has landed: ${blocker.what}. Make it a real row.`,
-      );
-    }
-  }
-  return problems;
-}
 
 // ---- running commands --------------------------------------------------------
 
