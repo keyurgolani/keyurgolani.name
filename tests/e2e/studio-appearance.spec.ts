@@ -84,6 +84,9 @@ test(
       'Blocks publishing',
     );
     // Only what a site may select: never the fallback composition.
+    await expect(
+      composition.locator('option:not([value="missing-variant"])').first(),
+    ).toBeAttached();
     const offered = await composition
       .locator('option')
       .evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value));
@@ -113,6 +116,9 @@ test(
     await page.goto('/studio#appearance');
     const form = workspace(page);
     const composition = form.getByRole('combobox', { name: 'Composition the site shows' });
+    await expect(
+      composition.locator('option:not([value="missing-variant"])').first(),
+    ).toBeAttached();
     const target = await composition
       .locator('option')
       .evaluateAll((options) =>
@@ -143,8 +149,7 @@ test(
     // The source shows the same document with those two values changed, and nothing else.
     await page.getByRole('link', { name: 'Content' }).click();
     await page.getByRole('button', { name: 'Source', exact: true }).click();
-    const site = await page.getByLabel(/^site\.(?:yml|json)$/).inputValue();
-    expect(site).toBe(
+    await expect(page.getByLabel(/^site\.(?:yml|json)$/)).toHaveValue(
       SITE.replace('variant: missing-variant', `variant: ${target}`).replace(
         '  displayMode: selectable\nmotionPolicy',
         '  displayMode: locked\nmotionPolicy',
@@ -171,6 +176,7 @@ test(
     await expect(line(page, 'Draft')).toHaveText(`Saved draft, version ${draft.version}.`);
     // Item focus: the section scrolls into the frame and is outlined over it, outside its document.
     const sections = preview.getByRole('combobox', { name: 'Show a section in the preview' });
+    await expect(sections.locator('option:not([value=""])').first()).toBeAttached();
     const first = await sections
       .locator('option')
       .evaluateAll((options) => (options[1] as HTMLOptionElement | undefined)?.value ?? '');
