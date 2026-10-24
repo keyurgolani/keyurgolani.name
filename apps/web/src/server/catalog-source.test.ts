@@ -380,6 +380,11 @@ function reidentified(own: { name?: boolean; title?: boolean; ogImage?: boolean 
   return text;
 }
 
+/** `text` with a zero-width space, a zero-width non-joiner, and a soft hyphen inside it. */
+function invisible(text: string): string {
+  return `${text.slice(0, 2)}\u200b${text.slice(2, 4)}\u200c${text.slice(4, 6)}\u00ad${text.slice(6)}`;
+}
+
 const sampleRows = (issues: readonly ConfigIssue[]) =>
   issues
     .filter(({ code }) => code === 'sample_identity')
@@ -406,6 +411,12 @@ test("the sample's name, title, and share image are each fatal in production and
     // Case, spacing, and Unicode form aside.
     ['/identity/name', PORTFOLIO.replace('Rowan Test', `"  ${SAMPLE.name.toUpperCase()} "`), 5],
     ['/meta/title', withMeta({ title: ` ${SAMPLE.title!.toLowerCase()}` }), 11],
+    // Invisible characters aside: a zero-width space, a zero-width
+    // non-joiner, and a soft hyphen.
+    ['/identity/name', PORTFOLIO.replace('Rowan Test', invisible(SAMPLE.name)), 5],
+    ['/meta/title', withMeta({ title: invisible(SAMPLE.title!) }), 11],
+    // The sample's name alone, as the title.
+    ['/meta/title', withMeta({ title: SAMPLE.name }), 11],
     // By the image's source, whatever the entry's id.
     ['/meta/ogImage', withMeta({ ogImage: SAMPLE.ogImage! }), 12],
   ];
@@ -425,11 +436,13 @@ test("the sample's name, title, and share image are each fatal in production and
   }
 });
 
-test('a title or a share image of your own passes', (t) => {
-  const own = withMeta({ title: 'Rowan Test, engineer', ogImage: 'og/rowan.png' });
-  const opened = open(tempDir(t, pair(own)), 'production');
-  assert.ok(opened.ok, JSON.stringify(opened.issues));
-  assert.deepEqual(opened.issues, []);
+test('a title or a share image of your own passes, a title that only mentions the sample too', (t) => {
+  for (const title of ['Rowan Test, engineer', `Notes on a talk by ${SAMPLE.name}`]) {
+    const own = withMeta({ title, ogImage: 'og/rowan.png' });
+    const opened = open(tempDir(t, pair(own)), 'production');
+    assert.ok(opened.ok, JSON.stringify(opened.issues));
+    assert.deepEqual(opened.issues, []);
+  }
 });
 
 test('the example with only its name replaced is still refused, by its title and its share image', (t) => {
@@ -464,17 +477,43 @@ test('the example with its name, title, and share image all replaced passes in p
   }
 });
 
-test("a bundled sample that doesn't read stops production, which never checks against nothing", (t) => {
+test("a bundled sample portfolio that doesn't read stops production, which never checks against nothing", (t) => {
   const dir = tempDir(t, pair());
-  const missing = { ...EXAMPLES, portfolio: path.join(dir, 'absent.example.yml') };
-  const production = open(dir, 'production', { examples: missing });
-  assert.deepEqual(
-    fatal(production).map(({ key, code, file }) => [key, code, file]),
-    [['PORTFOLIO_PROFILE', 'sample_unreadable', 'absent.example.yml']],
-  );
-  const dev = open(dir, 'development', { examples: missing });
-  assert.ok(dev.ok);
-  assert.deepEqual(codes(dev.issues), ['warning:sample_unreadable']);
+  const broken = tempDir(t, { 'invalid.example.yml': `${HEAD}identity: {}\n` });
+  const cases: [string, RegExp][] = [
+    [path.join(dir, 'absent.example.yml'), /^The bundled sample portfolio is missing, /],
+    [path.join(broken, 'invalid.example.yml'), /^The bundled sample portfolio doesn't validate, /],
+  ];
+  for (const [portfolio, message] of cases) {
+    const examples = { ...EXAMPLES, portfolio };
+    const [issue, ...rest] = fatal(open(dir, 'production', { examples }));
+    assert.deepEqual(rest, []);
+    assert.deepEqual(
+      [issue?.key, issue?.code, issue?.file, issue?.document],
+      ['PORTFOLIO_PROFILE', 'sample_unreadable', path.basename(portfolio), 'portfolio'],
+    );
+    assert.match(issue!.message, message);
+    assert.equal(
+      issue!.remediation,
+      'Rebuild or re-pull the image; portfolio.example.yml and site.example.yml ship at the app root.',
+    );
+    const dev = open(dir, 'development', { examples });
+    assert.ok(dev.ok);
+    assert.deepEqual(codes(dev.issues), ['warning:sample_unreadable']);
+  }
+});
+
+test('a broken site example never stops production: the sample check reads the portfolio example alone', (t) => {
+  const dir = tempDir(t, pair());
+  const examples = { ...EXAMPLES, site: path.join(dir, 'absent-site.example.yml') };
+  const opened = open(dir, 'production', { examples });
+  assert.ok(opened.ok, JSON.stringify(opened.issues));
+  assert.deepEqual(opened.issues, []);
+  // It still checks: the sample's name is refused.
+  const sample = tempDir(t, pair(PORTFOLIO.replace('Rowan Test', SAMPLE.name)));
+  assert.deepEqual(sampleRows(fatal(open(sample, 'production', { examples }))), [
+    ['fatal', 'portfolio.yml', '/identity/name', 5],
+  ]);
 });
 
 test('a valid pair becomes one frozen revision, named by a hash over both documents', async (t) => {

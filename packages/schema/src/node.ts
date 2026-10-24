@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { MIGRATE_COMMAND } from './legacy';
+import { parsePortfolio } from './load';
 import { parseMediaDocumentText, type MediaDocument } from './media';
 import { redactSecrets } from './secrets';
 import { isSnapshotKind, parseSnapshotText, type UnitFileProblem } from './snapshots';
+import type { Portfolio } from './portfolio';
 import type { ParsedPair } from './view';
 import { detectFormat, DOCUMENT_MAX_BYTES, type DocumentFormat } from './source';
 import {
@@ -215,6 +217,31 @@ export function readPair(files: PairFiles, ctx: Context = {}): LoadPairResult {
     notChecked: result.notChecked,
     sources: { portfolio, site },
   };
+}
+
+export type PortfolioFileResult =
+  | { readonly ok: true; readonly portfolio: Portfolio }
+  | { readonly ok: false; readonly reason: 'missing' | 'unreadable' | 'invalid' };
+
+/**
+ * One portfolio document from its file, read as readPair() reads it and
+ * checked against its own schema alone, with no site document beside it:
+ * for a value the portfolio holds, such as the bundled sample's name.
+ */
+export function readPortfolioFile(file: string, ctx: Context = {}): PortfolioFileResult {
+  const name = path.basename(file);
+  let text: string;
+  try {
+    text = readBounded(file);
+  } catch (error) {
+    const missing = (error as NodeJS.ErrnoException).code === 'ENOENT';
+    return { ok: false, reason: missing ? 'missing' : 'unreadable' };
+  }
+  const parsed = parsePortfolio(text, detectFormat(name), {
+    ...(ctx.extensions ? { extensions: ctx.extensions } : {}),
+    name,
+  });
+  return parsed.ok ? { ok: true, portfolio: parsed.value } : { ok: false, reason: 'invalid' };
 }
 
 /** One of the pair's files as read: its name, such as portfolio.yml, and its bytes. */

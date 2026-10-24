@@ -13,8 +13,8 @@ import {
   type Context,
   type UnitValidator,
 } from '@portfolio/schema';
-import { readPair, type PairFiles } from '@portfolio/schema/node';
-import { sampleFields, sampleIdentityOf, type SampleIdentity } from '../lib/sample-identity';
+import { readPortfolioFile, type PairFiles } from '@portfolio/schema/node';
+import { sampleFields, sampleIdentityOf } from '../lib/sample-identity';
 import type { ConfigIssue, RuntimeMode } from './config';
 
 // The mounted documents as a CatalogReader (#3, item 19): @portfolio/core's
@@ -57,18 +57,23 @@ export function openSourceCatalog(input: SourceCatalogInput): OpenSourceCatalogR
     validators: input.validators,
     ...(input.origin ? { canonicalOrigin: input.origin } : {}),
   };
-  const sample = readSample(input.examples);
-  // Production checks against the sample or doesn't start: never against nothing.
-  const unread: ConfigIssue[] = sample
+  const read = readPortfolioFile(input.examples.portfolio);
+  const sample = read.ok ? sampleIdentityOf(read.portfolio) : undefined;
+  // Production checks against the sample or doesn't start: never against
+  // nothing. Only the portfolio example holds what's checked, so a broken
+  // site example can't stop a deployment that never renders it.
+  const unread: ConfigIssue[] = read.ok
     ? []
     : [
         {
           severity: input.mode === 'production' ? 'fatal' : 'warning',
           key: 'PORTFOLIO_PROFILE',
           code: 'sample_unreadable',
-          message:
-            "The server can't read the bundled sample, or it doesn't validate, so it can't check that the portfolio isn't it. This build is broken.",
+          message: `${UNREAD[read.reason]}, so the server can't check that the portfolio isn't it. This build is broken.`,
           file: path.basename(input.examples.portfolio),
+          document: 'portfolio',
+          remediation:
+            'Rebuild or re-pull the image; portfolio.example.yml and site.example.yml ship at the app root.',
         },
       ];
   if (sample === undefined && input.mode === 'production') return { ok: false, issues: unread };
@@ -85,11 +90,12 @@ export function openSourceCatalog(input: SourceCatalogInput): OpenSourceCatalogR
   return opened.ok ? { ok: true, reader: opened.reader, issues } : { ok: false, issues };
 }
 
-/** The bundled sample's identity, from the pair the build ships, or undefined when it doesn't read. */
-function readSample(examples: PairFiles): SampleIdentity | undefined {
-  const read = readPair(examples);
-  return read.ok ? sampleIdentityOf(read.pair.portfolio) : undefined;
-}
+/** Why the bundled sample's portfolio didn't read. */
+const UNREAD = {
+  missing: 'The bundled sample portfolio is missing',
+  unreadable: "The server can't read the bundled sample portfolio",
+  invalid: "The bundled sample portfolio doesn't validate",
+} as const;
 
 /** #4's validator with the live context: a served pair is checked as it serves. */
 function servedChecks(context: Context): UnitChecks {
