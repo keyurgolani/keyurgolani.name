@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ComponentType } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ResolvedAppearance } from '@portfolio/appearance';
 import { PresentationBoundary } from '@portfolio/appearance/react';
 import { installPostPass } from '@portfolio/kit/markdown-local';
@@ -283,7 +283,7 @@ export function LocalFrame({ catalog, studioOrigin, nonce, install = installPost
     <LocalDocumentView
       render={view.shown.render}
       registries={registries}
-      Variant={view.shown.Variant as ComponentType<{ input: VariantRenderInput }> as VariantComponent}
+      Variant={view.shown.Variant}
       nonce={nonce}
     />
   );
@@ -299,7 +299,9 @@ export function frameView(
   shown: Shown | null,
   failed: boolean,
 ):
-  | { readonly kind: 'unavailable' | 'not-rendered' | 'waiting' }
+  | { readonly kind: 'unavailable' }
+  | { readonly kind: 'not-rendered' }
+  | { readonly kind: 'waiting' }
   | { readonly kind: 'document'; readonly shown: Shown } {
   if (postPass === 'failed') return { kind: 'unavailable' };
   if (postPass !== 'ready') return { kind: 'waiting' };
