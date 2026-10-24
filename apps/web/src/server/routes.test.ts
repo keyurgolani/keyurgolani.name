@@ -18,6 +18,7 @@ import { VARIANTS } from '../lib/generated/registry.meta';
 import { CAPABILITIES, FIXTURE_CAPABILITIES, PROFILES, type Profile } from './capabilities';
 import type { DeploymentConfig } from './config';
 import { setDeploymentState, setLiveCaseStudies, setServable } from './config-store';
+import { CONTENT_HASHED } from './cache-rules';
 import { servedPattern } from './route-guard';
 import {
   devPreviewRoute,
@@ -1746,12 +1747,31 @@ test('every top-level public/ entry is a name no view or route takes, so a file 
   // one the contract reserves, such as favicon.ico. .gitkeep keeps the
   // directory in git.
   const owned = ownedFirstSegments();
+  // A route under /_portfolio/ (#20's generated schemes) sits beside the
+  // files registry generation writes there: it takes a directory of its own,
+  // never one of those the content-hashed rule serves, and public/_portfolio/
+  // holds none of its name.
+  const written = /:kind\(([^)]+)\)/.exec(CONTENT_HASHED)![1]!.split('|');
+  const shared = listRoutes().filter((entry) => entry.pattern.startsWith('/_portfolio/'));
+  for (const entry of shared) {
+    const dir = entry.pattern.split('/')[2]!;
+    assert.ok(!dir.startsWith('['), `${entry.pattern} takes a fixed directory`);
+    assert.ok(
+      !written.includes(dir),
+      `${entry.pattern} takes a directory registry generation writes`,
+    );
+    assert.ok(
+      !existsSync(path.join(WEB, 'public', '_portfolio', dir)),
+      `a route answers before public/_portfolio/${dir}`,
+    );
+  }
   for (const entry of readdirSync(path.join(WEB, 'public'))) {
     if (entry === '.gitkeep') continue;
     assert.ok(
       isReservedSegment(entry) || !LITERAL_SEGMENT.test(entry),
       `a view could take public/${entry}: name it like a file, or reserve it`,
     );
+    if (entry === '_portfolio' && shared.length > 0) continue;
     assert.ok(!owned.has(entry), `a route answers before public/${entry}`);
   }
   // Such a path is missing, so it reaches Next, which serves the file before
