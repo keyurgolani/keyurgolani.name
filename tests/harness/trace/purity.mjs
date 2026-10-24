@@ -13,7 +13,12 @@
 //   ASSET_MANIFEST (apps/web/src/lib/generated/asset-manifest.json);
 // - a third-party request;
 // - a link to /studio or /admin;
-// - CSS from anything but experience-base.css and the selected units.
+// - CSS from anything but experience-base.css and the selected units;
+// - a generated scheme's stylesheet (#20) that isn't the page's own: one
+//   under /_portfolio/scheme/ other than the one the revision the page
+//   renders compiles for the scheme its boundary names, such as another
+//   site's or an earlier revision's, and, as any stylesheet off the
+//   build's, a draft's from a grant's /preview-assets/.
 //
 // Modules are matched through source maps, so a chunk without one fails
 // the page: only a PORTFOLIO_ANALYZE=1 build ships them.
@@ -26,8 +31,14 @@ export const BASE_STYLESHEET = 'apps/web/src/app/experience-base.css';
 /** #19's pack kinds, each the boundary attribute that names the pack it renders, data-<kind>. */
 export const PACK_KINDS = ['design-language', 'color-scheme', 'typography'];
 
-/** Where the host serves units' files (packages/variant-contract VARIANT_URL, ASSET_URL, and #19's packs). */
-const UNIT_FILES = /^\/_portfolio\/(variant|pack|asset)\/[^/]+$/;
+/**
+ * Where the host serves units' files (packages/variant-contract VARIANT_URL,
+ * ASSET_URL, and #19's packs), and a live revision's generated schemes (#20).
+ */
+const UNIT_FILES = /^\/_portfolio\/(variant|pack|asset|scheme)\/[^/]+$/;
+
+/** Where the host serves a live revision's generated schemes (#20): `<schemeId>.<sha256-12>.css`. */
+const SCHEME_FILES = '/_portfolio/scheme/';
 
 /** Where Next serves the build's chunks. */
 const NEXT_STATIC = '/_next/static/';
@@ -252,7 +263,7 @@ export function documentReferences(html, pageUrl) {
       chunks.add(chunkUrl(match, pageUrl));
     }
     for (const [match] of text.matchAll(
-      /\/_portfolio\/(?:variant|pack|asset)\/[A-Za-z0-9_\-.]+/g,
+      /\/_portfolio\/(?:variant|pack|asset|scheme)\/[A-Za-z0-9_\-.]+/g,
     )) {
       unitFiles.add(resolved(match, pageUrl));
     }
@@ -350,6 +361,10 @@ const label = (unit) => `${unit.kind} ${unit.id}`;
  * @param {readonly string[]} [page.forbiddenProblems] forbiddenRules()'s problems
  * @param {Partial<Record<string, string>>} [page.errorPacks] the pack on each kind the error
  *   page renders in, whose stylesheet a page may name but not load
+ * @param {Readonly<Record<string, string>>} [page.generatedSchemes] the stylesheet path, under
+ *   /_portfolio/scheme/, of each generated scheme the revision the page renders stored, by scheme
+ *   id, as the server compiles it: the page may load the one its boundary's data-color-scheme
+ *   names, and no other
  * @returns {{ selected: { units: string[], platform: string | null }, problems: string[] }}
  */
 export function purityProblems(page) {
@@ -378,6 +393,16 @@ export function purityProblems(page) {
     ),
   );
   if (manifest.platform && selected.platform) allowed.add(manifest.platform.url);
+  // The page's own generated scheme (#20): the one its boundary renders, at
+  // the name its revision's stored sets compile to. Own property only.
+  const schemeId = dom.boundary?.['data-color-scheme'];
+  const ownScheme =
+    schemeId !== undefined &&
+    page.generatedSchemes &&
+    Object.hasOwn(page.generatedSchemes, schemeId)
+      ? page.generatedSchemes[schemeId]
+      : undefined;
+  if (typeof ownScheme === 'string' && ownScheme.startsWith(SCHEME_FILES)) allowed.add(ownScheme);
   const unitPackages = new Map();
   for (const unit of manifest.units) {
     unitPackages.set(unit.packageName, [...(unitPackages.get(unit.packageName) ?? []), unit]);
@@ -428,7 +453,9 @@ export function purityProblems(page) {
     problems.add(
       owner
         ? `${pathname} is ${label(owner)}'s, which the page doesn't render.`
-        : `${pathname} is no registered unit's file in ASSET_MANIFEST.`,
+        : pathname.startsWith(SCHEME_FILES)
+          ? `${pathname} is no generated scheme the page renders: only its own revision's ${schemeId ?? 'scheme'} stylesheet is.`
+          : `${pathname} is no registered unit's file in ASSET_MANIFEST.`,
     );
   }
 
