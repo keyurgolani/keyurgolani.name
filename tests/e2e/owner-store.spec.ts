@@ -17,15 +17,34 @@ import { ownerSecret } from '../harness/owner-secret.mjs';
 const OWNER = { type: 'profile', description: 'owner' };
 const secret = ownerSecret();
 
-/** The fixture pair, with `name` as the portfolio's identity and its page title. */
-function documents(name: string) {
+/** The fixture's one work, which its visible works section lists. */
+const WORK = 'fixture-garden';
+
+/**
+ * The fixture pair, with `name` as the portfolio's identity and its page
+ * title, and with `caseStudy`, a case study on its one work at /work/<WORK>
+ * (#10b).
+ */
+function documents(name: string, caseStudy = false) {
   const portfolio = readFileSync(DEFAULT_PORTFOLIO, 'utf8');
   expect(portfolio).toContain('name: Rowan Fixture');
   expect(portfolio).toContain('title: Rowan Fixture');
+  const work = `  - id: ${WORK}\n`;
+  const summary = '    summary: A garden of deterministic fixtures.\n';
+  expect(portfolio).toContain(work);
+  expect(portfolio).toContain(summary);
+  const withCase = caseStudy
+    ? portfolio
+        .replace(work, `${work}    slug: ${WORK}\n`)
+        .replace(
+          summary,
+          `${summary}    caseStudy:\n      challenge: Grow the same garden every run.\n`,
+        )
+    : portfolio;
   return {
     portfolio: {
       format: 'yaml',
-      sourceText: portfolio.replaceAll('Rowan Fixture', name),
+      sourceText: withCase.replaceAll('Rowan Fixture', name),
     },
     site: { format: 'yaml', sourceText: readFileSync(DEFAULT_SITE, 'utf8') },
   };
@@ -46,12 +65,23 @@ function dataDirFor(testInfo: TestInfo): string {
  * directory out as startup's preflight would, and returns the revision IDs.
  */
 async function publish(dataDir: string, ...names: string[]): Promise<string[]> {
+  return publishPairs(
+    dataDir,
+    names.map((name) => documents(name)),
+  );
+}
+
+/** Publishes each pair in turn, as publish() does, and returns the revision IDs. */
+async function publishPairs(
+  dataDir: string,
+  pairs: readonly ReturnType<typeof documents>[],
+): Promise<string[]> {
   const run = await runChild({
     kind: 'run',
     dataDir,
     steps: [
       { op: 'preflight' },
-      ...names.map((name) => ({ op: 'publishDocuments', documents: documents(name) })),
+      ...pairs.map((pair) => ({ op: 'publishDocuments', documents: pair })),
     ],
   } as never);
   const { results } = (run.result ?? { results: [] }) as {
@@ -59,7 +89,7 @@ async function publish(dataDir: string, ...names: string[]): Promise<string[]> {
   };
   const [laidOut, ...published] = results;
   expect(laidOut, JSON.stringify(run)).toEqual({ ok: true, outcome: null });
-  expect(published.length).toBe(names.length);
+  expect(published.length).toBe(pairs.length);
   for (const result of published) {
     expect(result.outcome?.kind, JSON.stringify(result)).toBe('committed');
   }
@@ -174,6 +204,126 @@ test(
         seen.add(name!);
       }
       await publishing;
+    } finally {
+      await app.stop();
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  },
+);
+
+/** The metadata surfaces every revision serves. */
+const SURFACES = ['/', '/feed.xml', '/robots.txt', '/sitemap.xml', '/opengraph-image-12o0cb'];
+
+/**
+ * Each of `routes`' bytes, as the server answers them now. A page's scripts
+ * carry the nonce of its own response's Content-Security-Policy (#6, item
+ * 8), new on every request, so each is checked against the header and read
+ * as `<nonce>`; nothing else in a page differs between two requests.
+ */
+async function surfaces(
+  request: APIRequestContext,
+  origin: string,
+  routes: readonly string[] = SURFACES,
+) {
+  const answers: Record<string, Buffer> = {};
+  for (const route of routes) {
+    const response = await request.get(`${origin}${route}`);
+    expect(response.status(), route).toBe(200);
+    const body = await response.body();
+    if (!(response.headers()['content-type'] ?? '').startsWith('text/html')) {
+      answers[route] = body;
+      continue;
+    }
+    const nonce = /'nonce-([A-Za-z0-9+/=]+)'/.exec(
+      response.headers()['content-security-policy'] ?? '',
+    )?.[1];
+    expect(nonce, `${route}'s policy has a nonce`).toBeDefined();
+    const text = body.toString('utf8');
+    for (const [, used] of text.matchAll(/\snonce="([^"]*)"/g)) {
+      expect(used, `${route}: a nonce that isn't the policy's`).toBe(nonce);
+    }
+    answers[route] = Buffer.from(text.split(nonce!).join('<nonce>'));
+  }
+  return answers;
+}
+
+/** A page's canonical link, og:url, and JSON-LD, as its HTML names them. */
+function head(html: string) {
+  return {
+    canonical: /<link rel="canonical" href="([^"]*)"/.exec(html)?.[1],
+    ogUrl: /<meta property="og:url" content="([^"]*)"/.exec(html)?.[1],
+    ld: /<script type="application\/ld\+json"[^>]*>([^<]*)<\/script>/.exec(html)?.[1] ?? '',
+  };
+}
+
+test(
+  'a publish that renames the person and removes a case study shows on every metadata surface on the next request, and a rollback serves the earlier bytes exactly, the case study page included (#22)',
+  {
+    annotation: [
+      { type: 'route', description: '/' },
+      { type: 'route', description: '/feed.xml' },
+      { type: 'route', description: '/opengraph-image-12o0cb' },
+      { type: 'route', description: '/work/[slug]' },
+      OWNER,
+    ],
+  },
+  async ({ request }, testInfo) => {
+    const dataDir = dataDirFor(testInfo);
+    // The first revision has a case study on the fixture's work; the
+    // renamed one drops it.
+    const [before] = await publishPairs(dataDir, [documents('Rowan Before', true)]);
+    const app = await owner(dataDir);
+    const workPage = `/work/${WORK}`;
+    try {
+      const first = await surfaces(request, app.origin, [...SURFACES, workPage]);
+      expect(names(first['/']!.toString('utf8')).ld).toContain('Rowan Before');
+      const work = head(first[workPage]!.toString('utf8'));
+      expect(work.canonical).toBe(`${app.origin}${workPage}`);
+      expect(work.ogUrl).toBe(`${app.origin}${workPage}`);
+      expect(work.ld).toContain('Rowan Before');
+      expect(first['/sitemap.xml']!.toString('utf8')).toContain(
+        `<loc>${app.origin}${workPage}</loc>`,
+      );
+
+      const [after] = await publish(dataDir, 'Rowan Renamed');
+      const renamed = await surfaces(request, app.origin);
+      // The removed case study is gone: a 404, and out of the sitemap.
+      expect((await request.get(`${app.origin}${workPage}`)).status()).toBe(404);
+      expect(renamed['/sitemap.xml']!.toString('utf8')).not.toContain(workPage);
+      const page = names(renamed['/']!.toString('utf8'));
+      expect(page.title).toContain('Rowan Renamed');
+      expect(page.ld).toContain('Rowan Renamed');
+      expect(page.html).not.toContain('Rowan Before');
+      expect(renamed['/feed.xml']!.toString('utf8')).toContain('Rowan Renamed');
+      // The card is drawn from the live person, so it changed with them.
+      expect(renamed['/opengraph-image-12o0cb']!.equals(first['/opengraph-image-12o0cb']!)).toBe(
+        false,
+      );
+
+      const run = await runChild({
+        kind: 'run',
+        dataDir,
+        steps: [
+          {
+            op: 'rollback',
+            input: { targetRevisionId: before, expectedLiveRevisionId: after },
+          },
+        ],
+      } as never);
+      const { results } = (run.result ?? { results: [] }) as {
+        results: { ok: boolean; outcome?: { kind?: string } | null }[];
+      };
+      expect(results[0]?.outcome?.kind, JSON.stringify(run)).toBe('committed');
+
+      // Nothing to rebuild and nothing kept from the renamed revision: the
+      // case study's page is back, its canonical, og:url, and JSON-LD the
+      // restored revision's.
+      const again = await surfaces(request, app.origin, [...SURFACES, workPage]);
+      for (const route of Object.keys(first)) {
+        expect(again[route]!.equals(first[route]!), `${route} after the rollback`).toBe(true);
+      }
+      expect(head(again[workPage]!.toString('utf8'))).toEqual(work);
+      expect(app.egress()).toEqual([]);
     } finally {
       await app.stop();
       rmSync(dataDir, { recursive: true, force: true });

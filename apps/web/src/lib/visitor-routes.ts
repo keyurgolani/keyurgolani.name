@@ -42,7 +42,11 @@ export type VisitorRoute =
       readonly view: PublicView;
       readonly composition: Composition;
       readonly target: RouteTarget;
-      /** A path view's parent route, below `basePath`, which its canonical link names. */
+      /**
+       * The path the page's canonical link and og:url name (#22): the route
+       * itself at the site root, a path view's parent route below `basePath`,
+       * and none for a route of /sample or a preview frame.
+       */
       readonly canonical?: string;
     }
   /** A 307 to the canonical route of a view only another installed variant declares. */
@@ -80,20 +84,20 @@ export async function resolveVisitorPath(
   if (first === 'work' && !routedSlugs(view).has(path.segments[1] ?? '')) return NOT_FOUND;
   if (result.kind !== 'render') return result;
   const { target } = result;
+  // A route on the live site is its own canonical, with no query (#22): `/`
+  // and `/work/<slug>`. /sample and a preview frame aren't the live site's,
+  // so they name none.
+  const canonical = path.basePath === '' ? { canonical: href(target) } : {};
   if (target.route === 'work' && !rendersWorkPage(composition.rendered.manifest)) {
     // The selection stays the site's; only what renders the page changes.
     const fallback = { ...compositionFor(FALLBACK_ID, registry), requested: composition.requested };
-    return { kind: 'render', view, composition: fallback, target };
+    return { kind: 'render', view, composition: fallback, target, ...canonical };
   }
-  if (target.route !== 'view') return { kind: 'render', view, composition, target };
-  // A view is canonical to its parent route.
+  if (target.route !== 'view') return { kind: 'render', view, composition, target, ...canonical };
+  // A view is canonical to its parent route, at the site root alone: a view
+  // under /sample or a preview frame names none, as its parent doesn't.
+  if (path.basePath !== '') return { kind: 'render', view, composition, target };
   const parent: RouteTarget =
     target.slug === undefined ? { route: 'home' } : { route: 'work', slug: target.slug };
-  return {
-    kind: 'render',
-    view,
-    composition,
-    target,
-    canonical: href(parent, { basePath: path.basePath, query: path.query }),
-  };
+  return { kind: 'render', view, composition, target, canonical: href(parent) };
 }

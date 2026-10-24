@@ -41,13 +41,20 @@ export function renderExperienceSegments(result: RegistryResult): Map<string, st
 //
 // ${id}'s experience segment (#6, Slice 2): each visitor page that renders
 // ${id} comes here, through the rewrite of proxy.ts's mark in next.config.ts.
-// It imports no other variant.
+// It imports no other variant. Its head metadata names the route's
+// canonical path (#22).
 
+import { experienceMetadata } from '~/server/experience-metadata';
 import { experiencePage } from '~/server/experience-page';
-import { servedPage } from '~/server/page-guard';
+import { servedMetadata, servedPage } from '~/server/page-guard';
 import { ClientHostModules } from ${text('../host-modules')};
 
 export const dynamic = 'force-dynamic';
+
+export const generateMetadata = servedMetadata(
+  ${text(`/_experience/${id}/[[...route]]`)},
+  experienceMetadata(),
+);
 
 export default servedPage(
   ${text(`/_experience/${id}/[[...route]]`)},

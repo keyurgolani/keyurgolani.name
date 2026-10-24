@@ -731,6 +731,13 @@ test('the JSON-LD names the signature and featured works, each @id its anchor on
   assert.equal(bare!.workExample, undefined);
 });
 
+test("the structured data never carries the identity's email, which the contact section alone shows (#22)", () => {
+  assert.ok(READY.portfolio.identity.email, 'the fixture has one');
+  for (const block of buildStructuredData(READY, { siteUrl: 'https://rowan.test' })) {
+    assert.doesNotMatch(JSON.stringify(block), new RegExp(READY.portfolio.identity.email!));
+  }
+});
+
 test("a kind the composition doesn't render takes the anchors, the links to them, and the navigation with it", () => {
   const input = inputFor(COMPLETE, { manifest: { unsupportedKinds: ['works'] } });
   const work = input.portfolio.works.find(({ id }) => id === 'tide-atlas')!;

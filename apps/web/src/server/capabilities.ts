@@ -110,10 +110,10 @@ export function accessIn(profile: Profile, capability: Capability): Access | 'ab
 }
 
 /**
- * Whether crawlers may index a profile's pages. Until #9 and #22 decide what
- * a demo deployment shows them, `demo` asks for nothing to be indexed:
- * proxy.ts sends `X-Robots-Tag: noindex` on every response, robots.txt
- * disallows `/`, and the sitemap is empty.
+ * Whether crawlers may index a profile's pages. `demo` asks for nothing to
+ * be indexed (#22): proxy.ts sends `X-Robots-Tag: noindex` on every
+ * response, robots.txt lets crawlers fetch the pages that say so, the
+ * sitemap is empty, and no page carries JSON-LD.
  */
 export const INDEXABLE: Readonly<Record<Profile, boolean>> = {
   owner: true,

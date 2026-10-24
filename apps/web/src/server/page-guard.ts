@@ -1,4 +1,5 @@
 import 'server-only';
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { requireDeploymentConfig } from './config-store';
 import { serves, type RoutePattern } from './routes';
@@ -23,5 +24,20 @@ export function servedPage<Args extends unknown[], Result>(
     if (!serves(requireDeploymentConfig().profile, pattern)) notFound();
     return render(...args);
   };
+  return Object.assign(guarded, { [SERVED]: pattern });
+}
+
+/**
+ * A page's generateMetadata that adds nothing, and reads nothing, unless
+ * the deployment's profile serves `pattern` (#22), as the page's servedPage()
+ * renders nothing then. A page exports one as
+ * `export const generateMetadata = servedMetadata('<its pattern>', metadata)`.
+ */
+export function servedMetadata<Args extends unknown[]>(
+  pattern: RoutePattern,
+  metadata: (...args: Args) => Promise<Metadata>,
+): (...args: Args) => Promise<Metadata> {
+  const guarded = async (...args: Args): Promise<Metadata> =>
+    serves(requireDeploymentConfig().profile, pattern) ? metadata(...args) : {};
   return Object.assign(guarded, { [SERVED]: pattern });
 }

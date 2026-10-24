@@ -162,6 +162,16 @@ Add the `--set`, `--drop-unknown`, and `--write --out /config/new` arguments to 
 
 Put Nginx, Caddy, or Traefik in front, pointed at `http://127.0.0.1:3000` (or the port you set), and terminate TLS there. The app builds every absolute URL from `PORTFOLIO_ORIGIN`; it never reads `Host` or `X-Forwarded-*` for one. With `PORTFOLIO_PREVIEW_ORIGIN` set, the proxy must pass each request's own `Host` on: the server tells the site's host from the preview origin's by it, and fails closed, so any other host, such as the upstream's name a proxy put in its place, gets only `/api/health` and `/api/ready`. Nginx's `proxy_pass` sends the upstream's name unless told otherwise, so add `proxy_set_header Host $host;` beside it. Caddy's `reverse_proxy` and Traefik keep the client's `Host` as they come. Set `PORTFOLIO_TRUSTED_PROXY_HOPS` to the number of proxies that append to `X-Forwarded-For`. With `0`, the default, `owner` ignores the header and doesn't know where a request came from. With N, it takes the Nth entry from the right as the client, without a port or the brackets around an IPv6 address. That is the source the audit log records and sign-in limits by. Set it to exactly the proxies that append: a higher count takes an entry the client wrote itself.
 
+The site has one canonical origin, `PORTFOLIO_ORIGIN`. Every canonical link, `og:url`, sitemap entry, feed link, and JSON-LD URL names it, whichever host a request came in on. Send every other name the site answers to, such as `www.` or an old domain, to it with a permanent redirect at the proxy, since the app can't tell a wrong public host from the proxy's own and never reads `Host` to find out. In Caddy, for a site on `jane.name`:
+
+```
+www.jane.name, old-jane.example {
+	redir https://jane.name{uri} permanent
+}
+```
+
+In Nginx, a `server` block for the other names with `return 308 https://jane.name$request_uri;`.
+
 That address is for a proxy on the host. A proxy in another container can't reach a port published on the host's `127.0.0.1`: put the proxy and the app on one Docker network, point the proxy at the app's service name (`http://web:3000` in these examples), and drop the `ports:` entry if nothing on the host needs it.
 
 The proxy knows the site is on HTTPS, so it sends `Strict-Transport-Security`. In a Caddy site block, for example:
@@ -512,7 +522,7 @@ For a process manager (PM2, systemd, etc.), wrap `pnpm start` with the same envi
 PORTFOLIO_PROFILE=demo PORTFOLIO_ORIGIN=https://demo.jane.name pnpm start
 ```
 
-`/` and `/sample` show the sample in the sample site's selection, `editorial-evidence`, which renders as the fallback composition until #13 installs it. `/sample?variant=<id>` shows it in any registered variant, with that variant's views below `/sample` and the parameter on every link; `fallback`, an id this build doesn't register, an empty one, or two are a 404. The sample's `github` section doesn't render, since it would fetch a live account. Until the demo's indexing rules are settled, every response the app sends has `X-Robots-Tag: noindex`, `robots.txt` disallows everything, the sitemap is empty, and there is no feed. Every Studio operation answers with the 404 envelope.
+`/` and `/sample` show the sample in the sample site's selection, `editorial-evidence`, which renders as the fallback composition until #13 installs it. `/sample?variant=<id>` shows it in any registered variant, with that variant's views below `/sample` and the parameter on every link; `fallback`, an id this build doesn't register, an empty one, or two are a 404. The sample's `github` section doesn't render, since it would fetch a live account. The sample stays out of search: every response the app sends has `X-Robots-Tag: noindex`, and `robots.txt` lets crawlers fetch every page, since a crawler only sees the `noindex` on a page it may fetch. Robots names no sitemap, the sitemap is empty, no page carries JSON-LD, and there is no feed. Every Studio operation answers with the 404 envelope.
 
 ## Environment variables
 
@@ -544,7 +554,8 @@ A key outside its profile's list stops a production server; `pnpm dev` warns and
 The host uses Next.js fetch revalidation:
 
 - **GitHub data:** none fetched. A `github` section renders the snapshot beside the documents, `snapshots/github.json`, read at startup, and links the profile until one holds its section. #10's third slice refreshes it.
-- **Metadata:** rendered per request (`robots.txt`, `sitemap.xml`, the Open Graph image, and the feed), from the documents loaded at startup and `PORTFOLIO_ORIGIN`. `features.feed: false` in the site document turns the feed off.
+- **Metadata:** rendered per request (each page's head, `robots.txt`, `sitemap.xml`, the Open Graph image, and the feed), from the live revision and `PORTFOLIO_ORIGIN`, so a publish or a rollback shows on the next request with no rebuild. The build renders none of them ahead. Visitor pages are `no-store`, the share image, robots, and the sitemap must be revalidated on every use, and the feed is `public, max-age=3600`, with nothing stale allowed after the hour. `features.feed: false` in the site document turns the feed off.
+- **After a rollback:** the app serves the earlier revision at once, but a CDN or caching proxy can keep the feed for up to that hour, and anything at all for as long as its own rules say when they override the app's headers. When a rollback takes out something that must not stay up, purge `/feed.xml`, `/opengraph-image-12o0cb`, `/sitemap.xml`, and the pages it was on from the cache.
 - **Media:** a rendition under `/media` is immutable and cached for a year; a new source gets a new address. Nothing else under `/media` is cached. An image made private or removed stops serving at once, but browsers and any CDN or caching proxy keep the copies they already fetched for up to that year: purge `/media/<assetId>/` from the proxy's cache when one has to go now.
 - **Unit files:** every file under `/_portfolio/`, packs, fonts, variant stylesheets, assets, and catalog stills, is named by its content hash, so its URL is its cache key. Those names go out with `Cache-Control: public, max-age=31536000, immutable`, on the site's origin and the preview origin alike; anything else there, a 404 included, gets `no-store`. A deploy that changes a file changes its URL, so nothing needs purging. A page loads only the units it renders, and no file is preloaded or prefetched for a unit it doesn't, so switching one appearance axis downloads only that axis's unit. Documents, `/api`, `/preview` and `/preview-assets`, and Studio keep their own `Cache-Control`.
 - **Next's build assets:** `/_next/static/` is content hashed too, and Next sends its own long-lived caching there.

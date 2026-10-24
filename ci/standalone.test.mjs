@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
-import { checkStandalone, scanStandalone } from './check-standalone.mjs';
+import { checkPrerender, checkStandalone, scanStandalone } from './check-standalone.mjs';
 import { SCAN_SNIPPET } from './lib/container.mjs';
 
 // The build's standalone output holds the bundled sample and nothing the
@@ -255,4 +255,48 @@ test("a build without BUDGET_FIXTURES that ships #6's catalog fixture fails, by 
   assert.match(checkStandalone(dir, {}) ?? '', /static[\\/]chunks[\\/]a\.js/);
   writeFileSync(path.join(parent, 'static', 'chunks', 'a.js'), 'x("data-plate",1)');
   assert.equal(checkStandalone(dir, {}), null);
+});
+
+/** A temporary .next holding a prerender manifest of `routes` and `dynamicRoutes`. */
+function nextDir(t, routes, dynamicRoutes = []) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'next-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const entries = (names) => Object.fromEntries(names.map((name) => [name, {}]));
+  writeFileSync(
+    path.join(dir, 'prerender-manifest.json'),
+    JSON.stringify({ version: 4, routes: entries(routes), dynamicRoutes: entries(dynamicRoutes) }),
+  );
+  return dir;
+}
+
+test('a build that prerendered only pages no portfolio feeds passes the prerender check (#22)', (t) => {
+  assert.equal(checkPrerender(nextDir(t, ['/_global-error', '/_not-found'])), null);
+  assert.equal(checkPrerender(nextDir(t, [])), null);
+});
+
+test('a build that prerendered a metadata route or a visitor page fails, by route (#22)', (t) => {
+  for (const route of [
+    '/robots.txt',
+    '/sitemap.xml',
+    '/feed.xml',
+    '/opengraph-image-12o0cb',
+    '/twitter-image',
+    '/icon.png',
+    '/',
+    '/sample',
+    '/%5Fexperience/fallback',
+  ]) {
+    const problem = checkPrerender(nextDir(t, ['/_global-error', route]));
+    assert.ok(problem?.includes(`: ${route}.`), `${route}: ${problem}`);
+    assert.ok(!problem.includes('_global-error'), problem);
+  }
+  const dynamic = checkPrerender(nextDir(t, [], ['/work/[slug]']));
+  assert.match(
+    dynamic ?? '',
+    /1 route\(s\) the build rendered, which answer per request: \/work\/\[slug\]\./,
+  );
+  assert.match(
+    checkPrerender(path.join(tmpdir(), 'no-such-next-dir')) ?? '',
+    /^No prerender manifest at /,
+  );
 });

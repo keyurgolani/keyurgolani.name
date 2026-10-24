@@ -59,16 +59,19 @@ test.describe('without JavaScript', () => {
 });
 
 test(
-  'a view is canonical to home, and stays out of the sitemap',
+  'a view is canonical to home, as home is to itself (#22), and stays out of the sitemap',
   { annotation: [{ type: 'route', description: '/[...view]' }, READ_ONLY] },
   async ({ page, request, app }) => {
-    await page.goto(VIEW);
-    await expect(page.locator('head link[rel="canonical"]')).toHaveAttribute(
-      'href',
-      `${app.origin}/`,
-    );
-    await page.goto('/');
-    await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
+    for (const route of [VIEW, '/']) {
+      await page.goto(route);
+      await expect(page.locator('head link[rel="canonical"]'), route).toHaveAttribute(
+        'href',
+        `${app.origin}/`,
+      );
+      // Next writes the root's og:url without its slash: the same URL.
+      const ogUrl = await page.locator('head meta[property="og:url"]').getAttribute('content');
+      expect(new URL(ogUrl ?? '').href, route).toBe(`${app.origin}/`);
+    }
     const sitemap = await (await request.get('/sitemap.xml')).text();
     expect([...sitemap.matchAll(/<loc>([^<]*)<\/loc>/g)].map(([, url]) => url)).toEqual([
       `${app.origin}/`,

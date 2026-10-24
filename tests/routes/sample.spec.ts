@@ -54,10 +54,10 @@ test(
     }
     expect((await page.reload())?.status()).toBe(200);
     await expect(heading).toHaveText('About');
-    await expect(page.locator('head link[rel="canonical"]')).toHaveAttribute(
-      'href',
-      `${app.origin}/sample${CHAPTERS}`,
-    );
+    // /sample isn't the live site, so its views name no canonical and no
+    // og:url (#22), as its home doesn't.
+    await expect(page.locator('head link[rel="canonical"]')).toHaveCount(0);
+    await expect(page.locator('head meta[property="og:url"]')).toHaveCount(0);
   },
 );
 

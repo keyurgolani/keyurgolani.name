@@ -25,7 +25,7 @@ What the platform can do today.
 - **Installing a variant is a dependency.** `pnpm --filter @portfolio/web add <package>`, and the build registers it. A package the build can't register stops the build with a diagnostic that names the package, the file, the pointer, and the fix.
 - **The fallback composition.** When the site's variant isn't installed, every section renders in content order, in one column, in its place. The page answers 200, the owner gets a `variant.unavailable` warning at startup and in `config.status`, readiness says `degraded`, and visitors see no label. It's the one composition this build registers; #13 to #17 add the approved five.
 - **Case-study pages.** A public work with a `caseStudy` that a visible section reaches gets its own page at `/work/<slug>`, rendered from the server, and listed in the sitemap. The works list links it with Read the case study. A private work's slug, or any other, is the 404 page, the same as an unknown path.
-- **Views.** A variant can declare path views below `/` and below `/work/<slug>`, such as `/chapters/<chapter>`. Each renders from the server, so it works without JavaScript, links back to its parent route as canonical, and stays out of the sitemap. After a switch, a view only the old variant declares redirects to its parent route while the old variant stays installed, and is a 404 once it's removed.
+- **Views.** A variant can declare path views below `/` and below `/work/<slug>`, such as `/chapters/<chapter>`. Each renders from the server, so it works without JavaScript, links back to its parent route as canonical at the site root (under `/sample` and in a preview frame it names none), and stays out of the sitemap. After a switch, a view only the old variant declares redirects to its parent route while the old variant stays installed, and is a 404 once it's removed.
 - **Shared section renderers.** Every core section kind has an accessible renderer in the kit, which a variant uses for each kind it doesn't render bespoke, so no section's content goes missing. They render only what the owner wrote, formatted, a snapshot's values with their date, and a short list of fixed labels (`Archive`, `As of`, the case-study headings, `Image unavailable`, and GitHub's three figures): no default heading, link label, or alt text, and no decoration around a number. A section with nothing public leaves the page and the navigation.
 - **Owner controls.** A variant can declare composition controls, such as a hero layout or a featured project, stored per variant in the site document and checked against its manifest. When a variant raises its controls version, `pnpm variants:migrate-controls` steps the stored values through its migrations, with a dry run first.
 - **Compatibility report.** How the portfolio renders in the selected composition: each kind's renderer, how full each content slot is, which of the previous variant's views it drops, and every finding, saying what renders instead and whether publishing is blocked. Startup and `pnpm config:validate` print its findings, and it needs nothing from Node, so #9 can run it in the browser.
@@ -41,12 +41,14 @@ What the platform can do today.
 
 ## SEO
 
-- **Metadata** generated from `identity` and `meta` (title, description, Open Graph, Twitter Card).
-- **Open Graph image** generated per request from the identity's name and tagline.
-- **Structured data (JSON-LD)** for Person, ProfilePage, and WebSite, from the published view: the current role and organization from the chronology, the practice's skills, and the signature and featured works, each with an `@id` from its record id.
+- **Metadata** generated from `identity` and `meta` (title, description, Open Graph, Twitter Card), per request from the live revision.
+- **A canonical link and `og:url`** on every page of the live site: `/` names itself, a view names its parent route, and neither ever carries a query string or visitor state. A preview names neither.
+- **Open Graph image** generated per request from the identity's name and tagline, with the site's host.
+- **Structured data (JSON-LD)** for Person, ProfilePage, and WebSite, from the published view: the current role and organization from the chronology, the practice's skills, and the signature and featured works, each with an `@id` from its record id. It never carries the identity's email.
 - **Feed** at `/feed.xml`, listing writing and audio and video works and publications newest first, each GUID made from its record id, with the portfolio's `locale` as its language. `features.feed: false` in the site document turns it off.
-- **`/robots.txt` and `/sitemap.xml`** generated server-side, per request.
-- **Absolute URLs** (Open Graph, sitemap, robots.txt, feed, JSON-LD) on `PORTFOLIO_ORIGIN`, the deployment's canonical origin.
+- **`/robots.txt` and `/sitemap.xml`** generated server-side, per request. Robots keeps crawlers out of Studio and `/api/` and names the sitemap.
+- **Absolute URLs** (canonical links, Open Graph, sitemap, robots.txt, feed, JSON-LD) on `PORTFOLIO_ORIGIN`, the deployment's canonical origin.
+- **The demo stays out of search.** Every demo response is `noindex`, robots lets crawlers fetch the pages to see it, the sitemap is empty, and no page carries JSON-LD, so the sample never passes for a real person.
 - **`<html lang dir>`** from the portfolio's `locale` and `direction`.
 - **Hidden content stays hidden.** Hidden sections, private records, what only they reach, and unregistered extension data never reach the page, its client payload, its JSON-LD, the feed, or the Open Graph image.
 

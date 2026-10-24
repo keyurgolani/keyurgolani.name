@@ -48,7 +48,7 @@ See [docs/getting-started.md](docs/getting-started.md) for the full walkthrough.
 - **Appearance in the site document**: the variant, and the design language, color scheme, typography, and display mode that #19 (appearance axes) resolves. Every page renders in them from the server, and visitors change the `selectable` ones in the Appearance control.
 - **Validation that says where**: every problem in either document comes with its code, file, line and column, and fix, from `pnpm config:validate` or the server at startup. A missing, doubled, or unreadable document is about the file, so its record has no line or column.
 - **GitHub sections** link the profile; repository data reaches variants through the render input with #10. Public pages never send a token.
-- **Feed, structured data, and Open Graph images.**
+- **Feed, structured data, canonical links, and a generated share image**, each rendered per request from the live revision on the deployment's one origin.
 - **Drift gates** keep the schema, kit catalog, and skill references in sync (`pnpm check:skills`).
 - **AI-assisted authoring and variant development** via two skills under [skills/](skills/).
 

@@ -91,11 +91,11 @@ function rendered(route: VisitorRoute): [string, RouteTarget, string | undefined
   return [route.composition.rendered.manifest.id, route.target, route.canonical];
 }
 
-test("home and a path view of the site's variant render, the view canonical to home", async () => {
+test("home and a path view of the site's variant render, home its own canonical and the view canonical to home", async () => {
   assert.deepEqual(rendered((await resolve({ segments: [] })).route), [
     'fixture-chapters',
     { route: 'home' },
-    undefined,
+    '/',
   ]);
   assert.deepEqual(rendered((await resolve({ segments: ['chapters', 'about'] })).route), [
     'fixture-chapters',
@@ -134,16 +134,26 @@ test('under /sample, the variant ?variant= names renders its views, and links an
   } as const;
   assert.deepEqual(
     rendered((await resolve({ ...named, segments: ['chapters', 'about'] }, sample)).route),
+    // Below /sample a view names no canonical either, as its parent doesn't (#22).
     [
       'fixture-chapters',
       { route: 'view', view: CHAPTERS, params: { chapter: 'about' } },
-      '/sample?variant=fixture-chapters',
+      undefined,
     ],
   );
   assert.deepEqual((await resolve({ ...named, segments: ['notes'] }, sample)).route, {
     kind: 'redirect',
     location: '/sample?variant=fixture-chapters',
   });
+  // /sample's home isn't the live site's, so it names no canonical (#22).
+  assert.equal(rendered((await resolve({ ...named, segments: [] }, sample)).route)[2], undefined);
+  // Nor does a preview frame's view.
+  assert.equal(
+    rendered(
+      (await resolve({ basePath: '/preview/grant', segments: ['chapters', 'about'] })).route,
+    )[2],
+    undefined,
+  );
   // Without ?variant=, the sample's own selection: the fallback, whose path is another's.
   assert.deepEqual(
     (await resolve({ basePath: '/sample', segments: ['chapters', 'about'] }, sample)).route,
@@ -173,11 +183,11 @@ test('anything else is missing: an undeclared path, a bare view prefix, or a tur
 
 test('a public case study renders at its slug, and its views as any view does (#10b)', async () => {
   // fixture-chapters says routes.work: shared, so the fallback composition
-  // renders the work's own page (lib/work-page.ts).
+  // renders the work's own page (lib/work-page.ts), its own canonical (#22).
   assert.deepEqual(rendered((await resolve({ segments: ['work', SLUG] })).route), [
     FALLBACK_ID,
     { route: 'work', slug: SLUG },
-    undefined,
+    `/work/${SLUG}`,
   ]);
   const credits = BUILD[1]!.manifest.routes.views.find((view) => view.id === 'credits')!;
   assert.deepEqual(rendered((await resolve({ segments: ['work', SLUG, 'credits'] })).route), [
@@ -222,11 +232,11 @@ test("a work's own page renders in a composition that says routes.work: bespoke,
   const work = { route: 'work', slug: SLUG } as const;
   const own = (await resolve({ segments: ['work', SLUG] }, viewFor('fixture-bespoke'), build))
     .route;
-  assert.deepEqual(rendered(own), ['fixture-bespoke', work, undefined]);
+  assert.deepEqual(rendered(own), ['fixture-bespoke', work, `/work/${SLUG}`]);
   assert.equal(own.kind === 'render' && own.composition.fallback, false);
   for (const variant of ['fixture-chapters', 'fixture-notes']) {
     const shared = (await resolve({ segments: ['work', SLUG] }, viewFor(variant), build)).route;
-    assert.deepEqual(rendered(shared), [FALLBACK_ID, work, undefined], variant);
+    assert.deepEqual(rendered(shared), [FALLBACK_ID, work, `/work/${SLUG}`], variant);
     assert.ok(shared.kind === 'render');
     assert.equal(shared.composition.requested, variant);
     assert.equal(shared.composition.fallback, true);
@@ -241,7 +251,8 @@ test("a work's own page renders in a composition that says routes.work: bespoke,
     rendered((await resolve({ segments: ['work', SLUG, 'credits'] }, undefined, build)).route)[0],
     'fixture-chapters',
   );
-  // Under /sample, ?variant= picks the composition, and the rule is the same.
+  // Under /sample, ?variant= picks the composition, and the rule is the
+  // same, with no canonical, since /sample isn't the live site (#22).
   for (const [selected, expected] of [
     ['fixture-notes', FALLBACK_ID],
     ['fixture-bespoke', 'fixture-bespoke'],
