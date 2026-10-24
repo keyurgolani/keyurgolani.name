@@ -68,10 +68,11 @@ export const PREVIEW_CSP =
 
 /**
  * Demo Studio's local frame's CSP (#9): the preview's, with blob: images and
- * media from the visitor's own files, and still no connection to any host.
+ * media from the visitor's own files, sandboxed to scripts alone, and still
+ * no connection to any host.
  */
 export const LOCAL_PREVIEW_CSP =
-  /^default-src 'none'; script-src 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'nonce-\1'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors (https?:\/\/[a-z0-9.-]+(?::\d+)?)$/;
+  /^default-src 'none'; script-src 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'nonce-\1'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; sandbox allow-scripts; frame-ancestors (https?:\/\/[a-z0-9.-]+(?::\d+)?)$/;
 
 /** A response's nonce, as a policy, an attribute, a Link header, or Next's payload carries it. */
 const NONCE = /('nonce-|nonce=\\?"|nonce=|\\?"nonce\\?":\\?")([A-Za-z0-9+/]{22}==)/g;

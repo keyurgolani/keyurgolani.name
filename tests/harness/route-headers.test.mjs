@@ -172,7 +172,7 @@ test("under demo, /preview/local alone needs the local frame's policy, the previ
     'content-security-policy': PREVIEW_CSP_VALUE.replace(
       "img-src 'self' data:; media-src 'self';",
       "img-src 'self' data: blob:; media-src 'self' blob:;",
-    ),
+    ).replace("form-action 'none'; ", "form-action 'none'; sandbox allow-scripts; "),
   };
   assert.notEqual(LOCAL_PAGE['content-security-policy'], PREVIEW_CSP_VALUE);
   const origin = 'https://rowan.test';
@@ -205,6 +205,18 @@ test("under demo, /preview/local alone needs the local frame's policy, the previ
     [
       'content-security-policy',
       LOCAL_PAGE['content-security-policy'].replace("media-src 'self' blob:", 'media-src *'),
+    ],
+    // The sandbox gone, or loosened: the document could have an origin of its own.
+    [
+      'content-security-policy',
+      LOCAL_PAGE['content-security-policy'].replace('sandbox allow-scripts; ', ''),
+    ],
+    [
+      'content-security-policy',
+      LOCAL_PAGE['content-security-policy'].replace(
+        'sandbox allow-scripts',
+        'sandbox allow-scripts allow-same-origin',
+      ),
     ],
     ['x-robots-tag', undefined],
     ['cache-control', 'no-store'],
