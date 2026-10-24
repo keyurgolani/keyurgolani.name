@@ -366,3 +366,16 @@ test('the plan is the same each time', () => {
     b.tests.map((each) => `${each.cell.id} ${each.viewport.id} ${each.row.id}`),
   );
 });
+
+test("a surface's requiresScript reason goes on each of its cells, and on no other", () => {
+  const plan = planCells({ meta: checkoutMeta(), registrations, mode: 'full' });
+  const reason = registrations.surfaces.find((each) => each.id === 'studio')?.requiresScript
+    ?.reason;
+  assert.ok(reason !== undefined && isReason(reason));
+  const studio = plan.cells.filter((cell) => cell.target === 'studio');
+  assert.ok(studio.length > 0);
+  for (const cell of studio) assert.equal(cell.requiresScript, reason, cell.id);
+  for (const cell of plan.cells.filter((each) => each.target !== 'studio')) {
+    assert.equal(cell.requiresScript, undefined, cell.id);
+  }
+});

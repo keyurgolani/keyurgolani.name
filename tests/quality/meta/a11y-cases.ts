@@ -17,8 +17,12 @@ import { checkEmulation } from '../lib/emulation';
 import { PREFERENCE_ROWS } from '../lib/matrix';
 import {
   enhancementFindings,
+  failureStateFindings,
   inventoryFindings,
+  notBusy,
   reflowFindings,
+  scriptRequiredFindings,
+  STILL_BUSY,
   scriptingMediaFindings,
   transparencyFindings,
 } from '../lib/a11y/conditions';
@@ -161,6 +165,11 @@ function good(
 }
 
 const keyboard = (page: Page) => keyboardFindings(page);
+/** A page whose script didn't arrive, as failed enhancement reads it; axe has cases of its own. */
+const failureState = (page: Page) => failureStateFindings(page, { axe: false });
+/** A page that needs JavaScript, as the no-JavaScript checks read it; axe has cases of its own. */
+const scriptRequired = (page: Page) =>
+  scriptRequiredFindings(page, null, 'no-javascript', { axe: false });
 const focus = async (page: Page) =>
   (await keyboardFindings(page, { focus: true })).filter((each) => each.gate === 'focus');
 const occlusion = async (page: Page) =>
@@ -377,6 +386,59 @@ export const A11Y_CASES: readonly MetaCase[] = [
   good('inventory', inventory),
   bad('needs-canvas', 'enhancement.html', 'enhancement', 'semantics|navigation', enhancement),
   good('enhancement', enhancement),
+  // A Studio surface that declares requiresScript: with JavaScript off it says so in #content.
+  bad(
+    'no-javascript-silent',
+    'no-javascript-silent.html',
+    'enhancement',
+    'notice',
+    scriptRequired,
+    {
+      noScript: true,
+    },
+  ),
+  // And when the script it needs doesn't arrive, it says it couldn't load, and stops loading.
+  bad(
+    'failure-state-silent',
+    'failure-state-silent.html',
+    'enhancement',
+    'failure-state',
+    failureState,
+  ),
+  bad(
+    'failure-state-busy',
+    'failure-state-busy.html',
+    'enhancement',
+    'failure-state',
+    failureState,
+  ),
+  {
+    id: 'enhancement/failure-state',
+    gate: 'enhancement',
+    input: 'tests/quality/fixtures/a11y/failure-state.html',
+    expect: 'pass',
+    browser: true,
+    run: () => onPage('failure-state.html', failureState),
+  },
+  {
+    id: 'enhancement/no-javascript-notice',
+    gate: 'enhancement',
+    input: 'tests/quality/fixtures/a11y/no-javascript-notice.html',
+    expect: 'pass',
+    browser: true,
+    run: () =>
+      onPage(
+        'no-javascript-notice.html',
+        async (page) => [
+          ...(await scriptRequired(page)),
+          // Its waiting line is hidden without script, so the page has settled.
+          ...((await notBusy(page))
+            ? []
+            : [{ gate: 'runner', rule: 'settled', actual: STILL_BUSY } as Finding]),
+        ],
+        { noScript: true },
+      ),
+  },
   bad('spinner', 'motion-spin.html', 'motion', 'animation', motionFindings, {
     ...REDUCED,
     init: MOTION_SAMPLER,

@@ -115,6 +115,11 @@ export interface Cell {
   readonly performanceTier: PerformanceTier;
   /** `session` for a surface that needs a #2 test session: its page loads signed in. */
   readonly auth?: 'session';
+  /**
+   * Why a Studio surface needs its script by design, when it does: without
+   * it, its cells check its honest state, and their report says why.
+   */
+  readonly requiresScript?: string;
   readonly tuple: Tuple;
   /** The path the cell loads, its state's query included. */
   readonly path: string;
@@ -545,6 +550,7 @@ export function planCells({ meta, registrations, mode, changes = [] }: PlanInput
           profile: surface.profile,
           performanceTier: surface.performanceTier,
           ...(surface.auth === 'session' ? { auth: 'session' as const } : {}),
+          ...(surface.requiresScript ? { requiresScript: surface.requiresScript.reason } : {}),
           tuple,
           path: query ? `${route}?${query}` : route,
           route,

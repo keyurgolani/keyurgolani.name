@@ -48,6 +48,7 @@ import {
   enhancementFindings,
   notBusy,
   PRINT_IGNORE,
+  scriptRequiredFindings,
   STILL_BUSY,
   scriptingMediaFindings,
   inventoryFindings,
@@ -157,6 +158,8 @@ interface SuiteRun {
   readonly ran: Set<string>;
   /** Run the default row's content conditions: the inventory and failed enhancement. */
   readonly conditions: boolean;
+  /** A Studio surface that needs JavaScript: without it, its notice stands in for its content. */
+  readonly scriptRequired: boolean;
 }
 
 /** Slice 2's suites on the page `run.at` names, as `run.owed` says. Motion runs before axe, in runCell. */
@@ -204,10 +207,10 @@ async function suites(run: SuiteRun): Promise<Finding[]> {
     );
   }
   if (run.conditions && does('inventory')) {
-    findings.push(...(await inventoryFindings(page, at, baseline)));
+    findings.push(...(await inventoryFindings(page, at, baseline, undefined, run.scriptRequired)));
   }
   if (run.conditions && does('enhancement')) {
-    findings.push(...(await enhancementFindings(page, at, baseline, scripts)));
+    findings.push(...(await enhancementFindings(page, at, baseline, scripts, run.scriptRequired)));
   }
   return findings;
 }
@@ -354,7 +357,14 @@ export async function runCell({
       viewport,
       ran,
       conditions: row.id === 'default',
+      scriptRequired: cell.requiresScript !== undefined,
     })),
+    // The no-JavaScript row on a surface that needs it: its honest state, axe having run above.
+    ...(cell.requiresScript !== undefined && row.id === 'no-javascript'
+      ? await scriptRequiredFindings(page, scriptless.get(page) ?? null, 'no-javascript', {
+          axe: false,
+        })
+      : []),
   ];
   ran.add('contrast');
   if (printRow) {
@@ -412,6 +422,7 @@ export async function runCell({
           viewport,
           ran: new Set(),
           conditions: false,
+          scriptRequired: false,
         })),
       );
     }
@@ -441,6 +452,10 @@ export async function runCell({
   await keep(RECORDS_ATTACHMENT, failures);
   if (owed.has('motion')) ran.add('motion');
   testInfo.annotations.push({ type: CHECKS_ANNOTATION, description: [...ran].join(' ') });
+  // Why its no-JavaScript and failed-enhancement checks read its honest state, in its report.
+  if (cell.requiresScript !== undefined) {
+    testInfo.annotations.push({ type: 'requires-script', description: cell.requiresScript });
+  }
   // A change-directed cell's failures name the changed axis, and the tokens it resolved.
   const diagnostic = changeDiagnostic(cell, tokenPages);
   if (diagnostic) testInfo.annotations.push({ type: 'changed', description: diagnostic });

@@ -91,9 +91,13 @@ export const notApplicable: readonly NotApplicable[] = [
     reason:
       'Studio renders outside any presentation boundary, so a display mode has nothing to apply to.',
   },
-  {
-    match: { row: 'no-javascript' },
-    reason:
-      'Studio is a signed-in workspace its script draws: without JavaScript it shows only its loading line, and nothing in it can be used.',
-  },
 ];
+
+// Studio needs its script by design: its no-JavaScript cells, the row and the
+// default row's condition, check that it says so, and under failed
+// enhancement that it says it couldn't load, each with axe, in place of
+// comparing its content (#11's registration contract).
+export const requiresScript = {
+  reason:
+    'Studio is a signed-in workspace its script draws from the store: without JavaScript it says it needs it, and nothing in it can be used.',
+} as const;
