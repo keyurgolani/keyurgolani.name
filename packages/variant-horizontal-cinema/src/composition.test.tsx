@@ -179,8 +179,11 @@ test('the complete fixture: one main, one h1, one control slot, the chrome, the 
   );
   assert.ok(markup.indexOf('class="hc-filmstrip"') < markup.indexOf('class="hc-stage"'));
   assert.doesNotMatch(markup, /aria-current="step"/);
-  // The stage is a named region; the arrow keys work from any link in the experience.
-  assert.match(markup, /<div class="hc-stage" role="region" aria-labelledby="hc--chapters-label">/);
+  // The stage is a named, focusable scroll region the arrow keys work in.
+  assert.match(
+    markup,
+    /<div class="hc-stage" role="region" aria-labelledby="hc--chapters-label" tabindex="0">/,
+  );
   // The transport waits for the controller: hidden in the server's markup, so no script means no dead buttons.
   assert.match(markup, /<div class="hc-transport" hidden="">/);
   // One polite live region, empty until a step.
@@ -607,7 +610,7 @@ test('the controller never cancels a wheel, touch, or scroll, writes no history 
   const source = readFileSync(new URL('./controller.tsx', import.meta.url), 'utf8');
   assert.match(source, /^'use client';/);
   // The gestures it notes, passively, only to know a scroll was the visitor's own.
-  assert.match(source, /const GESTURES = \['wheel', 'touchstart', 'pointerdown'\] as const;/);
+  assert.match(source, /const GESTURES = \['wheel', 'touchstart'\] as const;/);
   assert.match(
     source,
     /for \(const type of GESTURES\) stageElement\.addEventListener\(type, onGesture, \{ passive: true \}\);/,

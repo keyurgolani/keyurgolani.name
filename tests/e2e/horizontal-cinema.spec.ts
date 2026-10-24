@@ -69,6 +69,16 @@ function read(scope: Scope) {
   });
 }
 
+/** Waits for `chapter` to be current, wherever the stage sits. */
+async function expectCurrent(scope: Scope, chapter: Chapter): Promise<void> {
+  await expect
+    .poll(async () => {
+      const { current, progress } = await read(scope);
+      return { current, progress };
+    })
+    .toEqual({ current: anchor(chapter), progress: `0${CHAPTERS.indexOf(chapter) + 1} / 05` });
+}
+
 /** Waits for the controller to settle on `chapter`, current and on screen at once. */
 async function expectAt(scope: Scope, chapter: Chapter): Promise<void> {
   await expect
@@ -252,12 +262,14 @@ test(
   async ({ page }) => {
     await load(page);
     const start = await read(page);
-    // What find-in-page does: scroll the match just into view. It stays in view as its chapter lands.
+    // What find-in-page does: scroll the match just into view. The stage stays where find put
+    // it, so the match stays in view, and the chapter it revealed is current.
     const match = page.locator('#chapter-craft [data-section-id]').first();
     await match.evaluate((element) =>
       element.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' }),
     );
-    await expectAt(page, 'craft');
+    await expectCurrent(page, 'craft');
+    await page.waitForTimeout(400);
     await expect(match).toBeInViewport();
     expect(await read(page)).toMatchObject({ hash: anchor('craft'), history: start.history });
     // Tab, or a script, focusing a link in another chapter: that chapter, at once, the link in view.
@@ -265,12 +277,14 @@ test(
     await link.focus();
     await expect(link).toBeInViewport();
     await expectAt(page, 'journey');
-    // And back the other way.
-    await match.evaluate((element) =>
+    // And back the other way, to Prologue.
+    const back = page.locator('#chapter-prologue [data-section-id]').first();
+    await back.evaluate((element) =>
       element.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' }),
     );
-    await expectAt(page, 'craft');
-    await expect(match).toBeInViewport();
+    await expectCurrent(page, 'prologue');
+    await page.waitForTimeout(400);
+    await expect(back).toBeInViewport();
     // The scrollbar: a direct write of the stage's scroll position.
     await page.evaluate(() => {
       const stage = document.querySelector<HTMLElement>('.hc-stage')!;

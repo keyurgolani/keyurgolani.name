@@ -105,6 +105,8 @@
  */
 [data-variant='horizontal-cinema'] .hc-stage {
   display: block;
+  /* Room for its focus ring inside the window, since the stage spans it. */
+  margin-inline: 0.5rem;
 }
 
 [data-variant='horizontal-cinema'] .hc-chapter {
@@ -284,6 +286,11 @@
 
 [data-variant='horizontal-cinema'] .hc-pager__next {
   margin-inline-start: auto;
+}
+
+/* Standalone links in a list, so no underline: the text's own color is all a sampler sees. */
+[data-variant='horizontal-cinema'] .hc-pager a {
+  text-decoration-line: none;
 }
 
 [data-variant='horizontal-cinema'] .hc-pager__rel {
