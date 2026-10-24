@@ -31,8 +31,7 @@ import { ownerStore } from './store';
 // store imports the pair as revision 1, by the operator, through the
 // startup hook and the server claim. The import is a publish: a pair that
 // can't go live stops that start, and so does one a publish refuses, such
-// as a site whose variant this build doesn't register, every site's until
-// #13. A busy lock never stops it: the import waits for the claim while
+// as a site whose variant this build doesn't register. A busy lock never stops it: the import waits for the claim while
 // visitors get 503. Once a revision exists, the mounted pair is import input,
 // and its findings only warn. A store with history but no live.json is never
 // imported over, and one with revisions but no history imports beside them.
@@ -51,6 +50,11 @@ const HASH = `$scrypt$ln=17,r=8,p=1$${base64(randomBytes(16))}$${base64(randomBy
 const PORTFOLIO = readFileSync(path.join(REPO, 'tests', 'fixtures', 'portfolio.yml'), 'utf8');
 const SITE = readFileSync(EXAMPLES.site, 'utf8');
 const PAIR = { 'portfolio.yml': PORTFOLIO, 'site.yml': SITE };
+/** The pair with a variant no package may take, which renders only as the fallback composition. */
+const UNKNOWN_VARIANT = {
+  'portfolio.yml': PORTFOLIO,
+  'site.yml': SITE.replace('variant: editorial-evidence', 'variant: missing-variant'),
+};
 const DESCRIPTION = '  description: Fixture portfolio for the browser harness.\n';
 
 /** The portfolio with `marker` in its meta description: other bytes, the same shape. */
@@ -120,9 +124,9 @@ function fixture(name: string): Record<string, string> {
 }
 
 /**
- * The build's checks, in a build that registers the site's variant. Until
- * #13 this one registers none a site can select, so a publish here takes
- * the pair as serving does, and keeps the build's rendering and snapshots.
+ * The build's checks, as if the build registered the site's variant
+ * whatever it is, so a publish here takes the pair as serving does, and
+ * keeps the build's rendering and snapshots.
  */
 function registered(origin: string): UnitChecks {
   const checks = deploymentUnitChecks(origin);
@@ -291,9 +295,24 @@ test("a pair that can't go live stops a first start: a missing document, an inva
   }
 });
 
+test("with this build's registry, the example site's variant, the platform default, goes live at first start (#13)", async (t) => {
+  t.mock.method(console, 'log', () => {});
+  assert.match(SITE, /^ {2}variant: editorial-evidence$/m);
+  const site = deployment(t, PAIR);
+  const composed = await start(t, site, { unitChecks: deploymentUnitChecks });
+  assert.ok(composed.ok, JSON.stringify(composed.ok ? [] : composed.issues));
+  const live = await composed.state.catalog.getLive();
+  assert.equal(live.state, 'live');
+  assert.equal(live.unit?.site.appearance.variant, 'editorial-evidence');
+  assert.deepEqual(
+    eventsIn(site.dataDir).map((event) => [event.seq, event.type]),
+    [[1, 'import']],
+  );
+});
+
 test("with this build's registry, a site whose variant it doesn't register stops a first start, as it stops portfolio-store import, even with the lock busy", async (t) => {
   t.mock.method(console, 'log', () => {});
-  const site = deployment(t, PAIR);
+  const site = deployment(t, UNKNOWN_VARIANT);
   const composed = await start(t, site, { unitChecks: deploymentUnitChecks });
   assert.equal(composed.ok, false);
   const issues = composed.ok ? [] : composed.issues;
@@ -308,7 +327,7 @@ test("with this build's registry, a site whose variant it doesn't register stops
   assert.deepEqual(eventsIn(site.dataDir), []);
 
   // With the CLI holding the lock, it stops at once, without waiting for it.
-  const busy = deployment(t, PAIR);
+  const busy = deployment(t, UNKNOWN_VARIANT);
   const owner = ownerStore({
     config: busy.config,
     checks: deploymentUnitChecks(ORIGIN),

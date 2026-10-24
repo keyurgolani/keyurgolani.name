@@ -180,7 +180,7 @@ If you must keep it, clamp its position to the viewport, and use `position: abso
 
 ### What it looks like
 
-- The reference (a `legacy/` package, page-zero) had richer data than the schema carries.
+- The reference (a v1 variant, page-zero) had richer data than the schema carries.
 - The schema dropped or renamed fields the reference's renderers used (such as `experienceTracks[].branch` against a chronology entry's `thread`, which the owner writes and nothing infers).
 - Renderers crash on missing fields, or render less than the reference did.
 

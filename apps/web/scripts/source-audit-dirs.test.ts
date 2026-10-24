@@ -8,8 +8,8 @@ import { generateRegistry, REPO_ROOT } from './registry-options';
 // What the appearance source audit reads (#19, Slice 5): every variant
 // package registry generation can register, under any fixture flag, is one
 // of the packages the audit finds, and the audit finds no other but one
-// @portfolio/web doesn't depend on yet, such as Editorial Evidence until #13
-// registers it. Each file a variant's stylesheet compiles from is one the
+// @portfolio/web doesn't depend on yet, as a composition is before it
+// registers. Each file a variant's stylesheet compiles from is one the
 // audit reads, so a skipped directory never hides a stylesheet.
 
 const real = (file: string) => fs.realpathSync(file);

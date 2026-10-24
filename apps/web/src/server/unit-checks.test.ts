@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -45,8 +45,33 @@ test('the CLI and the composition root check a pair alike: one rendering, snapsh
   for (const rule of ['validate', 'validateLive'] as const) {
     assert.deepEqual(findings(cli, rule), findings(server, rule), rule);
   }
-  // As published, the example's unregistered variant blocks; as served, it warns.
-  assert.ok(findings(server, 'validate').some((line) => line.includes('variant.unavailable')));
+  // The example's variant, the platform default, is registered (#13).
+  for (const rule of ['validate', 'validateLive'] as const) {
+    assert.ok(!findings(server, rule).some((line) => line.includes('variant.unavailable')), rule);
+  }
+});
+
+test("a variant this build doesn't register blocks a publish and warns when served, from the CLI and the composition root alike", (t) => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'unit-checks-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const site = path.join(dir, 'site.yml');
+  writeFileSync(
+    site,
+    readFileSync(EXAMPLES.site, 'utf8').replace(
+      'variant: editorial-evidence',
+      'variant: missing-variant',
+    ),
+  );
+  const read = readPair({ portfolio: EXAMPLES.portfolio, site });
+  assert.ok(read.ok, 'the pair reads');
+  const unavailable = (checks: UnitChecks, rule: 'validate' | 'validateLive') =>
+    checks[rule]!(read.sources)
+      .diagnostics.filter((diagnostic) => diagnostic.code === 'variant.unavailable')
+      .map((diagnostic) => `${diagnostic.severity} ${diagnostic.pointer}`);
+  for (const checks of [deploymentUnitChecks(ORIGIN), storeChecks({ PORTFOLIO_ORIGIN: ORIGIN })]) {
+    assert.deepEqual(unavailable(checks, 'validate'), ['blocks-publish /appearance/variant']);
+    assert.deepEqual(unavailable(checks, 'validateLive'), ['warning /appearance/variant']);
+  }
 });
 
 test('portfolio-store reads PORTFOLIO_ORIGIN or PORTFOLIO_ORIGIN_FILE as the server does, and refuses an origin that is not bare', (t) => {

@@ -1,5 +1,5 @@
 // The servers the route specs start, each from the fixture host's build,
-// which registers the fallback composition and two fixture variants:
+// which registers the host's own compositions and two fixture variants:
 // fixture-chapters (chapters/{chapter} under home, credits under work) and
 // fixture-notes (notes under home). Their packages are in
 // tests/fixtures/variants/.
@@ -19,7 +19,7 @@ export function readOnlyApp(variant: string): AppOptions {
   return { fixtureHost: true, siteText: SITE.replace(UNREGISTERED, `\n  variant: ${variant}\n`) };
 }
 
-/** demo on the bundled sample, whose site selects Editorial Evidence, unregistered until #13. */
+/** demo on the bundled sample, whose site selects Editorial Evidence, the platform default (#13). */
 export const DEMO_APP: AppOptions = {
   fixtureHost: true,
   env: { PORTFOLIO_PROFILE: 'demo', PORTFOLIO_SOURCE_DIR: '' },

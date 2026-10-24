@@ -255,6 +255,9 @@ A content extension package sets `"portfolio": { "kind": "content-extension" }` 
 
 ## The first-party compositions
 
+Each is a dependency of `@portfolio/web`, so it runs under `test:variants`, `check:budgets`, #11's cells, the profile matrix, and the trace on every pull request. Editorial Evidence and Kinetic Cosmos rebuilt the retired v1 packages on contract 2.0, with their palettes and fonts moving to #19's packs; the v1 copies are gone from the tree, and git history keeps them.
+
+- **Editorial Evidence** (`packages/variant-editorial-evidence`, #13): the platform default, `PLATFORM_DEFAULTS.variant`, and the composition the example site selects. It's `monograph`, `still`, and `light`. It opens with the practice thesis and the signature work on its largest plate, then the flagship works on smaller ones, the proof strip, and the rest of the reading order, with the archive behind a disclosure, and each case study gets its own page.
 - **Kinetic Cosmos** (`packages/variant-kinetic-cosmos`, #14): an orbital opening, evidence that opens in place, and a chronology in its authored lanes.
 - **Obsidian Atelier** (`packages/variant-obsidian-atelier`, #15): a night gallery of chapters. The chapters are the signature and the featured works, or the works sections' works when the owner curated none. Each is a full-bleed room whose treatment follows the work's `medium`, with its premise and artifact in view and the rest of the case behind Unfold the case, a native `details`. A quiet index, each chapter's position, and previous and next are plain fragment links, so nothing needs a script, hover, or motion. The color scheme supplies the dark: it never forces a mode. A work's page is the host's shared one. Its [README](../packages/variant-obsidian-atelier/README.md) has the details.
 - **Spatial Bento** (`packages/variant-spatial-bento`, #16): the portfolio as a bento of tiles in content order, with a still of its spatial stage, which a later pull request enhances on capable devices.
@@ -262,10 +265,6 @@ A content extension package sets `"portfolio": { "kind": "content-extension" }` 
 ## The fallback composition
 
 `packages/fallback-composition` is the host's stand-in and the clone source: every visible section in content order through the kit's shared renderers, in one column, with a navigation list and the visitor control slot in a header. It's `document`, `still`, and `light`, with empty `renderedKinds` and no slots or controls. It renders for a selection no package registers, and for the contract fixtures; a site can't select it. Fixtures select `missing-variant`, an id no package may take, to reach it.
-
-## Retired variants
-
-`legacy/` holds the v1 Editorial package, its screenshots, and the v1 browser specs, outside the workspace: nothing installs, builds, lints, or tests them. #13 rebuilds it on contract 2.0 as `editorial-evidence`, with its palettes and fonts moving to #19's packs. Read it for inventory; never import it. `packages/variant-editorial-evidence` is #13's rebuild, which no host registers until #13's second pull request: its own tests validate its manifest, run the source audit on it, and render it on every contract fixture. Kinetic Cosmos is rebuilt (#14) as `packages/variant-kinetic-cosmos`, and its v1 copy is gone.
 
 ## Visual companion
 

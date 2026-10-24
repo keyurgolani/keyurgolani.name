@@ -24,7 +24,7 @@ What the platform can do today.
 
 - **Variants are compositions.** A variant decides how the sections are arranged, navigated, and revealed. Color, type, materials, and motion timing belong to the appearance system (#19), so any composition can pair with any appearance.
 - **Installing a variant is a dependency.** `pnpm --filter @portfolio/web add <package>`, and the build registers it. A package the build can't register stops the build with a diagnostic that names the package, the file, the pointer, and the fix.
-- **The fallback composition.** When the site's variant isn't installed, every section renders in content order, in one column, in its place. The page answers 200, the owner gets a `variant.unavailable` warning at startup and in `config.status`, readiness says `degraded`, and visitors see no label. It's the one composition this build registers; #13 to #17 add the approved five.
+- **The fallback composition.** When the site's variant isn't installed, every section renders in content order, in one column, in its place. The page answers 200, the owner gets a `variant.unavailable` warning at startup and in `config.status`, readiness says `degraded`, and visitors see no label. It stands in for a selection; the compositions a site selects are Editorial Evidence, the platform default (#13), Kinetic Cosmos (#14), Obsidian Atelier (#15), and Spatial Bento (#16), and #17 adds the last of the approved five.
 - **Case-study pages.** A public work with a `caseStudy` that a visible section reaches gets its own page at `/work/<slug>`, rendered from the server, and listed in the sitemap. The works list links it with Read the case study. A private work's slug, or any other, is the 404 page, the same as an unknown path.
 - **Views.** A variant can declare path views below `/` and below `/work/<slug>`, such as `/chapters/<chapter>`. Each renders from the server, so it works without JavaScript, links back to its parent route as canonical at the site root (under `/sample` and in a preview frame it names none), and stays out of the sitemap. After a switch, a view only the old variant declares redirects to its parent route while the old variant stays installed, and is a 404 once it's removed.
 - **Shared section renderers.** Every core section kind has an accessible renderer in the kit, which a variant uses for each kind it doesn't render bespoke, so no section's content goes missing. They render only what the owner wrote, formatted, a snapshot's values with their date, and a short list of fixed labels (`Archive`, `As of`, the case-study headings, `Image unavailable`, and GitHub's three figures): no default heading, link label, or alt text, and no decoration around a number. A section with nothing public leaves the page and the navigation.
@@ -82,7 +82,7 @@ These keep the system honest:
 ## Roadmap (deferred, not yet shipped)
 
 - The appearance axes, and a visitor control for each, applying `visitorControls` (#19).
-- The five approved compositions, starting with Editorial Evidence and Kinetic Cosmos (#13 to #17).
+- The last of the five approved compositions (#17); Editorial Evidence, Kinetic Cosmos, Obsidian Atelier, and Spatial Bento are registered (#13 to #16).
 - Redirects for a changed slug, and 410 for a removed case study (#10, #22).
 - CI/CD workflow templates.
 

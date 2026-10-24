@@ -1,9 +1,10 @@
 // Owner's first start publishes the mounted pair, so it refuses a site whose
-// variant the build doesn't register (#3, Slice 3): every fixture's, until
-// #13 registers a composition. The harness's owner servers start on a store
-// the store's own test child published the pair into, as a first start in a
-// build that registers the variant would have. owner-store.spec.ts lays its
-// stores out the same way.
+// variant the build doesn't register (#3, Slice 3): every harness fixture's,
+// which selects missing-variant to reach the fallback composition, though
+// the bundled example's, Editorial Evidence, imports (#13). The harness's
+// owner servers start on a store the store's own test child published the
+// pair into, as a first start in a build that registers the variant would
+// have. owner-store.spec.ts lays its stores out the same way.
 import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';

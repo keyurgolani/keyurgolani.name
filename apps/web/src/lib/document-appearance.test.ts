@@ -41,12 +41,28 @@ test('a page with no site renders the fallback packs, with no finding about the 
 });
 
 test("the page's composition renders, and a site's variant this build lacks is still the owner's finding", () => {
-  const resolved = documentAppearance({ site: SITE, variant: FALLBACK_ID, profile: 'read-only' });
+  const unknown = { ...SITE, appearance: { ...SITE.appearance, variant: 'missing-variant' } };
+  const resolved = documentAppearance({
+    site: unknown,
+    variant: FALLBACK_ID,
+    profile: 'read-only',
+  });
   assert.equal(resolved.selection.variant, FALLBACK_ID);
   assert.deepEqual(
     resolved.diagnostics.map(({ code, axis }) => [code, axis]),
     [['variant.unavailable', 'variant']],
   );
+});
+
+test('the platform default, Editorial Evidence, is registered: it renders with no finding (#13)', () => {
+  const resolved = documentAppearance({
+    site: SITE,
+    variant: 'editorial-evidence',
+    profile: 'read-only',
+  });
+  assert.equal(resolved.selection.variant, 'editorial-evidence');
+  assert.deepEqual(resolved.diagnostics, []);
+  assert.deepEqual(resolved.fallbackAxes, []);
 });
 
 test('owner and read-only read the cookie, demo the query, each on the axes the site lets a visitor choose', () => {

@@ -40,6 +40,7 @@
     "@portfolio/quality-fixtures-typography": "workspace:*",
     "@portfolio/schema": "workspace:*",
     "@portfolio/variant-contract": "workspace:*",
+    "@portfolio/variant-editorial-evidence": "workspace:*",
     "@portfolio/variant-kinetic-cosmos": "workspace:*",
     "@portfolio/variant-obsidian-atelier": "workspace:*",
     "@portfolio/variant-spatial-bento": "workspace:*",

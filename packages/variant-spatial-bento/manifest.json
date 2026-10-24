@@ -12,11 +12,15 @@
   "budgets": {
     "js": 4096,
     "css": 3072,
-    "image": 0,
+    "image": 61440,
     "font": 0,
     "animation": 1,
     "enhancement": 256000
   },
+  "stills": [
+    { "file": "./stills/1440.webp", "width": 1440, "height": 900 },
+    { "file": "./stills/720.webp", "width": 720, "height": 450 }
+  ],
   "renderedKinds": ["hero"],
   "unsupportedKinds": [],
   "contentSlots": [],

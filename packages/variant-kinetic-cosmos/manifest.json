@@ -9,7 +9,18 @@
   "compositionFamily": "kinetic",
   "motionIntent": "kinetic",
   "performanceTier": "medium",
-  "budgets": { "js": 2048, "css": 3072, "image": 0, "font": 0, "animation": 3, "enhancement": 0 },
+  "budgets": {
+    "js": 2048,
+    "css": 3072,
+    "image": 57344,
+    "font": 0,
+    "animation": 3,
+    "enhancement": 0
+  },
+  "stills": [
+    { "file": "./stills/1440.webp", "width": 1440, "height": 900 },
+    { "file": "./stills/720.webp", "width": 720, "height": 450 }
+  ],
   "renderedKinds": ["hero", "evidence", "chronology"],
   "unsupportedKinds": [],
   "contentSlots": [],
@@ -21,7 +32,7 @@
     "provisional": true,
     "sources": [
       {
-        "source": "Kinetic Cosmos v1 (legacy/variant-kinetic-cosmos), page-zero's re-imagining",
+        "source": "Kinetic Cosmos v1, page-zero's re-imagining",
         "disposition": "preserved",
         "note": "The orbital opening, the evidence cards, and the forking timeline, rebuilt on the v3 records, the kit's shared renderers, and #19's primitives."
       },

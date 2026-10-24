@@ -209,9 +209,26 @@ test('a sample that fails the schema, or a site the build cannot render, refuses
     ['PORTFOLIO_PROFILE:sample_invalid'],
   );
   assert.ok(!JSON.stringify(broken.issues).includes('canary'));
-  // A build that doesn't register the example's variant serves it in the
-  // fallback composition, with the warning startup logs.
-  const unregistered = openSampleCatalog({ examples: EXAMPLES, catalog: HOST, validators: LIVE });
+  // This build registers the example's variant, Editorial Evidence (#13),
+  // so the sample serves with no finding.
+  const registered = openSampleCatalog({ examples: EXAMPLES, catalog: HOST, validators: LIVE });
+  assert.ok(registered.ok);
+  assert.deepEqual(registered.issues, []);
+  // A site whose variant the build doesn't register serves in the fallback
+  // composition, with the warning startup logs.
+  const site = path.join(scratch(t), 'site.example.yml');
+  writeFileSync(
+    site,
+    readFileSync(EXAMPLES.site, 'utf8').replace(
+      'variant: editorial-evidence',
+      'variant: missing-variant',
+    ),
+  );
+  const unregistered = openSampleCatalog({
+    examples: { ...EXAMPLES, site },
+    catalog: HOST,
+    validators: LIVE,
+  });
   assert.ok(unregistered.ok);
   assert.deepEqual(
     unregistered.issues.map((issue) => `${issue.severity} ${issue.code} ${issue.file}`),

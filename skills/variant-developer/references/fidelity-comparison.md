@@ -22,7 +22,7 @@ ambiguity _before_ you write code.
 ## Step 1 — Read the reference end-to-end
 
 Before opening DESIGN.md, walk through every file in the reference. For
-a `legacy/` package or an archive variant:
+a v1 variant from git history or an archive variant:
 
 - Every `sections/*.tsx` — what data each section needs, what visual
   primitives it composes.

@@ -3,15 +3,15 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
-import { LAYER_ORDER } from '@portfolio/appearance';
+import { LAYER_ORDER, PLATFORM_DEFAULTS } from '@portfolio/appearance';
 import { validateManifest } from '@portfolio/variant-contract';
 import { auditVariant, compileVariantStylesheet } from '@portfolio/variant-contract/node';
 import { MANIFEST, PACKAGE, PACKAGE_DIR, RAW_MANIFEST, REPO_ROOT } from './harness';
 
 // The package itself (#13): a manifest that validates clean and keeps the
 // catalog's pins, budgets inside the light tier's ceilings, sources and a
-// stylesheet the variant audit passes, no motion anywhere, and no host
-// registering it yet. PR 2 of #13 registers it.
+// stylesheet the variant audit passes, no motion anywhere, and the host
+// registering it as the platform default (#13, PR 2).
 
 test('its manifest validates with nothing to report, and keeps the catalog pins', () => {
   const result = validateManifest(RAW_MANIFEST, {
@@ -127,9 +127,11 @@ test('print keeps the order, opens every disclosure, and drops the visitor contr
   assert.doesNotMatch(css, /\border\s*:|grid-row|flex-direction:\s*(?:row|column)-reverse/);
 });
 
-test('no host registers it yet: it is in no app dependency list', () => {
+test('the host registers it as the platform default: a dependency of @portfolio/web, and the default selection', () => {
   const web = JSON.parse(readFileSync(path.join(REPO_ROOT, 'apps', 'web', 'package.json'), 'utf8'));
-  for (const list of ['dependencies', 'devDependencies', 'optionalDependencies']) {
+  assert.equal(web.dependencies?.[PACKAGE.name], 'workspace:*');
+  for (const list of ['devDependencies', 'optionalDependencies']) {
     assert.equal(web[list]?.[PACKAGE.name], undefined, list);
   }
+  assert.equal(PLATFORM_DEFAULTS.variant, MANIFEST.id);
 });

@@ -288,8 +288,8 @@ test("every profile's reader records the composition each live revision renders,
     assert.equal(composed.ok, true, config.profile);
     if (!composed.ok) continue;
     await composed.state.catalog.getLive();
-    // Both pairs select a variant this build doesn't register, so the fallback composition renders.
-    assert.equal(liveComposition(), 'fallback', config.profile);
+    // Both pairs select the platform default, Editorial Evidence, which renders (#13).
+    assert.equal(liveComposition(), 'editorial-evidence', config.profile);
   }
   // A registered selection records its own id, on every read.
   const registry: VariantRegistry = [
@@ -358,7 +358,8 @@ test('the reader records the slugs /work serves in the same step as the composit
       },
     },
   });
-  assert.equal(liveComposition(), 'fallback');
+  // The example selects the platform default, Editorial Evidence, which renders (#13).
+  assert.equal(liveComposition(), 'editorial-evidence');
   assert.deepEqual([...liveCaseStudies()], [SLUG]);
   assert.equal(routes(SLUG), true);
 });

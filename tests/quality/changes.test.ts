@@ -461,7 +461,8 @@ test("a change-directed cell's failures name the axis, and its diagnostic the to
     { route: '/_fixtures/appearance', tokens, file: 'results/a/primitives-resolved-tokens.json' },
   ])!;
   assert.match(text, /the designLanguage second-language changed/);
-  assert.match(text, /fallback\/second-language\/warm-parchment\/humanist-ui\/system/);
+  // The first composition, the platform default (#13), is the one it runs.
+  assert.match(text, /editorial-evidence\/second-language\/warm-parchment\/humanist-ui\/system/);
   assert.match(text, /\/ rendered no presentation boundary \(results\/a\/resolved-tokens\.json\)/);
   assert.match(text, /data-design-language=second-language\) resolved 8 token\(s\)/);
   assert.match(text, /--token-0: #000000.*and 2 more/);

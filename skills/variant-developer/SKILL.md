@@ -7,7 +7,7 @@ description: >
   one composition idea, rendering every section kind the schema defines through bespoke renderers
   or the kit's shared ones, and using @portfolio/kit instead of reinventing helpers. Trigger when
   the user mentions creating a variant, cloning the fallback composition, designing a new
-  portfolio layout, or porting a retired variant from legacy/. Do NOT trigger for editing
+  portfolio layout, or porting a retired v1 variant from git history. Do NOT trigger for editing
   portfolio data (use portfolio-author), for color, type, or display-mode work (the appearance
   system, #19), or for general React or CSS work outside this monorepo.
 license: MIT
@@ -39,7 +39,7 @@ Reference packages:
 
 - **`packages/fallback-composition`**: the clone source and the smallest correct composition: every section in content order through the kit's shared renderers, one `<main>`, one visitor control slot. Read it before scaffolding.
 - **`packages/kit`**: `@portfolio/kit/sections` (`renderSection`, the shared renderers, `RichText`, `seededRandom`, `VisitorControlSlot`) and `@portfolio/kit/enhancements` (`Enhancement`), plus layout primitives and hooks. Use it. If you find yourself rewriting a helper that could live there, hoist it.
-- **`legacy/`**: the retired v1 Editorial package, outside the workspace, for #13 to port. Read it for ideas and inventory; never import it. Its themes, color schemes, and typography presets moved to #19.
+- **`packages/variant-editorial-evidence`**: a port of v1 Editorial (#13), the platform default composition: a thesis, a signature plate, unequal flagship plates, case-study pages, and the archive behind a disclosure, with no motion.
 - **`packages/variant-kinetic-cosmos`**: a port of v1 Kinetic Cosmos (#14), the first registered composition: bespoke renderers for three kinds, the rest shared, #19's Dialog and Disclosure, the kit's `threadLanes`, and a motion layer on the kit runtime: CSS animations keyed on the runtime's state, a receding chrome, and `MotionControl`.
 - **`packages/variant-obsidian-atelier`**: Obsidian Atelier (#15), a server module with no client code: a chapter a work, each a room whose treatment follows the work's medium, #19's Navigation, Surface, and Disclosure, and plain fragment links for the index and previous and next.
 - **`packages/variant-spatial-bento`**: Spatial Bento (#16): a tile a section through the shared renderers, the hero beside a CSS still of its stage, and a bounded three.js stage over the still as a declared enhancement: a pure capability policy (`policy.ts`), a slot that loads the stage only after it, one live stage a document, an exit, and the kit's `SpatialCanvas`, which detects each way a WebGL scene fails and tears down to the still.
@@ -55,7 +55,7 @@ Reference packages:
 
 Every variant goes through these phases in order. Skipping or reordering produces incoherent output.
 
-- **Phase 0: Reference inventory** (when porting a `legacy/` package, another platform, a Figma, or "make it look like X"). Read the reference end to end, list every component and signature interaction, diff the data shape against the schema, and decide what's composition (yours), what's appearance (#19's), and what's not portable. Output drives DESIGN.md. Skip only when greenfield.
+- **Phase 0: Reference inventory** (when porting a v1 variant from git history, another platform, a Figma, or "make it look like X"). Read the reference end to end, list every component and signature interaction, diff the data shape against the schema, and decide what's composition (yours), what's appearance (#19's), and what's not portable. Output drives DESIGN.md. Skip only when greenfield.
 - **Phase 1: Design contract.** Pick one composition idea. Write `packages/variant-<id>/DESIGN.md`. Get the user to approve it. No code yet.
 - **Phase 2: Implementation in waves.** Wave 1 is foundation (scaffold, manifest, layout styles, every section through the shared renderers). Wave 1.5 is kit hoists. Wave 2 is bespoke renderers, one cluster at a time. Wave 3 is polish (navigation, controls, content slots, enhancements, right-to-left).
 - **Phase 3: Pre-merge audit.** Scripted gates (`pnpm check:variants`, typecheck, lint, build, the motion contract, kit-dedup) and visual gates. See `references/audit-checklist.md` and `references/quality-gates.md`.

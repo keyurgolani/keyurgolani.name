@@ -168,6 +168,18 @@ test('the catalog fixture shows stills first, and live frames only on request or
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(PAGE, { waitUntil: 'load' });
+  // Each plate's still as its <img> chose it from its srcset, read while the plates show them.
+  const chosen = new Map<string, string>();
+  const readChosen = async () => {
+    const pairs = await plates(page).evaluateAll((all) =>
+      all.map((plate) => [
+        plate.getAttribute('data-plate') ?? '',
+        plate.querySelector<HTMLImageElement>('img.catalog-plate__still')?.currentSrc ?? '',
+      ]),
+    );
+    for (const [plate, src] of pairs) if (plate && src) chosen.set(plate, new URL(src).pathname);
+  };
+  await readChosen();
   const [first, second] = [plates(page).nth(0), plates(page).nth(1)];
   const [firstId, secondId] = [
     (await first.getAttribute('data-plate'))!,
@@ -211,12 +223,32 @@ test('the catalog fixture shows stills first, and live frames only on request or
     await page.locator('[data-plate-live]:not([data-plate-live="still"])').count(),
   ).toBeLessThanOrEqual(2);
 
-  // The catalog page itself downloads no unit's files but the plates' stills.
+  // The catalog page itself downloads no unit's files but the plates' stills: the first two
+  // plates', which it showed, and at most the third's, which lazy loading may reach as the page
+  // scrolls. None of a plate further down, and each plate's one still, the candidate its <img>
+  // chose, never a second from its srcset.
+  await readChosen();
   const owners = unitOwners();
+  const onPage = (await plates(page).evaluateAll((all) =>
+    all.map((plate) => plate.getAttribute('data-plate')),
+  )) as string[];
+  const near = onPage.slice(0, 3).map((id) => `variant ${id}`);
   const pageFiles = portfolioFiles(requests, page.mainFrame());
   expect(pageFiles.length, 'the stills the page showed').toBeGreaterThan(0);
+  const shown = pageFiles.map((file) => owners.get(file));
+  expect(shown, "the first two plates' stills").toEqual(
+    expect.arrayContaining([`variant ${firstId}`, `variant ${secondId}`]),
+  );
+  const byPlate = new Map<string, string[]>();
   for (const file of pageFiles) {
     expect(file, 'a plate still').toMatch(/^\/_portfolio\/still\//);
-    expect([`variant ${firstId}`, `variant ${secondId}`], file).toContain(owners.get(file));
+    const owner = owners.get(file)!;
+    expect(near, `${file}: a still of the first three plates`).toContain(owner);
+    byPlate.set(owner, [...(byPlate.get(owner) ?? []), file]);
+  }
+  for (const [owner, files] of byPlate) {
+    expect(files, `${owner}: one still`).toHaveLength(1);
+    const id = owner.replace(/^variant /, '');
+    if (chosen.has(id)) expect(files[0], `${owner}: its <img>'s candidate`).toBe(chosen.get(id));
   }
 });
