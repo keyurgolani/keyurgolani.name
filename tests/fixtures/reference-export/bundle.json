@@ -5,7 +5,7 @@
   "createdAt": "2026-10-24T08:00:00.000Z",
   "createdBy": "owner",
   "source": {
-    "kind": "publish"
+    "kind": "draft"
   },
   "appVersion": "0.1.1",
   "unitHash": "sha256:3460c73ea6d515222ae19c2636e28530e434146af34d8a8dcf62ea814136ce34",
@@ -56,9 +56,15 @@
     }
   ],
   "rendering": {
-    "variant": null,
+    "variant": {
+      "id": "spatial-bento",
+      "version": "0.1.0"
+    },
     "packs": [],
-    "contracts": {}
+    "contracts": {
+      "variant": "2.0",
+      "tokens": "1"
+    }
   },
   "events": [
     {
@@ -67,8 +73,7 @@
       "revisionId": "rev_3460c73ea6d515222ae19c2636e28530",
       "previousRevisionId": null,
       "actor": "owner",
-      "at": "2026-10-24T08:00:00.000Z",
-      "reason": "CANARY-REF-EVENT-REASON"
+      "at": "2026-10-24T08:00:00.000Z"
     }
   ]
 }

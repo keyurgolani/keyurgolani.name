@@ -4,12 +4,20 @@
  * #3's export-revision lays out a full export in its provisional bundle
  * format 1: the two documents as they are, snapshots/<kind>.json as
  * canonical JSON, media/media.json, media/blobs/<hex>, and bundle.json, with
- * every hash made by this build's own checks. It stands in for
- * export-revision, which is deferred, for this fixture alone: it opens no
- * store, and the demo never runs it. The images are tiny PNGs made here, so
- * nothing is fetched or derived with sharp, and every byte is the same on
- * every run. reference-fixture.test.ts builds it in memory and fails when
- * the committed files differ, naming this command.
+ * every hash made by this build's own checks and bundle.json's fields as
+ * export-revision writes them. It stands in for export-revision, which is
+ * coming with #3, for this fixture alone: it opens no store, and the demo
+ * never runs it. The images are tiny PNGs made here, so nothing is fetched
+ * or derived with sharp, and every byte is the same on every run.
+ * reference-fixture.test.ts builds it in memory and fails when the committed
+ * files differ, naming this command.
+ *
+ * Its blobs are deliberately over-inclusive. export-revision writes only the
+ * renditions the revision's public view places, and this lists the private
+ * and the unplaced images' too: the reader still takes such a bundle, and
+ * the demo must never serve a listed blob its view doesn't keep, whoever
+ * wrote the export. The private record stays in portfolio.yml, as a real
+ * export's documents keep every record byte for byte.
  */
 import { mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -41,9 +49,8 @@ export const SOURCE_FILES = ['portfolio.yml', 'site.yml'] as const;
 export const REFERENCE_CANARIES = Object.freeze({
   privateRecord: 'CANARY-REF-PRIVATE-RECORD',
   hiddenSection: 'CANARY-REF-HIDDEN-SECTION',
+  /** In the private image's bytes, a blob export-revision never writes (see above). */
   privateMedia: 'CANARY-REF-PRIVATE-MEDIA',
-  /** In bundle.json's events, which the reader never reads. */
-  event: 'CANARY-REF-EVENT-REASON',
   privateSlug: 'canary-ref-private',
   privateAsset: 'canary-ref-private-media',
 });
@@ -166,7 +173,7 @@ export function buildReferenceFixture(
     const codes = checked.diagnostics.map(({ code, pointer }) => `${code} ${pointer}`).join(', ');
     throw new Error(`The reference fixture's pair doesn't check: ${codes}`);
   }
-  const { unit } = checked;
+  const { unit, rendering } = checked;
   files.set('media/media.json', Buffer.from(mediaText, 'utf8'));
   const snapshots: Record<string, { file: string; contentHash: Sha256 }> = {};
   for (const [kind, value] of Object.entries(unit.snapshots).sort(([a], [b]) =>
@@ -191,7 +198,8 @@ export function buildReferenceFixture(
     parentRevisionId: null,
     createdAt: CREATED_AT,
     createdBy: 'owner',
-    source: { kind: 'publish' },
+    // How the revision came to be, and no more: export-revision writes the kind alone.
+    source: { kind: 'draft' },
     appVersion: webPackage.version,
     unitHash: unit.unitHash,
     documents: {
@@ -207,7 +215,7 @@ export function buildReferenceFixture(
     },
     snapshots,
     blobs,
-    rendering: { variant: null, packs: [], contracts: {} },
+    rendering,
     events: [
       {
         seq: 1,
@@ -216,7 +224,6 @@ export function buildReferenceFixture(
         previousRevisionId: null,
         actor: 'owner',
         at: CREATED_AT,
-        reason: REFERENCE_CANARIES.event,
       },
     ],
   };

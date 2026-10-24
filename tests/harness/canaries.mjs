@@ -17,15 +17,15 @@ export const CANARY_BODY = 'canary-draft-7c1e04aa';
 /**
  * What the CI reference fixture (#9, tests/fixtures/reference-export) holds
  * that the demo must never send: its private record, its hidden section,
- * its private image's bytes, its bundle's events, the private work's slug
- * (a prefix of the private image's id), and the mount's own directory name.
+ * its private image's bytes, the private work's slug (a prefix of the
+ * private image's id), and the mount's own directory name. Its bundle's
+ * events carry no canary: export-revision never exports an event's reason.
  * apps/web/scripts/reference-fixture.test.ts holds these to the fixture's.
  */
 export const REFERENCE_CANARIES = Object.freeze([
   'CANARY-REF-PRIVATE-RECORD',
   'CANARY-REF-HIDDEN-SECTION',
   'CANARY-REF-PRIVATE-MEDIA',
-  'CANARY-REF-EVENT-REASON',
   'canary-ref-private',
   'canary-ref-private-media',
   'wren/private.png',
