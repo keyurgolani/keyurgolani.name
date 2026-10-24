@@ -1,6 +1,10 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
-import type { AppearanceRegistry, AppearanceStylesheets } from '@portfolio/appearance';
+import type {
+  AppearanceRegistry,
+  AppearanceStylesheets,
+  GeneratedScheme,
+} from '@portfolio/appearance';
 import { compileGeneratedScheme } from '@portfolio/appearance/node';
 import { APPEARANCE_REGISTRY, APPEARANCE_STYLESHEETS } from '~/lib/appearance-registry';
 import { storedSchemes } from '~/lib/document-appearance';
@@ -41,7 +45,7 @@ import { previewStatusDocument } from './preview-asset';
 //
 // The live revision's schemes compile once per revision: the memo holds one
 // revision's, and a publish or rollback replaces it on the next read. A
-// grant's compile once while the owner composition caches the grant's view.
+// grant's compile once per grant and scheme, keyed by the grant's digest.
 
 /** Where the live revision's generated schemes are served. */
 export const SCHEME_URL = '/_portfolio/scheme/';
@@ -74,23 +78,45 @@ export function schemeStylesheets(
 ): ReadonlyMap<string, SchemeStylesheet> {
   const sheets = new Map<string, SchemeStylesheet>();
   for (const [id, sets] of Object.entries(storedSchemes(schemes, registry))) {
-    const css = compileGeneratedScheme(id, sets);
-    compileCount.value += 1;
-    const hash = createHash('sha256').update(css, 'utf8').digest('hex').slice(0, 12);
-    sheets.set(id, { id, name: `${id}.${hash}.css`, css });
+    sheets.set(id, compileSheet(id, sets));
   }
   return sheets;
 }
 
-/** A grant's compiled schemes, by the OpenedGrant.schemes its cached view holds. */
-const grantSheets = new WeakMap<object, ReadonlyMap<string, SchemeStylesheet>>();
+/** One scheme's stylesheet, compiled from its checked sets and named by its bytes. */
+function compileSheet(id: string, sets: GeneratedScheme): SchemeStylesheet {
+  const css = compileGeneratedScheme(id, sets);
+  compileCount.value += 1;
+  const hash = createHash('sha256').update(css, 'utf8').digest('hex').slice(0, 12);
+  return { id, name: `${id}.${hash}.css`, css };
+}
 
-function grantStylesheets(schemes: unknown): ReadonlyMap<string, SchemeStylesheet> {
-  if (typeof schemes !== 'object' || schemes === null) return schemeStylesheets(schemes);
-  let sheets = grantSheets.get(schemes);
-  if (!sheets) {
-    sheets = schemeStylesheets(schemes);
-    grantSheets.set(schemes, sheets);
+/**
+ * Each grant's compiled schemes, by the grant's digest and the scheme id:
+ * the SHA-256 of its token, which the grant's record and its cached view are
+ * kept under too. A grant's subject is pinned when it's minted, so its
+ * stored schemes never change under one digest, however often open() reads
+ * them afresh. The oldest go first past GRANT_SHEETS.
+ */
+const grantSheets = new Map<string, SchemeStylesheet>();
+const GRANT_SHEETS = 64;
+
+/** The grant's stored schemes compiled, each once per grant and scheme. */
+function grantStylesheets(grant: string, schemes: unknown): ReadonlyMap<string, SchemeStylesheet> {
+  const digest = createHash('sha256').update(grant).digest('hex');
+  const sheets = new Map<string, SchemeStylesheet>();
+  for (const [id, sets] of Object.entries(storedSchemes(schemes))) {
+    const key = JSON.stringify([digest, id]);
+    let sheet = grantSheets.get(key);
+    if (!sheet) {
+      sheet = compileSheet(id, sets);
+      grantSheets.set(key, sheet);
+      for (const oldest of grantSheets.keys()) {
+        if (grantSheets.size <= GRANT_SHEETS) break;
+        grantSheets.delete(oldest);
+      }
+    }
+    sheets.set(id, sheet);
   }
   return sheets;
 }
@@ -169,7 +195,7 @@ export function liveStylesheets(live: LiveSchemes): AppearanceStylesheets {
 /** A preview frame's stylesheets: the build's, and its grant's generated schemes under the grant. */
 export function previewStylesheets(grant: string, schemes: unknown): AppearanceStylesheets {
   return withSchemeStylesheets(
-    grantStylesheets(schemes),
+    grantStylesheets(grant, schemes),
     (name) => `/preview-assets/${encodeURIComponent(grant)}/${PREVIEW_SCHEME_SEGMENT}/${name}`,
   );
 }
@@ -248,9 +274,10 @@ export async function previewSchemeStylesheet(
   if (!previews) return previewStatusDocument();
   const name = await sentName(request, context);
   if (name === null) return previewStatusDocument();
-  const opened = await previews.open(await param(context, 'grant')).catch(() => null);
+  const grant = await param(context, 'grant');
+  const opened = await previews.open(grant).catch(() => null);
   if (!opened) return previewStatusDocument();
-  const sheet = schemeNamed(grantStylesheets(opened.schemes), name);
+  const sheet = schemeNamed(grantStylesheets(grant, opened.schemes), name);
   if (!sheet) return previewStatusDocument();
   return stylesheet(sheet, 'private, no-store', request.method === 'HEAD');
 }
