@@ -199,22 +199,8 @@ test("given the identity's title, every title the page carries holds it, never t
   );
 });
 
-test("given the sample's pictures, an Open Graph image that is one of them fails", () => {
-  const SAMPLE_OG = 'a'.repeat(64);
-  const pictured = (sha256) =>
-    owner((a) => ({
-      ...a,
-      ogImage: { ...a.ogImage, sha256 },
-      sampleImages: [SAMPLE_OG],
-    }));
-  assert.deepEqual(pictured('b'.repeat(64)), []);
-  assert.ok(
-    pictured(SAMPLE_OG).some((p) => /^the Open Graph image is the sample's own picture/.test(p)),
-    pictured(SAMPLE_OG).join(' | '),
-  );
-  // Unread bytes can't pass for someone else's picture.
-  assert.ok(pictured(undefined).some((p) => /bytes weren't read/.test(p)));
-  // An og:image that points at the sample's placed picture, not the card, fails on its URL.
+test('the Open Graph image is the card the server draws on the origin, never a placed picture or none', () => {
+  // meta.ogImage isn't rendered yet: og:image is always the generated card.
   const placed = owner(
     edit(
       'page',
@@ -225,6 +211,65 @@ test("given the sample's pictures, an Open Graph image that is one of them fails
   assert.ok(
     placed.some((p) => p.startsWith(`the Open Graph image is ["${ORIGIN}/media/og-image`)),
     placed.join(' | '),
+  );
+  const none = owner(edit('page', /<meta (property|name)="(og|twitter):image"[^>]*>/g, ''));
+  assert.ok(
+    none.includes(`the Open Graph image is [], not ${ORIGIN}/opengraph-image`),
+    none.join(' | '),
+  );
+  const demoNone = demo(edit('page', /<meta (property|name)="(og|twitter):image"[^>]*>/g, ''));
+  assert.ok(
+    demoNone.some((p) => p.startsWith('the Open Graph image is []')),
+    demoNone.join(' | '),
+  );
+});
+
+test('a missing ProfilePage or WebSite block, or either on another url, fails', () => {
+  for (const type of ['ProfilePage', 'WebSite']) {
+    const missing = owner(
+      edit(
+        'page',
+        new RegExp(
+          `<script type="application/ld\\+json">\\{"@context":"https://schema.org","@type":"${type}"[\\s\\S]*?</script>`,
+        ),
+        '',
+      ),
+    );
+    assert.ok(
+      missing.includes(`the page carries no ${type} JSON-LD`),
+      `${type}: ${missing.join(' | ')}`,
+    );
+    const moved = owner(
+      edit(
+        'page',
+        new RegExp(`("@type":"${type}"[^<]*"url":")${ORIGIN.replace(/[.]/g, '\\.')}"`),
+        '$1https://elsewhere.test"',
+      ),
+    );
+    assert.ok(
+      moved.includes(`JSON-LD's ${type} url is https://elsewhere.test, not ${ORIGIN}`),
+      `${type}: ${moved.join(' | ')}`,
+    );
+  }
+});
+
+test('the sitemap and robots must answer 200 in every profile, and a feed must list its items with guids', () => {
+  for (const [key, path] of [
+    ['sitemap', '/sitemap.xml'],
+    ['robots', '/robots.txt'],
+  ]) {
+    for (const status of [500, 0]) {
+      const broken = (a) => ({ ...a, [key]: { status, body: '' } });
+      assert.ok(owner(broken).includes(`${path} answered ${status}`), `owner ${path} ${status}`);
+      assert.ok(demo(broken).includes(`${path} answered ${status}`), `demo ${path} ${status}`);
+    }
+  }
+  const empty = owner(edit('feed', /<item>[\s\S]*<\/item>/, ''));
+  assert.ok(empty.includes('the feed lists no item'), empty.join(' | '));
+  const unguided = owner(edit('feed', /<guid[^>]*>[^<]*<\/guid>/, ''));
+  assert.ok(
+    unguided.some((p) => /^the feed has \d+ items and \d+ guids$/.test(p)),
+    unguided.join(' | '),
   );
 });
 
