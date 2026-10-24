@@ -179,6 +179,8 @@ test('a wrong, missing, or malformed hash, or any other spelling of a name, is t
     `..%2Fbrand-seed.${hash}.css`,
     `%62rand-seed.${hash}.css`,
     encodeURIComponent(name).replace(/\./g, '%2E'),
+    // A trailing slash: a file has no path below it.
+    `${name}/`,
     '',
   ];
   for (const sent of refused) await assertNotFound(await fetchLive(sent), sent);
@@ -188,6 +190,31 @@ test('a wrong, missing, or malformed hash, or any other spelling of a name, is t
     params: Promise.resolve({ file: `x${name}` }),
   });
   await assertNotFound(mismatched, 'a parameter other than the path');
+});
+
+test('dot segments, plain or percent-encoded, normalize before routing, so they reach only the canonical name and its own bytes (#20)', async (t) => {
+  deploy(t, () => revision('r1', { 'brand-seed': STORED }));
+  const { css, name } = nameOf(STORED.tokens);
+  for (const spelled of [
+    `x/../${name}`,
+    `./${name}`,
+    `x/%2e%2e/${name}`,
+    `x/%2E%2E/${name}`,
+    `%2e/${name}`,
+    `../scheme/${name}`,
+  ]) {
+    // The URL parser, which every request goes through first, leaves the canonical path.
+    const url = new URL(`${ORIGIN}${SCHEME_URL}${spelled}`);
+    assert.equal(url.pathname, `${SCHEME_URL}${name}`, spelled);
+    const response = await liveRoute(new Request(url), { params: Promise.resolve({ file: name }) });
+    assert.equal(response.status, 200, spelled);
+    assert.equal(await response.text(), css, spelled);
+  }
+  // One that climbs out of the route leaves it, for another prefix's rules.
+  assert.equal(
+    new URL(`${ORIGIN}${SCHEME_URL}../pack/${name}`).pathname,
+    `/_portfolio/pack/${name}`,
+  );
 });
 
 test("another site's scheme, an unchecked entry's, and a scheme the live revision doesn't store are 404 on the public route (#20)", async (t) => {
