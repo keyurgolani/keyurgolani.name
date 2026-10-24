@@ -128,6 +128,9 @@ export function StudioShell({
   // The owner adapter's chunk didn't arrive: Studio can't reach its store.
   const [backendFailed, setBackendFailed] = useState(false);
   const reload = useRef<HTMLButtonElement>(null);
+  const retry = useRef<HTMLButtonElement>(null);
+  // The journal write waiting for a pause in typing, which a page going into the cache cancels.
+  const journalTimer = useRef<number | null>(null);
   // Only the owner adapter exists yet: #9 brings the demo's.
   const unavailable = policy.profile !== 'owner';
   // False while a back-forward cache restore re-checks the session: nothing shows until it does.
@@ -278,8 +281,15 @@ export function StudioShell({
   // The journal follows the editor: each pause in typing, and every save.
   // Leaving the page, or the session ending, writes it at once.
   useEffect(() => {
-    const timer = window.setTimeout(flush, JOURNAL_PAUSE_MS);
-    return () => window.clearTimeout(timer);
+    const timer = window.setTimeout(() => {
+      journalTimer.current = null;
+      flush();
+    }, JOURNAL_PAUSE_MS);
+    journalTimer.current = timer;
+    return () => {
+      window.clearTimeout(timer);
+      if (journalTimer.current === timer) journalTimer.current = null;
+    };
   }, [session.local, session.draft, session.conflict, session.orphan, flush]);
 
   // A 401 anywhere, or another tab's sign-out: keep the journal, then leave,
@@ -303,6 +313,10 @@ export function StudioShell({
     // restore shows nothing until the session checks out.
     const { pagehide, pageshow } = pageCacheHandlers({
       flush,
+      cancelPending: () => {
+        if (journalTimer.current !== null) window.clearTimeout(journalTimer.current);
+        journalTimer.current = null;
+      },
       hide: () => flushSync(() => setVerified(false)),
       recheck: () => {
         if (!backend) return;
@@ -342,6 +356,27 @@ export function StudioShell({
   useEffect(() => {
     if (backendFailed && backend === null) reload.current?.focus();
   }, [backendFailed, backend]);
+
+  // The store couldn't read the draft as Studio loaded: its Try again control takes focus.
+  const loadFailed =
+    !unavailable && verified && session.phase === 'loading' && session.error !== null;
+  useEffect(() => {
+    if (loadFailed) retry.current?.focus();
+  }, [loadFailed]);
+
+  // A failure state that gives way, as a late chunk arriving or a retry does, takes its focused
+  // control with it: focus goes to the task area, not the page's body.
+  const stuck = (backendFailed && backend === null) || loadFailed;
+  const wasStuck = useRef(false);
+  useEffect(() => {
+    if (wasStuck.current && !stuck) {
+      const focused = document.activeElement;
+      if (focused === null || focused === document.body) {
+        document.getElementById('studio-main')?.focus();
+      }
+    }
+    wasStuck.current = stuck;
+  }, [stuck]);
 
   const active = tasks.find((each) => each.id === task) ?? tasks[0];
   useEffect(() => {
@@ -545,6 +580,21 @@ export function StudioShell({
                 Reload Studio
               </button>
             </div>
+          ) : loadFailed ? (
+            <div className="studio-alert" role="alert">
+              <p>Studio couldn&apos;t read the draft. {session.error}</p>
+              <button
+                ref={retry}
+                type="button"
+                className="studio-button"
+                onClick={() => {
+                  dispatch({ type: 'retry' });
+                  if (backend) void load(backend);
+                }}
+              >
+                Try again
+              </button>
+            </div>
           ) : (
             <p
               className="studio-state__waiting"
@@ -569,14 +619,16 @@ export function StudioShell({
             </p>
           ) : null}
         </section>
-        {failedToLoad && active ? (
+        {stuck && active ? (
           // Which task couldn't load, so the owner knows where they were.
           <section className="studio-task" aria-labelledby="studio-task-heading">
             <h2 id="studio-task-heading" className="studio-task__heading">
               {active.label}
             </h2>
             <p className="studio-task__pending">
-              This task needs the part of Studio that couldn&apos;t load.
+              {failedToLoad
+                ? "This task needs the part of Studio that couldn't load."
+                : "This task needs the draft, which Studio couldn't read."}
             </p>
           </section>
         ) : null}

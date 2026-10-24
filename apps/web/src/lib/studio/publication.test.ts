@@ -142,6 +142,22 @@ test('a move that times out is asked again with the same key, and gives up after
     describeMove('publish', report),
     new RegExp(`Revision ${BASE_REVISION.slice(0, 16)}, number 4, is live now\\.$`),
   );
+  // Live where it was before the move: still "not published as far as Studio can tell".
+  assert.match(
+    describeMove('publish', report, null, LIVE.liveRevisionId),
+    /^Not published as far as Studio can tell: /,
+  );
+  // Live moved since this page read it: it says what's live, never "not published" (#123 review).
+  for (const kind of ['publish', 'rollback'] as const) {
+    const moved = describeMove(kind, report, null, 'rev_somethingelse');
+    assert.doesNotMatch(moved, /^Not (published|rolled back)/, kind);
+    assert.match(moved, new RegExp(`this ${kind} may have gone through`), kind);
+    assert.match(
+      moved,
+      new RegExp(`Revision ${BASE_REVISION.slice(0, 16)}, number 4, is live now\\.$`),
+      kind,
+    );
+  }
 });
 
 test('a refusal, a moved live revision, or a newer draft version is never asked again', async () => {

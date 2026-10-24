@@ -9,6 +9,13 @@ export interface PageCacheEnv {
   readonly hide: () => void;
   /** Writes the journal, as any pagehide does. */
   readonly flush: () => void;
+  /**
+   * Cancels a journal write still waiting for a pause in typing. A page
+   * frozen in the cache keeps its timers, which would run once it's
+   * restored, before its session checks out, and could write back an entry
+   * a discard removed meanwhile.
+   */
+  readonly cancelPending: () => void;
   /** Re-checks the session, then shows the page again or ends it. */
   readonly recheck: () => void;
 }
@@ -33,6 +40,7 @@ export function pageCacheHandlers(env: PageCacheEnv) {
   return {
     pagehide(event: Pick<PageTransitionEvent, 'persisted'>) {
       env.flush();
+      env.cancelPending();
       if (event.persisted) env.hide();
     },
     pageshow(event: Pick<PageTransitionEvent, 'persisted'>) {

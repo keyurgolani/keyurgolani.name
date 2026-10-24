@@ -180,7 +180,7 @@ test(
       .poll(() => refused.length, "the owner adapter's chunk is asked for, and refused")
       .toBe(1);
     const alert = page.getByRole('alert').filter({ hasText: "Studio couldn't load" });
-    // Refused at once, or past the shell's 15 second wait for a chunk that hangs.
+    // Refused at once, or past the shell's 5 second wait for a chunk that hangs.
     await expect(alert).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('button', { name: 'Reload Studio' })).toBeFocused();
     await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
@@ -188,5 +188,72 @@ test(
     for (const id of ['content', 'appearance', 'history']) {
       await expect(page.locator(`[id="${id}"]`)).toHaveCount(1);
     }
+  },
+);
+
+/** The owner adapter's chunk, the one script that names its commands. */
+const OWNER_CHUNK = /["']draft\.applyEdits["']/;
+
+test(
+  "when the store can't read the draft as Studio loads, it says so with Try again, which takes focus, and nothing stays loading",
+  { annotation: [STUDIO] },
+  async ({ page, app }) => {
+    await signIn(page, app, secret.password);
+    // The store answers draft.getWorking with a 503, as an unreachable data directory does.
+    let refuse = true;
+    await page.route(/\/api\/studio\/draft\.getWorking/, (route) =>
+      refuse
+        ? route.fulfill({
+            status: 503,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              error: {
+                code: 'storage_unavailable',
+                message: "The data directory can't be used right now.",
+                requestId: 'req_e2e',
+              },
+            }),
+          })
+        : route.fallback(),
+    );
+    await page.goto('/studio');
+    const alert = page.getByRole('alert').filter({ hasText: "Studio couldn't read the draft" });
+    await expect(alert).toBeVisible({ timeout: 20_000 });
+    const again = page.getByRole('button', { name: 'Try again' });
+    await expect(again).toBeFocused();
+    await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+    // The task's heading stays, so the owner knows where they were.
+    await expect(page.getByRole('heading', { level: 2, name: 'Content' })).toBeVisible();
+    // The store is back: Try again reads the draft, and focus goes to the task area.
+    refuse = false;
+    await again.press('Enter');
+    await expect(line(page, 'Draft')).toBeVisible();
+    await expect(alert).toHaveCount(0);
+    await expect(page.locator('#studio-main')).toBeFocused();
+  },
+);
+
+test(
+  "when the part that reaches the store arrives after Studio said it couldn't load, Studio loads, and focus goes to the task area",
+  { annotation: [STUDIO] },
+  async ({ page, app }) => {
+    await signIn(page, app, secret.password);
+    await page.goto('/studio');
+    await expect(line(page, 'Draft')).toBeVisible();
+    // The owner adapter's chunk comes 7 seconds late, past the shell's 5 second wait.
+    await page.route(/\/_next\/static\/chunks\/.*\.js/, async (route) => {
+      const response = await route.fetch();
+      const body = await response.text();
+      if (OWNER_CHUNK.test(body)) await new Promise((done) => setTimeout(done, 7_000));
+      return route.fulfill({ response, body });
+    });
+    await page.reload();
+    const alert = page.getByRole('alert').filter({ hasText: "Studio couldn't load" });
+    await expect(alert).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('button', { name: 'Reload Studio' })).toBeFocused();
+    // It arrives: the draft loads, the alert goes, and focus doesn't fall to the page's body.
+    await expect(line(page, 'Draft')).toBeVisible({ timeout: 20_000 });
+    await expect(alert).toHaveCount(0);
+    await expect(page.locator('#studio-main')).toBeFocused();
   },
 );

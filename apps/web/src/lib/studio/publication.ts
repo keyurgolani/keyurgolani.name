@@ -153,6 +153,8 @@ export function describeMove(
   kind: 'publish' | 'rollback',
   report: MoveReport,
   documents: StudioDraft['documents'] | null = null,
+  /** The live revision Studio read before it asked, when it knows it. */
+  liveBefore?: string | null,
 ): string {
   const { outcome } = report;
   const done = kind === 'publish' ? 'Published' : 'Rolled back';
@@ -168,6 +170,14 @@ export function describeMove(
     case 'refused':
       return `${not}: ${outcome.message}${firstBlocking(outcome.findings ?? [], documents)} Nothing moved. ${live}`;
     case 'failed':
+      // No answer, but live.get says the live site moved since: say what's live, not "not published".
+      if (
+        liveBefore !== undefined &&
+        report.live !== null &&
+        report.live.liveRevisionId !== liveBefore
+      ) {
+        return `No answer from the store: ${outcome.message} The live site changed since this page read it, so this ${kind === 'publish' ? 'publish' : 'rollback'} may have gone through. ${live}`;
+      }
       return `${not} as far as Studio can tell: ${outcome.message} It asked ${report.attempts === 1 ? 'once' : `${report.attempts} times`} with one request, which the store carries out at most once. ${live}`;
     case 'signed-out':
       return '';

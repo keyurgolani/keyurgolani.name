@@ -44,21 +44,50 @@ function record() {
   const handlers = pageCacheHandlers({
     hide: () => calls.push('hide'),
     flush: () => calls.push('flush'),
+    cancelPending: () => calls.push('cancel'),
     recheck: () => calls.push('recheck'),
   });
   return { calls, handlers };
 }
 
-test('a page going into the cache keeps the journal, then hides before it is frozen', () => {
+test('a page going into the cache keeps the journal, cancels the write waiting on a pause, then hides before it is frozen', () => {
   const { calls, handlers } = record();
   handlers.pagehide({ persisted: true });
-  assert.deepEqual(calls, ['flush', 'hide']);
+  assert.deepEqual(calls, ['flush', 'cancel', 'hide']);
 });
 
-test('a page that unloads for good keeps the journal and hides nothing', () => {
+test('a page that unloads for good keeps the journal, cancels the waiting write, and hides nothing', () => {
   const { calls, handlers } = record();
   handlers.pagehide({ persisted: false });
-  assert.deepEqual(calls, ['flush']);
+  assert.deepEqual(calls, ['flush', 'cancel']);
+});
+
+test('a journal write waiting on a pause never runs after a restore, so a discard made meanwhile stays (#123 review)', () => {
+  // A page's timers as the cache freezes them: they run once it's restored.
+  const timers = new Map<number, () => void>();
+  let next = 0;
+  let pending: number | null = null;
+  const writes: string[] = [];
+  const flush = () => writes.push('write');
+  // The shell's pause timer: a write once typing pauses.
+  pending = ++next;
+  timers.set(pending, flush);
+  const handlers = pageCacheHandlers({
+    hide: () => {},
+    flush,
+    cancelPending: () => {
+      if (pending !== null) timers.delete(pending);
+      pending = null;
+    },
+    recheck: () => {},
+  });
+  handlers.pagehide({ persisted: true });
+  assert.deepEqual(writes, ['write'], 'pagehide writes the journal once');
+  // Meanwhile another tab's discard removes the entry; then the page is restored, and its timers run.
+  writes.length = 0;
+  handlers.pageshow({ persisted: true });
+  for (const run of timers.values()) run();
+  assert.deepEqual(writes, [], 'nothing writes the entry back');
 });
 
 test('a restored page stays hidden and re-checks its session; a first load does neither', () => {

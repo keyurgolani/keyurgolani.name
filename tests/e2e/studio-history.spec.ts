@@ -158,6 +158,35 @@ test(
 );
 
 test(
+  "while a publish runs, Escape leaves its dialog open, so it can't close on a move still going",
+  { annotation: [STUDIO] },
+  async ({ page, app }) => {
+    const draft = await draftNamed(app, 'Rowan Held');
+    await signIn(page, app, secret.password);
+    const version = await choosePublishable(page, draft.version);
+    await openHistory(page);
+    // The publish waits at the network until the test lets it go.
+    let release!: () => void;
+    const held = new Promise<void>((done) => {
+      release = done;
+    });
+    await page.route('**/api/studio/publish', async (route) => {
+      await held;
+      await route.continue();
+    });
+    await page.getByRole('button', { name: `Publish version ${version}` }).click();
+    const dialog = page.getByRole('dialog', { name: 'Publish this draft?' });
+    await dialog.getByRole('button', { name: `Publish version ${version} now` }).click();
+    await expect(history(page).getByRole('status')).toHaveText('Publishing…');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeVisible();
+    release();
+    await expect(history(page).getByRole('status')).toHaveText(/^Published: /);
+    await expect(dialog).toBeHidden();
+  },
+);
+
+test(
   'a lost answer after the server committed: Studio asks again with the same key, publishes once, and reports the true live revision',
   { annotation: [STUDIO] },
   async ({ page, app }) => {
@@ -210,12 +239,12 @@ test(
     await signIn(page, app, secret.password);
     await openHistory(page);
     const live = await liveOf(page);
-    // The live revision, published from "Rowan Retried" over "Rowan Published".
+    // The live revision, published from "Rowan Retried" over "Rowan Held".
     await history(page)
       .getByRole('button', { name: `Changes in ${short(live.liveRevisionId!)}` })
       .click();
     const diff = history(page).getByLabel('Changes to portfolio.yml');
-    await expect(diff).toContainText('-  name: Rowan Published');
+    await expect(diff).toContainText('-  name: Rowan Held');
     await expect(diff).toContainText('+  name: Rowan Retried');
     const derived = history(page).getByRole('region', { name: 'Derived changes' });
     await expect(derived.getByRole('row', { name: /portfolio \/identity\/name/ })).toContainText(

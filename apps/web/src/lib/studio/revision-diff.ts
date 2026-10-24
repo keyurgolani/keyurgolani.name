@@ -1,5 +1,11 @@
 import { unifiedDiff } from '@portfolio/schema/diff';
-import type { RevisionDetail } from './backend';
+import type {
+  Page,
+  PublicationEvent,
+  ReadResult,
+  RevisionDetail,
+  RevisionSummary,
+} from './backend';
 import { DOCUMENT_NAMES, shortRevision as shortId, type DocumentName } from './documents';
 
 // What changed between two revisions (#8, Slice 6 item 4), the way the
@@ -14,7 +20,9 @@ import { DOCUMENT_NAMES, shortRevision as shortId, type DocumentName } from './d
 //   that changed, or a pack that moved on, shows here even when no authored
 //   line did.
 //
-// Both compare `before`, or nothing for a first revision, to `after`.
+// Both compare `before`, or nothing for a first revision, to `after`. A
+// bidirectional control in either, which would reorder the rest of its line
+// as it shows, shows as a marker such as ⟨U+202E⟩ instead.
 
 /** The most derived changes listed; past it, the rest are counted. */
 export const DERIVED_LIMIT = 200;
@@ -44,6 +52,23 @@ export interface RevisionChanges {
   readonly moreDerived: number;
 }
 
+/** The bidirectional controls: embeddings and overrides, isolates, and the marks. */
+const BIDI_CONTROLS = /[\u202A-\u202E\u2066-\u2069\u200E\u200F\u061C]/g;
+
+/**
+ * `text` with each bidirectional control shown as a visible marker, such as
+ * ⟨U+202E⟩, so none can reorder how a diff reads. Right-to-left text itself
+ * stays as it is.
+ */
+export function showBidiControls(text: string): string {
+  return text.replace(
+    BIDI_CONTROLS,
+    (control) => `⟨U+${control.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}⟩`,
+  );
+}
+
+const shown = (text: string | null) => (text === null ? null : showBidiControls(text));
+
 const fileOf = (name: DocumentName, format: 'yaml' | 'json') =>
   `${name}.${format === 'yaml' ? 'yml' : 'json'}`;
 
@@ -72,9 +97,9 @@ function compare(
     .filter((key) => before.get(key) !== after.get(key))
     .map((key) => ({
       area,
-      where: label(key),
-      before: before.get(key) ?? null,
-      after: after.get(key) ?? null,
+      where: showBidiControls(label(key)),
+      before: shown(before.get(key) ?? null),
+      after: shown(after.get(key) ?? null),
     }));
 }
 
@@ -95,6 +120,78 @@ const snapshots = (revision: RevisionDetail | null) =>
     ]),
   );
 
+/** What a comparison came to: the changes, or why they couldn't be read. */
+export type Comparison =
+  | { readonly kind: 'changes'; readonly changes: RevisionChanges }
+  | { readonly kind: 'error'; readonly error: string }
+  | { readonly kind: 'signed-out' };
+
+/**
+ * What changed in `revisionId`, from `otherId`, the revision before it or
+ * the live one, or from nothing when it has none. A revision that can't be
+ * read, this one or the one it's compared with, is an error, never a
+ * comparison with nothing, which would show every line as added.
+ */
+export async function compareRevisions(
+  read: (revisionId: string) => Promise<ReadResult<RevisionDetail | null>>,
+  revisionId: string,
+  against: 'parent' | 'live',
+  liveId: string | null,
+): Promise<Comparison> {
+  const after = await read(revisionId);
+  if (after.kind === 'signed-out') return after;
+  if (after.kind === 'failed') return { kind: 'error', error: after.message };
+  if (after.value === null)
+    return { kind: 'error', error: 'That revision is gone from the store.' };
+  const otherId = against === 'live' ? liveId : after.value.manifest.parentRevisionId;
+  if (!otherId) return { kind: 'changes', changes: revisionChanges(null, after.value) };
+  const before = await read(otherId);
+  if (before.kind === 'signed-out') return before;
+  const which = against === 'live' ? 'the live revision' : 'the revision before it';
+  if (before.kind === 'failed') {
+    return {
+      kind: 'error',
+      error: `Studio couldn't read ${which}, ${shortId(otherId)}, to compare with: ${before.message}`,
+    };
+  }
+  if (before.value === null) {
+    return {
+      kind: 'error',
+      error: `Studio couldn't read ${which}, ${shortId(otherId)}, to compare with: it's gone from the store.`,
+    };
+  }
+  return { kind: 'changes', changes: revisionChanges(before.value, after.value) };
+}
+
+/** The history the task lists, or why each part of it couldn't be read. */
+export interface HistoryLists {
+  readonly revisions: readonly RevisionSummary[];
+  readonly nextOffset: number | null;
+  readonly revisionsError: string | null;
+  /** Newest first. */
+  readonly events: readonly PublicationEvent[];
+  readonly eventsError: string | null;
+}
+
+/**
+ * The revisions and events as two reads answered them, or null when the
+ * session ended. A read that failed is its error, never an empty list:
+ * "nothing published yet" is only what a read that worked says.
+ */
+export function historyLists(
+  page: ReadResult<Page<RevisionSummary>>,
+  history: ReadResult<Page<PublicationEvent>>,
+): HistoryLists | null {
+  if (page.kind === 'signed-out' || history.kind === 'signed-out') return null;
+  return {
+    revisions: page.kind === 'read' ? page.value.items : [],
+    nextOffset: page.kind === 'read' ? page.value.nextOffset : null,
+    revisionsError: page.kind === 'failed' ? page.message : null,
+    events: history.kind === 'read' ? [...history.value.items].reverse() : [],
+    eventsError: history.kind === 'failed' ? history.message : null,
+  };
+}
+
 /** What changed from `before`, or from nothing, to `after`. */
 export function revisionChanges(
   before: RevisionDetail | null,
@@ -112,7 +209,7 @@ export function revisionChanges(
         before && old ? `${shortId(before.revisionId)}/${fileOf(name, old.format)}` : '/dev/null',
       after: now ? `${shortId(after.revisionId)}/${file}` : '/dev/null',
     });
-    if (diff !== '') authored.push({ document: name, file, diff });
+    if (diff !== '') authored.push({ document: name, file, diff: shown(diff) });
     derived.push(
       ...compare(
         'model',

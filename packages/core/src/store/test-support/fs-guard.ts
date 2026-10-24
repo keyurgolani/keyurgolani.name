@@ -48,7 +48,8 @@ const POINTER_KEYS = new Set(['live', 'liveTemp', 'publication']);
 /** What a module takes from fs that can write: the write APIs it names, or `*` for the module whole. */
 export function fsWrites(source: ts.SourceFile): string[] {
   const found: string[] = [];
-  const requires = createdRequires(source);
+  const makers = createRequireNames(source);
+  const requires = createdRequires(source, makers);
   const visit = (node: ts.Node) => {
     if (
       ts.isImportDeclaration(node) &&
@@ -69,7 +70,7 @@ export function fsWrites(source: ts.SourceFile): string[] {
     // import('node:fs') and require('fs') get the module whole, and so do
     // process.getBuiltinModule('fs') and a require createRequire() made,
     // called at once or through the name it's bound to.
-    if (ts.isCallExpression(node) && loadsModule(node.expression, requires)) {
+    if (ts.isCallExpression(node) && loadsModule(node.expression, requires, makers)) {
       const [specifier] = node.arguments;
       if (specifier && ts.isStringLiteralLike(specifier) && FS_MODULES.has(specifier.text)) {
         found.push('*');
@@ -81,16 +82,46 @@ export function fsWrites(source: ts.SourceFile): string[] {
   return found;
 }
 
-/** Whether `node` names createRequire, by itself or off a namespace such as `module.createRequire`. */
-function isCreateRequire(node: ts.Expression): boolean {
+const MODULE_MODULES = new Set(['module', 'node:module']);
+
+/**
+ * The names createRequire goes by in `source`: its own, and any it's
+ * imported as, such as `import { createRequire as make } from 'node:module'`.
+ */
+function createRequireNames(source: ts.SourceFile): Set<string> {
+  const names = new Set(['createRequire']);
+  for (const statement of source.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      !MODULE_MODULES.has(statement.moduleSpecifier.text)
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) continue;
+    for (const element of bindings.elements) {
+      if ((element.propertyName ?? element.name).text === 'createRequire') {
+        names.add(element.name.text);
+      }
+    }
+  }
+  return names;
+}
+
+/**
+ * Whether `node` names createRequire, by any name `makers` holds or off a
+ * namespace such as `module.createRequire`.
+ */
+function isCreateRequire(node: ts.Expression, makers: ReadonlySet<string>): boolean {
   return (
-    (ts.isIdentifier(node) && node.text === 'createRequire') ||
+    (ts.isIdentifier(node) && makers.has(node.text)) ||
     (ts.isPropertyAccessExpression(node) && node.name.text === 'createRequire')
   );
 }
 
 /** The names `source` binds a require to that createRequire() made. */
-function createdRequires(source: ts.SourceFile): Set<string> {
+function createdRequires(source: ts.SourceFile, makers: ReadonlySet<string>): Set<string> {
   const names = new Set<string>();
   const visit = (node: ts.Node) => {
     if (
@@ -98,7 +129,7 @@ function createdRequires(source: ts.SourceFile): Set<string> {
       ts.isIdentifier(node.name) &&
       node.initializer &&
       ts.isCallExpression(node.initializer) &&
-      isCreateRequire(node.initializer.expression)
+      isCreateRequire(node.initializer.expression, makers)
     ) {
       names.add(node.name.text);
     }
@@ -109,7 +140,11 @@ function createdRequires(source: ts.SourceFile): Set<string> {
 }
 
 /** Whether a call to `callee` loads a module by its specifier: import(), require, getBuiltinModule, or a made require. */
-function loadsModule(callee: ts.Expression, requires: ReadonlySet<string>): boolean {
+function loadsModule(
+  callee: ts.Expression,
+  requires: ReadonlySet<string>,
+  makers: ReadonlySet<string>,
+): boolean {
   if (callee.kind === ts.SyntaxKind.ImportKeyword) return true;
   if (ts.isIdentifier(callee)) {
     return (
@@ -117,7 +152,7 @@ function loadsModule(callee: ts.Expression, requires: ReadonlySet<string>): bool
     );
   }
   if (ts.isPropertyAccessExpression(callee)) return callee.name.text === 'getBuiltinModule';
-  return ts.isCallExpression(callee) && isCreateRequire(callee.expression);
+  return ts.isCallExpression(callee) && isCreateRequire(callee.expression, makers);
 }
 
 /** Each read of `live`, `liveTemp`, or `publication` off any object in `source`, as `<line>: <text>`. */

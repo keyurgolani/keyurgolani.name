@@ -75,6 +75,8 @@ export type SessionAction =
   | { readonly type: 'adopt-orphan' }
   | { readonly type: 'drop-orphan' }
   | { readonly type: 'failed'; readonly error: string }
+  /** Trying again after a failure: the error goes while Studio asks again. */
+  | { readonly type: 'retry' }
   | { readonly type: 'live'; readonly live: LiveState | null }
   | { readonly type: 'expired' };
 
@@ -197,6 +199,8 @@ export function draftSession(session: DraftSession, action: SessionAction): Draf
       return { ...session, orphan: null };
     case 'failed':
       return { ...session, saving: false, error: action.error };
+    case 'retry':
+      return { ...session, error: null };
     case 'live':
       return { ...session, live: action.live };
     case 'expired':

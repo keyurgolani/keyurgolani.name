@@ -1,13 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import type {
-  MoveResult,
-  PublicationEvent,
-  RevisionDetail,
-  OwnerBackend,
-  RevisionSummary,
-} from '~/lib/studio/backend';
+import type { MoveResult, OwnerBackend, RevisionSummary } from '~/lib/studio/backend';
 import { shortRevision } from '~/lib/studio/documents';
 import type { DraftSession } from '~/lib/studio/draft-session';
 import {
@@ -20,7 +14,12 @@ import {
   draftFindings,
 } from '~/lib/studio/publication';
 import type { FindingView } from '~/lib/studio/findings';
-import { revisionChanges, type RevisionChanges } from '~/lib/studio/revision-diff';
+import {
+  compareRevisions,
+  historyLists,
+  type HistoryLists,
+  type RevisionChanges,
+} from '~/lib/studio/revision-diff';
 
 // The Publish history task (#8, Slice 6): publish the saved draft, the
 // revisions with what each changed, authored and derived, and a rollback
@@ -33,7 +32,7 @@ import { revisionChanges, type RevisionChanges } from '~/lib/studio/revision-dif
 /** How many of the latest publication events the task lists. */
 export const EVENT_COUNT = 20;
 
-const EVENT_WORDS: Readonly<Record<PublicationEvent['type'], string>> = {
+const EVENT_WORDS: Readonly<Record<HistoryLists['events'][number]['type'], string>> = {
   import: 'Imported',
   publish: 'Published',
   rollback: 'Rolled back to',
@@ -64,7 +63,10 @@ interface Opened {
   readonly error: string | null;
 }
 
-/** A modal confirmation: Escape and Cancel close it, and focus goes back where it was. */
+/**
+ * A modal confirmation: Escape and Cancel close it, and focus goes back where
+ * it was. While its move runs, Escape doesn't close it.
+ */
 function Confirm({
   open,
   heading,
@@ -91,7 +93,16 @@ function Confirm({
     if (!open && element.open) element.close();
   }, [open]);
   return (
-    <dialog ref={dialog} className="studio-dialog" aria-labelledby={headingId} onClose={onCancel}>
+    <dialog
+      ref={dialog}
+      className="studio-dialog"
+      aria-labelledby={headingId}
+      onCancel={(event) => {
+        // Escape mid-move would close the dialog while the move it confirmed still runs.
+        if (busy) event.preventDefault();
+      }}
+      onClose={onCancel}
+    >
       <h2 id={headingId}>{heading}</h2>
       {children}
       <div className="studio-dialog__actions">
@@ -213,11 +224,12 @@ export function HistoryTask({
   /** After a move: the shell reads the draft and live state again. */
   onMoved: () => Promise<void>;
 }) {
-  const [revisions, setRevisions] = useState<readonly RevisionSummary[]>([]);
-  const [nextOffset, setNextOffset] = useState<number | null>(null);
-  const [events, setEvents] = useState<readonly PublicationEvent[]>([]);
-  const [listError, setListError] = useState<string | null>(null);
-  const [listed, setListed] = useState(false);
+  // The lists as the store last answered, or null before it has.
+  const [lists, setLists] = useState<HistoryLists | null>(null);
+  const [older, setOlder] = useState<{
+    readonly revisions: readonly RevisionSummary[];
+    readonly nextOffset: number | null;
+  } | null>(null);
   const [confirming, setConfirming] = useState<Confirming>(null);
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState('');
@@ -237,16 +249,10 @@ export function HistoryTask({
   );
 
   const show = useCallback(([page, history]: Awaited<ReturnType<typeof read>>) => {
-    if (page.kind === 'signed-out' || history.kind === 'signed-out') return;
-    setListed(true);
-    if (page.kind === 'failed') {
-      setListError(page.message);
-      return;
-    }
-    setListError(null);
-    setRevisions(page.value.items);
-    setNextOffset(page.value.nextOffset);
-    setEvents(history.kind === 'read' ? [...history.value.items].reverse() : []);
+    const next = historyLists(page, history);
+    if (next === null) return;
+    setLists(next);
+    setOlder(null);
   }, []);
 
   const list = useCallback(async () => show(await read()), [read, show]);
@@ -261,35 +267,35 @@ export function HistoryTask({
     };
   }, [read, show]);
 
+  const revisions = [...(lists?.revisions ?? []), ...(older?.revisions ?? [])];
+  const nextOffset = older ? older.nextOffset : (lists?.nextOffset ?? null);
+  const events = lists?.events ?? [];
+
   async function more() {
     if (nextOffset === null) return;
     const page = await backend.revisions(nextOffset);
     if (page.kind !== 'read') return;
-    setRevisions((now) => [...now, ...page.value.items]);
-    setNextOffset(page.value.nextOffset);
+    setOlder((now) => ({
+      revisions: [...(now?.revisions ?? []), ...page.value.items],
+      nextOffset: page.value.nextOffset,
+    }));
   }
 
   async function compare(revisionId: string, against: Comparison) {
     setOpened({ revisionId, against, changes: null, error: null });
-    const after = await backend.revision(revisionId);
-    if (after.kind === 'signed-out') return;
-    if (after.kind === 'failed' || after.value === null) {
-      setOpened({
-        revisionId,
-        against,
-        changes: null,
-        error: after.kind === 'failed' ? after.message : 'That revision is gone from the store.',
-      });
-      return;
-    }
-    const otherId = against === 'live' ? liveId : after.value.manifest.parentRevisionId;
-    let before: RevisionDetail | null = null;
-    if (otherId) {
-      const read = await backend.revision(otherId);
-      if (read.kind === 'signed-out') return;
-      before = read.kind === 'read' ? read.value : null;
-    }
-    setOpened({ revisionId, against, changes: revisionChanges(before, after.value), error: null });
+    const result = await compareRevisions(
+      (id) => backend.revision(id),
+      revisionId,
+      against,
+      liveId,
+    );
+    if (result.kind === 'signed-out') return;
+    setOpened({
+      revisionId,
+      against,
+      changes: result.kind === 'changes' ? result.changes : null,
+      error: result.kind === 'error' ? result.error : null,
+    });
   }
 
   async function move(kind: 'publish' | 'rollback', send: (key: string) => Promise<MoveResult>) {
@@ -298,6 +304,8 @@ export function HistoryTask({
     setReport(kind === 'publish' ? 'Publishing…' : 'Rolling back…');
     // One key for this confirmation, and for its retries alone.
     const key = newIdempotencyKey();
+    // What was live when the owner confirmed, to tell an unanswered move that went through.
+    const before = liveId;
     const result = await moveWithRecovery({
       send,
       readLive: () => backend.live(),
@@ -308,7 +316,12 @@ export function HistoryTask({
     setBusy(false);
     // A refusal names its first finding as the complete summary does, over the draft's documents.
     setReport(
-      describeMove(kind, result, kind === 'publish' ? (session.draft?.documents ?? null) : null),
+      describeMove(
+        kind,
+        result,
+        kind === 'publish' ? (session.draft?.documents ?? null) : null,
+        before,
+      ),
     );
     if (result.outcome.kind === 'signed-out') return;
     await onMoved();
@@ -350,11 +363,14 @@ export function HistoryTask({
 
       <section className="studio-history__revisions" aria-labelledby="studio-revisions-heading">
         <h3 id="studio-revisions-heading">Revisions</h3>
-        {listError ? (
-          <p className="studio-alert" role="alert">
-            {listError}
-          </p>
-        ) : !listed ? (
+        {lists?.revisionsError ? (
+          <div className="studio-alert" role="alert">
+            <p>Studio couldn&apos;t read the revisions. {lists.revisionsError}</p>
+            <button type="button" className="studio-button" onClick={() => void list()}>
+              Try again
+            </button>
+          </div>
+        ) : lists === null ? (
           <p className="studio-source__note" aria-busy="true">
             Reading the history…
           </p>
@@ -457,7 +473,18 @@ export function HistoryTask({
 
       <section className="studio-history__events" aria-labelledby="studio-events-heading">
         <h3 id="studio-events-heading">What happened</h3>
-        {events.length === 0 ? (
+        {lists?.eventsError ? (
+          <div className="studio-alert" role="alert">
+            <p>Studio couldn&apos;t read what happened. {lists.eventsError}</p>
+            <button type="button" className="studio-button" onClick={() => void list()}>
+              Try again
+            </button>
+          </div>
+        ) : lists === null ? (
+          <p className="studio-source__note" aria-busy="true">
+            Reading the history…
+          </p>
+        ) : events.length === 0 ? (
           <p className="studio-source__note">No publication events yet.</p>
         ) : (
           <ol className="studio-history__list" reversed>
