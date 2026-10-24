@@ -44,6 +44,7 @@
     "check:registry": "node ci/check-registry.mjs",
     "check:variants": "pnpm --filter @portfolio/web check:variants",
     "check:appearance": "pnpm --filter @portfolio/web check:appearance",
+    "catalog:lock": "tsx apps/web/scripts/check-appearance-lock.ts",
     "check:deps": "tsx apps/web/scripts/build-registry.ts --modules-only >&2 && depcruise apps packages --config .dependency-cruiser.cjs",
     "check:pins": "node ci/check-pins.mjs",
     "check:workflows": "node ci/check-workflows.mjs",

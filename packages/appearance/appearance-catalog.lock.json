@@ -1,0 +1,29 @@
+{
+  "lockVersion": 1,
+  "packs": {
+    "humanist-ui": {
+      "axis": "typography",
+      "package": "@portfolio/appearance-typography",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "provided-by-operating-system",
+      "digest": "sha256-a9b6c8b8471d89f75fbe109909e35732fedb358a5ba49ed143f704c74e75e3e8"
+    },
+    "platform-neutral": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-f22e9239111a140d7ccddc8b229577c4bcdd70ae86b031e31c9d820d71fdfaff"
+    },
+    "warm-parchment": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-d35a510314dcbd85588780196a70f656285b76214d465524780d92cd83c3fed8"
+    }
+  }
+}

@@ -50,7 +50,14 @@ import {
   type RegistryResult,
 } from '@portfolio/variant-contract/node';
 import type { GateTargets } from '@portfolio/appearance';
+import { currentGate, writeFailureRecord } from '../../../ci/lib/reports.mjs';
 import { loadThresholds } from '../../../quality/thresholds';
+import {
+  catalogFindings,
+  contrastRecords,
+  hierarchyRecords,
+  problemRecords,
+} from './check-appearance-catalog';
 import { appearanceTargets } from './appearance-targets';
 import { generateRegistry, PACK_OUT, plural, renderOptions, REPO_ROOT } from './registry-options';
 
@@ -169,7 +176,7 @@ async function main(): Promise<number> {
     process.stderr.write(`${TAG} The thresholds don't load, so nothing was checked.\n`);
     return 1;
   }
-  const { result, packs } = await generateRegistry(process.env, { write: false });
+  const { result, packs, excluded } = await generateRegistry(process.env, { write: false });
   if (!result.ok) {
     process.stderr.write(formatRegistryDiagnostics(result.diagnostics));
     process.stderr.write(`${TAG} Registry generation failed, so nothing was checked.\n`);
@@ -224,8 +231,16 @@ async function main(): Promise<number> {
     options.auditExceptions ? path.resolve(options.auditExceptions) : undefined,
   );
 
+  const catalog = catalogFindings(REPO_ROOT, result, excluded ?? []);
+
   for (const { axis, id, reason } of check.skipped)
     process.stdout.write(`${TAG} Skipped ${axis} ${id}: ${reason}.\n`);
+  for (const pack of (excluded ?? []).filter(
+    ({ packageName }) => !packageName.startsWith('@portfolio/'),
+  ))
+    process.stdout.write(
+      `${TAG} Excluded ${pack.kind} ${pack.id} in ${pack.packageName}: ${pack.reason}\n`,
+    );
   const findings = [
     ...describe(check),
     ...unordered.map(
@@ -233,9 +248,22 @@ async function main(): Promise<number> {
     ),
     ...misses,
     ...audit.lines,
+    ...catalog.lines,
   ];
   for (const line of findings) process.stderr.write(`${TAG} ${line}\n`);
   if (findings.length > 0) {
+    // In CI, each pack's failure is a record naming its pack, axis, and role (#20).
+    const gate = currentGate();
+    if (gate) {
+      for (const record of [
+        ...contrastRecords(check),
+        ...hierarchyRecords(check),
+        ...problemRecords(check),
+        ...catalog.records,
+      ]) {
+        writeFailureRecord({ ...record, gate: gate.gate, reproCommand: gate.reproCommand });
+      }
+    }
     process.stderr.write(`${TAG} ${plural(findings.length, 'finding')}.\n`);
     return 1;
   }
@@ -249,7 +277,9 @@ async function main(): Promise<number> {
       `${plural(check.combinations, 'combination')} and ${plural(check.pairs, 'pair')} checked, none failing; ` +
       `the hierarchy holds; ${plural(layered, 'layered stylesheet')}, each starting with the layer order; ` +
       `${plural(knownBadNames().length, 'known-bad input')} in ${relative(KNOWN_BAD_DIR)}, each failing as it names; ` +
-      `the source audit read ${plural(audit.files, 'file')}, with ${plural(audit.exceptions, 'reviewed exception')}, each still needed.\n`,
+      `the source audit read ${plural(audit.files, 'file')}, with ${plural(audit.exceptions, 'reviewed exception')}, each still needed. ` +
+      `${plural(catalog.counts.gated, 'pack')} passed the pack gates; the lock pins ${plural(catalog.counts.locked, 'pack')} and the notices are current; ` +
+      `${plural(catalog.counts.research, 'Research record')} checked, none registered.\n`,
   );
   return 0;
 }

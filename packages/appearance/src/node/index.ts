@@ -23,6 +23,35 @@ export {
 } from './compile';
 export { compilePlatform, platformStylesheet } from './platform';
 export {
+  catalogPacks,
+  compareVersions,
+  LOCK_FILE,
+  LOCK_VERSION,
+  lockedPacks,
+  lockProblems,
+  NOTICES_FILE,
+  packDigest,
+  packPackages,
+  renderLock,
+  renderNotices,
+  researchIds,
+  researchRecords,
+  type CatalogLock,
+  type CatalogPack,
+  type LockEntry,
+  type LockProblem,
+  type PackPackage,
+  type ResearchFile,
+} from './catalog';
+export {
+  gatePack,
+  PACK_GATES,
+  type GatedFile,
+  type GatedPack,
+  type PackGate,
+  type PackGateFailure,
+} from './pack-gates';
+export {
   decodeEscapes,
   LINT_RULES,
   MAX_STYLESHEET_BYTES,
