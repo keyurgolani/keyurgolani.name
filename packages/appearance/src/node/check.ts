@@ -36,6 +36,7 @@ import {
   type PackEntry,
 } from '../registry';
 import { validatePackManifest } from '../validate-pack';
+import { generatedSets, type GeneratedSchemes } from '../resolve-tokens';
 import { compilePack } from './compile';
 import { readLanguageStylesheet, type LintRule } from './stylesheet';
 import {
@@ -91,6 +92,12 @@ export interface CheckOptions {
     readonly packageName: string;
     readonly manifest: { readonly id: string };
   }) => boolean;
+  /**
+   * Generated sets by scheme id (#20 PR 3): a generator scheme with sets
+   * here is gated with them, as every other scheme is, with every language
+   * and profile. `pnpm check:appearance` passes each one's reference record.
+   */
+  readonly generated?: GeneratedSchemes;
 }
 
 export interface AppearanceCheck {
@@ -218,7 +225,7 @@ const byId = <T extends { readonly manifest: { readonly id: string } }>(entries:
  */
 export function checkAppearance(
   registry: AppearanceRegistry,
-  { targets = GATE_TARGETS, gateFixture }: CheckOptions = {},
+  { targets = GATE_TARGETS, gateFixture, generated }: CheckOptions = {},
 ): AppearanceCheck {
   const skipped: SkippedPack[] = [];
   const problems: PackProblem[] = [];
@@ -255,6 +262,10 @@ export function checkAppearance(
     .filter((entry) => keep('colorScheme', entry))
     .flatMap((entry) => {
       if (entry.manifest.generator) {
+        const sets = generatedSets(generated, entry.manifest.id);
+        if (sets) {
+          return [{ id: entry.manifest.id, sets: schemeSets(sets, sets.highContrast) }];
+        }
         skipped.push({
           axis: 'colorScheme',
           id: entry.manifest.id,

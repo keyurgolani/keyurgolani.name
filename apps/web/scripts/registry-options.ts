@@ -18,7 +18,7 @@ import {
   type ExcludedPack,
   type PackManifest,
 } from '@portfolio/appearance';
-import { compilePack, compilePlatform } from '@portfolio/appearance/node';
+import { compilePack, compilePlatform, reviewExclusion } from '@portfolio/appearance/node';
 import {
   assetFiles,
   exportTarget,
@@ -236,14 +236,23 @@ export function excludePacks(read: RegistryResult): {
   const fallbacks = Object.values(packHooks().fallbacks);
   const excluded: ExcludedPack[] = [];
   const packs = read.packs.filter((pack) => {
-    const reason = licenseExclusion(pack.manifest as PackManifest);
+    const license = licenseExclusion(pack.manifest as PackManifest);
+    // #20 PR 3: an image-derived scheme waits for the owner's acceptance.
+    const review = license ? null : reviewExclusion(pack.manifest as PackManifest, pack.dir);
+    const reason = license ?? review;
     if (!reason) return true;
     if (fallbacks.some(({ id }) => id === pack.manifest.id)) {
       throw new Error(
         `${pack.manifest.id} in ${pack.packageName} is a fallback, and it can't ship: ${reason}`,
       );
     }
-    excluded.push({ kind: pack.kind, id: pack.manifest.id, packageName: pack.packageName, reason });
+    excluded.push({
+      kind: pack.kind,
+      id: pack.manifest.id,
+      packageName: pack.packageName,
+      reason,
+      ...(review ? { awaiting: 'owner-acceptance' as const } : {}),
+    });
     return false;
   });
   return { result: excluded.length > 0 ? { ...read, packs } : read, excluded };

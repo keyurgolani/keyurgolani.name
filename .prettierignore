@@ -21,3 +21,6 @@ ci/fixtures/lockfile-drift/
 scripts/catalog/seed/
 # #20's held-pack gate records, which pnpm catalog:held writes and check:appearance compares byte for byte
 packages/*/held/*/gate.json
+# #20's generated schemes' reference records, which pnpm catalog:generated writes and check:appearance compares byte for byte
+packages/*/generated/*.json
+!packages/*/generated/acceptance.json
