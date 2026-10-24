@@ -9,9 +9,10 @@ import { fileURLToPath } from 'node:url';
 // of its own. Owner Studio's group, with everything it loads, holds none of
 // Demo Studio's code, and Demo Studio's none of the owner's: its shell,
 // studioFetch, its journal, or its adapter. This reads the build in
-// apps/web/.next, when there is one; the browser check,
-// tests/e2e/demo-studio-chunks.spec.ts, reads what each profile's page
-// loads. With no build here, it has nothing to read, and says so.
+// apps/web/.next, when there is one; the browser checks,
+// tests/e2e/demo-studio-chunks.spec.ts and owner-studio-chunks.spec.ts,
+// read what each profile's page loads. With no build here, it has nothing
+// to read, and says so.
 
 const WEB = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
 const NEXT = path.join(WEB, '.next');

@@ -57,7 +57,7 @@ async function pickAnother(page: Page, label = 'Composition'): Promise<string> {
     .locator('option')
     .evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value));
   const other = values.find((value) => value !== current);
-  expect(other, 'the build offers a second composition').toBeDefined();
+  expect(other, `the build offers a second ${label.toLowerCase()}`).toBeDefined();
   await select.selectOption(other!);
   await expect(page.getByRole('status')).toContainText(`${label} is now`);
   return other!;
@@ -208,10 +208,12 @@ test(
   async ({ page, app }) => {
     await open(page);
     const chosen = await pickAnother(page);
-    const scheme = await pickAnother(page, 'Color scheme');
+    // A second axis, which every build offers more than one value on: this build may
+    // register one pack on each pack axis.
+    const mode = await pickAnother(page, 'Display mode');
     const frame = await sampleFrame(page);
     await expect.poll(() => new URL(frame.url()).searchParams.get('variant')).toBe(chosen);
-    await expect.poll(() => new URL(frame.url()).searchParams.get('scheme')).toBe(scheme);
+    await expect.poll(() => new URL(frame.url()).searchParams.get('mode')).toBe(mode);
     // A work's own page, which the sample's works list links.
     const link = frame.locator('a[href^="/sample/work/"]').first();
     const href = await link.getAttribute('href');
@@ -223,8 +225,8 @@ test(
       .poll(() => new URL(frame.url()).pathname)
       .toBe(new URL(href!, app.origin).pathname);
     expect(new URL(frame.url()).searchParams.get('variant')).toBe(chosen);
-    expect(new URL(frame.url()).searchParams.get('scheme')).toBe(scheme);
-    // The selection holds on the work's page: its color scheme, and its composition, or the
+    expect(new URL(frame.url()).searchParams.get('mode')).toBe(mode);
+    // The selection holds on the work's page: its display mode, and its composition, or the
     // fallback composition in its place where the composition leaves a work's page to the
     // host (`routes.work: shared`, lib/work-page.ts), as it does on the live site.
     const manifest = VARIANTS.find((variant) => variant.manifest.id === chosen)?.manifest;
@@ -232,7 +234,7 @@ test(
     const rendered = manifest!.routes.work === 'bespoke' ? chosen : 'fallback';
     const boundary = frame.locator('[data-appearance-boundary="document"]');
     await expect(boundary).toHaveAttribute('data-variant', rendered);
-    await expect(boundary).toHaveAttribute('data-color-scheme', scheme);
+    await expect(boundary).toHaveAttribute('data-display-mode', mode);
     expect(new URL(page.url()).pathname).toBe('/studio');
   },
 );
