@@ -10,9 +10,10 @@ import { isAllowedUrl } from './url';
 // Source snapshots (#10, items 3 and 4): publish-frozen data from outside the
 // documents, one JSON file per kind at snapshots/<kind>.json beside the two
 // documents. Renderers read only these, never a source at request time.
-// Slice 1 knows two kinds: `github` (slice 3 item 1's adapter records) and
-// `urls` (the redirect table). Any other kind is kept as plain JSON. Pure and
-// browser-safe: the file reader is in @portfolio/schema/node.
+// It knows three kinds: `github` (slice 3 item 1's adapter records), `urls`
+// (the redirect table), and `schemes` (10h: each generated color scheme a
+// draft save made, by scheme id). Any other kind is kept as plain JSON. Pure
+// and browser-safe: the file reader is in @portfolio/schema/node.
 
 /** A snapshot kind, the file's name without .json. */
 export const SNAPSHOT_KIND_PATTERN = /^[a-z][a-z0-9-]*$/;
@@ -23,7 +24,7 @@ export function isSnapshotKind(name: string): boolean {
 }
 
 /** The kinds this build checks. Every other kind is kept, unchecked, as plain JSON. */
-export const KNOWN_SNAPSHOT_KINDS = ['github', 'urls'] as const;
+export const KNOWN_SNAPSHOT_KINDS = ['github', 'urls', 'schemes'] as const;
 export type KnownSnapshotKind = (typeof KNOWN_SNAPSHOT_KINDS)[number];
 
 // --- GitHub ----------------------------------------------------------------
@@ -227,12 +228,43 @@ export const UrlTableSchema = z
     }
   }) as z.ZodType<UrlTable, z.ZodTypeDef, unknown>;
 
+// --- Generated schemes -----------------------------------------------------------
+
+const SchemeHex = z.string().regex(/^#[0-9a-f]{6}$/, { message: 'must be a #rrggbb color.' });
+const SchemeTokens = z.record(z.string().min(1).max(64), SchemeHex);
+
+/**
+ * snapshots/schemes.json (#10, 10h): each generated color scheme a draft save
+ * made, by scheme id, as `@portfolio/appearance`'s DerivedSchemeSchema holds
+ * one. This is its shape alone: the schema doesn't know the color roles, so
+ * the store and the read side check each entry against DerivedSchemeSchema too.
+ */
+export const SchemesSnapshotSchema = z.record(
+  z.string().regex(/^[a-z][a-z0-9-]{1,47}$/),
+  z
+    .object({
+      generator: z
+        .object({ id: z.string().min(1).max(64), version: z.number().int().positive() })
+        .strict(),
+      inputsHash: z.string().regex(/^[0-9a-f]{64}$/),
+      tokens: z
+        .object({
+          light: SchemeTokens,
+          dark: SchemeTokens,
+          highContrast: z.object({ light: SchemeTokens, dark: SchemeTokens }).strict().optional(),
+        })
+        .strict(),
+    })
+    .strict(),
+);
+
 // --- Parsing -------------------------------------------------------------------
 
 /** The snapshots a unit holds, by kind, once parsed: the known kinds typed, the rest as plain JSON. */
 export interface SourceSnapshots {
   readonly github?: GitHubSnapshot;
   readonly urls?: UrlTable;
+  readonly schemes?: z.infer<typeof SchemesSnapshotSchema>;
   readonly [kind: string]: unknown;
 }
 
@@ -254,6 +286,7 @@ export type UnitFileResult<T> =
 const SCHEMAS: Readonly<Record<KnownSnapshotKind, z.ZodTypeAny>> = {
   github: GitHubSnapshotSchema,
   urls: UrlTableSchema,
+  schemes: SchemesSnapshotSchema,
 };
 
 /**
