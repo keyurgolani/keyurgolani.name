@@ -4,7 +4,7 @@
 // After that the manifests are canonical: this never writes over a file
 // that exists, so a rerun writes only what's missing and edits stay.
 //
-//   node scripts/catalog/seed.mjs [--axis colorScheme|typography|designLanguage] [--dry-run]
+//   node scripts/catalog/seed.mjs [--axis colorScheme|typography|designLanguage|recipes] [--dry-run]
 //
 // The mapping onto #19's contract:
 //
@@ -20,6 +20,9 @@
 // - The prototype's `status` is the tier, its `research` status a Research
 //   record under research/<id>.json, never a pack. Its `review-1` versions
 //   become 1.0.0 and `tokenContract: 1`.
+// - The recipes are the prototype's, as they are, in
+//   packages/appearance/appearance-recipes.json. The defaults are already
+//   PLATFORM_DEFAULTS, which a test holds to the prototype's.
 // - Generated schemes (brand-seed, material-hct, profile-image,
 //   portfolio-artwork) need #20's generators and stored inputs, so PR 3
 //   seeds them, not this.
@@ -27,7 +30,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { COLOR_SCHEMES, TYPOGRAPHY_PROFILES } from './seed/appearance-catalog.js';
+import {
+  APPEARANCE_RECIPES,
+  COLOR_SCHEMES,
+  TYPOGRAPHY_PROFILES,
+} from './seed/appearance-catalog.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -298,6 +305,12 @@ export function seedFiles() {
       });
     }
   }
+  // The eight recipes, as the prototype has them: shortcuts to ordinary axis ids.
+  files.push({
+    axis: 'recipes',
+    file: 'packages/appearance/appearance-recipes.json',
+    data: { recipesVersion: 1, recipes: APPEARANCE_RECIPES },
+  });
   for (const profile of TYPOGRAPHY_PROFILES) {
     files.push({
       axis: 'typography',
