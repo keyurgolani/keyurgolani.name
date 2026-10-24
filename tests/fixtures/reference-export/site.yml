@@ -1,0 +1,21 @@
+# CI fixture: the reference's site document (#9). It selects a registered
+# composition and hides canary-ref-hidden, which no visitor may see.
+schemaVersion: 2
+appearance:
+  variant: spatial-bento
+  designLanguage: platform-neutral
+  colorScheme: warm-parchment
+  typography: humanist-ui
+  displayMode: system
+visitorControls:
+  variant: locked
+  designLanguage: locked
+  colorScheme: selectable
+  typography: locked
+  displayMode: selectable
+motionPolicy: respect-os
+features:
+  feed: true
+sections:
+  canary-ref-hidden:
+    hidden: true

@@ -1,0 +1,74 @@
+{
+  "bundleFormat": 1,
+  "revisionId": "rev_3460c73ea6d515222ae19c2636e28530",
+  "parentRevisionId": null,
+  "createdAt": "2026-10-24T08:00:00.000Z",
+  "createdBy": "owner",
+  "source": {
+    "kind": "publish"
+  },
+  "appVersion": "0.1.1",
+  "unitHash": "sha256:3460c73ea6d515222ae19c2636e28530e434146af34d8a8dcf62ea814136ce34",
+  "documents": {
+    "portfolio": {
+      "file": "portfolio.yml",
+      "format": "yaml",
+      "schemaVersion": 3,
+      "sourceHash": "sha256:8826212fcc3e33877e551eb82b2de1db7eeca102c2b0138d3991955395c51e27",
+      "contentHash": "sha256:f1c47fd3254e3a407c2c1baa8289f57e2cf5bb80887061708d25156b10d12b25"
+    },
+    "site": {
+      "file": "site.yml",
+      "format": "yaml",
+      "schemaVersion": 2,
+      "sourceHash": "sha256:9f0fc02908011c192d6c6c351cb0ca307650e1c58602bb817b02e95cd27fbc8c",
+      "contentHash": "sha256:746a9f362dd2851fa4cf562af46962c1899dc316ffa51e3a19bfb2d35d7c3713"
+    },
+    "media": {
+      "file": "media/media.json",
+      "format": "json",
+      "schemaVersion": null,
+      "sourceHash": "sha256:41a7aa5a6bd6b0c57e113ec2a37435cfe88067e21ffb783e658ea48736018142",
+      "contentHash": "sha256:41a7aa5a6bd6b0c57e113ec2a37435cfe88067e21ffb783e658ea48736018142"
+    }
+  },
+  "snapshots": {
+    "controls": {
+      "file": "snapshots/controls.json",
+      "contentHash": "sha256:d27989086c2fa53869a4c33f87a4830d30bbad2b1f98bd34f31591aa1ee31a5a"
+    }
+  },
+  "blobs": [
+    {
+      "file": "media/blobs/5452b689ce05fae34e217bcf5a855f921ebf5a9741143f559dce902c6f250aae",
+      "sha256": "sha256:5452b689ce05fae34e217bcf5a855f921ebf5a9741143f559dce902c6f250aae",
+      "size": 74
+    },
+    {
+      "file": "media/blobs/83765fbddad43ea1bbb521ec451887999369da5483e964564c0331d6372e9797",
+      "sha256": "sha256:83765fbddad43ea1bbb521ec451887999369da5483e964564c0331d6372e9797",
+      "size": 118
+    },
+    {
+      "file": "media/blobs/b4f60d0c2af23b9c5f74aca9c81cd536dea7378ec55783208e63dc904d2a6481",
+      "sha256": "sha256:b4f60d0c2af23b9c5f74aca9c81cd536dea7378ec55783208e63dc904d2a6481",
+      "size": 72
+    }
+  ],
+  "rendering": {
+    "variant": null,
+    "packs": [],
+    "contracts": {}
+  },
+  "events": [
+    {
+      "seq": 1,
+      "type": "publish",
+      "revisionId": "rev_3460c73ea6d515222ae19c2636e28530",
+      "previousRevisionId": null,
+      "actor": "owner",
+      "at": "2026-10-24T08:00:00.000Z",
+      "reason": "CANARY-REF-EVENT-REASON"
+    }
+  ]
+}
