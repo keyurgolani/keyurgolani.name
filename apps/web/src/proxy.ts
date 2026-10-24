@@ -72,7 +72,8 @@ import {
 // Under a profile that serves grant routes (owner, #7 Slice 2), this is
 // where a grant path is checked, every request: only a GET or HEAD of a
 // frame's document with Sec-Fetch-Dest: iframe, or of a draft-only asset
-// with an image, video, audio, track, or font destination, for a grant the
+// with an image, video, audio, track, or font destination, or of a generated
+// scheme's stylesheet (#20) with a style destination, for a grant the
 // owner composition finds active, goes on to Next. Every other request under
 // the preview prefixes, a path no grant route serves included, gets one
 // status document, 404, under the preview's headers, whatever the reason,
@@ -352,11 +353,16 @@ function hasGrants(profile: Profile): boolean {
   return known;
 }
 
-/** What each kind of grant route may be loaded as, by Sec-Fetch-Dest (#7, Slice 2, item 8). */
+/**
+ * What each kind of grant route may be loaded as, by Sec-Fetch-Dest (#7,
+ * Slice 2, item 8). Only a generated scheme's stylesheet (#20) is a style
+ * load: no other grant path admits one.
+ */
 const GRANT_DESTINATIONS: Readonly<Record<NonNullable<RouteEntry['grant']>, ReadonlySet<string>>> =
   {
     document: new Set(['iframe']),
     asset: new Set(['image', 'video', 'audio', 'track', 'font']),
+    style: new Set(['style']),
   };
 
 interface Gate {
