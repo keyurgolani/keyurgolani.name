@@ -37,6 +37,7 @@
 // trace-case.json, which report-writer.ts gathers into
 // reports/trace/trace-report.json, and its policy proves itself first in
 // policy.spec.ts.
+import { createRequire } from 'node:module';
 import { thirdPartyFailure } from '../harness/trace/policy.mjs';
 import {
   CPU_THROTTLING_RATE,
@@ -60,6 +61,29 @@ import {
   watchRequests,
 } from './fixtures';
 import type { TraceTarget } from './targets';
+import type * as WorkPage from '../../apps/web/src/lib/work-page';
+import { REGISTERED } from '../variants/target';
+
+// apps/web has no "type": "module", so its modules are CommonJS to Node and
+// load through require(). The work page's rule is the app's own (#10b).
+const { pageComposition } = createRequire(import.meta.url)(
+  '../../apps/web/src/lib/work-page.ts',
+) as typeof WorkPage;
+
+/**
+ * The composition `route` renders in when `composition` is selected: the
+ * fallback composition's on a work's own page that `composition` leaves to
+ * the host, by its manifest's routes.work (#10b), and its own on every other.
+ */
+function compositionOf(composition: string, route: string): string {
+  const variant = REGISTERED.find(({ manifest }) => manifest.id === composition);
+  if (!variant) throw new Error(`The build registers no variant ${composition}.`);
+  const segments = new URL(route, 'http://trace.test').pathname
+    .split('/')
+    .filter((segment) => segment !== '')
+    .map((segment) => decodeURIComponent(segment));
+  return pageComposition(variant.manifest, segments);
+}
 
 /** The routes each selection is traced on. */
 const ROUTES = ['/'];
@@ -217,15 +241,18 @@ test(
       const html = (await response?.text()) ?? '';
       const { records, downloads } = await requests.done();
       const attribution = await attribute(page, downloads);
+      // Each page is held to the one composition that renders it: a shared
+      // variant's work page to the fallback's units and none of its own.
+      const composition = compositionOf(target.composition!, route);
       const verdict = await purityOf(page, {
         html,
-        composition: target.composition!,
+        composition,
         appOrigin,
         records,
         downloads,
         attribution,
       });
-      pages.push({ route, status: response?.status() ?? null, ...verdict });
+      pages.push({ route, composition, status: response?.status() ?? null, ...verdict });
     }
     await testInfo.attach('purity-pages.json', {
       body: JSON.stringify(

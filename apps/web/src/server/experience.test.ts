@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { REGISTRY_ID_PATTERN } from '@portfolio/schema';
 import { setLiveComposition } from './config-store';
-import { rendersWorkPage } from '../lib/work-page';
+import { isWorkPath, pageComposition, rendersWorkPage } from '../lib/work-page';
 import {
   experiencePattern,
   isExperiencePath,
@@ -193,4 +193,20 @@ test("the work page's rule: the fallback composition and a bespoke work route re
   assert.equal(rendersWorkPage({ id: 'fallback', routes: { work: 'shared' } }), true);
   assert.equal(rendersWorkPage({ id: 'acme-pages', routes: { work: 'bespoke' } }), true);
   assert.equal(rendersWorkPage({ id: 'acme-tiles', routes: { work: 'shared' } }), false);
+});
+
+test("the composition a page renders in: the fallback's on a shared variant's work page alone, as #6's trace expects (#10b)", () => {
+  const shared = { id: 'acme-tiles', routes: { work: 'shared' } } as const;
+  const bespoke = { id: 'acme-pages', routes: { work: 'bespoke' } } as const;
+  const fallback = { id: 'fallback', routes: { work: 'shared' } } as const;
+  const work = ['work', 'project-name'];
+  assert.equal(pageComposition(shared, work), 'fallback');
+  assert.equal(pageComposition(bespoke, work), 'acme-pages');
+  assert.equal(pageComposition(fallback, work), 'fallback');
+  for (const segments of [[], ['notes'], ['work'], [...work, 'credits'], ['no-such-page']]) {
+    assert.equal(pageComposition(shared, segments), 'acme-tiles', segments.join('/'));
+    assert.equal(pageComposition(bespoke, segments), 'acme-pages', segments.join('/'));
+  }
+  assert.equal(isWorkPath(work), true);
+  assert.equal(isWorkPath(['sample', ...work]), false);
 });

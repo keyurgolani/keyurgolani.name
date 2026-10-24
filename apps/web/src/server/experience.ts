@@ -1,6 +1,6 @@
 import { FALLBACK_VARIANT_ID } from '@portfolio/schema/ids';
 import { VARIANTS } from '../lib/generated/registry.meta';
-import { rendersWorkPage, type WorkRouteManifest } from '../lib/work-page';
+import { isWorkPath, rendersWorkPage, type WorkRouteManifest } from '../lib/work-page';
 import type { Profile } from './capabilities';
 import { liveComposition } from './config-store';
 import { EXPERIENCE_SEGMENT } from './route-header';
@@ -72,8 +72,7 @@ const WORK_PATTERN = '/work/[slug]';
  */
 export function isWorkPage(request: Pick<SegmentRequest, 'pattern' | 'segments'>): boolean {
   if (request.pattern === WORK_PATTERN) return true;
-  const { segments } = request;
-  return request.pattern === SAMPLE_PATTERN && segments.length === 3 && segments[1] === 'work';
+  return request.pattern === SAMPLE_PATTERN && isWorkPath(request.segments.slice(1));
 }
 
 /**

@@ -26,3 +26,19 @@ export interface WorkRouteManifest {
 export function rendersWorkPage(manifest: WorkRouteManifest): boolean {
   return manifest.id === FALLBACK_VARIANT_ID || manifest.routes.work === 'bespoke';
 }
+
+/** Whether a path below the routes' base, as decoded segments, is a work's own page: work/<slug>. */
+export function isWorkPath(segments: readonly string[]): boolean {
+  return segments.length === 2 && segments[0] === 'work';
+}
+
+/**
+ * The id of the composition that renders the page at `segments`, below the
+ * routes' base, when `manifest`'s composition is selected: the fallback
+ * composition's on a work's own page that `manifest` leaves to the host,
+ * and its own everywhere else. #6's trace holds each page to this one
+ * composition's units.
+ */
+export function pageComposition(manifest: WorkRouteManifest, segments: readonly string[]): string {
+  return isWorkPath(segments) && !rendersWorkPage(manifest) ? FALLBACK_VARIANT_ID : manifest.id;
+}
