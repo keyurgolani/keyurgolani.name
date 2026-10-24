@@ -46,6 +46,13 @@ export interface BoundField {
 
 /** An object in the document the fields edit: the identity, a work, a section. */
 export interface FieldGroup {
+  /**
+   * What the group is apart from where it sits: `document`, `identity`,
+   * `meta`, `work:<id>`, or `section:<id>`, and `work#<n>` or `section#<n>`
+   * for one with no id. A finding made on the saved text finds its group in
+   * the working text by it, after a reorder or a deletion too.
+   */
+  readonly key: string;
   /** JSON pointer to the object, '' for the document itself. */
   readonly pointer: string;
   /** The stable item as the owner reads it, such as `Work fixture-garden`. */
@@ -145,11 +152,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function bind(data: Record<string, unknown> | undefined, path: readonly (string | number)[]) {
   return (spec: FieldSpec): BoundField => {
     const value = data && Object.hasOwn(data, spec.key) ? data[spec.key] : undefined;
+    // `key:` with nothing after it reads as null: an empty field, which an edit fills.
+    const empty = value === undefined || value === null;
+    // A one-line control would drop a line break on the next keystroke.
+    const fits = typeof value === 'string' && (spec.kind === 'long' || !/[\r\n]/.test(value));
     return {
       spec,
       pointer: toPointer([...path, spec.key]),
       value: typeof value === 'string' ? value : '',
-      editable: value === undefined || typeof value === 'string',
+      editable: empty || fits,
     };
   };
 }
@@ -162,6 +173,12 @@ function namespaces(data: Record<string, unknown> | undefined): readonly string[
 /** The id an item carries, when it's text. */
 function idOf(data: unknown): string | null {
   return isRecord(data) && typeof data.id === 'string' && data.id !== '' ? data.id : null;
+}
+
+/** A work's or a section's group key: by its id, or by its place when it has none. */
+export function itemKey(kind: 'work' | 'section', data: unknown, index: number): string {
+  const id = idOf(data);
+  return id ? `${kind}:${id}` : `${kind}#${index}`;
 }
 
 /** The stable item a work at `index` is, as the owner reads it. */
@@ -185,6 +202,7 @@ export function fieldGroups(data: unknown): readonly FieldGroup[] {
   const object = (value: unknown) => (isRecord(value) ? value : undefined);
 
   groups.push({
+    key: 'document',
     pointer: '',
     item: 'The portfolio document',
     facts: [],
@@ -199,6 +217,7 @@ export function fieldGroups(data: unknown): readonly FieldGroup[] {
     // An object the document holds as something else is left to source mode.
     if (root[key] !== undefined && !value) continue;
     groups.push({
+      key,
       pointer: toPointer([key]),
       item,
       facts: [],
@@ -211,6 +230,7 @@ export function fieldGroups(data: unknown): readonly FieldGroup[] {
     const value = object(work);
     if (!value) return;
     groups.push({
+      key: itemKey('work', value, index),
       pointer: toPointer(['works', index]),
       item: workItem(value, index),
       facts: [
@@ -233,6 +253,7 @@ export function fieldGroups(data: unknown): readonly FieldGroup[] {
       ...(SECTION_FIELDS[kind] ?? []),
     ];
     groups.push({
+      key: itemKey('section', value, index),
       pointer: toPointer(['sections', index]),
       item: sectionItem(value, index),
       facts: [
@@ -267,6 +288,28 @@ export function readDocument(document: SourceDocument): ReadDocument {
   };
 }
 
+/** Why a field edit refuses a JSON document rewritesJson() finds. */
+export const JSON_REWRITE =
+  'This document has formatting a field edit would rewrite, such as how a number, an escape, a list, or a line break is written. Make the change in source mode.';
+
+/**
+ * Whether a field edit would rewrite more of a JSON document than its value:
+ * #4's applyEdits writes a JSON document out whole, so a number written as
+ * 1.50 or 1e3, an escape, a list on one line, CRLF line breaks, or an
+ * integer too large for a double would all change. Written out with no
+ * edit, such a document comes back different, and fields leave it to source
+ * mode. A YAML edit splices only its value, so YAML is never refused.
+ */
+export function rewritesJson(document: SourceDocument): boolean {
+  if (document.format !== 'json') return false;
+  try {
+    const indent = jsonIndent(document.sourceText);
+    return applyEdits(document.sourceText, 'json', [], { indent }) !== document.sourceText;
+  } catch {
+    return true;
+  }
+}
+
 export type FieldEdit =
   | { readonly ok: true; readonly sourceText: string }
   | { readonly ok: false; readonly message: string };
@@ -281,6 +324,7 @@ export function editField(document: SourceDocument, field: BoundField, value: st
   if (!field.editable) {
     return { ok: false, message: "This field holds a value fields can't edit. Use source mode." };
   }
+  if (rewritesJson(document)) return { ok: false, message: JSON_REWRITE };
   if (value === field.value) return { ok: true, sourceText: document.sourceText };
   const leaveOut = value === '' && !field.spec.required;
   try {

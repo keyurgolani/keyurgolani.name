@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validatePublicationUnit } from '@portfolio/schema';
 import type { DocumentName, DraftFinding } from './documents';
-import { describeDraft, describeFindings, placeIn } from './findings';
+import { describeDraft, describeFindings, placeFindings, placeIn } from './findings';
 import { fieldGroups, readDocument } from './fields';
 import { draft } from './test-support';
 
@@ -119,12 +119,12 @@ test('each finding names its document, stable item, field, cause, and next actio
   assert.deepEqual(
     views.map((view) => view.at),
     [
-      { group: '/identity', field: null },
-      { group: '/sections/0', field: '/sections/0/body' },
-      { group: '', field: null },
-      { group: '', field: null },
-      { group: '/identity', field: '/identity/name' },
-      { group: '/works/0', field: '/works/0/title' },
+      { group: 'identity', field: null },
+      { group: 'section:about', field: 'body' },
+      { group: 'document', field: null },
+      { group: 'document', field: null },
+      { group: 'identity', field: 'name' },
+      { group: 'work:fixture-garden', field: 'title' },
     ],
   );
 });
@@ -179,5 +179,76 @@ test("the validator's own findings, the boundary the store checks a save with, e
   assert.equal(blank?.field, 'name');
   const stray = views.find((view) => view.finding.pointer === '/identity/nickname');
   assert.equal(stray?.field, 'nickname');
-  assert.deepEqual(stray?.at, { group: '/identity', field: null });
+  assert.deepEqual(stray?.at, { group: 'identity', field: null });
+});
+
+// Findings are made on the saved text; the fields show the working text,
+// whose items source mode may have moved, deleted, or changed the kind of.
+
+const HEAD = 'schemaVersion: 3\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan\n';
+const WORK_A = '  - id: work-a\n    title: A\n    medium: software\n';
+const WORK_B = '  - id: work-b\n    title: ""\n    medium: software\n    nickname: Bee\n';
+const LEDE = 'sections:\n  - kind: lede\n    id: about\n    body: ""\n';
+const SAVED = `${HEAD}works:\n${WORK_A}${WORK_B}${LEDE}`;
+
+const dataOf = (text: string) => {
+  const read = readDocument({ format: 'yaml', sourceText: text });
+  assert.ok(read.ok);
+  return read.data;
+};
+
+/** The saved draft's findings: work-b's blank title and stray key, and the lede's blank body. */
+const savedViews = () =>
+  describeDraft(
+    draft(2, SAVED, {
+      diagnostics: [
+        finding('/works/1/title'),
+        finding('/works/1/nickname'),
+        finding('/sections/0/body', 'blocks-preview', 'portfolio', { stableId: 'about' }),
+      ],
+    }),
+    fileName,
+  );
+
+/** Each finding's saved pointer, and where it shows now: group, field, and whether it's stale. */
+const where = (working: string) =>
+  placeFindings(savedViews(), dataOf(SAVED), dataOf(working)).map(
+    ({ view, group, field, stale }) => [view.finding.pointer, group, field, stale],
+  );
+
+test("a finding follows its item when source mode reorders the works, and an item's note is stale once the item changed", () => {
+  assert.deepEqual(where(`${HEAD}works:\n${WORK_B}${WORK_A}${LEDE}`), [
+    // Work b is first now: its findings go with it, and work a, now second, has none.
+    ['/works/1/title', '/works/0', '/works/0/title', false],
+    ['/works/1/nickname', '/works/0', null, false],
+    ['/sections/0/body', '/sections/0', '/sections/0/body', false],
+  ]);
+  // Work b changed: the note on the item is stale, and the untouched field's isn't.
+  const edited = `${HEAD}works:\n${WORK_B.replace('Bee', 'B')}${WORK_A}${LEDE}`;
+  assert.deepEqual(where(edited).slice(0, 2), [
+    ['/works/1/title', '/works/0', '/works/0/title', false],
+    ['/works/1/nickname', '/works/0', null, true],
+  ]);
+});
+
+test('a finding whose item source mode deleted goes on the document, stale, and one whose item moved up follows it', () => {
+  assert.deepEqual(where(`${HEAD}works:\n${WORK_A}${LEDE}`), [
+    ['/works/1/title', '', null, true],
+    ['/works/1/nickname', '', null, true],
+    ['/sections/0/body', '/sections/0', '/sections/0/body', false],
+  ]);
+  assert.deepEqual(where(`${HEAD}works:\n${WORK_B}${LEDE}`).slice(0, 2), [
+    ['/works/1/title', '/works/0', '/works/0/title', false],
+    ['/works/1/nickname', '/works/0', null, false],
+  ]);
+});
+
+test("a finding on a field a section's new kind doesn't have goes on the section, stale", () => {
+  const quote = 'sections:\n  - kind: quote\n    id: about\n    text: Hi.\n';
+  assert.deepEqual(where(`${HEAD}works:\n${WORK_A}${WORK_B}${quote}`)[2], [
+    '/sections/0/body',
+    '/sections/0',
+    null,
+    true,
+  ]);
 });

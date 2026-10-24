@@ -5,12 +5,19 @@ import type { DocumentName, SourceDocuments, StudioDraft } from '~/lib/studio/do
 import {
   editField,
   fieldGroups,
+  JSON_REWRITE,
   readDocument,
-  valueAt,
+  rewritesJson,
   type BoundField,
   type FieldGroup,
 } from '~/lib/studio/fields';
-import { describeDraft, SEVERITY_LABEL, type FindingView } from '~/lib/studio/findings';
+import {
+  describeDraft,
+  placeFindings,
+  SEVERITY_LABEL,
+  type FindingView,
+  type PlacedFinding,
+} from '~/lib/studio/findings';
 
 // The content task's structured fields (#8, Slice 4): the portfolio's
 // common content, as fields over the same text source mode edits. Each
@@ -45,8 +52,14 @@ export function StructuredFields({
   const read = useMemo(() => readDocument(portfolio), [portfolio]);
   const groups = useMemo(() => (read.ok ? fieldGroups(read.data) : []), [read]);
   const findings = useMemo(() => describeDraft(draft, fileName), [draft, fileName]);
-  // The saved text, so a field can say it changed since the check.
+  // The saved text the findings were made on, placed by item over the working text.
   const saved = useMemo(() => readDocument(draft.documents.portfolio), [draft]);
+  const placed = useMemo(
+    () => (read.ok ? placeFindings(findings, saved.ok ? saved.data : undefined, read.data) : []),
+    [findings, saved, read],
+  );
+  // A JSON document a field edit would write out differently stays with source mode.
+  const rewrites = useMemo(() => rewritesJson(portfolio), [portfolio]);
   // A change applyEdits couldn't make, by field, until the next one it can.
   const [refused, setRefused] = useState<Readonly<Record<string, string>>>({});
   const blocked = readOnly || saving || !dirty;
@@ -82,12 +95,6 @@ export function StructuredFields({
     if (result.sourceText !== portfolio.sourceText) onEdit('portfolio', result.sourceText);
   }
 
-  const changedSinceCheck = (pointer: string, value: string) => {
-    if (!saved.ok) return true;
-    const before = valueAt(saved.data, pointer);
-    return (typeof before === 'string' ? before : '') !== value;
-  };
-
   return (
     <form
       className="studio-fields"
@@ -102,14 +109,14 @@ export function StructuredFields({
         document&apos;s text, as source mode would make it, so anything else there stays as written.
         Saving checks it; it never changes the live site.
       </p>
+      {rewrites ? <p className="studio-alert">{JSON_REWRITE}</p> : null}
       {groups.map((group) => (
         <Group
-          key={group.pointer || 'document'}
+          key={group.key}
           group={group}
-          findings={findings}
-          readOnly={readOnly}
+          placed={placed.filter((each) => each.group === group.pointer)}
+          readOnly={readOnly || rewrites}
           refused={refused}
-          changedSinceCheck={changedSinceCheck}
           onChange={change}
         />
       ))}
@@ -130,11 +137,21 @@ export function StructuredFields({
 }
 
 /** A finding's text beside its field or item: what, why, and what next. */
-function FindingNote({ view, changed }: { view: FindingView; changed: boolean }) {
+function FindingNote({
+  view,
+  changed,
+  named = false,
+}: {
+  view: FindingView;
+  changed: boolean;
+  /** Whether to name the item: a note whose item is gone shows on the document. */
+  named?: boolean;
+}) {
   return (
     <div className="studio-fields__finding" data-severity={view.finding.severity}>
       <p>
         <strong>{SEVERITY_LABEL[view.finding.severity] ?? view.finding.severity}:</strong>{' '}
+        {named ? `${view.item}, ` : ''}
         {view.field ? `${view.field}: ` : ''}
         {view.cause}
       </p>
@@ -150,21 +167,19 @@ function FindingNote({ view, changed }: { view: FindingView; changed: boolean })
 
 function Group({
   group,
-  findings,
+  placed,
   readOnly,
   refused,
-  changedSinceCheck,
   onChange,
 }: {
   group: FieldGroup;
-  findings: readonly FindingView[];
+  /** The findings placed in this group. */
+  placed: readonly PlacedFinding[];
   readOnly: boolean;
   refused: Readonly<Record<string, string>>;
-  changedSinceCheck: (pointer: string, value: string) => boolean;
   onChange: (field: BoundField, value: string) => void;
 }) {
-  const own = findings.filter((view) => view.at?.group === group.pointer);
-  const itemLevel = own.filter((view) => view.at?.field === null);
+  const itemLevel = placed.filter((each) => each.field === null);
   const heading = `studio-fields-${idFor(group.pointer)}`;
   return (
     <fieldset
@@ -185,11 +200,12 @@ function Group({
           ))}
         </dl>
       ) : null}
-      {itemLevel.map((view, index) => (
+      {itemLevel.map((each, index) => (
         <FindingNote
-          key={`${view.finding.code}${view.finding.pointer}${index}`}
-          view={view}
-          changed={false}
+          key={`${each.view.finding.code}${each.view.finding.pointer}${index}`}
+          view={each.view}
+          changed={each.stale}
+          named={group.key !== each.view.at?.group}
         />
       ))}
       {group.fields.map((field) => (
@@ -198,8 +214,7 @@ function Group({
           field={field}
           readOnly={readOnly}
           refused={refused[field.pointer]}
-          findings={own.filter((view) => view.at?.field === field.pointer)}
-          changed={changedSinceCheck(field.pointer, field.value)}
+          placed={placed.filter((each) => each.field === field.pointer)}
           onChange={onChange}
         />
       ))}
@@ -222,15 +237,13 @@ function Field({
   field,
   readOnly,
   refused,
-  findings,
-  changed,
+  placed,
   onChange,
 }: {
   field: BoundField;
   readOnly: boolean;
   refused: string | undefined;
-  findings: readonly FindingView[];
-  changed: boolean;
+  placed: readonly PlacedFinding[];
   onChange: (field: BoundField, value: string) => void;
 }) {
   const id = `studio-field-${idFor(field.pointer)}`;
@@ -291,11 +304,11 @@ function Field({
         </p>
       )}
       {refused ? <p className="studio-fields__note">{refused}</p> : null}
-      {findings.map((view, index) => (
+      {placed.map((each, index) => (
         <FindingNote
-          key={`${view.finding.code}${view.finding.pointer}${index}`}
-          view={view}
-          changed={changed}
+          key={`${each.view.finding.code}${each.view.finding.pointer}${index}`}
+          view={each.view}
+          changed={each.stale}
         />
       ))}
     </div>

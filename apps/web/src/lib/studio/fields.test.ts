@@ -3,7 +3,14 @@ import assert from 'node:assert/strict';
 import { parseSource, validatePublicationUnit } from '@portfolio/schema';
 import type { SourceDocument } from './documents';
 import { draftSession, expectedVersion, INITIAL_SESSION, isDirty } from './draft-session';
-import { editField, fieldGroups, readDocument, type BoundField } from './fields';
+import {
+  editField,
+  fieldGroups,
+  JSON_REWRITE,
+  readDocument,
+  rewritesJson,
+  type BoundField,
+} from './fields';
 import { stateLines } from './state-model';
 import { draft } from './test-support';
 
@@ -292,4 +299,73 @@ test("a structured edit is the shell's edit: unsaved in this browser, then saved
     stateLines(saved).find((line) => line.id === 'draft')?.text,
     'Saved draft, version 4.',
   );
+});
+
+test('a JSON document a field edit would write out differently is refused, and left as written', () => {
+  // Each line holds something #4's JSON writer would change: a number's form,
+  // an escape, a list on one line, an integer past a double, and CRLF.
+  const text = [
+    '{',
+    '  "schemaVersion": 3,',
+    '  "locale": "en",',
+    '  "direction": "ltr",',
+    '  "identity": {',
+    '    "name": "Rowan \\u00e9",',
+    '    "extensions": {',
+    '      "@acme/portfolio-photography": {',
+    '        "ratio": 1.50,',
+    '        "shots": 1e3,',
+    '        "serial": 12345678901234567890,',
+    '        "lenses": ["35mm", "50mm"]',
+    '      }',
+    '    }',
+    '  }',
+    '}',
+    '',
+  ].join('\r\n');
+  const json: SourceDocument = { format: 'json', sourceText: text };
+  assert.equal(rewritesJson(json), true);
+  const result = editField(json, field(json, '/identity/tagline'), 'Calm.');
+  assert.deepEqual(result, { ok: false, message: JSON_REWRITE });
+  // Each one alone is enough.
+  const plain = JSON.stringify(data(yaml(PORTFOLIO)), null, 2) + '\n';
+  for (const [from, to] of [
+    ['"schemaVersion": 3', '"schemaVersion": 3.0'],
+    ['"name": "Rowan Fixture"', '"name": "Rowan \\u0046ixture"'],
+    ['"film": true', '"film": true, "serial": 12345678901234567890'],
+    ['\n', '\r\n'],
+  ] as const) {
+    const changed: SourceDocument = { format: 'json', sourceText: plain.replaceAll(from, to) };
+    assert.equal(rewritesJson(changed), true, to);
+    assert.equal(editField(changed, field(changed, '/identity/tagline'), 'Calm.').ok, false, to);
+  }
+  // A document as #4 writes JSON edits like any other, and YAML is never refused.
+  assert.equal(rewritesJson({ format: 'json', sourceText: plain }), false);
+  assert.equal(rewritesJson(yaml(PORTFOLIO.replace('\n', '\r\n'))), false);
+});
+
+test('a YAML key with no value is an empty field the owner can fill', () => {
+  const bare = yaml(PORTFOLIO.replace('  tagline: Builds calm software.\n', '  tagline:\n'));
+  const tagline = field(bare, '/identity/tagline');
+  assert.equal(tagline.value, '');
+  assert.equal(tagline.editable, true);
+  const after = edit(bare, [['/identity/tagline', 'Calm.']]);
+  assert.equal(data(after).identity.tagline, 'Calm.');
+  assert.ok(after.sourceText.includes('  tagline: Calm.\n'));
+});
+
+test("a one-line field whose value holds a line break is left to source mode, and a long one isn't", () => {
+  const broken = yaml(
+    PORTFOLIO.replace('  tagline: Builds calm software.\n', '  tagline: "Builds\\ncalm."\n'),
+  );
+  const tagline = field(broken, '/identity/tagline');
+  assert.equal(tagline.editable, false);
+  assert.equal(editField(broken, tagline, 'Builds').ok, false);
+  const long = yaml(
+    PORTFOLIO.replace(
+      '    summary: A garden of deterministic fixtures.\n',
+      '    summary: "Two\\nlines."\n',
+    ),
+  );
+  assert.equal(field(long, '/works/0/summary').editable, true);
 });

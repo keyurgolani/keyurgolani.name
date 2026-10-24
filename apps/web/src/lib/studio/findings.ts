@@ -1,3 +1,4 @@
+import { isJsonEqual } from '@portfolio/schema';
 import {
   findingsOf,
   namesIn,
@@ -10,6 +11,7 @@ import {
   readDocument,
   sectionItem,
   workItem,
+  valueAt,
   type BoundField,
   type FieldGroup,
 } from './fields';
@@ -34,8 +36,24 @@ export interface FindingView {
   readonly cause: string;
   /** What to do, and where. */
   readonly next: string;
-  /** Where it shows in the fields: a field's pointer, a group's, or null for source mode only. */
+  /**
+   * What it's about in the fields, by what the item is rather than where it
+   * sat in the saved text: the group's key, such as `work:fixture-garden`,
+   * and the field's key under it, such as `title`, or null for the item
+   * itself. Null when no field shows it: source mode only.
+   */
   readonly at: { readonly group: string; readonly field: string | null } | null;
+}
+
+/** A finding where the fields show it now, in the working text. */
+export interface PlacedFinding {
+  readonly view: FindingView;
+  /** The working group's pointer. */
+  readonly group: string;
+  /** The working field's pointer, or null to show it on the item. */
+  readonly field: string | null;
+  /** Whether what it's about changed since the check, or is gone. */
+  readonly stale: boolean;
 }
 
 /** What blocks first, then the warnings. */
@@ -150,7 +168,12 @@ export function describeFindings(
       const { item, field } = name
         ? itemAndField(name, finding.pointer, data.get(name), finding.stableId)
         : { item: 'The whole document', field: null };
-      const place = name === 'portfolio' ? placeIn(groups, finding.pointer) : null;
+      const found = name === 'portfolio' ? placeIn(groups, finding.pointer) : null;
+      // A section the validator named that the saved text doesn't place is its id's.
+      const place =
+        found && finding.stableId && found.group.key !== `section:${finding.stableId}`
+          ? null
+          : found;
       const line = finding.line ? `, line ${finding.line}` : '';
       const where = place?.field
         ? `Change it in the ${place.field.spec.label} field of ${place.group.item}, or in source mode, ${file}${line}.`
@@ -162,7 +185,11 @@ export function describeFindings(
         field,
         cause: finding.message,
         next: `${finding.remediation} ${where}`.trim(),
-        at: place ? { group: place.group.pointer, field: place.field?.pointer ?? null } : null,
+        at: place
+          ? { group: place.group.key, field: place.field?.spec.key ?? null }
+          : name === 'portfolio' && finding.stableId
+            ? { group: `section:${finding.stableId}`, field: null }
+            : null,
       };
     });
 }
@@ -170,4 +197,52 @@ export function describeFindings(
 /** Every finding on a saved draft, described: describeFindings() over the draft's own documents. */
 export function describeDraft(draft: StudioDraft, fileName: FileName): readonly FindingView[] {
   return describeFindings(findingsOf(draft), draft.documents, fileName);
+}
+
+/**
+ * Where each finding shows over the working text. The findings were made on
+ * the saved text, whose items may since have moved, gone, or changed kind
+ * in source mode, so a finding finds its item by its key, never its saved
+ * pointer: its field there when the item still has it, else the item, and
+ * the document when the item is gone. A note is stale when what it's about
+ * differs from the saved text: the field's value, or the whole item.
+ */
+export function placeFindings(
+  views: readonly FindingView[],
+  saved: unknown,
+  working: unknown,
+): readonly PlacedFinding[] {
+  const before = new Map(fieldGroups(saved).map((group) => [group.key, group]));
+  const now = new Map(fieldGroups(working).map((group) => [group.key, group]));
+  const placed: PlacedFinding[] = [];
+  for (const view of views) {
+    if (!view.at) continue;
+    const target = now.get(view.at.group);
+    const origin = before.get(view.at.group);
+    if (!target) {
+      // The item is gone: the note goes on the document, and what it was about has changed.
+      placed.push({ view, group: '', field: null, stale: true });
+      continue;
+    }
+    const field = view.at.field
+      ? (target.fields.find((each) => each.spec.key === view.at!.field) ?? null)
+      : null;
+    if (field) {
+      const was = origin?.fields.find((each) => each.spec.key === field.spec.key);
+      placed.push({
+        view,
+        group: target.pointer,
+        field: field.pointer,
+        stale: !was || was.value !== field.value || was.editable !== field.editable,
+      });
+      continue;
+    }
+    // On the item: the document's own notes compare what they point at, an item's the whole item.
+    const stale =
+      target.key === 'document'
+        ? !isJsonEqual(valueAt(saved, view.finding.pointer), valueAt(working, view.finding.pointer))
+        : !origin || !isJsonEqual(valueAt(saved, origin.pointer), valueAt(working, target.pointer));
+    placed.push({ view, group: target.pointer, field: null, stale });
+  }
+  return placed;
 }
