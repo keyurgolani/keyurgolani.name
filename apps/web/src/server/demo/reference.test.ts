@@ -29,6 +29,7 @@ import { readDeploymentConfig } from '../config';
 import { setDeploymentState, type DeploymentState, type ServedReference } from '../config-store';
 import { loadedOwnerModules } from '../load-trace';
 import { referenceRendition } from '../reference-media';
+import { resolveRoute } from '../routes';
 import { openReference, REFERENCE_HELD_BYTES, servedRenditions } from './reference';
 
 // The demo's read-only reference (#9): the CI fixture opens, with nothing
@@ -286,15 +287,20 @@ test('a mount that is missing, or a file, is reference_unreadable', async (t) =>
   }
 });
 
-test('a case study whose slug is media, which names the renditions route, refuses the reference', async (t) => {
+test('a case study whose slug is media serves under /reference/work, and /reference/media is still never a page', async (t) => {
   const source = readSource();
   const changed = {
     ...source,
     'portfolio.yml': source['portfolio.yml'].replace('slug: tide-tables', 'slug: media'),
   };
-  const dir = written(t, changed, buildReferenceFixture(changed, CHECKS));
-  const issues = await refusal(dir);
-  assert.equal(issues[0]?.code, 'reference_route_reserved');
+  const reference = await opened(written(t, changed, buildReferenceFixture(changed, CHECKS)));
+  assert.deepEqual([...reference.caseStudies], ['media']);
+  serving(t, reference);
+  const page = resolveRoute('demo', '/reference/work/media');
+  assert.equal(page.status === 'served' && page.entry.pattern, '/reference/[[...path]]');
+  assert.equal(resolveRoute('demo', '/reference/media').status, 'missing');
+  const media = resolveRoute('demo', '/reference/media/a/b/c.png');
+  assert.equal(media.status === 'served' && media.entry.pattern, '/reference/media/[...path]');
 });
 
 test('renditions over the held limit refuse the reference whole, naming the limit', async (t) => {

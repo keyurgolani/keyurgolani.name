@@ -422,3 +422,18 @@ test('parseBundle checks every file name against the layout before any is used',
     assert.equal(parseBundle(copy), null, change.toString());
   }
 });
+
+test('parseBundle takes no inherited name as a document, constructor and __proto__ included', () => {
+  const text = JSON.stringify(exportOf().bundle);
+  assert.ok(text.includes('"documents":{'));
+  assert.ok(parseBundle(JSON.parse(text)));
+  for (const name of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+    // JSON.parse makes each one an own key, as a bundle.json on disk would.
+    const changed: unknown = JSON.parse(
+      text.replace('"documents":{', `"documents":{"${name}":{"file":"portfolio.yml"},`),
+    );
+    const documents = (changed as { documents: object }).documents;
+    assert.ok(Object.keys(documents).includes(name), `${name} is an own key`);
+    assert.equal(parseBundle(changed), null, name);
+  }
+});

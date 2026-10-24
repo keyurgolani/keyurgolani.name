@@ -199,13 +199,18 @@ test("the forbidden block's globs each match a file, and a malformed or empty ru
   ]);
 });
 
-test("runtime-budgets.json's forbidden block holds Studio's and the preview's code, and each glob matches a file here", () => {
+test("runtime-budgets.json's forbidden block holds Studio's, the preview's, and the demo's code, and each glob matches a file here", () => {
   const budgets = JSON.parse(readFileSync(path.join(REPO_ROOT, 'runtime-budgets.json'), 'utf8'));
   const { rules, problems } = forbiddenRules(budgets, sourceFiles(REPO_ROOT));
   assert.deepEqual(problems, []);
   assert.deepEqual(
     rules.map((rule) => rule.glob),
-    ['apps/web/src/app/(studio)/**', 'apps/web/src/app/(preview)/**', 'apps/web/src/preview/**'],
+    [
+      'apps/web/src/app/(studio)/**',
+      'apps/web/src/app/(preview)/**',
+      'apps/web/src/preview/**',
+      'apps/web/src/server/demo/**',
+    ],
   );
 });
 
