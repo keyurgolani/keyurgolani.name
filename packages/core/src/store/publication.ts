@@ -1166,10 +1166,13 @@ export function filesystemPublicationService({
         const carriedOut = carriedSnapshots(documents, adapterSnapshots);
         const carried: Record<string, unknown> = { ...carriedOut.snapshots };
         const warnings = [...carriedOut.warnings];
-        // An import makes the generated schemes its site selects, as a draft
-        // save does (10h), and counts them as accepted, as it does every
-        // derived value its files bring. One it can't make is left out, with
-        // a warning, and renders its fallback.
+        // An import makes the seed schemes its site selects, as a draft save
+        // does (10h), and counts them as accepted: the seed is text the
+        // operator wrote. An image-derived one is left out, with a warning,
+        // until the owner accepts what its generator makes in a draft, and so
+        // is one it can't make. Each renders its fallback meanwhile. The live
+        // revision's image-derived entry, made by the same generator from the
+        // same pixels, is one the owner accepted, and stays.
         if (checks.schemes) {
           const site = parseSource(documents.site.sourceText, documents.site.format);
           const mediaText = documents.media
@@ -1181,6 +1184,8 @@ export function filesystemPublicationService({
             generators: checks.schemes,
             readAsset: assetReader(assets),
             pixelHash,
+            seedsOnly: true,
+            accepted: liveRevision?.snapshots?.schemes,
           });
           if (Object.keys(made.schemes).length > 0) carried.schemes = made.schemes;
           warnings.push(...made.problems.map(schemeWarning));

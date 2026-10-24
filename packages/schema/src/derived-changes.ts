@@ -365,11 +365,17 @@ export const assertDerivedChangesApproved: UnitValidator = {
   validate(pair, ctx: Context) {
     const publication = ctx.publication;
     if (!publication) return { diagnostics: [], notChecked: ['derived.unapproved'] };
-    if (publication.live === null || publication.derived === undefined) {
-      return { diagnostics: [] };
-    }
+    if (publication.derived === undefined) return { diagnostics: [] };
     const draft = publication.draft ?? {};
-    const live = { media: publication.live.media, snapshots: publication.live.snapshots };
+    // With no live revision, media and GitHub data have nothing to compare
+    // against, but a generated scheme does: none. Its first tokens wait for
+    // the owner on a store's first publish too (10h).
+    const live =
+      publication.live === null
+        ? { snapshots: {} }
+        : { media: publication.live.media, snapshots: publication.live.snapshots };
+    const compared =
+      publication.live === null ? { snapshots: { schemes: draft.snapshots?.schemes } } : draft;
     const accepted = new Set(
       recordedChanges(publication.derived)
         .filter(({ decision }) => decision.state === 'accepted')
@@ -380,7 +386,7 @@ export const assertDerivedChangesApproved: UnitValidator = {
       recordedChanges(publication.derived).map((change) => [changeContent(change), change.id]),
     );
     const diagnostics: Diagnostic[] = [];
-    for (const change of derivedChanges(live, draft)) {
+    for (const change of derivedChanges(live, compared)) {
       const content = changeContent(change);
       if (accepted.has(content)) continue;
       const id = ids.get(content);

@@ -16,9 +16,11 @@ import type { Sha256 } from './layout';
 // generators, as it hands it every other check (UnitChecks.schemes), so
 // core doesn't depend on @portfolio/appearance. A changed result is a
 // `scheme-regenerated` derived change, which the owner accepts before it
-// publishes; a first one too, so an image-derived scheme never goes live
-// unseen. An asset's pixels come only from the media service's asset store,
-// under its caps, never from a fetch.
+// publishes; a first one too, at a store's first publish as well. An import
+// makes seed schemes only, and leaves an image-derived one out until the
+// owner has accepted its tokens, so none made from an image goes live
+// before the owner accepts it. An asset's pixels come only from the media
+// service's asset store, under its caps, never from a fetch.
 
 recordOwnerModule('core/store/schemes');
 
@@ -181,27 +183,64 @@ export function seedInputsHash(seed: string): string {
 }
 
 /** An asset's decoded pixels' hash, or null when they can't be decoded within the media limits. */
-export type PixelHash = (bytes: Uint8Array) => Promise<string | null>;
+export type PixelHash = (fileSha256: string, bytes: Uint8Array) => Promise<string | null>;
+
+/** How many files' pixel hashes one store keeps, so a save, a decision, or a publish decodes a file once. */
+export const PIXEL_HASH_CACHE = 256;
+
+/**
+ * SHA-256 over decoded RGBA pixels as #20 defines it: over the RGB rows when
+ * every pixel is opaque, else over the RGBA rows. Replace with stream D's
+ * `pixelsSha256` from `@portfolio/appearance/node` once #20 PR 3 lands.
+ */
+export function rasterSha256(rgba: Uint8Array): string {
+  let opaque = true;
+  for (let index = 3; index < rgba.length; index += 4) {
+    if (rgba[index] !== 255) {
+      opaque = false;
+      break;
+    }
+  }
+  if (!opaque) return hex(rgba);
+  const rgb = new Uint8Array((rgba.length / 4) * 3);
+  for (let pixel = 0, at = 0; pixel < rgba.length; pixel += 4, at += 3) {
+    rgb[at] = rgba[pixel]!;
+    rgb[at + 1] = rgba[pixel + 1]!;
+    rgb[at + 2] = rgba[pixel + 2]!;
+  }
+  return hex(rgb);
+}
 
 /**
  * An asset's input hash, `pixelsSha256`, as #20's records and
- * example-media/provenance.json hold it: the SHA-256 hex over the decoded
- * pixel rows, RGB, or RGBA when the image has alpha, not over the file's
- * bytes, so a re-encoding of the same pixels is the same input. Decoded by
- * the media service's sharp, under its pixel limit. Replace with stream D's
- * helper from #20 PR 3 once it lands.
+ * example-media/provenance.json hold it: rasterSha256() over the decoded
+ * pixels, not the file's bytes, so a re-encoding of the same pixels is the
+ * same input. The media service's sharp decodes them, under its pixel limit,
+ * which it checks against the header before it decodes. Each file decodes
+ * once per store: the hash is kept by the file's SHA-256, which names its
+ * bytes in the content-addressed asset store, for the last PIXEL_HASH_CACHE
+ * files. A sharp that decodes other pixels gives another hash, which fails
+ * closed: a new change, or a publish held until a save.
  */
 export function pixelsSha256(sharp: () => Promise<SharpLoad>): PixelHash {
-  return async (bytes) => {
+  const cache = new Map<string, string>();
+  return async (fileSha256, bytes) => {
+    const hit = cache.get(fileSha256);
+    if (hit !== undefined) return hit;
     const load = await sharp();
     if (!load.ok) return null;
     try {
-      const { data } = await load
+      const { data, info } = await load
         .sharp(bytes, { limitInputPixels: MEDIA_LIMITS.pixels })
         .toColourspace('srgb')
+        .ensureAlpha()
         .raw()
         .toBuffer({ resolveWithObject: true });
-      return hex(data);
+      if (info.channels !== 4) return null;
+      const hash = rasterSha256(data);
+      cache.set(fileSha256, hash);
+      if (cache.size > PIXEL_HASH_CACHE) cache.delete(cache.keys().next().value!);
+      return hash;
     } catch {
       return null;
     }
@@ -240,7 +279,7 @@ async function resolveInput(
       problem: `${schemeId} reads the media asset ${assetId}, whose stored bytes are missing or over the media limits.`,
     };
   }
-  const inputsHash = await read.pixelHash(bytes);
+  const inputsHash = await read.pixelHash(canonical.asset!.sha256, bytes);
   if (!inputsHash) {
     return {
       ok: false,
@@ -263,12 +302,27 @@ export async function deriveSchemes({
   generators,
   readAsset,
   pixelHash,
+  seedsOnly = false,
+  accepted,
 }: {
   readonly site: unknown;
   readonly media: unknown;
   readonly generators: SchemeGenerators;
   readonly readAsset: AssetBytes;
   readonly pixelHash: PixelHash;
+  /**
+   * For an import: image-derived schemes are left out, each a problem, since
+   * the owner hasn't seen what their generator makes of the image. A draft's
+   * change is how one goes live.
+   */
+  readonly seedsOnly?: boolean;
+  /**
+   * With seedsOnly, the live revision's snapshots/schemes.json: an
+   * image-derived entry there that the declared generator, at its version,
+   * made from the pixels the site gives now is one the owner accepted, and
+   * the import keeps it.
+   */
+  readonly accepted?: unknown;
 }): Promise<{
   readonly schemes: Record<string, StoredScheme>;
   readonly problems: SchemeProblem[];
@@ -278,6 +332,31 @@ export async function deriveSchemes({
   for (const schemeId of selectedSchemes(site)) {
     const declared = generators.declared(schemeId);
     if (!declared) continue;
+    if (seedsOnly && declared.input === 'asset') {
+      const before =
+        isRecord(accepted) && Object.hasOwn(accepted, schemeId) ? accepted[schemeId] : undefined;
+      if (before !== undefined && generators.check(before)) {
+        const entry = before as StoredScheme;
+        const resolved = await resolveInput(declared, site, media, schemeId, {
+          readAsset,
+          pixelHash,
+        });
+        if (
+          entry.generator.id === declared.id &&
+          entry.generator.version === declared.version &&
+          resolved.ok &&
+          entry.inputsHash === resolved.inputsHash
+        ) {
+          schemes[schemeId] = entry;
+          continue;
+        }
+      }
+      problems.push({
+        schemeId,
+        message: `${schemeId} is made from an image, which the owner accepts in a draft before it goes live.`,
+      });
+      continue;
+    }
     const resolved = await resolveInput(declared, site, media, schemeId, { readAsset, pixelHash });
     if (!resolved.ok) {
       problems.push({ schemeId, message: resolved.problem });
@@ -319,8 +398,9 @@ export async function deriveSchemes({
  * what blocks it: every scheme the site selects that declares a generator
  * needs an entry that checks, made by that generator at that version, from
  * the input the site gives now, or the live revision's own entry, which a
- * dismissal put back. Entries for a scheme no longer selected go. Pure, so
- * the publish runs no generator and reads no pixels.
+ * dismissal put back. Entries for a scheme no longer selected go. It runs
+ * no generator; for an image it reads the stored bytes to check the pixels'
+ * hash, which pixelsSha256() decodes once per file.
  */
 export async function frozenSchemes({
   site,
@@ -406,6 +486,6 @@ export function schemeWarning(problem: SchemeProblem): UnitDiagnostic {
     pointer: '',
     message: `${problem.message} The import stores no tokens for it, and it renders its fallback.`,
     remediation:
-      'Nothing to do for the import. Fix the input, then save a draft in Studio to generate it.',
+      'Nothing to do for the import. Save a draft in Studio to generate it, and accept the change it raises.',
   };
 }

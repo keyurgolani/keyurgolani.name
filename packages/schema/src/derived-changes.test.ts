@@ -181,10 +181,28 @@ test("the gate recomputes the changes: a forged acceptance of another change, or
   assert.notEqual(changeContent(other), changeContent(moved!));
 });
 
-test('with no live revision, or an import with no derived block, the gate has nothing to hold; with no publication it waits', () => {
+test('with no live revision, the gate holds only a first generated scheme, since media and GitHub data have nothing to compare against; an import with no derived block holds nothing; with no publication it waits', () => {
   const ctx = (publication: Context['publication']) =>
     assertDerivedChangesApproved.validate(PAIR, { ...(publication ? { publication } : {}) });
   assert.deepEqual(ctx({ live: null, derived: { changes: [] } }).diagnostics, []);
+  // A store's first publish: the draft's media and snapshots raise nothing,
+  // and its first scheme waits for the owner, then passes once accepted.
+  const first = (changes: unknown[]) => ({
+    live: null,
+    derived: { changes },
+    draft: {
+      media: { assets: [record('portrait', 'a', 'people/me.png')] },
+      snapshots: { ...LIVE.snapshots, schemes: { brand: scheme('a') } },
+    },
+  });
+  const held = ctx(first([])).diagnostics;
+  assert.deepEqual(
+    held.map(({ code, pointer }) => [code, pointer]),
+    [['derived.unapproved', '/appearance/colorScheme']],
+  );
+  const [change] = derivedChanges({}, { snapshots: { schemes: { brand: scheme('a') } } });
+  assert.deepEqual(ctx(first([accepted(change!)])).diagnostics, []);
+  assert.deepEqual(ctx({ ...first([]), draft: { media: first([]).draft.media } }).diagnostics, []);
   assert.deepEqual(gate(undefined).diagnostics, []);
   assert.deepEqual(ctx(undefined).notChecked, ['derived.unapproved']);
 });

@@ -18,7 +18,15 @@ import type { Draft, DraftOutcome } from './drafts';
 import { nodeFs } from './fs-port';
 import type { RevisionId } from './layout';
 import { readRevision } from './revisions';
-import { pixelsSha256, seedInputsHash, type SchemeGenerators } from './schemes';
+import {
+  assetReader,
+  pixelsSha256,
+  rasterSha256,
+  seedInputsHash,
+  type SchemeGenerators,
+} from './schemes';
+import type { AssetStore } from './assets';
+import { Readable } from 'node:stream';
 import { loadSharp } from '../catalog/media/derive';
 import type { Store } from './store';
 import { newStore, owned, pairInput, testChecks } from './test-support/fixtures';
@@ -214,10 +222,39 @@ test("an input's hash is #20's: a seed's text lowercased, and an image's decoded
   assert.ok(provenance.images.length > 0);
   for (const image of provenance.images) {
     const bytes = new Uint8Array(readFileSync(new URL(image.file, EXAMPLE_MEDIA)));
-    assert.equal(await hashOf(bytes), image.pixelsSha256, image.file);
+    assert.equal(await hashOf(hex(bytes), bytes), image.pixelsSha256, image.file);
   }
   // What isn't an image has no pixels to hash.
-  assert.equal(await hashOf(new TextEncoder().encode('not an image')), null);
+  const junk = new TextEncoder().encode('not an image');
+  assert.equal(await hashOf(hex(junk), junk), null);
+  // An image with an alpha channel hashes its RGB rows while every pixel is
+  // opaque, and its RGBA rows once one isn't, as #20 defines it.
+  const load = await loadSharp();
+  assert.ok(load.ok);
+  const png = async (alpha: number) =>
+    new Uint8Array(
+      await load
+        .sharp(new Uint8Array([51, 102, 255, alpha, 51, 102, 255, alpha]), {
+          raw: { width: 2, height: 1, channels: 4 },
+        })
+        .png()
+        .toBuffer(),
+    );
+  const opaque = await png(255);
+  assert.equal(
+    await hashOf(hex(opaque), opaque),
+    hex(new Uint8Array([51, 102, 255, 51, 102, 255])),
+  );
+  const translucent = await png(128);
+  assert.equal(
+    await hashOf(hex(translucent), translucent),
+    hex(new Uint8Array([51, 102, 255, 128, 51, 102, 255, 128])),
+  );
+  assert.equal(
+    rasterSha256(new Uint8Array([51, 102, 255, 255, 51, 102, 255, 128])),
+    hex(new Uint8Array([51, 102, 255, 255, 51, 102, 255, 128])),
+  );
+  assert.equal(rasterSha256(new Uint8Array([1, 2, 3, 255])), hex(new Uint8Array([1, 2, 3])));
 });
 
 const entryFor = (seed: string) => ({
@@ -511,4 +548,200 @@ test("an import leaves out a scheme it can't make whole, with a warning, and goe
   );
   assert.match(imported?.warnings?.[0]?.remediation ?? '', /Nothing to do for the import/);
   assert.equal(frozenSchemes(store, imported!.revisionId), null);
+});
+
+/** The bundled portrait, stored in `store`, and a pair whose site selects gen-image for it. */
+async function storedPortrait(store: Store, file = 'anamika/portrait.png') {
+  const bytes = new Uint8Array(readFileSync(new URL(file, EXAMPLE_MEDIA)));
+  const stored = await store.assets.put(bytes, 'image/png');
+  const sha = stored.sha256.slice('sha256:'.length);
+  return pairWith(
+    'gen-image',
+    { 'gen-image': { sourceAsset: 'portrait' } },
+    portrait(sha, bytes.byteLength, 480, 480),
+  );
+}
+
+test("a store's first publish holds a first generated scheme for the owner too, an image-derived one and a seed one, and commits once it's accepted", async (t) => {
+  for (const kind of ['image', 'seed'] as const) {
+    const { generators } = testGenerators();
+    const store = await newStore(t, { checks: testChecks({ schemes: generators }) });
+    const documents = kind === 'image' ? await storedPortrait(store) : seeded('#3366ff');
+    const draft = saved(await store.drafts.create({ documents }, 'owner'));
+    assert.equal((await store.publication.status()).liveRevisionId, null, 'nothing is live yet');
+    const [change] = changesOf(draft);
+    assert.deepEqual(
+      [change?.cause, change?.before, change?.decision.state],
+      ['scheme-regenerated', null, 'pending'],
+      kind,
+    );
+    const refused = await publish(store, draft);
+    assert.deepEqual(codesOf(refused), ['derived.unapproved'], kind);
+    const accepted = await decide(store, draft, 'accepted');
+    const outcome = await publish(store, accepted);
+    assert.equal(outcome.kind, 'committed', `${kind}: ${JSON.stringify(outcome)}`);
+    const frozen = frozenSchemes(
+      store,
+      outcome.kind === 'committed' ? outcome.revisionId : ('' as RevisionId),
+    );
+    assert.ok(frozen && Object.keys(frozen).length === 1, kind);
+  }
+});
+
+test('an import makes seed schemes and leaves an image-derived one out, with a warning, until the owner accepts it in a draft, and then keeps it while the pixels are the same', async (t) => {
+  const { generators } = testGenerators();
+  const store = await newStore(t, { checks: testChecks({ schemes: generators }) });
+  // As owner's first start imports the mounted pair into an empty store.
+  const imported = await importPair(store, await storedPortrait(store), 'first');
+  assert.equal(frozenSchemes(store, imported!.revisionId), null, 'no image tokens went live');
+  const [warning] = imported?.warnings ?? [];
+  assert.deepEqual([warning?.code, warning?.severity], ['scheme.dropped', 'warning']);
+  assert.match(
+    warning?.message ?? '',
+    /gen-image is made from an image, which the owner accepts in a draft/,
+  );
+  // In a draft, its first tokens wait for the owner, then go live.
+  const draft = await save(store, await draftOf(store), await storedPortrait(store));
+  assert.deepEqual(codesOf(await publish(store, draft)), ['derived.unapproved']);
+  const outcome = await publish(store, await decide(store, draft, 'accepted'));
+  assert.equal(outcome.kind, 'committed', JSON.stringify(outcome));
+  const accepted = frozenSchemes(
+    store,
+    outcome.kind === 'committed' ? outcome.revisionId : ('' as RevisionId),
+  ) as Record<string, unknown> | null;
+  assert.ok(accepted?.['gen-image']);
+  // An import of the same image keeps what the owner accepted; another image's isn't accepted.
+  const same = await importPair(store, await storedPortrait(store), 'same');
+  assert.deepEqual(frozenSchemes(store, same!.revisionId), accepted);
+  assert.deepEqual(same?.warnings ?? [], []);
+  const other = await importPair(store, await storedPortrait(store, 'og/anamika.png'), 'other');
+  assert.equal(frozenSchemes(store, other!.revisionId), null);
+  assert.deepEqual(
+    (other?.warnings ?? []).map(({ code }) => code),
+    ['scheme.dropped'],
+  );
+  // A seed scheme an import brings goes live with it.
+  const seededImport = await importPair(store, seeded('#3366ff'), 'second');
+  assert.deepEqual(frozenSchemes(store, seededImport!.revisionId), {
+    'gen-seed': entryFor('#3366ff'),
+  });
+});
+
+test("a generated scheme's first tokens can't be dismissed, since there's nothing earlier to keep: the draft stays as it was, and accepting still works", async (t) => {
+  const { generators } = testGenerators();
+  const store = await newStore(t, { checks: testChecks({ schemes: generators }) });
+  await importPair(store, pairInput('engineering'), 'base');
+  const draft = await save(store, await draftOf(store), seeded('#3366ff'));
+  const before = readFileSync(store.paths.draft(draft.draftId), 'utf8');
+  const refused = await store.drafts.decideChanges(
+    {
+      draftId: draft.draftId,
+      expectedVersion: draft.version,
+      changeIds: changesOf(draft).map(({ id }) => id),
+      decision: 'dismissed',
+    },
+    'owner',
+  );
+  assert.equal(refused.kind === 'rejected' && refused.code, 'validation_failed');
+  const [record] = refused.kind === 'rejected' ? refused.diagnostics : [];
+  assert.deepEqual(
+    [record?.code, record?.document, record?.pointer],
+    ['derived.dismiss_unavailable', 'site', '/appearanceInputs/gen-seed'],
+  );
+  assert.equal(record?.remediation, 'Accept it, or select another scheme.');
+  assert.equal(
+    readFileSync(store.paths.draft(draft.draftId), 'utf8'),
+    before,
+    'the draft is as it was',
+  );
+  const accepted = await decide(store, draft, 'accepted');
+  assert.equal((await publish(store, accepted)).kind, 'committed');
+});
+
+test("an import over a live revision with a scheme drops it when it can't make the scheme again, and says so", async (t) => {
+  let broken = false;
+  const flaky = testGenerators(() =>
+    broken
+      ? { generator: { id: 'test-seed', version: 1 }, tokens: { light: { accent: '#3366ff' } } }
+      : null,
+  );
+  const store = await newStore(t, { checks: testChecks({ schemes: flaky.generators }) });
+  const first = await importPair(store, seeded('#3366ff'), 'first');
+  assert.deepEqual(frozenSchemes(store, first!.revisionId), { 'gen-seed': entryFor('#3366ff') });
+  broken = true;
+  const second = await importPair(store, seeded('#3366ff'), 'second');
+  assert.equal(
+    frozenSchemes(store, second!.revisionId),
+    null,
+    "the live revision's entry isn't kept",
+  );
+  assert.deepEqual(
+    (second?.warnings ?? []).map(({ code }) => code),
+    ['scheme.dropped'],
+  );
+});
+
+/** An asset store holding one blob, whose size and bytes the test sets. */
+function fakeAssets(size: number, bytes: Uint8Array): { assets: AssetStore; opened: string[] } {
+  const opened: string[] = [];
+  const assets: AssetStore = {
+    put: async () => {
+      throw new Error('unused');
+    },
+    has: async () => true,
+    stat: async (hash) => ({ sha256: hash, size }),
+    open: async (hash) => {
+      opened.push(hash);
+      return Readable.from([
+        Buffer.from(bytes.subarray(0, bytes.length / 2)),
+        Buffer.from(bytes.subarray(bytes.length / 2)),
+      ]);
+    },
+  };
+  return { assets, opened };
+}
+
+test('the asset reader holds a stored file to the byte cap: one the store says is over is never opened, and one whose bytes run past it is cut off', async () => {
+  const hash = `sha256:${'a'.repeat(64)}` as const;
+  const bytes = new Uint8Array(64).fill(7);
+  const over = fakeAssets(65, bytes);
+  assert.equal(await assetReader(over.assets)(hash, 64), null);
+  assert.deepEqual(over.opened, [], 'never opened');
+  // The store says 16 bytes, and the stream gives 64.
+  const lying = fakeAssets(16, bytes);
+  assert.equal(await assetReader(lying.assets)(hash, 32), null);
+  const fits = fakeAssets(64, bytes);
+  assert.deepEqual(await assetReader(fits.assets)(hash, 64), bytes);
+});
+
+test("the pixel hash asks sharp for the media service's pixel limit, and decodes each file once", async () => {
+  const options: unknown[] = [];
+  let decodes = 0;
+  const pipeline = {
+    toColourspace: () => pipeline,
+    ensureAlpha: () => pipeline,
+    raw: () => pipeline,
+    toBuffer: async () => {
+      decodes += 1;
+      return { data: Buffer.from([1, 2, 3, 255]), info: { channels: 4 } };
+    },
+  };
+  const fake = async () =>
+    ({
+      ok: true,
+      sharp: (_input: unknown, given: unknown) => {
+        options.push(given);
+        return pipeline;
+      },
+    }) as never;
+  const hashOf = pixelsSha256(fake);
+  const bytes = new Uint8Array([1]);
+  assert.equal(await hashOf('f'.repeat(64), bytes), hex(new Uint8Array([1, 2, 3])));
+  assert.deepEqual(options, [{ limitInputPixels: 100_000_000 }]);
+  // Saved again, decided, or published: the same file isn't decoded again.
+  await hashOf('f'.repeat(64), bytes);
+  await hashOf('f'.repeat(64), bytes);
+  assert.equal(decodes, 1);
+  await hashOf('e'.repeat(64), bytes);
+  assert.equal(decodes, 2, 'another file decodes');
 });

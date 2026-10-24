@@ -9,6 +9,7 @@ import {
   schemeEntries,
   type DerivedSide,
   type DocumentFormat,
+  type RecordedChange,
 } from '@portfolio/schema';
 import { recordOwnerModule } from '../load-trace';
 import {
@@ -473,6 +474,23 @@ export function checkedInput(documents: UnitInput): UnitInput {
     portfolio: one(documents.portfolio, 'portfolio'),
     site: one(documents.site, 'site'),
     ...(documents.media === undefined ? {} : { media: one(documents.media, 'media') }),
+  };
+}
+
+/** A first generated scheme's change, which can't be dismissed: there's no earlier value to keep. */
+function dismissUnavailable(site: unknown, change: RecordedChange): UnitDiagnostic {
+  const schemeId = change.subject.kind === 'scheme' ? change.subject.schemeId : '';
+  const inputs =
+    isPlainObject(site) && isPlainObject(site.appearanceInputs) ? site.appearanceInputs : {};
+  return {
+    code: 'derived.dismiss_unavailable',
+    severity: 'blocks-publish',
+    document: 'site',
+    pointer: Object.hasOwn(inputs, schemeId)
+      ? `/appearanceInputs/${schemeId}`
+      : '/appearance/colorScheme',
+    message: `${change.id} is the first tokens for the generated color scheme ${schemeId}, which has none before it to keep.`,
+    remediation: 'Accept it, or select another scheme.',
   };
 }
 
@@ -1014,6 +1032,23 @@ export function filesystemDraftStore({
         if (found.draft.version !== expectedVersion) return conflict(found);
         const own = asDraftDerived(found.draft.derived) ?? { changes: [] };
         if (unknownChanges(own, changeIds).length > 0) return rejected('not_found', []);
+        // A generated scheme's first tokens have no earlier ones to put back,
+        // so dismissing them would leave the selected scheme with none (10h).
+        if (decision === 'dismissed') {
+          const firsts = own.changes.filter(
+            (change) =>
+              changeIds.includes(change.id) &&
+              change.subject.kind === 'scheme' &&
+              change.before === null,
+          );
+          if (firsts.length > 0) {
+            const site = found.draft.documents.site.model;
+            return rejected(
+              'validation_failed',
+              firsts.map((change) => dismissUnavailable(site, change)),
+            );
+          }
+        }
         return commit('draft.decideChanges', found, draftInput(found.draft), {
           baseRevisionId: found.draft.baseRevisionId,
           ...(found.draft.sourceHash === undefined ? {} : { sourceHash: found.draft.sourceHash }),
