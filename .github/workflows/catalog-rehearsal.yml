@@ -1,10 +1,11 @@
 # #20's sharded cross-product rehearsal (tests/catalog/plan.ts, REHEARSAL),
 # which a pull request asks for by changing tests/catalog/rehearsal.json in
-# its head commit. `request` (ci/rehearsal-request.mjs) runs the rest only
-# then, so a later push that leaves the file alone, or the commit that
-# removes it, runs nothing, and one request is one run. There's no manual
-# trigger and no schedule; the owner asks again before a release the same
-# way, on a release candidate's pull request.
+# its head commit, naming that commit's parent as its `for`. `request`
+# (ci/rehearsal-request.mjs) runs the rest only then, so a later push that
+# leaves the file alone, the commit that removes it, a restack that rewrites
+# the parent, or a reopen, runs nothing, and one request is one run. There's
+# no manual trigger and no schedule; the owner asks again before a release
+# the same way, on a release candidate's pull request.
 #
 # - `shard`, eight of them, in the pinned Playwright image: the static smoke
 #   over its share of every tuple, generated schemes through their
@@ -25,7 +26,8 @@ name: catalog-rehearsal
 on:
   pull_request:
     branches: [main, next]
-    types: [opened, synchronize, reopened]
+    # No reopen: a request runs once, when the push that carries it lands.
+    types: [opened, synchronize]
     paths:
       - tests/catalog/rehearsal.json
 
