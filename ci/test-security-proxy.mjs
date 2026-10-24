@@ -3,7 +3,7 @@
 // `pnpm ci:security-proxy` in CI's image job: the security suite
 // (tests/harness/security-suite.ts) against the image under owner, behind
 // the HTTPS proxy fixture with one trusted hop: tests/proxy/security.spec.ts,
-// under tests/proxy/playwright.config.ts. It needs the image, which
+// the security project of tests/proxy/playwright.config.ts. It needs the image, which
 // `pnpm ci:image` builds, and a container runtime, and no browser. The suite
 // loads the route table, which imports the generated registry, and nothing
 // in the image job builds the app, so this writes the registry first
@@ -31,7 +31,8 @@ try {
 console.log(
   `[test:security:proxy] the security suite through the HTTPS proxy, on ${process.env.PORTFOLIO_IMAGE || 'portfolio:ci'}`,
 );
-const args = [PLAYWRIGHT, 'test', '-c', CONFIG, ...process.argv.slice(2)];
+// The security project alone: demo-origin needs a browser, and its own run (ci/demo-origin.mjs).
+const args = [PLAYWRIGHT, 'test', '-c', CONFIG, '--project', 'security', ...process.argv.slice(2)];
 const result = spawnSync(process.execPath, args, { cwd: REPO_ROOT, stdio: 'inherit' });
 if (result.status !== 0) {
   console.error(`[test:security:proxy] failed (exit ${result.status ?? result.signal})`);
