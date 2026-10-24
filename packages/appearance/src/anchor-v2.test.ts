@@ -10,6 +10,7 @@ import {
   anchorV2Adjustments,
   CATEGORICAL_DELTA,
   categoricalWalk,
+  walkCategorical,
   fillStops,
   HIGH_CONTRAST_V2_TARGETS,
   highContrastV2,
@@ -311,6 +312,16 @@ test('property: monotonic: while a target is reachable, a higher one never lower
       }
     }
   }
+});
+
+test('the walk steps away from the ground first: darker under dark text, lighter under light text', () => {
+  // A gray on itself fails; one step either way passes a low limit, so the order decides.
+  const gray = '#808080';
+  const darker = walkCategorical(gray, gray, 1.1, [], '#000000');
+  const lighter = walkCategorical(gray, gray, 1.1, [], '#ffffff');
+  assert.ok(lightness(darker) < lightness(gray), darker);
+  assert.ok(lightness(lighter) > lightness(gray), lighter);
+  assert.equal(walkCategorical(gray, '#ffffff', 3, [], '#000000'), gray, 'a passing start stays');
 });
 
 test('deterministic: the same anchors give the same sets and the same record, whatever object holds them', () => {
