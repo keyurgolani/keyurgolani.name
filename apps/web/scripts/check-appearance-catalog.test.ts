@@ -74,7 +74,21 @@ function valid(record: CatalogRecord) {
 test('the repository passes every governance check', async () => {
   const findings = catalogFindings(REPO_ROOT, await shipped(), []);
   assert.deepEqual(findings.lines, []);
-  assert.deepEqual(findings.counts, { gated: 3, locked: 3, research: 1 });
+  // Every first-party pack, gated and locked; the 23 catalog records and the fixture one; and the audit over the first-party packs and the catalog's records.
+  const shipping = ['appearance-languages', 'appearance-schemes', 'appearance-typography'].reduce(
+    (count, dir) => count + fs.readdirSync(path.join(REPO_ROOT, 'packages', dir, 'packs')).length,
+    0,
+  );
+  assert.deepEqual(findings.counts, {
+    gated: shipping,
+    locked: shipping,
+    research: 24,
+    // The held languages too (#20, PR 2b).
+    audited:
+      shipping +
+      23 +
+      fs.readdirSync(path.join(REPO_ROOT, 'packages/appearance-languages/held')).length,
+  });
 });
 
 /** The registry with a third party's MIT copy of warm-parchment, as if installed from npm. */
@@ -123,11 +137,19 @@ test('an installed third-party MIT pack gets its notice, with its copyright and 
     assert.deepEqual(governance(stale.lines), [
       'apps/web/public/third-party-notices.txt is stale. Run pnpm catalog:lock and commit it.',
     ]);
-    // With the notices regenerated, it passes, and the lock pins the first-party three alone.
+    // With the notices regenerated, it passes, and the lock pins the first-party packs alone.
     fs.writeFileSync(path.join(root, NOTICES_FILE), notices);
     const current = catalogFindings(root, result, []);
     assert.deepEqual(governance(current.lines), []);
-    assert.equal(current.counts.locked, 3);
+    const firstParty = [
+      'appearance-languages',
+      'appearance-schemes',
+      'appearance-typography',
+    ].reduce(
+      (count, dir) => count + fs.readdirSync(path.join(REPO_ROOT, 'packages', dir, 'packs')).length,
+      0,
+    );
+    assert.equal(current.counts.locked, firstParty);
     assert.ok(
       !fs
         .readFileSync(path.join(root, 'packages/appearance/appearance-catalog.lock.json'), 'utf8')
@@ -304,23 +326,47 @@ test('two packs on one axis with one display name fail: a derived counterpart ta
   );
 });
 
-test('a contrast failure is one record per display mode, naming the one pack it excludes', async () => {
+test('a contrast failure is one record per pack, rule, role pair, and display mode, naming the one pack it excludes', async () => {
   const result = await shipped({ QUALITY_FIXTURES: 'meta' });
   const meta = registryMeta(result, renderOptions({ QUALITY_FIXTURES: 'meta' }));
-  const check = checkAppearance(
-    createAppearanceRegistry({ VARIANTS: meta.VARIANTS, PACKS: meta.PACKS as readonly MetaPack[] }),
-    { gateFixture: () => true },
-  );
+  const packs = meta.PACKS as readonly MetaPack[];
+  const run = (extra: readonly MetaPack[]) =>
+    checkAppearance(
+      createAppearanceRegistry({ VARIANTS: meta.VARIANTS, PACKS: [...packs, ...extra] }),
+      { gateFixture: () => true },
+    );
+  const check = run([]);
   assert.ok(check.failures.length > 0, 'the meta fixture fails the gate');
   const records = contrastRecords(check);
-  assert.ok(records.length >= check.failures.length);
   for (const record of records) {
     valid(record);
     assert.equal(record.pack, 'fixture-scheme-experimental-low-contrast');
     assert.equal(record.axis, 'colorScheme');
     assert.ok(record.tokenRole && record.displayMode && record.tuple);
     assert.ok(record.tuple!.endsWith(`/${record.displayMode}`));
+    // Its tuple count and its first tuple, in the test it names.
+    assert.match(
+      record.test,
+      / in \d+ tuples?, first [a-z0-9-]+\/fixture-scheme-experimental-low-contrast\//,
+    );
   }
+  // One record per pack, rule, role pair, set, and mode: no two the same.
+  const keys = records.map((r) => `${r.pack} ${r.rule} ${r.test.split(',')[0]} ${r.displayMode}`);
+  assert.equal(new Set(keys).size, keys.length);
+  // Twelve more languages that pass multiply the failing tuples, and leave the records as they are.
+  const language = packs.find((pack) => pack.kind === 'design-language' && !pack.fixture)!;
+  const more = Array.from({ length: 12 }, (_, index) => ({
+    ...language,
+    manifest: { ...language.manifest, id: `copy-language-${index + 1}`, name: `Copy ${index + 1}` },
+  })) as MetaPack[];
+  const wider = run(more);
+  assert.ok(wider.failures.length > check.failures.length, 'the failing tuples grow');
+  const grown = contrastRecords(wider);
+  assert.equal(grown.length, records.length);
+  assert.deepEqual(
+    grown.map(({ test, ...rest }) => ({ ...rest, test: test.replace(/ in \d+ tuples/, '') })),
+    records.map(({ test, ...rest }) => ({ ...rest, test: test.replace(/ in \d+ tuples/, '') })),
+  );
   hierarchyRecords(check).forEach(valid);
 });
 

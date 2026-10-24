@@ -33,6 +33,8 @@ import {
   type NoticePack,
 } from '@portfolio/appearance/node';
 import type { RegistryResult } from '@portfolio/variant-contract/node';
+import { auditCatalog } from './catalog-audit';
+import { readHeld } from './catalog-held';
 import { REPO_ROOT } from './registry-options';
 
 /** A failure record's fields, less the gate and command ci/run.mjs gives it. */
@@ -60,6 +62,8 @@ export interface CatalogFindings {
     readonly gated: number;
     readonly locked: number;
     readonly research: number;
+    /** Entries the branded-name audit read: shipping packs and Research records. */
+    readonly audited: number;
   };
 }
 
@@ -107,25 +111,67 @@ const read = (root: string, file: string): string | null => {
 /** The pack a contrast failure excludes (#20), which check.ts in @portfolio/appearance/node decides. */
 export { responsiblePack };
 
-/** One record per display mode a contrast failure renders in, naming the pack it excludes. */
+/** The contrast failures' records, naming the pack each excludes, grouped so their count doesn't grow with the other axes. */
 export function contrastRecords(check: AppearanceCheck): CatalogRecord[] {
-  return check.failures.flatMap((failure) => {
+  // One record per pack, axis, rule, role pair, set, and display mode: the
+  // same pair failing in every tuple a pack is in is one failure, so the
+  // records stay bounded however many packs the other axes register. Each
+  // carries its first tuple, its worst ratio, and how many tuples it fails.
+  const groups = new Map<
+    string,
+    { record: CatalogRecord; worst: number; tuples: number; label: string }
+  >();
+  for (const failure of check.failures) {
     const { axis, id } = responsiblePack(failure);
     const { pair } = failure;
-    return failure.modes.map((mode) => ({
-      schemaVersion: '1.1' as const,
-      test: `contrast: ${pair.foreground}${pair.ground ? ` on ${pair.ground}` : ''} in ${pair.set}`,
-      pack: id,
-      axis,
-      // A fill's roles read "signature-start to signature-end": the record names its first.
-      tokenRole: pair.foreground.split(' ')[0],
-      displayMode: mode,
-      tuple: `${failure.language}/${failure.scheme}/${failure.typography}/${mode}`,
-      rule: pair.kind,
-      expected: pair.target,
-      actual: pair.ratio,
-    }));
-  });
+    const label = `contrast: ${pair.foreground}${pair.ground ? ` on ${pair.ground}` : ''}${
+      pair.backdrop ? ` over ${pair.backdrop}` : ''
+    } in ${pair.set}`;
+    for (const mode of failure.modes) {
+      const key = [
+        id,
+        axis,
+        pair.kind,
+        pair.foreground,
+        pair.ground,
+        pair.backdrop ?? '',
+        pair.set,
+        mode,
+      ].join('\0');
+      const existing = groups.get(key);
+      if (existing) {
+        existing.tuples += 1;
+        existing.worst = Math.min(existing.worst, pair.ratio);
+        continue;
+      }
+      groups.set(key, {
+        label,
+        worst: pair.ratio,
+        tuples: 1,
+        record: {
+          schemaVersion: '1.1' as const,
+          test: label,
+          pack: id,
+          axis,
+          // A fill's roles read "signature-start to signature-end": the record names its first.
+          tokenRole: pair.foreground.split(' ')[0],
+          displayMode: mode,
+          tuple: `${failure.language}/${failure.scheme}/${failure.typography}/${mode}`,
+          rule: pair.kind,
+          expected: pair.target,
+          actual: pair.ratio,
+        },
+      });
+    }
+  }
+  return [...groups.values()].map(({ record, worst, tuples, label }) => ({
+    ...record,
+    test: `${label}, in ${tuples} tuple${tuples === 1 ? '' : 's'}, first ${record.tuple}`.slice(
+      0,
+      500,
+    ),
+    actual: worst,
+  }));
 }
 
 /** The hierarchy failures, each the scheme's. */
@@ -308,6 +354,9 @@ export function catalogFindings(
 
   // The Research records: well formed, and never an id anything else has.
   const packages = packPackages(root);
+  const fixturePackages = new Set(
+    packages.filter(({ fixture }) => fixture).map(({ name }) => name),
+  );
   const research = researchRecords(root, packages);
   const taken = new Map<string, string>([
     ...result.variants.map(({ manifest }) => [manifest.id, 'a variant'] as const),
@@ -329,9 +378,44 @@ export function catalogFindings(
     seen.add(record.id);
   }
 
+  // The branded-name audit, over every shipping and held pack and every Research record.
+  const audit = auditCatalog({
+    packs: [
+      ...result.packs
+        .filter((pack) => !pack.fixture)
+        .map((pack) => ({
+          kind: pack.kind,
+          manifest: pack.manifest as PackManifest,
+          // A language's compiled stylesheet, which the typeface rule reads too.
+          ...(pack.kind === 'design-language' && pack.stylesheet
+            ? { stylesheetText: new TextDecoder().decode(pack.stylesheet.bytes) }
+            : {}),
+        })),
+      ...readHeld(root, packages)
+        .filter((pack) => !fixturePackages.has(pack.packageName))
+        .flatMap((pack) => (pack.manifest ? [{ kind: pack.kind, manifest: pack.manifest }] : [])),
+    ],
+    research: research.flatMap(({ record, packageName }) =>
+      record && !fixturePackages.has(packageName) ? [record] : [],
+    ),
+  });
+  for (const finding of audit.findings) {
+    add(finding.message, {
+      test: `branded-name audit ${finding.rule}`,
+      pack: finding.pack,
+      axis: finding.axis,
+      rule: finding.rule,
+    });
+  }
+
   return {
     lines,
     records,
-    counts: { gated: result.packs.length, locked: locked.length, research: research.length },
+    counts: {
+      gated: result.packs.length,
+      locked: locked.length,
+      research: research.length,
+      audited: audit.entries.length,
+    },
   };
 }

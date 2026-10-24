@@ -1,0 +1,53 @@
+{
+  "id": "neon-city",
+  "name": "Neon City",
+  "description": "Hot pink and electric cyan on a near-black night ground. Dark only.",
+  "version": "1.0.0",
+  "tokenContract": 1,
+  "tier": "experimental",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v1 from the reviewed prototype's neon-city anchors."
+  },
+  "modes": ["dark"],
+  "lockedMode": "dark",
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "Every display mode renders the dark set, high contrast renders the sets high-contrast-v1 derives from it, and print renders the light high-contrast set, since print is always light."
+  ],
+  "caveats": [
+    "Dark only: it keeps its native dark mode, so light isn't offered with it.",
+    "Saturated neon accents on near black can tire the eyes over long reading."
+  ],
+  "derivation": "anchor-v1",
+  "anchors": {
+    "dark": {
+      "canvas": "#090814",
+      "text": "#f4f3ff",
+      "accent": "#ff42b3",
+      "secondary": "#28e7f2"
+    }
+  },
+  "swatches": ["#090814", "#f4f3ff", "#ff42b3", "#28e7f2"]
+}

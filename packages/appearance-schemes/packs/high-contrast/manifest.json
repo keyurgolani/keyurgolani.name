@@ -1,0 +1,55 @@
+{
+  "id": "high-contrast",
+  "name": "High Contrast",
+  "description": "Pure white and black with saturated blue and violet accents.",
+  "version": "1.0.0",
+  "tokenContract": 1,
+  "tier": "stable",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v1 from the reviewed prototype's high-contrast anchors."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [],
+  "derivation": "anchor-v1",
+  "anchors": {
+    "light": {
+      "canvas": "#ffffff",
+      "text": "#000000",
+      "accent": "#0047ff",
+      "secondary": "#7a00cc"
+    },
+    "dark": {
+      "canvas": "#000000",
+      "text": "#ffffff",
+      "accent": "#66a3ff",
+      "secondary": "#ff7ad9"
+    }
+  },
+  "swatches": ["#ffffff", "#000000", "#0047ff", "#7a00cc"]
+}

@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { MetaPack } from '../../packages/appearance/src/index';
+import { PLATFORM_DEFAULTS, type MetaPack } from '../../packages/appearance/src/index';
 import { readBuildMeta, type BuildMeta } from './cells';
 
 const WEB = fileURLToPath(new URL('../../apps/web/', import.meta.url));
@@ -16,6 +16,23 @@ export function checkoutMeta(): BuildMeta {
   const file = path.join(WEB, 'src', 'lib', 'generated', 'registry.meta.ts');
   assert.ok(existsSync(file), 'run pnpm --filter @portfolio/web build:registry first');
   return readBuildMeta(WEB);
+}
+
+/**
+ * The metadata with the fallback packs as its only shipping ones, so a test
+ * of the planner's rules counts cells that don't move with #20's catalog.
+ * Fixture packs stay.
+ */
+export function fallbackPacks(meta: BuildMeta): BuildMeta {
+  const fallbacks = new Set<string>([
+    PLATFORM_DEFAULTS.designLanguage,
+    PLATFORM_DEFAULTS.colorScheme,
+    PLATFORM_DEFAULTS.typography,
+  ]);
+  return {
+    ...meta,
+    PACKS: (meta.PACKS ?? []).filter((pack) => pack.fixture || fallbacks.has(pack.manifest.id)),
+  };
 }
 
 export const TIERS = ['stable', 'extended', 'experimental'] as const;

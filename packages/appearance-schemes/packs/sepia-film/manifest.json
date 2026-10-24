@@ -1,0 +1,55 @@
+{
+  "id": "sepia-film",
+  "name": "Sepia Film",
+  "description": "Sepia film stock: warm browns with a rust accent and an olive secondary.",
+  "version": "1.0.0",
+  "tokenContract": 1,
+  "tier": "stable",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v1 from the reviewed prototype's sepia-film anchors."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [],
+  "derivation": "anchor-v1",
+  "anchors": {
+    "light": {
+      "canvas": "#f4e2c5",
+      "text": "#30251b",
+      "accent": "#9a4f32",
+      "secondary": "#6e7658"
+    },
+    "dark": {
+      "canvas": "#241a13",
+      "text": "#f0d8b6",
+      "accent": "#cb7654",
+      "secondary": "#a0a77d"
+    }
+  },
+  "swatches": ["#f4e2c5", "#30251b", "#9a4f32", "#6e7658"]
+}

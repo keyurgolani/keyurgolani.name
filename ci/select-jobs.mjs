@@ -187,6 +187,14 @@ export const RULES = [
     paths: ['packages/appearance-*/research/**'],
   },
   {
+    // #20's held packs fail their gate and never register either: the unit
+    // tests and check:appearance read them, and build's check proves none
+    // reaches the build.
+    class: 'held',
+    jobs: ['unit', 'build'],
+    paths: ['packages/appearance-*/held/**'],
+  },
+  {
     // A shipped pack reaches every render, the image's compiled packs, and
     // the trace's bytes, but no variant's source. Its gates against every
     // variant are quality-pr's change-directed cells (#20).

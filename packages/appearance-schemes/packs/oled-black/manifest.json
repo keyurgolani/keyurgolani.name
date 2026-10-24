@@ -1,0 +1,51 @@
+{
+  "id": "oled-black",
+  "name": "OLED Black",
+  "description": "True black for OLED screens, with Tailwind CSS cyan and purple accents. Dark only.",
+  "version": "1.0.1",
+  "tokenContract": 1,
+  "tier": "extended",
+  "provenance": {
+    "source": {
+      "name": "Tailwind CSS v3.4.17 colors",
+      "url": "https://github.com/tailwindlabs/tailwindcss/blob/v3.4.17/src/public/colors.js"
+    },
+    "license": "MIT",
+    "attribution": "Tailwind Labs, Inc., Tailwind CSS v3.4.17's cyan-300 and purple-400, under the MIT License.",
+    "copyright": "Copyright (c) Tailwind Labs, Inc.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani, from Tailwind CSS v3.4.17",
+    "derivation": "anchor-v1 from the reviewed prototype's oled-black anchors: a black canvas and #f5f5f2 text, with Tailwind CSS v3.4.17 cyan-300 as the accent and purple-400 as the secondary."
+  },
+  "modes": ["dark"],
+  "lockedMode": "dark",
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "Every display mode renders the dark set, high contrast renders the sets high-contrast-v1 derives from it, and print renders the light high-contrast set, since print is always light."
+  ],
+  "caveats": ["Dark only: it keeps its native dark mode, so light isn't offered with it."],
+  "derivation": "anchor-v1",
+  "anchors": {
+    "dark": {
+      "canvas": "#000000",
+      "text": "#f5f5f2",
+      "accent": "#67e8f9",
+      "secondary": "#c084fc"
+    }
+  },
+  "swatches": ["#000000", "#f5f5f2", "#67e8f9", "#c084fc"]
+}
