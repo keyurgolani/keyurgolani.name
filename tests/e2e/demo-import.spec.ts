@@ -56,8 +56,12 @@ test.afterAll(() => {
 
 interface Captured {
   readonly url: string;
+  readonly method: string;
   readonly text: string;
 }
+
+/** The only requests an import may make: the served module, its worker, and the worker's chunk. */
+const EXPECTED = new RegExp(`^${BASE}(?:index\\.js|import\\.worker\\.ts|chunk-[\\w-]+\\.js)$`);
 
 test(
   'the hostile import fixtures, through the module worker on the demo origin, are inert or refused, log nothing, and send no planted value',
@@ -86,12 +90,15 @@ test(
     page.on('request', (request) => {
       requests.push({
         url: request.url(),
+        method: request.method(),
         text: [request.url(), JSON.stringify(request.headers()), request.postData() ?? ''].join(
           '\n',
         ),
       });
     });
-    page.on('websocket', (socket) => requests.push({ url: socket.url(), text: socket.url() }));
+    page.on('websocket', (socket) =>
+      requests.push({ url: socket.url(), method: 'WEBSOCKET', text: socket.url() }),
+    );
     page.on('console', (message) => consoleLines.push(`${message.type()}: ${message.text()}`));
     page.on('pageerror', (error) => errors.push(String(error)));
     page.on('dialog', (dialog) => {
@@ -147,6 +154,18 @@ test(
       true,
     );
 
+    // Every request while it ran was a GET for the served scripts, and nothing
+    // else, so no request carried the files, however encoded.
+    expect(
+      requests
+        .filter(
+          ({ url, method }) =>
+            method !== 'GET' ||
+            new URL(url).origin !== app.origin ||
+            !EXPECTED.test(new URL(url).pathname),
+        )
+        .map(({ method, url }) => `${method} ${url}`),
+    ).toEqual([]);
     // Nothing planted left in any request, and nothing went to another host.
     expect(requests.filter(({ text }) => text.includes(CANARY)).map(({ url }) => url)).toEqual([]);
     expect(
