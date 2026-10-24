@@ -99,6 +99,18 @@ export function reportFrameStatus(status: FrameStatus): void {
   for (const listener of statusListeners) listener(status);
 }
 
+const routeListeners = new Set<(route: string) => void>();
+
+/**
+ * Reports a route a local frame moved to on its own, such as a redirect its
+ * renderer followed, which the channel keeps as the route it shows and sends
+ * Studio as `navigated`. A server frame's moves are document loads, so it
+ * takes none.
+ */
+export function reportLocalRoute(route: string): void {
+  for (const listener of routeListeners) listener(route);
+}
+
 /** A random token in TOKEN's format: 128 bits in base64url. */
 function randomToken(): string {
   const bytes = new Uint8Array(16);
@@ -290,6 +302,11 @@ export function startFrameChannel(win: Window, options: FrameChannelOptions): ((
     }
   };
   const onStatus = (status: FrameStatus) => send('status', status);
+  const onLocalRoute = (route: string) => {
+    if (mode !== 'local' || !isRoute(route)) return;
+    localRoute = route;
+    send('navigated', { route });
+  };
 
   /** The route a local frame shows, which it keeps in memory. */
   let localRoute = '/';
@@ -394,6 +411,8 @@ export function startFrameChannel(win: Window, options: FrameChannelOptions): ((
         return;
       case 'document':
         if (!take(sizeOf(message.payload, LIMITS.document))) return drop('size', 'document');
+        // A new document starts at its home page.
+        localRoute = '/';
         return options.onDocument?.(message.payload);
       case 'asset':
         if (!take(message.payload.blob.size)) return drop('size', 'asset');
@@ -498,6 +517,7 @@ export function startFrameChannel(win: Window, options: FrameChannelOptions): ((
   navigation?.addEventListener('navigate', onNavigate);
   win.addEventListener('scroll', onScroll, { passive: true });
   statusListeners.add(onStatus);
+  routeListeners.add(onLocalRoute);
   // After the document's own load, so the frame's load event in Studio's
   // window comes first nearly always. When it doesn't, the hellos after it
   // open the channel again.
@@ -515,6 +535,7 @@ export function startFrameChannel(win: Window, options: FrameChannelOptions): ((
     win.removeEventListener('scroll', onScroll);
     win.removeEventListener('load', helloAfterLoad);
     statusListeners.delete(onStatus);
+    routeListeners.delete(onLocalRoute);
     if (port) {
       port.onmessage = null;
       port.close();
