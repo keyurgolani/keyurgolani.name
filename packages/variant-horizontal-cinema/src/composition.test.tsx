@@ -179,11 +179,8 @@ test('the complete fixture: one main, one h1, one control slot, the chrome, the 
   );
   assert.ok(markup.indexOf('class="hc-filmstrip"') < markup.indexOf('class="hc-stage"'));
   assert.doesNotMatch(markup, /aria-current="step"/);
-  // The stage is a named, focusable region the arrow keys work in.
-  assert.match(
-    markup,
-    /<div class="hc-stage" role="region" aria-labelledby="hc--chapters-label" tabindex="0">/,
-  );
+  // The stage is a named region; the arrow keys work from any link in the experience.
+  assert.match(markup, /<div class="hc-stage" role="region" aria-labelledby="hc--chapters-label">/);
   // The transport waits for the controller: hidden in the server's markup, so no script means no dead buttons.
   assert.match(markup, /<div class="hc-transport" hidden="">/);
   // One polite live region, empty until a step.
@@ -556,12 +553,6 @@ test('an identity alone still gets its h1, its control, the five chapters, and t
 /** The stylesheet without its comments. */
 const STYLES = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
 
-/** Every rule of the stylesheet, as its selector and its declarations. */
-const RULES = [...STYLES.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({
-  selector: selector!.trim(),
-  body: body!,
-}));
-
 test("the stylesheet uses #19's border tokens whole, and declares no custom property but --layout-*", () => {
   // Each is a whole border, such as `1px solid var(--color-border-default)`: never a width, a
   // style, or a color longhand, and never with anything beside it.
@@ -582,7 +573,7 @@ test("the stylesheet uses #19's border tokens whole, and declares no custom prop
   }
 });
 
-test('the horizontal layout tests reduced motion itself, holds five snap points, and is smooth only on the runtime', () => {
+test('the horizontal layout tests reduced motion itself, holds the five chapters, and never scrolls on its own', () => {
   const queries = [...STYLES.matchAll(/@media\s*([^{]+)\{/g)].map(([, query]) => query!.trim());
   const horizontal = queries.filter((query) => query.includes('pointer: fine'));
   assert.equal(horizontal.length, 1, 'one query picks the horizontal layout');
@@ -596,15 +587,15 @@ test('the horizontal layout tests reduced motion itself, holds five snap points,
   }
   // Never data-motion, which stays full under the OS's reduce.
   assert.doesNotMatch(STYLES, /data-motion/);
-  // Smooth scrolling only inside that query, and only while the controller's runtime is active.
+  // The scroller: the chapters side by side, one window wide each.
   const block = STYLES.slice(STYLES.indexOf(horizontal[0]!));
-  const smooth = RULES.filter(({ body }) => /scroll-behavior:\s*smooth/.test(body));
-  assert.equal(smooth.length, 1);
-  assert.match(smooth[0]!.selector, /\.hc-cinema\[data-runtime='active'\] \.hc-stage$/);
-  assert.ok(block.includes(smooth[0]!.selector));
-  // The scroller: exactly the chapters, each a mandatory snap point, nothing hidden or inert.
-  assert.match(block, /scroll-snap-type: inline mandatory/);
-  assert.match(block, /scroll-snap-align: start/);
+  assert.match(block, /grid-auto-flow: column/);
+  assert.match(block, /grid-auto-columns: 100%/);
+  assert.match(block, /overflow-x: auto/);
+  // No snapping and no smooth scrolling in CSS: find, Tab, and a fragment land
+  // where they reach, and only the controller eases, on its runtime.
+  assert.doesNotMatch(STYLES, /scroll-snap|scroll-behavior/);
+  // Nothing hidden, inert, pinned, or unselectable.
   assert.doesNotMatch(
     STYLES,
     /overscroll-behavior|user-select|visibility:\s*hidden|position:\s*(?:fixed|sticky)/,
@@ -616,10 +607,17 @@ test('the horizontal layout tests reduced motion itself, holds five snap points,
 test('the controller never cancels a wheel, touch, or scroll, writes no history entry of its own, and never runs in a frame’s history', () => {
   const source = readFileSync(new URL('./controller.tsx', import.meta.url), 'utf8');
   assert.match(source, /^'use client';/);
-  assert.doesNotMatch(
+  // The gestures it notes, passively, only to know a scroll was the visitor's own.
+  assert.match(source, /const GESTURES = \['wheel', 'touchstart', 'pointerdown'\] as const;/);
+  assert.match(
     source,
-    /['"](?:wheel|mousewheel|touchstart|touchmove|touchend|pointermove)['"]/,
+    /for \(const type of GESTURES\) stageElement\.addEventListener\(type, onGesture, \{ passive: true \}\);/,
   );
+  assert.match(
+    source,
+    /const onGesture = \(event: Event\) => \{\n\s*gestureAt = event\.timeStamp;\n\s*\};/,
+  );
+  assert.doesNotMatch(source, /['"](?:mousewheel|touchmove|touchend|pointermove)['"]/);
   // Scrolls it listens to are passive, and it calls preventDefault for a step and a framed link alone.
   for (const [line] of source.matchAll(/addEventListener\('scroll(?:end)?'[^\n]*/g)) {
     assert.match(line, /passive: true/, line);

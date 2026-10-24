@@ -19,7 +19,6 @@ import {
   chapterOfHash,
   CHAPTERS,
   INDEX_ANCHOR,
-  LAST,
   numberOf,
   progressOf,
   stepFrom,
@@ -43,13 +42,17 @@ import { Runtime } from './runtime';
 //                                       chapter it left
 //   previous and next                   a step, the URL replaced, announced
 //   the wheel, a trackpad, a swipe,     the page's or the stage's own
-//   Tab, find, the scrollbar            scrolling, never cancelled: the
-//                                       chapter it settles on, the URL
-//                                       replaced
+//   the scrollbar                       scrolling, never cancelled: once it
+//                                       settles, the nearest chapter,
+//                                       aligned, the URL replaced
+//   Tab, find, anything scrolled        the chapter it revealed, aligned at
+//   into view                           once, so what it reached stays in
+//                                       view, the URL replaced
 //
 // Every one of them names one of the five chapters or nothing: a step past
 // either end is no step, and its key does what it always does. No handler
-// cancels a wheel, touch, or scroll event, and no history entry is written
+// cancels a wheel, touch, or scroll event; the gesture listeners are passive
+// and only note that a gesture moved the stage. No history entry is written
 // per frame: the URL changes once a change settles, by replaceState, which
 // keeps the path, the query, and history.state.
 //
@@ -57,7 +60,7 @@ import { Runtime } from './runtime';
 // scroller on a wide screen with a fine pointer and no reduced motion, and
 // the page's ordinary vertical flow anywhere else. The controller reads
 // which from the stage's computed style, and a resize, a rotation, or a
-// switch of layout realigns the current chapter at once.
+// switch of layout keeps the current chapter.
 //
 // Scrolling the controller starts is smooth only while its runtime is
 // active and the visitor hasn't asked for reduced motion, which it tests
@@ -72,9 +75,15 @@ const SETTLE_MS = 150;
 /** How long a scroll the controller started may run before what it reached counts anyway. */
 const LATE_MS = 900;
 
+/** How long after a wheel, touch, or press a scroll still counts as that gesture's. */
+const GESTURE_MS = 1500;
+
 /** What arrow keys never step from: a form or media control, or anything editable. */
 const NATIVE_KEYS =
   'input, textarea, select, video, audio, [contenteditable]:not([contenteditable="false"])';
+
+/** What moves the stage by hand, which the controller only notes. */
+const GESTURES = ['wheel', 'touchstart', 'pointerdown'] as const;
 
 export interface CinemaProps {
   /** The boundary's id prefix, which every id starts with. */
@@ -94,14 +103,10 @@ interface Live {
   readonly onStep: (by: 1 | -1) => void;
 }
 
-type ActionRef = RefObject<(HTMLButtonElement & HTMLAnchorElement) | null>;
-
 /** Where the live controller reads the markup it renders. */
 interface Refs {
   readonly root: (node: HTMLDivElement | null) => void;
   readonly stage: RefObject<HTMLDivElement | null>;
-  readonly previous: ActionRef;
-  readonly next: ActionRef;
 }
 
 /**
@@ -148,23 +153,15 @@ function CinemaMarkup({
         <Navigation labelledBy={labelId} items={items} className="hc-filmstrip" />
         {live ? (
           <div className="hc-transport" hidden={!live.ready}>
-            <p className="hc-progress" data-type-role="numeric" aria-hidden="true">
+            {/* The progress, which the filmstrip's mark and the live region say to assistive technology. */}
+            <span className="hc-progress" data-type-role="numeric" aria-hidden="true">
               {progressOf(live.current)}
-            </p>
-            <Action
-              ref={refs?.previous}
-              emphasis="quiet"
-              disabled={live.ready && live.current === 0}
-              onClick={() => live.onStep(-1)}
-            >
+            </span>
+            {/* Never disabled, so focus never drops to the page: at an end a step is no step. */}
+            <Action emphasis="quiet" onClick={() => live.onStep(-1)}>
               <Words lang={lang}>Previous chapter</Words>
             </Action>
-            <Action
-              ref={refs?.next}
-              emphasis="quiet"
-              disabled={live.ready && live.current === LAST}
-              onClick={() => live.onStep(1)}
-            >
+            <Action emphasis="quiet" onClick={() => live.onStep(1)}>
               <Words lang={lang}>Next chapter</Words>
             </Action>
           </div>
@@ -175,7 +172,6 @@ function CinemaMarkup({
         className="hc-stage"
         role={live ? 'region' : undefined}
         aria-labelledby={live ? labelId : undefined}
-        tabIndex={live ? 0 : undefined}
       >
         {children}
       </div>
@@ -218,8 +214,6 @@ function LiveCinema(props: CinemaProps) {
   const [message, setMessage] = useState('');
   const root = useRef<HTMLDivElement | null>(null);
   const stage = useRef<HTMLDivElement | null>(null);
-  const previous = useRef<(HTMLButtonElement & HTMLAnchorElement) | null>(null);
-  const next = useRef<(HTMLButtonElement & HTMLAnchorElement) | null>(null);
   const animate = useRef(false);
   const step = useRef<(by: 1 | -1) => void>(() => {});
 
@@ -252,6 +246,13 @@ function LiveCinema(props: CinemaProps) {
     let aligning: number | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let linked = false;
+    // Focus the controller moves itself, which the focusin handler leaves alone.
+    let focusing = false;
+    // When a gesture last touched the stage, and when the stage last scrolled, by their events' times.
+    let gestureAt = -Infinity;
+    let scrolledAt = -Infinity;
+    // Where the stage sat when it last settled, to tell which way a scroll went.
+    let settledAt = Math.abs(stageElement.scrollLeft);
 
     const horizontal = () => ['auto', 'scroll'].includes(getComputedStyle(stageElement).overflowX);
     const rtl = () => getComputedStyle(rootElement).direction === 'rtl';
@@ -260,40 +261,66 @@ function LiveCinema(props: CinemaProps) {
         ? 'smooth'
         : 'instant';
 
-    /** The chapter in view: at the stage's start, or under the window's middle. None in the index. */
+    /** How far the chapter's start sits from the stage's start, in pixels. */
+    const offsetOf = (to: number) => {
+      const chapter = chapters[to];
+      if (!chapter) return 0;
+      return chapter.getBoundingClientRect().left - stageElement.getBoundingClientRect().left;
+    };
+
+    /** The chapter in view: the one nearest the stage's start, or under the window's middle. None in the index. */
     const measure = (): number | undefined => {
-      const box = stageElement.getBoundingClientRect();
       if (horizontal()) {
         let nearest = 0;
         let distance = Infinity;
         chapters.forEach((chapter, index) => {
           if (!chapter) return;
-          const away = Math.abs(chapter.getBoundingClientRect().left - box.left);
+          const away = Math.abs(offsetOf(index));
           if (away < distance) [nearest, distance] = [index, away];
         });
         return nearest;
       }
       const middle = window.innerHeight / 2;
-      if (box.bottom < middle) return undefined;
+      if (stageElement.getBoundingClientRect().bottom < middle) return undefined;
       return chapterAt(
         chapters.map((chapter) => chapter?.getBoundingClientRect().top ?? Infinity),
         middle,
       );
     };
 
+    /**
+     * The chapter a scroll that no gesture made brought into view: the one
+     * at the stage's leading edge, the way it went. Tab, find, and a script
+     * scroll only far enough to show what they reach, so that chapter holds it.
+     */
+    const revealed = (forward: boolean): number | undefined => {
+      const box = stageElement.getBoundingClientRect();
+      const end = forward !== rtl();
+      const x = end ? box.right - 1 : box.left + 1;
+      const found = chapters.findIndex((chapter) => {
+        const r = chapter?.getBoundingClientRect();
+        return r !== undefined && r.left <= x && x < r.right;
+      });
+      return found === -1 ? undefined : found;
+    };
+
+    /** Scrolls the stage to the chapter, and nothing else. */
+    const alignStage = (to: number, how: ScrollBehavior) => {
+      const offset = offsetOf(to);
+      if (Math.abs(offset) < 1) return;
+      aligning = to;
+      stageElement.scrollTo({ left: stageElement.scrollLeft + offset, behavior: how });
+    };
+
     /** Scrolls the chapter into place: the stage to it, or the page to its top. */
     const align = (to: number, how: ScrollBehavior) => {
       const chapter = chapters[to];
       if (!chapter) return;
-      const box = stageElement.getBoundingClientRect();
       if (horizontal()) {
-        const offset = chapter.getBoundingClientRect().left - box.left;
-        if (Math.abs(offset) >= 1) {
-          aligning = to;
-          stageElement.scrollTo({ left: stageElement.scrollLeft + offset, behavior: how });
-        }
+        const top = stageElement.getBoundingClientRect().top;
+        alignStage(to, how);
         // A chapter taller than the window: back to its top, so the step reads from its start.
-        if (box.top < 0) window.scrollTo({ top: window.scrollY + box.top, behavior: how });
+        if (top < 0) window.scrollTo({ top: window.scrollY + top, behavior: how });
         return;
       }
       const top = chapter.getBoundingClientRect().top;
@@ -307,7 +334,11 @@ function LiveCinema(props: CinemaProps) {
       const changed = to !== position;
       position = to;
       setCurrent(to);
-      if (effects.focus) titles[to]?.focus({ preventScroll: true });
+      if (effects.focus) {
+        focusing = true;
+        titles[to]?.focus({ preventScroll: true });
+        focusing = false;
+      }
       if (effects.align) align(to, effects.align);
       if (changed && effects.replace && !framed) {
         const hash = `#${prefix}${anchorOf(to)}`;
@@ -317,33 +348,67 @@ function LiveCinema(props: CinemaProps) {
       if (changed && effects.announce) setMessage(announcementOf(to));
     };
 
+    /** Whether scrolling may replace the URL: it never replaces a link to something inside a chapter. */
+    const owned = () => {
+      const hash = window.location.hash;
+      const id = fragmentId(hash);
+      return (
+        id === undefined ||
+        chapterOfHash(hash, prefix) !== undefined ||
+        id === `${prefix}${INDEX_ANCHOR}`
+      );
+    };
+
     /** Where scrolling settled, once it has: a scroll of the controller's own counts once it lands. */
     const settle = (late: boolean) => {
       timer = undefined;
-      const to = measure();
+      const wide = horizontal();
       if (aligning !== null) {
-        if (to !== aligning && !late) {
+        if (measure() !== aligning && !late) {
           timer = setTimeout(() => settle(true), LATE_MS);
           return;
         }
         aligning = null;
       }
+      let to = measure();
+      if (wide) {
+        const left = Math.abs(stageElement.scrollLeft);
+        const gesture = scrolledAt - gestureAt < GESTURE_MS;
+        gestureAt = -Infinity;
+        if (!gesture && left !== settledAt) to = revealed(left > settledAt) ?? to;
+        settledAt = left;
+        // A gesture eases to the nearest chapter; anything else lands on what it revealed at once.
+        if (to !== undefined && Math.abs(offsetOf(to)) >= 1) {
+          alignStage(to, gesture ? behavior() : 'instant');
+        }
+      }
       if (to === undefined || to === position) return;
-      // A link to something in a chapter keeps its own fragment; scrolling
-      // only ever replaces a chapter's, the index's, or none.
-      const hash = window.location.hash;
-      const owned =
-        fragmentId(hash) === undefined ||
-        chapterOfHash(hash, prefix) !== undefined ||
-        fragmentId(hash) === `${prefix}${INDEX_ANCHOR}`;
-      commit(to, { replace: owned, announce: horizontal() });
+      commit(to, { replace: owned(), announce: wide });
     };
     const schedule = (wait: number) => {
       if (timer !== undefined) clearTimeout(timer);
       timer = setTimeout(() => settle(false), wait);
     };
-    const onScroll = () => schedule(SETTLE_MS);
+    const onScroll = (event: Event) => {
+      scrolledAt = event.timeStamp;
+      schedule(SETTLE_MS);
+    };
     const onScrollEnd = () => schedule(0);
+    const onGesture = (event: Event) => {
+      gestureAt = event.timeStamp;
+    };
+
+    // Focus that lands in another chapter, by Tab or a script, brings that
+    // chapter in whole and at once, so what has focus is never clipped.
+    const onFocusIn = (event: FocusEvent) => {
+      if (focusing || !horizontal()) return;
+      const target = event.target instanceof Node ? event.target : null;
+      const holder = chapters.findIndex((chapter) => chapter?.contains(target) ?? false);
+      if (holder === -1) return;
+      alignStage(holder, 'instant');
+      settledAt = Math.abs(stageElement.scrollLeft);
+      if (holder !== position) commit(holder, { replace: owned() });
+    };
 
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
@@ -364,8 +429,6 @@ function LiveCinema(props: CinemaProps) {
       const to = stepFrom(position, by);
       if (to === undefined) return;
       commit(to, { align: behavior(), replace: true, announce: true });
-      // At the end this button turns off: focus goes to the other one, not to the page.
-      if (stepFrom(to, by) === undefined) (by === 1 ? previous : next).current?.focus();
     };
 
     /** Focus on the index's heading, which a link to the index lands on. */
@@ -443,6 +506,7 @@ function LiveCinema(props: CinemaProps) {
       width = window.innerWidth;
       layout = horizontal();
       if (measure() !== position) align(position, 'instant');
+      settledAt = Math.abs(stageElement.scrollLeft);
     };
 
     // The start: the chapter the URL names, else the one in view.
@@ -454,12 +518,15 @@ function LiveCinema(props: CinemaProps) {
     position = named ?? (scrolled ? measure() : undefined) ?? 0;
     setCurrent(position);
     setReady(true);
-    if (named !== undefined && horizontal()) align(named, 'instant');
+    if (horizontal() && Math.abs(offsetOf(position)) >= 1) alignStage(position, 'instant');
+    settledAt = Math.abs(stageElement.scrollLeft);
 
     rootElement.addEventListener('keydown', onKey);
+    rootElement.addEventListener('focusin', onFocusIn);
     boundary.addEventListener('click', onClick);
     window.addEventListener('hashchange', onHash);
     window.addEventListener('resize', onResize);
+    for (const type of GESTURES) stageElement.addEventListener(type, onGesture, { passive: true });
     stageElement.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('scroll', onScroll, { passive: true });
     stageElement.addEventListener('scrollend', onScrollEnd, { passive: true });
@@ -468,9 +535,11 @@ function LiveCinema(props: CinemaProps) {
       if (timer !== undefined) clearTimeout(timer);
       step.current = () => {};
       rootElement.removeEventListener('keydown', onKey);
+      rootElement.removeEventListener('focusin', onFocusIn);
       boundary.removeEventListener('click', onClick);
       window.removeEventListener('hashchange', onHash);
       window.removeEventListener('resize', onResize);
+      for (const type of GESTURES) stageElement.removeEventListener(type, onGesture);
       stageElement.removeEventListener('scroll', onScroll);
       window.removeEventListener('scroll', onScroll);
       stageElement.removeEventListener('scrollend', onScrollEnd);
@@ -479,7 +548,7 @@ function LiveCinema(props: CinemaProps) {
   }, [prefix]);
 
   const onStep = useCallback((by: 1 | -1) => step.current(by), []);
-  const refs = useMemo<Refs>(() => ({ root: setRoot, stage, previous, next }), [setRoot]);
+  const refs = useMemo<Refs>(() => ({ root: setRoot, stage }), [setRoot]);
 
   return (
     <CinemaMarkup
