@@ -332,6 +332,7 @@ test('under read-only, /sample is no page at all, whatever its query', async (t)
   setLiveComposition('fixture-notes');
   const answered = await answer('fixture-notes', ['sample'], { mode: 'sepia' });
   assert.match(answered.digest ?? '', /^NEXT_HTTP_ERROR_FALLBACK;404$/);
+});
 
 /** brand-seed's reference record (#20 PR 3), as the live revision's snapshots/schemes.json holds it. */
 function storedBrandSeed() {
@@ -397,7 +398,7 @@ test("a visitor page renders a generated scheme from the live revision's stored 
   // operation would hand back: a visitor page never asks for it.
   const asked: string[] = [];
   const draft = { derived: { schemes: { 'brand-seed': stored } }, site: current.unit!.site };
-  deploy(t, () => current, "read-only", (async (operation: string) => {
+  deploy(t, () => current, 'read-only', (async (operation: string) => {
     asked.push(operation);
     return { ok: true, value: draft };
   }) as never);
