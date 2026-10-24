@@ -2088,7 +2088,7 @@ test('/_portfolio/scheme/ takes GET and HEAD alone: any other method is the plai
 /** The local frame's policy (#9): the preview's, with blob: images and media from the visitor's own files. */
 const localPolicy = (ancestors: string) =>
   new RegExp(
-    `^default-src 'none'; script-src 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'nonce-\\1'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors ${escape(ancestors)}$`,
+    `^default-src 'none'; script-src 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'nonce-\\1'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; sandbox allow-scripts; frame-ancestors ${escape(ancestors)}$`,
   );
 
 test("under demo /preview/local, Demo Studio's local frame, goes on to Next under the preview's headers with blob: media, connecting to nothing, framed by Studio's origin alone (#9)", async (t) => {

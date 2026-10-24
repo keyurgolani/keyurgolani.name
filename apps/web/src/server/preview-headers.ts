@@ -92,17 +92,21 @@ export function isLocalPreviewPath(pathname: string): boolean {
  * connects to nothing: `connect-src 'none'`, no worker source, so `fetch`,
  * `sendBeacon`, and `WebSocket` from anything the frame renders reach no
  * host, its own included. Only Studio, on the deployment's origin, may
- * frame it.
+ * frame it. `sandbox allow-scripts` makes its document's origin opaque
+ * whatever frames it, or loads it top level: Studio's iframe sandbox says the
+ * same, and the policy holds without it.
  */
 export function localPreviewCsp(nonce: string, options: PreviewPolicyOptions): string {
   return previewCsp(nonce, options)
     .split('; ')
-    .map((directive) =>
+    .flatMap((directive) =>
       directive.startsWith('img-src ')
-        ? "img-src 'self' data: blob:"
+        ? ["img-src 'self' data: blob:"]
         : directive.startsWith('media-src ')
-          ? "media-src 'self' blob:"
-          : directive,
+          ? ["media-src 'self' blob:"]
+          : directive.startsWith('frame-ancestors ')
+            ? ['sandbox allow-scripts', directive]
+            : [directive],
     )
     .join('; ');
 }
