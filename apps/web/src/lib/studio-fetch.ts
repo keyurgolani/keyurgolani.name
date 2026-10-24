@@ -16,6 +16,22 @@ import { DEFAULT_RETURN_TO, safeReturnTo, signInLocation } from '~/server/return
 export const SESSION_CHANNEL = 'studio-session';
 /** The message every other tab leaves Studio on. */
 export const SIGNED_OUT = 'logout';
+/**
+ * What the owner chose at sign-out for the local journal of unsaved edits
+ * (#8): `discard` tells every other tab to drop its unsaved text rather than
+ * keep it, so no tab writes back what the owner discarded.
+ */
+export type SignOutChoice = 'keep' | 'discard';
+/** The sign-out message that carries `choice`. */
+export const signedOutMessage = (choice: SignOutChoice) => `${SIGNED_OUT}:${choice}`;
+
+/** The choice a sign-out message carries, null for a plain one, or undefined for any other message. */
+export function signOutChoice(data: unknown): SignOutChoice | null | undefined {
+  if (data === SIGNED_OUT) return null;
+  if (data === signedOutMessage('keep')) return 'keep';
+  if (data === signedOutMessage('discard')) return 'discard';
+  return undefined;
+}
 /** The event a 401 dispatches on window before studioFetch goes to sign-in. */
 export const AUTH_REQUIRED = 'studio:auth-required';
 
@@ -28,6 +44,8 @@ export interface StudioFetchOptions {
   readonly query?: Readonly<Record<string, string>>;
   /** Lets the request outlive the page, as a command sent on pagehide must. */
   readonly keepalive?: boolean;
+  /** For auth.logout: the owner's choice for the journal, which the other tabs hear. */
+  readonly signOut?: SignOutChoice;
 }
 
 /** The part of a BroadcastChannel a tab uses: one per tab, to post and to listen. */
@@ -52,7 +70,7 @@ export interface StudioFetchEnv {
 export function createStudioFetch(env: StudioFetchEnv) {
   return async function studioFetch(
     name: string,
-    { body, csrfToken, query, keepalive }: StudioFetchOptions = {},
+    { body, csrfToken, query, keepalive, signOut }: StudioFetchOptions = {},
   ): Promise<Response> {
     const command = body !== undefined;
     const search = query ? `?${new URLSearchParams(query)}` : '';
@@ -73,7 +91,7 @@ export function createStudioFetch(env: StudioFetchEnv) {
         env.navigate(signInLocation('session_ended', safeReturnTo(env.here())));
       }
     } else if (name === 'auth.logout' && response.ok) {
-      env.channel.postMessage(SIGNED_OUT);
+      env.channel.postMessage(signOut ? signedOutMessage(signOut) : SIGNED_OUT);
     }
     return response;
   };
@@ -107,7 +125,7 @@ export function leaveOnSignOut(
   env: Pick<StudioFetchEnv, 'channel' | 'here' | 'navigate'> = browser(),
 ): () => void {
   const listener = (event: MessageEvent) => {
-    if (event.data === SIGNED_OUT) {
+    if (signOutChoice(event.data) !== undefined) {
       env.navigate(signInLocation('signed_out', safeReturnTo(env.here())));
     }
   };
@@ -122,11 +140,12 @@ export function leaveOnSignOut(
  * to sign-in. Returns the unsubscribe.
  */
 export function onSignedOut(
-  listener: () => void,
+  listener: (choice: SignOutChoice | null) => void,
   env: Pick<StudioFetchEnv, 'channel'> = browser(),
 ): () => void {
   const handle = (event: MessageEvent) => {
-    if (event.data === SIGNED_OUT) listener();
+    const choice = signOutChoice(event.data);
+    if (choice !== undefined) listener(choice);
   };
   env.channel.addEventListener('message', handle);
   return () => env.channel.removeEventListener('message', handle);

@@ -98,6 +98,7 @@ test("this browser's journal comes back over the saved draft, and as a conflict 
     portfolio: { format: 'yaml', sourceText: 'mine\n' },
   } as const;
   const entry = (baseVersion: number): JournalEntry => ({
+    tabId: 'tab-aaaaaaaa',
     draftId: draft(2).draftId,
     baseVersion,
     documents,
@@ -120,6 +121,7 @@ test("this browser's journal comes back over the saved draft, and as a conflict 
 
 test("a journal for a draft that isn't the working one is kept aside until the owner takes it or lets it go", () => {
   const orphan: JournalEntry = {
+    tabId: 'tab-bbbbbbbb',
     draftId: OTHER_DRAFT_ID,
     baseVersion: 5,
     documents: { ...sourceOf(draft(5)), portfolio: { format: 'yaml', sourceText: 'old\n' } },

@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { flushSync } from 'react-dom';
 import type { StudioBackend, StudioPolicy } from '~/lib/studio/backend';
 import { namesIn, type DocumentName } from '~/lib/studio/documents';
 import {
@@ -18,7 +19,17 @@ import {
   isDirty,
   type DraftSession,
 } from '~/lib/studio/draft-session';
-import { clearJournal, readJournal, writeJournal } from '~/lib/studio/journal';
+import {
+  clearJournal,
+  entryFor,
+  pruneJournal,
+  readJournal,
+  removeEntry,
+  tabId,
+  writeEntry,
+} from '~/lib/studio/journal';
+import { pageCacheHandlers } from '~/lib/studio/page-cache';
+import { holdTab, mayRestore, openTabs } from '~/lib/studio/tab-presence';
 import { endSession, NEUTRAL_TITLE } from '~/lib/studio/session-end';
 import { stateLines } from '~/lib/studio/state-model';
 import { tasksFor, type StudioTask, type TaskId } from '~/lib/studio/tasks';
@@ -57,6 +68,15 @@ function storage(): Storage | null {
   }
 }
 
+/** This tab's sessionStorage, or null where it can't be reached. */
+function tabStorage(): Storage | null {
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
 export function StudioShell({ csrfToken, policy }: { csrfToken: string; policy: StudioPolicy }) {
   const tasks = useMemo(() => tasksFor(policy.allowed), [policy.allowed]);
   const [task, setTask] = useState<TaskId>(tasks[0]?.id ?? 'content');
@@ -68,10 +88,20 @@ export function StudioShell({ csrfToken, policy }: { csrfToken: string; policy: 
   const [verified, setVerified] = useState(true);
   const [notice, setNotice] = useState('');
   const latest = useRef<DraftSession>(session);
+  // This tab's id in the journal, and when the editor's text last changed.
+  const tab = useRef<string | null>(null);
+  const editedAt = useRef<number | null>(null);
   // Before any other effect reads it: the session this render shows.
   useLayoutEffect(() => {
     latest.current = session;
   });
+  // Before the shell loads anything: what may not stay in the journal goes.
+  useLayoutEffect(() => {
+    tab.current = tabId(tabStorage());
+    holdTab(tab.current);
+    const store = storage();
+    if (store) pruneJournal(store, Date.now());
+  }, []);
   const canWrite = policy.allowed.includes('draft.write');
 
   // The owner adapter, loaded only when the policy says the profile is owner.
@@ -86,22 +116,41 @@ export function StudioShell({ csrfToken, policy }: { csrfToken: string; policy: 
     };
   }, [unavailable, csrfToken]);
 
-  /** Writes the editor's unsaved text to the journal, or clears it once nothing is unsaved. */
+  /**
+   * Writes this tab's unsaved text to the journal, dated by its last edit,
+   * or removes this tab's entry once nothing is unsaved. Another tab's entry
+   * stays as it is.
+   */
   const flush = useCallback(() => {
     const current = latest.current;
     const store = storage();
-    // An orphaned entry stays as it is until the owner takes it or lets it go.
-    if (!store || current.phase !== 'ready' || current.orphan) return;
+    const own = tab.current;
+    if (!store || !own || current.phase !== 'ready') return;
+    // This tab's own entry for another draft stays until the owner takes it or lets it go.
+    if (current.orphan?.tabId === own) return;
+    const now = Date.now();
     if (current.local && current.draft && isDirty(current)) {
-      writeJournal(store, {
-        draftId: current.draft.draftId,
-        baseVersion: current.draft.version,
-        documents: current.local,
-        savedAt: Date.now(),
-      });
+      writeEntry(
+        store,
+        {
+          tabId: own,
+          draftId: current.draft.draftId,
+          baseVersion: current.draft.version,
+          documents: current.local,
+          savedAt: editedAt.current ?? now,
+        },
+        now,
+      );
     } else if (current.draft) {
-      clearJournal(store);
+      removeEntry(store, own, now);
     }
+  }, []);
+
+  /** Drops every tab's unsaved text and this page's, as a discard at sign-out does. */
+  const discard = useCallback(() => {
+    const store = storage();
+    if (store) clearJournal(store);
+    dispatch({ type: 'expired' });
   }, []);
 
   const end = useCallback(
@@ -129,11 +178,25 @@ export function StudioShell({ csrfToken, policy }: { csrfToken: string; policy: 
       return;
     }
     const store = storage();
+    const own = tab.current ?? '';
+    // Another tab's entry only once that tab is gone: an open one still holds its text.
+    const open = await openTabs();
+    const now = Date.now();
+    const restorable = store
+      ? readJournal(store, now).filter((entry) => mayRestore(entry.tabId, own, open))
+      : [];
+    const found = entryFor(restorable, own, draft.value?.draftId ?? null);
+    // Text another tab left for the working draft, as a closed tab leaves it, becomes this tab's.
+    if (store && found && found.tabId !== own && found.draftId === draft.value?.draftId) {
+      writeEntry(store, { ...found, tabId: own }, now);
+      removeEntry(store, found.tabId, now);
+    }
+    editedAt.current = found?.savedAt ?? null;
     dispatch({
       type: 'loaded',
       draft: draft.value,
       live: live.kind === 'read' ? live.value : null,
-      journal: store ? readJournal(store, Date.now()) : null,
+      journal: found,
     });
   }, []);
 
@@ -148,37 +211,49 @@ export function StudioShell({ csrfToken, policy }: { csrfToken: string; policy: 
     return () => window.clearTimeout(timer);
   }, [session.local, session.draft, session.conflict, session.orphan, flush]);
 
-  // A 401 anywhere, or another tab's sign-out: keep the journal, then leave.
+  // A 401 anywhere, or another tab's sign-out: keep the journal, then leave,
+  // unless the owner chose to discard it there, when this tab drops its text too.
   useEffect(() => {
     const required = (event: Event) => {
       event.preventDefault();
       end('session_ended');
     };
     window.addEventListener(AUTH_REQUIRED, required);
-    const unsubscribe = onSignedOut(() => end('signed_out'));
-    const hide = () => flush();
-    window.addEventListener('pagehide', hide);
-    // A back-forward cache restore shows nothing until the session checks out.
-    const show = (event: PageTransitionEvent) => {
-      if (!event.persisted || !backend) return;
-      setVerified(false);
-      void backend.session().then((ok) => {
-        if (ok) {
-          setVerified(true);
-          void load(backend);
-        } else {
-          end('session_ended');
-        }
-      });
-    };
-    window.addEventListener('pageshow', show);
+    const unsubscribe = onSignedOut((choice) => {
+      if (choice === 'discard') {
+        discard();
+        document.title = NEUTRAL_TITLE;
+        window.location.assign(SIGNED_OUT_LOCATION);
+      } else {
+        end('signed_out');
+      }
+    });
+    // Into the back-forward cache, the page hides before it's frozen, and a
+    // restore shows nothing until the session checks out.
+    const { pagehide, pageshow } = pageCacheHandlers({
+      flush,
+      hide: () => flushSync(() => setVerified(false)),
+      recheck: () => {
+        if (!backend) return;
+        void backend.session().then((ok) => {
+          if (ok) {
+            setVerified(true);
+            void load(backend);
+          } else {
+            end('session_ended');
+          }
+        });
+      },
+    });
+    window.addEventListener('pagehide', pagehide);
+    window.addEventListener('pageshow', pageshow);
     return () => {
       window.removeEventListener(AUTH_REQUIRED, required);
       unsubscribe();
-      window.removeEventListener('pagehide', hide);
-      window.removeEventListener('pageshow', show);
+      window.removeEventListener('pagehide', pagehide);
+      window.removeEventListener('pageshow', pageshow);
     };
-  }, [backend, end, flush, load]);
+  }, [backend, discard, end, flush, load]);
 
   // The task follows the URL's fragment, so Back and a link both reach it.
   useEffect(() => {
@@ -247,6 +322,13 @@ export function StudioShell({ csrfToken, policy }: { csrfToken: string; policy: 
     void save(theirs.version);
   }
 
+  /** Whether sign-out asks first: this tab has unsaved text, or the journal holds any tab's. */
+  function journalHolds(): boolean {
+    if (isDirty(latest.current) || latest.current.orphan) return true;
+    const store = storage();
+    return store !== null && readJournal(store, Date.now()).length > 0;
+  }
+
   async function signOut(keep: boolean): Promise<boolean> {
     const store = storage();
     if (store) {
@@ -254,9 +336,11 @@ export function StudioShell({ csrfToken, policy }: { csrfToken: string; policy: 
       else clearJournal(store);
     }
     if (!backend) return false;
-    if (!(await backend.signOut())) return false;
+    // The other tabs hear the choice: on discard, none writes its text back.
+    if (!(await backend.signOut(keep ? 'keep' : 'discard'))) return false;
     // Nothing of the session stays on the page as it goes.
-    dispatch({ type: 'expired' });
+    if (keep) dispatch({ type: 'expired' });
+    else discard();
     document.title = NEUTRAL_TITLE;
     window.location.assign(SIGNED_OUT_LOCATION);
     return true;
@@ -271,7 +355,7 @@ export function StudioShell({ csrfToken, policy }: { csrfToken: string; policy: 
       <header className="studio-shell__header">
         <h1 className="studio-shell__name">Portfolio Studio</h1>
         <p className="studio-shell__signed-in">Signed in</p>
-        <SignOut dirty={dirty || session.orphan !== null} onSignOut={signOut} />
+        <SignOut shouldAsk={journalHolds} onSignOut={signOut} />
       </header>
       <nav className="studio-shell__nav" aria-label="Studio tasks">
         <ul>
@@ -336,10 +420,20 @@ export function StudioShell({ csrfToken, policy }: { csrfToken: string; policy: 
               <OrphanPanel
                 orphan={session.orphan}
                 canAdopt={session.local !== null}
-                onAdopt={() => dispatch({ type: 'adopt-orphan' })}
+                onAdopt={() => {
+                  // Its text becomes this tab's, under this tab's entry, dated by its own last edit.
+                  const store = storage();
+                  if (store && session.orphan && session.orphan.tabId !== tab.current) {
+                    removeEntry(store, session.orphan.tabId, Date.now());
+                  }
+                  editedAt.current = session.orphan?.savedAt ?? null;
+                  dispatch({ type: 'adopt-orphan' });
+                }}
                 onDrop={() => {
                   const store = storage();
-                  if (store) clearJournal(store);
+                  if (store && session.orphan) {
+                    removeEntry(store, session.orphan.tabId, Date.now());
+                  }
                   dispatch({ type: 'drop-orphan' });
                 }}
               />
@@ -365,7 +459,10 @@ export function StudioShell({ csrfToken, policy }: { csrfToken: string; policy: 
                 readOnly={!canWrite || session.conflict !== null || session.orphan !== null}
                 dirty={dirty}
                 saving={session.saving}
-                onEdit={(name, sourceText) => dispatch({ type: 'edited', name, sourceText })}
+                onEdit={(name, sourceText) => {
+                  editedAt.current = Date.now();
+                  dispatch({ type: 'edited', name, sourceText });
+                }}
                 onSave={() => void save()}
               />
             ) : (

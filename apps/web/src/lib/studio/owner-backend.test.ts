@@ -120,17 +120,19 @@ test('reads are queries, and a new draft starts from live with draft.create', as
   );
 });
 
-test('the session check is auth.session, and sign-out is auth.logout with the token', async () => {
+test("the session check is auth.session, and sign-out is auth.logout with the token and the owner's choice for the journal", async () => {
   const { sent, studio } = backend(({ name }) =>
     name === 'auth.session' ? json(200, { data: {} }) : json(200, { data: { signedOut: true } }),
   );
   assert.equal(await studio.session(), true);
-  assert.equal(await studio.signOut(), true);
+  assert.equal(await studio.signOut('discard'), true);
+  assert.equal(await studio.signOut('keep'), true);
   assert.deepEqual(
-    sent.map(({ name, options }) => [name, options.csrfToken ?? null]),
+    sent.map(({ name, options }) => [name, options.csrfToken ?? null, options.signOut ?? null]),
     [
-      ['auth.session', null],
-      ['auth.logout', 'csrf-token'],
+      ['auth.session', null, null],
+      ['auth.logout', 'csrf-token', 'discard'],
+      ['auth.logout', 'csrf-token', 'keep'],
     ],
   );
   assert.equal(await backend(() => json(401, {})).studio.session(), false);

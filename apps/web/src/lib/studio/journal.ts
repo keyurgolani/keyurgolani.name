@@ -1,38 +1,59 @@
 import { DOCUMENT_NAMES, type SourceDocument, type SourceDocuments } from './documents';
 
 // The local journal of unsaved edits (#8, Slice 1; refined Slice 2 item 3):
-// what the editor holds that the store's draft doesn't, kept in this
+// what an editor holds that the store's draft doesn't, kept in this
 // browser so a closed tab, a crash, or an ended session loses nothing.
 //
+// It's plaintext in localStorage for the site's origin. Any script running
+// on the site's pages, and anyone at the machine, can read it until it
+// expires or is discarded. What holds:
+//
 // - Studio's own key. It sits under STUDIO_STORAGE_PREFIX, which nothing on
-//   the public site reads, and Studio writes no other key, no cookie, and
-//   never the #19 visitor preference.
-// - Never before authentication. Only the signed-in Studio shell reads or
-//   writes it, after requireOwnerPage let the page render; sign-in never
-//   touches it.
-// - Bounded. An entry older than JOURNAL_RETENTION_MS is dropped the next
-//   time Studio reads the journal, and one that doesn't read is dropped too.
-// - Sign-out asks the owner whether to keep or discard it.
+//   the public site reads or writes, and Studio writes no other localStorage
+//   key, no cookie, and never the #19 visitor preference.
+// - Never rendered before authentication. Only the signed-in Studio shell
+//   reads entries to show them, after requireOwnerPage let the page render.
+//   The sign-in page only prunes: it drops what's expired and reads nothing
+//   out.
+// - One entry per tab. Each entry names the tab that wrote it, by an id in
+//   that tab's sessionStorage, and a tab overwrites or removes only its own;
+//   only an explicit discard at sign-out removes every tab's.
+// - Bounded. An entry's time is its last edit's, not its last write's, so
+//   opening Studio never extends it. One older than JOURNAL_RETENTION_MS,
+//   one dated more than JOURNAL_CLOCK_SKEW_MS in the future, and one that
+//   doesn't read are dropped whenever Studio or the sign-in page reads the
+//   journal, before anything shows. Nothing removes an entry from storage
+//   while no Studio page is open: until one is, it sits there expired.
 
 /** The prefix of every key Studio writes to browser storage. The public site reads none of them. */
 export const STUDIO_STORAGE_PREFIX = 'portfolio-studio:';
-/** The journal's key. */
+/** The journal's key, in localStorage. */
 export const JOURNAL_KEY = `${STUDIO_STORAGE_PREFIX}journal:v1`;
-/** How long an unsaved edit is kept: 7 days. */
+/** The key of this tab's id, in sessionStorage. */
+export const TAB_KEY = `${STUDIO_STORAGE_PREFIX}tab`;
+/** How long an unsaved edit is kept after it was made: 7 days. */
 export const JOURNAL_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+/** How far in the future an entry's time may be, for a clock that drifts: 5 minutes. */
+export const JOURNAL_CLOCK_SKEW_MS = 5 * 60 * 1000;
+/** At most this many tabs' entries are kept: the oldest goes first. */
+export const JOURNAL_MAX_ENTRIES = 8;
 
-/** One draft's unsaved text, and the draft version it was edited on. */
+/** One tab's unsaved text for one draft, and the draft version it was edited on. */
 export interface JournalEntry {
+  /** The tab that wrote it. */
+  readonly tabId: string;
   readonly draftId: string;
   /** The version the edits started from: a save sends it as expectedVersion. */
   readonly baseVersion: number;
   readonly documents: SourceDocuments;
-  /** When it was written, in epoch milliseconds. */
+  /** When the last edit in it was made, in epoch milliseconds. */
   readonly savedAt: number;
 }
 
 /** The part of Web Storage the journal uses, so a test can stand in for it. */
 export type JournalStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+
+const TAB_ID = /^[A-Za-z0-9_-]{8,64}$/;
 
 function isDocument(value: unknown): value is SourceDocument {
   if (!value || typeof value !== 'object') return false;
@@ -42,7 +63,8 @@ function isDocument(value: unknown): value is SourceDocument {
 
 function isEntry(value: unknown): value is JournalEntry {
   if (!value || typeof value !== 'object') return false;
-  const { draftId, baseVersion, documents, savedAt } = value as Record<string, unknown>;
+  const { tabId, draftId, baseVersion, documents, savedAt } = value as Record<string, unknown>;
+  if (typeof tabId !== 'string' || !TAB_ID.test(tabId)) return false;
   if (typeof draftId !== 'string' || !/^drf_[0-9a-f]{32}$/.test(draftId)) return false;
   if (!Number.isSafeInteger(baseVersion) || (baseVersion as number) < 1) return false;
   if (!Number.isFinite(savedAt)) return false;
@@ -58,47 +80,115 @@ function isEntry(value: unknown): value is JournalEntry {
   );
 }
 
-/**
- * The journal's entry, or null: none written, one that doesn't read, or one
- * past its retention, which this removes. Storage that throws, as a browser
- * that refuses it does, reads as none.
- */
-export function readJournal(storage: JournalStorage, now: number): JournalEntry | null {
-  let text: string | null;
-  try {
-    text = storage.getItem(JOURNAL_KEY);
-  } catch {
-    return null;
-  }
-  if (text === null) return null;
-  let entry: unknown;
-  try {
-    entry = JSON.parse(text);
-  } catch {
-    entry = null;
-  }
-  if (!isEntry(entry) || now - entry.savedAt > JOURNAL_RETENTION_MS) {
-    clearJournal(storage);
-    return null;
-  }
-  return entry;
+/** Whether `entry`, which reads, may stay at `now`: neither past its retention nor from the future. */
+function current(entry: JournalEntry, now: number): boolean {
+  return (
+    now - entry.savedAt <= JOURNAL_RETENTION_MS && entry.savedAt - now <= JOURNAL_CLOCK_SKEW_MS
+  );
 }
 
-/** Writes `entry`, replacing what the journal held. Returns false when storage refused it. */
-export function writeJournal(storage: JournalStorage, entry: JournalEntry): boolean {
+function store(storage: JournalStorage, entries: readonly JournalEntry[]): boolean {
   try {
-    storage.setItem(JOURNAL_KEY, JSON.stringify(entry));
+    if (entries.length === 0) storage.removeItem(JOURNAL_KEY);
+    else storage.setItem(JOURNAL_KEY, JSON.stringify(entries));
     return true;
   } catch {
     return false;
   }
 }
 
-/** Removes the journal's entry. */
+/**
+ * Every entry that may stay at `now`, newest first. Storage keeps only
+ * those: one that doesn't read, is past its retention, or is from the
+ * future is removed as this reads. Storage that throws reads as none.
+ */
+export function readJournal(storage: JournalStorage, now: number): JournalEntry[] {
+  let text: string | null;
+  try {
+    text = storage.getItem(JOURNAL_KEY);
+  } catch {
+    return [];
+  }
+  if (text === null) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    parsed = null;
+  }
+  const all: unknown[] = Array.isArray(parsed) ? parsed : [];
+  const kept = all
+    .filter((entry): entry is JournalEntry => isEntry(entry) && current(entry, now))
+    .filter(
+      (entry, index, list) => list.findIndex((other) => other.tabId === entry.tabId) === index,
+    )
+    .sort((a, b) => b.savedAt - a.savedAt)
+    .slice(0, JOURNAL_MAX_ENTRIES);
+  if (kept.length !== all.length || !Array.isArray(parsed)) store(storage, kept);
+  return kept;
+}
+
+/** Drops what may not stay, as the sign-in page and the shell do before anything shows. */
+export function pruneJournal(storage: JournalStorage, now: number): void {
+  readJournal(storage, now);
+}
+
+/** Writes `entry` as its tab's, keeping every other tab's. Returns false when storage refused it. */
+export function writeEntry(storage: JournalStorage, entry: JournalEntry, now: number): boolean {
+  const others = readJournal(storage, now).filter((other) => other.tabId !== entry.tabId);
+  return store(storage, [entry, ...others].slice(0, JOURNAL_MAX_ENTRIES));
+}
+
+/** Removes the entry `tabId` wrote, and nothing else. */
+export function removeEntry(storage: JournalStorage, tabId: string, now: number): void {
+  const entries = readJournal(storage, now);
+  if (entries.some((entry) => entry.tabId === tabId)) {
+    store(
+      storage,
+      entries.filter((entry) => entry.tabId !== tabId),
+    );
+  }
+}
+
+/** Removes every tab's entry: the owner's explicit discard at sign-out. */
 export function clearJournal(storage: JournalStorage): void {
   try {
     storage.removeItem(JOURNAL_KEY);
   } catch {
     // Nothing to keep: storage that refuses holds no entry either.
+  }
+}
+
+/**
+ * The entry a tab restores for `draftId`: its own first, else the newest
+ * another tab left for that draft, as a closed tab or a crash leaves one,
+ * else the newest for any draft, which the shell offers as an orphan.
+ */
+export function entryFor(
+  entries: readonly JournalEntry[],
+  tabId: string,
+  draftId: string | null,
+): JournalEntry | null {
+  return (
+    entries.find((entry) => entry.tabId === tabId) ??
+    entries.find((entry) => entry.draftId === draftId) ??
+    entries[0] ??
+    null
+  );
+}
+
+/** This tab's id, from its sessionStorage, made the first time; one in memory where that throws. */
+export function tabId(
+  session: Pick<Storage, 'getItem' | 'setItem'> | null,
+  random: () => string = () => crypto.randomUUID().replace(/-/g, ''),
+): string {
+  try {
+    const kept = session?.getItem(TAB_KEY);
+    if (kept && TAB_ID.test(kept)) return kept;
+    const made = random();
+    session?.setItem(TAB_KEY, made);
+    return made;
+  } catch {
+    return random();
   }
 }

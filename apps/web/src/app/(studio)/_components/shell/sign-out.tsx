@@ -2,16 +2,19 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-// Sign out (#8, Slice 1; refined Slice 2 item 3): with unsaved changes in
-// this browser's journal, it asks first whether to keep them here for the
-// next sign-in or discard them, since a shared machine's next user signs in
-// to the same browser. With none, it signs out at once.
+// Sign out (#8, Slice 1; refined Slice 2 item 3): while this browser's
+// journal holds unsaved changes, this tab's or any other's, it asks first
+// whether to keep them here for the next sign-in or discard them, since a
+// shared machine's next user signs in to the same browser. Discard reaches
+// every open Studio tab, so none writes its text back. With nothing in the
+// journal, it signs out at once.
 
 export function SignOut({
-  dirty,
+  shouldAsk,
   onSignOut,
 }: {
-  dirty: boolean;
+  /** Whether the journal holds unsaved changes, read when the owner clicks. */
+  shouldAsk: () => boolean;
   /** Signs out, keeping or discarding the journal. False when the server refused. */
   onSignOut: (keep: boolean) => Promise<boolean>;
 }) {
@@ -50,7 +53,7 @@ export function SignOut({
         type="button"
         className="studio-button studio-button--quiet"
         aria-disabled={busy ? true : undefined}
-        onClick={() => (dirty ? setAsking(true) : void go(false))}
+        onClick={() => (shouldAsk() ? setAsking(true) : void go(false))}
       >
         Sign out
       </button>

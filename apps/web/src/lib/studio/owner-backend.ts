@@ -119,8 +119,8 @@ export function ownerBackend(studioFetch: Fetch, csrfToken: string): StudioBacke
     startDraft: () => write('draft.create', {}),
     saveDraft: ({ draftId, expectedVersion, documents }) =>
       write('draft.save', { draftId, expectedVersion, documents: documents as SourceDocuments }),
-    async signOut() {
-      const sent = await send('auth.logout', { body: {}, csrfToken });
+    async signOut(choice) {
+      const sent = await send('auth.logout', { body: {}, csrfToken, signOut: choice });
       return !('kind' in sent) && sent.response.ok;
     },
   };

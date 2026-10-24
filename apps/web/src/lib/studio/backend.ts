@@ -44,8 +44,8 @@ export interface StudioBackend {
     readonly expectedVersion: number;
     readonly documents: SourceDocuments;
   }): Promise<SaveResult>;
-  /** Ends the session. True when the server ended it. */
-  signOut(): Promise<boolean>;
+  /** Ends the session, telling the other tabs the owner's choice for the journal. True when the server ended it. */
+  signOut(choice: 'keep' | 'discard'): Promise<boolean>;
 }
 
 /** What a page's policy grants the Studio shell, by capability, for the session it rendered with. */

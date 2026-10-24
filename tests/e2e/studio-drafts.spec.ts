@@ -296,6 +296,163 @@ test(
       );
     } finally {
       await context.close();
+      // Signing in again there replaced the spec's session: the next test signs in afresh.
+      signedIn = undefined;
+    }
+  },
+);
+
+/** Every entry the journal holds, as a page in the context reads it. */
+async function journal(
+  page: Page,
+): Promise<{ tabId: string; savedAt: number; documents: { portfolio: { sourceText: string } } }[]> {
+  return page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? '[]'), JOURNAL_KEY);
+}
+
+test(
+  "two pages in one browser: a page with no edits leaves the other's entry alone, and a later page takes it once its page is gone",
+  { annotation: [STUDIO] },
+  async ({ browser, app }) => {
+    const context = await owner(browser, app.origin);
+    try {
+      const a = await context.newPage();
+      await content(a);
+      const text = await edit(a, 'page a only');
+      await expect.poll(async () => (await journal(a)).length).toBe(1);
+      const [mine] = await journal(a);
+
+      // B opens while A is open: A's text stays A's, and B has none of its own.
+      const b = await context.newPage();
+      await content(b);
+      await expect(line(b, 'This browser')).toHaveText('No unsaved changes.');
+      await expect(portfolio(b)).not.toHaveValue(text);
+      await b.reload();
+      await expect(line(b, 'This browser')).toHaveText('No unsaved changes.');
+      await b.close({ runBeforeUnload: true });
+      await expect
+        .poll(async () => (await journal(a)).map((entry) => entry.tabId))
+        .toEqual([mine!.tabId]);
+      expect((await journal(a))[0]!.documents.portfolio.sourceText).toBe(text);
+
+      // Once A is gone, a page that opens takes its text, as from a closed tab.
+      await a.close({ runBeforeUnload: true });
+      const c = await context.newPage();
+      await content(c);
+      await expect(portfolio(c)).toHaveValue(text);
+      await expect(line(c, 'This browser')).toHaveText(
+        'Unsaved changes, restored from this browser. Save them to the draft.',
+      );
+      await expect
+        .poll(async () => (await journal(c)).map((entry) => entry.tabId))
+        .not.toContain(mine!.tabId);
+      // Saved, it leaves the journal empty.
+      await c.getByRole('button', { name: 'Save draft' }).click();
+      await expect(line(c, 'This browser')).toHaveText('No unsaved changes.');
+      await expect.poll(async () => (await journal(c)).length).toBe(0);
+    } finally {
+      await context.close();
+    }
+  },
+);
+
+test(
+  'an entry is dated by its last edit, so opening Studio never extends it, and the sign-in page removes one past 7 days',
+  { annotation: [STUDIO] },
+  async ({ browser, app }) => {
+    const context = await owner(browser, app.origin);
+    try {
+      const page = await context.newPage();
+      await content(page);
+      const working = await page.request.get('/api/studio/draft.getWorking');
+      const { draft } = (await working.json()).data as {
+        draft: {
+          draftId: string;
+          version: number;
+          documents: Record<string, { format: string; sourceText: string }>;
+        };
+      };
+      const hour = 60 * 60 * 1000;
+      const seed = (savedAt: number) => [
+        {
+          tabId: 'seededtab1',
+          draftId: draft.draftId,
+          baseVersion: draft.version,
+          documents: {
+            portfolio: {
+              format: draft.documents.portfolio!.format,
+              sourceText: `${draft.documents.portfolio!.sourceText}# studio-drafts seeded\n`,
+            },
+            site: draft.documents.site,
+            ...(draft.documents.media ? { media: draft.documents.media } : {}),
+          },
+          savedAt,
+        },
+      ];
+      const savedAt = Date.now() - 165 * hour;
+      await page.evaluate(([key, value]) => localStorage.setItem(key, value), [
+        JOURNAL_KEY,
+        JSON.stringify(seed(savedAt)),
+      ] as const);
+      // A page that opens restores it, and keeps its date.
+      const later = await context.newPage();
+      await content(later);
+      await expect(portfolio(later)).toHaveValue(/# studio-drafts seeded\n$/);
+      await expect.poll(async () => (await journal(later)).length).toBe(1);
+      // Past the shell's pause, its own write keeps the date, and so does a reload's.
+      await later.waitForTimeout(1_000);
+      expect((await journal(later))[0]!.savedAt).toBe(savedAt);
+      await later.reload();
+      await expect(portfolio(later)).toHaveValue(/# studio-drafts seeded\n$/);
+      await later.waitForTimeout(1_000);
+      expect((await journal(later))[0]!.savedAt).toBe(savedAt);
+      await later.close();
+      await page.close();
+
+      // Past 7 days, the sign-in page drops it before anyone signs in. The
+      // entry goes in from a page that isn't Studio, so no shell prunes it first.
+      const outside = await context.newPage();
+      await outside.goto('/api/health');
+      await outside.evaluate(([key, value]) => localStorage.setItem(key, value), [
+        JOURNAL_KEY,
+        JSON.stringify(seed(Date.now() - 7 * 24 * hour - 60_000)),
+      ] as const);
+      await outside.goto('/studio/sign-in');
+      await expect
+        .poll(() => outside.evaluate((key) => localStorage.getItem(key), JOURNAL_KEY))
+        .toBeNull();
+    } finally {
+      await context.close();
+    }
+  },
+);
+
+test(
+  'two pages in one browser: discarding at sign-out empties the journal, though the other page had unsaved text too',
+  { annotation: [STUDIO] },
+  async ({ browser, app }) => {
+    const context = await owner(browser, app.origin);
+    try {
+      const a = await context.newPage();
+      const b = await context.newPage();
+      await content(a);
+      await content(b);
+      await edit(a, 'discard a');
+      await edit(b, 'discard b');
+      await expect.poll(async () => (await journal(a)).length).toBe(2);
+      await a.getByRole('button', { name: 'Sign out' }).click();
+      await a
+        .getByRole('dialog', { name: 'Keep your unsaved changes?' })
+        .getByRole('button', { name: 'Discard them and sign out' })
+        .click();
+      await expect(a).toHaveURL(`${app.origin}/studio/sign-in?state=signed_out`);
+      await expect(b).toHaveURL(`${app.origin}/studio/sign-in?state=signed_out`);
+      // B wrote nothing back as it left.
+      await a.waitForTimeout(500);
+      expect(await a.evaluate((key) => localStorage.getItem(key), JOURNAL_KEY)).toBeNull();
+      await expect(b.locator('body')).not.toContainText('studio-drafts');
+    } finally {
+      await context.close();
+      signedIn = undefined;
     }
   },
 );

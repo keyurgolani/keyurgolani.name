@@ -10,6 +10,7 @@ import {
   SESSION_CHANNEL,
   SIGNED_OUT,
   SIGNED_OUT_LOCATION,
+  signedOutMessage,
   studioFetch,
   type StudioFetchEnv,
 } from './studio-fetch';
@@ -352,5 +353,39 @@ test("in a page, studioFetch and leaveOnSignOut share the tab's one channel, so 
     ]);
   } finally {
     stop();
+  }
+});
+
+test("a sign-out carries the owner's choice for the journal to every other tab, which hears it as a sign-out", async () => {
+  for (const choice of ['keep', 'discard'] as const) {
+    const signedOut = env(ok);
+    await createStudioFetch(signedOut)('auth.logout', { body: {}, signOut: choice });
+    assert.deepEqual(signedOut.seen.broadcasts, [signedOutMessage(choice)]);
+  }
+  const heard: (string | null)[] = [];
+  const channel = new BroadcastChannel(SESSION_CHANNEL);
+  const stop = onSignedOut((choice) => heard.push(choice), { channel });
+  const left: string[] = [];
+  const leaving = new BroadcastChannel(SESSION_CHANNEL);
+  const stopLeaving = leaveOnSignOut({
+    channel: leaving,
+    here: () => '/studio',
+    navigate: (location) => left.push(location),
+  });
+  const other = new BroadcastChannel(SESSION_CHANNEL);
+  try {
+    other.postMessage(signedOutMessage('discard'));
+    other.postMessage(signedOutMessage('keep'));
+    other.postMessage(SIGNED_OUT);
+    other.postMessage('logout:something-else');
+    await delivered();
+    assert.deepEqual(heard, ['discard', 'keep', null]);
+    assert.equal(left.length, 3);
+  } finally {
+    stop();
+    stopLeaving();
+    channel.close();
+    leaving.close();
+    other.close();
   }
 });
