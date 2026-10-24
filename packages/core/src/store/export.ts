@@ -347,29 +347,28 @@ export async function exportRevision(
       // bundle.json last.
       files.push({ file: BUNDLE_FILE, bytes: Buffer.from(`${JSON.stringify(bundle, null, 2)}\n`) });
     }
-    const limits = [
-      { over: files.length > BUNDLE_LIMITS.files, limit: BUNDLE_LIMITS.files },
-      {
-        over: files.some(
-          ({ file, bytes }) =>
-            !file.startsWith('media/blobs/') &&
-            bytes.byteLength >
-              (file === BUNDLE_FILE ? BUNDLE_LIMITS.bundleBytes : BUNDLE_LIMITS.documentBytes),
-        ),
-        limit: BUNDLE_LIMITS.documentBytes,
-      },
-      {
-        over:
-          files.reduce((sum, { bytes }) => sum + bytes.byteLength, 0) > BUNDLE_LIMITS.totalBytes,
-        limit: BUNDLE_LIMITS.totalBytes,
-      },
-    ];
-    const over = limits.find(({ over }) => over);
-    if (over) return refused('too_large', { limit: over.limit });
+    // The reader's limits, which no bundle over them passes.
+    const limitOf = (file: string) =>
+      file.startsWith('media/blobs/')
+        ? BUNDLE_LIMITS.blobBytes
+        : file === BUNDLE_FILE
+          ? BUNDLE_LIMITS.bundleBytes
+          : BUNDLE_LIMITS.documentBytes;
+    const oversize = files.find(({ file, bytes }) => bytes.byteLength > limitOf(file));
+    if (oversize) return refused('too_large', { limit: limitOf(oversize.file) });
+    if (files.length > BUNDLE_LIMITS.files) {
+      return refused('too_large', { limit: BUNDLE_LIMITS.files });
+    }
+    if (files.reduce((sum, { bytes }) => sum + bytes.byteLength, 0) > BUNDLE_LIMITS.totalBytes) {
+      return refused('too_large', { limit: BUNDLE_LIMITS.totalBytes });
+    }
 
     // Written beside the target, checked, and moved into place.
     const staging = tempBeside(out);
     const point = (step: string): CrashPoint => `export.${step}`;
+    // A new directory: one something else holds at that name is never
+    // written into or removed.
+    if (await fs.lstat(staging)) throw new Error('The staging name is taken.');
     try {
       await fs.mkdir(staging, point('mkdir'));
       const dirs = new Set<string>([staging]);
