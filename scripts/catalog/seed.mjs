@@ -3,6 +3,8 @@
 // lab's catalog, copied byte for byte into ./seed/appearance-catalog.js.
 // After that the manifests are canonical: this never writes over a file
 // that exists, so a rerun writes only what's missing and edits stay.
+// Review fixes since (#122: zinc's and oled-black's Tailwind provenance,
+// two display names, two light-mode caveats) live in the manifests alone.
 //
 //   node scripts/catalog/seed.mjs [--axis colorScheme|typography|designLanguage|recipes] [--dry-run]
 //
@@ -87,7 +89,7 @@ export const SCHEME_DESCRIPTIONS = {
 
 /**
  * Schemes whose anchors come from an upstream palette, by the branded-name
- * audit (scripts/catalog/audit.mjs): their provenance names it, under its
+ * audit (apps/web/scripts/catalog-audit.ts): their provenance names it, under its
  * license, and the notices carry it.
  */
 export const UPSTREAM_SCHEMES = {

@@ -1,20 +1,21 @@
 {
   "id": "oled-black",
   "name": "OLED Black",
-  "description": "True black for OLED screens, with cyan and violet accents. Dark only.",
-  "version": "1.0.0",
+  "description": "True black for OLED screens, with Tailwind CSS cyan and purple accents. Dark only.",
+  "version": "1.0.1",
   "tokenContract": 1,
   "tier": "extended",
   "provenance": {
     "source": {
-      "name": "Keyur Golani portfolio platform",
-      "url": "https://github.com/keyurgolani/keyurgolani.name"
+      "name": "Tailwind CSS v3.4.17 colors",
+      "url": "https://github.com/tailwindlabs/tailwindcss/blob/v3.4.17/src/public/colors.js"
     },
-    "license": "first-party",
-    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "license": "MIT",
+    "attribution": "Tailwind Labs, Inc., Tailwind CSS v3.4.17's cyan-300 and purple-400, under the MIT License.",
+    "copyright": "Copyright (c) Tailwind Labs, Inc.",
     "researchedAt": "2026-10-17",
-    "maintainer": "keyurgolani",
-    "derivation": "anchor-v1 from the reviewed prototype's oled-black anchors."
+    "maintainer": "keyurgolani, from Tailwind CSS v3.4.17",
+    "derivation": "anchor-v1 from the reviewed prototype's oled-black anchors: a black canvas and #f5f5f2 text, with Tailwind CSS v3.4.17 cyan-300 as the accent and purple-400 as the secondary."
   },
   "modes": ["dark"],
   "lockedMode": "dark",

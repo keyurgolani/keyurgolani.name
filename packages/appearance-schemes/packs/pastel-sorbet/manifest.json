@@ -2,7 +2,7 @@
   "id": "pastel-sorbet",
   "name": "Pastel Sorbet",
   "description": "Pastel pink and mint on a pale ground.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "tokenContract": 1,
   "tier": "extended",
   "provenance": {
@@ -35,7 +35,10 @@
   "fallbacks": [
     "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
   ],
-  "caveats": ["Pastel accents carry little weight, so emphasis leans on type and layout."],
+  "caveats": [
+    "Pastel accents carry little weight, so emphasis leans on type and layout.",
+    "In light mode the accent and secondary are darkened to #bd6590 and #608989 so the signature fill reaches 3:1, so they read as dusty rose and grey teal more than pastel."
+  ],
   "derivation": "anchor-v1",
   "anchors": {
     "light": {

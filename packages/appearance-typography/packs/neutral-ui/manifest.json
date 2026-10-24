@@ -1,8 +1,8 @@
 {
   "id": "neutral-ui",
-  "name": "Neutral Ui",
+  "name": "Neutral UI",
   "description": "A neutral system sans for display, body, and interface text, with a monospace system stack for code and numerals.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "tokenContract": 1,
   "tier": "stable",
   "provenance": {
