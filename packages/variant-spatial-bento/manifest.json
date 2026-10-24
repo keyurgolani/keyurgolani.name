@@ -10,12 +10,12 @@
   "motionIntent": "adaptive",
   "performanceTier": "heavy",
   "budgets": {
-    "js": 8192,
+    "js": 4096,
     "css": 3072,
     "image": 0,
     "font": 0,
-    "animation": 1,
-    "enhancement": 307200
+    "animation": 0,
+    "enhancement": 256000
   },
   "renderedKinds": ["hero"],
   "unsupportedKinds": [],

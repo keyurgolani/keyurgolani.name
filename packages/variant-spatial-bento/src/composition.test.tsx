@@ -24,13 +24,14 @@ import { decideStage } from './policy';
 import { Runtime } from './runtime';
 import { buildScene, PARTICLE_COUNT, PLANES } from './scene';
 
-// Spatial Bento (#16), the static document: its manifest holds the
-// catalog's pins and declares budgets inside the medium ceilings, and it
-// renders every contract fixture as one main, one h1, one visitor control
-// slot, its section links, and a tile a section in content order, each
-// section with every word, link, and action the shared renderers write,
-// beside a still of the stage that holds none of them. No stage code ships,
-// nothing hidden reaches it, and in a plate every id is under the prefix.
+// Spatial Bento (#16): its manifest holds the catalog's pins and declares
+// the stage's heavy budgets, and it renders every contract fixture as one
+// main, one h1, one visitor control slot, its section links, and a tile a
+// section in content order, each section with every word, link, and action
+// the shared renderers write, beside a still of the stage that holds none
+// of them. Nothing hidden reaches it, and in a plate every id is under the
+// prefix. The stage is one lazily loaded module, off the static path, run
+// by a pure capability policy over a bounded scene.
 
 // tsx compiles JSX to React.createElement calls, so the test supplies React.
 Object.assign(globalThis, { React });
@@ -70,6 +71,8 @@ test("its manifest validates with nothing to report, holds the catalog's pins, a
     budgets.enhancement! > CEILINGS.medium.enhancement,
     'the stage is why the tier is heavy',
   );
+  // The stage's chunk, three.js and R3F in it, at most 250 KB gzipped.
+  assert.ok(budgets.enhancement! <= 250 * 1024);
   // The stage is the one enhancement: WebGL2 and the width it needs, its export the lazily loaded module.
   assert.deepEqual(manifest.enhancements, [
     { id: 'stage', export: './enhancements/stage', requires: ['webgl2', 'min-width:768'] },
