@@ -82,6 +82,36 @@ test('a missing or other-version record is stale and writable, and a changed one
   }
 });
 
+test('a record from another reference input, a seed or an image, is stale and writable, never a generator change', () => {
+  const root = scratch();
+  try {
+    // brand-seed's record says it came from another seed.
+    const seeded = path.join(root, RECORDS, 'brand-seed.json');
+    const parsed = JSON.parse(fs.readFileSync(seeded, 'utf8'));
+    parsed.source.seedColor = '#5b5bd7';
+    parsed.result.input.seedColor = '#5b5bd7';
+    parsed.result.tokens.light.accent = '#5b5bd7';
+    fs.writeFileSync(seeded, JSON.stringify(parsed));
+    // The portrait's pixels changed, so its hash and its palette did.
+    fs.copyFileSync(
+      path.join(REPO_ROOT, 'example-media/gallery/looking-1.png'),
+      path.join(root, 'example-media/anamika/portrait.png'),
+    );
+    const found = messages(root);
+    assert.deepEqual(
+      found.map(({ pack, writable }) => [pack, writable]),
+      [
+        ['brand-seed', true],
+        ['profile-image', true],
+      ],
+    );
+    for (const { message } of found)
+      assert.match(message, /from another reference input and is stale/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('an acceptance names only an image-derived scheme, and the owner accepts the current record alone', () => {
   const root = scratch();
   try {
