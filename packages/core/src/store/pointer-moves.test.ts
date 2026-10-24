@@ -81,6 +81,8 @@ const FS_WRITERS = [
   'apps/web/scripts/fixture-gate.ts',
   'apps/web/scripts/fixture-routes.ts',
   'apps/web/scripts/migrate-controls.ts',
+  // #9's CI reference fixture, which `pnpm fixture:reference` writes under tests/fixtures.
+  'apps/web/scripts/reference-fixture.ts',
   'apps/web/scripts/registry-options.ts',
   'apps/web/src/server/config.ts',
   'packages/appearance/src/node/check.ts',
