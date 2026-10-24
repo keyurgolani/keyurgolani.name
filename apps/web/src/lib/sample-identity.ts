@@ -47,9 +47,10 @@ export function bundledSample(text: string, fileName: string): SampleIdentity | 
 }
 
 /**
- * Each field of `portfolio` that is one of `samples`': the name and the
- * title ignoring case, spacing, and Unicode form, and the share image by
- * the source its media entry names, whatever the entry's id.
+ * Each field of `portfolio` that is one of `samples`': the name, and a
+ * title that is the sample's title or its name, ignoring case, spacing,
+ * Unicode form, and invisible characters; and the share image by the source
+ * its media entry names, whatever the entry's id.
  */
 export function sampleFields(
   portfolio: Portfolio,
@@ -60,7 +61,11 @@ export function sampleFields(
   if (samples.some(({ name }) => sameText(name, own.name))) {
     fields.push({ pointer: '/identity/name', path: ['identity', 'name'] });
   }
-  if (own.title !== undefined && samples.some(({ title }) => sameText(title, own.title))) {
+  // A title that is the sample's own, or the sample's name alone.
+  if (
+    own.title !== undefined &&
+    samples.some(({ name, title }) => sameText(title, own.title) || sameText(name, own.title))
+  ) {
     fields.push({ pointer: '/meta/title', path: ['meta', 'title'] });
   }
   if (own.ogImage !== undefined && samples.some(({ ogImage }) => ogImage === own.ogImage)) {
@@ -73,8 +78,14 @@ function sameText(sample: string | undefined, value: string | undefined): boolea
   return sample !== undefined && value !== undefined && normalize(sample) === normalize(value);
 }
 
+/** The text as a reader sees it: no invisible characters, such as a zero-width space or a soft hyphen. */
 function normalize(value: string): string {
-  return value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+  return value
+    .normalize('NFKC')
+    .replace(/\p{Default_Ignorable_Code_Point}/gu, '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
 }
 
 function ogImageSource(portfolio: Portfolio): string | undefined {
