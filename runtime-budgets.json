@@ -25,6 +25,10 @@
       {
         "glob": "apps/web/src/server/demo/**",
         "rationale": "The demo's code (#9), the read-only reference's opener among it: the composition root loads it under demo alone, so no owner or read-only page names or loads it."
+      },
+      {
+        "glob": "apps/web/src/lib/demo/**",
+        "rationale": "Demo Studio's URL state, storage, and browser backend (#9): the demo deployment's Studio code, which no owner or read-only page loads."
       }
     ]
   },

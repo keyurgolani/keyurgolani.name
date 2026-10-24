@@ -365,6 +365,37 @@ module.exports = {
       to: { path: '^apps/web/src/app/\\(studio\\)/', reachable: true },
     },
     {
+      name: 'demo-studio-reaches-no-owner-code',
+      severity: 'error',
+      comment:
+        "Demo Studio (#9) keeps everything in the visitor's browser, so nothing in lib/demo or " +
+        "its components reaches Owner Studio's adapter, its transport (studioFetch, which sends " +
+        "the owner's CSRF token), or any server module: not by an import of its own, and not " +
+        'through a shared module that imports one. Tests and their test support may.',
+      from: {
+        path: '^apps/web/src/(?:lib/demo/|app/\\(studio\\)/_components/demo/)',
+        pathNot: ['\\.test\\.tsx?$', '^apps/web/src/lib/demo/test-support\\.ts$'],
+      },
+      to: {
+        path: '^apps/web/src/(?:lib/studio/owner-backend\\.ts$|lib/studio-fetch\\.ts$|server/)',
+        reachable: true,
+      },
+    },
+    {
+      name: 'owner-code-loads-no-demo-code',
+      severity: 'error',
+      comment:
+        "Owner Studio's libraries and every server module stay clear of Demo Studio's code (#9): " +
+        'the demo adapter loads only under demo, through the backend loader #9 adds to ' +
+        'lib/studio, whose import() of it the shell calls only when the policy says the profile ' +
+        'is demo. Tests may.',
+      from: {
+        path: '^apps/web/src/(?:lib/studio/|server/)',
+        pathNot: ['\\.test\\.tsx?$', '^apps/web/src/lib/studio/load-backend\\.ts$'],
+      },
+      to: { path: '^apps/web/src/lib/demo/' },
+    },
+    {
       name: 'preview-protocol-imports-zod-and-ids-only',
       severity: 'error',
       comment:
