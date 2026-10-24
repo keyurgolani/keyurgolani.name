@@ -252,21 +252,34 @@ test('a portfolio with no titled section has no section links, and still its h1 
   assert.equal(count(markup, /data-visitor-control-slot/g), 1);
 });
 
-const SOURCES = readdirSync(new URL('.', import.meta.url))
-  .filter((file) => /\.tsx?$/.test(file) && !file.includes('.test.'))
+/** Every module under src/, however deep, but the tests. */
+const SOURCES = (readdirSync(new URL('.', import.meta.url), { recursive: true }) as string[])
+  .filter((file) => /\.[cm]?[jt]sx?$/.test(file) && !/\.test\./.test(file))
   .map((file) => [file, readFileSync(new URL(`./${file}`, import.meta.url), 'utf8')] as const);
+
+/** A 3D library or the kit's spatial, R3F, or enhancement modules, however a module reaches it. */
+const STAGE_IMPORT =
+  /(?:from\s+|import\s*\(\s*|import\s+|require\s*\(\s*)['"](?:three(?:\/[^'"]*)?|@react-three\/[^'"]+|postprocessing(?:\/[^'"]*)?|@portfolio\/kit\/(?:spatial|spatial-r3f|enhancements)(?:\/[^'"]*)?)['"]/;
 
 test('no stage code ships: no client module, no 3D library, and no spatial kit', () => {
   assert.ok(SOURCES.length >= 2);
   for (const [file, source] of SOURCES) {
     assert.doesNotMatch(source, /^\s*['"]use client['"]/m, file);
-    assert.doesNotMatch(
-      source,
-      /from\s+['"](?:three|@react-three\/[\w-]+|postprocessing|@portfolio\/kit\/(?:spatial|spatial-r3f|enhancements))['"]/,
-      file,
-    );
+    assert.doesNotMatch(source, STAGE_IMPORT, file);
     assert.doesNotMatch(source, /SpatialCanvas|requestAnimationFrame|addEventListener/, file);
   }
+  // The matcher sees every way in: a bare import, a dynamic one, a require, and a subpath.
+  for (const reach of [
+    "import '@portfolio/kit/spatial';",
+    "const stage = import('@portfolio/kit/spatial-r3f');",
+    "import { x } from '@portfolio/kit/spatial-r3f/spatial-canvas';",
+    "const three = require('three');",
+    "import('three/examples/jsm/controls/OrbitControls.js')",
+    "export { Canvas } from '@react-three/fiber';",
+  ]) {
+    assert.match(reach, STAGE_IMPORT, reach);
+  }
+  assert.doesNotMatch("import { renderSection } from '@portfolio/kit/sections';", STAGE_IMPORT);
   const dependencies = { ...PACKAGE.dependencies, ...PACKAGE.peerDependencies };
   for (const name of Object.keys(dependencies)) {
     assert.doesNotMatch(name, /^(?:three|@react-three\/|postprocessing)/, name);

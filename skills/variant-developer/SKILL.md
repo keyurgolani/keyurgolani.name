@@ -271,7 +271,7 @@ For the full catalog with reproductions and fixes, load `references/common-bugs.
 ### Motion and performance
 
 - The boundary's motion tokens stop CSS movement under every reduced-motion source, and a variant's own keyframes stop under `[data-variant='<id>']:is([data-motion='reduced'], [data-motion='static'])`; a `prefers-reduced-motion` query or a universal `!important` kill switch in variant CSS is wrong. Script motion runs on `@portfolio/kit/runtime`: `useEnhancementRuntime()` and `useFrameLoop()`. (`references/styling-conventions.md`, `common-bugs.md` §8)
-- `@portfolio/kit/spatial-r3f` is heavy: use it only with a `heavy` tier and a reason, and better as an enhancement, off the static path. No audit checks a 3D import against `performanceTier`: `pnpm check:budgets` measures what it costs against the tier's ceilings, so keep `three` and R3F out of every module the server or a still renders.
+- `@portfolio/kit/spatial-r3f` is heavy: use it only with a `heavy` tier and a reason, and better as an enhancement, off the static path. No audit checks a 3D import against `performanceTier`, and nothing measures what one costs yet: `pnpm check:budgets` counts only your package's own bytes in a chunk, not the `three` or R3F beside them. Keep them out of every module the server or a still renders.
 - `@portfolio/kit/motion-fx` needs `framer-motion`, an optional peer: list it in your own dependencies when you import the subpath.
 - `next.config.ts` sets `reactStrictMode: true`, so in development every effect mounts, unmounts, and mounts again. A canvas effect has to survive that: create its renderer in the effect, and dispose of it, and of every listener on it, in the cleanup. Don't change it from a variant.
 
