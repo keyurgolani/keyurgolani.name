@@ -1,6 +1,6 @@
 # Owner migration prompt
 
-This is the prompt the owner hands to an agent on the host that serves the site, to move it from #21's interim containment to the `owner` profile (#18). The agent inventories the host without changing anything, gets the owner's approval for a plan, backs everything up, converts the portfolio file, starts the release image beside the old container on a temporary origin, validates it through the existing front end, and flips only after a second approval. The old container keeps running, unrouted, until the owner closes the rollback window. Lanes in this repository never run it.
+This is the prompt the owner hands to an agent on the host that serves the site, to move it from #21's interim containment to the `owner` profile (#18). The agent inventories the host without changing anything, gets the owner's approval for a plan, backs everything up, has the owner convert the portfolio file, starts the release image beside the old container on a temporary origin, validates it through the existing front end, and flips only after a second approval. The old container keeps running, unrouted, until the owner closes the rollback window. Lanes in this repository never run it.
 
 It starts from the `posture.md` that the #21 run wrote next to its backups ([Interim containment](interim-containment.md)), and uses only names this release ships: [deployment.md](../deployment.md), [configuration.md](../configuration.md), [releasing.md](../releasing.md), and `deploy/compose.owner.yml`. `ci/owner-migration-names.test.mjs` fails when a name it uses goes missing from them.
 
@@ -12,7 +12,8 @@ Before the run, the owner:
 2. Picks a temporary origin, a hostname of his own that the front end can serve over TLS for this run, and points its DNS at the host. It stays `noindex` and is removed after the run.
 3. Writes the password hash himself, with the release image, into a new deployment directory on the host, as [Writing the hash](../deployment.md#writing-the-hash) shows, and gives the agent only the file's path. He never pastes the password or the hash into the conversation.
 4. Fills in the Inputs block below: every value, nothing left as a placeholder.
-5. Saves the prompt on the host, gives the agent its path, and stays reachable: the run stops twice for his approval (G1 and G2), and once for him to sign in to Studio on the temporary origin.
+5. Has a machine of his own with Node 22, pnpm, and a clone of the release tag, for the conversion: the released image can't run `pnpm config:migrate`, and the host never builds one (step 8).
+6. Saves the prompt on the host, gives the agent its path, and stays reachable: the run stops twice for his approval (G1 and G2), once for the conversion, and once for him to sign in to Studio on the temporary origin.
 
 After the run, the owner reads the report, and when he's satisfied, closes the rollback window himself: he removes the temporary origin's site block and DNS, and only then removes the old container, its image, and the backups he no longer wants. The agent never does.
 
@@ -146,7 +147,7 @@ The first must print the digest in `RELEASE_IMAGE`, and the second must pass. Bo
 Write `plan.md` in the run directory, and show it to the owner. It holds:
 
 1. **The configuration diff:** the candidate's Compose file (step 9) in full, and its `.env` with every key and value (none is a secret), and, for the front end, the site block step 10 adds and the change step 13 makes, with the line numbers `proxy-lines` gave.
-2. **The storage migration:** the portfolio file converted by `pnpm config:migrate` (step 8) into `CANDIDATE_DIR/config`, the media copied into `CANDIDATE_DIR/assets`, and a new `portfolio-data` volume that the first start fills with revision 1.
+2. **The storage migration:** the portfolio file converted by `pnpm config:migrate` on the owner's own machine (step 8) into `CANDIDATE_DIR/config`, the media copied into `CANDIDATE_DIR/assets`, and a new `portfolio-data` volume that the first start fills with revision 1.
 3. **The validation plan:** step 11's checks, step 12's scratch checks, and what each must show.
 4. **The cutover plan:** step 13.
 5. **The rollback:** step 15's commands with the values filled in, and its triggers.
@@ -186,13 +187,20 @@ Ask the owner to make no edit on the host until the report, and record the time.
 
 ## 8. Conversion
 
-Convert the backed-up copy, never the live file, with the release's `pnpm config:migrate`, from the clone. On a host without Node and pnpm, build the release's build stage from the clone, with `command docker build --target builder -t "m18-migrate-${RUN:?}" "${CLONE:?}"`, and run it with `--network none` and the copy mounted read-only, as [Migrating from the one-file format](../deployment.md#migrating-from-the-one-file-format) shows. That image only converts; it never runs the site.
+This host never builds an image, the release's build stage included, and the released image can't run the converter: `pnpm config:migrate` runs through `tsx`, generates the variant registry into the source tree first, and imports the workspace's TypeScript sources and their dependencies, none of which the runtime image carries. So stop here and ask the owner to convert the backed-up copy on a machine of his own that has Node 22 and pnpm, from a clone of `RELEASE_TAG`. Give him:
 
-1. A dry run with `--summary`, which keeps every value out of its output: `pnpm config:migrate <copy> --summary`. Note what it asks for.
-2. The run that writes: `--set site.appearance.variant=<VARIANT>`, the same for `designLanguage`, `colorScheme`, `typography`, and `displayMode`, one `--set site.visitorControls.<field>=<value>` per field of `VISITOR_CONTROLS`, `--origin "${CANONICAL_ORIGIN:?}"`, and `--write --out "${CANDIDATE_DIR:?}/config"`. Add `--drop-unknown` only if the dry run asked for it and the owner approved it at G1. If it exits 2 and asks for a value the Inputs don't give, stop and ask the owner.
-3. `pnpm config:validate "${CANDIDATE_DIR:?}/config" --origin "${CANONICAL_ORIGIN:?}"` must exit 0.
-4. The owner reads the converted pair on the host and confirms it's his content: the file took anonymous writes before #21. Record his sign-off.
-5. Copy each media file the converted portfolio names, from where the old deployment serves it, into `CANDIDATE_DIR/assets` with `command cp -p`. Never move one.
+- the copy's path in the run directory and its SHA-256, which must be `OLD_PORTFOLIO_SHA`;
+- the dry run, with `--summary`, which keeps every value out of its output: `pnpm config:migrate <copy> --summary`;
+- the run that writes, with the Inputs filled in: `pnpm config:migrate <copy>`, then `--set site.appearance.variant=<VARIANT>` and the same for `designLanguage`, `colorScheme`, `typography`, and `displayMode`, one `--set site.visitorControls.<field>=<value>` per field of `VISITOR_CONTROLS`, `--origin <CANONICAL_ORIGIN>`, and `--write --out <a new directory>`. `--drop-unknown` goes in only if the dry run asks for it and he approved it at G1. If it exits 2 and asks for a value the Inputs don't give, he decides it;
+- the check: `pnpm config:validate <that directory> --origin <CANONICAL_ORIGIN>`, which must exit 0.
+
+When he's copied the written pair into `CANDIDATE_DIR/config` and tells you, check that:
+
+1. he converted a copy with the SHA-256 `OLD_PORTFOLIO_SHA`, and `pnpm config:validate` exited 0;
+2. `command ls -lA "${CANDIDATE_DIR:?}/config"` shows exactly `portfolio.yml` and `site.yml`;
+3. he read the converted pair and confirms it's his content, since the file took anonymous writes before #21. Record his sign-off.
+
+The candidate's first start (step 9) checks the pair again, as a publish does, and refuses to start on one a publish refuses. Then copy each media file the converted portfolio names, from where the old deployment serves it, into `CANDIDATE_DIR/assets` with `command cp -p`. Never move one.
 
 ## 9. Candidate
 
