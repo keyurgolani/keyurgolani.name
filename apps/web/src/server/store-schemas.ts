@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { DerivedSchemeSchema } from '@portfolio/appearance';
+import { DERIVED_CAUSES } from '@portfolio/schema';
 
 // The schemas of the revision store's registry entries (#3, item 22), which
 // operations.ts lists: data only, so loading them never loads owner code.
@@ -92,18 +94,19 @@ const DraftDocumentsSchema = z
     media: DraftDocumentSchema.optional(),
   })
   .strict();
-/** A derived change's subject (#10): a media asset, or one GitHub section's record. */
+/** A derived change's subject (#10): a media asset, one GitHub section's record, or a generated scheme. */
 const ChangeSubjectSchema = z.union([
   z.object({ kind: z.literal('media'), assetId: z.string() }).strict(),
   z
     .object({ kind: z.literal('snapshot'), adapter: z.literal('github'), sectionId: z.string() })
     .strict(),
+  z.object({ kind: z.literal('scheme'), schemeId: z.string() }).strict(),
 ]);
 /** A derived change as a draft records it, with the owner's decision. */
 export const DerivedChangeSchema = z
   .object({
     id: z.string().regex(/^dch_[0-9a-f]{32}$/),
-    cause: z.enum(['source-moved', 'source-replaced', 'integration-refreshed']),
+    cause: z.enum(DERIVED_CAUSES),
     subject: ChangeSubjectSchema,
     before: z.record(z.unknown()).nullable(),
     after: z.record(z.unknown()),
@@ -114,10 +117,14 @@ export const DerivedChangeSchema = z
     ]),
   })
   .strict();
-/** A draft's derived block (#10): what its refreshes froze, and its derived changes. */
+/**
+ * A draft's derived block (#10): what its refreshes froze, the generated
+ * schemes its saves made (10h), and its derived changes.
+ */
 const DraftDerivedSchema = z
   .object({
     snapshots: z.object({ github: z.unknown().optional() }).strict().optional(),
+    schemes: z.record(z.string(), DerivedSchemeSchema).optional(),
     changes: z.array(DerivedChangeSchema),
   })
   .strict();
