@@ -11,7 +11,8 @@ import { CATALOG, DEFAULTS, FakeStorage, SCHEME_MODES, UNIT } from '~/lib/demo/t
 import { frameSource } from '~/lib/demo/url-state';
 import { VIEWPORTS } from '~/lib/preview-frame';
 import { DEMO_FRAME_SANDBOX, DemoFrame, isDemoFrameSource } from './demo-frame';
-import { DemoStudio, SandboxLine } from './demo-studio';
+import { AxisField } from '../shell/axis-field';
+import { DemoStudio, demoUnoffered, SandboxLine } from './demo-studio';
 
 // tsx compiles JSX to React.createElement calls, so the test supplies React.
 Object.assign(globalThis, { React });
@@ -134,6 +135,29 @@ test('the Preview task has the viewports, the display mode, and Follow system an
     /<option value="system"[^>]*>Follow system<\/option><option value="reduce">Reduced<\/option>/,
   );
   assert.equal((html.match(/<iframe\b/g) ?? []).length, 1);
+});
+
+test("a value the build doesn't offer says what shows in its place in the demo, and never mentions publishing", () => {
+  for (const { axis, label } of CATALOG.axes) {
+    const html = renderToStaticMarkup(
+      <AxisField
+        id={`studio-appearance-${axis}`}
+        axis={axis}
+        label={label}
+        value="canary-unoffered"
+        catalog={CATALOG}
+        unoffered={demoUnoffered}
+        onChange={() => {}}
+      />,
+    );
+    assert.match(html, /canary-unoffered, not available in this build/, axis);
+    assert.match(
+      html,
+      /<p class="studio-appearance__fact">This build doesn&#x27;t offer it, so .+ shows in its place\.<\/p>/,
+      axis,
+    );
+    assert.doesNotMatch(html, /publish/i, axis);
+  }
 });
 
 test('no Demo Studio view offers publishing, a draft, signing in or out, or settings', () => {

@@ -57,6 +57,27 @@ test('a full store keeps the write in memory from then on, and the page says so'
   assert.equal(store.persistent(), false);
 });
 
+test('the notice follows the store each write used: blocking only sessionStorage keeps the selection kept', () => {
+  const local = new FakeStorage();
+  const store = demoStore(local, null);
+  assert.equal(store.persistent(), true);
+  store.write(SELECTION_KEY, 'kept');
+  assert.equal(local.items.get(SELECTION_KEY), 'kept');
+  assert.equal(store.persistent(), true);
+  // The working copy has no store of its own here, so it stays in memory, and a reload loses it.
+  store.write(WORKING_KEY, 'copy');
+  assert.equal(store.persistent(), false);
+  // A full reset drops it, and the selection's store is still there.
+  store.clearAll();
+  assert.equal(store.persistent(), true);
+  // A full sessionStorage is the same: the selection goes to localStorage, and stays.
+  const full = new FakeStorage();
+  full.full = true;
+  const another = demoStore(new FakeStorage(), full);
+  another.write(SELECTION_KEY, 'kept');
+  assert.equal(another.persistent(), true);
+});
+
 test("a full reset deletes every portfolio-demo: key in both stores, any version's, and nothing else", () => {
   const local = new FakeStorage();
   const session = new FakeStorage();
