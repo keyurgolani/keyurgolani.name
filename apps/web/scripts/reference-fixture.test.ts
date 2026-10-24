@@ -45,7 +45,51 @@ test('the fixture holds each canary where the demo must drop it', () => {
     1,
     'the private image carries its canary in its bytes',
   );
-  assert.ok(built.get('bundle.json')!.includes(REFERENCE_CANARIES.event));
+});
+
+test('bundle.json has the fields export-revision writes, and no event field it never exports', () => {
+  const bundle = JSON.parse(
+    buildReferenceFixture(readSource()).get('bundle.json')!.toString('utf8'),
+  );
+  assert.deepEqual(Object.keys(bundle), [
+    'bundleFormat',
+    'revisionId',
+    'parentRevisionId',
+    'createdAt',
+    'createdBy',
+    'source',
+    'appVersion',
+    'unitHash',
+    'documents',
+    'snapshots',
+    'blobs',
+    'rendering',
+    'events',
+  ]);
+  assert.deepEqual(bundle.source, { kind: 'draft' });
+  assert.deepEqual(Object.keys(bundle.documents), ['portfolio', 'site', 'media']);
+  for (const document of Object.values(bundle.documents)) {
+    assert.deepEqual(Object.keys(document as object), [
+      'file',
+      'format',
+      'schemaVersion',
+      'sourceHash',
+      'contentHash',
+    ]);
+  }
+  assert.deepEqual(Object.keys(bundle.rendering), ['variant', 'packs', 'contracts']);
+  for (const blob of bundle.blobs) assert.deepEqual(Object.keys(blob), ['file', 'sha256', 'size']);
+  // reason and idempotencyKey stay in the store's log: export-revision never writes them.
+  for (const event of bundle.events) {
+    assert.deepEqual(Object.keys(event), [
+      'seq',
+      'type',
+      'revisionId',
+      'previousRevisionId',
+      'actor',
+      'at',
+    ]);
+  }
 });
 
 test('png() makes the same bytes every time, a PNG signature first', () => {
@@ -60,7 +104,6 @@ test('the leak scans look for every canary the fixture holds, and for the mountâ
     REFERENCE_CANARIES.privateRecord,
     REFERENCE_CANARIES.hiddenSection,
     REFERENCE_CANARIES.privateMedia,
-    REFERENCE_CANARIES.event,
     REFERENCE_CANARIES.privateSlug,
     REFERENCE_CANARIES.privateAsset,
   ]) {
