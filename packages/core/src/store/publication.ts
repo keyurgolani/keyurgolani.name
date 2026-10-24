@@ -53,6 +53,8 @@ import {
   type LivePointer,
   type PublicationEvent,
 } from './pointer';
+import { ADAPTER_SNAPSHOT_KINDS, type ParsedPair, type Publication } from '@portfolio/schema';
+import { asDraftDerived } from './derived';
 import { manifestFor, readManifest, readRevision, revisionIds, type Manifest } from './revisions';
 import {
   checkUnit,
@@ -456,6 +458,44 @@ export function filesystemPublicationService({
       }
     }
     return null;
+  }
+
+  /**
+   * The live revision as the publish validators read it (#10): its pair,
+   * media document, and snapshots, or null for an empty store. A live
+   * revision that can't be read is null too: visitors get the last known
+   * good meanwhile, a publish is how the owner replaces it, and a draft
+   * based on it recorded no derived change against it either.
+   */
+  async function liveContext(live: RevisionId | null): Promise<{
+    readonly context: Publication['live'];
+    readonly adapterSnapshots: Readonly<Record<string, unknown>>;
+  }> {
+    if (live === null) return { context: null, adapterSnapshots: {} };
+    const read = await readRevision(fs, paths, live);
+    if (!read.ok) {
+      // A read that may work next time stops the publish, so the checks
+      // never pass for want of a moment's I/O.
+      if (read.transient) {
+        throw new StoreError('storage_unavailable', "The live revision can't be read just now.");
+      }
+      log({ level: 'warn', event: 'store.publish.live_unread', code: read.damage });
+      return { context: null, adapterSnapshots: {} };
+    }
+    const { unit } = read.revision;
+    const adapterSnapshots = Object.fromEntries(
+      Object.entries(unit.snapshots).filter(([kind]) =>
+        (ADAPTER_SNAPSHOT_KINDS as readonly string[]).includes(kind),
+      ),
+    );
+    return {
+      context: {
+        pair: { portfolio: unit.portfolio.model, site: unit.site.model } as ParsedPair,
+        ...(unit.media ? { media: unit.media.model } : {}),
+        snapshots: unit.snapshots,
+      },
+      adapterSnapshots,
+    };
   }
 
   async function hashOf(id: RevisionId | null): Promise<Sha256 | null> {
@@ -897,7 +937,26 @@ export function filesystemPublicationService({
         }
 
         stage('validate');
-        const checked = checkUnit(draftInput(draft), checks);
+        // What the draft's refreshes froze goes live with it, and the
+        // publish checks see the live revision and the draft's derived
+        // block: an id the live revision gives another type, and a derived
+        // change no one accepted, block it (#10). A draft with no derived
+        // block has no decision either, so every change it carries is held.
+        const derived = asDraftDerived(draft.derived);
+        const { context: liveRevision } = await liveContext(live);
+        const publication: Publication = {
+          live: liveRevision,
+          derived: derived ?? { changes: [] },
+          draft: {
+            media: draft.documents.media?.model,
+            ...(derived?.snapshots ? { snapshots: derived.snapshots } : {}),
+          },
+        };
+        const checked = checkUnit(
+          { ...draftInput(draft), ...(derived?.snapshots ? { snapshots: derived.snapshots } : {}) },
+          checks,
+          publication,
+        );
         if (!checked.ok) return rejected('validation_failed', checked.diagnostics);
         const { unit, rendering } = checked;
         const manifestFields = {
@@ -979,7 +1038,19 @@ export function filesystemPublicationService({
         if (expected !== live) return liveConflict(pointer, expected);
 
         stage('validate');
-        const checked = checkUnit(documents, checks);
+        // An import checks against the live revision too (#10), with no
+        // derived block: what it brings counts as accepted, as an operator's
+        // files are. It keeps what the live revision's refreshes froze, so an
+        // import never drops the GitHub data the owner published.
+        const { context: liveRevision, adapterSnapshots } = await liveContext(live);
+        const checked = checkUnit(
+          {
+            ...documents,
+            ...(Object.keys(adapterSnapshots).length > 0 ? { snapshots: adapterSnapshots } : {}),
+          },
+          checks,
+          { live: liveRevision },
+        );
         if (!checked.ok) return rejected('validation_failed', checked.diagnostics);
         const { unit, rendering } = checked;
         const manifest = manifestFor(

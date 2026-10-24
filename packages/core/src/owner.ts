@@ -271,3 +271,25 @@ export {
 } from './catalog/media/remote';
 export { ALGORITHM_VERSION, loadSharp, type SharpLoad } from './catalog/media/derive';
 export { MEDIA_LIMITS, MediaSourceError } from './catalog/media/limits';
+
+// Derived changes (#10, item 7): a draft's derived block, its diff for #8,
+// and the change ids accept and dismiss name.
+export {
+  changeId,
+  diffDraft,
+  type AuthoredChange,
+  type DraftDerived,
+  type DraftDiff,
+} from './store/derived';
+
+// The GitHub adapter (#10, item 8): the only reader of GITHUB_TOKEN and the
+// only caller of GitHub, for an owner's refresh. Renderers read snapshots.
+export {
+  githubAdapter,
+  githubTokenFrom,
+  type GitHubAdapter,
+  type GitHubAdapterOptions,
+  type GitHubRefresh,
+  type GitHubRefreshFinding,
+  type FetchLike,
+} from './sources/github/index';

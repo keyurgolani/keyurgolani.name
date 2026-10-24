@@ -1,4 +1,5 @@
-import { revalidatedFetch } from './fetch';
+import { recordOwnerModule } from '../../load-trace';
+import { timedFetch, type FetchLike } from './fetch';
 import type {
   ContributionDay,
   ContributionLevel,
@@ -8,6 +9,8 @@ import type {
   FetchGitHubDataInput,
   LanguageBreakdownEntry,
 } from './types';
+
+recordOwnerModule('core/sources/github/graphql');
 
 const GRAPHQL_URL = 'https://api.github.com/graphql';
 
@@ -135,9 +138,10 @@ function clampLimit(n: number): number {
 export async function fetchViaGraphQL(
   input: FetchGitHubDataInput,
   token: string,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  fetchFn: FetchLike,
 ): Promise<GitHubData | null> {
-  const response = await revalidatedFetch(GRAPHQL_URL, {
+  const response = await timedFetch(fetchFn, GRAPHQL_URL, {
     method: 'POST',
     signal,
     headers: {
@@ -151,7 +155,6 @@ export async function fetchViaGraphQL(
         recentLimit: clampLimit(input.recentlyActiveLimit ?? 10),
       },
     }),
-    next: { revalidate: 3600 },
   });
 
   if (!response.ok) return null;

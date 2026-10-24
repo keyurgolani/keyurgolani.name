@@ -1,3 +1,6 @@
+import { recordOwnerModule } from '../../load-trace';
+recordOwnerModule('core/sources/github/colors');
+
 const LANGUAGE_COLORS: Record<string, string> = {
   TypeScript: '#3178c6',
   JavaScript: '#f1e05a',

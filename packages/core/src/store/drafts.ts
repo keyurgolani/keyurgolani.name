@@ -1,4 +1,12 @@
-import { applyEdits as applyTextEdits, type DocumentFormat } from '@portfolio/schema';
+import {
+  ADAPTER_SNAPSHOT_KINDS,
+  applyEdits as applyTextEdits,
+  isChangeId,
+  isPlainObject,
+  parseSource,
+  type DerivedSide,
+  type DocumentFormat,
+} from '@portfolio/schema';
 import { recordOwnerModule } from '../load-trace';
 import {
   emitStoreEvent,
@@ -25,9 +33,19 @@ import { DamagedPointerError, readLive, type LivePointer } from './pointer';
 import { readManifest, readRevision } from './revisions';
 import type { AssetStore } from './assets';
 import {
+  asDraftDerived,
+  decided,
+  diffDraft,
+  type DraftDiff,
+  reconcileDerived,
+  unknownChanges,
+  type DraftDerived,
+} from './derived';
+import {
   diagnoseUnit,
   DOCUMENT_NAMES,
   oversize,
+  plainModel,
   type DocumentInput,
   type DocumentName,
   type UnitChecks,
@@ -44,7 +62,9 @@ import {
 // replaces kept as <draftId>.prev.json. A write names the version it
 // replaces and gets draft_conflict when that's no longer the draft's. Every
 // draft command runs under the publication lock, and none of them touches
-// the published pointer.
+// the published pointer. Beside its documents a draft keeps its derived
+// block (#10): what its refreshes froze, and the derived changes against
+// its base revision with the owner's decisions, recomputed on every write.
 
 recordOwnerModule('core/store/drafts');
 
@@ -78,6 +98,11 @@ export interface Draft {
   /** A draft imported from source keeps the mounted files' hash for its publish event (#3, item 24). */
   readonly sourceHash?: Sha256;
   readonly documents: DraftDocuments;
+  /**
+   * The derived block (#10): adapter snapshots its refreshes wrote, and the
+   * derived changes with the owner's decisions. Absent while it has neither.
+   */
+  readonly derived?: DraftDerived;
 }
 
 /** One edit to a draft document by JSON pointer, as #4's applyEdits takes it. */
@@ -182,6 +207,38 @@ export interface DraftStore {
     },
     actor: StoreActor,
   ): Promise<DraftOutcome>;
+  /**
+   * Writes what an adapter refreshed (#10), by kind, into the draft's
+   * derived block, and raises the changes it makes. The refresh itself runs
+   * before, outside the lock: this only records it.
+   */
+  refreshSources(
+    input: {
+      readonly draftId: DraftId;
+      readonly expectedVersion: number;
+      readonly snapshots: Readonly<Record<string, unknown>>;
+    },
+    actor: StoreActor,
+  ): Promise<DraftOutcome>;
+  /**
+   * Accepts or dismisses derived changes (#10) by id, as one new version. A
+   * dismissed change puts the base revision's value back. An id the draft
+   * doesn't record answers not_found, and nothing is written.
+   */
+  decideChanges(
+    input: {
+      readonly draftId: DraftId;
+      readonly expectedVersion: number;
+      readonly changeIds: readonly string[];
+      readonly decision: 'accepted' | 'dismissed';
+    },
+    actor: StoreActor,
+  ): Promise<DraftOutcome>;
+  /**
+   * The draft's authored and derived changes from its base revision, apart
+   * (#10, for #8), or null when there's no such draft.
+   */
+  diff(draftId: DraftId): Promise<DraftDiff | null>;
   /** Deletes the draft and its previous version. */
   discard(
     input: { readonly draftId: DraftId; readonly expectedVersion?: number },
@@ -231,6 +288,7 @@ export function asDraft(value: unknown): Draft | null {
     typeof draft.updatedAt === 'string' &&
     isStoreActor(draft.updatedBy) &&
     (draft.sourceHash === undefined || isSha256(draft.sourceHash)) &&
+    (draft.derived === undefined || isPlainObject(draft.derived)) &&
     documents !== null &&
     typeof documents === 'object' &&
     asDraftDocument(documents.portfolio) !== null &&
@@ -515,19 +573,90 @@ export function filesystemDraftStore({
     };
   }
 
+  /** The revision `revisionId`'s side of the derived comparison, or null for none. */
+  async function baseSide(revisionId: RevisionId | null): Promise<DerivedSide | null> {
+    if (revisionId === null) return null;
+    const read = await readRevision(fs, paths, revisionId);
+    if (!read.ok) {
+      // A read that may work next time stops the write, so no decision is lost to it.
+      if (read.transient) {
+        throw new StoreError(
+          'storage_unavailable',
+          "The draft's base revision can't be read just now.",
+        );
+      }
+      return null;
+    }
+    const { unit } = read.revision;
+    return { media: unit.media?.model, snapshots: unit.snapshots };
+  }
+
+  /** The revision's adapter snapshots, which a draft started from it keeps. */
+  async function adapterSnapshotsOf(
+    revisionId: RevisionId | null,
+  ): Promise<Readonly<Record<string, unknown>> | undefined> {
+    const base = await baseSide(revisionId);
+    const kept = Object.entries(base?.snapshots ?? {}).filter(([kind]) =>
+      (ADAPTER_SNAPSHOT_KINDS as readonly string[]).includes(kind),
+    );
+    return kept.length > 0 ? Object.fromEntries(kept) : undefined;
+  }
+
+  /**
+   * `input` and the derived block for a write: the changes from the base
+   * revision recomputed, the decisions kept, and the media document with
+   * every dismissed change put back.
+   */
+  async function withDerived(
+    input: UnitInput,
+    baseRevisionId: RevisionId | null,
+    derived: Partial<DraftDerived>,
+  ): Promise<{ readonly input: UnitInput; readonly derived: DraftDerived | undefined }> {
+    const parsed = input.media ? parseSource(input.media.sourceText, input.media.format) : null;
+    const media = parsed?.ok ? parsed.data : undefined;
+    const reconciled = reconcileDerived({
+      base: await baseSide(baseRevisionId),
+      media,
+      snapshots: derived.snapshots,
+      previous: derived.changes ?? [],
+    });
+    const next =
+      input.media && reconciled.media !== media
+        ? {
+            ...input,
+            media: {
+              format: 'json' as const,
+              sourceText: `${JSON.stringify(reconciled.media, null, 2)}\n`,
+            },
+          }
+        : input;
+    const { snapshots, changes } = reconciled.derived;
+    return {
+      input: next,
+      derived: snapshots || changes.length > 0 ? reconciled.derived : undefined,
+    };
+  }
+
   /** Writes `input` as the next version of `found`, or as a new draft. */
   async function commit(
     operation: string,
     found: ReadDraft | null,
-    input: UnitInput,
+    given: UnitInput,
     fields: {
       readonly baseRevisionId: RevisionId | null;
       readonly sourceHash?: Sha256;
       readonly actor: StoreActor;
+      /** The derived block to start from: the draft's own by default. */
+      readonly derived?: Partial<DraftDerived>;
     },
   ): Promise<DraftOutcome> {
-    const large = tooLarge(input);
+    const large = tooLarge(given);
     if (large) return large;
+    const { input, derived } = await withDerived(
+      given,
+      fields.baseRevisionId,
+      fields.derived ?? asDraftDerived(found?.draft.derived) ?? {},
+    );
     const documents = documentsOf(input);
     const missing = await missingBlobs(documents);
     if (missing) return missing;
@@ -542,6 +671,7 @@ export function filesystemDraftStore({
       updatedBy: fields.actor,
       ...(fields.sourceHash === undefined ? {} : { sourceHash: fields.sourceHash }),
       documents,
+      ...(derived ? { derived } : {}),
     };
     await writeDraft(fs, paths, draft, found?.text ?? null, operation, () => lock.fence());
     emitStoreEvent({ name: 'draftSaved', draftId: draft.draftId, version: draft.version });
@@ -614,10 +744,17 @@ export function filesystemDraftStore({
         if (input.sourceHash !== undefined && !isSha256(input.sourceHash)) {
           throw new TypeError('Not a source hash.');
         }
+        // A new start keeps what the revision it starts from froze, and no decision.
+        const from =
+          input.documents === undefined
+            ? (input.fromRevisionId ?? pointer?.revisionId)
+            : pointer?.revisionId;
+        const snapshots = await adapterSnapshotsOf(from && isRevisionId(from) ? from : null);
         return commit('draft.create', working, documents, {
           baseRevisionId: pointer?.revisionId ?? null,
           ...(input.sourceHash === undefined ? {} : { sourceHash: input.sourceHash }),
           actor,
+          derived: { ...(snapshots ? { snapshots } : {}), changes: [] },
         });
       });
     },
@@ -646,7 +783,12 @@ export function filesystemDraftStore({
         ) {
           throw new TypeError('An edit names no document.');
         }
-        const input: Record<string, DocumentInput> = { ...draftInput(found.draft) };
+        const documents = draftInput(found.draft);
+        const input: Record<string, DocumentInput> = {};
+        for (const name of DOCUMENT_NAMES) {
+          const document = documents[name];
+          if (document) input[name] = document;
+        }
         for (const name of DOCUMENT_NAMES) {
           const own = edits.filter((edit) => edit?.document === name);
           if (own.length === 0) continue;
@@ -686,6 +828,71 @@ export function filesystemDraftStore({
           baseRevisionId,
           ...(found.draft.sourceHash === undefined ? {} : { sourceHash: found.draft.sourceHash }),
           actor,
+        });
+      });
+    },
+
+    async diff(draftId) {
+      const found = await find(draftId);
+      if (!found) return null;
+      const { baseRevisionId } = found.draft;
+      try {
+        const read = baseRevisionId === null ? null : await readRevision(fs, paths, baseRevisionId);
+        if (!read?.ok) return diffDraft(found.draft, null);
+        // The draft's models are its texts as parsed, so the base's are too:
+        // a revision's normalized model carries defaults no one wrote.
+        const { unit } = read.revision;
+        const raw = (document: { sourceText: string; format: DocumentFormat }) => {
+          const parsed = parseSource(document.sourceText, document.format);
+          return { model: parsed.ok ? plainModel(parsed.data) : null };
+        };
+        return diffDraft(found.draft, { portfolio: raw(unit.portfolio), site: raw(unit.site) });
+      } catch (error) {
+        throw storageError(error);
+      }
+    },
+
+    refreshSources({ draftId, expectedVersion, snapshots }, actor) {
+      return locked('draft.refreshSources', async () => {
+        if (
+          !isPlainObject(snapshots) ||
+          !Object.keys(snapshots).every((kind) =>
+            (ADAPTER_SNAPSHOT_KINDS as readonly string[]).includes(kind),
+          )
+        ) {
+          throw new TypeError('A refresh writes only an adapter snapshot kind, such as github.');
+        }
+        const found = await find(draftId);
+        if (!found) return rejected('not_found', []);
+        if (found.draft.version !== expectedVersion) return conflict(found);
+        const own = asDraftDerived(found.draft.derived);
+        return commit('draft.refreshSources', found, draftInput(found.draft), {
+          baseRevisionId: found.draft.baseRevisionId,
+          ...(found.draft.sourceHash === undefined ? {} : { sourceHash: found.draft.sourceHash }),
+          actor,
+          derived: { snapshots: { ...own?.snapshots, ...snapshots }, changes: own?.changes ?? [] },
+        });
+      });
+    },
+
+    decideChanges({ draftId, expectedVersion, changeIds, decision }, actor) {
+      return locked('draft.decideChanges', async () => {
+        if (decision !== 'accepted' && decision !== 'dismissed') {
+          throw new TypeError('A decision is accepted or dismissed.');
+        }
+        if (!Array.isArray(changeIds) || changeIds.length === 0 || !changeIds.every(isChangeId)) {
+          throw new TypeError('Name the changes by id: dch_ and 32 hex digits.');
+        }
+        const found = await find(draftId);
+        if (!found) return rejected('not_found', []);
+        if (found.draft.version !== expectedVersion) return conflict(found);
+        const own = asDraftDerived(found.draft.derived) ?? { changes: [] };
+        if (unknownChanges(own, changeIds).length > 0) return rejected('not_found', []);
+        return commit('draft.decideChanges', found, draftInput(found.draft), {
+          baseRevisionId: found.draft.baseRevisionId,
+          ...(found.draft.sourceHash === undefined ? {} : { sourceHash: found.draft.sourceHash }),
+          actor,
+          derived: decided(own, changeIds, decision, actor, stamp()),
         });
       });
     },

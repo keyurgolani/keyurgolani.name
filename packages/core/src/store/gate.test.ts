@@ -72,8 +72,8 @@ test('every blocking invalid pair fails import and a draft publish with validati
   // A fixture's two documents are what import reads. One with a directory
   // beside them is another reader's: media/ and snapshots/ are read-only's
   // (#4's readUnitFiles), and live/ is the live pair #10's publication
-  // validators, urls.vanished and id.reused, check a pair against, which
-  // the store passes #4 no context for yet. The gate leaves those to them.
+  // validators, urls.vanished, id.reused, and derived.unapproved, check a
+  // pair against. Their own tests, derived.test.ts among them, run those.
   const beside = (code: string) =>
     readdirSync(path.join(INVALID, code), { withFileTypes: true })
       // source.unreadable's portfolio.yml is a directory, which import can't read.
@@ -83,6 +83,7 @@ test('every blocking invalid pair fails import and a draft publish with validati
   assert.deepEqual(
     others.map((code) => [code, beside(code).join(',')]),
     [
+      ['derived.unapproved', 'live,snapshots'],
       ['id.reused', 'live'],
       ['media.invalid', 'media'],
       ['media.syntax', 'media'],
