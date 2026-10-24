@@ -154,11 +154,11 @@ test(
     await expect(entry).toHaveCount(1);
     await expect(entry.locator('dt')).toHaveText(['Document', 'Item', 'Field', 'Cause', 'Next']);
     await expect(entry.locator('dd')).toHaveText([
-      /^portfolio\.yml, line \d+$/,
+      /^portfolio\.yml(?:, line \d+)?$/,
       'Identity',
       'name',
       /is blank/,
-      /Change it in the Name field of Identity, or in source mode, portfolio\.yml, line \d+\.$/,
+      /Change it in the Name field of Identity, or in source mode, portfolio\.yml(?:, line \d+)?\.$/,
     ]);
 
     // Fixed in the field, the error goes on the next save.

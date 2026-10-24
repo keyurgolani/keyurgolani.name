@@ -252,7 +252,13 @@ function Field({
       {spec.kind === 'long' ? (
         <textarea {...common} rows={4} />
       ) : spec.kind === 'choice' ? (
-        <select {...common} disabled={locked}>
+        <select
+          id={common.id}
+          className={common.className}
+          value={common.value}
+          disabled={locked}
+          onChange={common.onChange}
+        >
           {(spec.options ?? []).map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
