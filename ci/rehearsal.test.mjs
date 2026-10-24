@@ -28,6 +28,10 @@ import {
   rehearsalComposition,
   renderSummary,
   servingRevision,
+  REVISION_ONE_NAME,
+  REVISION_TWO_NAME,
+  showsRevision,
+  verdictInput,
 } from './rehearsal.mjs';
 
 function tree(t, files) {
@@ -265,4 +269,58 @@ test('the summary lists each row with its outcome', () => {
   ]);
   assert.match(summary, /\| `old-config` \| passed \| refused \\\| nothing written \|/);
   assert.match(summary, /\| `previous-digest` \| pending: waits on x \|/);
+});
+
+test("the verdict's input requires owner's secrets once any container row ran", () => {
+  const secrets = { runCanary: 'a', contentCanary: 'b' };
+  const native = [{ id: 'import', outcome: 'passed' }];
+  assert.deepEqual(
+    verdictInput({ results: native, secrets, landedState: null, reports: '/r' }).requiredSecrets,
+    ['runCanary', 'contentCanary'],
+  );
+  const skipped = [
+    ...native,
+    { id: 'image-import', outcome: 'not run: needs REHEARSAL_IMAGE (CI)' },
+  ];
+  assert.deepEqual(
+    verdictInput({ results: skipped, secrets, landedState: null, reports: '/r' }).requiredSecrets,
+    ['runCanary', 'contentCanary'],
+  );
+  for (const outcome of ['passed', 'failed']) {
+    const ran = [...native, { id: 'image-old-config', outcome }];
+    assert.deepEqual(
+      verdictInput({ results: ran, secrets, landedState: null, reports: '/r' }).requiredSecrets,
+      ['runCanary', 'contentCanary', 'password', 'hash'],
+      outcome,
+    );
+  }
+  const landed = { sampleImports: true };
+  const input = verdictInput({ results: native, secrets, landedState: landed, reports: '/r' });
+  assert.equal(input.landedState, landed);
+  assert.equal(input.pendingRows, PENDING_ROWS);
+  assert.deepEqual(
+    verdictInput({ results: native, secrets, landedState: null, reports: '/r' }).landedState,
+    { sampleImports: false },
+  );
+});
+
+test("a page is revision 1 or 2 only with its own identity.name and without the other's", () => {
+  assert.notEqual(REVISION_ONE_NAME, REVISION_TWO_NAME);
+  assert.ok(
+    !REVISION_ONE_NAME.includes(REVISION_TWO_NAME) &&
+      !REVISION_TWO_NAME.includes(REVISION_ONE_NAME),
+  );
+  assert.ok(showsRevision(`<h1>${REVISION_ONE_NAME}</h1>`, 1));
+  assert.ok(!showsRevision(`<h1>${REVISION_ONE_NAME}</h1>`, 2));
+  assert.ok(
+    !showsRevision('<h1>an empty page</h1>', 1),
+    "revision 1 needs its own name, not just the other's absence",
+  );
+  assert.ok(!showsRevision(`${REVISION_ONE_NAME} ${REVISION_TWO_NAME}`, 1));
+  assert.ok(showsRevision(`<title>${REVISION_TWO_NAME}</title>`, 2));
+  // And the frozen config names neither, so only the edit puts one there.
+  for (const { file } of BASELINES) {
+    const text = readFileSync(file, 'utf8');
+    assert.ok(!text.includes(REVISION_ONE_NAME) && !text.includes(REVISION_TWO_NAME), file);
+  }
 });

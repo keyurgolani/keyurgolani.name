@@ -839,6 +839,19 @@ export const CONTAINER_ROWS = [
 
 /** identity.name in the container rows' revision 2, which the old site never shows. */
 export const REVISION_TWO_NAME = 'Rowan Revision-Two';
+/** identity.name in their revision 1, the old site. */
+export const REVISION_ONE_NAME = 'Rowan Revision-One';
+
+/**
+ * Whether a page is revision `n` of the container rows' pairs: its own
+ * identity.name there, and not the other's. Each name appears nowhere else
+ * in the pair.
+ */
+export function showsRevision(body, n) {
+  const [own, other] =
+    n === 1 ? [REVISION_ONE_NAME, REVISION_TWO_NAME] : [REVISION_TWO_NAME, REVISION_ONE_NAME];
+  return String(body).includes(own) && !String(body).includes(other);
+}
 
 function containerCli() {
   return process.env.CONTAINER_CLI || 'docker';
@@ -1017,11 +1030,12 @@ function newVolume(ctx, label) {
   return volume;
 }
 
-/** Revision 1 and 2 of the container rows: the migrated pair, then the same with REVISION_TWO_NAME. */
+/** Revision 1 and 2 of the container rows: the migrated pair, named REVISION_ONE_NAME, then REVISION_TWO_NAME. */
 function imagePairs(ctx) {
   if (!ctx.pairs) {
-    const one = path.join(ctx.run.scratch, 'image-pair-1');
-    cpSync(ctx.state.pair, one, { recursive: true });
+    const one = editedPair(ctx.state.pair, path.join(ctx.run.scratch, 'image-pair-1'), {
+      name: REVISION_ONE_NAME,
+    });
     const two = editedPair(ctx.state.pair, path.join(ctx.run.scratch, 'image-pair-2'), {
       name: REVISION_TWO_NAME,
     });
@@ -1148,7 +1162,7 @@ async function imageImport(ctx) {
   );
   const home = probe(ctx, ctx.owner, '/');
   expect(
-    home.status === 200 && home.body.includes(REVISION_TWO_NAME),
+    home.status === 200 && showsRevision(home.body, 2),
     'owner serves revision 2',
     `${home.status}`,
   );
@@ -1195,7 +1209,7 @@ async function inAppRollback(ctx) {
   );
   const home = probe(ctx, ctx.owner, '/');
   expect(
-    home.status === 200 && !home.body.includes(REVISION_TWO_NAME),
+    home.status === 200 && showsRevision(home.body, 1),
     'owner serves revision 1 again',
     `${home.status}`,
   );
@@ -1234,7 +1248,7 @@ async function serverLastKnownGood(ctx) {
   );
   const home = probe(ctx, ctx.owner, '/');
   expect(
-    home.status === 200 && home.body.includes(REVISION_TWO_NAME),
+    home.status === 200 && showsRevision(home.body, 2),
     'the last known good, revision 2, serves',
     `${home.status}`,
   );
@@ -1304,7 +1318,7 @@ async function previousDigest(ctx) {
   );
   const home = probe(ctx, name, '/');
   expect(
-    home.status === 200 && !home.body.includes(REVISION_TWO_NAME),
+    home.status === 200 && showsRevision(home.body, 1),
     'the previous image serves the old site',
     `${home.status}`,
   );
@@ -1410,6 +1424,28 @@ function probeSampleImport(run) {
   return sampleImport(run.store(run.dataDir('sample-probe'), ['import', '--from', source]));
 }
 
+/**
+ * What the run's final verdict judges (lib/verdict.mjs): the pending rows
+ * against what the sample probe found, and the reports against every
+ * per-run secret, owner's password and hash required once any container
+ * row ran, since containerContext() made them for those rows.
+ */
+export function verdictInput({ results, secrets, landedState, reports }) {
+  const containerIds = new Set(CONTAINER_ROWS.map((row) => row.id));
+  const containersRan = results.some(
+    (r) => containerIds.has(r.id) && !r.outcome.startsWith('not run'),
+  );
+  return {
+    pendingRows: PENDING_ROWS,
+    landedState: landedState ?? { sampleImports: false },
+    reports,
+    secrets,
+    requiredSecrets: containersRan
+      ? ['runCanary', 'contentCanary', 'password', 'hash']
+      : ['runCanary', 'contentCanary'],
+  };
+}
+
 /** Runs rows in order, each on what the one before it left; one that fails stops the rest. */
 async function runRows(rows, call, { results, fail }) {
   let stopped = false;
@@ -1458,7 +1494,6 @@ async function main() {
       writeFailureRecord({ ...gate, test: `rehearsal ${id}`, actual: message.split('\n')[0] });
   };
   let landedState = { sampleImports: false };
-  let containersRan = false;
   let ctx = null;
   const image =
     process.env.REHEARSAL_IMAGE ||
@@ -1502,7 +1537,6 @@ async function main() {
         const tagged = /Loaded image: (\S+)/.exec(loaded.out)?.[1];
         if (tagged && tagged !== image) container(run, ['tag', tagged, image]);
       }
-      containersRan = true;
       ctx = containerContext(run, state, image);
       await runRows(CONTAINER_ROWS, (row) => row.run(ctx), { results, fail });
     }
@@ -1529,15 +1563,9 @@ async function main() {
     }
   }
 
-  for (const problem of finalVerdict({
-    pendingRows: PENDING_ROWS,
-    landedState,
-    reports: reportsDir(),
-    secrets,
-    requiredSecrets: containersRan
-      ? ['runCanary', 'contentCanary', 'password', 'hash']
-      : ['runCanary', 'contentCanary'],
-  })) {
+  for (const problem of finalVerdict(
+    verdictInput({ results, secrets, landedState, reports: reportsDir() }),
+  )) {
     fail(problem.slice(0, problem.indexOf(':')), problem.slice(problem.indexOf(':') + 2));
   }
   const summary = renderSummary(results);
