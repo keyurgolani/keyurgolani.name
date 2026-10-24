@@ -8,7 +8,7 @@
     "conditions": "Each viewport's conditions are what its case ran under. webgl says whether getContext('webgl') and getContext('webgl2') gave a context; false is null, as in the headless shell with no GPU, so a variant that draws with WebGL draws nothing there and its frame, canvas, and long-task numbers understate it. dpr is window.devicePixelRatio, and loadAverage the machine's 1-minute load as the case ended."
   },
   "forbidden": {
-    "description": "Source modules no owner or read-only public page may load (#6, Slice 2). pnpm test:trace matches every module of every chunk a public page downloads, or its HTML and RSC payload name, against these globs, through source maps (tests/harness/trace/purity.mjs). Each glob is a path under apps/ or packages/, relative to the repository root, and has to match a file there: one that matches nothing fails the trace and pnpm test. Units other than the one a page renders are checked from ASSET_MANIFEST, so they aren't listed here. #8, #9, and #20 add their Studio, demo, and research paths as they land, and slice 6 adds apps/web/src/lib/studio/**.",
+    "description": "Source modules no owner or read-only public page may load (#6, Slice 2). pnpm test:trace matches every module of every chunk a public page downloads, or its HTML and RSC payload name, against these globs, through source maps (tests/harness/trace/purity.mjs). Each glob is a path under apps/ or packages/, relative to the repository root, and has to match a file there: one that matches nothing fails the trace and pnpm test. Units other than the one a page renders are checked from ASSET_MANIFEST, so they aren't listed here. #8 and #20 add their Studio and research paths as they land, #9 holds the demo's apps/web/src/lib/demo/**, and slice 6 adds apps/web/src/lib/studio/**.",
     "modules": [
       {
         "glob": "apps/web/src/app/(studio)/**",
@@ -25,6 +25,10 @@
       {
         "glob": "apps/web/src/server/demo/**",
         "rationale": "The demo's code (#9), the read-only reference's opener among it: the composition root loads it under demo alone, so no owner or read-only page names or loads it."
+      },
+      {
+        "glob": "apps/web/src/lib/demo/**",
+        "rationale": "The Demo Studio's browser modules (#9): the import worker, its pipeline, and the export. They load under the demo profile alone, never on an owner or read-only page."
       }
     ]
   },

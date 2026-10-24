@@ -460,6 +460,41 @@ module.exports = {
       },
     },
     {
+      name: 'demo-reaches-no-owner-code',
+      severity: 'error',
+      comment:
+        "The demo's browser modules (#9) run for anonymous visitors, so nothing under lib/demo " +
+        "reaches Owner Studio's backend, its fetch client, or the owner server modules, by " +
+        'an import of its own or through anything it imports. Tests may import anything.',
+      from: { path: '^apps/web/src/lib/demo/', pathNot: '\\.test\\.tsx?$' },
+      to: {
+        path: [
+          '^apps/web/src/lib/studio/owner-backend\\.ts$',
+          '^apps/web/src/lib/studio-fetch\\.ts$',
+          '^apps/web/src/server/owner/',
+        ],
+        reachable: true,
+      },
+    },
+    {
+      name: 'owner-code-reaches-no-demo',
+      severity: 'error',
+      comment:
+        "Owner code never loads the demo's modules (#9): not the owner server modules, Owner " +
+        "Studio's backend or fetch client, nor @portfolio/core, by an import of its own or " +
+        'through anything it imports. Tests may import anything.',
+      from: {
+        path: [
+          '^apps/web/src/server/owner/',
+          '^apps/web/src/lib/studio/owner-backend\\.ts$',
+          '^apps/web/src/lib/studio-fetch\\.ts$',
+          '^packages/core/',
+        ],
+        pathNot: '\\.test\\.(?:tsx?|mjs)$',
+      },
+      to: { path: '^apps/web/src/lib/demo/', reachable: true },
+    },
+    {
       name: 'store-test-support-only-from-tests',
       severity: 'error',
       comment:
