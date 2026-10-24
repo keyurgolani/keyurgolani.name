@@ -21,7 +21,12 @@ export interface DemoStudioSetup {
 
 /** A parsed document as Studio reads one: its model, and its text as JSON. */
 function asDocument(model: unknown): DraftDocument {
-  return { format: 'json', sourceText: `${JSON.stringify(model, null, 2)}\n`, diagnostics: [], model };
+  return {
+    format: 'json',
+    sourceText: `${JSON.stringify(model, null, 2)}\n`,
+    diagnostics: [],
+    model,
+  };
 }
 
 export async function demoStudioSetup(
