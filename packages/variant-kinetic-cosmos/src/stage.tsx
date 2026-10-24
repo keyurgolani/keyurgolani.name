@@ -1,8 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useRef, type PointerEvent, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  type PointerEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import { useBoundary } from '@portfolio/appearance/react';
-import { useEnhancementRuntime } from '@portfolio/kit/runtime';
+import { Runtime } from './runtime';
 
 // The opening's stage (#14), the motion layer on #6's runtime: the orbit
 // turns, a bounded field of glyphs falls behind it, and a pointer can drag
@@ -69,49 +76,18 @@ function angleAt(element: Element, x: number, y: number): number {
   );
 }
 
-export function OpeningStage({ children }: { readonly children: ReactNode }) {
-  const { plate } = useBoundary();
-  const { attachRoot, state } = useEnhancementRuntime();
-  const moving = !plate && state !== 'static';
-  const turn = useRef<HTMLDivElement | null>(null);
-  // Where the drag started, and the turn it started from.
-  const drag = useRef<{ pointer: number; from: number; offset: number } | null>(null);
-  const offset = useRef(0);
+interface StageMarkupProps {
+  readonly children: ReactNode;
+  readonly attachRoot?: (node: Element | null) => void;
+  readonly runtime?: 'active' | 'paused';
+  readonly turn?: RefObject<HTMLDivElement | null>;
+  readonly handlers?: Readonly<Record<string, (event: PointerEvent<HTMLDivElement>) => void>>;
+}
 
-  const start = useCallback((event: PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
-    drag.current = {
-      pointer: event.pointerId,
-      from: angleAt(event.currentTarget, event.clientX, event.clientY),
-      offset: offset.current,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }, []);
-  const move = useCallback((event: PointerEvent<HTMLDivElement>) => {
-    const held = drag.current;
-    if (!held || held.pointer !== event.pointerId || !turn.current) return;
-    offset.current =
-      held.offset + angleAt(event.currentTarget, event.clientX, event.clientY) - held.from;
-    turn.current.style.transform = `rotate(${offset.current.toFixed(2)}deg)`;
-  }, []);
-  const end = useCallback(() => {
-    drag.current = null;
-  }, []);
-  // The drag only turns the orbit, and only while there's motion to have:
-  // nothing it reveals is anywhere else, and the still composition has none.
-  // Back to the still composition, the orbit where the server drew it.
-  useEffect(() => {
-    if (moving) return;
-    drag.current = null;
-    offset.current = 0;
-    turn.current?.style.removeProperty('transform');
-  }, [moving]);
-  const handlers = moving
-    ? { onPointerDown: start, onPointerMove: move, onPointerUp: end, onPointerCancel: end }
-    : {};
-
+/** The stage's markup: the still, and with a runtime, what moves on it. */
+function StageMarkup({ children, attachRoot, runtime, turn, handlers }: StageMarkupProps) {
   return (
-    <div ref={attachRoot} className="kc-opening" data-runtime={moving ? state : undefined}>
+    <div ref={attachRoot} className="kc-opening" data-runtime={runtime}>
       <div className="kc-glyphs" aria-hidden="true" data-type-role="code">
         {FIELD.map(({ name, glyphs }) => (
           <div key={name} className={`kc-glyphs__layer kc-glyphs__layer--${name}`}>
@@ -147,4 +123,67 @@ export function OpeningStage({ children }: { readonly children: ReactNode }) {
       <div className="kc-opening__content">{children}</div>
     </div>
   );
+}
+
+/** The stage on its runtime: the only path that calls the hook, observes, or listens. */
+function LiveStage({ children }: { readonly children: ReactNode }) {
+  const { attachRoot, state } = Runtime.useEnhancementRuntime();
+  const moving = state !== 'static';
+  const turn = useRef<HTMLDivElement | null>(null);
+  // Where the drag started, and the turn it started from.
+  const drag = useRef<{ pointer: number; from: number; offset: number } | null>(null);
+  const offset = useRef(0);
+
+  const start = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    drag.current = {
+      pointer: event.pointerId,
+      from: angleAt(event.currentTarget, event.clientX, event.clientY),
+      offset: offset.current,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }, []);
+  const move = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    const held = drag.current;
+    if (!held || held.pointer !== event.pointerId || !turn.current) return;
+    offset.current =
+      held.offset + angleAt(event.currentTarget, event.clientX, event.clientY) - held.from;
+    turn.current.style.transform = `rotate(${offset.current.toFixed(2)}deg)`;
+  }, []);
+  const end = useCallback(() => {
+    drag.current = null;
+  }, []);
+  // Back to the still composition, the orbit where the server drew it.
+  useEffect(() => {
+    if (moving) return;
+    drag.current = null;
+    offset.current = 0;
+    turn.current?.style.removeProperty('transform');
+  }, [moving]);
+  // The drag only turns the orbit, and only while there's motion to have:
+  // nothing it reveals is anywhere else, and the still composition has none.
+  const handlers = moving
+    ? { onPointerDown: start, onPointerMove: move, onPointerUp: end, onPointerCancel: end }
+    : undefined;
+
+  return (
+    <StageMarkup
+      attachRoot={attachRoot}
+      runtime={state === 'static' ? undefined : state}
+      turn={turn}
+      handlers={handlers}
+    >
+      {children}
+    </StageMarkup>
+  );
+}
+
+/**
+ * The opening's stage. In a plate it's the still markup alone, before any
+ * runtime hook: no subscription, observer, listener, or attribute of the
+ * runtime's. Anywhere else it's the live stage.
+ */
+export function OpeningStage({ children }: { readonly children: ReactNode }) {
+  const { plate } = useBoundary();
+  return plate ? <StageMarkup>{children}</StageMarkup> : <LiveStage>{children}</LiveStage>;
 }
