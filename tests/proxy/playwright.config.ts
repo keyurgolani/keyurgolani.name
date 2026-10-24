@@ -47,9 +47,7 @@ export default defineConfig({
         browserName: 'chromium',
         ignoreHTTPSErrors: true,
         launchOptions: {
-          args: [
-            `--host-resolver-rules=MAP ${PROXY_HOST} 127.0.0.1,MAP ${DEMO_HOST} 127.0.0.1`,
-          ],
+          args: [`--host-resolver-rules=MAP ${PROXY_HOST} 127.0.0.1,MAP ${DEMO_HOST} 127.0.0.1`],
         },
       },
     },

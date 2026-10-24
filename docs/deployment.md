@@ -93,7 +93,7 @@ echo 'PORTFOLIO_REFERENCE_HOST_DIR=/srv/portfolio-reference' >> .env
 docker compose -f compose.demo.yml -f compose.demo.reference.yml up --build
 ```
 
-The overlay mounts that directory read-only at `/reference`, sets `PORTFOLIO_REFERENCE_DIR` to it, and changes nothing else: the same root, tmpfs, and loopback port. With the setting unset, Compose refuses the pair, and with a directory that isn't there it creates neither the container nor the directory. The server's user (uid 1001) needs to read every file in it.
+The overlay mounts that directory read-only at `/reference`, sets `PORTFOLIO_REFERENCE_DIR` to it, and changes nothing else: the same root, tmpfs, and loopback port. With the setting unset, Compose refuses the pair, and with a directory that isn't there it creates neither the container nor the directory. The server's user (uid 1001) needs to read every file in it, and no one else should: the export holds the portfolio's private records, though the demo serves none of them.
 
 ### `owner`
 
@@ -568,7 +568,9 @@ Demo Studio (#9) keeps a visitor's choices in their own browser, never on the se
 
 `demo` can also serve one published portfolio, read-only, at `/reference` (#9): a full export of an owner's live revision, mounted read-only at `PORTFOLIO_REFERENCE_DIR`. It is never in the image or the repository, and the demo never fetches it from the owner's origin. Leave the setting unset and there is no reference: everything under `/reference` is the 404 page.
 
-The export is the layout `portfolio-store export-revision` writes: the two documents as they were published, `snapshots/<kind>.json`, `media/media.json`, `media/blobs/<hex>`, and `bundle.json`, which lists every file with its hash. That command is deferred, and its bundle format 1 is provisional: this release reads format 1 alone, and the format can still change before the command ships.
+The export is the layout `portfolio-store export-revision` writes: the two documents as they were published, `snapshots/<kind>.json`, `media/media.json`, `media/blobs/<hex>`, and `bundle.json`, which lists every file with its hash. That command and `verify-revision` are coming with #3 and aren't in this release yet, and their bundle format 1 is provisional: this release reads format 1 alone, and the format can still change before the commands ship.
+
+The documents are the published ones byte for byte, so the export holds the portfolio's private records too. Only what the public view keeps is ever served, but keep the directory readable by the server's user (uid 1001) and no one else.
 
 At startup, before the first request, the server reads the mount once and checks all of it, with no store and no data directory: exactly the files `bundle.json` lists, with no link, special file, or extra file (a stray `.DS_Store` included), each file's SHA-256 and size, the `unitHash` they make, that the pair validates under this build and means what it meant when it was exported, and that every rendition its public view shows has a listed blob. It refuses a reference over any of these limits: `bundle.json` over 1 MiB, a document, snapshot, or media document over 1 MiB, a blob over 20 MiB, more than 4096 files, 256 MiB in all, or renditions to serve over 64 MiB together, which it holds in memory. Any problem leaves the demo on its sample, never part of a reference, and logs a `config.warning` for each one, with `key` `PORTFOLIO_REFERENCE_DIR`, a `code` such as `reference_hash_mismatch` or `reference_too_large`, and the file relative to the mount, never its path or its content, then `reference_unavailable`. Export it again, and mount the whole export unchanged.
 
@@ -576,11 +578,13 @@ Visitors get only what the public view keeps, the same view the live site is bui
 
 Demo Studio offers the reference only once startup verified it: a button names the portfolio and says read-only, and shows it in the same sandboxed frame as the sample, at `/reference`, with `source=reference` in Studio's URL. Without a verified reference the button isn't there, and a URL asking for one opens the sample. Only the demo's own pages may frame `/reference`.
 
-To refresh it, export the owner's live revision again, check the export, and swap it in whole. The commands are provisional, like the format, until `portfolio-store` ships them:
+To refresh it, export the owner's live revision again, check the export, and swap it in whole. The commands are coming with #3, and provisional like the format:
 
-1. On the owner's host, `portfolio-store export-revision live --out <dir>`, into a new or empty directory.
-2. `portfolio-store verify-revision <dir>`, which reads it as the demo does.
+1. On the owner's host, `portfolio-store export-revision live --out <dir>`, into a new or empty directory. It writes beside the target, checks what it wrote as `verify-revision` does, and moves it into place. It exits 0 once written, 1 when it refuses or fails, ending with "Nothing was written.", and 2 on a usage error.
+2. `portfolio-store verify-revision <dir>`, which reads it as the demo does, with no data directory. It exits 0 when the export checks out, 1 with a `problem: <code> <file>` line for each problem, and 2 on a usage error.
 3. Copy the directory to the demo's host, set `PORTFOLIO_REFERENCE_HOST_DIR` to the copy, and restart the demo.
+
+`--out` and `<dir>` have to be real paths: both commands refuse one with a symbolic link at or above it, and on macOS `/tmp` is one. An export with more renditions to serve than the demo holds in memory, 64 MiB, still exports and verifies, and the demo refuses it with `reference_too_large`.
 
 **Never mount a `--documents-only` export.** It has no `bundle.json`, so the demo refuses it with `reference_bundle_unreadable` and serves no reference.
 

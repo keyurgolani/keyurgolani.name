@@ -1780,7 +1780,9 @@ async function referenceRun() {
     : [`compose config failed: ${(resolved.stderr || `exit ${resolved.status}`).trim()}`];
   for (const problem of problems) fail(`${what}: Compose`, `${REFERENCE_OVERLAY}: ${problem}`);
   if (problems.length > 0) return;
-  console.log(`[profiles] ${what}: ${REFERENCE_OVERLAY} keeps demo's hardening, the reference read-only`);
+  console.log(
+    `[profiles] ${what}: ${REFERENCE_OVERLAY} keeps demo's hardening, the reference read-only`,
+  );
 
   const name = `${run}-demo-reference`;
   const { env, mounts } = referenceRunArgs(config);
@@ -1842,7 +1844,10 @@ async function referenceRun() {
     }
     if (referenceLeaks(log, '/').length > 0) fail(what, 'the log holds a reference canary');
     if (failures.length > failed) saveLogs(name, redact(log, runSecrets));
-    else console.log(`[profiles] ${what}: /reference and its placed rendition served, the private one a 404`);
+    else
+      console.log(
+        `[profiles] ${what}: /reference and its placed rendition served, the private one a 404`,
+      );
   } catch (error) {
     fail(what, explained(name, error));
     saveLogs(name, redact(output(name), runSecrets));
