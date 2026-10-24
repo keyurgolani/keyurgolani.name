@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import type { Site } from '@portfolio/schema';
 import type { ResolvedAppearance, SelectionText } from '@portfolio/appearance';
 import { APPEARANCE_COOKIE, documentAppearance } from '~/lib/document-appearance';
+import { getLive } from './catalog';
 import { getDeploymentState, requireDeploymentConfig } from './config-store';
 
 // A visitor page's appearance (#19, Slice 4): the site's, with the visitor's
@@ -28,10 +29,16 @@ export const preferenceCookie = {
   },
 };
 
-/** The live revision's stored generated schemes, `unit.snapshots.schemes`, as read: unchecked, or undefined. */
+/**
+ * The live revision's stored generated schemes, `unit.snapshots.schemes`, as
+ * read: unchecked, or undefined. It reads the request's own live revision,
+ * the per-request getLive() the page's view comes from (#3, item 19), so a
+ * publish landing mid-request can't give the page one revision's site and
+ * another's schemes.
+ */
 export async function liveSchemes(): Promise<unknown> {
-  const live = await getDeploymentState()?.catalog.getLive();
-  return live?.unit?.snapshots.schemes;
+  if (!getDeploymentState()) return undefined;
+  return (await getLive()).unit?.snapshots.schemes;
 }
 
 /**
