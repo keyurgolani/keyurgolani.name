@@ -143,14 +143,22 @@ export function blamed(
 
 /**
  * The rates the budgets are sized from (#20), each measured, with where.
- * The static smoke's and the browser smoke's were measured on this
- * machine's runs of each part (tests/catalog/plan.test.ts states the
- * figures); a shard job's fixed part is quality-pr's, measured in CI.
+ * Each shard's log prints its own rate (static-smoke.ts, and Playwright's
+ * duration), so a scheduled run's numbers can replace these.
  */
 export const MEASURED = {
-  /** Static smoke tuples a second, resolve included: MEASURED_STATIC in the docs. */
-  staticTuplesPerSecond: 2000,
-  /** Browser smoke seconds a tuple, its load, checks, and screenshot. */
+  /**
+   * Static smoke tuples a second, plan and resolve included. Measured at
+   * 22,800 a second over 30,000 tuples (three variants, 10 languages, 25
+   * schemes, 10 profiles) on a developer machine, and taken at 5,000 for a
+   * slower CI runner.
+   */
+  staticTuplesPerSecond: 5000,
+  /**
+   * Browser smoke seconds a tuple: a load and its checks, which quality-pr's
+   * plain cell tests took 2.4 seconds for in CI (shard-durations.json's
+   * `plain`), and a screenshot.
+   */
   browserSecondsPerTuple: 3,
   /**
    * A shard job's fixed part, in seconds: container, checkout, install,
