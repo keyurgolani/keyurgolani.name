@@ -285,10 +285,14 @@ export const RULES = [
       'quality-pr',
       'quality-pr-verdict',
     ],
+    // The command line, and what it runs on: the catalog checks every
+    // import, and the audit log every pointer move.
     paths: [
       'packages/core/src/store/**',
       'packages/core/src/cli.ts',
       'packages/core/src/cli.test.ts',
+      'packages/core/src/catalog/**',
+      'packages/core/src/audit/**',
     ],
   },
   {
