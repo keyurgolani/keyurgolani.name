@@ -403,7 +403,7 @@ Protected, always: the live revision, the 10 revisions most recently live before
 
 ### Upgrades
 
-Back up before every upgrade, and keep the backup with the image that took it: going back means that image and that backup. Startup never changes a stored revision. When the new image can't serve the live revision, it serves the most recently live one it can, `degraded`, or nothing, `incompatible`, and `status` says why. Going back across the cutover to this store, to a release before it, means the previous image and the backed-up source files (#18, #12).
+Back up before every upgrade, and keep the backup with the image that took it: going back means that image and that backup. Startup never changes a stored revision. When the new image can't serve the live revision, it serves the most recently live one it can, `degraded`, or nothing, `incompatible`, and `status` says why. Going back across the cutover to this store, to a release before it, means the previous image and the backed-up source files (#18, #12). The [owner migration prompt](operations/owner-migration.md) runs that cutover on a host coming from #21's containment, and keeps the old container as its rollback.
 
 ## Startup checks
 

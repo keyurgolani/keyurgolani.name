@@ -64,12 +64,12 @@ export const OWN_NAMES = Object.freeze([
   'not-a-hash',
 ]);
 
-/** The prompt itself: the text between its markers. */
+/** The prompt itself: the text between its markers, each on a line of its own. */
 export function promptText(markdown) {
-  const start = markdown.indexOf('<!-- prompt:start -->');
-  const end = markdown.indexOf('<!-- prompt:end -->');
-  if (start === -1 || end === -1 || end < start) throw new Error('No prompt markers.');
-  return markdown.slice(start, end);
+  const start = /^<!-- prompt:start -->$/m.exec(markdown);
+  const end = /^<!-- prompt:end -->$/m.exec(markdown);
+  if (!start || !end || end.index < start.index) throw new Error('No prompt markers.');
+  return markdown.slice(start.index, end.index);
 }
 
 /** Every inline code span and every line of a fenced block. */

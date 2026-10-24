@@ -94,6 +94,16 @@ command mkdir -m 0700 "${RUN_DIR:?}/secrets"
 
 Append `REPO`, the release's `<owner>/<repo>`: `RELEASE_IMAGE` without its `ghcr.io/` and its `@sha256:...`.
 
+Compare the prompt you were given with the release's copy, ignoring the Inputs block, as #21's step 2 does. Use the path the owner gave you as `<prompt file>`, or write the text you were given to `${RUN_DIR:?}/prompt-given.md` and use that:
+
+```sh
+command sed -n '/^<!-- prompt:start -->$/,/^<!-- prompt:end -->$/p' "${CLONE:?}/docs/operations/owner-migration.md" | command sed '/^## Inputs$/,/^## Context$/d' > "${RUN_DIR:?}/prompt-release.txt"
+command sed -n '/^<!-- prompt:start -->$/,/^<!-- prompt:end -->$/p' "<prompt file>" | command sed '/^## Inputs$/,/^## Context$/d' > "${RUN_DIR:?}/prompt-given.txt"
+command diff -q "${RUN_DIR:?}/prompt-release.txt" "${RUN_DIR:?}/prompt-given.txt"
+```
+
+Append `PROMPT_MATCH` (`yes` or `no`). If they differ, carry on with the prompt you were given, and say so at the top of the report.
+
 ## 3. Read-only inventory
 
 Record each item for the report, and append the named values. Read what `POSTURE_FILE` says first, then check each fact on the host.
@@ -129,7 +139,7 @@ command docker buildx imagetools inspect "ghcr.io/${REPO:?}:${RELEASE_TAG#v}" --
 command gh attestation verify "oci://${RELEASE_IMAGE:?}" --repo "${REPO:?}" --signer-workflow "${REPO:?}/.github/workflows/release.yml"
 ```
 
-The first must print the digest in `RELEASE_IMAGE`, and the second must pass. Then `command docker pull "${RELEASE_IMAGE:?}"`, which changes nothing that runs. If the host has no `gh`, record that and ask the owner to run the second command on a machine that has it.
+The first must print the digest in `RELEASE_IMAGE`, and the second must pass. Both only read. If the host has no `gh`, record that and ask the owner to run the second command on a machine that has it. The pull waits for step 9.
 
 ## 5. Plan and G1
 
@@ -189,6 +199,7 @@ Convert the backed-up copy, never the live file, with the release's `pnpm config
 Write `CANDIDATE_DIR/compose.candidate.yml`: the release's `deploy/compose.owner.yml` from the clone, with its `build:` removed and `image:` set to `RELEASE_IMAGE`, the container named `portfolio-owner`, `../config` and `../assets` mounted as `./config` and `./assets`, since the file sits in `CANDIDATE_DIR`, and the port published as `127.0.0.1:${PORT}:3000`, or, for a proxy in a container, no `ports:` and `PROXY_NETWORK` joined as an external network. Keep its `read_only`, `cap_drop`, `security_opt`, `tmpfs`, `volumes`, `secrets`, and `healthcheck` as they are. Its `.env` holds `PORTFOLIO_ORIGIN=<TEMP_ORIGIN>`, `PORTFOLIO_TRUSTED_PROXY_HOPS=<PROXY_HOPS>`, and `PORT=<CANDIDATE_PORT>`.
 
 ```sh
+command docker pull "${RELEASE_IMAGE:?}"
 m18_compose config --quiet
 m18_compose up -d --no-build
 ```
@@ -217,18 +228,22 @@ Every check goes through `TEMP_ORIGIN`, from this host, and from another network
 7. **Draft isolation:** the owner saves a draft in Studio's source mode with `M18-DRAFT-<RUN>` added to a text field. `/` and `/feed.xml` don't contain it, and `m18_store status` still names `REVISION_1`. Then the owner discards the draft.
 8. **Atomic publish and history:** copy `CANDIDATE_DIR/config` to `$RUN_DIR/validation-pair`, flip `feed:` under `features` in its `site.yml` (exactly one line, `true` to `false` or back), and import it, with the pair mounted read-only beside the running server:
 
-```sh
-m18_compose run --rm --name portfolio-store -v "${RUN_DIR:?}/validation-pair:/validation:ro" web \
-  node bin/portfolio-store.mjs import --from /validation --expect "${REVISION_1:?}"
-```
+   ```sh
+   m18_compose run --rm --name portfolio-store -v "${RUN_DIR:?}/validation-pair:/validation:ro" web \
+     node bin/portfolio-store.mjs import --from /validation --expect "${REVISION_1:?}"
+   ```
 
-`/feed.xml`'s status changes on the next request, `m18_store history` lists the `import` event, and `m18_store verify` exits 0. Append `REVISION_2`. 9. **Rollback:** `m18_store rollback --to "${REVISION_1:?}"`. `/feed.xml` answers as it did before, `history` lists the `rollback` event, and `verify` exits 0. 10. **Restart:** `m18_compose restart web`. It's `healthy` again, `status` names `REVISION_1`, and checks 1 to 4 pass again. 11. **Backup of the new store,** into a new directory in `RUN_DIR`, made `0700` and owned by uid 1001, as [Backups](../deployment.md#backups) shows:
+   `/feed.xml`'s status changes on the next request, `m18_store history` lists the `import` event, and `m18_store verify` exits 0. Append `REVISION_2`.
 
-```sh
-command mkdir -m 0700 "${RUN_DIR:?}/store-backups" && command sudo chown 1001:1001 "${RUN_DIR:?}/store-backups"
-m18_compose run --rm --name portfolio-store -v "${RUN_DIR:?}/store-backups:/backups" web \
-  node bin/portfolio-store.mjs backup --out "/backups/${RUN:?}"
-```
+9. **Rollback:** `m18_store rollback --to "${REVISION_1:?}"`. `/feed.xml` answers as it did before, `history` lists the `rollback` event, and `verify` exits 0.
+10. **Restart:** `m18_compose restart web`. It's `healthy` again, `status` names `REVISION_1`, and checks 1 to 4 pass again.
+11. **Backup of the new store,** into a new directory in `RUN_DIR`, made `0700` and owned by uid 1001, as [Backups](../deployment.md#backups) shows:
+
+    ```sh
+    command mkdir -m 0700 "${RUN_DIR:?}/store-backups" && command sudo chown 1001:1001 "${RUN_DIR:?}/store-backups"
+    m18_compose run --rm --name portfolio-store -v "${RUN_DIR:?}/store-backups:/backups" web \
+      node bin/portfolio-store.mjs backup --out "/backups/${RUN:?}"
+    ```
 
 ## 12. Scratch checks
 
@@ -258,7 +273,7 @@ Recheck `OLD_PORTFOLIO_SHA` (step 7). Show the owner steps 11 and 12's results a
 
 ## 14. After the flip
 
-Through `CANONICAL_ORIGIN`, from this host and another network: step 11's checks 1, 2, 4, and 5, and `m18_check "${CANONICAL_ORIGIN:?}" --expect-name "${NAME:?}" --expect-origin "${CANONICAL_ORIGIN:?}"`, with no `X-Robots-Tag: noindex` on the canonical origin. The old checkout's `git status --porcelain --ignored` matches `checkout-before.txt`.
+Through `CANONICAL_ORIGIN`, from this host and another network: step 11's checks 1, 2, 4, and 5, and `m18_check "${CANONICAL_ORIGIN:?}" --expect-name "${NAME:?}" --expect-origin "${CANONICAL_ORIGIN:?}"`, with no `X-Robots-Tag: noindex` on the canonical origin. The old container still runs, unrouted, and the old checkout's `git status --porcelain --ignored` matches `checkout-before.txt`.
 
 ## 15. Rollback
 
