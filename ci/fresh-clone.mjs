@@ -25,8 +25,8 @@
 // Each server that starts after the identity step, and each demo, is held
 // to lib/identity.mjs on its origin: read-only and owner publish the new
 // name and that origin in their titles, canonical link, og:url, Open Graph
-// image, sitemap, robots, feed, and JSON-LD, never the sample's persona or
-// one of its pictures, and demo shows the sample alone.
+// card (drawn from identity.name), sitemap, robots, feed, and JSON-LD,
+// never the sample's persona, and demo shows the sample alone.
 // In containers, only where FRESH_CLONE_CONTAINERS=1 (CI), with Docker,
 // each profile's section of deployment.md from the repository, its cd
 // steps resolved from where the run is, as a shell would:
@@ -56,7 +56,7 @@
 //   FRESH_CLONE_PNPM_STORE  a pnpm store for the install to reuse, for a local run only
 //   FRESH_CLONE_KEEP        keep the clone, for a look after
 import { spawn, spawnSync } from 'node:child_process';
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import {
   chmodSync,
   readdirSync,
@@ -699,7 +699,9 @@ const IDENTITY_EDITS = {
 /**
  * What still makes a portfolio the sample's after the guide's identity
  * step: its identity.name, a meta.title naming its persona, or a
- * meta.ogImage placing one of its own pictures.
+ * meta.ogImage placing one of its own pictures. Nothing renders
+ * meta.ogImage yet (link previews use the card drawn from identity.name),
+ * so that one guards the release that starts rendering it.
  */
 export function sampleLeftovers(text, sample) {
   const left = [];
@@ -778,12 +780,10 @@ export function responseProblems(response, expect) {
 async function get(url) {
   try {
     const response = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(120_000) });
-    const bytes = Buffer.from(await response.arrayBuffer());
     return {
       status: response.status,
       headers: Object.fromEntries(response.headers),
-      body: bytes.toString('utf8'),
-      sha256: createHash('sha256').update(bytes).digest('hex'),
+      body: await response.text(),
     };
   } catch (error) {
     return { status: 0, body: String(error.cause?.code ?? error.message) };
@@ -1193,7 +1193,7 @@ async function runStep(clone, step) {
           if (response.status !== 0) break;
           await sleep(1000);
         }
-        if (response.status !== 0) await afterServed(clone, step, `http://127.0.0.1:${port}`);
+        if (response.status !== 0) await afterServed(step, `http://127.0.0.1:${port}`);
       } finally {
         await server.stop();
       }
@@ -1233,7 +1233,7 @@ async function runStep(clone, step) {
  * answers 200 and ready; `identity`, what it publishes follows the
  * identity and the origin it was given (lib/identity.mjs).
  */
-async function afterServed(clone, step, base) {
+async function afterServed(step, base) {
   if (step.ready) {
     const ready = await get(`${base}/api/ready`);
     let status;
@@ -1248,26 +1248,16 @@ async function afterServed(clone, step, base) {
     );
   }
   if (step.identity) {
-    const { profile, origin, name, title } = step.identity;
+    const { origin } = step.identity;
     const [page, sitemap, robots, feed] = await Promise.all(
       Object.values(IDENTITY_PATHS).map((p) => get(`${base}${p}`)),
     );
     const imagePath = page.status === 200 ? ogImagePath(page.body, origin) : null;
-    const ogImage = imagePath ? await get(`${base}${imagePath}`) : { status: 0 };
-    const problems = identityProblems({
-      profile,
-      origin,
-      name,
-      page,
-      sitemap,
-      robots,
-      feed,
-      ogImage,
-      forbidden: identityForbidden(profile),
-      title,
-      sampleImages: profile === 'demo' ? [] : samplePictures(clone.root),
-    });
-    expect(problems.length === 0, `${profile}'s identity: ${problems.join('; ')}`);
+    const ogImage = imagePath ? await get(`${base}${imagePath}`) : undefined;
+    const problems = identityProblems(
+      identityInput(step, { page, sitemap, robots, feed, ogImage }),
+    );
+    expect(problems.length === 0, `${step.identity.profile}'s identity: ${problems.join('; ')}`);
   }
 }
 
@@ -1283,16 +1273,25 @@ export function identityForbidden(profile) {
     : [SAMPLE_NAME, 'https://demo.jane.name'];
 }
 
-/** The sha256 of every picture the clone's sample bundles, none of which owner's or read-only's Open Graph image may be. */
-export function samplePictures(root) {
-  const dir = path.join(root, 'example-media');
-  return readdirSync(dir, { recursive: true })
-    .filter((file) => /\.(png|jpe?g|webp|avif|gif)$/i.test(file))
-    .map((file) =>
-      createHash('sha256')
-        .update(readFileSync(path.join(dir, file)))
-        .digest('hex'),
-    );
+/**
+ * identityProblems' input for a serve step's answers: the step's identity,
+ * with its title under owner and read-only, what its profile may not
+ * name, and the Open Graph image, which has to have answered.
+ */
+export function identityInput(step, { page, sitemap, robots, feed, ogImage }) {
+  const { profile, origin, name, title } = step.identity;
+  return {
+    profile,
+    origin,
+    name,
+    title,
+    page,
+    sitemap,
+    robots,
+    feed,
+    ogImage: ogImage ?? { status: 0 },
+    forbidden: identityForbidden(profile),
+  };
 }
 
 /** The hash file, which the server's user owns, mode 0400. */
@@ -1341,7 +1340,7 @@ async function composeStep(clone, step, command) {
         expect(up.exited() === undefined, `"${step.command}" ended before it served`, up.output());
         await sleep(3000);
       }
-      if (response.status !== 0) await afterServed(clone, step, 'http://127.0.0.1:3000');
+      if (response.status !== 0) await afterServed(step, 'http://127.0.0.1:3000');
       const logs = compose(['logs', '--no-color', '--no-log-prefix']).out;
       expect(
         response.status !== 0,
