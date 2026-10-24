@@ -1,20 +1,20 @@
 {
-  "id": "atelier-luxury",
-  "name": "Atelier Luxury",
-  "description": "Tight radii, hairline borders, translucent surfaces, editorial density, medium elevation, fluid motion, and a grain texture.",
-  "version": "1.0.1",
+  "id": "fluent-2-inspired",
+  "name": "Fluent 2 Inspired",
+  "description": "An independent interpretation of Fluent 2's public design principles: soft radii, hairline borders, translucent surfaces, normal density, low elevation, fluid motion, and a grain texture. It ships no official component, token file, icon, or font.",
+  "version": "1.1.0",
   "tokenContract": 1,
-  "tier": "extended",
+  "tier": "stable",
   "provenance": {
     "source": {
-      "name": "Keyur Golani portfolio platform",
-      "url": "https://github.com/keyurgolani/keyurgolani.name"
+      "name": "Fluent 2",
+      "url": "https://fluent2.microsoft.design/"
     },
-    "license": "first-party",
-    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "license": "independent-inspired-interpretation",
+    "attribution": "Keyur Golani, after Fluent 2's public principles. Not affiliated with or endorsed by Microsoft.",
     "researchedAt": "2026-10-17",
     "maintainer": "keyurgolani",
-    "derivation": "The reviewed prototype's luxury recipe, with its --appearance-* references read as --color-*, and the contract's signature-fill and emphasis-glow at the fallback language's values."
+    "derivation": "The reviewed prototype's fluent recipe, with its --appearance-* references read as --color-*, and the contract's signature-fill and emphasis-glow at the fallback language's values."
   },
   "modes": ["light", "dark"],
   "accessibility": {
@@ -40,29 +40,30 @@
   "caveats": [
     "Translucent surfaces with a backdrop blur cost paint time on slower devices, and read less clearly over busy content.",
     "A decorative gradient texture sits behind surfaces.",
-    "Its emphasis motion, float-once, has no keyframes in the platform yet, so it doesn't animate."
+    "Its emphasis motion, float-once, has no keyframes in the platform yet, so it doesn't animate.",
+    "Ships opaque: its approved 92% translucent surfaces fall under the contrast targets with its texture over a black or white backdrop, so surfaces are 100% opaque, the orchestrator's call under the owner's delegation."
   ],
   "tokens": {
     "surface-material": "linear-gradient(color-mix(in srgb, var(--color-surface-default) 92%, transparent), color-mix(in srgb, var(--color-surface-default) 92%, transparent))",
-    "radius-control": "4px",
-    "radius-card": "8px",
-    "radius-overlay": "10px",
-    "radius-media": "6px",
+    "radius-control": "10px",
+    "radius-card": "18px",
+    "radius-overlay": "24px",
+    "radius-media": "16px",
     "radius-badge": "999px",
     "border-control": "1px solid",
     "border-card": "1px solid",
     "border-divider": "1px solid",
-    "shadow-card": "0 10px 28px color-mix(in srgb, var(--color-text-primary) 16%, transparent)",
-    "shadow-overlay": "0 22px 60px color-mix(in srgb, var(--color-text-primary) 22%, transparent)",
-    "shadow-raised": "0 22px 60px color-mix(in srgb, var(--color-text-primary) 22%, transparent)",
+    "shadow-card": "0 2px 8px color-mix(in srgb, var(--color-text-primary) 12%, transparent)",
+    "shadow-overlay": "0 10px 28px color-mix(in srgb, var(--color-text-primary) 16%, transparent)",
+    "shadow-raised": "0 10px 28px color-mix(in srgb, var(--color-text-primary) 16%, transparent)",
     "shadow-inset": "inset 2px 2px 5px color-mix(in srgb, var(--color-text-primary) 16%, transparent)",
-    "surface-opacity": "92%",
+    "surface-opacity": "100%",
     "backdrop-blur": "8px",
-    "control-height": "2.75rem",
-    "space-control-inline": "1rem",
-    "space-control-block": "0.75rem",
-    "space-surface-inline": "1.5rem",
-    "space-surface-block": "1.5rem",
+    "control-height": "2.5rem",
+    "space-control-inline": "0.875rem",
+    "space-control-block": "0.625rem",
+    "space-surface-inline": "1rem",
+    "space-surface-block": "1rem",
     "focus-width": "2px",
     "focus-offset": "2px",
     "focus-style": "solid",
@@ -84,5 +85,6 @@
     "texture": "radial-gradient(circle, color-mix(in srgb, var(--color-text-primary) 12%, transparent) 0 0.5px, transparent 0.75px)",
     "signature-fill": "linear-gradient(90deg, var(--color-signature-start), var(--color-signature-end))",
     "emphasis-glow": "none"
-  }
+  },
+  "approvedSurfaceOpacity": "92%"
 }
