@@ -109,9 +109,11 @@
     "ci:demo-origin": "node ci/run.mjs demo-origin -- node ci/demo-origin.mjs",
     "ci:profiles": "node ci/run.mjs profiles -- pnpm smoke:profiles",
     "ci:rehearsal": "node ci/run.mjs rehearsal -- pnpm rehearse",
+    "ci:fresh-clone": "node ci/run.mjs fresh-clone -- node ci/fresh-clone.mjs",
     "ci:summary": "node ci/summarize.mjs",
     "smoke:profiles": "node --import tsx ci/smoke-profiles.mjs",
     "rehearse": "node ci/rehearsal.mjs",
+    "fresh-clone": "node ci/fresh-clone.mjs",
     "clean": "pnpm -r exec rm -rf dist .next node_modules tsconfig.tsbuildinfo && rm -rf node_modules",
     "new-variant": "node skills/variant-developer/scripts/new-variant.mjs"
   },
