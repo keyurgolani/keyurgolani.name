@@ -232,6 +232,7 @@ test('a PR that changes a scheme runs it against every variant, and a changed va
   assert.deepEqual(byScheme.map((cell) => cell.target).sort(), [
     'fallback',
     'kinetic-cosmos',
+    'obsidian-atelier',
     'second-variant',
     'spatial-bento',
   ]);
@@ -246,10 +247,10 @@ test('a PR that changes a scheme runs it against every variant, and a changed va
   // One cell per stable shipping language: no scheme or profile pairs, no
   // extended tier, no fixture pack.
   assert.deepEqual(met, ['designLanguage:platform-neutral', 'designLanguage:second-language']);
-  assert.equal(byScheme.length, 4);
+  assert.equal(byScheme.length, 5);
   // A changed profile runs against every variant too.
   const profile = plan([{ axis: 'typography', id: 'humanist-ui', paths: [] }]);
-  assert.equal(profile.cells.filter((cell) => cell.changed).length, 4);
+  assert.equal(profile.cells.filter((cell) => cell.changed).length, 5);
 });
 
 test('a PR that changes a variant runs it against every stable language, and one that changes a language against every variant', () => {
