@@ -245,10 +245,10 @@ test('touch targets keep their floors, in the utilities layer, whatever the cont
   );
 });
 
-test("a busy action shows whole while it has focus, so its ring isn't dimmed under 3:1 (#11)", () => {
+test("a busy action, and an unavailable one that keeps its focus, show whole while focused, so the ring isn't dimmed under 3:1 (#11)", () => {
   assert.match(
     CSS,
-    /\[data-ui-slot='action'\]\[data-state='loading'\]:focus-visible \{\s*opacity: 1;\s*\}/,
+    /\[data-ui-slot='action'\]\[data-state='loading'\]:focus-visible,\s*\[data-ui-slot='action'\]\[aria-disabled='true'\]:focus-visible \{\s*opacity: 1;\s*\}/,
   );
 });
 

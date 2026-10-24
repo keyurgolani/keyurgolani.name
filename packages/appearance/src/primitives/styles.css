@@ -269,8 +269,10 @@
   }
 
   /* The opacity would dim the focus ring under 3:1 (WCAG 2.4.7, 1.4.11). Focused, a busy
-     action shows whole; its spinner and aria-busy still say it's working. */
-  [data-ui-slot='action'][data-state='loading']:focus-visible {
+     action shows whole; its spinner and aria-busy still say it's working. So does an
+     unavailable one that keeps its focus (keepsFocus): aria-disabled still says so. */
+  [data-ui-slot='action'][data-state='loading']:focus-visible,
+  [data-ui-slot='action'][aria-disabled='true']:focus-visible {
     opacity: 1;
   }
 
