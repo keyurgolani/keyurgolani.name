@@ -73,6 +73,8 @@ test(
     ).toBeVisible();
     // The validator's own finding, before publish, once Studio has saved the draft and the server checked it.
     await page.getByRole('link', { name: 'Content' }).click();
+    // The content task opens on its fields (#8's second pull request): this edits the text.
+    await page.getByRole('button', { name: 'Source', exact: true }).click();
     const portfolio = page.getByLabel(/^portfolio\.(?:yml|json)$/);
     await portfolio.fill(`${await portfolio.inputValue()}# saved from Studio\n`);
     await page.getByRole('button', { name: 'Save draft' }).click();
@@ -140,6 +142,7 @@ test(
     );
     // The source shows the same document with those two values changed, and nothing else.
     await page.getByRole('link', { name: 'Content' }).click();
+    await page.getByRole('button', { name: 'Source', exact: true }).click();
     const site = await page.getByLabel(/^site\.(?:yml|json)$/).inputValue();
     expect(site).toBe(
       SITE.replace('variant: missing-variant', `variant: ${target}`).replace(

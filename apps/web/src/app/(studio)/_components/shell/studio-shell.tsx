@@ -34,10 +34,10 @@ import { endSession, NEUTRAL_TITLE } from '~/lib/studio/session-end';
 import { stateLines } from '~/lib/studio/state-model';
 import { tasksFor, type StudioTask, type TaskId } from '~/lib/studio/tasks';
 import { AUTH_REQUIRED, onSignedOut, SIGNED_OUT_LOCATION, studioFetch } from '~/lib/studio-fetch';
+import { ContentEditor } from '../fields/content-editor';
+import { FindingsSummary } from '../fields/findings-summary';
 import { ConflictPanel, OrphanPanel } from './conflict-panel';
 import { SignOut } from './sign-out';
-import { SourceMode } from './source-mode';
-import { ValidationSummary } from './validation-summary';
 import { AppearanceWorkspace, type PreviewSetup } from './appearance-workspace';
 import type { AppearanceCatalog, SiteEdit } from '~/lib/studio/appearance';
 
@@ -501,7 +501,7 @@ export function StudioShell({
             {active.pending ? (
               <p className="studio-task__pending">{active.pending}</p>
             ) : active.id === 'validation' ? (
-              <ValidationSummary draft={session.draft} dirty={dirty} />
+              <FindingsSummary draft={session.draft} dirty={dirty} fileName={fileName} />
             ) : active.id === 'appearance' ? (
               <AppearanceWorkspace
                 draft={session.draft}
@@ -514,8 +514,9 @@ export function StudioShell({
                 onApply={(edits) => void applyAppearance(edits)}
               />
             ) : session.draft && session.local ? (
-              <SourceMode
+              <ContentEditor
                 documents={session.local}
+                draft={session.draft}
                 names={namesIn(session.local)}
                 fileName={fileName}
                 readOnly={!canWrite || session.conflict !== null || session.orphan !== null}

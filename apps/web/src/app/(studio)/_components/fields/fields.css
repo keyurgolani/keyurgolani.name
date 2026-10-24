@@ -1,0 +1,154 @@
+/* The content task's fields (#8, Slice 4), in Studio's own look: one item to
+   a group, a field's findings under it in words. Nothing shows by color alone. */
+
+.studio-content {
+  display: grid;
+  gap: 1rem;
+}
+
+.studio-content__modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.studio-content__mode[aria-pressed='true'] {
+  border-color: var(--studio-ink);
+  box-shadow: inset 0 -3px 0 var(--studio-ink);
+  font-weight: 650;
+}
+
+.studio-content__mode:focus-visible,
+.studio-fields__long:focus-visible,
+.studio-fields select:focus-visible {
+  outline: 2px solid var(--studio-ink);
+  outline-offset: 2px;
+}
+
+.studio-content__checks,
+.studio-fields__lede {
+  margin: 0;
+  color: var(--studio-muted);
+}
+
+.studio-fields {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.studio-fields__group {
+  display: grid;
+  gap: 0.875rem;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 1rem 1.125rem 1.125rem;
+  border: 1px solid var(--studio-rule);
+  border-radius: 2px;
+  background: var(--studio-surface);
+}
+
+.studio-fields__item {
+  padding: 0 0.25rem;
+  font-weight: 650;
+}
+
+.studio-fields__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.5rem;
+  margin: 0;
+  color: var(--studio-muted);
+  font-size: 0.875rem;
+}
+
+.studio-fields__facts div,
+.studio-validation__facts div {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.studio-fields__facts dt,
+.studio-validation__facts dt {
+  font-weight: 600;
+}
+
+.studio-fields__facts dt::after,
+.studio-validation__facts dt::after {
+  content: ':';
+}
+
+.studio-fields__facts dd,
+.studio-validation__facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.studio-fields__field {
+  display: grid;
+  gap: 0.375rem;
+}
+
+.studio-fields__long {
+  min-width: 0;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--studio-edge);
+  border-radius: 2px;
+  background: var(--studio-surface);
+  color: inherit;
+  font: inherit;
+  resize: vertical;
+}
+
+.studio-fields select {
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--studio-edge);
+  border-radius: 2px;
+  background: var(--studio-surface);
+  color: inherit;
+  font: inherit;
+}
+
+.studio-fields .studio-input[readonly],
+.studio-fields__long[readonly] {
+  border-style: dashed;
+}
+
+.studio-fields__finding {
+  display: grid;
+  gap: 0.125rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px dashed var(--studio-edge);
+  border-radius: 2px;
+}
+
+/* What blocks has a solid rule; a warning a dashed one. The words say which. */
+.studio-fields__finding[data-severity='blocks-preview'],
+.studio-fields__finding[data-severity='blocks-publish'] {
+  border-style: solid;
+  border-color: var(--studio-ink);
+}
+
+.studio-fields__finding p,
+.studio-fields__note,
+.studio-fields__extensions,
+.studio-fields__unread p {
+  margin: 0;
+}
+
+.studio-fields__stale,
+.studio-fields__note,
+.studio-fields__extensions {
+  color: var(--studio-muted);
+  font-size: 0.875rem;
+}
+
+.studio-fields__unread {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.studio-validation__facts {
+  display: grid;
+  gap: 0.125rem;
+  margin: 0.25rem 0 0;
+}

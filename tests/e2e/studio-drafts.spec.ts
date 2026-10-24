@@ -49,6 +49,8 @@ async function content(page: Page): Promise<number> {
     await page.getByRole('button', { name: 'Start a draft' }).click();
   }
   await expect(draft).toHaveText(/^Saved draft, version \d+\.$/);
+  // This spec edits the text: source mode, which the tab keeps across a reload.
+  await page.getByRole('button', { name: 'Source', exact: true }).click();
   return Number(/\d+/.exec((await draft.textContent()) ?? '')![0]);
 }
 
