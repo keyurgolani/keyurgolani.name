@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import type { MetaPack } from '../../packages/appearance/src/index';
 import { PLATFORM_DEFAULTS } from '../../packages/appearance/src/index';
 import { readBuildMeta, type BuildMeta } from '../quality/cells';
-import { tupleKey } from '../quality/coverage';
+import { tupleKey, type Tuple } from '../quality/coverage';
 import { readFileSync } from 'node:fs';
 import { parse } from 'yaml';
 import { PACK_AXES } from '../../packages/appearance/src/index';
@@ -163,6 +163,15 @@ test('the browser sample holds every shipping pack at least once per variant and
     ['dark', 'high-contrast'],
   );
   assert.deepEqual(coverageSample([...tuples].reverse()), sample, 'the same each time');
+  // Sorted, and each variant and mode's first pick is its earliest tuple, the first to show the most.
+  const sampled = sample.map(tupleKey);
+  assert.deepEqual(sampled, [...sampled].sort(), 'in key order');
+  const earliest = new Map<string, string>();
+  for (const key of tuples.map(tupleKey).sort()) {
+    const [variant, , , , displayMode] = key.split('/');
+    if (!earliest.has(`${variant}/${displayMode}`)) earliest.set(`${variant}/${displayMode}`, key);
+  }
+  for (const key of earliest.values()) assert.ok(sampled.includes(key), key);
 
   // Each shard loads its share of it, and a seeded draw of its own tuples up to budget.
   const shards = Array.from({ length: 4 }, (_, at) =>
@@ -178,6 +187,82 @@ test('the browser sample holds every shipping pack at least once per variant and
     shards[1],
     'another seed draws others',
   );
+});
+
+/** coverageSample() as it was before #20 sped it up: every pick scans every tuple, the first with the most still unshown. */
+function scannedSample(tuples: readonly Tuple[]): Tuple[] {
+  const keyOf = (tuple: Tuple) => tupleKey(tuple);
+  const groups = new Map<string, Tuple[]>();
+  for (const tuple of tuples) {
+    const at = `${tuple.variant}\0${tuple.displayMode}`;
+    groups.set(at, [...(groups.get(at) ?? []), tuple]);
+  }
+  const chosen: Tuple[] = [];
+  for (const group of groups.values()) {
+    const sorted = [...group].sort((a, b) => (keyOf(a) < keyOf(b) ? -1 : 1));
+    const unshown = PACK_AXES.map((axis) => new Set(sorted.map((tuple) => tuple[axis])));
+    while (unshown.some((packs) => packs.size > 0)) {
+      const shows = (tuple: Tuple) =>
+        PACK_AXES.filter((axis, at) => unshown[at]!.has(tuple[axis])).length;
+      let best = sorted[0]!;
+      for (const tuple of sorted) if (shows(tuple) > shows(best)) best = tuple;
+      PACK_AXES.forEach((axis, at) => unshown[at]!.delete(best[axis]));
+      chosen.push(best);
+    }
+  }
+  return chosen.sort((a, b) => (keyOf(a) < keyOf(b) ? -1 : 1));
+}
+
+test('the coverage sample is the plain greedy scan, ties to the earliest tuple, on catalogs that are no full product', () => {
+  // One variant and mode. After two picks no tuple shows a pack on every
+  // open axis, and four tie at one: the earliest wins, and which one wins
+  // decides whether a, x, t0 or b, x, t2 shows x later.
+  const tuple = (designLanguage: string, colorScheme: string, typography: string): Tuple => ({
+    variant: 'fallback',
+    designLanguage,
+    colorScheme,
+    typography,
+    displayMode: 'light',
+  });
+  const tied = [
+    tuple('w', 's0', 't0'),
+    tuple('b', 'x', 't2'),
+    tuple('b', 's2', 't2'),
+    tuple('a', 'x', 't0'),
+    tuple('a', 's0', 't3'),
+    tuple('a', 's0', 't0'),
+  ];
+  assert.deepEqual(coverageSample(tied).map(tupleKey), [
+    'fallback/a/s0/t0/light',
+    'fallback/a/s0/t3/light',
+    'fallback/a/x/t0/light',
+    'fallback/b/s2/t2/light',
+    'fallback/w/s0/t0/light',
+  ]);
+  assert.deepEqual(coverageSample(tied), scannedSample(tied));
+  // Seeded catalogs: random tuples from small axes, duplicates and fixture packs included, in random order.
+  let state = 20;
+  const random = (count: number) => {
+    state = (Math.imul(state, 1103515245) + 12345) >>> 0;
+    return state % count;
+  };
+  const values = {
+    variant: ['fallback', 'kinetic-cosmos'],
+    designLanguage: ['a', 'b', 'c', 'fixture-language-stable'],
+    colorScheme: ['s1', 's2', 's3', 'fixture-scheme-extended'],
+    typography: ['t1', 't2', 't3'],
+    displayMode: ['light', 'dark'],
+  } as const;
+  for (let at = 0; at < 300; at += 1) {
+    const tuples = Array.from({ length: 2 + random(24) }, () => ({
+      variant: values.variant[random(2)]!,
+      designLanguage: values.designLanguage[random(4)]!,
+      colorScheme: values.colorScheme[random(4)]!,
+      typography: values.typography[random(3)]!,
+      displayMode: values.displayMode[random(2)]!,
+    }));
+    assert.deepEqual(coverageSample(tuples), scannedSample(tuples), `catalog ${at}`);
+  }
 });
 
 test("the plan fits its budget at #20 PR 2's catalog size, and the workflow's shards and timeout are sized from it", () => {
