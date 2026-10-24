@@ -63,6 +63,9 @@ const EXTRA: Readonly<Record<string, readonly string[]>> = {
   'preview.grant.mark_failed': GRANT,
   'preview.grant.read_failed': GRANT,
   'preview.render_failed': GRANT,
+  // A draft grant's pinned generated scheme that isn't whole (#10, 10h):
+  // the grant's ref and the scheme's id, a pack id the site names.
+  'preview.scheme_dropped': ['grantRef', 'schemeId'],
   'media.asset.derived': MEDIA,
   'media.source.unused': MEDIA,
   'media.startup.asset': MEDIA,

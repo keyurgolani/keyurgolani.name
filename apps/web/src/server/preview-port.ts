@@ -61,10 +61,10 @@ export interface OpenedGrant {
   /** What a log line calls the grant: the first 8 hex characters of its digest. */
   readonly ref: string;
   /**
-   * The generated schemes the grant's own subject stored (#20 PR 3), each
-   * checked by readDerivedSchemes(): its pinned revision's or fixture's
-   * `snapshots.schemes`. Never the request's, and never another grant's. A
-   * draft grant has none until #10's 10h pins its `derived.schemes` at mint.
+   * The generated color schemes the frame renders with, by scheme id, each
+   * checked with readDerivedSchemes() (#10, 10h): a draft grant's pinned at
+   * mint. #20's PR 3 fills a revision's and a fixture's from their
+   * snapshots.schemes. Absent when there are none.
    */
   readonly schemes?: Readonly<Record<string, DerivedScheme>>;
 }

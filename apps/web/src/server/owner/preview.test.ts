@@ -88,6 +88,7 @@ async function setup(
   t: TestContext,
   fixtures: (id: string) => PreviewFixture | null = (id) =>
     id === 'complete' ? pair(portfolio('Fixture Person')) : null,
+  now?: () => number,
 ): Promise<Setup> {
   const dataDir = mkdtempSync(path.join(tmpdir(), 'owner-preview-'));
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
@@ -131,6 +132,7 @@ async function setup(
     sessions: port,
     ...liveContext(),
     fixtures,
+    ...(now ? { now } : {}),
   });
   t.after(() => previews.close());
   setDeploymentState({
@@ -689,35 +691,68 @@ function storedScheme(seed: string) {
   };
 }
 
-test("a grant opens with its own subject's stored schemes, checked, never another grant's, and none once it's revoked (#20 PR 3)", async (t) => {
+test("a grant opens with its own subject's stored schemes, checked, never another grant's, and none once it's revoked or expired (#20 PR 3)", async (t) => {
   const first = storedScheme('#5b5bd6');
   const second = storedScheme('#3366ff');
-  const { command, previews } = await setup(t, (id) =>
-    id === 'complete'
-      ? { ...pair(portfolio('First Person')), snapshots: { schemes: { 'brand-seed': first } } }
-      : id === 'other'
-        ? {
-            ...pair(portfolio('Second Person')),
-            snapshots: { schemes: { 'brand-seed': second, broken: { generator: 7 } } },
-          }
-        : id === 'plain'
-          ? pair(portfolio('Plain Person'))
-          : null,
+  let clock = Date.now();
+  const lines: string[] = [];
+  t.mock.method(console, 'log', (line: unknown) => lines.push(String(line)));
+  const { command, previews } = await setup(
+    t,
+    (id) =>
+      id === 'complete'
+        ? { ...pair(portfolio('First Person')), snapshots: { schemes: { 'brand-seed': first } } }
+        : id === 'other'
+          ? {
+              ...pair(portfolio('Second Person')),
+              snapshots: { schemes: { 'brand-seed': second, broken: { generator: 7 } } },
+            }
+          : id === 'plain'
+            ? pair(portfolio('Plain Person'))
+            : id === 'unchecked'
+              ? {
+                  ...pair(portfolio('Unchecked Person')),
+                  snapshots: { schemes: { 'brand-seed': { generator: 7 } } },
+                }
+              : null,
+    () => clock,
   );
   const mint = async (fixture: string) =>
     minted(await command('preview.grant.mint', { subject: { fixture }, environment: ENVIRONMENT }));
   const a = await mint('complete');
   const b = await mint('other');
   const plain = await mint('plain');
+  const unchecked = await mint('unchecked');
   // Each grant's own, read twice so the second comes from its cache entry.
   for (let read = 0; read < 2; read += 1) {
     assert.deepEqual((await previews.port.open(a))?.schemes, { 'brand-seed': first });
-    // An entry that doesn't check is left out.
+    // An entry that doesn't check is left out, and logged by its id.
     assert.deepEqual((await previews.port.open(b))?.schemes, { 'brand-seed': second });
     assert.equal((await previews.port.open(plain))?.schemes, undefined);
+    // None left after the check: no schemes at all, never an empty record.
+    const opened = await previews.port.open(unchecked);
+    assert.ok(opened && !('schemes' in opened));
+  }
+  const dropped = lines
+    .map((line) => JSON.parse(line) as Record<string, unknown>)
+    .filter((entry) => entry.event === 'preview.scheme_dropped');
+  assert.deepEqual(
+    dropped.map(({ grantRef, schemeId, level }) => [grantRef, schemeId, level]),
+    [
+      [grantDigest(b).slice(0, 8), 'broken', 'warn'],
+      [grantDigest(unchecked).slice(0, 8), 'brand-seed', 'warn'],
+      [grantDigest(b).slice(0, 8), 'broken', 'warn'],
+      [grantDigest(unchecked).slice(0, 8), 'brand-seed', 'warn'],
+    ],
+  );
+  for (const entry of dropped) {
+    assert.deepEqual(Object.keys(entry).sort(), ['event', 'grantRef', 'level', 'schemeId', 'ts']);
   }
   // A revoked grant opens nothing, its schemes included.
   assert.deepEqual(await command('preview.grant.revoke', { grant: a }), { revoked: true });
   assert.equal(await previews.port.open(a), null);
   assert.deepEqual((await previews.port.open(b))?.schemes, { 'brand-seed': second });
+  // An expired one opens nothing either.
+  clock += 366 * 24 * 60 * 60 * 1000;
+  assert.equal(await previews.port.open(b), null);
 });
