@@ -234,8 +234,12 @@ test('the notices carry each upstream-licensed pack, and only those', () => {
       },
     ]);
     assert.match(apache, /Licensed under the Apache-2\.0 license/);
-    assert.match(apache, /^ {4}Apache License$/m);
-    assert.match(apache, /^ {4}END OF TERMS AND CONDITIONS$/m);
+    // The canonical text, as the Apache Software Foundation publishes it, its (a) to (d) labels included.
+    assert.match(apache, /^ +Apache License$/m);
+    assert.match(apache, /^ +\(a\) You must give any other recipients of the Work or$/m);
+    assert.match(apache, /^ +\(d\) If the Work includes a "NOTICE" text file as part of its$/m);
+    assert.match(apache, /^ +END OF TERMS AND CONDITIONS$/m);
+    assert.match(apache, /^ +Copyright \[yyyy\] \[name of copyright owner\]$/m);
     assert.ok(notices.indexOf('lato (color scheme') < notices.indexOf('nord (color scheme'));
     assert.match(notices, /License: MIT/);
     assert.match(notices, /License: OFL-1\.1/);

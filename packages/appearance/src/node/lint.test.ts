@@ -207,6 +207,33 @@ test('focus-outline: nothing removes an outline, and a focus rule draws no shado
     assert.deepEqual(rules(`${slot} { outline-width: ${width}; }`), [], width);
   }
   assert.deepEqual(rules(`${slot}:focus-visible { outline-color: var(--color-focus); }`), []);
+  // A function's arguments are read as the function: max() and min() evaluate, and a
+  // color-mix() with a visible color in it is visible.
+  const outlineRule = (css: string) => rules(css).includes('focus-outline');
+  assert.ok(!outlineRule(`${slot} { outline-width: max(0.5px, 2px); }`));
+  assert.ok(!outlineRule(`${slot} { outline-width: clamp(1px, 0.5px, 4px); }`));
+  assert.ok(
+    !outlineRule(
+      `${slot}:focus-visible { outline-color: color-mix(in srgb, var(--color-focus) 60%, transparent); }`,
+    ),
+  );
+  breaks('focus-outline', [
+    `${slot} { outline-width: min(0.5px, 2px); }`,
+    `${slot} { outline-width: max(0px, 0.25px); }`,
+    `${slot} { outline-width: clamp(0px, 0.5px, 0.75px); }`,
+    `${slot}:focus-visible { outline-color: color-mix(in srgb, transparent, transparent); }`,
+  ]);
+  // A transparent color function says so, not that it's 0 wide.
+  const zeroAlpha = readLanguageStylesheet(`${slot} { outline: 2px solid rgba(0, 0, 0, 0); }`, {
+    packId: PACK,
+  });
+  assert.ok(!zeroAlpha.ok);
+  const said = zeroAlpha.problems.filter(({ rule }) => rule === 'focus-outline');
+  assert.ok(said.length > 0);
+  for (const { message } of said) {
+    assert.doesNotMatch(message, /0 wide/);
+    assert.match(message, /transparent/);
+  }
   assert.ok(testsFocus("[data-ui-slot='a']:focus-visible"));
   assert.ok(testsFocus("[data-ui-slot='a']:focus-within [data-ui-slot='b']"));
   assert.ok(!testsFocus("[data-ui-slot='a']:not(:focus)"));

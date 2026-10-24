@@ -1077,29 +1077,97 @@ function lengthPx(word: string): number | null {
   return null;
 }
 
+/** `value` split on its top-level spaces, or its top-level commas, keeping each function call whole. */
+function splitTop(value: string, by: ' ' | ','): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index]!;
+    if (character === '(') depth += 1;
+    else if (character === ')') depth -= 1;
+    else if (depth === 0 && (by === ',' ? character === ',' : /\s/.test(character))) {
+      parts.push(value.slice(start, index));
+      start = index + 1;
+    }
+  }
+  parts.push(value.slice(start));
+  return parts.map((part) => part.trim()).filter(Boolean);
+}
+
+/** The arguments of `word` when it's a call of `name`, such as max(0.5px, 2px), or null. */
+function callArguments(word: string, names: RegExp): string[] | null {
+  const match = /^([a-z-]+)\((.*)\)$/s.exec(word);
+  if (!match || !names.test(match[1]!)) return null;
+  return splitTop(match[2]!, ',');
+}
+
+/**
+ * A width in px, evaluated: a written-out length, or calc() of one, or
+ * min(), max(), or clamp() of lengths it can evaluate. Null for anything
+ * else, such as a keyword or a token, which the gate reads instead.
+ */
+function widthPx(word: string): number | null {
+  const direct = lengthPx(word);
+  if (direct !== null) return direct;
+  const calc = callArguments(word, /^calc$/);
+  if (calc) return calc.length === 1 ? widthPx(calc[0]!) : null;
+  const bound = callArguments(word, /^(?:min|max|clamp)$/);
+  if (!bound) return null;
+  const values = bound.map(widthPx);
+  if (values.some((value) => value === null)) return null;
+  const numbers = values as number[];
+  if (word.startsWith('min(')) return Math.min(...numbers);
+  if (word.startsWith('max(')) return Math.max(...numbers);
+  return numbers.length === 3 ? Math.max(numbers[0]!, Math.min(numbers[1]!, numbers[2]!)) : null;
+}
+
+/**
+ * Whether a color word draws nothing: transparent, a color function whose
+ * alpha is 0, or a color-mix() of nothing but transparent. A color-mix()
+ * with a visible color in it is visible.
+ */
+function invisibleColor(word: string): boolean {
+  if (word === 'transparent') return true;
+  const mixed = callArguments(word, /^color-mix$/);
+  if (mixed) {
+    const colors = mixed.slice(1).map((part) => splitTop(part, ' ')[0] ?? '');
+    return colors.length > 0 && colors.every(invisibleColor);
+  }
+  const color = callArguments(word, /^(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)$/);
+  if (!color) return false;
+  const inner = color.join(',');
+  const slash = inner.split('/');
+  const alpha =
+    slash.length > 1 ? slash.at(-1)!.trim() : color.length === 4 ? color[3]!.trim() : null;
+  return alpha !== null && /^[+]?(?:0+\.?0*|\.0+)%?$/.test(alpha);
+}
+
 /**
  * Why an outline declaration draws nothing, or null when it draws a ring:
  * none or hidden as its style, a width under MIN_OUTLINE_PX (zero however
- * it's written, a fraction of a pixel, or below zero), or a transparent color.
+ * it's written, a fraction of a pixel, below zero, or a calc(), min(),
+ * max(), or clamp() that comes to one), or a color that draws nothing.
  */
 function removesOutline(base: string, value: string): string | null {
-  const words = value
-    .toLowerCase()
-    .split(/[\s,()]+/)
-    .filter(Boolean);
+  const words = splitTop(value.toLowerCase(), ' ');
   const style = words.find((word) => word === 'none' || word === 'hidden');
   const thin = words.find((word) => {
-    const px = lengthPx(word);
+    const px = widthPx(word);
     return px !== null && px < MIN_OUTLINE_PX;
   });
-  const clear = words.includes('transparent');
+  const clear = words.find(invisibleColor);
   if ((base === 'outline' || base === 'outline-style') && style) {
     return `sets its style to ${style}`;
   }
   if ((base === 'outline' || base === 'outline-width') && thin) {
     return `is ${thin} wide, and an outline under ${MIN_OUTLINE_PX}px draws nothing to see`;
   }
-  if ((base === 'outline' || base === 'outline-color') && clear) return 'draws it transparent';
+  if ((base === 'outline' || base === 'outline-color') && clear) {
+    return clear === 'transparent'
+      ? 'draws it transparent'
+      : `draws it in ${clear}, which is transparent`;
+  }
   return null;
 }
 
