@@ -279,7 +279,8 @@ async function main(): Promise<number> {
       `${plural(knownBadNames().length, 'known-bad input')} in ${relative(KNOWN_BAD_DIR)}, each failing as it names; ` +
       `the source audit read ${plural(audit.files, 'file')}, with ${plural(audit.exceptions, 'reviewed exception')}, each still needed. ` +
       `${plural(catalog.counts.gated, 'pack')} passed the pack gates; the lock pins ${plural(catalog.counts.locked, 'pack')} and the notices are current; ` +
-      `${plural(catalog.counts.research, 'Research record')} checked, none registered.\n`,
+      `${plural(catalog.counts.research, 'Research record')} checked, none registered; ` +
+      `the branded-name audit read ${catalog.counts.audited} ${catalog.counts.audited === 1 ? 'entry' : 'entries'}, with no finding.\n`,
   );
   return 0;
 }
