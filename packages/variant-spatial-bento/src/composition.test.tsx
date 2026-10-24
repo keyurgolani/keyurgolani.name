@@ -175,7 +175,7 @@ test('the complete fixture renders one main, one h1, one visitor control slot, a
   );
   assert.match(
     markup,
-    /<button(?=[^>]*\saria-describedby="sb--stage-unavailable")(?=[^>]*\sdisabled="")/,
+    /<button(?=[^>]*\saria-describedby="sb--stage-unavailable")(?=[^>]*\saria-disabled="true")(?![^>]*\sdisabled="")/,
   );
 });
 
@@ -286,7 +286,7 @@ test('in a plate it renders the same, every id under the plate prefix and none r
   // The exit is there, disabled and unpressed, as the page has it, so a plate's controls are the page's.
   assert.match(
     plate,
-    /<span class="sb-stage__exit"><button(?=[^>]*\saria-pressed="false")(?=[^>]*\sdisabled="")[^>]*>[\s\S]*?Spatial stage/,
+    /<span class="sb-stage__exit"><button(?=[^>]*\saria-pressed="false")(?=[^>]*\saria-disabled="true")(?![^>]*\sdisabled="")[^>]*>[\s\S]*?Spatial stage/,
   );
   const all = ids(plate);
   assert.ok(all.length > 10);
@@ -402,7 +402,7 @@ test("the server draws the still, and the stage's slot adds nothing to it until 
   assert.equal(count(markup, /class="sb-stage__exit"/g), 1);
   assert.match(
     markup,
-    /<span class="sb-stage__exit"><button(?=[^>]*\saria-pressed="false")(?=[^>]*\sdisabled="")[^>]*>[\s\S]*?Spatial stage/,
+    /<span class="sb-stage__exit"><button(?=[^>]*\saria-pressed="false")(?=[^>]*\saria-disabled="true")(?![^>]*\sdisabled="")[^>]*>[\s\S]*?Spatial stage/,
   );
 });
 
@@ -414,6 +414,9 @@ const RUNNING: Parameters<typeof decideStage>[0] = {
   moreContrast: false,
   highContrast: false,
   enhancement: 'on',
+  wide: true,
+  framed: false,
+  lifecycle: 'none',
   deviceMemory: 8,
   cores: 8,
   saveData: false,
@@ -450,12 +453,16 @@ test('the capability policy: a supported device runs the stage, and every reason
     [{ highContrast: true }, 'contrast', false],
     [{ enhancement: 'off' }, 'preview-off', false],
     [{ eligible: false }, 'unsupported', false],
+    [{ wide: false }, 'narrow', false],
     [{ deviceMemory: 2 }, 'low-memory', false],
     [{ cores: 2 }, 'low-power', false],
     [{ saveData: true }, 'save-data', false],
     [{ claimed: false }, 'another-stage', false],
     [{ exited: true }, 'exited', true],
     [{ state: 'paused', reason: 'lifecycle' }, 'lifecycle', true],
+    // A frame with no lifecycle yet is inactive, and so is one hidden or out of focus.
+    [{ framed: true, lifecycle: 'none' }, 'lifecycle', true],
+    [{ framed: true, lifecycle: 'inactive' }, 'lifecycle', true],
     [{ state: 'paused', reason: 'offscreen' }, 'waiting', true],
   ];
   for (const [change, reason, offered] of off) {
@@ -475,6 +482,24 @@ test('the capability policy: a supported device runs the stage, and every reason
     decideStage({ ...RUNNING, state: 'static', reason: 'reduced', started: true }).mount,
     false,
   );
+  // A frame's lifecycle pause ends a stage that started, so its WebGL context goes, and so does a
+  // width under 768px; a framed document whose lifecycle says visible and focused runs it.
+  for (const change of [
+    { state: 'paused', reason: 'lifecycle' },
+    { framed: true, lifecycle: 'inactive' },
+    { wide: false },
+  ] as const) {
+    assert.equal(
+      decideStage({ ...RUNNING, ...change, started: true }).mount,
+      false,
+      JSON.stringify(change),
+    );
+  }
+  assert.deepEqual(decideStage({ ...RUNNING, framed: true, lifecycle: 'active' }), {
+    mount: true,
+    offered: true,
+    reason: 'running',
+  });
   // Nothing turns it on against reduced motion, forced colors, or more contrast, whatever else holds.
   for (const against of [
     { state: 'static', reason: 'reduced' },
@@ -498,11 +523,66 @@ test('the scene is bounded: the same planes and particles whatever the portfolio
   // The scene's size never depends on the content: the largest fixture's seed builds the same count.
   const large = fixtureInput('large');
   assert.equal(buildScene(large.env.seed).particles.length, PARTICLE_COUNT * 3);
-  // Linear in the particles, and no pointer at all: no nested loop over them.
-  const source = readFileSync(new URL('./scene.ts', import.meta.url), 'utf8');
-  assert.equal(count(source, /for \(let /g), 2);
+  // No pointer at all, so no interaction loop to grow.
   for (const [file, text] of SOURCES)
     assert.doesNotMatch(text, /onPointer|pointermove|raycast/i, file);
+});
+
+/** A particle array that counts every element read or written, through any loop or iterator. */
+function countedParticles(length: number) {
+  const touches = { count: 0 };
+  const element = (key: string | symbol) => typeof key === 'string' && /^\d+$/.test(key);
+  const array = new Proxy(new Array<number>(length).fill(0), {
+    get(target, key, receiver) {
+      if (element(key)) touches.count += 1;
+      return Reflect.get(target, key, receiver);
+    },
+    set(target, key, value, receiver) {
+      if (element(key)) touches.count += 1;
+      return Reflect.set(target, key, value, receiver);
+    },
+  });
+  return { array: array as unknown as Float32Array, touches };
+}
+
+test('the stage is linear in its particles: building the scene touches each a constant number of times, and a frame touches none', async () => {
+  // Building: every element written once, so N, 2N, and 4N particles take exactly 1x, 2x, and 4x the work.
+  const build = (particles: number) => {
+    let touches = { count: 0 };
+    buildScene(42, particles, (length) => {
+      const made = countedParticles(length);
+      touches = made.touches;
+      return made.array;
+    });
+    return touches.count;
+  };
+  const n = 200;
+  assert.equal(build(n), n * 3);
+  assert.equal(build(2 * n), 2 * build(n));
+  assert.equal(build(4 * n), 4 * build(n));
+
+  // A frame: the drift moves the group from the time alone, over N particles or 2N.
+  const { driftFrame } = await import('./stage-canvas');
+  const frames = (particles: number) => {
+    const made = countedParticles(particles * 3);
+    const target = { rotation: { z: 0 }, position: { y: 0 } };
+    for (let frame = 0; frame < 30; frame++) {
+      driftFrame({ planes: PLANES, particles: made.array }, target, frame * 33);
+    }
+    return { touches: made.touches.count, target };
+  };
+  assert.equal(frames(n).touches, 0);
+  assert.equal(frames(2 * n).touches, 0);
+  assert.notEqual(frames(n).target.rotation.z, 0, 'the frame moves the group');
+  // And the frame callback is driftFrame and nothing else, so nothing beside it runs each frame.
+  const stage = readFileSync(new URL('./stage-canvas.tsx', import.meta.url), 'utf8');
+  assert.equal(count(stage, /\buseFrame\(/g), 1);
+  const opens = stage.indexOf('useFrame(') + 'useFrame('.length;
+  const callback = stage.slice(opens, stage.indexOf('\n  });', opens) + '\n  }'.length);
+  assert.equal(
+    callback.replace(/\s+/g, ' ').trim(),
+    '({ clock }) => { if (group.current) driftFrame(scene, group.current, clock.elapsedTime); }',
+  );
 });
 
 /** The stylesheet, comments gone. */

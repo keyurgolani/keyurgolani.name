@@ -13,7 +13,8 @@ declare module 'react' {
 // Action's markup (#19, Slice 3, item 2): a native button, or a link when
 // it navigates. Its kind is data-emphasis, and its state shows through ARIA
 // and native attributes: aria-pressed for a toggle, the native disabled
-// attribute for a button that isn't available, and aria-busy with
+// attribute for a button that isn't available (aria-disabled instead, with
+// keepsFocus, for one that mustn't lose focus), and aria-busy with
 // aria-disabled while it works, so focus stays on it and it isn't
 // activated. action.tsx renders it, and action-client.tsx does when it needs
 // a click handler.
@@ -38,6 +39,13 @@ export interface ActionProps {
   readonly loading?: boolean;
   /** Not available: a button gets the disabled attribute, and a link loses its href. */
   readonly disabled?: boolean;
+  /**
+   * With disabled: a button that keeps its focus and place in the tab
+   * order, as aria-disabled instead of the native attribute, and does
+   * nothing on a click. For a control that can become unavailable while
+   * it has focus, which the native attribute would drop to the body.
+   */
+  readonly keepsFocus?: boolean;
   /** A decorative icon before the label, hidden from assistive technology. */
   readonly icon?: ReactNode;
   /** The accessible name, when the visible label alone doesn't give one, as for an icon. */
@@ -83,6 +91,7 @@ export function actionElement(
     pressed,
     loading = false,
     disabled = false,
+    keepsFocus = false,
     icon,
     label,
     describedBy,
@@ -143,8 +152,8 @@ export function actionElement(
       type={type}
       name={name}
       value={value}
-      disabled={disabled || undefined}
-      aria-disabled={loading || undefined}
+      disabled={(disabled && !keepsFocus) || undefined}
+      aria-disabled={loading || (disabled && keepsFocus) || undefined}
       aria-pressed={pressed}
       // React passes these through lowercase, as the HTML attributes are spelled.
       commandfor={command?.for}

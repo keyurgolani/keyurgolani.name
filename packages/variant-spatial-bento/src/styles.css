@@ -177,9 +177,16 @@
   [data-variant='spatial-bento'] .sb-still {
     max-inline-size: 18rem;
   }
+}
 
-  /* The stage needs 768px, so a phone has no stage to leave. */
-  [data-variant='spatial-bento'] .sb-stage__exit {
+/*
+ * The stage needs 768px, the same px query as its runtime's requirement, so
+ * narrower there's no stage to leave: the exit goes, unless the stage runs or
+ * could (data-offered), which the slot ends on a resize under 768px anyway.
+ * A px query, since a larger default font moves a rem one.
+ */
+@media (max-width: 767.98px) {
+  [data-variant='spatial-bento'] .sb-stage__exit:not([data-offered]) {
     display: none;
   }
 }

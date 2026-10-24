@@ -23,7 +23,8 @@ import { Runtime } from './runtime';
 // - The exit is always there, on the server, in a plate, and in every
 //   state, so the page's controls are the same whatever the device and
 //   whether the stage runs: pressed while the stage runs, enabled while it
-//   runs or could, and disabled while it can't.
+//   runs or could, and aria-disabled while it can't, so a stage that fails
+//   while the exit has focus leaves the focus where it was.
 // - A plate renders the still alone, before any runtime hook: no
 //   subscription, observer, listener, or attribute of the runtime's.
 // - The stage's module, with three.js, loads only once the policy says it
@@ -35,8 +36,14 @@ import { Runtime } from './runtime';
 //   were, since the canvas is decoration inside the still, hidden from
 //   assistive technology. The runtime then stays static for the page.
 // - One stage a document: the first slot to mount claims it.
-// - A preview's messages only turn it off: once the boundary's
-//   `data-enhancement` is `off`, the slot stays off for its life.
+// - A preview's messages only turn it off. Once the boundary's
+//   `data-enhancement` is `off`, or, in a framed document, once its
+//   contrast is `more`, its display mode `high-contrast`, or its motion
+//   `reduced` or `static`, the stage stays off for the rest of the page,
+//   whatever a later message sets.
+// - In a framed document it waits for #7's lifecycle: none heard yet is
+//   inactive, and a lifecycle pause unmounts the stage.
+// - Under 768px wide, as a resize can make it, the stage unmounts.
 // - It reads no storage, so a sandboxed preview frame, which blocks it,
 //   changes nothing.
 
@@ -64,9 +71,11 @@ const EXIT_UNAVAILABLE = "The 3D stage isn't available here.";
 
 /**
  * The exit: a toggle, pressed while the stage runs. While the stage can't
- * run it's disabled, out of the tab order since there's no stage to leave,
- * and described by a line saying so, hidden as the navigation's name is,
- * so it shows nothing and moves nothing but is read with the control.
+ * run it's aria-disabled, so it keeps focus and its place in the tab order
+ * and a press does nothing, and described by a line saying so, hidden as
+ * the navigation's name is, so it shows nothing and moves nothing but is
+ * read with the control. data-offered marks it while the stage runs or
+ * could; the stylesheet hides it narrower than 768px only without that.
  */
 function Exit({
   idPrefix,
@@ -81,10 +90,11 @@ function Exit({
 }) {
   const note = `${idPrefix}sb--stage-unavailable`;
   return (
-    <span className="sb-stage__exit">
+    <span className="sb-stage__exit" data-offered={offered ? '' : undefined}>
       <Action
         pressed={pressed}
         disabled={!offered}
+        keepsFocus
         describedBy={offered ? undefined : note}
         onClick={onToggle}
       >
@@ -146,6 +156,50 @@ function setOwner(next: object | null): void {
   for (const change of owners) change();
 }
 
+/** Where #7's frame agent keeps the last lifecycle, and the event it dispatches with each (kit/src/runtime/store.ts). */
+const LIFECYCLE_STATE = Symbol.for('kgn-preview.lifecycle');
+const LIFECYCLE_EVENT = 'kgn-preview-lifecycle';
+
+/** The width the stage needs, the same as its runtime requirement `min-width:768`. */
+const WIDE = '(min-width: 768px)';
+
+/** Whether this document is in a frame. A top window another origin hides counts as one. */
+function framed(): boolean {
+  try {
+    return window.self !== window.top;
+  } catch {
+    return true;
+  }
+}
+
+/** #7's last lifecycle here: none yet, visible and focused, or anything else. */
+function lifecycle(): 'none' | 'active' | 'inactive' {
+  const value = (window as unknown as Record<symbol, unknown>)[LIFECYCLE_STATE];
+  if (!value || typeof value !== 'object') return 'none';
+  const { state, focused } = value as Record<string, unknown>;
+  return state === 'visible' && focused === true ? 'active' : 'inactive';
+}
+
+// A preview's off signals, latched for the page: once any is seen, the stage stays off.
+let previewLatched = false;
+
+/** Whether a preview has turned the stage off, now or before, on this page. */
+function previewOff(boundary: Element | null, inFrame: boolean): boolean {
+  const attribute = (name: string) => boundary?.getAttribute(name) ?? null;
+  const motion = attribute('data-motion');
+  if (
+    attribute('data-enhancement') === 'off' ||
+    (inFrame &&
+      (attribute('data-contrast') === 'more' ||
+        attribute('data-display-mode') === 'high-contrast' ||
+        motion === 'reduced' ||
+        motion === 'static'))
+  ) {
+    previewLatched = true;
+  }
+  return previewLatched;
+}
+
 /** What the page and the browser say, read live, as one string so a snapshot that hasn't changed compares equal. */
 function readSignals(): string {
   if (typeof document === 'undefined') return '';
@@ -155,31 +209,37 @@ function readSignals(): string {
     deviceMemory?: number;
     connection?: { saveData?: boolean };
   };
+  const inFrame = framed();
   return JSON.stringify({
     forcedColors: media('(forced-colors: active)'),
     moreContrast:
       media('(prefers-contrast: more)') || boundary?.getAttribute('data-contrast') === 'more',
     highContrast: boundary?.getAttribute('data-display-mode') === 'high-contrast',
-    enhancement: boundary?.getAttribute('data-enhancement') === 'off' ? 'off' : 'on',
+    enhancement: previewOff(boundary, inFrame) ? 'off' : 'on',
+    wide: media(WIDE),
+    framed: inFrame,
+    lifecycle: inFrame ? lifecycle() : 'none',
     deviceMemory: typeof nav.deviceMemory === 'number' ? nav.deviceMemory : null,
     cores: typeof nav.hardwareConcurrency === 'number' ? nav.hardwareConcurrency : null,
     saveData: nav.connection?.saveData === true,
   });
 }
 
-const QUERIES = ['(forced-colors: active)', '(prefers-contrast: more)'] as const;
+const QUERIES = ['(forced-colors: active)', '(prefers-contrast: more)', WIDE] as const;
 
 function subscribeSignals(change: () => void): () => void {
   const lists = QUERIES.map((query) => matchMedia(query));
   for (const list of lists) list.addEventListener('change', change);
+  window.addEventListener(LIFECYCLE_EVENT, change);
   const boundary = document.querySelector('[data-appearance-boundary]');
   const observer = boundary ? new MutationObserver(change) : null;
   observer?.observe(boundary!, {
     attributes: true,
-    attributeFilter: ['data-contrast', 'data-display-mode', 'data-enhancement'],
+    attributeFilter: ['data-contrast', 'data-display-mode', 'data-enhancement', 'data-motion'],
   });
   return () => {
     for (const list of lists) list.removeEventListener('change', change);
+    window.removeEventListener(LIFECYCLE_EVENT, change);
     observer?.disconnect();
   };
 }
@@ -201,7 +261,6 @@ function LiveSlot({
   const [started, setStarted] = useState(false);
   const [failed, setFailed] = useState(pageFailed);
   const [live, setLive] = useState(false);
-  const [previewOff, setPreviewOff] = useState(false);
 
   // The document's one stage: the first slot to mount claims it, and gives it up as it unmounts.
   const [token] = useState(() => ({}));
@@ -224,16 +283,11 @@ function LiveSlot({
           Parameters<typeof decideStage>[0],
           'state' | 'reason' | 'eligible' | 'failed' | 'exited' | 'claimed' | 'started'
         >);
-  // A preview's environment can only turn the stage off: once the boundary says
-  // off, the slot stays off, whatever a later message sets.
-  if (!previewOff && read?.enhancement === 'off') setPreviewOff(true);
-
   const decision =
     read === null
       ? { mount: false, offered: false, reason: 'pending' as StageReason }
       : decideStage({
           ...read,
-          enhancement: previewOff ? 'off' : read.enhancement,
           state,
           reason,
           eligible,

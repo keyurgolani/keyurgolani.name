@@ -248,6 +248,24 @@ test("Action's states: disabled is native, loading keeps focus with aria-busy an
   assert.equal(disabled.attributes.disabled, '');
   assert.equal(disabled.attributes['aria-disabled'], undefined);
 
+  // keepsFocus: unavailable as aria-disabled, so it keeps focus, with no spinner and no busy state.
+  const keeps = one(
+    html(
+      <Action disabled keepsFocus>
+        Unavailable
+      </Action>,
+    ),
+    'action',
+  );
+  assert.equal(keeps.attributes.disabled, undefined, 'a disabled action that keeps focus');
+  assert.equal(keeps.attributes['aria-disabled'], 'true');
+  assert.equal(keeps.attributes['aria-busy'], undefined);
+  assert.equal(keeps.attributes['data-state'], undefined);
+  // keepsFocus alone changes nothing.
+  const available = one(html(<Action keepsFocus>Available</Action>), 'action');
+  assert.equal(available.attributes['aria-disabled'], undefined);
+  assert.equal(available.attributes.disabled, undefined);
+
   const loadingMarkup = html(<Action loading>Validating</Action>);
   const loading = one(loadingMarkup, 'action');
   assert.equal(loading.attributes.disabled, undefined, 'a loading action stays focusable');

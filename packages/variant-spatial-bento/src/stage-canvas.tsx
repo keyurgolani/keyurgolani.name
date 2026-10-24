@@ -17,6 +17,25 @@ import { Slot, type StageCanvasProps } from './stage-slot';
 /** How far the planes drift, in radians and scene units. */
 const DRIFT = { tilt: 0.04, float: 0.06 } as const;
 
+/** What the frame moves: the group that holds the planes and the field. */
+export interface Drifting {
+  rotation: { z: number };
+  position: { y: number };
+}
+
+/**
+ * One frame of the stage: the group's drift, from the frame's time alone.
+ * It's the whole of the frame callback, and it takes the scene so a test
+ * can hold it to constant work whatever the particles: it touches none, and
+ * nothing in it grows with them.
+ */
+export function driftFrame(scene: Scene, target: Drifting, elapsedMs: number): void {
+  // Under a frameloop of `never`, R3F keeps the frame's timestamp, in ms, as the elapsed time.
+  const t = elapsedMs / 1000;
+  target.rotation.z = -0.6 + Math.sin(t * 0.25) * DRIFT.tilt;
+  target.position.y = Math.sin(t * 0.4) * DRIFT.float;
+}
+
 function Planes({
   scene,
   colors,
@@ -24,14 +43,9 @@ function Planes({
   readonly scene: Scene;
   readonly colors: Readonly<Record<SceneRole, string | null>>;
 }) {
-  const group = useRef<{ rotation: { z: number }; position: { y: number } } | null>(null);
+  const group = useRef<Drifting | null>(null);
   useFrame(({ clock }) => {
-    const current = group.current;
-    if (!current) return;
-    // Under a frameloop of `never`, R3F keeps the frame's timestamp, in ms, as the elapsed time.
-    const t = clock.elapsedTime / 1000;
-    current.rotation.z = -0.6 + Math.sin(t * 0.25) * DRIFT.tilt;
-    current.position.y = Math.sin(t * 0.4) * DRIFT.float;
+    if (group.current) driftFrame(scene, group.current, clock.elapsedTime);
   });
   return (
     <group ref={group as never} rotation={[-0.95, 0, -0.6]}>
