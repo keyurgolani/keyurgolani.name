@@ -238,17 +238,17 @@ test('a pack sweep adds the shards it alone needs to the usual 12, up to 16, and
   );
 });
 
-test('an ordinary PR plans 4 to 6 shards, and one that changes a pack plans 6, its most 13', () => {
+test('an ordinary PR plans 4 to 7 shards, as the base PR set plans 7, and one that changes a pack plans 7, its most 13', () => {
   for (const { name, plan } of plans.filter(({ plan }) => !plan.cells.some((cell) => cell.sweep))) {
     const { count, reason } = pickShardCount(planGroups(plan, ENGINES));
-    assert.ok(count >= 4 && count <= 6, `${name}: ${count}`);
+    assert.ok(count >= 4 && count <= 7, `${name}: ${count}`);
     assert.equal(reason, null, name);
   }
   const onePack = plans.find(
     ({ name }) => name === 'the PR set with one changed non-default pack',
   )!;
   const { count, sweepShards, max } = pickShardCount(planGroups(onePack.plan, ENGINES));
-  assert.deepEqual({ count, sweepShards, max }, { count: 6, sweepShards: 1, max: 13 });
+  assert.deepEqual({ count, sweepShards, max }, { count: 7, sweepShards: 1, max: 13 });
 });
 
 test('a cell group too heavy for one worker is split, by cell or by test, and its parts run each of its tests once', () => {

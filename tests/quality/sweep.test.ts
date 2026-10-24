@@ -6,7 +6,7 @@ import test from 'node:test';
 import { isDeepStrictEqual } from 'node:util';
 import { parse } from 'yaml';
 import { parseSelection } from '../../packages/appearance/src/index';
-import { planCells, type BuildMeta, type Cell, type Plan } from './cells';
+import { cellAnnotations, planCells, type BuildMeta, type Cell, type Plan } from './cells';
 import { CHECKS_ANNOTATION, requiredChecks, sweepCheck, sweepRowChecks } from './lib/checks';
 import { FIXED_TIME } from './lib/clock';
 import { PREFERENCE_ROWS, VIEWPORTS } from './lib/matrix';
@@ -331,6 +331,7 @@ function stubRun(throwOn: string | null) {
     soft: (value: unknown, message: string) => ({
       toBe: (wanted: unknown) => void (value === wanted || softs.push(message)),
       toEqual: (wanted: unknown) => void (isDeepStrictEqual(value, wanted) || softs.push(message)),
+      toBeNull: () => void (value === null || softs.push(message)),
     }),
   };
   // A page whose load rejects under one row, as a crashed or hung load does.
@@ -352,6 +353,7 @@ const stubPass: typeof runPass = async (run) => {
     row: run.row,
     isolation: [],
     status: run.cell.expectedStatus,
+    settled: true,
     emulation: [],
     now: Date.parse(FIXED_TIME),
     results: { violations: [], incomplete: [] } as never,
@@ -525,4 +527,56 @@ test("a swept test checks it starts clean: no cookie but the canary's, then its 
   );
   // A page nothing recorded fails too: the check never passes by default.
   assert.equal((await storageFindings(stub([], undefined).page))[0]!.actual, 'nothing recorded it');
+});
+
+test("each swept row's pass answers whether its page settled, and a cell's annotations go on before any row runs, so a throwing cell carries them (#123)", async () => {
+  const plan = planCells({ meta: twoPacks(), registrations, mode: 'pr', changes: CHANGES });
+  const cell = plan.cells.find((each) => each.sweep)!;
+  const planned = plan.tests.find((each) => each.cell === cell)!;
+  const { dir, softs, testInfo, expect, page } = stubRun(null);
+  const busyUnder: typeof runPass = async (run, options) => ({
+    ...(await stubPass(run, options)),
+    settled: run.row.id !== 'reduced-motion',
+  });
+  await runCell(
+    {
+      page: page as never,
+      cell,
+      viewport: planned.viewport,
+      row: planned.row,
+      conditions: planned.conditions,
+      testInfo: testInfo as never,
+      expect: expect as never,
+      origin: 'http://127.0.0.1:3000',
+    },
+    busyUnder,
+  );
+  rmSync(dir, { recursive: true, force: true });
+  assert.deepEqual(
+    softs.filter((each) => each.includes(' settles')),
+    [`${cell.path} settles, under reduced-motion`],
+  );
+  // A cell that throws still carries what cellAnnotations() gives it, pushed first.
+  const plain = plan.cells.find((each) => !each.sweep)!;
+  const own = plan.tests.find((each) => each.cell === plain)!;
+  const scripted = { ...plain, requiresScript: 'It draws its workspace with JavaScript.' };
+  const run = stubRun(own.row.id);
+  await assert.rejects(
+    runCell(
+      {
+        page: run.page as never,
+        cell: scripted,
+        viewport: own.viewport,
+        row: own.row,
+        conditions: own.conditions,
+        testInfo: run.testInfo as never,
+        expect: run.expect as never,
+      },
+      stubPass,
+    ),
+    /ERR_ABORTED/,
+  );
+  rmSync(run.dir, { recursive: true, force: true });
+  assert.deepEqual(run.testInfo.annotations, cellAnnotations(scripted));
+  assert.ok(run.testInfo.annotations.length > 0);
 });
