@@ -220,9 +220,20 @@ export const BUSY_LIMIT_MS = 10_000;
 export const STILL_BUSY = `the page still says it's loading, aria-busy="true", after ${BUSY_LIMIT_MS / 1000} s`;
 
 /**
+ * Where aria-busy is a specimen's, not the page's: inside an element marked
+ * data-quality-specimen="busy", as the primitives fixture marks its loading
+ * Actions, which say they're at work for good. Only fixtures carry it
+ * (specimen-marker.test.ts), so a real page's stuck Save still keeps it
+ * from settling.
+ */
+export const BUSY_SPECIMEN = '[data-quality-specimen="busy"]';
+
+/**
  * Waits until nothing on the page says it's still loading, a shown element
  * with aria-busy="true", as a page that fetches its content after it loads
- * does (#8's Studio), up to BUSY_LIMIT_MS. One that isn't rendered, such as
+ * does (#8's Studio), up to BUSY_LIMIT_MS, but for a fixture's specimens,
+ * inside BUSY_SPECIMEN, which say they're at work for good by design. One
+ * that isn't rendered, such as
  * Studio's waiting line under (scripting: none), tells no one it's loading.
  * False when the page is still busy then: the caller fails the cell with
  * STILL_BUSY, and reads the page as it stands, so it never passes on a page
@@ -231,11 +242,11 @@ export const STILL_BUSY = `the page still says it's loading, aria-busy="true", a
 export async function notBusy(page: Page): Promise<boolean> {
   return page
     .waitForFunction(
-      () =>
+      (specimen) =>
         ![...document.querySelectorAll('[aria-busy="true"]')].some(
-          (element) => element.getClientRects().length > 0,
+          (element) => element.getClientRects().length > 0 && !element.closest(specimen),
         ),
-      null,
+      BUSY_SPECIMEN,
       { timeout: BUSY_LIMIT_MS },
     )
     .then(
@@ -357,27 +368,30 @@ export async function failureStateFindings(
   const fail = (expected: string, actual: string) =>
     findings.push({ gate: 'enhancement', rule: 'failure-state', expected, actual });
   // No named helper inside: esbuild's keepNames would wrap it in a __name the page lacks.
-  const state = await page.evaluate((again) => {
-    const alert = [...document.querySelectorAll('[role="alert"]')].find(
-      (element) =>
-        element.getClientRects().length > 0 && (element as HTMLElement).innerText.trim() !== '',
-    );
-    const control = alert?.querySelector<HTMLElement>('button, a[href], input, select') ?? null;
-    control?.focus();
-    const name = control
-      ? (control.getAttribute('aria-label') ?? control.innerText ?? '').trim()
-      : '';
-    return {
-      alert: Boolean(alert),
-      control: Boolean(control),
-      named: new RegExp(again, 'i').test(name),
-      reachable: control !== null && control.tabIndex >= 0,
-      focused: control !== null && document.activeElement === control,
-      busy: [...document.querySelectorAll('[aria-busy="true"]')].filter(
-        (element) => element.getClientRects().length > 0,
-      ).length,
-    };
-  }, TRY_AGAIN.source);
+  const state = await page.evaluate(
+    ([again, specimen]) => {
+      const alert = [...document.querySelectorAll('[role="alert"]')].find(
+        (element) =>
+          element.getClientRects().length > 0 && (element as HTMLElement).innerText.trim() !== '',
+      );
+      const control = alert?.querySelector<HTMLElement>('button, a[href], input, select') ?? null;
+      control?.focus();
+      const name = control
+        ? (control.getAttribute('aria-label') ?? control.innerText ?? '').trim()
+        : '';
+      return {
+        alert: Boolean(alert),
+        control: Boolean(control),
+        named: new RegExp(again, 'i').test(name),
+        reachable: control !== null && control.tabIndex >= 0,
+        focused: control !== null && document.activeElement === control,
+        busy: [...document.querySelectorAll('[aria-busy="true"]')].filter(
+          (element) => element.getClientRects().length > 0 && !element.closest(specimen),
+        ).length,
+      };
+    },
+    [TRY_AGAIN.source, BUSY_SPECIMEN] as const,
+  );
   if (!state.alert) {
     fail("an alert that it couldn't load, under failed enhancement", 'no alert says so');
   } else if (!state.control) {

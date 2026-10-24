@@ -169,6 +169,9 @@ function good(
   };
 }
 
+/** Whether the page settles, as settle() and the reload conditions wait for it. */
+const settled = async (page: Page): Promise<Finding[]> =>
+  (await notBusy(page)) ? [] : [{ gate: 'runner', rule: 'settled', actual: STILL_BUSY }];
 const keyboard = (page: Page) => keyboardFindings(page);
 /** A page whose script didn't arrive, as failed enhancement reads it; axe has cases of its own. */
 const failureState = (page: Page) => failureStateFindings(page, { axe: false });
@@ -639,5 +642,18 @@ export const A11Y_CASES: readonly MetaCase[] = [
     expect: 'pass',
     browser: true,
     run: () => onPage('good.html', scriptingMediaFindings, { noScript: true }),
+  },
+  // A page settles once nothing on it says it's at work but a fixture's marked specimens:
+  // a loading Action inside data-quality-specimen="busy" is at work for good by design; the
+  // same button unmarked, or a region or status line, is the page still loading.
+  bad('busy-region', 'busy-region.html', 'runner', 'settled', settled),
+  bad('busy-unmarked', 'busy-unmarked.html', 'runner', 'settled', settled),
+  {
+    id: 'runner/busy-specimen',
+    gate: 'runner',
+    input: 'tests/quality/fixtures/a11y/busy-specimen.html',
+    expect: 'pass',
+    browser: true,
+    run: () => onPage('busy-specimen.html', settled),
   },
 ];

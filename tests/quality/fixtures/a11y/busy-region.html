@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A region that never finishes loading, known-bad</title>
+    <!--
+      Known-bad (#11): a page whose region and status line say they're
+      loading, aria-busy="true", for good, as a stuck fetch leaves Studio's
+      lines. The page never settles, so its cell fails.
+    -->
+  </head>
+  <body>
+    <main>
+      <h1>Portfolio Studio</h1>
+      <section aria-busy="true" aria-labelledby="history">
+        <h2 id="history">Revisions</h2>
+        <p>Reading the history…</p>
+      </section>
+      <p role="status" aria-busy="true">Loading the draft…</p>
+    </main>
+  </body>
+</html>
