@@ -41,6 +41,7 @@ function record(overrides: Partial<GrantRecord> = {}): GrantRecord {
       portfolio: { format: 'yaml', sourceText: 'identity:\n  name: Rowan\n' },
       site: { format: 'json', sourceText: '{}\n' },
     },
+    schemes: { brand: { generator: { id: 'fixture-seed', version: 1 } } },
     appearance: { variant: 'editorial' },
     environment: { displayMode: 'system', contrast: 'system', motion: 'system', enhancement: 'on' },
     createdAt: AT,
@@ -83,6 +84,7 @@ test("a grant record keeps its times in ISO 8601 and no digest, which is its fil
   // An ended grant drops its documents, and one with no override has none.
   const bare: { -readonly [K in keyof GrantRecord]?: GrantRecord[K] } = { ...record() };
   delete bare.documents;
+  delete bare.schemes;
   delete bare.appearance;
   const ended = { ...(bare as GrantRecord), state: 'session_ended' as const };
   assert.deepEqual(parseGrant(ended.digest, serializeGrant(ended)), ended);
@@ -104,6 +106,9 @@ test('a record with any field missing, of the wrong type, or out of its set read
     { ...fields, documents: { portfolio: { format: 'toml', sourceText: '' } } },
     { ...fields, documents: { ...(fields.documents as object), extra: {} } },
     { ...fields, appearance: ['editorial'] },
+    // Pinned schemes are an object, and only beside the documents they were minted with.
+    { ...fields, schemes: ['brand'] },
+    { ...fields, documents: undefined },
     { ...fields, createdAt: 'yesterday' },
     { ...fields, state: 'expired' },
   ];

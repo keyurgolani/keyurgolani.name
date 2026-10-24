@@ -1,3 +1,4 @@
+import { loadSharp, type SharpLoad } from '../catalog/media/derive';
 import type { AuditSink } from '../audit/sink';
 import { recordOwnerModule } from '../load-trace';
 import { filesystemAssetStore, type AssetStore } from './assets';
@@ -8,6 +9,7 @@ import { storePaths, type StorePaths } from './layout';
 import { publicationLock, type PublicationLock } from './lock';
 import { filesystemPublicationService, type PublicationService } from './publication';
 import { filesystemRevisionStore, type RevisionStore } from './revisions';
+import { pixelsSha256 } from './schemes';
 import type { UnitChecks } from '../catalog/unit';
 
 // The revision store (#3) over one data directory: the DraftStore,
@@ -31,6 +33,11 @@ export interface StoreOptions {
   readonly now?: () => number;
   /** How long a waiter waits for the lock: 5 s. */
   readonly lockWaitMs?: number;
+  /**
+   * The media service's sharp, which decodes an image-derived scheme's
+   * asset (10h): loadSharp(), or portfolio-store's from its directories.
+   */
+  readonly sharp?: () => Promise<SharpLoad>;
 }
 
 export interface Store {
@@ -50,6 +57,7 @@ export function openStore({
   fs = nodeFs,
   now,
   lockWaitMs,
+  sharp,
 }: StoreOptions): Store {
   const paths = storePaths(dataDir);
   const lock = publicationLock({
@@ -60,6 +68,9 @@ export function openStore({
     ...(log ? { log } : {}),
   });
   const assets = filesystemAssetStore({ fs, paths });
+  // One pixel hash for drafts and publishes, so an image decodes once per
+  // file in this store, whichever writes first (10h).
+  const pixelHash = pixelsSha256(sharp ?? (() => loadSharp()));
   const shared = {
     fs,
     paths,
@@ -68,6 +79,8 @@ export function openStore({
     assets,
     ...(now ? { now } : {}),
     ...(log ? { log } : {}),
+    ...(sharp ? { sharp } : {}),
+    pixelHash,
   };
   const publication = filesystemPublicationService({ ...shared, ...(audit ? { audit } : {}) });
   return Object.freeze({

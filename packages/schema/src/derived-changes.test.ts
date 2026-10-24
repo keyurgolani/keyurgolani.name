@@ -13,6 +13,7 @@ import {
   type DerivedSide,
 } from './derived-changes';
 import { publishDiagnostics } from './publish-checks';
+import { parseSnapshot } from './snapshots';
 import { validatePublicationUnit } from './validate';
 import type { Context } from './diagnostics';
 import { PUBLISH_VALIDATORS, withPublication } from './published-urls';
@@ -180,10 +181,28 @@ test("the gate recomputes the changes: a forged acceptance of another change, or
   assert.notEqual(changeContent(other), changeContent(moved!));
 });
 
-test('with no live revision, or an import with no derived block, the gate has nothing to hold; with no publication it waits', () => {
+test('with no live revision, the gate holds only a first generated scheme, since media and GitHub data have nothing to compare against; an import with no derived block holds nothing; with no publication it waits', () => {
   const ctx = (publication: Context['publication']) =>
     assertDerivedChangesApproved.validate(PAIR, { ...(publication ? { publication } : {}) });
   assert.deepEqual(ctx({ live: null, derived: { changes: [] } }).diagnostics, []);
+  // A store's first publish: the draft's media and snapshots raise nothing,
+  // and its first scheme waits for the owner, then passes once accepted.
+  const first = (changes: unknown[]) => ({
+    live: null,
+    derived: { changes },
+    draft: {
+      media: { assets: [record('portrait', 'a', 'people/me.png')] },
+      snapshots: { ...LIVE.snapshots, schemes: { brand: scheme('a') } },
+    },
+  });
+  const held = ctx(first([])).diagnostics;
+  assert.deepEqual(
+    held.map(({ code, pointer }) => [code, pointer]),
+    [['derived.unapproved', '/appearance/colorScheme']],
+  );
+  const [change] = derivedChanges({}, { snapshots: { schemes: { brand: scheme('a') } } });
+  assert.deepEqual(ctx(first([accepted(change!)])).diagnostics, []);
+  assert.deepEqual(ctx({ ...first([]), draft: { media: first([]).draft.media } }).diagnostics, []);
   assert.deepEqual(gate(undefined).diagnostics, []);
   assert.deepEqual(ctx(undefined).notChecked, ['derived.unapproved']);
 });
@@ -305,4 +324,77 @@ test('publishDiagnostics runs only the publish validators, each record located i
     [['derived.unapproved', 'portfolio', '/sections/1']],
   );
   assert.equal(typeof records[0]?.line, 'number');
+});
+
+const scheme = (seed: string, version = 1) => ({
+  generator: { id: 'fixture-seed', version },
+  inputsHash: seed.repeat(64).slice(0, 64),
+  tokens: { light: { accent: '#3366ff' }, dark: { accent: `#${seed.repeat(6).slice(0, 6)}` } },
+});
+
+test('a generated scheme with other tokens, input, or generator is scheme-regenerated, a first one too, and one the draft drops raises none', () => {
+  const live = { snapshots: { schemes: { brand: scheme('a') } } };
+  assert.deepEqual(derivedChanges(live, { snapshots: { schemes: { brand: scheme('a') } } }), []);
+  const [regenerated] = derivedChanges(live, { snapshots: { schemes: { brand: scheme('b') } } });
+  assert.equal(regenerated?.cause, 'scheme-regenerated');
+  assert.deepEqual(regenerated?.subject, { kind: 'scheme', schemeId: 'brand' });
+  assert.deepEqual(regenerated?.fields, ['inputsHash', 'tokens']);
+  const [upgraded] = derivedChanges(live, {
+    snapshots: {
+      schemes: { brand: { ...scheme('a'), generator: { id: 'fixture-seed', version: 2 } } },
+    },
+  });
+  assert.deepEqual(upgraded?.fields, ['generator']);
+  const [first] = derivedChanges({}, { snapshots: { schemes: { brand: scheme('a') } } });
+  assert.deepEqual([first?.cause, first?.before], ['scheme-regenerated', null]);
+  assert.deepEqual(derivedChanges(live, { snapshots: {} }), []);
+});
+
+test("the gate holds a scheme change no one accepted, on the site's input for it, and passes the very change accepted", () => {
+  const pair = {
+    portfolio: { sections: [] },
+    site: { appearanceInputs: { brand: { seedColor: '#3366ff' } } },
+  } as unknown as ParsedPair;
+  const publication = (changes: unknown[]) => ({
+    live: { pair, snapshots: { schemes: { brand: scheme('a') } } },
+    derived: { changes },
+    draft: { snapshots: { schemes: { brand: scheme('b') } } },
+  });
+  const blocked = assertDerivedChangesApproved.validate(pair, {
+    publication: publication([]),
+  }).diagnostics;
+  assert.deepEqual(
+    blocked.map(({ code, document, pointer }) => [code, document, pointer]),
+    [['derived.unapproved', 'site', '/appearanceInputs/brand']],
+  );
+  assert.match(
+    blocked[0]!.message,
+    /the generated color scheme brand has newly generated tokens \(scheme-regenerated\)/,
+  );
+  const [change] = derivedChanges(publication([]).live, publication([]).draft);
+  assert.deepEqual(
+    assertDerivedChangesApproved.validate(pair, { publication: publication([accepted(change!)]) })
+      .diagnostics,
+    [],
+  );
+  assert.equal(
+    recordedChanges({ changes: [accepted(change!, `dch_${'c'.repeat(32)}`)] }).length,
+    1,
+  );
+});
+
+test('snapshots/schemes.json holds generated schemes by id, each exactly a generator, an input hash, and two sets of hex colors', () => {
+  assert.equal(parseSnapshot('schemes', { brand: scheme('a') }).ok, true);
+  for (const [what, value] of [
+    ['an extra field', { brand: { ...scheme('a'), fetchedAt: 'x' } }],
+    ['a mode missing', { brand: { ...scheme('a'), tokens: { light: { accent: '#3366ff' } } } }],
+    [
+      'a color that is no hex',
+      { brand: { ...scheme('a'), tokens: { light: { accent: 'blue' }, dark: {} } } },
+    ],
+    ['a short hash', { brand: { ...scheme('a'), inputsHash: 'abc' } }],
+    ['an id that is no registry id', { Brand: scheme('a') }],
+  ] as const) {
+    assert.equal(parseSnapshot('schemes', value).ok, false, what);
+  }
 });

@@ -53,6 +53,13 @@ export interface GrantRecord {
    * version whatever the draft holds since. Dropped once the grant ends.
    */
   readonly documents?: UnitInput;
+  /**
+   * A draft grant's generated schemes, its derived.schemes copied at mint
+   * with its documents (#10, 10h), so a later save doesn't change what an
+   * open frame renders. Plain JSON, which the opener checks. Dropped with
+   * the documents.
+   */
+  readonly schemes?: Readonly<Record<string, unknown>>;
   /** The frame's appearance override, which the caller checked against #4's schema. Plain JSON. */
   readonly appearance?: Readonly<Record<string, unknown>>;
   readonly environment: GrantEnvironment;
@@ -175,6 +182,7 @@ export function serializeGrant(record: GrantRecord): string {
     nonce: record.nonce,
     subject: record.subject,
     ...(record.documents ? { documents: record.documents } : {}),
+    ...(record.schemes ? { schemes: record.schemes } : {}),
     ...(record.appearance ? { appearance: record.appearance } : {}),
     environment: record.environment,
     createdAt: new Date(record.createdAt).toISOString(),
@@ -202,6 +210,7 @@ export function parseGrant(digest: string, text: string): GrantRecord | null {
   const environment = asEnvironment(value.environment);
   const documents = value.documents === undefined ? undefined : asDocuments(value.documents);
   const appearance = value.appearance;
+  const schemes = value.schemes;
   if (
     !isGrantDigest(value.sessionDigest) ||
     typeof value.profile !== 'string' ||
@@ -212,6 +221,7 @@ export function parseGrant(digest: string, text: string): GrantRecord | null {
     !environment ||
     documents === null ||
     (appearance !== undefined && !isObject(appearance)) ||
+    (schemes !== undefined && (!isObject(schemes) || documents === undefined)) ||
     createdAt === null ||
     renewedAt === null ||
     absoluteExpiresAt === null ||
@@ -227,6 +237,7 @@ export function parseGrant(digest: string, text: string): GrantRecord | null {
     nonce: value.nonce,
     subject,
     ...(documents ? { documents } : {}),
+    ...(schemes !== undefined ? { schemes: schemes as Record<string, unknown> } : {}),
     ...(appearance !== undefined ? { appearance: appearance as Record<string, unknown> } : {}),
     environment,
     createdAt,

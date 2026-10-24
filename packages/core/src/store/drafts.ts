@@ -6,8 +6,10 @@ import {
   isPlainObject,
   parseSnapshot,
   parseSource,
+  schemeEntries,
   type DerivedSide,
   type DocumentFormat,
+  type RecordedChange,
 } from '@portfolio/schema';
 import { recordOwnerModule } from '../load-trace';
 import {
@@ -33,6 +35,14 @@ import {
 import { LockLostError, type PublicationLock } from './lock';
 import { DamagedPointerError, readLive, type LivePointer } from './pointer';
 import { readManifest, readRevision } from './revisions';
+import { loadSharp, type SharpLoad } from '../catalog/media/derive';
+import {
+  assetReader,
+  deriveSchemes,
+  pixelsSha256,
+  schemeDiagnostic,
+  type PixelHash,
+} from './schemes';
 import type { AssetStore } from './assets';
 import {
   asDraftDerived,
@@ -473,6 +483,23 @@ export function checkedInput(documents: UnitInput): UnitInput {
   };
 }
 
+/** A first generated scheme's change, which can't be dismissed: there's no earlier value to keep. */
+function dismissUnavailable(site: unknown, change: RecordedChange): UnitDiagnostic {
+  const schemeId = change.subject.kind === 'scheme' ? change.subject.schemeId : '';
+  const inputs =
+    isPlainObject(site) && isPlainObject(site.appearanceInputs) ? site.appearanceInputs : {};
+  return {
+    code: 'derived.dismiss_unavailable',
+    severity: 'blocks-publish',
+    document: 'site',
+    pointer: Object.hasOwn(inputs, schemeId)
+      ? `/appearanceInputs/${schemeId}`
+      : '/appearance/colorScheme',
+    message: `${change.id} is the first tokens for the generated color scheme ${schemeId}, which has none before it to keep.`,
+    remediation: 'Accept it, or select another scheme.',
+  };
+}
+
 const editFailed = (document: DocumentName, pointer: string): UnitDiagnostic => ({
   code: 'edit.failed',
   severity: 'blocks-preview',
@@ -496,6 +523,10 @@ export interface DraftStoreOptions {
    * as the publish gate does. None by default.
    */
   readonly lastKnownGood?: (except: readonly RevisionId[]) => Promise<RevisionId | null>;
+  /** The media service's sharp, which decodes an image-derived scheme's asset (10h). */
+  readonly sharp?: () => Promise<SharpLoad>;
+  /** The pixel hash, with its cache, which openStore() shares with the publication service. */
+  readonly pixelHash?: PixelHash;
 }
 
 export function filesystemDraftStore({
@@ -507,6 +538,8 @@ export function filesystemDraftStore({
   now = Date.now,
   log = () => {},
   lastKnownGood = async () => null,
+  sharp = () => loadSharp(),
+  pixelHash = pixelsSha256(sharp),
 }: DraftStoreOptions): DraftStore {
   const stamp = () => new Date(now()).toISOString();
 
@@ -643,6 +676,15 @@ export function filesystemDraftStore({
     return kept.length > 0 ? Object.fromEntries(kept) : undefined;
   }
 
+  /** The revision's generated schemes, which a draft started from it holds until a save makes them again (10h). */
+  async function schemesOf(
+    revisionId: RevisionId | null,
+  ): Promise<Readonly<Record<string, unknown>> | undefined> {
+    const base = await baseSide(revisionId);
+    const entries = Object.fromEntries(schemeEntries(base?.snapshots?.schemes));
+    return Object.keys(entries).length > 0 ? entries : undefined;
+  }
+
   /**
    * `snapshots` with each GitHub record whose section `input`'s portfolio
    * still has, for the account it names (#10): a username edit drops the
@@ -669,13 +711,35 @@ export function filesystemDraftStore({
     input: UnitInput,
     baseRevisionId: RevisionId | null,
     derived: Partial<DraftDerived>,
-  ): Promise<{ readonly input: UnitInput; readonly derived: DraftDerived | undefined }> {
+  ): Promise<{
+    readonly input: UnitInput;
+    readonly derived: DraftDerived | undefined;
+    readonly diagnostics: readonly UnitDiagnostic[];
+  }> {
     const parsed = input.media ? parseSource(input.media.sourceText, input.media.format) : null;
     const media = parsed?.ok ? parsed.data : undefined;
+    // The generated schemes the site selects, made again from its inputs
+    // (10h). A build without generators keeps what the draft holds.
+    const siteParsed = parseSource(input.site.sourceText, input.site.format);
+    const site = siteParsed.ok ? siteParsed.data : null;
+    let schemes = derived.schemes;
+    const diagnostics: UnitDiagnostic[] = [];
+    if (checks.schemes) {
+      const made = await deriveSchemes({
+        site,
+        media,
+        generators: checks.schemes,
+        readAsset: assetReader(assets),
+        pixelHash,
+      });
+      schemes = made.schemes;
+      diagnostics.push(...made.problems.map((problem) => schemeDiagnostic(site, problem)));
+    }
     const reconciled = reconcileDerived({
       base: await baseSide(baseRevisionId),
       media,
       snapshots: currentSnapshots(input, derived.snapshots),
+      schemes,
       previous: derived.changes ?? [],
     });
     const next =
@@ -691,13 +755,14 @@ export function filesystemDraftStore({
     // A dismissal puts the base's record back, which may be for the account
     // the section named before.
     const snapshots = currentSnapshots(input, reconciled.derived.snapshots);
-    const { changes } = reconciled.derived;
+    const { changes, schemes: kept } = reconciled.derived;
     return {
       input: next,
       derived:
-        snapshots || changes.length > 0
-          ? { changes, ...(snapshots ? { snapshots } : {}) }
+        snapshots || kept || changes.length > 0
+          ? { changes, ...(snapshots ? { snapshots } : {}), ...(kept ? { schemes: kept } : {}) }
           : undefined,
+      diagnostics,
     };
   }
 
@@ -716,12 +781,20 @@ export function filesystemDraftStore({
   ): Promise<DraftOutcome> {
     const large = tooLarge(given);
     if (large) return large;
-    const { input, derived } = await withDerived(
+    const { input, derived, diagnostics } = await withDerived(
       given,
       fields.baseRevisionId,
       fields.derived ?? asDraftDerived(found?.draft.derived) ?? {},
     );
-    const documents = documentsOf(input);
+    const checked = documentsOf(input);
+    // A generated scheme that couldn't be made is a finding on the site document.
+    const documents =
+      diagnostics.length > 0
+        ? {
+            ...checked,
+            site: { ...checked.site, diagnostics: [...checked.site.diagnostics, ...diagnostics] },
+          }
+        : checked;
     const missing = await missingBlobs(documents);
     if (missing) return missing;
     const at = stamp();
@@ -813,12 +886,18 @@ export function filesystemDraftStore({
           input.documents === undefined
             ? (input.fromRevisionId ?? pointer?.revisionId)
             : pointer?.revisionId;
-        const snapshots = await adapterSnapshotsOf(from && isRevisionId(from) ? from : null);
+        const source = from && isRevisionId(from) ? from : null;
+        const snapshots = await adapterSnapshotsOf(source);
+        const schemes = await schemesOf(source);
         return commit('draft.create', working, documents, {
           baseRevisionId: pointer?.revisionId ?? null,
           ...(input.sourceHash === undefined ? {} : { sourceHash: input.sourceHash }),
           actor,
-          derived: { ...(snapshots ? { snapshots } : {}), changes: [] },
+          derived: {
+            ...(snapshots ? { snapshots } : {}),
+            ...(schemes ? { schemes } : {}),
+            changes: [],
+          },
         });
       });
     },
@@ -942,7 +1021,13 @@ export function filesystemDraftStore({
           baseRevisionId: found.draft.baseRevisionId,
           ...(found.draft.sourceHash === undefined ? {} : { sourceHash: found.draft.sourceHash }),
           actor,
-          derived: { snapshots: { ...own?.snapshots, ...snapshots }, changes: own?.changes ?? [] },
+          // A refresh writes adapter snapshots only, and keeps the draft's
+          // generated schemes (10h) as they are.
+          derived: {
+            snapshots: { ...own?.snapshots, ...snapshots },
+            changes: own?.changes ?? [],
+            ...(own?.schemes ? { schemes: own.schemes } : {}),
+          },
         });
       });
     },
@@ -960,6 +1045,23 @@ export function filesystemDraftStore({
         if (found.draft.version !== expectedVersion) return conflict(found);
         const own = asDraftDerived(found.draft.derived) ?? { changes: [] };
         if (unknownChanges(own, changeIds).length > 0) return rejected('not_found', []);
+        // A generated scheme's first tokens have no earlier ones to put back,
+        // so dismissing them would leave the selected scheme with none (10h).
+        if (decision === 'dismissed') {
+          const firsts = own.changes.filter(
+            (change) =>
+              changeIds.includes(change.id) &&
+              change.subject.kind === 'scheme' &&
+              change.before === null,
+          );
+          if (firsts.length > 0) {
+            const site = found.draft.documents.site.model;
+            return rejected(
+              'validation_failed',
+              firsts.map((change) => dismissUnavailable(site, change)),
+            );
+          }
+        }
         return commit('draft.decideChanges', found, draftInput(found.draft), {
           baseRevisionId: found.draft.baseRevisionId,
           ...(found.draft.sourceHash === undefined ? {} : { sourceHash: found.draft.sourceHash }),

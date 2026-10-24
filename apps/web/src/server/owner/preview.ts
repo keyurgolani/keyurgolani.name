@@ -30,6 +30,7 @@ import {
   type Store,
   type UnitInput,
 } from '@portfolio/core/owner';
+import { readDerivedSchemes } from '@portfolio/appearance';
 import { resolveRendition } from '@portfolio/core';
 import { assertAuthorized, authorize, type Authorized } from '../authorize';
 import type { DeploymentConfig } from '../config';
@@ -287,12 +288,27 @@ export function ownerPreviews({
         views.delete(key);
       }
     }
+    // A draft grant's generated schemes, as pinned at mint, each checked: one
+    // that doesn't is left out, so its axis falls back, and logged by id (10h).
+    const pinned = record.subject.kind === 'draft' ? record.schemes : undefined;
+    const pinnedRead = pinned === undefined ? null : readDerivedSchemes(pinned);
+    for (const problem of pinnedRead?.problems ?? []) {
+      log({
+        level: 'warn',
+        event: 'preview.scheme_dropped',
+        grantRef: ref,
+        schemeId: problem.schemeId,
+      });
+    }
     return Object.freeze({
       view,
       environment: record.environment,
       nonce: record.nonce,
       renderedVersion: renderedVersionOf(record),
       ref,
+      ...(pinnedRead && Object.keys(pinnedRead.schemes).length > 0
+        ? { schemes: pinnedRead.schemes }
+        : {}),
     });
   }
 
@@ -423,6 +439,7 @@ export function ownerPreviews({
 
     let grantSubject: GrantSubject;
     let documents: UnitInput | null;
+    let pinnedSchemes: Readonly<Record<string, unknown>> | undefined;
     if ('draft' in subject) {
       if (!isDraftId(subject.draft)) return errorResult('invalid_input');
       const draft = await store.drafts.get(subject.draft);
@@ -430,6 +447,7 @@ export function ownerPreviews({
       if (draft.version !== subject.version) return errorResult('version_conflict');
       grantSubject = { kind: 'draft', draftId: draft.draftId, version: draft.version };
       documents = documentsOf(draft.documents);
+      pinnedSchemes = draft.derived?.schemes;
     } else if ('revision' in subject) {
       grantSubject = { kind: 'revision', revisionId: subject.revision as RevisionId };
       documents = (await contentOf(grantSubject))?.documents ?? null;
@@ -445,6 +463,7 @@ export function ownerPreviews({
       session,
       subject: grantSubject,
       ...(grantSubject.kind === 'draft' ? { documents } : {}),
+      ...(grantSubject.kind === 'draft' && pinnedSchemes ? { schemes: pinnedSchemes } : {}),
       ...(selection ? { appearance: selection } : {}),
       environment,
     });

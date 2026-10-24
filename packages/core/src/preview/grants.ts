@@ -115,6 +115,8 @@ export interface MintInput {
   readonly subject: GrantSubject;
   /** A draft grant's pinned version, which the caller read and checked. Only a draft grant has one. */
   readonly documents?: UnitInput;
+  /** A draft grant's derived.schemes as minted (10h), pinned with its documents. */
+  readonly schemes?: Readonly<Record<string, unknown>>;
   /** The frame's appearance override, which the caller checked against #4's schema. */
   readonly appearance?: Readonly<Record<string, unknown>>;
   readonly environment: GrantEnvironment;
@@ -195,9 +197,10 @@ function serializer() {
 
 /** A record without the copy of a draft it no longer renders. */
 function withoutDocuments(record: GrantRecord): GrantRecord {
-  if (!record.documents) return record;
+  if (!record.documents && !record.schemes) return record;
   const copy: { -readonly [K in keyof GrantRecord]?: GrantRecord[K] } = { ...record };
   delete copy.documents;
+  delete copy.schemes;
   return Object.freeze(copy as GrantRecord);
 }
 
@@ -348,10 +351,13 @@ export function createPreviewGrants({
   }
 
   return {
-    async mint({ session, subject, documents, appearance, environment }) {
+    async mint({ session, subject, documents, schemes, appearance, environment }) {
       if (!isGrantDigest(session.digest)) throw new TypeError('Not a session digest.');
       if ((subject.kind === 'draft') !== (documents !== undefined)) {
         throw new TypeError('A draft grant, and only a draft grant, pins documents.');
+      }
+      if (schemes !== undefined && subject.kind !== 'draft') {
+        throw new TypeError('Only a draft grant pins generated schemes.');
       }
       const at = now();
       const absoluteExpiresAt = Math.min(at + maxMs, session.absoluteExpiresAt);
@@ -379,6 +385,7 @@ export function createPreviewGrants({
         nonce: newChannelNonce(),
         subject,
         ...(documents ? { documents } : {}),
+        ...(schemes ? { schemes } : {}),
         ...(appearance ? { appearance } : {}),
         environment,
         createdAt: at,

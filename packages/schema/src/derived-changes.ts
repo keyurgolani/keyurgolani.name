@@ -9,20 +9,28 @@ import { canonicalize } from './serialize';
 //   source (a renamed file, or a URL that moved);
 // - `source-replaced`: a media asset's bytes changed (a replaced file, or a
 //   metadata edit that rewrote it), so its renditions and derived fields did;
-// - `integration-refreshed`: a refresh froze new data for a GitHub section.
+// - `integration-refreshed`: a refresh froze new data for a GitHub section;
+// - `scheme-regenerated`: a draft save's generator made other tokens for a
+//   generated color scheme, from another input or another generator (10h).
 // A draft keeps each change beside its authored documents, with the owner's
 // decision, and `assertDerivedChangesApproved` blocks a publish that would
 // carry one the owner hasn't accepted. A missing or restored source changes
 // no asset revision, so it raises none: `portfolio-store media check` reports
 // it. Pure and browser-safe: #8's Studio reads the same records.
 
-export const DERIVED_CAUSES = ['source-moved', 'source-replaced', 'integration-refreshed'] as const;
+export const DERIVED_CAUSES = [
+  'source-moved',
+  'source-replaced',
+  'integration-refreshed',
+  'scheme-regenerated',
+] as const;
 export type DerivedCause = (typeof DERIVED_CAUSES)[number];
 
-/** What a derived change is about: a media asset, or one section's adapter record. */
+/** What a derived change is about: a media asset, one section's adapter record, or a generated scheme. */
 export type DerivedSubject =
   | { readonly kind: 'media'; readonly assetId: string }
-  | { readonly kind: 'snapshot'; readonly adapter: 'github'; readonly sectionId: string };
+  | { readonly kind: 'snapshot'; readonly adapter: 'github'; readonly sectionId: string }
+  | { readonly kind: 'scheme'; readonly schemeId: string };
 
 /** A derived value as a change shows it: plain JSON. */
 export type DerivedValue = Readonly<Record<string, unknown>>;
@@ -49,7 +57,10 @@ export interface RecordedChange extends DerivedChange {
   readonly decision: DerivedDecision;
 }
 
-/** One side of the comparison: a unit's media document and its adapter snapshots. */
+/**
+ * One side of the comparison: a unit's media document and its frozen
+ * snapshots, the generated schemes as `snapshots.schemes`.
+ */
 export interface DerivedSide {
   readonly media?: unknown;
   readonly snapshots?: Readonly<Record<string, unknown>>;
@@ -58,6 +69,13 @@ export interface DerivedSide {
 /** The snapshot kinds an adapter writes, which a draft keeps and a publish freezes. */
 export const ADAPTER_SNAPSHOT_KINDS = ['github'] as const;
 export type AdapterSnapshotKind = (typeof ADAPTER_SNAPSHOT_KINDS)[number];
+
+/**
+ * The snapshot kinds a draft's derived block freezes into a revision at
+ * publish: the adapters' records, and the generated schemes (10h), which
+ * the draft holds as derived.schemes and the revision as snapshots/schemes.json.
+ */
+export const FROZEN_SNAPSHOT_KINDS = [...ADAPTER_SNAPSHOT_KINDS, 'schemes'] as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => isPlainObject(value);
 
@@ -99,6 +117,22 @@ export function snapshotRecords(snapshot: unknown): Map<string, Record<string, u
 }
 
 const same = (a: unknown, b: unknown) => canonicalize(a ?? null) === canonicalize(b ?? null);
+
+/** A schemes snapshot's entries by scheme id, read leniently: anything malformed is left out. */
+export function schemeEntries(schemes: unknown): Map<string, Record<string, unknown>> {
+  const entries = new Map<string, Record<string, unknown>>();
+  if (!isRecord(schemes)) return entries;
+  for (const [schemeId, entry] of Object.entries(schemes)) {
+    if (!/^[a-z][a-z0-9-]{1,47}$/.test(schemeId) || !isRecord(entry)) continue;
+    entries.set(schemeId, entry);
+  }
+  return entries;
+}
+
+/** What a change shows of a generated scheme: the generator, the input's hash, and the tokens. */
+function schemeValue(entry: Record<string, unknown>): DerivedValue {
+  return { generator: entry.generator, inputsHash: entry.inputsHash, tokens: entry.tokens };
+}
 
 /** The keys of `before` and `after` whose values differ, `prefix` first. */
 function changedFields(
@@ -154,6 +188,24 @@ export function derivedChanges(before: DerivedSide | null, after: DerivedSide): 
       before: from,
       after: to,
       fields: changedFields(last ? data(last.data) : null, data(record.data), 'data.'),
+    });
+  }
+  // A generated scheme the base has with other tokens, generator, or input,
+  // and a first one, which no one has seen either (10h). One the draft no
+  // longer selects is gone from it, and raises none.
+  const schemesBefore = schemeEntries(before?.snapshots?.schemes);
+  const schemesAfter = schemeEntries(after.snapshots?.schemes);
+  for (const schemeId of [...schemesAfter.keys()].sort()) {
+    const to = schemeValue(schemesAfter.get(schemeId)!);
+    const last = schemesBefore.get(schemeId);
+    const from = last ? schemeValue(last) : null;
+    if (from && same(from, to)) continue;
+    changes.push({
+      cause: 'scheme-regenerated',
+      subject: { kind: 'scheme', schemeId },
+      before: from,
+      after: to,
+      fields: changedFields(from, to),
     });
   }
   return changes;
@@ -215,6 +267,7 @@ export function githubRecordsFor(portfolio: unknown, snapshot: unknown): unknown
 function isSubject(value: unknown): value is DerivedSubject {
   if (!isRecord(value)) return false;
   if (value.kind === 'media') return typeof value.assetId === 'string';
+  if (value.kind === 'scheme') return typeof value.schemeId === 'string';
   return (
     value.kind === 'snapshot' && value.adapter === 'github' && typeof value.sectionId === 'string'
   );
@@ -254,6 +307,7 @@ export function recordedChanges(derived: unknown): RecordedChange[] {
 
 /** How a message names what a change is about. */
 export function subjectName(subject: DerivedSubject): string {
+  if (subject.kind === 'scheme') return `the generated color scheme ${subject.schemeId}`;
   return subject.kind === 'media'
     ? `the media asset ${subject.assetId}`
     : `the GitHub section ${subject.sectionId}`;
@@ -263,17 +317,30 @@ const CAUSE_WORDS: Readonly<Record<DerivedCause, string>> = {
   'source-moved': 'is read from another source',
   'source-replaced': 'has new bytes, so its renditions and derived fields changed',
   'integration-refreshed': 'has newly refreshed data',
+  'scheme-regenerated': 'has newly generated tokens',
 };
 
 /**
  * Where a change's subject is authored: its media entry, or its GitHub
- * section, in the portfolio. A plugged-in validator reports into the pair,
- * so the record lands on the entry the owner wrote, with its line.
+ * section, in the portfolio, or a generated scheme's input, or its
+ * selection, in the site. A plugged-in validator reports into the pair, so
+ * the record lands on the entry the owner wrote, with its line.
  */
 function located(
   change: DerivedChange,
-  portfolio: unknown,
+  pair: { readonly portfolio: unknown; readonly site: unknown },
 ): Pick<Diagnostic, 'document' | 'pointer'> {
+  if (change.subject.kind === 'scheme') {
+    const inputs = isRecord(pair.site) ? pair.site.appearanceInputs : undefined;
+    return {
+      document: 'site',
+      pointer:
+        isRecord(inputs) && Object.hasOwn(inputs, change.subject.schemeId)
+          ? `/appearanceInputs/${change.subject.schemeId}`
+          : '/appearance/colorScheme',
+    };
+  }
+  const { portfolio } = pair;
   const [list, id] =
     change.subject.kind === 'media'
       ? (['media', change.subject.assetId] as const)
@@ -298,11 +365,17 @@ export const assertDerivedChangesApproved: UnitValidator = {
   validate(pair, ctx: Context) {
     const publication = ctx.publication;
     if (!publication) return { diagnostics: [], notChecked: ['derived.unapproved'] };
-    if (publication.live === null || publication.derived === undefined) {
-      return { diagnostics: [] };
-    }
+    if (publication.derived === undefined) return { diagnostics: [] };
     const draft = publication.draft ?? {};
-    const live = { media: publication.live.media, snapshots: publication.live.snapshots };
+    // With no live revision, media and GitHub data have nothing to compare
+    // against, but a generated scheme does: none. Its first tokens wait for
+    // the owner on a store's first publish too (10h).
+    const live =
+      publication.live === null
+        ? { snapshots: {} }
+        : { media: publication.live.media, snapshots: publication.live.snapshots };
+    const compared =
+      publication.live === null ? { snapshots: { schemes: draft.snapshots?.schemes } } : draft;
     const accepted = new Set(
       recordedChanges(publication.derived)
         .filter(({ decision }) => decision.state === 'accepted')
@@ -313,14 +386,14 @@ export const assertDerivedChangesApproved: UnitValidator = {
       recordedChanges(publication.derived).map((change) => [changeContent(change), change.id]),
     );
     const diagnostics: Diagnostic[] = [];
-    for (const change of derivedChanges(live, draft)) {
+    for (const change of derivedChanges(live, compared)) {
       const content = changeContent(change);
       if (accepted.has(content)) continue;
       const id = ids.get(content);
       diagnostics.push({
         code: 'derived.unapproved',
         severity: 'blocks-publish',
-        ...located(change, pair.portfolio),
+        ...located(change, pair),
         message: `${subjectName(change.subject)} ${CAUSE_WORDS[change.cause]} (${change.cause}${id ? `, change ${id}` : ''}), and no one has accepted that change.`,
         remediation:
           'Review it, then accept it or dismiss it: in Studio, or with portfolio-store changes accept <id> or portfolio-store changes dismiss <id>. Dismissing it keeps the live value.',

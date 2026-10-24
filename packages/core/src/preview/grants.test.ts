@@ -170,11 +170,13 @@ function mintDraft(
   grants: PreviewGrants,
   session: { digest: string; absoluteExpiresAt: number },
   draft: Draft,
+  schemes?: Readonly<Record<string, unknown>>,
 ) {
   return grants.mint({
     session,
     subject: draftSubject(draft),
     documents: draftInput(draft),
+    ...(schemes ? { schemes } : {}),
     environment: ENVIRONMENT,
   });
 }
@@ -491,15 +493,17 @@ test('a grant that ends keeps its hash, without its documents, until its 2-hour 
   const { store, dataDir, sessions, grants, advance } = await setup(t);
   const { record: signedIn, session } = await signIn(sessions);
   const draft = await newDraft(store);
-  const { token, record } = await mintDraft(grants, session, draft);
+  const { token, record } = await mintDraft(grants, session, draft, { brand: { tokens: {} } });
   const file = path.join(previewPaths(dataDir).grants, `${record.digest}.json`);
   assert.ok(readFileSync(file, 'utf8').includes('"documents"'));
+  assert.ok(readFileSync(file, 'utf8').includes('"schemes"'));
 
   assert.equal(await grants.revoke(token, signedIn.digest), true);
   assert.equal(await grants.revoke(token, signedIn.digest), false, 'once');
   const ended = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
   assert.equal(ended.state, 'superseded');
   assert.equal(ended.documents, undefined, 'its copy of the draft is gone');
+  assert.equal(ended.schemes, undefined, 'and its schemes with it');
   assert.equal(await grants.status(token, signedIn.digest), 'superseded');
 
   // An expired grant drops its documents at the next sweep.
@@ -672,6 +676,15 @@ test('a draft grant, and only a draft grant, pins documents, and no grant outliv
       environment: ENVIRONMENT,
     }),
     TypeError,
+  );
+  await assert.rejects(
+    grants.mint({
+      session,
+      subject: { kind: 'fixture', fixture: 'complete' },
+      schemes: { brand: {} },
+      environment: ENVIRONMENT,
+    }),
+    /Only a draft grant pins generated schemes/,
   );
   await assert.rejects(
     grants.mint({

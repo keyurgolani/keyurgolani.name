@@ -92,18 +92,24 @@ const DraftDocumentsSchema = z
     media: DraftDocumentSchema.optional(),
   })
   .strict();
-/** A derived change's subject (#10): a media asset, or one GitHub section's record. */
+/** A derived change's subject (#10): a media asset, one GitHub section's record, or a generated scheme. */
 const ChangeSubjectSchema = z.union([
   z.object({ kind: z.literal('media'), assetId: z.string() }).strict(),
   z
     .object({ kind: z.literal('snapshot'), adapter: z.literal('github'), sectionId: z.string() })
     .strict(),
+  z.object({ kind: z.literal('scheme'), schemeId: z.string() }).strict(),
 ]);
 /** A derived change as a draft records it, with the owner's decision. */
 export const DerivedChangeSchema = z
   .object({
     id: z.string().regex(/^dch_[0-9a-f]{32}$/),
-    cause: z.enum(['source-moved', 'source-replaced', 'integration-refreshed']),
+    cause: z.enum([
+      'source-moved',
+      'source-replaced',
+      'integration-refreshed',
+      'scheme-regenerated',
+    ]),
     subject: ChangeSubjectSchema,
     before: z.record(z.unknown()).nullable(),
     after: z.record(z.unknown()),
@@ -114,10 +120,35 @@ export const DerivedChangeSchema = z
     ]),
   })
   .strict();
-/** A draft's derived block (#10): what its refreshes froze, and its derived changes. */
+/** A color set as a generated scheme carries it: role names to `#rrggbb`. */
+const ColorSetSchema = z.record(z.string(), z.string().regex(/^#[0-9a-f]{6}$/));
+/**
+ * A generated scheme (10h), as `DerivedSchemeSchema` in @portfolio/appearance
+ * describes it. It's written out here because this file imports zod alone;
+ * the store checks every entry against that schema before it writes one, and
+ * store-schemas.test.ts holds the two to the same shape.
+ */
+export const DerivedSchemeEntrySchema = z
+  .object({
+    generator: z.object({ id: z.string().min(1), version: z.number().int().positive() }).strict(),
+    inputsHash: z.string().regex(/^[0-9a-f]{64}$/),
+    tokens: z
+      .object({
+        light: ColorSetSchema,
+        dark: ColorSetSchema,
+        highContrast: z.object({ light: ColorSetSchema, dark: ColorSetSchema }).strict().optional(),
+      })
+      .strict(),
+  })
+  .strict();
+/**
+ * A draft's derived block (#10): what its refreshes froze, the generated
+ * schemes its saves made (10h), and its derived changes.
+ */
 const DraftDerivedSchema = z
   .object({
     snapshots: z.object({ github: z.unknown().optional() }).strict().optional(),
+    schemes: z.record(z.string(), DerivedSchemeEntrySchema).optional(),
     changes: z.array(DerivedChangeSchema),
   })
   .strict();

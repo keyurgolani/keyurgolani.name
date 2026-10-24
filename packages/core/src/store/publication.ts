@@ -62,6 +62,16 @@ import {
   type Publication,
 } from '@portfolio/schema';
 import { asDraftDerived } from './derived';
+import { loadSharp, type SharpLoad } from '../catalog/media/derive';
+import {
+  assetReader,
+  deriveSchemes,
+  frozenSchemes,
+  pixelsSha256,
+  type PixelHash,
+  schemeDiagnostic,
+  schemeWarning,
+} from './schemes';
 import { manifestFor, readManifest, readRevision, revisionIds, type Manifest } from './revisions';
 import {
   checkUnit,
@@ -350,6 +360,10 @@ export interface PublicationOptions {
   readonly audit?: AuditSink;
   readonly now?: () => number;
   readonly log?: StoreLog;
+  /** The media service's sharp, which decodes an image-derived scheme's asset (10h). */
+  readonly sharp?: () => Promise<SharpLoad>;
+  /** The pixel hash, with its cache, which openStore() shares with the draft store. */
+  readonly pixelHash?: PixelHash;
 }
 
 const AUDIT_TYPE: Readonly<Record<EventType, AuditType>> = Object.freeze({
@@ -416,6 +430,8 @@ export function filesystemPublicationService({
   audit = NO_AUDIT,
   now = Date.now,
   log = () => {},
+  sharp = () => loadSharp(),
+  pixelHash = pixelsSha256(sharp),
 }: PublicationOptions): PublicationService {
   const stamp = () => new Date(now()).toISOString();
   const hasBlob = (hash: Sha256) => assets.has(hash);
@@ -1025,20 +1041,43 @@ export function filesystemPublicationService({
         const against = await liveContext(pointer);
         if (against === 'unreadable') return rejected('live_unreadable');
         const { context: liveRevision } = against;
+        // The generated schemes it freezes (10h): each the site selects, made
+        // by the generator its manifest declares from the site's input, or
+        // the live revision's own. One missing blocks the publish.
+        const site = draft.documents.site.model;
+        const media = draft.documents.media?.model;
+        const frozen = checks.schemes
+          ? await frozenSchemes({
+              site,
+              media,
+              stored: derived?.schemes,
+              live: liveRevision?.snapshots?.schemes,
+              generators: checks.schemes,
+              readAsset: assetReader(assets),
+              pixelHash,
+            })
+          : { schemes: { ...derived?.schemes }, problems: [] };
+        const snapshots = {
+          ...derived?.snapshots,
+          ...(Object.keys(frozen.schemes).length > 0 ? { schemes: frozen.schemes } : {}),
+        };
         const publication: Publication = {
           live: liveRevision,
           derived: derived ?? { changes: [] },
-          draft: {
-            media: draft.documents.media?.model,
-            ...(derived?.snapshots ? { snapshots: derived.snapshots } : {}),
-          },
+          draft: { media, snapshots },
         };
         const checked = checkUnit(
-          { ...draftInput(draft), ...(derived?.snapshots ? { snapshots: derived.snapshots } : {}) },
+          { ...draftInput(draft), ...(Object.keys(snapshots).length > 0 ? { snapshots } : {}) },
           checks,
           publication,
         );
-        if (!checked.ok) return rejected('validation_failed', checked.diagnostics);
+        const ungenerated = frozen.problems.map((problem) => schemeDiagnostic(site, problem));
+        if (!checked.ok || ungenerated.length > 0) {
+          return rejected('validation_failed', [
+            ...(checked.ok ? [] : checked.diagnostics),
+            ...ungenerated,
+          ]);
+        }
         const { unit, rendering } = checked;
         const manifestFields = {
           revisionId: newRevisionId(),
@@ -1126,7 +1165,33 @@ export function filesystemPublicationService({
         const against = await liveContext(pointer);
         const { context: liveRevision, adapterSnapshots } =
           against === 'unreadable' ? { context: null, adapterSnapshots: {} } : against;
-        const { snapshots: carried, warnings } = carriedSnapshots(documents, adapterSnapshots);
+        const carriedOut = carriedSnapshots(documents, adapterSnapshots);
+        const carried: Record<string, unknown> = { ...carriedOut.snapshots };
+        const warnings = [...carriedOut.warnings];
+        // An import makes the seed schemes its site selects, as a draft save
+        // does (10h), and counts them as accepted: the seed is text the
+        // operator wrote. An image-derived one is left out, with a warning,
+        // until the owner accepts what its generator makes in a draft, and so
+        // is one it can't make. Each renders its fallback meanwhile. The live
+        // revision's image-derived entry, made by the same generator from the
+        // same pixels, is one the owner accepted, and stays.
+        if (checks.schemes) {
+          const site = parseSource(documents.site.sourceText, documents.site.format);
+          const mediaText = documents.media
+            ? parseSource(documents.media.sourceText, documents.media.format)
+            : null;
+          const made = await deriveSchemes({
+            site: site.ok ? site.data : null,
+            media: mediaText?.ok ? mediaText.data : undefined,
+            generators: checks.schemes,
+            readAsset: assetReader(assets),
+            pixelHash,
+            seedsOnly: true,
+            accepted: liveRevision?.snapshots?.schemes,
+          });
+          if (Object.keys(made.schemes).length > 0) carried.schemes = made.schemes;
+          warnings.push(...made.problems.map(schemeWarning));
+        }
         const checked = checkUnit(
           {
             ...documents,
