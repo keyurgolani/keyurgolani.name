@@ -16,8 +16,9 @@
 // partition the groups, so they run every planned test exactly once
 // between them.
 //
-// How many shards: the fewest, from 1 to MAX_SHARDS (SWEEP_MAX_SHARDS when
-// the pack sweep alone needs more, shardLimit), whose slowest shard,
+// How many shards: the fewest, from 1 to MAX_SHARDS (and with a pack sweep,
+// MAX_SHARDS and what the sweep alone needs, up to SWEEP_MAX_SHARDS:
+// shardLimit), whose slowest shard,
 // its fixed part plus its groups on Playwright's two workers, stays within
 // SHARD_CEILING (pickShardCount). CI's quality-pr-plan job works it out for
 // each PR (pr-count.ts), and every shard is handed that count. A cell group
@@ -67,9 +68,9 @@ export const SHARD_WORKERS = 2;
 /** The most shards quality-pr-plan hands out: more only add parallel runners, and 12 fits the repository's concurrency beside the other jobs. */
 export const MAX_SHARDS = 12;
 /**
- * The most a PR may take when its pack sweep's groups alone (lib/sweep.ts)
- * need more than MAX_SHARDS: #20's catalog PRs, which change dozens of packs
- * at once. Nothing else reaches it (shardLimit).
+ * The most a PR with a pack sweep may take (shardLimit): MAX_SHARDS and the
+ * shards the sweep alone needs, up to this. #20's catalog PRs, which change
+ * dozens of packs at once, reach it. Nothing else does.
  */
 export const SWEEP_MAX_SHARDS = 16;
 /** The most one group may weigh: a group runs on one worker, so it alone sets its shard's floor. */
@@ -367,31 +368,50 @@ function fewestShards(
 }
 
 /**
- * The most shards `groups` may take: MAX_SHARDS, unless the pack sweep's
- * groups alone, split and placed as the whole plan's are, need more than
- * MAX_SHARDS, when it's SWEEP_MAX_SHARDS and `reason` says why. Every other
- * group is left out of that count, so only sweep load raises it.
+ * The most shards `groups` may take: MAX_SHARDS, plus the fewest the pack
+ * sweep's groups alone need (lib/sweep.ts), split and placed as the whole
+ * plan's are, up to SWEEP_MAX_SHARDS. The rest keeps its usual
+ * MAX_SHARDS' worth, and the sweep brings its own on top. Only sweep groups
+ * count toward `sweepShards`, so nothing else raises it.
  */
 export function shardLimit(
   groups: readonly ShardGroup[],
   durations: Pick<ShardDurations, 'group'> = loadDurations(),
-): { readonly max: number; readonly reason: string | null } {
+): { readonly max: number; readonly sweepShards: number; readonly reason: string | null } {
   const sweep = groups.filter((group) => group.sweep);
-  if (sweep.length === 0) return { max: MAX_SHARDS, reason: null };
+  if (sweep.length === 0) return { max: MAX_SHARDS, sweepShards: 0, reason: null };
   const alone = fewestShards(splitGroups(sweep, GROUP_BUDGET, durations), SWEEP_MAX_SHARDS);
-  if (alone.fits && alone.count <= MAX_SHARDS) return { max: MAX_SHARDS, reason: null };
-  const needs = alone.fits ? `${alone.count}` : `more than ${SWEEP_MAX_SHARDS}`;
+  // A sweep that needs more than SWEEP_MAX_SHARDS on its own counts as that many: the most never passes it.
+  const sweepShards = alone.fits ? alone.count : SWEEP_MAX_SHARDS;
+  const max = Math.min(SWEEP_MAX_SHARDS, MAX_SHARDS + sweepShards);
+  const needs = alone.fits ? `${sweepShards} shard(s)` : `more than ${SWEEP_MAX_SHARDS} shards`;
   return {
-    max: SWEEP_MAX_SHARDS,
-    reason: `the pack sweep's ${sweep.length} group(s) alone need ${needs} shards, more than ${MAX_SHARDS}, so up to ${SWEEP_MAX_SHARDS} are allowed`,
+    max,
+    sweepShards,
+    reason: `the pack sweep's ${sweep.length} group(s) alone need ${needs}, so the most is ${max}`,
   };
+}
+
+/** Why `groups` can't fit `max` shards: the slowest shard, its heaviest group, and `about`. */
+function overCeiling(
+  max: number,
+  { slowest, shards }: { readonly slowest: number; readonly shards: readonly PrShard[] },
+  about: string | null,
+): Error {
+  const worst = shards.reduce((a, b) => (shardEstimate(b) > shardEstimate(a) ? b : a));
+  const heaviest = [...worst.groups].sort((a, b) => b.weight - a.weight)[0]!;
+  return new Error(
+    `Even ${max} shards leave one at about ${Math.round(slowest)}s, over the ${SHARD_CEILING}s ceiling${about ? ` (${about})` : ''}. Its heaviest group is ${groupKey(heaviest)}, at about ${Math.round(heaviest.weight)}s.`,
+  );
 }
 
 /**
  * The fewest shards, 1 to shardLimit()'s most, that keep every shard
  * within SHARD_CEILING, from `groups` as planGroups() weighs them, split
- * first. Needing more throws, naming the slowest shard's heaviest group and
- * about how long that shard would take.
+ * first. The groups outside the pack sweep must fit MAX_SHARDS on their
+ * own, so a sweep never makes room for anything else. Needing more throws,
+ * naming the slowest shard's heaviest group and about how long that shard
+ * would take.
  */
 export function pickShardCount(
   groups: readonly ShardGroup[],
@@ -400,20 +420,27 @@ export function pickShardCount(
   readonly count: number;
   readonly slowest: number;
   readonly shards: PrShard[];
-  /** Why the count may pass MAX_SHARDS, or null when it may not. */
+  /** The fewest shards the pack sweep alone needs, 0 without one. */
+  readonly sweepShards: number;
+  /** The most the count could be, and why it's over MAX_SHARDS, or null. */
+  readonly max: number;
   readonly reason: string | null;
 } {
-  const { max, reason } = shardLimit(groups, durations);
-  const { fits, count, slowest, shards } = fewestShards(
-    splitGroups(groups, GROUP_BUDGET, durations),
-    max,
-  );
-  if (fits) return { count, slowest, shards, reason };
-  const worst = shards.reduce((a, b) => (shardEstimate(b) > shardEstimate(a) ? b : a));
-  const heaviest = [...worst.groups].sort((a, b) => b.weight - a.weight)[0]!;
-  throw new Error(
-    `Even ${max} shards leave one at about ${Math.round(slowest)}s, over the ${SHARD_CEILING}s ceiling${reason ? ` (${reason})` : ''}. Its heaviest group is ${groupKey(heaviest)}, at about ${Math.round(heaviest.weight)}s.`,
-  );
+  const { max, sweepShards, reason } = shardLimit(groups, durations);
+  if (sweepShards > 0) {
+    const rest = fewestShards(
+      splitGroups(
+        groups.filter((group) => !group.sweep),
+        GROUP_BUDGET,
+        durations,
+      ),
+      MAX_SHARDS,
+    );
+    if (!rest.fits) throw overCeiling(MAX_SHARDS, rest, 'the groups outside the pack sweep, alone');
+  }
+  const picked = fewestShards(splitGroups(groups, GROUP_BUDGET, durations), max);
+  if (!picked.fits) throw overCeiling(max, picked, reason);
+  return { ...picked, sweepShards, max, reason };
 }
 
 /** The shard `text` (<n>/<m>) names, of the PR plan on `engines`, its groups split as pickShardCount() splits them. */

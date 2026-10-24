@@ -651,8 +651,9 @@ jobs:
   # quality-pr-plan, which every rule that selects quality-pr selects, plans the same PR set from the
   # registry the quality host builds and the paths the merge changes, and
   # picks the fewest shards that keep each within about 5 minutes
-  # (tests/quality/pr-count.ts), at most 12, or 16 when the pack sweep alone
-  # needs more than 12. Needing more fails, naming the heaviest group.
+  # (tests/quality/pr-count.ts), at most 12, or with a pack sweep 12 plus what
+  # the sweep alone needs, up to 16. Needing more fails, naming the heaviest
+  # group.
   quality-pr-plan:
     name: quality-pr-plan
     needs: [changes]

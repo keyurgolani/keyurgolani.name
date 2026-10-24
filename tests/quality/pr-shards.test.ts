@@ -181,8 +181,9 @@ test('the count is the fewest shards the weights allow within the ceiling, and m
   }
 });
 
-test('only the pack sweep raises the most past 12, to 16, when its groups alone need more, and the reason says so', () => {
+test('a pack sweep adds the shards it alone needs to the usual 12, up to 16, and nothing else raises it', () => {
   const durations = { group: 5 };
+  // A shard holds two 200 s groups, one a worker.
   const swept = (count: number, weight: number): ShardGroup[] =>
     synthetic(count, weight).map((group, at) => ({
       ...group,
@@ -191,26 +192,49 @@ test('only the pack sweep raises the most past 12, to 16, when its groups alone 
     }));
   assert.equal(SWEEP_MAX_SHARDS, 16);
   // No sweep load: needing 14 fails at 12, naming the heaviest group.
-  assert.deepEqual(shardLimit(synthetic(28, 200), durations), { max: MAX_SHARDS, reason: null });
+  assert.deepEqual(shardLimit(synthetic(28, 200), durations), {
+    max: MAX_SHARDS,
+    sweepShards: 0,
+    reason: null,
+  });
   assert.throws(
     () => pickShardCount(synthetic(28, 200), durations),
     /^Error: Even 12 shards leave one at about \d+s, over the 300s ceiling\. Its heaviest group is chromium s\d+ cells\.spec\.ts, at about 200s\.$/,
   );
-  // The same load as the sweep's: 14, and why.
-  const picked = pickShardCount(swept(28, 200), durations);
-  assert.equal(picked.count, 14);
+  // 2a's shape: a sweep that alone needs 8 beside the rest's 6, so up to 16, and 14 picked.
+  const catalog = pickShardCount([...synthetic(12, 200), ...swept(16, 200)], durations);
+  assert.equal(catalog.sweepShards, 8);
+  assert.equal(catalog.max, 16);
+  assert.equal(catalog.count, 14);
   assert.equal(
-    picked.reason,
-    "the pack sweep's 28 group(s) alone need 14 shards, more than 12, so up to 16 are allowed",
+    catalog.reason,
+    "the pack sweep's 16 group(s) alone need 8 shard(s), so the most is 16",
   );
-  // A sweep that alone fits 12 doesn't raise it, whatever else the PR holds.
-  const mixed = [...swept(20, 200), ...synthetic(8, 200)];
-  assert.deepEqual(shardLimit(mixed, durations), { max: MAX_SHARDS, reason: null });
-  assert.throws(() => pickShardCount(mixed, durations), /^Error: Even 12 shards/);
-  // Past 16, even the sweep fails, naming its reason.
+  // One small pack raises the most to 13, and the count is still the fewest that fit.
+  const small = [...synthetic(8, 200), ...swept(1, 50)];
+  assert.deepEqual(shardLimit(small, durations), {
+    max: 13,
+    sweepShards: 1,
+    reason: "the pack sweep's 1 group(s) alone need 1 shard(s), so the most is 13",
+  });
+  const fewest = pickShardCount(small, durations);
+  assert.equal(fewest.count, 5);
+  const fewer = Math.max(
+    ...assignShards(splitGroups(small, GROUP_BUDGET, durations), 4).map(shardEstimate),
+  );
+  assert.ok(fewer > SHARD_CEILING, `4 shards: ${fewer}s`);
+  // One pack can't make room for the rest: without the sweep it needs 13, so it fails at 12.
+  assert.throws(
+    () => pickShardCount([...synthetic(26, 200), ...swept(1, 50)], durations),
+    /^Error: Even 12 shards leave one at about \d+s, over the 300s ceiling \(the groups outside the pack sweep, alone\)\. Its heaviest group is chromium s\d+ cells\.spec\.ts, at about 200s\.$/,
+  );
+  // The most is never over 16, however much the sweep needs.
+  for (const count of [1, 8, 16, 24, 40]) {
+    assert.ok(shardLimit(swept(count, 200), durations).max <= SWEEP_MAX_SHARDS, `${count}`);
+  }
   assert.throws(
     () => pickShardCount(swept(40, 200), durations),
-    /^Error: Even 16 shards leave one at about \d+s, over the 300s ceiling \(the pack sweep's 40 group\(s\) alone need more than 16 shards, more than 12, so up to 16 are allowed\)\./,
+    /^Error: Even 16 shards leave one at about \d+s, over the 300s ceiling \(the pack sweep's 40 group\(s\) alone need more than 16 shards, so the most is 16\)\./,
   );
 });
 
