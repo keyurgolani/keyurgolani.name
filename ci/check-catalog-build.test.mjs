@@ -338,27 +338,34 @@ test("the held packs are read from each pack package's held/, and the build hold
   const root = path.resolve(import.meta.dirname, '..');
   const held = heldRecords();
   const dirs = readdirSync(path.join(root, 'packages/appearance-languages/held')).sort();
-  assert.equal(dirs.length, 13);
+  // The five whose design is their translucency (#20 PR 2d: the other eight ship opaque).
+  assert.deepEqual(dirs, [
+    'frutiger-aero',
+    'holographic-iridescent',
+    'refractive-glass',
+    'vaporwave',
+    'y2k-translucent',
+  ]);
   assert.deepEqual(
     held.map(({ id }) => id),
     dirs,
   );
   for (const record of held) assert.ok(record.reason, `${record.id} records why it's held`);
   // A held id registered, in the metadata module or as a static chunk's registry key, fails.
-  const fluent = held.find(({ id }) => id === 'fluent-2-inspired');
+  const aero = held.find(({ id }) => id === 'frutiger-aero');
   const web = build({
     'src/lib/generated/registry.meta.ts':
-      'export const PACKS = [{"manifest":{"id":"fluent-2-inspired"}}];',
-    '.next/static/chunks/held.js': 'var p={"id":"fluent-2-inspired"};',
-    '.next/standalone/packages/appearance-languages/held/fluent-2-inspired/manifest.json': '{}',
+      'export const PACKS = [{"manifest":{"id":"frutiger-aero"}}];',
+    '.next/static/chunks/held.js': 'var p={"id":"frutiger-aero"};',
+    '.next/standalone/packages/appearance-languages/held/frutiger-aero/manifest.json': '{}',
   });
   try {
     assert.deepEqual(
-      researchInBuild(web, [fluent]).map(({ id, where }) => `${id} ${where}`),
+      researchInBuild(web, [aero]).map(({ id, where }) => `${id} ${where}`),
       [
-        'fluent-2-inspired the generated modules',
-        'fluent-2-inspired .next/static',
-        'fluent-2-inspired the image',
+        'frutiger-aero the generated modules',
+        'frutiger-aero .next/static',
+        'frutiger-aero the image',
       ],
     );
   } finally {
