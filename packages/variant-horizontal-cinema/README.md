@@ -27,7 +27,7 @@ A frame is the work's cover, else its first meaningful image, on a matte beside 
 
 ## Layout
 
-One DOM, which the stylesheet lays out. On a window at least 64rem wide and 36rem tall, with a fine pointer, hover, and no `prefers-reduced-motion`, the stage is one native horizontal scroller of five full-width chapters, each a mandatory snap point. Anywhere else, phones, tablets, short windows, reduced motion, and print, the same chapters stack in the page's ordinary vertical flow, with the same URLs, order, and controls. The query tests reduced motion itself, since #19 keeps `data-motion` full under the OS's reduce.
+One DOM, which the stylesheet lays out. On a window at least 64rem wide and 36rem tall, with a fine pointer, hover, and no `prefers-reduced-motion`, the stage is one native horizontal scroller of five full-width chapters. It doesn't snap in CSS, which would pull Tab and find back off what they reach: the controller aligns the chapter instead. Anywhere else, phones, tablets, short windows, reduced motion, and print, the same chapters stack in the page's ordinary vertical flow, with the same URLs, order, and controls. The query tests reduced motion itself, since #19 keeps `data-motion` full under the OS's reduce.
 
 ## The controller
 
@@ -36,9 +36,10 @@ One DOM, which the stylesheet lays out. On a window at least 64rem wide and 36re
 - a filmstrip, pager, or index link: the browser's own fragment navigation, one history entry, and focus on the chapter's title;
 - a direct link, refresh, back, and forward: the chapter the fragment names;
 - ArrowLeft and ArrowRight with focus in the experience, and Previous and Next chapter: one step, the URL replaced, and the chapter announced in one polite live region, or focus moved to the new chapter's title when it was in the old one;
-- the wheel, a trackpad, a swipe, Tab, find, and the scrollbar: the page's or the stage's own scrolling, which it never cancels, and the chapter it settles on, the URL replaced.
+- the wheel, a trackpad, a swipe, and the scrollbar: the page's or the stage's own scrolling, which it never cancels, then the nearest chapter, aligned, the URL replaced;
+- Tab, find, and anything else scrolled into view: the chapter it revealed, aligned at once, so what it reached stays in view, the URL replaced.
 
-A step past either end is no step, and its key does what it always does. The URL changes once a change settles, by `replaceState`, never per frame. A resize, a rotation, or a switch of layout keeps the chapter. Its scrolling is smooth only while its runtime is active and `prefers-reduced-motion` doesn't say otherwise. In any frame it writes no history and no hash, and a chapter link scrolls the frame in place. In a plate it never starts.
+A step past either end is no step, and its key does what it always does. The URL changes once a change settles, by `replaceState`, never per frame. A resize, a rotation, or a switch of layout keeps the chapter. Only scrolling it starts is ever smooth, and only while its runtime is active and `prefers-reduced-motion` doesn't say otherwise. In any frame it writes no history and no hash, and a chapter link scrolls the frame in place. In a plate it never starts.
 
 ## Lineage
 
