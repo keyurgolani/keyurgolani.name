@@ -362,13 +362,18 @@ test.describe('touch', () => {
       // Swipe until the page is past Prologue: each swipe is a real touch scroll, never cancelled.
       for (let swipe = 0; swipe < 12; swipe++) {
         const before = await page.evaluate(() => window.scrollY);
-        await cdp.send('Input.synthesizeScrollGesture', {
-          x: 195,
-          y: 700,
-          yDistance: -600,
-          gestureSourceType: 'touch',
-          speed: 1200,
+        // A finger down, ten moves up the screen, and up: the browser's own touch scrolling.
+        await cdp.send('Input.dispatchTouchEvent', {
+          type: 'touchStart',
+          touchPoints: [{ x: 195, y: 700 }],
         });
+        for (let move = 1; move <= 10; move++) {
+          await cdp.send('Input.dispatchTouchEvent', {
+            type: 'touchMove',
+            touchPoints: [{ x: 195, y: 700 - move * 50 }],
+          });
+        }
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
         await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
         if ((await read(page)).onScreen !== anchor('prologue')) break;
       }
