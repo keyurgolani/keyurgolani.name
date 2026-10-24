@@ -13,7 +13,10 @@
 //
 // --fixture <name> instead runs the gate with that one known-bad input
 // registered beside the build's packs, and fails when the gate does, as
-// `pnpm check:appearance --fixture bad-contrast` must.
+// `pnpm check:appearance --fixture bad-contrast` must. It gates only the
+// combinations that hold the input's pack, so a failing shipping pack's own
+// findings don't show there; the main run gates the rest. The exit code and
+// the input's expectations are the same as before.
 //
 // The gate's targets come from quality/thresholds.json (#11, AC5), through
 // appearance-targets.ts. --thresholds <file> reads them from another copy of

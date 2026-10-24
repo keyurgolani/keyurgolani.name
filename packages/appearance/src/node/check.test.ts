@@ -30,6 +30,7 @@ import {
   unmetExpectations,
 } from './check';
 import { LINT_RULES } from './stylesheet';
+import { validatePackManifest } from '../validate-pack';
 
 // `pnpm check:appearance` (#19, Slice 2, item 8): the computed gate over every
 // registered combination, the hierarchy check, the layer-order check, and
@@ -158,6 +159,39 @@ test('every known-bad input fails the check, for the reason it names', () => {
       unmetExpectations(fixture, run),
       [],
       `${name}: ${JSON.stringify(run.check?.failures.slice(0, 2) ?? run.problems)}`,
+    );
+  }
+});
+
+test("a known-bad input's run gates only the combinations that hold its pack, and finds what the whole run finds for it (#20)", () => {
+  const registry = createAppearanceRegistry(META);
+  const base = checkAppearance(registry).combinations;
+  for (const name of ['bad-contrast', 'bad-texture']) {
+    const read = readKnownBadFixture(name, registry);
+    assert.ok(read.ok, name);
+    const run = runKnownBad(read.fixture, META);
+    const validated = validatePackManifest(read.fixture.manifest, {
+      kind: read.fixture.kind,
+      packageName: '@portfolio/appearance',
+    });
+    assert.ok(validated.ok, name);
+    const pack = {
+      kind: read.fixture.kind,
+      packageName: '@portfolio/appearance',
+      version: '0.0.0',
+      manifest: validated.manifest,
+    } as MetaPack;
+    const whole = checkAppearance(
+      createAppearanceRegistry({ ...META, PACKS: [...META.PACKS, pack] }),
+    );
+    assert.ok(run.check && run.check.combinations > 0, name);
+    assert.equal(run.check.combinations, whole.combinations - base, name);
+    assert.deepEqual(
+      run.check.failures,
+      whole.failures.filter((failure) =>
+        [failure.language, failure.scheme, failure.typography].includes(read.fixture.name),
+      ),
+      name,
     );
   }
 });
