@@ -1,3 +1,4 @@
+import { FALLBACK_VARIANT_ID } from '@portfolio/schema/ids';
 import type { AppearanceCatalog, CatalogAxis } from '../studio/appearance';
 import type { DemoUnit } from './browser-backend';
 import type { StorageLike } from './storage';
@@ -25,9 +26,9 @@ const axis = (
 
 export const CATALOG: AppearanceCatalog = {
   axes: [
-    axis('variant', 'Composition', 'fallback', [
-      ['kinetic-cosmos', 'Kinetic Cosmos'],
-      ['obsidian-atelier', 'Obsidian Atelier'],
+    axis('variant', 'Composition', FALLBACK_VARIANT_ID, [
+      ['acme-orbit', 'Acme Orbit'],
+      ['acme-gallery', 'Acme Gallery'],
     ]),
     axis('designLanguage', 'Design language', 'platform-neutral', [
       ['platform-neutral', 'Platform Neutral'],
@@ -53,7 +54,7 @@ export const SCHEME_MODES: SchemeModes = {
 
 /** The sample's own selection: its composition is one this build doesn't register. */
 export const DEFAULTS: DemoSelection = {
-  variant: 'editorial-evidence',
+  variant: 'acme-default',
   designLanguage: 'platform-neutral',
   colorScheme: 'warm-parchment',
   typography: 'humanist-ui',

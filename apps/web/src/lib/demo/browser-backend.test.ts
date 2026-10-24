@@ -56,7 +56,7 @@ test('it implements the base StudioBackend alone, and reaches no server', async 
 });
 
 test('the working draft is the sample with the selection on its site appearance', async () => {
-  const { backend } = setup({ ...DEFAULTS, variant: 'kinetic-cosmos' });
+  const { backend } = setup({ ...DEFAULTS, variant: 'acme-orbit' });
   const working = await backend.workingDraft();
   assert.equal(working.kind, 'read');
   const draft = working.kind === 'read' ? working.value! : assert.fail();
@@ -65,12 +65,12 @@ test('the working draft is the sample with the selection on its site appearance'
   assert.equal(draft.documents.portfolio, UNIT.documents.portfolio);
   assert.deepEqual((draft.documents.site.model as { appearance: unknown }).appearance, {
     ...DEFAULTS,
-    variant: 'kinetic-cosmos',
+    variant: 'acme-orbit',
   });
   // The sample's own documents are never changed in place.
   assert.equal(
     (UNIT.documents.site.model as { appearance: { variant: string } }).appearance.variant,
-    'editorial-evidence',
+    'acme-default',
   );
 });
 
@@ -93,13 +93,13 @@ test('an edit sets one /appearance/<axis> of the site to a value the catalog off
   const result = await backend.applyEdits({
     draftId: DEMO_DRAFT_ID,
     expectedVersion: 1,
-    edits: [set('variant', 'obsidian-atelier'), set('displayMode', 'dark')],
+    edits: [set('variant', 'acme-gallery'), set('displayMode', 'dark')],
   });
   assert.equal(result.kind, 'saved');
   assert.equal(result.kind === 'saved' && result.draft.version, 2);
   assert.deepEqual(backend.selection(), {
     ...DEFAULTS,
-    variant: 'obsidian-atelier',
+    variant: 'acme-gallery',
     displayMode: 'dark',
   });
   assert.deepEqual(JSON.parse(local.items.get(SELECTION_KEY)!), backend.selection());
@@ -138,7 +138,7 @@ test('anything else is refused whole, and changes nothing', async () => {
     ],
     [set('variant', 42)],
     // One edit it can't take refuses the batch, the good one with it.
-    [set('variant', 'kinetic-cosmos'), set('visitorControls', 'selectable')],
+    [set('variant', 'acme-orbit'), set('visitorControls', 'selectable')],
   ]) {
     const result = await backend.applyEdits({ draftId: DEMO_DRAFT_ID, expectedVersion: 1, edits });
     assert.equal(result.kind, 'failed', JSON.stringify(edits));
@@ -147,7 +147,7 @@ test('anything else is refused whole, and changes nothing', async () => {
   for (const [axis, value] of [
     ['variant', 'canary-variant'],
     ['variant', 'fallback'],
-    ['variant', 'editorial-evidence'],
+    ['variant', 'acme-default'],
     ['colorScheme', 'generated-seed'],
     ['displayMode', 'sepia'],
   ] as const) {
@@ -175,27 +175,27 @@ test('another draft or a stale version is no edit: the newer one comes back', as
   const other = await backend.applyEdits({
     draftId: 'draft-1',
     expectedVersion: 1,
-    edits: [set('variant', 'kinetic-cosmos')],
+    edits: [set('variant', 'acme-orbit')],
   });
   assert.equal(other.kind === 'failed' && other.code, 'not_found');
   await backend.applyEdits({
     draftId: DEMO_DRAFT_ID,
     expectedVersion: 1,
-    edits: [set('variant', 'kinetic-cosmos')],
+    edits: [set('variant', 'acme-orbit')],
   });
   const stale = await backend.applyEdits({
     draftId: DEMO_DRAFT_ID,
     expectedVersion: 1,
-    edits: [set('variant', 'obsidian-atelier')],
+    edits: [set('variant', 'acme-gallery')],
   });
   assert.equal(stale.kind, 'conflict');
   assert.equal(stale.kind === 'conflict' && stale.theirs.version, 2);
-  assert.equal(backend.selection().variant, 'kinetic-cosmos');
+  assert.equal(backend.selection().variant, 'acme-orbit');
 });
 
 test('an axis reset puts that axis back and leaves the other four as they are', async () => {
   const { backend } = setup({
-    variant: 'kinetic-cosmos',
+    variant: 'acme-orbit',
     designLanguage: 'platform-neutral',
     colorScheme: 'night-only',
     typography: 'humanist-ui',
@@ -216,7 +216,7 @@ test('a full reset clears every portfolio-demo: key and brings back the sample',
   await backend.applyEdits({
     draftId: DEMO_DRAFT_ID,
     expectedVersion: 1,
-    edits: [set('variant', 'kinetic-cosmos')],
+    edits: [set('variant', 'acme-orbit')],
   });
   session.setItem('portfolio-demo:v1:working', 'copy');
   local.setItem('portfolio-studio:journal:v1', 'owner');
@@ -233,10 +233,10 @@ test('a stored selection reads back through the catalog, axis by axis', () => {
   assert.equal(storedSelection(store, DEFAULTS, rules), null);
   store.write(
     SELECTION_KEY,
-    JSON.stringify({ variant: 'kinetic-cosmos', typography: 'gone', displayMode: 7 }),
+    JSON.stringify({ variant: 'acme-orbit', typography: 'gone', displayMode: 7 }),
   );
   assert.deepEqual(storedSelection(store, DEFAULTS, rules), {
     ...DEFAULTS,
-    variant: 'kinetic-cosmos',
+    variant: 'acme-orbit',
   });
 });

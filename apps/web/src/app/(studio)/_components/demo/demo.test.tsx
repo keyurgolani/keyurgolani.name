@@ -39,7 +39,7 @@ function backend() {
     schemeModes: SCHEME_MODES,
     defaults: DEFAULTS,
     store: demoStore(new FakeStorage(), new FakeStorage()),
-    initial: { ...DEFAULTS, variant: 'kinetic-cosmos', displayMode: 'dark' },
+    initial: { ...DEFAULTS, variant: 'acme-orbit', displayMode: 'dark' },
   });
 }
 
@@ -56,7 +56,7 @@ function frameAttributes(html: string): Record<string, string> {
 }
 
 test('a demo frame loads /sample, sandboxed to scripts alone, with no referrer and no permissions', () => {
-  const src = '/sample?variant=kinetic-cosmos&mode=dark';
+  const src = '/sample?variant=acme-orbit&mode=dark';
   const html = renderToStaticMarkup(
     <DemoFrame src={src} title="Demo sample" viewport={VIEWPORTS[2]!} />,
   );
@@ -126,7 +126,7 @@ test('the Appearance task has a picker and a reset for each axis, a full reset, 
       '&amp;',
     ),
   );
-  assert.match(html, /Composition: Kinetic Cosmos/);
+  assert.match(html, /Composition: Acme Orbit/);
 });
 
 test('the Preview task has the viewports, the display mode, and Follow system and Reduced motion', () => {
