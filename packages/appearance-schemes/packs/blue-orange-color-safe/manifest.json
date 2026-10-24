@@ -1,0 +1,55 @@
+{
+  "id": "blue-orange-color-safe",
+  "name": "Blue Orange Color Safe",
+  "description": "A blue and orange pair that stays distinct under the common color-vision deficiencies.",
+  "version": "1.0.0",
+  "tokenContract": 1,
+  "tier": "stable",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v1 from the reviewed prototype's blue-orange-color-safe anchors, with the light secondary #d46b08 to #cc680a, 4% toward text, so the signature fill reaches 3:1 on every surface."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0,
+    "css": 3072
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [],
+  "derivation": "anchor-v1",
+  "anchors": {
+    "light": {
+      "canvas": "#fffaf2",
+      "text": "#17243a",
+      "accent": "#0067b9",
+      "secondary": "#cc680a"
+    },
+    "dark": {
+      "canvas": "#101827",
+      "text": "#f7f4ed",
+      "accent": "#5eb3ff",
+      "secondary": "#ffad5c"
+    }
+  },
+  "swatches": ["#fffaf2", "#17243a", "#0067b9", "#cc680a"]
+}

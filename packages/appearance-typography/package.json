@@ -2,7 +2,7 @@
   "name": "@portfolio/appearance-typography",
   "version": "0.1.0",
   "private": true,
-  "description": "The platform's typography packs (#19): humanist-ui, the fallback for typography.",
+  "description": "The platform's typography packs (#19, #20): eight system-stack profiles, with humanist-ui the fallback.",
   "portfolio": {
     "kind": "typography",
     "packs": "./packs"

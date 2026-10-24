@@ -20,3 +20,5 @@ ci/fixtures/lockfile-drift/
 # #9's reference fixture, a full export whose bundle.json holds every file's
 # hash: `pnpm fixture:reference` writes it, and a reformat would break them
 tests/fixtures/reference-export/
+# #20's seed: the approved review lab's catalog, copied byte for byte
+scripts/catalog/seed/

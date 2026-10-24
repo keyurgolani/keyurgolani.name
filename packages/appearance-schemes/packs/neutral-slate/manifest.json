@@ -1,0 +1,55 @@
+{
+  "id": "neutral-slate",
+  "name": "Neutral Slate",
+  "description": "Cool slate neutrals with a clear blue accent and a grey-blue secondary.",
+  "version": "1.0.0",
+  "tokenContract": 1,
+  "tier": "stable",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v1 from the reviewed prototype's neutral-slate anchors."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0,
+    "css": 3072
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [],
+  "derivation": "anchor-v1",
+  "anchors": {
+    "light": {
+      "canvas": "#f7f8fa",
+      "text": "#18202c",
+      "accent": "#315fbd",
+      "secondary": "#64748b"
+    },
+    "dark": {
+      "canvas": "#11151c",
+      "text": "#edf2f7",
+      "accent": "#7aa2f7",
+      "secondary": "#94a3b8"
+    }
+  },
+  "swatches": ["#f7f8fa", "#18202c", "#315fbd", "#64748b"]
+}

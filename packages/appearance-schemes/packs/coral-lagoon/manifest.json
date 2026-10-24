@@ -1,0 +1,55 @@
+{
+  "id": "coral-lagoon",
+  "name": "Coral Lagoon",
+  "description": "Coral and lagoon teal on a bright, warm ground.",
+  "version": "1.0.0",
+  "tokenContract": 1,
+  "tier": "extended",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v1 from the reviewed prototype's coral-lagoon anchors, with the light accent #e85d55 to #d45952, 10% toward text, so the signature fill reaches 3:1 on every surface."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0,
+    "css": 3072
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [],
+  "derivation": "anchor-v1",
+  "anchors": {
+    "light": {
+      "canvas": "#fff3ef",
+      "text": "#24343a",
+      "accent": "#d45952",
+      "secondary": "#078f96"
+    },
+    "dark": {
+      "canvas": "#10272c",
+      "text": "#f3ffff",
+      "accent": "#ff8b80",
+      "secondary": "#4cc7cb"
+    }
+  },
+  "swatches": ["#fff3ef", "#24343a", "#d45952", "#078f96"]
+}

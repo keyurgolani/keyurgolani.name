@@ -1,0 +1,55 @@
+{
+  "id": "reduced-chroma",
+  "name": "Reduced Chroma",
+  "description": "Muted, low-saturation greys with a slate accent, for a quieter page.",
+  "version": "1.0.0",
+  "tokenContract": 1,
+  "tier": "stable",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v1 from the reviewed prototype's reduced-chroma anchors."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0,
+    "css": 3072
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [],
+  "derivation": "anchor-v1",
+  "anchors": {
+    "light": {
+      "canvas": "#f3f2ef",
+      "text": "#2e3033",
+      "accent": "#69717a",
+      "secondary": "#85776e"
+    },
+    "dark": {
+      "canvas": "#232426",
+      "text": "#e7e5e0",
+      "accent": "#9ca6ad",
+      "secondary": "#b2a49a"
+    }
+  },
+  "swatches": ["#f3f2ef", "#2e3033", "#69717a", "#85776e"]
+}

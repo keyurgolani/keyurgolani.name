@@ -1,0 +1,55 @@
+{
+  "id": "sunset-ember",
+  "name": "Sunset Ember",
+  "description": "Ember orange and dusk violet on a warm ground.",
+  "version": "1.0.0",
+  "tokenContract": 1,
+  "tier": "stable",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v1 from the reviewed prototype's sunset-ember anchors, with the light accent #e4583e to #d6533c, 8% toward text, so the signature fill reaches 3:1 on every surface."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0,
+    "css": 3072
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [],
+  "derivation": "anchor-v1",
+  "anchors": {
+    "light": {
+      "canvas": "#fff1e6",
+      "text": "#3a1d26",
+      "accent": "#d6533c",
+      "secondary": "#7c4ea3"
+    },
+    "dark": {
+      "canvas": "#21101a",
+      "text": "#fff0e5",
+      "accent": "#ff7963",
+      "secondary": "#b690e8"
+    }
+  },
+  "swatches": ["#fff1e6", "#3a1d26", "#d6533c", "#7c4ea3"]
+}
