@@ -138,8 +138,31 @@ test('the lock records a translucent language approved and shipped surface-opaci
   );
   assert.deepEqual(
     translucent.map(([id]) => id),
-    ['glassmorphism'],
+    [
+      'art-deco',
+      'atelier-luxury',
+      'blueprint',
+      'cyberpunk',
+      'fluent-2-inspired',
+      'glassmorphism',
+      'industrial',
+      'synthwave',
+      'terminal-chrome',
+    ],
   );
+  // #20 PR 2d: eight whose approved 92% or 96% fails with their texture ship opaque, the approved value recorded.
+  for (const [id, approved] of [
+    ['art-deco', '96%'],
+    ['industrial', '96%'],
+    ['atelier-luxury', '92%'],
+    ['blueprint', '92%'],
+    ['cyberpunk', '92%'],
+    ['fluent-2-inspired', '92%'],
+    ['synthwave', '92%'],
+    ['terminal-chrome', '92%'],
+  ] as const) {
+    assert.deepEqual(committed.packs[id].surfaceOpacity, { approved, shipped: '100%' }, id);
+  }
 });
 
 test('a digest covers every file by path and bytes, and nothing else', () => {
