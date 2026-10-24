@@ -253,10 +253,6 @@ export function heldRecord(
     : failures(registry, { ...manifest.tokens, 'surface-opacity': '100%' }, targets);
   const textureFails = textured && solid !== null && solid.pairs.length > 0;
   const translucent = found.pairs.some((pair) => pair.backdrop !== undefined);
-  const causes = [
-    ...(textureFails ? (['texture'] as const) : []),
-    ...(translucent ? (['translucency'] as const) : []),
-  ];
   const floor = !translucent
     ? undefined
     : {
@@ -268,6 +264,13 @@ export function heldRecord(
         ),
       };
   const floorIsOpaque = floor?.withTexture === 100;
+  // The texture is a cause too when it alone pushes the floor to opaque.
+  const untextured = floor?.withoutTexture ?? null;
+  const textureMakesOpaque = floorIsOpaque && untextured !== null && untextured < 100;
+  const causes = [
+    ...(textureFails || textureMakesOpaque ? (['texture'] as const) : []),
+    ...(translucent ? (['translucency'] as const) : []),
+  ];
   const unblockedBy = [
     ...(textureFails
       ? [
@@ -289,7 +292,9 @@ export function heldRecord(
       ? `its texture raises every target by ${targets.textureRaise}, past where anchor-v2 solves each scheme's roles`
       : null,
     floorIsOpaque
-      ? `its floor is opaque: its ${manifest.tokens['surface-opacity']} surfaces fall under the targets over a black or white backdrop at every opacity under 100%`
+      ? `its floor is opaque: its ${manifest.tokens['surface-opacity']} surfaces fall under the targets over a black or white backdrop at every opacity under 100%${
+          textureMakesOpaque ? `, and without its texture they'd pass at ${untextured}%` : ''
+        }`
       : translucent
         ? `its ${manifest.tokens['surface-opacity']} surfaces fall under the targets over a black or white backdrop`
         : null,
