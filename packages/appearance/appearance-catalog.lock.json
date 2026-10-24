@@ -12,10 +12,10 @@
     "ant-inspired": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "tier": "extended",
       "license": "independent-inspired-interpretation",
-      "digest": "sha256-3e6c61d850ae86d126b6ad73c631dfc4d8ca5fec4eb0350a54fae8eab0810c96"
+      "digest": "sha256-98cc7f110dae72b1aa02ace79f4432172923570f5d4d5ba6391fbe32ebf02dcb"
     },
     "arctic-aurora": {
       "axis": "colorScheme",
@@ -28,10 +28,10 @@
     "atlassian-inspired": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "tier": "extended",
       "license": "independent-inspired-interpretation",
-      "digest": "sha256-b80cb337acfec4c7393faf4fe736bb69ae4471d6c402dc9c33bfaa581af5fab1"
+      "digest": "sha256-7c22025e87262b744ffd2bd665fcf0486075ae213f7ffab346c9514370af0212"
     },
     "blue-orange-color-safe": {
       "axis": "colorScheme",
@@ -172,34 +172,34 @@
     "material-3-inspired": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "tier": "stable",
       "license": "independent-inspired-interpretation",
-      "digest": "sha256-6662fa72ea9f981fc26a99b460048fbeaeb20d98ea462ecb536b9dfd56d3ec1e"
+      "digest": "sha256-f3d3602ffb7ebc4c75f06aa48e2cf32bf12e47210e04b5526211d7e6008b0038"
     },
     "material-expressive-inspired": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "tier": "extended",
       "license": "independent-inspired-interpretation",
-      "digest": "sha256-fe4329af20a10fe2c79661e6c202c24c754ad6e97692a0c7e3c21b37d344853e"
+      "digest": "sha256-1025b61c8046b74fbf22761fd74fa24eecfac8b12376e2c3b25fb690d73a13b9"
     },
     "minimal-flat": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-7f7a5eb2a8699551c98f0aa26a13a05de2df576617ee4e4a75ebf7ad1944d260"
+      "digest": "sha256-342813b8082c0b752b3eb80133fdc655c76c746dc5a3a38e6657b0e7c23101ad"
     },
     "monochrome-functional": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "tier": "extended",
       "license": "first-party",
-      "digest": "sha256-ad885ce2f91d955e67a55b3ec86b928651097e56fa2df4d8702abb4f509388f1"
+      "digest": "sha256-e05278bd766aaf02afd87c6c07fd459e8f36844d141ad6f5e68409e1d220a0cf"
     },
     "multilingual-system": {
       "axis": "typography",
@@ -220,10 +220,10 @@
     "neumorphic": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "tier": "experimental",
       "license": "first-party",
-      "digest": "sha256-18c8ec175ea22b9cde70ec4e04bf1b2cf1b02b700cbaa574e59591a3651183a4"
+      "digest": "sha256-c35eac186e3f5ccaac38c98f89992dccadcb1cf4642c913794089b522c3d110a"
     },
     "neutral-slate": {
       "axis": "colorScheme",
@@ -276,34 +276,34 @@
     "platform-neutral": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-f22e9239111a140d7ccddc8b229577c4bcdd70ae86b031e31c9d820d71fdfaff"
+      "digest": "sha256-7f688580a690c491640b3845eb636bee2ea094b410935bdb0f830912d043cde0"
     },
     "polaris-inspired": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "tier": "extended",
       "license": "independent-inspired-interpretation",
-      "digest": "sha256-461d212f067943f74b02305968cb2b951f6f99a46bdab6b73e9a3fcc9dcb2717"
+      "digest": "sha256-dc774292cd1f99a4ba8f8f36f60a35eb8263745b163ccdbcbb0055ab0f267099"
     },
     "primer-inspired": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "tier": "stable",
       "license": "independent-inspired-interpretation",
-      "digest": "sha256-5e4c2be2b6df5b9bcaa42f7f28a95b6b7791df137c3bcffeb6ef9ed55069536b"
+      "digest": "sha256-169a475f422722225db449acf09830c662907392a38932af52f1f4b5154bc4e9"
     },
     "radix-inspired": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "tier": "extended",
       "license": "independent-inspired-interpretation",
-      "digest": "sha256-8c83ac7d125d007695ff5b55c807214e5a27834ec2ed9f8385385f709a957c81"
+      "digest": "sha256-f94e18a9413e7a103d24523f92de4246cb4bde5e282429f2a9c2f72a53c5085d"
     },
     "reduced-chroma": {
       "axis": "colorScheme",
@@ -324,10 +324,10 @@
     "spectrum-2-inspired": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "tier": "stable",
       "license": "independent-inspired-interpretation",
-      "digest": "sha256-c189b2d67df0ce89a32bf51fe01c5e6ac633f77f8ac419cbbbba780a9040f419"
+      "digest": "sha256-9bdf5fc61f57b38f7b6acf55f7d1f83ba456fea949b09b99823f49d8a19579ba"
     },
     "sunset-ember": {
       "axis": "colorScheme",
@@ -348,10 +348,10 @@
     "utility-dense": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "tier": "extended",
       "license": "first-party",
-      "digest": "sha256-02a19bcc3cb81a5fed7fda759fb3804ab014c9e50e278ad4dc9aa77e01342822"
+      "digest": "sha256-cfa05e478d2ec60536543198336b4c46d545b8e3dbe2a1b2041b4f0b4b0b655f"
     },
     "warm-parchment": {
       "axis": "colorScheme",

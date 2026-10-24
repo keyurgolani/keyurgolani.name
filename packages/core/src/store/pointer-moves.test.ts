@@ -82,6 +82,8 @@ const FS_WRITERS = [
   'apps/web/scripts/fixture-routes.ts',
   'apps/web/scripts/migrate-controls.ts',
   'apps/web/scripts/registry-options.ts',
+  // #20 PR 2b: writes each held pack's gate.json (pnpm catalog:held).
+  'apps/web/scripts/write-held.ts',
   'apps/web/src/server/config.ts',
   'packages/appearance/src/node/check.ts',
   'packages/appearance/src/node/compile.ts',

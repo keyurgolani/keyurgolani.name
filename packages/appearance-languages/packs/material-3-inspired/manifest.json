@@ -2,7 +2,7 @@
   "id": "material-3-inspired",
   "name": "Material 3 Inspired",
   "description": "An independent interpretation of Material Design's public design principles: pill controls, hairline borders, solid surfaces, comfortable density, medium elevation, fluid motion, and no texture. It ships no official component, token file, icon, or font.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "tokenContract": 1,
   "tier": "stable",
   "provenance": {
@@ -34,9 +34,11 @@
   },
   "fallbacks": [
     "Under reduced transparency, without backdrop-filter, in forced colors, and in print, surfaces render opaque and the backdrop blur is 0.",
-    "Under reduced motion, the state transforms are none and motion is instant."
+    "Under reduced motion, transforms and emphasis stop and entrances and exits fade; a paused boundary and print are instant."
   ],
-  "caveats": [],
+  "caveats": [
+    "Its emphasis motion, float-once, has no keyframes in the platform yet, so it doesn't animate."
+  ],
   "tokens": {
     "surface-material": "linear-gradient(var(--color-surface-default), var(--color-surface-default))",
     "radius-control": "999px",
