@@ -40,10 +40,18 @@ export interface Readiness {
 export interface ReadinessProbes {
   /** The health of the site's selection, once the module that renders it has loaded; it throws when that fails. */
   readonly variantHealth: (variant: string) => Promise<VariantHealth>;
-  /** The health of the site's packs, `degraded` while one falls back (#19, Slice 4), for the serving revision. */
+  /**
+   * The health of the site's packs, `degraded` while one falls back (#19,
+   * Slice 4), for the serving revision, with its stored generated schemes,
+   * `unit.snapshots.schemes` as read (#20 PR 3), when it has them.
+   */
   readonly appearanceHealth: (
     site: PublicSite,
-    revision: { readonly revisionId: string; readonly profile: Profile },
+    revision: {
+      readonly revisionId: string;
+      readonly profile: Profile;
+      readonly schemes?: unknown;
+    },
   ) => { readonly status: 'ok' | 'degraded' };
   readonly loadedOwnerModules: () => readonly string[];
 }
@@ -74,11 +82,13 @@ export async function readiness(
   const { profile } = state.config;
   let site: PublicSite | undefined;
   let revisionId: string | null = null;
+  let schemes: unknown;
   let catalog: CheckStatus = 'fail';
   try {
     const live = await state.catalog.getLive();
     catalog = SERVING[live.state];
     site = live.unit?.site;
+    schemes = live.unit?.snapshots?.schemes;
     revisionId = live.revisionId;
   } catch {
     catalog = 'fail';
@@ -94,7 +104,11 @@ export async function readiness(
           : worst(
               await packs(() => probes.variantHealth(served.appearance.variant)),
               appearance(() =>
-                probes.appearanceHealth(served, { revisionId: revisionId!, profile }),
+                probes.appearanceHealth(served, {
+                  revisionId: revisionId!,
+                  profile,
+                  ...(schemes === undefined ? {} : { schemes }),
+                }),
               ),
             ),
     },
