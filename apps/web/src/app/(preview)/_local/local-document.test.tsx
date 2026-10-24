@@ -214,7 +214,7 @@ test("every hostile fixture the import takes renders inert in every composition,
   assert.ok(checked > 0);
 });
 
-test("no media source the content names reaches the page: a remote one renders as unavailable, and a data: one doesn't import", async () => {
+test("no media source the content names reaches the page: a remote one renders as Not loaded in the demo, and a data: one doesn't import", async () => {
   const { installPostPass } = await import('@portfolio/kit/markdown-local');
   await installPostPass();
   const { renderLocal } = await frame();
@@ -235,6 +235,7 @@ test("no media source the content names reaches the page: a remote one renders a
     ),
   );
   assert.equal(withData.kind, 'refused');
+  let shownNotLoaded = 0;
   for (const { manifest } of registries.variants.filter(
     ({ manifest }) => manifest.id !== 'fallback',
   )) {
@@ -247,12 +248,19 @@ test("no media source the content names reaches the page: a remote one renders a
       }),
     );
     assert.ok(!html.includes('evil.example'), manifest.id);
+    // A placeholder says why: the demo loads no media, never that it's still processing.
+    assert.doesNotMatch(html, /data-media-reason="(?!not-loaded")/, manifest.id);
+    if (/data-media-reason=/.test(html)) {
+      shownNotLoaded += 1;
+      assert.match(html, /Not loaded in the demo/, manifest.id);
+    }
     assert.ok(!html.includes(Buffer.from(CANARY).toString('base64')), manifest.id);
     // Nothing loads from anywhere but the build's own files.
     for (const url of loads(html)) {
       assert.doesNotMatch(url, /^(?:https?:|data:|blob:|\/\/)/, `${manifest.id}: ${url}`);
     }
   }
+  assert.ok(shownNotLoaded > 0, 'some composition shows a media placeholder');
 });
 
 test('a document that fails the check, or a route it has no page at, renders nothing', async () => {
