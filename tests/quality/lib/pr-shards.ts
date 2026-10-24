@@ -181,6 +181,20 @@ export function planGroups(
 ): ShardGroup[] {
   const fallback = median(Object.values(durations.conditions));
   const perf = perfCells(plan);
+  // Each server's tests and perf cells, found once: a server's id is a
+  // hash, and a full plan holds tens of thousands of tests.
+  const testsOf = new Map<string, Plan['tests'][number][]>();
+  for (const test of plan.tests) {
+    const id = serverId(cellServer(test.cell));
+    const own = testsOf.get(id);
+    if (own) own.push(test);
+    else testsOf.set(id, [test]);
+  }
+  const perfOf = new Map<string, number>();
+  for (const cell of perf) {
+    const id = serverId(cellServer(cell));
+    perfOf.set(id, (perfOf.get(id) ?? 0) + 1);
+  }
   const groups: ShardGroup[] = [];
   for (const engine of engines) {
     for (const file of HARNESS_SPECS) {
@@ -192,7 +206,7 @@ export function planGroups(
       });
     }
     for (const { id, server } of planServers(plan)) {
-      const own = plan.tests.filter((test) => serverId(cellServer(test.cell)) === id);
+      const own = testsOf.get(id) ?? [];
       const costs = own.map((test) => testWeight(test, engine, durations, fallback));
       groups.push({
         project: serverProject(engine, id),
@@ -202,7 +216,7 @@ export function planGroups(
         weight: costs.reduce((sum, cost) => sum + cost, durations.group),
         ...(server.sweep ? { sweep: true as const } : {}),
       });
-      const perfHere = perf.filter((cell) => serverId(cellServer(cell)) === id).length;
+      const perfHere = perfOf.get(id) ?? 0;
       if (perfHere > 0) {
         groups.push({
           project: serverProject(engine, id),
@@ -468,6 +482,8 @@ export function shardFiles(shard: PrShard): Map<string, string[]> {
 
 /** The tag perf tests carry, so a project whose cell group is split still runs them. */
 export const PERF_TAG = '@perf';
+/** The same for visual tests, which only quality:full runs (lib/full-shards.ts). */
+export const VISUAL_TAG = '@visual';
 
 /** The tag a cell test carries, by its cell, viewport, and row, so a shard can run some of a project's tests and not the rest. */
 export const testTag = (cell: string, viewport: string, row: string) =>
@@ -488,8 +504,9 @@ export function shardTests(shard: PrShard): Map<string, string[]> {
 
 /**
  * A server project's grep: its server's tests, and with `tests` (keys), only
- * those cell tests and its perf tests, as Playwright matches a test's title
- * and tags.
+ * those cell tests and its perf and visual tests, as Playwright matches a
+ * test's title and tags. Which perf and visual files run is the project's
+ * testMatch.
  */
 export function projectGrep(id: string, tests?: readonly string[]): RegExp {
   const server = `@server-${id}(?![0-9a-f])`;
@@ -501,6 +518,6 @@ export function projectGrep(id: string, tests?: readonly string[]): RegExp {
     })
     .join('|');
   return new RegExp(
-    `^(?=[\\s\\S]*${server})(?=[\\s\\S]*(?:${PERF_TAG}(?![\\w-])|@test-(?:${tags})(?![0-9a-f])))`,
+    `^(?=[\\s\\S]*${server})(?=[\\s\\S]*(?:${PERF_TAG}(?![\\w-])|${VISUAL_TAG}(?![\\w-])|@test-(?:${tags})(?![0-9a-f])))`,
   );
 }

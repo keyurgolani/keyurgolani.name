@@ -838,6 +838,7 @@ test("quality:pr takes --shard as the runner's own, and hands it to Playwright's
   assert.deepEqual(parseRunArgs(['pr', '--', '--shard=2/3', '--grep', 'login']), {
     mode: 'pr',
     shard: '2/3',
+    night: null,
     externalVariant: false,
     playwright: ['--grep', 'login'],
   });

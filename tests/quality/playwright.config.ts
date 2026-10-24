@@ -12,13 +12,15 @@
 // projects run at once. Nothing retries: accessibility and performance
 // assertions never do. A quality:pr shard runs only its own spec files in
 // each project (lib/pr-shards.ts), and only its part's tests in a project
-// whose cell group is split.
+// whose cell group is split; so does a quality:full shard, of the release
+// plan or of a night's slice (lib/full-shards.ts).
 import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 import { reportsDir } from '../../ci/lib/reports.mjs';
 import base from '../../playwright.config';
 import { TRACE_LAUNCH_ARGS } from '../harness/trace/policy.mjs';
-import { runCanary, runShard } from './lib/env';
+import { runCanary, runNight, runShard } from './lib/env';
+import { fullShard, VISUAL_SPEC } from './lib/full-shards';
 import { RUN_ENGINES, type Engine } from './lib/matrix';
 import {
   CELL_SPEC,
@@ -55,18 +57,24 @@ const engineUse = (engine: Engine) => ({
 });
 
 // perf.spec.ts runs each target's representative cell on the same servers (#11, 11-3).
-const cellSpecs = [CELL_SPEC, PERF_SPEC, ...(plan.mode === 'full' ? ['visual.spec.ts'] : [])];
+const cellSpecs = [CELL_SPEC, PERF_SPEC, ...(plan.mode === 'full' ? [VISUAL_SPEC] : [])];
 
 // A PR shard (lib/pr-shards.ts) keeps every project, so each shard's
 // summary lists them all, and runs only the spec files it was given in each.
+// A full run's shard or night (lib/full-shards.ts) does the same, with the
+// projects its run lists: a night's, those of its slice.
 const shard = runShard();
-if (shard && plan.mode !== 'pr') throw new Error("QUALITY_SHARD is for quality:pr's shards.");
-const mine = shard ? prShard(plan, RUN_ENGINES[plan.mode], shard) : null;
+const night = runNight();
+if (night && plan.mode !== 'full') throw new Error('QUALITY_NIGHT is for quality:full.');
+const full =
+  plan.mode === 'full' && (shard || night) ? fullShard(plan, RUN_ENGINES.full, shard, night) : null;
+const mine = full ? full.shard : shard ? prShard(plan, RUN_ENGINES[plan.mode], shard) : null;
 const assigned = mine ? shardFiles(mine) : null;
 // A project whose cell group is split runs only its part's tests here.
 const testsOf = mine ? shardTests(mine) : new Map<string, string[]>();
 const specsFor = (project: string, specs: readonly string[]) =>
   assigned ? specs.filter((file) => assigned.get(project)?.includes(file)) : [...specs];
+const listed = (project: string) => !full || full.projects.has(project);
 
 export default defineConfig({
   ...base,
@@ -84,12 +92,14 @@ export default defineConfig({
       testMatch: specsFor(harnessProject(engine), HARNESS_SPECS),
       use: { ...engineUse(engine), cellServer: HARNESS_SERVER },
     },
-    ...planServers(plan).map(({ id, label, server }) => ({
-      name: serverProject(engine, id),
-      testMatch: specsFor(serverProject(engine, id), cellSpecs),
-      grep: projectGrep(id, testsOf.get(serverProject(engine, id))),
-      use: { ...engineUse(engine), cellServer: server },
-      metadata: { server: label },
-    })),
+    ...planServers(plan)
+      .filter(({ id }) => listed(serverProject(engine, id)))
+      .map(({ id, label, server }) => ({
+        name: serverProject(engine, id),
+        testMatch: specsFor(serverProject(engine, id), cellSpecs),
+        grep: projectGrep(id, testsOf.get(serverProject(engine, id))),
+        use: { ...engineUse(engine), cellServer: server },
+        metadata: { server: label },
+      })),
   ]),
 });

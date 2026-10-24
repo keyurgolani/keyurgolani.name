@@ -5,9 +5,10 @@ import { parse } from 'yaml';
 import { VISUAL_IMAGE } from './lib/visual';
 
 // #11's nightly matrix and the PR run's change-directed cells (11-4), as
-// the workflows wire them: the sharded quality:full in the pinned image,
-// each shard's reports scrubbed before they upload, the merged verdict over
-// every shard, and the PR set's change base.
+// the workflows wire them: the sharded quality:full in the pinned image, a
+// night's slice at a time, each shard's reports scrubbed before they
+// upload, the merged verdict over every shard, and the PR set's change
+// base. full-shards.test.ts holds the shard count, the cap, and the timeout.
 
 interface Step {
   readonly id?: string;
@@ -21,6 +22,7 @@ interface Step {
 interface Job {
   readonly name?: string;
   readonly needs?: readonly string[];
+  readonly outputs?: Record<string, string>;
   readonly 'timeout-minutes'?: number;
   readonly if?: string;
   readonly permissions?: unknown;
@@ -79,14 +81,26 @@ test('the scheduled workflow runs once every night, so the matrix is nightly and
   );
   assert.ok(crons.includes('23 6 * * 1'), 'the Monday run, which links needs');
   assert.equal(SCHEDULED.jobs.links?.if, "${{ github.event.schedule == '23 6 * * 1' }}");
-  for (const id of ['quality-full', 'quality-verdict']) {
+  for (const id of ['quality-night', 'quality-full', 'quality-verdict']) {
     assert.doesNotMatch(SCHEDULED.jobs[id]?.if ?? '', /schedule/, `${id} runs every night`);
   }
+});
+
+test("quality-night takes the night's UTC date once, for every shard to read its slice from", () => {
+  const job = SCHEDULED.jobs['quality-night'];
+  assert.ok(job, 'the scheduled workflow has quality-night');
+  assert.equal(job.permissions, undefined);
+  assert.deepEqual(job.outputs, { night: '${{ steps.night.outputs.night }}' });
+  const night = step(job, (each) => each.id === 'night', 'the date step');
+  assert.equal(night.run, 'echo "night=$(date -u +%F)" >> "$GITHUB_OUTPUT"');
+  // It checks nothing out and installs nothing: a date is all it gives.
+  assert.equal(job.steps.length, 1);
 });
 
 test('quality-full shards quality:full in the pinned image, scrubs however it ended, and uploads only a clean scrub', () => {
   const job = SCHEDULED.jobs['quality-full'];
   assert.ok(job, 'the scheduled workflow has quality-full');
+  assert.deepEqual(job.needs, ['quality-night']);
   assert.equal(job.container?.image, VISUAL_IMAGE);
   assert.equal(job.env?.QUALITY_CONTAINER, VISUAL_IMAGE);
   assert.equal(job.permissions, undefined, "it keeps the workflow's contents: read");
@@ -100,11 +114,13 @@ test('quality-full shards quality:full in the pinned image, scrubs however it en
   assert.equal(job.name, `quality-full (\${{ matrix.shard }}/${total})`);
 
   const run = step(job, (each) => /pnpm ci:quality-full/.test(each.run ?? ''), 'the run step');
-  assert.equal(run.run, 'pnpm ci:quality-full "--shard=$SHARD"');
+  assert.equal(run.run, 'pnpm ci:quality-full "--shard=$SHARD" "--night=$NIGHT"');
   assert.equal(run.env?.SHARD, `\${{ matrix.shard }}/${total}`);
+  const night = '${{ needs.quality-night.outputs.night }}';
+  assert.equal(run.env?.NIGHT, night);
   assert.equal(
     run.env?.CI_REPRO_COMMAND,
-    `pnpm ci:quality-full --shard=\${{ matrix.shard }}/${total}`,
+    `pnpm ci:quality-full --shard=\${{ matrix.shard }}/${total} --night=${night}`,
   );
   assert.ok(run.env?.QUALITY_CANARY_FILE && run.env?.QUALITY_SECRETS_FILE);
   // The nightly run is the close and scheduled runs' build: the reference variant installed from its tarball.
@@ -162,7 +178,7 @@ test('quality-verdict judges every shard whole, however they ended, from their o
   for (const id of ['quality-full', 'quality-verdict']) {
     assert.ok(SCHEDULED.jobs.report?.needs?.includes(id), `report needs ${id}`);
   }
-  // It downloads every job's reports, the six shards' too, so it gets the time.
+  // It downloads every job's reports, the eight shards' too, so it gets the time.
   assert.ok((SCHEDULED.jobs.report?.['timeout-minutes'] ?? 0) >= 15);
 });
 

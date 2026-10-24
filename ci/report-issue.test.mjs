@@ -4,7 +4,10 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parse } from 'yaml';
 import {
+  commandFor,
+  COMMANDS,
   decide,
   failedJobs,
   issueCell,
@@ -20,6 +23,20 @@ const FIXTURES = path.join(HERE, 'fixtures', 'report-issue');
 const CASES = JSON.parse(readFileSync(path.join(FIXTURES, 'cases.json'), 'utf8'));
 const RECORDS = readRecords(path.join(FIXTURES, 'records'));
 const RUN_URL = 'https://github.com/o/r/actions/runs/1';
+
+test('every scheduled job the report can name has a local command that exists', () => {
+  const scheduled = parse(
+    readFileSync(path.join(HERE, '..', '.github', 'workflows', 'scheduled.yml'), 'utf8'),
+  );
+  const { scripts } = JSON.parse(readFileSync(path.join(HERE, '..', 'package.json'), 'utf8'));
+  for (const job of scheduled.jobs.report.needs) {
+    const command = commandFor(job);
+    if (job in COMMANDS) continue;
+    const script = command.replace(/^pnpm /, '');
+    assert.ok(script in scripts, `${job}'s command, ${command}, is a package.json script`);
+  }
+  assert.equal(commandFor('quality-night'), 'date -u +%F');
+});
 
 for (const fixture of CASES) {
   test(`reporter: ${fixture.name}`, () => {

@@ -26,8 +26,12 @@ export const TITLE = 'Scheduled checks are failing';
 const BOT = 'github-actions[bot]';
 
 /** Local commands for the scheduled jobs; any other job is `pnpm ci:<job>`. */
-const COMMANDS = { links: 'pnpm check:docs && pnpm check:links' };
-const commandFor = (job) => COMMANDS[job] ?? `pnpm ci:${job}`;
+export const COMMANDS = {
+  links: 'pnpm check:docs && pnpm check:links',
+  // It runs no check: it takes the night's UTC date for quality-full's shards.
+  'quality-night': 'date -u +%F',
+};
+export const commandFor = (job) => COMMANDS[job] ?? `pnpm ci:${job}`;
 
 const RESULT_TEXT = {
   failure: 'failed',

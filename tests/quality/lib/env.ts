@@ -22,9 +22,10 @@ export function runCanary(env: NodeJS.ProcessEnv = process.env): string {
 }
 
 /**
- * The PR run's shard, <n>/<m>, which run.ts hands its Playwright processes
- * for `pnpm quality:pr -- --shard=<n>/<m>` (lib/pr-shards.ts), or null for a
- * whole run. quality:full shards through Playwright's own --shard instead.
+ * The run's shard, <n>/<m>, which run.ts hands its Playwright processes for
+ * `pnpm quality:pr -- --shard=<n>/<m>` (lib/pr-shards.ts) and
+ * `pnpm quality:full -- --shard=<n>/<m>` (lib/full-shards.ts), or null for a
+ * whole run.
  */
 export function runShard(env: NodeJS.ProcessEnv = process.env): string | null {
   const shard = env.QUALITY_SHARD;
@@ -34,4 +35,19 @@ export function runShard(env: NodeJS.ProcessEnv = process.env): string | null {
     throw new Error(`QUALITY_SHARD is ${shard}, not <n>/<m> with 1 <= n <= m.`);
   }
   return shard;
+}
+
+/**
+ * The night whose slice of the full plan the run runs, a UTC date, which
+ * run.ts hands its Playwright processes for
+ * `pnpm quality:full -- --night=<YYYY-MM-DD>` (lib/full-shards.ts), or null
+ * for the whole plan.
+ */
+export function runNight(env: NodeJS.ProcessEnv = process.env): string | null {
+  const night = env.QUALITY_NIGHT;
+  if (night === undefined || night === '') return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(night)) {
+    throw new Error(`QUALITY_NIGHT is ${night}, not a date, YYYY-MM-DD.`);
+  }
+  return night;
 }

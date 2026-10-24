@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Promotion's first check: a final tag vX.Y.Z promotes only the newest
 // release candidate for X.Y.Z, only when that candidate is on the same
-// commit, and only when its release run passed its scan and tagged its
-// digest (docs/releasing.md).
+// commit, and only when its release run passed its scan and its quality
+// gate and tagged its digest (docs/releasing.md).
 //
 //   GITHUB_TOKEN=... GITHUB_REPOSITORY=owner/repo TAG=v1.2.0 SHA=<commit> \
 //     node ci/release/promote-check.mjs
@@ -21,8 +21,8 @@ import { githubGet, repository } from './github.mjs';
 import { parseReleaseTag, promotionTargets, rcImageTag } from './tags.mjs';
 
 export const RELEASE_WORKFLOW = '.github/workflows/release.yml';
-/** The candidate's jobs that must have succeeded: its scan, and the image tag it got after. */
-export const REQUIRED_RC_JOBS = ['rc-scan', 'rc-tag'];
+/** The candidate's jobs that must have succeeded: its scan, its quality gate, and the image tag it got after. */
+export const REQUIRED_RC_JOBS = ['rc-scan', 'rc-quality-verdict', 'rc-tag'];
 export const TAG_REF_FORMAT = '%(refname:strip=2) %(objectname) %(*objectname)';
 const SHA = /^[0-9a-f]{40}$/;
 

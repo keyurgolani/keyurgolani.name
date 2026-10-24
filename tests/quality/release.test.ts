@@ -6,7 +6,15 @@ import test from 'node:test';
 import { judge, type MetaCase } from './meta/cases';
 import { TIMING_GATE } from './lib/perf/timing';
 import { OVER, RELEASE_CASES, releaseOutcome, WITHIN } from './meta/release-cases';
-import { MATRIX_GATE, matrixVerdict, parseReleaseArgs, RELEASE_GATES, runMatrix } from './release';
+import {
+  MATRIX_GATE,
+  mergedMatrix,
+  matrixVerdict,
+  parseReleaseArgs,
+  RELEASE_GATES,
+  runMatrix,
+} from './release';
+import { SHARD_1, SHARD_2, writeShards } from './meta/shard-cases';
 
 // pnpm quality:release (#11, 11-4): the full matrix and the release gates
 // #12's RC pipeline runs. What it decides is quality:meta's release cases.
@@ -109,4 +117,41 @@ test("quality:release reads only the verdict its own run wrote, and only when th
   } finally {
     rmSync(reports, { recursive: true, force: true });
   }
+});
+
+test("a sharded release's matrix is the whole plan's: a night's slice fails it, not-whole", (t) => {
+  const root = mkdtempSync(path.join(tmpdir(), 'quality-release-slice-'));
+  const reports = mkdtempSync(path.join(tmpdir(), 'quality-release-slice-reports-'));
+  const saved = process.env.CI_REPORTS_DIR;
+  process.env.CI_REPORTS_DIR = reports;
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'error', () => {});
+  t.after(() => {
+    if (saved === undefined) delete process.env.CI_REPORTS_DIR;
+    else process.env.CI_REPORTS_DIR = saved;
+    rmSync(root, { recursive: true, force: true });
+    rmSync(reports, { recursive: true, force: true });
+  });
+  writeShards(root, [SHARD_1, SHARD_2]);
+  assert.ok(mergedMatrix(root, 2).ok, 'the whole plan passes');
+  // The same shards, as a night's slice of the plan.
+  for (const dir of ['reports-quality-full-1', 'reports-quality-full-2']) {
+    const file = path.join(root, dir, 'quality', 'plan.json');
+    const plan = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+    const slice = {
+      night: '2026-10-24',
+      index: 3,
+      nights: 14,
+      fingerprint: '0123456789abcdef',
+      cells: [],
+      rotation: {},
+    };
+    writeFileSync(file, JSON.stringify({ ...plan, slice }));
+  }
+  const sliced = mergedMatrix(root, 2);
+  assert.equal(sliced.ok, false);
+  assert.deepEqual(
+    sliced.failures.map((each) => each.rule),
+    ['not-whole'],
+  );
 });

@@ -137,7 +137,7 @@ export default class QualityReporter implements Reporter {
         perf: attachment(test, 'perf.json'),
       };
     });
-    // Playwright's --shard for quality:full, run.ts's own for quality:pr (lib/pr-shards.ts).
+    // run.ts's own shard (lib/pr-shards.ts, lib/full-shards.ts), or Playwright's, given some other way.
     const shard = this.config?.shard;
     const summary: Summary = {
       schemaVersion: 1,

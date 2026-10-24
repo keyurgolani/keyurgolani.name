@@ -32,7 +32,8 @@ const GATE_DOCS = {
   ],
   'CONTRIBUTING.md': [
     'pnpm quality:pr',
-    'pnpm quality:full -- --shard=1/6',
+    'pnpm quality:full -- --shard=1/8',
+    'pnpm quality:full -- --night=2026-10-24',
     'pnpm quality:merge',
     'pnpm quality:release',
     'pnpm quality:checklist',

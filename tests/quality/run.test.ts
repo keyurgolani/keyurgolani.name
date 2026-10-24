@@ -9,28 +9,32 @@ import { scrubRun, parseRunArgs } from './run';
 import { plantCanary } from './lib/artifacts.mjs';
 import { UNKNOWN_FORM } from './lib/canary-forms.mjs';
 
-test("quality:full's shard goes to Playwright; quality:pr's stays the runner's (pr-shards.test.ts), and the rest goes to Playwright", () => {
+test("the shard and the night are the runner's own (pr-shards.test.ts, full-shards.test.ts), and the rest goes to Playwright", () => {
   assert.deepEqual(parseRunArgs(['pr']), {
     mode: 'pr',
     shard: null,
+    night: null,
     externalVariant: false,
     playwright: [],
   });
   assert.deepEqual(parseRunArgs(['full', '--', '--shard=2/3']), {
     mode: 'full',
     shard: '2/3',
+    night: null,
     externalVariant: false,
-    playwright: ['--shard=2/3'],
+    playwright: [],
   });
   assert.deepEqual(parseRunArgs(['full', '--shard=1/1', '--grep', 'login']), {
     mode: 'full',
     shard: '1/1',
+    night: null,
     externalVariant: false,
-    playwright: ['--shard=1/1', '--grep', 'login'],
+    playwright: ['--grep', 'login'],
   });
   assert.deepEqual(parseRunArgs(['pr', '--shard=1/2']), {
     mode: 'pr',
     shard: '1/2',
+    night: null,
     externalVariant: false,
     playwright: [],
   });
@@ -38,12 +42,26 @@ test("quality:full's shard goes to Playwright; quality:pr's stays the runner's (
   assert.throws(() => parseRunArgs(['full', '--shard=0/2']), /1 <= n <= m/);
   assert.throws(() => parseRunArgs(['full', '--shard=x']), /<n>\/<m>/);
   assert.throws(() => parseRunArgs(['nightly']), /usage/);
-  assert.deepEqual(parseRunArgs(['full', '--', '--external-variant', '--shard=1/2']), {
-    mode: 'full',
-    shard: '1/2',
-    externalVariant: true,
-    playwright: ['--shard=1/2'],
-  });
+  // The nightly's run: a shard of the night's slice.
+  assert.deepEqual(
+    parseRunArgs(['full', '--', '--external-variant', '--shard=1/8', '--night=2026-10-24']),
+    {
+      mode: 'full',
+      shard: '1/8',
+      night: '2026-10-24',
+      externalVariant: true,
+      playwright: [],
+    },
+  );
+  // The whole slice on one machine.
+  assert.equal(parseRunArgs(['full', '--night=2026-10-24']).night, '2026-10-24');
+  assert.throws(() => parseRunArgs(['pr', '--night=2026-10-24']), /quality:full's/);
+  assert.throws(() => parseRunArgs(['full', '--night=2026-02-30']), /UTC date/);
+  assert.throws(() => parseRunArgs(['full', '--night=tonight']), /UTC date/);
+  assert.throws(
+    () => parseRunArgs(['full', '--night=2026-10-24', '--night=2026-10-25']),
+    /given twice/,
+  );
   assert.throws(() => parseRunArgs(['pr', '--external-variant']), /close and scheduled runs/);
   assert.throws(() => parseRunArgs([]), /usage/);
 });

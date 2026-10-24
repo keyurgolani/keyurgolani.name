@@ -13,14 +13,22 @@
 // jobs' result from `needs`, so a shard job that failed, was cancelled, or
 // was skipped fails the verdict too.
 //
+// A night's shards (lib/full-shards.ts) are judged against their slice, and
+// the merge writes the night's rotation report to
+// reports/quality/rotation.json and the job summary: which slice ran, of
+// how many nights, and each cell's result tonight, when it last passed as
+// far as this run can tell, and the nights the rotation gave it and gives
+// it next. quality:release merges with `whole`, so a night's slice fails it.
+//
 // Point it only at a new, empty directory the shards' artifacts were
 // downloaded into: it reads every quality/ directory under it.
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { currentGate, reportError, reportsDir, writeFailureRecord } from '../../ci/lib/reports.mjs';
 import { RECORD_VERSION } from './lib/failure-records';
+import { rotationReport, type RotationReport } from './lib/full-shards';
 import { timingTrend } from './lib/perf/timing';
 import type { RunMode } from './cells';
 import {
@@ -34,6 +42,28 @@ import { RUN_MODES } from './plan';
 import { SUMMARY_FILE } from './reporter';
 
 export const MERGED_VERDICT = 'merged-verdict.json';
+export const ROTATION_REPORT = 'rotation.json';
+
+/** The rotation report as the job summary shows it: the slice, then tonight's cells, then the rest. */
+export function rotationMarkdown(report: RotationReport): string {
+  const lines = [
+    `### quality-full, the night of ${report.night}`,
+    '',
+    `Night ${report.slice} of ${report.nights}, of the plan ${report.fingerprint}: a cycle, ${report.cycle.from} to ${report.cycle.to}, runs every cell once.`,
+    '',
+    '| Cell | Nights | Tonight | Last passed | Scheduled last | Scheduled next |',
+    '| --- | --- | --- | --- | --- | --- |',
+  ];
+  const tonight = report.cells.filter((cell) => cell.tonight !== null);
+  const rest = report.cells.filter((cell) => cell.tonight === null);
+  for (const cell of [...tonight, ...rest]) {
+    lines.push(
+      `| \`${cell.cell}\` | ${cell.nights.join(', ')} | ${cell.tonight ?? ''} | ${cell.lastPassed ?? 'unknown'} | ${cell.scheduledLast} | ${cell.scheduledNext} |`,
+    );
+  }
+  lines.push('', report.note, '');
+  return lines.join('\n');
+}
 
 export interface MergeArgs {
   readonly dir: string;
@@ -75,12 +105,13 @@ export function mergeRun(
   test = 'quality:full merged verdict',
   mode?: RunMode,
   jobs?: string,
+  whole?: boolean,
 ) {
   let shards: ShardReport[] = [];
   let verdict: MergedVerdict;
   try {
     shards = readShards(dir);
-    verdict = mergeShards(shards, { expected, mode, jobs });
+    verdict = mergeShards(shards, { expected, mode, jobs, whole });
   } catch (error) {
     // Whatever the reports hold, the merge says so and fails, with its record.
     shards = [];
@@ -108,6 +139,20 @@ export function mergeRun(
       SUMMARY_FILE(),
       `${JSON.stringify({ ...joined, verdict, timing: timingTrend(joined) }, null, 2)}\n`,
     );
+  }
+  // A night's slice: which slice ran, and each cell's turn and result.
+  const slice = shards.find((shard) => shard.plan?.slice)?.plan?.slice;
+  if (slice) {
+    const report = rotationReport(slice, joined?.tests ?? []);
+    writeFileSync(path.join(quality, ROTATION_REPORT), `${JSON.stringify(report, null, 2)}\n`);
+    const ran = report.cells.filter((cell) => cell.tonight !== null);
+    console.log(
+      `[quality] the night of ${report.night}: slice ${report.slice} of ${report.nights}, ${ran.length} cell(s): ${ran.filter((cell) => cell.tonight === 'passed').length} passed, ${ran.filter((cell) => cell.tonight === 'failed').length} failed`,
+    );
+    for (const cell of ran) console.log(`  ${cell.tonight}: ${cell.cell}`);
+    if (process.env.GITHUB_STEP_SUMMARY) {
+      appendFileSync(process.env.GITHUB_STEP_SUMMARY, `\n${rotationMarkdown(report)}`);
+    }
   }
   const gate = currentGate();
   for (const { rule, message } of gate ? verdict.failures : []) {
