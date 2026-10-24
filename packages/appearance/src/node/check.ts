@@ -91,6 +91,12 @@ export interface CheckOptions {
     readonly packageName: string;
     readonly manifest: { readonly id: string };
   }) => boolean;
+  /**
+   * Gate only the combinations that hold this pack, as a known-bad input's
+   * run does (runKnownBad): its findings are all it needs, and the other
+   * packs' combinations are the main run's. Without it, every combination.
+   */
+  readonly only?: { readonly axis: PackAxis; readonly id: string };
 }
 
 export interface AppearanceCheck {
@@ -201,13 +207,14 @@ const byId = <T extends { readonly manifest: { readonly id: string } }>(entries:
  */
 export function checkAppearance(
   registry: AppearanceRegistry,
-  { targets = GATE_TARGETS, gateFixture }: CheckOptions = {},
+  { targets = GATE_TARGETS, gateFixture, only }: CheckOptions = {},
 ): AppearanceCheck {
   const skipped: SkippedPack[] = [];
   const problems: PackProblem[] = [];
   const failures: GateFailure[] = [];
   const hierarchy: HierarchyFailure[] = [];
   const keep = <A extends PackAxis>(axis: A, entry: PackEntry<A>) => {
+    if (only && only.axis === axis && only.id !== entry.manifest.id) return false;
     if (entry.fixture && !gateFixture?.(entry)) {
       skipped.push({
         axis,
@@ -573,7 +580,13 @@ export function runKnownBad(
   } as MetaPack;
   const check = checkAppearance(
     createAppearanceRegistry({ ...meta, PACKS: [...(meta.PACKS ?? []), pack] }),
-    { targets },
+    {
+      targets,
+      only: {
+        axis: PACK_AXES.find((axis) => PACK_KIND_BY_AXIS[axis] === fixture.kind)!,
+        id: validated.manifest.id,
+      },
+    },
   );
   return { problems: check.problems.map(({ message }) => message), check };
 }
