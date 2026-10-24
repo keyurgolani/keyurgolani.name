@@ -927,6 +927,9 @@ class Commands {
       );
       for (const line of liveLines(await this.pointer(store))) this.say(line);
       this.say(`source hash: ${sourceHash}`);
+      for (const warning of outcome.warnings ?? []) {
+        for (const line of recordLines(warning)) this.say(line);
+      }
       return 0;
     }
     return this.rejected(outcome, 'Nothing was imported.');
@@ -991,6 +994,12 @@ class Commands {
       case 'idempotency_conflict':
         this.complain(
           `idempotency_conflict: an earlier request, not this one, used its key. ${nothing}`,
+        );
+        return 1;
+      case 'live_unreadable':
+        this.complain(
+          "live_unreadable: the live revision is damaged, and no earlier revision is healthy, so the publish has nothing to check the draft's derived changes against. " +
+            `${nothing} \`verify\` says what's wrong; \`recover\`, \`restore\`, or \`import\` repairs it.`,
         );
         return 1;
       default:

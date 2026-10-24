@@ -1,8 +1,10 @@
 import {
   ADAPTER_SNAPSHOT_KINDS,
   applyEdits as applyTextEdits,
+  githubRecordsFor,
   isChangeId,
   isPlainObject,
+  parseSnapshot,
   parseSource,
   type DerivedSide,
   type DocumentFormat,
@@ -488,6 +490,12 @@ export interface DraftStoreOptions {
   readonly assets: AssetStore;
   readonly now?: () => number;
   readonly log?: StoreLog;
+  /**
+   * The revision visitors get when the live one can't be read (#10), which a
+   * draft based on a damaged revision compares its derived changes against,
+   * as the publish gate does. None by default.
+   */
+  readonly lastKnownGood?: () => Promise<RevisionId | null>;
 }
 
 export function filesystemDraftStore({
@@ -498,6 +506,7 @@ export function filesystemDraftStore({
   assets,
   now = Date.now,
   log = () => {},
+  lastKnownGood = async () => null,
 }: DraftStoreOptions): DraftStore {
   const stamp = () => new Date(now()).toISOString();
 
@@ -573,33 +582,74 @@ export function filesystemDraftStore({
     };
   }
 
-  /** The revision `revisionId`'s side of the derived comparison, or null for none. */
-  async function baseSide(revisionId: RevisionId | null): Promise<DerivedSide | null> {
-    if (revisionId === null) return null;
+  /** A revision's side of the derived comparison: its media document and snapshots. */
+  async function sideOf(revisionId: RevisionId) {
     const read = await readRevision(fs, paths, revisionId);
-    if (!read.ok) {
-      // A read that may work next time stops the write, so no decision is lost to it.
-      if (read.transient) {
-        throw new StoreError(
-          'storage_unavailable',
-          "The draft's base revision can't be read just now.",
-        );
-      }
-      return null;
+    // A read that may work next time stops the write, so no decision is lost to it.
+    if (!read.ok && read.transient) {
+      throw new StoreError(
+        'storage_unavailable',
+        "The draft's base revision can't be read just now.",
+      );
     }
-    const { unit } = read.revision;
-    return { media: unit.media?.model, snapshots: unit.snapshots };
+    return read.ok
+      ? { media: read.revision.unit.media?.model, snapshots: read.revision.unit.snapshots }
+      : null;
   }
 
-  /** The revision's adapter snapshots, which a draft started from it keeps. */
+  /**
+   * The revision `revisionId`'s side of the derived comparison, or null for
+   * none. A base damaged for good compares as the last known good revision,
+   * what visitors get in its place and what the publish gate compares
+   * against, so the draft records the changes the gate will raise.
+   */
+  async function baseSide(revisionId: RevisionId | null): Promise<DerivedSide | null> {
+    if (revisionId === null) return null;
+    const side = await sideOf(revisionId);
+    if (side) return side;
+    const good = await lastKnownGood();
+    log({
+      level: 'warn',
+      event: 'store.draft.base_unread',
+      revisionId,
+      ...(good ? { servingRevisionId: good } : {}),
+    });
+    return good && good !== revisionId ? sideOf(good) : null;
+  }
+
+  /**
+   * The revision's adapter snapshots, which a draft started from it keeps:
+   * each that still checks against this build's schema. One that doesn't
+   * is left out, so a tightened schema never leaves a draft unpublishable
+   * until a refresh, which needs a token.
+   */
   async function adapterSnapshotsOf(
     revisionId: RevisionId | null,
   ): Promise<Readonly<Record<string, unknown>> | undefined> {
     const base = await baseSide(revisionId);
-    const kept = Object.entries(base?.snapshots ?? {}).filter(([kind]) =>
-      (ADAPTER_SNAPSHOT_KINDS as readonly string[]).includes(kind),
+    const kept = Object.entries(base?.snapshots ?? {}).filter(
+      ([kind, value]) =>
+        (ADAPTER_SNAPSHOT_KINDS as readonly string[]).includes(kind) &&
+        parseSnapshot(kind, value).ok,
     );
     return kept.length > 0 ? Object.fromEntries(kept) : undefined;
+  }
+
+  /**
+   * `snapshots` with each GitHub record whose section `input`'s portfolio
+   * still has, for the account it names (#10): a username edit drops the
+   * old account's data, and the section shows its profile link until a refresh.
+   */
+  function currentSnapshots(
+    input: UnitInput,
+    snapshots: Readonly<Record<string, unknown>> | undefined,
+  ): Readonly<Record<string, unknown>> | undefined {
+    if (snapshots?.github === undefined) return snapshots;
+    const parsed = parseSource(input.portfolio.sourceText, input.portfolio.format);
+    return {
+      ...snapshots,
+      github: githubRecordsFor(parsed.ok ? parsed.data : null, snapshots.github),
+    };
   }
 
   /**
@@ -617,7 +667,7 @@ export function filesystemDraftStore({
     const reconciled = reconcileDerived({
       base: await baseSide(baseRevisionId),
       media,
-      snapshots: derived.snapshots,
+      snapshots: currentSnapshots(input, derived.snapshots),
       previous: derived.changes ?? [],
     });
     const next =
@@ -630,10 +680,16 @@ export function filesystemDraftStore({
             },
           }
         : input;
-    const { snapshots, changes } = reconciled.derived;
+    // A dismissal puts the base's record back, which may be for the account
+    // the section named before.
+    const snapshots = currentSnapshots(input, reconciled.derived.snapshots);
+    const { changes } = reconciled.derived;
     return {
       input: next,
-      derived: snapshots || changes.length > 0 ? reconciled.derived : undefined,
+      derived:
+        snapshots || changes.length > 0
+          ? { changes, ...(snapshots ? { snapshots } : {}) }
+          : undefined,
     };
   }
 
@@ -838,6 +894,14 @@ export function filesystemDraftStore({
       const { baseRevisionId } = found.draft;
       try {
         const read = baseRevisionId === null ? null : await readRevision(fs, paths, baseRevisionId);
+        // A read that may work next time answers storage_unavailable, as a
+        // write does: as no base, every authored value would show as added.
+        if (read && !read.ok && read.transient) {
+          throw new StoreError(
+            'storage_unavailable',
+            "The draft's base revision can't be read just now.",
+          );
+        }
         if (!read?.ok) return diffDraft(found.draft, null);
         // The draft's models are its texts as parsed, so the base's are too:
         // a revision's normalized model carries defaults no one wrote.

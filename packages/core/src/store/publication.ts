@@ -53,7 +53,14 @@ import {
   type LivePointer,
   type PublicationEvent,
 } from './pointer';
-import { ADAPTER_SNAPSHOT_KINDS, type ParsedPair, type Publication } from '@portfolio/schema';
+import {
+  ADAPTER_SNAPSHOT_KINDS,
+  githubRecordsFor,
+  parseSnapshot,
+  parseSource,
+  type ParsedPair,
+  type Publication,
+} from '@portfolio/schema';
 import { asDraftDerived } from './derived';
 import { manifestFor, readManifest, readRevision, revisionIds, type Manifest } from './revisions';
 import {
@@ -138,7 +145,14 @@ export type PublicationRejectionCode =
    * it, as after a stall past 2 minutes; the pointer didn't move. A retry is
    * safe: 503 with Retry-After, as lock_timeout.
    */
-  | 'lock_lost';
+  | 'lock_lost'
+  /**
+   * The live revision is damaged for good, and no earlier revision is
+   * healthy (#10): the publish has nothing to check its derived changes
+   * against, so it refuses rather than publish unchecked. `verify` says
+   * what's wrong; `recover`, `restore`, or `import` repairs it.
+   */
+  | 'live_unreadable';
 
 export interface PublicationRejection extends Rejection<PublicationRejectionCode> {
   /** For revision_incompatible: why, such as `schema.version` or `damaged:hash_mismatch`. */
@@ -148,7 +162,13 @@ export interface PublicationRejection extends Rejection<PublicationRejectionCode
 }
 
 export type PublicationOutcome =
-  | { readonly kind: 'committed'; readonly revisionId: RevisionId; readonly seq: number }
+  | {
+      readonly kind: 'committed';
+      readonly revisionId: RevisionId;
+      readonly seq: number;
+      /** For an import: what it left out and why, such as a snapshot this build's schema refuses. */
+      readonly warnings?: readonly UnitDiagnostic[];
+    }
   | PublicationRejection
   | LiveConflict
   | DraftConflict;
@@ -461,26 +481,77 @@ export function filesystemPublicationService({
   }
 
   /**
+   * The live revision's adapter snapshots an import keeps (#10): each that
+   * checks against this build's schema, with only the GitHub records whose
+   * section the imported portfolio has, for the account it names. A
+   * snapshot that no longer checks, after a build tightens its schema, is
+   * left out with a warning, so the import doesn't block on what the
+   * operator's files don't hold.
+   */
+  function carriedSnapshots(
+    documents: UnitInput,
+    adapterSnapshots: Readonly<Record<string, unknown>>,
+  ): { snapshots: Record<string, unknown>; warnings: UnitDiagnostic[] } {
+    const parsed = parseSource(documents.portfolio.sourceText, documents.portfolio.format);
+    const portfolio = parsed.ok ? parsed.data : null;
+    const snapshots: Record<string, unknown> = {};
+    const warnings: UnitDiagnostic[] = [];
+    for (const [kind, value] of Object.entries(adapterSnapshots)) {
+      if (!parseSnapshot(kind, value).ok) {
+        warnings.push({
+          code: 'snapshot.dropped',
+          severity: 'warning',
+          document: 'snapshots',
+          pointer: '',
+          message: `The live revision's ${kind} snapshot doesn't check against this build's schema, so the import left it out.`,
+          remediation:
+            'Nothing to do for the import. Refresh a draft from its sources, with portfolio-store sources refresh or in Studio, to fetch it again.',
+        });
+        continue;
+      }
+      snapshots[kind] = kind === 'github' ? githubRecordsFor(portfolio, value) : value;
+    }
+    return { snapshots, warnings };
+  }
+
+  /**
    * The live revision as the publish validators read it (#10): its pair,
    * media document, and snapshots, or null for an empty store. A live
-   * revision that can't be read is null too: visitors get the last known
-   * good meanwhile, a publish is how the owner replaces it, and a draft
-   * based on it recorded no derived change against it either.
+   * revision damaged for good reads as the last known good, what visitors
+   * get in its place and what a draft based on it compared against, so the
+   * gate still holds what no one accepted. With no last known good, it's
+   * `unreadable`: a publish refuses, and an import, one of the repairs, goes
+   * on with nothing to compare.
    */
-  async function liveContext(live: RevisionId | null): Promise<{
-    readonly context: Publication['live'];
-    readonly adapterSnapshots: Readonly<Record<string, unknown>>;
-  }> {
-    if (live === null) return { context: null, adapterSnapshots: {} };
-    const read = await readRevision(fs, paths, live);
-    if (!read.ok) {
-      // A read that may work next time stops the publish, so the checks
-      // never pass for want of a moment's I/O.
-      if (read.transient) {
-        throw new StoreError('storage_unavailable', "The live revision can't be read just now.");
+  async function liveContext(pointer: LivePointer | null): Promise<
+    | {
+        readonly context: Publication['live'];
+        readonly adapterSnapshots: Readonly<Record<string, unknown>>;
       }
-      log({ level: 'warn', event: 'store.publish.live_unread', code: read.damage });
-      return { context: null, adapterSnapshots: {} };
+    | 'unreadable'
+  > {
+    const live = pointer?.revisionId ?? null;
+    if (live === null) return { context: null, adapterSnapshots: {} };
+    let read = await readRevision(fs, paths, live);
+    // A read that may work next time stops the publish, so the checks
+    // never pass for want of a moment's I/O.
+    const transient = () =>
+      new StoreError('storage_unavailable', "The live revision can't be read just now.");
+    if (!read.ok) {
+      if (read.transient) throw transient();
+      const good = await walkLastKnownGood(pointer);
+      log({
+        level: 'warn',
+        event: 'store.publish.live_unread',
+        code: read.damage,
+        ...(good ? { servingRevisionId: good } : {}),
+      });
+      if (!good || good === live) return 'unreadable';
+      read = await readRevision(fs, paths, good);
+      if (!read.ok) {
+        if (read.transient) throw transient();
+        return 'unreadable';
+      }
     }
     const { unit } = read.revision;
     const adapterSnapshots = Object.fromEntries(
@@ -943,7 +1014,9 @@ export function filesystemPublicationService({
         // change no one accepted, block it (#10). A draft with no derived
         // block has no decision either, so every change it carries is held.
         const derived = asDraftDerived(draft.derived);
-        const { context: liveRevision } = await liveContext(live);
+        const against = await liveContext(pointer);
+        if (against === 'unreadable') return rejected('live_unreadable');
+        const { context: liveRevision } = against;
         const publication: Publication = {
           live: liveRevision,
           derived: derived ?? { changes: [] },
@@ -1042,11 +1115,14 @@ export function filesystemPublicationService({
         // derived block: what it brings counts as accepted, as an operator's
         // files are. It keeps what the live revision's refreshes froze, so an
         // import never drops the GitHub data the owner published.
-        const { context: liveRevision, adapterSnapshots } = await liveContext(live);
+        const against = await liveContext(pointer);
+        const { context: liveRevision, adapterSnapshots } =
+          against === 'unreadable' ? { context: null, adapterSnapshots: {} } : against;
+        const { snapshots: carried, warnings } = carriedSnapshots(documents, adapterSnapshots);
         const checked = checkUnit(
           {
             ...documents,
-            ...(Object.keys(adapterSnapshots).length > 0 ? { snapshots: adapterSnapshots } : {}),
+            ...(Object.keys(carried).length > 0 ? { snapshots: carried } : {}),
           },
           checks,
           { live: liveRevision },
@@ -1097,7 +1173,10 @@ export function filesystemPublicationService({
           ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
           sourceHash: input.sourceHash,
         };
-        return commit('import', event, unit.unitHash, context);
+        const committed = await commit('import', event, unit.unitHash, context);
+        return committed.kind === 'committed' && warnings.length > 0
+          ? { ...committed, warnings }
+          : committed;
       });
     },
 

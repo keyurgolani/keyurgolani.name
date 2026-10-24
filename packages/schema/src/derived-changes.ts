@@ -159,14 +159,57 @@ export function derivedChanges(before: DerivedSide | null, after: DerivedSide): 
   return changes;
 }
 
-/** The content a change's id and an approval cover: everything but the decision and the fields list. */
+/** A snapshot change's value without when it was fetched: a refresh of the same data is the same change. */
+function contentOf(change: DerivedChange, value: DerivedValue | null): DerivedValue | null {
+  if (value === null || change.subject.kind !== 'snapshot') return value;
+  return Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'fetchedAt'));
+}
+
+/**
+ * The content a change's id and an approval cover: everything but the
+ * decision and the fields list, and a snapshot's fetchedAt, so refreshing
+ * the same data again keeps the change's id and the owner's decision.
+ */
 export function changeContent(change: DerivedChange): string {
   return canonicalize({
     cause: change.cause,
     subject: change.subject,
-    before: change.before,
-    after: change.after,
+    before: contentOf(change, change.before),
+    after: contentOf(change, change.after),
   });
+}
+
+/** A GitHub username as GitHub compares it: trimmed, and in any case. */
+const login = (value: unknown) => (typeof value === 'string' ? value.trim().toLowerCase() : null);
+
+/**
+ * `snapshot`, a draft's `github` snapshot, with only the records whose
+ * section `portfolio` still has, for the account that section names. A
+ * record for another username is another account's data: carried past a
+ * username edit, it would show that account under the new name's link
+ * (#10). Without it, the section shows its profile link until a refresh.
+ * Anything that isn't a snapshot comes back as it is.
+ */
+export function githubRecordsFor(portfolio: unknown, snapshot: unknown): unknown {
+  if (!isRecord(snapshot) || !Array.isArray(snapshot.records)) return snapshot;
+  const sections =
+    isRecord(portfolio) && Array.isArray(portfolio.sections) ? portfolio.sections : [];
+  const accounts = new Map<string, string | null>();
+  for (const section of sections) {
+    if (!isRecord(section) || section.kind !== 'github' || typeof section.id !== 'string') continue;
+    if (!accounts.has(section.id)) accounts.set(section.id, login(section.username));
+  }
+  const records = snapshot.records.filter((record) => {
+    if (!isRecord(record) || typeof record.sectionId !== 'string') return false;
+    const account = accounts.get(record.sectionId);
+    return (
+      account !== undefined &&
+      account !== null &&
+      isRecord(record.data) &&
+      login(record.data.username) === account
+    );
+  });
+  return records.length === snapshot.records.length ? snapshot : { ...snapshot, records };
 }
 
 function isSubject(value: unknown): value is DerivedSubject {
@@ -265,14 +308,20 @@ export const assertDerivedChangesApproved: UnitValidator = {
         .filter(({ decision }) => decision.state === 'accepted')
         .map(changeContent),
     );
+    // The draft's own ids name a change for the owner, and never pass one.
+    const ids = new Map(
+      recordedChanges(publication.derived).map((change) => [changeContent(change), change.id]),
+    );
     const diagnostics: Diagnostic[] = [];
     for (const change of derivedChanges(live, draft)) {
-      if (accepted.has(changeContent(change))) continue;
+      const content = changeContent(change);
+      if (accepted.has(content)) continue;
+      const id = ids.get(content);
       diagnostics.push({
         code: 'derived.unapproved',
         severity: 'blocks-publish',
         ...located(change, pair.portfolio),
-        message: `${subjectName(change.subject)} ${CAUSE_WORDS[change.cause]} (${change.cause}), and no one has accepted that change.`,
+        message: `${subjectName(change.subject)} ${CAUSE_WORDS[change.cause]} (${change.cause}${id ? `, change ${id}` : ''}), and no one has accepted that change.`,
         remediation:
           'Review it, then accept it or dismiss it: in Studio, or with portfolio-store changes accept <id> or portfolio-store changes dismiss <id>. Dismissing it keeps the live value.',
       });

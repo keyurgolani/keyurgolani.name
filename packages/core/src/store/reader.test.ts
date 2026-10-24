@@ -709,14 +709,25 @@ test("of two decisions in flight, only the later pointer's sets the flag, whiche
     let expected: boolean;
     let early: Promise<LiveRevision>;
     if (order === 'nothing servable, then live') {
-      // The first pointer's decision, nothing servable, is slow; meanwhile a good publish lands.
+      // The first pointer's decision, nothing servable, is slow; meanwhile a
+      // good revision lands. With nothing healthy, a publish has nothing to
+      // check derived changes against and is refused (#10), so it's an
+      // import, one of the repairs.
       damage(first);
       damage(second);
       slow = new Set([first]);
       early = catalog.getLive();
       await new Promise((resolve) => setTimeout(resolve, 50));
       slow = new Set();
-      await publishInput(store, contentVariant(pairInput('engineering'), 'three'));
+      const imported = await store.publication.importSource(
+        {
+          documents: contentVariant(pairInput('engineering'), 'three'),
+          sourceHash: `sha256:${'3'.repeat(64)}`,
+          expectedLiveRevisionId: second,
+        },
+        'operator',
+      );
+      assert.equal(imported.kind, 'committed', JSON.stringify(imported));
       expected = true;
     } else {
       // The first pointer's decision, live, is slow, past its tombstone

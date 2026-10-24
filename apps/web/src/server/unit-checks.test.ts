@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { UnitChecks } from '@portfolio/core';
-import { mediaBlobs } from '@portfolio/schema';
+import { derivedChanges, mediaBlobs } from '@portfolio/schema';
 import { readPair } from '@portfolio/schema/node';
 import { APPEARANCE_REGISTRY } from '~/lib/appearance-registry';
 import { OriginError, storeChecks, storeOrigin } from '../../scripts/portfolio-store';
@@ -131,4 +131,35 @@ test("a unit references its media document's source and rendition blobs", () => 
   const cli = storeChecks({ PORTFOLIO_ORIGIN: 'https://rowan.name' });
   assert.deepEqual(cli.referencedBlobs?.(DOCUMENT), mediaBlobs(DOCUMENT));
   assert.deepEqual(checks.referencedBlobs?.(undefined), []);
+});
+
+test("the deployment's checks and portfolio-store's run the publish gate with a publication: an unapproved change refuses the pair, the accepted one passes", () => {
+  const read = readPair(EXAMPLES);
+  assert.ok(read.ok, 'the bundled example reads');
+  const asset = (sha: string) => ({ ...DOCUMENT.assets[0]!, sha256: hex(sha) });
+  const live = deploymentUnitChecks(ORIGIN).validateLive!(read.sources);
+  assert.ok(live.pair);
+  const publication = (changes: unknown[]) => ({
+    live: { pair: live.pair!, media: { assets: [asset('a')] }, snapshots: {} },
+    derived: { changes },
+    draft: { media: { assets: [asset('e')] } },
+  });
+  for (const [name, checks] of [
+    ['the deployment', deploymentUnitChecks(ORIGIN)],
+    ['portfolio-store', storeChecks({ PORTFOLIO_ORIGIN: ORIGIN })],
+  ] as const) {
+    const codes = (result: ReturnType<UnitChecks['validate']>) =>
+      result.diagnostics.map(({ code }) => code).filter((code) => code === 'derived.unapproved');
+    const held = checks.validate(read.sources, publication([]));
+    assert.deepEqual(codes(held), ['derived.unapproved'], name);
+    const [change] = derivedChanges(publication([]).live, publication([]).draft);
+    const accepted = {
+      ...change!,
+      id: `dch_${'0'.repeat(32)}`,
+      decision: { state: 'accepted', at: 'x', by: 'owner' },
+    };
+    assert.deepEqual(codes(checks.validate(read.sources, publication([accepted]))), [], name);
+    // Without a publication, as a preview checks, there's nothing to compare.
+    assert.deepEqual(codes(checks.validate(read.sources)), [], name);
+  }
 });

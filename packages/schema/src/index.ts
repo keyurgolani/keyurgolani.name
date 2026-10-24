@@ -23,6 +23,7 @@ export * from './record-ids';
 export * from './derived-changes';
 export * from './ids-fix';
 export * from './published-urls';
+export * from './publish-checks';
 export * from './validate';
 export * from './edit';
 export * from './serialize';

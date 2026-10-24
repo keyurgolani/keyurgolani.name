@@ -5,6 +5,7 @@ import {
   DOCUMENT_MAX_BYTES,
   parseSnapshot,
   parseSource,
+  publishDiagnostics,
   type Diagnostic,
   type DocumentFormat,
   type ParsedPair,
@@ -260,17 +261,16 @@ export function checkUnit(
   checks: UnitChecks,
   publication?: Publication,
 ): CheckedUnit {
-  const result = checks.validate(
-    {
-      portfolio: sourceOf('portfolio', input.portfolio),
-      site: sourceOf('site', input.site),
-    },
-    ...(publication ? [publication] : []),
-  );
+  const sources = {
+    portfolio: sourceOf('portfolio', input.portfolio),
+    site: sourceOf('site', input.site),
+  };
+  const result = checks.validate(sources, ...(publication ? [publication] : []));
   const media = input.media ? mediaDiagnostics(input.media) : undefined;
   const adapter = adapterSnapshots(input.snapshots);
   const diagnostics: UnitDiagnostic[] = [
     ...result.diagnostics,
+    ...(publication ? gateDiagnostics(sources, publication, result.diagnostics) : []),
     ...(media?.diagnostics ?? []),
     ...adapter.diagnostics,
   ];
@@ -305,6 +305,22 @@ export function checkUnit(
   });
   const rendering = checks.rendering?.(result.pair) ?? NO_RENDERING;
   return { ok: true, unit, rendering, diagnostics };
+}
+
+/**
+ * The publish validators' records (#10), run here whatever `checks` did with
+ * the publication, so no build's checks can leave out the gate or
+ * id.reused. A record the build's checks raised already isn't repeated.
+ */
+function gateDiagnostics(
+  sources: { readonly portfolio: SourceDocument; readonly site: SourceDocument },
+  publication: Publication,
+  raised: readonly Diagnostic[],
+): readonly Diagnostic[] {
+  const key = (record: Diagnostic) =>
+    [record.code, record.document, record.pointer, record.message].join('\u0000');
+  const seen = new Set(raised.map(key));
+  return publishDiagnostics(sources, publication).filter((record) => !seen.has(key(record)));
 }
 
 /**

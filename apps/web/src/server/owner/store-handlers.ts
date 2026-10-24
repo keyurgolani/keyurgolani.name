@@ -68,6 +68,8 @@ function rejection(outcome: Rejected): StudioResult {
       return errorResult('lock_lost', RETRY);
     case 'idempotency_conflict':
       return errorResult('idempotency_conflict');
+    case 'live_unreadable':
+      return errorResult('live_unreadable');
     case 'validation_failed':
       return errorResult('validation_failed', { details: { diagnostics: outcome.diagnostics } });
     case 'asset_missing':

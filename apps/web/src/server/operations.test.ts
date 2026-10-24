@@ -129,6 +129,7 @@ const STORE_ENTRIES: Record<string, { capability: string; kind: string; codes: E
       'asset_missing',
       'not_found',
       'idempotency_conflict',
+      'live_unreadable',
       'lock_timeout',
       'lock_lost',
       'storage_unavailable',

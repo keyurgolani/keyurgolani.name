@@ -1,12 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   assertDerivedChangesApproved,
   changeContent,
   derivedChanges,
+  githubRecordsFor,
   recordedChanges,
   type DerivedChange,
+  type DerivedSide,
 } from './derived-changes';
+import { publishDiagnostics } from './publish-checks';
+import { validatePublicationUnit } from './validate';
 import type { Context } from './diagnostics';
 import { PUBLISH_VALIDATORS, withPublication } from './published-urls';
 import type { ParsedPair } from './view';
@@ -114,7 +121,7 @@ const PAIR = {
 
 function gate(
   derived: unknown,
-  draft = {
+  draft: DerivedSide = {
     media: { assets: [record('portrait', 'a', 'people/me.png')] },
     snapshots: LIVE.snapshots,
   },
@@ -213,4 +220,89 @@ test('publish and import run id.reused and the derived-change gate, and leave ur
     ['id.reused', 'derived.unapproved'],
   );
   assert.deepEqual(context.publication, { live: null });
+});
+
+test("an approval covers the value before too: the same after from another before isn't the change accepted", () => {
+  const [moved] = derivedChanges(LIVE, {
+    media: { assets: [record('portrait', 'a', 'people/me.png')] },
+  });
+  const otherBefore = { ...moved!, before: { ...moved!.before, sha256: hex('9') } };
+  assert.notEqual(changeContent(otherBefore), changeContent(moved!));
+  assert.equal(gate({ changes: [accepted(otherBefore)] }).diagnostics.length, 1);
+});
+
+test("a snapshot change's identity leaves out when it was fetched, and the gate's message names the draft's id for it", () => {
+  const [one] = derivedChanges(LIVE, { snapshots: { github: github('code', 15) } });
+  const [two] = derivedChanges(LIVE, {
+    snapshots: { github: github('code', 15, '2026-10-22T00:00:00Z') },
+  });
+  assert.notDeepEqual(one?.after, two?.after, 'each shows its own fetchedAt');
+  assert.equal(changeContent(one!), changeContent(two!));
+  // A media change keeps every field it shows.
+  const [moved] = derivedChanges(LIVE, {
+    media: { assets: [record('portrait', 'a', 'people/me.png')] },
+  });
+  const pending = { ...accepted(moved!, `dch_${'b'.repeat(32)}`), decision: { state: 'pending' } };
+  const [blocked] = gate({ changes: [pending] }).diagnostics;
+  assert.match(blocked!.message, new RegExp(`change dch_${'b'.repeat(32)}`));
+  // An acceptance of the earlier fetch passes the later one.
+  const refreshed = { snapshots: { github: github('code', 15, '2026-10-22T00:00:00Z') } };
+  assert.deepEqual(gate({ changes: [accepted(one!)] }, refreshed).diagnostics, []);
+});
+
+test('githubRecordsFor keeps a record only for a github section the portfolio has, naming the same account in any case', () => {
+  const portfolio = {
+    sections: [
+      { kind: 'github', id: 'code', username: ' Rowan ' },
+      { kind: 'github', id: 'other', username: 'someone-else' },
+      { kind: 'lede', id: 'about' },
+    ],
+  };
+  const snapshot = {
+    records: [
+      ...github('code', 12).records,
+      ...github('other', 3).records,
+      ...github('gone', 4).records,
+      ...github('about', 5).records,
+    ],
+  };
+  assert.deepEqual(githubRecordsFor(portfolio, snapshot), {
+    records: github('code', 12).records,
+  });
+  // Unchanged, it's the same object; anything not a snapshot comes back as it is.
+  const kept = github('code', 12);
+  assert.equal(githubRecordsFor(portfolio, kept), kept);
+  assert.equal(githubRecordsFor(portfolio, undefined), undefined);
+  assert.deepEqual(githubRecordsFor(null, kept), { records: [] });
+});
+
+test('publishDiagnostics runs only the publish validators, each record located in the pair', () => {
+  const dir = path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '__fixtures__/invalid/derived.unapproved',
+  );
+  const read = (file: string) => readFileSync(path.join(dir, file), 'utf8');
+  const unitOf = (prefix: string) => ({
+    portfolio: {
+      name: 'portfolio.yml',
+      format: 'yaml' as const,
+      text: read(`${prefix}portfolio.yml`),
+    },
+    site: { name: 'site.yml', format: 'yaml' as const, text: read(`${prefix}site.yml`) },
+  });
+  const live = validatePublicationUnit(unitOf('live/'));
+  assert.ok(live.pair, 'the live side validates');
+  const records = publishDiagnostics(unitOf(''), {
+    live: {
+      pair: live.pair,
+      snapshots: { github: JSON.parse(read('live/snapshots/github.json')) },
+    },
+    derived: { changes: [] },
+    draft: { snapshots: { github: JSON.parse(read('snapshots/github.json')) } },
+  });
+  assert.deepEqual(
+    records.map(({ code, document, pointer }) => [code, document, pointer]),
+    [['derived.unapproved', 'portfolio', '/sections/1']],
+  );
+  assert.equal(typeof records[0]?.line, 'number');
 });

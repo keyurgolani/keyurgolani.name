@@ -56,6 +56,12 @@ export const ERRORS = {
   draft_conflict: { status: 409, message: 'The draft changed since it was read.' },
   live_conflict: { status: 409, message: 'The live revision changed since it was read.' },
   nothing_to_publish: { status: 409, message: 'The draft is the same as the live revision.' },
+  // #10: the live revision is damaged and nothing earlier is healthy, so the
+  // publish has nothing to check derived changes against. A retry won't help.
+  live_unreadable: {
+    status: 409,
+    message: "The live revision can't be read. Run verify, then recover, restore, or import.",
+  },
   validation_failed: { status: 422, message: "The content doesn't validate." },
   revision_incompatible: { status: 422, message: "This build can't make that revision live." },
   asset_missing: { status: 422, message: "A file the content references isn't stored." },
@@ -557,6 +563,7 @@ const STORE_OPERATIONS: readonly Operation[] = [
       'asset_missing',
       'not_found',
       'idempotency_conflict',
+      'live_unreadable',
     ],
     {
       live_conflict: LiveConflictDetails,

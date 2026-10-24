@@ -449,16 +449,33 @@ test('every registered operation fails closed without a session and runs with on
       const draft = await working();
       return { draftId: draft.draftId, expectedVersion: draft.version };
     },
-    // A change each to decide, from a refresh recorded beside the server.
+    // A change each to decide, from a refresh recorded beside the server,
+    // for a GitHub section the draft has: a record for none is dropped.
     ...Object.fromEntries(
       (['draft.changes.accept', 'draft.changes.dismiss'] as const).map((name, index) => [
         name,
         async () => {
           const draft = await working();
-          const refreshed = await side.drafts.refreshSources(
+          const withSection = await side.drafts.save(
             {
               draftId: draft.draftId,
               expectedVersion: draft.version,
+              documents: {
+                ...documents('Rowan Decides'),
+                portfolio: {
+                  format: 'yaml',
+                  sourceText: `${PORTFOLIO}  - kind: github\n    id: code\n    title: Code\n    username: rowan\n`,
+                },
+              },
+            },
+            'owner',
+          );
+          assert.equal(withSection.kind, 'saved', name);
+          if (withSection.kind !== 'saved') return {};
+          const refreshed = await side.drafts.refreshSources(
+            {
+              draftId: withSection.draft.draftId,
+              expectedVersion: withSection.draft.version,
               snapshots: { github: githubSnapshot(10 + index) },
             },
             'owner',
