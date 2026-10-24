@@ -14,6 +14,21 @@ export const CANARY_SOURCE = 'canary-source-0f3b9a64';
 export const CANARY_DATA = 'canary-data-3e9d51b0';
 /** Sent in every request body, which no response may echo. */
 export const CANARY_BODY = 'canary-draft-7c1e04aa';
+/**
+ * What the CI reference fixture (#9, tests/fixtures/reference-export) holds
+ * that the demo must never send: its private record, its hidden section,
+ * its private image's bytes, its bundle's events, the private work's slug
+ * (a prefix of the private image's id), and the mount's own directory name.
+ * apps/web/scripts/reference-fixture.test.ts holds these to the fixture's.
+ */
+export const REFERENCE_CANARIES = Object.freeze([
+  'CANARY-REF-PRIVATE-RECORD',
+  'CANARY-REF-HIDDEN-SECTION',
+  'CANARY-REF-PRIVATE-MEDIA',
+  'CANARY-REF-EVENT-REASON',
+  'canary-ref-private',
+  'reference-export',
+]);
 /** Fields only the config summary has, which only an owner session gets, through config.status. */
 export const SUMMARY_FIELDS = ['"proxyHops"', '"adapters"'];
 
@@ -73,6 +88,7 @@ export function canaries(root, { secrets = [], summary = true } = {}) {
         CANARY_SOURCE,
         CANARY_DATA,
         CANARY_BODY,
+        ...REFERENCE_CANARIES,
         root,
         ...(summary ? SUMMARY_FIELDS : []),
         ...secrets,

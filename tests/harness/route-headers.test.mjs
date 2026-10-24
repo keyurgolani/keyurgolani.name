@@ -245,6 +245,28 @@ test("under demo, the showroom and every /sample path need the demo policy, whic
   assert.notDeepEqual(headerProblems('/studio', STUDIO_PAGE, { demo: true }), []);
 });
 
+test('under demo, every /reference path, its renditions included, needs the demo policy framed by no one (#9)', () => {
+  const page = (/** @type {string} */ framing) => ({
+    ...BASELINE_HEADERS,
+    'content-security-policy': demoPolicy(framing),
+  });
+  for (const path of [
+    '/reference',
+    '/reference/work/tide-tables',
+    '/reference/media/a/b/c.png',
+    '/%72eference',
+  ]) {
+    assert.deepEqual(headerProblems(path, page("'none'"), { demo: true, studio: false }), [], path);
+    assert.notDeepEqual(headerProblems(path, page("'self'"), { demo: true }), [], path);
+    assert.notDeepEqual(headerProblems(path, { ...BASELINE_HEADERS }, { demo: true }), [], path);
+  }
+  for (const path of ['/references', '/x/reference']) {
+    assert.deepEqual(headerProblems(path, { ...BASELINE_HEADERS }, { demo: true }), [], path);
+  }
+  // Outside demo nothing sends it.
+  assert.deepEqual(headerProblems('/reference', { ...BASELINE_HEADERS }), []);
+});
+
 test('two answers that differ in their nonces alone compare equal, and nothing else is taken for a nonce', () => {
   const nonce = 'MVlEoQyHU2PoMq1Imu8oSA==';
   const other = 'WFUrZAL3dO/g3rt7Jm3XSA==';
