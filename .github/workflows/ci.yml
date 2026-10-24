@@ -78,6 +78,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # check:appearance holds the catalog lock to the one at HEAD^1 (#20).
+          fetch-depth: 2
       - name: Install
         id: install
         uses: ./.github/actions/install
@@ -110,6 +112,9 @@ jobs:
       - name: pnpm ci:appearance
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm ci:appearance
+        env:
+          # The base branch's tip under a PR's merge commit, or the commit before a push.
+          CATALOG_LOCK_BASE: HEAD^1
       - name: pnpm ci:deps
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm ci:deps

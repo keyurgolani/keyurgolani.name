@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  baseLockProblems,
   catalogPacks,
   compareVersions,
   LOCK_FILE,
@@ -166,6 +167,44 @@ test('a lock that is missing, malformed, out of form, or lists a pack nobody shi
     // A changed tier or license is stale too.
     const edited = lock.replace('"tier": "stable"', '"tier": "extended"');
     assert.match(lockProblems(edited, packs)[0]!.message, /lock entry is stale/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a lock edited along with its pack still fails against the base's lock: same version, same digest (#20)", () => {
+  const root = workspace({ a: { manifest: manifest('a'), files: { 'styles.css': 'x' } } });
+  try {
+    const dir = path.join(root, 'packages', 'appearance-schemes', 'packs', 'a');
+    const read = () => catalogPacks(root, packPackages(root));
+    const base = { ref: 'HEAD^1', text: renderLock(read()) };
+    assert.deepEqual(baseLockProblems(base, read()), []);
+    // The content changes, and the committed lock is edited to match, with no version bump.
+    fs.writeFileSync(path.join(dir, 'styles.css'), 'changed');
+    const edited = renderLock(read());
+    assert.deepEqual(lockProblems(edited, read()), [], 'the committed lock alone looks current');
+    const problems = baseLockProblems(base, read());
+    assert.equal(problems.length, 1);
+    assert.equal(problems[0]!.pack, 'a');
+    assert.equal(problems[0]!.axis, 'colorScheme');
+    assert.match(problems[0]!.message, /changed since HEAD\^1 without a version bump/);
+    // Bumped, it holds.
+    fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify(manifest('a', '1.0.1')));
+    assert.deepEqual(baseLockProblems(base, read()), []);
+    // Below the base's version fails whatever the digest.
+    const ahead = { ref: 'HEAD^1', text: renderLock(read()) };
+    fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify(manifest('a', '1.0.0')));
+    assert.match(
+      baseLockProblems(ahead, read())[0]!.message,
+      /version went down since HEAD\^1, from 1\.0\.1 to 1\.0\.0/,
+    );
+    // A base with no lock, or one that doesn't pin the pack, holds it to nothing.
+    assert.deepEqual(baseLockProblems({ ref: 'HEAD^1', text: null }, read()), []);
+    assert.deepEqual(baseLockProblems({ ref: 'HEAD^1', text: renderLock([]) }, read()), []);
+    assert.match(
+      baseLockProblems({ ref: 'HEAD^1', text: 'nope' }, read())[0]!.message,
+      /isn't valid JSON/,
+    );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

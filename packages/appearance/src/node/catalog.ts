@@ -301,6 +301,55 @@ export function lockProblems(
   return problems;
 }
 
+/** The lock at the change's base, which the committed lock is held to: its git ref and its text, null where the base has none. */
+export interface BaseLock {
+  readonly ref: string;
+  readonly text: string | null;
+}
+
+/**
+ * What's wrong with the packs on disk against the lock at the change's
+ * base (#20): a pack whose files digest to something else at the version
+ * the base pins changed without a version bump, however the committed lock
+ * was edited to match; and a version is never below the base's. A pack the
+ * base doesn't pin, or a base with no lock, is new, and holds to nothing.
+ */
+export function baseLockProblems(base: BaseLock, packs: readonly CatalogPack[]): LockProblem[] {
+  if (base.text === null) return [];
+  let lock: CatalogLock;
+  try {
+    lock = JSON.parse(base.text) as CatalogLock;
+  } catch {
+    return [
+      { message: `${LOCK_FILE} at ${base.ref} isn't valid JSON, so nothing can be held to it.` },
+    ];
+  }
+  if (typeof lock?.packs !== 'object' || lock.packs === null) {
+    return [{ message: `${LOCK_FILE} at ${base.ref} isn't lock version ${LOCK_VERSION}.` }];
+  }
+  const problems: LockProblem[] = [];
+  for (const pack of packs) {
+    const was = lock.packs[pack.id];
+    if (!was) continue;
+    const version = field(pack.manifest, 'version');
+    const name = `The ${AXIS_NAMES[pack.axis]} ${pack.id}`;
+    if (was.version === version && was.digest !== pack.digest) {
+      problems.push({
+        pack: pack.id,
+        axis: pack.axis,
+        message: `${name} changed since ${base.ref} without a version bump: ${base.ref}'s lock pins ${was.digest} at ${version}, and its files digest to ${pack.digest}. Bump its version, then run pnpm catalog:lock.`,
+      });
+    } else if (version && was.version && compareVersions(version, was.version) < 0) {
+      problems.push({
+        pack: pack.id,
+        axis: pack.axis,
+        message: `${name}'s version went down since ${base.ref}, from ${was.version} to ${version}: a pack's version only goes up.`,
+      });
+    }
+  }
+  return problems;
+}
+
 /** A pack the notices read: any registered pack, first-party or installed from elsewhere. */
 export interface NoticePack {
   readonly id: string;

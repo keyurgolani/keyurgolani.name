@@ -6,6 +6,7 @@
 // failure record through ci/run.mjs (ci/lib/reports.mjs), with the token
 // role, display mode, and tuple where it has them.
 
+import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -17,6 +18,7 @@ import {
   type PackManifest,
 } from '@portfolio/appearance';
 import {
+  baseLockProblems,
   catalogPacks,
   gatePack,
   LOCK_FILE,
@@ -27,6 +29,7 @@ import {
   renderNotices,
   researchRecords,
   type AppearanceCheck,
+  type BaseLock,
   type GateFailure,
   type NoticePack,
 } from '@portfolio/appearance/node';
@@ -160,6 +163,38 @@ export function problemRecords(check: AppearanceCheck): CatalogRecord[] {
 }
 
 /**
+ * The lock at the change's base, which CATALOG_LOCK_BASE names as a git
+ * ref, or null when it names none. CI's static job sets HEAD^1: under a
+ * PR's merge commit, the base branch's tip, and on a push, the commit
+ * before. The text is null when the base has no lock yet. A ref git can't
+ * read fails, so a run asked to hold the lock to its base never quietly
+ * doesn't.
+ */
+export function baseLock(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+  root: string = REPO_ROOT,
+): BaseLock | null {
+  const ref = env.CATALOG_LOCK_BASE;
+  if (!ref) return null;
+  const git = (...args: string[]) =>
+    execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  try {
+    git('rev-parse', '--verify', '--quiet', `${ref}^{commit}`);
+  } catch {
+    throw new Error(
+      `CATALOG_LOCK_BASE is ${ref}, and git can't read it. Fetch it (CI's static job checks out with fetch-depth: 2), or unset it to check the lock against the packs alone.`,
+    );
+  }
+  let text: string | null;
+  try {
+    text = git('show', `${ref}:${LOCK_FILE}`);
+  } catch {
+    text = null;
+  }
+  return { ref, text };
+}
+
+/**
  * The packs the third-party notices cover: every pack registry generation
  * registered, from any package, less the fixtures a flag admitted, which no
  * production build ships. The lock pins first-party packs alone, since
@@ -178,12 +213,14 @@ export function noticePacks(result: Pick<RegistryResult, 'packs'>): NoticePack[]
 
 /**
  * The catalog's governance checks over what registry generation read: its
- * result, less the excluded packs, and the excluded ones.
+ * result, less the excluded packs, and the excluded ones; and the lock at
+ * the change's base, when there is one to hold the committed lock to.
  */
 export function catalogFindings(
   root: string,
   result: RegistryResult,
   excluded: readonly ExcludedPack[],
+  base: BaseLock | null = null,
 ): CatalogFindings {
   const lines: string[] = [];
   const records: CatalogRecord[] = [];
@@ -248,6 +285,15 @@ export function catalogFindings(
   for (const problem of lockProblems(read(root, LOCK_FILE), locked)) {
     add(problem.message, {
       test: 'catalog lock',
+      ...(problem.pack ? { pack: problem.pack } : {}),
+      ...(problem.axis ? { axis: problem.axis } : {}),
+      asset: LOCK_FILE,
+    });
+  }
+  // A lock edited along with its pack still holds to the base's: same version, same digest.
+  for (const problem of base ? baseLockProblems(base, locked) : []) {
+    add(problem.message, {
+      test: 'catalog lock against its base',
       ...(problem.pack ? { pack: problem.pack } : {}),
       ...(problem.axis ? { axis: problem.axis } : {}),
       asset: LOCK_FILE,

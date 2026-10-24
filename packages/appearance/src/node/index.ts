@@ -23,6 +23,7 @@ export {
 } from './compile';
 export { compilePlatform, platformStylesheet } from './platform';
 export {
+  baseLockProblems,
   catalogPacks,
   compareVersions,
   LOCK_FILE,
@@ -36,6 +37,7 @@ export {
   renderNotices,
   researchIds,
   researchRecords,
+  type BaseLock,
   type CatalogLock,
   type CatalogPack,
   type LockEntry,

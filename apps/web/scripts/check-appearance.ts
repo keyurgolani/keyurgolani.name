@@ -52,6 +52,7 @@ import {
 import type { GateTargets } from '@portfolio/appearance';
 import { loadThresholds } from '../../../quality/thresholds';
 import {
+  baseLock,
   catalogFindings,
   contrastRecords,
   hierarchyRecords,
@@ -231,7 +232,7 @@ async function main(): Promise<number> {
     options.auditExceptions ? path.resolve(options.auditExceptions) : undefined,
   );
 
-  const catalog = catalogFindings(REPO_ROOT, result, excluded ?? []);
+  const catalog = catalogFindings(REPO_ROOT, result, excluded ?? [], baseLock());
 
   for (const { axis, id, reason } of check.skipped)
     process.stdout.write(`${TAG} Skipped ${axis} ${id}: ${reason}.\n`);

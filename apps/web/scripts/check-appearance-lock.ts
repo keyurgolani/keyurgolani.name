@@ -12,6 +12,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  baseLockProblems,
   LOCK_FILE,
   lockedPacks,
   lockProblems,
@@ -20,7 +21,7 @@ import {
   renderNotices,
 } from '@portfolio/appearance/node';
 import { readRegistry } from '@portfolio/variant-contract/node';
-import { noticePacks } from './check-appearance-catalog';
+import { baseLock, noticePacks } from './check-appearance-catalog';
 import { excludePacks, registryOptions, REPO_ROOT } from './registry-options';
 
 const TAG = '[catalog:lock]';
@@ -40,7 +41,12 @@ async function main(args: readonly string[]): Promise<number> {
     return 2;
   }
   const packs = lockedPacks(REPO_ROOT);
-  const problems = lockProblems(read(LOCK_FILE), packs);
+  // CATALOG_LOCK_BASE holds the lock to the change's base too, as check:appearance does.
+  const base = baseLock();
+  const problems = [
+    ...lockProblems(read(LOCK_FILE), packs),
+    ...(base ? baseLockProblems(base, packs) : []),
+  ];
   // The notices cover what a production build registers: no fixture flag set.
   const registry = await readRegistry(registryOptions({}));
   if (!registry.ok) {

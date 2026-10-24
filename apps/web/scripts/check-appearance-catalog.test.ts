@@ -1,14 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createAppearanceRegistry, type MetaPack } from '@portfolio/appearance';
-import { checkAppearance, NOTICES_FILE, renderNotices } from '@portfolio/appearance/node';
+import {
+  checkAppearance,
+  lockedPacks,
+  NOTICES_FILE,
+  renderNotices,
+} from '@portfolio/appearance/node';
 import { readRegistry, registryMeta, type RegistryResult } from '@portfolio/variant-contract/node';
 import Ajv2020 from 'ajv/dist/2020';
 import { failureRecord, readFailureRecords, SCHEMA_PATH } from '../../../ci/lib/reports.mjs';
 import {
+  baseLock,
   catalogFindings,
   contrastRecords,
   hierarchyRecords,
@@ -148,6 +155,72 @@ test('a pack whose content changed without a version bump fails, naming the pack
     findings.records.forEach(valid);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a pack changed with its lock edited to match fails against the base's lock, naming the pack and axis (#20)", async () => {
+  const root = scratch();
+  try {
+    const lockFile = path.join(root, 'packages/appearance/appearance-catalog.lock.json');
+    const base = { ref: 'HEAD^1', text: fs.readFileSync(lockFile, 'utf8') };
+    const file = path.join(root, 'packages/appearance-schemes/packs/warm-parchment/manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+    manifest.description = `${manifest.description} Edited.`;
+    fs.writeFileSync(file, JSON.stringify(manifest, null, 2));
+    // The committed lock is edited to the new digest, so it alone looks current.
+    const lock = JSON.parse(base.text);
+    lock.packs['warm-parchment'].digest = lockedPacks(root).find(
+      ({ id }) => id === 'warm-parchment',
+    )!.digest;
+    fs.writeFileSync(lockFile, `${JSON.stringify(lock, null, 2)}\n`);
+    assert.deepEqual(catalogFindings(root, await shipped(), []).lines, []);
+    const findings = catalogFindings(root, await shipped(), [], base);
+    assert.equal(findings.lines.length, 1, findings.lines.join('\n'));
+    assert.match(findings.lines[0]!, /warm-parchment changed since HEAD\^1 without a version bump/);
+    assert.equal(findings.records[0]!.pack, 'warm-parchment');
+    assert.equal(findings.records[0]!.axis, 'colorScheme');
+    findings.records.forEach(valid);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('CATALOG_LOCK_BASE names the base lock by a git ref, none at a base without one, and a ref git cannot read fails', () => {
+  assert.equal(baseLock({}), null);
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'portfolio-lock-base-'));
+  const git = (...args: string[]) =>
+    execFileSync(
+      'git',
+      ['-c', 'user.name=Lock Test', '-c', 'user.email=lock@example.test', ...args],
+      {
+        cwd: repo,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    );
+  try {
+    git('init', '-q', '-b', 'base');
+    fs.writeFileSync(path.join(repo, 'README'), 'x\n');
+    git('add', '-A');
+    git('commit', '-q', '-m', 'no lock yet');
+    assert.deepEqual(baseLock({ CATALOG_LOCK_BASE: 'HEAD' }, repo), { ref: 'HEAD', text: null });
+    const lockFile = path.join(repo, 'packages/appearance/appearance-catalog.lock.json');
+    fs.mkdirSync(path.dirname(lockFile), { recursive: true });
+    fs.writeFileSync(lockFile, '{"lockVersion":1,"packs":{}}\n');
+    git('add', '-A');
+    git('commit', '-q', '-m', 'lock');
+    fs.writeFileSync(lockFile, '{"edited":true}\n');
+    git('commit', '-q', '-am', 'edit');
+    assert.deepEqual(baseLock({ CATALOG_LOCK_BASE: 'HEAD^1' }, repo), {
+      ref: 'HEAD^1',
+      text: '{"lockVersion":1,"packs":{}}\n',
+    });
+    assert.throws(
+      () => baseLock({ CATALOG_LOCK_BASE: 'refs/heads/no-such-base' }, repo),
+      /CATALOG_LOCK_BASE is refs\/heads\/no-such-base, and git can't read it/,
+    );
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
   }
 });
 
