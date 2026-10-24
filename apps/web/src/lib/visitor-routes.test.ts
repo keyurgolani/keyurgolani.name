@@ -134,10 +134,11 @@ test('under /sample, the variant ?variant= names renders its views, and links an
   } as const;
   assert.deepEqual(
     rendered((await resolve({ ...named, segments: ['chapters', 'about'] }, sample)).route),
+    // Below /sample a view names no canonical either, as its parent doesn't (#22).
     [
       'fixture-chapters',
       { route: 'view', view: CHAPTERS, params: { chapter: 'about' } },
-      '/sample?variant=fixture-chapters',
+      undefined,
     ],
   );
   assert.deepEqual((await resolve({ ...named, segments: ['notes'] }, sample)).route, {
@@ -146,6 +147,13 @@ test('under /sample, the variant ?variant= names renders its views, and links an
   });
   // /sample's home isn't the live site's, so it names no canonical (#22).
   assert.equal(rendered((await resolve({ ...named, segments: [] }, sample)).route)[2], undefined);
+  // Nor does a preview frame's view.
+  assert.equal(
+    rendered(
+      (await resolve({ basePath: '/preview/grant', segments: ['chapters', 'about'] })).route,
+    )[2],
+    undefined,
+  );
   // Without ?variant=, the sample's own selection: the fallback, whose path is another's.
   assert.deepEqual(
     (await resolve({ basePath: '/sample', segments: ['chapters', 'about'] }, sample)).route,

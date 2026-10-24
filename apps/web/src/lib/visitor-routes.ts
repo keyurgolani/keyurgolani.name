@@ -94,14 +94,10 @@ export async function resolveVisitorPath(
     return { kind: 'render', view, composition: fallback, target, ...canonical };
   }
   if (target.route !== 'view') return { kind: 'render', view, composition, target, ...canonical };
-  // A view is canonical to its parent route.
+  // A view is canonical to its parent route, at the site root alone: a view
+  // under /sample or a preview frame names none, as its parent doesn't.
+  if (path.basePath !== '') return { kind: 'render', view, composition, target };
   const parent: RouteTarget =
     target.slug === undefined ? { route: 'home' } : { route: 'work', slug: target.slug };
-  return {
-    kind: 'render',
-    view,
-    composition,
-    target,
-    canonical: href(parent, { basePath: path.basePath, query: path.query }),
-  };
+  return { kind: 'render', view, composition, target, canonical: href(parent) };
 }
