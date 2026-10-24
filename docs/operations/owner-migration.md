@@ -10,7 +10,7 @@ Before the run, the owner:
 
 1. Picks the release: one `vX.Y.Z` tag and the `ghcr.io/<owner>/<repo>@sha256:<digest>` its GitHub Release notes name ([Releasing](../releasing.md#pull-by-digest)). Never `latest`.
 2. While the package is private, runs `docker login ghcr.io` on the host himself, with a token that has `read:packages`. He never gives the agent a token.
-3. Picks a temporary origin, a hostname of his own, points its DNS at the host, and makes sure the front end can serve it over TLS: a certificate that already covers it, or the proxy's own automatic HTTPS. The agent never runs `certbot` or changes TLS settings. The origin stays `noindex` and is removed after the run.
+3. Picks a temporary origin, a hostname of his own, points its DNS at the host, and makes sure a certificate that covers it is already on the host, where the front end can read it. He gives the agent its certificate and key paths as the front end sees them (inside its container, for a container), paths only. The agent never obtains a certificate, never runs `certbot`, and never changes TLS settings. The origin stays `noindex` and is removed after the run.
 4. Writes the password hash himself, with the release image, into a new deployment directory on the host, as [Writing the hash](../deployment.md#writing-the-hash) shows, and gives the agent only the file's path. He never pastes the password or the hash into the conversation.
 5. Fills in the Inputs block below: every value, nothing left as a placeholder.
 6. Has a machine of his own with Node 22, pnpm, and network access for a clone of the release tag, for the conversion: the released image can't run `pnpm config:migrate`, and the host never builds one (step 9).
@@ -70,7 +70,7 @@ Your job is to move the site to `RELEASE_IMAGE` under the `owner` profile: Studi
 3. **Secrets.** Never ask for, read, or print a secret: a password, a password hash, a cookie, a CSRF token, a private key, an API token, an env file's content, or a secret-bearing file's content. Check a secret file only with `command sudo stat -c '%u:%g %a %F'` (owner, mode, type) and `command sudo test -s` (present and not empty). If the owner pastes a password, a hash, or a token into the conversation, stop and ask him to rotate it.
 4. **Redacting commands only.**
    - Never run `env` or `printenv`, except as `command env | command cut -d= -f1`, which prints names only. Never run `systemctl show`, or read `/proc/*/environ`, an env file, a key file, `~/.docker/config.json`, or the old container's unfiltered logs.
-   - Never open or print a Compose file, and never run `docker compose config` in any form but the two this prompt gives: `config --quiet`, and the facts pipeline in step 5. Its full output holds every environment value.
+   - Never open or print a Compose file, and never run `docker compose config` in any form but the ones this prompt gives: `config --quiet`, and the facts pipelines into `compose-facts` in steps 5, 11, and 14. Its full output holds every environment value.
    - Read container and image facts only with `docker inspect --format` and `docker image inspect --format`, one template per command, from this list, and never a broader one: `{{.Config.Image}}`, `{{.Image}}`, `{{.Id}}`, `{{json .RepoDigests}}`, `{{json .Mounts}}`, `{{json .HostConfig.PortBindings}}`, `{{json .Config.ExposedPorts}}`, `{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}`, `{{with .State.Health}}{{range .Log}}{{.ExitCode}} {{end}}{{end}}` (the exit codes of the last health probes, never their output), `{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}`, `{{.Path}} {{json .Args}}` on a Caddy or nginx proxy container only, and one label at a time as `{{with .Config.Labels}}{{index . "<label>"}}{{end}}` for `org.opencontainers.image.revision`, `com.docker.compose.project`, `com.docker.compose.service`, `com.docker.compose.project.config_files`, `com.docker.compose.project.working_dir`, `com.docker.compose.project.environment_file`, and `com.docker.compose.config-hash`. This prompt adds one more, which prints environment key names and never a value: `{{range .Config.Env}}{{index (split . "=") 0}} {{end}}`. Never run a bare `inspect`, which prints `Config.Env`, and never print all labels, which can hold proxy password hashes. If a template errors, record that; don't reach for a broader one.
    - Read proxy configs only with `m18_tools proxy-lines caddy|nginx`, which prints an allowlist of lines and numbers every line. Never print a raw access log line.
    - A diff of an env or Compose file shows each changed key as `[redacted:<name>]`, never a value.
@@ -80,7 +80,8 @@ Your job is to move the site to `RELEASE_IMAGE` under the `owner` profile: Studi
 8. **Stop and report.** At any failed check, stop and write the report (step 18) as incomplete, naming the step and the check. Before the flip, a failed check after the front end changed restores the front end first (step 12). After the flip, a failure that matches a rollback trigger (step 17) rolls back first. A pause, where this prompt waits for the owner, is not a failure.
 9. **Destructive checks** run only on a scratch copy restored from a backup (step 14), never on the candidate's data volume.
 10. **sudo** only when a listed read or change needs it, such as the hash file's checks. When a read is refused, record "not checked", not "none".
-11. **TLS.** Never obtain, renew, or change a certificate, and never run `certbot`. If the front end can't already serve `TEMP_ORIGIN` over TLS, stop.
+11. **TLS.** Never obtain, renew, or change a certificate, and never run `certbot`. The temporary site block names the certificate and key the owner gave (operator checklist 3), so the front end never obtains one: for Caddy, a `tls <certificate path> <key path>` line, which turns off automatic HTTPS for that block; for nginx, `listen 443 ssl` with `ssl_certificate` and `ssl_certificate_key` lines. `proxy-lines` hides TLS lines, so these paths come from the owner, never from reading a key or a config. If he has given none, ask him, and stop if no certificate covers `TEMP_ORIGIN`'s host.
+12. **Projects.** Never run `m18_compose up` or `m18_scratch up` while that project holds a container this run didn't create. Step 5.14 checks it, and steps 11 and 14 check it again before their first `up`.
 
 ## 2. Setup
 
@@ -183,7 +184,10 @@ Record each item for the report, and append the named values. Read what `POSTURE
    It prints the image, the build context, the `env_file` paths, the ports, the volumes, and the networks, and never an environment value.
 
 3. **The checkout:** if `OLD_PROJECT_DIR` is a git checkout, only `command git -C "$OLD_PROJECT_DIR" rev-parse HEAD` and `command git --no-optional-locks -C "$OLD_PROJECT_DIR" status --porcelain --ignored`. Save the second's output as `"${RUN_DIR:?}/checkout-before.txt"`, which holds paths alone; step 16 compares it.
-4. **The front end:** the reverse proxy (Caddy or nginx, as a host service or a container), or a tunnel, how it reloads, the file that holds the site's blocks, and the site addresses that serve the app. For a Caddy or nginx container, `{{.Path}} {{json .Args}}` shows the main config file it loads, and `{{json .Mounts}}` where that file and any file it imports live on the host. Read the file with `m18_tools proxy-lines caddy` (or `nginx`). Append `PROXY_KIND`, `PROXY_CONTAINER` (empty for a host service), `PROXY_CONFIG` (the host path of the file with the site's blocks), `PROXY_CONFIG_IN` (its path inside the container), `PROXY_MAIN_IN` (the main file inside the container), `PROXY_IMAGE`, and `PROXY_NETWORK` (a network the proxy container shares with the old container, from the networks template on both, or empty).
+4. **The front end:** the reverse proxy (Caddy or nginx, as a host service or a container), or a tunnel, how it reloads, the file that holds the site's blocks, and the site addresses that serve the app. For a Caddy or nginx container, `{{.Path}} {{json .Args}}` shows the main config file it loads, and `{{json .Mounts}}` where that file and any file it imports live on the host. Read the file with `m18_tools proxy-lines caddy` (or `nginx`). Append `PROXY_KIND`, `PROXY_CONTAINER` (empty for a host service), `PROXY_CONFIG` (the host path of the file with the site's blocks), `PROXY_CONFIG_IN` (its path inside the container), `PROXY_MAIN_IN` (the main file inside the container), `PROXY_IMAGE`, and `PROXY_NETWORK` (a network the proxy container shares with the old container, from the networks template on both, or empty). Record every site block's upstream host and port from its `reverse_proxy` or `proxy_pass` line, and from the `server` lines of any nginx `upstream` block it names, and append `CANONICAL_UPSTREAM`, the canonical block's upstream host. When `PROXY_NETWORK` is set, list what answers on it: `command docker ps --filter "network=${PROXY_NETWORK:?}" --format '{{.Names}}'`, and each one's `com.docker.compose.service` label with the label template.
+
+   On a shared network, Compose makes each container answer to its container name and to its service name. So on `PROXY_NETWORK` the candidate answers to `portfolio-owner` and `web`, and the scratch copy, which never joins it, would answer to `portfolio-m18-scratch` and `web`. Stop, and ask the owner, when any upstream host is `web`, `portfolio-owner`, or `portfolio-m18-scratch`, or when a container on `PROXY_NETWORK` already has the service label `portfolio-owner`. The owner can repoint that upstream at the old container's own name first, as a change of his own, and start the run again. That inventory is the proof that the candidate joins the proxy network only under names no upstream uses.
+
 5. **The public origin:** `CANONICAL_ORIGIN` must be one of the site addresses item 4 found serving the site. If it isn't, stop. Append `OTHER_SITES`, the others.
 6. **Ports:** `{{json .HostConfig.PortBindings}}` on the old container, and every port the host listens on (`command ss -ltn`, addresses and ports only). Pick `CANDIDATE_PORT`, a port nothing listens on, and `SCRATCH_PORT`, another.
 7. **Mounts:** `{{json .Mounts}}` on the old container, with each mode. The portfolio file is the one mounted at the path `POSTURE_FILE` names. Append `OLD_PORTFOLIO`, its host path, `OLD_PORTFOLIO_IN`, the path the old container reads it from, and its `command sha256sum` as `OLD_PORTFOLIO_SHA`. Don't print its content.
@@ -192,10 +196,10 @@ Record each item for the report, and append the named values. Read what `POSTURE
 10. **Health:** the health template on the old container, and `m18_tools facts < "${OLD_PORTFOLIO:?}" | command sed 's/^/OLD_/' >> "${RUN_DIR:?}/vars.sh"`, which appends `OLD_NAME`, `OLD_ORIGIN`, and `OLD_VARIANT` from the live file and prints nothing else. Then take the live site's own check, which step 17 compares a rollback with:
 
     ```sh
-    m18_check "${CANONICAL_ORIGIN:?}" --expect-name "${OLD_NAME:?}" --no-put > "${RUN_DIR:?}/check-before.txt" 2>&1; echo "exit $?" >> "${RUN_DIR:?}/check-before.txt"; command cat "${RUN_DIR:?}/check-before.txt"
+    m18_check "${CANONICAL_ORIGIN:?}" --expect-name "${OLD_NAME:?}" --expect-origin "${CANONICAL_ORIGIN:?}" --no-put > "${RUN_DIR:?}/check-before.txt" 2>&1; echo "exit $?" >> "${RUN_DIR:?}/check-before.txt"; command cat "${RUN_DIR:?}/check-before.txt"
     ```
 
-    It must pass.
+    It must pass. If only its origin rows fail, the old site's `meta.url` isn't `CANONICAL_ORIGIN`: stop and ask the owner. The origin rows are what show a server on another origin answering canonical traffic.
 
 11. **Backups and restore:** existing backups of the deployment, by `command ls -lA` names, sizes, and dates, and the restore procedure `POSTURE_FILE` records.
 12. **Appearance:** `OLD_VARIANT` is the old site's variant, for the report alone. The Inputs decide the new appearance.
@@ -204,7 +208,13 @@ Record each item for the report, and append the named values. Read what `POSTURE
     - `command crontab -l | command grep -cE 'docker (compose )?pull|watchtower'`
     - `command sudo grep -rlE 'docker (compose )?pull|watchtower' /etc/cron* /var/spool/cron`
     - `command systemctl list-timers --all --no-pager | command grep -iE 'docker|compose|watchtower|diun|pull'`
-14. **Leftovers:** `command docker ps -a --format '{{.Names}}' | command grep -E '^(portfolio-owner|portfolio-m18-scratch)$'` and `command docker volume ls --format '{{.Name}}' | command grep -E '^(portfolio-owner|portfolio-m18-scratch)_'` must print nothing. A container or a volume by those names, from an earlier run or anything else, stops the run before mutation.
+14. **Leftovers and projects:** `OLD_PROJECT` must be neither `portfolio-owner` nor `portfolio-m18-scratch`, and each of these must print nothing:
+    - `command docker ps -a --format '{{.Names}}' | command grep -E '^(portfolio-owner|portfolio-m18-scratch)$'`
+    - `command docker ps -a --filter label=com.docker.compose.project=portfolio-owner --format '{{.Names}}'`, and the same with `portfolio-m18-scratch`
+    - `command docker volume ls --format '{{.Name}}' | command grep -E '^(portfolio-owner|portfolio-m18-scratch)_'`
+    - `command docker volume ls --filter label=com.docker.compose.project=portfolio-owner --format '{{.Name}}'`, and the same with `portfolio-m18-scratch`
+
+    A container or a volume by those names or in those projects, from an earlier run or anything else, stops the run before mutation: `m18_compose` or `m18_scratch` would recreate or reuse it, and an old container in project `portfolio-owner` would be replaced by the candidate.
 
 Stop before any mutation, with an incomplete report, when:
 
@@ -233,7 +243,7 @@ Back up into the run directory, one command per file, and record each copy's has
 - the portfolio file: `m18_copy "${OLD_PORTFOLIO:?}" portfolio.yml`, which must hash to `OLD_PORTFOLIO_SHA`;
 - the old Compose files and the front end's config: `m18_copy` each, by name. Append `PROXY_BACKUP`, the copy of `PROXY_CONFIG`, and `PROXY_BACKUP_SHA`, its hash;
 - every env file and every other secret-bearing file: `m18_secret <path> <name>`, never opened or diffed;
-- each piece of persistent data step 5 found: a host directory with `command sudo cp -a <path> "${RUN_DIR:?}/data-<name>"`, and a volume with `command docker run --rm -v <volume>:/from:ro -v "${RUN_DIR:?}/volume-<name>:/to" --entrypoint cp "${OLD_IMAGE_ID:?}" -a /from/. /to/`. Treat what they hold as secret-bearing: never open it;
+- each piece of persistent data step 5 found, into a directory made first with `command mkdir -m 0700 "${RUN_DIR:?}/data-<name>"`: a host directory with `command sudo cp -a <path>/. "${RUN_DIR:?}/data-<name>/"`, and a volume with `command docker run --rm --user 0:0 -v <volume>:/from:ro -v "${RUN_DIR:?}/data-<name>:/to" --entrypoint cp "${OLD_IMAGE_ID:?}" -a /from/. /to/`, as root, since the old image's own user can't write the directory. `cp -a` keeps each file's owner for a restore, and also gives the directory the source's owner and mode, so put those back: `command sudo chown "$(command id -u):$(command id -g)" "${RUN_DIR:?}/data-<name>" && command chmod 0700 "${RUN_DIR:?}/data-<name>"`. Treat what they hold as secret-bearing: never open it;
 - the old container's identity: its image ID and digest, already in `vars.sh`.
 
 Then prove the backup can be read: start the old image on loopback with the copy mounted read-only at `OLD_PORTFOLIO_IN`, and each backed-up env file passed with `--env-file`:
@@ -264,6 +274,7 @@ So pause here. This isn't a failure: don't write the report. Ask the owner to co
   ```sh
   git clone --depth 1 --branch <RELEASE_TAG> https://github.com/keyurgolani/keyurgolani.name <clone> && cd <clone>
   git rev-parse HEAD
+  sha256sum <copy>
   pnpm install --frozen-lockfile
   pnpm config:migrate <copy> --summary
   pnpm config:migrate <copy> --set site.appearance.variant=<APPEARANCE_VARIANT> --set site.appearance.designLanguage=<APPEARANCE_DESIGN_LANGUAGE> --set site.appearance.colorScheme=<APPEARANCE_COLOR_SCHEME> --set site.appearance.typography=<APPEARANCE_TYPOGRAPHY> --set site.appearance.displayMode=<APPEARANCE_DISPLAY_MODE> --set site.visitorControls.<field>=<value> --origin <CANONICAL_ORIGIN> --write --out <a new directory>
@@ -273,30 +284,35 @@ So pause here. This isn't a failure: don't write the report. Ask the owner to co
 
   with one `--set site.visitorControls.<field>=<value>` per field of `VISITOR_CONTROLS`.
 
-Ask him to send back only the output of `git rev-parse HEAD`, each command's exit code, and the two hashes: never the diff or the documents, which the write run prints. `--drop-unknown`, and any edit to his copy before converting it (such as removing secret-shaped text the migration refuses to pass), is a deviation: he approves it then, and gives you the edited copy's new SHA-256, which you record as `CONVERTED_FROM_SHA`. If the write run exits 2 and asks for a value the Inputs don't give, he decides it, and you record that as a deviation too.
+Ask him to send back only the output of `git rev-parse HEAD`, the hash of the copy he converted, each command's exit code, and the two output hashes: never the diff or the documents, which the write run prints. The pair holds no secret, so ask him to place it with mode `0644` files in a `0755` directory, which uid 1001 can read and every later copy keeps. `--drop-unknown`, and any edit to his copy before converting it (such as removing secret-shaped text the migration refuses to pass), is a deviation: he approves it then, and gives you the edited copy's new SHA-256, which you record as `CONVERTED_FROM_SHA`. If the write run exits 2 and asks for a value the Inputs don't give, he decides it, and you record that as a deviation too.
 
 When he's copied the two files into `CANDIDATE_DIR/config` and tells you, check that:
 
 1. his `git rev-parse HEAD` is `CLONE_COMMIT`, and every command exited 0;
-2. `command ls -lA "${CANDIDATE_DIR:?}/config"` shows exactly `portfolio.yml` and `site.yml`, each readable by uid 1001: mode `0644`, or group `1001` with mode `0640`;
-3. `command sha256sum` of each placed file is the hash he sent;
-4. he read the converted pair and confirms it's his content, since the file took anonymous writes before #21. Record his sign-off.
+2. the hash of the copy he converted is `OLD_PORTFOLIO_SHA`, or `CONVERTED_FROM_SHA` after an edit he approved. Any other hash is a deviation: he approves it then, and you record it as `CONVERTED_FROM_SHA`;
+3. `command ls -lA "${CANDIDATE_DIR:?}/config"` shows exactly `portfolio.yml` and `site.yml`, and `command stat -c '%a %n' "${CANDIDATE_DIR:?}/config" "${CANDIDATE_DIR:?}/config/"*` shows `755` for the directory and `644` for each file;
+4. `command sha256sum` of each placed file is the hash he sent;
+5. he read the converted pair and confirms it's his content, since the file took anonymous writes before #21. Record his sign-off.
 
 The candidate's first start (step 11) checks the pair again, as a publish does, and refuses to start on one a publish refuses.
 
 ## 10. Media
 
-List the media sources the converted portfolio names: `command grep -nE '^ *source:' "${CANDIDATE_DIR:?}/config/portfolio.yml"`, which prints each source's path or URL and nothing else. For each one that isn't an `https` URL, copy the file from where the old deployment serves it into `CANDIDATE_DIR/assets` at that path, with `command cp -p`. Never move one. Then `command test -f "${CANDIDATE_DIR:?}/assets/<path>"` for each, and stop and ask the owner on any miss. Never edit the pair to drop or change a source.
+List the media sources the converted portfolio names: `command grep -nE '^ *source: *[^ ]' "${CANDIDATE_DIR:?}/config/portfolio.yml"`, which prints each source's path or URL and nothing else. A `source:` line with no value opens an evidence record's source, not media, and this grep skips it. For each one that isn't an `https` URL, copy the file from where the old deployment serves it into `CANDIDATE_DIR/assets` at that path, with `command cp -p`. Never move one. Then `command test -f "${CANDIDATE_DIR:?}/assets/<path>"` for each, and stop and ask the owner on any miss. Every file in `CANDIDATE_DIR/assets` must be readable by uid 1001 (mode `0644`, directories `0755`): `command find "${CANDIDATE_DIR:?}/assets" ! -perm -o+r` prints nothing. Never edit the pair to drop or change a source.
 
 ## 11. Candidate
 
-Write `CANDIDATE_DIR/compose.candidate.yml`: the release's `deploy/compose.owner.yml` from the clone, with its `build:` removed and `image:` set to `RELEASE_IMAGE`, the service still `web` and the container named `portfolio-owner`, the `../config` and `../assets` mount sources changed to `./config` and `./assets`, since the file sits in `CANDIDATE_DIR`, and the port published as `127.0.0.1:${PORT}:3000`, or, for a proxy in a container, no `ports:` and `PROXY_NETWORK` joined as an external network. Keep its `read_only`, `cap_drop`, `security_opt`, `tmpfs`, `volumes`, `secrets`, and `healthcheck` as they are. Its `.env` holds `PORTFOLIO_ORIGIN=<TEMP_ORIGIN>`, `PORTFOLIO_TRUSTED_PROXY_HOPS=<PROXY_HOPS>`, and `PORT=<CANDIDATE_PORT>`.
+Write `CANDIDATE_DIR/compose.candidate.yml`: the release's `deploy/compose.owner.yml` from the clone, with its `build:` removed and `image:` set to `RELEASE_IMAGE`, the service still `web` and the container named `portfolio-owner`, the `../config` and `../assets` mount sources changed to `./config` and `./assets`, since the file sits in `CANDIDATE_DIR`, and the port published as `127.0.0.1:${PORT}:3000`, or, for a proxy in a container, no `ports:` and `PROXY_NETWORK` joined as an external network, which step 5.4 proved no upstream reaches by the candidate's names. Keep its `read_only`, `cap_drop`, `security_opt`, `tmpfs`, `volumes`, `secrets`, and `healthcheck` as they are. Its `.env` holds `PORTFOLIO_ORIGIN=<TEMP_ORIGIN>`, `PORTFOLIO_TRUSTED_PROXY_HOPS=<PROXY_HOPS>`, and `PORT=<CANDIDATE_PORT>`.
+
+Run step 5.14's two `portfolio-owner` project commands again: anything they print stops the run. Then:
 
 ```sh
 command docker pull "${RELEASE_IMAGE:?}"
 m18_compose config --quiet > /dev/null 2>&1; echo "exit $?"
-m18_compose up -d --no-build
+m18_compose config --format json --no-env-resolution 2>/dev/null | m18_tools compose-facts --service web
 ```
+
+The facts must show `project: portfolio-owner`, `container_name: portfolio-owner`, `RELEASE_IMAGE`, no build context, a port on `127.0.0.1` alone or none, and no external network but `PROXY_NETWORK`. Then start it with `m18_compose up -d --no-build`.
 
 Then check, and stop on any miss:
 
@@ -307,7 +323,7 @@ Then check, and stop on any miss:
 
 ## 12. Temporary origin
 
-Add one site block for `TEMP_ORIGIN` that proxies to the candidate (`http://127.0.0.1:<CANDIDATE_PORT>`, or `http://portfolio-owner:3000` on `PROXY_NETWORK`), passes each request's own `Host`, adds `X-Robots-Tag: noindex`, never caches `/studio`, `/api/*`, `/preview/*`, or `/preview-assets/*`, adds no `X-Frame-Options`, passes the app's headers through as they are, and logs only the path's first segment for `/preview/*` and `/preview-assets/*`. It carries none of #21's denials: the app answers those paths itself. For a front end the owner applies himself, print the block, wait for him, and go on to the recheck below.
+Add one site block for `TEMP_ORIGIN`, with the TLS lines rule 11 gives, that proxies to the candidate (`http://127.0.0.1:<CANDIDATE_PORT>`, or `http://portfolio-owner:3000` on `PROXY_NETWORK`), passes each request's own `Host`, adds `X-Robots-Tag: noindex`, never caches `/studio`, `/api/*`, `/preview/*`, or `/preview-assets/*`, adds no `X-Frame-Options`, passes the app's headers through as they are, and logs only the path's first segment for `/preview/*` and `/preview-assets/*`. It carries none of #21's denials: the app answers those paths itself. For a front end the owner applies himself, print the block, wait for him, and go on to the recheck below.
 
 Change the front end with #21's step 7 mechanics, and no other way:
 
@@ -338,7 +354,7 @@ Every check goes through `TEMP_ORIGIN`, from this host, and from another network
 5. **Denied anonymous queries and commands:** with no cookie, `GET /api/studio/config.status` and `GET /api/studio/draft.getWorking` answer 401 with `authentication_required`, and `POST /api/studio/draft.save` with an `Origin` of `TEMP_ORIGIN` and a body of `{}` answers exactly 401 with `authentication_required`. Print the status and the code alone. `GET /studio` answers 303 to `/studio/sign-in`.
 6. **Authenticated Studio:** the owner signs in at `TEMP_ORIGIN/studio/sign-in` in his own browser, and confirms `/studio` shows his content, the Appearance task shows the Inputs' choices, and the site's images show on `TEMP_ORIGIN`. You never see the password.
 7. **Draft isolation:** the owner saves a draft in Studio's source mode with `M18-DRAFT-<RUN>` added to a text field. `/` and `/feed.xml` don't contain it, and `m18_store status` still names `REVISION_1`. Then the owner discards the draft.
-8. **Atomic publish and history:** copy `CANDIDATE_DIR/config` to `$RUN_DIR/validation-pair`. In its `site.yml`, flip the one `feed:` line under `features:`, `true` to `false` or back. A valid `site.yml` always has that line, and `config:migrate` writes `feed: true` when the old file had none, so a file without it stops the run. Then import it, with the pair mounted read-only beside the running server:
+8. **Atomic publish and history:** copy the pair with `command cp -rp "${CANDIDATE_DIR:?}/config" "${RUN_DIR:?}/validation-pair"`, which keeps its `0755` and `0644` modes. In its `site.yml`, flip the one `feed:` line under `features:`, `true` to `false` or back, then `command chmod 0644` the file, since an edit can rewrite it under your own umask. A valid `site.yml` always has that line, and `config:migrate` always writes `feed: true`, so a file without it stops the run. Then import it, with the pair mounted read-only beside the running server:
 
    ```sh
    m18_compose run --rm --name portfolio-store -v "${RUN_DIR:?}/validation-pair:/validation:ro" web \
@@ -361,12 +377,12 @@ Every check goes through `TEMP_ORIGIN`, from this host, and from another network
 
 These break things on purpose, so they run only on a scratch copy, never on `portfolio-owner` or its volume, and only through `m18_scratch`. Make `$RUN_DIR/scratch`, `0700`, holding:
 
-- a copy of `compose.candidate.yml` with `name: portfolio-m18-scratch` as its first key, the container named `portfolio-m18-scratch`, and the port `127.0.0.1:${PORT}:3000`;
+- a copy of `compose.candidate.yml` with `name: portfolio-m18-scratch` as its first key, the container named `portfolio-m18-scratch`, the port `127.0.0.1:${PORT}:3000`, and no `networks:` key, in the service or at the top level, so it joins only its own default network and never `PROXY_NETWORK`;
 - a `.env` with `PORTFOLIO_ORIGIN=http://127.0.0.1:<SCRATCH_PORT>`, `PORTFOLIO_TRUSTED_PROXY_HOPS=0`, and `PORT=<SCRATCH_PORT>`;
-- copies of `config/` and `assets/`;
+- copies of `config/` and `assets/`, made with `command cp -rp` so they keep their modes;
 - its own `secrets/owner_password_hash`, copied from the candidate's with `command sudo install -m 0400 -o 1001 -g 1001`.
 
-Never point the front end at it. Check that `m18_scratch config --quiet > /dev/null 2>&1; echo "exit $?"` prints `exit 0`, then restore step 13's backup into its new volume:
+Never point the front end at it. Run step 5.14's two `portfolio-m18-scratch` project commands again: anything they print stops the run. Check that `m18_scratch config --quiet > /dev/null 2>&1; echo "exit $?"` prints `exit 0`, and that `m18_scratch config --format json --no-env-resolution 2>/dev/null | m18_tools compose-facts --service web` shows `project: portfolio-m18-scratch`, `container_name: portfolio-m18-scratch`, a port on `127.0.0.1` alone, and no `network` line marked `(external)`. Then restore step 13's backup into its new volume:
 
 ```sh
 m18_scratch run --rm --name portfolio-m18-restore -v "${RUN_DIR:?}/store-backups:/backups:ro" web \
@@ -375,12 +391,12 @@ m18_scratch run --rm --name portfolio-m18-restore -v "${RUN_DIR:?}/store-backups
 
 Start it with `m18_scratch up -d --no-build`, stop it with `m18_scratch stop`, and run the store's command line in it with `m18_scratch exec web node bin/portfolio-store.mjs <command>`. Change its volume only with a throwaway container of the release image, such as `command docker run --rm --user 1001:1001 -v portfolio-m18-scratch_portfolio-data:/d --entrypoint sh "${RELEASE_IMAGE:?}" -c '<the change>'`.
 
-1. **Last known good:** append a byte to `revisions/<REVISION_1>/manifest.json`, then start it. `http://127.0.0.1:<SCRATCH_PORT>/api/ready` answers `degraded`, its readiness check `catalog` is `degraded`, and `/` still serves. `recover` makes a servable revision live, and `status` says `live`.
-   In checks 2 to 4 the server refuses to start. `up -d` itself still exits 0, and Docker restarts the container over and over, since the Compose file says `restart: unless-stopped`. So judge each one by its log, read by event name, setting name, and code only: `command docker logs portfolio-m18-scratch 2>&1 | command grep -o '"event":"[a-z._]*"\|"key":"[A-Z_]*"\|"code":"[a-z._]*"'`. It shows a `config.fatal` event for the setting named below, and no `store.import.first_start`. Its health never reaches `healthy`. Stop it with `m18_scratch stop` before the next check.
+In checks 2 to 4 the server refuses to start. `up -d` itself still exits 0, and Docker restarts the container over and over, since the Compose file says `restart: unless-stopped`. So judge each one by its log, read by event name, setting name, and code only: `command docker logs portfolio-m18-scratch 2>&1 | command grep -o '"event":"[a-z._]*"\|"key":"[A-Z_]*"\|"code":"[a-z._]*"'`. It shows a `config.fatal` event for the setting named below, and no `store.import.first_start`. Its health never reaches `healthy`. Stop it with `m18_scratch stop` before the next check.
 
-2. **Bad hash:** stop it, and replace its hash file with one holding `not-a-hash`, owned by uid 1001 with mode `0400`. `m18_scratch up -d --no-build`: a `config.fatal` line with the code `malformed`, for `PORTFOLIO_AUTH_PASSWORD_HASH_FILE`, and never a value.
+1. **Last known good:** append a byte to `revisions/<REVISION_1>/manifest.json`, then start it. `http://127.0.0.1:<SCRATCH_PORT>/api/ready` answers `"status":"degraded"`, its readiness check `catalog` is `degraded`, and `/` still serves. `m18_scratch exec web node bin/portfolio-store.mjs recover` makes a servable revision live, and `m18_scratch exec web node bin/portfolio-store.mjs status` says `live`.
+2. **Bad hash:** stop it, and replace its hash file with one holding `not-a-hash`, owned by uid 1001 with mode `0400`. `m18_scratch up -d --no-build`: a `config.fatal` line for `PORTFOLIO_AUTH_PASSWORD_HASH_FILE` with the code `malformed`, and never a value.
 3. **Wrong data directory ownership:** put the hash file back, and `chown 0:0` the volume's root from a throwaway container run as `--user 0:0`. `m18_scratch up -d --no-build`: a `config.fatal` line for `PORTFOLIO_DATA_DIR`.
-4. **Missing mount:** chown it back to `1001:1001`, remove the `secrets:` entry from the scratch copy's Compose file, and `m18_scratch up -d --no-build`, which recreates the container without it: a `config.fatal` line for `PORTFOLIO_AUTH_PASSWORD_HASH_FILE`.
+4. **Missing mount:** chown it back to `1001:1001`, remove the `- owner_password_hash` entry from the `web` service's `secrets:` list in the scratch copy's Compose file, keeping the top-level `secrets:` block, which Compose needs, and `m18_scratch up -d --no-build`, which recreates the container without the mount: a `config.fatal` line for `PORTFOLIO_AUTH_PASSWORD_HASH_FILE` with the code `file_unreadable`.
 
 Then remove what this run made for it, and nothing else, with `-v` never on `down`:
 
@@ -413,10 +429,10 @@ Through `CANONICAL_ORIGIN`, from this host and another network: step 13's checks
 Rollback is the old container and the backed-up front-end config, never the app's own rollback, which knows nothing from before this run. It runs on its own, under G1's approval, when a step 16 check fails, the candidate stops being `healthy`, or the owner asks.
 
 1. Restore the front end (step 12). For a front end the owner applies himself, print the restore and wait for him.
-2. Through `CANONICAL_ORIGIN`: `m18_check "${CANONICAL_ORIGIN:?}" --expect-name "${OLD_NAME:?}" --no-put` matches `check-before.txt` row for row. Health alone never proves a rollback.
-3. Leave the candidate stopped, not removed: `command docker stop portfolio-owner`. Never remove the old container, its image, the candidate's volume, or a backup.
+2. Stop the candidate, and leave it stopped, not removed: `command docker stop portfolio-owner`. Never remove the old container, its image, the candidate's volume, or a backup.
+3. Through `CANONICAL_ORIGIN`: `m18_check "${CANONICAL_ORIGIN:?}" --expect-name "${OLD_NAME:?}" --expect-origin "${CANONICAL_ORIGIN:?}" --no-put` matches `check-before.txt` row for row. Health alone never proves a rollback.
 
-If 2 doesn't match, tell the owner at once, give him the exact manual restore (`PROXY_BACKUP`'s path, `PROXY_CONFIG`, and the reload command), and touch nothing else.
+If 3 doesn't match, tell the owner at once, give him the exact manual restore (`PROXY_BACKUP`'s path, `PROXY_CONFIG`, and the reload command), and touch nothing else.
 
 ## 18. Report
 
