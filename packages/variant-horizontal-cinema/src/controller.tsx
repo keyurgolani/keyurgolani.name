@@ -361,6 +361,13 @@ function LiveCinema(props: CinemaProps) {
       if (stepFrom(to, by) === undefined) (by === 1 ? previous : next).current?.focus();
     };
 
+    /** Focus on the index's heading, which a link to the index lands on. */
+    const focusIndex = () =>
+      doc
+        .getElementById(`${prefix}${INDEX_ANCHOR}`)
+        ?.querySelector<HTMLElement>('[tabindex="-1"]')
+        ?.focus({ preventScroll: true });
+
     const onClick = (event: MouseEvent) => {
       if (event.defaultPrevented || event.button !== 0) return;
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -373,10 +380,17 @@ function LiveCinema(props: CinemaProps) {
       const to = chapterOfHash(url.hash, prefix);
       const index = fragmentId(url.hash) === `${prefix}${INDEX_ANCHOR}`;
       if (to === undefined && !index) return;
-      if (!framed) {
+      if (!framed && url.hash !== window.location.hash) {
         // A plain link: the browser navigates, with its one history entry,
         // and the hashchange after it lands the chapter and the focus.
         linked = true;
+        return;
+      }
+      if (!framed) {
+        // The URL already names it, so no hashchange follows: the browser
+        // scrolls to it, and the chapter and the focus land here.
+        if (to !== undefined) commit(to, { align: behavior(), focus: true });
+        else focusIndex();
         return;
       }
       event.preventDefault();
@@ -384,9 +398,8 @@ function LiveCinema(props: CinemaProps) {
         commit(to, { align: behavior(), focus: true });
         return;
       }
-      const target = doc.getElementById(`${prefix}${INDEX_ANCHOR}`);
-      target?.scrollIntoView({ behavior: behavior() });
-      target?.querySelector<HTMLElement>('[tabindex="-1"]')?.focus({ preventScroll: true });
+      doc.getElementById(`${prefix}${INDEX_ANCHOR}`)?.scrollIntoView({ behavior: behavior() });
+      focusIndex();
     };
 
     const onHash = () => {
@@ -407,7 +420,7 @@ function LiveCinema(props: CinemaProps) {
       const target = doc.getElementById(id);
       if (!target) return;
       if (fromLink && id === `${prefix}${INDEX_ANCHOR}`) {
-        target.querySelector<HTMLElement>('[tabindex="-1"]')?.focus({ preventScroll: true });
+        focusIndex();
         return;
       }
       // Anything inside a chapter makes it current.
