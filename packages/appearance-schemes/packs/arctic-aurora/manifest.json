@@ -2,7 +2,7 @@
   "id": "arctic-aurora",
   "name": "Arctic Aurora",
   "description": "Glacier teal and aurora violet on a cold ground.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "extended",
   "provenance": {
@@ -14,7 +14,7 @@
     "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
     "researchedAt": "2026-10-17",
     "maintainer": "keyurgolani",
-    "derivation": "anchor-v1 from the reviewed prototype's arctic-aurora anchors, with the light accent #2e8fa3 to #2d8b9f, 4% toward text, so the signature fill reaches 3:1 on every surface."
+    "derivation": "anchor-v2 from the reviewed prototype's arctic-aurora anchors. It puts the light accent #2d8b9f back to #2e8fa3, undoing PR 2a's nudges: anchor-v2 solves the signature fill itself. adjustments lists the 13 roles it moves from anchor-v1."
   },
   "modes": ["light", "dark"],
   "accessibility": {
@@ -33,15 +33,15 @@
     "enhancement": 0
   },
   "fallbacks": [
-    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
   ],
   "caveats": [],
-  "derivation": "anchor-v1",
+  "derivation": "anchor-v2",
   "anchors": {
     "light": {
       "canvas": "#f1f8fb",
       "text": "#16323c",
-      "accent": "#2d8b9f",
+      "accent": "#2e8fa3",
       "secondary": "#8b63b8"
     },
     "dark": {
@@ -51,5 +51,26 @@
       "secondary": "#c18beb"
     }
   },
-  "swatches": ["#f1f8fb", "#16323c", "#2d8b9f", "#8b63b8"]
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#445b64", "#3f5760"],
+      "text-muted": ["#50666e", "#4a6169"],
+      "border-strong": ["#6c8188", "#657b82"],
+      "accent-text": ["#256c7c", "#236574"],
+      "focus": ["#2d899d", "#2b8295"],
+      "data-categorical-1": ["#2e8fa3", "#26899d"],
+      "data-categorical-6": ["#445b64", "#3f5760"],
+      "signature-start": ["#2e8fa3", "#2b8295"]
+    },
+    "dark": {
+      "text-secondary": ["#a9bdc3", "#b0c4ca"],
+      "text-muted": ["#9cb0b6", "#a4b8bd"],
+      "border-strong": ["#7c8f96", "#82959c"],
+      "data-categorical-6": ["#a9bdc3", "#b0c4ca"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#174852", "#16454f"]
+    }
+  },
+  "swatches": ["#f1f8fb", "#16323c", "#2e8fa3", "#8b63b8"]
 }

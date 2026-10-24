@@ -2,7 +2,7 @@
   "id": "high-contrast",
   "name": "High Contrast",
   "description": "Pure white and black with saturated blue and violet accents.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "stable",
   "provenance": {
@@ -14,7 +14,7 @@
     "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
     "researchedAt": "2026-10-17",
     "maintainer": "keyurgolani",
-    "derivation": "anchor-v1 from the reviewed prototype's high-contrast anchors."
+    "derivation": "anchor-v2 from the reviewed prototype's high-contrast anchors. The anchors stay as approved. adjustments lists the 4 roles it moves from anchor-v1."
   },
   "modes": ["light", "dark"],
   "accessibility": {
@@ -33,10 +33,10 @@
     "enhancement": 0
   },
   "fallbacks": [
-    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
   ],
   "caveats": [],
-  "derivation": "anchor-v1",
+  "derivation": "anchor-v2",
   "anchors": {
     "light": {
       "canvas": "#ffffff",
@@ -49,6 +49,18 @@
       "text": "#ffffff",
       "accent": "#66a3ff",
       "secondary": "#ff7ad9"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-muted": ["#656565", "#5f5f5f"],
+      "border-strong": ["#818181", "#797979"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#0032b3", "#0030ac"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#75acff", "#83b4ff"]
     }
   },
   "swatches": ["#ffffff", "#000000", "#0047ff", "#7a00cc"]

@@ -31,7 +31,8 @@ export interface Anchors {
 const TEXT = 4.5;
 const NON_TEXT = 3;
 const HIGH_CONTRAST_TEXT = 7;
-const HEADROOM = 0.1;
+/** How far past its limit a moved role stops: anchor-v2 (anchor-v2.ts) shares it. */
+export const HEADROOM = 0.1;
 
 /**
  * The least OKLab distance between accent, accent-hover, and accent-active.
@@ -58,7 +59,7 @@ export const DISTINCT_PAIRS = [
   ['text-secondary', 'text-muted', QUIET_TEXT_DELTA],
 ] as const satisfies readonly (readonly [ColorRole, ColorRole, number])[];
 
-const apart = (color: string, others: readonly string[], least: number) =>
+export const apart = (color: string, others: readonly string[], least: number) =>
   others.every((other) => deltaE(color, other) >= least);
 
 /** The percentages and starting colors `anchor-v1` uses, by mode. */
@@ -83,7 +84,7 @@ const ANCHOR_V1 = {
   },
 } as const;
 
-const passesOn = (color: string, grounds: readonly string[], target: number) =>
+export const passesOn = (color: string, grounds: readonly string[], target: number) =>
   grounds.every((ground) => contrast(color, ground) >= target);
 
 /**
@@ -91,7 +92,7 @@ const passesOn = (color: string, grounds: readonly string[], target: number) =>
  * toward `text` in `step`-percent steps that reaches `limit` plus 0.1. Every
  * step failing, the text color itself.
  */
-function towardText(
+export function towardText(
   start: string,
   text: string,
   grounds: readonly string[],
@@ -155,7 +156,7 @@ function accentState(
  * QUIET_TEXT_DELTA from `muted`. Toward text only adds contrast, so it still
  * passes, and text-muted keeps its place at its contrast limit.
  */
-function apartTowardText(color: string, text: string, muted: string): string {
+export function apartTowardText(color: string, text: string, muted: string): string {
   if (apart(color, [muted], QUIET_TEXT_DELTA)) return color;
   for (let percent = 2; percent <= 100; percent += 2) {
     const candidate = mix(color, text, percent);

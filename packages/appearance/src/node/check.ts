@@ -180,14 +180,31 @@ export function hierarchyFailures(scheme: string, sets: SchemeSets): HierarchyFa
   return failures;
 }
 
+/** A pair as one scheme's set holds it, whatever language reads it. */
+const schemePairKey = ({ scheme, pair }: GateFailure) =>
+  `${scheme}\0${pair.set}\0${pair.foreground}\0${pair.ground}`;
+
+/** The scheme pairs among `failures` that fail on an opaque surface, for responsiblePack(). */
+export function opaqueFailing(failures: readonly GateFailure[]): ReadonlySet<string> {
+  return new Set(failures.filter(({ pair }) => !pair.backdrop).map(schemePairKey));
+}
+
 /**
  * The pack a contrast failure excludes (#20): one pack, never the pair. A
  * focus ring's width, or a translucent surface read over its worst backdrop,
  * is the design language's; every other pair is between the color scheme's
- * own roles.
+ * own roles. A backdrop failure stays the scheme's when the same pair fails
+ * on an opaque surface too (`opaque`, from opaqueFailing()), since no
+ * translucency floor would fix it (#20 PR 2c).
  */
-export function responsiblePack(failure: GateFailure): { axis: PackAxis; id: string } {
-  if (failure.pair.kind === 'focus-width' || failure.pair.backdrop) {
+export function responsiblePack(
+  failure: GateFailure,
+  opaque: ReadonlySet<string> = new Set(),
+): { axis: PackAxis; id: string } {
+  if (
+    failure.pair.kind === 'focus-width' ||
+    (failure.pair.backdrop && !opaque.has(schemePairKey(failure)))
+  ) {
     return { axis: 'designLanguage', id: failure.language };
   }
   return { axis: 'colorScheme', id: failure.scheme };
@@ -252,7 +269,12 @@ export function checkAppearance(
         });
         return [];
       }
-      return [{ id: entry.manifest.id, sets: schemeSets(entry.sets, entry.manifest.highContrast) }];
+      return [
+        {
+          id: entry.manifest.id,
+          sets: schemeSets(entry.sets, entry.manifest.highContrast, entry.manifest.derivation),
+        },
+      ];
     });
 
   let combinations = 0;
@@ -475,7 +497,11 @@ export function readKnownBadFixture(
       if (scheme.sets.light) manifest.light = patched(scheme.sets.light, patch.light);
       if (scheme.sets.dark) manifest.dark = patched(scheme.sets.dark, patch.dark);
       if (patch.highContrast) {
-        const derived = schemeSets(scheme.sets, scheme.manifest.highContrast);
+        const derived = schemeSets(
+          scheme.sets,
+          scheme.manifest.highContrast,
+          scheme.manifest.derivation,
+        );
         manifest.highContrast = {
           ...(patch.highContrast.light
             ? { light: patched(derived['high-contrast-light'], patch.highContrast.light) }

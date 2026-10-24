@@ -2,7 +2,7 @@
   "id": "lavender-dusk",
   "name": "Lavender Dusk",
   "description": "Lavender and rose on a soft dusk ground.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "stable",
   "provenance": {
@@ -14,7 +14,7 @@
     "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
     "researchedAt": "2026-10-17",
     "maintainer": "keyurgolani",
-    "derivation": "anchor-v1 from the reviewed prototype's lavender-dusk anchors."
+    "derivation": "anchor-v2 from the reviewed prototype's lavender-dusk anchors. The anchors stay as approved. adjustments lists the 12 roles it moves from anchor-v1."
   },
   "modes": ["light", "dark"],
   "accessibility": {
@@ -33,10 +33,10 @@
     "enhancement": 0
   },
   "fallbacks": [
-    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
   ],
   "caveats": [],
-  "derivation": "anchor-v1",
+  "derivation": "anchor-v2",
   "anchors": {
     "light": {
       "canvas": "#f6f0fb",
@@ -49,6 +49,28 @@
       "text": "#f4eafb",
       "accent": "#bba0eb",
       "secondary": "#dd8aac"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#59516a", "#544c65"],
+      "text-muted": ["#645c74", "#5f576f"],
+      "border-strong": ["#7f788d", "#787187"],
+      "accent-text": ["#6c5598", "#644f8e"],
+      "data-categorical-6": ["#59516a", "#544c65"]
+    },
+    "dark": {
+      "text-secondary": ["#beb5c7", "#c6bcce"],
+      "text-muted": ["#b2a9bc", "#b9b0c2"],
+      "border-strong": ["#91899d", "#978fa3"],
+      "accent-text": ["#bba0eb", "#c1a7ed"],
+      "data-categorical-6": ["#beb5c7", "#c6bcce"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#4d3c6c", "#483866"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#bba0eb", "#c0a8ed"]
     }
   },
   "swatches": ["#f6f0fb", "#2d2541", "#8064b4", "#b05c82"]

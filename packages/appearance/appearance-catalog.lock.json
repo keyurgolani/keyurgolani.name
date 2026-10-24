@@ -20,10 +20,10 @@
     "arctic-aurora": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tier": "extended",
       "license": "first-party",
-      "digest": "sha256-89fd08275ece36cf55ff23be947b72bb0a6753dfcf922f4e92b94236fbbf1a3f"
+      "digest": "sha256-9e028df330a7911052aa50c454f6805418791951f2df5381a68fd952d54e89d2"
     },
     "atlassian-inspired": {
       "axis": "designLanguage",
@@ -33,53 +33,77 @@
       "license": "independent-inspired-interpretation",
       "digest": "sha256-7c22025e87262b744ffd2bd665fcf0486075ae213f7ffab346c9514370af0212"
     },
+    "bauhaus-geometric": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "extended",
+      "license": "first-party",
+      "digest": "sha256-0fb3584a1e2ae8e8ae901765e99916b875064f0882b95595e539b21bd4e04ba7"
+    },
     "blue-orange-color-safe": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-7e889799e48b7d319e48f3bed947edaef12f436d39cd6859f45756c04cb5101d"
+      "digest": "sha256-1cf6d08a2861f021e5ae673cc3cf639d27dcf0e827b568d6fc7bd4d4351cdc58"
     },
     "botanical-sage": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-9df624cb04caf40b3b7cbcfe2c3e142d18c8824d38481e3564b547db21459d02"
+      "digest": "sha256-5fd06c1d292a6a51a3f32c7ec4ac084f7ebc432f9af1c5d3e6c544797b5697b5"
+    },
+    "carbon-inspired": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "stable",
+      "license": "independent-inspired-interpretation",
+      "digest": "sha256-ad280290c9262e1a1476de123407273f7ad7cfd0448705d9a1d199d89e2bef98"
+    },
+    "claymorphic": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "experimental",
+      "license": "first-party",
+      "digest": "sha256-155c8c3deda176a427e6bc7e4471c3be4ff6db7b43bee7ab548cec10f4438429"
     },
     "cool-color-safe": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-a83caed2ab1acc76278310f5ba18340b77d3ba21face746118bfb07219988277"
+      "digest": "sha256-d24c4b141c810bc5ecd22d38ff7e90aee3df7bc43ba66399696341265d25fd63"
     },
     "coral-lagoon": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tier": "extended",
       "license": "first-party",
-      "digest": "sha256-d432ee2a4992f4cfe3dc36662933d90fc96a05b5705eb6bfb6cacc6cbb854e57"
+      "digest": "sha256-071a2be943ce8c33656f98bd059cc56a565aa869c65295b5778c475ce0be4da6"
     },
     "desert-terracotta": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-a0a2f50ff14630aa53ca296d64040c61c57ab5e7c4ded93801a1d8ae8df6e3b2"
+      "digest": "sha256-2b948932c84dbf129ed5d6aa79b0ed6b5a8c20a43f8bd503f50ad91408ff940f"
     },
     "earthy-clay": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-c0b005dc4a5308ece613c596b9df9dfa1703d1e2bc8b6891ea55517d120a8b4d"
+      "digest": "sha256-e8695b0a965c6deba4616e86bdb04b6f310ead7698d1f268f88e73773f439d5d"
     },
     "editorial-serif": {
       "axis": "typography",
@@ -92,10 +116,10 @@
     "forest-moss": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-e9fb477755ae765042803e06f5cb10634ba9f5e0458be8bdc8618a121e8aa69b"
+      "digest": "sha256-ef346b360d5ad3ce9b9c6db94b7b7f045213bd93fc33be26f013f944dcc4ff87"
     },
     "geometric-display": {
       "axis": "typography",
@@ -105,21 +129,41 @@
       "license": "provided-by-operating-system",
       "digest": "sha256-a3678e5b44c87197a072c965250b9610afc740ea703fe0a8c1954e9d313a9766"
     },
+    "glassmorphism": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.1.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-0df5e5a6f83967e60539c08b232b677c48fb048708b77dd558c9ad946bf2826c",
+      "surfaceOpacity": {
+        "approved": "78%",
+        "shipped": "97%"
+      }
+    },
     "graphite": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-423a727706a8ca48a2fa0c615071be04f11b0305d1d098e7ac19e1f5092f1f5d"
+      "digest": "sha256-d36680d7746607a17ceaa1bf3de1bec19c8c04222d0244f8c9ff95f102930687"
+    },
+    "handcrafted-collage": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "extended",
+      "license": "first-party",
+      "digest": "sha256-ba12243f5f99dc12c870f1bc18cb271a6f3b927f1918a74909cc9f9670ba97c1"
     },
     "high-contrast": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-78f9d7607bcebb2280097ee9dc8f022d70becadfbdae9b91772361434925b6fc"
+      "digest": "sha256-9edcad85ffdf9399bed12e9db59cb8dd8b3ed5c2aefb58744f8ce22330dc53ee"
     },
     "humanist-ui": {
       "axis": "typography",
@@ -129,29 +173,37 @@
       "license": "provided-by-operating-system",
       "digest": "sha256-a9b6c8b8471d89f75fbe109909e35732fedb358a5ba49ed143f704c74e75e3e8"
     },
+    "international-grid": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-a55d521820b832b12aa889b7b23ff6d16d0dd6f7c89da98639afdb02fcba9866"
+    },
     "iridescent-pearl": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "tier": "extended",
       "license": "first-party",
-      "digest": "sha256-19eafb64ad8960e03ff8a53ac5bcc434289e939e17eba3c9d38d39244a1f8f9d"
+      "digest": "sha256-0b46c3a349a0b41fd8fbb29ebc88933b4d38f3a5035289d7c611916471481ce0"
     },
     "jewel-twilight": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-7ec1e96483b7fba759e88122ddde106828e27d92c785ff2853b456210cad5b67"
+      "digest": "sha256-95756a5a641e70f5982181d2382ad148c57d4453b820a89b9c0a127dc5e00baa"
     },
     "lavender-dusk": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-63c2b7cd2fa120c6e2b8eb08f2960fa216c29e2593f7c8202e4c886e5fa36634"
+      "digest": "sha256-f6310df53e1816568415c34114ef1c1932e8d8b87f35610740b6fef18a37fdda"
     },
     "literary-reading": {
       "axis": "typography",
@@ -164,10 +216,10 @@
     "low-stimulus-warm": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-9c0b6640814d34a3fde71b6ac602f1e67c8ea5e0c0779ee123d81a84840a1469"
+      "digest": "sha256-c6f9886f0cee822f2bd855ed0b832291902c468b52ba5e58f5eb95dd128708ab"
     },
     "material-3-inspired": {
       "axis": "designLanguage",
@@ -184,6 +236,14 @@
       "tier": "extended",
       "license": "independent-inspired-interpretation",
       "digest": "sha256-1025b61c8046b74fbf22761fd74fa24eecfac8b12376e2c3b25fb690d73a13b9"
+    },
+    "memphis": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "extended",
+      "license": "first-party",
+      "digest": "sha256-5334bac9e9f255298b92ebe843a3677a3f5c64841e295142c51e0264aa19f1fb"
     },
     "minimal-flat": {
       "axis": "designLanguage",
@@ -209,13 +269,21 @@
       "license": "provided-by-operating-system",
       "digest": "sha256-a8160e39a0a604c153355882c28300726387c043a1b48bb615b9332b4ffb170b"
     },
+    "neobrutalist": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-575985dfa82a458364fe1612efd4d55d3eb6ebb3e7a4fbb589922b8597aeec87"
+    },
     "neon-city": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tier": "experimental",
       "license": "first-party",
-      "digest": "sha256-757fc6dbd2464ebf61e4b6879aab7e94818ee290c1f97c6c8a7a58b512e6232e"
+      "digest": "sha256-a28a60253e1a164d33384e9c25991dfd7745bea066728d10d7611ff94ec45e1c"
     },
     "neumorphic": {
       "axis": "designLanguage",
@@ -228,10 +296,10 @@
     "neutral-slate": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-f1dabe29d53260621e86b42aab1529fa74a328b8caa5fd20bb1c235329f93e1b"
+      "digest": "sha256-9f67c32cab6999e075574796d19f0b93e8d3c124ba9a42618b49a25ac09cdbdd"
     },
     "neutral-ui": {
       "axis": "typography",
@@ -244,34 +312,50 @@
     "ocean-abyss": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-78ec2f7af4d70922d6c9730234e025806e84449a578dbe255fabf5464b7e89dc"
+      "digest": "sha256-e9ba07132f4448bc5f621cdffb8bbdae83c71fe6aaaa970d02e38e9874240a3e"
     },
     "oled-black": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "tier": "extended",
       "license": "MIT",
-      "digest": "sha256-a336399d0f18284402cfd81bf18446e043ec1847cc42458614a8113ba5cd2a63"
+      "digest": "sha256-d188cb6d1d595737359e9484058a92725fcdcf8236fe6120e8cf5764298dc5ce"
     },
     "paper-ink": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-031ea3a81a45ad6864a431aec2779e0033b44d5b574b10ee21e0632b640c30eb"
+      "digest": "sha256-358e3a348b2b15157834dac21d3fd946131e9900b228379c0563a1e020f9f905"
+    },
+    "paper-tactile": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-1a8536c9e1825f40bddf19fa6c76b91a56eaf405c319a55d6fffc0f173d646b6"
     },
     "pastel-sorbet": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "tier": "extended",
       "license": "first-party",
-      "digest": "sha256-50be71b6f4990a6be0ffc5a081c0e1c0219d83b6dad2b6f5f3935585c4fe4c0b"
+      "digest": "sha256-7279fc7aa812999c52d8f8f93f4e42ec36cfce79d2e43bffd2356952394335d3"
+    },
+    "pixel-interface": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "experimental",
+      "license": "first-party",
+      "digest": "sha256-a4cc71c378859e14be2b9b47703f280d07b26b21d33c0600bf4354150fa5f9b5"
     },
     "platform-neutral": {
       "axis": "designLanguage",
@@ -305,21 +389,53 @@
       "license": "independent-inspired-interpretation",
       "digest": "sha256-f94e18a9413e7a103d24523f92de4246cb4bde5e282429f2a9c2f72a53c5085d"
     },
+    "raw-brutalist": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "extended",
+      "license": "first-party",
+      "digest": "sha256-9ee69c42f94e7e71a15852d1c58e5f94979e74bc5ce036a31980e0a021438f09"
+    },
     "reduced-chroma": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-cb1d24c77513bbe165287921e16c95c1f04d732b9cbe74047e9c465d7ead2b7d"
+      "digest": "sha256-8ea0765a31bbca75dce626c1f091b5604b3bf0473b220e88ee938e8e95aecf3a"
+    },
+    "retro-web": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "experimental",
+      "license": "first-party",
+      "digest": "sha256-dccd410825b294d3377f03423078c8b75da6b855541eb751548521b0a70d9db9"
     },
     "sepia-film": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-b5f2e212ef5509a485fb3ffdbdf433434e506f9fae4d0217f0e25861917fe4dc"
+      "digest": "sha256-030b6fba327a19a49a5cd7c98c6d5eca738aa08ad2dc5a37ac1c57bd6da9066a"
+    },
+    "skeuomorphic": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "experimental",
+      "license": "first-party",
+      "digest": "sha256-aa44e5f058d414956878c8c0a28e9e367febe82030ef942011481915e9dd84b2"
+    },
+    "soft-organic": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-d42f82b4057fab5f6e57761c329965a8e1e2946033cdbfa86c0bd190eb3823a5"
     },
     "spectrum-2-inspired": {
       "axis": "designLanguage",
@@ -332,10 +448,10 @@
     "sunset-ember": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-aae45237c6dac70ad2b083666d968af25d849f7354df5af860c69f9e48f506ec"
+      "digest": "sha256-e89f2fee6a3a2be898cc8fd4020cfd216133f460b248c2cc09f625dbde7d56b2"
     },
     "technical-sans-mono": {
       "axis": "typography",
@@ -356,18 +472,18 @@
     "warm-parchment": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-d35a510314dcbd85588780196a70f656285b76214d465524780d92cd83c3fed8"
+      "digest": "sha256-e1b7379dd73a7e412a9bf108cd4ac95931173204f920ab380c6e77cc9e5f0015"
     },
     "zinc": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "tier": "extended",
       "license": "MIT",
-      "digest": "sha256-7575a4234e0892a27e92c233b875f484db20a07d20b23068eaf1e129a4ea9c1a"
+      "digest": "sha256-fb7a2330b246aa8d8cd2e1e1bca4d0d4c4d1de0a4d05271e754859ce835b3e46"
     }
   }
 }

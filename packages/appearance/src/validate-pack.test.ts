@@ -12,6 +12,7 @@ import {
   TRANSLUCENT,
   WARM_PARCHMENT,
 } from './test-support/packs';
+import { anchorV2Adjustments } from './anchor-v2';
 import { anchorV1 } from './derive';
 
 const FIRST_PARTY = '@portfolio/appearance-schemes';
@@ -151,6 +152,7 @@ test('a scheme takes its colors one way', () => {
   const bare = { ...clone(WARM_PARCHMENT) } as Record<string, unknown>;
   delete bare.anchors;
   delete bare.derivation;
+  delete bare.adjustments;
   assert.deepEqual(records(bare, 'color-scheme').found, [['manifest.missing', '']]);
   assert.deepEqual(records({ ...clone(WARM_PARCHMENT), dark: tokens }, 'color-scheme').found, [
     ['manifest.invalid', ''],
@@ -185,9 +187,70 @@ test('a scheme takes its colors one way', () => {
     [['manifest.missing', '/anchors']],
   );
   assert.deepEqual(
-    records({ ...clone(WARM_PARCHMENT), derivation: 'anchor-v2' }, 'color-scheme').found,
+    records({ ...clone(WARM_PARCHMENT), derivation: 'anchor-v3' }, 'color-scheme').found,
     [['manifest.invalid', '/derivation']],
   );
+});
+
+test('an anchor-v2 scheme records exactly the roles anchor-v2 moves, and no other scheme records any (#20 PR 2c)', () => {
+  assert.equal(WARM_PARCHMENT.derivation, 'anchor-v2');
+  assert.deepEqual(records(clone(WARM_PARCHMENT), 'color-scheme').found, []);
+  assert.deepEqual(WARM_PARCHMENT.adjustments, anchorV2Adjustments(WARM_PARCHMENT.anchors!));
+
+  const edited = clone(WARM_PARCHMENT);
+  const light = { ...edited.adjustments!.light! };
+  light['text-muted'] = [light['text-muted']![0], '#000000'];
+  const result = validatePackManifest(
+    { ...edited, adjustments: { ...edited.adjustments, light } },
+    { kind: 'color-scheme', packageName: '@portfolio/appearance-schemes' },
+  );
+  const record = result.diagnostics.find(
+    ({ pointer }) => pointer === '/adjustments/light/text-muted',
+  )!;
+  assert.equal(record.code, 'manifest.invalid');
+  assert.match(
+    record.message,
+    /records #[0-9a-f]{6} to #000000, and anchor-v2 gives #[0-9a-f]{6} to #5e564d/,
+  );
+
+  const unrecorded = { ...clone(WARM_PARCHMENT) } as Record<string, unknown>;
+  delete unrecorded.adjustments;
+  const missing = records(unrecorded, 'color-scheme').found;
+  assert.ok(missing.length > 0);
+  assert.ok(
+    missing.every(
+      ([code, pointer]) => code === 'manifest.invalid' && pointer.startsWith('/adjustments/'),
+    ),
+  );
+
+  const extra = clone(WARM_PARCHMENT);
+  const moved = { ...extra.adjustments!.dark!, canvas: ['#251f19', '#000000'] as [string, string] };
+  assert.deepEqual(
+    records({ ...extra, adjustments: { ...extra.adjustments, dark: moved } }, 'color-scheme').found,
+    [['manifest.invalid', '/adjustments/dark/canvas']],
+  );
+
+  assert.deepEqual(
+    records({ ...clone(WARM_PARCHMENT), derivation: 'anchor-v1' }, 'color-scheme').found,
+    [['manifest.invalid', '/adjustments']],
+  );
+});
+
+test('a translucency floor only raises the approved surface-opacity (#20 PR 2c)', () => {
+  const floored = (approved: string, shipped: string) =>
+    records(
+      {
+        ...clone(PLATFORM_NEUTRAL),
+        tokens: { ...PLATFORM_NEUTRAL.tokens, 'surface-opacity': shipped },
+        approvedSurfaceOpacity: approved,
+      },
+      'design-language',
+    ).found;
+  assert.deepEqual(floored('78%', '97%'), []);
+  assert.deepEqual(floored('78%', '100%'), []);
+  assert.deepEqual(floored('78%', '78%'), [['manifest.invalid', '/approvedSurfaceOpacity']]);
+  assert.deepEqual(floored('90%', '80%'), [['manifest.invalid', '/approvedSurfaceOpacity']]);
+  assert.deepEqual(floored('100%', '100%'), [['manifest.invalid', '/approvedSurfaceOpacity']]);
 });
 
 test('a stable scheme has both modes, and a high-contrast set needs its base mode', () => {

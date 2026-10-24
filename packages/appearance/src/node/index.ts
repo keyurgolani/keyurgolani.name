@@ -77,6 +77,7 @@ export {
   knownBadNames,
   layerOrderProblems,
   readKnownBadFixture,
+  opaqueFailing,
   responsiblePack,
   runKnownBad,
   setsForMode,
