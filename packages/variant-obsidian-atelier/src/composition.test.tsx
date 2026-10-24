@@ -557,10 +557,10 @@ test('the composition needs no motion, hover, pointer, or script: still CSS and 
       /'use client'|useEffect|useState|useRef|addEventListener|onClick/,
       file,
     );
-    // None of Page 99's traits, none of v1's chapter navigation, and nothing from legacy/.
+    // None of Page 99's traits, and none of v1's chapter navigation.
     assert.doesNotMatch(
       source,
-      /TypingAnimation|useMouseTilt|MagneticCursor|TableOfContents|legacy\//,
+      /TypingAnimation|useMouseTilt|MagneticCursor|TableOfContents/,
       file,
     );
     assert.doesNotMatch(source, /from '@portfolio\/kit'/, file);

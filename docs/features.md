@@ -82,7 +82,7 @@ These keep the system honest:
 ## Roadmap (deferred, not yet shipped)
 
 - The appearance axes, and a visitor control for each, applying `visitorControls` (#19).
-- The five approved compositions, starting with Editorial Evidence and Kinetic Cosmos (#13 to #17).
+- The last of the five approved compositions (#17); Editorial Evidence, Kinetic Cosmos, Obsidian Atelier, and Spatial Bento are registered (#13 to #16).
 - Redirects for a changed slug, and 410 for a removed case study (#10, #22).
 - CI/CD workflow templates.
 

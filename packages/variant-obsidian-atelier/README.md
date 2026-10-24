@@ -34,7 +34,7 @@ No artifact is cropped or upscaled: each keeps its own aspect, no wider than its
 
 - No client code: no effect, no listener, no fetch, no clock. Every chapter, its index, and its neighbors are fragment links, so they work without JavaScript, without hover or a pointer, and under reduced motion.
 - No transition, animation, smooth scrolling, tilt, or parallax.
-- Nothing from `legacy/`, and none of the kit's `TypingAnimation`, `useMouseTilt`, or `MagneticCursor`.
+- Nothing from the retired v1 packages, and none of the kit's `TypingAnimation`, `useMouseTilt`, or `MagneticCursor`.
 - No work page of its own: `routes.work` is `shared`, so `/work/<slug>` is the host's.
 
 ## Media guidance
