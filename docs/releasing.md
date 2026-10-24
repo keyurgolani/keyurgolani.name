@@ -13,8 +13,9 @@ Pushing `vX.Y.Z-rc.N` runs these jobs in order, and each one stops the release w
 3. **rc-build** builds `linux/amd64` on `ubuntu-24.04` and `linux/arm64` on `ubuntu-24.04-arm`, once each and natively, with BuildKit's SLSA provenance at `mode=max` and an SPDX SBOM. Each leg pushes its platform's index to `ghcr.io/<owner>/<repo>` by digest, with no tag.
 4. **rc-merge** merges the two indexes into one with `docker buildx imagetools create`, which keeps each platform's attestation manifest, and pushes it by digest, with no tag ([`ci/release/merge-index.mjs`](../ci/release/merge-index.mjs)). The merged index must hold one image and one attestation manifest for each platform, and no attestation for an image it doesn't hold. It checks that both platforms carry the provenance and an SBOM ([`ci/release/attestations.mjs`](../ci/release/attestations.mjs)), and attests the merged digest with `actions/attest-build-provenance`, which signs the provenance through Sigstore and stores it with GitHub and on GHCR. The check runs after the push, so when it fails the digests are already on GHCR, untagged and never promoted: delete those package versions in the package settings.
 5. **rc-scan** runs Grype on the merged digest, once per platform, and on the production dependencies ([Scans](#scans)).
-6. **rc-tag** tags the scanned digest `X.Y.Z-rc.N` on GHCR, and checks the tag resolves to it.
-7. **rc-release** creates the GitHub pre-release, with notes that name the pull source by digest and the two SBOMs attached.
+6. **rc-rehearsal** runs beside the build, after `rc-verify`: the upgrade rehearsal ([The rehearsal](#the-rehearsal)), on an image of the tagged commit it builds itself with no cache and never pushes, so nothing comes from GHCR.
+7. **rc-tag** waits on `rc-scan` and `rc-rehearsal`, then tags the scanned digest `X.Y.Z-rc.N` on GHCR, and checks the tag resolves to it.
+8. **rc-release** creates the GitHub pre-release, with notes that name the pull source by digest and the two SBOMs attached.
 
 ## Promotion
 
@@ -50,6 +51,23 @@ The workflow's token is `contents: read`. Each job that writes gets only what it
 A pull request into `next` or `main` that changes `release.yml`, `ci/release/`, the `Dockerfile`, `.dockerignore`, `.grype.yaml`, or `pnpm-lock.yaml` runs the dry run. `dry-run-build` builds each platform natively on the same runners as `rc-build`, with the same provenance and SBOM settings, into an OCI layout it keeps as a one-day artifact. `dry-run` pushes both layouts by digest into a `registry:2` container on its runner, published on its loopback only, merges them there with the same helper as `rc-merge`, checks the attestations on the merged index, runs both scans, tags the digest `0.0.0-rc.1` and then promotes it to `0.0.0`, `0.0`, `0`, and `latest` in that registry, and renders the notes into the job summary. It holds `contents: read` and no secret, never logs in to GHCR, and attests nothing, since signing needs `id-token: write`.
 
 Grype downloads its vulnerability database on the runner. The dry run is not a required check: `gate` is the only one.
+
+## The rehearsal
+
+`pnpm rehearse` ([`ci/rehearsal.mjs`](../ci/rehearsal.mjs)) rehearses an upgrade from a clean data directory, each row on what the one before it left:
+
+1. **Old configs.** Frozen copies of `62a0f06`'s one-file portfolio, as YAML and JSON, and one in TOML ([`ci/fixtures/rehearsal/baseline/`](../ci/fixtures/rehearsal/baseline/)), are each refused by `portfolio-store import` with `legacy.document`, and nothing is published: the data directory holds only the empty layout, and `status` says `empty`.
+2. **Migration.** `pnpm config:migrate` writes the new pair from the YAML and the JSON one. A second run over the new pair says there's nothing to migrate and writes nothing, and migrating the old file again writes the same bytes. The TOML one writes nothing at all.
+3. **Import, publish, rollback.** `import --expect empty` makes the migrated pair revision 1, an edited pair becomes revision 2, and `rollback --to` makes revision 1 live again.
+4. **A backup during a publish.** A publish from another process is held just before its pointer moves, holding the publication lock. `backup` started then gives up with `lock_timeout` and leaves nothing behind. The publish is killed with SIGKILL, and revision 1 is still live. `backup` then succeeds, and `restore` into a clean directory serves the same live revision with its media, and passes `verify`.
+5. **Last known good.** In clean restores, the newest revision is damaged three ways: a missing file, a bad hash, and a revision the build's validator rejects. `status` serves the last known good, `degraded`, with the reason, and `recover` makes it live.
+6. **The image.** Under `owner`, on an empty data volume, and under `read-only`, the image exits non-zero on the frozen YAML config with `legacy.document`, and owner's volume holds nothing published. This row needs Docker and an image, `REHEARSAL_IMAGE`, so it runs in CI.
+
+The rows that need a ready `owner`, which needs the default composition registered (#13), are declared pending, and the run fails once that composition is registered while one still is: Studio's in-app rollback, a restart into the last known good, the base commit's image serving the old site on the pre-upgrade backup, and the image's own `portfolio-store` import. Until then the rehearsal's pair selects a registered stand-in.
+
+Every command runs with an empty `HOME`, its own `TMPDIR`, `TZ=UTC`, no token, and the test harness's egress guard, which fails a row on any request outside the machine; the containers run on an internal network, hardened as the Compose examples are. A per-run canary in every command's environment, another in revision 2's content, and the owner password and hash the image's `hash-password --stdin` makes for the run never appear in any output or report. The reports go to `reports/rehearsal/`.
+
+CI's `rehearsal` job runs it on a pull request whose changes select it (the rehearsal, the store, its command line, the migration, and every complete run), on the image the `image` job built, and `rc-rehearsal` on every release candidate.
 
 ## Scans
 
@@ -134,4 +152,4 @@ docker buildx imagetools inspect ghcr.io/<owner>/<repo>@sha256:<digest> --format
 
 ## Not here yet
 
-Release versioning (the tag matching `package.json`, and a `release.json` on each release), native arm64 runners, a freshness gate on the scheduled workflow, and the gate for the first final release are in the backlog. So are the release-candidate rehearsal of migration, backup, restore, and rollback (#12's last PR) and the profile container checks against the candidate's digest.
+Release versioning (the tag matching `package.json`, and a `release.json` on each release), native arm64 runners, a freshness gate on the scheduled workflow, and the gate for the first final release are in the backlog. So are the profile container checks against the candidate's digest, and the rehearsal's store migration and blue-green cutover.

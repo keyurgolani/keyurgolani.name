@@ -346,3 +346,27 @@ test('profiles loads the image the image job saved, builds nothing, and holds no
     assert.equal(checkout.with['persist-credentials'], false);
   }
 });
+
+test('rehearsal loads the image the image job saved, builds nothing, holds no token, and must run its container rows', () => {
+  const job = CI.jobs.rehearsal;
+  assert.ok(job, 'ci.yml has a rehearsal job');
+  assert.deepEqual(job.needs, ['changes', 'image']);
+  assert.match(job.if, /needs\.image\.outputs\.saved == 'true'/);
+  assert.match(job.if, /contains\(fromJSON\(needs\.changes\.outputs\.jobs\), 'rehearsal'\)/);
+  const download = job.steps.find((s) => /^actions\/download-artifact@/.test(s.uses ?? ''));
+  assert.equal(download.with.name, 'image-amd64');
+  const run = job.steps.find((s) => s.run === 'pnpm ci:rehearsal');
+  assert.ok(run, 'rehearsal runs pnpm ci:rehearsal');
+  assert.match(run.env.REHEARSAL_IMAGE_ARCHIVE, /portfolio-ci\.tar\.gz$/);
+  assert.equal(run.env.REHEARSAL_CONTAINER, 'required');
+  const text = JSON.stringify(job);
+  assert.doesNotMatch(text, /docker build|ci:image|build-push-action/);
+  assert.doesNotMatch(text, /secrets\.|GITHUB_TOKEN|github\.token/);
+  assert.equal(job.permissions, undefined, "rehearsal keeps the workflow's contents: read");
+  for (const checkout of job.steps.filter((s) => /^actions\/checkout@/.test(s.uses ?? ''))) {
+    assert.equal(checkout.with['persist-credentials'], false);
+  }
+  for (const control of ['gate', 'selected']) {
+    assert.ok(CI.jobs[control].needs.includes('rehearsal'), control);
+  }
+});
