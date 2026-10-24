@@ -173,14 +173,16 @@ function namesWork(
  * read-only reference (#9): one its verified view routes, by namesPage()'s
  * rules and its own case-study slugs, so a private work's slug and a
  * reserved segment, `media` included, never do. A demo with no reference
- * names none. Under another profile, which serves no reference, the path is
- * left to the profile's access, so it answers as a route it doesn't serve.
+ * names none. Under another profile, which serves no reference, a path
+ * names what it would below /sample, by namesPage()'s rules, so it answers
+ * as a route that profile doesn't serve, as /sample does there, and a path
+ * that names nothing, such as the route file's own, is missing.
  */
 function namesReference(installed: Installed, segments: readonly string[]): boolean {
   const reference = servedReference();
   if (reference) return namesPage(installed, segments, reference.caseStudies);
   const profile = getDeploymentConfig()?.profile;
-  return profile !== undefined && profile !== 'demo';
+  return profile !== undefined && profile !== 'demo' && namesPage(installed, segments);
 }
 
 /**

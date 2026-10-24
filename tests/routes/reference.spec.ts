@@ -10,7 +10,7 @@ import {
   copyReferenceFixture,
   REFERENCE_FIXTURE,
   REFERENCE_MOUNT,
-} from '../harness/profile-matrix';
+} from '../harness/reference-fixture';
 import { DEMO_CSP } from '../harness/route-headers.mjs';
 import { DEMO, DEMO_APP } from './apps';
 

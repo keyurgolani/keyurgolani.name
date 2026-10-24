@@ -62,7 +62,9 @@ test('reference.read is demo’s alone, so owner and read-only answer every refe
   assert.deepEqual(CAPABILITY_MATRIX['reference.read'], { demo: 'public' });
   for (const profile of ['owner', 'read-only'] as const) {
     deploy(t, profile);
-    for (const path of PATHS.filter((at) => at !== '/reference/media')) {
+    // The reference's home and its renditions route, which name something
+    // under demo, are absent here, as /sample is: the plain 404 to every method.
+    for (const path of ['/reference', '/reference/media/tide-tables-cover/abc/w8-a1.png']) {
       assert.equal(resolveRoute(profile, path).status, 'absent', `${profile} ${path}`);
       for (const method of ['GET', 'HEAD', 'POST']) {
         const response = await proxy(new NextRequest(`https://rowan.test${path}`, { method }));
@@ -70,6 +72,25 @@ test('reference.read is demo’s alone, so owner and read-only answer every refe
         assert.notEqual(response.headers.get('x-middleware-next'), '1', 'it goes no further');
         assert.equal(response.headers.get('cache-control'), 'no-store');
       }
+    }
+    // A path that names nothing below it, the route file's own included, is
+    // missing, as /sample/[[...path]] is: the 404 page to GET, the plain 404 to POST.
+    for (const path of ['/reference/[[...path]]', '/reference/no-such-view']) {
+      assert.equal(resolveRoute(profile, path).status, 'missing', `${profile} ${path}`);
+      assert.equal(
+        resolveRoute(profile, path).status,
+        resolveRoute(profile, path.replace('/reference', '/sample')).status,
+        `${profile} ${path} answers as /sample's counterpart does`,
+      );
+      const page = await proxy(new NextRequest(`https://rowan.test${path}`));
+      assert.equal(
+        page.headers.get('x-middleware-next'),
+        '1',
+        `${profile} GET ${path}: the 404 page`,
+      );
+      const posted = await proxy(new NextRequest(`https://rowan.test${path}`, { method: 'POST' }));
+      assert.equal(posted.status, 404, `${profile} POST ${path}`);
+      assert.match(posted.headers.get('content-type') ?? '', /^text\/plain/);
     }
   }
 });
