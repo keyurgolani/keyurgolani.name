@@ -170,6 +170,9 @@ test(
         `/sample?variant=${VARIANTS.find(({ manifest }) => manifest.id !== FALLBACK_ID)?.manifest.id ?? FALLBACK_ID}&mode=light&motion=reduce`,
         '/sample/no-such-view',
         '/robots.txt',
+        // Demo Studio, which keeps every choice in the visitor's browser (#9).
+        '/studio',
+        '/studio?mode=dark',
       ];
       for (const path of paths) {
         const bodies: string[] = [];

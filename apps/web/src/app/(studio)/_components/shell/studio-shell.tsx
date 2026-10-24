@@ -37,7 +37,7 @@ import { pageCacheHandlers, restoredMayKeep } from '~/lib/studio/page-cache';
 import { claimTab, mayRestore, openTabs } from '~/lib/studio/tab-presence';
 import { endSession, NEUTRAL_TITLE } from '~/lib/studio/session-end';
 import { stateLines } from '~/lib/studio/state-model';
-import { loadBackend } from '~/lib/studio/load-backend';
+import { loadOwnerBackend } from '~/lib/studio/load-backend';
 import { tasksFor, type StudioTask, type TaskId } from '~/lib/studio/tasks';
 import { AUTH_REQUIRED, onSignedOut, SIGNED_OUT_LOCATION, studioFetch } from '~/lib/studio-fetch';
 import { ContentEditor } from '../fields/content-editor';
@@ -171,7 +171,7 @@ export function StudioShell({
       if (!cancelled) setBackendFailed(true);
     };
     const timer = window.setTimeout(failed, BACKEND_TIMEOUT_MS);
-    loadBackend('owner').then(
+    loadOwnerBackend().then(
       ({ ownerBackend }) => {
         window.clearTimeout(timer);
         if (!cancelled) setBackend(ownerBackend(studioFetch, csrfToken));

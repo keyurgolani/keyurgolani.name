@@ -1330,7 +1330,7 @@ test('the Studio transport is served in every profile', () => {
   for (const profile of PROFILES) assert.equal(serves(profile, '/api/studio/[name]'), true);
 });
 
-test("what every profile serves, with #2's Studio pages under owner alone", () => {
+test("what every profile serves: #2's Studio pages under owner, and Demo Studio's /studio under demo", () => {
   const served = (profile: Profile) =>
     PATTERNS.filter((pattern) => serves(profile, pattern as RoutePattern));
   const everywhere = [

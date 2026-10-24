@@ -137,6 +137,23 @@ test('anything else is refused whole, and changes nothing', async () => {
       },
     ],
     [set('variant', 42)],
+    // An appearance pointer and a value the catalog offers, on another document or by another op.
+    [
+      {
+        document: 'portfolio' as const,
+        pointer: '/appearance/variant',
+        op: 'set' as const,
+        value: 'acme-orbit',
+      },
+    ],
+    [
+      {
+        document: 'site' as const,
+        pointer: '/appearance/variant',
+        op: 'delete' as const,
+        value: 'acme-orbit',
+      },
+    ],
     // One edit it can't take refuses the batch, the good one with it.
     [set('variant', 'acme-orbit'), set('visitorControls', 'selectable')],
   ]) {

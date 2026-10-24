@@ -386,12 +386,11 @@ module.exports = {
       severity: 'error',
       comment:
         "Owner Studio's libraries and every server module stay clear of Demo Studio's code (#9): " +
-        'the demo adapter loads only under demo, through the backend loader #9 adds to ' +
-        'lib/studio, whose import() of it the shell calls only when the policy says the profile ' +
-        'is demo. Tests may.',
+        "the demo's browser backend loads only from Demo Studio's own shell, with an import() " +
+        'of its own. Tests may.',
       from: {
         path: '^apps/web/src/(?:lib/studio/|server/)',
-        pathNot: ['\\.test\\.tsx?$', '^apps/web/src/lib/studio/load-backend\\.ts$'],
+        pathNot: '\\.test\\.tsx?$',
       },
       to: { path: '^apps/web/src/lib/demo/' },
     },
