@@ -42,7 +42,7 @@
     "A decorative gradient texture sits behind surfaces.",
     "Expressive state motion: hovers and presses move more than in a quiet language.",
     "Its enter motion, slide-cut, and emphasis motion, glitch-once, have no keyframes in the platform yet, so they don't animate.",
-    "Ships opaque: its approved 92% translucent surfaces fall under the contrast targets with its texture over a black or white backdrop, so surfaces are 100% opaque, the orchestrator's call under the owner's delegation."
+    "Ships opaque: its approved 92% translucent surfaces fall under the contrast targets with its texture over a black or white backdrop, so its surfaces are 100% opaque, and only a dialog's backdrop is blurred. This supersedes the translucency caveats above."
   ],
   "tokens": {
     "surface-material": "linear-gradient(color-mix(in srgb, var(--color-surface-default) 92%, transparent), color-mix(in srgb, var(--color-surface-default) 92%, transparent))",

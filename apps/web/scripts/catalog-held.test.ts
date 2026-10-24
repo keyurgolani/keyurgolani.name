@@ -112,7 +112,11 @@ test('every seeded language, shipping or held, is the seed mapping of its protot
       if (manifest.tokens['surface-opacity'] === '100%') {
         // An opaque floor (PR 2d) adds one caveat saying so, and nothing else.
         const added = manifest.caveats.at(-1)!;
-        assert.match(added, /^Ships opaque: its approved \d+% translucent surfaces /, language.id);
+        assert.equal(
+          added,
+          `Ships opaque: its approved ${manifest.approvedSurfaceOpacity} translucent surfaces fall under the contrast targets with its texture over a black or white backdrop, so its surfaces are 100% opaque, and only a dialog's backdrop is blurred. This supersedes the translucency caveats above.`,
+          language.id,
+        );
         seeded.caveats = [...seeded.caveats, added];
       }
     }
