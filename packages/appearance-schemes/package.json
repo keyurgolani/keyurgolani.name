@@ -2,7 +2,7 @@
   "name": "@portfolio/appearance-schemes",
   "version": "0.1.0",
   "private": true,
-  "description": "The platform's color-scheme packs (#19): warm-parchment, the fallback for color schemes.",
+  "description": "The platform's color-scheme packs (#19, #20): the shipping catalog, with warm-parchment the fallback, and the Research records in research/, which never ship.",
   "portfolio": {
     "kind": "color-scheme",
     "packs": "./packs"

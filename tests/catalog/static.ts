@@ -31,6 +31,7 @@ import {
 import {
   checkAppearance,
   gatePack,
+  opaqueFailing,
   responsiblePack,
 } from '../../packages/appearance/src/node/index';
 import type { BuildMeta } from '../quality/cells';
@@ -158,9 +159,10 @@ export function staticSmoke(
 
   // The contrast table, once over every combination, read by tuple.
   const check = checkAppearance(registry);
+  const opaque = opaqueFailing(check.failures);
   const contrast = new Map<string, { axis: PackAxis; id: string; message: string }[]>();
   for (const failure of check.failures) {
-    const { axis, id } = responsiblePack(failure);
+    const { axis, id } = responsiblePack(failure, opaque);
     const { pair } = failure;
     for (const mode of failure.modes) {
       const key = `${failure.language}/${failure.scheme}/${failure.typography}/${mode}`;

@@ -104,6 +104,8 @@ test('a failure names its pack on each axis, the set, the pair, and the modes th
       tokens: {
         ...PLATFORM_NEUTRAL.tokens,
         texture: 'linear-gradient(var(--color-border-subtle), transparent)',
+        // The accent itself, which anchor-v2 leaves at anchor-v1's 3:1 on the surfaces.
+        'signature-fill': 'linear-gradient(90deg, var(--color-accent), var(--color-signature-end))',
       },
     },
   } as MetaPack;
@@ -112,13 +114,14 @@ test('a failure names its pack on each axis, the set, the pair, and the modes th
   );
   assert.equal(check.ok, false);
   const failure = check.failures.find(
-    (item) => item.pair.set === 'light' && item.pair.foreground === 'text-muted',
+    (item) => item.pair.set === 'light' && item.pair.foreground === 'accent to signature-end',
   )!;
   assert.equal(failure.language, 'acme-grain');
   assert.equal(failure.scheme, 'warm-parchment');
   assert.equal(failure.typography, 'humanist-ui');
   assert.deepEqual(failure.modes, ['system', 'light', 'dark']);
-  assert.equal(failure.pair.target, 4.95);
+  assert.equal(failure.pair.kind, 'large-text');
+  assert.equal(failure.pair.target, 3.3);
 });
 
 test('the hierarchy check holds the accent states and the quieter text roles apart', () => {
@@ -160,6 +163,18 @@ test('every known-bad input fails the check, for the reason it names', () => {
       `${name}: ${JSON.stringify(run.check?.failures.slice(0, 2) ?? run.problems)}`,
     );
   }
+});
+
+test('bad-texture fails only for its texture: the same fill untextured passes on anchor-v2 schemes (#20 PR 2c)', () => {
+  const read = readKnownBadFixture('bad-texture', createAppearanceRegistry(META));
+  assert.ok(read.ok);
+  const manifest = read.fixture.manifest as { tokens: Record<string, string> };
+  const untextured = {
+    ...read.fixture,
+    manifest: { ...manifest, tokens: { ...manifest.tokens, texture: 'none' } },
+  };
+  const run = runKnownBad(untextured, META);
+  assert.deepEqual(run.check?.failures ?? run.problems, []);
 });
 
 test('every refusal the refined body lists for a language stylesheet has its known-bad input', () => {

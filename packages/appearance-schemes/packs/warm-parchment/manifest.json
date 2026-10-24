@@ -2,7 +2,7 @@
   "id": "warm-parchment",
   "name": "Warm Parchment",
   "description": "The platform's fallback color scheme: warm paper and ink with a terracotta accent and a sage secondary, in light and dark.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "stable",
   "provenance": {
@@ -14,7 +14,7 @@
     "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
     "researchedAt": "2026-10-17",
     "maintainer": "keyurgolani",
-    "derivation": "anchor-v1 from the reviewed prototype's warm-parchment anchors."
+    "derivation": "anchor-v2 from the reviewed prototype's warm-parchment anchors. The anchors stay as approved. adjustments lists the 14 roles it moves from anchor-v1."
   },
   "modes": ["light", "dark"],
   "accessibility": {
@@ -33,10 +33,10 @@
     "enhancement": 0
   },
   "fallbacks": [
-    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
   ],
   "caveats": [],
-  "derivation": "anchor-v1",
+  "derivation": "anchor-v2",
   "anchors": {
     "light": {
       "canvas": "#f6eddc",
@@ -49,6 +49,30 @@
       "text": "#f4e8d2",
       "accent": "#f09d70",
       "secondary": "#9db38d"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#5a5248", "#544c43"],
+      "text-muted": ["#645c52", "#5e564d"],
+      "border-strong": ["#7e766a", "#797165"],
+      "accent-text": ["#8e4d2b", "#84492a"],
+      "focus": ["#b95f32", "#b05b31"],
+      "data-categorical-6": ["#5a5248", "#544c43"],
+      "signature-start": ["#b95f32", "#b05b31"]
+    },
+    "dark": {
+      "text-secondary": ["#c2b8a5", "#cac0ac"],
+      "text-muted": ["#b6ac9b", "#bfb4a3"],
+      "border-strong": ["#958c7e", "#9d9385"],
+      "accent-text": ["#f09d70", "#f0a57a"],
+      "data-categorical-6": ["#c2b8a5", "#cac0ac"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#66341c", "#64331b"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#f09d70", "#f1a176"]
     }
   },
   "swatches": ["#f6eddc", "#2b241c", "#b95f32", "#5f7653"]

@@ -1,0 +1,27 @@
+{
+  "id": "tailwind-oklch",
+  "name": "Tailwind OKLCH",
+  "kind": "color-scheme",
+  "tier": "research",
+  "source": {
+    "name": "Tailwind CSS v4 colors (OKLCH)",
+    "url": "https://tailwindcss.com/docs/colors"
+  },
+  "license": "unverified",
+  "researchedAt": "2026-10-17",
+  "reason": "Tailwind CSS v4's OKLCH palette, which the review kept as a reference. Its license isn't recorded at a pinned v4 version, and its anchors here are v3's sRGB stand-ins, so it doesn't ship. zinc and oled-black ship v3.4.17's sRGB values under MIT. Promoting this one is its own owner-approved PR.",
+  "anchors": {
+    "light": {
+      "canvas": "#f8fafc",
+      "text": "#0f172a",
+      "accent": "#4f46e5",
+      "secondary": "#0d9488"
+    },
+    "dark": {
+      "canvas": "#0f172a",
+      "text": "#f8fafc",
+      "accent": "#818cf8",
+      "secondary": "#2dd4bf"
+    }
+  }
+}

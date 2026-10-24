@@ -1,0 +1,82 @@
+{
+  "id": "botanical-sage",
+  "name": "Botanical Sage",
+  "description": "Sage green with a clay secondary on a soft botanical ground.",
+  "version": "1.1.0",
+  "tokenContract": 1,
+  "tier": "stable",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v2 from the reviewed prototype's botanical-sage anchors. It puts the light accent #65896a back to #668b6b and secondary #9f775f back to #ad7f65, undoing PR 2a's nudges: anchor-v2 solves the signature fill itself. adjustments lists the 17 roles it moves from anchor-v1."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [],
+  "derivation": "anchor-v2",
+  "anchors": {
+    "light": {
+      "canvas": "#f4f6ef",
+      "text": "#243028",
+      "accent": "#668b6b",
+      "secondary": "#ad7f65"
+    },
+    "dark": {
+      "canvas": "#17211b",
+      "text": "#edf3ea",
+      "accent": "#91b997",
+      "secondary": "#d2a088"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#505952", "#4c554e"],
+      "text-muted": ["#5b645d", "#565f58"],
+      "border-strong": ["#777f77", "#707971"],
+      "accent-text": ["#4d6852", "#49624e"],
+      "focus": ["#628667", "#5d7f62"],
+      "data-categorical-1": ["#668b6b", "#608565"],
+      "data-categorical-2": ["#a57a61", "#9a6d54"],
+      "data-categorical-6": ["#505952", "#4c554e"],
+      "signature-start": ["#668b6b", "#5d7e62"],
+      "signature-end": ["#ad7f65", "#926f59"]
+    },
+    "dark": {
+      "text-secondary": ["#b5bcb3", "#bdc4bb"],
+      "text-muted": ["#a8b0a8", "#b0b8b0"],
+      "border-strong": ["#899189", "#8f978f"],
+      "accent-text": ["#91b997", "#9abf9f"],
+      "data-categorical-6": ["#b5bcb3", "#bdc4bb"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#334636", "#324535"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#91b997", "#95bc9b"]
+    }
+  },
+  "swatches": ["#f4f6ef", "#243028", "#668b6b", "#ad7f65"]
+}

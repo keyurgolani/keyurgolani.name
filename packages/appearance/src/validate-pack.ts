@@ -25,6 +25,7 @@ import {
   type PackAxis,
   type PackKind,
 } from './axes';
+import { anchorV2Adjustments, type Adjustments } from './anchor-v2';
 import { isUpstreamLicense } from './governance';
 import {
   ColorSchemeManifestSchema,
@@ -176,6 +177,8 @@ export function validatePackManifest<K extends PackKind>(
   if (id)
     report(id.code, ['id'], id.message, id.remedy, { expected: id.expected, actual: manifest.id });
   if (context.kind === 'color-scheme') checkScheme(manifest as ColorSchemeManifest, report);
+  if (context.kind === 'design-language')
+    checkApprovedOpacity(manifest as DesignLanguageManifest, report);
   checkNoScript(context, report);
   if (context.kind === 'typography') checkTypography(manifest as TypographyManifest, report);
   checkGovernance(manifest, context, report);
@@ -550,7 +553,7 @@ function checkScheme(manifest: ColorSchemeManifest, report: Report) {
       'manifest.missing',
       [],
       'gives the scheme no colors.',
-      'Add light or dark token sets, per-mode anchors with derivation: "anchor-v1", or a generator.',
+      'Add light or dark token sets, per-mode anchors with derivation: "anchor-v2", or a generator.',
     );
     return;
   }
@@ -577,10 +580,11 @@ function checkScheme(manifest: ColorSchemeManifest, report: Report) {
         'manifest.missing',
         ['derivation'],
         'is required with anchors.',
-        'Set derivation: "anchor-v1".',
-        { expected: 'anchor-v1' },
+        'Set derivation: "anchor-v2".',
+        { expected: 'anchor-v1 | anchor-v2' },
       );
     }
+    checkAdjustments(manifest, report);
   } else if (manifest.derivation !== undefined) {
     report(
       'manifest.invalid',
@@ -622,6 +626,65 @@ function checkScheme(manifest: ColorSchemeManifest, report: Report) {
     );
   }
   duplicates(manifest.swatches ?? [], ['swatches'], report, 'color');
+}
+
+/**
+ * An anchor-v2 scheme records every role the solver moved from anchor-v1
+ * (#20 PR 2c), and the record is what anchor-v2 gives its anchors, so a
+ * review reads each move and none goes unrecorded. Any other scheme records
+ * none.
+ */
+function checkAdjustments(manifest: ColorSchemeManifest, report: Report) {
+  // A missing derivation is its own record: the moves can't be read against it.
+  if (manifest.derivation === undefined) return;
+  if (manifest.derivation !== 'anchor-v2') {
+    if (manifest.adjustments !== undefined) {
+      report(
+        'manifest.invalid',
+        ['adjustments'],
+        `records anchor-v2's moves, and the scheme derives with ${manifest.derivation}.`,
+        'Remove it, or set derivation: "anchor-v2" and record what it gives.',
+      );
+    }
+    return;
+  }
+  const expected = anchorV2Adjustments(manifest.anchors!);
+  const recorded = manifest.adjustments ?? {};
+  const names = [...new Set([...Object.keys(expected), ...Object.keys(recorded)])].sort();
+  for (const name of names as (keyof Adjustments)[]) {
+    const want: Readonly<Record<string, readonly [string, string]>> = expected[name] ?? {};
+    const have: Readonly<Record<string, readonly [string, string]>> = recorded[name] ?? {};
+    const roles = [...new Set([...Object.keys(want), ...Object.keys(have)])].sort();
+    for (const role of roles) {
+      const a = want[role]?.join(' to ') ?? 'unmoved';
+      const b = have[role]?.join(' to ') ?? 'unmoved';
+      if (a === b) continue;
+      report(
+        'manifest.invalid',
+        ['adjustments', name, role],
+        `records ${b}, and anchor-v2 gives ${a} for these anchors.`,
+        "Record what anchor-v2 gives: [anchor-v1's value, anchor-v2's] for each role it moves.",
+        { expected: a, actual: b },
+      );
+    }
+  }
+}
+
+/** A floor raises an approved translucency: the shipped surface-opacity is above the approved one. */
+function checkApprovedOpacity(manifest: DesignLanguageManifest, report: Report) {
+  const approved = manifest.approvedSurfaceOpacity;
+  if (approved === undefined) return;
+  const shipped = manifest.tokens['surface-opacity'];
+  const percent = /^(\d+(?:\.\d+)?)%$/.exec(shipped);
+  if (!percent || Number.parseFloat(percent[1]!) <= Number.parseFloat(approved)) {
+    report(
+      'manifest.invalid',
+      ['approvedSurfaceOpacity'],
+      `is ${approved}, and the shipped surface-opacity, ${shipped}, isn't a percentage above it: a floor only raises an approved opacity.`,
+      'Ship the floor as a percentage above the approved value, or remove approvedSurfaceOpacity when the approved value ships.',
+      { actual: shipped },
+    );
+  }
 }
 
 /** The base modes a scheme manifest has: a generator gives both. */

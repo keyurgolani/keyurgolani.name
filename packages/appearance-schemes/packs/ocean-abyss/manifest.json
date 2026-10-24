@@ -1,0 +1,73 @@
+{
+  "id": "ocean-abyss",
+  "name": "Ocean Abyss",
+  "description": "Deep teal and indigo, from shallow water to the deep.",
+  "version": "1.1.0",
+  "tokenContract": 1,
+  "tier": "stable",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v2 from the reviewed prototype's ocean-abyss anchors. The anchors stay as approved. adjustments lists the 10 roles it moves from anchor-v1."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [],
+  "derivation": "anchor-v2",
+  "anchors": {
+    "light": {
+      "canvas": "#eef8fb",
+      "text": "#102d3a",
+      "accent": "#007d91",
+      "secondary": "#4c5fa8"
+    },
+    "dark": {
+      "canvas": "#071b24",
+      "text": "#e8f8fb",
+      "accent": "#42c6d7",
+      "secondary": "#8497ef"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#435c66", "#3d5661"],
+      "text-muted": ["#4f6670", "#49606b"],
+      "border-strong": ["#6d828b", "#667b85"],
+      "accent-text": ["#036d80", "#056578"],
+      "data-categorical-6": ["#435c66", "#3d5661"]
+    },
+    "dark": {
+      "text-secondary": ["#a9babf", "#adbec3"],
+      "text-muted": ["#9cadb2", "#a1b2b6"],
+      "border-strong": ["#788a8f", "#819398"],
+      "data-categorical-6": ["#a9babf", "#adbec3"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#004b57", "#004752"]
+    }
+  },
+  "swatches": ["#eef8fb", "#102d3a", "#007d91", "#4c5fa8"]
+}

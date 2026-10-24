@@ -17,3 +17,7 @@ packages/variant-contract/fixtures/
 packages/appearance/test/fixtures/lint-*/styles.css
 # pnpm-lock.yaml excerpts, byte for byte, for ci/lib/lockfile-drift.mjs's tests
 ci/fixtures/lockfile-drift/
+# #20's seed: the approved review lab's catalog, copied byte for byte
+scripts/catalog/seed/
+# #20's held-pack gate records, which pnpm catalog:held writes and check:appearance compares byte for byte
+packages/*/held/*/gate.json

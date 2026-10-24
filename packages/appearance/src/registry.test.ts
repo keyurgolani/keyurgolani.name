@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  anchorV1,
+  anchorV2,
   axisFallback,
   createAppearanceRegistry,
   exclusionOf,
@@ -48,8 +48,9 @@ test("each scheme's base sets are derived once, and a generator scheme has both 
   const registry = testRegistry();
   const warm = findPack(registry, 'colorScheme', 'warm-parchment')!;
   assert.deepEqual(warm.modes, ['light', 'dark']);
-  assert.deepEqual(warm.sets.light, anchorV1(WARM_PARCHMENT.anchors!.light!, 'light'));
-  assert.deepEqual(warm.sets.dark, anchorV1(WARM_PARCHMENT.anchors!.dark!, 'dark'));
+  // warm-parchment's derivation is anchor-v2 (#20 PR 2c).
+  assert.deepEqual(warm.sets.light, anchorV2(WARM_PARCHMENT.anchors!.light!, 'light'));
+  assert.deepEqual(warm.sets.dark, anchorV2(WARM_PARCHMENT.anchors!.dark!, 'dark'));
   const dark = findPack(registry, 'colorScheme', 'fixture-dark-only')!;
   assert.deepEqual(dark.modes, ['dark']);
   assert.equal(dark.sets.light, undefined);

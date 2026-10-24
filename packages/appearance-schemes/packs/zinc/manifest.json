@@ -1,0 +1,73 @@
+{
+  "id": "zinc",
+  "name": "Zinc",
+  "description": "Tailwind CSS's zinc neutrals with a zinc-600 accent and a violet secondary.",
+  "version": "1.1.0",
+  "tokenContract": 1,
+  "tier": "extended",
+  "provenance": {
+    "source": {
+      "name": "Tailwind CSS v3.4.17 colors",
+      "url": "https://github.com/tailwindlabs/tailwindcss/blob/v3.4.17/src/public/colors.js"
+    },
+    "license": "MIT",
+    "attribution": "Tailwind Labs, Inc., Tailwind CSS v3.4.17's zinc and violet color scales, under the MIT License.",
+    "copyright": "Copyright (c) Tailwind Labs, Inc.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani, from Tailwind CSS v3.4.17",
+    "derivation": "anchor-v2 from Tailwind CSS v3.4.17 zinc-50, zinc-900, zinc-600, and violet-600 (light) and zinc-950, zinc-50, zinc-400, and violet-400 (dark). zinc-950 is in Tailwind CSS from v3.3.0. The anchors stay as credited. adjustments lists the 7 roles it moves from anchor-v1."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [],
+  "derivation": "anchor-v2",
+  "anchors": {
+    "light": {
+      "canvas": "#fafafa",
+      "text": "#18181b",
+      "accent": "#52525b",
+      "secondary": "#7c3aed"
+    },
+    "dark": {
+      "canvas": "#09090b",
+      "text": "#fafafa",
+      "accent": "#a1a1aa",
+      "secondary": "#a78bfa"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#575759", "#535355"],
+      "text-muted": ["#636365", "#5d5d5f"],
+      "border-strong": ["#7f7f81", "#777779"],
+      "data-categorical-6": ["#575759", "#4e4e50"]
+    },
+    "dark": {
+      "border-strong": ["#7d7d7e", "#828283"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#424249", "#3f3f46"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#aaaab3", "#b3b3bb"]
+    }
+  },
+  "swatches": ["#fafafa", "#18181b", "#52525b", "#7c3aed"]
+}
