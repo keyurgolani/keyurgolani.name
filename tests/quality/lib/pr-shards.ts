@@ -25,13 +25,18 @@
 // moves tests between shards and never adds or drops one.
 //
 // The weights: a skipped test none; a cell test that runs the default row's
-// reload conditions (cells.ts) its viewport and row's mean; any other cell
-// test `plain`; a perf test `perf`; a harness spec its own total. They were
-// measured from the list reporter's durations in #84's and #89's quality-pr
-// job logs (`gh api .../actions/jobs/<id>/logs`), each the mean of its tests.
+// reload conditions (cells.ts) its viewport and row's mean, from `pack` when
+// the cell's tuple names a pack other than the platform default on any axis
+// (a tier sentinel, or since #20 a change-directed cell on any pack axis),
+// else from `conditions`; any other cell test `plain`; a perf test `perf`;
+// a harness spec its own total. They were measured from the list reporter's
+// durations in quality-pr job logs (`gh api .../actions/jobs/<id>/logs`),
+// each the mean of its tests: `pack` from the tier sentinels' nine cells in
+// three runs (#20), the rest from #84's and #89's.
 
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { PACK_AXES, PLATFORM_DEFAULTS } from '../../../packages/appearance/src/index';
 import { assign, parseShard } from '../../../ci/shards.mjs';
 import type { Plan } from '../cells';
 import type { Engine } from './matrix';
@@ -69,7 +74,13 @@ export interface ShardDurations {
   readonly harness: Readonly<Record<string, number>>;
   /** A cell test with the reload conditions, by `<viewport> <row>`. */
   readonly conditions: Readonly<Record<string, number>>;
+  /** The same on a cell whose tuple names a pack other than the platform default (#20). */
+  readonly pack: Readonly<Record<string, number>>;
 }
+
+/** Whether a cell's tuple names a pack other than the platform default on any axis. */
+export const onPack = (tuple: Readonly<Record<string, string>>) =>
+  PACK_AXES.some((axis) => tuple[axis] !== PLATFORM_DEFAULTS[axis]);
 
 export const DURATIONS_FILE = new URL('../shard-durations.json', import.meta.url);
 
@@ -126,7 +137,12 @@ export function planGroups(
           return durations.skipped;
         }
         if (!test.conditions) return durations.plain;
-        return durations.conditions[`${test.viewport.id} ${test.row.id}`] ?? fallback;
+        const key = `${test.viewport.id} ${test.row.id}`;
+        return (
+          (onPack(test.cell.tuple) ? durations.pack[key] : undefined) ??
+          durations.conditions[key] ??
+          fallback
+        );
       });
       groups.push({
         project: serverProject(engine, id),

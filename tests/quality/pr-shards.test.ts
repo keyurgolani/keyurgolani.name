@@ -16,6 +16,7 @@ import {
   harnessProject,
   loadDurations,
   MAX_SHARDS,
+  onPack,
   PERF_SPEC,
   PERF_TAG,
   pickShardCount,
@@ -383,6 +384,9 @@ test('the weights file has every row a conditions test can plan, and a perf, har
       if (Object.values(each.engineSkips).length > 0) continue;
       const key = `${each.viewport.id} ${each.row.id}`;
       assert.ok(durations.conditions[key]! > 0, `${key} has a measured weight`);
+      if (onPack(each.cell.tuple)) {
+        assert.ok(durations.pack[key]! > 0, `${key} has a measured weight on a pack cell`);
+      }
     }
   }
 });
