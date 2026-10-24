@@ -66,6 +66,13 @@ export function demoPagePath(pathname) {
 export const PREVIEW_CSP =
   /^default-src 'none'; script-src 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'nonce-\1'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors (https?:\/\/[a-z0-9.-]+(?::\d+)?)$/;
 
+/**
+ * Demo Studio's local frame's CSP (#9): the preview's, with blob: images and
+ * media from the visitor's own files, and still no connection to any host.
+ */
+export const LOCAL_PREVIEW_CSP =
+  /^default-src 'none'; script-src 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'nonce-\1'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors (https?:\/\/[a-z0-9.-]+(?::\d+)?)$/;
+
 /** A response's nonce, as a policy, an attribute, a Link header, or Next's payload carries it. */
 const NONCE = /('nonce-|nonce=\\?"|nonce=|\\?"nonce\\?":\\?")([A-Za-z0-9+/]{22}==)/g;
 
@@ -104,6 +111,14 @@ function decoded(/** @type {string} */ pathname) {
  */
 export const isPreviewPath = (pathname) =>
   /^\/preview(?:-assets)?(?:\/|$)/i.test(decoded(pathname));
+
+/**
+ * Whether `pathname` is Demo Studio's local frame, /preview/local exactly,
+ * read percent-decoded as proxy.ts reads it (#9).
+ *
+ * @param {string} pathname
+ */
+export const isLocalPreviewPath = (pathname) => decoded(pathname) === '/preview/local';
 
 /**
  * Whether `pathname` is under /_next/static or /_portfolio, in any case, as
@@ -175,9 +190,12 @@ export function headerProblems(
     for (const [name, value] of Object.entries(PREVIEW_HEADERS)) expect(name, value);
     expect('cross-origin-resource-policy', undefined);
     const csp = headers['content-security-policy'];
-    const policy = csp === undefined ? null : PREVIEW_CSP.exec(csp);
+    // Under demo, the local frame gets its own policy, and only it does.
+    const local = demo && isLocalPreviewPath(pathname);
+    const policy = csp === undefined ? null : (local ? LOCAL_PREVIEW_CSP : PREVIEW_CSP).exec(csp);
     if (!policy) {
-      problems.push(`content-security-policy is ${csp}, not the preview's nonce CSP`);
+      const which = local ? "the local frame's" : "the preview's";
+      problems.push(`content-security-policy is ${csp}, not ${which} nonce CSP`);
     } else if (origin !== undefined && policy[2] !== origin) {
       problems.push(`frame-ancestors is ${policy[2]}, not ${origin}`);
     }
