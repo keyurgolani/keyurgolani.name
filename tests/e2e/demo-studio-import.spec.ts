@@ -377,3 +377,51 @@ test(
     expect(await demoKeys(page)).toEqual([]);
   },
 );
+
+test(
+  "with the worker's script blocked, or failing as it loads, the import says worker_unavailable as text, keeps nothing, and no console line carries the input (risk 8)",
+  { annotation: ANNOTATION },
+  async ({ page }) => {
+    const lines: string[] = [];
+    // A network line's text names the error; its location names the script.
+    page.on('console', (message) => lines.push(`${message.text()} ${message.location().url}`));
+    await openContent(page);
+    // Every script the page has loaded so far; the worker's is none of them.
+    const loaded = new Set(
+      await page.evaluate(() =>
+        performance.getEntriesByType('resource').map((entry) => entry.name.split('#')[0]!),
+      ),
+    );
+    const fixture = H.HOSTILE_FIXTURES.find(({ expect: outcome }) => outcome === 'imported')!;
+    const texts = fixture.files.map(({ bytes }) => new TextDecoder().decode(bytes));
+    for (const how of ['blocked', 'fails'] as const) {
+      await page.unroute('**/_next/static/**');
+      await page.route('**/_next/static/**', (route) => {
+        if (loaded.has(route.request().url())) return route.fallback();
+        return how === 'blocked'
+          ? route.abort('blockedbyclient')
+          : route.fulfill({
+              status: 200,
+              contentType: 'text/javascript',
+              body: 'throw new Error("the worker failed as it loaded");',
+            });
+      });
+      lines.length = 0;
+      expect(await pick(page, fixture.files), how).toBe('refused');
+      await expect(page.locator('.studio-import__report [role="status"]')).toHaveText(
+        "The import couldn't start in this browser, so nothing was read.",
+      );
+      // The frame is still the sample, and the tab keeps nothing.
+      await expect(page.locator('iframe')).toHaveAttribute('src', /^\/sample/);
+      expect(await demoKeys(page), how).toEqual([]);
+      // What the browser says of a script it couldn't load names the script, never the input.
+      for (const line of lines) {
+        expect(line.includes(H.CANARY), `${how}: ${line}`).toBe(false);
+        for (const text of texts) {
+          expect(line.includes(text.slice(0, 40)), `${how}: ${line}`).toBe(false);
+        }
+        expect(line, how).toMatch(/\/_next\/static\//);
+      }
+    }
+  },
+);
