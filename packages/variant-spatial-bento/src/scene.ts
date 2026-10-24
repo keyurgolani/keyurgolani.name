@@ -55,16 +55,18 @@ export function seeded(seed: number): () => number {
 
 /**
  * The scene for `seed`: the planes, and `count` particles placed once, in
- * one pass, into the array `allocate` makes. The page takes the defaults;
- * a test passes a count and an array that counts what touches it, to hold
- * the work to linear in the particles.
+ * one pass, into the array `allocate` makes, from the generator `generate`
+ * makes for the seed. The page takes the defaults; a test passes a count, an
+ * array that counts what touches it, and a generator that counts its draws,
+ * to hold the work to linear in the particles.
  */
 export function buildScene(
   seed: number,
   count: number = PARTICLE_COUNT,
   allocate: (length: number) => Float32Array = (length) => new Float32Array(length),
+  generate: (seed: number) => () => number = seeded,
 ): Scene {
-  const next = seeded(seed);
+  const next = generate(seed);
   const particles = allocate(count * 3);
   for (let index = 0; index < count; index++) {
     for (let axis = 0; axis < 3; axis++) {

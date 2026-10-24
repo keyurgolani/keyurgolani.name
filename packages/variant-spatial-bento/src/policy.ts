@@ -88,6 +88,25 @@ export interface StageDecision {
   readonly reason: StageReason;
 }
 
+/**
+ * Whether the exit reads pressed: only while the stage is mounted, running or
+ * paused after it started. Offered while it waits for #7's lifecycle or for
+ * the runtime, nothing is drawn, so the exit says the stage isn't on.
+ */
+export function exitPressed(decision: StageDecision): boolean {
+  return decision.mount;
+}
+
+/**
+ * Whether the visitor has left the stage once they press the exit, as it
+ * read before the press: a pressed exit leaves the stage, and an unpressed
+ * one asks for it, so a press while it waits for the lifecycle or the
+ * runtime never opts the visitor out for good.
+ */
+export function exitedAfterPress(decision: StageDecision): boolean {
+  return exitPressed(decision);
+}
+
 /** The least memory and the fewest cores a stage runs on, where the browser says. */
 export const MIN_DEVICE_MEMORY = 4;
 export const MIN_CORES = 4;

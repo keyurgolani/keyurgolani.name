@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { asyncGroups, buildChunks, enhancementEntries } from './check-budgets.mjs';
+import { asyncGroups, buildChunks, enhancementEntries, staticChunks } from './check-budgets.mjs';
 import { OVER_BUDGET_METRICS, overBudgetProblems } from './budgets.mjs';
 import {
   BUDGET_KINDS,
@@ -110,7 +110,7 @@ function traceCase(composition, fields = {}) {
 }
 
 /** checkBudgets over `units` and `cases`, with every stylesheet a clean one unless `css` says. */
-function check(units, cases, { css = {}, chunks = [], entries = {} } = {}) {
+function check(units, cases, { css = {}, chunks = [], entries = {}, statics = {} } = {}) {
   return checkBudgets({
     units,
     platform: { url: '/_portfolio/pack/_platform.0123456789ab.css' },
@@ -118,6 +118,7 @@ function check(units, cases, { css = {}, chunks = [], entries = {} } = {}) {
     trace: { cases },
     chunks,
     entries: (unit) => entries[unit.id] ?? {},
+    statics: (unit) => (unit.id in statics ? statics[unit.id] : new Set()),
     stylesheet: (url) => css[url] ?? '[data-variant] { color: red; }',
   });
 }
@@ -915,6 +916,154 @@ test("the check finds an enhancement's chunk in the build through its source map
   }).checked.filter((row) => row.metric === 'enhancement');
   assert.equal(glint.enhancement, 'glint');
   assert.ok(glint.actual > 0);
+});
+
+test("a chunk holding an enhancement that no loader's group names is a record: a changed loader fails closed", (t) => {
+  const web = scratch(t);
+  const staticDir = path.join(web, '.next', 'static');
+  mkdirSync(path.join(staticDir, 'chunks'), { recursive: true });
+  writeFileSync(
+    path.join(staticDir, 'chunks', 'glint.js'),
+    'console.log("glint");\n//# sourceMappingURL=glint.js.map',
+  );
+  writeFileSync(
+    path.join(staticDir, 'chunks', 'glint.js.map'),
+    JSON.stringify({
+      version: 3,
+      sources: ['turbopack:///[project]/node_modules/@acme/medium/src/enhancements/glint.tsx'],
+      mappings: 'AAAA',
+    }),
+  );
+  // The loader, in a spelling asyncGroups() doesn't read.
+  writeFileSync(
+    path.join(staticDir, 'chunks', 'route.js'),
+    'e.v(t=>loadAll(["static/chunks/glint.js","static/chunks/three.js"]))',
+  );
+  const chunks = buildChunks(['./src/enhancements/glint.tsx'], staticDir);
+  assert.equal(chunks.find((one) => one.path.endsWith('/glint.js'))?.ungrouped, true);
+  const medium = variant('medium', {
+    enhancements: [{ id: 'glint', export: './enhancements/glint', requires: [] }],
+  });
+  const { records } = check([medium], [traceCase('medium')], {
+    chunks,
+    entries: { medium: { glint: './src/enhancements/glint.tsx' } },
+  });
+  const ungrouped = records.filter((record) => /no async group/.test(record.test));
+  assert.equal(ungrouped.length, 1);
+  assert.equal(ungrouped[0].asset, '/_next/static/chunks/glint.js');
+  assert.match(ungrouped[0].test, /variant medium's enhancement glint/);
+  // A loader it reads names the group, and there's no such record.
+  writeFileSync(
+    path.join(staticDir, 'chunks', 'route.js'),
+    'e.v(t=>Promise.all(["static/chunks/glint.js"].map(t=>e.l(t))))',
+  );
+  const grouped = buildChunks(['./src/enhancements/glint.tsx'], staticDir);
+  assert.equal(grouped[0].ungrouped, undefined);
+  assert.ok(
+    !check([medium], [traceCase('medium')], {
+      chunks: grouped,
+      entries: { medium: { glint: './src/enhancements/glint.tsx' } },
+    }).records.some((record) => /no async group/.test(record.test)),
+  );
+});
+
+test("a chunk an enhancement's group shares with the page's static chunks counts in the route's js, once, and not in the enhancement", () => {
+  const medium = variant('medium', {
+    performanceTier: 'medium',
+    enhancements: [{ id: 'glint', export: './enhancements/glint', requires: [] }],
+  });
+  const glint = {
+    path: '/_next/static/chunks/glint.js',
+    loadedWith: ['/_next/static/chunks/three.js', '/_next/static/chunks/main.js'],
+    modules: [
+      {
+        source: 'packages/acme/medium/src/enhancements/glint.tsx',
+        package: '@acme/medium',
+        gzipBytes: 5000,
+      },
+    ],
+  };
+  const three = {
+    path: '/_next/static/chunks/three.js',
+    modules: [
+      { source: 'node_modules/three/three.module.js', package: 'three', gzipBytes: 150000 },
+    ],
+  };
+  // The page's own chunk, which its HTML loads, and the group lists too.
+  const main = {
+    path: '/_next/static/chunks/main.js',
+    modules: [
+      { source: 'packages/acme/medium/src/index.tsx', package: '@acme/medium', gzipBytes: 2000 },
+    ],
+  };
+  const cases = [
+    traceCase('medium', {
+      attribution: {
+        chunks: [chunk('main', { '@acme/medium': 2000 }), chunk('glint', { '@acme/medium': 5000 })],
+        withoutMap: [],
+      },
+    }),
+  ];
+  const run = (statics) =>
+    check([medium], cases, {
+      chunks: [glint, three, main],
+      entries: { medium: { glint: './src/enhancements/glint.tsx' } },
+      statics: { medium: statics },
+    }).checked;
+  const shared = run(new Set(['/_next/static/chunks/main.js']));
+  // The page's own 2000 stay in its js, and the enhancement is its entry and three.js alone.
+  assert.equal(shared.find((row) => row.metric === 'js').actual, 2000);
+  assert.equal(shared.find((row) => row.metric === 'enhancement').actual, 155000);
+  // Unknown statics, as before: the group's main.js is the enhancement's, and drops out of js.
+  const none = run(new Set());
+  assert.equal(none.find((row) => row.metric === 'js').actual, 0);
+  assert.equal(none.find((row) => row.metric === 'enhancement').actual, 157000);
+  // The build without a manifest for the page is a record of its own.
+  const { records } = check([medium], cases, {
+    chunks: [glint, three, main],
+    entries: { medium: { glint: './src/enhancements/glint.tsx' } },
+    statics: { medium: null },
+  });
+  assert.ok(records.some((record) => /names no client reference manifest/.test(record.test)));
+});
+
+test("a variant's static chunks are its experience segment's entries in the build's client reference manifest, and the root's", (t) => {
+  const web = scratch(t);
+  const segment = path.join(
+    web,
+    '.next',
+    'server',
+    'app',
+    '(site)',
+    '_experience',
+    'medium',
+    '[[...route]]',
+  );
+  mkdirSync(segment, { recursive: true });
+  const manifest = {
+    moduleLoading: { prefix: '' },
+    entryJSFiles: {
+      '[project]/apps/web/src/app/(site)/layout': ['static/chunks/layout.js'],
+      '[project]/apps/web/src/app/(site)/%5Fexperience/medium/[[...route]]/page': [
+        'static/chunks/layout.js',
+        'static/chunks/page.js',
+      ],
+    },
+  };
+  writeFileSync(
+    path.join(segment, 'page_client-reference-manifest.js'),
+    `globalThis.__RSC_MANIFEST = globalThis.__RSC_MANIFEST || {};\nglobalThis.__RSC_MANIFEST["/(site)/_experience/medium/[[...route]]/page"] = ${JSON.stringify(manifest)};`,
+  );
+  writeFileSync(
+    path.join(web, '.next', 'build-manifest.json'),
+    JSON.stringify({ rootMainFiles: ['static/chunks/turbopack.js'], polyfillFiles: [] }),
+  );
+  assert.deepEqual([...staticChunks('medium', web)].sort(), [
+    '/_next/static/chunks/layout.js',
+    '/_next/static/chunks/page.js',
+    '/_next/static/chunks/turbopack.js',
+  ]);
+  assert.equal(staticChunks('other', web), null);
 });
 
 test("a variant's catalog stills count toward its image budget, so stills alone can break it (#6)", () => {
