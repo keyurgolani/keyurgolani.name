@@ -30,7 +30,10 @@ export interface StorageLike {
 export interface DemoStore {
   read(key: string): string | null;
   write(key: string, value: string): void;
-  /** False once any write has stayed in memory: a reload loses it. */
+  /**
+   * False while a write sits in memory because its own store refused it, or
+   * when the selection's store can't be reached at all: a reload loses it.
+   */
   persistent(): boolean;
   /** Deletes every `portfolio-demo:` key from both stores, and from memory. */
   clearAll(): void;
@@ -58,8 +61,8 @@ const placeOf = (key: string): 'local' | 'session' => (key === WORKING_KEY ? 'se
  */
 export function demoStore(local: StorageLike | null, session: StorageLike | null): DemoStore {
   const stores = { local, session };
+  // What a write couldn't put in its own store, which a reload loses.
   const memory = new Map<string, string>();
-  let durable = local !== null && session !== null;
   const own = (key: string) => {
     if (!key.startsWith(DEMO_PREFIX))
       throw new Error(`Demo Studio writes only ${DEMO_PREFIX} keys.`);
@@ -86,10 +89,11 @@ export function demoStore(local: StorageLike | null, session: StorageLike | null
           // Full, or refused: the value stays in memory below.
         }
       }
-      durable = false;
       memory.set(key, value);
     },
-    persistent: () => durable,
+    // By the store each write used: true while every key written sits in its own store, and the
+    // selection's store can be reached, so blocking only sessionStorage leaves the selection kept.
+    persistent: () => local !== null && memory.size === 0,
     clearAll() {
       memory.clear();
       for (const store of [local, session]) {
