@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { readPair } from '@portfolio/schema/node';
 import type { VariantRegistry } from '@portfolio/variant-contract';
 import { REGISTRY } from '~/lib/variants';
-import { BUNDLED_SAMPLE_NAMES } from '../lib/sample-identity';
+import { bundledSample } from '../lib/sample-identity';
 import type { LiveRevision, PublicationUnit } from './catalog-port';
 import {
   compose,
@@ -119,7 +119,10 @@ test('demo builds the bundled sample and loads no owner module', async (t) => {
   assert.ok(composed.ok, JSON.stringify(composed.issues));
   assert.ok(Object.isFrozen(composed.state));
   const live = await composed.state.catalog.getLive();
-  assert.ok(BUNDLED_SAMPLE_NAMES.includes(live.unit!.portfolio.identity.name));
+  assert.equal(
+    live.unit!.portfolio.identity.name,
+    bundledSample(readFileSync(EXAMPLES.portfolio, 'utf8'), 'portfolio.example.yml')?.name,
+  );
   assert.match(live.revisionId ?? '', /^sample-/);
   assert.deepEqual(loadedOwnerModules(), []);
   assert.equal(composed.state.pages, undefined);
@@ -336,11 +339,11 @@ test('the reader records the slugs /work serves in the same step as the composit
     t,
     { PORTFOLIO_PROFILE: 'read-only' },
     {
-      // read-only refuses the bundled sample's identity.
-      'portfolio.yml': readFileSync(EXAMPLES.portfolio, 'utf8').replace(
-        '\n  name: Anamika Devi\n',
-        '\n  name: Rowan Test\n',
-      ),
+      // read-only refuses the bundled sample's name, title, and share image.
+      'portfolio.yml': readFileSync(EXAMPLES.portfolio, 'utf8')
+        .replace('\n  name: Anamika Devi\n', '\n  name: Rowan Test\n')
+        .replace('\n  title: Anamika Devi — Portfolio\n', '\n  title: Rowan Test\n')
+        .replace('\n    source: og/anamika.png\n', '\n    source: og/rowan.png\n'),
       'site.yml': readFileSync(EXAMPLES.site, 'utf8'),
     },
   );

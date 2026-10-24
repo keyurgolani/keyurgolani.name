@@ -10,7 +10,7 @@ import { acmePortfolioPhotography } from '../../../../packages/schema/src/__fixt
 import { REGISTRY } from '~/lib/variants';
 import { appearanceCatalog } from '../lib/appearance-checks';
 import { APPEARANCE_REGISTRY } from '../lib/appearance-registry';
-import { BUNDLED_SAMPLE_NAMES } from '../lib/sample-identity';
+import { bundledSample } from '../lib/sample-identity';
 import { openSampleCatalog } from './catalog-sample';
 
 // The sample adapter for `demo` (#1, item 16): the bundled pair, read once,
@@ -61,7 +61,10 @@ test('it serves the bundled pair, frozen', async () => {
   assert.ok(opened.ok, JSON.stringify(opened.issues));
   assert.deepEqual(opened.issues, []);
   const live = await opened.reader.getLive();
-  assert.ok(BUNDLED_SAMPLE_NAMES.includes(live.unit!.portfolio.identity.name));
+  assert.equal(
+    live.unit!.portfolio.identity.name,
+    bundledSample(readFileSync(EXAMPLES.portfolio, 'utf8'), 'portfolio.example.yml')?.name,
+  );
   assert.equal(live.unit!.site.appearance.variant, 'editorial-evidence');
   assert.match(live.revisionId ?? '', /^sample-[0-9a-f]{12}$/);
   // The port's shape (#3): always live, with its unit's hash.
