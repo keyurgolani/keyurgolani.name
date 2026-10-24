@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
@@ -277,11 +277,21 @@ test('a Research record reaching the image fails: its file, or its id as a key i
 
 test("the workspace's Research records are read from each pack package's research/", () => {
   const records = researchRecords();
+  // The fixture record, and the catalog's 23 Research schemes (#20, PR 2).
+  const root = path.resolve(import.meta.dirname, '..');
+  const catalog = readdirSync(path.join(root, 'packages/appearance-schemes/research'))
+    .sort()
+    .map((file) => [file.replace(/\.json$/, ''), `packages/appearance-schemes/research/${file}`]);
+  assert.equal(catalog.length, 23);
+  const byFile = (a, b) => (a[1] < b[1] ? -1 : 1);
   assert.deepEqual(
-    records.map(({ id, file }) => [id, file]),
-    [['fixture-research', 'packages/appearance-fixtures-schemes/research/fixture-research.json']],
+    records.map(({ id, file }) => [id, file]).sort(byFile),
+    [
+      ['fixture-research', 'packages/appearance-fixtures-schemes/research/fixture-research.json'],
+      ...catalog,
+    ].sort(byFile),
   );
-  assert.ok(records[0].reason);
+  for (const record of records) assert.ok(record.reason, `${record.id} says why it doesn't ship`);
 });
 
 test("a pack package's held/<id>/ packs are read as records, each with its gate's reason", () => {

@@ -12,6 +12,7 @@ import { changedFiles, mapChanges, METADATA_KEYS, readChanges, renderedKeys } fr
 import { PREFERENCE_ROWS, VIEWPORTS } from './lib/matrix';
 import { loadRegistrations, type Registrations } from './lib/registration';
 import { changeDiagnostic, changeFields } from './lib/records';
+import { fallbackPacks } from './plan-fixtures';
 
 // The owner's [37] change-directed rule (#11, 11-4): a changed variant runs
 // against every stable design language, a changed language against every
@@ -295,7 +296,14 @@ test('a changed scheme or profile maps to its pack, and a Research record to not
   assert.deepEqual(map('packages/appearance-schemes/packs/warm-parchment/manifest.json'), [
     'colorScheme warm-parchment',
   ]);
-  assert.deepEqual(map('packages/appearance-typography/package.json'), ['typography humanist-ui']);
+  // A package file maps to every pack the package holds.
+  assert.deepEqual(
+    map('packages/appearance-typography/package.json'),
+    (meta.PACKS ?? [])
+      .filter((pack) => pack.kind === 'typography' && !pack.fixture)
+      .map((pack) => `typography ${pack.manifest.id}`)
+      .sort(),
+  );
   assert.deepEqual(map('packages/appearance-schemes/research/nord.json'), []);
   // Variants first, then the pack axes in axis order.
   assert.deepEqual(
@@ -325,7 +333,7 @@ const registeredVariants = (meta: BuildMeta) =>
     .sort();
 
 test('a PR that changes a scheme runs it against every variant, and a changed variant meets only the stable languages (#20)', () => {
-  const meta = wider(checkoutMeta());
+  const meta = wider(fallbackPacks(checkoutMeta()));
   const plan = (changes: Parameters<typeof planCells>[0]['changes']) =>
     planCells({ meta, registrations, mode: 'pr', changes });
   const scheme = plan([{ axis: 'colorScheme', id: 'warm-parchment', paths: [] }]);
@@ -354,7 +362,7 @@ test('a PR that changes a scheme runs it against every variant, and a changed va
 });
 
 test('a PR that changes a variant runs it against every stable language, and one that changes a language against every variant', () => {
-  const meta = wider(checkoutMeta());
+  const meta = wider(fallbackPacks(checkoutMeta()));
   const plan = (changes: Parameters<typeof planCells>[0]['changes']) =>
     planCells({ meta, registrations, mode: 'pr', changes });
   const none = plan([]);
@@ -413,7 +421,7 @@ test('a PR that changes a variant runs it against every stable language, and one
 });
 
 test('the full plan holds every pair a PR could direct', () => {
-  const meta = wider(checkoutMeta());
+  const meta = wider(fallbackPacks(checkoutMeta()));
   const full = planCells({ meta, registrations, mode: 'full' });
   const keys = new Set(full.cells.map((cell) => tupleKey(cell.tuple)));
   for (const changes of [
@@ -431,7 +439,7 @@ test('the full plan holds every pair a PR could direct', () => {
 });
 
 test("a change-directed cell's failures name the axis, and its diagnostic the tokens each page resolved", () => {
-  const meta = wider(checkoutMeta());
+  const meta = wider(fallbackPacks(checkoutMeta()));
   const plan = planCells({
     meta,
     registrations,

@@ -9,7 +9,7 @@ import { isReason } from './lib/checks';
 import { requiredChecks } from './lib/checks';
 import { PREFERENCE_ROWS, VIEWPORTS } from './lib/matrix';
 import { loadRegistrations, type Registrations } from './lib/registration';
-import { checkoutMeta, clone, TIERS, withTierPacks } from './plan-fixtures';
+import { checkoutMeta, clone, fallbackPacks, TIERS, withTierPacks } from './plan-fixtures';
 
 let registrations: Registrations;
 test.before(async () => {
@@ -140,7 +140,7 @@ test('a PR run takes the reload conditions on the first default and the tier sen
 });
 
 test("a PR run takes the reload conditions on every change-directed cell, where a changed variant's content and enhancement regressions show", () => {
-  const meta = withTierPacks(checkoutMeta());
+  const meta = withTierPacks(fallbackPacks(checkoutMeta()));
   const language = meta.PACKS!.find((pack) => pack.kind === 'design-language' && !pack.fixture)!;
   // A second shipping stable language, so the changed variant meets one that isn't the first default's.
   const wider: BuildMeta = {
