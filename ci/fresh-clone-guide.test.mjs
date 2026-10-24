@@ -125,7 +125,7 @@ test('the run covers the guide the scope asks for: refusal and start under read-
   // In containers, owner and read-only the same way, and demo on the sample.
   for (const [before, after] of [
     ['compose-read-only-refuses-sample', 'compose-read-only-starts'],
-    ['compose-owner-refuses-sample', 'compose-owner-accepts-identity'],
+    ['compose-owner-refuses-sample', 'compose-owner-ready'],
   ]) {
     assert.ok(ids.indexOf(before) < ids.indexOf(after), `${before} before ${after}`);
     const between = STEPS.slice(ids.indexOf(before), ids.indexOf(after)).map((s) => s.kind);
@@ -134,12 +134,8 @@ test('the run covers the guide the scope asks for: refusal and start under read-
       `the identity step comes between ${before} and ${after}`,
     );
   }
-  // Past the identity, owner refuses for its first-start import of the
-  // sample's unregistered variant, and for nothing else.
-  assert.deepEqual(STEPS.find((s) => s.id === 'compose-owner-accepts-identity').fatal, [
-    'PORTFOLIO_DATA_DIR:store_import_failed',
-    'PORTFOLIO_SOURCE_DIR:variant.unavailable',
-  ]);
+  // Past the identity, owner imports the sample at its first start and is ready.
+  assert.equal(STEPS.find((s) => s.id === 'compose-owner-ready').ready, true);
   for (const id of ['compose-read-only-refuses-sample', 'compose-owner-refuses-sample']) {
     assert.deepEqual(
       STEPS.find((s) => s.id === id).fatal,
@@ -183,14 +179,23 @@ test('the scripted hash step is the guide command with -i, --stdin, and the imag
   );
 });
 
-test("owner's ready row is pending until the sample pair imports, and fails the run after", () => {
-  assert.deepEqual(
-    PENDING.map((row) => row.id),
-    ['compose-owner-ready'],
-  );
-  for (const row of PENDING) assert.ok(LANDED[row.waitsOn], row.id);
-  assert.deepEqual(pendingProblems(PENDING, { sampleImports: false }), []);
-  assert.equal(pendingProblems(PENDING, { sampleImports: true }).length, 1);
+test("owner's ready step is a real one now: nothing waits, and owner is ready after the identity step", () => {
+  assert.deepEqual(PENDING, []);
+  const ready = STEPS.find((s) => s.id === 'compose-owner-ready');
+  assert.equal(ready.kind, 'compose-serve');
+  assert.equal(ready.ready, true);
+  assert.deepEqual(ready.identity, {
+    profile: 'owner',
+    origin: 'https://jane.name',
+    name: FIXTURE_NAME,
+  });
+  const ids = STEPS.map((s) => s.id);
+  assert.ok(ids.indexOf('owner-identity') < ids.indexOf('compose-owner-ready'));
+  // The machinery stays for the next row that waits.
+  const rows = [{ id: 'a-row', waitsOn: 'default-composition' }];
+  for (const row of rows) assert.ok(LANDED[row.waitsOn], row.id);
+  assert.deepEqual(pendingProblems(rows, { sampleImports: false }), []);
+  assert.equal(pendingProblems(rows, { sampleImports: true }).length, 1);
 });
 
 test('a response is checked for its status and what it must and must not show', () => {
@@ -355,7 +360,7 @@ test('the final verdict fails on a planted canary, a lost owner secret, and a pe
   const secrets = { runCanary: 'canary-fresh-clone-0123', password: 'pw-0123', hash: '$scrypt$x' };
   const required = ['runCanary', 'password', 'hash'];
   const clean = {
-    pendingRows: PENDING,
+    pendingRows: [{ id: 'a-row', waitsOn: 'default-composition' }],
     landedState: { sampleImports: false },
     reports,
     secrets,
