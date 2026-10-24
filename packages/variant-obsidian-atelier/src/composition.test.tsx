@@ -215,7 +215,7 @@ test('Unfold the case: the premise and the artifact show, and the rest of the ca
   // Closed on the server, named by its summary, with no heading or button in the summary.
   assert.match(
     room,
-    /<details class="oa-room__case" data-ui-slot="disclosure"><summary data-ui-slot="disclosure.summary">Unfold the case<\/summary>/,
+    /<details class="oa-room__case" data-ui-slot="disclosure"><summary data-ui-slot="disclosure.summary">Unfold the case<span class="oa-visually-hidden">: Project name<\/span><\/summary>/,
   );
   // The premise and the artifact come before it, outside it.
   assert.ok(room.indexOf('class="oa-room__title"') < details);
@@ -254,6 +254,85 @@ test('a room with nothing more to unfold has no empty disclosure', () => {
   assert.equal(room.markup.match(/data-artifact="none"/)?.length, 1);
   // A text room reserves no frame for an artifact it doesn't have.
   assert.doesNotMatch(room.markup, /oa-room__artifact|<figure/);
+});
+
+test('each disclosure is named for the work it unfolds, and every room in every fixture says which', () => {
+  for (const { name } of CONTRACT_FIXTURES) {
+    const input = fixtureInput(name);
+    for (const room of rooms(html(input))) {
+      const summary = /<summary data-ui-slot="disclosure.summary">([\s\S]*?)<\/summary>/.exec(
+        room.markup,
+      );
+      if (!summary) continue;
+      const work = input.portfolio.works.find(({ id }) => id === room.id)!;
+      assert.equal(text(summary[1]!), `Unfold the case: ${work.title}`, `${name} ${room.id}`);
+    }
+  }
+});
+
+test('a decorative cover is never the artifact, with or without a rendition, and leaves no empty frame', () => {
+  const base = portfolioInput({
+    schemaVersion: 3,
+    locale: 'en',
+    direction: 'ltr',
+    identity: { name: 'Rowan Atelier' },
+    featured: ['waiting', 'ready', 'behind'],
+    media: ['ornament', 'texture', 'plate'].map((id) => ({
+      id,
+      kind: 'image',
+      source: `images/${id}.png`,
+      ...(id === 'plate' ? { alt: 'Alt plate' } : { decorative: true }),
+    })),
+    works: [
+      { id: 'waiting', title: 'Waiting', medium: 'interface', cover: { asset: 'ornament' } },
+      {
+        id: 'ready',
+        title: 'Ready',
+        medium: 'system',
+        cover: { asset: 'texture' },
+        media: [{ asset: 'texture' }],
+      },
+      {
+        id: 'behind',
+        title: 'Behind',
+        medium: 'photography',
+        cover: { asset: 'texture' },
+        media: [{ asset: 'plate', caption: 'The plate itself' }],
+      },
+    ],
+    sections: [{ kind: 'works', id: 'work', items: ['waiting', 'ready', 'behind'] }],
+  });
+  // `texture` has a rendition; `ornament` and `plate` never arrive.
+  const media = {
+    ...base.media,
+    texture: {
+      ...base.media.texture!,
+      derived: {
+        state: 'ready',
+        value: ready('texture', 400, 300, 'image/png'),
+        derivedAt: '2026-10-23T00:00:00Z',
+      },
+    },
+  };
+  const found = rooms(html({ ...base, media } as VariantRenderInput));
+  const [waiting, readyRoom, behind] = found;
+  for (const room of [waiting!, readyRoom!]) {
+    assert.match(room.markup, /data-artifact="none"/, room.id);
+    assert.doesNotMatch(
+      room.markup,
+      /oa-room__artifact|<figure|<img|oa-case__media|<li><\/li>/,
+      room.id,
+    );
+  }
+  // A meaningful image behind a decorative cover leads the room instead.
+  assert.match(behind!.markup, /data-artifact="image"/);
+  assert.match(
+    behind!.markup,
+    /<div class="oa-room__artifact"[^>]*><figure[^>]*data-media-asset="plate"/,
+  );
+  assert.doesNotMatch(behind!.markup, /data-media-asset="texture"/);
+  // And a slot that somehow holds nothing paints nothing.
+  assert.match(CSS, /\.oa-room__artifact:empty \{\s*display: none;/);
 });
 
 test('a private work, or one only a hidden section reaches, is no chapter, no number, and no neighbor', () => {
@@ -490,10 +569,19 @@ test('the composition needs no motion, hover, pointer, or script: still CSS and 
 });
 
 test("the stylesheet uses #19's border tokens whole, and declares no custom property but --layout-*", () => {
-  for (const [, value] of CSS.matchAll(/border[a-z-]*:\s*([^;]+);/g)) {
-    if (value!.includes('var(--ui-border-')) {
-      assert.match(value!.trim(), /^var\(--ui-border-[a-z-]+\)$/, value);
-    }
+  // Each is a whole border, such as `1px solid var(--color-border-default)`: never a width, a
+  // style, or a color longhand, and never with anything beside it.
+  const declarations = [...CSS.matchAll(/([a-z-]+)\s*:\s*([^;{}]+);/g)].filter(([, , value]) =>
+    value!.includes('var(--ui-border-'),
+  );
+  assert.ok(declarations.length > 4, `${declarations.length} border token uses`);
+  for (const [declaration, property, value] of declarations) {
+    assert.match(
+      property!,
+      /^border(?:-(?:block|inline|top|right|bottom|left)(?:-(?:start|end))?)?$/,
+      declaration,
+    );
+    assert.match(value!.trim(), /^var\(--ui-border-[a-z-]+\)$/, declaration);
   }
   for (const [, name] of CSS.matchAll(/(--[a-z][a-z0-9-]*):/g)) {
     assert.match(name!, /^--layout-/, name);

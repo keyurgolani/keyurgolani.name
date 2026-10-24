@@ -83,11 +83,12 @@ export function Room({
   const titleId = ownId(input, `title-${work.id}`);
   const medium = mediumLabel(work);
 
-  // Every image placement the work has, the cover first, so the case shows each once.
+  // Every meaningful image the work places, the cover first, so the case shows each once.
+  // Decoration is ambience, never an artifact: it takes no slot in the room or the case.
   const placements = [...(work.cover ? [work.cover] : []), ...(work.media ?? [])];
   const images = placements.flatMap((placement) => {
     const placed = placedMedia(placement, ctx);
-    return placed ? [placed] : [];
+    return placed && !placed.decorative ? [placed] : [];
   });
   const leadExcerpt = treatment === 'text' && present(work.excerpt);
   const artifact: PlacedImage | undefined = leadExcerpt ? undefined : images[0];
@@ -164,7 +165,14 @@ export function Room({
       {hasCase(work, media, leadExcerpt) ? (
         <Disclosure
           className="oa-room__case"
-          summary={<Words input={input}>Unfold the case</Words>}
+          summary={
+            <>
+              <Words input={input}>Unfold the case</Words>
+              <span className="oa-visually-hidden" lang={work.lang}>
+                {`: ${work.title}`}
+              </span>
+            </>
+          }
         >
           <Case work={work} ctx={ctx} media={media} leadExcerpt={leadExcerpt} level={3} />
         </Disclosure>

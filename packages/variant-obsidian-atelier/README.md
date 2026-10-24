@@ -28,7 +28,7 @@ Each room says where it is ("Chapter 2 of 5") and its medium, then the work's ti
 
 No artifact is cropped or upscaled: each keeps its own aspect, no wider than its pixels or the room and no taller than 80% of the window, so portraits, panoramas, transparent images, pages of text, and small images read whole. Its alt text, caption, credit, and rights are the owner's, from #10's media model, and sit below it, never over it. An image that isn't there yet keeps its box and says so; a work with no artifact is a text room with no empty frame.
 
-**Unfold the case** is a native `details`, closed on the server. It holds the work's description, its highlights, tools, and tags, its case study's fields under their fixed labels, the rest of its media, its evidence, and its links. A room with nothing more has no disclosure. Each room ends with plain previous, index, and next links.
+**Unfold the case** is a native `details`, closed on the server, its name the summary and the work's title. It holds the work's description, its highlights, tools, and tags, its case study's fields under their fixed labels, the rest of its media, its evidence, and its links. A room with nothing more has no disclosure. Each room ends with plain previous, index, and next links.
 
 ## What it doesn't do
 
@@ -39,8 +39,8 @@ No artifact is cropped or upscaled: each keeps its own aspect, no wider than its
 
 ## Media guidance
 
-Give every meaningful image alt text, and mark decoration `decorative: true`, which renders nothing until it's there and an empty alt once it is. A caption shows under the image at a compact measure, however long. Set a cover on each chapter's work for its room to lead with it; without one, the first image the work places leads.
+Give every meaningful image alt text, and mark decoration `decorative: true`. A room never shows decoration, as its artifact or in its case, so behind a decorative cover the work's first meaningful image leads. A caption shows under the image at a compact measure, however long. Set a cover on each chapter's work for its room to lead with it; without one, the first image the work places leads.
 
 ## Checks
 
-`pnpm --filter @portfolio/variant-obsidian-atelier test` renders every contract fixture and checks the manifest's pins, the chapters and their numbering, the index and the previous and next links, Unfold the case, the medium treatments, missing and extreme media, the plate, the mount, and the stylesheet's rules. `pnpm check:variants` and `pnpm check:appearance` audit it, and CI's variant specs and quality cells run it in every mode.
+`pnpm --filter @portfolio/variant-obsidian-atelier test` renders every contract fixture and checks the manifest's pins, the chapters and their numbering, the index and the previous and next links, Unfold the case and its name, the medium treatments, missing, decorative, and extreme media, the plate, the mount, and the stylesheet's rules. `pnpm check:variants` and `pnpm check:appearance` audit it. CI's variant specs run it on every contract fixture in their six modes, in the platform's default light appearance. CI's PR quality cells run its published default appearance (the system display mode) and, when its package changes, every stable design language; its dark-scheme cells run in the nightly `pnpm quality:full`.

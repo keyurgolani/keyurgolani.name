@@ -29,6 +29,16 @@
   padding-inline: var(--layout-gutter);
 }
 
+/* Words for assistive technology alone, such as which work a disclosure unfolds. */
+[data-variant='obsidian-atelier'] .oa-visually-hidden {
+  display: inline-block;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* The chrome: the name, the index link, and the visitor control, in flow from the first paint. */
 [data-variant='obsidian-atelier'] .oa-chrome {
   display: flex;
@@ -191,6 +201,11 @@
  * image shows through; a photograph sits on the room itself. Its words
  * are below it, never over it.
  */
+/* A slot with no figure in it paints nothing: no matte, no frame. */
+[data-variant='obsidian-atelier'] .oa-room__artifact:empty {
+  display: none;
+}
+
 [data-variant='obsidian-atelier'] .oa-room__artifact .pf-figure {
   margin: 0;
 }
