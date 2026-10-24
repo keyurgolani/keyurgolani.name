@@ -111,25 +111,67 @@ const read = (root: string, file: string): string | null => {
 /** The pack a contrast failure excludes (#20), which check.ts in @portfolio/appearance/node decides. */
 export { responsiblePack };
 
-/** One record per display mode a contrast failure renders in, naming the pack it excludes. */
+/** The contrast failures' records, naming the pack each excludes, grouped so their count doesn't grow with the other axes. */
 export function contrastRecords(check: AppearanceCheck): CatalogRecord[] {
-  return check.failures.flatMap((failure) => {
+  // One record per pack, axis, rule, role pair, set, and display mode: the
+  // same pair failing in every tuple a pack is in is one failure, so the
+  // records stay bounded however many packs the other axes register. Each
+  // carries its first tuple, its worst ratio, and how many tuples it fails.
+  const groups = new Map<
+    string,
+    { record: CatalogRecord; worst: number; tuples: number; label: string }
+  >();
+  for (const failure of check.failures) {
     const { axis, id } = responsiblePack(failure);
     const { pair } = failure;
-    return failure.modes.map((mode) => ({
-      schemaVersion: '1.1' as const,
-      test: `contrast: ${pair.foreground}${pair.ground ? ` on ${pair.ground}` : ''} in ${pair.set}`,
-      pack: id,
-      axis,
-      // A fill's roles read "signature-start to signature-end": the record names its first.
-      tokenRole: pair.foreground.split(' ')[0],
-      displayMode: mode,
-      tuple: `${failure.language}/${failure.scheme}/${failure.typography}/${mode}`,
-      rule: pair.kind,
-      expected: pair.target,
-      actual: pair.ratio,
-    }));
-  });
+    const label = `contrast: ${pair.foreground}${pair.ground ? ` on ${pair.ground}` : ''}${
+      pair.backdrop ? ` over ${pair.backdrop}` : ''
+    } in ${pair.set}`;
+    for (const mode of failure.modes) {
+      const key = [
+        id,
+        axis,
+        pair.kind,
+        pair.foreground,
+        pair.ground,
+        pair.backdrop ?? '',
+        pair.set,
+        mode,
+      ].join('\0');
+      const existing = groups.get(key);
+      if (existing) {
+        existing.tuples += 1;
+        existing.worst = Math.min(existing.worst, pair.ratio);
+        continue;
+      }
+      groups.set(key, {
+        label,
+        worst: pair.ratio,
+        tuples: 1,
+        record: {
+          schemaVersion: '1.1' as const,
+          test: label,
+          pack: id,
+          axis,
+          // A fill's roles read "signature-start to signature-end": the record names its first.
+          tokenRole: pair.foreground.split(' ')[0],
+          displayMode: mode,
+          tuple: `${failure.language}/${failure.scheme}/${failure.typography}/${mode}`,
+          rule: pair.kind,
+          expected: pair.target,
+          actual: pair.ratio,
+        },
+      });
+    }
+  }
+  return [...groups.values()].map(({ record, worst, tuples, label }) => ({
+    ...record,
+    test: `${label}, in ${tuples} tuple${tuples === 1 ? '' : 's'}, first ${record.tuple}`.slice(
+      0,
+      500,
+    ),
+    actual: worst,
+  }));
 }
 
 /** The hierarchy failures, each the scheme's. */
