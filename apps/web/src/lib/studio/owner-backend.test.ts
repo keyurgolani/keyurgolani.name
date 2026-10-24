@@ -220,6 +220,39 @@ test("a move's refusals come back by kind: live moved, a newer draft, #3's codes
   assert.deepEqual(await answer(json(401, {})), { kind: 'signed-out' });
 });
 
+test("a read that fails says the store couldn't be read, never that changes are kept, which only a write has (#123 delta check)", async () => {
+  const reads = (studio: ReturnType<typeof backend>['studio']) => [
+    studio.workingDraft(),
+    studio.live(),
+    studio.revisions(0),
+    studio.history(0),
+    studio.revision(REVISION),
+  ];
+  for (const [answer, says] of [
+    [() => failed(503, 'storage_unavailable'), /^The store couldn't be read right now\./],
+    [
+      () => {
+        throw new TypeError('Failed to fetch');
+      },
+      /^Couldn't reach the server\. Try again/,
+    ],
+  ] as const) {
+    for (const result of await Promise.all(reads(backend(answer).studio))) {
+      assert.equal(result.kind, 'failed');
+      const { message } = result as { message: string };
+      assert.match(message, says);
+      assert.doesNotMatch(message, /kept in this browser/);
+    }
+  }
+  // A write keeps its own words: what it couldn't save is still in this browser.
+  const save = await backend(() => failed(503, 'storage_unavailable')).studio.saveDraft({
+    draftId: DRAFT_ID,
+    expectedVersion: 1,
+    documents: DOCUMENTS,
+  });
+  assert.match((save as { message: string }).message, /kept in this browser/);
+});
+
 test('history reads its pages by query, and a revision that is gone reads as none', async () => {
   const { sent, studio } = backend(({ name }) =>
     name === 'revision.get'

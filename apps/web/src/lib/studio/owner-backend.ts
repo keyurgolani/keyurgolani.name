@@ -50,6 +50,16 @@ const MESSAGES: Readonly<Record<string, string>> = {
   not_found: 'The working draft is gone. Reload to see the one there is now.',
 };
 
+/**
+ * The words a failed read shows, where they differ from a write's: a read
+ * changes nothing, so it has no changes to keep, only a store it couldn't read.
+ */
+const READ_MESSAGES: Readonly<Record<string, string>> = {
+  network: "Couldn't reach the server. Try again in a moment.",
+  storage_unavailable: "The store couldn't be read right now. Try again in a moment.",
+  storage_full: "The data directory is full, so the store couldn't be read.",
+};
+
 /** Why the store refused a publish or a rollback, in words: in each, nothing moved. */
 const MOVE_MESSAGES: Readonly<Record<string, string>> = {
   validation_failed: 'The draft has findings that block publishing.',
@@ -60,11 +70,16 @@ const MOVE_MESSAGES: Readonly<Record<string, string>> = {
   not_found: "That draft or revision isn't in the store any more.",
 };
 
-function failure(code: string, message?: unknown): BackendFailure {
+function failure(
+  code: string,
+  message?: unknown,
+  { read = false }: { readonly read?: boolean } = {},
+): BackendFailure {
   return {
     kind: 'failed',
     code,
     message:
+      (read ? READ_MESSAGES[code] : undefined) ??
       MESSAGES[code] ??
       (typeof message === 'string' && message !== ''
         ? message
@@ -102,10 +117,14 @@ export function ownerBackend(studioFetch: Fetch, csrfToken: string): OwnerBacken
     query?: Readonly<Record<string, string>>,
   ): Promise<ReadResult<T>> {
     const sent = await send(name, query ? { query } : {});
-    if ('kind' in sent) return sent;
+    if ('kind' in sent) {
+      return sent.kind === 'failed' ? failure(sent.code, undefined, { read: true }) : sent;
+    }
     const { response, body } = sent;
     if (!response.ok || !body.data || typeof body.data !== 'object') {
-      return failure(String(body.error?.code ?? 'internal_error'), body.error?.message);
+      return failure(String(body.error?.code ?? 'internal_error'), body.error?.message, {
+        read: true,
+      });
     }
     return { kind: 'read', value: pick(body.data as Record<string, unknown>) };
   }
