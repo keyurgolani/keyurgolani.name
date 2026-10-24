@@ -38,7 +38,7 @@ import { shardOutputs } from './pr-count';
 import { loadRegistrations, type Registrations } from './lib/registration';
 import { cellServer, planServers, serverId } from './lib/server';
 import { parseRunArgs } from './run';
-import { checkoutMeta, withTierPacks } from './plan-fixtures';
+import { checkoutMeta, clone, withTierPacks } from './plan-fixtures';
 
 // quality:pr's shards (lib/pr-shards.ts): every shard plans the whole PR set
 // and runs only its own test groups, so the shards' tests are the unsharded
@@ -80,6 +80,24 @@ test.before(async () => {
       plan: planCells({ meta: checkoutMeta(), registrations, mode: 'pr' }),
     },
   );
+  // A PR that changes one non-default stable pack: the [37] rule runs every
+  // variant on it, each cell a pack cell at the measured pack weights.
+  const language = meta.PACKS!.find((pack) => pack.kind === 'design-language' && !pack.fixture)!;
+  const onePack = {
+    ...meta,
+    PACKS: [...meta.PACKS!, clone(language, 'second-language', 'stable', false)],
+  };
+  const packPlan = planCells({
+    meta: onePack,
+    registrations,
+    mode: 'pr',
+    changes: [{ axis: 'designLanguage', id: 'second-language', paths: [] }],
+  });
+  assert.ok(
+    packPlan.cells.some((cell) => cell.changed && onPack(cell.tuple)),
+    'the changed pack directs pack cells',
+  );
+  plans.push({ name: 'the PR set with one changed non-default pack', plan: packPlan });
 });
 
 /** The count the planner picks for the PR set, as quality-pr-plan emits it. */
