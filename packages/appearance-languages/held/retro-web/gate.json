@@ -1,0 +1,168 @@
+{
+  "heldVersion": 1,
+  "id": "retro-web",
+  "kind": "design-language",
+  "tier": "experimental",
+  "reason": "It fails check:appearance with 24 of 25 color schemes: its texture raises every target by 1.1, past where anchor-v1 solves each scheme's roles.",
+  "causes": [
+    "texture"
+  ],
+  "schemes": {
+    "failing": 24,
+    "of": 25
+  },
+  "worst": {
+    "set": "light",
+    "kind": "large-text",
+    "foreground": "signature-start to signature-end",
+    "ground": "surface-prominent",
+    "ratio": 3,
+    "target": 3.3,
+    "scheme": "botanical-sage"
+  },
+  "pairs": [
+    {
+      "set": "light",
+      "kind": "large-text",
+      "foreground": "signature-start to signature-end",
+      "ground": "surface-prominent",
+      "ratio": 3,
+      "target": 3.3,
+      "scheme": "botanical-sage",
+      "failing": 11
+    },
+    {
+      "set": "light",
+      "kind": "non-text",
+      "foreground": "focus",
+      "ground": "surface-prominent",
+      "ratio": 3,
+      "target": 3.3,
+      "scheme": "botanical-sage",
+      "failing": 7
+    },
+    {
+      "set": "dark",
+      "kind": "text",
+      "foreground": "accent-text",
+      "ground": "surface-prominent",
+      "ratio": 4.51,
+      "target": 4.95,
+      "scheme": "sunset-ember",
+      "failing": 16
+    },
+    {
+      "set": "light",
+      "kind": "text",
+      "foreground": "accent-text",
+      "ground": "surface-prominent",
+      "ratio": 4.55,
+      "target": 4.95,
+      "scheme": "cool-color-safe",
+      "failing": 19
+    },
+    {
+      "set": "high-contrast-light",
+      "kind": "text",
+      "foreground": "accent-text",
+      "ground": "surface-prominent",
+      "ratio": 7.1,
+      "target": 7.7,
+      "scheme": "earthy-clay",
+      "failing": 20
+    },
+    {
+      "set": "high-contrast-dark",
+      "kind": "text",
+      "foreground": "accent-text",
+      "ground": "surface-prominent",
+      "ratio": 7.1,
+      "target": 7.7,
+      "scheme": "paper-ink",
+      "failing": 20
+    },
+    {
+      "set": "dark",
+      "kind": "text",
+      "foreground": "text-muted",
+      "ground": "surface-prominent",
+      "ratio": 4.59,
+      "target": 4.95,
+      "scheme": "low-stimulus-warm",
+      "failing": 20
+    },
+    {
+      "set": "light",
+      "kind": "text",
+      "foreground": "text-muted",
+      "ground": "surface-prominent",
+      "ratio": 4.59,
+      "target": 4.95,
+      "scheme": "pastel-sorbet",
+      "failing": 23
+    },
+    {
+      "set": "light",
+      "kind": "large-text",
+      "foreground": "signature-start to signature-end",
+      "ground": "surface-default",
+      "ratio": 3.24,
+      "target": 3.3,
+      "scheme": "blue-orange-color-safe",
+      "failing": 6
+    },
+    {
+      "set": "light",
+      "kind": "non-text",
+      "foreground": "data-categorical-2",
+      "ground": "surface-default",
+      "ratio": 3.24,
+      "target": 3.3,
+      "scheme": "blue-orange-color-safe",
+      "failing": 5
+    },
+    {
+      "set": "light",
+      "kind": "non-text",
+      "foreground": "focus",
+      "ground": "surface-default",
+      "ratio": 3.24,
+      "target": 3.3,
+      "scheme": "botanical-sage",
+      "failing": 4
+    },
+    {
+      "set": "light",
+      "kind": "non-text",
+      "foreground": "data-categorical-1",
+      "ground": "surface-default",
+      "ratio": 3.24,
+      "target": 3.3,
+      "scheme": "botanical-sage",
+      "failing": 4
+    },
+    {
+      "set": "light",
+      "kind": "non-text",
+      "foreground": "data-categorical-3",
+      "ground": "surface-default",
+      "ratio": 3.26,
+      "target": 3.3,
+      "scheme": "sepia-film",
+      "failing": 1
+    },
+    {
+      "set": "light",
+      "kind": "text",
+      "foreground": "accent-text",
+      "ground": "surface-default",
+      "ratio": 4.94,
+      "target": 4.95,
+      "scheme": "blue-orange-color-safe",
+      "failing": 2
+    }
+  ],
+  "unblockedBy": [
+    "anchor-v2 textured targets (scope Deferred: \"anchor-v2 solver\"), so a scheme meets the raised targets a texture sets"
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "id": "handcrafted-collage",
+  "name": "Handcrafted Collage",
+  "description": "Cut corners, heavy raw borders, paper surfaces, editorial density, hard offset shadows, no motion, and a paper-fiber texture.",
+  "version": "1.0.0",
+  "tokenContract": 1,
+  "tier": "extended",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "The reviewed prototype's collage recipe, with its --appearance-* references read as --color-*, and the contract's signature-fill and emphasis-glow at the fallback language's values."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "focus-ring", "stylesheet-lint"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "Under reduced transparency, without backdrop-filter, in forced colors, and in print, surfaces render opaque and the backdrop blur is 0.",
+    "Under reduced motion, the state transforms are none and motion is instant.",
+    "In forced colors, the material is a solid surface, and shadows and texture drop."
+  ],
+  "caveats": ["A decorative gradient texture sits behind surfaces."],
+  "tokens": {
+    "surface-material": "linear-gradient(175deg, var(--color-surface-prominent), var(--color-surface-default))",
+    "radius-control": "0 10px",
+    "radius-card": "0 16px",
+    "radius-overlay": "0 20px",
+    "radius-media": "0 12px",
+    "radius-badge": "0",
+    "border-control": "3px solid",
+    "border-card": "3px solid",
+    "border-divider": "3px solid",
+    "shadow-card": "5px 5px 0 var(--color-border-strong)",
+    "shadow-overlay": "8px 8px 0 var(--color-border-strong)",
+    "shadow-raised": "8px 8px 0 var(--color-border-strong)",
+    "shadow-inset": "none",
+    "surface-opacity": "100%",
+    "backdrop-blur": "0px",
+    "control-height": "2.75rem",
+    "space-control-inline": "1rem",
+    "space-control-block": "0.75rem",
+    "space-surface-inline": "1.5rem",
+    "space-surface-block": "1.5rem",
+    "focus-width": "4px",
+    "focus-offset": "3px",
+    "focus-style": "solid",
+    "state-hover-transform": "none",
+    "state-active-transform": "none",
+    "state-selected-emphasis": "2px",
+    "state-disabled-opacity": "0.45",
+    "state-loading-opacity": "0.65",
+    "state-validation-emphasis": "2px",
+    "icon-stroke-width": "1.5",
+    "icon-fill": "currentColor",
+    "motion-fast": "0.01ms",
+    "motion-standard": "0.01ms",
+    "motion-slow": "0.01ms",
+    "motion-easing": "linear",
+    "motion-enter": "none",
+    "motion-exit": "none",
+    "motion-emphasis": "none",
+    "texture": "repeating-linear-gradient(0deg, transparent 0 3px, color-mix(in srgb, var(--color-border-subtle) 35%, transparent) 3px 4px)",
+    "signature-fill": "linear-gradient(90deg, var(--color-signature-start), var(--color-signature-end))",
+    "emphasis-glow": "none"
+  }
+}
