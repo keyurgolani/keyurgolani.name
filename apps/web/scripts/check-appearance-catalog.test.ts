@@ -74,7 +74,17 @@ function valid(record: CatalogRecord) {
 test('the repository passes every governance check', async () => {
   const findings = catalogFindings(REPO_ROOT, await shipped(), []);
   assert.deepEqual(findings.lines, []);
-  assert.deepEqual(findings.counts, { gated: 3, locked: 3, research: 1 });
+  // Every first-party pack, gated and locked; the 23 catalog records and the fixture one; and the audit over the first-party packs and the catalog's records.
+  const shipping = ['appearance-languages', 'appearance-schemes', 'appearance-typography'].reduce(
+    (count, dir) => count + fs.readdirSync(path.join(REPO_ROOT, 'packages', dir, 'packs')).length,
+    0,
+  );
+  assert.deepEqual(findings.counts, {
+    gated: shipping,
+    locked: shipping,
+    research: 24,
+    audited: shipping + 23,
+  });
 });
 
 /** The registry with a third party's MIT copy of warm-parchment, as if installed from npm. */
