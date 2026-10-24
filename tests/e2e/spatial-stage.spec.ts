@@ -377,6 +377,8 @@ test(
     await loadHome(page, '/');
     // A rem query would read 900px as narrow: 47.99rem is 960px here.
     expect(await page.evaluate(() => matchMedia('(max-width: 47.99rem)').matches)).toBe(true);
+    // The opening stacks at that size, so the stage sits below the words: in view, it runs.
+    await page.locator('.sb-stage').scrollIntoViewIfNeeded();
     await expectLive(page);
     await expect(page.getByRole('button', { name: 'Spatial stage' })).toBeVisible();
   },
