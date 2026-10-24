@@ -35,24 +35,26 @@ async function previewFrame(page: Page): Promise<Frame> {
   return frame!;
 }
 
-/** Every canary of the reference's in what `responses` carried. */
-async function leaked(responses: readonly Response[]): Promise<string[]> {
-  const found: string[] = [];
-  for (const response of responses) {
-    const body = await response.body().catch(() => Buffer.alloc(0));
-    const text = `${JSON.stringify(await response.allHeaders())}\n${body.toString('latin1')}`;
-    for (const canary of LEAKS)
-      if (text.includes(canary)) found.push(`${response.url()}: ${canary}`);
-  }
-  return found;
+/**
+ * Each canary of the reference's in `response`, read as it arrives: its
+ * headers as the browser got them, which need no raw-header event (one that
+ * waited for those, allHeaders(), hung in CI), and its body, which a page
+ * that has since moved on may no longer hold.
+ */
+async function leaksOf(response: Response): Promise<string[]> {
+  const body = await response.body().catch(() => Buffer.alloc(0));
+  const text = `${JSON.stringify(response.headers())}\n${body.toString('latin1')}`;
+  return LEAKS.filter((canary) => text.includes(canary)).map(
+    (canary) => `${response.url()}: ${canary}`,
+  );
 }
 
 test(
   'Studio opens on the sample, the labeled action shows the reference at /reference, read-only, and the way back returns to the sample',
   { annotation: [STUDIO, REFERENCE, DEMO] },
   async ({ page, app }) => {
-    const responses: Response[] = [];
-    page.on('response', (response) => responses.push(response));
+    const scanned: Promise<string[]>[] = [];
+    page.on('response', (response) => void scanned.push(leaksOf(response)));
     await open(page);
     await expect(page.locator('iframe')).toHaveAttribute('src', /^\/sample(?:\?|$)/);
     await expect(page.locator('[data-state="content"]')).toContainText(
@@ -80,7 +82,8 @@ test(
     await expect(page.locator('iframe')).toHaveAttribute('src', /^\/sample(?:\?|$)/);
     await expect(page).not.toHaveURL(/source=/);
 
-    expect(await leaked(responses)).toEqual([]);
+    expect(scanned.length).toBeGreaterThan(0);
+    expect((await Promise.all(scanned)).flat()).toEqual([]);
     expect(new URL(page.url()).origin).toBe(app.origin);
   },
 );

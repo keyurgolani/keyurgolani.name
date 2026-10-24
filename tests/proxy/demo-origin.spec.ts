@@ -1,11 +1,4 @@
-import {
-  expect,
-  test,
-  type BrowserContext,
-  type Browser,
-  type Page,
-  type Response,
-} from '@playwright/test';
+import { expect, test, type BrowserContext, type Browser, type Page } from '@playwright/test';
 import { DEMO_HOST, PROXY_HOST } from '../harness/proxy-stack.mjs';
 
 // The demo origin against the owner's, in a browser over https (#9, A13's
@@ -23,6 +16,16 @@ import { DEMO_HOST, PROXY_HOST } from '../harness/proxy-stack.mjs';
 // __Host-studio_session, host-only, so the demo can neither read it nor
 // replace it, and the server reads no other name over https. Commands carry
 // the cookie, and #2's exact Origin check refuses them.
+//
+// Playwright's request.allHeaders() and its response events wait for
+// Chromium's raw-header events, which this run never got: in CI each call
+// hung to the test's timeout. So nothing here reads them. A same-origin
+// answer is read by the page's own script, and a cross-origin one through a
+// CDP session's Network.responseReceived, which carries the status and the
+// headers. Which cookies the browser sends is what it holds for the owner's
+// origin (context.cookies()), and the server's answer shows a session cookie
+// was sent: a command that needs a session answers 401 without one, and is
+// refused for its Origin only once the session resolves.
 
 const PORT = process.env.DEMO_ORIGIN_PORT;
 const PASSWORD = process.env.DEMO_ORIGIN_PASSWORD;
@@ -46,39 +49,111 @@ test.beforeAll(() => {
 interface Answer {
   readonly status: number;
   readonly code: string | null;
-  /** The Cookie header the browser sent with it. */
-  readonly cookie: string;
-  /** Its Access-Control-* headers, which would let the demo read it. */
+  /** Its Access-Control-* headers, which would let another origin read it. */
   readonly cors: readonly string[];
+  /** Set when CDP kept no body to read the code from. */
+  readonly unread?: true;
 }
 
-/** What the server answered `response`, and the Cookie header its request carried. */
-async function answerOf(response: Response): Promise<Answer> {
-  const body = (await response.json().catch(() => null)) as { error?: { code?: string } } | null;
-  return {
-    status: response.status(),
-    code: body?.error?.code ?? null,
-    cookie: (await response.request().allHeaders())['cookie'] ?? '',
-    cors: Object.keys(await response.allHeaders()).filter((name) =>
-      name.startsWith('access-control-'),
-    ),
-  };
+/** `answer` is the refusal #2's Origin check gives, by its code too when its body was kept. */
+function expectOriginRefusal(answer: Answer, what: string) {
+  expect(answer.status, what).toBe(403);
+  if (answer.unread) {
+    test.info().annotations.push({ type: 'unread body', description: what });
+  } else {
+    expect(answer.code, what).toBe('request_origin_rejected');
+  }
+  expect(answer.cors, what).toEqual([]);
 }
 
-/** `fetch(pathname, init)` from `page`, as its own script sends it, and what the server answered. */
-async function sent(page: Page, url: string, init: RequestInit = {}): Promise<Answer> {
-  const answered = page.waitForResponse((response) => response.url() === url);
-  await page.evaluate(
-    ([target, options]) => fetch(target!, options as RequestInit).catch(() => null),
-    [url, init] as const,
+const corsOf = (names: Iterable<string>) =>
+  [...names].map((name) => name.toLowerCase()).filter((name) => name.startsWith('access-control-'));
+
+function codeOf(text: string): string | null {
+  try {
+    return (JSON.parse(text) as { error?: { code?: string } }).error?.code ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** `fetch(pathname, init)` on `page`'s own origin, read by the page's own script. */
+async function sameOrigin(page: Page, pathname: string, init: RequestInit = {}): Promise<Answer> {
+  const { status, text, names } = await page.evaluate(
+    async ([target, options]) => {
+      const response = await fetch(target!, options as RequestInit);
+      return {
+        status: response.status,
+        text: await response.text(),
+        names: [...response.headers.keys()],
+      };
+    },
+    [pathname, init] as const,
   );
-  return answerOf(await answered);
+  return { status, code: codeOf(text), cors: corsOf(names) };
+}
+
+interface Seen {
+  readonly status: number;
+  readonly headers: Record<string, string>;
+  loaded: boolean;
+}
+
+/**
+ * The server's answers to what `page` sends under `prefix`, another origin,
+ * as a CDP session sees them: the function it resolves to runs `send` and
+ * resolves to the one new answer, once its body has loaded.
+ */
+async function crossOrigin(page: Page, prefix: string) {
+  const cdp = await page.context().newCDPSession(page);
+  const answers = new Map<string, Seen>();
+  cdp.on('Network.responseReceived', ({ requestId, response }) => {
+    if (response.url.startsWith(prefix)) {
+      answers.set(requestId, { status: response.status, headers: response.headers, loaded: false });
+    }
+  });
+  cdp.on('Network.loadingFinished', ({ requestId }) => {
+    const seen = answers.get(requestId);
+    if (seen) seen.loaded = true;
+  });
+  await cdp.send('Network.enable');
+  return async (send: () => Promise<unknown>): Promise<Answer> => {
+    const before = new Set(answers.keys());
+    const fresh = () => [...answers].filter(([id, seen]) => !before.has(id) && seen.loaded);
+    await send();
+    await expect.poll(() => fresh().length, { timeout: 15_000 }).toBe(1);
+    const [requestId, seen] = fresh()[0]!;
+    // An opaque answer's body may not be kept for CDP: then its code is
+    // unknown, and its status says what the server did.
+    const text = await cdp
+      .send('Network.getResponseBody', { requestId })
+      .then(({ body, base64Encoded }) =>
+        base64Encoded ? Buffer.from(body, 'base64').toString('utf8') : body,
+      )
+      .catch(() => null);
+    return {
+      status: seen.status,
+      code: text === null ? null : codeOf(text),
+      cors: corsOf(Object.keys(seen.headers)),
+      ...(text === null ? { unread: true } : {}),
+    };
+  };
 }
 
 /** A page on the owner's origin in `context`. */
 async function ownerPage(context: BrowserContext): Promise<Page> {
   const page = await context.newPage();
   expect((await page.goto(`${OWNER}/`))?.status()).toBe(200);
+  return page;
+}
+
+/** A page on the demo origin with no policy of its own, standing in for any script there. */
+async function standIn(context: BrowserContext): Promise<Page> {
+  const page = await context.newPage();
+  await page.route(`${DEMO}/elsewhere`, (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Demo</title>' }),
+  );
+  await page.goto(`${DEMO}/elsewhere`);
   return page;
 }
 
@@ -105,7 +180,7 @@ async function signedIn(browser: Browser) {
 
 /** auth.session from the owner's origin: 200 while the owner's session stands. */
 const sessionStatus = async (page: Page) =>
-  (await sent(page, `${OWNER}/api/studio/auth.session`)).status;
+  (await sameOrigin(page, '/api/studio/auth.session')).status;
 
 test(
   'a studio_session cookie set with Domain=portfolio.test reaches no owner operation',
@@ -133,11 +208,14 @@ test(
     const visitor = await browser.newContext();
     await visitor.addCookies(planted);
     const page = await ownerPage(visitor);
-    const session = await sent(page, `${OWNER}/api/studio/auth.session`);
-    expect(session.cookie).toContain(`studio_session=${owner.token}`);
+    expect(
+      (await visitor.cookies(OWNER)).map(({ name, value }) => ({ name, value })),
+      'the one cookie it sends the owner is the planted one',
+    ).toEqual([{ name: 'studio_session', value: owner.token }]);
+    const session = await sameOrigin(page, '/api/studio/auth.session');
     expect([session.status, session.code]).toEqual([401, 'authentication_required']);
     for (const name of ['auth.session.extend', 'auth.sessions.revokeAll']) {
-      const answer = await sent(page, `${OWNER}/api/studio/${name}`, {
+      const answer = await sameOrigin(page, `/api/studio/${name}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-csrf-token': owner.csrf },
         body: '{}',
@@ -169,9 +247,8 @@ test(
       document.cookie = `__Host-studio_session=forged; Domain=${domain}; Path=/; Secure`;
       document.cookie = `__Host-studio_session=forged; Domain=.${domain}; Path=/; Secure`;
     }, PROXY_HOST);
-    expect(
-      (await owner.context.cookies(OWNER)).filter((cookie) => cookie.name === SESSION),
-    ).toEqual([
+    const sent = await owner.context.cookies(OWNER);
+    expect(sent.filter((cookie) => cookie.name === SESSION)).toEqual([
       expect.objectContaining({
         value: owner.token,
         domain: PROXY_HOST,
@@ -181,10 +258,11 @@ test(
         sameSite: 'Strict',
       }),
     ]);
-    const session = await sent(owner.page, `${OWNER}/api/studio/auth.session`);
-    expect(session.status).toBe(200);
-    expect(session.cookie).toContain(`${SESSION}=${owner.token}`);
-    expect(session.cookie).not.toContain('forged');
+    expect(
+      sent.filter(({ value }) => value === 'forged'),
+      'no forged cookie goes to the owner',
+    ).toEqual([]);
+    expect(await sessionStatus(owner.page)).toBe(200);
     await owner.context.close();
   },
 );
@@ -194,50 +272,58 @@ test(
   { annotation: ROW },
   async ({ browser }) => {
     const owner = await signedIn(browser);
-    // A page on the demo origin with no policy of its own, standing in for
-    // any script there: the demo's own pages allow no request off the demo.
-    const demo = await owner.context.newPage();
-    await demo.route(`${DEMO}/elsewhere`, (route) =>
-      route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Demo</title>' }),
+    // The demo's own pages allow no request off the demo, so the stand-in
+    // page has no policy.
+    const demo = await standIn(owner.context);
+    const next = await crossOrigin(demo, `${OWNER}/api/studio/`);
+    // A simple request, so no preflight stops it before the server.
+    const command = (page: Page, name: string, mode: RequestMode) =>
+      page.evaluate(
+        ([target, chosen]) =>
+          fetch(target!, {
+            method: 'POST',
+            mode: chosen as RequestMode,
+            credentials: 'include',
+            body: '{}',
+          }).catch(() => null),
+        [`${OWNER}/api/studio/${name}`, mode] as const,
+      );
+
+    // The control: with no owner cookie, the same command is a 401, so each
+    // 403 below refuses a session the owner's cookie resolved.
+    const stranger = await browser.newContext();
+    const strangerPage = await standIn(stranger);
+    const strangerNext = await crossOrigin(strangerPage, `${OWNER}/api/studio/`);
+    const control = await strangerNext(() =>
+      command(strangerPage, 'auth.session.extend', 'no-cors'),
     );
-    await demo.goto(`${DEMO}/elsewhere`);
+    expect(control.status, 'no cookie').toBe(401);
+    if (!control.unread) expect(control.code, 'no cookie').toBe('authentication_required');
+    await stranger.close();
+
+    // no-cors, as a script that only wants the side effect sends it. A
+    // cors-mode fetch reads nothing either, with no Access-Control-* header
+    // on any answer, which each check below holds.
     for (const name of ['auth.session.extend', 'auth.sessions.revokeAll', 'auth.logout']) {
-      for (const mode of ['no-cors', 'cors'] as const) {
-        // A simple request, so no preflight stops it before the server.
-        const answer = await sent(demo, `${OWNER}/api/studio/${name}`, {
-          method: 'POST',
-          mode,
-          credentials: 'include',
-          body: '{}',
-        });
-        const what = `${name}, ${mode}`;
-        expect(answer.cookie, what).toContain(`${SESSION}=${owner.token}`);
-        expect([answer.status, answer.code], what).toEqual([403, 'request_origin_rejected']);
-        expect(answer.cors, what).toEqual([]);
-      }
+      expectOriginRefusal(await next(() => command(demo, name, 'no-cors')), name);
     }
     // A text/plain form posted to auth.logout, a navigation the browser
     // sends with the owner's cookie and no preflight.
-    const logout = `${OWNER}/api/studio/auth.logout`;
-    const answered = demo.waitForResponse(
-      (response) => response.url() === logout && response.request().method() === 'POST',
+    const posted = await next(() =>
+      demo.evaluate((action) => {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.enctype = 'text/plain';
+        form.action = action;
+        const field = document.createElement('input');
+        field.name = '{"x":"';
+        field.value = '"}';
+        form.append(field);
+        document.body.append(form);
+        form.submit();
+      }, `${OWNER}/api/studio/auth.logout`),
     );
-    await demo.evaluate((action) => {
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.enctype = 'text/plain';
-      form.action = action;
-      const field = document.createElement('input');
-      field.name = '{"x":"';
-      field.value = '"}';
-      form.append(field);
-      document.body.append(form);
-      form.submit();
-    }, logout);
-    const posted = await answerOf(await answered);
-    expect(posted.cookie, 'form').toContain(`${SESSION}=${owner.token}`);
-    expect([posted.status, posted.code], 'form').toEqual([403, 'request_origin_rejected']);
-    expect(posted.cors, 'form').toEqual([]);
+    expectOriginRefusal(posted, 'auth.logout, a form');
     // auth.logout sent either way ended nothing.
     expect(await sessionStatus(owner.page)).toBe(200);
     await owner.context.close();

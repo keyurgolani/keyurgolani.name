@@ -473,7 +473,7 @@ test('/reference/media is a no-store 404 for anything the view does not keep', a
   }
 });
 
-test('an export whose events carry a reason and an idempotency key opens, and neither reaches anything the demo serves or logs', async (t) => {
+test('an export whose events carry a reason and an idempotency key opens, and neither reaches anything the demo serves or warns about', async (t) => {
   // export-revision never writes either field, so the committed fixture has
   // neither: this bundle is made here, the fixture's with both added.
   const EVENT_CANARIES = ['CANARY-REF-EVENT-REASON', 'canary-ref-event-idempotency-key'];
