@@ -376,9 +376,11 @@ m18_scratch run --rm --name portfolio-m18-restore -v "${RUN_DIR:?}/store-backups
 Start it with `m18_scratch up -d --no-build`, stop it with `m18_scratch stop`, and run the store's command line in it with `m18_scratch exec web node bin/portfolio-store.mjs <command>`. Change its volume only with a throwaway container of the release image, such as `command docker run --rm --user 1001:1001 -v portfolio-m18-scratch_portfolio-data:/d --entrypoint sh "${RELEASE_IMAGE:?}" -c '<the change>'`.
 
 1. **Last known good:** append a byte to `revisions/<REVISION_1>/manifest.json`, then start it. `http://127.0.0.1:<SCRATCH_PORT>/api/ready` answers `degraded`, its readiness check `catalog` is `degraded`, and `/` still serves. `recover` makes a servable revision live, and `status` says `live`.
-2. **Bad hash:** stop it, and replace its hash file with one holding `not-a-hash`, owned by uid 1001 with mode `0400`. `m18_scratch up -d --no-build`: the server refuses to start, and its `config.fatal` line names the setting, never a value.
-3. **Wrong data directory ownership:** put the hash file back, and `chown 0:0` the volume's root from a throwaway container run as `--user 0:0`. The server refuses to start, with a `config.fatal` line for `PORTFOLIO_DATA_DIR`.
-4. **Missing mount:** chown it back to `1001:1001`, and start it with the `secrets:` entry removed from the scratch copy's Compose file. The server refuses to start.
+   In checks 2 to 4 the server refuses to start. `up -d` itself still exits 0, and Docker restarts the container over and over, since the Compose file says `restart: unless-stopped`. So judge each one by its log, read by event name, setting name, and code only: `command docker logs portfolio-m18-scratch 2>&1 | command grep -o '"event":"[a-z._]*"\|"key":"[A-Z_]*"\|"code":"[a-z._]*"'`. It shows a `config.fatal` event for the setting named below, and no `store.import.first_start`. Its health never reaches `healthy`. Stop it with `m18_scratch stop` before the next check.
+
+2. **Bad hash:** stop it, and replace its hash file with one holding `not-a-hash`, owned by uid 1001 with mode `0400`. `m18_scratch up -d --no-build`: a `config.fatal` line with the code `malformed`, for `PORTFOLIO_AUTH_PASSWORD_HASH_FILE`, and never a value.
+3. **Wrong data directory ownership:** put the hash file back, and `chown 0:0` the volume's root from a throwaway container run as `--user 0:0`. `m18_scratch up -d --no-build`: a `config.fatal` line for `PORTFOLIO_DATA_DIR`.
+4. **Missing mount:** chown it back to `1001:1001`, remove the `secrets:` entry from the scratch copy's Compose file, and `m18_scratch up -d --no-build`, which recreates the container without it: a `config.fatal` line for `PORTFOLIO_AUTH_PASSWORD_HASH_FILE`.
 
 Then remove what this run made for it, and nothing else, with `-v` never on `down`:
 
