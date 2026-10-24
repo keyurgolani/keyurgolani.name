@@ -5,10 +5,11 @@ import type { ResolvedAppearance } from '@portfolio/appearance';
 import { PresentationBoundary } from '@portfolio/appearance/react';
 import { installPostPass } from '@portfolio/kit/markdown-local';
 import type { VariantComponent } from '@portfolio/kit/sections';
-import { resolvePortfolioView, type Context, type Site } from '@portfolio/schema';
+import { resolvePortfolioView, type Context, type PublicView, type Site } from '@portfolio/schema';
 import {
   buildRenderInput,
   contractValidators,
+  type RouteTarget,
   type VariantRenderInput,
 } from '@portfolio/variant-contract';
 import { appearanceCatalog, appearanceValidator } from '~/lib/appearance-checks';
@@ -54,6 +55,9 @@ export type LocalRender =
   | {
       readonly kind: 'render';
       readonly input: VariantRenderInput;
+      /** The public view it renders, and the route in it: what the server would render from. */
+      readonly view: PublicView;
+      readonly target: RouteTarget;
       readonly composition: Composition;
       readonly appearance: ResolvedAppearance;
       readonly lang?: 'en';
@@ -150,6 +154,8 @@ export async function renderLocal({
   return {
     kind: 'render',
     input,
+    view: resolved.view,
+    target: resolved.target,
     composition: resolved.composition,
     appearance,
     ...(lang ? { lang } : {}),

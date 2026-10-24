@@ -263,6 +263,69 @@ test("no media source the content names reaches the page: a remote one renders a
   assert.ok(shownNotLoaded > 0, 'some composition shows a media placeholder');
 });
 
+/** `html` with every CSP nonce as `<nonce>`, so two renders that differ in nothing else compare equal. */
+const withoutNonces = (html: string) => html.replace(/\bnonce="[^"]*"/g, 'nonce="<nonce>"');
+
+test("the frame's client render of the sample is ExperienceDocument's server markup, nonces aside, in the site's own composition and every other (risk 3)", async () => {
+  const { installPostPass } = await import('@portfolio/kit/markdown-local');
+  await installPostPass();
+  const { renderLocal } = await frame();
+  const { ExperienceDocument } = await import('~/lib/experience-document');
+  const { documentAppearance } = await import('~/lib/document-appearance');
+  const { ClientHostModules } = await import('~/lib/host-modules-client');
+  const requestTime = new Date('2026-10-25T00:00:00.000Z');
+  const compositions = [
+    undefined,
+    ...registries.variants.map(({ manifest }) => manifest.id).filter((id) => id !== 'fallback'),
+  ];
+  for (const variant of compositions) {
+    const render = await renderLocal({
+      document: documentOf(pairFiles(EXAMPLE.portfolio), variant ? { variant } : {}),
+      route: '/',
+      registries,
+      origin: ORIGIN,
+      requestTime,
+    });
+    if (render.kind !== 'render') assert.fail(render.kind);
+    const id = render.composition.rendered.manifest.id;
+    const what = variant ?? `the site's own, ${id}`;
+    // What the server renders for the same view, route, composition, and time.
+    const server = renderToStaticMarkup(
+      await ExperienceDocument({
+        unit: render.view,
+        selection: render.composition,
+        load: VARIANT_LOADERS[id]!,
+        hostModules: ClientHostModules,
+        appearance: documentAppearance({ site: render.view.site, variant: id, profile: 'demo' }),
+        linkBase: { basePath: '/preview/local' },
+        route: render.target,
+        origin: ORIGIN,
+        requestTime,
+        nonce: 'server-nonce',
+      }),
+    );
+    const client = await markup(render);
+    // The same appearance from the frame's catalog as from the server's registry.
+    assert.deepEqual(
+      render.appearance,
+      documentAppearance({ site: render.view.site, variant: id, profile: 'demo' }),
+      what,
+    );
+    // Each is the whole document: the boundary, its skip link, and the sample in the composition.
+    assert.match(client, new RegExp(`data-variant="${id}"`), what);
+    assert.match(client, /Skip to content/, what);
+    assert.match(client, /Anamika Devi/, what);
+    const [a, b] = [withoutNonces(client), withoutNonces(server)];
+    if (a !== b) {
+      let at = 0;
+      while (at < a.length && a[at] === b[at]) at++;
+      assert.fail(
+        `${what}: the frame's markup differs at ${at}:\n  frame:  ${a.slice(at - 80, at + 160)}\n  server: ${b.slice(at - 80, at + 160)}`,
+      );
+    }
+  }
+});
+
 test('a document that fails the check, or a route it has no page at, renders nothing', async () => {
   const { renderLocal } = await frame();
   const invalid = await renderLocal({
