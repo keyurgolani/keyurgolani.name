@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { PLATFORM_DEFAULTS } from '@portfolio/appearance';
 import { validatePublicationUnit } from '@portfolio/schema';
 import type { Profile } from './capabilities';
 import type { LiveRevision } from './catalog-port';
@@ -11,6 +13,8 @@ import type { DeploymentState } from './config-store';
 import { ownerStore, PROBE_INTERVAL_MS } from './owner/store';
 import { capabilityPolicy } from './policy';
 import { readiness, type ReadinessProbes } from './readiness';
+import { appearanceHealth } from './appearance-health';
+import type { LogEntry } from './log';
 
 // Readiness (#1, item 19): its checks, and what the endpoint answers.
 
@@ -161,6 +165,82 @@ test("a pack of the site's that falls back is 200, degraded, with packs degraded
   });
   assert.equal(failed.httpStatus, 503);
   assert.ok(!JSON.stringify(failed.body).includes('canary'));
+});
+
+/** brand-seed's reference record (#20 PR 3), as the live revision's snapshots/schemes.json holds it. */
+function storedBrandSeed() {
+  const record = JSON.parse(
+    readFileSync(
+      new URL('../../../../packages/appearance-schemes/generated/brand-seed.json', import.meta.url),
+      'utf8',
+    ),
+  ) as {
+    result: {
+      generator: { id: string; version: number };
+      input: { seedColor: string };
+      tokens: unknown;
+    };
+  };
+  return {
+    generator: record.result.generator,
+    inputsHash: createHash('sha256').update(record.result.input.seedColor).digest('hex'),
+    tokens: record.result.tokens,
+  };
+}
+
+test("/api/ready's packs check reads the live revision's stored generated schemes: a valid one is ok and tells nothing, and an invalid or mismatched one is degraded (#20 PR 3)", async () => {
+  const site = {
+    appearance: { ...PLATFORM_DEFAULTS, variant: 'acme-ocean', colorScheme: 'brand-seed' },
+    motionPolicy: 'system',
+  };
+  const stored = storedBrandSeed();
+  const ready = async (schemes: unknown) => {
+    const told: LogEntry[] = [];
+    const deployment: DeploymentState = {
+      ...state('read-only'),
+      catalog: {
+        getLive: async () =>
+          ({
+            state: 'live',
+            revisionId: `rev_${'d'.repeat(32)}`,
+            unitHash: `sha256:${'d'.repeat(64)}`,
+            unit: { site, snapshots: schemes === undefined ? {} : { schemes } },
+          }) as LiveRevision,
+      },
+    };
+    const result = await readiness(deployment, {
+      ...PROBES,
+      appearanceHealth: (served, revision) =>
+        appearanceHealth(served, {
+          ...revision,
+          log: (entry) => told.push(entry),
+          told: new Set(),
+        }),
+    });
+    const packs = result.body.status === 'starting' ? undefined : result.body.checks[1];
+    return { packs, events: told.map((entry) => entry.event) };
+  };
+  assert.deepEqual(await ready({ 'brand-seed': stored }), {
+    packs: { id: 'packs', status: 'ok' },
+    events: [],
+  });
+  for (const schemes of [
+    undefined,
+    { 'brand-seed': { generator: 7 } },
+    {
+      'brand-seed': {
+        ...stored,
+        generator: { ...stored.generator, version: stored.generator.version + 1 },
+      },
+    },
+    { 'brand-seed': { ...stored, generator: { ...stored.generator, id: 'hct' } } },
+  ]) {
+    assert.deepEqual(
+      await ready(schemes),
+      { packs: { id: 'packs', status: 'degraded' }, events: ['appearance.fallback'] },
+      JSON.stringify(schemes)?.slice(0, 80),
+    );
+  }
 });
 
 test('a degraded startup requirement is 200, degraded', async () => {
