@@ -35,6 +35,7 @@ import {
 } from '@portfolio/appearance/node';
 import type { RegistryResult } from '@portfolio/variant-contract/node';
 import { auditCatalog } from './catalog-audit';
+import { generatedEntries } from './catalog-generated';
 import { readHeld } from './catalog-held';
 import { REPO_ROOT } from './registry-options';
 
@@ -65,6 +66,8 @@ export interface CatalogFindings {
     readonly research: number;
     /** Entries the branded-name audit read: shipping packs and Research records. */
     readonly audited: number;
+    /** Generator schemes whose reference records it held current. */
+    readonly generated: number;
   };
 }
 
@@ -313,10 +316,11 @@ export function catalogFindings(
     } else names.set(key, manifest.id);
   }
 
-  // Every pack the platform ships must ship: a first-party pack excluded is a finding.
+  // Every pack the platform ships must ship: a first-party pack excluded is a
+  // finding, but for an image-derived scheme waiting on the owner (#20 PR 3).
   for (const pack of excluded) {
     const axis = AXIS_BY_KIND[pack.kind];
-    if (pack.packageName.startsWith('@portfolio/')) {
+    if (pack.packageName.startsWith('@portfolio/') && pack.awaiting !== 'owner-acceptance') {
       add(
         `${AXIS_NAMES[axis]} ${pack.id} in ${pack.packageName} is excluded from the build: ${pack.reason}`,
         {
@@ -326,6 +330,18 @@ export function catalogFindings(
         },
       );
     }
+  }
+
+  // The generated schemes' reference records, each current at its generator's version (#20 PR 3).
+  const packages = packPackages(root);
+  const generated = generatedEntries(root, packages);
+  for (const problem of generated.problems) {
+    add(problem.message, {
+      test: 'generated scheme reference record',
+      pack: problem.pack,
+      axis: 'colorScheme',
+      rule: 'generated',
+    });
   }
 
   // The lock, and the notices generated beside it.
@@ -355,7 +371,6 @@ export function catalogFindings(
   }
 
   // The Research records: well formed, and never an id anything else has.
-  const packages = packPackages(root);
   const fixturePackages = new Set(
     packages.filter(({ fixture }) => fixture).map(({ name }) => name),
   );
@@ -418,6 +433,7 @@ export function catalogFindings(
       locked: locked.length,
       research: research.length,
       audited: audit.entries.length,
+      generated: generated.entries.length,
     },
   };
 }

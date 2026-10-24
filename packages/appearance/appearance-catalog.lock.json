@@ -93,6 +93,14 @@
       "license": "first-party",
       "digest": "sha256-5fd06c1d292a6a51a3f32c7ec4ac084f7ebc432f9af1c5d3e6c544797b5697b5"
     },
+    "brand-seed": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "extended",
+      "license": "generated",
+      "digest": "sha256-c13da07d573865d84b856c1d58f5e5a0d92318c91fec29dafcc3c99e2082273b"
+    },
     "carbon-inspired": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
@@ -216,6 +224,14 @@
       "tier": "extended",
       "license": "first-party",
       "digest": "sha256-ba12243f5f99dc12c870f1bc18cb271a6f3b927f1918a74909cc9f9670ba97c1"
+    },
+    "hct-tonal": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "extended",
+      "license": "generated",
+      "digest": "sha256-f83936dbdf3fea4956317c0cf21d8f36eb2247bf353733d1a44ae18fbef64661"
     },
     "high-contrast": {
       "axis": "colorScheme",
@@ -445,6 +461,14 @@
       "license": "independent-inspired-interpretation",
       "digest": "sha256-dc774292cd1f99a4ba8f8f36f60a35eb8263745b163ccdbcbb0055ab0f267099"
     },
+    "portfolio-artwork": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "experimental",
+      "license": "generated",
+      "digest": "sha256-c593aaebbbc2a8b7fc2bc7aaa9ca10c69f8c7f2c97cf025d846e5ef4491fc24c"
+    },
     "primer-inspired": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
@@ -452,6 +476,14 @@
       "tier": "stable",
       "license": "independent-inspired-interpretation",
       "digest": "sha256-169a475f422722225db449acf09830c662907392a38932af52f1f4b5154bc4e9"
+    },
+    "profile-image": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.0.0",
+      "tier": "experimental",
+      "license": "generated",
+      "digest": "sha256-6a5f8e1dd40314a4d2500443383012cee69af2952adcb3172c4ef8a93400ebf9"
     },
     "radix-inspired": {
       "axis": "designLanguage",
