@@ -16,9 +16,13 @@
 // - The [37] rule's five checks at 1440x900, in the rows that run them:
 //   contrast and focus in the default row, focus under forced colors,
 //   motion under reduced motion, and transparency under reduced
-//   transparency (SWEEP_CHECKS). Each row is a test of its own, so each
-//   pack starts in a fresh browser context and a full load: nothing one
-//   pack set carries into the next.
+//   transparency (SWEEP_CHECKS). Each pack is one test, so each starts in
+//   a fresh browser context: nothing one pack set carries into the next.
+//   The test runs the four rows on one page, one after another, each
+//   emulated with emulateMedia (and CDP for reduced transparency) and
+//   loaded again, so it pays for one context and page, not four.
+//   run-cell.ts runs it, and names each row's checks `<row>:<check>`
+//   (checks.ts's sweepCheck), so the verdict holds the test to all of them.
 // - Every failure is a failure record, naming the pack, its axis, the
 //   variant, and the check (records.ts's changeFields and runnerFailure),
 //   and a test records every one of its findings before it fails.
@@ -30,7 +34,7 @@
 // them for every shipping pack and every variant, as it did.
 
 import type { Cell, PlannedTest } from '../cells';
-import { requiredChecks } from './checks';
+import { requiredChecks, sweepCheck, SWEEP_ROW_CHECKS } from './checks';
 import type { Finding } from './a11y/interaction';
 import { PREFERENCE_ROWS, VIEWPORTS, type PreferenceRow, type Viewport } from './matrix';
 import type { ResolvedTokens } from './records';
@@ -53,9 +57,9 @@ export const SWEEP_CHECKS = [
   { name: 'reduced-transparency', row: 'reduced-transparency', check: 'transparency' },
 ] as const;
 
-/** The rows the sweep runs, in the matrix's order. */
-export const SWEEP_ROWS: readonly PreferenceRow[] = PREFERENCE_ROWS.filter((row) =>
-  SWEEP_CHECKS.some((each) => each.row === row.id),
+/** The rows a swept test runs, in checks.ts's SWEEP_ROW_CHECKS order. */
+export const SWEEP_ROWS: readonly PreferenceRow[] = Object.keys(SWEEP_ROW_CHECKS).map((id) =>
+  PREFERENCE_ROWS.find((row) => row.id === id)!,
 );
 
 /**
@@ -136,7 +140,8 @@ export function packFindings(cell: Pick<Cell, 'tuple'>, tokens: ResolvedTokens):
 
 /**
  * The [37] checks a planned test runs: each SWEEP_CHECKS entry whose row it
- * is and whose check it owes, a swept test the sweep's own checks.
+ * is and whose check it owes, and for a swept test, each whose row's check
+ * it owes by sweepCheck()'s name.
  */
 export function sweepChecksOf(
   test: Pick<PlannedTest, 'viewport' | 'row' | 'conditions'> & {
@@ -145,7 +150,9 @@ export function sweepChecksOf(
 ): (typeof SWEEP_CHECKS)[number]['name'][] {
   if (test.viewport.id !== SWEEP_VIEWPORT.id) return [];
   const owed = requiredChecks(test.row.id, test.viewport.id, test.conditions, test.cell.sweep);
-  return SWEEP_CHECKS.filter((each) => each.row === test.row.id && owed.includes(each.check)).map(
-    (each) => each.name,
-  );
+  return SWEEP_CHECKS.filter((each) =>
+    test.cell.sweep
+      ? owed.includes(sweepCheck(each.row, each.check))
+      : each.row === test.row.id && owed.includes(each.check),
+  ).map((each) => each.name);
 }

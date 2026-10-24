@@ -54,7 +54,7 @@ const CHANGES = [
 const variantsOf = (plan: Plan) =>
   plan.targets.filter((target) => target.kind === 'composition').map((target) => target.id);
 
-test('a PR sweeps each changed pack against every variant, in the [37] rows at 1440x900 and no other test, and full keeps every viewport and row', () => {
+test('a PR sweeps each changed pack against every variant, one test a pair at 1440x900 that runs the [37] rows, and full keeps every viewport and row', () => {
   const meta = twoPacks();
   const plan = planCells({ meta, registrations, mode: 'pr', changes: CHANGES });
   const variants = variantsOf(plan);
@@ -63,29 +63,39 @@ test('a PR sweeps each changed pack against every variant, in the [37] rows at 1
     swept.map((cell) => `${changeFields(cell).pack} ${cell.target}`).sort(),
     CHANGES.flatMap((change) => variants.map((variant) => `${change.id} ${variant}`)).sort(),
   );
+  // Reduced motion after forced colors: its frame sampler stays on the page.
   assert.deepEqual(
     SWEEP_ROWS.map((row) => row.id),
-    ['default', 'reduced-motion', 'forced-colors', 'reduced-transparency'],
+    ['default', 'forced-colors', 'reduced-motion', 'reduced-transparency'],
   );
   for (const cell of swept) {
     const tests = plan.tests.filter((each) => each.cell === cell);
     assert.deepEqual(
       tests.map((each) => `${each.viewport.id} ${each.row.id}`),
-      SWEEP_ROWS.map((row) => `${SWEEP_VIEWPORT.id} ${row.id}`),
+      [`${SWEEP_VIEWPORT.id} default`],
       cell.id,
     );
-    for (const each of tests) {
-      assert.equal(each.conditions, false, 'no reload conditions');
-      // The five checks alone: no occlusion, overlays, hover, or reload conditions.
-      const owed = requiredChecks(each.row.id, each.viewport.id, each.conditions, true);
-      for (const check of ['occlusion', 'overlays', 'hover', 'reflow', 'inventory', 'enhancement'])
-        assert.ok(!owed.includes(check), `${each.row.id} owes ${check}`);
-    }
-    // Every one of the five, once a pack and variant.
-    assert.deepEqual(
-      tests.flatMap(sweepChecksOf).sort(),
-      SWEEP_CHECKS.map((each) => each.name).sort(),
-    );
+    const [only] = tests;
+    assert.equal(only!.conditions, false, 'no reload conditions');
+    // Each row's checks by name, and none of the full cells' others.
+    const owed = requiredChecks(only!.row.id, only!.viewport.id, only!.conditions, true);
+    for (const check of [
+      'sweep-pack',
+      'axe',
+      'contrast',
+      'focus',
+      'keyboard',
+      'forced-colors:focus',
+      'forced-colors:axe',
+      'reduced-motion:motion',
+      'reduced-transparency:transparency',
+      'reduced-transparency:emulation',
+    ])
+      assert.ok(owed.includes(check), `owes ${check}`);
+    for (const check of ['occlusion', 'overlays', 'hover', 'reflow', 'inventory', 'enhancement'])
+      assert.ok(!owed.some((each) => each.endsWith(check)), `owes ${check}`);
+    // Every one of the five, in the one test.
+    assert.deepEqual(sweepChecksOf(only!).sort(), SWEEP_CHECKS.map((each) => each.name).sort());
   }
 
   // A changed variant keeps every viewport in the default row and every row at 1440x900.
@@ -209,8 +219,10 @@ test("a swept cell's failures name the pack, its axis, the variant, and the chec
     (each) =>
       each.sweep && each.target === 'kinetic-cosmos' && each.tuple.colorScheme === 'second-scheme',
   ) as Cell;
-  const planned = plan.tests.find((each) => each.cell === cell && each.row.id === 'forced-colors')!;
-  const context = { cell, viewport: planned.viewport, row: planned.row, artifacts: [] };
+  // A pass under forced colors, as run-cell.ts makes its context.
+  const planned = plan.tests.find((each) => each.cell === cell)!;
+  const row = SWEEP_ROWS.find((each) => each.id === 'forced-colors')!;
+  const context = { cell, viewport: planned.viewport, row, artifacts: [] };
   const runner = {
     ...runnerFailure(context, 'sweep-pack', 'data-color-scheme=warm-parchment'),
     check: 'focus',
@@ -250,9 +262,7 @@ test("a swept test that didn't run fails plan-coverage, naming its pack and vari
       checks:
         checks ?? requiredChecks(each.row.id, each.viewport.id, each.conditions, each.cell.sweep),
     });
-  const dropped = swept.find(
-    (each) => each.row.id === 'forced-colors' && each.cell.id.includes('second-language'),
-  )!;
+  const dropped = swept.find((each) => each.cell.id.includes('second-language'))!;
   const verdict = (summaryTests: ReturnType<typeof cellTest>[]) =>
     judge({
       plan: { targets: plan.targets, tests },
@@ -267,19 +277,25 @@ test("a swept test that didn't run fails plan-coverage, naming its pack and vari
   assert.deepEqual(rules(verdict(all), 'plan-coverage'), []);
   assert.deepEqual(rules(verdict(all), 'unchecked-cell'), []);
   const missing = rules(
-    verdict(all.filter((each) => !(each.cell === dropped.cell.id && each.row === 'forced-colors'))),
+    verdict(all.filter((each) => each.cell !== dropped.cell.id)),
     'plan-coverage',
   );
   assert.equal(missing.length, 1);
   assert.match(missing[0]!, /second-language/);
   // The cell's id names the variant and the tuple the pack is in.
-  assert.ok(missing[0]!.startsWith(`${dropped.cell.id} at 1440x900, forced-colors`), missing[0]);
+  assert.ok(missing[0]!.startsWith(`${dropped.cell.id} at 1440x900, default`), missing[0]);
   assert.match(missing[0]!, /is planned, and didn't run/);
-  // A swept test that passed without its focus check, or without checking
+  // A swept test that passed without one row's check, or without checking
   // the page rendered its pack, fails unchecked-cell.
-  for (const check of ['focus', 'sweep-pack']) {
+  for (const check of [
+    'focus',
+    'forced-colors:focus',
+    'reduced-motion:motion',
+    'reduced-transparency:transparency',
+    'sweep-pack',
+  ]) {
     const without = all.map((each) =>
-      each.cell === dropped.cell.id && each.row === 'forced-colors'
+      each.cell === dropped.cell.id
         ? { ...each, checks: each.checks.filter((ran) => ran !== check) }
         : each,
     );

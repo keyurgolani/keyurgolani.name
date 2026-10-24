@@ -6,8 +6,10 @@
 // scheme, whose text fails contrast and which leaves itself in
 // localStorage, where a page that shared its context would pick it up.
 //
-// Each pack runs as each swept test does: a fresh context, its cookie
-// (packCookie), a full load, then the sweep's checks, run-cell.ts's own:
+// Each pack runs as each swept test starts: a fresh context, its cookie
+// (packCookie), a full load, then the sweep's default-row checks,
+// run-cell.ts's own (a swept test then loads the page again for each
+// other row, in the same context):
 // the boundary renders the pack (packFindings), axe on the contrast rules
 // with the incomplete contrast resampled (audit), and keyboard focus.
 //

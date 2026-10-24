@@ -84,7 +84,7 @@ import type {
   SurfaceRegistration,
 } from './lib/registration';
 import { APPEARANCE_STATE, STATE_FIXTURES, type StateFixture } from './lib/state-fixtures';
-import { SWEEP_ROWS, SWEEP_VIEWPORT, sweeps } from './lib/sweep';
+import { SWEEP_VIEWPORT, sweeps } from './lib/sweep';
 
 export type RunMode = 'pr' | 'full';
 
@@ -141,8 +141,8 @@ export interface Cell {
   readonly changed?: readonly ChangedBy[];
   /**
    * In a PR, a changed pack's pair with a variant runs in the pack sweep
-   * (lib/sweep.ts): on its variant's sweep server, its tuple applied by the
-   * visitor's cookie, in the [37] rows at 1440x900.
+   * (lib/sweep.ts): one test on its variant's sweep server, its tuple
+   * applied by the visitor's cookie, running the [37] rows at 1440x900.
    */
   readonly sweep?: boolean;
   /** In the PR set. */
@@ -621,9 +621,9 @@ export function planCells({ meta, registrations, mode, changes = [] }: PlanInput
   for (const cell of selected) {
     for (const viewport of VIEWPORTS) {
       for (const row of PREFERENCE_ROWS) {
-        // A swept cell runs the [37] rows at the sweep's viewport, and nothing else.
+        // A swept cell is one test at the sweep's viewport, which runs the [37] rows itself.
         const planned = cell.sweep
-          ? viewport === SWEEP_VIEWPORT && SWEEP_ROWS.includes(row)
+          ? viewport === SWEEP_VIEWPORT && row === DEFAULT_ROW
           : mode === 'full' ||
             row === DEFAULT_ROW ||
             ((cell === firstDefault || cell.pack !== undefined || cell.changed !== undefined) &&

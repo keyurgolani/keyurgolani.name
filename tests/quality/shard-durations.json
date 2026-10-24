@@ -37,9 +37,6 @@
     "390x844 default": 55.2
   },
   "sweep": {
-    "1440x900 default": 50,
-    "1440x900 reduced-motion": 8.7,
-    "1440x900 forced-colors": 20.8,
-    "1440x900 reduced-transparency": 8.8
+    "1440x900 default": 88.3
   }
 }

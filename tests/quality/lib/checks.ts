@@ -50,10 +50,11 @@ const ROW_CHECKS: Readonly<Record<PreferenceMode, readonly SuiteCheck[]>> = {
 export const SWEEP_PACK_CHECK = 'sweep-pack';
 
 /**
- * What a swept cell's test owes beside CELL_CHECKS and SWEEP_PACK_CHECK (lib/sweep.ts): the
- * [37] rule's five checks alone, by the row each runs in. Its axe run is
- * the contrast rules, since a pack changes how the page looks and never
- * what it is.
+ * The rows a swept cell's one test runs, in order, and what each owes
+ * beside CELL_CHECKS (lib/sweep.ts): the [37] rule's five checks alone. Its
+ * axe run is the contrast rules, since a pack changes how the page looks
+ * and never what it is. Reduced motion comes after forced colors, since
+ * its frame sampler stays on the page for the loads after it.
  */
 export const SWEEP_ROW_CHECKS: Readonly<Record<string, readonly SuiteCheck[]>> = {
   default: ['keyboard', 'focus'],
@@ -62,13 +63,24 @@ export const SWEEP_ROW_CHECKS: Readonly<Record<string, readonly SuiteCheck[]>> =
   'reduced-transparency': ['transparency'],
 };
 
+/** A swept test's name for a check it ran in `row`: the check alone in the default row, else `<row>:<check>`. */
+export const sweepCheck = (row: string, check: string) =>
+  row === 'default' ? check : `${row}:${check}`;
+
+/** What a swept pass in `row` owes, by the check's own name. */
+export const sweepRowChecks = (row: string): string[] => [
+  ...CELL_CHECKS,
+  ...(SWEEP_ROW_CHECKS[row] ?? []),
+];
+
 /**
  * The checks a cell test at `viewport` in `row` owes. In the default row,
  * hover parity runs at the pointer viewports; the reflow, inventory, and
  * enhancement conditions, which reload the page several times, once a cell,
  * at the first viewport, where the plan says the cell takes them
  * (PlannedTest.conditions); and the landscape occlusion pass at the phone's.
- * A swept cell's test (`sweep`) owes SWEEP_ROW_CHECKS instead.
+ * A swept cell's one test (`sweep`) owes, whatever its row, SWEEP_PACK_CHECK
+ * and each SWEEP_ROW_CHECKS row's checks, by sweepCheck()'s names.
  */
 export function requiredChecks(
   row: string,
@@ -76,7 +88,14 @@ export function requiredChecks(
   conditions = true,
   sweep = false,
 ): string[] {
-  if (sweep) return [...CELL_CHECKS, SWEEP_PACK_CHECK, ...(SWEEP_ROW_CHECKS[row] ?? [])];
+  if (sweep) {
+    return [
+      SWEEP_PACK_CHECK,
+      ...Object.keys(SWEEP_ROW_CHECKS).flatMap((each) =>
+        sweepRowChecks(each).map((check) => sweepCheck(each, check)),
+      ),
+    ];
+  }
   const at = VIEWPORTS.find((each) => each.id === viewport);
   const checks: string[] = [...CELL_CHECKS, ...(ROW_CHECKS[row as PreferenceMode] ?? [])];
   if (row === 'default' && at) {

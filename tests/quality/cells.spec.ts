@@ -1,7 +1,7 @@
 import { KIND_ANNOTATION } from './lib/checks';
 import { testTag } from './lib/pr-shards';
 import { runCell } from './lib/run-cell';
-import { packCookie } from './lib/sweep';
+import { packCookie, SWEEP_ROWS } from './lib/sweep';
 import { cellServer, serverTag } from './lib/server';
 import { expect, test } from './fixtures';
 import { loadPlan } from './plan';
@@ -13,8 +13,8 @@ import { loadPlan } from './plan';
 // project's tests (lib/pr-shards.ts). A stand-in state's test, or an excluded one,
 // skips with the reason the plan declares, before any server starts. A
 // swept cell (lib/sweep.ts) is one changed pack on its variant's sweep
-// server: each of its tests sets the pack's cookie in its own context
-// before the page loads, so each pack starts clean.
+// server, in one test: it sets the pack's cookie in its own context before
+// the page loads, so each pack starts clean, and runs the [37] rows.
 
 const plan = await loadPlan();
 
@@ -41,7 +41,7 @@ for (const cell of plan.cells) {
           test.skip(({ browserName }) => browserName === engine, reason);
         }
         test(
-          `${cell.target} ${cell.state} ${cell.path} at ${viewport.id}, ${row.id}`,
+          `${cell.target} ${cell.state} ${cell.path} at ${viewport.id}, ${cell.sweep ? `the [37] sweep's ${SWEEP_ROWS.map((each) => each.id).join(', ')}` : row.id}`,
           {
             tag: [server, testTag(cell.id, viewport.id, row.id)],
             annotation: [

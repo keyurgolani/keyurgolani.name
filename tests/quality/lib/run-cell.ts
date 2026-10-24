@@ -24,7 +24,15 @@ import { QUERY_KEYS } from '../../../packages/appearance/src/axes';
 import { COLOR_ROLES, TOKEN_PROPERTIES } from '../../../packages/appearance/src/roles';
 import { cellAnnotations, type Cell } from '../cells';
 import { axeFor } from './axe';
-import { CHECKS_ANNOTATION, NOTICE_CHECK, requiredChecks } from './checks';
+import {
+  CHECKS_ANNOTATION,
+  NOTICE_CHECK,
+  requiredChecks,
+  SWEEP_ISOLATION_CHECK,
+  sweepCheck,
+  SWEEP_PACK_CHECK,
+  sweepRowChecks,
+} from './checks';
 import { FIXED_TIME } from './clock';
 import { checkEmulation } from './emulation';
 import type { PreferenceRow, Viewport } from './matrix';
@@ -43,7 +51,8 @@ import {
 } from './records';
 import { loadRegistrations, type Interaction } from './registration';
 import { APPEARANCE_STATE } from './state-fixtures';
-import { packFindings } from './sweep';
+import { CANARY_COOKIE } from './env';
+import { packCookie, packFindings, SWEEP_ROWS } from './sweep';
 import { readVitals } from './vitals';
 import {
   enhancementFindings,
@@ -89,6 +98,8 @@ export interface CellRun {
   readonly conditions: boolean;
   readonly testInfo: TestInfo;
   readonly expect: typeof import('@playwright/test').expect;
+  /** The app's origin, which a swept cell's pack cookie is set on. */
+  readonly origin?: string;
 }
 
 /** #19's shared primitives, in every state, which render the packs a tuple names. */
@@ -121,6 +132,35 @@ function rowPath(cell: Cell, row: PreferenceRow): string {
 /** The session that turned JavaScript off on a page, which audit() turns it back on through. */
 const scriptless = new WeakMap<Page, CDPSession>();
 
+/** The session a row's CDP media features went through, which emulateRow() clears them on. */
+const featureSessions = new WeakMap<Page, CDPSession>();
+
+/**
+ * Puts `page` under `row` alone, for a swept test's row after its first
+ * (lib/sweep.ts): whatever the row before set is reset first, the CDP
+ * media features and the media type, then the row's reduced motion,
+ * forced colors, and contrast are emulated on the page, as a context would
+ * for its first, and applyRow() sets the rest. The page then loads again.
+ * Without `reset`, as a mutant, the row before's CDP features stay.
+ */
+export async function emulateRow(
+  page: Page,
+  row: PreferenceRow,
+  { reset = true }: { readonly reset?: boolean } = {},
+): Promise<void> {
+  const features = featureSessions.get(page);
+  if (reset && features) {
+    await features.send('Emulation.setEmulatedMedia', { media: '', features: [] });
+  }
+  await page.emulateMedia({
+    media: null,
+    reducedMotion: row.context.reducedMotion ?? 'no-preference',
+    forcedColors: row.context.forcedColors ?? 'none',
+    contrast: row.context.contrast ?? 'no-preference',
+  });
+  await applyRow(page, row);
+}
+
 /** Applies what a row sets on the page rather than the context: the media type, CDP features, JavaScript off, and the motion sampler. */
 export async function applyRow(page: Page, row: PreferenceRow): Promise<void> {
   if (row.context.javaScriptEnabled === false) {
@@ -130,7 +170,8 @@ export async function applyRow(page: Page, row: PreferenceRow): Promise<void> {
   }
   if (row.context.media) await page.emulateMedia({ media: row.context.media });
   if (row.context.features) {
-    const cdp = await page.context().newCDPSession(page);
+    const cdp = featureSessions.get(page) ?? (await page.context().newCDPSession(page));
+    featureSessions.set(page, cdp);
     await cdp.send('Emulation.setEmulatedMedia', {
       media: row.context.media ?? '',
       features: [{ name: 'prefers-color-scheme', value: 'light' }, ...row.context.features],
@@ -228,10 +269,14 @@ async function suites(run: SuiteRun): Promise<Finding[]> {
 /** The longest axe waits for the page's finite animations to end. */
 const ANIMATION_WAIT_MS = 2_000;
 
-/** The axe rules about color, which a swept cell's audit runs alone (lib/sweep.ts). */
-export const CONTRAST_RULES = ['color-contrast', 'link-in-text-block'] as const;
+/**
+ * The axe rules a swept cell's audit runs alone (lib/sweep.ts): the rules
+ * about color, and target size, since a design language sets how big its
+ * controls are, and the [37] rule keeps touch targets under every one.
+ */
+export const SWEEP_AXE_RULES = ['color-contrast', 'link-in-text-block', 'target-size'] as const;
 
-export async function audit(page: Page, row: PreferenceRow, contrastOnly = false) {
+export async function audit(page: Page, row: PreferenceRow, sweptRules = false) {
   const forced = row.context.forcedColors === 'active';
   const cdp = scriptless.get(page);
   // Read before script turns on: a query axe's pass would flip fails the row.
@@ -256,8 +301,8 @@ export async function audit(page: Page, row: PreferenceRow, contrastOnly = false
       ANIMATION_WAIT_MS,
     );
     const builder = axeFor(page);
-    if (contrastOnly) {
-      builder.withRules(CONTRAST_RULES.filter((rule) => !forced || rule !== 'color-contrast'));
+    if (sweptRules) {
+      builder.withRules(SWEEP_AXE_RULES.filter((rule) => !forced || rule !== 'color-contrast'));
     }
     if (forced) builder.disableRules(['color-contrast']);
     const results: AxeResults = await builder.analyze();
@@ -271,28 +316,106 @@ export async function audit(page: Page, row: PreferenceRow, contrastOnly = false
 /** A cell test does a lot: the default row reloads under every condition. */
 const CELL_TIMEOUT_MS = 240_000;
 
-export async function runCell({
-  page,
-  cell,
-  viewport,
-  row,
-  conditions,
-  testInfo,
-  expect,
-}: CellRun) {
-  testInfo.setTimeout(CELL_TIMEOUT_MS);
-  // First, so a cell that throws carries them too.
-  testInfo.annotations.push(...cellAnnotations(cell));
+/** Where a swept page's init script keeps what localStorage held as the document began. */
+const STORAGE_AT_START = '__qualityStorageAtStart';
+
+/**
+ * A swept test's start (lib/sweep.ts): the context must hold no cookie but
+ * the run's canary, or a pack before this one left its own, and then gets
+ * this pack's. Every document the page loads records how many localStorage
+ * entries it began with, which storageFindings() reads after the first.
+ */
+export async function startPack(
+  page: Page,
+  cell: Pick<Cell, 'tuple'>,
+  origin: string,
+): Promise<Finding[]> {
+  const left = (await page.context().cookies()).filter((each) => each.name !== CANARY_COOKIE);
+  await page.context().addCookies([packCookie(cell, origin)]);
+  await page.addInitScript((key) => {
+    (window as unknown as Record<string, number>)[key] = localStorage.length;
+  }, STORAGE_AT_START);
+  return left.map((each) => ({
+    gate: 'runner',
+    rule: SWEEP_ISOLATION_CHECK,
+    expected: `no cookie but ${CANARY_COOKIE}`,
+    actual: `the context held ${each.name}`,
+  }));
+}
+
+/** Whether the page's document began with localStorage empty, as a fresh context's does. */
+export async function storageFindings(page: Page): Promise<Finding[]> {
+  const kept = await page.evaluate(
+    (key) => (window as unknown as Record<string, number | undefined>)[key] ?? -1,
+    STORAGE_AT_START,
+  );
+  if (kept === 0) return [];
+  return [
+    {
+      gate: 'runner',
+      rule: SWEEP_ISOLATION_CHECK,
+      expected: 'localStorage empty on the first load',
+      actual: kept < 0 ? 'nothing recorded it' : `${kept} entr${kept === 1 ? 'y' : 'ies'}`,
+    },
+  ];
+}
+
+/** What one pass of a cell test found: its row's checks on the cell's page, and on the primitives page. */
+export interface Pass {
+  readonly row: PreferenceRow;
+  /** A swept test's first pass: whether it started clean (startPack, storageFindings). */
+  readonly isolation: readonly Finding[];
+  readonly status: number;
+  /** Whether the page settled (notBusy()) after it loaded. */
+  readonly settled: boolean;
+  readonly emulation: readonly string[];
+  readonly now: number;
+  readonly results: AxeResults;
+  readonly sweptPack: readonly Finding[];
+  /** The suites' failures, the page's and the primitives'. */
+  readonly suiteFailures: readonly CellFailure[];
+  /** Every failure record of the pass. */
+  readonly failures: readonly CellFailure[];
+  readonly ran: ReadonlySet<string>;
+  readonly tokenPages: readonly { route: string; tokens: ResolvedTokens; file: string }[];
+}
+
+/**
+ * One row's pass on `page`. A swept cell's passes after its first share
+ * the page: `reemulate` resets the row before's emulation and sets this
+ * row's (emulateRow), its artifacts take the row's name first, and it
+ * owes its row's sweep checks (checks.ts's sweepRowChecks).
+ */
+export async function runPass(
+  { page, cell, viewport, row, conditions, testInfo, origin }: CellRun,
+  options: { readonly reemulate: boolean },
+): Promise<Pass> {
   const ran = new Set<string>();
-  const owed = new Set(requiredChecks(row.id, viewport.id, conditions, cell.sweep ?? false));
+  const owed = new Set(
+    cell.sweep ? sweepRowChecks(row.id) : requiredChecks(row.id, viewport.id, conditions),
+  );
+  // A swept test's first pass sets its pack, once it has checked the context is clean.
+  const first = cell.sweep === true && !options.reemulate;
+  const isolation: Finding[] = [];
+  if (first) {
+    if (!origin)
+      throw new Error(`${cell.id} is swept, and its run names no origin to set its pack on.`);
+    isolation.push(...(await startPack(page, cell, origin)));
+  }
   // The print row compares the page in print with the page on screen, so it loads on screen first.
   const printRow = row.context.media === 'print';
-  await applyRow(page, printRow ? { ...row, context: { ...row.context, media: undefined } } : row);
+  const onScreen = printRow ? { ...row, context: { ...row.context, media: undefined } } : row;
+  if (options.reemulate) await emulateRow(page, onScreen);
+  else await applyRow(page, onScreen);
   const at = rowPath(cell, row);
   const response = await page.goto(at, { waitUntil: 'load' });
   const status = response?.status() ?? 0;
   ran.add('status');
   const settled = await settle(page);
+  if (first) {
+    isolation.push(...(await storageFindings(page)));
+    ran.add(SWEEP_ISOLATION_CHECK);
+  }
   const screen = printRow ? await inPage<string[]>(page, { kind: 'inventory' }) : [];
   if (printRow) await page.emulateMedia({ media: 'print' });
 
@@ -319,18 +442,19 @@ export async function runCell({
   // On disk in the test's output directory, which the reports artifact
   // uploads, passed or not: axe's JSON, the vitals, and the resolved tokens.
   const written: string[] = [];
+  const named = (name: string) => (cell.sweep ? `${row.id}-${name}` : name);
   const keep = async (name: string, value: unknown) => {
-    const file = testInfo.outputPath(name);
+    const file = testInfo.outputPath(named(name));
     writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
     written.push(path.relative(reportsDir(), file));
-    await testInfo.attach(name, { path: file, contentType: 'application/json' });
+    await testInfo.attach(named(name), { path: file, contentType: 'application/json' });
   };
   await keep('axe.json', { violations: results.violations, incomplete: results.incomplete });
   await keep('vitals.json', vitals);
   await keep('resolved-tokens.json', tokens);
   // A swept cell's tuple came by the visitor's cookie: the page must render its packs (lib/sweep.ts).
   const sweptPack = cell.sweep ? packFindings(cell, tokens) : [];
-  if (cell.sweep) ran.add('sweep-pack');
+  if (cell.sweep) ran.add(SWEEP_PACK_CHECK);
   // What a change-directed cell's failures name its tokens from (the [37] rule).
   const tokenPages = [{ route: cell.route, tokens, file: written.at(-1)! }];
 
@@ -458,7 +582,7 @@ export async function runCell({
       : [runnerFailure(context, 'status', `${status}, not ${cell.expectedStatus}`)]),
     ...emulation.map((problem) => runnerFailure(context, 'media-emulation', problem)),
     ...(settled ? [] : [runnerFailure(context, 'settled', STILL_BUSY)]),
-    ...sweptPack.map((finding) => ({
+    ...[...isolation, ...sweptPack].map((finding) => ({
       ...runnerFailure(context, finding.rule, finding.actual ?? ''),
       expected: finding.expected,
     })),
@@ -474,37 +598,107 @@ export async function runCell({
     ...found,
     ...primitives,
   ];
-  await keep(RECORDS_ATTACHMENT, failures);
   if (owed.has('motion')) ran.add('motion');
-  testInfo.annotations.push({ type: CHECKS_ANNOTATION, description: [...ran].join(' ') });
+  return {
+    row,
+    isolation,
+    status,
+    settled,
+    emulation,
+    now,
+    results,
+    sweptPack,
+    suiteFailures: [...found, ...primitives],
+    failures,
+    ran,
+    tokenPages,
+  };
+}
+
+/**
+ * A cell test: its row's pass, or a swept cell's four (lib/sweep.ts), one
+ * after another on the test's page, each checked to the end before the
+ * next, and every finding recorded before the test fails.
+ */
+export async function runCell(run: CellRun, pass: typeof runPass = runPass) {
+  const { cell, testInfo, expect } = run;
+  testInfo.setTimeout(CELL_TIMEOUT_MS);
+  // First, so a cell that throws carries them too.
+  testInfo.annotations.push(...cellAnnotations(cell));
+  const passes: Pass[] = [];
+  // A swept row that throws is a failure of its own, and the rows after it still run.
+  const broken: CellFailure[] = [];
+  for (const [at, row] of (cell.sweep ? SWEEP_ROWS : [run.row]).entries()) {
+    try {
+      passes.push(await pass({ ...run, row }, { reemulate: at > 0 }));
+    } catch (error) {
+      if (!cell.sweep) throw error;
+      const context: CellContext = { cell, viewport: run.viewport, row, artifacts: [] };
+      broken.push(
+        runnerFailure(context, 'sweep-row', (error as Error).message.split('\n')[0] ?? ''),
+      );
+    }
+  }
+  const failures = [...passes.flatMap((pass) => pass.failures), ...broken];
+  const file = testInfo.outputPath(RECORDS_ATTACHMENT);
+  writeFileSync(file, `${JSON.stringify(failures, null, 2)}\n`);
+  await testInfo.attach(RECORDS_ATTACHMENT, { path: file, contentType: 'application/json' });
+  // A swept test's checks by row (checks.ts's sweepCheck), so the verdict holds it to each row's.
+  const ran = passes.flatMap((pass) =>
+    [...pass.ran].map((check) => (cell.sweep ? sweepCheck(pass.row.id, check) : check)),
+  );
+  testInfo.annotations.push({ type: CHECKS_ANNOTATION, description: ran.join(' ') });
   // A change-directed cell's failures name the changed axis, and the tokens it resolved.
-  const diagnostic = changeDiagnostic(cell, tokenPages);
+  const diagnostic = changeDiagnostic(
+    cell,
+    passes.flatMap((pass) => pass.tokenPages),
+  );
   if (diagnostic) testInfo.annotations.push({ type: 'changed', description: diagnostic });
   const about = (what: string) => (diagnostic ? `${what}. ${diagnostic}` : what);
 
-  expect.soft(status, `${cell.path} answers ${cell.expectedStatus}`).toBe(cell.expectedStatus);
-  expect.soft(settled ? null : STILL_BUSY, `${cell.path} settles`).toBeNull();
-  expect.soft(emulation, `the ${row.id} row's media emulation`).toEqual([]);
   expect
     .soft(
-      sweptPack.map((finding) => `${finding.expected}, rendered ${finding.actual}`),
-      about("the swept pack's tuple, as the page rendered it"),
+      broken.map((failure) => `${failure.preferenceMode}: ${failure.actual}`),
+      about('every row of the sweep ran to the end'),
     )
     .toEqual([]);
-  expect.soft(new Date(now).toISOString(), "the page's clock").toBe(FIXED_TIME);
-  expect
-    .soft(
-      results.violations.map((rule) => `${rule.id}: ${rule.nodes.length} element(s), ${rule.help}`),
-      about('axe, WCAG 2.2 AA'),
-    )
-    .toEqual([]);
-  expect
-    .soft(
-      [...found, ...primitives].map(
-        (failure) =>
-          `${failure.check} ${failure.rule} on ${failure.surface} at ${failure.viewport}${failure.element?.selector ? `, ${failure.element.selector}` : ''}: ${failure.actual}`,
-      ),
-      about("Slice 2's suites"),
-    )
-    .toEqual([]);
+  for (const each of passes) {
+    const { row, status, settled, emulation, now, results } = each;
+    const under = cell.sweep ? `, under ${row.id}` : '';
+    expect
+      .soft(status, `${cell.path} answers ${cell.expectedStatus}${under}`)
+      .toBe(cell.expectedStatus);
+    expect.soft(settled ? null : STILL_BUSY, `${cell.path} settles${under}`).toBeNull();
+    expect.soft(emulation, `the ${row.id} row's media emulation`).toEqual([]);
+    expect
+      .soft(
+        each.isolation.map((finding) => `${finding.expected}, found ${finding.actual}`),
+        about(`the swept test started clean${under}`),
+      )
+      .toEqual([]);
+    expect
+      .soft(
+        each.sweptPack.map((finding) => `${finding.expected}, rendered ${finding.actual}`),
+        about(`the swept pack's tuple, as the page rendered it${under}`),
+      )
+      .toEqual([]);
+    expect.soft(new Date(now).toISOString(), `the page's clock${under}`).toBe(FIXED_TIME);
+    expect
+      .soft(
+        results.violations.map(
+          (rule) => `${rule.id}: ${rule.nodes.length} element(s), ${rule.help}`,
+        ),
+        about(`axe, WCAG 2.2 AA${under}`),
+      )
+      .toEqual([]);
+    expect
+      .soft(
+        each.suiteFailures.map(
+          (failure) =>
+            `${failure.check} ${failure.rule} on ${failure.surface} at ${failure.viewport}${failure.element?.selector ? `, ${failure.element.selector}` : ''}: ${failure.actual}`,
+        ),
+        about(`Slice 2's suites${under}`),
+      )
+      .toEqual([]);
+  }
 }

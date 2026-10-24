@@ -42,7 +42,11 @@ import { shardOutputs } from './pr-count';
 import { loadRegistrations, type Registrations } from './lib/registration';
 import { cellServer, planServers, serverId } from './lib/server';
 import { parseRunArgs } from './run';
+import { SWEEP_VIEWPORT } from './lib/sweep';
 import { checkoutMeta, clone, withTierPacks } from './plan-fixtures';
+
+/** The viewport a swept test runs at (lib/sweep.ts). */
+const SWEEP_VIEWPORT_ID = SWEEP_VIEWPORT.id;
 
 // quality:pr's shards (lib/pr-shards.ts): every shard plans the whole PR set
 // and runs only its own test groups, so the shards' tests are the unsharded
@@ -643,8 +647,8 @@ test("a changed pack's cells run in each variant's sweep group, at the sweep's r
       (each) => each.project === serverProject(ENGINES[0]!, id) && each.file === CELL_SPEC,
     )!;
     const tests = plan.tests.filter((each) => serverId(cellServer(each.cell)) === id);
-    // Both packs' four rows, at the sweep's weight for each.
-    assert.equal(tests.length, 2 * 4);
+    // Both packs, one test each, at the sweep's weight.
+    assert.equal(tests.length, 2);
     const expected = tests.reduce(
       (sum, each) =>
         sum +
@@ -656,30 +660,20 @@ test("a changed pack's cells run in each variant's sweep group, at the sweep's r
     assert.ok(Math.abs(group.weight - expected) < 1e-6, `${id}: ${group.weight} vs ${expected}`);
   }
   for (const cell of swept) assert.ok(onPack(cell.tuple), cell.id);
-  // A pair costs the sweep's four rows, under half of the eleven tests it cost as a cell of its own.
-  const sweepPair = Object.values(durations.sweep).reduce((sum, each) => sum + each, 0);
+  // A pair's one test costs under half of the eleven it cost as a cell of its own.
+  const sweepPair = durations.sweep[`${SWEEP_VIEWPORT_ID} default`]!;
   const cellPair = Object.values(durations.pack).reduce((sum, each) => sum + each, 0);
   assert.ok(sweepPair < cellPair / 2, `${sweepPair}s against ${cellPair}s`);
   // The platform default's tuple is no pack cell.
   assert.ok(!onPack(plan.cells.find((cell) => !cell.pack && !cell.changed)!.tuple));
 });
 
-test("a sweep group too heavy for one worker splits by pack, each pack's rows in one part, and every pack runs once", () => {
+test('a sweep group too heavy for one worker splits by pack, each pack whole in one part, and every pack runs once', () => {
   const meta = withTierPacks(checkoutMeta());
   const language = meta.PACKS!.find((pack) => pack.kind === 'design-language' && !pack.fixture)!;
-  // Rows weighed so that filling parts test by test would cut a pack in two
-  // (10, 60, 10, and 10 s: two packs and the next one's first row fit), and
-  // enough packs that one variant's sweep is more than a worker's share.
-  const durations = {
-    ...loadDurations(),
-    sweep: {
-      '1440x900 default': 10,
-      '1440x900 reduced-motion': 60,
-      '1440x900 forced-colors': 10,
-      '1440x900 reduced-transparency': 10,
-    },
-  };
-  const pair = Object.values(durations.sweep).reduce((sum, each) => sum + each, 0);
+  // Enough packs that one variant's sweep is more than a worker's share.
+  const durations = loadDurations();
+  const pair = durations.sweep[`${SWEEP_VIEWPORT_ID} default`]!;
   const count = Math.ceil(GROUP_BUDGET / pair) + 1;
   const ids = Array.from({ length: count }, (_, at) => `swept-language-${at + 1}`);
   const plan = planCells({
@@ -705,7 +699,7 @@ test("a sweep group too heavy for one worker splits by pack, each pack's rows in
     const parts = split.filter((part) => part.project === group.project && part.file === CELL_SPEC);
     assert.ok(parts.length > 1, group.project);
     for (const part of parts) assert.ok(part.weight <= GROUP_BUDGET, `${part.weight}s`);
-    // Every test of the group in exactly one part, in order, and each pack whole in one part.
+    // Every test of the group in exactly one part, in order: each pack is one test, so it's whole.
     assert.deepEqual(
       parts.flatMap((part) => part.tests),
       group.tests,

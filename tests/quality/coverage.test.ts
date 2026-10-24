@@ -208,3 +208,22 @@ test('a pack, a variant, or a row the plan leaves out is missing, by pack, varia
     FIVE.length,
   );
 });
+
+test("a swept pair's one test counts all five checks, by the rows it runs", () => {
+  const swept = {
+    ...planned('scheme-a', 'fallback', 'default'),
+    cell: { target: 'fallback', changed: [{ axis: 'colorScheme', id: 'scheme-a' }], sweep: true },
+  } as unknown as PlannedTest;
+  const { planned: counted, missing } = sweepCoverage({
+    changes: CHANGES.slice(0, 1),
+    variants: VARIANTS,
+    tests: [swept],
+  });
+  assert.deepEqual(
+    counted,
+    FIVE.map((check) => `colorScheme scheme-a × fallback × ${check}`),
+  );
+  // The other variant has no test of the pack.
+  assert.equal(missing.length, FIVE.length);
+  assert.ok(missing.every((each) => each.includes(' × kinetic × ')));
+});
