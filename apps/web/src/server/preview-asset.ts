@@ -18,7 +18,8 @@ export const PREVIEW_RENDITION_HEADERS: Readonly<Record<string, string>> = Objec
   'accept-ranges': 'none',
 });
 
-function statusDocument(): Response {
+/** The status document a grant route answers when it serves nothing (#7), private and no-store. */
+export function previewStatusDocument(): Response {
   return new Response(PREVIEW_STATUS_DOCUMENT, {
     status: PREVIEW_STATUS,
     headers: { 'content-type': PREVIEW_STATUS_TYPE, 'cache-control': 'private, no-store' },
@@ -40,10 +41,10 @@ async function paramsOf(
 
 export async function previewAsset(request: Request, context?: unknown): Promise<Response> {
   const previews = getDeploymentState()?.previews;
-  if (!previews) return statusDocument();
+  if (!previews) return previewStatusDocument();
   const { grant, segments } = await paramsOf(context);
   const found = await previews.asset(grant, segments).catch(() => null);
-  if (!found) return statusDocument();
+  if (!found) return previewStatusDocument();
   const response = await renditionResponse(
     found,
     () => found.open(),
@@ -51,5 +52,5 @@ export async function previewAsset(request: Request, context?: unknown): Promise
     request.method === 'HEAD',
   );
   // A blob that's gone answers what any refusal does here.
-  return response.status === 200 ? response : statusDocument();
+  return response.status === 200 ? response : previewStatusDocument();
 }
