@@ -762,6 +762,71 @@ test('a grant serves the renditions of the media it pinned, private and no-store
   await refused(await get(next, `portrait/${'c'.repeat(64)}/w480-a1.webp`), 'after the session');
 });
 
+test("a revision grant renders the schemes of the revision it was minted for, never the live one's, after a newer one goes live (#20 PR 3)", async (t) => {
+  const build = schemeGenerators(APPEARANCE_REGISTRY);
+  const schemes: SchemeGenerators = {
+    ...build,
+    declared: (schemeId) =>
+      schemeId === 'fixture-seed'
+        ? { id: 'fixture-seed', version: 1, input: 'seed-color' }
+        : build.declared(schemeId),
+  };
+  const { store, previews, command } = await setup(t, { schemes });
+  const seeded = (seedColor: string) =>
+    pair(
+      portfolio('Live Person'),
+      applyEdits(SITE, 'yaml', [
+        { op: 'set', pointer: '/appearanceInputs', value: { 'fixture-seed': { seedColor } } },
+      ]),
+    );
+  /** Saves `seedColor` as a draft and publishes it: the revision and the scheme it froze. */
+  const publish = async (seedColor: string, expectedLiveRevisionId: `rev_${string}` | null) => {
+    const created = await createDraft(store, seeded(seedColor));
+    const made = created.derived?.schemes?.['fixture-seed'];
+    assert.ok(made, `the save made ${seedColor}'s scheme`);
+    // Its newly generated tokens are a derived change the owner accepts first (#113).
+    const decided = await store.drafts.decideChanges(
+      {
+        draftId: created.draftId,
+        expectedVersion: created.version,
+        changeIds: (created.derived?.changes ?? []).map(({ id }) => id),
+        decision: 'accepted',
+      },
+      'owner',
+    );
+    assert.equal(decided.kind, 'saved', JSON.stringify(decided));
+    const draft = (decided as { draft: Draft }).draft;
+    const published = await store.publication.publish(
+      { draftId: draft.draftId, draftVersion: draft.version, expectedLiveRevisionId },
+      'operator',
+    );
+    assert.equal(published.kind, 'committed', JSON.stringify(published));
+    return { revisionId: (published as { revisionId: `rev_${string}` }).revisionId, made };
+  };
+  const mint = async (revisionId: `rev_${string}`) =>
+    minted(
+      await command('preview.grant.mint', {
+        subject: { revision: revisionId },
+        environment: ENVIRONMENT,
+      }),
+    );
+  const older = await publish('#3366ff', null);
+  const pinned = await mint(older.revisionId);
+  assert.deepEqual((await previews.port.open(pinned))?.schemes, { 'fixture-seed': older.made });
+
+  // A newer revision goes live with another seed's scheme.
+  const newer = await publish('#aa5500', older.revisionId);
+  assert.notDeepEqual(newer.made, older.made);
+  assert.equal((await store.publication.status()).liveRevisionId, newer.revisionId);
+  // The open grant, and a new one on the older revision, read the older one's.
+  assert.deepEqual((await previews.port.open(pinned))?.schemes, { 'fixture-seed': older.made });
+  const later = await mint(older.revisionId);
+  assert.deepEqual((await previews.port.open(later))?.schemes, { 'fixture-seed': older.made });
+  // And a grant on the live one reads its own.
+  const live = await mint(newer.revisionId);
+  assert.deepEqual((await previews.port.open(live))?.schemes, { 'fixture-seed': newer.made });
+});
+
 /** A stored generated scheme, as a revision's snapshots/schemes.json holds one (#20 PR 3). */
 function storedScheme(seed: string) {
   const record = JSON.parse(
