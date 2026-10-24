@@ -18,7 +18,13 @@ import {
 import { preflight, type PreflightCode } from './store/preflight';
 import type { PublicationOutcome } from './store/publication';
 import { runRetention, type Protection } from './store/retention';
-import { liveMedia, mountedSource, withMountedMedia, type SourceReader } from './store/source';
+import {
+  importRefusal,
+  liveMedia,
+  mountedSource,
+  withMountedMedia,
+  type SourceReader,
+} from './store/source';
 import { loadSharp } from './catalog/media/derive';
 import { imageEntries, mediaIngestion, type MediaFinding } from './catalog/media/ingest';
 import { MediaSourceError } from './catalog/media/limits';
@@ -868,6 +874,29 @@ class Commands {
       }
       from = path.resolve(this.options.envBase, source);
     }
+    // The source is read and checked before anything is laid out in the data
+    // directory (#3): an import it refuses leaves the directory as it found
+    // it, so a later first start or import sees a clean one, not a store.
+    this.ownerOnly(this.dataDir(), 'PORTFOLIO_DATA_DIR');
+    const read = await this.options.readSource(from);
+    if (!read.ok) {
+      const why =
+        read.directory === 'missing'
+          ? "doesn't exist"
+          : read.directory === 'not-directory'
+            ? 'is a file, not the directory that holds the pair'
+            : read.directory === 'unreadable'
+              ? "can't be read"
+              : undefined;
+      if (why) throw new Refusal(`${from} ${why}. Nothing was imported.`);
+      return this.refuse('validation_failed', read.diagnostics, 'Nothing was imported.');
+    }
+    // What a publish refuses with no store to compare against, such as a
+    // variant this build doesn't register, as owner's first start checks it.
+    const refusal = importRefusal(mountedSource(read.files), this.options.checks);
+    if (refusal.length > 0)
+      return this.refuse('validation_failed', refusal, 'Nothing was imported.');
+
     const store = await this.writable(from);
     const live = await this.pointer(store);
     // No pointer in a store with history, an event or a tombstone, is a
@@ -883,19 +912,6 @@ class Commands {
     // import commits wins, and the import is refused.
     const startedLive = expect === undefined ? (live?.revisionId ?? null) : expect;
 
-    const read = await this.options.readSource(from);
-    if (!read.ok) {
-      const why =
-        read.directory === 'missing'
-          ? "doesn't exist"
-          : read.directory === 'not-directory'
-            ? 'is a file, not the directory that holds the pair'
-            : read.directory === 'unreadable'
-              ? "can't be read"
-              : undefined;
-      if (why) throw new Refusal(`${from} ${why}. Nothing was imported.`);
-      return this.refuse('validation_failed', read.diagnostics, 'Nothing was imported.');
-    }
     // The pair's media, as a draft save ingests it (#10), over the live
     // revision's records: an unchanged source keeps its revision.
     const mediaRoot = setting(this.options.env, 'PORTFOLIO_MEDIA_ROOT');

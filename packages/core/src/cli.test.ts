@@ -33,9 +33,11 @@ import type { RemoteFetcher } from './catalog/media/remote';
 import {
   contentVariant,
   filesUnder,
+  invalidInput,
   newStore,
   pairInput,
   publishInput,
+  registryChecks,
   tempDir,
   testChecks,
 } from './store/test-support/fixtures';
@@ -788,6 +790,69 @@ test('a signal leaves a lock that names its pid from another host, or from anoth
     );
     assert.deepEqual([run.code, run.signal], [143, null], `${what}: ${run.stderr.slice(-600)}`);
     assert.equal((await store.lock.holder())?.nonce, nonce, `${what}: the lock stays`);
+  }
+});
+
+/**
+ * Every entry under `dir`, directories included, each file with its
+ * SHA-256, sorted: what tells two states of a directory apart, entry for
+ * entry and byte for byte.
+ */
+function entries(dir: string): string[] {
+  const found: string[] = [];
+  const walk = (relative: string) => {
+    for (const entry of readdirSync(path.join(dir, relative), { withFileTypes: true })) {
+      const name = path.join(relative, entry.name);
+      if (entry.isDirectory()) {
+        found.push(`${name}/`);
+        walk(name);
+      } else {
+        found.push(`${name} ${sha256(readFileSync(path.join(dir, name)))}`);
+      }
+    }
+  };
+  walk('');
+  return found.sort();
+}
+
+test('an import it refuses, for the source, the pair, or the variant, leaves an empty or missing data directory as it was', async (t) => {
+  const refusals = [
+    {
+      what: "a source directory that isn't there",
+      source: path.join(tempDir(t, 'store-gone-'), 'nothing'),
+      checks: testChecks(),
+      says: /doesn't exist\. Nothing was imported\.$/m,
+    },
+    {
+      what: "a pair that doesn't validate",
+      source: mounted(t, invalidInput('schema.invalid')),
+      checks: testChecks(),
+      says: /^validation_failed: .* Nothing was imported\.$/m,
+    },
+    {
+      what: "a variant this build doesn't register",
+      source: mounted(t, pairInput('engineering')),
+      checks: registryChecks([]),
+      says: /^validation_failed: .* Nothing was imported\.$/m,
+    },
+  ];
+  for (const { what, source, checks, says } of refusals) {
+    for (const state of ['empty', 'missing'] as const) {
+      // The parent holds the data directory, so a missing one that a run
+      // created would show as a new entry.
+      const parent = tempDir(t, 'store-parent-');
+      const dataDir = path.join(parent, 'data');
+      if (state === 'empty') mkdirSync(dataDir, { mode: 0o700 });
+      const before = entries(parent);
+      const run = await cli(['import', '--from', source], { dataDir, readSource, checks });
+      assert.equal(run.code, 1, `${what}, ${state}: ${run.out}${run.err}`);
+      assert.match(run.err, says, `${what}, ${state}`);
+      assert.deepEqual(
+        entries(parent),
+        before,
+        `${what}, ${state}: the data directory is as it was`,
+      );
+    }
   }
 });
 
