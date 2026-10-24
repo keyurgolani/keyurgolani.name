@@ -286,13 +286,18 @@ const isEntry = (source, entry) =>
  * gzip size, or the sum of its modules' where only they are known.
  * `chunks` is the build's attributed chunks, each with the path it's served
  * at; `entries` maps an enhancement id to the file its export resolves to
- * in the package, or null for none.
+ * in the package, or null for none. A chunk of its group that the unit's
+ * page loads statically, in `statics`, is the page's, which it would load
+ * anyway: it counts in the route's js, and not here, so its bytes count
+ * once. A chunk holding its entry that no group names is `ungrouped`: the
+ * build's loader wasn't read, so what its import loads isn't known.
  *
  * @param {any} unit
- * @param {{ path: string, gzipBytes?: number, loadedWith?: string[], modules: { source: string, package: string | null, gzipBytes: number }[] }[]} chunks
+ * @param {{ path: string, gzipBytes?: number, loadedWith?: string[], ungrouped?: boolean, modules: { source: string, package: string | null, gzipBytes: number }[] }[]} chunks
  * @param {Record<string, string | null>} entries
+ * @param {ReadonlySet<string>} [statics] the chunks the unit's page loads statically, by served path
  */
-export function enhancementChunks(unit, chunks, entries) {
+export function enhancementChunks(unit, chunks, entries, statics = new Set()) {
   const byPath = new Map(chunks.map((chunk) => [chunk.path, chunk]));
   const size = (chunk) =>
     chunk.gzipBytes ?? chunk.modules.reduce((total, module) => total + module.gzipBytes, 0);
@@ -303,17 +308,23 @@ export function enhancementChunks(unit, chunks, entries) {
         (module) => module.package === unit.packageName && isEntry(module.source, entry),
       ),
     );
-    // The chunks its import loads, each once: the ones holding its entry, then their group's others.
+    // The chunks its import loads, each once: the ones holding its entry, then their group's
+    // others, but for those the page loads statically, which are the page's.
     const loaded = new Map(holding.map((chunk) => [chunk.path, chunk]));
+    const shared = new Set();
     for (const chunk of holding) {
       for (const other of chunk.loadedWith ?? []) {
         const found = byPath.get(other);
-        if (found && !loaded.has(other)) loaded.set(other, found);
+        if (!found || loaded.has(other)) continue;
+        if (statics.has(other)) shared.add(other);
+        else loaded.set(other, found);
       }
     }
     return {
       id: enhancement.id,
       entry,
+      shared: [...shared].sort(),
+      ungrouped: holding.filter((chunk) => chunk.ungrouped).map((chunk) => chunk.path),
       // Everything it loads is the enhancement's to load: its own code, and the kit's,
       // three.js's, or any library's beside it, which nothing else on the page needed.
       chunks:
@@ -461,6 +472,7 @@ export function checkBudgets({
   trace,
   chunks,
   entries,
+  statics = () => new Set(),
   stylesheet,
 }) {
   const records = [];
@@ -503,7 +515,8 @@ export function checkBudgets({
     const limits = limitsFor(unit, ceilings);
     const rendering =
       unit.kind === 'variant' ? cases.filter((entry) => entry.composition === unit.id) : [];
-    const enhancements = enhancementChunks(unit, chunks, entries(unit));
+    const pageStatics = unit.enhancements?.length ? statics(unit) : new Set();
+    const enhancements = enhancementChunks(unit, chunks, entries(unit), pageStatics ?? new Set());
     const css = unit.stylesheet ? stylesheet(unit.stylesheet.url) : null;
     const measured = measure({ unit, cases: rendering, enhancements, css });
     if (!row) {
@@ -603,6 +616,24 @@ export function checkBudgets({
           metric: 'trace',
           test: `the trace couldn't attribute ${label(unit)}'s JS, since ${unmapped.length > 0 ? `${unmapped.length} script(s) had no source map` : 'a case has no attribution'}: ${NEEDS_MAPS}`,
           asset: unmapped[0] ?? manifestOf(unit),
+        });
+      }
+    }
+    if (pageStatics === null) {
+      records.push({
+        unit,
+        metric: 'enhancement',
+        test: `the build names no client reference manifest for ${label(unit)}'s page, so the chunks it loads statically, and so what its enhancements load beside them, aren't known: run pnpm build`,
+        asset: manifestOf(unit),
+      });
+    }
+    for (const { id, ungrouped = [] } of enhancements) {
+      for (const chunk of ungrouped) {
+        records.push({
+          unit,
+          metric: 'enhancement',
+          test: `no async group of the build's loaders names ${chunk}, which holds ${label(unit)}'s enhancement ${id}, so what its import loads beside it isn't known: the loader's text may have changed, and asyncGroups() in ci/check-budgets.mjs reads it`,
+          asset: chunk,
         });
       }
     }

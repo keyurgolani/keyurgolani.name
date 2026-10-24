@@ -20,9 +20,9 @@ import {
   HIDDEN_CANARY,
 } from '@portfolio/variant-contract/node';
 import SpatialBento from '.';
-import { decideStage } from './policy';
+import { decideStage, exitedAfterPress, exitPressed } from './policy';
 import { Runtime } from './runtime';
-import { buildScene, PARTICLE_COUNT, PLANES } from './scene';
+import { buildScene, PARTICLE_COUNT, PLANES, seeded } from './scene';
 
 // Spatial Bento (#16): its manifest holds the catalog's pins and declares
 // the stage's heavy budgets, and it renders every contract fixture as one
@@ -466,18 +466,31 @@ test('the capability policy: a supported device runs the stage, and every reason
     [{ state: 'paused', reason: 'offscreen' }, 'waiting', true],
   ];
   for (const [change, reason, offered] of off) {
-    assert.deepEqual(
-      decideStage({ ...RUNNING, ...change }),
-      { mount: false, offered, reason },
-      JSON.stringify(change),
-    );
+    const decision = decideStage({ ...RUNNING, ...change });
+    assert.deepEqual(decision, { mount: false, offered, reason }, JSON.stringify(change));
+    // Offered or not, the exit isn't pressed while nothing is mounted: waiting for #7's
+    // lifecycle or the runtime included.
+    assert.equal(exitPressed(decision), false, JSON.stringify(change));
   }
+  assert.equal(exitPressed(decideStage(RUNNING)), true);
+  // A press acts on what the exit reads: unpressed while it waits, a press asks for the stage, so
+  // once the lifecycle says active it runs, pressed; pressed, a press leaves it, and again comes back.
+  const press = (change: Partial<typeof RUNNING>, exited: boolean) =>
+    exitedAfterPress(decideStage({ ...RUNNING, ...change, exited }));
+  const waited = press({ framed: true, lifecycle: 'none' }, false);
+  assert.equal(waited, false, 'a press while it waits never opts out');
+  const active = decideStage({ ...RUNNING, framed: true, lifecycle: 'active', exited: waited });
+  assert.deepEqual(active, { mount: true, offered: true, reason: 'running' });
+  assert.equal(exitPressed(active), true);
+  assert.equal(press({ state: 'paused', reason: 'offscreen' }, false), false);
+  const left = press({}, false);
+  assert.equal(left, true, 'a press on the running stage leaves it');
+  assert.equal(decideStage({ ...RUNNING, exited: left }).reason, 'exited');
+  assert.equal(press({}, left), false, 'and a press on the exit it left brings it back');
   // A stage that started holds still while paused, and a static runtime ends it.
-  assert.deepEqual(decideStage({ ...RUNNING, state: 'paused', reason: 'hidden', started: true }), {
-    mount: true,
-    offered: true,
-    reason: 'paused',
-  });
+  const paused = decideStage({ ...RUNNING, state: 'paused', reason: 'hidden', started: true });
+  assert.deepEqual(paused, { mount: true, offered: true, reason: 'paused' });
+  assert.equal(exitPressed(paused), true);
   assert.equal(
     decideStage({ ...RUNNING, state: 'static', reason: 'reduced', started: true }).mount,
     false,
@@ -560,6 +573,24 @@ test('the stage is linear in its particles: building the scene touches each a co
   assert.equal(build(n), n * 3);
   assert.equal(build(2 * n), 2 * build(n));
   assert.equal(build(4 * n), 4 * build(n));
+  // And its work, the seeded generator's draws, which a loop that only draws would still grow:
+  // three a particle, so N, 2N, and 4N particles take exactly 1x, 2x, and 4x the draws.
+  const draws = (particles: number) => {
+    let drawn = 0;
+    const scene = buildScene(42, particles, undefined, (seed) => {
+      const next = seeded(seed);
+      return () => {
+        drawn += 1;
+        return next();
+      };
+    });
+    // The counted generator is the seeded one: the field is the page's own.
+    assert.deepEqual([...scene.particles], [...buildScene(42, particles).particles]);
+    return drawn;
+  };
+  assert.equal(draws(n), n * 3);
+  assert.equal(draws(2 * n), 2 * draws(n));
+  assert.equal(draws(4 * n), 4 * draws(n));
 
   // A frame: the drift moves the group from the time alone, over N particles or 2N.
   const { driftFrame } = await import('./stage-canvas');

@@ -303,6 +303,34 @@ test('Action carries an invoker command, spelled as HTML spells it', () => {
   assert.equal(action.attributes.command, 'show-modal');
 });
 
+test("An Action that isn't available carries no invoker command, which a browser would run anyway", () => {
+  const command = { for: 'note', action: 'show-modal' } as const;
+  for (const [what, element] of [
+    [
+      'disabled, keeping focus',
+      <Action key="keeps" disabled keepsFocus command={command}>
+        Open
+      </Action>,
+    ],
+    [
+      'disabled',
+      <Action key="disabled" disabled command={command}>
+        Open
+      </Action>,
+    ],
+    [
+      'loading',
+      <Action key="loading" loading command={command}>
+        Open
+      </Action>,
+    ],
+  ] as const) {
+    const action = one(html(element), 'action');
+    assert.equal(action.attributes.commandfor, undefined, what);
+    assert.equal(action.attributes.command, undefined, what);
+  }
+});
+
 test("Surface's level is data-emphasis; it's a div unless it's an article", () => {
   const surface = one(html(<Surface labelledBy="h">Body</Surface>), 'surface');
   assert.equal(surface.tag, 'div');

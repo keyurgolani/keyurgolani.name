@@ -167,12 +167,63 @@ export function buildChunks(files, staticDir = STATIC_DIR) {
           .filter((other) => other !== chunk.served && byPath.has(other)),
       ),
     ];
-    found.set(chunk.served, { ...attribute(chunk), loadedWith: others });
+    // A holding chunk no group names: the loader's text wasn't read, and the check says so.
+    const ungrouped = !groups.some((group) => group.includes(chunk.served));
+    found.set(chunk.served, {
+      ...attribute(chunk),
+      loadedWith: others,
+      ...(ungrouped ? { ungrouped: true } : {}),
+    });
     for (const other of others) {
       if (!found.has(other)) found.set(other, attribute(byPath.get(other)));
     }
   }
   return [...found.values()];
+}
+
+/**
+ * The chunks a variant's page loads statically, by the path each is served
+ * at: every entry's in the client reference manifest the build writes for
+ * its experience segment, and the root's own, from build-manifest.json.
+ * Null when the build has no such manifest, so its statics aren't known.
+ *
+ * @param {string} id the variant's id
+ * @returns {Set<string> | null}
+ */
+export function staticChunks(id, web = WEB) {
+  const next = path.join(web, '.next');
+  const manifest = path.join(
+    next,
+    'server',
+    'app',
+    '(site)',
+    '_experience',
+    id,
+    '[[...route]]',
+    'page_client-reference-manifest.js',
+  );
+  let entryJSFiles;
+  try {
+    // globalThis.__RSC_MANIFEST["…/page"] = {…};
+    const text = readFileSync(manifest, 'utf8');
+    const json = text.slice(text.indexOf('] = ') + 4).replace(/;\s*$/, '');
+    ({ entryJSFiles } = JSON.parse(json));
+  } catch {
+    return null;
+  }
+  if (!entryJSFiles || typeof entryJSFiles !== 'object') return null;
+  let root = [];
+  try {
+    const build = readJson(path.join(next, 'build-manifest.json'));
+    root = [...(build.rootMainFiles ?? []), ...(build.polyfillFiles ?? [])];
+  } catch {
+    // No build manifest: the segment's entries alone.
+  }
+  return new Set(
+    [...Object.values(entryJSFiles).flat(), ...root]
+      .filter((file) => typeof file === 'string' && file.startsWith('static/'))
+      .map((file) => `/_next/${file}`),
+  );
 }
 
 /** A stylesheet's text from the build's public/ tree, by the URL it's served at. */
@@ -236,6 +287,7 @@ function main(argv, env = process.env) {
     trace: report,
     chunks,
     entries: (unit) => entries.get(unit) ?? {},
+    statics: (unit) => staticChunks(unit.id),
     stylesheet: publicStylesheet(),
   });
 

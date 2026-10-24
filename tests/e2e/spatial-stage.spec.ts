@@ -507,17 +507,42 @@ test(
   { annotation },
   async ({ page }) => {
     const frame = await loadFramed(page);
-    // No lifecycle yet: inactive, with no canvas and so no WebGL context.
+    const exit = frame.getByRole('button', { name: 'Spatial stage' });
+    // No lifecycle yet: inactive, with no canvas and so no WebGL context, and the exit,
+    // offered, isn't pressed while nothing runs.
     expect(await frameReason(frame)).toBe('lifecycle');
     await expect(frame.locator('canvas[data-spatial-canvas]')).toHaveCount(0);
+    await expect(exit).toBeEnabled();
+    await expect(exit).toHaveAttribute('aria-pressed', 'false');
     await lifecycle(frame, 'visible', true);
     await expect.poll(() => frameReason(frame), { timeout: 20_000 }).toBe('running');
     await expect(frame.locator('canvas[data-spatial-canvas]')).toHaveCount(1);
+    await expect(exit).toHaveAttribute('aria-pressed', 'true');
     await lifecycle(frame, 'visible', false);
     await expect.poll(() => frameReason(frame)).toBe('lifecycle');
     await expect(frame.locator('canvas[data-spatial-canvas]')).toHaveCount(0);
+    await expect(exit).toHaveAttribute('aria-pressed', 'false');
     await lifecycle(frame, 'visible', true);
     await expect.poll(() => frameReason(frame), { timeout: 20_000 }).toBe('running');
+  },
+);
+
+test(
+  "in a frame, pressing the unpressed exit while the stage waits for #7's lifecycle asks for it, so it runs once the lifecycle says active",
+  { annotation },
+  async ({ page }) => {
+    const frame = await loadFramed(page);
+    const exit = frame.getByRole('button', { name: 'Spatial stage' });
+    expect(await frameReason(frame)).toBe('lifecycle');
+    await expect(exit).toHaveAttribute('aria-pressed', 'false');
+    await exit.click();
+    // Still waiting, and never opted out.
+    expect(await frameReason(frame)).toBe('lifecycle');
+    await expect(exit).toHaveAttribute('aria-pressed', 'false');
+    await lifecycle(frame, 'visible', true);
+    await expect.poll(() => frameReason(frame), { timeout: 20_000 }).toBe('running');
+    await expect(exit).toHaveAttribute('aria-pressed', 'true');
+    await expect(frame.locator('canvas[data-spatial-canvas]')).toHaveCount(1);
   },
 );
 
