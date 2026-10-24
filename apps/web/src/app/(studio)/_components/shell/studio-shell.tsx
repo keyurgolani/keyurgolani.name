@@ -37,12 +37,14 @@ import { pageCacheHandlers, restoredMayKeep } from '~/lib/studio/page-cache';
 import { claimTab, mayRestore, openTabs } from '~/lib/studio/tab-presence';
 import { endSession, NEUTRAL_TITLE } from '~/lib/studio/session-end';
 import { stateLines } from '~/lib/studio/state-model';
+import { loadOwnerBackend } from '~/lib/studio/load-backend';
 import { tasksFor, type StudioTask, type TaskId } from '~/lib/studio/tasks';
 import { AUTH_REQUIRED, onSignedOut, SIGNED_OUT_LOCATION, studioFetch } from '~/lib/studio-fetch';
 import { ContentEditor } from '../fields/content-editor';
 import { FindingsSummary } from '../fields/findings-summary';
 import { ConflictPanel, OrphanPanel } from './conflict-panel';
 import { SignOut } from './sign-out';
+import { StudioFrame } from './studio-frame';
 import { AppearanceWorkspace, type PreviewSetup } from './appearance-workspace';
 
 // Publish history loads with its task, never with the rest of /studio.
@@ -131,7 +133,7 @@ export function StudioShell({
   const retry = useRef<HTMLButtonElement>(null);
   // The journal write waiting for a pause in typing, which a page going into the cache cancels.
   const journalTimer = useRef<number | null>(null);
-  // Only the owner adapter exists yet: #9 brings the demo's.
+  // Demo Studio has its own shell (#9), so this one loads only the owner adapter.
   const unavailable = policy.profile !== 'owner';
   // False while a back-forward cache restore re-checks the session: nothing shows until it does.
   const [verified, setVerified] = useState(true);
@@ -169,7 +171,7 @@ export function StudioShell({
       if (!cancelled) setBackendFailed(true);
     };
     const timer = window.setTimeout(failed, BACKEND_TIMEOUT_MS);
-    import('~/lib/studio/owner-backend').then(
+    loadOwnerBackend().then(
       ({ ownerBackend }) => {
         window.clearTimeout(timer);
         if (!cancelled) setBackend(ownerBackend(studioFetch, csrfToken));
@@ -504,53 +506,19 @@ export function StudioShell({
   const dirty = isDirty(session);
 
   return (
-    <div className="studio-shell">
-      <header className="studio-shell__header">
-        <h1 className="studio-shell__name">Portfolio Studio</h1>
-        <p className="studio-shell__signed-in">Signed in</p>
-        <SignOut shouldAsk={journalHolds} onSignOut={signOut} />
-      </header>
-      <nav className="studio-shell__nav" aria-label="Studio tasks">
-        <ul>
-          {tasks.map((each) => (
-            <li key={each.id}>
-              <a
-                href={`#${each.id}`}
-                className="studio-shell__task"
-                aria-current={each.id === active?.id ? 'page' : undefined}
-              >
-                {each.label}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </nav>
-      <main className="studio-shell__main" id="studio-main" tabIndex={-1}>
-        {/* Each task link's fragment names an element, with or without the shell's script. */}
-        <div className="studio-shell__anchors">
-          {tasks.map((each) =>
-            // Focusable, so a task link moves focus to the task area, as a skip link does.
-            each.id === 'content' ? (
-              <div key={each.id} id={each.id} tabIndex={-1}>
-                {/* Studio needs JavaScript by design, and says so where its first task starts.
-                    Without it the shell never loads, so its waiting line goes too. */}
-                <noscript>
-                  <style>{'.studio-state__waiting { display: none; }'}</style>
-                  <p className="studio-alert">
-                    Portfolio Studio needs JavaScript: it reads and saves the draft from the
-                    browser. Turn JavaScript on for this site, then reload the page.
-                  </p>
-                </noscript>
-              </div>
-            ) : (
-              <span key={each.id} id={each.id} tabIndex={-1} />
-            ),
-          )}
-        </div>
-        <section className="studio-state" aria-labelledby="studio-state-heading">
-          <h2 id="studio-state-heading" className="studio-state__heading">
-            Where things stand
-          </h2>
+    <StudioFrame
+      status={<p className="studio-shell__signed-in">Signed in</p>}
+      actions={<SignOut shouldAsk={journalHolds} onSignOut={signOut} />}
+      tasks={tasks}
+      current={active?.id}
+      noScript={
+        <p className="studio-alert">
+          Portfolio Studio needs JavaScript: it reads and saves the draft from the browser. Turn
+          JavaScript on for this site, then reload the page.
+        </p>
+      }
+      state={
+        <>
           {ready ? (
             <dl className="studio-state__lines">
               {lines.map((line) => (
@@ -618,122 +586,123 @@ export function StudioShell({
               {session.error}
             </p>
           ) : null}
+        </>
+      }
+    >
+      {stuck && active ? (
+        // Which task couldn't load, so the owner knows where they were.
+        <section className="studio-task" aria-labelledby="studio-task-heading">
+          <h2 id="studio-task-heading" className="studio-task__heading">
+            {active.label}
+          </h2>
+          <p className="studio-task__pending">
+            {failedToLoad
+              ? "This task needs the part of Studio that couldn't load."
+              : "This task needs the draft, which Studio couldn't read."}
+          </p>
         </section>
-        {stuck && active ? (
-          // Which task couldn't load, so the owner knows where they were.
-          <section className="studio-task" aria-labelledby="studio-task-heading">
-            <h2 id="studio-task-heading" className="studio-task__heading">
-              {active.label}
-            </h2>
-            <p className="studio-task__pending">
-              {failedToLoad
-                ? "This task needs the part of Studio that couldn't load."
-                : "This task needs the draft, which Studio couldn't read."}
-            </p>
-          </section>
-        ) : null}
-        {ready && active ? (
-          <section className="studio-task" aria-labelledby="studio-task-heading">
-            <h2 id="studio-task-heading" className="studio-task__heading">
-              {active.label}
-            </h2>
-            {session.orphan ? (
-              <OrphanPanel
-                orphan={session.orphan}
-                canAdopt={session.local !== null}
-                onAdopt={() => {
-                  // Its text becomes this tab's, under this tab's entry, dated by its own last edit.
-                  const store = storage();
-                  if (store && session.orphan && session.orphan.tabId !== tab.current) {
-                    removeEntry(store, session.orphan.tabId, Date.now());
-                  }
-                  editedAt.current = session.orphan?.savedAt ?? null;
-                  dispatch({ type: 'adopt-orphan' });
-                }}
-                onDrop={() => {
-                  const store = storage();
-                  if (store && session.orphan) {
-                    removeEntry(store, session.orphan.tabId, Date.now());
-                  }
-                  dispatch({ type: 'drop-orphan' });
-                }}
+      ) : null}
+      {ready && active ? (
+        <section className="studio-task" aria-labelledby="studio-task-heading">
+          <h2 id="studio-task-heading" className="studio-task__heading">
+            {active.label}
+          </h2>
+          {session.orphan ? (
+            <OrphanPanel
+              orphan={session.orphan}
+              canAdopt={session.local !== null}
+              onAdopt={() => {
+                // Its text becomes this tab's, under this tab's entry, dated by its own last edit.
+                const store = storage();
+                if (store && session.orphan && session.orphan.tabId !== tab.current) {
+                  removeEntry(store, session.orphan.tabId, Date.now());
+                }
+                editedAt.current = session.orphan?.savedAt ?? null;
+                dispatch({ type: 'adopt-orphan' });
+              }}
+              onDrop={() => {
+                const store = storage();
+                if (store && session.orphan) {
+                  removeEntry(store, session.orphan.tabId, Date.now());
+                }
+                dispatch({ type: 'drop-orphan' });
+              }}
+            />
+          ) : null}
+          {session.conflict && session.local ? (
+            <ConflictPanel
+              theirs={session.conflict}
+              fileName={fileName}
+              saving={session.saving}
+              onKeepMine={keepMine}
+              onTakeTheirs={() => dispatch({ type: 'take-theirs' })}
+            />
+          ) : null}
+          {active.pending ? (
+            <p className="studio-task__pending">{active.pending}</p>
+          ) : active.id === 'history' ? (
+            // Publish history needs the owner's backend: a demo's has no publish or rollback.
+            backend && isOwnerBackend(backend) ? (
+              <HistoryTask
+                backend={backend}
+                session={session}
+                canPublish={policy.allowed.includes('publish')}
+                canRollback={policy.allowed.includes('rollback')}
+                onMoved={() => load(backend)}
               />
-            ) : null}
-            {session.conflict && session.local ? (
-              <ConflictPanel
-                theirs={session.conflict}
-                fileName={fileName}
-                saving={session.saving}
-                onKeepMine={keepMine}
-                onTakeTheirs={() => dispatch({ type: 'take-theirs' })}
-              />
-            ) : null}
-            {active.pending ? (
-              <p className="studio-task__pending">{active.pending}</p>
-            ) : active.id === 'history' ? (
-              // Publish history needs the owner's backend: a demo's has no publish or rollback.
-              backend && isOwnerBackend(backend) ? (
-                <HistoryTask
-                  backend={backend}
-                  session={session}
-                  canPublish={policy.allowed.includes('publish')}
-                  canRollback={policy.allowed.includes('rollback')}
-                  onMoved={() => load(backend)}
-                />
-              ) : backend ? (
-                <p className="studio-task__pending">
-                  Publish history needs the owner&apos;s store, which this Studio doesn&apos;t have.
-                </p>
-              ) : null
-            ) : active.id === 'validation' ? (
-              <FindingsSummary draft={session.draft} dirty={dirty} fileName={fileName} />
-            ) : active.id === 'appearance' ? (
-              <AppearanceWorkspace
-                draft={session.draft}
-                dirty={dirty}
-                saving={session.saving}
-                canWrite={canWrite && session.conflict === null && session.orphan === null}
-                catalog={appearance}
-                csrfToken={csrfToken}
-                preview={preview}
-                onApply={(edits) => void applyAppearance(edits)}
-              />
-            ) : session.draft && session.local ? (
-              <ContentEditor
-                documents={session.local}
-                draft={session.draft}
-                names={namesIn(session.local)}
-                fileName={fileName}
-                readOnly={!canWrite || session.conflict !== null || session.orphan !== null}
-                dirty={dirty}
-                saving={session.saving}
-                onEdit={(name, sourceText) => {
-                  editedAt.current = Date.now();
-                  dispatch({ type: 'edited', name, sourceText });
-                }}
-                onSave={() => void save()}
-              />
-            ) : (
-              <div className="studio-task__empty">
-                <p>
-                  There is no working draft yet. Start one from the live revision to edit the
-                  portfolio and site documents.
-                </p>
-                {canWrite ? (
-                  <button
-                    type="button"
-                    className="studio-button"
-                    aria-disabled={session.saving ? true : undefined}
-                    onClick={() => void start()}
-                  >
-                    Start a draft
-                  </button>
-                ) : null}
-              </div>
-            )}
-          </section>
-        ) : null}
-      </main>
-    </div>
+            ) : backend ? (
+              <p className="studio-task__pending">
+                Publish history needs the owner&apos;s store, which this Studio doesn&apos;t have.
+              </p>
+            ) : null
+          ) : active.id === 'validation' ? (
+            <FindingsSummary draft={session.draft} dirty={dirty} fileName={fileName} />
+          ) : active.id === 'appearance' ? (
+            <AppearanceWorkspace
+              draft={session.draft}
+              dirty={dirty}
+              saving={session.saving}
+              canWrite={canWrite && session.conflict === null && session.orphan === null}
+              catalog={appearance}
+              csrfToken={csrfToken}
+              preview={preview}
+              onApply={(edits) => void applyAppearance(edits)}
+            />
+          ) : session.draft && session.local ? (
+            <ContentEditor
+              documents={session.local}
+              draft={session.draft}
+              names={namesIn(session.local)}
+              fileName={fileName}
+              readOnly={!canWrite || session.conflict !== null || session.orphan !== null}
+              dirty={dirty}
+              saving={session.saving}
+              onEdit={(name, sourceText) => {
+                editedAt.current = Date.now();
+                dispatch({ type: 'edited', name, sourceText });
+              }}
+              onSave={() => void save()}
+            />
+          ) : (
+            <div className="studio-task__empty">
+              <p>
+                There is no working draft yet. Start one from the live revision to edit the
+                portfolio and site documents.
+              </p>
+              {canWrite ? (
+                <button
+                  type="button"
+                  className="studio-button"
+                  aria-disabled={session.saving ? true : undefined}
+                  onClick={() => void start()}
+                >
+                  Start a draft
+                </button>
+              ) : null}
+            </div>
+          )}
+        </section>
+      ) : null}
+    </StudioFrame>
   );
 }

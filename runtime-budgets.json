@@ -28,7 +28,7 @@
       },
       {
         "glob": "apps/web/src/lib/demo/**",
-        "rationale": "The Demo Studio's browser modules (#9): the import worker, its pipeline, and the export. They load under the demo profile alone, never on an owner or read-only page."
+        "rationale": "Demo Studio's browser modules (#9): its URL state, storage, browser backend, and body, and the import worker, its pipeline, and the export. Only Demo Studio's own shell chunk and what it loads carry them, on /studio under demo, never a public page or Owner Studio."
       }
     ]
   },

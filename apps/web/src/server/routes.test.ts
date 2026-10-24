@@ -1330,7 +1330,7 @@ test('the Studio transport is served in every profile', () => {
   for (const profile of PROFILES) assert.equal(serves(profile, '/api/studio/[name]'), true);
 });
 
-test("what every profile serves, with #2's Studio pages under owner alone", () => {
+test("what every profile serves: #2's Studio pages under owner, and Demo Studio's /studio under demo", () => {
   const served = (profile: Profile) =>
     PATTERNS.filter((pattern) => serves(profile, pattern as RoutePattern));
   const everywhere = [
@@ -1373,8 +1373,8 @@ test("what every profile serves, with #2's Studio pages under owner alone", () =
     ].sort(),
   );
   assert.deepEqual(served('read-only'), [...everywhere, ...site].sort());
-  // The bundled sample, and every route under it, and the read-only
-  // reference's pages and renditions (#9).
+  // The bundled sample, and every route under it, the read-only reference's
+  // pages and renditions, and Demo Studio (#9).
   assert.deepEqual(
     served('demo'),
     [
@@ -1382,6 +1382,7 @@ test("what every profile serves, with #2's Studio pages under owner alone", () =
       '/sample/[[...path]]',
       '/reference/[[...path]]',
       '/reference/media/[...path]',
+      '/studio',
     ].sort(),
   );
 });
@@ -1391,12 +1392,16 @@ test('each table route resolves the way its capability says, in every profile', 
     for (const entry of listRoutes()) {
       const pathname = instantiate(entry.pattern);
       // No installed variant declares a view at /probe, and no live slug is probe (#10b).
+      // A pattern another entry serves in the profile, as demo's /studio (#9), is served there.
+      const servedThere = listRoutes().some(
+        (other) => other.pattern === entry.pattern && routeAccess(profile, other) !== 'absent',
+      );
       const expected =
         entry.kind === 'page' && pathname.includes('probe')
           ? 'missing'
-          : routeAccess(profile, entry) === 'absent'
-            ? 'absent'
-            : 'served';
+          : servedThere
+            ? 'served'
+            : 'absent';
       assert.equal(resolveRoute(profile, pathname).status, expected, `${profile} ${entry.pattern}`);
     }
   }

@@ -25,6 +25,7 @@ export const routes: readonly string[] = ['/studio'];
 
 export const sources: readonly string[] = [
   'apps/web/src/app/(studio)/studio/page.tsx',
+  'apps/web/src/app/(studio)/_components/studio-entry.tsx',
   'apps/web/src/app/(studio)/_components/shell/**',
   'apps/web/src/app/(studio)/_components/preview/**',
   'apps/web/src/app/(studio)/layout.tsx',
