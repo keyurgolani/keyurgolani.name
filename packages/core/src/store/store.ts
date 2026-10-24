@@ -75,7 +75,10 @@ export function openStore({
     lock,
     assets,
     // A draft on a damaged base compares as the publish gate does (#10).
-    drafts: filesystemDraftStore({ ...shared, lastKnownGood: () => publication.lastKnownGood() }),
+    drafts: filesystemDraftStore({
+      ...shared,
+      lastKnownGood: (except) => publication.lastKnownGood({ except }),
+    }),
     revisions: filesystemRevisionStore({ fs, paths, checks, hasBlob: (hash) => assets.has(hash) }),
     publication,
   });

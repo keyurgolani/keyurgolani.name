@@ -323,8 +323,12 @@ export interface PublicationService {
    */
   revisions(page?: ListPage): Promise<readonly RevisionSummary[]>;
   revision(revisionId: RevisionId): Promise<RevisionDetail | null>;
-  /** The most recently live revision this build can serve, or null. */
-  lastKnownGood(): Promise<RevisionId | null>;
+  /**
+   * The most recently live revision this build can serve, or null. One in
+   * `except` is passed over: a revision a read has just proven damaged,
+   * which the health cache may still hold as healthy.
+   */
+  lastKnownGood(options?: { readonly except?: readonly RevisionId[] }): Promise<RevisionId | null>;
   /**
    * Whether the store is empty: no live.json, and no history, which is an
    * event, a moved-aside one, or a tombstone (hasHistory()). A revision
@@ -537,21 +541,21 @@ export function filesystemPublicationService({
     // never pass for want of a moment's I/O.
     const transient = () =>
       new StoreError('storage_unavailable', "The live revision can't be read just now.");
-    if (!read.ok) {
+    // Each revision a read proves damaged is passed over, though the health
+    // cache, which a running server keeps, may still hold it as healthy.
+    const damaged = new Set<RevisionId>([live]);
+    while (!read.ok) {
       if (read.transient) throw transient();
-      const good = await walkLastKnownGood(pointer);
+      const good = await walkLastKnownGood(pointer, damaged);
       log({
         level: 'warn',
         event: 'store.publish.live_unread',
         code: read.damage,
         ...(good ? { servingRevisionId: good } : {}),
       });
-      if (!good || good === live) return 'unreadable';
+      if (!good) return 'unreadable';
+      damaged.add(good);
       read = await readRevision(fs, paths, good);
-      if (!read.ok) {
-        if (read.transient) throw transient();
-        return 'unreadable';
-      }
     }
     const { unit } = read.revision;
     const adapterSnapshots = Object.fromEntries(
@@ -890,8 +894,12 @@ export function filesystemPublicationService({
     return order;
   }
 
-  async function walkLastKnownGood(pointer: LivePointer | null): Promise<RevisionId | null> {
+  async function walkLastKnownGood(
+    pointer: LivePointer | null,
+    except: ReadonlySet<RevisionId> = new Set(),
+  ): Promise<RevisionId | null> {
     for (const id of await liveOrder(pointer)) {
+      if (except.has(id)) continue;
       if ((await health(id, 'serve')).state === 'ok') return id;
     }
     return null;
@@ -1295,9 +1303,9 @@ export function filesystemPublicationService({
       }
     },
 
-    async lastKnownGood() {
+    async lastKnownGood(options = {}) {
       try {
-        return await walkLastKnownGood(await readPointer());
+        return await walkLastKnownGood(await readPointer(), new Set(options.except ?? []));
       } catch (error) {
         throw storageError(error);
       }

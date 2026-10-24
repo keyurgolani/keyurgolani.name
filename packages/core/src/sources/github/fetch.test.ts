@@ -223,19 +223,22 @@ test('the REST fallback asks only api.github.com, with the username encoded as o
 test(
   "GraphQL's requests keep the timeout and join the section's budget",
   { timeout: 5000 },
-  async () => {
+  async (t) => {
+    // The timer whileAlive keeps, cleared however the test ends: one that
+    // hangs fails at its timeout, and the file still exits.
+    const alive = setInterval(() => {}, 1000);
+    t.after(() => clearInterval(alive));
     const started = Date.now();
-    await whileAlive(() =>
-      assert.rejects(
-        fetchViaGraphQL(
-          { username: 'x' },
-          'test-token-value',
-          AbortSignal.timeout(100),
-          hangingFetch,
-        ),
-        { name: 'TimeoutError' },
+    await assert.rejects(
+      fetchViaGraphQL(
+        { username: 'x' },
+        'test-token-value',
+        AbortSignal.timeout(100),
+        hangingFetch,
       ),
+      { name: 'TimeoutError' },
     );
+    clearInterval(alive);
     assert.ok(Date.now() - started < 1000, 'the budget ended it');
     // With no budget, the request's own timeout does.
     const seen: (AbortSignal | null | undefined)[] = [];

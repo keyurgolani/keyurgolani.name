@@ -618,6 +618,47 @@ test('a damaged live revision compares as the last known good: the draft records
   assert.equal((await publish(store, accepted)).kind, 'committed');
 });
 
+test('in a running server, a live revision the health cache still holds as healthy, then damaged, compares as the one before it', async (t) => {
+  const store = await newStore(t, { checks });
+  const good = await publishInput(store, withMedia(record('portrait', 'a', 'me.png')));
+  const damaged = await publishInput(store, {
+    ...contentVariant(pairInput('engineering'), 'two'),
+    media: mediaText(record('portrait', 'a', 'me.png')),
+  });
+  const draft = saved(
+    await store.drafts.create(
+      { expectedVersion: (await store.drafts.getWorking())?.version },
+      'owner',
+    ),
+  );
+  // The same process asks first, so its health cache holds the live revision as healthy.
+  assert.equal(await store.publication.lastKnownGood(), damaged);
+  damage(store, damaged);
+  assert.equal(await store.publication.lastKnownGood({ except: [damaged] }), good);
+  const replaced = saved(
+    await store.drafts.save(
+      {
+        draftId: draft.draftId,
+        expectedVersion: draft.version,
+        documents: {
+          ...contentVariant(pairInput('engineering'), 'two'),
+          media: mediaText(record('portrait', 'e', 'me.png')),
+        },
+      },
+      'owner',
+    ),
+  );
+  assert.deepEqual(
+    changesOf(replaced).map(({ cause, before }) => [cause, before?.sha256]),
+    [['source-replaced', hex('a')]],
+  );
+  const refused = await publish(store, replaced);
+  assert.equal(refused.kind === 'rejected' && refused.code, 'validation_failed');
+  assert.deepEqual(refused.kind === 'rejected' ? refused.diagnostics.map(({ code }) => code) : [], [
+    'derived.unapproved',
+  ]);
+});
+
 test('with the live revision damaged and no healthy revision before it, a publish is refused with live_unreadable, never published unchecked', async (t) => {
   const { store, draft } = await liveWithPortrait(t);
   const live = (await store.publication.status()).liveRevisionId!;

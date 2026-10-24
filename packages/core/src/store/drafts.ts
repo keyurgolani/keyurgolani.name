@@ -495,7 +495,7 @@ export interface DraftStoreOptions {
    * draft based on a damaged revision compares its derived changes against,
    * as the publish gate does. None by default.
    */
-  readonly lastKnownGood?: () => Promise<RevisionId | null>;
+  readonly lastKnownGood?: (except: readonly RevisionId[]) => Promise<RevisionId | null>;
 }
 
 export function filesystemDraftStore({
@@ -607,14 +607,22 @@ export function filesystemDraftStore({
     if (revisionId === null) return null;
     const side = await sideOf(revisionId);
     if (side) return side;
-    const good = await lastKnownGood();
-    log({
-      level: 'warn',
-      event: 'store.draft.base_unread',
-      revisionId,
-      ...(good ? { servingRevisionId: good } : {}),
-    });
-    return good && good !== revisionId ? sideOf(good) : null;
+    // Each revision a read proves damaged is passed over, though a running
+    // server's health cache may still hold it as healthy.
+    const damaged: RevisionId[] = [revisionId];
+    for (;;) {
+      const good = await lastKnownGood(damaged);
+      log({
+        level: 'warn',
+        event: 'store.draft.base_unread',
+        revisionId,
+        ...(good ? { servingRevisionId: good } : {}),
+      });
+      if (!good || damaged.includes(good)) return null;
+      const fallback = await sideOf(good);
+      if (fallback) return fallback;
+      damaged.push(good);
+    }
   }
 
   /**

@@ -1,9 +1,14 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
+import childProcess from 'node:child_process';
+import dgram from 'node:dgram';
+import dns from 'node:dns';
 import http from 'node:http';
 import https from 'node:https';
+import { syncBuiltinESMExports } from 'node:module';
 import net from 'node:net';
 import tls from 'node:tls';
+import workerThreads from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -25,8 +30,10 @@ import { REGISTRY } from '~/lib/variants';
 // render completely, on every visitor route they have, through every
 // registered composition, from their documents, the snapshots beside them,
 // and nothing else. Every way out is replaced by one that fails the test:
-// fetch, which is Node's own undici (no other undici is installed), and
-// node:http, node:https, node:net, and node:tls, down to a socket's connect.
+// fetch, which is Node's own undici (no other undici is installed);
+// node:http, node:https, node:net, and node:tls, down to a socket's connect;
+// node:dgram and node:dns, which send UDP; and node:child_process and
+// node:worker_threads, which could do any of it elsewhere.
 // Each page renders with react-dom's server renderer, so a component that
 // throws fails the test too.
 
@@ -49,6 +56,9 @@ const PAIRS = [
   },
 ];
 
+/** A module or prototype as the mocks see it: its functions, by name. */
+type Methods = Record<string, (...args: unknown[]) => unknown>;
+
 /** Replaces every way this process could reach a network with one that records it and throws. */
 function blockNetwork(t: TestContext): string[] {
   const calls: string[] = [];
@@ -70,6 +80,46 @@ function blockNetwork(t: TestContext): string[] {
   t.mock.method(net, 'createConnection', refuse('net.createConnection'));
   t.mock.method(net.Socket.prototype, 'connect', refuse('net.Socket.connect'));
   t.mock.method(tls, 'connect', refuse('tls.connect'));
+  t.mock.method(dgram, 'createSocket', refuse('dgram.createSocket'));
+  for (const method of ['send', 'connect', 'bind'] as const) {
+    t.mock.method(dgram.Socket.prototype, method, refuse(`dgram.Socket.${method}`));
+  }
+  // Every lookup and resolve, callback and promise alike.
+  for (const [name, module] of [
+    ['dns', dns],
+    ['dns.promises', dns.promises],
+  ] as const) {
+    const methods = module as unknown as Methods;
+    for (const key of Object.keys(methods)) {
+      if (!/^(lookup|resolve|reverse)/.test(key)) continue;
+      if (typeof methods[key] !== 'function') continue;
+      t.mock.method(methods, key, refuse(`${name}.${key}`));
+    }
+  }
+  t.mock.method(
+    childProcess.ChildProcess.prototype as unknown as Methods,
+    'spawn',
+    refuse('child_process spawn'),
+  );
+  for (const method of [
+    'spawn',
+    'exec',
+    'execFile',
+    'fork',
+    'spawnSync',
+    'execSync',
+    'execFileSync',
+  ] as const) {
+    t.mock.method(childProcess, method, refuse(`child_process.${method}`));
+  }
+  t.mock.method(workerThreads, 'Worker', refuse('worker_threads.Worker'));
+  // An ESM named import of a builtin, such as `import { lookup } from
+  // 'node:dns'`, reads the mocks too.
+  syncBuiltinESMExports();
+  t.after(() => {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+  });
   return calls;
 }
 
