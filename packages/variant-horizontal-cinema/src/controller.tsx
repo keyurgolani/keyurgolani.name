@@ -82,8 +82,17 @@ const LATE_MS = 900;
 const GESTURE_MS = 1500;
 
 /** What arrow keys never step from: a form or media control, or anything editable. */
-const NATIVE_KEYS =
-  'input, textarea, select, video, audio, [contenteditable]:not([contenteditable="false"])';
+const NATIVE_KEYS = [
+  'input',
+  'textarea',
+  'select',
+  'video',
+  'audio',
+  '[contenteditable]:not([contenteditable="false"])',
+  ...['slider', 'tab', 'listbox', 'menu', 'spinbutton', 'combobox', 'textbox', 'grid'].map(
+    (role) => `[role="${role}"]`,
+  ),
+].join(', ');
 
 /** What moves the stage by hand, which the controller only notes. */
 const GESTURES = ['wheel', 'touchstart'] as const;
@@ -273,7 +282,43 @@ function LiveCinema(props: CinemaProps) {
       return chapter.getBoundingClientRect().left - stageElement.getBoundingClientRect().left;
     };
 
-    /** The chapter in view: the one nearest the stage's start, or under the window's middle. None in the index. */
+    /** Whether the page is scrolled as far down as it goes. */
+    const atBottom = () => {
+      const page = doc.scrollingElement ?? doc.documentElement;
+      return window.scrollY + window.innerHeight >= page.scrollHeight - 1;
+    };
+
+    /**
+     * Vertical, the chapter at the window's top: the last whose top is at or
+     * above it, its scroll margin allowed for, so a short chapter is current
+     * once it's scrolled to. At the foot of the page, where a short last
+     * chapter can't reach the top, the current chapter holds while it's in
+     * view, else the last one in view counts. None in the index.
+     */
+    const measureVertical = (): number | undefined => {
+      const margin = Number.parseFloat(
+        chapters[0] ? getComputedStyle(chapters[0]).scrollMarginTop : '',
+      );
+      const probe = (Number.isFinite(margin) ? margin : 0) + 1;
+      if (stageElement.getBoundingClientRect().bottom <= probe) return undefined;
+      const boxes = chapters.map((chapter) => chapter?.getBoundingClientRect());
+      if (atBottom()) {
+        const seen = (box: DOMRect | undefined) =>
+          box !== undefined && box.bottom > 0 && box.top < window.innerHeight;
+        if (seen(boxes[position])) return position;
+        let last: number | undefined;
+        boxes.forEach((box, index) => {
+          if (seen(box)) last = index;
+        });
+        if (last !== undefined) return last;
+      }
+      return chapterAt(
+        boxes.map((box) => box?.top ?? Infinity),
+        probe,
+      );
+    };
+
+    /** The chapter in view: the one nearest the stage's start, or at the window's top. None in the index. */
     const measure = (): number | undefined => {
       if (horizontal()) {
         let nearest = 0;
@@ -285,12 +330,7 @@ function LiveCinema(props: CinemaProps) {
         });
         return nearest;
       }
-      const middle = window.innerHeight / 2;
-      if (stageElement.getBoundingClientRect().bottom < middle) return undefined;
-      return chapterAt(
-        chapters.map((chapter) => chapter?.getBoundingClientRect().top ?? Infinity),
-        middle,
-      );
+      return measureVertical();
     };
 
     /**
@@ -369,11 +409,22 @@ function LiveCinema(props: CinemaProps) {
       timer = undefined;
       const wide = horizontal();
       if (aligning !== null) {
-        if (measure() !== aligning && !late) {
+        // An alignment of the controller's own keeps its chapter once it lands:
+        // the chapter at the stage's start, or at the window's top, or as far
+        // as the page goes.
+        const target = aligning;
+        const top = chapters[target]?.getBoundingClientRect().top ?? 0;
+        const landed = wide ? Math.abs(offsetOf(target)) < 1 : Math.abs(top) < 1 || atBottom();
+        if (!landed && !late) {
           timer = setTimeout(() => settle(true), LATE_MS);
           return;
         }
         aligning = null;
+        if (landed) {
+          if (wide) settledAt = Math.abs(stageElement.scrollLeft);
+          if (target !== position) commit(target, { replace: owned() });
+          return;
+        }
       }
       let to = measure();
       if (wide) {
@@ -435,7 +486,11 @@ function LiveCinema(props: CinemaProps) {
     step.current = (by) => {
       const to = stepFrom(position, by);
       if (to === undefined) return;
-      commit(to, { align: behavior(), replace: true, announce: true });
+      // Horizontal, the bar stays in view, so focus stays on the button and the
+      // live region says where it went. Vertical, the page leaves the bar
+      // behind, so focus goes to the chapter's title, as an arrow in a chapter does.
+      const vertical = !horizontal();
+      commit(to, { align: behavior(), replace: true, announce: !vertical, focus: vertical });
     };
 
     /** Focus on the index's heading, which a link to the index lands on. */
