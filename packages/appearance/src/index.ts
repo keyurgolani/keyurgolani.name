@@ -162,6 +162,12 @@ export {
   type SetAxisResult,
 } from './selection';
 export {
+  DerivedSchemeSchema,
+  readDerivedSchemes,
+  type DerivedScheme,
+  type DerivedSchemeProblem,
+} from './derived-scheme';
+export {
   generatedSets,
   resolveTokens,
   schemeRenders,
