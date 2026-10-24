@@ -9,6 +9,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { expect } from '@playwright/test';
 import { currentGate, reportsDir, writeFailureRecord } from '../../ci/lib/reports.mjs';
 import { PACK_AXES, PLATFORM_DEFAULTS, type PackAxis } from '../../packages/appearance/src/index';
@@ -26,7 +27,7 @@ import {
   VIEWPORT,
 } from './plan';
 
-const WEB = path.resolve(__dirname, '..', '..', 'apps', 'web');
+const WEB = fileURLToPath(new URL('../../apps/web/', import.meta.url));
 const SHARD = readShard(process.env.CATALOG_SHARD);
 const SCREENS = path.join(reportsDir(), 'catalog', 'screens', `shard-${SHARD.index}`);
 
