@@ -307,6 +307,11 @@ test('no pack ships JavaScript: a language has no enhancements, and a pack packa
     { './ripple': { import: './ripple.ts', default: './ripple.cjs' } },
     { './frame': ['./frame.html'] },
     { './icon': './icon.svg' },
+    // A target with no extension could resolve to script.
+    './index',
+    { '.': './dist/' },
+    { './packs/*': './packs/*' },
+    { '.': { import: './lib/main' } },
   ]) {
     const result = validatePackManifest(manifest, {
       kind: 'design-language',
@@ -320,6 +325,34 @@ test('no pack ships JavaScript: a language has no enhancements, and a pack packa
     );
     assert.match(result.diagnostics[0]!.message, /no pack ships JavaScript/);
   }
+  // A package that names an entry point is refused, whatever the entry is.
+  for (const entryPoints of [
+    { main: './index.js' },
+    { module: './index.mjs' },
+    { browser: './browser.js' },
+    { browser: { './a.js': false } },
+    { main: 'styles.css' },
+  ]) {
+    const result = validatePackManifest(manifest, {
+      kind: 'design-language',
+      packageName: '@acme/ripple',
+      entryPoints,
+    });
+    assert.deepEqual(
+      result.diagnostics.map(({ code, pointer }) => [code, pointer]),
+      [['manifest.invalid', '']],
+      JSON.stringify(entryPoints),
+    );
+    assert.match(result.diagnostics[0]!.message, /names an entry point.*no pack ships JavaScript/);
+  }
+  assert.equal(
+    validatePackManifest(manifest, {
+      kind: 'design-language',
+      packageName: '@acme/ripple',
+      entryPoints: { main: undefined, module: undefined, browser: undefined },
+    }).ok,
+    true,
+  );
   // A scheme or a profile is held to it too, and a data export is fine.
   assert.equal(
     validatePackManifest(clone(DARK_ONLY), {

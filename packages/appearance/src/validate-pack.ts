@@ -48,6 +48,12 @@ export interface PackContext {
   readonly packageName: string;
   /** The package's `exports`, which each enhancement's subpath must be in. Omitted, those go unchecked. */
   readonly exports?: unknown;
+  /** The package's `main`, `module`, and `browser` fields, as its package.json gives them (#20). Omitted, those go unchecked. */
+  readonly entryPoints?: {
+    readonly main?: unknown;
+    readonly module?: unknown;
+    readonly browser?: unknown;
+  };
 }
 
 export interface PackManifestByKind {
@@ -623,14 +629,33 @@ function exportTargets(exports: unknown): string[] {
   return [];
 }
 
+/** An export target with no file extension, such as `./index` or `./dist/`, which could resolve to script. */
+const extensionless = (target: string) => !/\.[A-Za-z0-9]+$/.test(target);
+
 /**
  * No pack ships JavaScript (#20): a pack package exports nothing a page
- * could run. Its packs are data, which registry generation reads from the
- * packs directory, and the compiler writes the only CSS that reaches a page.
- * compilePack() refuses a script file inside a pack's directory.
+ * could run, and names no entry point. Its packs are data, which registry
+ * generation reads from the packs directory, and the compiler writes the
+ * only CSS that reaches a page. compilePack() refuses a script file inside a
+ * pack's directory. An exports target with no extension is refused too,
+ * since what it resolves to isn't said.
  */
 function checkNoScript(context: PackContext, report: Report) {
-  const scripts = exportTargets(context.exports).filter((target) => SCRIPT_FILE.test(target));
+  const entries = (['main', 'module', 'browser'] as const).filter(
+    (field) => context.entryPoints?.[field] !== undefined,
+  );
+  if (entries.length > 0) {
+    report(
+      'manifest.invalid',
+      [],
+      `comes from a package that names an entry point, ${entries.map((field) => `"${field}"`).join(', ')}, and no pack ships JavaScript.`,
+      "Remove the package's main, module, and browser fields: a pack package holds data the host compiles.",
+      { actual: entries.join(', ') },
+    );
+  }
+  const scripts = exportTargets(context.exports).filter(
+    (target) => SCRIPT_FILE.test(target) || extensionless(target),
+  );
   if (scripts.length > 0) {
     report(
       'manifest.invalid',

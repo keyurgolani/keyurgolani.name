@@ -571,8 +571,11 @@ export function readLanguageStylesheet(
   if (read.ok || !source.includes('\\')) return read;
   // The reader refuses every escape, which hides what a name or value is.
   // Read it as a browser decodes it too, so a rule an escape hid is named.
+  // The decoded text may hold what the reader refuses on sight, such as a
+  // character past ASCII: the reread reads on past it, so a rule is named
+  // whatever else the decoding yields.
   const decoded = decodeEscapes(source);
-  const hidden = readOnce(decoded, options);
+  const hidden = readOnce(decoded, options, true);
   if (hidden.ok) return read;
   const named = new Set(read.problems.map(({ rule }) => rule).filter(Boolean));
   const extra = hidden.problems
@@ -588,26 +591,70 @@ export function readLanguageStylesheet(
  * `source` with each CSS escape decoded as CSS Syntax 3 reads it: a
  * backslash and one to six hex digits, with one whitespace after, is that
  * code point (0, a surrogate, or past U+10FFFF is U+FFFD); a backslash
- * before a newline is nothing; a backslash before anything else is that
- * character.
+ * before a newline is nothing inside a string, and outside one isn't an
+ * escape, so it stays; a backslash before anything else is that character.
+ * A comment's text is no escape, and stays as written.
  */
 export function decodeEscapes(source: string): string {
-  return source.replace(
-    /\\(?:([0-9a-fA-F]{1,6})(?:\r\n|[ \t\r\n\f])?|(\r\n|[\n\r\f])|([\s\S]))/g,
-    (_, hex: string | undefined, newline: string | undefined, other: string | undefined) => {
+  let out = '';
+  let quote: string | null = null;
+  let index = 0;
+  while (index < source.length) {
+    const character = source[index]!;
+    if (quote === null && source.startsWith('/*', index)) {
+      const close = source.indexOf('*/', index + 2);
+      const end = close < 0 ? source.length : close + 2;
+      out += source.slice(index, end);
+      index = end;
+      continue;
+    }
+    if (character === '\\') {
+      const next = source[index + 1];
+      const hex = /^[0-9a-fA-F]{1,6}/.exec(source.slice(index + 1, index + 7))?.[0];
       if (hex !== undefined) {
         const code = Number.parseInt(hex, 16);
-        return code === 0 || (code >= 0xd800 && code <= 0xdfff) || code > 0x10ffff
-          ? '�'
-          : String.fromCodePoint(code);
+        out +=
+          code === 0 || (code >= 0xd800 && code <= 0xdfff) || code > 0x10ffff
+            ? '\uFFFD'
+            : String.fromCodePoint(code);
+        index += 1 + hex.length;
+        if (source.startsWith('\r\n', index)) index += 2;
+        else if (/[ \t\r\n\f]/.test(source[index] ?? '')) index += 1;
+      } else if (next === '\n' || next === '\r' || next === '\f') {
+        if (quote !== null) {
+          index += source.startsWith('\r\n', index + 1) ? 3 : 2;
+        } else {
+          out += character;
+          index += 1;
+        }
+      } else if (next === undefined) {
+        out += character;
+        index += 1;
+      } else {
+        out += next;
+        index += 2;
       }
-      if (newline !== undefined) return '';
-      return other ?? '';
-    },
-  );
+      continue;
+    }
+    if (quote !== null) {
+      if (character === quote || character === '\n' || character === '\r' || character === '\f') {
+        quote = null;
+      }
+    } else if (character === '"' || character === "'") {
+      quote = character;
+    }
+    out += character;
+    index += 1;
+  }
+  return out;
 }
 
-function readOnce(source: string, options: StylesheetOptions): StylesheetResult {
+function readOnce(
+  source: string,
+  options: StylesheetOptions,
+  /** A decoded reread, which reads on past a character the reader refuses. */
+  reread = false,
+): StylesheetResult {
   const problems: StylesheetProblem[] = [];
   const lines = lineStarts(source);
   const report: Report = (offset, message, rule) => {
@@ -625,9 +672,10 @@ function readOnce(source: string, options: StylesheetOptions): StylesheetResult 
     return { ok: false, problems };
   }
   checkCharacters(source, report);
-  if (problems.length > 0) return { ok: false, problems };
+  if (problems.length > 0 && !reread) return { ok: false, problems };
+  const before = problems.length;
   const text = blankComments(source, report);
-  if (text === null || problems.length > 0) return { ok: false, problems };
+  if (text === null || problems.length > before) return { ok: false, problems };
 
   const reader = new Reader({ source, text, lines }, report, options);
   const nodes = reader.items(0, text.length, 0);
@@ -649,7 +697,7 @@ function unprefixed(name: string, packId: string | undefined): boolean {
   return packId === undefined || !name.startsWith(`${packId}-`);
 }
 
-function checkCharacters(source: string, report: (offset: number, message: string) => void) {
+function checkCharacters(source: string, report: Report) {
   for (let index = 0; index < source.length; index += 1) {
     const character = source[index]!;
     if (CHARACTERS.test(character)) continue;
@@ -659,6 +707,13 @@ function checkCharacters(source: string, report: (offset: number, message: strin
       report(index, "can't use !important: accessibility rules must win over a language's.");
     } else if (character === '&') {
       report(index, "can't nest rules with &: write each rule at the top level.");
+    } else if (character === '|' && (source[index - 1] === '*' || source[index + 1] === '*')) {
+      // A namespace's universal selector, *|* or *|name or ns|*.
+      report(
+        index,
+        'can\'t use "|": a namespace\'s * selects every element, as * does.',
+        'universal',
+      );
     } else if (character.charCodeAt(0) > 0x7e) {
       report(index, 'must be plain ASCII text.');
     } else {
@@ -749,7 +804,10 @@ class Reader {
       const stop = this.nextStop(index, end);
       if (stop === null) return nodes;
       if (stop.offset >= end) {
-        this.report(index, "is text after the last rule that isn't a rule.");
+        // An at-rule with no semicolon, such as a last @import, is still that at-rule.
+        const rest = text.slice(index, end).trim();
+        if (rest.startsWith('@')) this.atRuleProblem(rest, index);
+        else this.report(index, "is text after the last rule that isn't a rule.");
         return nodes;
       }
       if (stop.character === '}') {
@@ -914,8 +972,15 @@ class Reader {
       return null;
     }
     const body = text.slice(start, end);
-    if (/[{}]/.test(body.replace(/"[^"]*"|'[^']*'/g, ''))) {
+    const unquoted = body.replace(/"[^"]*"|'[^']*'/g, '');
+    if (/[{}]/.test(unquoted)) {
       this.report(start, 'nests a rule inside a rule: write each rule at the top level.');
+      // An at-rule nested in the body still names the rule it breaks.
+      for (const nested of unquoted.matchAll(
+        /@(?:-(?:webkit|moz)-)?(?:import|layer|scope|keyframes|counter-style)(?![\w-])[^;{}]*/gi,
+      )) {
+        this.atRuleProblem(nested[0].trim(), start + nested.index);
+      }
       return null;
     }
     const declarations: StyleDeclaration[] = [];
@@ -926,6 +991,12 @@ class Reader {
       const at = cursor + (piece.length - piece.trimStart().length);
       cursor += piece.length + 1;
       if (piece.trim() === '') continue;
+      if (piece.trim().startsWith('@')) {
+        // An at-rule in a rule's body, such as @import, is that at-rule, not a declaration.
+        this.atRuleProblem(normalize(piece), at);
+        valid = false;
+        continue;
+      }
       const declaration = readDeclaration(piece, dims, this.options);
       if ('message' in declaration) {
         this.report(at, declaration.message, declaration.rule);

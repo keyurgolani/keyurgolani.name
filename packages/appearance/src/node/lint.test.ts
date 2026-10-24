@@ -85,7 +85,15 @@ test('import: no @import, in any case, behind an escape, or with a url', () => {
     "@\\69mport 'elsewhere.css';",
     "@\\49 MPORT 'elsewhere.css';",
     "@-webkit-import 'elsewhere.css';",
+    // With no semicolon, as the stylesheet's last text.
+    "@import 'elsewhere.css'",
+    `${slot} { border-radius: 0; } @import url(elsewhere.css)`,
+    // Inside a rule's body, alone or among declarations.
+    `${slot} { @import 'elsewhere.css'; }`,
+    `${slot} { border-radius: 0; @import 'elsewhere.css' }`,
+    `${slot} { border-radius: 0; @IMPORT url(elsewhere.css); }`,
   ]);
+  breaks('layer-scope', [`${slot} { @layer own { border-radius: 0; } }`]);
   // A comment ends the at-keyword, so this is the at-rule @im, which a browser doesn't import, and it's still refused.
   assert.ok(refused("@im/**/port 'elsewhere.css';"));
 });
@@ -117,8 +125,13 @@ test('universal: no *, bare, in a compound, after a combinator, or in a pseudo-c
     `${slot}, * { border-radius: 0; }`,
     '\\2a { border-radius: 0; }',
   ]);
-  // A namespace's * uses | too, which the reader refuses before anything else.
-  assert.ok(refused('*|* { border-radius: 0; }'));
+  // A namespace's *, which uses |, is a universal selector too.
+  breaks('universal', [
+    '*|* { border-radius: 0; }',
+    `${slot}, *|* { border-radius: 0; }`,
+    `${slot} > *|* { border-radius: 0; }`,
+    "*|[data-ui-slot='action'] { border-radius: 0; }",
+  ]);
 });
 
 test('prefixed-names: keyframes, counter styles, and view transitions start with the pack id', () => {
@@ -217,7 +230,12 @@ test('escapes decode as CSS reads them, and the reader refuses every one', () =>
   assert.equal(decodeEscapes('\\000075rl'), 'url');
   assert.equal(decodeEscapes('\\75\nrl'), 'url');
   assert.equal(decodeEscapes('\\u\\r\\l'), 'url');
-  assert.equal(decodeEscapes('a\\\nb'), 'ab');
+  // A backslash before a newline is nothing inside a string, and outside one is no escape at all.
+  assert.equal(decodeEscapes("'a\\\nb'"), "'ab'");
+  assert.equal(decodeEscapes('"a\\\r\nb"'), '"ab"');
+  assert.equal(decodeEscapes('a\\\nb'), 'a\\\nb');
+  // A comment's text is no escape.
+  assert.equal(decodeEscapes('/* \\75 */\\75 rl'), '/* \\75 */url');
   assert.equal(decodeEscapes('\\0 x'), '�x');
   assert.equal(decodeEscapes('\\d800 x'), '�x');
   assert.equal(decodeEscapes('\\110000 x'), '�x');
@@ -225,6 +243,18 @@ test('escapes decode as CSS reads them, and the reader refuses every one', () =>
   const escaped = readLanguageStylesheet(`${slot} { border-r\\61 dius: 0; }`, { packId: PACK });
   assert.ok(!escaped.ok);
   assert.ok(escaped.problems.some(({ message }) => /can't use a backslash/.test(message)));
+  // A rule an escape hid is named even when decoding yields a character past ASCII.
+  for (const css of [
+    "@\\69mport '\\e9.css';",
+    `@\\69mport 'x.css'; ${slot} { border-radius: 0\\e9; }`,
+  ]) {
+    const read = readLanguageStylesheet(css, { packId: PACK });
+    assert.ok(!read.ok);
+    assert.ok(
+      read.problems.some(({ rule }) => rule === 'import'),
+      `import in ${JSON.stringify(read.problems)}`,
+    );
+  }
   // A rule an escape hid is named once its escapes are decoded.
   const hidden = readLanguageStylesheet("@\\69mport 'x.css';", { packId: PACK });
   assert.ok(!hidden.ok);

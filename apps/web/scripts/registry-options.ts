@@ -90,14 +90,32 @@ const SHARED_STYLES = './sections/styles.css';
 
 type Environment = Readonly<Record<string, string | undefined>>;
 
+/**
+ * The main, module, and browser fields of the package `name` installed for
+ * `hostDir`, which validation refuses on a pack package (#20), or undefined
+ * when it isn't installed there.
+ */
+function entryPoints(name: string, hostDir: string) {
+  const dir = findInstalled(name, hostDir);
+  if (!dir) return undefined;
+  const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')) as Record<
+    string,
+    unknown
+  >;
+  return { main: pkg.main, module: pkg.module, browser: pkg.browser };
+}
+
 /** #19's pack checks, as registry generation takes them. */
-export function packHooks(): PackHooks {
+export function packHooks(hostDir: string = HOST): PackHooks {
   // compile() takes only a manifest validate() passed, so each one it
   // compiles is a PackManifest.
   const passed = new WeakSet<object>();
   return {
     validate(manifest, context) {
-      const checked = validatePackManifest(manifest, context);
+      const checked = validatePackManifest(manifest, {
+        ...context,
+        entryPoints: entryPoints(context.packageName, hostDir),
+      });
       if (checked.ok) passed.add(checked.manifest);
       return checked;
     },

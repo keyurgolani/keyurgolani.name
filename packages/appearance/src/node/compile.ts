@@ -137,7 +137,7 @@ export function compilePack(source: PackSource): CompileResult {
 /**
  * Every file under a pack's directory a page could run as script, such as
  * a .js, .mjs, .ts, .wasm, .html, or .svg file, relative to it and sorted.
- * A link counts too, whatever it names, since it can lead anywhere.
+ * A link with a script-file name counts, whatever it points at.
  */
 export function scriptFiles(dir: string): string[] {
   const found: string[] = [];
