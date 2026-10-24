@@ -20,6 +20,8 @@ export const SHELL_CAPABILITIES: readonly Capability[] = [
   'publish',
   'rollback',
   'config.status',
+  // Demo Studio's (#9), which the demo profile grants with no session.
+  'sandbox.view',
 ];
 
 export function studioPolicy(profile: Profile, session: Session | null): StudioPolicy {

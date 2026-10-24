@@ -2,10 +2,18 @@
 // order the shell lists them, each with the capability it needs from the
 // page's policy. This pull request builds the content task's expert source
 // mode and the validation summary. The rest show an empty state that says
-// which of #8's pull requests brings them, until it does.
+// which of #8's pull requests brings them, until it does. #9's Demo Studio
+// lists its own two, behind sandbox.view: Appearance and Preview.
 
 export type TaskId =
-  'content' | 'case-studies' | 'media' | 'appearance' | 'site' | 'validation' | 'history';
+  | 'content'
+  | 'case-studies'
+  | 'media'
+  | 'appearance'
+  | 'site'
+  | 'validation'
+  | 'history'
+  | 'preview';
 
 export interface StudioTask {
   readonly id: TaskId;
@@ -54,7 +62,17 @@ export const STUDIO_TASKS: readonly StudioTask[] = Object.freeze([
   },
 ]);
 
-/** The tasks `allowed` grants, in STUDIO_TASKS order. */
-export function tasksFor(allowed: readonly string[]): readonly StudioTask[] {
-  return STUDIO_TASKS.filter((task) => allowed.includes(task.capability));
+/** Demo Studio's tasks (#9): the sample's appearance, and its preview. */
+export const DEMO_TASKS: readonly StudioTask[] = Object.freeze([
+  { id: 'appearance', label: 'Appearance', capability: 'sandbox.view', pending: null },
+  { id: 'preview', label: 'Preview', capability: 'sandbox.view', pending: null },
+]);
+
+/** The tasks `allowed` grants, in the order the profile's Studio lists them. */
+export function tasksFor(
+  allowed: readonly string[],
+  profile: 'owner' | 'demo' | 'read-only' = 'owner',
+): readonly StudioTask[] {
+  const tasks = profile === 'demo' ? DEMO_TASKS : STUDIO_TASKS;
+  return tasks.filter((task) => allowed.includes(task.capability));
 }
