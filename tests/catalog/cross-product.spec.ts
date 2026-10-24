@@ -158,7 +158,11 @@ test(`the cross-product, shard ${SHARD.index} of ${SHARD.count}`, async ({ page 
       const name = `${tuple.variant}--${recordTuple(tuple).replace(/\//g, '--')}`;
       await page.screenshot(
         PLAN === 'rehearsal'
-          ? { path: path.join(SCREENS, `${name}.jpg`), type: 'jpeg', quality: REHEARSAL.jpegQuality }
+          ? {
+              path: path.join(SCREENS, `${name}.jpg`),
+              type: 'jpeg',
+              quality: REHEARSAL.jpegQuality,
+            }
           : { path: path.join(SCREENS, `${name}.png`) },
       );
     } catch (error) {
