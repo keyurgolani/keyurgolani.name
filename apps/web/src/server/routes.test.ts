@@ -876,7 +876,11 @@ test("every Studio page but /studio/sign-in, and every Studio route handler, met
   let checked = 0;
   for (const route of routeFiles()) {
     const inGroup = !path.relative(STUDIO_GROUP, route.file).startsWith('..');
-    if (!inGroup && !isStudioPage(route.pattern)) continue;
+    // Demo Studio's pages outside the group too, as its local preview frame is (#9).
+    const demoStudio = listRoutes().some(
+      (entry) => entry.pattern === route.pattern && entry.capability === 'sandbox.view',
+    );
+    if (!inGroup && !isStudioPage(route.pattern) && !demoStudio) continue;
     if (route.pattern === SIGN_IN) continue;
     const entries = listRoutes().filter((entry) => entry.pattern === route.pattern);
     assert.ok(entries.length > 0, `${path.relative(SRC, route.file)} has no route table entry`);

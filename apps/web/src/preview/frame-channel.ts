@@ -59,6 +59,14 @@ export interface FrameChannelOptions {
    * and motion.
    */
   readonly selection?: EnvironmentSelection;
+  /** In local mode (Slice 6), what renders a `document` Studio sends: Demo Studio's local frame (#9). */
+  readonly onDocument?: (document: ToFramePayload<'document'>) => void;
+  /**
+   * In local mode, where the frame goes: an internal link or Studio's
+   * `navigate` keeps the route in memory and hands it here, with no
+   * document load, and the frame says `navigated`.
+   */
+  readonly onRoute?: (route: string) => void;
 }
 
 /**
@@ -261,15 +269,27 @@ export function startFrameChannel(win: Window, options: FrameChannelOptions): ((
     else {
       send('ready', {
         renderedVersion: options.renderedVersion,
-        route: routeOf(win.location.pathname, linkBase),
+        route: mode === 'local' ? localRoute : routeOf(win.location.pathname, linkBase),
       });
     }
   };
   const onStatus = (status: FrameStatus) => send('status', status);
 
-  /** Loads `url`, a path under the link base, after telling Studio where to. */
+  /** The route a local frame shows, which it keeps in memory. */
+  let localRoute = '/';
+
+  /**
+   * Loads `url`, a path under the link base, after telling Studio where to.
+   * A local frame keeps the route in memory instead and renders it there.
+   */
   const load = (url: URL) => {
-    send('navigated', { route: routeOf(url.pathname, linkBase) });
+    const route = routeOf(url.pathname, linkBase);
+    send('navigated', { route });
+    if (mode === 'local') {
+      localRoute = route;
+      options.onRoute?.(route);
+      return;
+    }
     win.location.assign(url.href);
   };
 
@@ -357,9 +377,8 @@ export function startFrameChannel(win: Window, options: FrameChannelOptions): ((
         scrollSync = message.payload.scroll;
         return;
       case 'document':
-        // Slice 6 renders it.
         if (!take(sizeOf(message.payload, LIMITS.document))) return drop('size', 'document');
-        return;
+        return options.onDocument?.(message.payload);
       case 'asset':
         if (!take(message.payload.blob.size)) return drop('size', 'asset');
         return;
