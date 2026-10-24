@@ -234,7 +234,11 @@ export function mapChanges(
       const own = [...dirs].find(([, packDir]) => under(file, packDir));
       if (own) {
         if (ids.includes(own[0])) add(axis, own[0], file);
-      } else if (!under(file, `${dir}/packs`) && !under(file, `${dir}/research`)) {
+      } else if (
+        !under(file, `${dir}/packs`) &&
+        !under(file, `${dir}/research`) &&
+        !under(file, `${dir}/held`)
+      ) {
         // A package-level file, such as its package.json, reaches every pack it ships.
         for (const id of ids) add(axis, id, file);
       }

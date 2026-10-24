@@ -81,6 +81,15 @@ const CLASSES = [
     jobs: ['static', 'unit', 'build'],
   },
   {
+    // #20: a held pack never registers either.
+    name: 'a held pack',
+    files: [
+      'packages/appearance-languages/held/glassmorphism/manifest.json',
+      'packages/appearance-languages/held/glassmorphism/gate.json',
+    ],
+    jobs: ['static', 'unit', 'build'],
+  },
+  {
     name: "the catalog build check and the scheduled cross-product's plan",
     files: ['ci/check-catalog-build.mjs', 'tests/catalog/plan.ts'],
     jobs: ['static', 'unit', 'build'],
@@ -420,4 +429,25 @@ test('job ids are read from the top level of jobs only', () => {
     '  FOO: bar',
   ].join('\n');
   assert.deepEqual(workflowJobIds(text), ['static', 'unit']);
+});
+
+test('every PR runs the static pack gates over every shipping pack, whatever it changes (#20)', () => {
+  // On a PR, a real catalog pack's rendered coverage is the [37] rule's
+  // directed cells alone (tests/quality/cells.ts), so check:appearance,
+  // which gates every registered pack, runs on every PR.
+  for (const files of [
+    ['docs/appearance.md'],
+    ['packages/fallback-composition/src/index.tsx'],
+    ['packages/appearance-schemes/research/nord.json'],
+    ['tests/quality/cells.ts'],
+    ['ci/check-budgets.mjs'],
+  ]) {
+    assert.ok(draft(files).jobs.includes('static'), `${files[0]} selects static`);
+  }
+  const staticJob = CI_YML.slice(CI_YML.indexOf('\n  static:'), CI_YML.indexOf('\n  unit:'));
+  assert.match(
+    staticJob,
+    /- name: pnpm ci:appearance\n\s+if: [^\n]+\n\s+run: pnpm ci:appearance\n/,
+    'the static job runs check:appearance',
+  );
 });

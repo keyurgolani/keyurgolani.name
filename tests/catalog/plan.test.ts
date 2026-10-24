@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import type { MetaPack } from '../../packages/appearance/src/index';
 import { PLATFORM_DEFAULTS } from '../../packages/appearance/src/index';
 import { readBuildMeta, type BuildMeta } from '../quality/cells';
+import { fallbackPacks } from '../quality/plan-fixtures';
 import { tupleKey } from '../quality/coverage';
 import { readFileSync } from 'node:fs';
 import { parse } from 'yaml';
@@ -74,7 +75,7 @@ function wider(meta: BuildMeta): BuildMeta {
 }
 
 test('the cross-product is every registered variant against every shipping pack in every mode it renders', () => {
-  const meta = wider(checkoutMeta());
+  const meta = wider(fallbackPacks(checkoutMeta()));
   const variants = registeredVariants(meta);
   assert.ok(variants.includes('fallback'));
   assert.deepEqual(shippingPacks(meta, 'designLanguage'), ['platform-neutral', 'second-language']);
@@ -284,7 +285,11 @@ test("the static smoke checks every tuple's packs, compiled files, and contrast,
   assert.equal(findings[0]!.axis, 'colorScheme');
   assert.equal(findings[0]!.id, 'warm-parchment');
   assert.match(findings[0]!.message, /isn't the file registry generation hashed/);
-  assert.equal(findings[0]!.tuples.length, tuples.length);
+  // Every tuple warm-parchment is in, and only those.
+  assert.equal(
+    findings[0]!.tuples.length,
+    tuples.filter((tuple) => tuple.colorScheme === 'warm-parchment').length,
+  );
   // A scheme under its contrast targets fails the contrast table in every tuple and mode it renders.
   const low = JSON.parse(
     readFileSync(

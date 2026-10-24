@@ -3,7 +3,7 @@
 // compiler (Slice 2) writes the same values as custom properties.
 
 import { PACK_AXES, type BaseMode, type PackAxis } from './axes';
-import { highContrastV1 } from './derive';
+import { deriveHighContrastSet, type SchemeDerivation } from './sets';
 import { ColorTokenSetSchema } from './manifests';
 import { axisFallback, findPack, type AppearanceRegistry, type RegisteredScheme } from './registry';
 import type { ColorTokens, LanguageTokens, TypographyMeasures, TypographyRoles } from './tokens';
@@ -68,18 +68,19 @@ export interface ResolvedTokens {
 
 const highContrastCache = new WeakMap<object, Map<BaseMode, ColorTokens>>();
 
-/** A scheme's high-contrast set of `polarity`: its authored one, else high-contrast-v1's. */
+/** A scheme's high-contrast set of `polarity`: its authored one, else the one its derivation derives. */
 function highContrastSet(
   key: object,
   sets: { readonly light?: ColorTokens; readonly dark?: ColorTokens },
   authored: ColorTokens | undefined,
   polarity: BaseMode,
+  derivation: SchemeDerivation | undefined,
 ): ColorTokens {
   if (authored) return authored;
   let cached = highContrastCache.get(key);
   if (!cached) highContrastCache.set(key, (cached = new Map()));
   let set = cached.get(polarity);
-  if (!set) cached.set(polarity, (set = highContrastV1(sets, polarity)));
+  if (!set) cached.set(polarity, (set = deriveHighContrastSet(sets, polarity, derivation)));
   return set;
 }
 
@@ -116,7 +117,13 @@ export function resolveTokens(
   const polarity = scheme.modes.includes(request.polarity) ? request.polarity : scheme.modes[0]!;
   const highContrast = request.highContrast === true;
   const color = highContrast
-    ? highContrastSet(generated ?? scheme, sets, scheme.manifest.highContrast?.[polarity], polarity)
+    ? highContrastSet(
+        generated ?? scheme,
+        sets,
+        scheme.manifest.highContrast?.[polarity],
+        polarity,
+        generated ? undefined : scheme.manifest.derivation,
+      )
     : sets[polarity]!;
 
   return {

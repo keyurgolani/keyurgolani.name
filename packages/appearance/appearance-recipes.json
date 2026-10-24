@@ -1,0 +1,101 @@
+{
+  "recipesVersion": 1,
+  "recipes": [
+    {
+      "id": "quiet-product",
+      "name": "Quiet Product",
+      "description": "Neutral geometry, restrained color, and a humanist reading voice.",
+      "selection": {
+        "variant": "editorial-evidence",
+        "designLanguage": "platform-neutral",
+        "colorScheme": "neutral-slate",
+        "typography": "humanist-ui",
+        "displayMode": "system"
+      }
+    },
+    {
+      "id": "editorial-warmth",
+      "name": "Editorial Warmth",
+      "description": "Paper tactility, literary hierarchy, and warm evidence-led composition.",
+      "selection": {
+        "variant": "editorial-evidence",
+        "designLanguage": "paper-tactile",
+        "colorScheme": "warm-parchment",
+        "typography": "editorial-serif",
+        "displayMode": "light"
+      }
+    },
+    {
+      "id": "systems-clarity",
+      "name": "Systems Clarity",
+      "description": "Dense technical structure with measured graphite contrast.",
+      "selection": {
+        "variant": "spatial-bento",
+        "designLanguage": "carbon-inspired",
+        "colorScheme": "graphite",
+        "typography": "technical-sans-mono",
+        "displayMode": "dark"
+      }
+    },
+    {
+      "id": "night-gallery",
+      "name": "Night Gallery",
+      "description": "A quiet atelier for visual systems and authored artifacts.",
+      "selection": {
+        "variant": "obsidian-atelier",
+        "designLanguage": "atelier-luxury",
+        "colorScheme": "jewel-twilight",
+        "typography": "editorial-serif",
+        "displayMode": "dark"
+      }
+    },
+    {
+      "id": "material-portfolio",
+      "name": "Material Portfolio",
+      "description": "Approachable spatial cards with botanical, system-aware color.",
+      "selection": {
+        "variant": "spatial-bento",
+        "designLanguage": "material-3-inspired",
+        "colorScheme": "botanical-sage",
+        "typography": "neutral-ui",
+        "displayMode": "system"
+      }
+    },
+    {
+      "id": "cinematic-archive",
+      "name": "Cinematic Archive",
+      "description": "A chapter-led analog archive with literary pacing.",
+      "selection": {
+        "variant": "horizontal-cinema",
+        "designLanguage": "paper-tactile",
+        "colorScheme": "sepia-film",
+        "typography": "literary-reading",
+        "displayMode": "dark"
+      }
+    },
+    {
+      "id": "neon-maker",
+      "name": "Neon Maker",
+      "description": "Kinetic evidence, technical energy, and controlled neon contrast.",
+      "selection": {
+        "variant": "kinetic-cosmos",
+        "designLanguage": "cyberpunk",
+        "colorScheme": "neon-city",
+        "typography": "geometric-display",
+        "displayMode": "dark"
+      }
+    },
+    {
+      "id": "accessible-evidence",
+      "name": "Accessible Evidence",
+      "description": "High-contrast clarity with generous, familiar reading forms.",
+      "selection": {
+        "variant": "editorial-evidence",
+        "designLanguage": "minimal-flat",
+        "colorScheme": "high-contrast",
+        "typography": "accessible-reading",
+        "displayMode": "high-contrast"
+      }
+    }
+  ]
+}

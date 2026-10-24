@@ -2,7 +2,7 @@
   "id": "fixture-scheme-stable",
   "name": "Fixture Scheme Stable",
   "description": "A tier fixture: a Stable color scheme, cool slate with a blue accent and a teal secondary, in light and dark, for the quality gates to run as a shipping Stable pack.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "stable",
   "provenance": {
@@ -14,7 +14,7 @@
     "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
     "researchedAt": "2026-10-22",
     "maintainer": "keyurgolani",
-    "derivation": "anchor-v1 from cool slate anchors in light and dark."
+    "derivation": "anchor-v2 from cool slate anchors in light and dark. The anchors stay as approved. adjustments lists the 10 roles it moves from anchor-v1."
   },
   "modes": ["light", "dark"],
   "accessibility": {
@@ -33,10 +33,10 @@
     "enhancement": 0
   },
   "fallbacks": [
-    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
   ],
   "caveats": ["A test fixture: it registers only when QUALITY_FIXTURES is 1 or meta."],
-  "derivation": "anchor-v1",
+  "derivation": "anchor-v2",
   "anchors": {
     "light": {
       "canvas": "#f4f6f8",
@@ -49,6 +49,24 @@
       "text": "#e6edf3",
       "accent": "#79b8ff",
       "secondary": "#7ee0c3"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#515961", "#4b535b"],
+      "text-muted": ["#5d646c", "#565d65"],
+      "border-strong": ["#797f86", "#72787f"],
+      "accent-text": ["#2d63a3", "#2c5e9a"],
+      "data-categorical-6": ["#515961", "#4b535b"]
+    },
+    "dark": {
+      "text-secondary": ["#afb6bc", "#b6bdc3"],
+      "text-muted": ["#a2a9af", "#aab1b7"],
+      "border-strong": ["#83898f", "#8b9197"],
+      "data-categorical-6": ["#afb6bc", "#b6bdc3"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#1f4776", "#1d416d"]
     }
   },
   "swatches": ["#f4f6f8", "#1f2933", "#2f6db5", "#327565"]

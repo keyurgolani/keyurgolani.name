@@ -59,6 +59,20 @@ export {
   type Anchors,
 } from './derive';
 export {
+  ANCHOR_V2_TARGETS,
+  anchorV2,
+  anchorV2Adjustments,
+  CATEGORICAL_DELTA,
+  categoricalWalk,
+  fillStops,
+  HIGH_CONTRAST_V2_TARGETS,
+  highContrastV2,
+  solveSignature,
+  type Adjustments,
+  type SetAdjustments,
+  type SolveTargets,
+} from './anchor-v2';
+export {
   APPEARANCE_LAYERS,
   LAYER_ORDER,
   startsWithLayerOrder,
@@ -67,9 +81,13 @@ export {
 export {
   COLOR_SET_NAMES,
   isHighContrastSet,
+  deriveBaseSet,
+  deriveHighContrastSet,
   printSet,
+  SCHEME_DERIVATIONS,
   schemeSets,
   setPolarity,
+  type SchemeDerivation,
   type ColorSetName,
   type SchemeSets,
 } from './sets';

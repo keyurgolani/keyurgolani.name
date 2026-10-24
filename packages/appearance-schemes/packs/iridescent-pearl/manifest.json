@@ -1,0 +1,70 @@
+{
+  "id": "iridescent-pearl",
+  "name": "Iridescent Pearl",
+  "description": "Pearl white with violet and teal accents. Light only.",
+  "version": "1.1.0",
+  "tokenContract": 1,
+  "tier": "extended",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v2 from the reviewed prototype's iridescent-pearl anchors. It puts the light accent #8a70d6 back to #8c72d9 and secondary #438d95 back to #4caeb3, undoing PR 2a's nudges: anchor-v2 solves the signature fill itself. adjustments lists the 11 roles it moves from anchor-v1."
+  },
+  "modes": ["light"],
+  "lockedMode": "light",
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "Every display mode renders the light set, high contrast renders the set high-contrast-v2 derives from it, and print renders the light set."
+  ],
+  "caveats": [
+    "Light only: it keeps its native light mode, so dark isn't offered with it.",
+    "In light mode the secondary is darkened to #438d95 so the signature fill reaches 3:1, so the teal reads muted."
+  ],
+  "derivation": "anchor-v2",
+  "anchors": {
+    "light": {
+      "canvas": "#faf8ff",
+      "text": "#282638",
+      "accent": "#8c72d9",
+      "secondary": "#4caeb3"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#5a5867", "#545261"],
+      "text-muted": ["#656372", "#5f5d6c"],
+      "border-strong": ["#807e8b", "#797784"],
+      "accent-text": ["#6a58a2", "#635397"],
+      "focus": ["#886fd3", "#8069c7"],
+      "data-categorical-1": ["#8c72d9", "#866cd2"],
+      "data-categorical-2": ["#449098", "#1c898e"],
+      "data-categorical-6": ["#5a5867", "#545261"],
+      "signature-start": ["#8c72d9", "#826ac9"],
+      "signature-end": ["#4caeb3", "#40828c"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#46396d", "#45386b"]
+    }
+  },
+  "swatches": ["#faf8ff", "#282638", "#8c72d9", "#4caeb3"]
+}

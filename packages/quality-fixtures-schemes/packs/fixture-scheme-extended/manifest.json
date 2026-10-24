@@ -2,7 +2,7 @@
   "id": "fixture-scheme-extended",
   "name": "Fixture Scheme Extended",
   "description": "A tier fixture: an Extended color scheme, forest green with a bark-brown secondary, in light and dark, for the quality gates to run as a shipping Extended pack.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "extended",
   "provenance": {
@@ -14,7 +14,7 @@
     "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
     "researchedAt": "2026-10-22",
     "maintainer": "keyurgolani",
-    "derivation": "anchor-v1 from forest anchors in light and dark."
+    "derivation": "anchor-v2 from forest anchors in light and dark. The anchors stay as approved. adjustments lists the 10 roles it moves from anchor-v1."
   },
   "modes": ["light", "dark"],
   "accessibility": {
@@ -33,10 +33,10 @@
     "enhancement": 0
   },
   "fallbacks": [
-    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
   ],
   "caveats": ["A test fixture: it registers only when QUALITY_FIXTURES is 1 or meta."],
-  "derivation": "anchor-v1",
+  "derivation": "anchor-v2",
   "anchors": {
     "light": {
       "canvas": "#f1f4ec",
@@ -49,6 +49,24 @@
       "text": "#e3ecdf",
       "accent": "#8fd18a",
       "secondary": "#e0b07d"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#4e594e", "#485348"],
+      "text-muted": ["#5a6359", "#545d53"],
+      "border-strong": ["#747c73", "#6f776e"],
+      "accent-text": ["#386d36", "#356634"],
+      "data-categorical-6": ["#4e594e", "#485348"]
+    },
+    "dark": {
+      "text-secondary": ["#b1baae", "#bac3b7"],
+      "text-muted": ["#a5aea2", "#aeb7ab"],
+      "border-strong": ["#868f84", "#8c9589"],
+      "data-categorical-6": ["#b1baae", "#bac3b7"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#284f26", "#244722"]
     }
   },
   "swatches": ["#f1f4ec", "#1e2a1f", "#3d7a3a", "#8a5a2b"]

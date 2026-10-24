@@ -1,6 +1,170 @@
 {
   "lockVersion": 1,
   "packs": {
+    "accessible-reading": {
+      "axis": "typography",
+      "package": "@portfolio/appearance-typography",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "provided-by-operating-system",
+      "digest": "sha256-166040da3359e6fec632205af596cf65c89c701c81cfa1ce04274848f448eba4"
+    },
+    "ant-inspired": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "extended",
+      "license": "independent-inspired-interpretation",
+      "digest": "sha256-98cc7f110dae72b1aa02ace79f4432172923570f5d4d5ba6391fbe32ebf02dcb"
+    },
+    "arctic-aurora": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "extended",
+      "license": "first-party",
+      "digest": "sha256-9e028df330a7911052aa50c454f6805418791951f2df5381a68fd952d54e89d2"
+    },
+    "atlassian-inspired": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "extended",
+      "license": "independent-inspired-interpretation",
+      "digest": "sha256-7c22025e87262b744ffd2bd665fcf0486075ae213f7ffab346c9514370af0212"
+    },
+    "bauhaus-geometric": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "extended",
+      "license": "first-party",
+      "digest": "sha256-0fb3584a1e2ae8e8ae901765e99916b875064f0882b95595e539b21bd4e04ba7"
+    },
+    "blue-orange-color-safe": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-1cf6d08a2861f021e5ae673cc3cf639d27dcf0e827b568d6fc7bd4d4351cdc58"
+    },
+    "botanical-sage": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-5fd06c1d292a6a51a3f32c7ec4ac084f7ebc432f9af1c5d3e6c544797b5697b5"
+    },
+    "carbon-inspired": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "stable",
+      "license": "independent-inspired-interpretation",
+      "digest": "sha256-ad280290c9262e1a1476de123407273f7ad7cfd0448705d9a1d199d89e2bef98"
+    },
+    "claymorphic": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "experimental",
+      "license": "first-party",
+      "digest": "sha256-155c8c3deda176a427e6bc7e4471c3be4ff6db7b43bee7ab548cec10f4438429"
+    },
+    "cool-color-safe": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-d24c4b141c810bc5ecd22d38ff7e90aee3df7bc43ba66399696341265d25fd63"
+    },
+    "coral-lagoon": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "extended",
+      "license": "first-party",
+      "digest": "sha256-071a2be943ce8c33656f98bd059cc56a565aa869c65295b5778c475ce0be4da6"
+    },
+    "desert-terracotta": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-2b948932c84dbf129ed5d6aa79b0ed6b5a8c20a43f8bd503f50ad91408ff940f"
+    },
+    "earthy-clay": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-e8695b0a965c6deba4616e86bdb04b6f310ead7698d1f268f88e73773f439d5d"
+    },
+    "editorial-serif": {
+      "axis": "typography",
+      "package": "@portfolio/appearance-typography",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "provided-by-operating-system",
+      "digest": "sha256-19c2a428e9ce5508e5eae6dc43f356ea75f72c8918f76e15ac22517f1ba1e1ca"
+    },
+    "forest-moss": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-ef346b360d5ad3ce9b9c6db94b7b7f045213bd93fc33be26f013f944dcc4ff87"
+    },
+    "geometric-display": {
+      "axis": "typography",
+      "package": "@portfolio/appearance-typography",
+      "version": "1.0.0",
+      "tier": "extended",
+      "license": "provided-by-operating-system",
+      "digest": "sha256-a3678e5b44c87197a072c965250b9610afc740ea703fe0a8c1954e9d313a9766"
+    },
+    "glassmorphism": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.1.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-0df5e5a6f83967e60539c08b232b677c48fb048708b77dd558c9ad946bf2826c",
+      "surfaceOpacity": {
+        "approved": "78%",
+        "shipped": "97%"
+      }
+    },
+    "graphite": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-d36680d7746607a17ceaa1bf3de1bec19c8c04222d0244f8c9ff95f102930687"
+    },
+    "handcrafted-collage": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "extended",
+      "license": "first-party",
+      "digest": "sha256-ba12243f5f99dc12c870f1bc18cb271a6f3b927f1918a74909cc9f9670ba97c1"
+    },
+    "high-contrast": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-9edcad85ffdf9399bed12e9db59cb8dd8b3ed5c2aefb58744f8ce22330dc53ee"
+    },
     "humanist-ui": {
       "axis": "typography",
       "package": "@portfolio/appearance-typography",
@@ -9,21 +173,317 @@
       "license": "provided-by-operating-system",
       "digest": "sha256-a9b6c8b8471d89f75fbe109909e35732fedb358a5ba49ed143f704c74e75e3e8"
     },
+    "international-grid": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-a55d521820b832b12aa889b7b23ff6d16d0dd6f7c89da98639afdb02fcba9866"
+    },
+    "iridescent-pearl": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "extended",
+      "license": "first-party",
+      "digest": "sha256-0b46c3a349a0b41fd8fbb29ebc88933b4d38f3a5035289d7c611916471481ce0"
+    },
+    "jewel-twilight": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-95756a5a641e70f5982181d2382ad148c57d4453b820a89b9c0a127dc5e00baa"
+    },
+    "lavender-dusk": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-f6310df53e1816568415c34114ef1c1932e8d8b87f35610740b6fef18a37fdda"
+    },
+    "literary-reading": {
+      "axis": "typography",
+      "package": "@portfolio/appearance-typography",
+      "version": "1.0.0",
+      "tier": "extended",
+      "license": "provided-by-operating-system",
+      "digest": "sha256-433334946d854196c1d97b4098fdf0f88ca46c73b86a07ba56cac935b335fc1b"
+    },
+    "low-stimulus-warm": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-c6f9886f0cee822f2bd855ed0b832291902c468b52ba5e58f5eb95dd128708ab"
+    },
+    "material-3-inspired": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "stable",
+      "license": "independent-inspired-interpretation",
+      "digest": "sha256-f3d3602ffb7ebc4c75f06aa48e2cf32bf12e47210e04b5526211d7e6008b0038"
+    },
+    "material-expressive-inspired": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "extended",
+      "license": "independent-inspired-interpretation",
+      "digest": "sha256-1025b61c8046b74fbf22761fd74fa24eecfac8b12376e2c3b25fb690d73a13b9"
+    },
+    "memphis": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "extended",
+      "license": "first-party",
+      "digest": "sha256-5334bac9e9f255298b92ebe843a3677a3f5c64841e295142c51e0264aa19f1fb"
+    },
+    "minimal-flat": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-342813b8082c0b752b3eb80133fdc655c76c746dc5a3a38e6657b0e7c23101ad"
+    },
+    "monochrome-functional": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "extended",
+      "license": "first-party",
+      "digest": "sha256-e05278bd766aaf02afd87c6c07fd459e8f36844d141ad6f5e68409e1d220a0cf"
+    },
+    "multilingual-system": {
+      "axis": "typography",
+      "package": "@portfolio/appearance-typography",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "provided-by-operating-system",
+      "digest": "sha256-a8160e39a0a604c153355882c28300726387c043a1b48bb615b9332b4ffb170b"
+    },
+    "neobrutalist": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-575985dfa82a458364fe1612efd4d55d3eb6ebb3e7a4fbb589922b8597aeec87"
+    },
+    "neon-city": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "experimental",
+      "license": "first-party",
+      "digest": "sha256-a28a60253e1a164d33384e9c25991dfd7745bea066728d10d7611ff94ec45e1c"
+    },
+    "neumorphic": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "experimental",
+      "license": "first-party",
+      "digest": "sha256-c35eac186e3f5ccaac38c98f89992dccadcb1cf4642c913794089b522c3d110a"
+    },
+    "neutral-slate": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-9f67c32cab6999e075574796d19f0b93e8d3c124ba9a42618b49a25ac09cdbdd"
+    },
+    "neutral-ui": {
+      "axis": "typography",
+      "package": "@portfolio/appearance-typography",
+      "version": "1.0.1",
+      "tier": "stable",
+      "license": "provided-by-operating-system",
+      "digest": "sha256-5293932643cb9205d910ea80c1dfcd4ec14b1b90867bc958bf302bc3e6226c65"
+    },
+    "ocean-abyss": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-e9ba07132f4448bc5f621cdffb8bbdae83c71fe6aaaa970d02e38e9874240a3e"
+    },
+    "oled-black": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "extended",
+      "license": "MIT",
+      "digest": "sha256-d188cb6d1d595737359e9484058a92725fcdcf8236fe6120e8cf5764298dc5ce"
+    },
+    "paper-ink": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-358e3a348b2b15157834dac21d3fd946131e9900b228379c0563a1e020f9f905"
+    },
+    "paper-tactile": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-1a8536c9e1825f40bddf19fa6c76b91a56eaf405c319a55d6fffc0f173d646b6"
+    },
+    "pastel-sorbet": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "extended",
+      "license": "first-party",
+      "digest": "sha256-7279fc7aa812999c52d8f8f93f4e42ec36cfce79d2e43bffd2356952394335d3"
+    },
+    "pixel-interface": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "experimental",
+      "license": "first-party",
+      "digest": "sha256-a4cc71c378859e14be2b9b47703f280d07b26b21d33c0600bf4354150fa5f9b5"
+    },
     "platform-neutral": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-f22e9239111a140d7ccddc8b229577c4bcdd70ae86b031e31c9d820d71fdfaff"
+      "digest": "sha256-7f688580a690c491640b3845eb636bee2ea094b410935bdb0f830912d043cde0"
+    },
+    "polaris-inspired": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "extended",
+      "license": "independent-inspired-interpretation",
+      "digest": "sha256-dc774292cd1f99a4ba8f8f36f60a35eb8263745b163ccdbcbb0055ab0f267099"
+    },
+    "primer-inspired": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "stable",
+      "license": "independent-inspired-interpretation",
+      "digest": "sha256-169a475f422722225db449acf09830c662907392a38932af52f1f4b5154bc4e9"
+    },
+    "radix-inspired": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "extended",
+      "license": "independent-inspired-interpretation",
+      "digest": "sha256-f94e18a9413e7a103d24523f92de4246cb4bde5e282429f2a9c2f72a53c5085d"
+    },
+    "raw-brutalist": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "extended",
+      "license": "first-party",
+      "digest": "sha256-9ee69c42f94e7e71a15852d1c58e5f94979e74bc5ce036a31980e0a021438f09"
+    },
+    "reduced-chroma": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-8ea0765a31bbca75dce626c1f091b5604b3bf0473b220e88ee938e8e95aecf3a"
+    },
+    "retro-web": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "experimental",
+      "license": "first-party",
+      "digest": "sha256-dccd410825b294d3377f03423078c8b75da6b855541eb751548521b0a70d9db9"
+    },
+    "sepia-film": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-030b6fba327a19a49a5cd7c98c6d5eca738aa08ad2dc5a37ac1c57bd6da9066a"
+    },
+    "skeuomorphic": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "experimental",
+      "license": "first-party",
+      "digest": "sha256-aa44e5f058d414956878c8c0a28e9e367febe82030ef942011481915e9dd84b2"
+    },
+    "soft-organic": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-d42f82b4057fab5f6e57761c329965a8e1e2946033cdbfa86c0bd190eb3823a5"
+    },
+    "spectrum-2-inspired": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "stable",
+      "license": "independent-inspired-interpretation",
+      "digest": "sha256-9bdf5fc61f57b38f7b6acf55f7d1f83ba456fea949b09b99823f49d8a19579ba"
+    },
+    "sunset-ember": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-e89f2fee6a3a2be898cc8fd4020cfd216133f460b248c2cc09f625dbde7d56b2"
+    },
+    "technical-sans-mono": {
+      "axis": "typography",
+      "package": "@portfolio/appearance-typography",
+      "version": "1.0.1",
+      "tier": "stable",
+      "license": "provided-by-operating-system",
+      "digest": "sha256-1dba09a1e430a1bac80937a0f748a3fe10f2637f794eb6dfde837bf8bdea3bd2"
+    },
+    "utility-dense": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "extended",
+      "license": "first-party",
+      "digest": "sha256-cfa05e478d2ec60536543198336b4c46d545b8e3dbe2a1b2041b4f0b4b0b655f"
     },
     "warm-parchment": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-d35a510314dcbd85588780196a70f656285b76214d465524780d92cd83c3fed8"
+      "digest": "sha256-e1b7379dd73a7e412a9bf108cd4ac95931173204f920ab380c6e77cc9e5f0015"
+    },
+    "zinc": {
+      "axis": "colorScheme",
+      "package": "@portfolio/appearance-schemes",
+      "version": "1.1.0",
+      "tier": "extended",
+      "license": "MIT",
+      "digest": "sha256-fb7a2330b246aa8d8cd2e1e1bca4d0d4c4d1de0a4d05271e754859ce835b3e46"
     }
   }
 }

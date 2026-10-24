@@ -72,10 +72,17 @@ const manifest = (id: string, version = '1.0.0', license = 'first-party') => ({
 
 test('the committed lock is current, canonical, and pins every first-party pack', () => {
   const packs = lockedPacks(ROOT);
+  // Every pack the three first-party packages ship, and nothing else.
+  const shipped = ['appearance-languages', 'appearance-schemes', 'appearance-typography']
+    .flatMap((dir) => fs.readdirSync(path.join(ROOT, 'packages', dir, 'packs')))
+    .sort();
   assert.deepEqual(
     packs.map(({ id }) => id),
-    ['humanist-ui', 'platform-neutral', 'warm-parchment'],
+    shipped,
   );
+  for (const id of ['humanist-ui', 'platform-neutral', 'warm-parchment']) {
+    assert.ok(shipped.includes(id), `the lock pins the fallback ${id}`);
+  }
   const committed = fs.readFileSync(path.join(ROOT, LOCK_FILE), 'utf8');
   assert.deepEqual(lockProblems(committed, packs), []);
   assert.equal(committed, renderLock(packs));
@@ -99,6 +106,40 @@ test('serialization is deterministic: the same packs render the same bytes, in a
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('the lock records a translucent language approved and shipped surface-opacity, and nothing for an opaque one (#20 PR 2c)', () => {
+  const language = (id: string, tokens: Record<string, string>, extra = {}) => ({
+    id,
+    axis: 'designLanguage' as const,
+    packageName: '@portfolio/appearance-languages',
+    dir: `packages/appearance-languages/packs/${id}`,
+    manifest: { ...manifest(id), tokens, ...extra },
+    digest: `sha256-${id}`,
+  });
+  const lock = JSON.parse(
+    renderLock([
+      language('floored', { 'surface-opacity': '97%' }, { approvedSurfaceOpacity: '78%' }),
+      language('glassy', { 'surface-opacity': '88%' }),
+      language('solid', { 'surface-opacity': '100%' }),
+    ]),
+  );
+  assert.deepEqual(lock.packs.floored.surfaceOpacity, { approved: '78%', shipped: '97%' });
+  assert.deepEqual(lock.packs.glassy.surfaceOpacity, { approved: '88%', shipped: '88%' });
+  assert.equal(lock.packs.solid.surfaceOpacity, undefined);
+  // The committed lock: glassmorphism ships its floor, and records the approved design's value.
+  const committed = JSON.parse(fs.readFileSync(path.join(ROOT, LOCK_FILE), 'utf8'));
+  assert.deepEqual(committed.packs.glassmorphism.surfaceOpacity, {
+    approved: '78%',
+    shipped: '97%',
+  });
+  const translucent = Object.entries(committed.packs).filter(
+    ([, entry]) => (entry as { surfaceOpacity?: unknown }).surfaceOpacity,
+  );
+  assert.deepEqual(
+    translucent.map(([id]) => id),
+    ['glassmorphism'],
+  );
 });
 
 test('a digest covers every file by path and bytes, and nothing else', () => {
@@ -311,6 +352,10 @@ test('research records are read from research/, checked, and never from packs/',
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
-  // The workspace's own: the fixture record, which lives in research/.
-  assert.deepEqual(researchIds(ROOT), ['fixture-research']);
+  // The workspace's own: the fixture record and the catalog's 23 schemes (#20, PR 2), each in research/.
+  const catalog = fs
+    .readdirSync(path.join(ROOT, 'packages/appearance-schemes/research'))
+    .map((file) => file.replace(/\.json$/, ''));
+  assert.equal(catalog.length, 23);
+  assert.deepEqual(researchIds(ROOT), ['fixture-research', ...catalog].sort());
 });

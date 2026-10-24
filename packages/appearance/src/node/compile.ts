@@ -23,13 +23,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { DisplayMode } from '@portfolio/schema';
 import type { PackKind } from '../axes';
-import { anchorV1 } from '../derive';
 import { LAYER_ORDER } from '../layers';
 import type { ColorSchemeManifest, DesignLanguageManifest, TypographyManifest } from '../manifests';
 import type { GeneratedScheme } from '../resolve-tokens';
 import {
   isHighContrastSet,
   printSet,
+  deriveBaseSet,
   schemeSets,
   setPolarity,
   type ColorSetName,
@@ -126,7 +126,10 @@ export function compilePack(source: PackSource): CompileResult {
     const manifest = source.manifest as ColorSchemeManifest;
     const sets = schemeBaseSets(manifest);
     if (!sets) return { ok: true, pack: { stylesheet: null, assets: [] } };
-    const css = compileSchemeStylesheet(manifest.id, schemeSets(sets, manifest.highContrast));
+    const css = compileSchemeStylesheet(
+      manifest.id,
+      schemeSets(sets, manifest.highContrast, manifest.derivation),
+    );
     return { ok: true, pack: { stylesheet: cssFile(manifest.id, css), assets: [] } };
   }
   if (source.kind === 'typography')
@@ -161,7 +164,7 @@ export function scriptFiles(dir: string): string[] {
   return found.sort();
 }
 
-/** A scheme's base sets: authored, or anchor-v1's from its anchors. Null for a generator scheme. */
+/** A scheme's base sets: authored, or its derivation's from its anchors. Null for a generator scheme. */
 export function schemeBaseSets(
   manifest: ColorSchemeManifest,
 ): { light?: ColorTokens; dark?: ColorTokens } | null {
@@ -169,7 +172,7 @@ export function schemeBaseSets(
   const sets: { light?: ColorTokens; dark?: ColorTokens } = {};
   for (const mode of ['light', 'dark'] as const) {
     const anchors = manifest.anchors?.[mode];
-    if (anchors) sets[mode] = anchorV1(anchors, mode);
+    if (anchors) sets[mode] = deriveBaseSet(manifest.derivation!, anchors, mode);
     else if (manifest[mode]) sets[mode] = manifest[mode];
   }
   return sets;

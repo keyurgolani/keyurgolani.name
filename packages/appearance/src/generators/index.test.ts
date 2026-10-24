@@ -49,6 +49,7 @@ test('./generators loads none of the packages manifests need, so its bundle stay
   // TOKEN_CONTRACT_VERSION would bring @portfolio/variant-contract, @portfolio/schema, and yaml.
   assert.deepEqual(packages, []);
   assert.deepEqual(modules, [
+    'anchor-v2.ts',
     'color.ts',
     'derive.ts',
     'gate.ts',

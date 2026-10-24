@@ -1,0 +1,82 @@
+{
+  "id": "pastel-sorbet",
+  "name": "Pastel Sorbet",
+  "description": "Pastel pink and mint on a pale ground.",
+  "version": "1.1.0",
+  "tokenContract": 1,
+  "tier": "extended",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v2 from the reviewed prototype's pastel-sorbet anchors. It puts the light accent #bd6590 back to #e477a8 and secondary #608989 back to #6ea8a1, undoing PR 2a's nudges: anchor-v2 solves the signature fill itself. adjustments lists the 16 roles it moves from anchor-v1."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [
+    "Pastel accents carry little weight, so emphasis leans on type and layout.",
+    "In light mode the accent and secondary are darkened to #bd6590 and #608989 so the signature fill reaches 3:1, so they read as dusty rose and grey teal more than pastel."
+  ],
+  "derivation": "anchor-v2",
+  "anchors": {
+    "light": {
+      "canvas": "#fff7fb",
+      "text": "#33263b",
+      "accent": "#e477a8",
+      "secondary": "#6ea8a1"
+    },
+    "dark": {
+      "canvas": "#302437",
+      "text": "#fff3fa",
+      "accent": "#f3a1c6",
+      "secondary": "#9bcfc8"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#625667", "#5b4f61"],
+      "text-muted": ["#6d6171", "#665a6b"],
+      "border-strong": ["#867b89", "#817684"],
+      "accent-text": ["#8f5074", "#864c6e"],
+      "focus": ["#ba648e", "#af5f87"],
+      "data-categorical-1": ["#c16792", "#c25889"],
+      "data-categorical-2": ["#618b8b", "#4a837d"],
+      "data-categorical-6": ["#625667", "#5b4f61"],
+      "signature-start": ["#e477a8", "#af5f87"],
+      "signature-end": ["#6ea8a1", "#5b7e80"]
+    },
+    "dark": {
+      "text-secondary": ["#cfc3cd", "#d7cbd4"],
+      "text-muted": ["#c3b7c1", "#cbbfc9"],
+      "border-strong": ["#a094a1", "#a89ca8"],
+      "accent-text": ["#f3a1c6", "#f5aece"],
+      "data-categorical-6": ["#cfc3cd", "#d7cbd4"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#67364c", "#5f3246"]
+    }
+  },
+  "swatches": ["#fff7fb", "#33263b", "#e477a8", "#6ea8a1"]
+}

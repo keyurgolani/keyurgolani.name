@@ -170,6 +170,12 @@ export interface LockEntry {
   readonly tier: string;
   readonly license: string;
   readonly digest: string;
+  /**
+   * A translucent design language's surface-opacity (#20 PR 2c): the
+   * approved design's, and the one it ships, its translucency floor when
+   * that's higher.
+   */
+  readonly surfaceOpacity?: { readonly approved: string; readonly shipped: string };
 }
 
 export interface CatalogLock {
@@ -185,6 +191,16 @@ const license = (manifest: Record<string, unknown> | null): string => {
   return typeof provenance?.license === 'string' ? provenance.license : '';
 };
 
+/** A translucent language's approved and shipped surface-opacity, or null for any other pack. */
+function surfaceOpacity(pack: CatalogPack): LockEntry['surfaceOpacity'] | null {
+  if (pack.axis !== 'designLanguage') return null;
+  const tokens = pack.manifest?.tokens as Record<string, unknown> | undefined;
+  const shipped = typeof tokens?.['surface-opacity'] === 'string' ? tokens['surface-opacity'] : '';
+  const approved = field(pack.manifest, 'approvedSurfaceOpacity') || shipped;
+  if (approved === '100%' || approved === '') return null;
+  return { approved, shipped };
+}
+
 /** The lock for `packs`: canonical JSON, by id, every entry's fields in one order. */
 export function renderLock(packs: readonly CatalogPack[]): string {
   const entries: Record<string, LockEntry> = {};
@@ -197,6 +213,8 @@ export function renderLock(packs: readonly CatalogPack[]): string {
       license: license(pack.manifest),
       digest: pack.digest,
     };
+    const opacity = surfaceOpacity(pack);
+    if (opacity) entries[pack.id] = { ...entries[pack.id]!, surfaceOpacity: opacity };
   }
   return `${JSON.stringify({ lockVersion: LOCK_VERSION, packs: entries }, null, 2)}\n`;
 }

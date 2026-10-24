@@ -1,0 +1,78 @@
+{
+  "id": "reduced-chroma",
+  "name": "Reduced Chroma",
+  "description": "Muted, low-saturation greys with a slate accent, for a quieter page.",
+  "version": "1.1.0",
+  "tokenContract": 1,
+  "tier": "stable",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v2 from the reviewed prototype's reduced-chroma anchors. The anchors stay as approved. adjustments lists the 13 roles it moves from anchor-v1."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [],
+  "derivation": "anchor-v2",
+  "anchors": {
+    "light": {
+      "canvas": "#f3f2ef",
+      "text": "#2e3033",
+      "accent": "#69717a",
+      "secondary": "#85776e"
+    },
+    "dark": {
+      "canvas": "#232426",
+      "text": "#e7e5e0",
+      "accent": "#9ca6ad",
+      "secondary": "#b2a49a"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#555658", "#505153"],
+      "text-muted": ["#606163", "#5a5b5d"],
+      "border-strong": ["#7a7a7b", "#757677"],
+      "accent-text": ["#5b6169", "#565b63"],
+      "data-categorical-6": ["#555658", "#505153"],
+      "signature-end": ["#85776e", "#80736a"]
+    },
+    "dark": {
+      "text-secondary": ["#bfbebb", "#c6c5c2"],
+      "text-muted": ["#b3b2af", "#bab9b6"],
+      "border-strong": ["#91918f", "#989895"],
+      "accent-text": ["#abb3b7", "#b5bbbe"],
+      "data-categorical-6": ["#bfbebb", "#c6c5c2"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#3f4449", "#3c4146"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#a6afb5", "#abb4b9"]
+    }
+  },
+  "swatches": ["#f3f2ef", "#2e3033", "#69717a", "#85776e"]
+}
