@@ -20,6 +20,9 @@ import {
   HIDDEN_CANARY,
 } from '@portfolio/variant-contract/node';
 import SpatialBento from '.';
+import { decideStage } from './policy';
+import { Runtime } from './runtime';
+import { buildScene, PARTICLE_COUNT, PLANES } from './scene';
 
 // Spatial Bento (#16), the static document: its manifest holds the
 // catalog's pins and declares budgets inside the medium ceilings, and it
@@ -217,15 +220,36 @@ test('in a plate it renders the same, every id under the plate prefix and none r
     fallbackAxes: [],
     diagnostics: [],
   } as never;
-  const plate = renderToStaticMarkup(
-    <PresentationBoundary
-      kind="plate"
-      appearance={appearance}
-      ids={{ prefix: 'pl-', main: input.ids.main }}
-    >
-      <SpatialBento input={input} />
-    </PresentationBoundary>,
-  );
+  // Every call of the runtime's hook, which subscribes to the document,
+  // observes the stage, and writes data-activity once mounted.
+  const calls: string[] = [];
+  const hook = Runtime.useEnhancementRuntime;
+  Runtime.useEnhancementRuntime = (options) => {
+    calls.push('runtime');
+    return hook(options);
+  };
+  let plate: string;
+  let documentCalls: number;
+  try {
+    plate = renderToStaticMarkup(
+      <PresentationBoundary
+        kind="plate"
+        appearance={appearance}
+        ids={{ prefix: 'pl-', main: input.ids.main }}
+      >
+        <SpatialBento input={input} />
+      </PresentationBoundary>,
+    );
+    // A plate renders the still before any runtime hook: none is called, and the stage never enhances.
+    assert.deepEqual(calls, [], 'runtime hooks called in a plate');
+    // The control: outside a plate, the stage's slot calls it once.
+    html(fixtureInput('complete'));
+    documentCalls = calls.length;
+  } finally {
+    Runtime.useEnhancementRuntime = hook;
+  }
+  assert.equal(documentCalls, 1, 'runtime hooks outside a plate');
+  assert.doesNotMatch(plate, /data-stage-reason|sb-stage__exit|<canvas/);
   const all = ids(plate);
   assert.ok(all.length > 10);
   assert.deepEqual(
@@ -252,27 +276,55 @@ test('a portfolio with no titled section has no section links, and still its h1 
   assert.equal(count(markup, /data-visitor-control-slot/g), 1);
 });
 
-/** Every module under src/, however deep, but the tests. */
+/** Every module under src/, however deep, but the tests, its comments gone: a module may say what it never reads. */
 const SOURCES = (readdirSync(new URL('.', import.meta.url), { recursive: true }) as string[])
   .filter((file) => /\.[cm]?[jt]sx?$/.test(file) && !/\.test\./.test(file))
-  .map((file) => [file, readFileSync(new URL(`./${file}`, import.meta.url), 'utf8')] as const);
+  .map(
+    (file) =>
+      [
+        file,
+        readFileSync(new URL(`./${file}`, import.meta.url), 'utf8')
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/^\s*\/\/.*$/gm, ''),
+      ] as const,
+  );
 
-/** A 3D library or the kit's spatial, R3F, or enhancement modules, however a module reaches it. */
+/** A 3D library or the kit's spatial, R3F, canvas, or enhancement modules, however a module reaches it. */
 const STAGE_IMPORT =
-  /(?:from\s+|import\s*\(\s*|import\s+|require\s*\(\s*)['"](?:three(?:\/[^'"]*)?|@react-three\/[^'"]+|postprocessing(?:\/[^'"]*)?|@portfolio\/kit\/(?:spatial|spatial-r3f|enhancements)(?:\/[^'"]*)?)['"]/;
+  /(?:from\s+|import\s*\(\s*|import\s+|require\s*\(\s*)['"](?:three(?:\/[^'"]*)?|@react-three\/[^'"]+|postprocessing(?:\/[^'"]*)?|@portfolio\/kit\/(?:spatial|spatial-r3f|spatial-canvas|enhancements)(?:\/[^'"]*)?)['"]/;
 
-test('no stage code ships: no client module, no 3D library, and no spatial kit', () => {
-  assert.ok(SOURCES.length >= 2);
+/** A module's source without its type-only imports, which ship nothing. */
+const runtimeSource = (source: string) => source.replace(/^import\s+type\b[^;]*;/gm, '');
+
+test('the static path holds no stage code: the stage and three.js are one lazily loaded module', () => {
+  const STAGE = 'stage-canvas.tsx';
+  assert.ok(SOURCES.some(([file]) => file === STAGE));
   for (const [file, source] of SOURCES) {
-    assert.doesNotMatch(source, /^\s*['"]use client['"]/m, file);
-    assert.doesNotMatch(source, STAGE_IMPORT, file);
-    assert.doesNotMatch(source, /SpatialCanvas|requestAnimationFrame|addEventListener/, file);
+    if (file === STAGE) {
+      // The stage reaches three.js through the kit's canvas subpath alone, and no other spatial effect.
+      assert.match(source, /from '@portfolio\/kit\/spatial-canvas'/, file);
+      assert.doesNotMatch(
+        source.replace(/'@portfolio\/kit\/spatial-canvas'/g, "''"),
+        STAGE_IMPORT,
+        file,
+      );
+      continue;
+    }
+    assert.doesNotMatch(runtimeSource(source), STAGE_IMPORT, file);
+    // The stage's module only through import(), once the policy says it runs.
+    assert.doesNotMatch(source, /from\s+['"]\.\/stage-canvas['"]/, file);
   }
+  const slot = SOURCES.find(([file]) => file === 'stage-slot.tsx')![1];
+  assert.deepEqual(
+    [...slot.matchAll(/import\(\s*['"]([^'"]+)['"]\s*\)/g)].map(([, from]) => from),
+    ['./stage-canvas'],
+  );
   // The matcher sees every way in: a bare import, a dynamic one, a require, and a subpath.
   for (const reach of [
     "import '@portfolio/kit/spatial';",
     "const stage = import('@portfolio/kit/spatial-r3f');",
     "import { x } from '@portfolio/kit/spatial-r3f/spatial-canvas';",
+    "import { SpatialCanvas } from '@portfolio/kit/spatial-canvas';",
     "const three = require('three');",
     "import('three/examples/jsm/controls/OrbitControls.js')",
     "export { Canvas } from '@react-three/fiber';",
@@ -280,10 +332,116 @@ test('no stage code ships: no client module, no 3D library, and no spatial kit',
     assert.match(reach, STAGE_IMPORT, reach);
   }
   assert.doesNotMatch("import { renderSection } from '@portfolio/kit/sections';", STAGE_IMPORT);
+  // No CDN-backed helper, and none of the reads the policy rules out.
+  for (const [file, source] of SOURCES) {
+    assert.doesNotMatch(
+      source,
+      /@react-three\/drei|userAgent|WEBGL_debug_renderer_info|getBattery|localStorage|sessionStorage/,
+      file,
+    );
+  }
+  // No 3D library of its own: the kit's are the only copies.
   const dependencies = { ...PACKAGE.dependencies, ...PACKAGE.peerDependencies };
   for (const name of Object.keys(dependencies)) {
     assert.doesNotMatch(name, /^(?:three|@react-three\/|postprocessing)/, name);
   }
+});
+
+test("the server draws the still, and the stage's slot adds nothing to it until a browser runs it", () => {
+  const markup = html(fixtureInput('complete'));
+  assert.match(
+    markup,
+    /<div class="sb-stage" data-stage-reason="pending"><div class="sb-still" aria-hidden="true">/,
+  );
+  assert.doesNotMatch(markup, /<canvas|data-stage=|sb-stage__exit|data-activity/);
+  // The slot's first render is pending, so the server's markup carries the reason the stage waits.
+  assert.match(markup, /data-stage-reason="pending"/);
+});
+
+const RUNNING: Parameters<typeof decideStage>[0] = {
+  state: 'active',
+  reason: 'running',
+  eligible: true,
+  forcedColors: false,
+  moreContrast: false,
+  highContrast: false,
+  enhancement: 'on',
+  deviceMemory: 8,
+  cores: 8,
+  saveData: false,
+  failed: false,
+  exited: false,
+  claimed: true,
+  started: false,
+};
+
+test('the capability policy: a supported device runs the stage, and every reason it stays off does', () => {
+  assert.deepEqual(decideStage(RUNNING), { mount: true, offered: true, reason: 'running' });
+  // Hints the browser doesn't give count for nothing either way.
+  assert.equal(decideStage({ ...RUNNING, deviceMemory: null, cores: null }).mount, true);
+  const off: [Partial<typeof RUNNING>, string, boolean][] = [
+    [{ state: 'static', reason: 'reduced' }, 'reduced', false],
+    [{ state: 'static', reason: 'pending' }, 'pending', false],
+    [{ state: 'static', reason: 'failed' }, 'failed', false],
+    [{ failed: true }, 'failed', false],
+    [{ forcedColors: true }, 'forced-colors', false],
+    [{ moreContrast: true }, 'contrast', false],
+    [{ highContrast: true }, 'contrast', false],
+    [{ enhancement: 'off' }, 'preview-off', false],
+    [{ eligible: false }, 'unsupported', false],
+    [{ deviceMemory: 2 }, 'low-memory', false],
+    [{ cores: 2 }, 'low-power', false],
+    [{ saveData: true }, 'save-data', false],
+    [{ claimed: false }, 'another-stage', false],
+    [{ exited: true }, 'exited', true],
+    [{ state: 'paused', reason: 'lifecycle' }, 'lifecycle', true],
+    [{ state: 'paused', reason: 'offscreen' }, 'waiting', true],
+  ];
+  for (const [change, reason, offered] of off) {
+    assert.deepEqual(
+      decideStage({ ...RUNNING, ...change }),
+      { mount: false, offered, reason },
+      JSON.stringify(change),
+    );
+  }
+  // A stage that started holds still while paused, and a static runtime ends it.
+  assert.deepEqual(decideStage({ ...RUNNING, state: 'paused', reason: 'hidden', started: true }), {
+    mount: true,
+    offered: true,
+    reason: 'paused',
+  });
+  assert.equal(
+    decideStage({ ...RUNNING, state: 'static', reason: 'reduced', started: true }).mount,
+    false,
+  );
+  // Nothing turns it on against reduced motion, forced colors, or more contrast, whatever else holds.
+  for (const against of [
+    { state: 'static', reason: 'reduced' },
+    { forcedColors: true },
+    { moreContrast: true },
+    { highContrast: true },
+  ] as const) {
+    assert.equal(decideStage({ ...RUNNING, ...against, started: true }).mount, false);
+  }
+});
+
+test('the scene is bounded: the same planes and particles whatever the portfolio holds, placed in one pass', () => {
+  const scene = buildScene(42);
+  assert.equal(scene.planes.length, PLANES.length);
+  assert.equal(PLANES.length, 4);
+  assert.equal(scene.particles.length, PARTICLE_COUNT * 3);
+  assert.ok(PARTICLE_COUNT <= 2000);
+  // Seeded: the same seed, the same field.
+  assert.deepEqual([...buildScene(42).particles], [...scene.particles]);
+  assert.notDeepEqual([...buildScene(43).particles.slice(0, 6)], [...scene.particles.slice(0, 6)]);
+  // The scene's size never depends on the content: the largest fixture's seed builds the same count.
+  const large = fixtureInput('large');
+  assert.equal(buildScene(large.env.seed).particles.length, PARTICLE_COUNT * 3);
+  // Linear in the particles, and no pointer at all: no nested loop over them.
+  const source = readFileSync(new URL('./scene.ts', import.meta.url), 'utf8');
+  assert.equal(count(source, /for \(let /g), 2);
+  for (const [file, text] of SOURCES)
+    assert.doesNotMatch(text, /onPointer|pointermove|raycast/i, file);
 });
 
 /** The stylesheet, comments gone. */

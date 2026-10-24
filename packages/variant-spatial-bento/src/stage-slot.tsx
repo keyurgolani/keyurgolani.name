@@ -1,0 +1,207 @@
+'use client';
+
+import {
+  Component,
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
+import { Action } from '@portfolio/appearance/primitives';
+import { useBoundary } from '@portfolio/appearance/react';
+import type { SpatialFailure } from '@portfolio/kit/spatial-canvas';
+import { decideStage, type StageReason } from './policy';
+import { Runtime } from './runtime';
+
+// The stage's slot (#16): the still, and on a device the policy lets run
+// it, the spatial stage over it, with the visitor's exit beside it.
+//
+// - A plate renders the still alone, before any runtime hook: no
+//   subscription, observer, listener, or attribute of the runtime's.
+// - The stage's module, with three.js, loads only once the policy says it
+//   runs, so nothing of it is on the static path.
+// - Any failure, its import rejected, no context, a lost context, a shader
+//   that doesn't compile, a throw, or no first frame, tears the stage down
+//   and leaves the still, the page's reading order and actions as they
+//   were, since the canvas is decoration inside the still, hidden from
+//   assistive technology. The runtime then stays static for the page.
+// - One stage a document: the first slot to mount claims it.
+// - It reads no storage, so a sandboxed preview frame, which blocks it,
+//   changes nothing.
+
+const StageCanvas = lazy(() => import('./stage-canvas'));
+
+/** The planes the still draws, back to front. */
+const PLANES = ['far', 'middle', 'near', 'signature'] as const;
+
+/** The still of the stage: decoration, with no word, link, or control. */
+function Still({ children, live }: { readonly children?: ReactNode; readonly live?: string }) {
+  return (
+    <div className="sb-still" aria-hidden="true" data-stage={live}>
+      {PLANES.map((plane) => (
+        <span key={plane} className={`sb-still__plane sb-still__plane--${plane}`} />
+      ))}
+      {children}
+    </div>
+  );
+}
+
+/** Catches the stage's import rejected, or anything it throws as it renders. */
+class StageBoundary extends Component<
+  { readonly onError: (error: unknown) => void; readonly children: ReactNode },
+  { failed: boolean }
+> {
+  override state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  override componentDidCatch(error: unknown) {
+    this.props.onError(error);
+  }
+  override render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
+
+// The document's one stage, and whether this page's failed already.
+let owner: object | null = null;
+let pageFailed = false;
+
+/** What the page and the browser say, read live, as one string so a snapshot that hasn't changed compares equal. */
+function readSignals(): string {
+  if (typeof document === 'undefined') return '';
+  const boundary = document.querySelector('[data-appearance-boundary]');
+  const media = (query: string) => typeof matchMedia === 'function' && matchMedia(query).matches;
+  const nav = navigator as Navigator & {
+    deviceMemory?: number;
+    connection?: { saveData?: boolean };
+  };
+  return JSON.stringify({
+    forcedColors: media('(forced-colors: active)'),
+    moreContrast:
+      media('(prefers-contrast: more)') || boundary?.getAttribute('data-contrast') === 'more',
+    highContrast: boundary?.getAttribute('data-display-mode') === 'high-contrast',
+    enhancement: boundary?.getAttribute('data-enhancement') === 'off' ? 'off' : 'on',
+    deviceMemory: typeof nav.deviceMemory === 'number' ? nav.deviceMemory : null,
+    cores: typeof nav.hardwareConcurrency === 'number' ? nav.hardwareConcurrency : null,
+    saveData: nav.connection?.saveData === true,
+  });
+}
+
+const QUERIES = ['(forced-colors: active)', '(prefers-contrast: more)'] as const;
+
+function subscribeSignals(change: () => void): () => void {
+  const lists = QUERIES.map((query) => matchMedia(query));
+  for (const list of lists) list.addEventListener('change', change);
+  const boundary = document.querySelector('[data-appearance-boundary]');
+  const observer = boundary ? new MutationObserver(change) : null;
+  observer?.observe(boundary!, {
+    attributes: true,
+    attributeFilter: ['data-contrast', 'data-display-mode', 'data-enhancement'],
+  });
+  return () => {
+    for (const list of lists) list.removeEventListener('change', change);
+    observer?.disconnect();
+  };
+}
+
+/** The slot on its runtime: the only path that calls the hook, observes, or listens. */
+function LiveSlot({ seed }: { readonly seed: number }) {
+  const runtime = Runtime.useEnhancementRuntime({ requires: ['webgl2', 'min-width:768'] });
+  const { attachRoot, state, reason, eligible, fail } = runtime;
+  const signals = useSyncExternalStore(subscribeSignals, readSignals, () => '');
+  const [exited, setExited] = useState(false);
+  const [claimed, setClaimed] = useState(false);
+  const [started, setStarted] = useState(false);
+  const [failed, setFailed] = useState(pageFailed);
+  const [live, setLive] = useState(false);
+
+  useEffect(() => {
+    const me = {};
+    if (owner !== null) return;
+    owner = me;
+    setClaimed(true);
+    return () => {
+      if (owner === me) owner = null;
+    };
+  }, []);
+
+  const decision =
+    signals === ''
+      ? { mount: false, offered: false, reason: 'pending' as StageReason }
+      : decideStage({
+          ...(JSON.parse(signals) as Omit<
+            Parameters<typeof decideStage>[0],
+            'state' | 'reason' | 'eligible' | 'failed' | 'exited' | 'claimed' | 'started'
+          >),
+          state,
+          reason,
+          eligible,
+          failed,
+          exited,
+          claimed,
+          started,
+        });
+
+  useEffect(() => {
+    if (decision.mount && state === 'active') setStarted(true);
+    if (!decision.mount) setLive(false);
+  }, [decision.mount, state]);
+
+  const onFailure = useCallback(
+    (failure: SpatialFailure | 'import', error?: unknown) => {
+      pageFailed = true;
+      setFailed(true);
+      setLive(false);
+      fail();
+      // Said once, for whoever reads the console: the page reads the same either way.
+      console.warn(`[spatial-bento] the stage stopped (${failure}); the still stays.`, error ?? '');
+    },
+    [fail],
+  );
+
+  return (
+    <div className="sb-stage" ref={attachRoot} data-stage-reason={decision.reason}>
+      <Still live={live ? 'live' : undefined}>
+        {decision.mount ? (
+          <StageBoundary onError={(error) => onFailure('import', error)}>
+            <Suspense fallback={null}>
+              <StageCanvas
+                state={state}
+                seed={seed}
+                onFailure={onFailure}
+                onFirstFrame={() => setLive(true)}
+              />
+            </Suspense>
+          </StageBoundary>
+        ) : null}
+      </Still>
+      {decision.offered ? (
+        <span className="sb-stage__exit">
+          <Action pressed={!exited} onClick={() => setExited((value) => !value)}>
+            Spatial stage
+          </Action>
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The opening's stage. In a plate it's the still alone, before any runtime
+ * hook. Anywhere else it's the live slot, which shows the still until the
+ * stage runs, and whenever it doesn't.
+ */
+export function StageSlot({ seed }: { readonly seed: number }) {
+  const { plate } = useBoundary();
+  return plate ? (
+    <div className="sb-stage">
+      <Still />
+    </div>
+  ) : (
+    <LiveSlot seed={seed} />
+  );
+}

@@ -3,13 +3,18 @@
 // shows is what the page reads as without JavaScript.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { AnimatedCounter } from '../animated-counter';
 import { MotionPolicyProvider } from '../motion';
 import { AuroraGradient, HolographicPanel, MagneticCursor, ScanlineOverlay } from '../spatial';
 import { hidesSystemCursor } from '../spatial/magnetic-cursor';
-import type { SpatialCanvasProps } from '../spatial-r3f/spatial-canvas';
+import {
+  nextDpr,
+  startingDpr,
+  type SpatialCanvasProps,
+} from '../spatial-r3f/spatial-canvas';
 import { TypingAnimation } from '../typing-animation';
 
 // The kit compiles JSX with `preserve`, so tsx gives the components the classic runtime.
@@ -74,13 +79,36 @@ test('the counter and the cursor render as the server can know them', () => {
   assert.equal(renderToStaticMarkup(<MagneticCursor />), '');
 });
 
-test("a SpatialCanvas's frame loop is the runtime's, never a prop", () => {
+test("a SpatialCanvas's frames are its caller's runtime's, never a prop", () => {
   const props: SpatialCanvasProps = {
+    state: 'paused',
+    onFailure: () => {},
     children: null,
-    // @ts-expect-error frameloop isn't a SpatialCanvas prop: the runtime sets it.
+    // @ts-expect-error frameloop isn't a SpatialCanvas prop: the runtime's state decides.
     frameloop: 'always',
   };
   assert.ok(props);
+});
+
+test("a SpatialCanvas's pixel ratio starts at the device's, capped, and only ever steps down", () => {
+  assert.equal(startingDpr(3, 1.5, 0.75), 1.5);
+  assert.equal(startingDpr(1, 1.5, 0.75), 1);
+  assert.equal(startingDpr(0.5, 1.5, 0.75), 0.75);
+  assert.equal(startingDpr(Number.NaN, 1.5, 0.75), 1);
+  // Slow frames step it down, to the floor and no further; fast ones never raise it.
+  assert.equal(nextDpr(1.5, 60, 33, 0.75), 1.25);
+  assert.equal(nextDpr(0.75, 60, 33, 0.75), 0.75);
+  assert.equal(nextDpr(1, 10, 33, 0.75), 1);
+});
+
+test('the SpatialCanvas asks for no high-performance GPU and never renders on its own', () => {
+  const source = readFileSync(new URL('../spatial-r3f/spatial-canvas.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /high-performance'/);
+  assert.match(source, /powerPreference: 'low-power'/);
+  assert.match(source, /frameloop: 'never'/);
+  assert.doesNotMatch(source, /frameloop: '(?:always|demand)'/);
+  // No CDN-backed helper, and none of the reads the scope rules out.
+  assert.doesNotMatch(source, /@react-three\/drei|userAgent|WEBGL_debug_renderer_info|getBattery/);
 });
 
 test('the custom cursor hides the system pointer only while it runs', () => {

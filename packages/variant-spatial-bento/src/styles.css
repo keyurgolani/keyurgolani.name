@@ -133,6 +133,40 @@
   translate: 0 -0.5rem;
 }
 
+/*
+ * The stage's slot: the still, and over it, once the spatial stage has drawn
+ * its first frame, the canvas, which hides the still's planes. A canvas a
+ * resize cleared while nothing renders carries data-stale, and the planes
+ * show again until its next frame. The exit sits after the stage.
+ */
+[data-variant='spatial-bento'] .sb-stage {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+  min-inline-size: 0;
+}
+
+[data-variant='spatial-bento'] .sb-stage > .sb-still {
+  justify-self: stretch;
+}
+
+[data-variant='spatial-bento'] .sb-still__canvas {
+  position: absolute;
+  inset: 0;
+}
+
+[data-variant='spatial-bento'] .sb-still[data-stage='live'] .sb-still__plane {
+  visibility: hidden;
+}
+
+[data-variant='spatial-bento'] .sb-still[data-stage='live']:has([data-stale]) .sb-still__plane {
+  visibility: visible;
+}
+
+[data-variant='spatial-bento'] .sb-still__canvas:has([data-stale]) {
+  visibility: hidden;
+}
+
 @media (max-width: 47.99rem) {
   [data-variant='spatial-bento'] .sb-opening {
     grid-template-columns: minmax(0, 1fr);
@@ -146,7 +180,8 @@
 
 /* Print: the words in reading order, one tile after another, the still gone. */
 @media print {
-  [data-variant='spatial-bento'] .sb-still {
+  [data-variant='spatial-bento'] .sb-still,
+  [data-variant='spatial-bento'] .sb-stage__exit {
     display: none;
   }
 
