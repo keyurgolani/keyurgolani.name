@@ -63,7 +63,10 @@ export type SessionAction =
   | { readonly type: 'edited'; readonly name: DocumentName; readonly sourceText: string }
   | { readonly type: 'save-started' }
   | { readonly type: 'saved'; readonly draft: StudioDraft }
-  /** The store changed the draft itself, as applyEdits does: the editor takes its text. */
+  /**
+   * The store changed the draft itself, as applyEdits does: the editor takes its
+   * text, or, when it holds text typed since, meets it as a conflict.
+   */
   | { readonly type: 'applied'; readonly draft: StudioDraft }
   | { readonly type: 'conflicted'; readonly theirs: ConflictingDraft }
   | { readonly type: 'keep-mine' }
@@ -140,6 +143,10 @@ export function draftSession(session: DraftSession, action: SessionAction): Draf
         restored: false,
       };
     case 'applied':
+      // Text typed while the edits were in flight isn't the store's: it stays in
+      // the editor, and the applied version comes in as a conflict, the same as a
+      // stale save meets, so the owner keeps one or the other and loses neither.
+      if (isDirty(session)) return { ...session, saving: false, conflict: action.draft };
       return {
         ...session,
         saving: false,

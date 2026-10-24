@@ -325,10 +325,23 @@ export function StudioShell({
       edits,
     });
     if (result.kind === 'saved') {
+      // Text typed in the meantime stays, and meets the applied version as a conflict.
+      const typed = isDirty(latest.current);
       dispatch({ type: 'applied', draft: result.draft });
-      setNotice(`Applied the appearance as draft version ${result.draft.version}.`);
+      setNotice(
+        typed
+          ? `Applied the appearance as draft version ${result.draft.version}. Your changes since are kept.`
+          : `Applied the appearance as draft version ${result.draft.version}.`,
+      );
     } else if (result.kind === 'conflict') {
-      // Nothing of this tab's is unsaved, so the newer version just loads.
+      if (isDirty(latest.current)) {
+        // Text typed in the meantime stays, against the newer version, as a stale save's does.
+        dispatch({ type: 'conflicted', theirs: result.theirs });
+        setNotice(
+          `Not applied: version ${result.theirs.version} was saved first. Your changes are kept.`,
+        );
+        return;
+      }
       setNotice(`Not applied: version ${result.theirs.version} was saved first. It shows now.`);
       await load(backend);
     } else if (result.kind === 'failed') {

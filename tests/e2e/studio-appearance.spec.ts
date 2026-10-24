@@ -190,11 +190,52 @@ test(
     await signIn(page, app, secret.password);
     await page.goto('/studio#appearance');
     await grantFrame(page);
+    // What the page showed as it left, recorded by the document itself, so it's the page's own doing.
+    await page.evaluate(() => {
+      // Capturing, so it reads the page before Studio's own pagehide handlers touch it.
+      addEventListener(
+        'pagehide',
+        () => {
+          sessionStorage.setItem(
+            'kgn-e2e:left',
+            JSON.stringify({
+              at: `${location.pathname}${location.hash}`,
+              frames: document.querySelectorAll('iframe.preview-surface__frame').length,
+              draftShown: document.body.innerText.includes('Rowan Appearance'),
+            }),
+          );
+        },
+        { capture: true },
+      );
+    });
+    // Hold its way to sign-in until the page has asked for it.
+    let release = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let asked = () => {};
+    const navigating = new Promise<void>((resolve) => {
+      asked = resolve;
+    });
+    await page.route(
+      (url) => url.pathname === '/studio/sign-in',
+      async (route) => {
+        asked();
+        await held;
+        await route.continue();
+      },
+    );
     const other = await context.newPage();
     await other.goto('/studio');
     await other.getByRole('button', { name: 'Sign out' }).click();
     await expect(other).toHaveURL(`${app.origin}/studio/sign-in?state=signed_out`);
+    await navigating;
+    release();
     await expect(page).toHaveURL(/\/studio\/sign-in\?state=signed_out/);
+    // Before it went, the frame and the draft were gone already.
+    expect(
+      JSON.parse((await page.evaluate(() => sessionStorage.getItem('kgn-e2e:left'))) ?? 'null'),
+    ).toEqual({ at: '/studio#appearance', frames: 0, draftShown: false });
     await expect(frameElement(page)).toHaveCount(0);
     await expect(page.locator('body')).not.toContainText('Rowan Appearance');
   },
