@@ -69,6 +69,14 @@ If you add or change a section kind in `packages/schema/src/kinds/`, you must al
 
 The [checks](#checks) below catch most of these. A change to either document's fields also updates [docs/configuration.md](docs/configuration.md), and a change an existing document wouldn't pass bumps `schemaVersion` with a migration step in `packages/schema/src/migrate/`. A field for one profession belongs in a content extension instead.
 
+### Change a generated scheme
+
+A generated scheme's output is pinned to its generator's version (#20, [docs/appearance.md](docs/appearance.md#a-color-scheme)). Changing what a generator in `packages/appearance/src/generators/` makes means raising its `version` there and in the scheme's manifest, then running `pnpm catalog:generated`, which writes the reference records again, and committing them. `pnpm check:appearance` fails a changed output at the same version, and `pnpm catalog:generated` refuses to write it.
+
+A new record for an image-derived scheme makes the owner's acceptance stale, so the scheme stays out of the build until the owner reviews it again. Only the owner runs `pnpm catalog accept`.
+
+To rehearse the whole catalog in CI, the cross-product's static and browser parts and every primitive state, change `tests/catalog/rehearsal.json` in a pull request's head commit, and remove it in a later commit. Each request is one run of `catalog-rehearsal.yml`, at most 180 runner-minutes.
+
 ## Checks
 
 CI runs these on pull requests, as [CI](#ci) describes. Each CI step runs the matching `pnpm ci:<job>` script, or a shard of one, so a failure prints the command that reproduces it. `pnpm check:docs` checks every relative link, anchor, and `pnpm` script the Markdown names.
