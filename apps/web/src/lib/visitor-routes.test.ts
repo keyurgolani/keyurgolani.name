@@ -175,11 +175,11 @@ test('anything else is missing: an undeclared path, a bare view prefix, or a tur
 
 test('a public case study renders at its slug, and its views as any view does (#10b)', async () => {
   // fixture-chapters says routes.work: shared, so the fallback composition
-  // renders the work's own page (lib/work-page.ts).
+  // renders the work's own page (lib/work-page.ts), its own canonical (#22).
   assert.deepEqual(rendered((await resolve({ segments: ['work', SLUG] })).route), [
     FALLBACK_ID,
     { route: 'work', slug: SLUG },
-    undefined,
+    `/work/${SLUG}`,
   ]);
   const credits = BUILD[1]!.manifest.routes.views.find((view) => view.id === 'credits')!;
   assert.deepEqual(rendered((await resolve({ segments: ['work', SLUG, 'credits'] })).route), [
@@ -224,11 +224,11 @@ test("a work's own page renders in a composition that says routes.work: bespoke,
   const work = { route: 'work', slug: SLUG } as const;
   const own = (await resolve({ segments: ['work', SLUG] }, viewFor('fixture-bespoke'), build))
     .route;
-  assert.deepEqual(rendered(own), ['fixture-bespoke', work, undefined]);
+  assert.deepEqual(rendered(own), ['fixture-bespoke', work, `/work/${SLUG}`]);
   assert.equal(own.kind === 'render' && own.composition.fallback, false);
   for (const variant of ['fixture-chapters', 'fixture-notes']) {
     const shared = (await resolve({ segments: ['work', SLUG] }, viewFor(variant), build)).route;
-    assert.deepEqual(rendered(shared), [FALLBACK_ID, work, undefined], variant);
+    assert.deepEqual(rendered(shared), [FALLBACK_ID, work, `/work/${SLUG}`], variant);
     assert.ok(shared.kind === 'render');
     assert.equal(shared.composition.requested, variant);
     assert.equal(shared.composition.fallback, true);
@@ -243,7 +243,8 @@ test("a work's own page renders in a composition that says routes.work: bespoke,
     rendered((await resolve({ segments: ['work', SLUG, 'credits'] }, undefined, build)).route)[0],
     'fixture-chapters',
   );
-  // Under /sample, ?variant= picks the composition, and the rule is the same.
+  // Under /sample, ?variant= picks the composition, and the rule is the
+  // same, with no canonical, since /sample isn't the live site (#22).
   for (const [selected, expected] of [
     ['fixture-notes', FALLBACK_ID],
     ['fixture-bespoke', 'fixture-bespoke'],
