@@ -356,7 +356,7 @@ const FIXTURE = fileURLToPath(
   new URL('../../../../tests/fixtures/reference-export/', import.meta.url),
 );
 
-test('an export of live and of an older revision is export format 1: E’s reader verifies each unchanged, and verify-revision passes it', async (t) => {
+test('an export of live and of an older revision is export format 1: the store-free reader verifies each unchanged, and verify-revision passes it', async (t) => {
   const seededStore = await seeded(t);
   const { root, store, first, second } = seededStore;
   for (const [target, id] of [
@@ -528,7 +528,7 @@ test('--documents-only writes the two documents, byte for byte, and nothing else
   assert.match(verify.out, /^problem: bundle_unreadable bundle\.json$/m);
 });
 
-test('nothing of the store’s own reaches a bundle: no draft, session, claim, lock, audit record, password hash, token, event reason, idempotency key, or another revision', async (t) => {
+test("nothing of the store's own reaches a bundle: no draft, session, claim, lock, audit record, password hash, token, event reason, idempotency key, or another revision", async (t) => {
   const seededStore = await seeded(t);
   const out = path.join(seededStore.root, 'out');
   const run = await exportCli(seededStore, ['live', '--out', out], {
@@ -596,7 +596,7 @@ test('every refusal writes nothing, and says why: a target that is not empty, ov
 
   const full = path.join(root, 'full');
   mkdirSync(full);
-  writeFileSync(path.join(full, 'keep.txt'), 'the operator’s');
+  writeFileSync(path.join(full, 'keep.txt'), 'kept');
   await refuse('a target that holds a file', ['live', '--out', full], 'target_not_empty');
   assert.deepEqual(readdirSync(full), ['keep.txt']);
   const file = path.join(root, 'a-file');
@@ -794,7 +794,7 @@ async function exported(t: TestContext): Promise<{ out: string; seededStore: See
   return { out, seededStore };
 }
 
-test('verify-revision finds a changed byte, an extra file, a missing file, a link, and a directory outside the layout, by the reader’s codes, with paths relative to the bundle', async (t) => {
+test("verify-revision finds a changed byte, an extra file, a missing file, a link, and a directory outside the layout, by the reader's codes, with paths relative to the bundle", async (t) => {
   const { out, seededStore } = await exported(t);
   const problems = async () => {
     const run = await verifyCli(out);
