@@ -148,8 +148,8 @@ test('a work with a case study links to its page from its plate, by its title an
   // Every work link on home is a routed work's, and each routed work has
   // one: the plate's, or the kit's works list's (#10b), as for notes in the
   // work section and zine in the archive.
-  const routed = pairOf(CURATED)
-    .portfolio.works.filter((work) => work.caseStudy !== undefined && work.slug !== undefined)
+  const routed = (pairOf(CURATED).portfolio.works ?? [])
+    .filter((work) => work.caseStudy !== undefined && work.slug !== undefined)
     .map(({ slug }) => slug!)
     .sort();
   assert.deepEqual(routed, ['ledger', 'notes', 'zine']);
