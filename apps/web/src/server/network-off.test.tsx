@@ -211,17 +211,29 @@ test('with no adapter and no network, every fixture and the sample render comple
         // shows its title. A works section's title may go, as when a
         // composition folds one into its chapters, as Obsidian Atelier does
         // (#115), and so may that of a section a composition folds whole into
-        // a region of its own, whose id it keeps as an empty anchor there, as
-        // Editorial Evidence's proof strip does with an evidence section (#13).
+        // a region of its own, as Editorial Evidence's proof strip does with an
+        // evidence section (#13): it keeps the section's id as an empty anchor
+        // there, and every one of the section's items shows its own text in that
+        // region, after the anchor.
         // With no sections, the owner's name shows.
         const { sections } = view.portfolio;
         const unplaced = sections
           .map(({ id }) => id)
           .filter((id) => !new RegExp(`\\bid="[^"]*${id}"`).test(html));
         assert.deepEqual(unplaced, [], where);
-        const folded = (id: string) => new RegExp(`\\bid="[^"]*${id}"[^>]*></`).test(html);
+        const folded = (section: (typeof sections)[number]) => {
+          const region = foldedInto(html, section.id);
+          if (region === null) return false;
+          const regionText = region.replace(/<[^>]+>/g, '');
+          const texts = itemTexts(view, section);
+          return (
+            texts !== null &&
+            texts.length > 0 &&
+            texts.every((text) => text !== null && regionText.includes(escaped(text)))
+          );
+        };
         const untitled = sections
-          .filter((section) => section.kind !== 'works' && !folded(section.id))
+          .filter((section) => section.kind !== 'works' && !folded(section))
           .map((section) => (section as { title?: unknown }).title)
           .filter((title): title is string => typeof title === 'string')
           .filter((title) => !html.includes(escaped(title)));
@@ -238,6 +250,79 @@ test('with no adapter and no network, every fixture and the sample render comple
 });
 
 /** `text` as react-dom writes it into markup. */
+/** Elements with no closing tag. */
+const VOID = /^(?:area|base|br|col|embed|hr|img|input|link|meta|source|track|wbr)$/i;
+
+/**
+ * Where a composition folded the section `id` into a region of its own: the
+ * rest of the element that holds the section's empty anchor, after the
+ * anchor, or null when `id` marks no empty anchor.
+ */
+function foldedInto(html: string, id: string): string | null {
+  const anchor = new RegExp(`<([a-z]+)\\b[^>]*\\bid="[^"]*${id}"[^>]*></\\1>`).exec(html);
+  if (!anchor) return null;
+  const from = anchor.index + anchor[0].length;
+  let depth = 0;
+  for (const tag of html.slice(from).matchAll(/<(\/?)([a-z][a-z0-9-]*)\b[^>]*?(\/?)>/gi)) {
+    if (tag[1]) {
+      if (depth === 0) return html.slice(from, from + tag.index);
+      depth -= 1;
+    } else if (!tag[3] && !VOID.test(tag[2]!)) {
+      depth += 1;
+    }
+  }
+  return html.slice(from);
+}
+
+/** An item's own text: its title, name, label, or statement, or itself when it's text. */
+function ownText(item: unknown): string | null {
+  if (typeof item === 'string') return item.trim() === '' ? null : item;
+  if (!item || typeof item !== 'object') return null;
+  const record = item as Record<string, unknown>;
+  const text = ['title', 'name', 'label', 'statement']
+    .map((key) => record[key])
+    .find((value) => typeof value === 'string' && value.trim() !== '');
+  return typeof text === 'string' ? text : null;
+}
+
+/**
+ * The text each of a section's items carries: an evidence record's, a
+ * work's, or a chronology entry's own text for each id it lists, and for a
+ * practice section, its part of the practice (the thesis, or each skill or
+ * tool group's). Null for a section with nothing of either, and null in
+ * place of an item the view doesn't hold or that carries no text.
+ */
+function itemTexts(
+  view: PublicView,
+  section: PublicView['portfolio']['sections'][number],
+): (string | null)[] | null {
+  const items = (section as { items?: unknown }).items;
+  if (Array.isArray(items)) {
+    const records = [
+      ...view.portfolio.evidence,
+      ...view.portfolio.works,
+      ...view.portfolio.chronology,
+    ] as unknown as { id: unknown }[];
+    return items.map((id) => ownText(records.find((candidate) => candidate.id === id)));
+  }
+  const part = (section as { part?: unknown }).part;
+  if (section.kind === 'practice' && typeof part === 'string') {
+    const content = (view.portfolio.practice as Record<string, unknown> | undefined)?.[part];
+    if (typeof content === 'string') return [markdownText(content)];
+    if (Array.isArray(content)) return content.map(ownText);
+  }
+  return null;
+}
+
+/** Markdown as the text a reader sees: no emphasis or code marks, a link its words. */
+function markdownText(markdown: string): string {
+  return markdown
+    .split('\n')[0]!
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[*_`#>]/g, '')
+    .trim();
+}
+
 function escaped(text: string): string {
   return text
     .replaceAll('&', '&amp;')
