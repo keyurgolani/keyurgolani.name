@@ -8,6 +8,7 @@ import {
   ROUTE_HEADER,
 } from './src/server/route-header';
 import { CONTENT_HASHED, IMMUTABLE } from './src/server/cache-rules';
+import { BASELINE_CSP } from './src/server/public-headers';
 
 /**
  * The registered variant and content extension packages, which
@@ -212,7 +213,7 @@ const config: NextConfig = {
           // data: URL (#10): never a remote host.
           {
             key: 'Content-Security-Policy',
-            value: "frame-ancestors 'none'; img-src 'self' data:; media-src 'self'",
+            value: BASELINE_CSP,
           },
         ],
       },
@@ -234,7 +235,7 @@ const config: NextConfig = {
           { key: 'Referrer-Policy', value: 'same-origin' },
           {
             key: 'Content-Security-Policy',
-            value: "frame-ancestors 'none'; img-src 'self' data:; media-src 'self'",
+            value: BASELINE_CSP,
           },
           { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
         ],

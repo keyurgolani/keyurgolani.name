@@ -10,6 +10,7 @@ import {
 } from './server/config-store';
 import { isExperiencePath, segmentFor } from './server/experience';
 import { isPreviewPath, previewCsp, previewHeaders } from './server/preview-headers';
+import { publicCsp } from './server/public-headers';
 import { PORTFOLIO_FILES } from './server/portfolio-files';
 import { READY_PATH, STARTING, STARTING_HEADERS } from './server/ready-starting';
 import { unavailablePage } from './server/unavailable-page';
@@ -135,10 +136,11 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
         headers: { ...STARTING_HEADERS, 'x-request-id': requestId },
       });
     }
-    // A preview's 503 keeps the preview's headers, with no origin to frame it.
+    // A preview's 503 keeps the preview's headers, with no origin to frame
+    // it, and anything else's the public policy.
     const early = isPreviewPath(request.nextUrl.pathname)
       ? previewHeaders(previewCsp(newNonce(), { mode: 'production' }))
-      : {};
+      : { 'content-security-policy': publicCsp(newNonce(), 'production') };
     return plain(503, 'Service unavailable.', requestId, early);
   }
   const { pathname, search, searchParams } = request.nextUrl;
@@ -153,24 +155,33 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   // on a host the deployment doesn't name, only the health checks.
   const host = hostOf(request, deployment.origin, deployment.previewOrigin);
   if (host === 'preview' && !preview && !sharedAsset(pathname)) {
+    const policy = publicCsp(newNonce(), COMPILED_MODE);
+    extra['content-security-policy'] = policy;
     return pageLoad
-      ? unknownPath(request, requestId, extra, {})
+      ? unknownPath(request, requestId, extra, { csp: policy })
       : plain(404, 'Not found.', requestId, extra);
   }
   if (host === 'other' && !HEALTH_PATHS.has(pathname)) {
+    extra['content-security-policy'] = publicCsp(newNonce(), COMPILED_MODE);
     return plain(404, 'Not found.', requestId, extra);
   }
   const studioPath = isStudioPath(pathname);
   const studio = studioPath && hasStudio(deployment.profile);
+  // Every other path, a Studio path under a profile with none among them,
+  // gets the public site's policy (#6, item 8), its nonce on the request
+  // too, so Next puts it on the scripts it renders.
   const csp = studio
     ? studioCsp(newNonce(), COMPILED_MODE, deployment.previewOrigin)
     : preview
       ? previewCsp(newNonce(), { mode: COMPILED_MODE, studioOrigin: deployment.origin })
-      : undefined;
-  if (studio && csp) {
+      : publicCsp(newNonce(), COMPILED_MODE);
+  if (studio) {
     Object.assign(extra, STUDIO_RESPONSE_HEADERS, { 'content-security-policy': csp });
+  } else if (preview) {
+    Object.assign(extra, previewHeaders(csp));
+  } else {
+    extra['content-security-policy'] = csp;
   }
-  if (preview && csp) Object.assign(extra, previewHeaders(csp));
 
   // Only next.config.ts's rewrite of a request marked below reaches an
   // experience segment (#6, Slice 2).
@@ -236,7 +247,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   // for every request meanwhile, waited on for a second at most
   // (config-store's RECHECK_MS).
   if (decision.status === 'served' && decision.entry.visitor && !isServable()) {
-    if (!(await servableAgain())) return unavailable(requestId);
+    if (!(await servableAgain())) return unavailable(requestId, extra);
   }
   if (
     decision.status === 'served' &&
@@ -595,13 +606,14 @@ function plain(
  * validation text, path, or Studio link, which crawlers are asked to come
  * back for rather than index.
  */
-/** The static 503's page, in the fallback packs' boundary (server/unavailable-page.ts). */
+/** The static 503's page, in the fallback packs' boundary (server/unavailable-page.ts), under the response's own policy in `extra`. */
 const UNAVAILABLE_PAGE = unavailablePage();
 
-function unavailable(requestId: string): NextResponse {
+function unavailable(requestId: string, extra: Record<string, string>): NextResponse {
   return new NextResponse(UNAVAILABLE_PAGE, {
     status: 503,
     headers: {
+      ...extra,
       'content-type': 'text/html; charset=utf-8',
       'cache-control': 'no-store',
       'retry-after': '120',

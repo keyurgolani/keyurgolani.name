@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BASELINE_HEADERS, headerProblems } from './route-headers.mjs';
+import { BASELINE_HEADERS, headerProblems, withoutNonces } from './route-headers.mjs';
 
 // What the profile matrix and the profile smoke expect of a response's
 // headers, by path (#1 item 22, #2).
@@ -21,6 +21,28 @@ test('outside Studio a response needs the baseline headers, no resource policy, 
     [],
   );
   assert.notDeepEqual(headerProblems('/feed.xml', { 'x-content-type-options': 'nosniff' }), []);
+});
+
+test("outside Studio and preview a response needs the public site's nonce CSP, never the baseline or one that runs inline script (#6, item 8)", () => {
+  const csp = BASELINE_HEADERS['content-security-policy'];
+  for (const value of [
+    undefined,
+    "frame-ancestors 'none'; img-src 'self' data:; media-src 'self'",
+    csp.replace("'strict-dynamic'", "'strict-dynamic' 'unsafe-inline'"),
+    csp.replace("'strict-dynamic'", "'strict-dynamic' 'unsafe-eval'"),
+    csp.replace("img-src 'self' data:", "img-src 'self' data: https:"),
+    csp.replace("object-src 'none'", "object-src 'self'"),
+    csp.replace("frame-ancestors 'none'", 'frame-ancestors *'),
+    csp.replace(/'nonce-[^']+'/, "'nonce-short'"),
+  ]) {
+    for (const path of ['/', '/feed.xml', '/api/studio/auth.session']) {
+      assert.notDeepEqual(
+        headerProblems(path, { ...BASELINE_HEADERS, 'content-security-policy': value }),
+        [],
+        `${path}: ${value}`,
+      );
+    }
+  }
 });
 
 const STUDIO_PAGE = {
@@ -182,4 +204,20 @@ test("Studio's transport needs Referrer-Policy and Cross-Origin-Resource-Policy:
     headerProblems('/api/studio/auth.login', { ...transport, 'cache-control': undefined }),
     [],
   );
+});
+
+test('two answers that differ in their nonces alone compare equal, and nothing else is taken for a nonce', () => {
+  const nonce = 'MVlEoQyHU2PoMq1Imu8oSA==';
+  const other = 'WFUrZAL3dO/g3rt7Jm3XSA==';
+  for (const sample of [
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    `<script nonce="${nonce}">`,
+    `</_next/static/chunks/a.css>; rel=preload; as="style"; nonce="${nonce}"`,
+    `self.__next_f.push([1,"{\\"nonce\\":\\"${nonce}\\"}"])`,
+  ]) {
+    assert.equal(withoutNonces(sample), withoutNonces(sample.replaceAll(nonce, other)), sample);
+    assert.ok(!withoutNonces(sample).includes(nonce), sample);
+  }
+  // A value of the same shape that isn't a nonce stays.
+  assert.equal(withoutNonces(`token=${nonce}`), `token=${nonce}`);
 });

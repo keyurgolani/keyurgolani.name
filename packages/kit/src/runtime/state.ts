@@ -39,13 +39,17 @@ export interface LifecycleInput {
 export interface RuntimeInputs {
   /** False on the server and in the first client render. */
   readonly mounted: boolean;
-  /** Whether the boundary's data-motion-policy and data-motion have been read. */
+  /** Whether the boundary's data-motion has been read. */
   readonly boundaryRead: boolean;
   /** `prefers-reduced-motion: reduce`. */
   readonly osReduced: boolean;
-  /** The boundary's data-motion-policy: the site's motion policy. */
+  /** The effect's own motion policy, or a MotionPolicyProvider's: `reduce` reduces it. */
   readonly policy: string | null;
-  /** The boundary's data-motion: a preview environment's motion, `full`, or `reduced` or `static`, which both reduce it. */
+  /**
+   * The boundary's data-motion: `full`, or `reduced` or `static`, which both
+   * reduce it. It's `reduced` under the site's `reduce` policy and a
+   * preview's reduced environment (#19, Slice 4).
+   */
   readonly environmentMotion: string | null;
   readonly documentVisible: boolean;
   /** Whether the effect's root is within the viewport and its margin. */

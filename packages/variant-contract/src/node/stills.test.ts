@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { registryMeta, stillFiles, writeServedFiles } from './codegen';
 import { readRegistry } from './registry';
-import { imageSize, MAX_STILL_BYTES } from './stills';
+import { imageSize, isAnimated, MAX_STILL_BYTES } from './stills';
 import { FALLBACK, manifestFor, removeTestHosts, testHost, variantPackage } from './test-hosts';
 
 // A variant's catalog stills (#6, item 1): the header reader, what
@@ -44,6 +44,8 @@ function riff(chunk: string, body: number[]): Uint8Array {
     [...chunk].map((c) => c.charCodeAt(0)),
     12,
   );
+  // The chunk's own size, as a real file has it.
+  new DataView(bytes.buffer).setUint32(16, bytes.length - 20, true);
   bytes.set(body, 20);
   return bytes;
 }
@@ -59,11 +61,11 @@ function vp8l(width: number, height: number) {
 }
 
 /** Extended: flags, then the canvas less one, 24 bits each. */
-function vp8x(width: number, height: number) {
+function vp8x(width: number, height: number, flags = 0) {
   const w = width - 1;
   const h = height - 1;
   return riff('VP8X', [
-    0,
+    flags,
     0,
     0,
     0,
@@ -75,6 +77,69 @@ function vp8x(width: number, height: number) {
     h >> 16,
   ]);
 }
+
+/** A PNG chunk: a big-endian length, the type, the data, and a CRC this reader doesn't check. */
+function pngChunk(type: string, data: number[]): number[] {
+  const length = data.length;
+  return [
+    (length >>> 24) & 0xff,
+    (length >>> 16) & 0xff,
+    (length >>> 8) & 0xff,
+    length & 0xff,
+    ...[...type].map((c) => c.charCodeAt(0)),
+    ...data,
+    0,
+    0,
+    0,
+    0,
+  ];
+}
+
+/** A PNG with `chunks` after its IHDR, as an APNG puts acTL there. */
+function pngWith(width: number, height: number, chunks: number[][]): Uint8Array {
+  const head = png(width, height, 0);
+  return new Uint8Array([...head, ...chunks.flat()]);
+}
+
+test('a still is one frame: an animated WebP or an APNG is animated, and a plain one is not (#6)', () => {
+  assert.equal(isAnimated(vp8x(1440, 900), 'webp'), false);
+  assert.equal(isAnimated(vp8x(1440, 900, 0x02), 'webp'), true);
+  // An ANIM chunk after the header, with no flag.
+  const anim = new Uint8Array([
+    ...vp8x(720, 450),
+    ...[...'ANIM'].map((c) => c.charCodeAt(0)),
+    6,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+  ]);
+  assert.equal(isAnimated(anim, 'webp'), true);
+  assert.equal(isAnimated(vp8(720, 450), 'webp'), false);
+  assert.equal(isAnimated(vp8l(720, 450), 'webp'), false);
+  assert.equal(isAnimated(pngWith(720, 450, [pngChunk('IDAT', [1, 2, 3])]), 'png'), false);
+  assert.equal(
+    isAnimated(
+      pngWith(720, 450, [pngChunk('acTL', [0, 0, 0, 2, 0, 0, 0, 0]), pngChunk('IDAT', [1])]),
+      'png',
+    ),
+    true,
+  );
+  // An acTL after the image data isn't an APNG's.
+  assert.equal(
+    isAnimated(
+      pngWith(720, 450, [pngChunk('IDAT', [1]), pngChunk('acTL', [0, 0, 0, 2, 0, 0, 0, 0])]),
+      'png',
+    ),
+    false,
+  );
+  assert.equal(isAnimated(png(720, 450), 'png'), false);
+});
 
 test('imageSize reads a PNG and each WebP encoding, and nothing else', () => {
   assert.deepEqual(imageSize(png(1440, 900)), { format: 'png', width: 1440, height: 900 });
@@ -185,6 +250,22 @@ test("a still the package can't ship is a record, and the variant doesn't regist
         },
         STILLS,
         /over the 256 KB a still may be/,
+      ],
+      [
+        { 'stills/1440.webp': vp8x(1440, 900, 0x02), 'stills/720.png': png(720, 450) },
+        STILLS,
+        /names \.\/stills\/1440\.webp, which is animated: a still is one frame/,
+      ],
+      [
+        {
+          'stills/1440.webp': vp8x(1440, 900),
+          'stills/720.png': pngWith(720, 450, [
+            pngChunk('acTL', [0, 0, 0, 2, 0, 0, 0, 0]),
+            pngChunk('IDAT', [1]),
+          ]),
+        },
+        STILLS,
+        /names \.\/stills\/720\.png, which is animated: a still is one frame/,
       ],
     ];
     for (const [files, stills, message] of cases) {

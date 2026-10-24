@@ -33,7 +33,7 @@ import {
 import { DEFAULT_SITE } from './app-server.mjs';
 import { expect, test, type App, type AppOptions } from './fixtures';
 import { VARIANTS } from './registry';
-import { headerProblems, isPreviewPath, isStudioPath } from './route-headers.mjs';
+import { headerProblems, isPreviewPath, isStudioPath, withoutNonces } from './route-headers.mjs';
 import { withRscHash } from './rsc';
 import { concrete, scanTargets } from './scan-targets';
 
@@ -497,22 +497,17 @@ async function shape(response: APIResponse, target: string) {
   const type = response.headers()['content-type'] ?? '';
   const page = /^text\/html/.test(type) && text !== '';
   const flight = /^text\/x-component/.test(type);
-  // Studio's policy carries a nonce made per response, as do its page's
-  // scripts and the stylesheet preload Next sends in its Link header.
-  const csp = response.headers()['content-security-policy'];
-  const nonce = /'nonce-([A-Za-z0-9+/=]+)'/.exec(csp ?? '')?.[1];
   return {
     status: response.status(),
+    // Each response's own nonce (#6) aside, as its date and request ID are.
     headers: Object.fromEntries(
       Object.entries(response.headers())
         .filter(([name]) => !['date', 'x-request-id'].includes(name))
-        .map(([name, value]) => [name, nonce ? value.split(nonce).join('<n>') : value]),
+        .map(([name, value]) => [name, withoutNonces(value)]),
     ),
-    body: page
-      ? withoutOwnPath(withoutNonce(text, nonce), target)
-      : flight
-        ? withoutFlightRequestId(text)
-        : text,
+    body: withoutNonces(
+      page ? withoutOwnPath(text, target) : flight ? withoutFlightRequestId(text) : text,
+    ),
   };
 }
 
@@ -953,7 +948,14 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
       }
       const spell = (pattern: string) => {
         const at = concrete(pattern);
-        return [at, `${at}?x=1`, at.toUpperCase(), `${at}/x`, ...encodedSpellings(pattern)];
+        return [
+          at,
+          `${at}?x=1`,
+          at.toUpperCase(),
+          `${at}/x`,
+          `${at}.rsc`,
+          ...encodedSpellings(pattern),
+        ];
       };
       const spellings = routes.flatMap(({ pattern }) => spell(pattern));
       // Under owner, each as the same spelling of a Studio path no route
@@ -963,13 +965,57 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
       const nowhere = routes.flatMap(({ pattern }) =>
         spell(pattern.replace(/\/[^/]+$/, '/nowhere')),
       );
-      await expectUnknown(
-        request,
-        profile,
-        spellings,
-        {},
-        hasStudio(profile) ? nowhere : '/no-such-page',
-      );
+      // What answers `path` the same: the same spelling of a Studio path no
+      // route matches under owner, and /no-such-page, its query and its .rsc
+      // kept, elsewhere.
+      const reference = (path: string) => {
+        const query = path.includes('?') ? path.slice(path.indexOf('?')) : '';
+        const bare = path.slice(0, path.length - query.length);
+        return hasStudio(profile)
+          ? `${bare.replace(/\/[^/]+$/, '/nowhere')}${query}`
+          : `/no-such-page${bare.endsWith('.rsc') ? '.rsc' : ''}${query}`;
+      };
+      const counterparts = hasStudio(profile) ? nowhere : spellings.map(reference);
+      await expectUnknown(request, profile, spellings, {}, counterparts);
+      // As Next's router asks for its RSC payload, and as it prefetches one:
+      // the answer its counterpart gets, Next's not-found payload, a 200
+      // to an RSC request, never the route's.
+      const asked: Record<string, string>[] = [
+        { rsc: '1' },
+        { rsc: '1', 'next-router-prefetch': '1' },
+      ];
+      for (const headers of asked) {
+        for (const [index, target] of spellings.entries()) {
+          for (const method of ['GET', 'HEAD'] as const) {
+            const what = `${method} ${target} with ${Object.keys(headers).join(' and ')}`;
+            const options = { method, maxRedirects: 0, headers };
+            const response = await request.fetch(target, options);
+            const counterpart = await request.fetch(counterparts[index]!, options);
+            expect(response.status(), what).toBe(counterpart.status());
+            expect(response.headers()['content-type'], what).toBe(
+              counterpart.headers()['content-type'],
+            );
+            // Nothing of the route's own: no plate, and no sign-in form.
+            const text = await response.text();
+            expect(text, what).not.toContain('Password');
+            expect(text, what).not.toContain('data-plate');
+            expectProfileHeaders(profile, response, what);
+          }
+        }
+      }
+      // A trailing slash: the 308 to the path without it, as its counterpart gets.
+      for (const { pattern } of routes) {
+        const at = concrete(pattern);
+        for (const method of EVERY_METHOD) {
+          const what = `${method} ${at}/`;
+          const response = await request.fetch(`${at}/`, { method, maxRedirects: 0 });
+          const counterpart = await request.fetch(`${reference(at)}/`, { method, maxRedirects: 0 });
+          expect(response.status(), what).toBe(counterpart.status());
+          expect(response.status(), what).toBe(308);
+          expect(response.headers()['location'], what).toBe(at);
+          expectProfileHeaders(profile, response, what);
+        }
+      }
     },
   );
 

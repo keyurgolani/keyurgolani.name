@@ -82,10 +82,41 @@ export function imageSize(
 }
 
 /**
+ * Whether `bytes`, an image imageSize() read as `format`, holds more than
+ * one frame: a WebP whose VP8X header sets the animation flag or that
+ * carries an ANIM or ANMF chunk, or a PNG with an acTL chunk before its
+ * first IDAT, which makes it an APNG. A still is one frame.
+ */
+export function isAnimated(bytes: Uint8Array, format: ImageFormat): boolean {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const ascii = (start: number, length: number) =>
+    String.fromCharCode(...bytes.subarray(start, start + length));
+  if (format === 'webp') {
+    if (ascii(12, 4) === 'VP8X' && ((bytes[20] ?? 0) & 0x02) !== 0) return true;
+    // Every chunk after the header: a four-character code, a little-endian size, padded to even.
+    for (let at = 12; at + 8 <= bytes.length;) {
+      const type = ascii(at, 4);
+      if (type === 'ANIM' || type === 'ANMF') return true;
+      const size = view.getUint32(at + 4, true);
+      at += 8 + size + (size % 2);
+    }
+    return false;
+  }
+  // PNG chunks after the signature: a big-endian length, a type, the data, and a CRC.
+  for (let at = 8; at + 8 <= bytes.length;) {
+    const type = ascii(at + 4, 4);
+    if (type === 'acTL') return true;
+    if (type === 'IDAT' || type === 'IEND' || !/^[A-Za-z]{4}$/.test(type)) return false;
+    at += 12 + view.getUint32(at);
+  }
+  return false;
+}
+
+/**
  * Reads each still the manifest declares from the package at `dir`, and
  * names its copy `<id>.<sha256-12>.<png|webp>`. A file outside the package,
- * missing, over MAX_STILL_BYTES, of another format, or of other dimensions
- * than declared is a problem, never a skip.
+ * missing, over MAX_STILL_BYTES, of another format, animated, or of other
+ * dimensions than declared is a problem, never a skip.
  */
 export function readStills(
   id: string,
@@ -131,6 +162,13 @@ export function readStills(
     const size = imageSize(bytes);
     if (!size) {
       problem(`names ${still.file}, which isn't a PNG or WebP image.`, 'Ship the still as WebP.');
+      return;
+    }
+    if (isAnimated(bytes, size.format)) {
+      problem(
+        `names ${still.file}, which is animated: a still is one frame.`,
+        'Export one frame of it as a plain WebP or PNG.',
+      );
       return;
     }
     if (size.width !== still.width || size.height !== still.height) {

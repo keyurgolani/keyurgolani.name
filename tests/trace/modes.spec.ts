@@ -267,17 +267,34 @@ test('an enhancement chunk that fails to load tears its island down to the serve
   expect(await readable(page)).toEqual(plain);
 });
 
+/** A font file, as the typography packs serve them. */
+const FONT_FILE = /\/_portfolio\/font\/|\.woff2?(?:$|\?)/;
+
 /**
  * Fails every request `pattern` matches from here on, the browser's cache
- * off, so nothing it already holds gets past. The trace's site publishes
- * fixture-type-font, which ships a font; a public page links it once #19's
- * fourth slice links the selected packs, and 6-5's CSP follow-up then
- * asserts a font was refused.
+ * off, so nothing it already holds gets past, and returns the font files it
+ * refused so far. The trace's site publishes fixture-type-font when the
+ * build registers it, which ships a font, and the page links the selected
+ * typography's stylesheet (#19, Slice 4), so a blocked mode that refused
+ * none blocked nothing (#6).
  */
-async function block(page: Page, pattern: RegExp) {
+async function block(page: Page, pattern: RegExp): Promise<() => readonly string[]> {
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
-  await page.route(pattern, (route) => route.abort('failed'));
+  const fonts: string[] = [];
+  await page.route(pattern, (route) => {
+    const url = route.request().url();
+    if (FONT_FILE.test(new URL(url).pathname)) fonts.push(url);
+    return route.abort('failed');
+  });
+  return () => fonts;
+}
+
+/** That the blocked mode refused a font, where the trace's site publishes one. */
+function expectFontRefused(refused: () => readonly string[]) {
+  const target = test.info().project.metadata as unknown as TraceTarget;
+  console.log(`[trace] fonts blocked: ${refused().length} font file(s) refused`);
+  if (target.publishesFont) expect(refused().length, 'font files refused').toBeGreaterThan(0);
 }
 
 test('with the still, the unit stylesheet, and fonts blocked, the page reads the same', async ({
@@ -285,10 +302,11 @@ test('with the still, the unit stylesheet, and fonts blocked, the page reads the
 }) => {
   await load(page);
   const plain = await withoutJavaScript(page);
-  await block(page, /\/_portfolio\/(?:asset|font|variant)\/|\.woff2?(?:$|\?)/);
+  const refused = await block(page, /\/_portfolio\/(?:asset|font|variant)\/|\.woff2?(?:$|\?)/);
   await page.reload({ waitUntil: 'load' });
   await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined);
   expect(await readable(page)).toEqual(plain);
+  expectFontRefused(refused);
 });
 
 test("the page's layout shift, with fonts and media blocked and without, is recorded for #11", async ({
@@ -344,9 +362,10 @@ test("the page's layout shift, with fonts and media blocked and without, is reco
   const total = (list: { value: number }[]) => list.reduce((sum, { value }) => sum + value, 0);
   await load(page);
   const loadedShifts = await shifts();
-  await block(page, /\/_portfolio\/(?:asset|font)\/|\.woff2?(?:$|\?)/);
+  const refused = await block(page, /\/_portfolio\/(?:asset|font)\/|\.woff2?(?:$|\?)/);
   await page.reload({ waitUntil: 'load' });
   const blockedShifts = await shifts();
+  expectFontRefused(refused);
   const loaded = total(loadedShifts);
   const blocked = total(blockedShifts);
   await testInfo.attach('layout-shift.json', {

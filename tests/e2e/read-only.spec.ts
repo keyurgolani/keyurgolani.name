@@ -179,3 +179,47 @@ test(
     expect(links).toEqual(['/']);
   },
 );
+
+test(
+  "a public page runs under the site's nonce CSP: every script carries the response's nonce, the page hydrates, and nothing the policy refuses was asked for (#6, item 8)",
+  { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
+  async ({ page }) => {
+    await page.addInitScript(() => {
+      const seen: string[] = [];
+      (window as Window & { __violations?: string[] }).__violations = seen;
+      document.addEventListener('securitypolicyviolation', (event) => {
+        seen.push(`${event.violatedDirective} ${event.blockedURI}`);
+      });
+    });
+    for (const route of ['/', '/does-not-exist']) {
+      const response = await page.goto(route, { waitUntil: 'networkidle' });
+      const csp = response?.headers()['content-security-policy'] ?? '';
+      const nonce = /'nonce-([A-Za-z0-9+/]{22}==)'/.exec(csp)?.[1];
+      expect(nonce, `${route}: ${csp}`).toBeDefined();
+      expect(csp, route).not.toMatch(/script-src[^;]*'unsafe-inline'/);
+      // Every script the server sent: Next's, each with this response's nonce.
+      // The JSON-LD is a data block, which no policy runs.
+      const html = (await response?.text()) ?? '';
+      const scripts = [...html.matchAll(/<script\b([^>]*)>/g)]
+        .map((match) => match[1] ?? '')
+        .filter((attributes) => !attributes.includes('application/ld+json'));
+      expect(scripts.length, route).toBeGreaterThan(0);
+      for (const attributes of scripts) expect(attributes, route).toContain(`nonce="${nonce}"`);
+      // Next's inline payload and its client runtime both ran under the policy.
+      await expect
+        .poll(
+          () =>
+            page.evaluate(() => {
+              const self = window as Window & { __next_f?: unknown; next?: unknown };
+              return Array.isArray(self.__next_f) && typeof self.next === 'object';
+            }),
+          { message: `${route}: Next's scripts ran` },
+        )
+        .toBe(true);
+      expect(
+        await page.evaluate(() => (window as Window & { __violations?: string[] }).__violations),
+        route,
+      ).toEqual([]);
+    }
+  },
+);

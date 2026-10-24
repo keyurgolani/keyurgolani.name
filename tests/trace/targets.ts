@@ -45,12 +45,22 @@ function registersTypography(id: string, file = ASSET_MANIFEST): boolean {
   }
 }
 
-/** `site` publishing `typography`, in place of the fixture's own. */
+/**
+ * `site` publishing `typography`, in place of the fixture's own, and
+ * leaving the typography to the visitor, so a page offers the build's other
+ * one to switch to (axis-switch.spec.ts).
+ */
 export function publishingTypography(site: string, typography: string): string {
   const published = site.replace(/^(\s+typography:\s*)[a-z][a-z0-9-]*\s*$/m, `$1${typography}`);
   if (published === site)
     throw new Error("The trace fixture's site publishes no typography to replace.");
-  return published;
+  const controls = published.replace(
+    /^(visitorControls:\n(?:\s+.*\n)*?\s+typography:\s*)locked\s*$/m,
+    '$1selectable',
+  );
+  if (controls === published)
+    throw new Error("The trace fixture's site leaves no locked typography to open.");
+  return controls;
 }
 
 export interface TraceTarget {
@@ -58,6 +68,11 @@ export interface TraceTarget {
   readonly name: string;
   /** What the site document selects, or the label --selection gave an outside server. */
   readonly selection: string;
+  /**
+   * Whether the site publishes TRACE_TYPOGRAPHY, whose font a page then
+   * loads, so the fonts-blocked modes must refuse at least one (#6).
+   */
+  readonly publishesFont: boolean;
   /** The composition that renders, when the trace knows it. */
   readonly composition: string | null;
   readonly profile: string | null;
@@ -125,7 +140,17 @@ export function traceTargets(
 ): TraceTarget[] {
   if (options.baseUrl) {
     const label = options.selection ?? 'external';
-    return [{ name: label, selection: label, composition: null, profile: null, fixture: null }];
+    // An outside server's site is its own, so nothing says it publishes the font.
+    return [
+      {
+        name: label,
+        selection: label,
+        publishesFont: false,
+        composition: null,
+        profile: null,
+        fixture: null,
+      },
+    ];
   }
   const entries = matrix().entries.filter((entry) => entry.kind === 'variant');
   const chosen =
@@ -153,6 +178,7 @@ export function traceTargets(
       return {
         name: profile === 'read-only' ? entry.id : `${entry.id} (${profile})`,
         selection: entry.selection.variant,
+        publishesFont: app !== own,
         composition: entry.id,
         profile,
         fixture: TRACE_FIXTURE,

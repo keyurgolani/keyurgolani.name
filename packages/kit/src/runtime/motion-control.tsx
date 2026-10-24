@@ -6,9 +6,10 @@
 // effect on the page for the rest of the tab. Under reduced motion, from
 // the OS or a preview's environment, nothing runs to pause: it's disabled
 // and reads "Reduced by system". Under a motion policy of `reduce`, the
-// site's as its `policy` prop or a MotionPolicyProvider gives it, or the
-// boundary's, nothing moves at all, so it renders nothing, from the
-// server's render on.
+// site's as its `policy` prop or a MotionPolicyProvider gives it, nothing
+// moves at all, so it renders nothing, from the server's render on. The
+// boundary says only `reduced` for the site's policy and a preview's
+// environment alike, so a variant passes the policy to tell them apart.
 
 import { useSyncExternalStore, type ReactElement } from 'react';
 import type { MotionPolicy } from '@portfolio/schema';
@@ -57,7 +58,7 @@ export function MotionControl({
   const inputs = useSyncExternalStore(subscribeDocument, documentInputs, () => SERVER_INPUTS);
   const provided = useProvidedMotionPolicy();
   const boundary = useBoundaryMotion(null);
-  if (policy === 'reduce' || provided === 'reduce' || boundary?.policy === 'reduce') return null;
+  if (policy === 'reduce' || provided === 'reduce') return null;
   const reduced =
     inputs.osReduced || boundary?.motion === 'reduced' || boundary?.motion === 'static';
   const paused = !reduced && inputs.visitorPaused;
