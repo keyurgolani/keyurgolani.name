@@ -17,3 +17,6 @@ packages/variant-contract/fixtures/
 packages/appearance/test/fixtures/lint-*/styles.css
 # pnpm-lock.yaml excerpts, byte for byte, for ci/lib/lockfile-drift.mjs's tests
 ci/fixtures/lockfile-drift/
+# #9's reference fixture, a full export whose bundle.json holds every file's
+# hash: `pnpm fixture:reference` writes it, and a reformat would break them
+tests/fixtures/reference-export/

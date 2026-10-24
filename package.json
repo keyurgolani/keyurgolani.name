@@ -18,6 +18,7 @@
     "variants:migrate-controls": "tsx apps/web/scripts/build-registry.ts --modules-only >&2 && tsx apps/web/scripts/migrate-controls.ts",
     "owner:hash-password": "node apps/web/bin/owner.mjs hash-password",
     "store": "pnpm --filter @portfolio/web build:registry --modules-only && tsx --conditions=react-server apps/web/scripts/portfolio-store.ts",
+    "fixture:reference": "pnpm --filter @portfolio/web build:registry --modules-only && tsx --conditions=react-server apps/web/scripts/reference-fixture.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint --max-warnings=0 .",
