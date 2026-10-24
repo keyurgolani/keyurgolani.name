@@ -866,11 +866,21 @@ function container(run, args, { withheld = false, ...options } = {}) {
 /** `docker run` as every container here runs: never pulling, on the internal network, hardened. */
 function runArgs(
   ctx,
-  { name, detach = false, rm = !name, mounts = [], env = {}, entrypoint, image = ctx.image },
+  {
+    name,
+    detach = false,
+    rm = !name,
+    interactive = false,
+    mounts = [],
+    env = {},
+    entrypoint,
+    image = ctx.image,
+  },
 ) {
   return [
     'run',
     '--pull=never',
+    ...(interactive ? ['-i'] : []),
     ...(detach ? ['-d'] : []),
     ...(rm ? ['--rm'] : []),
     ...(name ? ['--name', name] : []),
@@ -1344,13 +1354,23 @@ function containerContext(run, state, image) {
   run.secrets.password = password;
   const hasher = container(
     run,
-    [...runArgs(ctx, {}), 'node', 'apps/web/bin/owner.mjs', 'hash-password', '--stdin'],
+    [
+      ...runArgs(ctx, { interactive: true }),
+      'node',
+      'apps/web/bin/owner.mjs',
+      'hash-password',
+      '--stdin',
+    ],
     { input: `${password}\n${password}\n`, withheld: '[output withheld: it is a per-run secret]' },
   );
   const hash = hasher.stdout.replace(/\n$/, '');
   run.secrets.hash = hash;
   for (const line of maskCommands([password, hash], process.env)) console.log(line);
-  expect(hasher.status === 0 && /^\$scrypt\$/.test(hash), 'hash-password --stdin made a hash');
+  expect(
+    hasher.status === 0 && /^\$scrypt\$/.test(hash),
+    'hash-password --stdin made a hash',
+    hasher.status === 0 ? undefined : hasher.out,
+  );
   ctx.secretsDir = path.join(run.scratch, 'secrets');
   mkdirSync(ctx.secretsDir, { recursive: true });
   writeFileSync(path.join(ctx.secretsDir, 'owner_password_hash'), hash);
@@ -1431,6 +1451,8 @@ async function main() {
   const gate = currentGate();
   const fail = (id, message) => {
     problems.push(`${id}: ${message}`);
+    // The whole message, with the output it quotes, for the job log.
+    if (message.includes('\n')) console.error(`[rehearsal] ${id}: ${message}`);
     reportError(`${id}: ${message.split('\n')[0]}`, { title: 'rehearsal' });
     if (gate)
       writeFailureRecord({ ...gate, test: `rehearsal ${id}`, actual: message.split('\n')[0] });

@@ -107,7 +107,7 @@ It needs the owner password's hash before it starts ([Owner authentication](#own
 cp portfolio.example.yml config/portfolio.yml   # then make it yours
 cp site.example.yml config/site.yml             # its appearance and which sections show
 cd deploy
-docker compose -f compose.owner.yml build
+docker build -t portfolio:latest ..
 mkdir -m 0700 secrets && sudo chown 1001:1001 secrets
 docker run --rm -it --user 1001:1001 -v "$PWD/secrets:/out" portfolio:latest \
   node apps/web/bin/owner.mjs hash-password --out /out/owner_password_hash
@@ -214,7 +214,7 @@ Add `includeSubDomains` only when every subdomain serves HTTPS.
 
 `hash-password` asks for the password twice, with echo off, and prints its hash, one line starting `$scrypt$ln=17,r=8,p=1$`. The password takes 15 to 256 characters, and it's compared after Unicode NFKC normalization, so the same password typed on another keyboard still matches. The command never takes the password as an argument, and reads it only from a terminal. Its `--stdin` flag, which reads both entries as two lines of standard input, is for tests.
 
-From `deploy/`, write the hash where `compose.owner.yml` reads it, with the image you run. `docker compose -f compose.owner.yml build` builds it as `portfolio:latest`, as the [`owner`](#owner) sequence does:
+From `deploy/`, write the hash where `compose.owner.yml` reads it, with the image you run. `docker build -t portfolio:latest ..` builds it, as the [`owner`](#owner) sequence does: `compose.owner.yml` runs the image of that name.
 
 ```sh
 mkdir -m 0700 secrets && sudo chown 1001:1001 secrets

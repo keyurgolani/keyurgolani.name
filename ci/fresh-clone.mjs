@@ -337,7 +337,7 @@ export const STEPS = [
   {
     id: 'owner-build',
     doc: 'docs/deployment.md',
-    command: 'docker compose -f compose.owner.yml build',
+    command: 'docker build -t portfolio:latest ..',
     kind: 'run',
     timeoutMs: 900_000,
     container: true,
@@ -1100,6 +1100,8 @@ async function main() {
   const gate = currentGate();
   const fail = (id, message) => {
     problems.push(`${id}: ${message}`);
+    // The whole message, with the output it quotes, for the job log.
+    if (message.includes('\n')) console.error(`[fresh-clone] ${id}: ${message}`);
     reportError(`${id}: ${message.split('\n')[0]}`, { title: 'fresh-clone' });
     if (gate)
       writeFailureRecord({ ...gate, test: `fresh-clone ${id}`, actual: message.split('\n')[0] });
