@@ -26,7 +26,7 @@ const CLIENT_CALLERS: Readonly<Record<string, string>> = {
   'apps/web/src/preview/local-document.tsx':
     "Demo Studio's local frame renders the visitor's document in the browser, through markdown-local.ts's post-pass (#9)",
   'apps/web/src/app/(preview)/_local/local-preview.tsx':
-    'the local frame\'s shell, which loads local-document.tsx on demand in the browser alone (#9)',
+    "the local frame's shell, which loads local-document.tsx on demand in the browser alone (#9)",
 };
 
 /** Every module under the workspace's sources whose first statement is 'use client', tests aside. */
