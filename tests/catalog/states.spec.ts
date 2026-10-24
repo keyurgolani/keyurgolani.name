@@ -20,7 +20,10 @@ import { readBuildMeta } from '../quality/cells';
 import { MEASURED, REHEARSAL, statesPlan, VIEWPORT } from './plan';
 
 const SCREENS = path.join(reportsDir(), 'catalog', 'states');
-const ATTRIBUTE = { designLanguage: 'data-design-language', typography: 'data-typography' } as const;
+const ATTRIBUTE = {
+  designLanguage: 'data-design-language',
+  typography: 'data-typography',
+} as const;
 
 test.use({ appOptions: FIXTURE_APP, viewport: VIEWPORT });
 
@@ -38,24 +41,32 @@ test('every primitive state in every shipping language and profile, in each disp
   for (const { axis, id, displayMode } of pages) {
     errors.length = 0;
     const problems: string[] = [];
-    const query = new URLSearchParams({ [QUERY_KEYS[axis]]: id, [QUERY_KEYS.displayMode]: displayMode });
+    const query = new URLSearchParams({
+      [QUERY_KEYS[axis]]: id,
+      [QUERY_KEYS.displayMode]: displayMode,
+    });
     try {
       const response = await page.goto(`${FIXTURES}?${query}`, { waitUntil: 'load' });
       if (response?.status() !== 200) problems.push(`answered ${response?.status() ?? 'nothing'}`);
       const boundary = page.locator('[data-appearance-boundary="document"]').first();
       const rendered = await boundary.evaluate(
-        (element, name) => ({ pack: element.getAttribute(name), mode: element.getAttribute('data-display-mode') }),
+        (element, name) => ({
+          pack: element.getAttribute(name),
+          mode: element.getAttribute('data-display-mode'),
+        }),
         ATTRIBUTE[axis],
       );
-      if (rendered.pack !== id) problems.push(`rendered ${ATTRIBUTE[axis]}=${rendered.pack}, not ${id}`);
-      if (rendered.mode !== displayMode) problems.push(`rendered display mode ${rendered.mode}, not ${displayMode}`);
+      if (rendered.pack !== id)
+        problems.push(`rendered ${ATTRIBUTE[axis]}=${rendered.pack}, not ${id}`);
+      if (rendered.mode !== displayMode)
+        problems.push(`rendered display mode ${rendered.mode}, not ${displayMode}`);
       // Every slot renders somewhere on the page, in the document boundary or a plate.
       const slots = await page
         .locator('[data-ui-slot]')
         .evaluateAll((elements) => [
           ...new Set(elements.map((each) => each.getAttribute('data-ui-slot')!)),
         ]);
-      const missing = SLOTS.filter((slot) => !slots.includes(slot));
+      const missing = Object.keys(SLOTS).filter((slot) => !slots.includes(slot));
       if (missing.length > 0) problems.push(`rendered no ${missing.join(', ')}`);
       if (errors.length > 0) problems.push(`threw ${errors.join('; ')}`);
       fs.mkdirSync(SCREENS, { recursive: true });
@@ -89,7 +100,9 @@ test('every primitive state in every shipping language and profile, in each disp
     });
   }
   expect(
-    failures.map(({ axis, id, displayMode, message }) => `${axis} ${id} ${displayMode}: ${message}`),
+    failures.map(
+      ({ axis, id, displayMode, message }) => `${axis} ${id} ${displayMode}: ${message}`,
+    ),
     `${failures.length} of ${pages.length} pages failed`,
   ).toEqual([]);
 });
