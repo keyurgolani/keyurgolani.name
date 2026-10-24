@@ -392,25 +392,32 @@ test('a listing that fails is bundle_unreadable', async () => {
 test('parseBundle checks every file name against the layout before any is used', () => {
   const { bundle } = exportOf();
   assert.ok(parseBundle(bundle));
-  const variants: ((b: Record<string, any>) => void)[] = [
-    (b) => (b.documents.portfolio.file = '../portfolio.yml'),
-    (b) => (b.documents.site.file = 'site.json'),
-    (b) => (b.documents.media.file = 'media/../media.json'),
-    (b) => (b.documents.media.format = 'yaml'),
-    (b) => (b.documents.extra = b.documents.site),
+  type Loose = {
+    documents: Record<string, Record<string, unknown>>;
+    snapshots: Record<string, Record<string, unknown>>;
+    blobs: Record<string, unknown>[];
+    revisionId: unknown;
+    unitHash: unknown;
+  };
+  const variants: ((b: Loose) => void)[] = [
+    (b) => (b.documents.portfolio!.file = '../portfolio.yml'),
+    (b) => (b.documents.site!.file = 'site.json'),
+    (b) => (b.documents.media!.file = 'media/../media.json'),
+    (b) => (b.documents.media!.format = 'yaml'),
+    (b) => (b.documents.extra = b.documents.site!),
     (b) => (b.snapshots['../x'] = { file: 'snapshots/../x.json', contentHash: sha256('x') }),
-    (b) => (b.snapshots.controls.file = 'snapshots/other.json'),
-    (b) => (b.blobs[0].file = '../blob'),
-    (b) => (b.blobs[0].file = `media/blobs/${'0'.repeat(64)}`),
-    (b) => (b.blobs[0].sha256 = `sha256:${'A'.repeat(64)}`),
-    (b) => (b.blobs[0].size = -1),
-    (b) => (b.blobs[1] = b.blobs[0]),
+    (b) => (b.snapshots.controls!.file = 'snapshots/other.json'),
+    (b) => (b.blobs[0]!.file = '../blob'),
+    (b) => (b.blobs[0]!.file = `media/blobs/${'0'.repeat(64)}`),
+    (b) => (b.blobs[0]!.sha256 = `sha256:${'A'.repeat(64)}`),
+    (b) => (b.blobs[0]!.size = -1),
+    (b) => (b.blobs[1] = b.blobs[0]!),
     (b) => (b.revisionId = 'rev_../../x'),
     (b) => (b.unitHash = 'sha256:short'),
-    (b) => (b.documents.portfolio.sourceHash = 'md5:x'),
+    (b) => (b.documents.portfolio!.sourceHash = 'md5:x'),
   ];
   for (const change of variants) {
-    const copy = structuredClone(bundle) as Record<string, any>;
+    const copy = structuredClone(bundle) as unknown as Loose;
     change(copy);
     assert.equal(parseBundle(copy), null, change.toString());
   }
