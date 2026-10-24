@@ -21,6 +21,7 @@ import { ClientHostModules } from '~/lib/host-modules-client';
 import { resolveVisitorPathIn } from '~/lib/visitor-dispatch';
 import {
   reportFrameStatus,
+  reportLocalRoute,
   routeOf,
   startFrameChannel,
   type FrameChannelOptions,
@@ -268,7 +269,11 @@ export function LocalFrame({
     void renderLocal({ document, route, registries, origin: studioOrigin })
       .then(async (render) => {
         if (cancelled) return;
-        if (render.kind === 'redirect') return setRoute(render.route);
+        if (render.kind === 'redirect') {
+          // The channel keeps the route it shows, and tells Studio, as a link's move does.
+          reportLocalRoute(render.route);
+          return setRoute(render.route);
+        }
         if (render.kind !== 'render') throw new Error(render.kind);
         const load = VARIANT_LOADERS[render.composition.rendered.manifest.id];
         if (!load) throw new Error('unregistered');

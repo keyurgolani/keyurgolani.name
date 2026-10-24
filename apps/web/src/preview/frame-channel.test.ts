@@ -11,6 +11,7 @@ import {
   LIFECYCLE_STATE,
   nonceFromFragment,
   reportFrameStatus,
+  reportLocalRoute,
   routeOf,
   startFrameChannel,
   type FrameChannelOptions,
@@ -599,6 +600,65 @@ test("the agent reads Studio's messages over the port, and drops what the protoc
     ],
   );
   assert.deepEqual(local, []);
+});
+
+test('a local frame starts each new document at its home page, and a route its renderer moves to on its own, as a redirect, goes to Studio as navigated (#9)', async (t) => {
+  const routes: string[] = [];
+  const { received, send, handshake, connect, drops } = setup(
+    t,
+    {
+      mode: 'local',
+      studioOrigin: STUDIO,
+      linkBase: '/preview/local',
+      renderedVersion: null,
+      onRoute: (route) => routes.push(route),
+    },
+    `${STUDIO}/preview/local#nonce=${NONCE}`,
+  );
+  const port = await handshake();
+  received.length = 0;
+  send(port, 'navigate', { route: '/work/small-traces' });
+  await until(() => received.length > 0, 'navigated');
+  // A redirect the renderer followed: the channel keeps it, and Studio hears it.
+  reportLocalRoute('/work/tide-tables');
+  // A route the protocol doesn't take goes nowhere.
+  reportLocalRoute('/../studio');
+  await until(() => received.length >= 2, 'the redirect');
+  assert.deepEqual(
+    received.map(({ type, payload }) => [type, payload]),
+    [
+      ['navigated', { route: '/work/small-traces' }],
+      ['navigated', { route: '/work/tide-tables' }],
+    ],
+  );
+  received.length = 0;
+  const second = connect();
+  await until(() => received.length > 0, 'ready');
+  assert.deepEqual(received.at(-1)!.payload, { renderedVersion: null, route: '/work/tide-tables' });
+  // A new document, over the port the frame holds now: home again, so the next port hears `/`.
+  send(second, 'document', {
+    sources: {
+      portfolio: { name: 'portfolio.yml', format: 'yaml', text: 'schemaVersion: 3\n' },
+      site: { name: 'site.yml', format: 'yaml', text: 'schemaVersion: 2\n' },
+    },
+    selection: {},
+  });
+  await wait(10);
+  received.length = 0;
+  connect();
+  await until(() => received.length > 0, 'ready after the document');
+  assert.deepEqual(received.at(-1)!.payload, { renderedVersion: null, route: '/' });
+  assert.deepEqual(drops, []);
+});
+
+test('a server frame takes no route reported on its own: its moves are document loads (#9)', async (t) => {
+  const { received, handshake, win } = setup(t);
+  await handshake();
+  received.length = 0;
+  reportLocalRoute('/work/a');
+  await wait(10);
+  assert.deepEqual(received, []);
+  assert.deepEqual(win.assigned, []);
 });
 
 test("a local frame's channel started again in the same document, as Strict Mode starts every effect twice, still says hello with the fragment's nonce (#9)", async (t) => {
