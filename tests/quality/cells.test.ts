@@ -40,6 +40,7 @@ test('the PR plan: each sentinel at every viewport in the default row, and every
     'editorial-evidence sparse / system',
     'editorial-evidence unavailable / system',
     'fallback complete / system',
+    'horizontal-cinema complete / system',
     'kinetic-cosmos complete / system',
     'login signed-out /studio/sign-in system',
     'obsidian-atelier complete / system',
@@ -70,6 +71,7 @@ test('the PR plan: each sentinel at every viewport in the default row, and every
   assert.deepEqual(plan.targets, [
     { kind: 'composition', id: 'editorial-evidence' },
     { kind: 'composition', id: 'fallback' },
+    { kind: 'composition', id: 'horizontal-cinema' },
     { kind: 'composition', id: 'kinetic-cosmos' },
     { kind: 'composition', id: 'obsidian-atelier' },
     { kind: 'composition', id: 'spatial-bento' },

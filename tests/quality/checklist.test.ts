@@ -82,13 +82,14 @@ test('an id nothing registers fails, naming what is registered', () => {
   assert.deepEqual(compositions, [
     'editorial-evidence',
     'fallback',
+    'horizontal-cinema',
     'kinetic-cosmos',
     'obsidian-atelier',
     'spatial-bento',
   ]);
   assert.throws(
     () => checklist('demo-studio', registrations, compositions),
-    /Nothing registers demo-studio\. Registered: login, studio, editorial-evidence, fallback, kinetic-cosmos, obsidian-atelier, spatial-bento\./,
+    /Nothing registers demo-studio\. Registered: login, studio, editorial-evidence, fallback, horizontal-cinema, kinetic-cosmos, obsidian-atelier, spatial-bento\./,
   );
 });
 

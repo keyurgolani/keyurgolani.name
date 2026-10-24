@@ -1,0 +1,21 @@
+{
+  "id": "horizontal-cinema",
+  "name": "Horizontal Cinema",
+  "promise": "A finite, project-led chapter sequence with equivalent vertical mobile storytelling.",
+  "description": "A sequence composition: five authored chapters, Prologue, Origins, Journey, Craft, and Epilogue, each a frame of the portfolio's own media beside its evidence, with a stable direct link. On a wide screen with a fine pointer the chapters sit side by side in one native horizontal scroller, and on narrow, touch, or reduced-motion screens the same chapters stack in the page's order. A filmstrip, previous and next, the arrow keys, the wheel, a swipe, and a chapter link all land on the same five chapters, and an index after them is always one link away. Nothing needs JavaScript, motion, or hover. Its dark and its grain come from the selected appearance, never from the composition.",
+  "contract": "2.0",
+  "schemas": { "portfolio": { "min": 3, "max": 3 }, "site": { "min": 2, "max": 2 } },
+  "tokenContract": 1,
+  "compositionFamily": "sequence",
+  "motionIntent": "directed",
+  "performanceTier": "medium",
+  "budgets": { "js": 12288, "css": 6144, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
+  "renderedKinds": [],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": { "home": "bespoke", "work": "shared", "views": [] },
+  "controls": { "version": 1, "items": [], "migrations": [] },
+  "visitorControl": { "placement": "header" },
+  "textDirection": ["ltr", "rtl"],
+  "provenance": { "provisional": true, "sources": [] }
+}

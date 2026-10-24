@@ -52,10 +52,16 @@ function firstLine(image, rgba) {
   return null;
 }
 
-/** `image` as a PNG with rows from `from` up to `to` filled with `rgba`. */
-function painted(image, rgba, from = 0, to = image.height) {
-  const copy = new PNG({ width: image.width, height: image.height });
-  image.data.copy(copy.data);
+/** Rows past the first line's that the blank and painted checks keep. */
+const BAND_MARGIN = 40;
+
+/**
+ * The top `height` rows of `image` as a PNG, with rows from `from` up to
+ * `to` filled with `rgba`.
+ */
+function painted(image, height, rgba, from = 0, to = height) {
+  const copy = new PNG({ width: image.width, height });
+  image.data.copy(copy.data, 0, 0, height * image.width * 4);
   for (let at = from * image.width * 4; at < to * image.width * 4; at += 4) {
     copy.data.writeUInt32BE(rgba, at);
   }
@@ -78,14 +84,20 @@ for (const name of names) {
     const image = PNG.sync.read(baseline);
     assert.equal(compare(baseline, baseline, SCREENSHOT_COMPARISON), null, 'against itself');
     const rgba = background(image);
-    assert.ok(
-      compare(painted(image, rgba), baseline, SCREENSHOT_COMPARISON),
-      'a blank page passes',
-    );
     const line = firstLine(image, rgba);
     assert.ok(line, 'the baseline shows nothing but its background');
+    // The blank and painted checks run on the band from the top through the
+    // first line of text: with maxDiffPixels 0, one changed pixel fails the
+    // whole page as it fails the band, and a full-page copy of each tall
+    // baseline took the suite past a CI runner's memory.
+    const height = Math.min(image.height, line.to + BAND_MARGIN);
+    const band = painted(image, height, rgba, 0, 0);
     assert.ok(
-      compare(painted(image, rgba, line.from, line.to), baseline, SCREENSHOT_COMPARISON),
+      compare(painted(image, height, rgba), band, SCREENSHOT_COMPARISON),
+      'a blank page passes',
+    );
+    assert.ok(
+      compare(painted(image, height, rgba, line.from, line.to), band, SCREENSHOT_COMPARISON),
       `the page passes with rows ${line.from} to ${line.to} painted over`,
     );
   });
