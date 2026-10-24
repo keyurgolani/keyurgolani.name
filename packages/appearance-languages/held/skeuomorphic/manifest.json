@@ -1,0 +1,87 @@
+{
+  "id": "skeuomorphic",
+  "name": "Skeuomorphic",
+  "description": "Rounded, physical radii, strong borders, skeuomorphic surfaces, comfortable density, high elevation, springy motion, and a grain texture.",
+  "version": "1.0.0",
+  "tokenContract": 1,
+  "tier": "experimental",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "The reviewed prototype's skeuomorphic recipe, with its --appearance-* references read as --color-*, and the contract's signature-fill and emphasis-glow at the fallback language's values."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "focus-ring", "stylesheet-lint"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "Under reduced transparency, without backdrop-filter, in forced colors, and in print, surfaces render opaque and the backdrop blur is 0.",
+    "Under reduced motion, the state transforms are none and motion is instant.",
+    "In forced colors, the material is a solid surface, and shadows and texture drop."
+  ],
+  "caveats": [
+    "A decorative gradient texture sits behind surfaces.",
+    "Expressive state motion: hovers and presses move more than in a quiet language."
+  ],
+  "tokens": {
+    "surface-material": "linear-gradient(180deg, var(--color-surface-prominent), var(--color-surface-default) 48%, var(--color-surface-subtle))",
+    "radius-control": "6px",
+    "radius-card": "12px",
+    "radius-overlay": "14px",
+    "radius-media": "10px",
+    "radius-badge": "999px",
+    "border-control": "2px solid",
+    "border-card": "2px solid",
+    "border-divider": "2px solid",
+    "shadow-card": "0 22px 60px color-mix(in srgb, var(--color-text-primary) 22%, transparent)",
+    "shadow-overlay": "0 22px 60px color-mix(in srgb, var(--color-text-primary) 22%, transparent)",
+    "shadow-raised": "0 22px 60px color-mix(in srgb, var(--color-text-primary) 22%, transparent)",
+    "shadow-inset": "inset 2px 2px 5px color-mix(in srgb, var(--color-text-primary) 16%, transparent)",
+    "surface-opacity": "100%",
+    "backdrop-blur": "0px",
+    "control-height": "2.875rem",
+    "space-control-inline": "1.125rem",
+    "space-control-block": "0.75rem",
+    "space-surface-inline": "1.25rem",
+    "space-surface-block": "1.25rem",
+    "focus-width": "3px",
+    "focus-offset": "3px",
+    "focus-style": "solid",
+    "state-hover-transform": "translateY(-2px) scale(1.01)",
+    "state-active-transform": "scale(0.96)",
+    "state-selected-emphasis": "3px",
+    "state-disabled-opacity": "0.45",
+    "state-loading-opacity": "0.65",
+    "state-validation-emphasis": "3px",
+    "icon-stroke-width": "1.5",
+    "icon-fill": "currentColor",
+    "motion-fast": "160ms",
+    "motion-standard": "320ms",
+    "motion-slow": "480ms",
+    "motion-easing": "cubic-bezier(0.16, 1, 0.3, 1)",
+    "motion-enter": "spring-in",
+    "motion-exit": "fade",
+    "motion-emphasis": "bounce-once",
+    "texture": "radial-gradient(circle, color-mix(in srgb, var(--color-text-primary) 12%, transparent) 0 0.5px, transparent 0.75px)",
+    "signature-fill": "linear-gradient(90deg, var(--color-signature-start), var(--color-signature-end))",
+    "emphasis-glow": "none"
+  }
+}

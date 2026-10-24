@@ -1,0 +1,87 @@
+{
+  "id": "holographic-iridescent",
+  "name": "Holographic Iridescent",
+  "description": "Organic, uneven radii, hairline borders, refractive glass surfaces, comfortable density, high elevation, fluid motion, and an iridescent sheen.",
+  "version": "1.0.0",
+  "tokenContract": 1,
+  "tier": "experimental",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "The reviewed prototype's holographic recipe, with its --appearance-* references read as --color-*, and the contract's signature-fill and emphasis-glow at the fallback language's values."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "focus-ring", "stylesheet-lint"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "Under reduced transparency, without backdrop-filter, in forced colors, and in print, surfaces render opaque and the backdrop blur is 0.",
+    "Under reduced motion, the state transforms are none and motion is instant.",
+    "In forced colors, the material is a solid surface, and shadows and texture drop."
+  ],
+  "caveats": [
+    "Translucent surfaces with a backdrop blur cost paint time on slower devices, and read less clearly over busy content.",
+    "A decorative gradient texture sits behind surfaces."
+  ],
+  "tokens": {
+    "surface-material": "linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 14%, transparent), color-mix(in srgb, var(--color-information) 10%, transparent), color-mix(in srgb, var(--color-surface-default) 70%, transparent))",
+    "radius-control": "16px 24px",
+    "radius-card": "28px 18px 30px 16px",
+    "radius-overlay": "30px 20px",
+    "radius-media": "24px 16px",
+    "radius-badge": "999px",
+    "border-control": "1px solid",
+    "border-card": "1px solid",
+    "border-divider": "1px solid",
+    "shadow-card": "0 22px 60px color-mix(in srgb, var(--color-text-primary) 22%, transparent)",
+    "shadow-overlay": "0 22px 60px color-mix(in srgb, var(--color-text-primary) 22%, transparent)",
+    "shadow-raised": "0 22px 60px color-mix(in srgb, var(--color-text-primary) 22%, transparent)",
+    "shadow-inset": "inset 2px 2px 5px color-mix(in srgb, var(--color-text-primary) 16%, transparent)",
+    "surface-opacity": "66%",
+    "backdrop-blur": "28px",
+    "control-height": "2.875rem",
+    "space-control-inline": "1.125rem",
+    "space-control-block": "0.75rem",
+    "space-surface-inline": "1.25rem",
+    "space-surface-block": "1.25rem",
+    "focus-width": "2px",
+    "focus-offset": "2px",
+    "focus-style": "solid",
+    "state-hover-transform": "translateY(-2px)",
+    "state-active-transform": "scale(0.985)",
+    "state-selected-emphasis": "2px",
+    "state-disabled-opacity": "0.45",
+    "state-loading-opacity": "0.65",
+    "state-validation-emphasis": "2px",
+    "icon-stroke-width": "1.5",
+    "icon-fill": "none",
+    "motion-fast": "140ms",
+    "motion-standard": "240ms",
+    "motion-slow": "360ms",
+    "motion-easing": "cubic-bezier(0.2, 0.8, 0.2, 1)",
+    "motion-enter": "fade-rise",
+    "motion-exit": "fade",
+    "motion-emphasis": "float-once",
+    "texture": "linear-gradient(120deg, color-mix(in srgb, var(--color-accent) 18%, transparent), transparent 32%, color-mix(in srgb, var(--color-information) 16%, transparent) 68%, transparent)",
+    "signature-fill": "linear-gradient(90deg, var(--color-signature-start), var(--color-signature-end))",
+    "emphasis-glow": "none"
+  }
+}

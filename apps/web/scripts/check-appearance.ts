@@ -36,6 +36,7 @@ import {
   KNOWN_BAD_DIR,
   knownBadNames,
   layerOrderProblems,
+  packPackages,
   readKnownBadFixture,
   runKnownBad,
   sourceAuditReport,
@@ -61,6 +62,7 @@ import {
   writeCatalogRecords,
 } from './check-appearance-catalog';
 import { appearanceTargets } from './appearance-targets';
+import { heldFindings, readHeld } from './catalog-held';
 import { generateRegistry, PACK_OUT, plural, renderOptions, REPO_ROOT } from './registry-options';
 
 const USAGE =
@@ -237,6 +239,9 @@ async function main(): Promise<number> {
   const catalog = catalogFindings(REPO_ROOT, result, excluded ?? [], base);
   const note = baseLockNote(base);
   if (note) process.stdout.write(`${TAG} ${note}\n`);
+  // The held packs (#20): never registered, each still failing its gate, each record current.
+  const held = heldFindings(registry, readHeld(REPO_ROOT, packPackages(REPO_ROOT)), targets);
+  for (const line of held.held) process.stdout.write(`${TAG} ${line}\n`);
 
   for (const { axis, id, reason } of check.skipped)
     process.stdout.write(`${TAG} Skipped ${axis} ${id}: ${reason}.\n`);
@@ -254,6 +259,7 @@ async function main(): Promise<number> {
     ...misses,
     ...audit.lines,
     ...catalog.lines,
+    ...held.findings.map(({ message }) => message),
   ];
   for (const line of findings) process.stderr.write(`${TAG} ${line}\n`);
   if (findings.length > 0) {
@@ -263,6 +269,13 @@ async function main(): Promise<number> {
       ...hierarchyRecords(check),
       ...problemRecords(check),
       ...catalog.records,
+      ...held.findings.map(({ message, pack, axis }) => ({
+        schemaVersion: '1.1' as const,
+        test: `held pack: ${message}`.slice(0, 500),
+        pack,
+        axis,
+        rule: 'held',
+      })),
     ]);
     process.stderr.write(`${TAG} ${plural(findings.length, 'finding')}.\n`);
     return 1;
@@ -280,6 +293,7 @@ async function main(): Promise<number> {
       `the source audit read ${plural(audit.files, 'file')}, with ${plural(audit.exceptions, 'reviewed exception')}, each still needed. ` +
       `${plural(catalog.counts.gated, 'pack')} passed the pack gates; the lock pins ${plural(catalog.counts.locked, 'pack')} and the notices are current; ` +
       `${plural(catalog.counts.research, 'Research record')} checked, none registered; ` +
+      `${plural(held.held.length, 'held pack')}, none registered, each record current; ` +
       `the branded-name audit read ${catalog.counts.audited} ${catalog.counts.audited === 1 ? 'entry' : 'entries'}, with no finding.\n`,
   );
   return 0;

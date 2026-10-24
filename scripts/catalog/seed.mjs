@@ -34,6 +34,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   APPEARANCE_RECIPES,
+  DESIGN_LANGUAGES,
   COLOR_SCHEMES,
   TYPOGRAPHY_PROFILES,
 } from './seed/appearance-catalog.js';
@@ -289,6 +290,233 @@ export function typographyManifest(profile) {
   };
 }
 
+/**
+ * The ten system adaptations' owners, for the attribution that says no
+ * affiliation. Their source names and URLs are the prototype's.
+ */
+export const INSPIRED_OWNERS = {
+  'Material Design': 'Google',
+  'Fluent 2': 'Microsoft',
+  Carbon: 'IBM',
+  'Spectrum 2': 'Adobe',
+  Primer: 'GitHub',
+  Polaris: 'Shopify',
+  Atlassian: 'Atlassian',
+  'Ant Design': 'Ant Group',
+  'Radix Themes': 'WorkOS',
+};
+
+/** The prototype's recipe vocabulary, as a description reads it. */
+const SHAPE_WORDS = {
+  square: 'square corners',
+  tight: 'tight radii',
+  soft: 'soft radii',
+  pill: 'pill controls',
+  organic: 'organic, uneven radii',
+  skeuo: 'rounded, physical radii',
+  deco: 'stepped corners',
+  cut: 'cut corners',
+  pixel: 'square pixel corners',
+};
+const BORDER_WORDS = {
+  none: 'no borders',
+  hairline: 'hairline borders',
+  strong: 'strong borders',
+  raw: 'heavy raw borders',
+  double: 'double borders',
+  dashed: 'dashed borders',
+  bevel: 'beveled borders',
+};
+const MATERIAL_WORDS = {
+  solid: 'solid surfaces',
+  translucent: 'translucent surfaces',
+  frosted: 'frosted-glass surfaces',
+  refractive: 'refractive glass surfaces',
+  'soft-extruded': 'soft extruded surfaces',
+  clay: 'clay surfaces',
+  skeuomorphic: 'skeuomorphic surfaces',
+  paper: 'paper surfaces',
+  metallic: 'brushed-metal surfaces',
+  glossy: 'glossy surfaces',
+};
+const ELEVATION_WORDS = {
+  none: 'no shadows',
+  line: 'line shadows',
+  low: 'low elevation',
+  medium: 'medium elevation',
+  high: 'high elevation',
+  inset: 'inset shadows',
+  hard: 'hard offset shadows',
+};
+const MOTION_WORDS = {
+  still: 'no motion',
+  precise: 'precise motion',
+  fluid: 'fluid motion',
+  spring: 'springy motion',
+  kinetic: 'kinetic motion',
+  stepped: 'stepped motion',
+};
+const TEXTURE_WORDS = {
+  none: 'no texture',
+  grain: 'a grain texture',
+  grid: 'a grid texture',
+  iridescent: 'an iridescent sheen',
+  paper: 'a paper-fiber texture',
+  noise: 'a noise texture',
+  halftone: 'a halftone texture',
+  geometric: 'a geometric pattern',
+  etched: 'an etched-line texture',
+  pattern: 'a dotted pattern',
+  scanline: 'scanlines',
+  dither: 'a dither texture',
+  bubbles: 'a bubble pattern',
+};
+
+/**
+ * Each prototype recipe's parts, as LANGUAGE_RECIPE_BLUEPRINTS in the seed
+ * lists them (shape, border, material, density, elevation, motion, texture),
+ * which the seed doesn't export. A test holds them to the seed's tokens.
+ */
+export const RECIPE_PARTS = {
+  neutral: ['soft', 'hairline', 'solid', 'normal', 'low', 'precise', 'none'],
+  material: ['pill', 'hairline', 'solid', 'comfortable', 'medium', 'fluid', 'none'],
+  'organic-material': ['organic', 'hairline', 'solid', 'comfortable', 'medium', 'spring', 'none'],
+  fluent: ['soft', 'hairline', 'translucent', 'normal', 'low', 'fluid', 'grain'],
+  carbon: ['tight', 'hairline', 'solid', 'compact', 'none', 'precise', 'grid'],
+  spectrum: ['soft', 'hairline', 'solid', 'normal', 'low', 'precise', 'none'],
+  primer: ['tight', 'hairline', 'solid', 'compact', 'low', 'precise', 'none'],
+  commerce: ['soft', 'hairline', 'solid', 'normal', 'low', 'precise', 'none'],
+  enterprise: ['tight', 'hairline', 'solid', 'compact', 'none', 'precise', 'none'],
+  ant: ['tight', 'hairline', 'solid', 'compact', 'low', 'precise', 'none'],
+  radix: ['soft', 'hairline', 'solid', 'normal', 'low', 'precise', 'none'],
+  flat: ['square', 'hairline', 'solid', 'normal', 'none', 'still', 'none'],
+  dense: ['tight', 'hairline', 'solid', 'compact', 'none', 'precise', 'none'],
+  organic: ['organic', 'hairline', 'solid', 'comfortable', 'low', 'spring', 'grain'],
+  grid: ['square', 'strong', 'solid', 'compact', 'none', 'precise', 'grid'],
+  monochrome: ['tight', 'hairline', 'solid', 'compact', 'line', 'still', 'none'],
+  glass: ['soft', 'hairline', 'frosted', 'normal', 'medium', 'fluid', 'none'],
+  refractive: ['organic', 'hairline', 'refractive', 'comfortable', 'high', 'fluid', 'iridescent'],
+  soft: ['soft', 'none', 'soft-extruded', 'comfortable', 'inset', 'fluid', 'none'],
+  clay: ['pill', 'strong', 'clay', 'comfortable', 'high', 'spring', 'grain'],
+  skeuomorphic: ['skeuo', 'strong', 'skeuomorphic', 'comfortable', 'high', 'spring', 'grain'],
+  paper: ['tight', 'hairline', 'paper', 'editorial', 'low', 'still', 'paper'],
+  'raw-brutal': ['square', 'raw', 'solid', 'compact', 'none', 'still', 'noise'],
+  'neo-brutal': ['tight', 'raw', 'solid', 'normal', 'hard', 'spring', 'halftone'],
+  bauhaus: ['square', 'strong', 'solid', 'normal', 'none', 'precise', 'geometric'],
+  deco: ['deco', 'double', 'metallic', 'normal', 'low', 'precise', 'etched'],
+  memphis: ['organic', 'strong', 'solid', 'comfortable', 'hard', 'spring', 'pattern'],
+  luxury: ['tight', 'hairline', 'translucent', 'editorial', 'medium', 'fluid', 'grain'],
+  industrial: ['tight', 'strong', 'metallic', 'compact', 'inset', 'precise', 'grid'],
+  blueprint: ['square', 'dashed', 'translucent', 'compact', 'none', 'precise', 'grid'],
+  terminal: ['square', 'hairline', 'translucent', 'compact', 'none', 'precise', 'scanline'],
+  'retro-web': ['square', 'bevel', 'skeuomorphic', 'compact', 'inset', 'still', 'dither'],
+  pixel: ['pixel', 'raw', 'solid', 'compact', 'hard', 'stepped', 'dither'],
+  aero: ['soft', 'hairline', 'glossy', 'comfortable', 'high', 'fluid', 'bubbles'],
+  y2k: ['pill', 'hairline', 'frosted', 'comfortable', 'medium', 'spring', 'iridescent'],
+  synthwave: ['square', 'strong', 'translucent', 'normal', 'hard', 'kinetic', 'grid'],
+  vaporwave: ['soft', 'hairline', 'frosted', 'comfortable', 'medium', 'fluid', 'grain'],
+  cyber: ['cut', 'strong', 'translucent', 'compact', 'hard', 'kinetic', 'grid'],
+  holographic: ['organic', 'hairline', 'refractive', 'comfortable', 'high', 'fluid', 'iridescent'],
+  collage: ['cut', 'raw', 'paper', 'editorial', 'hard', 'still', 'paper'],
+};
+
+/** A recipe in words, such as "soft radii, hairline borders, solid surfaces, normal density, ...". */
+export function recipeWords(recipe) {
+  const [shape, border, material, density, elevation, motion, texture] = RECIPE_PARTS[recipe];
+  return [
+    SHAPE_WORDS[shape],
+    BORDER_WORDS[border],
+    MATERIAL_WORDS[material],
+    `${density} density`,
+    ELEVATION_WORDS[elevation],
+    MOTION_WORDS[motion],
+    `and ${TEXTURE_WORDS[texture]}`,
+  ].join(', ');
+}
+
+/** The prototype's `--appearance-<role>` references, as #19's `--color-<role>`. */
+const contractColor = (value) => value.replaceAll('--appearance-', '--color-');
+
+/**
+ * The language tokens #19's contract adds to the prototype's, at the
+ * values the fallback language already ships.
+ */
+export const CONTRACT_LANGUAGE_TOKENS = {
+  'signature-fill':
+    'linear-gradient(90deg, var(--color-signature-start), var(--color-signature-end))',
+  'emphasis-glow': 'none',
+};
+
+/**
+ * neumorphic's controls draw no border in the prototype, so a control has
+ * nothing at 3:1 against its ground (WCAG 1.4.11). It gains a hairline in
+ * border-strong, which anchor-v1 holds to 3:1 on every ground.
+ */
+export const BORDER_FIXES = { neumorphic: '1px solid var(--color-border-strong)' };
+
+/** A design language's manifest, from the prototype's record. */
+export function languageManifest(language) {
+  const tokens = Object.fromEntries(
+    Object.entries(language.tokens).map(([key, value]) => [key, contractColor(value)]),
+  );
+  if (BORDER_FIXES[language.id]) tokens['border-control'] = BORDER_FIXES[language.id];
+  Object.assign(tokens, CONTRACT_LANGUAGE_TOKENS);
+  const [, , material, , , motion, texture] = RECIPE_PARTS[language.recipe];
+  const inspired = language.source.licenseState === 'independent-inspired-interpretation';
+  const words = recipeWords(language.recipe);
+  const owner = inspired ? INSPIRED_OWNERS[language.source.name] : null;
+  const translucent = tokens['surface-opacity'] !== '100%' || tokens['backdrop-blur'] !== '0px';
+  const caveats = [
+    ...(translucent
+      ? [
+          'Translucent surfaces with a backdrop blur cost paint time on slower devices, and read less clearly over busy content.',
+        ]
+      : []),
+    ...(texture !== 'none' ? ['A decorative gradient texture sits behind surfaces.'] : []),
+    ...(['spring', 'kinetic', 'stepped'].includes(motion)
+      ? ['Expressive state motion: hovers and presses move more than in a quiet language.']
+      : []),
+    ...(BORDER_FIXES[language.id]
+      ? [
+          "Controls carry a hairline border the prototype didn't have, so they meet 3:1 non-text contrast.",
+        ]
+      : []),
+  ];
+  return {
+    id: language.id,
+    name: language.name,
+    description: inspired
+      ? `An independent interpretation of ${language.source.name}'s public design principles: ${words}. It ships no official component, token file, icon, or font.`
+      : `${words.charAt(0).toUpperCase()}${words.slice(1)}.`,
+    version: '1.0.0',
+    tokenContract: 1,
+    tier: language.status,
+    provenance: {
+      source: inspired ? { name: language.source.name, url: language.source.url } : REPOSITORY,
+      license: inspired ? 'independent-inspired-interpretation' : 'first-party',
+      attribution: inspired
+        ? `Keyur Golani, after ${language.source.name}'s public principles. Not affiliated with or endorsed by ${owner}.`
+        : ATTRIBUTION,
+      researchedAt: language.researchedAt,
+      maintainer: 'keyurgolani',
+      derivation: `The reviewed prototype's ${language.recipe} recipe, with its --appearance-* references read as --color-*, and the contract's signature-fill and emphasis-glow at the fallback language's values.`,
+    },
+    modes: ['light', 'dark'],
+    accessibility: { checks: ['contrast', 'focus-ring', 'stylesheet-lint'] },
+    cost: { assets: 0, assetBytes: 0 },
+    budgets: budgets(3072),
+    fallbacks: [
+      'Under reduced transparency, without backdrop-filter, in forced colors, and in print, surfaces render opaque and the backdrop blur is 0.',
+      'Under reduced motion, the state transforms are none and motion is instant.',
+      ...(texture !== 'none' || material !== 'solid'
+        ? ['In forced colors, the material is a solid surface, and shadows and texture drop.']
+        : []),
+    ],
+    caveats,
+    tokens,
+  };
+}
+
 /** Every file the seed writes, by path from the repository root. */
 export function seedFiles() {
   const files = [];
@@ -307,6 +535,13 @@ export function seedFiles() {
         data: schemeManifest(scheme),
       });
     }
+  }
+  for (const language of DESIGN_LANGUAGES) {
+    files.push({
+      axis: 'designLanguage',
+      file: `packages/appearance-languages/packs/${language.id}/manifest.json`,
+      data: languageManifest(language),
+    });
   }
   // The eight recipes, as the prototype has them: shortcuts to ordinary axis ids.
   files.push({

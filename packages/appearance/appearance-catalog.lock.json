@@ -9,6 +9,14 @@
       "license": "provided-by-operating-system",
       "digest": "sha256-166040da3359e6fec632205af596cf65c89c701c81cfa1ce04274848f448eba4"
     },
+    "ant-inspired": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.0",
+      "tier": "extended",
+      "license": "independent-inspired-interpretation",
+      "digest": "sha256-3e6c61d850ae86d126b6ad73c631dfc4d8ca5fec4eb0350a54fae8eab0810c96"
+    },
     "arctic-aurora": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
@@ -16,6 +24,14 @@
       "tier": "extended",
       "license": "first-party",
       "digest": "sha256-89fd08275ece36cf55ff23be947b72bb0a6753dfcf922f4e92b94236fbbf1a3f"
+    },
+    "atlassian-inspired": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.0",
+      "tier": "extended",
+      "license": "independent-inspired-interpretation",
+      "digest": "sha256-b80cb337acfec4c7393faf4fe736bb69ae4471d6c402dc9c33bfaa581af5fab1"
     },
     "blue-orange-color-safe": {
       "axis": "colorScheme",
@@ -153,6 +169,38 @@
       "license": "first-party",
       "digest": "sha256-9c0b6640814d34a3fde71b6ac602f1e67c8ea5e0c0779ee123d81a84840a1469"
     },
+    "material-3-inspired": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "independent-inspired-interpretation",
+      "digest": "sha256-6662fa72ea9f981fc26a99b460048fbeaeb20d98ea462ecb536b9dfd56d3ec1e"
+    },
+    "material-expressive-inspired": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.0",
+      "tier": "extended",
+      "license": "independent-inspired-interpretation",
+      "digest": "sha256-fe4329af20a10fe2c79661e6c202c24c754ad6e97692a0c7e3c21b37d344853e"
+    },
+    "minimal-flat": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-7f7a5eb2a8699551c98f0aa26a13a05de2df576617ee4e4a75ebf7ad1944d260"
+    },
+    "monochrome-functional": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.0",
+      "tier": "extended",
+      "license": "first-party",
+      "digest": "sha256-ad885ce2f91d955e67a55b3ec86b928651097e56fa2df4d8702abb4f509388f1"
+    },
     "multilingual-system": {
       "axis": "typography",
       "package": "@portfolio/appearance-typography",
@@ -168,6 +216,14 @@
       "tier": "experimental",
       "license": "first-party",
       "digest": "sha256-757fc6dbd2464ebf61e4b6879aab7e94818ee290c1f97c6c8a7a58b512e6232e"
+    },
+    "neumorphic": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.0",
+      "tier": "experimental",
+      "license": "first-party",
+      "digest": "sha256-18c8ec175ea22b9cde70ec4e04bf1b2cf1b02b700cbaa574e59591a3651183a4"
     },
     "neutral-slate": {
       "axis": "colorScheme",
@@ -225,6 +281,30 @@
       "license": "first-party",
       "digest": "sha256-f22e9239111a140d7ccddc8b229577c4bcdd70ae86b031e31c9d820d71fdfaff"
     },
+    "polaris-inspired": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.0",
+      "tier": "extended",
+      "license": "independent-inspired-interpretation",
+      "digest": "sha256-461d212f067943f74b02305968cb2b951f6f99a46bdab6b73e9a3fcc9dcb2717"
+    },
+    "primer-inspired": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "independent-inspired-interpretation",
+      "digest": "sha256-5e4c2be2b6df5b9bcaa42f7f28a95b6b7791df137c3bcffeb6ef9ed55069536b"
+    },
+    "radix-inspired": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.0",
+      "tier": "extended",
+      "license": "independent-inspired-interpretation",
+      "digest": "sha256-8c83ac7d125d007695ff5b55c807214e5a27834ec2ed9f8385385f709a957c81"
+    },
     "reduced-chroma": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
@@ -241,6 +321,14 @@
       "license": "first-party",
       "digest": "sha256-b5f2e212ef5509a485fb3ffdbdf433434e506f9fae4d0217f0e25861917fe4dc"
     },
+    "spectrum-2-inspired": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.0",
+      "tier": "stable",
+      "license": "independent-inspired-interpretation",
+      "digest": "sha256-c189b2d67df0ce89a32bf51fe01c5e6ac633f77f8ac419cbbbba780a9040f419"
+    },
     "sunset-ember": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
@@ -256,6 +344,14 @@
       "tier": "stable",
       "license": "provided-by-operating-system",
       "digest": "sha256-1dba09a1e430a1bac80937a0f748a3fe10f2637f794eb6dfde837bf8bdea3bd2"
+    },
+    "utility-dense": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.0",
+      "tier": "extended",
+      "license": "first-party",
+      "digest": "sha256-02a19bcc3cb81a5fed7fda759fb3804ab014c9e50e278ad4dc9aa77e01342822"
     },
     "warm-parchment": {
       "axis": "colorScheme",
