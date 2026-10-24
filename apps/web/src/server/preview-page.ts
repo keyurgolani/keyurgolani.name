@@ -2,8 +2,7 @@ import 'server-only';
 import { cache } from 'react';
 import { notFound, redirect } from 'next/navigation';
 import type { AppearanceStylesheets, ResolvedAppearance } from '@portfolio/appearance';
-import type { PublicView } from '@portfolio/schema';
-import { documentAppearance } from '~/lib/document-appearance';
+import { documentAppearance, type DocumentAppearanceInput } from '~/lib/document-appearance';
 import { ExperienceDocument } from '~/lib/experience-document';
 import { ClientHostModules } from '~/lib/host-modules-client';
 import { variantLoader } from '~/lib/variant-loaders';
@@ -52,7 +51,7 @@ export const grantChannel = cache(async (grant: string): Promise<GrantChannel | 
 export function frameAppearance(
   grant: string,
   opened: Pick<OpenedGrant, 'environment' | 'schemes'>,
-  site: PublicView['site'],
+  site: DocumentAppearanceInput['site'],
   variant: string,
 ): { readonly appearance: ResolvedAppearance; readonly stylesheets: AppearanceStylesheets } {
   return {
