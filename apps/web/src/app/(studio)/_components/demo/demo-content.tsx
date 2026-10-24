@@ -77,7 +77,11 @@ export function ImportReport({ result }: { readonly result: ImportResult }) {
 }
 
 /** The export's disclosure, as text. */
-export function ExportDisclosure({ disclosure }: { readonly disclosure: ExportResult['disclosure'] }) {
+export function ExportDisclosure({
+  disclosure,
+}: {
+  readonly disclosure: ExportResult['disclosure'];
+}) {
   return (
     <div className="studio-export__disclosure">
       <p>{`Schema versions: portfolio ${disclosure.schemaVersions.portfolio}, site ${disclosure.schemaVersions.site}.`}</p>

@@ -1,0 +1,208 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import * as React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { browserBackend, type LocalSources } from '~/lib/demo/browser-backend';
+import { exportUnit } from '~/lib/demo/export';
+import type { ImportRefusal, ImportResult } from '~/lib/demo/import';
+import { runImport } from '~/lib/demo/import/pipeline';
+import { EXAMPLE, pairFiles } from '~/lib/demo/import/test-support/hostile';
+import { demoStore, WORKING_KEY } from '~/lib/demo/storage';
+import { CATALOG, DEFAULTS, FakeStorage, SCHEME_MODES, UNIT } from '~/lib/demo/test-support';
+import { VIEWPORTS } from '~/lib/preview-frame';
+import { envelope, readMessage, TO_FRAME } from '~/preview/protocol';
+import { ContentTask, ExportDisclosure, ImportReport, REFUSAL_TEXT } from './demo-content';
+import {
+  documentMessage,
+  isLocalFrameSource,
+  LocalFrameHost,
+  localNonce,
+} from './demo-local-frame';
+import { DemoStudio } from './demo-studio';
+
+// tsx compiles JSX to React.createElement calls, so the test supplies React.
+Object.assign(globalThis, { React });
+
+// Demo Studio's import, export, and local frame (#9, design note section
+// 3): what the import says is text alone, the export's disclosure says what
+// it leaves out, and while this tab holds an imported pair the frame is
+// /preview/local, under the demo frame's sandbox, and nothing else.
+
+const POLICY = { profile: 'demo', allowed: ['sandbox.view'] } as const;
+
+function backend(session = new FakeStorage()) {
+  return browserBackend({
+    unit: UNIT,
+    catalog: CATALOG,
+    schemeModes: SCHEME_MODES,
+    defaults: DEFAULTS,
+    store: demoStore(new FakeStorage(), session),
+    importer: async (files) => runImport(files),
+  });
+}
+
+/** Every attribute of each iframe in `html`. */
+function frames(html: string): Record<string, string>[] {
+  return [...html.matchAll(/<iframe\b([^>]*)>/g)].map(([, tag]) =>
+    Object.fromEntries(
+      [...tag!.matchAll(/([a-zA-Z-]+)="([^"]*)"/g)].map(([, name, value]) => [
+        name!.toLowerCase(),
+        value!,
+      ]),
+    ),
+  );
+}
+
+const HOSTILE = '<script>alert(1)</script><img src=x onerror=alert(2)>';
+
+test("the import's answer is text alone: a finding, remote media, what wasn't checked, and each refusal", () => {
+  const example = runImport(pairFiles(EXAMPLE.portfolio));
+  if (example.kind !== 'imported') assert.fail(example.code);
+  const imported: ImportResult = {
+    kind: 'imported',
+    unit: example.unit,
+    diagnostics: [
+      {
+        code: 'UNKNOWN_KEY',
+        severity: 'warning',
+        document: 'portfolio',
+        pointer: `/${HOSTILE}`,
+        line: 3,
+        message: `A key ${HOSTILE}.`,
+        remediation: HOSTILE,
+      } as never,
+    ],
+    remoteImages: [
+      { document: 'portfolio', kind: 'image', pointer: `/media/0/${HOSTILE}`, host: HOSTILE },
+    ],
+    unchecked: [HOSTILE],
+  };
+  const html = renderToStaticMarkup(<ImportReport result={imported} />);
+  // Every value shows, escaped: no element or attribute of its own.
+  assert.doesNotMatch(html, /<script|<img|<[^>]*\son[a-z]+=/i);
+  assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
+  assert.match(html, /portfolio \/&lt;script&gt;.*, line 3: A key /);
+  assert.match(html, /image from &lt;script&gt;/);
+  assert.match(html, /Not checked here: &lt;script&gt;/);
+  assert.match(html, /<p role="status">Imported\./);
+  for (const code of Object.keys(REFUSAL_TEXT) as ImportRefusal[]) {
+    const refused = renderToStaticMarkup(
+      <ImportReport result={{ kind: 'refused', code, diagnostics: [] }} />,
+    );
+    assert.ok(refused.includes(REFUSAL_TEXT[code].replace(/'/g, '&#x27;')), code);
+    assert.equal(refused.includes('<li'), false, code);
+  }
+});
+
+test("the export's disclosure says the schema versions, what the files leave out, and which won't import again", () => {
+  const { disclosure } = exportUnit(
+    {
+      sources: {
+        portfolio: { name: 'portfolio.yml', format: 'yaml', text: `# note\n${EXAMPLE.portfolio}` },
+        site: { name: 'site.yml', format: 'yaml', text: EXAMPLE.site },
+      },
+    },
+    'yaml',
+  );
+  const html = renderToStaticMarkup(<ExportDisclosure disclosure={disclosure} />);
+  assert.match(html, /Schema versions: portfolio \d+, site \d+\./);
+  assert.match(
+    html,
+    /Left out: the appearance you picked in the demo.*; images picked in this browser; comments in your YAML/,
+  );
+  assert.doesNotMatch(html, /import cap/);
+  const over = renderToStaticMarkup(
+    <ExportDisclosure disclosure={{ ...disclosure, overImportCap: ['site'] }} />,
+  );
+  assert.match(
+    over,
+    /<p role="alert">site\.yml is over the 1 MiB import cap, so it won&#x27;t import again\.<\/p>/,
+  );
+});
+
+test('the Content task has one picker for two YAML or JSON files, no form and no paste, and Export setup', () => {
+  const html = renderToStaticMarkup(<ContentTask backend={backend()} onSource={() => {}} />);
+  assert.match(
+    html,
+    /<input id="studio-demo-import" class="studio-input" type="file" multiple="" accept="\.yml,\.yaml,\.json,application\/json"/,
+  );
+  assert.equal((html.match(/<input\b/g) ?? []).length, 1);
+  assert.doesNotMatch(html, /<form|<textarea|contenteditable/);
+  assert.match(html, /<button type="button" class="studio-button">Export setup<\/button>/);
+  assert.match(html, /the sample&#x27;s documents as two YAML files/);
+});
+
+test('a local frame loads /preview/local with a nonce in its fragment, and nothing else', () => {
+  const nonce = localNonce();
+  assert.match(nonce, /^[A-Za-z0-9_-]{22}$/);
+  assert.notEqual(localNonce(), nonce);
+  assert.ok(isLocalFrameSource(`/preview/local#nonce=${nonce}`));
+  for (const src of [
+    '/preview/local',
+    `/preview/local?nonce=${nonce}`,
+    `/preview/local#nonce=${nonce}&x=1`,
+    `/preview/local#nonce=${nonce.slice(1)}`,
+    `/preview/localx#nonce=${nonce}`,
+    `/preview/local/work/a#nonce=${nonce}`,
+    `//evil.test/preview/local#nonce=${nonce}`,
+    `https://evil.test/preview/local#nonce=${nonce}`,
+    `/preview/g_7Hk-2#nonce=${nonce}`,
+    `/sample#nonce=${nonce}`,
+    `/PREVIEW/local#nonce=${nonce}`,
+  ]) {
+    assert.equal(isLocalFrameSource(src), false, src);
+  }
+});
+
+test("the local frame keeps the demo frame's sandbox, scripts alone, and loads only once Studio's half of the channel is open", () => {
+  const sources: LocalSources = {
+    portfolio: { name: 'portfolio.yml', format: 'yaml', text: EXAMPLE.portfolio },
+    site: { name: 'site.yml', format: 'yaml', text: EXAMPLE.site },
+  };
+  const html = renderToStaticMarkup(
+    <LocalFrameHost
+      sources={sources}
+      selection={DEFAULTS}
+      title="Your documents"
+      viewport={VIEWPORTS[2]!}
+      reduced={false}
+    />,
+  );
+  const [frame, ...more] = frames(html);
+  assert.equal(more.length, 0);
+  assert.ok(frame);
+  assert.equal(frame.sandbox, 'allow-scripts');
+  assert.equal(frame.referrerpolicy, 'no-referrer');
+  // No source until the channel is open: the effect sets it, in the browser.
+  assert.equal(frame.src, undefined);
+  // The document Studio sends is one #7's protocol takes for a frame, with the
+  // source as its text and the selection's five axes.
+  const message = documentMessage(sources, DEFAULTS);
+  const read = readMessage(envelope('document', message, 1), TO_FRAME);
+  assert.ok(read.ok, JSON.stringify(read));
+  assert.deepEqual(Object.keys(message.selection).sort(), Object.keys(DEFAULTS).sort());
+});
+
+test('while this tab holds an imported pair the frame is /preview/local, otherwise /sample, and the page names no source', async () => {
+  const session = new FakeStorage();
+  const sample = renderToStaticMarkup(
+    <DemoStudio catalog={CATALOG} policy={POLICY} backend={backend(session)} task="content" />,
+  );
+  assert.match(frames(sample)[0]!.src ?? '', /^\/sample/);
+  assert.doesNotMatch(sample, /data-source="local"/);
+  const importer = backend(session);
+  assert.equal((await importer.importFiles(pairFiles(EXAMPLE.portfolio))).kind, 'imported');
+  assert.ok(session.getItem(WORKING_KEY));
+  // A page in the same tab, as after a reload, shows the local frame on every task.
+  for (const task of ['appearance', 'preview', 'content'] as const) {
+    const html = renderToStaticMarkup(
+      <DemoStudio catalog={CATALOG} policy={POLICY} backend={backend(session)} task={task} />,
+    );
+    const [frame] = frames(html);
+    assert.equal(frame?.sandbox, 'allow-scripts', task);
+    assert.equal(frame?.src, undefined, task);
+    assert.match(html, /data-source="local"/, task);
+    // Nothing of the documents is on the page: they go over the port alone.
+    assert.equal(html.includes('Anamika'), false, task);
+  }
+});
