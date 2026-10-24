@@ -1,6 +1,4 @@
 import { z } from 'zod';
-import { DerivedSchemeSchema } from '@portfolio/appearance';
-import { DERIVED_CAUSES } from '@portfolio/schema';
 
 // The schemas of the revision store's registry entries (#3, item 22), which
 // operations.ts lists: data only, so loading them never loads owner code.
@@ -106,7 +104,12 @@ const ChangeSubjectSchema = z.union([
 export const DerivedChangeSchema = z
   .object({
     id: z.string().regex(/^dch_[0-9a-f]{32}$/),
-    cause: z.enum(DERIVED_CAUSES),
+    cause: z.enum([
+      'source-moved',
+      'source-replaced',
+      'integration-refreshed',
+      'scheme-regenerated',
+    ]),
     subject: ChangeSubjectSchema,
     before: z.record(z.unknown()).nullable(),
     after: z.record(z.unknown()),
@@ -117,6 +120,27 @@ export const DerivedChangeSchema = z
     ]),
   })
   .strict();
+/** A color set as a generated scheme carries it: role names to `#rrggbb`. */
+const ColorSetSchema = z.record(z.string(), z.string().regex(/^#[0-9a-f]{6}$/));
+/**
+ * A generated scheme (10h), as `DerivedSchemeSchema` in @portfolio/appearance
+ * describes it. It's written out here because this file imports zod alone;
+ * the store checks every entry against that schema before it writes one, and
+ * store-schemas.test.ts holds the two to the same shape.
+ */
+export const DerivedSchemeEntrySchema = z
+  .object({
+    generator: z.object({ id: z.string().min(1), version: z.number().int().positive() }).strict(),
+    inputsHash: z.string().regex(/^[0-9a-f]{64}$/),
+    tokens: z
+      .object({
+        light: ColorSetSchema,
+        dark: ColorSetSchema,
+        highContrast: z.object({ light: ColorSetSchema, dark: ColorSetSchema }).strict().optional(),
+      })
+      .strict(),
+  })
+  .strict();
 /**
  * A draft's derived block (#10): what its refreshes froze, the generated
  * schemes its saves made (10h), and its derived changes.
@@ -124,7 +148,7 @@ export const DerivedChangeSchema = z
 const DraftDerivedSchema = z
   .object({
     snapshots: z.object({ github: z.unknown().optional() }).strict().optional(),
-    schemes: z.record(z.string(), DerivedSchemeSchema).optional(),
+    schemes: z.record(z.string(), DerivedSchemeEntrySchema).optional(),
     changes: z.array(DerivedChangeSchema),
   })
   .strict();
