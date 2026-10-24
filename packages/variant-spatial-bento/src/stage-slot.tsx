@@ -20,6 +20,10 @@ import { Runtime } from './runtime';
 // The stage's slot (#16): the still, and on a device the policy lets run
 // it, the spatial stage over it, with the visitor's exit beside it.
 //
+// - The exit is always there, on the server, in a plate, and in every
+//   state, so the page's controls are the same whatever the device and
+//   whether the stage runs: pressed while the stage runs, enabled while it
+//   runs or could, and disabled while it can't.
 // - A plate renders the still alone, before any runtime hook: no
 //   subscription, observer, listener, or attribute of the runtime's.
 // - The stage's module, with three.js, loads only once the policy says it
@@ -51,6 +55,9 @@ export interface StageCanvasProps {
  * this module never imports the stage's, and the stage's can import it.
  */
 export type StageCanvasComponent = ComponentType<StageCanvasProps>;
+
+/** The exit's name, the same wherever it renders. */
+const EXIT_LABEL = 'Spatial stage';
 
 /** The planes the still draws, back to front. */
 const PLANES = ['far', 'middle', 'near', 'signature'] as const;
@@ -227,13 +234,15 @@ function LiveSlot({
           </StageBoundary>
         ) : null}
       </Still>
-      {decision.offered ? (
-        <span className="sb-stage__exit">
-          <Action pressed={!exited} onClick={() => setExited((value) => !value)}>
-            Spatial stage
-          </Action>
-        </span>
-      ) : null}
+      <span className="sb-stage__exit">
+        <Action
+          pressed={decision.offered && !exited}
+          disabled={!decision.offered}
+          onClick={() => setExited((value) => !value)}
+        >
+          {EXIT_LABEL}
+        </Action>
+      </span>
     </div>
   );
 }
@@ -254,6 +263,11 @@ export function Slot({
   return plate ? (
     <div className="sb-stage">
       <Still />
+      <span className="sb-stage__exit">
+        <Action pressed={false} disabled>
+          {EXIT_LABEL}
+        </Action>
+      </span>
     </div>
   ) : (
     <LiveSlot seed={seed} Canvas={Canvas} />

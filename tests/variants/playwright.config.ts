@@ -19,6 +19,16 @@ import { fixtureApp, LISTED_ONLY, SAMPLE_APP, UNDER_TEST } from './target';
 
 const reports = path.join(reportsDir(), 'variants');
 
+/**
+ * A composition's pages without WebGL. A variant's screenshots and parity
+ * are of its document, what every device without its WebGL enhancement
+ * gets, and a live canvas never holds two frames the same. Whether
+ * Chromium has WebGL otherwise depends on the platform: macOS's headless
+ * build has none, and the pinned Linux image's has SwiftShader's. A WebGL
+ * enhancement's own paths are its e2e specs' (tests/e2e/spatial-stage.spec.ts).
+ */
+const NO_WEBGL = { launchOptions: { args: ['--disable-3d-apis'] } };
+
 export default defineConfig({
   ...base,
   testDir: '.',
@@ -48,13 +58,17 @@ export default defineConfig({
             fixture.name === 'hidden-canary'
               ? ['fixtures.spec.ts', 'parity.spec.ts', 'case-study.spec.ts', 'hidden.spec.ts']
               : ['fixtures.spec.ts', 'parity.spec.ts', 'case-study.spec.ts'],
-          use: { ...devices['Desktop Chrome'], appOptions: fixtureApp(fixture, variant) },
+          use: {
+            ...devices['Desktop Chrome'],
+            ...NO_WEBGL,
+            appOptions: fixtureApp(fixture, variant),
+          },
           metadata: { variant: id, fixture: fixture.name },
         })),
         {
           name: `${id}/sample`,
           testMatch: ['sample.spec.ts'],
-          use: { ...devices['Desktop Chrome'], appOptions: SAMPLE_APP },
+          use: { ...devices['Desktop Chrome'], ...NO_WEBGL, appOptions: SAMPLE_APP },
           metadata: { variant: id },
         },
       ];

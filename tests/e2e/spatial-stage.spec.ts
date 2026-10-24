@@ -39,21 +39,18 @@ const reason = (page: Page) => page.locator('.sb-stage').getAttribute('data-stag
 
 /**
  * The page as a reader and a keyboard meet it: its words, its links, and
- * every control a keyboard reaches, in order, and its URL. The stage's own
- * exit is left out: it's there only while the stage could run, so the
- * document without the stage, which a failure restores, has none.
+ * every control a keyboard could reach, in order, the stage's exit among
+ * them, which is there in every state, and its URL.
  */
 async function reading(page: Page) {
   return {
     ...(await page.locator('main').evaluate((main) => {
       const reached = [
         ...main.querySelectorAll<HTMLElement>('a[href], button, summary, [tabindex]'),
-      ]
-        .filter((element) => !element.closest('.sb-stage__exit'))
-        .map((element) => `${element.localName} ${element.textContent?.trim() ?? ''}`);
-      const words = [...main.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6, p, li, dt, dd')]
-        .filter((element) => !element.closest('.sb-stage__exit'))
-        .map((element) => element.textContent?.trim() ?? '');
+      ].map((element) => `${element.localName} ${element.textContent?.trim() ?? ''}`);
+      const words = [
+        ...main.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6, p, li, dt, dd'),
+      ].map((element) => element.textContent?.trim() ?? '');
       return { reached, words };
     })),
     url: page.url(),
@@ -74,6 +71,13 @@ async function expectLive(page: Page) {
   await expect.poll(() => reason(page), { timeout: 20_000 }).toBe('running');
   await expect(page.locator('.sb-still[data-stage="live"]')).toHaveCount(1, { timeout: 20_000 });
   await expect(page.locator('.sb-still canvas[data-spatial-canvas]')).toHaveCount(1);
+}
+
+/** The exit, disabled: the stage can't run again on this page. */
+async function expectExitDisabled(page: Page) {
+  const exit = page.getByRole('button', { name: 'Spatial stage' });
+  await expect(exit).toBeDisabled();
+  await expect(exit).toHaveAttribute('aria-pressed', 'false');
 }
 
 /** The still, and nothing of the stage: no canvas, and the planes showing. */
@@ -168,6 +172,7 @@ test.describe('reduced motion', () => {
       await loadHome(page, '/');
       await expect.poll(() => reason(page)).toBe('reduced');
       await expectStill(page);
+      await expectExitDisabled(page);
       expect(await frameLoops(page)).toBeLessThan(5);
     },
   );
@@ -180,6 +185,7 @@ test.describe('forced colors', () => {
     await loadHome(page, '/');
     await expect.poll(() => reason(page)).toBe('forced-colors');
     await expectStill(page);
+    await expectExitDisabled(page);
   });
 });
 
@@ -193,6 +199,7 @@ test('low power: a device that says it has 2 GB keeps it off', { annotation }, a
   await loadHome(page, '/');
   await expect.poll(() => reason(page)).toBe('low-memory');
   await expectStill(page);
+  await expectExitDisabled(page);
 });
 
 test(
@@ -231,6 +238,7 @@ test(
     await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 1_000)));
     expect(await reason(page)).toBe('preview-off');
     await expectStill(page);
+    await expectExitDisabled(page);
     expect(await reading(page)).toEqual(before);
   },
 );
@@ -281,7 +289,7 @@ test(
     });
     await expect.poll(() => reason(page)).toBe('failed');
     await expectStill(page);
-    await expect(page.locator('.sb-stage__exit')).toHaveCount(0);
+    await expectExitDisabled(page);
     expect(await reading(page)).toEqual(before);
     expect(await frameLoops(page)).toBeLessThan(5);
   },
@@ -307,6 +315,7 @@ test(
     const before = await reading(page);
     await expect.poll(() => reason(page), { timeout: 20_000 }).toBe('failed');
     await expectStill(page);
+    await expectExitDisabled(page);
     expect(await reading(page)).toEqual(before);
   },
 );
@@ -331,6 +340,7 @@ test(
     await expect.poll(() => reason(page), { timeout: 20_000 }).toBe('failed');
     expect(failed.length, 'the stage chunk the route failed').toBeGreaterThan(0);
     await expectStill(page);
+    await expectExitDisabled(page);
     expect(await reading(page)).toEqual(before);
   },
 );

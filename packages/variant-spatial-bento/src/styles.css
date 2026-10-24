@@ -137,7 +137,8 @@
  * The stage's slot: the still, and over it, once the spatial stage has drawn
  * its first frame, the canvas, which hides the still's planes. A canvas a
  * resize cleared while nothing renders carries data-stale, and the planes
- * show again until its next frame. The exit sits after the stage.
+ * show again until its next frame. The exit sits after the stage, always
+ * there, and disabled while the stage can't run.
  */
 [data-variant='spatial-bento'] .sb-stage {
   display: grid;
@@ -175,6 +176,11 @@
   /* A calm phone: the still, smaller, after the words. */
   [data-variant='spatial-bento'] .sb-still {
     max-inline-size: 18rem;
+  }
+
+  /* The stage needs 768px, so a phone has no stage to leave. */
+  [data-variant='spatial-bento'] .sb-stage__exit {
+    display: none;
   }
 }
 

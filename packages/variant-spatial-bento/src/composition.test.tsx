@@ -141,6 +141,10 @@ function sectionMarkup(markup: string, id: string): string {
   throw new Error(`section ${id} never closes`);
 }
 
+/** The stage's exit, the one control the bento adds to a section. */
+const EXIT = /<span class="sb-stage__exit"><button\b[^>]*>[\s\S]*?<\/button><\/span>/g;
+const withoutExit = (markup: string) => markup.replace(EXIT, '');
+
 test('the complete fixture renders one main, one h1, one visitor control slot, and its section links before the main', () => {
   const input = fixtureInput('complete');
   const markup = html(input);
@@ -183,6 +187,12 @@ test('every section is a tile of the bento, in content order, the opening first 
   assert.doesNotMatch(still[1]!, /<(?:a|button|input|img|svg|canvas)\b/);
   assert.equal(count(still[1]!, /class="sb-still__plane /g), 4);
   assert.equal(count(markup, /sb-still__plane--signature/g), 1);
+  // The bento's one control of its own: the stage's exit, in the opening's tile, after the still.
+  const exits = [...markup.matchAll(EXIT)].map(([exit]) => exit);
+  assert.equal(exits.length, 1);
+  assert.equal(text(exits[0]!), 'Spatial stage');
+  const opening = sectionMarkup(markup, 'top');
+  assert.ok(opening.indexOf(exits[0]!) > opening.indexOf('class="sb-still"'));
 });
 
 test('every section holds every word, link, and action the shared renderers write for it, in every contract fixture', () => {
@@ -197,7 +207,8 @@ test('every section holds every word, link, and action the shared renderers writ
       if (shared === null) continue;
       leads = false;
       const expected = renderToStaticMarkup(shared);
-      const actual = sectionMarkup(markup, `${input.ids.prefix}${section.id}`);
+      // The stage's exit is the bento's own control, beside what the shared renderers write.
+      const actual = withoutExit(sectionMarkup(markup, `${input.ids.prefix}${section.id}`));
       assert.equal(text(actual), text(expected), `${name} ${section.id}: its words`);
       assert.deepEqual(hrefs(actual), hrefs(expected), `${name} ${section.id}: its links`);
       assert.equal(
@@ -261,7 +272,12 @@ test('in a plate it renders the same, every id under the plate prefix and none r
     Runtime.useEnhancementRuntime = hook;
   }
   assert.equal(documentCalls, 1, 'runtime hooks outside a plate');
-  assert.doesNotMatch(plate, /data-stage-reason|sb-stage__exit|<canvas/);
+  assert.doesNotMatch(plate, /data-stage-reason|<canvas/);
+  // The exit is there, disabled and unpressed, as the page has it, so a plate's controls are the page's.
+  assert.match(
+    plate,
+    /<span class="sb-stage__exit"><button(?=[^>]*\saria-pressed="false")(?=[^>]*\sdisabled="")[^>]*>[\s\S]*?Spatial stage/,
+  );
   const all = ids(plate);
   assert.ok(all.length > 10);
   assert.deepEqual(
@@ -369,9 +385,15 @@ test("the server draws the still, and the stage's slot adds nothing to it until 
     markup,
     /<div class="sb-stage" data-stage-reason="pending"><div class="sb-still" aria-hidden="true">/,
   );
-  assert.doesNotMatch(markup, /<canvas|data-stage=|sb-stage__exit|data-activity/);
-  // The slot's first render is pending, so the server's markup carries the reason the stage waits.
+  assert.doesNotMatch(markup, /<canvas|data-stage=|data-activity/);
+  // The slot's first render is pending, so the server's markup carries the reason the stage waits,
+  // and the exit, disabled until a browser says the stage can run.
   assert.match(markup, /data-stage-reason="pending"/);
+  assert.equal(count(markup, /class="sb-stage__exit"/g), 1);
+  assert.match(
+    markup,
+    /<span class="sb-stage__exit"><button(?=[^>]*\saria-pressed="false")(?=[^>]*\sdisabled="")[^>]*>[\s\S]*?Spatial stage/,
+  );
 });
 
 const RUNNING: Parameters<typeof decideStage>[0] = {
