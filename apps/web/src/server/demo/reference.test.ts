@@ -306,7 +306,7 @@ test('renditions over the held limit refuse the reference whole, naming the limi
   assert.ok((await openReference({ dir: FIXTURE_DIR, checks: CHECKS, heldBytes: kept })).ok);
 });
 
-test(`a reference just over REFERENCE_HELD_BYTES (${REFERENCE_HELD_BYTES / 1024 / 1024} MiB) is refused, and the demo still serves its sample`, async (t) => {
+test('a reference just over REFERENCE_HELD_BYTES, 64 MiB, is refused, and the demo still serves its sample', async (t) => {
   // Four public images on the visible work, whose renditions together with
   // the cover's come to one byte over the limit.
   const source = readSource();
@@ -350,6 +350,7 @@ test(`a reference just over REFERENCE_HELD_BYTES (${REFERENCE_HELD_BYTES / 1024 
   const composed = await compose({ config: read.config, examples: EXAMPLES, report: () => {} });
   assert.ok(composed.ok, JSON.stringify(composed.issues));
   assert.equal(composed.state.reference, undefined, 'no part of it serves');
+  assert.equal(REFERENCE_HELD_BYTES, 64 * 1024 * 1024);
   const issue = composed.issues.find((found) => found.code === 'reference_too_large');
   assert.ok(issue, JSON.stringify(composed.issues));
   assert.match(issue.message, /64 MiB/);
