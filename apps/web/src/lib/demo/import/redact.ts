@@ -15,8 +15,10 @@ import {
 // doesn't name at its place becomes UNKNOWN_KEY, in the pointer, in the
 // message and remediation, and as the stableId. Keys the schema names stay,
 // so a caller can still point at the field. An array index stays where the
-// data has an array, and wherever there's no data to look in, as for a file
-// that didn't parse.
+// data has an array. Where there's no data to look in, as for a file that
+// didn't parse, a key stays when it's a word the schemas name anywhere,
+// since a union's member can't be told without the value, and an index
+// stays as one.
 
 /** What stands in for a key the schema doesn't name. */
 export const UNKNOWN_KEY = '(unknown key)';
@@ -77,7 +79,8 @@ export function redactDiagnostic(diagnostic: Diagnostic, data: DocumentData): Di
 
 /**
  * Whether `segment` is a key the schema names on the object at `path`, or an
- * index into an array there. With no data, an index is kept as one.
+ * index into an array there. With no data, an index, or any word the
+ * schemas name.
  */
 function named(
   document: 'portfolio' | 'site',
@@ -85,15 +88,74 @@ function named(
   path: readonly string[],
   segment: string,
 ): boolean {
-  if (root === undefined) {
-    return (
-      INDEX.test(segment) ||
-      (allowedKeysAt(SCHEMAS[document], undefined, path) ?? []).includes(segment)
-    );
-  }
+  // With no data, a union's member can't be told from its value, so any word
+  // the schemas name stays. Each is the schema's own text, never the file's.
+  if (root === undefined) return INDEX.test(segment) || schemaWords().has(segment);
   const parent = valueAt(root, path);
   if (Array.isArray(parent)) return INDEX.test(segment);
   return (allowedKeysAt(SCHEMAS[document], root, path) ?? []).includes(segment);
+}
+
+/** A zod schema as far as this reads it: its definition's type name and children. */
+type SchemaNode = { readonly _def: Record<string, unknown> } & Record<string, unknown>;
+
+let words: ReadonlySet<string> | undefined;
+
+/**
+ * Every key any object in the portfolio, site, and core section schemas
+ * names, at any depth: the words a pointer may keep when there's no data
+ * to find its place in.
+ */
+export function schemaWords(): ReadonlySet<string> {
+  if (words) return words;
+  const found = new Set<string>();
+  const seen = new Set<unknown>();
+  const pending: unknown[] = [
+    DEFAULT_SCHEMAS.PortfolioSchema,
+    DEFAULT_SCHEMAS.SiteSchema,
+    ...DEFAULT_SCHEMAS.coreSections,
+  ];
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    if (typeof next !== 'object' || next === null || seen.has(next) || !('_def' in next)) continue;
+    seen.add(next);
+    const node = next as SchemaNode;
+    const def = node._def;
+    switch (def.typeName) {
+      case 'ZodObject': {
+        const shape = (node as unknown as { shape: Record<string, unknown> }).shape;
+        for (const [key, child] of Object.entries(shape)) {
+          found.add(key);
+          pending.push(child);
+        }
+        break;
+      }
+      case 'ZodArray':
+        pending.push(def.type);
+        break;
+      case 'ZodRecord':
+        pending.push(def.valueType);
+        break;
+      case 'ZodOptional':
+      case 'ZodNullable':
+      case 'ZodDefault':
+        pending.push(def.innerType);
+        break;
+      case 'ZodEffects':
+        pending.push(def.schema);
+        break;
+      case 'ZodPipeline':
+        pending.push(def.in, def.out);
+        break;
+      case 'ZodUnion':
+      case 'ZodDiscriminatedUnion':
+        pending.push(...(def.options as unknown[]));
+        break;
+      default:
+        break;
+    }
+  }
+  words = found;
+  return words;
 }
 
 function valueAt(root: unknown, path: readonly string[]): unknown {

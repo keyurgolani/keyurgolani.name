@@ -279,6 +279,7 @@ function isInput(value: unknown): value is ImportInput {
   return (
     typeof value === 'object' &&
     value !== null &&
+    typeof (value as { name?: unknown }).name === 'string' &&
     (value as { bytes?: unknown }).bytes instanceof Uint8Array
   );
 }
