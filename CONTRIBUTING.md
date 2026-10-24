@@ -147,17 +147,59 @@ Tests use Node's built-in `node:test`, through `tsx` for TypeScript. A single fi
 
 `.github/workflows/ci.yml` runs on every PR into `main` or `next` and every push to `main`. `gate` is the one required check.
 
+**Branch protection.** [`.github/rulesets/main.json`](.github/rulesets/main.json) protects `main`: no deletion, no force push, changes only through a pull request, and `gate` from GitHub Actions as the one required status check, against the PR's latest base. Nothing bypasses it. No other check is required, so a new job joins `gate`'s `needs` and never the ruleset. Two tag rulesets keep release tags from moving or being deleted, and let only an admin create one ([docs/releasing.md](docs/releasing.md)). The rulesets are committed here and applied by the repository's owner in its settings, so a change to one only takes effect once the owner applies it again.
+
 **Selection.** The first job, `changes`, runs `ci/select-jobs.mjs` and picks the check jobs a run needs from the paths the PR changes. A draft PR runs only those, for fast feedback, and the `selected` check says whether they passed. A PR that's ready for review, a PR into `main`, and a push run the complete product on every head. So does any change to a workflow or action file, the lockfile, a root config, the `Dockerfile` or `.dockerignore`, the selector, gate, or shard scripts, a CI script outside the container and docs ones, a deleted or moved package, or any path no rule maps. The step summary of `changes` lists each path's change class and each selected job's local command.
 
 **gate.** `gate` passes only on a complete run in which every job it needs succeeded, so path selection can't merge anything: a draft's run always fails `gate`, GitHub won't merge a draft, and marking it ready runs everything on the same head. A skipped, cancelled, or timed-out job fails `gate` too. A new job joins by adding `changes` to its `needs`, an `if:` on `contains(fromJSON(needs.changes.outputs.jobs), '<job>')`, and its id to `gate`'s and `selected`'s `needs` and to `CHECK_JOBS` and the rules in `ci/select-jobs.mjs`. `pnpm test` fails until it's mapped.
 
-**Check names.** `changes`, `static`, `unit (1/3)` to `unit (3/3)`, `build`, `browser (1/2)` and `browser (2/2)`, `routes`, `appearance-browser`, `check-variants`, `variants (1/2)` and `variants (2/2)`, `external-variant`, `image`, `profiles`, `docs`, `selected`, `gate`, and on `main` only, `publish`.
+**Check names.** Every check `ci.yml` runs on a PR, and the command that runs it locally. `ci/contributing.test.mjs` fails when this table and the workflow disagree, and `pnpm check:docs` when a command it names doesn't exist. A push to `main` adds `publish-build`, `publish-merge`, `publish-smoke`, and `publish` after `gate`, which have no local form.
+
+<!-- check-names:start -->
+
+| Check                                    | Local command                                                                                                                                                                         |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `changes`                                | `pnpm select-jobs`                                                                                                                                                                    |
+| `static`                                 | `pnpm format:check && pnpm lint && pnpm typecheck && pnpm check:skills && pnpm check:registry && pnpm check:appearance && pnpm check:deps && pnpm check:pins && pnpm check:workflows` |
+| `unit (1/3)` to `unit (3/3)`             | `pnpm test`                                                                                                                                                                           |
+| `build`                                  | `pnpm build && pnpm check:source-maps && pnpm check:standalone && pnpm check:markdown-pass`                                                                                           |
+| `browser (1/2)` to `browser (2/2)`       | `pnpm build && pnpm ci:browser`                                                                                                                                                       |
+| `routes`                                 | `pnpm test:routes`                                                                                                                                                                    |
+| `appearance-browser`                     | `pnpm test:appearance`                                                                                                                                                                |
+| `preview-fixtures-browser`               | `pnpm ci:preview-fixtures-browser`                                                                                                                                                    |
+| `check-variants`                         | `pnpm check:variants`                                                                                                                                                                 |
+| `variants (1/2)` to `variants (2/2)`     | `pnpm build && pnpm test:variants`                                                                                                                                                    |
+| `external-variant`                       | `pnpm test:external-variant`                                                                                                                                                          |
+| `quality-pr (1/3)` to `quality-pr (3/3)` | `pnpm ci:quality-pr`                                                                                                                                                                  |
+| `quality-pr-verdict`                     | `pnpm ci:quality-pr-verdict`                                                                                                                                                          |
+| `quality-meta`                           | `pnpm ci:quality-meta`                                                                                                                                                                |
+| `trace`                                  | `pnpm ci:budgets`                                                                                                                                                                     |
+| `image`                                  | `pnpm ci:image && pnpm ci:proxy && pnpm ci:security-proxy (needs Docker)`                                                                                                             |
+| `profiles`                               | `pnpm smoke:profiles (needs Docker; SMOKE_PROFILES=<part> for one part)`                                                                                                              |
+| `docs`                                   | `pnpm check:docs`                                                                                                                                                                     |
+| `selected`                               | CI only: it reads the results of the run it is in                                                                                                                                     |
+| `gate`                                   | CI only: it reads the results of the run it is in                                                                                                                                     |
+
+<!-- check-names:end -->
+
+`release.yml` adds its own checks to a PR that changes the release workflow, its helpers, the image inputs, the Grype config, or the lockfile ([docs/releasing.md](docs/releasing.md)). They aren't under `gate`, and they need Docker and GitHub's runners, so they run in CI only:
+
+<!-- release-check-names:start -->
+
+| Check                                               | What it does                                                                                                 |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `dry-run-build (amd64)` and `dry-run-build (arm64)` | Builds each platform natively into an OCI layout, with provenance and an SBOM                                |
+| `dry-run`                                           | Merges the two in a registry on its runner, checks the attestations, scans, and rehearses the tags and notes |
+
+<!-- release-check-names:end -->
 
 **Shards.** `unit`, `browser`, and `variants` split by measured duration (`ci/shards.mjs`): by workspace package and root test script, by spec file, and by Playwright project. Items are read from the tree when the shard runs, so a new one is never left out, and `pnpm test:shard <suite> <i>/<n>` runs one shard locally. `ci/shard-durations.json` holds the durations, and its `source` says where they came from; refresh it with `node ci/shards.mjs measure <suite> <log>...` from `gh run view --job <id> --log` output, which updates the items those logs measured and keeps the rest.
 
 **Caches.** Each check job installs through `.github/actions/install`, which restores and saves the pnpm store under the lockfile's hash. `build` also caches `apps/web/.next/cache` under the lockfile and a hash of the build inputs, and `browser` and `variants` restore it without writing it. Nothing caches `node_modules` or a generated registry, and `publish` installs without either cache.
 
 **The narrowest check.** `pnpm select-jobs` prints what a draft PR of your branch against `origin/next` would select, with each job's local command (`--base <ref>` for another base). Run those, or the single command for what you touched: `pnpm check:docs` for docs, `pnpm test` or one file with `node --test <file>` or `pnpm exec tsx --test <file>` for scripts and packages, `pnpm build && pnpm ci:browser <spec>` for one browser spec, `pnpm test:shard <suite> <i>/<n>` for one shard.
+
+**Flakes.** A check that fails and then passes with nothing changed is a flake, and a flake is a bug. When a check fails on your PR and you think it's one, run its local command from the table above once. If it passes, say so on the PR, with the failed run's link and the test's name, and open an issue for the flake; don't merge on a rerun that hides it. If it fails locally too, it's your change's to fix. Unit, contract, accessibility, and performance assertions never retry. Browser tests tagged `@interaction` retry once in CI, and the report marks a pass on that retry as flaky: treat it the same way. Nothing tracks flakes across runs yet.
 
 **Scheduled checks.** `.github/workflows/scheduled.yml` runs every night at 06:23 UTC. Every night it runs #11's quality matrix, below. On Mondays it also runs `pnpm check:docs`, then `pnpm check:links`, which requests each external link once and never a local, reserved, or live-site host; on the other nights `links` skips, and `report` expects that skip (`EXPECTED_SKIPS`). When a job doesn't succeed, including a timeout or any skip it doesn't expect, the `report` job opens or comments on one rolling issue with the failed jobs, their local commands, and their failure records, and the first passing run in which every job ran, a Monday's, closes it. Only `report` holds `issues: write`, and every job sets `timeout-minutes`. GitHub runs schedules only from the default branch, so it starts once it's on `main`, and it disables them after 60 days without activity in a public repository. Test the reporter with `node --test ci/report-issue.test.mjs`. Cross-product jobs, such as #11's appearance validation and #20's catalog provenance refresh, join it as the workflow's header describes.
 

@@ -6,7 +6,9 @@
 //     tree, and each #anchor to a heading or an id= in its target;
 //   - each `pnpm <script>` in code, inline or fenced, names a root script or
 //     a pnpm command, and each `pnpm --filter <package> <script>` a script of
-//     that workspace package.
+//     that workspace package;
+//   - each script a command in code runs with node or tsx, such as
+//     `node ci/report-issue.test.mjs`, is a file in the tree.
 // With --external it also requests each http(s) link once (HEAD, then GET),
 // which only the scheduled workflow does. It never requests a local or
 // reserved name, a loopback, private, or link-local address, or the live
@@ -160,6 +162,32 @@ const PNPM_COMMANDS = new Set([
   'update',
   'why',
 ]);
+
+// The repository's own top-level directories a script path in a command
+// starts with. A path anywhere else, such as bin/portfolio-store.mjs, is the
+// image's, or a placeholder, and isn't the tree's to check.
+const SCRIPT_ROOTS = /^(?:apps|packages|ci|tests|skills|scripts|quality)\//;
+
+/**
+ * The script files a piece of code runs with `node`, `tsx`, or
+ * `pnpm exec tsx`, such as ci/report-issue.test.mjs in
+ * `node --test ci/report-issue.test.mjs`: every word after the command, up
+ * to a shell separator, that is a repository path to a .mjs, .cjs, .js, or
+ * .ts file. A glob, a placeholder, or a quoted word names no one file.
+ */
+export function scriptPaths(code) {
+  const found = [];
+  for (const m of code.matchAll(
+    /(?:^|[\s;&|(`$])(?:node|tsx|pnpm\s+exec\s+tsx)\s+([^\n;&|)`]*)/g,
+  )) {
+    for (const word of m[1].split(/\s+/)) {
+      if (/^[\w.][\w./-]*\.(?:mjs|cjs|js|ts)$/.test(word) && SCRIPT_ROOTS.test(word)) {
+        found.push(word);
+      }
+    }
+  }
+  return found;
+}
 
 /** `pnpm` invocations in a piece of code: { filter, script }. */
 export function pnpmReferences(code) {
@@ -344,6 +372,11 @@ export function checkDocs({ root = REPO_ROOT, files = markdownFiles(root) } = {}
       }
     }
     for (const { line, text: snippet } of code) {
+      for (const named of scriptPaths(snippet)) {
+        if (!existsSync(path.join(root, named))) {
+          problems.push({ file, line, url: '', message: `${named}: there's no such script` });
+        }
+      }
       for (const ref of pnpmReferences(snippet)) {
         const message = pnpmProblem(ref, rootScripts, packages);
         if (message)

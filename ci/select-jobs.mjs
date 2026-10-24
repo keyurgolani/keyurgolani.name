@@ -438,8 +438,15 @@ export function selectJobs({ files, event, baseRef, draft, workflowJobs }) {
   };
 }
 
-/** What a developer runs locally for each job. */
+/**
+ * What a developer runs locally for each job. CONTRIBUTING.md's check table
+ * shows each one, and ci/contributing.test.mjs holds the two together.
+ */
 export const LOCAL_COMMANDS = {
+  changes: 'pnpm select-jobs',
+  // These two read the run's job results, so they have no local form.
+  selected: 'CI only: it reads the results of the run it is in',
+  gate: 'CI only: it reads the results of the run it is in',
   static:
     'pnpm format:check && pnpm lint && pnpm typecheck && pnpm check:skills && pnpm check:registry && pnpm check:appearance && pnpm check:deps && pnpm check:pins && pnpm check:workflows',
   unit: 'pnpm test',
