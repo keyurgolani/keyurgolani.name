@@ -1,0 +1,45 @@
+{
+  "id": "obsidian-atelier",
+  "name": "Obsidian Atelier",
+  "promise": "A night gallery of chapters: each work a room of its own, read in a narrow column beside its artifact.",
+  "description": "A gallery composition. The opening and a quiet chapter index come first, then one chapter a work, the signature and the featured works in the owner's order: a full-bleed room for the artifact, a narrow analytical column for the premise, and the rest of the case behind Unfold the case. Each medium gets its own room, so a photograph, an interface, a system, and an essay don't share one card. Every chapter has a direct link and plain previous and next links, and nothing needs motion, hover, or JavaScript. Its dark values come from the selected color scheme, never from the composition.",
+  "contract": "2.0",
+  "schemas": { "portfolio": { "min": 3, "max": 3 }, "site": { "min": 2, "max": 2 } },
+  "tokenContract": 1,
+  "compositionFamily": "gallery",
+  "motionIntent": "subtle",
+  "performanceTier": "light",
+  "budgets": { "js": 1024, "css": 4096, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
+  "renderedKinds": [],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": { "home": "bespoke", "work": "shared", "views": [] },
+  "controls": { "version": 1, "items": [], "migrations": [] },
+  "visitorControl": { "placement": "header" },
+  "textDirection": ["ltr", "rtl"],
+  "provenance": {
+    "provisional": true,
+    "sources": [
+      {
+        "source": "Page 93's photography-first rhythm and Page 98's editorial type hierarchy",
+        "disposition": "preserved",
+        "note": "Full-bleed artifact rooms beside a narrow analytical column, one chapter a work, rebuilt on the v3 records, the kit's shared renderers, and #19's primitives."
+      },
+      {
+        "source": "Page 3's case disclosure",
+        "disposition": "preserved",
+        "note": "Unfold the case: a closed native details holds each chapter's case below its premise and artifact."
+      },
+      {
+        "source": "The dark experiments' black and gold, and their fixed dark theme",
+        "disposition": "folded-into-pack",
+        "note": "Mineral dark and oxidized accents belong to the color schemes (#19, Codex [31]). The composition never forces dark."
+      },
+      {
+        "source": "Page 99's typewriter roles, hover depth, and magnetic actions",
+        "disposition": "retired",
+        "note": "No tilt, hover, parallax, or chapter animation is needed to read or reach anything."
+      }
+    ]
+  }
+}
