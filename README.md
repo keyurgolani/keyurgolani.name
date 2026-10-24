@@ -13,6 +13,8 @@ Designed for engineers, makers, photographers, writers, musicians, designers, co
 
 **In use:** [keyurgolani.name](https://keyurgolani.name), the maintainer's own portfolio. It isn't a demo deployment.
 
+**Live demo:** the demo deployment (self-hosted, see [docs](docs/deployment.md#demo)).
+
 <p align="center">
   <img src="docs/screenshots/01-home-hero-editorial.png" alt="Editorial variant" width="49%" />
   <img src="docs/screenshots/05-variant-kinetic-cosmos.png" alt="Kinetic Cosmos variant" width="49%" />
