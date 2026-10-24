@@ -69,6 +69,20 @@ function recordedVersion(text: string): number | null {
   }
 }
 
+/**
+ * What a record was made from: its reference source and the generator's
+ * input, the seed or the asset with its pixel hash. JSON, so two compare as
+ * text, or null when the text doesn't parse.
+ */
+function recordedInput(text: string): string | null {
+  try {
+    const parsed = JSON.parse(text) as { source?: unknown; result?: { input?: unknown } };
+    return JSON.stringify({ source: parsed.source, input: parsed.result?.input });
+  } catch {
+    return null;
+  }
+}
+
 /** Every first-party, non-fixture generator scheme in `packages`, with its record. */
 export function generatedEntries(
   root: string,
@@ -142,16 +156,24 @@ export function generatedEntries(
       });
     }
     if (recorded === text) continue;
+    const input = JSON.stringify({ source: made.record.source, input: made.record.result.input });
     if (recorded === null) {
       problems.push({
         pack: pack.id,
         message: `${file} is missing. Run pnpm catalog:generated and commit it.`,
         writable: true,
       });
+    } else if (recordedInput(recorded) !== input) {
+      // A new reference input, a seed or an image, isn't a new generator.
+      problems.push({
+        pack: pack.id,
+        message: `${file} is from another reference input and is stale. Run pnpm catalog:generated and commit it.`,
+        writable: true,
+      });
     } else if (recordedVersion(recorded) === declared.version) {
       problems.push({
         pack: pack.id,
-        message: `${file} differs from what ${declared.id} version ${declared.version} makes now: the generator changed at the same version. Raise its version in @portfolio/appearance/generators and in ${pack.id}'s manifest, then run pnpm catalog:generated.`,
+        message: `${file} differs from what ${declared.id} version ${declared.version} makes now from the same input: the generator changed at the same version. Raise its version in @portfolio/appearance/generators and in ${pack.id}'s manifest, then run pnpm catalog:generated.`,
         writable: false,
       });
     } else {
