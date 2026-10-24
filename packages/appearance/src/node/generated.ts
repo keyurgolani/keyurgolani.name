@@ -53,7 +53,7 @@ export function readPng(bytes: Uint8Array): DecodedPng {
   let width = 0;
   let height = 0;
   let channels = 0;
-  for (let at = 8; at + 8 <= buffer.length; ) {
+  for (let at = 8; at + 8 <= buffer.length;) {
     const length = buffer.readUInt32BE(at);
     const type = buffer.toString('latin1', at + 4, at + 8);
     const body = buffer.subarray(at + 8, at + 8 + length);
@@ -81,7 +81,8 @@ export function readPng(bytes: Uint8Array): DecodedPng {
     for (let index = 0; index < stride; index += 1) {
       const left = index >= channels ? rows[row * stride + index - channels]! : 0;
       const up = row > 0 ? rows[(row - 1) * stride + index]! : 0;
-      const corner = row > 0 && index >= channels ? rows[(row - 1) * stride + index - channels]! : 0;
+      const corner =
+        row > 0 && index >= channels ? rows[(row - 1) * stride + index - channels]! : 0;
       const predicted =
         filter === 0
           ? 0
@@ -125,8 +126,7 @@ export const ACCEPTANCE_FILE = 'acceptance.json';
 
 /** A reference input: a seed color, or a media asset id and the repository file it's drawn from. */
 export type ReferenceSource =
-  | { readonly seedColor: string }
-  | { readonly sourceAsset: string; readonly file: string };
+  { readonly seedColor: string } | { readonly sourceAsset: string; readonly file: string };
 
 /** Each first-party generator scheme's reference input. The images are this repository's own example media. */
 export const REFERENCE_SOURCES: Readonly<Record<string, ReferenceSource>> = Object.freeze({
@@ -156,7 +156,9 @@ export function referenceRecord(
   scheme: string,
   declared: DeclaredGenerator,
   source: ReferenceSource,
-): { readonly ok: true; readonly record: ReferenceRecord } | { readonly ok: false; readonly problem: string } {
+):
+  | { readonly ok: true; readonly record: ReferenceRecord }
+  | { readonly ok: false; readonly problem: string } {
   let asset;
   if ('file' in source) {
     try {
