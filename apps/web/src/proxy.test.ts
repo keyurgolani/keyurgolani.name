@@ -2084,3 +2084,67 @@ test('/_portfolio/scheme/ takes GET and HEAD alone: any other method is the plai
     }
   }
 });
+
+/** The local frame's policy (#9): the preview's, with blob: images and media from the visitor's own files. */
+const localPolicy = (ancestors: string) =>
+  new RegExp(
+    `^default-src 'none'; script-src 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'nonce-\\1'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors ${escape(ancestors)}$`,
+  );
+
+test("under demo /preview/local, Demo Studio's local frame, goes on to Next under the preview's headers with blob: media, connecting to nothing, framed by Studio's origin alone (#9)", async (t) => {
+  deploy(t, 'demo');
+  const nonces = new Set<string>();
+  for (const method of ['GET', 'HEAD']) {
+    for (const destination of ['iframe', null]) {
+      const response = await proxy(loaded('/preview/local', destination, method));
+      const what = `${method} as ${destination}`;
+      assert.equal(decision(response), 'served', what);
+      const csp = response.headers.get('content-security-policy') ?? '';
+      const nonce = localPolicy('https://rowan.test').exec(csp)?.[1];
+      assert.ok(nonce, `${what}: ${csp}`);
+      nonces.add(nonce);
+      // On the request too, so Next puts the nonce on the page's scripts.
+      assert.equal(response.headers.get('x-middleware-request-content-security-policy'), csp, what);
+      assert.deepEqual(previewHeaderProblems(response), [], what);
+      // The session cookie stays behind, so the frame reads no session.
+      assert.equal(response.headers.get('x-middleware-request-cookie'), null, what);
+    }
+  }
+  assert.equal(nonces.size, 4, 'a nonce came twice');
+  // Every other preview path keeps the preview's own policy, with no blob:.
+  for (const path of ['/preview/local/x', '/preview/localx', '/preview/Local', '/preview/x']) {
+    const response = await proxy(loaded(path, 'iframe'));
+    const csp = response.headers.get('content-security-policy') ?? '';
+    assert.match(csp, previewPolicy('https://rowan.test'), path);
+    assert.notEqual(decision(response), 'served', path);
+  }
+});
+
+test('under owner /preview/local is the status document, never a local frame, and under read-only a path no route matches (#9)', async (t) => {
+  const { port, checked } = grantsPort();
+  deploy(t, 'owner', port);
+  for (const destination of ['iframe', 'document', null]) {
+    for (const method of ['GET', 'HEAD', 'POST']) {
+      const what = `owner ${method} as ${destination}`;
+      const response = await proxy(loaded('/preview/local', destination, method));
+      await assertStatusDocument(response, what);
+      assert.doesNotMatch(response.headers.get('content-security-policy') ?? '', /blob:/, what);
+    }
+  }
+  assert.deepEqual(checked, [], 'the local frame is no grant to ask about');
+  setDeploymentState(undefined);
+
+  deploy(t, 'read-only');
+  for (const method of ['GET', 'HEAD']) {
+    const what = `read-only ${method}`;
+    const response = await proxy(request('/preview/local', method));
+    const csp = response.headers.get('content-security-policy') ?? '';
+    assert.match(csp, previewPolicy('https://rowan.test'), what);
+    assert.notEqual(decision(response), 'served', what);
+    assert.ok(
+      decision(response) === 'missing' ||
+        response.headers.get('x-middleware-request-x-portfolio-not-found') === '1',
+      what,
+    );
+  }
+});
