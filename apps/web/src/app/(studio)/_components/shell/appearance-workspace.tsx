@@ -10,12 +10,12 @@ import {
   optionNote,
   type AppearanceCatalog,
   type AppearanceState,
-  type CatalogAxis,
   type SiteEdit,
   type VisitorControl,
 } from '~/lib/studio/appearance';
 import type { StudioDraft } from '~/lib/studio/documents';
 import type { PreviewChoice } from '../preview/studio-preview';
+import { AxisField } from './axis-field';
 
 // #7's preview loads with the Appearance task, never with the rest of /studio.
 const StudioPreview = dynamic(
@@ -132,41 +132,22 @@ export function AppearanceWorkspace({
           if (!blocked) onApply(edits);
         }}
       >
-        {catalog.axes.map(({ axis, label, options }) => {
+        {catalog.axes.map(({ axis, label }) => {
           const value = state.selection[axis];
-          const note = optionNote(catalog, axis, value);
-          const id = `studio-appearance-${axis}`;
           return (
             <fieldset key={axis} className="studio-appearance__axis">
               <legend>{label}</legend>
-              <label className="studio-label" htmlFor={id}>
-                {label} the site shows
-              </label>
-              <select
-                id={id}
-                className="studio-input"
+              <AxisField
+                id={`studio-appearance-${axis}`}
+                axis={axis}
+                label={`${label} the site shows`}
                 value={value}
+                catalog={catalog}
                 disabled={!canWrite}
-                onChange={(event) =>
-                  change({
-                    ...state,
-                    selection: { ...state.selection, [axis]: event.target.value },
-                  })
+                onChange={(next) =>
+                  change({ ...state, selection: { ...state.selection, [axis]: next } })
                 }
-              >
-                {note.option ? null : (
-                  <option value={value}>
-                    {value === '' ? 'Not set' : value}, not available in this build
-                  </option>
-                )}
-                {options.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name}
-                    {option.tier && option.tier !== 'stable' ? ` (${option.tier})` : ''}
-                  </option>
-                ))}
-              </select>
-              <OptionFacts axis={axis} note={note} />
+              />
               <div
                 className="studio-appearance__control"
                 role="radiogroup"
@@ -252,52 +233,6 @@ export function AppearanceWorkspace({
         </section>
       ) : null}
     </div>
-  );
-}
-
-function OptionFacts({ axis, note }: { axis: CatalogAxis; note: ReturnType<typeof optionNote> }) {
-  if (!note.option) {
-    return (
-      <p className="studio-appearance__fact">
-        This build doesn&apos;t offer it, so {note.fallback} shows in its place, and it blocks
-        publishing.
-      </p>
-    );
-  }
-  const { description, tier, provenance, performance, access } = note.option;
-  return (
-    <dl className="studio-appearance__facts" data-axis={axis}>
-      {description ? (
-        <>
-          <dt>About</dt>
-          <dd>{description}</dd>
-        </>
-      ) : null}
-      {tier ? (
-        <>
-          <dt>Tier</dt>
-          <dd>{tier}</dd>
-        </>
-      ) : null}
-      {provenance.length > 0 ? (
-        <>
-          <dt>Provenance</dt>
-          <dd>{provenance.join('; ')}</dd>
-        </>
-      ) : null}
-      {performance ? (
-        <>
-          <dt>Performance</dt>
-          <dd>{performance}</dd>
-        </>
-      ) : null}
-      {access ? (
-        <>
-          <dt>Access</dt>
-          <dd>{access}</dd>
-        </>
-      ) : null}
-    </dl>
   );
 }
 
