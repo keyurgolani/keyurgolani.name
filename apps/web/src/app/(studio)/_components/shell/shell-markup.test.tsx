@@ -20,7 +20,9 @@ const SERVER_ONLY = createRequire(import.meta.url).resolve('server-only');
 const EMPTY = pathToFileURL(join(dirname(SERVER_ONLY), 'empty.js')).href;
 registerHooks({
   resolve: (specifier, context, nextResolve) =>
-    specifier.endsWith('.css') ? { url: EMPTY, shortCircuit: true } : nextResolve(specifier, context),
+    specifier.endsWith('.css')
+      ? { url: EMPTY, shortCircuit: true }
+      : nextResolve(specifier, context),
 });
 
 // The owner's Studio, as it renders before any script runs, held against a
@@ -30,7 +32,7 @@ registerHooks({
 // UPDATE_SHELL_SNAPSHOT=1 writes the snapshot again, for a change to the
 // owner's markup that's meant.
 
-const SNAPSHOT = fileURLToPath(new URL('./shell-markup.snapshot.html', import.meta.url));
+const SNAPSHOT = fileURLToPath(new URL('./shell-markup.snapshot.txt', import.meta.url));
 
 const OWNER = {
   profile: 'owner' as const,

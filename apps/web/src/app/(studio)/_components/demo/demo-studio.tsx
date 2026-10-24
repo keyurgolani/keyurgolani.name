@@ -239,11 +239,7 @@ export function DemoStudio({
                       catalog={catalog}
                       onChange={(value) => void choose(axis, value)}
                     />
-                    <button
-                      type="button"
-                      className="studio-button"
-                      onClick={() => resetAxis(axis)}
-                    >
+                    <button type="button" className="studio-button" onClick={() => resetAxis(axis)}>
                       Reset {label.toLowerCase()}
                     </button>
                   </div>

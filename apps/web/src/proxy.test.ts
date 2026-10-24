@@ -876,7 +876,9 @@ test("#6's catalog fixture is the owner's Studio page in a build with BUDGET_FIX
         const studio = await proxy(request('/studio/no-such-page', method));
         assert.equal(
           page.headers.get('cache-control'),
-          profile === 'read-only' ? UNKNOWN_PATH_CACHE_CONTROL : studio.headers.get('cache-control'),
+          profile === 'read-only'
+            ? UNKNOWN_PATH_CACHE_CONTROL
+            : studio.headers.get('cache-control'),
           what,
         );
         assert.equal(

@@ -47,7 +47,10 @@ test("Demo Studio lists its two tasks behind sandbox.view, and none of the owner
   assert.deepEqual(DEMO_TASKS, tasksFor(['sandbox.view'], 'demo'));
   // Each profile's Studio lists only its own tasks, whatever else the list holds.
   assert.deepEqual(tasksFor(['sandbox.view']), []);
-  assert.deepEqual(tasksFor(['studio.view', 'draft.read', 'draft.write', 'history.read'], 'demo'), []);
+  assert.deepEqual(
+    tasksFor(['studio.view', 'draft.read', 'draft.write', 'history.read'], 'demo'),
+    [],
+  );
   assert.deepEqual(tasksFor(['sandbox.view'], 'read-only'), []);
 });
 
