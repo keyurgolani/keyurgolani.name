@@ -213,7 +213,9 @@ test(
       await a.getByRole('button', { name: `Use version ${version + 3}` }).click();
       await expect(portfolio(a)).toHaveValue(newest);
       await expect(line(a, 'This browser')).toHaveText('No unsaved changes.');
-      expect(await a.evaluate((key) => localStorage.getItem(key), JOURNAL_KEY)).toBeNull();
+      await expect
+        .poll(() => a.evaluate((key) => localStorage.getItem(key), JOURNAL_KEY))
+        .toBeNull();
     } finally {
       await first.close();
       await second.close();
