@@ -399,7 +399,12 @@ function LiveCinema(props: CinemaProps) {
         commit(to, { align: fromLink ? behavior() : 'instant', focus: fromLink });
         return;
       }
-      const target = id === undefined ? null : doc.getElementById(id);
+      if (id === undefined) {
+        // Back to the page's own URL, with no fragment: the start, Prologue.
+        commit(0, horizontal() ? { align: 'instant' } : {});
+        return;
+      }
+      const target = doc.getElementById(id);
       if (!target) return;
       if (fromLink && id === `${prefix}${INDEX_ANCHOR}`) {
         target.querySelector<HTMLElement>('[tabindex="-1"]')?.focus({ preventScroll: true });
