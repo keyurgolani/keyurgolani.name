@@ -424,4 +424,27 @@ test("the responsible pack: a focus ring's width and a translucent backdrop are 
     axis: 'designLanguage',
     id: 'lang',
   });
+  // A backdrop failure whose pair fails opaque too is the scheme's: no floor fixes it (#20 PR 2c).
+  const backdrop = {
+    ...failure,
+    pair: { ...failure.pair, ground: 'surface-default', backdrop: '#000000' },
+  };
+  const opaque = {
+    ...backdrop,
+    language: 'solid',
+    pair: { ...failure.pair, ground: 'surface-default' },
+  };
+  const check = { failures: [backdrop, opaque] } as unknown as Parameters<
+    typeof contrastRecords
+  >[0];
+  assert.deepEqual(
+    contrastRecords(check).map(({ pack, axis }) => `${axis}:${pack}`),
+    ['colorScheme:scheme', 'colorScheme:scheme'],
+  );
+  assert.deepEqual(
+    contrastRecords({ failures: [backdrop] } as unknown as Parameters<
+      typeof contrastRecords
+    >[0]).map(({ pack, axis }) => `${axis}:${pack}`),
+    ['designLanguage:lang'],
+  );
 });
