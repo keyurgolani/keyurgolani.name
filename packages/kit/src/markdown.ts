@@ -65,7 +65,48 @@ markdown.use({
   },
 });
 
+/**
+ * The post-pass a browser that renders untrusted Markdown installs (#9):
+ * Demo Studio's local preview frame, through markdown-local.ts, with
+ * markdown-sanitize.ts's own pass. Null until it does. Once a document
+ * asks for it, the renderer gives nothing until it's in, and once in it
+ * stays: nothing replaces or removes it. The server never asks:
+ * markdown.server.ts runs the post-pass itself.
+ */
+interface PostPass {
+  readonly block: (html: string) => string;
+  readonly inline: (html: string) => string;
+}
+let postPass: PostPass | null = null;
+let postPassRequired = false;
+
+/** From now on, Markdown in this document renders only through the installed post-pass. markdown-local.ts calls it. */
+export function requireMarkdownPostPass(): void {
+  postPassRequired = true;
+}
+
+/** Installs the post-pass, once: markdown-local.ts alone calls it, with markdown-sanitize.ts's pass. */
+export function setMarkdownPostPass(pass: PostPass): void {
+  if (postPass) throw new Error('The Markdown post-pass is already installed.');
+  postPassRequired = true;
+  postPass = Object.freeze({ block: pass.block, inline: pass.inline });
+}
+
+/** The renderer's markup through the installed post-pass, nothing while one is required and missing, or as it is. */
+function passed(html: string, kind: keyof PostPass): string {
+  if (postPass) return postPass[kind](html);
+  return postPassRequired ? '' : html;
+}
+
 export function renderMarkdown(source: string | undefined | null): string {
+  return passed(renderBlocks(source), 'block');
+}
+
+export function renderInlineMarkdown(source: string | undefined | null): string {
+  return passed(renderInline(source), 'inline');
+}
+
+function renderBlocks(source: string | undefined | null): string {
   if (!source) return '';
   if (markdownOverLimit(source)) return paragraphsOf(source);
   try {
@@ -76,7 +117,7 @@ export function renderMarkdown(source: string | undefined | null): string {
   }
 }
 
-export function renderInlineMarkdown(source: string | undefined | null): string {
+function renderInline(source: string | undefined | null): string {
   if (!source) return '';
   // Inline, nothing is code: the measure counts the marks inside a fence too.
   if (markdownOverLimit(source, 'inline')) return escapeHtml(withoutNul(source));

@@ -13,6 +13,7 @@
       "react-server": "./src/markdown.server.ts",
       "default": "./src/markdown.ts"
     },
+    "./markdown-local": "./src/markdown-local.ts",
     "./sections": "./src/sections/index.ts",
     "./host-modules": "./src/entries/host-modules.ts",
     "./sections/styles.css": "./src/sections/styles.css",
