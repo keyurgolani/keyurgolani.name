@@ -51,9 +51,6 @@ export const REFERENCE_MEDIA_BASE = '/reference/media';
  */
 export const REFERENCE_HELD_BYTES = 64 * 1024 * 1024;
 
-/** A segment under /reference that names the media route, so no page may take it (#9). */
-const RESERVED_SLUG = 'media';
-
 const KEY = 'PORTFOLIO_REFERENCE_DIR';
 const REMEDIATION =
   'Export the revision again with portfolio-store export-revision, verify it, and mount the whole export unchanged. The demo reads it once, at startup.';
@@ -172,17 +169,15 @@ export async function openReference({
       return refused([{ code: 'reference_does_not_serve', file: 'media/media.json' }]);
     }
   }
-  const caseStudies = routedSlugs(view);
-  if (caseStudies.has(RESERVED_SLUG)) {
-    return refused([{ code: 'reference_route_reserved', document: 'portfolio' }]);
-  }
   const reference: ServedReference = Object.freeze({
     revisionId: bundle.revisionId,
     unit,
     view,
     media: unit.media,
     composition: compositionFor(unit.site.appearance.variant, REGISTRY).rendered.manifest.id,
-    caseStudies: new Set(caseStudies),
+    // Each under /reference/work, so none can take /reference/media, whose
+    // first segment namesPage() reserves (#9).
+    caseStudies: new Set(routedSlugs(view)),
     blob: (hash: Sha256) => blobs.get(hash),
   });
   return { ok: true, reference, issues: [] };
@@ -210,8 +205,6 @@ const MESSAGES: Readonly<Record<string, string>> = {
   reference_does_not_serve: "The reference doesn't serve under this build.",
   reference_blob_unlisted:
     "A rendition the reference's public view shows has no blob in bundle.json.",
-  reference_route_reserved:
-    'A case study in the reference has the slug media, which names the reference media route.',
 };
 
 function fromProblem(problem: BundleProblem): Found {

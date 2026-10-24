@@ -209,7 +209,10 @@ export function parseBundle(value: unknown): Bundle | null {
   if (typeof value.revisionId !== 'string' || !REVISION_ID.test(value.revisionId)) return null;
   if (!isSha256(value.unitHash)) return null;
   const documents = value.documents;
-  if (!isObject(documents) || !Object.keys(documents).every((name) => name in DOCUMENT_FILE)) {
+  if (
+    !isObject(documents) ||
+    !Object.keys(documents).every((name) => Object.hasOwn(DOCUMENT_FILE, name))
+  ) {
     return null;
   }
   const portfolio = asDocument(documents.portfolio, 'portfolio');

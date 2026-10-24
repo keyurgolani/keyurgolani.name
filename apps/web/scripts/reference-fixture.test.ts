@@ -9,6 +9,7 @@ import {
   generatedFiles,
   png,
   readSource,
+  REFERENCE_ASSETS,
   REFERENCE_CANARIES,
 } from './reference-fixture';
 
@@ -61,9 +62,16 @@ test('the leak scans look for every canary the fixture holds, and for the mountâ
     REFERENCE_CANARIES.privateMedia,
     REFERENCE_CANARIES.event,
     REFERENCE_CANARIES.privateSlug,
+    REFERENCE_CANARIES.privateAsset,
   ]) {
     assert.ok(SCANNED.includes(canary), canary);
   }
-  assert.ok(REFERENCE_CANARIES.privateAsset.startsWith(REFERENCE_CANARIES.privateSlug));
+  // The private image's source path, which only the media document and the
+  // portfolio name.
+  const privateSource = REFERENCE_ASSETS.find(
+    ({ assetId }) => assetId === REFERENCE_CANARIES.privateAsset,
+  )!.source;
+  assert.ok(readSource()['portfolio.yml'].includes(privateSource));
+  assert.ok(SCANNED.includes(privateSource), privateSource);
   assert.ok(SCANNED.includes(path.basename(FIXTURE_DIR)));
 });

@@ -25,6 +25,10 @@
       {
         "glob": "apps/web/src/app/host-chrome.css",
         "rationale": "The host chrome's styles (#7), which Studio and the preview document link: a public page's CSS is experience-base.css and its units' alone."
+      },
+      {
+        "glob": "apps/web/src/server/demo/**",
+        "rationale": "The demo's code (#9), the read-only reference's opener among it: the composition root loads it under demo alone, so no owner or read-only page names or loads it."
       }
     ]
   },

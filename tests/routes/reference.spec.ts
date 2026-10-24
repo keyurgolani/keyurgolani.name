@@ -1,12 +1,16 @@
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { APIResponse } from '@playwright/test';
 import { startApp } from '../harness/app-server.mjs';
-import { encodings, REFERENCE_CANARIES } from '../harness/canaries.mjs';
+import { referenceLeaks } from '../harness/canaries.mjs';
 import { fixtureHostWeb } from '../harness/fixture-host.mjs';
 import { expect, test } from '../harness/fixtures';
-import { REFERENCE_FIXTURE } from '../harness/profile-matrix';
+import {
+  copyReferenceFixture,
+  REFERENCE_FIXTURE,
+  REFERENCE_MOUNT,
+} from '../harness/profile-matrix';
 import { DEMO_CSP } from '../harness/route-headers.mjs';
 import { DEMO, DEMO_APP } from './apps';
 
@@ -23,7 +27,7 @@ import { DEMO, DEMO_APP } from './apps';
 
 const REFERENCE_APP = {
   ...DEMO_APP,
-  env: { ...DEMO_APP.env, PORTFOLIO_REFERENCE_DIR: REFERENCE_FIXTURE },
+  env: { ...DEMO_APP.env, PORTFOLIO_REFERENCE_DIR: REFERENCE_MOUNT },
 };
 test.use({ appOptions: REFERENCE_APP });
 
@@ -32,7 +36,6 @@ const DEMO_SERVER = { env: DEMO_APP.env ?? {}, portfolio: null, site: null };
 
 const ROUTE = { type: 'route', description: '/reference/[[...path]]' };
 const MEDIA_ROUTE = { type: 'route', description: '/reference/media/[...path]' };
-const LEAKS = REFERENCE_CANARIES.flatMap(encodings);
 
 interface Rendition {
   readonly name: string;
@@ -62,14 +65,15 @@ function rendition(assetId: string): { url: string; bytes: Buffer } {
 }
 
 /**
- * Every canary the response carries, in its body or a header, but one its
- * own request named: Next echoes the URL as sent in its payloads, the 404
- * page's included, so that one is no leak.
+ * Every reference canary the response carries, in its body or a header,
+ * but one that is exactly a segment or a query value its own request sent:
+ * Next echoes the URL as sent in its payloads, the 404 page's included
+ * (canaries.mjs's referenceLeaks(), whose unit test plants the private
+ * image's id in an answer to the private work's path and finds it).
  */
 async function leaks(response: APIResponse, sent: string): Promise<string[]> {
   const text = `${JSON.stringify(response.headers())}\n${(await response.body()).toString('latin1')}`;
-  const asked = `${sent}\n${decodeURIComponent(sent)}`;
-  return LEAKS.filter((canary) => text.includes(canary) && !asked.includes(canary));
+  return referenceLeaks(text, sent);
 }
 
 test(
@@ -218,7 +222,7 @@ test(
   async () => {
     test.setTimeout(180_000);
     const dir = mkdtempSync(path.join(tmpdir(), 'reference-tampered-'));
-    cpSync(REFERENCE_FIXTURE, dir, { recursive: true });
+    copyReferenceFixture(dir);
     const { bytes } = rendition('tide-tables-cover');
     const hex = MEDIA.assets.find((record) => record.assetId === 'tide-tables-cover')!
       .renditions[0]!.sha256;

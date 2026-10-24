@@ -9,8 +9,9 @@
 // secret, or config summary in any response. A spec runs it for the profile
 // its app options start: read-only and demo, and owner with the password
 // provider (#2), whose password and hash join the canaries.
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { APIRequestContext, APIResponse } from '@playwright/test';
@@ -88,15 +89,35 @@ export const REFERENCE_FIXTURE = fileURLToPath(
 );
 
 /**
+ * A copy of the reference fixture's own files in `to`, with no dotfile a
+ * checkout picked up beside them, such as a .DS_Store, which would make the
+ * reference unavailable: the demo refuses any file bundle.json doesn't list.
+ * Its directory's name keeps the fixture's, which the leak scans look for.
+ */
+export function copyReferenceFixture(
+  to = mkdtempSync(path.join(tmpdir(), `${path.basename(REFERENCE_FIXTURE)}-`)),
+): string {
+  cpSync(REFERENCE_FIXTURE, to, {
+    recursive: true,
+    filter: (from) => from === REFERENCE_FIXTURE || !path.basename(from).startsWith('.'),
+  });
+  return to;
+}
+
+/** The copy of the fixture demo mounts in this process, gone as the process exits. */
+export const REFERENCE_MOUNT = copyReferenceFixture();
+process.once('exit', () => rmSync(REFERENCE_MOUNT, { recursive: true, force: true }));
+
+/**
  * The demo profile on the bundled sample pair, with no source directory:
- * demo reads none. It mounts the CI reference fixture, so the matrix runs
- * the read-only reference's routes served (#9).
+ * demo reads none. It mounts a copy of the CI reference fixture, so the
+ * matrix runs the read-only reference's routes served (#9).
  */
 export const DEMO_APP: AppOptions = {
   env: {
     PORTFOLIO_PROFILE: 'demo',
     PORTFOLIO_SOURCE_DIR: '',
-    PORTFOLIO_REFERENCE_DIR: REFERENCE_FIXTURE,
+    PORTFOLIO_REFERENCE_DIR: REFERENCE_MOUNT,
   },
   envFiles: ENV_FILES,
   portfolio: null,
