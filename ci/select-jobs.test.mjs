@@ -81,6 +81,15 @@ const CLASSES = [
     jobs: ['static', 'unit', 'build'],
   },
   {
+    // #20: a held pack never registers either.
+    name: 'a held pack',
+    files: [
+      'packages/appearance-languages/held/glassmorphism/manifest.json',
+      'packages/appearance-languages/held/glassmorphism/gate.json',
+    ],
+    jobs: ['static', 'unit', 'build'],
+  },
+  {
     name: "the catalog build check and the scheduled cross-product's plan",
     files: ['ci/check-catalog-build.mjs', 'tests/catalog/plan.ts'],
     jobs: ['static', 'unit', 'build'],

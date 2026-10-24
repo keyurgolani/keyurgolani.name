@@ -70,9 +70,18 @@ test("a changed path maps to its variant's package, its language's pack, or its 
   assert.deepEqual(map('packages/appearance-languages/packs/platform-neutral/manifest.json'), [
     'designLanguage platform-neutral packages/appearance-languages/packs/platform-neutral/manifest.json',
   ]);
-  assert.deepEqual(map('packages/appearance-languages/package.json'), [
-    'designLanguage platform-neutral packages/appearance-languages/package.json',
-  ]);
+  // A package file maps to every language the package ships.
+  assert.deepEqual(
+    map('packages/appearance-languages/package.json'),
+    (meta.PACKS ?? [])
+      .filter((pack) => pack.kind === 'design-language' && !pack.fixture)
+      .map(
+        (pack) => `designLanguage ${pack.manifest.id} packages/appearance-languages/package.json`,
+      )
+      .sort(),
+  );
+  // A held pack (#20) never registers, so it maps to nothing.
+  assert.deepEqual(map('packages/appearance-languages/held/glassmorphism/manifest.json'), []);
   // Shared code, a pack this build doesn't register, and a lookalike directory map to nothing here.
   assert.deepEqual(
     map(

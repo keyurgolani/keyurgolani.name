@@ -275,7 +275,7 @@ export const APPEARANCE_CASES: readonly MetaCase[] = [
     expect: 'fail',
     // Its light text-muted under 4.5:1, on the canvas or a surface, in every tuple.
     reason:
-      /^[a-z-]+ \+ fixture-scheme-experimental-low-contrast \+ [a-z-]+ \(system, light, dark\), light: text-muted on (?:canvas|surface-[a-z]+) is \d\.\d+:1, under 4\.5:1 \(text\)\.$/,
+      /^[a-z0-9-]+ \+ fixture-scheme-experimental-low-contrast \+ [a-z0-9-]+ \(system, light, dark\), light: text-muted on (?:canvas|surface-[a-z]+) is \d\.\d+:1, under 4\.5:1 \(text\)\.$/,
     run: () => checkAppearance({ QUALITY_FIXTURES: 'meta' }),
   },
 ];
