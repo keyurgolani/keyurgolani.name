@@ -28,7 +28,7 @@
   gap: 1rem;
   margin-block-end: 2rem;
   padding-block-end: 1rem;
-  border-block-end: var(--ui-border-divider) solid var(--color-border-subtle);
+  border-block-end: var(--ui-border-divider);
 }
 
 /*
@@ -44,6 +44,49 @@
 
 [data-variant='kinetic-cosmos'] .kc-menu {
   display: none;
+}
+
+[data-variant='kinetic-cosmos'] .kc-chrome__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+/*
+ * The chrome recedes during passive viewing: while its runtime is active,
+ * after the visitor has done nothing for a while, the section links ease to
+ * the muted text color, which every color pack holds to text contrast, so
+ * they stay readable, in view, and in the tab order. Each input flips
+ * data-recede between two names for the same keyframes, which starts the
+ * wait over, and hover or focus inside the chrome brings it straight back.
+ */
+[data-variant='kinetic-cosmos'] .kc-chrome[data-recede='a'] [data-ui-slot='navigation.link'] {
+  animation: kinetic-cosmos-recede-a var(--ui-motion-slow) var(--ui-motion-easing)
+    calc(var(--ui-motion-slow) * 20) both;
+}
+
+[data-variant='kinetic-cosmos'] .kc-chrome[data-recede='b'] [data-ui-slot='navigation.link'] {
+  animation: kinetic-cosmos-recede-b var(--ui-motion-slow) var(--ui-motion-easing)
+    calc(var(--ui-motion-slow) * 20) both;
+}
+
+[data-variant='kinetic-cosmos']
+  .kc-chrome[data-recede]:is(:hover, :focus-within)
+  [data-ui-slot='navigation.link'] {
+  animation: none;
+}
+
+@keyframes kinetic-cosmos-recede-a {
+  to {
+    color: var(--color-text-muted);
+  }
+}
+
+@keyframes kinetic-cosmos-recede-b {
+  to {
+    color: var(--color-text-muted);
+  }
 }
 
 [data-variant='kinetic-cosmos'] .kc-menu__links {
@@ -107,13 +150,19 @@
   clip-path: circle(50%);
 }
 
-/* A ring is a circle's outline: a radial band in the border color, clear inside and out. */
+/*
+ * A ring is a circle's outline: a hairline radial band in the border color,
+ * clear inside and out, each edge eased over a pixel, so it draws as one
+ * unbroken line at any pixel ratio rather than aliasing into dashes. A
+ * border token is a whole border, width, style, and color, or none, so it
+ * has no width a gradient can take.
+ */
 [data-variant='kinetic-cosmos'] .kc-orbit__ring {
   background: radial-gradient(
     closest-side,
-    transparent calc(100% - var(--ui-border-card) - 1px),
-    var(--color-border-default) calc(100% - var(--ui-border-card) - 1px),
-    var(--color-border-default) 100%,
+    transparent calc(100% - 2.5px),
+    var(--color-border-default) calc(100% - 1.5px),
+    var(--color-border-default) calc(100% - 1px),
     transparent 100%
   );
 }
@@ -134,6 +183,146 @@
 [data-variant='kinetic-cosmos'] .kc-orbit__core {
   inline-size: 18%;
   background: var(--ui-signature-fill);
+}
+
+/*
+ * The motion layer (#14), on #6's runtime. The stage carries data-runtime
+ * only while its runtime is active or paused, never on the server, under
+ * reduced motion, in a static environment, or in a plate, so everything
+ * below starts only under it and the still composition above is what shows
+ * otherwise. Paused, the runtime's data-activity holds each animation where
+ * it is. Each one is a transform on a layer of its own, three in all, and
+ * each lasts a multiple of the motion pack's slow duration.
+ */
+[data-variant='kinetic-cosmos'] .kc-orbit__turn,
+[data-variant='kinetic-cosmos'] .kc-orbit__spin {
+  position: absolute;
+  inset: 0;
+}
+
+/* A satellite on each ring, so the orbit's turn shows: only while it can turn. */
+[data-variant='kinetic-cosmos'] .kc-orbit__satellite {
+  display: none;
+  position: absolute;
+  inline-size: 3%;
+  aspect-ratio: 1;
+  background: var(--color-accent);
+  clip-path: circle(50%);
+  translate: -50% -50%;
+}
+
+[data-variant='kinetic-cosmos'] .kc-orbit__satellite--inner {
+  inset-block-start: 27%;
+  inset-inline-start: 50%;
+}
+
+[data-variant='kinetic-cosmos'] .kc-orbit__satellite--middle {
+  inset-block-start: 86%;
+  inset-inline-start: 50%;
+}
+
+[data-variant='kinetic-cosmos'] .kc-orbit__satellite--outer {
+  inset-block-start: 50%;
+  inset-inline-start: 1%;
+}
+
+/* The glyph field: a fixed number of glyphs on two layers, behind the orbit and the words. */
+[data-variant='kinetic-cosmos'] .kc-glyphs {
+  display: none;
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  pointer-events: none;
+}
+
+/* A layer is two copies of one tile, so a fall of half its height starts over seamlessly. */
+[data-variant='kinetic-cosmos'] .kc-glyphs__layer {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: -100%;
+  block-size: 200%;
+}
+
+[data-variant='kinetic-cosmos'] .kc-glyphs__layer--far {
+  opacity: 0.22;
+}
+
+[data-variant='kinetic-cosmos'] .kc-glyphs__layer--near {
+  opacity: 0.38;
+}
+
+[data-variant='kinetic-cosmos'] .kc-glyph {
+  position: absolute;
+  color: var(--color-text-muted);
+  line-height: 1;
+}
+
+/* The glyph is the pseudo-element's, never text in the page. */
+[data-variant='kinetic-cosmos'] .kc-glyph::before {
+  content: attr(data-glyph);
+}
+
+[data-variant='kinetic-cosmos'] .kc-glyph--s {
+  font-size: 0.875rem;
+}
+
+[data-variant='kinetic-cosmos'] .kc-glyph--m {
+  font-size: 1.25rem;
+}
+
+[data-variant='kinetic-cosmos'] .kc-glyph--l {
+  font-size: 1.75rem;
+}
+
+[data-variant='kinetic-cosmos'] .kc-opening[data-runtime] .kc-glyphs,
+[data-variant='kinetic-cosmos'] .kc-opening[data-runtime] .kc-orbit__satellite {
+  display: block;
+}
+
+[data-variant='kinetic-cosmos'] .kc-opening[data-runtime] .kc-orbit__spin {
+  animation: kinetic-cosmos-spin calc(var(--ui-motion-slow) * 400) linear infinite;
+}
+
+[data-variant='kinetic-cosmos'] .kc-opening[data-runtime] .kc-glyphs__layer--far {
+  animation: kinetic-cosmos-fall calc(var(--ui-motion-slow) * 300) linear infinite;
+}
+
+[data-variant='kinetic-cosmos'] .kc-opening[data-runtime] .kc-glyphs__layer--near {
+  animation: kinetic-cosmos-fall calc(var(--ui-motion-slow) * 180) linear infinite;
+}
+
+/* A pointer can drag the orbit round while it moves; nothing it shows is anywhere else. */
+[data-variant='kinetic-cosmos'] .kc-opening[data-runtime] .kc-orbit {
+  cursor: grab;
+}
+
+/* On a phone the orbit goes, and its field with it; on paper, all of the motion layer does. */
+@media (max-width: 47.99rem) {
+  [data-variant='kinetic-cosmos'] .kc-opening[data-runtime] .kc-glyphs {
+    display: none;
+  }
+}
+
+@media print {
+  [data-variant='kinetic-cosmos'] .kc-opening[data-runtime] .kc-glyphs {
+    display: none;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-chrome[data-recede] [data-ui-slot='navigation.link'] {
+    animation: none;
+  }
+}
+
+@keyframes kinetic-cosmos-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@keyframes kinetic-cosmos-fall {
+  to {
+    transform: translateY(50%);
+  }
 }
 
 @media (max-width: 47.99rem) {
@@ -164,9 +353,18 @@
 
 [data-variant='kinetic-cosmos'] .kc-evidence__object {
   background: var(--color-surface-default);
-  border: var(--ui-border-card) solid var(--color-border-subtle);
+  border: var(--ui-border-card);
   border-radius: var(--ui-radius-card);
   box-shadow: var(--ui-shadow-card);
+}
+
+/*
+ * The face takes the object's corners, so its own surface never pokes past
+ * them. Nothing clips it, so its focus ring shows whole.
+ */
+[data-variant='kinetic-cosmos'] .kc-evidence__disclosure,
+[data-variant='kinetic-cosmos'] .kc-evidence__disclosure > summary {
+  border-radius: inherit;
 }
 
 [data-variant='kinetic-cosmos'] .kc-evidence__object:has(details[open]) {
@@ -213,7 +411,7 @@
 [data-variant='kinetic-cosmos'] .kc-chronology > li {
   position: relative;
   padding-inline-start: 1.25rem;
-  border-inline-start: var(--ui-border-card) solid var(--color-border-default);
+  border-inline-start: var(--ui-border-card);
 }
 
 @media (min-width: 64rem) {
@@ -232,6 +430,8 @@
   /* Each entry in its lane's column, in the list's order: a later one never sits above an earlier one. */
   [data-variant='kinetic-cosmos'] .kc-chronology > li {
     grid-column: 1;
+    /* Room at the foot, where a join crosses the lanes between, so it never strikes a word. */
+    padding-block-end: 1.5rem;
   }
 
   [data-variant='kinetic-cosmos'] .kc-chronology > li[data-lane='1'] {
@@ -246,14 +446,122 @@
     grid-column: 4;
   }
 
-  /* A fork or a join: a connector from the entry's edge toward the lane it reaches. */
+  /*
+   * A fork or a join: a connector from the entry to the rail of the lane it
+   * reaches, however many lanes away and on whichever side. The reach is how
+   * many lanes away that is; a lane is a column one gap from the next.
+   */
   [data-variant='kinetic-cosmos'] .kc-chronology > li[data-branches-from-lane]::before,
   [data-variant='kinetic-cosmos'] .kc-chronology > li[data-merges-into-lane]::after {
     content: '';
     position: absolute;
+    border-block-start: var(--ui-border-card);
+  }
+
+  [data-variant='kinetic-cosmos']
+    .kc-chronology
+    > li:is(
+      [data-lane='1'][data-branches-from-lane='0'],
+      [data-lane='2'][data-branches-from-lane='1'],
+      [data-lane='3'][data-branches-from-lane='2'],
+      [data-lane='0'][data-branches-from-lane='1'],
+      [data-lane='1'][data-branches-from-lane='2'],
+      [data-lane='2'][data-branches-from-lane='3']
+    ) {
+    --layout-fork-reach: 1;
+  }
+
+  [data-variant='kinetic-cosmos']
+    .kc-chronology
+    > li:is(
+      [data-lane='2'][data-branches-from-lane='0'],
+      [data-lane='3'][data-branches-from-lane='1'],
+      [data-lane='0'][data-branches-from-lane='2'],
+      [data-lane='1'][data-branches-from-lane='3']
+    ) {
+    --layout-fork-reach: 2;
+  }
+
+  [data-variant='kinetic-cosmos']
+    .kc-chronology
+    > li:is(
+      [data-lane='3'][data-branches-from-lane='0'],
+      [data-lane='0'][data-branches-from-lane='3']
+    ) {
+    --layout-fork-reach: 3;
+  }
+
+  [data-variant='kinetic-cosmos']
+    .kc-chronology
+    > li:is(
+      [data-lane='1'][data-merges-into-lane='0'],
+      [data-lane='2'][data-merges-into-lane='1'],
+      [data-lane='3'][data-merges-into-lane='2'],
+      [data-lane='0'][data-merges-into-lane='1'],
+      [data-lane='1'][data-merges-into-lane='2'],
+      [data-lane='2'][data-merges-into-lane='3']
+    ) {
+    --layout-join-reach: 1;
+  }
+
+  [data-variant='kinetic-cosmos']
+    .kc-chronology
+    > li:is(
+      [data-lane='2'][data-merges-into-lane='0'],
+      [data-lane='3'][data-merges-into-lane='1'],
+      [data-lane='0'][data-merges-into-lane='2'],
+      [data-lane='1'][data-merges-into-lane='3']
+    ) {
+    --layout-join-reach: 2;
+  }
+
+  [data-variant='kinetic-cosmos']
+    .kc-chronology
+    > li:is(
+      [data-lane='3'][data-merges-into-lane='0'],
+      [data-lane='0'][data-merges-into-lane='3']
+    ) {
+    --layout-join-reach: 3;
+  }
+
+  /* Toward the start: from the entry's rail back across the lanes between to the other's. */
+  [data-variant='kinetic-cosmos'] .kc-chronology > li[data-branches-from-lane]::before {
     inset-inline-end: 100%;
-    inline-size: 1.5rem;
-    border-block-start: var(--ui-border-card) solid var(--color-border-strong);
+    inline-size: calc(var(--layout-fork-reach) * (100% + 1.5rem));
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-chronology > li[data-merges-into-lane]::after {
+    inset-inline-end: 100%;
+    inline-size: calc(var(--layout-join-reach) * (100% + 1.5rem));
+  }
+
+  /* Toward the end: from the entry's far edge, past its own column, to the other's rail. */
+  [data-variant='kinetic-cosmos']
+    .kc-chronology
+    > li:is(
+      [data-lane='0'][data-branches-from-lane='1'],
+      [data-lane='0'][data-branches-from-lane='2'],
+      [data-lane='0'][data-branches-from-lane='3'],
+      [data-lane='1'][data-branches-from-lane='2'],
+      [data-lane='1'][data-branches-from-lane='3'],
+      [data-lane='2'][data-branches-from-lane='3']
+    )::before {
+    inset-inline: 100% auto;
+    inline-size: calc(var(--layout-fork-reach) * (100% + 1.5rem) - 100%);
+  }
+
+  [data-variant='kinetic-cosmos']
+    .kc-chronology
+    > li:is(
+      [data-lane='0'][data-merges-into-lane='1'],
+      [data-lane='0'][data-merges-into-lane='2'],
+      [data-lane='0'][data-merges-into-lane='3'],
+      [data-lane='1'][data-merges-into-lane='2'],
+      [data-lane='1'][data-merges-into-lane='3'],
+      [data-lane='2'][data-merges-into-lane='3']
+    )::after {
+    inset-inline: 100% auto;
+    inline-size: calc(var(--layout-join-reach) * (100% + 1.5rem) - 100%);
   }
 
   [data-variant='kinetic-cosmos'] .kc-chronology > li[data-branches-from-lane]::before {

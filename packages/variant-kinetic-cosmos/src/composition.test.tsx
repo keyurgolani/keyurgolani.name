@@ -22,6 +22,8 @@ import {
   HIDDEN_CANARY,
 } from '@portfolio/variant-contract/node';
 import KineticCosmos from '.';
+import { Runtime } from './runtime';
+import { GLYPHS_PER_LAYER } from './stage';
 
 // Kinetic Cosmos (#14), the still composition: its manifest holds the
 // catalog's pins, and it renders the contract fixtures as one main, one h1,
@@ -166,6 +168,7 @@ const text = (markup: string) =>
 
 test("every evidence summary, its accessible name, holds its record's title or statement, in every contract fixture", () => {
   let checked = 0;
+  let testimonials = 0;
   for (const { name } of CONTRACT_FIXTURES) {
     const input = fixtureInput(name);
     const markup = html(input);
@@ -182,21 +185,29 @@ test("every evidence summary, its accessible name, holds its record's title or s
       ].map(([, summary]) => text(summary!));
       assert.equal(summaries.length, entries.length, `${name} ${id}`);
       entries.forEach((entry, index) => {
-        const subject = present(entry.title)
-          ? entry.title
-          : present(entry.statement)
-            ? text(renderInlineMarkdown(entry.statement))
-            : undefined;
+        const author = [entry.source?.name, entry.publication, entry.venue].find(present);
+        const quote = present(entry.statement) ? text(renderInlineMarkdown(entry.statement)) : '';
+        // An untitled testimonial is its author's: the quote is read once, inside.
+        const quoted = !present(entry.title) && entry.type === 'testimonial' && author;
+        const subject = present(entry.title) ? entry.title : quoted ? author : quote || undefined;
         if (subject === undefined) return;
         checked += 1;
         assert.ok(
           summaries[index]!.includes(subject),
           `${name} ${entry.id}: "${summaries[index]}" says nothing of "${subject}"`,
         );
+        if (quoted && quote) {
+          testimonials += 1;
+          assert.ok(
+            !summaries[index]!.includes(quote),
+            `${name} ${entry.id} reads its quote twice`,
+          );
+        }
       });
     }
   }
   assert.ok(checked > 5, `${checked} summaries checked`);
+  assert.ok(testimonials > 2, `${testimonials} untitled testimonials checked`);
 });
 
 test("a metric with no title says what it counts, its source after it, as complete's tenure does", () => {
@@ -291,15 +302,35 @@ test('in a plate it renders the same, every id under the plate prefix and none r
     fallbackAxes: [],
     diagnostics: [],
   } as never;
-  const plate = renderToStaticMarkup(
-    <PresentationBoundary
-      kind="plate"
-      appearance={appearance}
-      ids={{ prefix: 'pl-', main: input.ids.main }}
-    >
-      <KineticCosmos input={input} />
-    </PresentationBoundary>,
-  );
+  // Every call of the runtime's hook, which subscribes to the document,
+  // observes the root, and writes data-activity once mounted.
+  const calls: string[] = [];
+  const hook = Runtime.useEnhancementRuntime;
+  Runtime.useEnhancementRuntime = (options) => {
+    calls.push('runtime');
+    return hook(options);
+  };
+  let plate: string;
+  let documentCalls: number;
+  try {
+    plate = renderToStaticMarkup(
+      <PresentationBoundary
+        kind="plate"
+        appearance={appearance}
+        ids={{ prefix: 'pl-', main: input.ids.main }}
+      >
+        <KineticCosmos input={input} />
+      </PresentationBoundary>,
+    );
+    // A plate renders the still before any runtime hook: none is called.
+    assert.deepEqual(calls, [], 'runtime hooks called in a plate');
+    // The control: the same composition outside a plate calls it, for the stage and the chrome.
+    html(fixtureInput('complete'));
+    documentCalls = calls.length;
+  } finally {
+    Runtime.useEnhancementRuntime = hook;
+  }
+  assert.equal(documentCalls, 2, 'runtime hooks outside a plate');
   const all = ids(plate);
   assert.ok(all.length > 10);
   assert.deepEqual(
@@ -309,6 +340,138 @@ test('in a plate it renders the same, every id under the plate prefix and none r
   assert.equal(new Set(all).size, all.length, 'no id repeats');
   // The menu links are the plain links the server wrote, with no handler of their own.
   assert.match(plate, /<dialog[^>]*id="pl-kc-menu"/);
+  // The still composition: nothing that moves, and no pause for it.
+  assert.doesNotMatch(plate, /data-runtime|data-recede|data-motion-control/);
+});
+
+/** Every rule of the stylesheet, as its selector and its declarations, comments gone. */
+const CSS = readFileSync(new URL('./styles.css', import.meta.url), 'utf8').replace(
+  /\/\*[\s\S]*?\*\//g,
+  '',
+);
+
+test('the server draws the still opening: a fixed, small glyph field and the orbit, none of it moving or read', () => {
+  let openings = 0;
+  for (const { name } of CONTRACT_FIXTURES) {
+    const markup = html(fixtureInput(name));
+    // No runtime has run, so nothing is set to move.
+    assert.doesNotMatch(markup, /data-runtime|data-recede|data-activity/, name);
+    if (!markup.includes('<div class="kc-opening">')) continue;
+    openings += 1;
+    const field =
+      /<div class="kc-glyphs" aria-hidden="true" data-type-role="code">([\s\S]*?)<\/div><div class="kc-orbit"/.exec(
+        markup,
+      );
+    assert.ok(field, name);
+    // The same count whatever the content: two layers of one tile twice.
+    const glyphs = [
+      ...field[1]!.matchAll(
+        /<span class="kc-glyph kc-glyph--[sml]" data-glyph="([^"]+)"[^>]*><\/span>/g,
+      ),
+    ];
+    assert.equal(glyphs.length, 2 * 2 * GLYPHS_PER_LAYER, name);
+    // Each glyph is a mark in a pseudo-element, never text, and never a word.
+    assert.equal(text(field[1]!), '', name);
+    for (const [, glyph] of glyphs) assert.match(text(glyph!), /^[^\p{L}\p{N}]$/u, glyph);
+  }
+  assert.ok(openings > 5, `${openings} openings`);
+  assert.ok(GLYPHS_PER_LAYER <= 16);
+});
+
+test('the chrome has the pause for motion, beside the visitor control, unless the site reduces motion', () => {
+  const input = fixtureInput('complete');
+  const markup = html(input);
+  const chrome = markup.slice(
+    markup.indexOf('<header class="kc-chrome"'),
+    markup.indexOf('</header>'),
+  );
+  assert.match(chrome, /data-visitor-control-slot[\s\S]*data-motion-control/);
+  assert.match(
+    chrome,
+    /<button[^>]*aria-pressed="false"[^>]*><span[^>]*>Pause motion<\/span><\/button>/,
+  );
+  const reduced = {
+    ...input,
+    presentation: { ...input.presentation, motionPolicy: 'reduce' as const },
+  };
+  assert.doesNotMatch(html(reduced), /data-motion-control/);
+});
+
+test('the motion layer starts only under the runtime, moves only transforms, and takes its timing from the motion pack', () => {
+  const rules = [...CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({
+    selector: selector!.replace(/\s+/g, ' ').trim(),
+    body: body!,
+  }));
+  const animated = rules.filter(({ body }) => /\banimation\s*:/.test(body));
+  assert.ok(animated.length >= 5, `${animated.length} animated rules`);
+  for (const { selector, body } of animated) {
+    if (/\banimation\s*:\s*none\b/.test(body)) continue;
+    // Never on data-motion: on the runtime's state, which a static or reduced page never sets.
+    assert.match(selector, /\[data-runtime\]|\[data-recede='[ab]'\]/, selector);
+    assert.doesNotMatch(selector, /data-motion/, selector);
+    // Every duration a multiple of the motion pack's slow one.
+    assert.match(body, /var\(--ui-motion-slow\)/, selector);
+    assert.doesNotMatch(body.replace(/var\([^()]*\)/g, ''), /\d(?:m?s)\b/, selector);
+  }
+  // Three run forever, the glyph layers and the orbit, the medium tier's ceiling.
+  assert.equal(animated.filter(({ body }) => /\binfinite\b/.test(body)).length, 3);
+  // What they move: transforms, and the chrome's color as it recedes.
+  const keyframes = [...CSS.matchAll(/@keyframes ([\w-]+)\s*\{([\s\S]*?\})\s*\}/g)];
+  assert.equal(keyframes.length, 4);
+  for (const [, name, frames] of keyframes) {
+    const properties = [...frames!.matchAll(/([a-z-]+)\s*:/g)].map(([, property]) => property);
+    assert.deepEqual(
+      [...new Set(properties)],
+      name!.includes('recede') ? ['color'] : ['transform'],
+      name,
+    );
+  }
+});
+
+test('each border token is used whole, as the border it is, never as a width', () => {
+  // The design language's --ui-border-* is a whole border, or none: `1px solid var(--color-border-default)`.
+  const uses = [...CSS.matchAll(/([a-z-]+)\s*:([^;{}]*var\(--ui-border-[^;{}]*)/g)];
+  assert.ok(uses.length >= 4, `${uses.length} uses`);
+  for (const [declaration, property, value] of uses) {
+    assert.match(property!, /^border(?:-(?:block|inline)(?:-(?:start|end))?)?$/, declaration);
+    assert.match(value!.trim(), /^var\(--ui-border-[a-z]+\)$/, declaration);
+  }
+});
+
+test('a fork or a join reaches the lane it names, however far and on whichever side', () => {
+  const reach = (kind: 'fork' | 'join', distance: number) =>
+    rulesSetting(`--layout-${kind}-reach: ${distance}`);
+  const rulesSetting = (declaration: string) =>
+    [...CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter(([, , body]) => body!.includes(declaration))
+      .map(([selector]) => selector!.replace(/\s+/g, ''))
+      .join(' ');
+  const toward = (pseudo: 'before' | 'after') =>
+    [...CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter(
+        ([, selector, body]) =>
+          selector!.includes(`::${pseudo}`) && /inset-inline:\s*100%/.test(body!),
+      )
+      .map(([selector]) => selector!.replace(/\s+/g, ''))
+      .join(' ');
+  for (const [kind, attribute, pseudo] of [
+    ['fork', 'data-branches-from-lane', 'before'],
+    ['join', 'data-merges-into-lane', 'after'],
+  ] as const) {
+    for (let lane = 0; lane < 4; lane++) {
+      for (let other = 0; other < 4; other++) {
+        if (other === lane) continue;
+        const pair = `[data-lane='${lane}'][${attribute}='${other}']`;
+        assert.ok(reach(kind, Math.abs(lane - other)).includes(pair), `${kind} ${pair}`);
+        // Toward the end, it starts past the entry's own column.
+        assert.equal(
+          toward(pseudo).includes(pair),
+          other > lane,
+          `${kind} ${pair} toward the ${other > lane ? 'end' : 'start'}`,
+        );
+      }
+    }
+  }
 });
 
 test('a portfolio with no titled section has no section links and no menu, and still its visitor control', () => {

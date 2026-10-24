@@ -2,14 +2,14 @@
   "id": "kinetic-cosmos",
   "name": "Kinetic Cosmos",
   "promise": "An orbital opening, evidence you can pick up and open, and a chronology that branches where the path did.",
-  "description": "A controlled expressive composition: the opening sits in a still orbit around one luminous signature, each piece of evidence is an object that opens in place, and the chronology runs in lanes from its authored threads on large screens and as one vertical list on small ones. Every destination is a link or a disclosure in the page's order, and the motion layer, which follows, only adds to what the still composition already shows.",
+  "description": "A controlled expressive composition: the opening sits in an orbit around one luminous signature, a bounded field of glyphs falling behind it, each piece of evidence is an object that opens in place, and the chronology runs in lanes from its authored threads on large screens and as one vertical list on small ones. Every destination is a link or a disclosure in the page's order, and the motion, on the kit runtime, only adds to a still composition that is complete without it.",
   "contract": "2.0",
   "schemas": { "portfolio": { "min": 3, "max": 3 }, "site": { "min": 2, "max": 2 } },
   "tokenContract": 1,
   "compositionFamily": "kinetic",
   "motionIntent": "kinetic",
   "performanceTier": "medium",
-  "budgets": { "js": 2048, "css": 3072, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
+  "budgets": { "js": 2048, "css": 3072, "image": 0, "font": 0, "animation": 3, "enhancement": 0 },
   "renderedKinds": ["hero", "evidence", "chronology"],
   "unsupportedKinds": [],
   "contentSlots": [],
@@ -43,7 +43,7 @@
       {
         "source": "Kinetic Cosmos v1's falling-glyph canvas, orbit drag, chrome recession, and pause control",
         "disposition": "reused-interaction",
-        "note": "The motion layer, #14's second pull request, on #6's runtime. This composition is complete and still without it."
+        "note": "On #6's runtime: a fixed glyph field of elements, the orbit's turn and drag, the chrome's recession, and MotionControl."
       }
     ]
   }

@@ -25,13 +25,17 @@ import {
  * What a piece of evidence is called at a glance, which is its disclosure's
  * accessible name, from what the owner wrote: its title, or else its
  * statement, so a figure always says what it counts, with where it comes
- * from on a line after it. With neither, the source names it.
+ * from on a line after it. With neither, the source names it. A
+ * testimonial's statement is its quote, which the record inside reads out
+ * whole, so its author names it, and opening it never reads the quote twice.
  */
 function Glance({ entry, ctx }: { entry: Evidence; ctx: RenderContext }) {
   const value = entry.metric?.value;
   const source = [entry.source?.name, entry.publication, entry.venue].find(present);
   const title = present(entry.title) ? entry.title : undefined;
-  const statement = title === undefined && present(entry.statement) ? entry.statement : undefined;
+  const quoted = entry.type === 'testimonial' && source !== undefined;
+  const statement =
+    title === undefined && !quoted && present(entry.statement) ? entry.statement : undefined;
   return (
     <span className="kc-evidence__glance">
       {value !== undefined ? (
