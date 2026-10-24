@@ -59,6 +59,9 @@ function scratch(): string {
   for (const file of [
     'packages/appearance/appearance-catalog.lock.json',
     'apps/web/public/third-party-notices.txt',
+    // The image-derived schemes' reference inputs (#20 PR 3).
+    'example-media/anamika/portrait.png',
+    'example-media/gallery/looking-1.png',
   ]) {
     fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
     fs.copyFileSync(path.join(REPO_ROOT, file), path.join(root, file));
@@ -88,6 +91,8 @@ test('the repository passes every governance check', async () => {
       shipping +
       23 +
       fs.readdirSync(path.join(REPO_ROOT, 'packages/appearance-languages/held')).length,
+    // The four generated schemes' reference records (#20 PR 3).
+    generated: 4,
   });
 });
 

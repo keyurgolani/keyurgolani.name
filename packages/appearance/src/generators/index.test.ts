@@ -51,16 +51,27 @@ test('./generators loads none of the packages manifests need, so its bundle stay
   assert.deepEqual(modules, [
     'anchor-v2.ts',
     'color.ts',
+    'compose.ts',
     'derive.ts',
     'gate.ts',
+    'hct.ts',
     'index.ts',
+    'palette.ts',
     'roles.ts',
+    'schemes.ts',
     'sets.ts',
   ]);
 });
 
 test('generators are keyed by their id', () => {
-  assert.deepEqual(Object.keys(GENERATORS), ['fixture-seed']);
+  assert.deepEqual(Object.keys(GENERATORS), [
+    'fixture-seed',
+    'brand-seed',
+    'hct-tonal',
+    'profile-image',
+    'portfolio-artwork',
+  ]);
+  for (const [id, generator] of Object.entries(GENERATORS)) assert.equal(generator.id, id);
   assert.equal(GENERATORS['fixture-seed'], FIXTURE_SEED);
 });
 
@@ -112,8 +123,8 @@ test('runGenerator refuses what it cannot run, and never throws', () => {
     return run.ok ? '' : run.problem;
   };
   assert.match(
-    problem({ ...DECLARED, id: 'brand-seed' }, { seedColor: '#3366ff' }),
-    /no generator brand-seed/,
+    problem({ ...DECLARED, id: 'acme-seed' }, { seedColor: '#3366ff' }),
+    /no generator acme-seed/,
   );
   assert.match(
     problem({ ...DECLARED, version: 2 }, { seedColor: '#3366ff' }),
