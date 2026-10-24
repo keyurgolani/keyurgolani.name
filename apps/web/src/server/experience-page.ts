@@ -11,7 +11,7 @@ import { requireDeploymentConfig } from './config-store';
 import { SAMPLE_PATTERN, segmentFor } from './experience';
 import { getPublicView } from './public-view';
 import { resolveRoute } from './routes';
-import { visitorPageAppearance } from './visitor-appearance';
+import { liveSchemes, visitorPageAppearance } from './visitor-appearance';
 
 // Every visitor page renders through here (#5, Slice 4; #6, Slice 2), in the
 // experience segment of the variant it renders: registry generation writes
@@ -94,10 +94,13 @@ export function experiencePage(
     if (here !== id || rendered !== id) redirect(`${asked}${query.size > 0 ? `?${query}` : ''}`);
     if (route.kind === 'not-found') notFound();
     if (route.kind === 'redirect') redirect(route.location);
+    // The live revision's stored generated schemes (#20 PR 3), never a draft's.
+    const schemes = await liveSchemes();
     const appearance = await visitorPageAppearance(
       route.view.site,
       route.composition.rendered.manifest.id,
       search,
+      schemes,
     );
     const lang = hostLang(route.view);
     return ExperienceDocument({
@@ -106,7 +109,7 @@ export function experiencePage(
       appearance,
       // The slot's control comes back to the page as the visitor asked for it.
       control: {
-        model: visitorControlModel(route.view.site, profile, appearance),
+        model: visitorControlModel(route.view.site, profile, appearance, undefined, schemes),
         returnTo: `${asked}${query.size > 0 ? `?${query}` : ''}`,
         ...(lang ? { lang } : {}),
       },

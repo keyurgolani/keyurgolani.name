@@ -1,5 +1,6 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { isValidElement } from 'react';
@@ -18,7 +19,7 @@ import {
 } from './config-store';
 import { segmentFor } from './experience';
 import { experiencePage } from './experience-page';
-import { preferenceCookie } from './visitor-appearance';
+import { liveSchemes, preferenceCookie } from './visitor-appearance';
 
 // A visitor page renders in its composition's experience segment (#6, Slice
 // 2). proxy.ts picks the segment from the live composition config-store
@@ -233,4 +234,64 @@ test('a case study a publish dropped after proxy.ts read the slugs is the 404 pa
     const answered = await answer(FALLBACK_ID, ['work', slug]);
     assert.match(answered.digest ?? '', /^NEXT_HTTP_ERROR_FALLBACK;404$/, `request ${request}`);
   }
+});
+
+/** brand-seed's reference record (#20 PR 3), as the live revision's snapshots/schemes.json holds it. */
+function storedBrandSeed() {
+  const record = JSON.parse(
+    readFileSync(
+      new URL('../../../../packages/appearance-schemes/generated/brand-seed.json', import.meta.url),
+      'utf8',
+    ),
+  ) as { result: { generator: unknown; input: { seedColor: string }; tokens: unknown } };
+  return {
+    generator: record.result.generator,
+    inputsHash: createHash('sha256').update(record.result.input.seedColor).digest('hex'),
+    tokens: record.result.tokens,
+  };
+}
+
+/** The live revision selecting brand-seed, with `schemes` as its snapshots/schemes.json. */
+function branded(schemes: unknown): LiveRevision {
+  const site = {
+    ...PAIR.site,
+    appearance: { ...PAIR.site.appearance, variant: 'fixture-notes', colorScheme: 'brand-seed' },
+  };
+  return {
+    state: 'live',
+    revisionId: 'doc-branded',
+    unitHash: 'hash-branded',
+    unit: {
+      portfolio: PAIR.portfolio,
+      site,
+      snapshots: schemes === undefined ? {} : { schemes },
+    },
+  };
+}
+
+/** The appearance the page's document boundary renders. */
+function boundaryAppearance(element: unknown) {
+  const children = (element as { props: { children: unknown[] } }).props.children;
+  const boundary = children.find(
+    (child) =>
+      isValidElement(child) && (child.props as { appearance?: unknown }).appearance !== undefined,
+  ) as { props: { appearance: { selection: { colorScheme: string } } } };
+  return boundary.props.appearance;
+}
+
+test("a visitor page renders a generated scheme from the live revision's stored sets, and only the live revision's (#20 PR 3)", async (t) => {
+  const stored = storedBrandSeed();
+  let current = branded({ 'brand-seed': stored });
+  deploy(t, () => current);
+  setLiveComposition('fixture-notes');
+  assert.deepEqual(await liveSchemes(), { 'brand-seed': stored });
+  const live = await answer('fixture-notes');
+  assert.ok(live.element, JSON.stringify(live));
+  assert.equal(boundaryAppearance(live.element).selection.colorScheme, 'brand-seed');
+  // Whatever a draft holds, a visitor page reads the live revision alone:
+  // one with no stored sets renders the scheme's fallback.
+  current = branded(undefined);
+  assert.equal(await liveSchemes(), undefined);
+  const without = await answer('fixture-notes');
+  assert.equal(boundaryAppearance(without.element).selection.colorScheme, 'warm-parchment');
 });
