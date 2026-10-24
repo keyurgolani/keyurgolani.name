@@ -92,12 +92,14 @@ async function load(scope: Page, url = '/'): Promise<void> {
   await expect(scope.locator('.hc-cinema')).toHaveAttribute('data-ready', '');
 }
 
-/** Records whether each keydown the page saw was cancelled, after every handler ran. */
+/** Records whether each arrow key's keydown was cancelled, after every handler ran. */
 async function watchKeys(scope: Scope): Promise<void> {
   await scope.evaluate(() => {
     const page = window as Window & { __keys?: boolean[] };
     page.__keys = [];
-    window.addEventListener('keydown', (event) => page.__keys!.push(event.defaultPrevented));
+    window.addEventListener('keydown', (event) => {
+      if (event.key.startsWith('Arrow')) page.__keys!.push(event.defaultPrevented);
+    });
   });
 }
 
@@ -114,7 +116,10 @@ test(
     await expectAt(page, 'prologue');
     const next = page.getByRole('button', { name: 'Next chapter' });
     const previous = page.getByRole('button', { name: 'Previous chapter' });
-    await expect(previous).toBeDisabled();
+    // Previous at Prologue is no step: nothing moves, and nothing is written.
+    await previous.click();
+    await page.waitForTimeout(300);
+    expect(await read(page)).toMatchObject({ current: anchor('prologue'), hash: '', live: '' });
 
     // Next, four times: Origins to Epilogue, each announced, none a history entry.
     for (const chapter of CHAPTERS.slice(1)) {
@@ -126,13 +131,15 @@ test(
         live: announced(chapter),
       });
     }
-    // At the end Next turns off, and focus goes to Previous, never to the page.
-    await expect(next).toBeDisabled();
-    await expect(previous).toBeFocused();
+    // Past the end Next is no step, and it keeps its focus: the visitor is never dropped on the page.
+    await next.click();
+    await page.waitForTimeout(300);
+    await expectAt(page, 'epilogue');
+    await expect(next).toBeFocused();
 
-    // The arrows, with focus on the stage: back to Prologue, and nothing past it.
+    // The arrows, with focus on the filmstrip: back to Prologue, and nothing past it.
     await watchKeys(page);
-    await page.locator('.hc-stage').focus();
+    await page.locator('.hc-filmstrip a').first().focus();
     for (const chapter of [...CHAPTERS].reverse().slice(1)) {
       await page.keyboard.press('ArrowLeft');
       await expectAt(page, chapter);
@@ -140,7 +147,7 @@ test(
     }
     await page.keyboard.press('ArrowLeft');
     await expectAt(page, 'prologue');
-    // Every step cancelled its key, so the scroller didn't nudge too; the step past the end didn't.
+    // Every step cancelled its key; the one past the end left it to the browser.
     expect(await keys(page)).toEqual([true, true, true, true, false]);
     expect((await read(page)).history).toBe(start.history);
 
@@ -208,15 +215,19 @@ test(
     const start = await read(page);
     const stage = (await page.locator('.hc-stage').boundingBox())!;
     await page.mouse.move(stage.x + stage.width / 2, stage.y + 200);
-    // A sideways swipe of the trackpad, or Shift with the wheel: one chapter, snapped.
-    await page.mouse.wheel(600, 0);
+    // A short sideways swipe of the trackpad settles back on the chapter it left.
+    await page.mouse.wheel(400, 0);
+    await page.waitForTimeout(600);
+    await expectAt(page, 'prologue');
+    // A longer one, or Shift with the wheel, settles on the next.
+    await page.mouse.wheel(1000, 0);
     await expectAt(page, 'origins');
     expect(await read(page)).toMatchObject({
       hash: anchor('origins'),
       history: start.history,
       live: announced('origins'),
     });
-    await page.mouse.wheel(600, 0);
+    await page.mouse.wheel(1000, 0);
     await expectAt(page, 'journey');
     // The wheel down scrolls the page, as it always does: the chapter stays.
     const before = await page.evaluate(() => scrollY);
@@ -224,9 +235,7 @@ test(
     await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(before);
     await page.waitForTimeout(400);
     await expectAt(page, 'journey');
-    // Back one chapter a stroke, however hard: each chapter is a stop the stage never skips.
-    await page.mouse.wheel(-3000, 0);
-    await expectAt(page, 'origins');
+    // Hard back to the start lands on Prologue.
     await page.mouse.wheel(-3000, 0);
     await expectAt(page, 'prologue');
     // Past the start the stage simply stops: no trap, nothing to undo.
@@ -243,12 +252,25 @@ test(
   async ({ page }) => {
     await load(page);
     const start = await read(page);
-    // What find-in-page does: scroll the match into view.
-    await page.evaluate(() =>
-      document.querySelector('#chapter-craft [data-section-id]')!.scrollIntoView(),
+    // What find-in-page does: scroll the match just into view. It stays in view as its chapter lands.
+    const match = page.locator('#chapter-craft [data-section-id]').first();
+    await match.evaluate((element) =>
+      element.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' }),
     );
     await expectAt(page, 'craft');
+    await expect(match).toBeInViewport();
     expect(await read(page)).toMatchObject({ hash: anchor('craft'), history: start.history });
+    // Tab, or a script, focusing a link in another chapter: that chapter, at once, the link in view.
+    const link = page.locator('#chapter-journey .hc-pager a').first();
+    await link.focus();
+    await expect(link).toBeInViewport();
+    await expectAt(page, 'journey');
+    // And back the other way.
+    await match.evaluate((element) =>
+      element.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' }),
+    );
+    await expectAt(page, 'craft');
+    await expect(match).toBeInViewport();
     // The scrollbar: a direct write of the stage's scroll position.
     await page.evaluate(() => {
       const stage = document.querySelector<HTMLElement>('.hc-stage')!;
@@ -337,17 +359,25 @@ test.describe('touch', () => {
       ).toEqual(CHAPTERS.map(anchor));
       // A swipe up the screen: the page scrolls, never cancelled, and the chapter follows.
       const cdp = await page.context().newCDPSession(page);
-      const target = await page.evaluate(
-        () => document.querySelector<HTMLElement>('#chapter-journey')!.getBoundingClientRect().top,
-      );
-      await cdp.send('Input.synthesizeScrollGesture', {
-        x: 195,
-        y: 600,
-        yDistance: -Math.round(target),
-        gestureSourceType: 'touch',
-        speed: 2000,
-      });
-      await expect.poll(async () => (await read(page)).current).toBe((await read(page)).onScreen);
+      // Swipe until the page is past Prologue: each swipe is a real touch scroll, never cancelled.
+      for (let swipe = 0; swipe < 12; swipe++) {
+        const before = await page.evaluate(() => window.scrollY);
+        await cdp.send('Input.synthesizeScrollGesture', {
+          x: 195,
+          y: 700,
+          yDistance: -600,
+          gestureSourceType: 'touch',
+          speed: 1200,
+        });
+        await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
+        if ((await read(page)).onScreen !== anchor('prologue')) break;
+      }
+      await expect
+        .poll(async () => {
+          const { current, onScreen } = await read(page);
+          return current === onScreen && current !== anchor('prologue');
+        })
+        .toBe(true);
       const swiped = await read(page);
       expect(swiped.current).not.toBe(anchor('prologue'));
       expect(swiped).toMatchObject({ hash: swiped.current, history: start.history });
@@ -375,7 +405,7 @@ test.describe('reduced motion', () => {
     async ({ page }) => {
       await load(page);
       expect((await read(page)).layout).toBe('vertical');
-      await page.locator('.hc-stage').focus();
+      await page.locator('.hc-filmstrip a').first().focus();
       await page.keyboard.press('ArrowRight');
       await expectAt(page, 'origins');
       // At once: the chapter's top is at the window's top in the next frame.
@@ -442,7 +472,7 @@ test(
     await expect(frame.locator('.hc-cinema')).toHaveAttribute('data-ready', '');
     const entries = await page.evaluate(() => window.history.length);
 
-    await frame.locator('.hc-stage').focus();
+    await frame.locator('.hc-filmstrip a').first().focus();
     await page.keyboard.press('ArrowRight');
     await page.keyboard.press('ArrowRight');
     await expectAt(frame, 'journey');

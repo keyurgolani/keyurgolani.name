@@ -314,12 +314,14 @@
 }
 
 /*
- * Horizontal: one native scroller of exactly five full-width chapters,
- * each a snap point, side by side in the inline direction. Each chapter is
- * as tall as the tallest, so nothing clips, and the page itself scrolls
- * vertically as it always does: the wheel, a trackpad, a swipe, Tab, find,
- * and a fragment move the scroller natively, and the controller reads where
- * it settles. Smooth only while the controller's runtime is active.
+ * Horizontal: one native scroller of exactly five full-width chapters, side
+ * by side in the inline direction. Each chapter is as tall as the tallest,
+ * so nothing clips, and the page itself scrolls vertically as it always
+ * does: the wheel, a trackpad, a swipe, Tab, find, and a fragment move the
+ * scroller natively, and the controller aligns the chapter where it
+ * settles. No CSS snapping, which would pull find and Tab back off what
+ * they reach, and no CSS smooth scrolling: the controller eases only the
+ * scrolls it starts, while its runtime is active.
  */
 @media (min-width: 64rem) and (min-height: 36rem) and (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
   [data-variant='horizontal-cinema'] .hc-stage {
@@ -328,18 +330,11 @@
     grid-auto-flow: column;
     overflow-x: auto;
     overflow-y: hidden;
-    scroll-snap-type: inline mandatory;
     border-block: var(--ui-border-divider);
   }
 
   [data-variant='horizontal-cinema'] .hc-chapter {
-    scroll-snap-align: start;
-    scroll-snap-stop: always;
     border-block-start: none;
-  }
-
-  [data-variant='horizontal-cinema'] .hc-cinema[data-runtime='active'] .hc-stage {
-    scroll-behavior: smooth;
   }
 }
 
