@@ -1,0 +1,158 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { QUERY_KEYS } from '@portfolio/appearance';
+import { CATALOG, DEFAULTS, SCHEME_MODES } from './test-support';
+import {
+  carriesSelection,
+  frameSource,
+  loadSelection,
+  modeFits,
+  selectionFrom,
+  selectionProblem,
+  selectionQuery,
+  studioLocation,
+} from './url-state';
+
+// Demo Studio's selection in the URL (#9): #19's query keys, checked
+// against the catalog the page was given, falling back axis by axis.
+
+const RULES = { catalog: CATALOG, schemeModes: SCHEME_MODES };
+const query = (text: string) => new URLSearchParams(text);
+
+test("the Studio URL and its frame's speak #19's query keys, the ones /sample reads", () => {
+  const all = selectionQuery(
+    {
+      variant: 'kinetic-cosmos',
+      designLanguage: 'platform-neutral',
+      colorScheme: 'warm-parchment',
+      typography: 'humanist-ui',
+      displayMode: 'dark',
+    },
+    RULES,
+  );
+  assert.deepEqual([...all.keys()], Object.values(QUERY_KEYS));
+  assert.equal(
+    all.toString(),
+    'variant=kinetic-cosmos&language=platform-neutral&scheme=warm-parchment&type=humanist-ui&mode=dark',
+  );
+});
+
+test('a value the catalog offers counts on its own axis, and anything else keeps the fallback there', () => {
+  assert.deepEqual(selectionFrom(query('variant=obsidian-atelier&mode=dark'), DEFAULTS, RULES), {
+    ...DEFAULTS,
+    variant: 'obsidian-atelier',
+    displayMode: 'dark',
+  });
+  for (const text of [
+    'variant=fallback',
+    'variant=canary-variant',
+    'variant=',
+    'variant=kinetic-cosmos&variant=kinetic-cosmos',
+    'variant=KINETIC-COSMOS',
+    'mode=sepia',
+    'language=humanist-ui',
+    'designLanguage=platform-neutral',
+  ]) {
+    assert.deepEqual(selectionFrom(query(text), DEFAULTS, RULES), DEFAULTS, text);
+  }
+});
+
+test('a scheme and a mode go together: a mode the scheme lacks gives way', () => {
+  assert.equal(modeFits(SCHEME_MODES, 'night-only', 'light'), false);
+  assert.equal(modeFits(SCHEME_MODES, 'night-only', 'system'), true);
+  assert.equal(modeFits(SCHEME_MODES, 'night-only', 'high-contrast'), true);
+  assert.equal(modeFits(SCHEME_MODES, 'unknown-scheme', 'light'), true);
+  assert.deepEqual(selectionFrom(query('scheme=night-only&mode=light'), DEFAULTS, RULES), {
+    ...DEFAULTS,
+    colorScheme: 'night-only',
+  });
+  assert.match(
+    selectionProblem(RULES, { ...DEFAULTS, colorScheme: 'night-only' }, 'displayMode', 'light') ??
+      '',
+    /no light mode/,
+  );
+  assert.match(
+    selectionProblem(RULES, { ...DEFAULTS, displayMode: 'light' }, 'colorScheme', 'night-only') ??
+      '',
+    /no light mode/,
+  );
+  assert.match(
+    selectionProblem(RULES, DEFAULTS, 'variant', 'canary-variant') ?? '',
+    /doesn't offer/,
+  );
+  assert.equal(selectionProblem(RULES, DEFAULTS, 'variant', 'kinetic-cosmos'), null);
+});
+
+test('a page load takes the URL, then the stored selection on a bare /studio alone, then the sample', () => {
+  const stored = { ...DEFAULTS, variant: 'obsidian-atelier' };
+  assert.deepEqual(
+    loadSelection({ search: query('mode=dark'), stored, defaults: DEFAULTS, rules: RULES }),
+    {
+      selection: { ...DEFAULTS, displayMode: 'dark' },
+      from: 'url',
+    },
+  );
+  assert.deepEqual(loadSelection({ search: query(''), stored, defaults: DEFAULTS, rules: RULES }), {
+    selection: stored,
+    from: 'stored',
+  });
+  // Any query at all is no bare visit, even one that carries no selection.
+  assert.deepEqual(
+    loadSelection({ search: query('x=1'), stored, defaults: DEFAULTS, rules: RULES }),
+    {
+      selection: DEFAULTS,
+      from: 'default',
+    },
+  );
+  assert.deepEqual(
+    loadSelection({ search: query(''), stored: null, defaults: DEFAULTS, rules: RULES }),
+    {
+      selection: DEFAULTS,
+      from: 'default',
+    },
+  );
+  // A stored value the catalog no longer offers falls back on its axis.
+  assert.deepEqual(
+    loadSelection({
+      search: query(''),
+      stored: { ...stored, typography: 'gone-pack' },
+      defaults: DEFAULTS,
+      rules: RULES,
+    }).selection,
+    stored,
+  );
+  assert.equal(carriesSelection(query('type=humanist-ui')), true);
+  assert.equal(carriesSelection(query('typography=humanist-ui')), false);
+});
+
+test("a value the catalog doesn't offer, such as the sample's own unregistered composition, stays out of every URL", () => {
+  assert.equal(
+    selectionQuery(DEFAULTS, RULES).toString(),
+    'language=platform-neutral&scheme=warm-parchment&type=humanist-ui&mode=system',
+  );
+});
+
+test('the frame loads /sample on the same origin with the selection, and motion=reduce only when asked', () => {
+  const chosen = { ...DEFAULTS, variant: 'kinetic-cosmos', displayMode: 'dark' };
+  assert.equal(
+    frameSource(chosen, RULES),
+    '/sample?variant=kinetic-cosmos&language=platform-neutral&scheme=warm-parchment&type=humanist-ui&mode=dark',
+  );
+  assert.equal(
+    frameSource(chosen, RULES, { reduceMotion: true }),
+    '/sample?variant=kinetic-cosmos&language=platform-neutral&scheme=warm-parchment&type=humanist-ui&mode=dark&motion=reduce',
+  );
+  assert.equal(frameSource(DEFAULTS, { catalog: { axes: [] } }), '/sample');
+  for (const each of [chosen, DEFAULTS]) {
+    assert.match(frameSource(each, RULES), /^\/sample(?:\?|$)/);
+    assert.doesNotMatch(frameSource(each, RULES), /preview|grant/);
+  }
+});
+
+test("Studio's own URL keeps its path and its task, with the selection in between", () => {
+  assert.equal(
+    studioLocation('/studio', '#preview', { ...DEFAULTS, displayMode: 'dark' }, RULES),
+    '/studio?language=platform-neutral&scheme=warm-parchment&type=humanist-ui&mode=dark#preview',
+  );
+  assert.equal(studioLocation('/studio', '', DEFAULTS, { catalog: { axes: [] } }), '/studio');
+});
