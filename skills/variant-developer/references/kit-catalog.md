@@ -76,10 +76,21 @@ The kit has no manifest types any more. `VariantManifest`, `VariantRenderInput`,
 
 ## Markdown (`@portfolio/kit`)
 
-| Export                 | Signature            | Use when                                                                                                                           |
-| ---------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `renderMarkdown`       | `(source) => string` | Kit internals: `RichText` wraps it. A variant renders markdown with `RichText`, since the audit refuses `dangerouslySetInnerHTML`. |
-| `renderInlineMarkdown` | `(source) => string` | The same for inline markdown: `<RichText inline>`.                                                                                 |
+| Export                    | Signature                     | Use when                                                                                                                                                                  |
+| ------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `renderMarkdown`          | `(source) => string`          | Kit internals: `RichText` wraps it. A variant renders markdown with `RichText`, since the audit refuses `dangerouslySetInnerHTML`.                                        |
+| `renderInlineMarkdown`    | `(source) => string`          | The same for inline markdown: `<RichText inline>`.                                                                                                                        |
+| `requireMarkdownPostPass` | `() => void`                  | Never in a variant. The browser renderer's hook for Demo Studio's local frame (#9): from the call on, Markdown renders nothing until a post-pass is in.                   |
+| `setMarkdownPostPass`     | `({ block, inline }) => void` | Never in a variant. Installs the browser renderer's post-pass, once per document: `@portfolio/kit/markdown-local` alone calls it, with `markdown-sanitize.ts`'s own pass. |
+
+## Markdown in the local frame (`@portfolio/kit/markdown-local`)
+
+Demo Studio's local preview frame (#9) alone imports this subpath, since it renders a visitor's document in the browser, where React Server Components' post-pass doesn't run. No variant imports it.
+
+| Export            | Signature             | Use when                                                                                                                           |
+| ----------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `requirePostPass` | `() => void`          | The frame asks for the post-pass before it renders anything, so no Markdown renders without it. Throws outside a browser.          |
+| `installPostPass` | `() => Promise<void>` | Loads the server's own post-pass on demand and installs it, once; the same promise for every later call. Throws outside a browser. |
 
 ## ClassName helper (`@portfolio/kit`)
 
