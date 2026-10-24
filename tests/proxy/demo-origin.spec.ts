@@ -1,4 +1,11 @@
-import { expect, test, type BrowserContext, type Browser, type Page } from '@playwright/test';
+import {
+  expect,
+  test,
+  type BrowserContext,
+  type Browser,
+  type Page,
+  type Response,
+} from '@playwright/test';
 import { DEMO_HOST, PROXY_HOST } from '../harness/proxy-stack.mjs';
 
 // The demo origin against the owner's, in a browser over https (#9, A13's
@@ -41,6 +48,21 @@ interface Answer {
   readonly code: string | null;
   /** The Cookie header the browser sent with it. */
   readonly cookie: string;
+  /** Its Access-Control-* headers, which would let the demo read it. */
+  readonly cors: readonly string[];
+}
+
+/** What the server answered `response`, and the Cookie header its request carried. */
+async function answerOf(response: Response): Promise<Answer> {
+  const body = (await response.json().catch(() => null)) as { error?: { code?: string } } | null;
+  return {
+    status: response.status(),
+    code: body?.error?.code ?? null,
+    cookie: (await response.request().allHeaders())['cookie'] ?? '',
+    cors: Object.keys(await response.allHeaders()).filter((name) =>
+      name.startsWith('access-control-'),
+    ),
+  };
 }
 
 /** `fetch(pathname, init)` from `page`, as its own script sends it, and what the server answered. */
@@ -50,13 +72,7 @@ async function sent(page: Page, url: string, init: RequestInit = {}): Promise<An
     ([target, options]) => fetch(target!, options as RequestInit).catch(() => null),
     [url, init] as const,
   );
-  const response = await answered;
-  const body = (await response.json().catch(() => null)) as { error?: { code?: string } } | null;
-  return {
-    status: response.status(),
-    code: body?.error?.code ?? null,
-    cookie: (await response.request().allHeaders())['cookie'] ?? '',
-  };
+  return answerOf(await answered);
 }
 
 /** A page on the owner's origin in `context`. */
@@ -197,9 +213,32 @@ test(
         const what = `${name}, ${mode}`;
         expect(answer.cookie, what).toContain(`${SESSION}=${owner.token}`);
         expect([answer.status, answer.code], what).toEqual([403, 'request_origin_rejected']);
+        expect(answer.cors, what).toEqual([]);
       }
     }
-    // auth.logout sent that way ended nothing.
+    // A text/plain form posted to auth.logout, a navigation the browser
+    // sends with the owner's cookie and no preflight.
+    const logout = `${OWNER}/api/studio/auth.logout`;
+    const answered = demo.waitForResponse(
+      (response) => response.url() === logout && response.request().method() === 'POST',
+    );
+    await demo.evaluate((action) => {
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.enctype = 'text/plain';
+      form.action = action;
+      const field = document.createElement('input');
+      field.name = '{"x":"';
+      field.value = '"}';
+      form.append(field);
+      document.body.append(form);
+      form.submit();
+    }, logout);
+    const posted = await answerOf(await answered);
+    expect(posted.cookie, 'form').toContain(`${SESSION}=${owner.token}`);
+    expect([posted.status, posted.code], 'form').toEqual([403, 'request_origin_rejected']);
+    expect(posted.cors, 'form').toEqual([]);
+    // auth.logout sent either way ended nothing.
     expect(await sessionStatus(owner.page)).toBe(200);
     await owner.context.close();
   },

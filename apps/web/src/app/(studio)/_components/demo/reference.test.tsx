@@ -126,3 +126,29 @@ test('a demo frame may load /reference and its pages, and never its renditions r
     assert.equal(isDemoFrameSource(src), false, src);
   }
 });
+
+test('a demo frame source is read decoded, as the proxy reads a demo path: an encoded name counts, and an encoded way out never does', () => {
+  for (const src of [
+    '/%72eference',
+    '/%72eference?mode=dark',
+    '/sampl%65',
+    '/reference/work/tide%2Dtables',
+  ]) {
+    assert.equal(isDemoFrameSource(src), true, src);
+  }
+  for (const src of [
+    '/%72eference/media/cover/abc/w8-a1.png',
+    '/reference/%6dedia/cover/abc/w8-a1.png',
+    '/reference%2fmedia/cover/abc/w8-a1.png',
+    '/sample/..%2f',
+    '/sample/..%2fstudio',
+    '/sample/%2e%2e/studio',
+    '/sample/%2e%2e%2fstudio',
+    '/reference/..%2F..%2Fstudio',
+    '/sample%5c..%5cstudio',
+    '/sample/%E0%A4%A',
+    '/sample%3f/../studio',
+  ]) {
+    assert.equal(isDemoFrameSource(src), false, src);
+  }
+});

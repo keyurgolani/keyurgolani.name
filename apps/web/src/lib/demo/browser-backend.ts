@@ -113,7 +113,12 @@ export function browserBackend(options: BrowserBackendOptions): DemoBackend {
   let version = 1;
   let updatedAt = now().toISOString();
 
-  const persist = () => store.write(SELECTION_KEY, JSON.stringify(selection));
+  // While the reference shows, edits stay in the page: the stored selection
+  // is the sample's, which a bare /studio opens on, never the reference's look.
+  let showingReference = false;
+  const persist = () => {
+    if (!showingReference) store.write(SELECTION_KEY, JSON.stringify(selection));
+  };
 
   function draft(): StudioDraft {
     const site: DraftDocument = unit.documents.site;
@@ -202,11 +207,13 @@ export function browserBackend(options: BrowserBackendOptions): DemoBackend {
       return selection;
     },
     showSource(next, shown) {
+      showingReference = next !== null;
       defaults = next ?? options.defaults;
       return moved(shown ?? defaults);
     },
     resetAll() {
       store.clearAll();
+      showingReference = false;
       defaults = options.defaults;
       return moved(defaults);
     },
