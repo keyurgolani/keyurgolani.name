@@ -923,6 +923,22 @@ test('license files are told apart by their text, or their SPDX tag', () => {
   assert.deepEqual(copyrightLines(OFL), ['Copyright 2010 The Acme Project Authors']);
 });
 
+test('an upstream license with no pinned GitHub source is unverified, and nothing is fetched for it', async () => {
+  const root = tree({ zinc: { license: 'Apache-2.0' } });
+  try {
+    const unpinned = 'https://tailwindcss.com/docs/colors';
+    write(path.join(root, 'packages', 'appearance-schemes', 'packs', 'zinc', 'manifest.json'), {
+      id: 'zinc',
+      provenance: provenance(unpinned, { license: 'MIT', copyright: 'Copyright (c) X' }),
+    });
+    const { findings, net } = await run(root, { [unpinned]: () => response(200) });
+    assert.deepEqual(kinds(findings), ['unverified zinc provenance.license']);
+    assert.ok(!net.requests.some((r) => /api\.github\.com|raw\.githubusercontent/.test(r.url)));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('a pin is a GitHub source at a version tag', () => {
   assert.deepEqual(githubPin(ZINC), {
     owner: 'tailwindlabs',
