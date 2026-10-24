@@ -103,7 +103,7 @@ test("with APPEARANCE_FIXTURES=1 too, it still skips #19's fixture packs and gat
   assert.ok(run.stdout.includes(`${packCounts(3)}: `), run.stdout);
 });
 
-test("with QUALITY_FIXTURES=meta it fails on the low-contrast scheme's light text-muted, and nothing else", () => {
+test("with QUALITY_FIXTURES=meta it fails on the low-contrast scheme's light text-muted, at 4.5:1 or a texture's 4.95:1, and nothing else", () => {
   const run = check([], { QUALITY_FIXTURES: 'meta' });
   assert.equal(run.status, 1, run.stdout);
   const lines = findings(run.stderr);
@@ -111,7 +111,7 @@ test("with QUALITY_FIXTURES=meta it fails on the low-contrast scheme's light tex
   for (const line of lines) {
     assert.match(
       line,
-      /^\[check:appearance\] [a-z0-9-]+ \+ fixture-scheme-experimental-low-contrast \+ [a-z0-9-]+ \(system, light, dark\), light: text-muted on (?:canvas|surface-[a-z]+) is \d\.\d+:1, under 4\.5:1 \(text\)\.$/,
+      /^\[check:appearance\] [a-z0-9-]+ \+ fixture-scheme-experimental-low-contrast \+ [a-z0-9-]+ \(system, light, dark\), light: text-muted on (?:canvas|surface-[a-z]+)(?: over #(?:000000|ffffff))? is \d\.\d+:1, under (?:4\.5|4\.95):1 \(text\)\.$/,
     );
   }
   // On the canvas and on every surface.
