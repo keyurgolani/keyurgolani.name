@@ -12,7 +12,7 @@ import {
   RichText,
   type HeadingLevel,
 } from '@portfolio/kit/sections';
-import { routeHref, type VariantRenderInput } from '@portfolio/variant-contract';
+import type { VariantRenderInput } from '@portfolio/variant-contract';
 import { contentAnchor, mediumLabel, present } from './model';
 import { ownId, uiLang, Words } from './parts';
 
@@ -26,7 +26,9 @@ import { ownId, uiLang, Words } from './parts';
 // the work cites reads beside it, and on its own too: an image that never
 // arrives keeps its box and its label, and the title, the evidence, and the
 // links stay where they were. A work with nothing to show is a text frame,
-// with no empty matte.
+// with no empty matte. A case study gets no link yet: the host answers
+// /work/<slug> with its 404 until #10's case-study pages land, and the
+// manifest's routes.work, shared, hands that page to the host then.
 
 /** How wide a frame's media shows, for the renditions a browser picks. */
 const SIZES = '(min-width: 64rem) 50vw, 100vw';
@@ -56,10 +58,6 @@ export function Frame({
   const evidence = evidenceByIds(work.evidence, input);
   const medium = mediumLabel(work);
   const meta = [work.role, work.organization].filter(present);
-  const study =
-    work.caseStudy !== undefined && work.slug !== undefined
-      ? routeHref(input, { route: 'work', slug: work.slug })
-      : undefined;
   const links = [...(present(work.url) ? [{ url: work.url }] : []), ...(work.links ?? [])];
   // Audio and video are links to their files: nothing plays in the page, so nothing autoplays.
   const listen = (
@@ -118,16 +116,8 @@ export function Frame({
             ))}
           </ul>
         ) : null}
-        {study !== undefined || links.length > 0 || listen.length > 0 ? (
+        {links.length > 0 || listen.length > 0 ? (
           <ul className="hc-frame__links" role="list">
-            {study !== undefined ? (
-              <li>
-                <a href={study}>
-                  <Words lang={lang}>Case study</Words>
-                  <span className="hc-visually-hidden">{`: ${work.title}`}</span>
-                </a>
-              </li>
-            ) : null}
             {listen.map(([label, url]) => (
               <li key={label}>
                 <a href={hrefFor(url, input)}>
