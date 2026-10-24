@@ -10,26 +10,32 @@
 // the PR set badly: a perf test is one test of about 90 seconds, and a
 // composition's skipped states are tests of none. So each group weighs what
 // its tests took in CI (tests/quality/shard-durations.json), plus a server
-// start, and is placed, heaviest first, on the lightest shard (ci/shards.mjs's
-// assign), the same way on every runner. The shards of one count always
+// start, and is placed, heaviest first, on the lightest shard, a split
+// group's part on the lightest without another part of its file
+// (assignShards), the same way on every runner. The shards of one count always
 // partition the groups, so they run every planned test exactly once
 // between them.
 //
-// How many shards: the fewest, from 1 to MAX_SHARDS, whose slowest shard,
+// How many shards: the fewest, from 1 to MAX_SHARDS (and with a pack sweep,
+// MAX_SHARDS and what the sweep alone needs, up to SWEEP_MAX_SHARDS:
+// shardLimit), whose slowest shard,
 // its fixed part plus its groups on Playwright's two workers, stays within
 // SHARD_CEILING (pickShardCount). CI's quality-pr-plan job works it out for
 // each PR (pr-count.ts), and every shard is handed that count. A cell group
 // too heavy for one worker's share of a shard is split first into parts,
 // by cell, and a cell too heavy on its own by test (splitGroups), each part
 // run through a grep of its tests' tags (playwright.config.ts), so a split
-// moves tests between shards and never adds or drops one.
+// moves tests between shards and never adds or drops one. A variant's
+// sweep group (lib/sweep.ts) is one cell group whose cells are its changed
+// packs, so it splits by pack, each pack's rows kept together.
 //
 // The weights: a skipped test none; a cell test that runs the default row's
 // reload conditions (cells.ts) its viewport and row's mean, from `pack` when
 // the cell's tuple names a pack other than the platform default on any axis
 // (a tier sentinel, or since #20 a change-directed cell on any pack axis),
 // else from `conditions`; any other cell test `plain`; a perf test `perf`;
-// a harness spec its own total. They were measured from the list reporter's
+// a harness spec its own total; a swept cell's test (lib/sweep.ts) its
+// row's `sweep` weight, whatever else it is. They were measured from the list reporter's
 // durations in quality-pr job logs (`gh api .../actions/jobs/<id>/logs`),
 // each the mean of its tests: `pack` from the tier sentinels' nine cells in
 // three runs (#20), the rest from #84's and #89's.
@@ -37,7 +43,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { PACK_AXES, PLATFORM_DEFAULTS } from '../../../packages/appearance/src/index';
-import { assign, parseShard } from '../../../ci/shards.mjs';
+import { parseShard } from '../../../ci/shards.mjs';
 import type { Plan } from '../cells';
 import type { Engine } from './matrix';
 import { perfCells } from './perf/plan';
@@ -61,6 +67,12 @@ export const SHARD_FIXED = 95;
 export const SHARD_WORKERS = 2;
 /** The most shards quality-pr-plan hands out: more only add parallel runners, and 12 fits the repository's concurrency beside the other jobs. */
 export const MAX_SHARDS = 12;
+/**
+ * The most a PR with a pack sweep may take (shardLimit): MAX_SHARDS and the
+ * shards the sweep alone needs, up to this. #20's catalog PRs, which change
+ * dozens of packs at once, reach it. Nothing else does.
+ */
+export const SWEEP_MAX_SHARDS = 16;
 /** The most one group may weigh: a group runs on one worker, so it alone sets its shard's floor. */
 export const GROUP_BUDGET = SHARD_CEILING - SHARD_FIXED;
 
@@ -83,6 +95,11 @@ export interface ShardDurations {
    * checks, unlike the stand-in states and surfaces `plain` weighs.
    */
   readonly composition: Readonly<Record<string, number>>;
+  /**
+   * A swept cell's test (lib/sweep.ts), a changed pack on its variant's
+   * sweep server without the reload conditions, by `<viewport> <row>`.
+   */
+  readonly sweep: Readonly<Record<string, number>>;
 }
 
 /** Whether a cell's tuple names a pack other than the platform default on any axis. */
@@ -107,6 +124,8 @@ export interface ShardGroup {
   readonly weight: number;
   /** A part of a split cell group, from 1: it runs only its `tests` of its project's cells.spec.ts. */
   readonly part?: number;
+  /** A variant's sweep server's cell group, or a part of one (lib/sweep.ts). */
+  readonly sweep?: true;
 }
 
 export const groupKey = (group: Pick<ShardGroup, 'project' | 'file' | 'part'>) =>
@@ -121,14 +140,14 @@ const median = (values: readonly number[]) => {
 
 /** What testWeight() reads of a planned test. */
 export type WeighedTest = Pick<Plan['tests'][number], 'skip' | 'engineSkips' | 'conditions'> & {
-  readonly cell: Pick<Plan['tests'][number]['cell'], 'kind' | 'state' | 'tuple'>;
+  readonly cell: Pick<Plan['tests'][number]['cell'], 'kind' | 'state' | 'tuple' | 'sweep'>;
   readonly viewport: { readonly id: string };
   readonly row: { readonly id: string };
 };
 
 /**
  * About how long one planned cell test takes on `engine`: none skipped; a
- * test with the reload conditions its row's measured mean, from `pack` on a
+ * swept cell's its row's `sweep` weight; a test with the reload conditions its row's measured mean, from `pack` on a
  * pack's tuple, else `conditions`; a composition's complete cell without
  * them `composition`'s; and any other, a stand-in state's or a surface's,
  * `plain`. A row with no measured weight takes `fallback`.
@@ -141,6 +160,7 @@ export function testWeight(
 ): number {
   if (test.skip !== undefined || test.engineSkips[engine] !== undefined) return durations.skipped;
   const key = `${test.viewport.id} ${test.row.id}`;
+  if (test.cell.sweep) return durations.sweep[key] ?? fallback;
   if (!test.conditions) {
     return test.cell.kind === 'composition' && test.cell.state === APPEARANCE_STATE.id
       ? (durations.composition[key] ?? fallback)
@@ -171,7 +191,7 @@ export function planGroups(
         weight: durations.group + (durations.harness[`tests/quality/${file}`] ?? fallback),
       });
     }
-    for (const { id } of planServers(plan)) {
+    for (const { id, server } of planServers(plan)) {
       const own = plan.tests.filter((test) => serverId(cellServer(test.cell)) === id);
       const costs = own.map((test) => testWeight(test, engine, durations, fallback));
       groups.push({
@@ -180,6 +200,7 @@ export function planGroups(
         tests: own.map((test) => testKey(test.cell.id, test.viewport.id, test.row.id, engine)),
         costs,
         weight: costs.reduce((sum, cost) => sum + cost, durations.group),
+        ...(server.sweep ? { sweep: true as const } : {}),
       });
       const perfHere = perf.filter((cell) => serverId(cellServer(cell)) === id).length;
       if (perfHere > 0) {
@@ -255,6 +276,7 @@ export function splitGroups(
       part: at + 1,
       tests: part.tests,
       weight: part.weight,
+      ...(group.sweep ? { sweep: true as const } : {}),
     }));
   });
 }
@@ -267,19 +289,41 @@ export interface PrShard {
   readonly weight: number;
 }
 
-/** The `count` shards of `groups`: a partition, heaviest group first onto the lightest shard. */
+/**
+ * The `count` shards of `groups`: a partition, heaviest group first onto
+ * the lightest shard (then the lowest index), as ci/shards.mjs's assign()
+ * places items, except that a split group's part goes to the lightest
+ * shard holding no other part of its file while one is left. Two parts of
+ * one file on one shard run one after another on one worker (shardWall),
+ * so a group split N ways spreads over N shards.
+ */
 export function assignShards(groups: readonly ShardGroup[], count: number): PrShard[] {
   const byKey = new Map(groups.map((group) => [groupKey(group), group]));
   if (byKey.size !== groups.length) throw new Error('two test groups share a project and file');
-  const weights = Object.fromEntries(groups.map((group) => [groupKey(group), group.weight]));
-  return (assign([...byKey.keys()], weights, count) as { items: string[]; weight: number }[]).map(
-    (shard, at) => ({
-      index: at + 1,
-      count,
-      groups: shard.items.map((key) => byKey.get(key)!),
-      weight: shard.weight,
-    }),
+  const shards = Array.from({ length: count }, () => ({
+    groups: [] as ShardGroup[],
+    files: new Set<string>(),
+    weight: 0,
+  }));
+  const ordered = [...byKey.values()].sort(
+    (a, b) => b.weight - a.weight || groupKey(a).localeCompare(groupKey(b)),
   );
+  const lightest = (among: typeof shards) =>
+    among.reduce((best, shard) => (shard.weight < best.weight ? shard : best));
+  for (const group of ordered) {
+    const file = `${group.project} ${group.file}`;
+    const free = group.part === undefined ? shards : shards.filter((each) => !each.files.has(file));
+    const shard = lightest(free.length > 0 ? free : shards);
+    shard.groups.push(group);
+    shard.files.add(file);
+    shard.weight += group.weight;
+  }
+  return shards.map((shard, at) => ({
+    index: at + 1,
+    count,
+    groups: shard.groups,
+    weight: Math.round(shard.weight),
+  }));
 }
 
 /** The longest a shard's workers take, placing its groups heaviest first on the freer worker. */
@@ -303,29 +347,100 @@ export function shardWall(groups: readonly ShardGroup[], workers: number = SHARD
 export const shardEstimate = (shard: Pick<PrShard, 'groups'>) =>
   SHARD_FIXED + shardWall(shard.groups);
 
+/** The fewest shards, 1 to `max`, that hold `split` within SHARD_CEILING, and the last tried. */
+function fewestShards(
+  split: readonly ShardGroup[],
+  max: number,
+): {
+  readonly fits: boolean;
+  readonly count: number;
+  readonly slowest: number;
+  readonly shards: PrShard[];
+} {
+  let shards: PrShard[] = [];
+  let slowest = 0;
+  for (let count = 1; count <= max; count += 1) {
+    shards = assignShards(split, count);
+    slowest = Math.max(...shards.map(shardEstimate));
+    if (slowest <= SHARD_CEILING) return { fits: true, count, slowest, shards };
+  }
+  return { fits: false, count: max, slowest, shards };
+}
+
 /**
- * The fewest shards, 1 to MAX_SHARDS, that keep every shard within
- * SHARD_CEILING, from `groups` as planGroups() weighs them, split first.
- * Needing more than MAX_SHARDS throws, naming the slowest shard's heaviest
- * group and about how long that shard would take.
+ * The most shards `groups` may take: MAX_SHARDS, plus the fewest the pack
+ * sweep's groups alone need (lib/sweep.ts), split and placed as the whole
+ * plan's are, up to SWEEP_MAX_SHARDS. The rest keeps its usual
+ * MAX_SHARDS' worth, and the sweep brings its own on top. Only sweep groups
+ * count toward `sweepShards`, so nothing else raises it.
+ */
+export function shardLimit(
+  groups: readonly ShardGroup[],
+  durations: Pick<ShardDurations, 'group'> = loadDurations(),
+): { readonly max: number; readonly sweepShards: number; readonly reason: string | null } {
+  const sweep = groups.filter((group) => group.sweep);
+  if (sweep.length === 0) return { max: MAX_SHARDS, sweepShards: 0, reason: null };
+  const alone = fewestShards(splitGroups(sweep, GROUP_BUDGET, durations), SWEEP_MAX_SHARDS);
+  // A sweep that needs more than SWEEP_MAX_SHARDS on its own counts as that many: the most never passes it.
+  const sweepShards = alone.fits ? alone.count : SWEEP_MAX_SHARDS;
+  const max = Math.min(SWEEP_MAX_SHARDS, MAX_SHARDS + sweepShards);
+  const needs = alone.fits ? `${sweepShards} shard(s)` : `more than ${SWEEP_MAX_SHARDS} shards`;
+  return {
+    max,
+    sweepShards,
+    reason: `the pack sweep's ${sweep.length} group(s) alone need ${needs}, so the most is ${max}`,
+  };
+}
+
+/** Why `groups` can't fit `max` shards: the slowest shard, its heaviest group, and `about`. */
+function overCeiling(
+  max: number,
+  { slowest, shards }: { readonly slowest: number; readonly shards: readonly PrShard[] },
+  about: string | null,
+): Error {
+  const worst = shards.reduce((a, b) => (shardEstimate(b) > shardEstimate(a) ? b : a));
+  const heaviest = [...worst.groups].sort((a, b) => b.weight - a.weight)[0]!;
+  return new Error(
+    `Even ${max} shards leave one at about ${Math.round(slowest)}s, over the ${SHARD_CEILING}s ceiling${about ? ` (${about})` : ''}. Its heaviest group is ${groupKey(heaviest)}, at about ${Math.round(heaviest.weight)}s.`,
+  );
+}
+
+/**
+ * The fewest shards, 1 to shardLimit()'s most, that keep every shard
+ * within SHARD_CEILING, from `groups` as planGroups() weighs them, split
+ * first. The groups outside the pack sweep must fit MAX_SHARDS on their
+ * own, so a sweep never makes room for anything else. Needing more throws,
+ * naming the slowest shard's heaviest group and about how long that shard
+ * would take.
  */
 export function pickShardCount(
   groups: readonly ShardGroup[],
   durations: Pick<ShardDurations, 'group'> = loadDurations(),
-): { readonly count: number; readonly slowest: number; readonly shards: PrShard[] } {
-  const split = splitGroups(groups, GROUP_BUDGET, durations);
-  let shards: PrShard[] = [];
-  let slowest = 0;
-  for (let count = 1; count <= MAX_SHARDS; count += 1) {
-    shards = assignShards(split, count);
-    slowest = Math.max(...shards.map(shardEstimate));
-    if (slowest <= SHARD_CEILING) return { count, slowest, shards };
+): {
+  readonly count: number;
+  readonly slowest: number;
+  readonly shards: PrShard[];
+  /** The fewest shards the pack sweep alone needs, 0 without one. */
+  readonly sweepShards: number;
+  /** The most the count could be, and why it's over MAX_SHARDS, or null. */
+  readonly max: number;
+  readonly reason: string | null;
+} {
+  const { max, sweepShards, reason } = shardLimit(groups, durations);
+  if (sweepShards > 0) {
+    const rest = fewestShards(
+      splitGroups(
+        groups.filter((group) => !group.sweep),
+        GROUP_BUDGET,
+        durations,
+      ),
+      MAX_SHARDS,
+    );
+    if (!rest.fits) throw overCeiling(MAX_SHARDS, rest, 'the groups outside the pack sweep, alone');
   }
-  const worst = shards.reduce((a, b) => (shardEstimate(b) > shardEstimate(a) ? b : a));
-  const heaviest = [...worst.groups].sort((a, b) => b.weight - a.weight)[0]!;
-  throw new Error(
-    `Even ${MAX_SHARDS} shards leave one at about ${Math.round(slowest)}s, over the ${SHARD_CEILING}s ceiling. Its heaviest group is ${groupKey(heaviest)}, at about ${Math.round(heaviest.weight)}s.`,
-  );
+  const picked = fewestShards(splitGroups(groups, GROUP_BUDGET, durations), max);
+  if (!picked.fits) throw overCeiling(max, picked, reason);
+  return { ...picked, sweepShards, max, reason };
 }
 
 /** The shard `text` (<n>/<m>) names, of the PR plan on `engines`, its groups split as pickShardCount() splits them. */

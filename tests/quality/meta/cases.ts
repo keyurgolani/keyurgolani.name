@@ -12,7 +12,8 @@
 // rules, the release timing gate, and #6's budget check over its fixtures
 // (perf-cases.ts), Slice 2's accessibility suites (a11y-cases.ts),
 // 11-4's merged verdict over a sharded run's shards (shard-cases.ts), the
-// release run's gates (release-cases.ts), and the manual-run records
+// pack sweep's failures and its isolation between packs (sweep-cases.ts),
+// the release run's gates (release-cases.ts), and the manual-run records
 // (manual-run-cases.ts).
 
 import fs from 'node:fs';
@@ -48,6 +49,7 @@ import { RUNNER_CASES } from './runner-cases';
 import { MANUAL_RUN_CASES } from './manual-run-cases';
 import { RELEASE_CASES } from './release-cases';
 import { SHARD_CASES } from './shard-cases';
+import { SWEEP_CASES } from './sweep-cases';
 
 /** What a gate said about one input. */
 export interface MetaOutcome {
@@ -424,6 +426,7 @@ export const META_CASES: readonly MetaCase[] = [
   ...PERF_BROWSER_CASES,
   ...A11Y_CASES,
   ...SHARD_CASES,
+  ...SWEEP_CASES,
   ...RELEASE_CASES,
   ...MANUAL_RUN_CASES,
 ];

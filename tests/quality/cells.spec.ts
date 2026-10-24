@@ -1,6 +1,7 @@
 import { KIND_ANNOTATION } from './lib/checks';
 import { testTag } from './lib/pr-shards';
 import { runCell } from './lib/run-cell';
+import { SWEEP_ROWS } from './lib/sweep';
 import { cellServer, serverTag } from './lib/server';
 import { expect, test } from './fixtures';
 import { loadPlan } from './plan';
@@ -10,7 +11,10 @@ import { loadPlan } from './plan';
 // carries its cell's server tag, so it runs only on that server's project
 // (playwright.config.ts), and its own tag, so a shard can run some of a
 // project's tests (lib/pr-shards.ts). A stand-in state's test, or an excluded one,
-// skips with the reason the plan declares, before any server starts.
+// skips with the reason the plan declares, before any server starts. A
+// swept cell (lib/sweep.ts) is one changed pack on its variant's sweep
+// server, in one test: run-cell.ts checks its context is clean, sets the
+// pack's cookie before the page loads, and runs the [37] rows.
 
 const plan = await loadPlan();
 
@@ -37,7 +41,7 @@ for (const cell of plan.cells) {
           test.skip(({ browserName }) => browserName === engine, reason);
         }
         test(
-          `${cell.target} ${cell.state} ${cell.path} at ${viewport.id}, ${row.id}`,
+          `${cell.target} ${cell.state} ${cell.path} at ${viewport.id}, ${cell.sweep ? `the [37] sweep's ${SWEEP_ROWS.map((each) => each.id).join(', ')}` : row.id}`,
           {
             tag: [server, testTag(cell.id, viewport.id, row.id)],
             annotation: [
@@ -50,8 +54,9 @@ for (const cell of plan.cells) {
               { type: 'row', description: row.id },
             ],
           },
-          async ({ page }, testInfo) => {
+          async ({ page, app }, testInfo) => {
             await runCell({
+              origin: app.origin,
               page,
               cell,
               viewport,

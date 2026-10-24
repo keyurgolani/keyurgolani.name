@@ -56,6 +56,8 @@ export interface PlanRecord {
     readonly engineSkips: Readonly<Record<string, string>>;
     /** Whether it runs the default row's reload conditions (cells.ts). */
     readonly conditions: boolean;
+    /** A swept cell's test (lib/sweep.ts), which owes the sweep's checks. Absent otherwise. */
+    readonly sweep?: true;
   }[];
   /** The perf cells (lib/perf/plan.ts), which perf-coverage holds the run to. run.ts always writes them. */
   readonly perf?: readonly PlannedPerf[];
@@ -86,6 +88,7 @@ export function planRecord(plan: Plan): PlanRecord {
       skip: test.skip ?? null,
       engineSkips: test.engineSkips,
       conditions: test.conditions,
+      ...(test.cell.sweep ? { sweep: true as const } : {}),
     })),
     perf: plannedPerf(plan),
   };
@@ -94,7 +97,7 @@ export function planRecord(plan: Plan): PlanRecord {
 /** The planned tests a plan record holds, as the verdict reads them. */
 export function plannedTests(record: Pick<PlanRecord, 'planned'>): VerdictTest[] {
   return record.planned.map((each) => ({
-    cell: { id: each.cell },
+    cell: { id: each.cell, ...(each.sweep ? { sweep: true } : {}) },
     viewport: { id: each.viewport },
     // The plan wrote it from a row's id.
     row: { id: each.row as VerdictTest['row']['id'] },

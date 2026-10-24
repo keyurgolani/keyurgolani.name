@@ -11,6 +11,9 @@ export function qualityWeb(env: NodeJS.ProcessEnv = process.env): string {
   return web;
 }
 
+/** The cookie every quality test's context carries the run's canary in (fixtures.ts). */
+export const CANARY_COOKIE = 'quality_canary';
+
 /** The run's canary, which run.ts or the global setup planted. */
 export function runCanary(env: NodeJS.ProcessEnv = process.env): string {
   const canary = env.QUALITY_CANARY;

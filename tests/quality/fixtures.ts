@@ -24,7 +24,7 @@ import { test as base } from '../harness/fixtures';
 import { startApp } from '../harness/app-server.mjs';
 import { canaryPassword } from './lib/artifacts.mjs';
 import { pinPageClock } from './lib/clock';
-import { qualityWeb, runCanary } from './lib/env';
+import { CANARY_COOKIE, qualityWeb, runCanary } from './lib/env';
 import {
   egressFailure,
   guardRequests,
@@ -38,7 +38,7 @@ import { recordVitals } from './lib/vitals';
 export { expect } from '../harness/fixtures';
 
 /** The cookie that carries the canary. */
-export const CANARY_COOKIE = 'quality_canary';
+export { CANARY_COOKIE };
 
 interface QualityWorkerFixtures {
   /** The cell's server, or null for a test of the harness itself, which takes appOptions. */

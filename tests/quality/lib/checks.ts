@@ -46,14 +46,64 @@ const ROW_CHECKS: Readonly<Record<PreferenceMode, readonly SuiteCheck[]>> = {
   'no-javascript': ['keyboard'],
 };
 
+/** The runner's check that a swept page rendered the pack its cookie asked for (lib/sweep.ts's packFindings). */
+export const SWEEP_PACK_CHECK = 'sweep-pack';
+
+/**
+ * The runner's check that a swept test started clean (run-cell.ts's
+ * startPack): its context held no cookie but the canary's before the pack's,
+ * and its first load found localStorage empty.
+ */
+export const SWEEP_ISOLATION_CHECK = 'sweep-isolation';
+
+/**
+ * The rows a swept cell's one test runs, in order, and what each owes
+ * beside CELL_CHECKS (lib/sweep.ts): the [37] rule's five checks alone. Its
+ * axe run is the contrast and target-size rules (run-cell.ts's
+ * SWEEP_AXE_RULES), since a pack changes how the page looks and how big
+ * its controls are, and never what it is. Reduced motion comes after forced colors, since
+ * its frame sampler stays on the page for the loads after it.
+ */
+export const SWEEP_ROW_CHECKS: Readonly<Record<string, readonly SuiteCheck[]>> = {
+  default: ['keyboard', 'focus'],
+  'forced-colors': ['keyboard', 'focus'],
+  'reduced-motion': ['motion'],
+  'reduced-transparency': ['transparency'],
+};
+
+/** A swept test's name for a check it ran in `row`: the check alone in the default row, else `<row>:<check>`. */
+export const sweepCheck = (row: string, check: string) =>
+  row === 'default' ? check : `${row}:${check}`;
+
+/** What a swept pass in `row` owes, by the check's own name. */
+export const sweepRowChecks = (row: string): string[] => [
+  ...CELL_CHECKS,
+  SWEEP_PACK_CHECK,
+  // The first row's load is the test's first, where it checks it started clean.
+  ...(row === Object.keys(SWEEP_ROW_CHECKS)[0] ? [SWEEP_ISOLATION_CHECK] : []),
+  ...(SWEEP_ROW_CHECKS[row] ?? []),
+];
+
 /**
  * The checks a cell test at `viewport` in `row` owes. In the default row,
  * hover parity runs at the pointer viewports; the reflow, inventory, and
  * enhancement conditions, which reload the page several times, once a cell,
  * at the first viewport, where the plan says the cell takes them
  * (PlannedTest.conditions); and the landscape occlusion pass at the phone's.
+ * A swept cell's one test (`sweep`) owes, whatever its row, each
+ * SWEEP_ROW_CHECKS row's sweepRowChecks(), by sweepCheck()'s names.
  */
-export function requiredChecks(row: string, viewport: string, conditions = true): string[] {
+export function requiredChecks(
+  row: string,
+  viewport: string,
+  conditions = true,
+  sweep = false,
+): string[] {
+  if (sweep) {
+    return Object.keys(SWEEP_ROW_CHECKS).flatMap((each) =>
+      sweepRowChecks(each).map((check) => sweepCheck(each, check)),
+    );
+  }
   const at = VIEWPORTS.find((each) => each.id === viewport);
   const checks: string[] = [...CELL_CHECKS, ...(ROW_CHECKS[row as PreferenceMode] ?? [])];
   if (row === 'default' && at) {
