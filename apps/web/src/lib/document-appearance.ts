@@ -1,13 +1,16 @@
-import type { AppearanceSelection, Site } from '@portfolio/schema';
+import { isPlainObject, type AppearanceSelection, type Site } from '@portfolio/schema';
 import {
   axisFallback,
   DEFAULT_VISITOR_CONTROLS,
+  findPack,
+  generatedSets,
   PLATFORM_DEFAULTS,
   resolveAppearance,
   visitorAppearanceModel,
   type VisitorAppearanceModel,
   type AppearanceEnvironment,
   type AppearanceRegistry,
+  type GeneratedSchemes,
   type Profile,
   type ResolvedAppearance,
   type SelectionText,
@@ -21,6 +24,14 @@ import type { EnvironmentOverride } from './environment';
 // Every page's document boundary comes from here, the 404's too, and the
 // pages with no site, the 503 and the error pages, render the platform's
 // fallback packs.
+//
+// A generated scheme (#20 PR 3) renders from what #10 stored for it: the
+// draft's derived.schemes in a preview, and the revision's
+// snapshots/schemes.json live, each by scheme id, as `schemes` here. Render
+// never runs a generator. An entry renders only when it's well formed, names
+// the generator and version the registered scheme's manifest does, and its
+// sets are complete and not waiting for the owner's review; anything else is
+// left out, so the scheme falls back on its axis with a diagnostic.
 //
 // The variant is the page's own: the composition its route renders, which
 // the experience segment it's in has already decided. A visitor's variant
@@ -49,6 +60,47 @@ export interface DocumentAppearanceInput {
    */
   readonly reduceMotion?: boolean;
   readonly registry?: AppearanceRegistry;
+  /**
+   * The generated schemes #10 stored, by scheme id, as read: the draft's
+   * `derived.schemes` in a preview, the revision's `snapshots.schemes`
+   * live. Each entry is checked here, and fails closed.
+   */
+  readonly schemes?: unknown;
+}
+
+/** One stored generated scheme, as #10's draft save writes it (B's DerivedScheme). */
+export interface StoredScheme {
+  readonly generator: { readonly id: string; readonly version: number };
+  /** The SHA-256 hex of the canonical input: a seed lowercased, or an image's pixels. */
+  readonly inputsHash: string;
+  readonly tokens: unknown;
+}
+
+const SHA256 = /^[0-9a-f]{64}$/;
+
+/**
+ * The stored generated schemes a page may render, by scheme id: each one a
+ * registered generator scheme's, made by the generator and version its
+ * manifest names, with an input hash and complete sets that aren't waiting
+ * for review. Anything else, or anything that isn't an object, is left out.
+ */
+export function storedSchemes(
+  schemes: unknown,
+  registry: AppearanceRegistry = APPEARANCE_REGISTRY,
+): GeneratedSchemes {
+  const kept: Record<string, GeneratedSchemes[string]> = {};
+  if (!isPlainObject(schemes)) return kept;
+  for (const id of Object.keys(schemes)) {
+    const entry = schemes[id];
+    const declared = findPack(registry, 'colorScheme', id)?.manifest.generator;
+    if (!declared || !isPlainObject(entry) || !isPlainObject(entry.generator)) continue;
+    if (entry.generator.id !== declared.id || entry.generator.version !== declared.version)
+      continue;
+    if (typeof entry.inputsHash !== 'string' || !SHA256.test(entry.inputsHash)) continue;
+    const sets = generatedSets({ [id]: entry.tokens as GeneratedSchemes[string] }, id);
+    if (sets) kept[id] = sets;
+  }
+  return kept;
 }
 
 /** The fallback packs every axis falls back to, which a page with no site renders. */
@@ -80,10 +132,12 @@ export function visitorControlModel(
   profile: Profile,
   appearance: ResolvedAppearance,
   registry: AppearanceRegistry = APPEARANCE_REGISTRY,
+  schemes?: unknown,
 ): VisitorAppearanceModel {
   return visitorAppearanceModel({
     registry,
     appearance,
+    generated: storedSchemes(schemes, registry),
     visitorControls: { ...(site?.visitorControls ?? DEFAULT_VISITOR_CONTROLS), variant: 'locked' },
     profile,
   });
@@ -111,6 +165,7 @@ export function documentAppearance(input: DocumentAppearanceInput): ResolvedAppe
         }),
     profile: input.profile,
     registry: input.registry ?? APPEARANCE_REGISTRY,
+    generated: storedSchemes(input.schemes, input.registry ?? APPEARANCE_REGISTRY),
   });
   // A page with no site selected no variant, so the fallback composition it
   // renders in is no finding.
