@@ -393,7 +393,8 @@ export function referenceOverlayProblems(config) {
       problems.push(`web mounts ${volume.target} beside the reference`);
       continue;
     }
-    if (volume.type !== 'bind') problems.push(`the reference is a ${volume.type} mount, not a bind`);
+    if (volume.type !== 'bind')
+      problems.push(`the reference is a ${volume.type} mount, not a bind`);
     if (volume.read_only !== true) problems.push('the reference mount is writable');
     if (!path.isAbsolute(volume.source ?? '')) {
       problems.push('the reference mount names no host directory');
@@ -438,7 +439,9 @@ export function referenceRefusalProblems(result, { names, created = false }) {
   const problems = [];
   if (result.status === 0) problems.push('Compose went ahead');
   else if (!names.test(result.stderr ?? '')) {
-    problems.push(`Compose failed without saying why: ${(result.stderr ?? '').trim().slice(0, 300)}`);
+    problems.push(
+      `Compose failed without saying why: ${(result.stderr ?? '').trim().slice(0, 300)}`,
+    );
   }
   if (created) problems.push('Compose made the missing directory');
   return problems;

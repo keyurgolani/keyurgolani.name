@@ -31,7 +31,9 @@ test('the demo overlay publishes nothing and joins no network but the internal o
   assert.deepEqual(proxy, { depends_on: ['app', 'demo'] });
   const base = parseYaml(read('tests/harness/compose/compose.yml'));
   assert.equal(base.networks.internal.internal, true);
-  assert.deepEqual(base.services.proxy.ports, ['127.0.0.1:${PROXY_PORT:?set PROXY_PORT to a free port}:443']);
+  assert.deepEqual(base.services.proxy.ports, [
+    '127.0.0.1:${PROXY_PORT:?set PROXY_PORT to a free port}:443',
+  ]);
 });
 
 test('the demo overlay runs the image under test alone, hardened as deploy/compose.demo.yml runs it', () => {

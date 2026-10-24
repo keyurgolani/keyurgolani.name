@@ -20,8 +20,8 @@ import {
 import { publicationUnitOf } from './view';
 
 // A full export's bundle, read and checked without a store (#9, #3). The
-// layout is the one #3's deferred `export-revision` writes, and read-only
-// serves as it is from PORTFOLIO_SOURCE_DIR:
+// layout is the one `portfolio-store export-revision` writes (#3), and
+// read-only serves as it is from PORTFOLIO_SOURCE_DIR:
 //
 //   portfolio.<yml|json>   the stored source text, byte for byte
 //   site.<yml|json>
@@ -30,9 +30,10 @@ import { publicationUnitOf } from './view';
 //   media/blobs/<hex>      each blob, named by its bare lowercase hex digest
 //   bundle.json            IDs, versions, hashes, and the events that made it live
 //
-// Bundle format 1 is provisional: nothing ships `export-revision` yet, so the
-// format can still change with it, and this reader refuses any other
-// number. The demo's read-only reference (#9) is the one reader today. This
+// Bundle format 1 is what `export-revision` writes, and stays provisional
+// until that command merges (#3): the format can still change with it, and
+// this reader refuses any other number. `verify-revision` checks an export
+// with verifyBundle(), as the demo's read-only reference (#9) does. This
 // module is pure: it reads no file and opens no store. The caller hands it a
 // BundleFiles port over the directory, the way checkUnit() takes its inputs,
 // so it records nothing in the owner load trace and reaches no owner module.
@@ -48,7 +49,7 @@ import { publicationUnitOf } from './view';
 // `createdBy`, `createdAt`, `source`, `appVersion`, `parentRevisionId`, and
 // `rendering` are never read, so nothing in them can reach a page.
 
-/** The one bundle format this build reads. Provisional until `export-revision` ships (#3). */
+/** The one bundle format this build reads. Provisional until `export-revision` merges (#3). */
 export const BUNDLE_FORMAT = 1;
 export const BUNDLE_FILE = 'bundle.json';
 
