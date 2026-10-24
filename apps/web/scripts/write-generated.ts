@@ -38,7 +38,8 @@ function main(args: readonly string[]): number {
     }
   }
   if (failed > 0) {
-    if (check) process.stderr.write(`${TAG} Run pnpm catalog:generated and commit what it writes.\n`);
+    if (check)
+      process.stderr.write(`${TAG} Run pnpm catalog:generated and commit what it writes.\n`);
     return 1;
   }
   process.stdout.write(

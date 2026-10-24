@@ -72,7 +72,10 @@ test('a pack under an allowed license stays, and only the image-derived schemes 
 });
 
 /** `read` with profile-image's pack directory in a scratch package holding its record and `acceptance`. */
-function withAcceptance(read: RegistryResult, acceptance: (digest: string) => unknown): RegistryResult {
+function withAcceptance(
+  read: RegistryResult,
+  acceptance: (digest: string) => unknown,
+): RegistryResult {
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'kgn-acceptance-'));
   const record = fs.readFileSync(
     path.join(REPO_ROOT, 'packages/appearance-schemes', referenceFile('profile-image')),
