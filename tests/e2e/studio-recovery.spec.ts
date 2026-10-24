@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import { expect, test } from '../harness/fixtures';
 import { ownerSecret } from '../harness/owner-secret.mjs';
 import { command, seedDraft, signIn } from '../harness/preview-grants';
+import { openTask } from '../harness/studio-tasks';
 import { ownerApp } from '../harness/profile-matrix';
 
 // Keeping the owner's unsaved text (#8, Slice 8), against the built server
@@ -89,7 +90,7 @@ test(
   async ({ page, app }) => {
     const draft = await seedDraft(app, 'Rowan Raced');
     const csrf = await signIn(page, app, secret.password);
-    await page.goto('/studio#appearance');
+    await openTask(page, 'Appearance');
     const form = page.getByRole('form', { name: 'Appearance' });
     const composition = form.getByRole('combobox', { name: 'Composition the site shows' });
     // The workspace renders its options once the draft is in: wait for two, as #124 does.
