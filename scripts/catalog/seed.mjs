@@ -44,7 +44,8 @@ const REPOSITORY = {
   url: 'https://github.com/keyurgolani/keyurgolani.name',
 };
 const ATTRIBUTION = 'Keyur Golani, for the keyurgolani.name portfolio platform.';
-const NO_SCRIPT = { js: 0, image: 0, font: 0, animation: 0, enhancement: 0 };
+/** A pack's budgets, in #6's order: no script, and only its stylesheet. */
+const budgets = (css) => ({ js: 0, css, image: 0, font: 0, animation: 0, enhancement: 0 });
 
 /** The prototype's generated schemes, which PR 3 seeds with their generators. */
 export const GENERATED_SCHEMES = new Set([
@@ -209,7 +210,7 @@ export function schemeManifest(scheme) {
     ...(single ? { lockedMode: single } : {}),
     accessibility: { checks: ['contrast', 'hierarchy'] },
     cost: { assets: 0, assetBytes: 0 },
-    budgets: { ...NO_SCRIPT, css: 3072 },
+    budgets: budgets(3072),
     fallbacks: [
       single === 'dark'
         ? 'Every display mode renders the dark set, high contrast renders the sets high-contrast-v1 derives from it, and print renders the light high-contrast set, since print is always light.'
@@ -274,7 +275,7 @@ export function typographyManifest(profile) {
     modes: ['light', 'dark'],
     accessibility: { checks: ['contrast', 'text-size'] },
     cost: { assets: 0, assetBytes: 0 },
-    budgets: { ...NO_SCRIPT, css: 1536 },
+    budgets: budgets(1536),
     fallbacks: [
       "Each role's stack ends in a generic family, so a platform without the named fonts renders its own.",
     ],

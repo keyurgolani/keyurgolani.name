@@ -17,7 +17,6 @@ import { auditCatalog } from './catalog-audit';
 import {
   applyRecipe,
   catalogEntries,
-  formatEntry,
   formatRecipe,
   formatResults,
   parseCatalogQuery,

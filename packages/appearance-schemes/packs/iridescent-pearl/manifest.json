@@ -27,11 +27,11 @@
   },
   "budgets": {
     "js": 0,
+    "css": 3072,
     "image": 0,
     "font": 0,
     "animation": 0,
-    "enhancement": 0,
-    "css": 3072
+    "enhancement": 0
   },
   "fallbacks": [
     "Every display mode renders the light set, high contrast renders the set high-contrast-v1 derives from it, and print renders the light set."

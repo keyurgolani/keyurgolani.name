@@ -7,7 +7,7 @@
       "version": "1.0.0",
       "tier": "stable",
       "license": "provided-by-operating-system",
-      "digest": "sha256-a30793675223c2189b7e4ba7ba52e442a2c7305b1076329f268b6de6fd4d970d"
+      "digest": "sha256-166040da3359e6fec632205af596cf65c89c701c81cfa1ce04274848f448eba4"
     },
     "arctic-aurora": {
       "axis": "colorScheme",
@@ -15,7 +15,7 @@
       "version": "1.0.0",
       "tier": "extended",
       "license": "first-party",
-      "digest": "sha256-3c7e285139664c3432f49696593e49dda2984f320c2305037b9b129723242149"
+      "digest": "sha256-89fd08275ece36cf55ff23be947b72bb0a6753dfcf922f4e92b94236fbbf1a3f"
     },
     "blue-orange-color-safe": {
       "axis": "colorScheme",
@@ -23,7 +23,7 @@
       "version": "1.0.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-556a4f9d16327bade97f50a4099a8c702ae37b69f47faf80d8aae3a19ef2aceb"
+      "digest": "sha256-7e889799e48b7d319e48f3bed947edaef12f436d39cd6859f45756c04cb5101d"
     },
     "botanical-sage": {
       "axis": "colorScheme",
@@ -31,7 +31,7 @@
       "version": "1.0.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-703200e5041c09da22545fea29952c6b8aec5544c803ea5314523c9235d538b4"
+      "digest": "sha256-9df624cb04caf40b3b7cbcfe2c3e142d18c8824d38481e3564b547db21459d02"
     },
     "cool-color-safe": {
       "axis": "colorScheme",
@@ -39,7 +39,7 @@
       "version": "1.0.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-3a860e9b6d7c2e2d16514caab5545f355f2049286cc3a68336a84f7a925d9645"
+      "digest": "sha256-a83caed2ab1acc76278310f5ba18340b77d3ba21face746118bfb07219988277"
     },
     "coral-lagoon": {
       "axis": "colorScheme",
@@ -47,7 +47,7 @@
       "version": "1.0.0",
       "tier": "extended",
       "license": "first-party",
-      "digest": "sha256-6888d1ecdc0ab3aa037b1cde57dbf649ee9e14069026135ddf63148d50d8b41f"
+      "digest": "sha256-d432ee2a4992f4cfe3dc36662933d90fc96a05b5705eb6bfb6cacc6cbb854e57"
     },
     "desert-terracotta": {
       "axis": "colorScheme",
@@ -55,7 +55,7 @@
       "version": "1.0.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-5e09be8f4ef6efd38269baccbccfea3877e85a200a54642745c87dcd0e9bdf57"
+      "digest": "sha256-a0a2f50ff14630aa53ca296d64040c61c57ab5e7c4ded93801a1d8ae8df6e3b2"
     },
     "earthy-clay": {
       "axis": "colorScheme",
@@ -63,7 +63,7 @@
       "version": "1.0.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-caab41a8a50f75e6d2e9b3753d25666b882deaf9dcd2d0e73f2247329320202c"
+      "digest": "sha256-c0b005dc4a5308ece613c596b9df9dfa1703d1e2bc8b6891ea55517d120a8b4d"
     },
     "editorial-serif": {
       "axis": "typography",
@@ -71,7 +71,7 @@
       "version": "1.0.0",
       "tier": "stable",
       "license": "provided-by-operating-system",
-      "digest": "sha256-93c8547318ffdbdf2bc3ffae195b00e9763e05c3b62d56ce31d03a519e2888a5"
+      "digest": "sha256-19c2a428e9ce5508e5eae6dc43f356ea75f72c8918f76e15ac22517f1ba1e1ca"
     },
     "forest-moss": {
       "axis": "colorScheme",
@@ -79,7 +79,7 @@
       "version": "1.0.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-30898ae3f5b1ecdd10c2dbdd5b5523d2cc35a1f33255f5846413adab29e24c22"
+      "digest": "sha256-e9fb477755ae765042803e06f5cb10634ba9f5e0458be8bdc8618a121e8aa69b"
     },
     "geometric-display": {
       "axis": "typography",
@@ -87,7 +87,7 @@
       "version": "1.0.0",
       "tier": "extended",
       "license": "provided-by-operating-system",
-      "digest": "sha256-f1ba97f1be54c9830c954890e06ae4926b75d48e6d68312a512bad41dd1ba6b2"
+      "digest": "sha256-a3678e5b44c87197a072c965250b9610afc740ea703fe0a8c1954e9d313a9766"
     },
     "graphite": {
       "axis": "colorScheme",
@@ -95,7 +95,7 @@
       "version": "1.0.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-a954326eeb0cfbcccea3acdd5490b9014bb6e997583f7f1c6349cbd9a4688abf"
+      "digest": "sha256-423a727706a8ca48a2fa0c615071be04f11b0305d1d098e7ac19e1f5092f1f5d"
     },
     "high-contrast": {
       "axis": "colorScheme",
@@ -103,7 +103,7 @@
       "version": "1.0.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-65788e109e01daf0446f1783c0c2b7e96a9b93ac53d02ea9854be6ea68e012bc"
+      "digest": "sha256-78f9d7607bcebb2280097ee9dc8f022d70becadfbdae9b91772361434925b6fc"
     },
     "humanist-ui": {
       "axis": "typography",
@@ -119,7 +119,7 @@
       "version": "1.0.0",
       "tier": "extended",
       "license": "first-party",
-      "digest": "sha256-c15fa39c4bc7f9e5eda393fb36275d78c640efe5f9a61a2765d4ff305972eaf0"
+      "digest": "sha256-fb70c68d5c1f73d2423edaa22467d1d31204b7360660aa5184676581f1fb499e"
     },
     "jewel-twilight": {
       "axis": "colorScheme",
@@ -127,7 +127,7 @@
       "version": "1.0.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-5b9faf55414c5e6b62f9eeaa3c96874f6c985717f827daa0f5ae2c4133aebb78"
+      "digest": "sha256-7ec1e96483b7fba759e88122ddde106828e27d92c785ff2853b456210cad5b67"
     },
     "lavender-dusk": {
       "axis": "colorScheme",
@@ -135,7 +135,7 @@
       "version": "1.0.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-5a836c120b06cca9ee63269a0ad10b9b4c8036d3b71ddafcc3617c23f6479fce"
+      "digest": "sha256-63c2b7cd2fa120c6e2b8eb08f2960fa216c29e2593f7c8202e4c886e5fa36634"
     },
     "literary-reading": {
       "axis": "typography",
@@ -143,7 +143,7 @@
       "version": "1.0.0",
       "tier": "extended",
       "license": "provided-by-operating-system",
-      "digest": "sha256-212260499046084c2edcd6321da1d5447bbfd9d08b2b7405d35c143e74c2267e"
+      "digest": "sha256-433334946d854196c1d97b4098fdf0f88ca46c73b86a07ba56cac935b335fc1b"
     },
     "low-stimulus-warm": {
       "axis": "colorScheme",
@@ -151,7 +151,7 @@
       "version": "1.0.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-b07a75638e3a7d40cb1a9896cbc209ae2a1b30e22997cddc7133f456714f28e6"
+      "digest": "sha256-9c0b6640814d34a3fde71b6ac602f1e67c8ea5e0c0779ee123d81a84840a1469"
     },
     "multilingual-system": {
       "axis": "typography",
@@ -159,7 +159,7 @@
       "version": "1.0.0",
       "tier": "stable",
       "license": "provided-by-operating-system",
-      "digest": "sha256-f402f81fc9331ed5893be94b662dd4ff676193e51c4e6a7c3ec5796704d4859c"
+      "digest": "sha256-a8160e39a0a604c153355882c28300726387c043a1b48bb615b9332b4ffb170b"
     },
     "neon-city": {
       "axis": "colorScheme",
@@ -167,7 +167,7 @@
       "version": "1.0.0",
       "tier": "experimental",
       "license": "first-party",
-      "digest": "sha256-d4dd6da5ffc833b42b4bc5e6a36a3574479faffdc499dedcaab71c8577d6f4fe"
+      "digest": "sha256-757fc6dbd2464ebf61e4b6879aab7e94818ee290c1f97c6c8a7a58b512e6232e"
     },
     "neutral-slate": {
       "axis": "colorScheme",
@@ -175,7 +175,7 @@
       "version": "1.0.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-12ee10e0514620f056d0be7d3f6d94581b1c7db8927717160f3dddc17b78b717"
+      "digest": "sha256-f1dabe29d53260621e86b42aab1529fa74a328b8caa5fd20bb1c235329f93e1b"
     },
     "neutral-ui": {
       "axis": "typography",
@@ -183,7 +183,7 @@
       "version": "1.0.0",
       "tier": "stable",
       "license": "provided-by-operating-system",
-      "digest": "sha256-716ce5be37194051deb0cf7613d8e9227d13cbd7de7d2bbf232db256656c0d16"
+      "digest": "sha256-62c284d6cbbae37da62f36e70c8ead4964e8ecadb36e38235a487dd5de21629b"
     },
     "ocean-abyss": {
       "axis": "colorScheme",
@@ -191,7 +191,7 @@
       "version": "1.0.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-6faef94560914743268f32445972e41913906df1e9f76f5619129552aa684534"
+      "digest": "sha256-78ec2f7af4d70922d6c9730234e025806e84449a578dbe255fabf5464b7e89dc"
     },
     "oled-black": {
       "axis": "colorScheme",
@@ -199,7 +199,7 @@
       "version": "1.0.0",
       "tier": "extended",
       "license": "first-party",
-      "digest": "sha256-bfe3ea5d83ad624e5c457acdde2d220741620c5afd23b87e494361de28092e66"
+      "digest": "sha256-aa4264e1c0fb899a22acb9c8f3a09fb48db4c0e10987e8651475ae5e04af7a2d"
     },
     "paper-ink": {
       "axis": "colorScheme",
@@ -207,7 +207,7 @@
       "version": "1.0.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-8a23eff72e339c8ca82c3962393052b1f46dbbdaca2dcd36d3dd6133b6bbf903"
+      "digest": "sha256-031ea3a81a45ad6864a431aec2779e0033b44d5b574b10ee21e0632b640c30eb"
     },
     "pastel-sorbet": {
       "axis": "colorScheme",
@@ -215,7 +215,7 @@
       "version": "1.0.0",
       "tier": "extended",
       "license": "first-party",
-      "digest": "sha256-0153455b64a4233d7450b1816a9c9f28b62bfb1b5c1404a02f8387254de81f16"
+      "digest": "sha256-d80374eff16bc1b38384426581296b27ae1ed43e707c2b03097065f4995d2815"
     },
     "platform-neutral": {
       "axis": "designLanguage",
@@ -231,7 +231,7 @@
       "version": "1.0.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-9624a112c040e84631ff80d038e29666249b3582167e6df5048ec53a27a77ea2"
+      "digest": "sha256-cb1d24c77513bbe165287921e16c95c1f04d732b9cbe74047e9c465d7ead2b7d"
     },
     "sepia-film": {
       "axis": "colorScheme",
@@ -239,7 +239,7 @@
       "version": "1.0.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-496dcb1b891e452ff19f87c95b4dafe139fabab7905525676d3a1f31c3252a39"
+      "digest": "sha256-b5f2e212ef5509a485fb3ffdbdf433434e506f9fae4d0217f0e25861917fe4dc"
     },
     "sunset-ember": {
       "axis": "colorScheme",
@@ -247,7 +247,7 @@
       "version": "1.0.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-de97d6dc6b5cf3d02a2f18f04333fa45564c74c99128927255c9cb86199e5be5"
+      "digest": "sha256-aae45237c6dac70ad2b083666d968af25d849f7354df5af860c69f9e48f506ec"
     },
     "technical-sans-mono": {
       "axis": "typography",
@@ -255,7 +255,7 @@
       "version": "1.0.0",
       "tier": "stable",
       "license": "provided-by-operating-system",
-      "digest": "sha256-02cfb974148f33133f29c2815b57e3cfa6cf9a129e0773346c71d3426ad32243"
+      "digest": "sha256-93ba5ff3866138dc73fad9823474bef5d1cd23f025e15c77bf5b54b9fa9b121d"
     },
     "warm-parchment": {
       "axis": "colorScheme",
@@ -271,7 +271,7 @@
       "version": "1.0.0",
       "tier": "extended",
       "license": "MIT",
-      "digest": "sha256-d102a2bc8b6b48463e36bd8e3771f63c58fc95fbfe6641601ff53f07fc4bec69"
+      "digest": "sha256-cc35fb7344e4a1bfdb0140e420e88304ed52593a2367a4a803c3308ef5b2b522"
     }
   }
 }
