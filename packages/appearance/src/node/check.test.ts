@@ -165,6 +165,18 @@ test('every known-bad input fails the check, for the reason it names', () => {
   }
 });
 
+test('bad-texture fails only for its texture: the same fill untextured passes on anchor-v2 schemes (#20 PR 2c)', () => {
+  const read = readKnownBadFixture('bad-texture', createAppearanceRegistry(META));
+  assert.ok(read.ok);
+  const manifest = read.fixture.manifest as { tokens: Record<string, string> };
+  const untextured = {
+    ...read.fixture,
+    manifest: { ...manifest, tokens: { ...manifest.tokens, texture: 'none' } },
+  };
+  const run = runKnownBad(untextured, META);
+  assert.deepEqual(run.check?.failures ?? run.problems, []);
+});
+
 test('every refusal the refined body lists for a language stylesheet has its known-bad input', () => {
   const audits = knownBadNames().filter((name) => name.startsWith('audit-'));
   for (const rule of [
