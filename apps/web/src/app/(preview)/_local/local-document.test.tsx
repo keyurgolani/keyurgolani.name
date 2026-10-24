@@ -299,6 +299,10 @@ test("the frame's module installs the post-pass, and its page renders no documen
   const shell = readFileSync(new URL('./local-preview.tsx', import.meta.url), 'utf8');
   assert.match(shell, /ssr: false/);
   assert.match(shell, /import\('\.\/local-document'\)/);
+  // The frame installs the kit's own post-pass by default, before any document renders.
+  const frame = readFileSync(new URL('./local-document.tsx', import.meta.url), 'utf8');
+  assert.match(frame, /\binstall = installPostPass\b/);
+  assert.match(frame, /install\(\)\.then\(/);
   const page = readFileSync(new URL('../preview/local/page.tsx', import.meta.url), 'utf8');
   assert.doesNotMatch(page, /getLive|readLive|catalog\.getLive|getPublicView/);
 });
