@@ -11,7 +11,7 @@ portfolio.yml + site.yml ── @portfolio/schema ── apps/web ── a varia
 
 Designed for engineers, makers, photographers, writers, musicians, designers, consultants, and academics who want to own their portfolio without learning a templating engine. The content model doesn't assume a profession, and a profession package can add its own fields and sections.
 
-**Live demo:** [keyurgolani.name](https://keyurgolani.name)
+**Live demo:** the demo deployment (self-hosted, see [docs](docs/deployment.md#demo)).
 
 <p align="center">
   <img src="docs/screenshots/01-home-hero-editorial.png" alt="Editorial variant" width="49%" />
