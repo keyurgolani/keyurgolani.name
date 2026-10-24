@@ -358,7 +358,8 @@ test('the reader records the slugs /work serves in the same step as the composit
       },
     },
   });
-  assert.equal(liveComposition(), 'fallback');
+  // The example selects the platform default, Editorial Evidence, which renders (#13).
+  assert.equal(liveComposition(), 'editorial-evidence');
   assert.deepEqual([...liveCaseStudies()], [SLUG]);
   assert.equal(routes(SLUG), true);
 });
