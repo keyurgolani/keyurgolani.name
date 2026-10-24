@@ -9,13 +9,15 @@ import { REGISTRY } from '~/lib/variants';
 import type { Profile } from './capabilities';
 import type { LiveRevision } from './catalog-port';
 import { readDeploymentConfig } from './config';
-import { setDeploymentState } from './config-store';
+import { recordingLive } from './composition';
+import { setDeploymentState, setLiveCaseStudies, setLiveComposition } from './config-store';
 import { experienceMetadata } from './experience-metadata';
 import { servedMetadata } from './page-guard';
 
 // A visitor page's head metadata (#22): its og:url names the route's
 // canonical path on the live site, and nothing under /sample or for a path
-// that renders nothing, and it keeps the share image the layout resolved.
+// that renders nothing, and it keeps the share image the layout resolved. A
+// case study's is its own page, /work/<slug> (#10b).
 // The route table reads the build's own registry, which declares no path
 // view, so visitor-routes.test.ts shows a view's canonical is its parent.
 
@@ -70,16 +72,25 @@ function deploy(t: TestContext, profile: Profile): { reads: () => number } {
   let reads = 0;
   setDeploymentState({
     config: read.config,
-    catalog: {
-      getLive: async () => {
-        reads++;
-        return LIVE;
+    // The composition root's reader, which records the live case studies'
+    // slugs the route table reads (#10b).
+    catalog: recordingLive(
+      {
+        getLive: async () => {
+          reads++;
+          return LIVE;
+        },
       },
-    },
+      BUILD,
+    ),
     dispatch: () => assert.fail('metadata runs no operation'),
     degraded: [],
   });
-  t.after(() => setDeploymentState(undefined));
+  t.after(() => {
+    setDeploymentState(undefined);
+    setLiveCaseStudies(undefined);
+    setLiveComposition(undefined);
+  });
   return { reads: () => reads };
 }
 
@@ -112,12 +123,30 @@ for (const profile of ['owner', 'read-only'] as const) {
   });
 }
 
+/** The example's one case study, its signature work, which a visible works section lists. */
+const SLUG = 'postmortem-template-kit';
+
+for (const profile of ['owner', 'read-only'] as const) {
+  test(`under ${profile}, a case study's og:url is /work/<slug> with no query, and keeps the layout's share image`, async (t) => {
+    const { reads } = deploy(t, profile);
+    // The reader records the slugs as the site serves, before the route table asks.
+    await metadata([]);
+    assert.ok(reads() > 0);
+    const head = await metadata(['work', SLUG], { utm_source: 'feed', variant: 'fixture-chapters' });
+    assert.deepEqual(Object.keys(head), ['openGraph']);
+    assert.equal(openGraph(head)?.url, `/work/${SLUG}`);
+    assert.deepEqual(openGraph(head)?.images, [IMAGE]);
+  });
+}
+
 test('a path that renders nothing adds nothing to the layout', async (t) => {
   deploy(t, 'read-only');
+  await metadata([]);
   assert.deepEqual(await metadata(['nope']), {});
   assert.deepEqual(await metadata(['studio']), {});
-  // Work pages answer 404 until #10 resolves slugs.
+  // A slug the live revision doesn't route: unknown, or a public work with no case study.
   assert.deepEqual(await metadata(['work', 'atlas']), {});
+  assert.deepEqual(await metadata(['work', 'small-traces']), {});
 });
 
 test('a layout with no share image gives the page none', async (t) => {
