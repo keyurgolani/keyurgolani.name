@@ -132,7 +132,10 @@ for (const profile of ['owner', 'read-only'] as const) {
     // The reader records the slugs as the site serves, before the route table asks.
     await metadata([]);
     assert.ok(reads() > 0);
-    const head = await metadata(['work', SLUG], { utm_source: 'feed', variant: 'fixture-chapters' });
+    const head = await metadata(['work', SLUG], {
+      utm_source: 'feed',
+      variant: 'fixture-chapters',
+    });
     assert.deepEqual(Object.keys(head), ['openGraph']);
     assert.equal(openGraph(head)?.url, `/work/${SLUG}`);
     assert.deepEqual(openGraph(head)?.images, [IMAGE]);
