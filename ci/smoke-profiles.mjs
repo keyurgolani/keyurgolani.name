@@ -556,6 +556,7 @@ function plan(profile, leaks, origin) {
           {
             studio: hasStudio(profile),
             origin,
+            demo: profile === 'demo',
           },
         ),
       ];

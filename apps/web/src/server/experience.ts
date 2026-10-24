@@ -1,5 +1,6 @@
 import { FALLBACK_VARIANT_ID } from '@portfolio/schema/ids';
 import { VARIANTS } from '../lib/generated/registry.meta';
+import { sampleVariant } from '../lib/sample';
 import { isWorkPath, rendersWorkPage, type WorkRouteManifest } from '../lib/work-page';
 import type { Profile } from './capabilities';
 import { liveComposition } from './config-store';
@@ -78,12 +79,13 @@ export function isWorkPage(request: Pick<SegmentRequest, 'pattern' | 'segments'>
 /**
  * The experience segment a visitor page renders in. Under demo, /sample's
  * `?variant=` names it, when it names one variant this build registers; any
- * other value there is the fallback composition's, and the page answers it
- * as /sample always has. Everywhere else it's the live composition
- * config-store holds, or the fallback composition's when it holds none this
- * build registers. Owner and read-only never read the query. On a work's
- * own page, a composition that leaves that page to the host gives way to
- * the fallback composition (#10b). #19 adds the visitor's variant from its
+ * other value there falls back to the sample site's own selection, as no
+ * value does, and the page sends the visitor on to the URL without it (#9).
+ * Everywhere else it's the live composition config-store holds, or the
+ * fallback composition's when it holds none this build registers. Owner and
+ * read-only never read the query. On a work's own page, a composition that
+ * leaves that page to the host gives way to the fallback composition (#10b).
+ * #19 adds the visitor's variant from its
  * preference cookie here, for a site whose visitor controls make the
  * variant selectable.
  */
@@ -103,14 +105,9 @@ function selectedSegment(request: SegmentRequest, registered: RegisteredSegments
     id !== undefined &&
     id !== FALLBACK_VARIANT_ID &&
     registered.some(({ manifest }) => manifest.id === id);
-  if (
-    request.profile === 'demo' &&
-    request.pattern === SAMPLE_PATTERN &&
-    request.query.has('variant')
-  ) {
-    const named = request.query.getAll('variant');
-    const [only] = named;
-    return named.length === 1 && known(only) ? only : FALLBACK_VARIANT_ID;
+  if (request.profile === 'demo' && request.pattern === SAMPLE_PATTERN) {
+    const named = sampleVariant(request.query, registered);
+    if (named !== undefined) return named;
   }
   const live = liveComposition();
   return known(live) ? live : FALLBACK_VARIANT_ID;

@@ -91,7 +91,7 @@ test("under owner and read-only it's the live composition, whatever the query sa
   }
 });
 
-test("under demo, /sample's ?variant= names one registered variant, any other value is the fallback composition's, and only /sample reads it", (t) => {
+test("under demo, /sample's ?variant= names one registered variant, any other value falls back to the sample site's own, and only /sample reads it", (t) => {
   t.after(() => setLiveComposition(undefined));
   setLiveComposition('acme-tiles');
   const sample = (text: string) =>
@@ -101,6 +101,7 @@ test("under demo, /sample's ?variant= names one registered variant, any other va
     );
   assert.equal(sample(''), 'acme-tiles', "the sample site's own selection");
   assert.equal(sample('variant=acme-notes'), 'acme-notes');
+  // As no value does (#9): the page then sends the visitor to the URL without it.
   for (const text of [
     'variant=acme-gone',
     'variant=fallback',
@@ -108,8 +109,12 @@ test("under demo, /sample's ?variant= names one registered variant, any other va
     'variant=acme-notes&variant=acme-tiles',
     'variant=ACME-NOTES',
   ]) {
-    assert.equal(sample(text), 'fallback', text);
+    assert.equal(sample(text), 'acme-tiles', text);
   }
+  // A sample site whose own selection this build lacks renders the fallback composition.
+  setLiveComposition('acme-gone');
+  assert.equal(sample('variant=acme-gone'), 'fallback');
+  setLiveComposition('acme-tiles');
   assert.equal(
     segmentFor(
       { profile: 'demo', pattern: '/', segments: [], query: query('variant=acme-notes') },

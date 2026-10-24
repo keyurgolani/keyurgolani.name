@@ -224,18 +224,22 @@ test('a path no route renders goes on marked missing for GET and HEAD, in every 
   }
 });
 
-test('under demo, a /sample path or ?variant= that names nothing is missing too', async (t) => {
+test('under demo, a /sample path that names nothing is missing too, and a query never makes one missing (#9)', async (t) => {
   deploy(t, 'demo');
+  for (const path of ['/sample/nowhere', '/sample/work/x', '/sample/nowhere?variant=fallback']) {
+    assert.equal(decision(await proxy(request(path))), 'missing', path);
+  }
+  // A value the registry doesn't accept falls back on its axis: the page
+  // sends the visitor to the canonical query.
   for (const path of [
+    '/sample',
     '/sample?variant=fallback',
     '/sample?variant=canary-variant',
     '/sample?variant=',
-    '/sample/nowhere',
-    '/sample/work/x',
+    '/sample?mode=sepia&utm_source=x',
   ]) {
-    assert.equal(decision(await proxy(request(path))), 'missing', path);
+    assert.equal(decision(await proxy(request(path))), 'served', path);
   }
-  assert.equal(decision(await proxy(request('/sample'))), 'served');
 });
 
 test("a route outside the profile's matrix is 404 early", async (t) => {
@@ -512,16 +516,18 @@ test('every public response, in every profile, gets the public policy with a non
   for (const profile of PROFILES) {
     deploy(t, profile);
     const nonces = new Set<string>();
+    // Under demo the showroom and /sample get the demo policy (#9), below.
     const paths = [
-      '/',
-      '/',
+      ...(profile === 'demo' ? [] : ['/', '/']),
       '/robots.txt',
       '/feed.xml',
       '/api/health',
       '/media/x',
       '/no-such-page',
+      '/samples',
+      '/x/sample',
     ];
-    for (const path of [...paths, ...(profile === 'demo' ? ['/sample', '/studio'] : [])]) {
+    for (const path of [...paths, ...(profile === 'demo' ? ['/studio', '/Sample'] : [])]) {
       const what = `${profile} ${path}`;
       const response = await proxy(request(path));
       const csp = response.headers.get('content-security-policy') ?? '';
@@ -538,6 +544,63 @@ test('every public response, in every profile, gets the public policy with a non
       paths.length + (profile === 'demo' ? 2 : 0),
       `${profile}: a nonce came twice`,
     );
+  }
+});
+
+/** The demo policy (#9), with its nonce and who may frame the page. */
+const DEMO_CSP =
+  /^default-src 'self'; script-src 'self' 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; frame-src 'self'; frame-ancestors ('self'|'none'); form-action 'none'; base-uri 'none'; object-src 'none'$/;
+
+test('under demo the showroom and every /sample path get the demo policy with a nonce of its own, which only /sample lets the demo frame, and every other demo path keeps the public one (#9)', async (t) => {
+  deploy(t, 'demo');
+  const nonces = new Set<string>();
+  const framed: Array<[path: string, ancestors: string]> = [
+    ['/', "'none'"],
+    ['/?mode=dark', "'none'"],
+    ['/sample', "'self'"],
+    ['/sample?variant=canary-variant&mode=dark', "'self'"],
+    ['/sample/nowhere', "'self'"],
+    ['/%73ample', "'self'"],
+  ];
+  for (const [path, ancestors] of framed) {
+    const response = await proxy(request(path));
+    const csp = response.headers.get('content-security-policy') ?? '';
+    const policy = DEMO_CSP.exec(csp);
+    assert.ok(policy, `${path}: ${csp}`);
+    assert.equal(policy[2], ancestors, path);
+    nonces.add(policy[1]!);
+    const forwarded = response.headers.get('x-middleware-request-content-security-policy');
+    if (response.headers.get('x-middleware-next') === '1') assert.equal(forwarded, csp, path);
+  }
+  assert.equal(nonces.size, framed.length, 'a nonce came twice');
+  // The rest keep the public policy, the plain answers proxy.ts writes included.
+  for (const [path, method] of [
+    ['/robots.txt', 'GET'],
+    ['/api/health', 'GET'],
+    ['/media/x', 'GET'],
+    ['/no-such-page', 'GET'],
+    ['/studio', 'GET'],
+    ['/samples', 'GET'],
+    ['/feed.xml', 'GET'],
+    ['/preview/x', 'GET'],
+    ['/sample', 'POST'],
+  ] as const) {
+    const csp = (await proxy(request(path, method))).headers.get('content-security-policy') ?? '';
+    const expected = path.startsWith('/preview') ? /^default-src 'none'/ : PUBLIC_CSP;
+    if (method === 'POST') {
+      // A 405 under /sample is still a /sample response: the demo policy.
+      assert.match(csp, DEMO_CSP, `${method} ${path}`);
+    } else {
+      assert.match(csp, expected, path);
+    }
+  }
+  // No other profile sends the demo policy anywhere.
+  for (const profile of ['owner', 'read-only'] as const) {
+    deploy(t, profile);
+    for (const path of ['/', '/sample', '/studio']) {
+      const csp = (await proxy(request(path))).headers.get('content-security-policy') ?? '';
+      assert.doesNotMatch(csp, /worker-src|form-action 'none'/, `${profile} ${path}`);
+    }
   }
 });
 
@@ -1442,9 +1505,10 @@ test("a visitor page's GET or HEAD goes on marked with the experience segment of
   // Under demo, /sample and everything below it.
   deploy(t, 'demo');
   assert.equal(segment(await proxy(visitor('/sample'))), 'fallback');
-  // A ?variant= that names nothing registered is a path no route matches, as before.
-  assert.equal(segment(await proxy(visitor('/sample?variant=acme-gone'))), null);
-  assert.equal(decision(await proxy(visitor('/sample?variant=acme-gone'))), 'missing');
+  // A ?variant= that names nothing registered falls back to the sample's own
+  // selection (#9), whose page then drops it with a 307.
+  assert.equal(segment(await proxy(visitor('/sample?variant=acme-gone'))), 'fallback');
+  assert.equal(decision(await proxy(visitor('/sample?variant=acme-gone'))), 'served');
 });
 
 test("only proxy.ts names an experience segment: a client's own mark goes no further, on any path, to any method, in every profile (#6, Slice 2)", async (t) => {
@@ -1807,13 +1871,17 @@ test("a Content-Security-Policy or Content-Security-Policy-Report-Only header th
       assert.ok(passed.includes('x-request-id'), what);
       assert.ok(!passed.includes('content-security-policy-report-only'), what);
       const policy = response.headers.get('x-middleware-request-content-security-policy');
-      // Studio's own policy, or the public site's, each with its own nonce,
-      // the one its response sends.
+      // Studio's own policy, the demo's (#9), or the public site's, each
+      // with its own nonce, the one its response sends.
       assert.ok(passed.includes('content-security-policy'), what);
       assert.equal(policy, response.headers.get('content-security-policy'), what);
       assert.match(
         policy ?? '',
-        profile === 'owner' && path === '/studio/sign-in' ? STUDIO_CSP : PUBLIC_CSP,
+        profile === 'owner' && path === '/studio/sign-in'
+          ? STUDIO_CSP
+          : profile === 'demo' && path === '/'
+            ? DEMO_CSP
+            : PUBLIC_CSP,
         what,
       );
       assert.doesNotMatch(policy ?? '', /clientchosen/, what);

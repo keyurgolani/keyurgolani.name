@@ -4,7 +4,8 @@ import { notFound, redirect } from 'next/navigation';
 import type { VariantRegistry } from '@portfolio/variant-contract';
 import { visitorControlModel } from '~/lib/document-appearance';
 import { ExperienceDocument, hostLang, type VariantLoader } from '~/lib/experience-document';
-import { sampleSelection, type SearchParams } from '~/lib/sample';
+import type { SearchParams } from '~/lib/sample';
+import { canonicalLocation, isCanonical, sampleQuery, type SampleQuery } from '~/lib/sample-query';
 import { REGISTRY } from '~/lib/variants';
 import { resolveVisitorPath, type VisitorPath } from '~/lib/visitor-routes';
 import { requireDeploymentConfig } from './config-store';
@@ -76,15 +77,32 @@ export function experiencePage(
     const decision = resolveRoute(profile, asked, query);
     if (decision.status !== 'served' || !decision.entry.experience) notFound();
     const sample = decision.entry.pattern === SAMPLE_PATTERN;
-    let path: VisitorPath;
-    if (sample) {
-      const selection = sampleSelection(search, registry);
-      if (selection === null) notFound();
-      path = { segments: segments.slice(1), basePath: '/sample', ...selection };
-    } else {
-      path = { segments, basePath: '' };
+    let path: VisitorPath = { segments, basePath: '' };
+    let selection: SampleQuery | null = null;
+    let readView = getPublicView;
+    // Demo reads its appearance from the query (#19, Slice 4), on /sample
+    // and the showroom at /. It goes through the registry first (#9), so no
+    // value the registry rejected decides what renders, and the page renders
+    // from the canonical query alone. Any other spelling of it answers a 307
+    // to the canonical URL on the deployment's own origin. Next still echoes
+    // the URL as sent, percent-encoded, in the payloads around the page.
+    // Only /sample's `variant` picks the composition.
+    if (sample || (profile === 'demo' && decision.entry.pattern === '/')) {
+      // One read of the live revision, which the route below renders too.
+      const view = await getPublicView();
+      readView = async () => view;
+      selection = sampleQuery(query, view.site, { registered: sample ? registry : [] });
+      if (!isCanonical(query, selection)) redirect(canonicalLocation(origin, segments, selection));
     }
-    const route = await resolveVisitorPath(path, getPublicView, registry);
+    if (sample && selection) {
+      path = {
+        segments: segments.slice(1),
+        basePath: '/sample',
+        query: selection.query,
+        ...(selection.selected === undefined ? {} : { selected: selection.selected }),
+      };
+    }
+    const route = await resolveVisitorPath(path, readView, registry);
     const here = segmentFor(
       { profile, pattern: decision.entry.pattern, segments, query },
       registry,
@@ -97,7 +115,8 @@ export function experiencePage(
     const appearance = await visitorPageAppearance(
       route.view.site,
       route.composition.rendered.manifest.id,
-      search,
+      selection ? selection.query : search,
+      selection?.reduceMotion ?? false,
     );
     const lang = hostLang(route.view);
     return ExperienceDocument({

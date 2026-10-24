@@ -42,6 +42,12 @@ export interface DocumentAppearanceInput {
   readonly query?: SelectionText;
   /** A preview's environment (#7), which reads no visitor value. */
   readonly environment?: EnvironmentOverride;
+  /**
+   * Demo's /sample with `motion=reduce` (#9): motion reduced, as a preview
+   * that reduces it renders, with the query's values still applied. It only
+   * ever lowers motion.
+   */
+  readonly reduceMotion?: boolean;
   readonly registry?: AppearanceRegistry;
 }
 
@@ -101,6 +107,7 @@ export function documentAppearance(input: DocumentAppearanceInput): ResolvedAppe
       ? { environment: previewEnvironment(environment) }
       : {
           visitor: { cookie: input.cookie ?? null, ...(input.query ? { query: input.query } : {}) },
+          ...(input.reduceMotion ? { environment: { motion: 'reduced' as const } } : {}),
         }),
     profile: input.profile,
     registry: input.registry ?? APPEARANCE_REGISTRY,

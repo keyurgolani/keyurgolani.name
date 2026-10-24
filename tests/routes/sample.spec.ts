@@ -1,4 +1,5 @@
 import { expect, test } from '../harness/fixtures';
+import { send } from '../harness/http-client.mjs';
 import { withRscHash } from '../harness/rsc';
 import { DEMO, DEMO_APP, expectNotFoundPage, PUBLIC_FILE } from './apps';
 
@@ -108,8 +109,6 @@ test.describe('without JavaScript', () => {
         `/sample/no-such-view${CHAPTERS}`,
         `/sample/work/tide-tables${CHAPTERS}`,
         `/sample/work/tide-tables/credits${CHAPTERS}`,
-        '/sample/chapters/about?variant=fallback',
-        '/sample?variant=canary-variant',
         // A path no installed variant declares, and a slug the live revision doesn't route.
         '/no-such-view',
         '/work/tide-tables',
@@ -119,6 +118,67 @@ test.describe('without JavaScript', () => {
     },
   );
 });
+
+test(
+  "a query the registry doesn't accept, in any part, is a 307 to the canonical one on the deployment's origin, which renders (#9)",
+  { annotation: [{ type: 'route', description: '/sample/[[...path]]' }, DEMO] },
+  async ({ request, app }) => {
+    for (const [path, location] of [
+      // An unknown or unselectable variant falls back to the sample's own.
+      ['/sample?variant=canary-variant', '/sample'],
+      ['/sample?variant=fallback&mode=dark', '/sample?mode=dark'],
+      ['/sample?variant=fixture-chapters&variant=fixture-chapters', '/sample'],
+      // Another key, a value no axis accepts, motion other than reduce, another order.
+      ['/sample?utm_source=mail', '/sample'],
+      ['/sample?mode=sepia&language=no-such-pack', '/sample'],
+      ['/sample?motion=full&mode=light', '/sample?mode=light'],
+      [`/sample?mode=dark&variant=fixture-chapters`, `/sample${CHAPTERS}&mode=dark`],
+      // The path below /sample comes along, each segment as one.
+      ['/sample/chapters/about?variant=fallback', '/sample/chapters/about'],
+      // Values that look like a URL or a host never reach the location.
+      ['/sample?mode=%2F%2Fevil.example&scheme=https%3A%2F%2Fevil.example', '/sample'],
+    ] as const) {
+      const spoofed: Record<string, string>[] = [{}, { 'x-forwarded-host': 'evil.example' }];
+      for (const headers of spoofed) {
+        const response = await request.get(path, { maxRedirects: 0, headers });
+        expect(response.status(), path).toBe(307);
+        // Absolute, on PORTFOLIO_ORIGIN, whatever the request said its host was.
+        expect(response.headers().location, path).toBe(`${app.origin}${location}`);
+      }
+      // A Host that isn't PORTFOLIO_ORIGIN's, which Playwright can't send, so
+      // over node:http: the location still names PORTFOLIO_ORIGIN, never it.
+      for (const host of [
+        'evil.example',
+        'evil.example:8443',
+        `demo.${new URL(app.origin).host}`,
+      ]) {
+        const sent: Record<string, string>[] = [{ host }, { host, 'x-forwarded-host': host }];
+        for (const headers of sent) {
+          const answer = await send({
+            protocol: 'http:',
+            port: Number(new URL(app.origin).port),
+            path,
+            headers,
+          });
+          expect(answer.status, `${path} Host ${host}`).toBe(307);
+          expect(answer.headers.location, `${path} Host ${host}`).toBe(`${app.origin}${location}`);
+        }
+      }
+    }
+    // The canonical URL renders as asked.
+    for (const path of [
+      '/sample',
+      '/sample?mode=dark',
+      `/sample${CHAPTERS}&mode=dark&motion=reduce`,
+    ]) {
+      expect((await request.get(path, { maxRedirects: 0 })).status(), path).toBe(200);
+    }
+    // And the view redirect below /sample still keeps it, on the next request.
+    const view = await request.get('/sample/chapters/about', { maxRedirects: 0 });
+    expect(view.status()).toBe(307);
+    expect(view.headers().location).toBe('/sample');
+  },
+);
 
 test(
   'a view another profile serves at the root is absent under demo: the proxy answers it',

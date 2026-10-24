@@ -12,7 +12,7 @@ import {
 } from '@portfolio/variant-contract';
 import { setLiveCaseStudies } from '../server/config-store';
 import { listRoutes, RETIRED_PATTERNS, routeResolver } from '../server/routes';
-import { sampleSelection } from './sample';
+import { sampleVariant } from './sample';
 import { REGISTRY } from './variants';
 import { resolveVisitorPath, type VisitorPath, type VisitorRoute } from './visitor-routes';
 
@@ -359,16 +359,28 @@ test('the route table calls a path missing exactly when no visitor page renders 
       assert.equal(route.kind === 'not-found', missing, `${variant} ${pathname}`);
     }
   }
-  // Below /sample, with and without ?variant=, as the page reads it.
+  // Below /sample, with and without ?variant=, as the page reads it: one
+  // this build doesn't register falls back to the sample's own (#9).
   const sample = viewFor(PAIR.site.appearance.variant);
   for (const segments of PATHS) {
-    for (const query of ['', 'variant=fixture-chapters', 'variant=fixture-notes']) {
+    for (const query of [
+      '',
+      'variant=fixture-chapters',
+      'variant=fixture-notes',
+      'variant=canary-variant',
+    ]) {
       const pathname = `/sample/${segments.join('/')}`;
       const params = new URLSearchParams(query);
       const missing = table('demo', pathname, params).status === 'missing';
-      const selection = sampleSelection(Object.fromEntries(params), BUILD);
-      assert.ok(selection, query);
-      const { route } = await resolve({ segments, basePath: '/sample', ...selection }, sample);
+      const selected = sampleVariant(params, BUILD);
+      const { route } = await resolve(
+        {
+          segments,
+          basePath: '/sample',
+          ...(selected === undefined ? {} : { selected, query: { variant: selected } }),
+        },
+        sample,
+      );
       assert.equal(route.kind === 'not-found', missing, `${pathname}?${query}`);
     }
   }

@@ -8,7 +8,10 @@
 // profile, and every Studio response asks for no-store. Every preview path,
 // in every profile, gets the preview's nonce CSP, noindex, no-referrer, and
 // private, no-store. Only the build's assets and /_portfolio allow any
-// origin. Paths match in any case, as Next matches header sources. The
+// origin. Under demo (#9), the showroom at /, every /sample path, and Demo
+// Studio's pages get the demo policy in place of the public one or Studio's,
+// with frame-ancestors 'self' on /sample alone. Paths match in any case, as
+// Next matches header sources. The
 // profile matrix and the profile smoke check responses against these.
 // headers.test.ts and proxy.test.ts check next.config.ts and proxy.ts
 // themselves.
@@ -32,6 +35,27 @@ export const BASELINE_HEADERS = Object.freeze({
 /** A Studio page's CSP in production, with its nonce: 16 random bytes in base64. */
 export const STUDIO_CSP =
   /^default-src 'self'; script-src 'self' 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'none'; object-src 'none'$/;
+
+/**
+ * The demo policy in production (#9): Studio's, with worker-src 'self' and
+ * form-action 'none', on the showroom, every /sample path, and Demo Studio.
+ * Its second group is who may frame the page: 'self' on /sample alone.
+ */
+export const DEMO_CSP =
+  /^default-src 'self'; script-src 'self' 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; frame-src 'self'; frame-ancestors ('self'|'none'); form-action 'none'; base-uri 'none'; object-src 'none'$/;
+
+/**
+ * Whether `pathname`, read percent-decoded, is a demo page outside Studio
+ * (#9): the showroom at / or a path under /sample, as proxy.ts reads it.
+ *
+ * @param {string} pathname
+ * @returns {'showroom' | 'sample' | null}
+ */
+export function demoPagePath(pathname) {
+  const path = decoded(pathname);
+  if (path === '/') return 'showroom';
+  return /^\/sample(?:\/|$)/.test(path) ? 'sample' : null;
+}
 
 /**
  * A preview response's CSP in production (#7), with its nonce on scripts
@@ -109,14 +133,20 @@ export const isStudioTransport = (/** @type {string} */ pathname) =>
  * `headers` holds lowercase names. `studio` says whether the profile serves
  * a Studio page, as owner does: under one that doesn't, a Studio path is as
  * unknown as any other. `origin`, the app's PORTFOLIO_ORIGIN, is the one
- * origin a preview's frame-ancestors may name.
+ * origin a preview's frame-ancestors may name. `demo` says the profile is
+ * demo (#9), whose showroom, /sample paths, and Studio pages get the demo
+ * policy in place of the public one and Studio's.
  *
  * @param {string} pathname
  * @param {Readonly<Record<string, string | undefined>>} headers
- * @param {{ studio?: boolean, origin?: string }} [options]
+ * @param {{ studio?: boolean, origin?: string, demo?: boolean }} [options]
  * @returns {string[]}
  */
-export function headerProblems(pathname, headers, { studio: served = true, origin } = {}) {
+export function headerProblems(
+  pathname,
+  headers,
+  { studio: served = true, origin, demo = false } = {},
+) {
   const problems = [];
   const expect = (/** @type {string} */ name, /** @type {string | undefined} */ value) => {
     if (headers[name] !== value) problems.push(`${name} is ${headers[name]}, not ${value}`);
@@ -127,6 +157,14 @@ export function headerProblems(pathname, headers, { studio: served = true, origi
       problems.push(`content-security-policy is ${csp}, not the public site's nonce CSP`);
     }
   };
+  const demoPolicy = (/** @type {string} */ framing) => {
+    const csp = headers['content-security-policy'];
+    const policy = csp === undefined ? null : DEMO_CSP.exec(csp);
+    if (!policy) problems.push(`content-security-policy is ${csp}, not the demo's nonce CSP`);
+    else if (policy[2] !== framing)
+      problems.push(`frame-ancestors is ${policy[2]}, not ${framing}`);
+  };
+  const demoPage = demo ? demoPagePath(pathname) : null;
   expect('x-content-type-options', 'nosniff');
   expect('access-control-allow-origin', isSharedAsset(pathname) ? '*' : undefined);
   const studio = served && isStudioPath(pathname);
@@ -147,9 +185,15 @@ export function headerProblems(pathname, headers, { studio: served = true, origi
     expect('referrer-policy', 'same-origin');
     expect('cross-origin-resource-policy', 'same-origin');
     const csp = headers['content-security-policy'];
-    if (csp === undefined || !STUDIO_CSP.test(csp)) {
+    if (demo) {
+      demoPolicy("'none'");
+    } else if (csp === undefined || !STUDIO_CSP.test(csp)) {
       problems.push(`content-security-policy is ${csp}, not Studio's nonce CSP`);
     }
+  } else if (demoPage) {
+    expect('referrer-policy', BASELINE_HEADERS['referrer-policy']);
+    demoPolicy(demoPage === 'sample' ? "'self'" : "'none'");
+    expect('cross-origin-resource-policy', undefined);
   } else if (transport) {
     expect('referrer-policy', 'same-origin');
     expect('cross-origin-resource-policy', 'same-origin');
