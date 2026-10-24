@@ -10,6 +10,7 @@ import {
   type VisitorAppearanceModel,
   type AppearanceEnvironment,
   type AppearanceRegistry,
+  type AppearanceStylesheets,
   type GeneratedSchemes,
   type Profile,
   type ResolvedAppearance,
@@ -115,6 +116,8 @@ export function visitorControlModel(
   appearance: ResolvedAppearance,
   registry: AppearanceRegistry = APPEARANCE_REGISTRY,
   schemes?: unknown,
+  /** Where each choice's stylesheet is: the page's, generated schemes' included (#20). */
+  stylesheets: AppearanceStylesheets = APPEARANCE_STYLESHEETS,
 ): VisitorAppearanceModel {
   return visitorAppearanceModel({
     registry,
@@ -122,7 +125,7 @@ export function visitorControlModel(
     generated: storedSchemes(schemes, registry),
     visitorControls: { ...(site?.visitorControls ?? DEFAULT_VISITOR_CONTROLS), variant: 'locked' },
     profile,
-    stylesheets: APPEARANCE_STYLESHEETS,
+    stylesheets,
   });
 }
 

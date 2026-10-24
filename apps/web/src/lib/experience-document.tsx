@@ -1,7 +1,7 @@
 import type { ComponentType, ReactNode } from 'react';
 import type { VariantComponent } from '@portfolio/kit/sections';
 import type { PublicView } from '@portfolio/schema';
-import type { ResolvedAppearance } from '@portfolio/appearance';
+import type { AppearanceStylesheets, ResolvedAppearance } from '@portfolio/appearance';
 import { PresentationBoundary } from '@portfolio/appearance/react';
 import { buildRenderInput, type RouteTarget } from '@portfolio/variant-contract';
 import './host-modules';
@@ -48,6 +48,13 @@ export interface ExperienceDocumentProps {
   readonly hostModules: ComponentType;
   /** What the document boundary renders: lib/document-appearance.ts's answer for this page. */
   readonly appearance: ResolvedAppearance;
+  /**
+   * Where the boundary's stylesheets are: the build's, and the generated
+   * schemes the page renders from (#20), the live revision's under
+   * /_portfolio/scheme/ or a grant's under its own path. The build's alone
+   * without it.
+   */
+  readonly stylesheets?: AppearanceStylesheets;
   readonly linkBase: LinkBase;
   readonly route: RouteTarget;
   /** The deployment's canonical origin, PORTFOLIO_ORIGIN. */
@@ -91,6 +98,7 @@ export async function ExperienceDocument(props: ExperienceDocumentProps) {
       )}
       <DocumentBoundary
         appearance={props.appearance}
+        stylesheets={props.stylesheets}
         main={input.ids.main}
         lang={hostLang(unit)}
         nonce={props.nonce}
@@ -116,6 +124,7 @@ export async function ExperienceDocument(props: ExperienceDocumentProps) {
  */
 export function DocumentBoundary({
   appearance,
+  stylesheets = APPEARANCE_STYLESHEETS,
   main,
   lang,
   nonce,
@@ -123,6 +132,8 @@ export function DocumentBoundary({
   children,
 }: {
   appearance: ResolvedAppearance;
+  /** Where its stylesheets are, a generated scheme's included (#20): the build's by default. */
+  stylesheets?: AppearanceStylesheets;
   /** The id of the variant's main, which the skip link goes to. */
   main: string;
   /** The skip link's language, when the portfolio's isn't English. */
@@ -142,7 +153,7 @@ export function DocumentBoundary({
         kind="document"
         appearance={appearance}
         ids={{ prefix: '', main }}
-        stylesheets={APPEARANCE_STYLESHEETS}
+        stylesheets={stylesheets}
         skipLink={{ label: 'Skip to content', ...(lang ? { lang } : {}) }}
         {...(nonce ? { nonce } : {})}
       >

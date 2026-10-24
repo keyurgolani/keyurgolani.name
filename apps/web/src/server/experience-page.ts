@@ -11,7 +11,8 @@ import { requireDeploymentConfig } from './config-store';
 import { SAMPLE_PATTERN, segmentFor } from './experience';
 import { getPublicView } from './public-view';
 import { resolveRoute } from './routes';
-import { liveSchemes, visitorPageAppearance } from './visitor-appearance';
+import { liveSchemeSheets, liveStylesheets } from './generated-schemes';
+import { visitorPageAppearance } from './visitor-appearance';
 
 // Every visitor page renders through here (#5, Slice 4; #6, Slice 2), in the
 // experience segment of the variant it renders: registry generation writes
@@ -94,8 +95,12 @@ export function experiencePage(
     if (here !== id || rendered !== id) redirect(`${asked}${query.size > 0 ? `?${query}` : ''}`);
     if (route.kind === 'not-found') notFound();
     if (route.kind === 'redirect') redirect(route.location);
-    // The live revision's stored generated schemes (#20 PR 3), never a draft's.
-    const schemes = await liveSchemes();
+    // The live revision's stored generated schemes (#20 PR 3), never a
+    // draft's, and their stylesheets, which the boundary links from
+    // /_portfolio/scheme/ and the control preloads.
+    const live = await liveSchemeSheets();
+    const { schemes } = live;
+    const stylesheets = liveStylesheets(live);
     const appearance = await visitorPageAppearance(
       route.view.site,
       route.composition.rendered.manifest.id,
@@ -107,9 +112,17 @@ export function experiencePage(
       unit: route.view,
       selection: route.composition,
       appearance,
+      stylesheets,
       // The slot's control comes back to the page as the visitor asked for it.
       control: {
-        model: visitorControlModel(route.view.site, profile, appearance, undefined, schemes),
+        model: visitorControlModel(
+          route.view.site,
+          profile,
+          appearance,
+          undefined,
+          schemes,
+          stylesheets,
+        ),
         returnTo: `${asked}${query.size > 0 ? `?${query}` : ''}`,
         ...(lang ? { lang } : {}),
       },
