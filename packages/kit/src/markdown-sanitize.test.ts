@@ -264,7 +264,15 @@ test('@portfolio/kit/markdown is the post-pass under the react-server condition 
   const byPath = kitModules().filter((file) =>
     /from '(?:\.\.?\/)+markdown';/.test(readFileSync(path.join(KIT, file), 'utf8')),
   );
-  assert.deepEqual(byPath, [path.join('src', 'markdown-post-pass.ts')]);
+  // The browser post-pass's installer (#9) reaches the renderer's module for its hook alone.
+  assert.deepEqual(byPath, [
+    path.join('src', 'markdown-local.ts'),
+    path.join('src', 'markdown-post-pass.ts'),
+  ]);
+  assert.doesNotMatch(
+    readFileSync(path.join(KIT, 'src/markdown-local.ts'), 'utf8'),
+    /\brender(?:Inline)?Markdown\b/,
+  );
   for (const file of ['src/sections/rich-text.tsx', 'src/index.ts']) {
     assert.match(
       readFileSync(path.join(KIT, file), 'utf8'),

@@ -10,7 +10,13 @@ import {
 } from './server/config-store';
 import { isExperiencePath, REFERENCE_PATTERN, segmentFor } from './server/experience';
 import { demoCsp, demoPagePath } from './server/demo-headers';
-import { isPreviewPath, previewCsp, previewHeaders } from './server/preview-headers';
+import {
+  isLocalPreviewPath,
+  isPreviewPath,
+  localPreviewCsp,
+  previewCsp,
+  previewHeaders,
+} from './server/preview-headers';
 import { publicCsp } from './server/public-headers';
 import { PORTFOLIO_FILES } from './server/portfolio-files';
 import { READY_PATH, STARTING, STARTING_HEADERS } from './server/ready-starting';
@@ -190,7 +196,10 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     : studio
       ? studioCsp(newNonce(), COMPILED_MODE, deployment.previewOrigin)
       : preview
-        ? previewCsp(newNonce(), { mode: COMPILED_MODE, studioOrigin: deployment.origin })
+        ? // Demo Studio's local frame (#9) takes blob: media from the visitor's own files.
+          (deployment.profile === 'demo' && isLocalPreviewPath(pathname)
+            ? localPreviewCsp
+            : previewCsp)(newNonce(), { mode: COMPILED_MODE, studioOrigin: deployment.origin })
         : publicCsp(newNonce(), COMPILED_MODE);
   if (studio) {
     Object.assign(extra, STUDIO_RESPONSE_HEADERS, { 'content-security-policy': csp });
