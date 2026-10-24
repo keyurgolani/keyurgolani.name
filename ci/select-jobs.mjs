@@ -432,7 +432,7 @@ export const LOCAL_COMMANDS = {
     'pnpm format:check && pnpm lint && pnpm typecheck && pnpm check:skills && pnpm check:registry && pnpm check:appearance && pnpm check:deps && pnpm check:pins && pnpm check:workflows',
   unit: 'pnpm test',
   build:
-    'pnpm build && pnpm check:source-maps && pnpm check:standalone && pnpm check:markdown-pass && pnpm check:catalog-build',
+    'pnpm build && pnpm check:source-maps && pnpm check:standalone && pnpm check:markdown-pass && pnpm check:catalog-build && pnpm check:studio-chunks',
   browser: 'pnpm build && pnpm ci:browser',
   routes: 'pnpm test:routes',
   'appearance-browser': 'pnpm test:appearance',
