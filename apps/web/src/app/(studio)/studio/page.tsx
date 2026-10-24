@@ -1,4 +1,3 @@
-import dynamic from 'next/dynamic';
 import { frameSandbox } from '~/lib/preview-frame';
 import { getDeploymentState, requireDeploymentConfig } from '~/server/config-store';
 import { demoStudioSetup } from '~/server/demo-studio';
@@ -8,6 +7,7 @@ import { signInLocation } from '~/server/return-to';
 import { appearanceCatalog } from '~/server/studio-appearance';
 import { studioPolicy } from '~/server/studio-policy';
 import { requireDemoPage, requireOwnerPage } from '~/server/studio-guard';
+import { StudioEntry } from '../_components/studio-entry';
 
 // /studio (#8, Slice 1; #9): the Owner Studio shell under owner, and Demo
 // Studio under demo. Under owner, with a session: requireOwnerPage sends a
@@ -18,15 +18,9 @@ import { requireDemoPage, requireOwnerPage } from '~/server/studio-guard';
 // and its backend. Under demo, with no session: requireDemoPage lets
 // sandbox.view through, and Demo Studio gets the build's appearance catalog
 // and the bundled sample, and keeps everything else in the visitor's
-// browser. Each profile's shell is its own chunk, which the other's page
-// never loads.
-
-const StudioShell = dynamic(() =>
-  import('../_components/shell/studio-shell').then((module) => module.StudioShell),
-);
-const DemoShell = dynamic(() =>
-  import('../_components/demo-shell').then((module) => module.DemoShell),
-);
+// browser. StudioEntry renders the profile's shell, each through a client
+// import() of its own, so each profile's /studio loads its own shell's
+// chunks and none of the other's.
 
 export const metadata = { title: 'Portfolio Studio' };
 
@@ -36,7 +30,13 @@ async function Studio() {
       ? requireDemoPage('sandbox.view')
       : await requireOwnerPage('studio.view');
   if (!owner) {
-    return <DemoShell policy={studioPolicy('demo', null)} setup={await demoStudioSetup()} />;
+    return (
+      <StudioEntry
+        profile="demo"
+        policy={studioPolicy('demo', null)}
+        setup={await demoStudioSetup()}
+      />
+    );
   }
   const { authorized, csrfToken } = owner;
   const state = getDeploymentState();
@@ -53,7 +53,8 @@ async function Studio() {
       }
     : null;
   return (
-    <StudioShell
+    <StudioEntry
+      profile="owner"
       csrfToken={csrfToken}
       policy={policy}
       appearance={appearanceCatalog()}
