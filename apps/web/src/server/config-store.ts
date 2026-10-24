@@ -1,5 +1,6 @@
 import type { Readable } from 'node:stream';
-import type { CatalogReader } from './catalog-port';
+import type { PublicView } from '@portfolio/schema';
+import type { CatalogReader, PublicationUnit } from './catalog-port';
 import type { DeploymentConfig } from './config';
 import type { PreviewGrantsPort } from './preview-port';
 import type { Dispatch, StudioPages } from './studio-port';
@@ -31,6 +32,32 @@ export interface DeploymentState {
    * their startup media cache instead.
    */
   readonly mediaBlobs?: (hash: `sha256:${string}`) => Promise<Readable | null>;
+  /**
+   * Demo only: the read-only reference (#9), verified whole at startup from
+   * PORTFOLIO_REFERENCE_DIR. Unset when none is configured or it failed.
+   */
+  readonly reference?: ServedReference;
+}
+
+/**
+ * The demo's read-only reference (#9), as startup verified and froze it. The
+ * mount is read once, then: a request reads only this, so a change on disk
+ * does nothing until the server restarts.
+ */
+export interface ServedReference {
+  /** The bundle's revision ID. */
+  readonly revisionId: string;
+  readonly unit: PublicationUnit;
+  /** What visitors may see of it: #10's public view, under /reference/media. */
+  readonly view: PublicView;
+  /** The media document the view's renditions resolve against. */
+  readonly media: unknown;
+  /** The composition its site selects, or the fallback's when this build doesn't register it. */
+  readonly composition: string;
+  /** The case-study slugs the view routes, under /reference/work. */
+  readonly caseStudies: ReadonlySet<string>;
+  /** A rendition blob the view keeps, verified at startup and held in memory, or undefined. */
+  readonly blob: (hash: `sha256:${string}`) => Uint8Array | undefined;
 }
 
 export const NOT_LOADED =
@@ -157,4 +184,9 @@ export function liveCaseStudies(): ReadonlySet<string> {
 /** Called by the composition root's reader on every getLive(), and by tests. */
 export function setLiveCaseStudies(slugs: ReadonlySet<string> | undefined): void {
   (globalThis as Holder)[LIVE_CASE_STUDIES] = slugs === undefined ? undefined : new Set(slugs);
+}
+
+/** The demo's read-only reference (#9), when startup verified one. */
+export function servedReference(): ServedReference | undefined {
+  return getDeploymentState()?.reference;
 }

@@ -79,6 +79,8 @@ const EXTRA: Readonly<Record<string, readonly string[]>> = {
     'capabilities',
     'adapters',
     'secrets',
+    // demo's read-only reference (#9): served, unavailable, or absent.
+    'reference',
   ],
 };
 
