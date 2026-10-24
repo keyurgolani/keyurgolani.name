@@ -199,7 +199,11 @@ test('a token an owner server issued, under either cookie name, reaches no Studi
           const what = `${profile} ${entry.pattern}`;
           expect(carried.headers['set-cookie'], what).toBeUndefined();
           expect(shape(carried), what).toEqual(shape(none));
-          if (routeAccess(profile, entry) === 'absent') expect(carried.status, what).toBe(404);
+          // Absent unless another entry serves the path here, as demo's /studio does (#9).
+          const served = studioPages.some(
+            (each) => each.pattern === entry.pattern && routeAccess(profile, each) !== 'absent',
+          );
+          if (!served) expect(carried.status, what).toBe(404);
         }
         for (const operation of listOperations()) {
           const pathname = `/api/studio/${operation.name}`;
