@@ -35,7 +35,7 @@ import type { HandlerContext } from '../dispatcher';
 import { authorize } from '../authorize';
 import { listOperations } from '../operations';
 import { previewAsset } from '../preview-asset';
-import type { GrantSessionPort } from '../preview-port';
+import type { GrantSessionPort, PreviewFixture } from '../preview-port';
 import { schemeGenerators } from '../scheme-generators';
 import type { Session } from '../session';
 import { isStudioResult } from '../studio-result';
@@ -89,8 +89,15 @@ interface Setup {
 
 async function setup(
   t: TestContext,
-  options: { readonly schemes?: SchemeGenerators } = {},
+  options: {
+    readonly schemes?: SchemeGenerators;
+    /** The fixtures a fixture grant opens, `complete` alone unless a test passes its own. */
+    readonly fixtures?: (id: string) => PreviewFixture | null;
+  } = {},
 ): Promise<Setup> {
+  const fixtures =
+    options.fixtures ??
+    ((id: string) => (id === 'complete' ? pair(portfolio('Fixture Person')) : null));
   const dataDir = mkdtempSync(path.join(tmpdir(), 'owner-preview-'));
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
   assert.equal(await preflight({ dataDir }), null);
@@ -136,7 +143,7 @@ async function setup(
     config,
     sessions: port,
     ...liveContext(),
-    fixtures: (id) => (id === 'complete' ? pair(portfolio('Fixture Person')) : null),
+    fixtures,
   });
   t.after(() => previews.close());
   setDeploymentState({
@@ -750,4 +757,55 @@ test('a grant serves the renditions of the media it pinned, private and no-store
   // The session ends, and the grant with it.
   await endSession();
   await refused(await get(next, `portrait/${'c'.repeat(64)}/w480-a1.webp`), 'after the session');
+});
+
+/** A stored generated scheme, as a revision's snapshots/schemes.json holds one (#20 PR 3). */
+function storedScheme(seed: string) {
+  const record = JSON.parse(
+    readFileSync(
+      new URL(
+        '../../../../../packages/appearance-schemes/generated/brand-seed.json',
+        import.meta.url,
+      ),
+      'utf8',
+    ),
+  ) as { result: { generator: unknown; tokens: unknown } };
+  return {
+    generator: record.result.generator,
+    inputsHash: createHash('sha256').update(seed).digest('hex'),
+    tokens: record.result.tokens,
+  };
+}
+
+test("a grant opens with its own subject's stored schemes, checked, never another grant's, and none once it's revoked (#20 PR 3)", async (t) => {
+  const first = storedScheme('#5b5bd6');
+  const second = storedScheme('#3366ff');
+  const { command, previews } = await setup(t, { fixtures: (id) =>
+    id === 'complete'
+      ? { ...pair(portfolio('First Person')), snapshots: { schemes: { 'brand-seed': first } } }
+      : id === 'other'
+        ? {
+            ...pair(portfolio('Second Person')),
+            snapshots: { schemes: { 'brand-seed': second, broken: { generator: 7 } } },
+          }
+        : id === 'plain'
+          ? pair(portfolio('Plain Person'))
+          : null,
+  });
+  const mint = async (fixture: string) =>
+    minted(await command('preview.grant.mint', { subject: { fixture }, environment: ENVIRONMENT }));
+  const a = await mint('complete');
+  const b = await mint('other');
+  const plain = await mint('plain');
+  // Each grant's own, read twice so the second comes from its cache entry.
+  for (let read = 0; read < 2; read += 1) {
+    assert.deepEqual((await previews.port.open(a))?.schemes, { 'brand-seed': first });
+    // An entry that doesn't check is left out.
+    assert.deepEqual((await previews.port.open(b))?.schemes, { 'brand-seed': second });
+    assert.equal((await previews.port.open(plain))?.schemes, undefined);
+  }
+  // A revoked grant opens nothing, its schemes included.
+  assert.deepEqual(await command('preview.grant.revoke', { grant: a }), { revoked: true });
+  assert.equal(await previews.port.open(a), null);
+  assert.deepEqual((await previews.port.open(b))?.schemes, { 'brand-seed': second });
 });
