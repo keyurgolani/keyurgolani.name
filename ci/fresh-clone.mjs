@@ -20,6 +20,10 @@
 //     sample, which refuses it (sample_identity), then the guide's identity
 //     step, after which it starts and renders the new name;
 //   - deployment.md's demo `pnpm start` on the sample.
+// Each server that starts after the identity step, and each demo, is held
+// to lib/identity.mjs on its origin: read-only and owner publish the new
+// name and that origin in their canonical link, og:url, Open Graph image,
+// sitemap, robots, feed, and JSON-LD, and demo shows the sample alone.
 // In containers, only where FRESH_CLONE_CONTAINERS=1 (CI), with Docker,
 // each profile's section of deployment.md from the repository, its cd
 // steps resolved from where the run is, as a shell would:
@@ -28,10 +32,8 @@
 //     which starts;
 //   - the owner sequence: the build, the hash (scripted with --stdin), and
 //     the Compose run, which refuses the untouched sample with exactly
-//     sample_identity, and after the identity step with exactly its
-//     first-start import's refusal of the sample's unregistered variant.
-//     It reaches ready once the bundled sample pair imports (PENDING, which
-//     fails the run once the clone's own portfolio-store imports it);
+//     sample_identity, and after the identity step imports the sample at
+//     its first start and reaches ready (/api/ready);
 //   - the demo Compose run, which serves the sample.
 // After the first Compose run, the runner's DOCKER-USER chain rejects and
 // logs every new connection from Docker's address pools to anything off
@@ -68,6 +70,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fatalCodes, maskCommands } from './lib/profile-checks.mjs';
 import { finalVerdict } from './lib/verdict.mjs';
+import { IDENTITY_PATHS, identityProblems, ogImagePath } from './lib/identity.mjs';
 import { hermeticProblems, TOKEN_KEYS } from './lib/hermetic.mjs';
 import {
   currentGate,
@@ -231,6 +234,7 @@ export const STEPS = [
     // The sample's content names its author in other places too (a quote,
     // the authors of a paper), so only the new name is checked here.
     expect: { status: 200, includes: [FIXTURE_NAME] },
+    identity: { profile: 'read-only', origin: 'https://jane.name', name: FIXTURE_NAME },
   },
   {
     id: 'demo-starts',
@@ -239,6 +243,7 @@ export const STEPS = [
     kind: 'serve',
     path: '/',
     expect: { status: 200, includes: [SAMPLE_NAME] },
+    identity: { profile: 'demo', origin: 'https://demo.jane.name', name: SAMPLE_NAME },
   },
   // ---- containers: CI only ----
   // Each profile's section of deployment.md starts from the repository,
@@ -307,6 +312,7 @@ export const STEPS = [
     path: '/',
     expect: { status: 200, includes: [FIXTURE_NAME] },
     container: true,
+    identity: { profile: 'read-only', origin: 'https://jane.name', name: FIXTURE_NAME },
   },
   {
     id: 'owner-path',
@@ -393,15 +399,18 @@ export const STEPS = [
     container: true,
   },
   {
-    // Past the identity, owner's first start imports the pair, which needs
-    // the default composition registered: until then it refuses that, and
-    // only that (smoke-profiles.mjs's owner refusal, less its missing hash).
-    id: 'compose-owner-accepts-identity',
+    // Past the identity, owner's first start imports the copied sample as
+    // revision 1, in the default composition #13 registered, and owner is
+    // ready on it, with its metadata on the origin it was given.
+    id: 'compose-owner-ready',
     doc: 'docs/deployment.md',
     command: 'docker compose -f compose.owner.yml up --build',
-    kind: 'compose-refuse',
+    kind: 'compose-serve',
     compose: ['-f', 'compose.owner.yml'],
-    fatal: ['PORTFOLIO_DATA_DIR:store_import_failed', 'PORTFOLIO_SOURCE_DIR:variant.unavailable'],
+    path: '/',
+    expect: { status: 200, includes: [FIXTURE_NAME] },
+    ready: true,
+    identity: { profile: 'owner', origin: 'https://jane.name', name: FIXTURE_NAME },
     container: true,
   },
   {
@@ -435,18 +444,12 @@ export const STEPS = [
     path: '/',
     expect: { status: 200, includes: [SAMPLE_NAME] },
     container: true,
+    identity: { profile: 'demo', origin: 'https://demo.jane.name', name: SAMPLE_NAME },
   },
 ];
 
 /** Steps declared but not yet run, each with what it waits on (ci/rehearsal.mjs's LANDED). */
-export const PENDING = Object.freeze([
-  {
-    id: 'compose-owner-ready',
-    title:
-      "deployment.md's owner Compose run reaches ready on the copied sample after the identity step",
-    waitsOn: 'default-composition',
-  },
-]);
+export const PENDING = Object.freeze([]);
 
 /**
  * sh fence lines in COVERED_DOCS the run doesn't take, each with why. A
@@ -606,7 +609,11 @@ export function responseProblems(response, expect) {
 async function get(url) {
   try {
     const response = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(120_000) });
-    return { status: response.status, body: await response.text() };
+    return {
+      status: response.status,
+      headers: Object.fromEntries(response.headers),
+      body: await response.text(),
+    };
   } catch (error) {
     return { status: 0, body: String(error.cause?.code ?? error.message) };
   }
@@ -1010,6 +1017,7 @@ async function runStep(clone, step) {
           if (response.status !== 0) break;
           await sleep(1000);
         }
+        if (response.status !== 0) await afterServed(step, `http://127.0.0.1:${port}`);
       } finally {
         await server.stop();
       }
@@ -1042,6 +1050,59 @@ async function runStep(clone, step) {
     default:
       throw new Error(`step ${step.id} has an unknown kind, ${step.kind}`);
   }
+}
+
+/**
+ * A serve step's further checks, while its server runs: `ready`, /api/ready
+ * answers 200 and ready; `identity`, what it publishes follows the
+ * identity and the origin it was given (lib/identity.mjs).
+ */
+async function afterServed(step, base) {
+  if (step.ready) {
+    const ready = await get(`${base}/api/ready`);
+    let status;
+    try {
+      status = JSON.parse(ready.body).status;
+    } catch {
+      status = undefined;
+    }
+    expect(
+      ready.status === 200 && status === 'ready',
+      `/api/ready answered ${ready.status} ${status ?? ready.body.slice(0, 200)}, not ready`,
+    );
+  }
+  if (step.identity) {
+    const { profile, origin, name } = step.identity;
+    const [page, sitemap, robots, feed] = await Promise.all(
+      Object.values(IDENTITY_PATHS).map((p) => get(`${base}${p}`)),
+    );
+    const imagePath = page.status === 200 ? ogImagePath(page.body, origin) : null;
+    const ogImage = imagePath ? await get(`${base}${imagePath}`) : { status: 0 };
+    const problems = identityProblems({
+      profile,
+      origin,
+      name,
+      page,
+      sitemap,
+      robots,
+      feed,
+      ogImage,
+      forbidden: identityForbidden(profile),
+    });
+    expect(problems.length === 0, `${profile}'s identity: ${problems.join('; ')}`);
+  }
+}
+
+/**
+ * What the guide's servers may not name, beyond the build's own leaks.
+ * Under demo, the fixture's name and the other origin. Under owner and
+ * read-only, the demo's origin; the copied sample keeps its meta.title and
+ * Open Graph picture, which the guide's identity step leaves alone, so the
+ * persona is held off the identity fields JSON-LD and the URLs carry, not
+ * the title.
+ */
+export function identityForbidden(profile) {
+  return profile === 'demo' ? [FIXTURE_NAME, 'https://jane.name'] : ['https://demo.jane.name'];
 }
 
 /** The hash file, which the server's user owns, mode 0400. */
@@ -1090,6 +1151,7 @@ async function composeStep(clone, step, command) {
         expect(up.exited() === undefined, `"${step.command}" ended before it served`, up.output());
         await sleep(3000);
       }
+      if (response.status !== 0) await afterServed(step, 'http://127.0.0.1:3000');
       const logs = compose(['logs', '--no-color', '--no-log-prefix']).out;
       expect(
         response.status !== 0,
