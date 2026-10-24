@@ -120,6 +120,9 @@ const OPTIONAL_SURFACE_EXPORTS = ['requiresScript'] as const;
 const isStudioRoute = (route: unknown) =>
   typeof route === 'string' && (route === '/studio' || route.startsWith('/studio/'));
 
+/** Demo Studio's pages (#9): what the demo profile serves behind sandbox.view, with no session. */
+const DEMO_STUDIO_ROUTES: readonly unknown[] = ['/studio'];
+
 function requiresScript(value: unknown, problems: string[]): void {
   const item = value as Record<string, unknown> | null;
   if (item === null || typeof item !== 'object') {
@@ -291,17 +294,23 @@ export function validateSurface(exports: Exports, file: string): SurfaceRegistra
   notApplicable(exports.notApplicable, problems);
   if ('requiresScript' in exports) {
     requiresScript(exports.requiresScript, problems);
-    // Only a Studio surface: every route of it /studio or under it, and signed in. A page a
-    // visitor reaches signed out, as the sign-in page is, works without JavaScript. #9's demo
-    // Studio, which has no session, widens this when it registers.
+    // Only a Studio surface: every route of it /studio or under it, and signed in, or Demo
+    // Studio, which has no session: under demo, its one page, behind sandbox.view (#9). Any
+    // other page a visitor reaches signed out, as the sign-in page is, works without JavaScript.
+    const demoStudio =
+      exports.profile === 'demo' &&
+      exports.auth === 'none' &&
+      Array.isArray(exports.routes) &&
+      exports.routes.length > 0 &&
+      exports.routes.every((route) => DEMO_STUDIO_ROUTES.includes(route));
     if (Array.isArray(exports.routes) && !exports.routes.every(isStudioRoute)) {
       problems.push(
         "declares requiresScript, which only a Studio surface may, and its routes aren't Studio's: a page outside /studio works without JavaScript",
       );
     }
-    if (exports.auth !== 'session') {
+    if (exports.auth !== 'session' && !demoStudio) {
       problems.push(
-        "declares requiresScript, which only a signed-in Studio surface may, and its auth isn't session: a page reached signed out works without JavaScript",
+        "declares requiresScript, which only a signed-in Studio surface or Demo Studio may, and its auth isn't session: a page reached signed out works without JavaScript",
       );
     }
   }

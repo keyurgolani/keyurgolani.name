@@ -20,7 +20,7 @@ What each profile grants. `public` is anyone, `session` is a signed-in owner, an
 | `feed.read`             | `/feed.xml`                                                | `public`  | `absent` | `public`    |
 | `sample.read`           | `/sample`, the bundled sample in any variant               | `absent`  | `public` | `absent`    |
 | `reference.read`        | `/reference`, the read-only reference, when one is mounted | `absent`  | `public` | `absent`    |
-| `sandbox.view`          | The demo Studio (not built yet)                            | `absent`  | `public` | `absent`    |
+| `sandbox.view`          | Demo Studio, at `/studio`                                  | `absent`  | `public` | `absent`    |
 | `health.read`           | `/api/health`                                              | `public`  | `public` | `public`    |
 | `ready.read`            | `/api/ready`                                               | `public`  | `public` | `public`    |
 | `appearance.preference` | `POST /api/appearance`, the visitor's appearance cookie    | `public`  | `absent` | `public`    |

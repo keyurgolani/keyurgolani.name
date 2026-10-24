@@ -195,6 +195,34 @@ test('a signed-in Studio surface may say it needs its script, with why; nothing 
       ),
     /declares requiresScript, which only a Studio surface may/,
   );
+  // Demo Studio (#9) has no session, and may too: under demo, at /studio, its one page.
+  const demo = {
+    ...studio,
+    id: 'demo-studio',
+    profile: 'demo',
+    auth: 'none',
+    routes: ['/studio'],
+    requiresScript: { reason: 'Demo Studio keeps its changes in the browser with JavaScript.' },
+  };
+  assert.deepEqual(problems(demo, 'quality/surfaces/demo-studio.ts'), []);
+  // Signed out anywhere else it may not: the sign-in page under any profile, any other
+  // Studio path under demo, /studio under another profile, and no route at all.
+  for (const [bad, what] of [
+    [{ ...demo, routes: ['/studio/sign-in'] }, 'the sign-in page under demo'],
+    [{ ...demo, routes: ['/studio', '/studio/sign-in'] }, 'the sign-in page beside /studio'],
+    [{ ...demo, routes: ['/studio/preview'] }, 'another Studio page under demo'],
+    [{ ...demo, profile: 'owner' }, '/studio signed out under owner'],
+    [{ ...demo, profile: 'read-only' }, '/studio under read-only'],
+    [{ ...LOGIN, profile: 'demo', requiresScript: demo.requiresScript }, 'the login surface under demo'],
+    [{ ...demo, routes: [] }, 'no route'],
+  ] as const) {
+    assert.ok(
+      problems(bad, 'quality/surfaces/demo-studio.ts').some((each) =>
+        each.includes("its auth isn't session"),
+      ),
+      what,
+    );
+  }
   // The repository's Owner Studio declares it, with its reason, which its cells carry.
   const { surfaces } = await loadRegistrations();
   assert.match(
