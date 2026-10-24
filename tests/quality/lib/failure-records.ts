@@ -51,9 +51,13 @@ export interface CellFailure {
   readonly surface: string;
   /** It's a registered composition, so the record names it as its variant. */
   readonly composition?: boolean;
-  /** The changed axis that brought a change-directed cell in (the owner's [37] rule). */
-  readonly axis?: 'variant' | 'designLanguage';
-  /** The changed design language, for a cell the language's change brought in. */
+  /**
+   * The axis of the pack a change-directed cell is about (the owner's [37]
+   * rule, on every pack axis since #20): the changed pack's, or the
+   * shipping pack's a changed variant met, else variant.
+   */
+  readonly axis?: 'variant' | 'designLanguage' | 'colorScheme' | 'typography';
+  /** The changed pack, or the shipping pack a changed variant met. */
   readonly pack?: string;
   readonly route: string;
   readonly tuple?: AppearanceTuple;

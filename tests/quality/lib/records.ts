@@ -74,7 +74,9 @@ export interface CellContext {
 export function changeFields(cell: Pick<Cell, 'changed'>): Pick<CellFailure, 'axis' | 'pack'> {
   const by = cell.changed?.[0];
   if (!by) return {};
-  return by.axis === 'designLanguage' ? { axis: by.axis, pack: by.id } : { axis: by.axis };
+  // A changed pack names itself; a changed variant, the shipping pack it met (#20).
+  if (by.axis !== 'variant') return { axis: by.axis, pack: by.id };
+  return by.pack ? { axis: by.pack.axis, pack: by.pack.id } : { axis: by.axis };
 }
 
 /** What every failure of a cell's test shares. */
@@ -154,7 +156,10 @@ export function changeDiagnostic(
 ): string | null {
   if (!cell.changed?.length) return null;
   const by = cell.changed
-    .map(({ axis, id }) => `${axis === 'variant' ? 'variant' : 'designLanguage'} ${id}`)
+    .map(
+      ({ axis, id, pack }) =>
+        `${axis} ${id}${pack ? ` (against the ${pack.axis} ${pack.id})` : ''}`,
+    )
     .join(' and ');
   const tuple = [
     cell.tuple.variant,

@@ -154,10 +154,17 @@ test("a PR run takes the reload conditions on every change-directed cell, where 
     changes: [{ axis: 'variant', id: 'fallback', paths: ['packages/fallback-composition/x.ts'] }],
   });
   const directed = plan.cells.filter((cell) => cell.changed);
+  // Every shipping pack on every axis since #20: the second language, and the dark-only night-only scheme in its dark mode.
   assert.deepEqual(directed.map((cell) => cell.tuple.designLanguage).sort(), [
+    'platform-neutral',
     'platform-neutral',
     'second-language',
   ]);
+  assert.ok(
+    directed.some(
+      (cell) => cell.tuple.colorScheme === 'night-only' && cell.tuple.displayMode === 'dark',
+    ),
+  );
   for (const cell of directed) {
     const tests = plan.tests.filter((each) => each.cell === cell);
     assert.ok(tests.length > 0, cell.id);

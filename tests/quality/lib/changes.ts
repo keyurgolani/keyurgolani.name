@@ -1,8 +1,9 @@
-// The owner's [37] change-directed rule (#11, 11-4): a PR that changes a
-// variant runs it against every stable design language, and one that
-// changes a design language runs it against every stable variant. This
+// The owner's [37] change-directed rule (#11, 11-4, and #20 on every pack
+// axis): a PR that changes a variant runs it against every shipping pack,
+// and one that changes a pack, a design language, a color scheme, or a
+// typography profile, runs it against every registered variant. This
 // module reads which paths a run changes and maps them to the variants and
-// languages they belong to; cells.ts plans the cells.
+// packs they belong to; cells.ts plans the cells.
 //
 // The paths come from QUALITY_CHANGED_FILES (a JSON array, which run.ts
 // sets once so every Playwright process plans the same cells), else from
@@ -15,9 +16,9 @@
 // asked for change-directed cells never quietly runs without them.
 //
 // A path maps by package: a file under a registered variant's package maps
-// to that variant, a file under a design-language pack's own directory
-// (`packs/<dir>/`, whose manifest names its id) to that language, and any
-// other file of a design-language package to every language it ships.
+// to that variant, a file under a pack's own directory (`packs/<dir>/`,
+// whose manifest names its id) to that pack, and any other file of a pack
+// package but its Research records to every pack it ships.
 // Shared code (the kit, the appearance core, the primitives, the harness)
 // maps to no cell here: mapping it to every cell is the PR cap's work,
 // which waits in the backlog with the 40-cell cap.
@@ -26,10 +27,11 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { REPO_ROOT } from '../../../ci/lib/reports.mjs';
+import { AXIS_BY_KIND, PACK_AXES, type PackAxis } from '../../../packages/appearance/src/index';
 import type { BuildMeta } from '../cells';
 
-/** The two axes the [37] rule directs. */
-export type ChangeAxis = 'variant' | 'designLanguage';
+/** The axes the [37] rule directs: the variant, and since #20 every pack axis. */
+export type ChangeAxis = 'variant' | PackAxis;
 
 /** One changed variant or language, and the paths that changed it. */
 export interface Change {
@@ -139,32 +141,33 @@ export function mapChanges(
     const dir = packages.get(packageName);
     return dir ? [{ id: manifest.id, dir }] : [];
   });
-  const languages = (meta.PACKS ?? []).filter((pack) => pack.kind === 'design-language');
-  const languagePackages = [...new Set(languages.map((pack) => pack.packageName))].flatMap(
-    (name) => {
-      const dir = packages.get(name);
-      if (!dir) return [];
-      const own = languages.filter((pack) => pack.packageName === name).map((p) => p.manifest.id);
-      return [{ dir, ids: own, packs: packDirs(root, dir) }];
-    },
-  );
+  const packs = meta.PACKS ?? [];
+  const packPackages = [...new Set(packs.map((pack) => pack.packageName))].flatMap((name) => {
+    const dir = packages.get(name);
+    if (!dir) return [];
+    const own = packs.filter((pack) => pack.packageName === name);
+    const axis = AXIS_BY_KIND[own[0]!.kind];
+    return [{ dir, axis, ids: own.map((p) => p.manifest.id), packs: packDirs(root, dir) }];
+  });
 
   for (const file of files) {
     for (const variant of variants) if (under(file, variant.dir)) add('variant', variant.id, file);
-    for (const { dir, ids, packs } of languagePackages) {
+    for (const { dir, axis, ids, packs: dirs } of packPackages) {
       if (!under(file, dir)) continue;
-      const own = [...packs].find(([, packDir]) => under(file, packDir));
+      const own = [...dirs].find(([, packDir]) => under(file, packDir));
       if (own) {
-        if (ids.includes(own[0])) add('designLanguage', own[0], file);
-      } else if (!under(file, `${dir}/packs`)) {
+        if (ids.includes(own[0])) add(axis, own[0], file);
+      } else if (!under(file, `${dir}/packs`) && !under(file, `${dir}/research`)) {
         // A package-level file, such as its package.json, reaches every pack it ships.
-        for (const id of ids) add('designLanguage', id, file);
+        for (const id of ids) add(axis, id, file);
       }
-      // A file under packs/ in no registered pack's directory is a pack this build doesn't register.
+      // A file under packs/ in no registered pack's directory is a pack this
+      // build doesn't register, and a Research record never registers.
     }
   }
-  // Variants first, then languages, each by id.
-  const order = (change: Change) => `${change.axis === 'variant' ? 0 : 1} ${change.id}`;
+  // Variants first, then each pack axis in axis order, each by id.
+  const rank = (axis: ChangeAxis) => (axis === 'variant' ? 0 : 1 + PACK_AXES.indexOf(axis));
+  const order = (change: Change) => `${rank(change.axis)} ${change.id}`;
   return [...changes.values()].sort((a, b) => (order(a) < order(b) ? -1 : 1));
 }
 

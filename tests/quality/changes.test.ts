@@ -72,12 +72,11 @@ test("a changed path maps to its variant's package, its language's pack, or its 
   assert.deepEqual(map('packages/appearance-languages/package.json'), [
     'designLanguage platform-neutral packages/appearance-languages/package.json',
   ]);
-  // Shared code, a scheme, a pack this build doesn't register, and a lookalike directory map to nothing here.
+  // Shared code, a pack this build doesn't register, and a lookalike directory map to nothing here.
   assert.deepEqual(
     map(
       'packages/kit/src/index.ts',
       'packages/appearance/src/resolve.ts',
-      'packages/appearance-schemes/packs/warm-parchment/manifest.json',
       'packages/appearance-languages/packs/not-registered/manifest.json',
       'packages/fallback-composition-notes.md',
       'docs/variants.md',
@@ -165,21 +164,100 @@ test('the changed paths come from QUALITY_CHANGED_FILES, else a git base, else n
   );
 });
 
-test('the [37] pairs: a changed variant with each stable language, a changed language with each stable variant', () => {
-  const stable = { variants: ['a', 'b'], designLanguages: ['x', 'y'] };
+test('the [37] pairs: a changed variant with each shipping pack on every axis, a changed pack with each variant (#20)', () => {
+  const targets = {
+    variants: ['a', 'b'],
+    packs: { designLanguage: ['x', 'y'], colorScheme: ['s'], typography: ['t'] },
+  };
   assert.deepEqual(
     changePairs(
       [
         { axis: 'variant', id: 'a' },
         { axis: 'designLanguage', id: 'z' },
+        { axis: 'colorScheme', id: 'q' },
+        { axis: 'typography', id: 'r' },
       ],
-      stable,
-    ).map(({ variant, designLanguage, by }) => `${variant}/${designLanguage} by ${by.id}`),
-    ['a/x by a', 'a/y by a', 'a/z by z', 'b/z by z'],
+      targets,
+    ).map(({ variant, axis, pack, by }) => `${variant}/${axis}:${pack} by ${by.id}`),
+    [
+      'a/designLanguage:x by a',
+      'a/designLanguage:y by a',
+      'a/colorScheme:s by a',
+      'a/typography:t by a',
+      'a/designLanguage:z by z',
+      'b/designLanguage:z by z',
+      'a/colorScheme:q by q',
+      'b/colorScheme:q by q',
+      'a/typography:r by r',
+      'b/typography:r by r',
+    ],
+  );
+  // A variant's pair names the pack it meets.
+  assert.deepEqual(changePairs([{ axis: 'variant', id: 'a' }], targets)[2]!.by, {
+    axis: 'variant',
+    id: 'a',
+    pack: { axis: 'colorScheme', id: 's' },
+  });
+});
+
+test('a changed scheme or profile maps to its pack, and a Research record to nothing (#20)', () => {
+  const meta = checkoutMeta();
+  const map = (...files: string[]) =>
+    mapChanges(files, meta).map(({ axis, id }) => `${axis} ${id}`);
+  assert.deepEqual(map('packages/appearance-schemes/packs/warm-parchment/manifest.json'), [
+    'colorScheme warm-parchment',
+  ]);
+  assert.deepEqual(map('packages/appearance-typography/package.json'), ['typography humanist-ui']);
+  assert.deepEqual(map('packages/appearance-schemes/research/nord.json'), []);
+  // Variants first, then the pack axes in axis order.
+  assert.deepEqual(
+    map(
+      'packages/appearance-typography/packs/humanist-ui/manifest.json',
+      'packages/appearance-schemes/packs/warm-parchment/manifest.json',
+      'packages/appearance-languages/packs/platform-neutral/manifest.json',
+      'packages/fallback-composition/src/a.ts',
+    ),
+    [
+      'variant fallback',
+      'designLanguage platform-neutral',
+      'colorScheme warm-parchment',
+      'typography humanist-ui',
+    ],
   );
 });
 
-test('a PR that changes a variant runs it against every stable language, and one that changes a language against every stable variant', () => {
+test('a PR that changes a scheme runs it against every variant, and a changed variant meets every shipping scheme and profile (#20)', () => {
+  const meta = wider(checkoutMeta());
+  const plan = (changes: Parameters<typeof planCells>[0]['changes']) =>
+    planCells({ meta, registrations, mode: 'pr', changes });
+  const scheme = plan([{ axis: 'colorScheme', id: 'warm-parchment', paths: [] }]);
+  const byScheme = scheme.cells.filter((cell) =>
+    cell.changed?.some((by) => by.axis === 'colorScheme'),
+  );
+  assert.deepEqual(byScheme.map((cell) => cell.target).sort(), [
+    'fallback',
+    'kinetic-cosmos',
+    'second-variant',
+  ]);
+  for (const cell of byScheme) assert.equal(cell.tuple.colorScheme, 'warm-parchment');
+  assert.deepEqual(changeFields(byScheme[0]!), { axis: 'colorScheme', pack: 'warm-parchment' });
+
+  const variant = plan([{ axis: 'variant', id: 'fallback', paths: [] }]);
+  const met = variant.cells
+    .filter((cell) => cell.changed)
+    .flatMap((cell) => cell.changed!.map((by) => `${by.pack?.axis}:${by.pack?.id}`))
+    .sort();
+  // Every shipping pack, every tier, no fixture pack.
+  assert.deepEqual(met, [
+    'colorScheme:warm-parchment',
+    'designLanguage:extended-language',
+    'designLanguage:platform-neutral',
+    'designLanguage:second-language',
+    'typography:humanist-ui',
+  ]);
+});
+
+test('a PR that changes a variant runs it against every shipping language, and one that changes a language against every variant', () => {
   const meta = wider(checkoutMeta());
   const plan = (changes: Parameters<typeof planCells>[0]['changes']) =>
     planCells({ meta, registrations, mode: 'pr', changes });
@@ -188,8 +266,9 @@ test('a PR that changes a variant runs it against every stable language, and one
 
   const variant = plan([{ axis: 'variant', id: 'fallback', paths: ['packages/x'] }]);
   const directed = variant.cells.filter((cell) => cell.changed);
-  // The shipping stable languages, not the extended one or the stable fixture pack.
+  // Every shipping language, extended too since #20, and never the stable fixture pack.
   assert.deepEqual(directed.map((cell) => cell.tuple.designLanguage).sort(), [
+    'extended-language',
     'platform-neutral',
     'second-language',
   ]);
@@ -197,7 +276,9 @@ test('a PR that changes a variant runs it against every stable language, and one
     assert.equal(cell.target, 'fallback');
     assert.equal(cell.state, 'complete');
     assert.equal(cell.path, '/');
-    assert.deepEqual(cell.changed, [{ axis: 'variant', id: 'fallback' }]);
+    assert.ok(
+      cell.changed!.every((by) => by.axis === 'variant' && by.id === 'fallback' && by.pack),
+    );
     // Every viewport in the default row, and every row at the first viewport.
     const tests = variant.tests.filter((each) => each.cell === cell);
     assert.deepEqual(
