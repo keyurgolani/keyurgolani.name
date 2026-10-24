@@ -66,9 +66,20 @@ class StageBoundary extends Component<
   }
 }
 
-// The document's one stage, and whether this page's failed already.
+// The document's one stage, its owner's listeners, and whether this page's failed already.
 let owner: object | null = null;
+const owners = new Set<() => void>();
 let pageFailed = false;
+
+function subscribeOwner(change: () => void): () => void {
+  owners.add(change);
+  return () => owners.delete(change);
+}
+
+function setOwner(next: object | null): void {
+  owner = next;
+  for (const change of owners) change();
+}
 
 /** What the page and the browser say, read live, as one string so a snapshot that hasn't changed compares equal. */
 function readSignals(): string {
@@ -114,20 +125,23 @@ function LiveSlot({ seed }: { readonly seed: number }) {
   const { attachRoot, state, reason, eligible, fail } = runtime;
   const signals = useSyncExternalStore(subscribeSignals, readSignals, () => '');
   const [exited, setExited] = useState(false);
-  const [claimed, setClaimed] = useState(false);
   const [started, setStarted] = useState(false);
   const [failed, setFailed] = useState(pageFailed);
   const [live, setLive] = useState(false);
 
+  // The document's one stage: the first slot to mount claims it, and gives it up as it unmounts.
+  const [token] = useState(() => ({}));
+  const claimed = useSyncExternalStore(
+    subscribeOwner,
+    () => owner === token,
+    () => false,
+  );
   useEffect(() => {
-    const me = {};
-    if (owner !== null) return;
-    owner = me;
-    setClaimed(true);
+    if (owner === null) setOwner(token);
     return () => {
-      if (owner === me) owner = null;
+      if (owner === token) setOwner(null);
     };
-  }, []);
+  }, [token]);
 
   const decision =
     signals === ''
@@ -146,10 +160,10 @@ function LiveSlot({ seed }: { readonly seed: number }) {
           started,
         });
 
-  useEffect(() => {
-    if (decision.mount && state === 'active') setStarted(true);
-    if (!decision.mount) setLive(false);
-  }, [decision.mount, state]);
+  // What this render learns for the next: the stage has started once it mounts on an active
+  // runtime, and a stage that unmounts is no longer drawn.
+  if (!started && decision.mount && state === 'active') setStarted(true);
+  if (live && !decision.mount) setLive(false);
 
   const onFailure = useCallback(
     (failure: SpatialFailure | 'import', error?: unknown) => {

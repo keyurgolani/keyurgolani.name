@@ -10,11 +10,7 @@ import { AnimatedCounter } from '../animated-counter';
 import { MotionPolicyProvider } from '../motion';
 import { AuroraGradient, HolographicPanel, MagneticCursor, ScanlineOverlay } from '../spatial';
 import { hidesSystemCursor } from '../spatial/magnetic-cursor';
-import {
-  nextDpr,
-  startingDpr,
-  type SpatialCanvasProps,
-} from '../spatial-r3f/spatial-canvas';
+import { nextDpr, startingDpr, type SpatialCanvasProps } from '../spatial-r3f/spatial-canvas';
 import { TypingAnimation } from '../typing-animation';
 
 // The kit compiles JSX with `preserve`, so tsx gives the components the classic runtime.
@@ -102,7 +98,10 @@ test("a SpatialCanvas's pixel ratio starts at the device's, capped, and only eve
 });
 
 test('the SpatialCanvas asks for no high-performance GPU and never renders on its own', () => {
-  const source = readFileSync(new URL('../spatial-r3f/spatial-canvas.tsx', import.meta.url), 'utf8');
+  const source = readFileSync(
+    new URL('../spatial-r3f/spatial-canvas.tsx', import.meta.url),
+    'utf8',
+  );
   assert.doesNotMatch(source, /high-performance'/);
   assert.match(source, /powerPreference: 'low-power'/);
   assert.match(source, /frameloop: 'never'/);

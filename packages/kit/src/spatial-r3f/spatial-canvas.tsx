@@ -44,12 +44,7 @@ import { SceneRuntimeContext } from './scene-runtime';
 // `data-stale` until the next frame, for the caller to show its still.
 
 export type SpatialFailure =
-  | 'context'
-  | 'configure'
-  | 'context-lost'
-  | 'shader'
-  | 'render'
-  | 'first-frame';
+  'context' | 'configure' | 'context-lost' | 'shader' | 'render' | 'first-frame';
 
 export interface SpatialCanvasProps {
   /** The caller's runtime state: frames render only while it's active. */
@@ -69,7 +64,10 @@ export interface SpatialCanvasProps {
   /** How long an active runtime waits for the first frame before it's a failure, in ms. Default 4000. */
   readonly firstFrameMs?: number;
   /** The camera's field of view and position. */
-  readonly camera?: { readonly fov?: number; readonly position?: readonly [number, number, number] };
+  readonly camera?: {
+    readonly fov?: number;
+    readonly position?: readonly [number, number, number];
+  };
   /** A hook for the variant's layout. */
   readonly className?: string;
 }
@@ -122,7 +120,8 @@ export function SpatialCanvas({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const background = useBoundaryColors(canvasRef, CANVAS_ROLES)?.canvas ?? null;
   const [ready, setReady] = useState(false);
-  const [failed, setFailed] = useState(false);
+  // Failed: the caller unmounts the canvas on the failure it hears of, and until then nothing renders.
+  const failed = useRef(false);
   // What the frame loop and the teardown share.
   const live = useRef<{
     root: ReconcilerRoot<HTMLCanvasElement>;
@@ -171,7 +170,7 @@ export function SpatialCanvas({
       // A shader error or a throw can come from inside a frame: tear down after it.
       queueMicrotask(teardown);
       done = true;
-      setFailed(true);
+      failed.current = true;
       latest.current.onFailure(failure, error);
     }
     try {
@@ -183,7 +182,7 @@ export function SpatialCanvas({
       });
     } catch (error) {
       done = true;
-      setFailed(true);
+      failed.current = true;
       latest.current.onFailure('context', error);
       return;
     }
@@ -212,7 +211,12 @@ export function SpatialCanvas({
           if (done) return;
           live.current = { root: owned, store: null, fail };
           resize = new ResizeObserver(() => {
-            owned.configure({ size: measured() }).catch((error: unknown) => fail('configure', error));
+            // The size alone, on the root's store: configure() again would put its own
+            // defaults back, a frameloop of `always` and a pixel ratio up to 2.
+            const store = live.current?.store;
+            if (!store) return;
+            const size = measured();
+            store.getState().setSize(size.width, size.height, size.top, size.left);
             // A resize clears the canvas, and nothing renders it again until the runtime is active.
             if (latest.current.state !== 'active') canvas.setAttribute('data-stale', '');
           });
@@ -242,7 +246,7 @@ export function SpatialCanvas({
 
   // No first frame in time, while the runtime is active, is a failure.
   const frames = useRef(0);
-  const running = ready && !failed && state === 'active';
+  const running = ready && state === 'active';
   useEffect(() => {
     if (!running || frames.current > 0) return;
     const timer = setTimeout(() => {
@@ -254,6 +258,7 @@ export function SpatialCanvas({
   // Frames, at most `fps` a second, only while the runtime is active.
   const pacing = useRef({ since: 0, window: 0, spent: 0 });
   useFrameLoop({ state: running ? 'active' : 'static' }, (time, delta) => {
+    if (failed.current) return false;
     const current = live.current;
     const store = current?.store;
     if (!current || !store) return;
@@ -284,7 +289,7 @@ export function SpatialCanvas({
     }
   });
 
-  return failed ? null : (
+  return (
     <canvas
       ref={canvasRef}
       className={className}

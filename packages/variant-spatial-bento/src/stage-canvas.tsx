@@ -32,7 +32,8 @@ function Planes({
   useFrame(({ clock }) => {
     const current = group.current;
     if (!current) return;
-    const t = clock.getElapsedTime();
+    // Under a frameloop of `never`, R3F keeps the frame's timestamp, in ms, as the elapsed time.
+    const t = clock.elapsedTime / 1000;
     current.rotation.z = -0.6 + Math.sin(t * 0.25) * DRIFT.tilt;
     current.position.y = Math.sin(t * 0.4) * DRIFT.float;
   });
@@ -77,6 +78,8 @@ export default function StageCanvas({ state, seed, onFailure, onFirstFrame }: St
         state={state}
         onFailure={onFailure}
         onFirstFrame={onFirstFrame}
+        // A slow device's first frame is still a first frame: only none at all is a failure.
+        firstFrameMs={8000}
         camera={{ fov: 40, position: [0, 0, 7] }}
       >
         <ambientLight intensity={0.8} />
