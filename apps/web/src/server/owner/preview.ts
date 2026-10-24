@@ -1,5 +1,5 @@
 import 'server-only';
-import { readDerivedSchemes, type DerivedScheme } from '~/lib/derived-schemes';
+import { readDerivedSchemes } from '~/lib/derived-schemes';
 import {
   applyEdits,
   composeSchemas,
@@ -249,14 +249,13 @@ export function ownerPreviews({
     return null;
   }
 
-  /** Each grant's view, and the generated schemes its subject stored (#20 PR 3), by digest. */
-  const views = new Map<
-    string,
-    {
-      readonly view: PublicView;
-      readonly schemes: Readonly<Record<string, DerivedScheme>> | undefined;
-    }
-  >();
+  const views = new Map<string, PublicView>();
+  /**
+   * A revision's or fixture's stored generated schemes, its
+   * snapshots/schemes.json as read (#20 PR 3), by the grant's digest, kept
+   * and dropped with its view.
+   */
+  const storedSchemes = new Map<string, unknown>();
 
   /**
    * The owner service a grant's content is read through: it takes the token
@@ -271,8 +270,8 @@ export function ownerPreviews({
   ): Promise<OpenedGrant> {
     assertAuthorized(authorized, 'preview.grant');
     const ref = grantRef(record.digest);
-    let cached = views.get(record.digest);
-    if (!cached) {
+    let view = views.get(record.digest);
+    if (!view) {
       const content: Content | null =
         record.subject.kind === 'draft'
           ? record.documents
@@ -285,28 +284,24 @@ export function ownerPreviews({
         log({ level: 'error', event: 'preview.render_failed', grantRef: ref });
         throw new Error("The grant's content doesn't render.");
       }
-      const view = resolvePortfolioView(
+      view = resolvePortfolioView(
         outcome.pair,
         { media: mediaOf(content.documents), snapshots: content.snapshots },
         { mediaBase: `/preview-assets/${grant}`, extensions },
       );
-      // The grant's own pinned revision's or fixture's snapshots/schemes.json,
-      // checked, cached with its view under its own digest. A draft's
-      // derived schemes come with #10's 10h, which pins them at mint.
-      const stored = content.snapshots.schemes;
-      cached = {
-        view,
-        schemes: stored === undefined ? undefined : readDerivedSchemes(stored).schemes,
-      };
-      views.set(record.digest, cached);
+      views.set(record.digest, view);
+      storedSchemes.set(record.digest, content.snapshots.schemes);
       for (const key of views.keys()) {
         if (views.size <= VIEWS) break;
         views.delete(key);
+        storedSchemes.delete(key);
       }
     }
-    // A draft grant's generated schemes, as pinned at mint, each checked: one
-    // that doesn't is left out, so its axis falls back, and logged by id (10h).
-    const pinned = record.subject.kind === 'draft' ? record.schemes : undefined;
+    // The grant's generated schemes, each checked: a draft grant's as pinned at
+    // mint (10h), a revision's or fixture's its own stored ones (#20 PR 3). One
+    // that doesn't check is left out, so its axis falls back, and logged by id.
+    const pinned =
+      record.subject.kind === 'draft' ? record.schemes : storedSchemes.get(record.digest);
     const pinnedRead = pinned === undefined ? null : readDerivedSchemes(pinned);
     for (const problem of pinnedRead?.problems ?? []) {
       log({
@@ -317,8 +312,7 @@ export function ownerPreviews({
       });
     }
     return Object.freeze({
-      view: cached.view,
-      ...(cached.schemes === undefined ? {} : { schemes: cached.schemes }),
+      view,
       environment: record.environment,
       nonce: record.nonce,
       renderedVersion: renderedVersionOf(record),
