@@ -1,8 +1,11 @@
 // What #20's four generators share (PR 3): each one picks a mode's four
-// anchors, and compose() makes them a scheme. The one step a generator takes
-// itself: when neither black nor white reads at 4.5:1 on the accent, the
-// accent moves in 2% OKLCH lightness steps away from on-accent, the one
-// that reads better, until it does. Then 2c's anchor-v2 solves every role
+// anchors, and compose() makes them a scheme. The two steps a generator
+// takes itself, both on the accent: an accent with OKLCH lightness under 0.15
+// or over 0.9 moves to that bound, so its hover and active states have room
+// to move away from on-accent, as #19's fixture-seed does more widely; and when
+// neither black nor white reads at 4.5:1 on it, it moves in 2% OKLCH
+// lightness steps away from on-accent, the one that reads better, until it
+// does. Then 2c's anchor-v2 solves every role
 // and high-contrast-v2 the high-contrast sets, so a generated scheme passes
 // with every shipping language, textured ones included, as an authored
 // anchor-v2 scheme does. Every move is recorded: the generator's own on the
@@ -79,13 +82,28 @@ export function readableAccent(accent: string): string {
   return lighter ? WHITE : BLACK;
 }
 
+/** The accent's OKLCH lightness bounds, which leave its states room on either side. */
+export const ACCENT_LIGHTNESS = { least: 0.15, most: 0.9 } as const;
+
+/** `accent` with its lightness held within ACCENT_LIGHTNESS, then readable: the generator's whole step. */
+export function generatorAccent(accent: string): string {
+  const at = lightness(accent);
+  const held =
+    at < ACCENT_LIGHTNESS.least
+      ? withLightness(accent, ACCENT_LIGHTNESS.least)
+      : at > ACCENT_LIGHTNESS.most
+        ? withLightness(accent, ACCENT_LIGHTNESS.most)
+        : accent;
+  return readableAccent(held);
+}
+
 /** A composition's scheme: the generator's step, then anchor-v2 and high-contrast-v2. */
 export function compose(composition: Composition): Composed {
   const generator: { -readonly [M in BaseMode]?: Record<string, readonly [string, string]> } = {};
   const used = {} as { -readonly [M in BaseMode]: Anchors };
   for (const mode of ['light', 'dark'] as const) {
     const picked = composition.anchors[mode];
-    const accent = readableAccent(picked.accent);
+    const accent = generatorAccent(picked.accent);
     if (accent !== picked.accent) generator[mode] = { accent: [picked.accent, accent] };
     used[mode] = { ...picked, accent };
   }
