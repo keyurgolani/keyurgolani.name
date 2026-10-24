@@ -439,7 +439,15 @@ function plan(profile, leaks, origin) {
       ? []
       : [`body ${response.body.slice(0, 300)}`]),
   ]);
-  for (const entry of listRoutes().filter((route) => route.capability !== 'operations')) {
+  // An entry another one serves the path of here, as /studio's two do for each other (#9), is that one's.
+  const shadowed = (route) =>
+    routeAccess(profile, route) === 'absent' &&
+    listRoutes().some(
+      (other) => other.pattern === route.pattern && routeAccess(profile, other) !== 'absent',
+    );
+  for (const entry of listRoutes().filter(
+    (route) => route.capability !== 'operations' && !shadowed(route),
+  )) {
     const access = routeAccess(profile, entry);
     // No grant is active here: a grant route, and under a profile with grant
     // routes any preview path the build doesn't serve, answer every method

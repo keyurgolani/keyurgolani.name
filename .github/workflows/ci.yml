@@ -234,6 +234,12 @@ jobs:
       # ci/check-catalog-build.test.mjs).
       - name: pnpm ci:catalog-build
         run: pnpm ci:catalog-build
+      # /studio's client entry holds neither shell, and each profile's shell
+      # chunks hold none of the other's (#9, studio-entry.test.ts). The unit
+      # job has no build, so the check runs here, where a missing or stale
+      # build fails it.
+      - name: pnpm ci:studio-chunks
+        run: pnpm ci:studio-chunks
       - name: Failure summary
         if: ${{ always() }}
         run: node ci/summarize.mjs
