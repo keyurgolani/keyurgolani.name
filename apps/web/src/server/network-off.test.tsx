@@ -1,10 +1,19 @@
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import { createElement, isValidElement, type ReactElement } from 'react';
+import http from 'node:http';
+import https from 'node:https';
+import net from 'node:net';
+import tls from 'node:tls';
 import { fileURLToPath } from 'node:url';
-import { resolvePortfolioView } from '@portfolio/schema';
+import * as React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { resolvePortfolioView, routedWorks, type PublicView } from '@portfolio/schema';
 import { readPair, readUnitFiles } from '@portfolio/schema/node';
-import { buildRenderInput } from '@portfolio/variant-contract';
+import {
+  buildRenderInput,
+  type RouteTarget,
+  type VariantManifest,
+} from '@portfolio/variant-contract';
 import { CONTRACT_FIXTURES } from '@portfolio/variant-contract/node';
 // The registry loads the variant packages, which need React's client build,
 // so this test runs without the react-server condition (a .test.tsx file).
@@ -13,10 +22,16 @@ import { REGISTRY } from '~/lib/variants';
 
 // The network-off render (#10, item 8; threat row github-3): with no source
 // adapter and no network, every contract fixture and the bundled sample
-// render completely through every registered composition, from their
-// documents, the snapshots beside them, and nothing else. `fetch` is
-// replaced by one that fails the test, so a renderer that called a source
-// at render time would show here.
+// render completely, on every visitor route they have, through every
+// registered composition, from their documents, the snapshots beside them,
+// and nothing else. Every way out is replaced by one that fails the test:
+// fetch, which is Node's own undici (no other undici is installed), and
+// node:http, node:https, node:net, and node:tls, down to a socket's connect.
+// Each page renders with react-dom's server renderer, so a component that
+// throws fails the test too.
+
+// tsx compiles the variants' JSX to React.createElement calls, so the test supplies React.
+Object.assign(globalThis, { React });
 
 const REPO = fileURLToPath(new URL('../../../../', import.meta.url));
 
@@ -34,46 +49,60 @@ const PAIRS = [
   },
 ];
 
-/**
- * Renders `node` as far as a server would: each function component called,
- * awaited when it's async, and its output walked; one whose hooks throw
- * outside React's render is a client component, and its props are walked
- * instead. Returns every string it met.
- */
-async function rendered(node: unknown, out: string[] = []): Promise<string[]> {
-  if (typeof node === 'string') {
-    out.push(node);
-  } else if (node instanceof Promise) {
-    await rendered(await node, out);
-  } else if (Array.isArray(node)) {
-    for (const child of node) await rendered(child, out);
-  } else if (isValidElement(node)) {
-    const { type, props } = node as ReactElement<Record<string, unknown>>;
-    if (typeof type === 'function') {
-      let output: unknown;
-      try {
-        output = await (type as (props: unknown) => unknown)(props);
-      } catch {
-        return rendered(props, out);
-      }
-      await rendered(output, out);
-    } else {
-      await rendered(props, out);
-    }
-  } else if (node !== null && typeof node === 'object') {
-    for (const value of Object.values(node)) await rendered(value, out);
+/** Replaces every way this process could reach a network with one that records it and throws. */
+function blockNetwork(t: TestContext): string[] {
+  const calls: string[] = [];
+  const refuse =
+    (what: string) =>
+    (...args: unknown[]): never => {
+      calls.push(`${what} ${String(args[0])}`);
+      throw new Error(`A render called the network: ${what}.`);
+    };
+  t.mock.method(globalThis, 'fetch', async (input: unknown) => refuse('fetch')(input));
+  for (const [name, module] of [
+    ['http', http],
+    ['https', https],
+  ] as const) {
+    t.mock.method(module, 'request', refuse(`${name}.request`));
+    t.mock.method(module, 'get', refuse(`${name}.get`));
   }
-  return out;
+  t.mock.method(net, 'connect', refuse('net.connect'));
+  t.mock.method(net, 'createConnection', refuse('net.createConnection'));
+  t.mock.method(net.Socket.prototype, 'connect', refuse('net.Socket.connect'));
+  t.mock.method(tls, 'connect', refuse('tls.connect'));
+  return calls;
 }
 
-test('with no adapter and no network, every fixture and the sample render completely through every registered composition', async (t) => {
-  const calls: string[] = [];
-  t.mock.method(globalThis, 'fetch', async (input: unknown) => {
-    calls.push(String(input));
-    throw new Error('A render called the network.');
-  });
+/**
+ * Every visitor route `view` has for a composition: home, each work's case
+ * study, and each of the manifest's path views, under home and under each
+ * case study. Its fragment views render within their parent route.
+ */
+function visitorRoutes(view: PublicView, manifest: VariantManifest): RouteTarget[] {
+  const slugs = [...routedWorks(view).values()].map((path) => path.slice('/work/'.length));
+  const targets: RouteTarget[] = [
+    { route: 'home' },
+    ...slugs.map((slug) => ({ route: 'work' as const, slug })),
+  ];
+  for (const declared of manifest.routes.views) {
+    if (declared.type !== 'path') continue;
+    assert.ok(
+      !declared.segment.includes('{'),
+      `${manifest.id}'s ${declared.id} takes a parameter: give this test its values`,
+    );
+    if (declared.under === 'home') targets.push({ route: 'view', view: declared, params: {} });
+    else
+      for (const slug of slugs) targets.push({ route: 'view', view: declared, params: {}, slug });
+  }
+  return targets;
+}
+
+test('with no adapter and no network, every fixture and the sample render completely, on every visitor route, through every registered composition', async (t) => {
+  const calls = blockNetwork(t);
   const ids = REGISTRY.map(({ manifest }) => manifest.id);
   assert.ok(ids.includes('fallback'), ids.join(', '));
+  let pages = 0;
+  let caseStudies = 0;
   for (const { name, files, dir } of PAIRS) {
     const read = readPair(files);
     assert.ok(read.ok, name);
@@ -88,22 +117,47 @@ test('with no adapter and no network, every fixture and the sample render comple
       { mediaBase: '/media' },
     );
     for (const entry of REGISTRY) {
-      const input = buildRenderInput({
-        view,
-        manifest: entry.manifest,
-        route: { route: 'home' },
-        basePath: '',
-        origin: 'https://rowan.test',
-        requestTime: '2026-01-01T00:00:00Z',
-      });
       const Variant = (await variantLoader(entry.manifest.id)()).default;
-      const strings = await rendered(createElement(Variant, { input }));
-      // The page has the portfolio: its owner's name renders.
-      assert.ok(
-        strings.some((text) => text.includes(read.pair.portfolio.identity.name)),
-        `${name} in ${entry.manifest.id}`,
-      );
+      for (const route of visitorRoutes(view, entry.manifest)) {
+        const where = `${name} in ${entry.manifest.id}, ${JSON.stringify(route)}`;
+        const input = buildRenderInput({
+          view,
+          manifest: entry.manifest,
+          route,
+          basePath: '',
+          origin: 'https://rowan.test',
+          requestTime: '2026-01-01T00:00:00Z',
+        });
+        // A component that throws fails here.
+        const html = renderToStaticMarkup(<Variant input={input} />);
+        pages += 1;
+        // Complete: every titled section renders its title, or with none, the owner's name.
+        const titles = view.portfolio.sections
+          .map((section) => (section as { title?: unknown }).title)
+          .filter((title): title is string => typeof title === 'string');
+        const expected: readonly string[] =
+          titles.length > 0 ? titles : [read.pair.portfolio.identity.name];
+        const missing: string[] = expected.filter((text: string) => !html.includes(escaped(text)));
+        assert.deepEqual(missing, [], where);
+        if (route.route === 'work') {
+          caseStudies += 1;
+          const work = view.portfolio.works.find(({ slug }) => slug === route.slug);
+          assert.ok(work && html.includes(escaped(work.title)), where);
+        }
+      }
     }
   }
+  assert.ok(pages > PAIRS.length * REGISTRY.length, 'more than the home pages rendered');
+  assert.ok(caseStudies > 0, 'a case study rendered');
   assert.deepEqual(calls, [], 'no render called a source');
 });
+
+/** `text` as react-dom writes it into markup. */
+function escaped(text: string): string {
+  return text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#x27;');
+}
