@@ -40,7 +40,7 @@
   "caveats": [
     "Translucent surfaces with a backdrop blur cost paint time on slower devices, and read less clearly over busy content.",
     "A decorative gradient texture sits behind surfaces.",
-    "Ships opaque: its approved 96% translucent surfaces fall under the contrast targets with its texture over a black or white backdrop, so surfaces are 100% opaque, the orchestrator's call under the owner's delegation."
+    "Ships opaque: its approved 96% translucent surfaces fall under the contrast targets with its texture over a black or white backdrop, so its surfaces are 100% opaque, and only a dialog's backdrop is blurred. This supersedes the translucency caveats above."
   ],
   "tokens": {
     "surface-material": "linear-gradient(135deg, var(--color-surface-subtle), var(--color-surface-prominent) 45%, var(--color-surface-default) 55%, var(--color-surface-subtle))",
