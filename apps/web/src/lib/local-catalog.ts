@@ -12,8 +12,13 @@ import type { VariantRegistry } from '@portfolio/variant-contract';
 // What Demo Studio's local preview frame (#7, Slice 6; #9) renders with:
 // what this build registers, as plain data its page hands it, since the
 // server's registry module is server-only. It holds no visitor data and no
-// published content: the variants' manifests, the packs', and where each
-// compiled stylesheet is served. The frame builds its registries from it.
+// published content: the variants' and the packs' manifests whole, with
+// their package names and versions, provenance, budgets, and controls, and
+// where each compiled stylesheet is served. #4's validators, the composition
+// and appearance registries, and the render input read across those fields,
+// so the frame gets them all: /preview/local is the one page that ships
+// what registry.meta.ts keeps server-only, the build's own package metadata.
+// The frame builds its registries from it.
 
 export interface LocalCatalog {
   readonly variants: VariantRegistry;
