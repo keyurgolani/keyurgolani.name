@@ -283,6 +283,24 @@ test(
   { annotation },
   async ({ page }) => {
     await load(page);
+    // The complete fixture's forks and joins all reach toward the start, so
+    // one trunk entry also branches from the farthest lane of its list, as an
+    // owner's could, for a connector toward the end.
+    const forked = await page.evaluate(() => {
+      for (const list of document.querySelectorAll('.kc-chronology')) {
+        const lanes = [...list.querySelectorAll<HTMLElement>(':scope > li[data-lane]')];
+        const far = Math.max(...lanes.map((entry) => Number(entry.dataset.lane)));
+        const trunk = lanes.find(
+          (entry) => entry.dataset.lane === '0' && entry.dataset.branchesFromLane === undefined,
+        );
+        if (far > 1 && trunk) {
+          trunk.dataset.branchesFromLane = String(far);
+          return far;
+        }
+      }
+      return 0;
+    });
+    expect(forked, 'a list with a trunk entry and two lanes beside it').toBeGreaterThan(1);
     const reaches = await page.evaluate(() =>
       [...document.querySelectorAll<HTMLElement>('.kc-chronology > li[data-lane]')].flatMap(
         (entry) => {
@@ -311,6 +329,9 @@ test(
       ),
     );
     expect(reaches.length, 'forks and joins on the complete fixture').toBeGreaterThan(0);
+    // Both sides: toward the start, and the trunk's toward the end.
+    expect(reaches.some((reach) => Number(reach.to) < Number(reach.lane))).toBe(true);
+    expect(reaches.some((reach) => Number(reach.to) > Number(reach.lane))).toBe(true);
     for (const reach of reaches) {
       expect(reach.target, `lane ${reach.to} has an entry`).not.toBeNull();
       // Toward the start it ends at the entry's own rail and starts at the other's;

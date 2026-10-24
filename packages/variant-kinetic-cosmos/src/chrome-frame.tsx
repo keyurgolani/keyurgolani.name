@@ -2,8 +2,9 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { useBoundary } from '@portfolio/appearance/react';
-import { MotionControl, useEnhancementRuntime } from '@portfolio/kit/runtime';
+import { MotionControl } from '@portfolio/kit/runtime';
 import type { MotionPolicy } from '@portfolio/schema';
+import { Runtime } from './runtime';
 
 // The chrome's frame (#14): the header, which recedes during passive
 // viewing and comes straight back. It recedes only while its own runtime is
@@ -28,10 +29,24 @@ const REVEALS = ['pointermove', 'pointerdown', 'touchstart', 'keydown', 'focusin
 /** At most one restart in this many milliseconds of continuous input. */
 const SETTLE_MS = 250;
 
+/**
+ * The header. In a plate it's the plain header alone, before any runtime
+ * hook: no subscription, observer, listener, or attribute of the runtime's.
+ * Anywhere else it's the live chrome.
+ */
 export function ChromeFrame({ children }: { readonly children: ReactNode }) {
   const { plate } = useBoundary();
-  const { attachRoot, state } = useEnhancementRuntime();
-  const receding = !plate && state === 'active';
+  return plate ? (
+    <header className="kc-chrome">{children}</header>
+  ) : (
+    <LiveChrome>{children}</LiveChrome>
+  );
+}
+
+/** The chrome on its runtime: the only path that calls the hook, observes, or listens. */
+function LiveChrome({ children }: { readonly children: ReactNode }) {
+  const { attachRoot, state } = Runtime.useEnhancementRuntime();
+  const receding = state === 'active';
   const [round, setRound] = useState<'a' | 'b'>('a');
 
   useEffect(() => {

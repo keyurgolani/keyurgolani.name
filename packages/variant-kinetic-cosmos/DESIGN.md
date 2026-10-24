@@ -72,7 +72,7 @@ N/A: there's no owner-tunable choice and no slot. The orbit's profile count and 
 - `@portfolio/kit/sections`: `renderSection`, `SHARED_RENDERERS`, `EvidenceEntry`, `ChronologyItem`, `SectionHeader`, `renderContext`, `evidenceOf`, `chronologyOf`, `recordAnchor`, `formatFigure`, `present`, `RichText`, `VisitorControlSlot`.
 - `@portfolio/kit/timeline`: `threadLanes` and `laneCount`, hoisted for this package: lanes from authored threads, tested on their own.
 - `@portfolio/kit/runtime`: `useEnhancementRuntime` for the stage and the chrome, and `MotionControl`. Nothing draws frames, so nothing loops through `useFrameLoop`.
-- `@portfolio/appearance/primitives`: `Dialog` for the menu and `Disclosure` for evidence; `@portfolio/appearance/react`: `useBoundary`, so the menu link, the stage, and the chrome attach no listener in a plate.
+- `@portfolio/appearance/primitives`: `Dialog` for the menu and `Disclosure` for evidence; `@portfolio/appearance/react`: `useBoundary`, so in a plate the menu link, the stage, and the chrome render their still markup before any runtime hook: no subscription, observer, listener, or attribute of the runtime's.
 - Kit fixes the port needed: `AnimatedCounter` renders the real value on the server, and `TypingAnimation` no longer announces through a polite live region.
 
 ## Performance tier

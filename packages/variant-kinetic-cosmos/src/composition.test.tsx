@@ -22,6 +22,7 @@ import {
   HIDDEN_CANARY,
 } from '@portfolio/variant-contract/node';
 import KineticCosmos from '.';
+import { Runtime } from './runtime';
 import { GLYPHS_PER_LAYER } from './stage';
 
 // Kinetic Cosmos (#14), the still composition: its manifest holds the
@@ -301,15 +302,35 @@ test('in a plate it renders the same, every id under the plate prefix and none r
     fallbackAxes: [],
     diagnostics: [],
   } as never;
-  const plate = renderToStaticMarkup(
-    <PresentationBoundary
-      kind="plate"
-      appearance={appearance}
-      ids={{ prefix: 'pl-', main: input.ids.main }}
-    >
-      <KineticCosmos input={input} />
-    </PresentationBoundary>,
-  );
+  // Every call of the runtime's hook, which subscribes to the document,
+  // observes the root, and writes data-activity once mounted.
+  const calls: string[] = [];
+  const hook = Runtime.useEnhancementRuntime;
+  Runtime.useEnhancementRuntime = (options) => {
+    calls.push('runtime');
+    return hook(options);
+  };
+  let plate: string;
+  let documentCalls: number;
+  try {
+    plate = renderToStaticMarkup(
+      <PresentationBoundary
+        kind="plate"
+        appearance={appearance}
+        ids={{ prefix: 'pl-', main: input.ids.main }}
+      >
+        <KineticCosmos input={input} />
+      </PresentationBoundary>,
+    );
+    // A plate renders the still before any runtime hook: none is called.
+    assert.deepEqual(calls, [], 'runtime hooks called in a plate');
+    // The control: the same composition outside a plate calls it, for the stage and the chrome.
+    html(fixtureInput('complete'));
+    documentCalls = calls.length;
+  } finally {
+    Runtime.useEnhancementRuntime = hook;
+  }
+  assert.equal(documentCalls, 2, 'runtime hooks outside a plate');
   const all = ids(plate);
   assert.ok(all.length > 10);
   assert.deepEqual(
