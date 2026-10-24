@@ -1,4 +1,4 @@
-import { isPlainObject, type AppearanceSelection, type Site } from '@portfolio/schema';
+import type { AppearanceSelection, Site } from '@portfolio/schema';
 import {
   axisFallback,
   DEFAULT_VISITOR_CONTROLS,
@@ -16,6 +16,7 @@ import {
   type SelectionText,
 } from '@portfolio/appearance';
 import { APPEARANCE_REGISTRY } from './appearance-registry';
+import { readDerivedSchemes } from './derived-schemes';
 import type { EnvironmentOverride } from './environment';
 
 // What a document boundary renders (#19, Slice 4): resolveAppearance() for
@@ -68,36 +69,23 @@ export interface DocumentAppearanceInput {
   readonly schemes?: unknown;
 }
 
-/** One stored generated scheme, as #10's draft save writes it (B's DerivedScheme). */
-export interface StoredScheme {
-  readonly generator: { readonly id: string; readonly version: number };
-  /** The SHA-256 hex of the canonical input: a seed lowercased, or an image's pixels. */
-  readonly inputsHash: string;
-  readonly tokens: unknown;
-}
-
-const SHA256 = /^[0-9a-f]{64}$/;
-
 /**
- * The stored generated schemes a page may render, by scheme id: each one a
- * registered generator scheme's, made by the generator and version its
- * manifest names, with an input hash and complete sets. Anything else, or
- * anything that isn't an object, is left out.
+ * The stored generated schemes a page may render, by scheme id: each entry
+ * that readDerivedSchemes() checks (#10's DerivedScheme), for a registered
+ * generator scheme, made by the generator and version its manifest names,
+ * with complete sets. Anything else is left out, so its axis falls back.
  */
 export function storedSchemes(
   schemes: unknown,
   registry: AppearanceRegistry = APPEARANCE_REGISTRY,
 ): GeneratedSchemes {
   const kept: Record<string, GeneratedSchemes[string]> = {};
-  if (!isPlainObject(schemes)) return kept;
-  for (const id of Object.keys(schemes)) {
-    const entry = schemes[id];
+  for (const [id, entry] of Object.entries(readDerivedSchemes(schemes).schemes)) {
     const declared = findPack(registry, 'colorScheme', id)?.manifest.generator;
-    if (!declared || !isPlainObject(entry) || !isPlainObject(entry.generator)) continue;
+    if (!declared) continue;
     if (entry.generator.id !== declared.id || entry.generator.version !== declared.version)
       continue;
-    if (typeof entry.inputsHash !== 'string' || !SHA256.test(entry.inputsHash)) continue;
-    const sets = generatedSets({ [id]: entry.tokens as GeneratedSchemes[string] }, id);
+    const sets = generatedSets({ [id]: entry.tokens }, id);
     if (sets) kept[id] = sets;
   }
   return kept;
