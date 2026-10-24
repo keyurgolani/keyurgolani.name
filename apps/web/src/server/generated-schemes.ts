@@ -9,7 +9,7 @@ import { compileGeneratedScheme } from '@portfolio/appearance/node';
 import { APPEARANCE_REGISTRY, APPEARANCE_STYLESHEETS } from '~/lib/appearance-registry';
 import { storedSchemes } from '~/lib/document-appearance';
 import { IMMUTABLE } from './cache-rules';
-import { getLive } from './catalog';
+import { getLive, type LiveRevision } from './catalog';
 import { getDeploymentState } from './config-store';
 import { previewStatusDocument } from './preview-asset';
 
@@ -142,9 +142,17 @@ let liveMemo: {
  * memo's compiles afresh and replaces it. With no live revision, none.
  */
 export async function liveSchemeSheets(): Promise<LiveSchemes> {
-  const live = await getLive().catch(() => null);
+  return schemeSheetsOf(await getLive().catch(() => null));
+}
+
+/**
+ * The generated schemes of a live revision a caller already read, with
+ * their stylesheets, through the same per-revision memo: so a page that
+ * reads the revision for its site renders and links from that one read.
+ */
+export function schemeSheetsOf(live: LiveRevision | null): LiveSchemes {
   if (!live?.unit) return NONE;
-  const schemes = live.unit.snapshots.schemes;
+  const schemes = live.unit.snapshots?.schemes;
   const key = JSON.stringify([live.revisionId, live.unitHash]);
   if (liveMemo?.key !== key) liveMemo = { key, sheets: schemeStylesheets(schemes) };
   return { schemes, sheets: liveMemo.sheets };

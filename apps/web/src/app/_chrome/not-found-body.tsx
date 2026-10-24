@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { AppearanceStylesheets } from '@portfolio/appearance';
 import type { Site } from '@portfolio/schema';
 import { FALLBACK_ID, type VariantRegistry } from '@portfolio/variant-contract';
 import { DocumentBoundary } from '~/lib/experience-document';
@@ -6,6 +7,7 @@ import { documentAppearance } from '~/lib/document-appearance';
 import { compositionFor, REGISTRY } from '~/lib/variants';
 import { getDeploymentState } from '~/server/config-store';
 import { getLive } from '~/server/live-revision';
+import { liveStylesheets, schemeSheetsOf } from '~/server/generated-schemes';
 import { visitorPageAppearance } from '~/server/visitor-appearance';
 import { capabilityPolicy, type NavLink } from '~/server/policy';
 
@@ -31,13 +33,25 @@ const HOME: readonly NavLink[] = [{ href: '/', label: 'Home' }];
  * The live site document and its revision's stored generated schemes
  * (#20 PR 3), or null before startup and while the catalog can't serve: the
  * request's own read, so a 404 inside the site's layout renders from the
- * layout's revision, its schemes included.
+ * layout's revision, its schemes included, and the stylesheets that link
+ * them from /_portfolio/scheme/ (#20), as a visitor page's boundary does.
  */
-async function liveSite(): Promise<{ readonly site: Site; readonly schemes: unknown } | null> {
+async function liveSite(): Promise<{
+  readonly site: Site;
+  readonly schemes: unknown;
+  readonly stylesheets: AppearanceStylesheets;
+} | null> {
   if (!getDeploymentState()) return null;
   try {
-    const { unit } = await getLive();
-    return unit ? { site: unit.site, schemes: unit.snapshots?.schemes } : null;
+    const live = await getLive();
+    const { unit } = live;
+    return unit
+      ? {
+          site: unit.site,
+          schemes: unit.snapshots?.schemes,
+          stylesheets: liveStylesheets(schemeSheetsOf(live)),
+        }
+      : null;
   } catch {
     return null;
   }
@@ -103,6 +117,7 @@ export async function NotFoundBody({
         undefined,
         served?.schemes,
       )}
+      stylesheets={served?.stylesheets}
       main="main"
       nonce={nonce}
     >
