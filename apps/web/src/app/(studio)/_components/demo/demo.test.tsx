@@ -11,7 +11,7 @@ import { CATALOG, DEFAULTS, FakeStorage, SCHEME_MODES, UNIT } from '~/lib/demo/t
 import { frameSource } from '~/lib/demo/url-state';
 import { VIEWPORTS } from '~/lib/preview-frame';
 import { DEMO_FRAME_SANDBOX, DemoFrame, isDemoFrameSource } from './demo-frame';
-import { DemoStudio, SandboxLine, type AxisPickerProps } from './demo-studio';
+import { DemoStudio, SandboxLine } from './demo-studio';
 
 // tsx compiles JSX to React.createElement calls, so the test supplies React.
 Object.assign(globalThis, { React });
@@ -24,13 +24,7 @@ Object.assign(globalThis, { React });
 const SRC = path.dirname(fileURLToPath(import.meta.url));
 const WEB_SRC = path.resolve(SRC, '..', '..', '..', '..');
 
-function Picker({ axis, label, value }: AxisPickerProps) {
-  return (
-    <label data-axis={axis}>
-      {label} <output>{value}</output>
-    </label>
-  );
-}
+const POLICY = { profile: 'demo', allowed: ['sandbox.view'] } as const;
 
 function backend() {
   return browserBackend({
@@ -109,13 +103,13 @@ test('the Appearance task has a picker and a reset for each axis, a full reset, 
     <DemoStudio
       catalog={CATALOG}
       schemeModes={SCHEME_MODES}
+      policy={POLICY}
       backend={demo}
       task="appearance"
-      AxisPicker={Picker}
     />,
   );
   for (const { axis, label } of CATALOG.axes) {
-    assert.match(html, new RegExp(`data-axis="${axis}"`), axis);
+    assert.match(html, new RegExp(`<select id="studio-appearance-${axis}"`), axis);
     assert.ok(html.includes(`Reset ${label.toLowerCase()}`), label);
   }
   assert.ok(html.includes('>Reset demo<'));
@@ -131,10 +125,10 @@ test('the Appearance task has a picker and a reset for each axis, a full reset, 
 
 test('the Preview task has the viewports, the display mode, and Follow system and Reduced motion', () => {
   const html = renderToStaticMarkup(
-    <DemoStudio catalog={CATALOG} backend={backend()} task="preview" AxisPicker={Picker} />,
+    <DemoStudio catalog={CATALOG} policy={POLICY} backend={backend()} task="preview" />,
   );
   for (const viewport of VIEWPORTS) assert.ok(html.includes(`value="${viewport.id}"`), viewport.id);
-  assert.match(html, /data-axis="displayMode"/);
+  assert.match(html, /<select id="studio-appearance-displayMode"/);
   assert.match(
     html,
     /<option value="system"[^>]*>Follow system<\/option><option value="reduce">Reduced<\/option>/,
@@ -145,7 +139,7 @@ test('the Preview task has the viewports, the display mode, and Follow system an
 test('no Demo Studio view offers publishing, a draft, signing in or out, or settings', () => {
   for (const task of ['appearance', 'preview'] as const) {
     const html = renderToStaticMarkup(
-      <DemoStudio catalog={CATALOG} backend={backend()} task={task} AxisPicker={Picker} />,
+      <DemoStudio catalog={CATALOG} policy={POLICY} backend={backend()} task={task} />,
     );
     assert.doesNotMatch(
       html,
@@ -155,11 +149,43 @@ test('no Demo Studio view offers publishing, a draft, signing in or out, or sett
   }
 });
 
-test('before the page hands it a backend, the body only says it is loading', () => {
+test('Demo Studio has its two tasks in the frame, and the sandbox line where Owner Studio says who is signed in', () => {
   const html = renderToStaticMarkup(
-    <DemoStudio catalog={CATALOG} backend={null} task="appearance" AxisPicker={Picker} />,
+    <DemoStudio catalog={CATALOG} policy={POLICY} backend={backend()} task="appearance" />,
   );
-  assert.equal(html, '<p class="studio-state__waiting">Loading the demo…</p>');
+  assert.ok(html.includes('<h1 class="studio-shell__name">Portfolio Studio</h1><p class="studio-shell__signed-in">Demo sandbox — only you can see these changes</p></header>'));
+  assert.deepEqual(
+    [...html.matchAll(/<a href="#([a-z-]+)" class="studio-shell__task"(?: aria-current="page")?>([^<]+)<\/a>/g)].map(
+      ([, id, label]) => `${id} ${label}`,
+    ),
+    ['appearance Appearance', 'preview Preview'],
+  );
+  assert.match(html, /<a href="#appearance" class="studio-shell__task" aria-current="page">/);
+  // Without JavaScript it says it needs it, and where the sample works without.
+  assert.match(
+    html,
+    /<noscript>.*Demo Studio needs JavaScript.*<a href="\/sample">see the sample without it<\/a>.*<\/noscript>/,
+  );
+  // A policy without sandbox.view lists no task.
+  assert.doesNotMatch(
+    renderToStaticMarkup(
+      <DemoStudio catalog={CATALOG} policy={{ profile: 'demo', allowed: [] }} backend={backend()} />,
+    ),
+    /studio-shell__task|<iframe/,
+  );
+});
+
+test('before the page hands it a backend, the demo only says it is loading, and says when it could not', () => {
+  const html = renderToStaticMarkup(
+    <DemoStudio catalog={CATALOG} policy={POLICY} backend={null} task="appearance" />,
+  );
+  assert.match(html, /<p class="studio-state__waiting" aria-busy="true">Loading the demo…<\/p>/);
+  assert.doesNotMatch(html, /studio-task"|<iframe/);
+  const failed = renderToStaticMarkup(
+    <DemoStudio catalog={CATALOG} policy={POLICY} backend={null} failed />,
+  );
+  assert.match(failed, /role="alert"><p>Demo Studio couldn&#x27;t load/);
+  assert.doesNotMatch(failed, /class="studio-state__waiting"/);
 });
 
 /** Every import specifier `file` names, type-only ones included, and the file each resolves to under src/. */
@@ -205,11 +231,15 @@ test("nothing Demo Studio loads reaches Owner Studio's adapter, its transport, o
   }
   const reached = [...seen].map((file) => path.relative(WEB_SRC, file));
   const forbidden = reached.filter((file) =>
-    /^(?:lib\/studio\/owner-backend\.ts|lib\/studio-fetch\.ts|server\/|app\/\(studio\)\/_components\/(?:shell|preview)\/)/.test(
+    /^(?:lib\/studio\/owner-backend\.ts|lib\/studio-fetch\.ts|lib\/studio\/load-backend\.ts|server\/|app\/\(studio\)\/_components\/preview\/)/.test(
       file,
-    ),
+    ) ||
+      // Of the owner's shell, only the frame and the axis field it shares.
+      (/^app\/\(studio\)\/_components\/shell\//.test(file) &&
+        !/\/(?:studio-frame|axis-field)\.tsx$/.test(file)),
   );
   assert.deepEqual(forbidden, []);
-  // The walk did follow imports into Studio's shared libraries.
+  // The walk did follow imports into Studio's shared libraries and its shared frame.
   assert.ok(reached.includes('lib/studio/appearance.ts'), reached.join(', '));
+  assert.ok(reached.includes('app/(studio)/_components/shell/studio-frame.tsx'), reached.join(', '));
 });
