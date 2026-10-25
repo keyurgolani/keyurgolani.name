@@ -68,9 +68,10 @@ interface Answer {
 /**
  * `answer` has `status` and, whenever a body came back, exactly `code`: a
  * missing or another code fails. Only a no-cors answer may come back empty,
- * or withheld for its same-origin resource policy, and then its status counts
- * whenever the browser reported it. Each send's path is recorded on the test
- * and in the log.
+ * or withheld for its same-origin resource policy, and a withheld one needs
+ * the raw headers Chromium reports for it: its status, and
+ * Cross-Origin-Resource-Policy: same-origin. Each send's path is recorded on
+ * the test and in the log.
  */
 function expectAnswer(
   answer: Answer,
@@ -87,13 +88,11 @@ function expectAnswer(
   console.log(`[demo-origin] ${path}`);
   // A request that isn't no-cors has a readable body: anything else fails.
   if (!opaque) expect(answer.body, `${what}: a body`).toBe('checked');
+  // A withheld answer's raw headers are required: with none, its status is
+  // null, and that fails here.
+  expect(answer.status, what).toBe(status);
   if (answer.body === 'withheld') {
-    if (answer.status !== null) {
-      expect(answer.status, what).toBe(status);
-      expect(answer.corp, `${what}: the resource policy`).toBe('same-origin');
-    }
-  } else {
-    expect(answer.status, what).toBe(status);
+    expect(answer.corp, `${what}: the resource policy`).toBe('same-origin');
   }
   if (answer.body === 'checked') expect(answer.code, what).toBe(code);
   expect(answer.cors, what).toEqual([]);
@@ -369,8 +368,8 @@ test(
     // Each command two ways, both simple requests no preflight stops before
     // the server. A no-cors fetch, as a script that only wants the side
     // effect sends it: Chromium withholds its answer from the page for its
-    // Cross-Origin-Resource-Policy, and reports the status only when it
-    // reports raw headers. And a text/plain form, a navigation, which no
+    // Cross-Origin-Resource-Policy, and its raw headers, which must come,
+    // carry the status. And a text/plain form, a navigation, which no
     // resource policy covers, so its status and its body always read.
     const command = (page: Page, name: string) =>
       page.evaluate(
