@@ -2,7 +2,7 @@
   "id": "terminal-chrome",
   "name": "Terminal Chrome",
   "description": "Square corners, hairline borders, translucent surfaces, compact density, no shadows, precise motion, and scanlines.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "extended",
   "provenance": {
@@ -39,7 +39,8 @@
   ],
   "caveats": [
     "Translucent surfaces with a backdrop blur cost paint time on slower devices, and read less clearly over busy content.",
-    "A decorative gradient texture sits behind surfaces."
+    "A decorative gradient texture sits behind surfaces.",
+    "Its scanlines draw in the canvas color, not the prototype's text color, so they sit away from the text and never take contrast from it."
   ],
   "tokens": {
     "surface-material": "linear-gradient(color-mix(in srgb, var(--color-surface-default) 92%, transparent), color-mix(in srgb, var(--color-surface-default) 92%, transparent))",
@@ -80,7 +81,7 @@
     "motion-enter": "fade-rise",
     "motion-exit": "fade",
     "motion-emphasis": "pulse-once",
-    "texture": "repeating-linear-gradient(0deg, transparent 0 3px, color-mix(in srgb, var(--color-text-primary) 10%, transparent) 3px 4px)",
+    "texture": "repeating-linear-gradient(0deg, transparent 0 3px, color-mix(in srgb, var(--color-canvas) 10%, transparent) 3px 4px)",
     "signature-fill": "linear-gradient(90deg, var(--color-signature-start), var(--color-signature-end))",
     "emphasis-glow": "none"
   }
