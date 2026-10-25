@@ -17,8 +17,9 @@
 // between them.
 //
 // How many shards: the fewest, from 1 to MAX_SHARDS (and with a pack sweep,
-// MAX_SHARDS and what the sweep alone needs, up to SWEEP_MAX_SHARDS:
-// shardLimit), whose slowest shard,
+// MAX_SHARDS and what the sweep alone needs, up to SWEEP_MAX_SHARDS, and for
+// a sweep that alone needs more, up to CATALOG_MAX_SHARDS: shardLimit),
+// whose slowest shard,
 // its fixed part plus its groups on Playwright's two workers, stays within
 // SHARD_CEILING (pickShardCount). CI's quality-pr-plan job works it out for
 // each PR (pr-count.ts), and every shard is handed that count. A cell group
@@ -73,6 +74,19 @@ export const MAX_SHARDS = 12;
  * dozens of packs at once, reach it. Nothing else does.
  */
 export const SWEEP_MAX_SHARDS = 16;
+/**
+ * The most a catalog-scale sweep may take. Only when the pack sweep alone
+ * can't fit SWEEP_MAX_SHARDS, as when a PR brings #20's whole catalog, is
+ * the most the fewest shards the plan fits, up to this. [37] keeps every
+ * changed pack against every variant, so the sweep is never cut to fit.
+ */
+export const CATALOG_MAX_SHARDS = 48;
+/**
+ * quality-pr's max-parallel for a catalog-scale sweep, so it runs in waves
+ * and PR CI keeps the account's other slots. Any other plan runs every
+ * shard at once (pr-count.ts's shardOutputs).
+ */
+export const PR_PARALLEL = 10;
 /** The most one group may weigh: a group runs on one worker, so it alone sets its shard's floor. */
 export const GROUP_BUDGET = SHARD_CEILING - SHARD_FIXED;
 
@@ -126,6 +140,12 @@ export interface ShardGroup {
   readonly part?: number;
   /** A variant's sweep server's cell group, or a part of one (lib/sweep.ts). */
   readonly sweep?: true;
+  /**
+   * A sweep group's changed pack for each test, in the order of `tests`, as
+   * `<axis>: <pack>` (`language: international-grid`), kept in its parts with
+   * their `costs`, so a plan over the ceiling names the pack.
+   */
+  readonly packs?: readonly string[];
   /**
    * A cell group whose every test is a changed variant's directed cell (the
    * [37] rule's variant pairs), or a part of one: with the sweep's, the
@@ -184,6 +204,22 @@ export function testWeight(
   );
 }
 
+/** The axes' names in a pack's description. */
+const AXIS_NAMES: Readonly<Record<string, string>> = {
+  designLanguage: 'language',
+  colorScheme: 'scheme',
+  typography: 'typography',
+};
+
+/** A swept cell's changed packs, as `<axis>: <pack>`, for a failure to name. */
+export const changedPack = (
+  changed: readonly { readonly axis: string; readonly id: string }[] | undefined,
+) =>
+  (changed ?? [])
+    .filter((by) => by.axis !== 'variant')
+    .map((by) => `${AXIS_NAMES[by.axis] ?? by.axis}: ${by.id}`)
+    .join(', ');
+
 /** Every test group the PR plan runs on `engines`, with its weight. */
 export function planGroups(
   plan: Pick<Plan, 'cells' | 'tests' | 'targets' | 'mode'>,
@@ -225,7 +261,9 @@ export function planGroups(
         tests: own.map((test) => testKey(test.cell.id, test.viewport.id, test.row.id, engine)),
         costs,
         weight: costs.reduce((sum, cost) => sum + cost, durations.group),
-        ...(server.sweep ? { sweep: true as const } : {}),
+        ...(server.sweep
+          ? { sweep: true as const, packs: own.map((test) => changedPack(test.cell.changed)) }
+          : {}),
         // A changed variant's own cells, none of them a sentinel the PR runs anyway.
         ...(!server.sweep &&
         own.length > 0 &&
@@ -273,25 +311,25 @@ export function splitGroups(
         `${groupKey(group)} takes about ${Math.round(group.weight)}s, over the ${budget}s one worker has in a shard, and only a cell group splits.`,
       );
     }
-    const byCell = new Map<string, { tests: string[]; costs: number[]; weight: number }>();
+    // Each cell's tests, by their place in the group.
+    const byCell = new Map<string, { tests: number[]; weight: number }>();
     group.tests.forEach((key, at) => {
       const cell = cellOfTest(key);
-      const entry = byCell.get(cell) ?? { tests: [], costs: [], weight: 0 };
-      entry.tests.push(key);
-      entry.costs.push(group.costs![at]!);
+      const entry = byCell.get(cell) ?? { tests: [], weight: 0 };
+      entry.tests.push(at);
       entry.weight += group.costs![at]!;
       byCell.set(cell, entry);
     });
     // What goes into parts whole: each cell that fits a part, else each of its tests.
     const units = [...byCell.values()].flatMap((entry) =>
       durations.group + entry.weight <= budget
-        ? [{ tests: entry.tests, weight: entry.weight }]
-        : entry.tests.map((key, at) => ({ tests: [key], weight: entry.costs[at]! })),
+        ? [entry]
+        : entry.tests.map((at) => ({ tests: [at], weight: group.costs![at]! })),
     );
-    const parts: { tests: string[]; weight: number }[] = [];
+    const parts: { tests: number[]; weight: number }[] = [];
     for (const unit of units) {
       if (durations.group + unit.weight > budget) {
-        const [cell, viewport, row] = JSON.parse(unit.tests[0]!) as string[];
+        const [cell, viewport, row] = JSON.parse(group.tests[unit.tests[0]!]!) as string[];
         throw new Error(
           `The test ${cell} at ${viewport}, ${row} alone takes about ${Math.round(durations.group + unit.weight)}s on ${group.project}, over the ${budget}s one worker has in a shard.`,
         );
@@ -308,9 +346,16 @@ export function splitGroups(
       project: group.project,
       file: group.file,
       part: at + 1,
-      tests: part.tests,
+      tests: part.tests.map((each) => group.tests[each]!),
       weight: part.weight,
-      ...(group.sweep ? { sweep: true as const } : {}),
+      // A sweep's part keeps each test's weight and pack, so a plan over the ceiling names it.
+      ...(group.sweep
+        ? {
+            sweep: true as const,
+            costs: part.tests.map((each) => group.costs![each]!),
+            ...(group.packs ? { packs: part.tests.map((each) => group.packs![each]!) } : {}),
+          }
+        : {}),
       ...(group.variant ? { variant: true as const } : {}),
     }));
   });
@@ -402,14 +447,15 @@ function fewestShards(
   return { fits: false, count: max, slowest, shards };
 }
 
-/** The fewest shards `groups` alone need, up to SWEEP_MAX_SHARDS (and that many past it), or 0 for none. */
+/** The fewest shards `groups` alone need, up to `max` (and that many past it), or 0 for none. */
 function shardsAlone(
   groups: readonly ShardGroup[],
   durations: Pick<ShardDurations, 'group'>,
+  max: number = SWEEP_MAX_SHARDS,
 ): { readonly count: number; readonly fits: boolean } {
   if (groups.length === 0) return { count: 0, fits: true };
-  const alone = fewestShards(splitGroups(groups, GROUP_BUDGET, durations), SWEEP_MAX_SHARDS);
-  return { count: alone.fits ? alone.count : SWEEP_MAX_SHARDS, fits: alone.fits };
+  const alone = fewestShards(splitGroups(groups, GROUP_BUDGET, durations), max);
+  return { count: alone.fits ? alone.count : max, fits: alone.fits };
 }
 
 /**
@@ -421,6 +467,13 @@ function shardsAlone(
  * own on top. Only directed groups count toward `directedShards`, so
  * nothing else raises it. `sweepShards` and `variantShards` say what each
  * part alone needs, for the log.
+ *
+ * A catalog-scale sweep: when the pack sweep can't fit SWEEP_MAX_SHARDS,
+ * alone or with the rest of the plan but the changed variants' groups, the
+ * most is CATALOG_MAX_SHARDS, so the count is the fewest the plan fits, up
+ * to that. Only sweep load steps it up: a changed variant's load never
+ * does, and by itself it still fails past SWEEP_MAX_SHARDS. Once the sweep
+ * has stepped the plan up, the changed variants share the larger limit.
  */
 export function shardLimit(
   groups: readonly ShardGroup[],
@@ -430,19 +483,60 @@ export function shardLimit(
   readonly directedShards: number;
   readonly sweepShards: number;
   readonly variantShards: number;
+  readonly catalogScale: boolean;
   readonly reason: string | null;
 } {
-  const directed = shardsAlone(groups.filter(isDirected), durations);
-  const sweepShards = shardsAlone(
+  const sweep = shardsAlone(
     groups.filter((group) => group.sweep),
     durations,
-  ).count;
+    CATALOG_MAX_SHARDS,
+  );
+  const sweepAlone = !sweep.fits || sweep.count > SWEEP_MAX_SHARDS;
+  // A sweep that fits by itself may not with the base beside it; the changed variants don't count.
+  const withBase =
+    !sweepAlone &&
+    sweep.count > 0 &&
+    !fewestShards(
+      splitGroups(
+        groups.filter((group) => !group.variant),
+        GROUP_BUDGET,
+        durations,
+      ),
+      SWEEP_MAX_SHARDS,
+    ).fits;
+  const catalogScale = sweepAlone || withBase;
+  const directed = shardsAlone(
+    groups.filter(isDirected),
+    durations,
+    catalogScale ? CATALOG_MAX_SHARDS : SWEEP_MAX_SHARDS,
+  );
+  const sweepShards = catalogScale ? sweep.count : Math.min(sweep.count, SWEEP_MAX_SHARDS);
   const variantShards = shardsAlone(
     groups.filter((group) => group.variant),
     durations,
   ).count;
   if (directed.count === 0) {
-    return { max: MAX_SHARDS, directedShards: 0, sweepShards, variantShards, reason: null };
+    return {
+      max: MAX_SHARDS,
+      directedShards: 0,
+      sweepShards,
+      variantShards,
+      catalogScale,
+      reason: null,
+    };
+  }
+  if (catalogScale) {
+    const why = sweepAlone
+      ? `the pack sweep alone needs ${sweep.fits ? sweep.count : `more than ${CATALOG_MAX_SHARDS}`} shards, more than ${SWEEP_MAX_SHARDS}`
+      : `the pack sweep alone needs ${sweep.count} shards, and with the rest of the plan but the changed variants more than ${SWEEP_MAX_SHARDS}`;
+    return {
+      max: CATALOG_MAX_SHARDS,
+      directedShards: directed.count,
+      sweepShards,
+      variantShards,
+      catalogScale,
+      reason: `a catalog-scale sweep: ${why}, so the most is ${CATALOG_MAX_SHARDS}`,
+    };
   }
   const max = Math.min(SWEEP_MAX_SHARDS, MAX_SHARDS + directed.count);
   const needs = directed.fits
@@ -453,11 +547,22 @@ export function shardLimit(
     directedShards: directed.count,
     sweepShards,
     variantShards,
+    catalogScale,
     reason: `the directed groups alone need ${needs} (the pack sweep's ${sweepShards}, the changed variants' ${variantShards}), so the most is ${max}`,
   };
 }
 
-/** Why `groups` can't fit `max` shards: the slowest shard, its heaviest group, and `about`. */
+/** A sweep group's or part's heaviest test's changed pack, as `<axis>: <pack>`, or null for another group. */
+function heaviestPack(group: ShardGroup): string | null {
+  if (!group.sweep || !group.packs || group.packs.length === 0) return null;
+  let at = 0;
+  (group.costs ?? []).forEach((cost, each) => {
+    if (cost > group.costs![at]!) at = each;
+  });
+  return group.packs[at] || null;
+}
+
+/** Why `groups` can't fit `max` shards: the slowest shard, its heaviest group and, for a sweep's, its pack, and `about`. */
 function overCeiling(
   max: number,
   { slowest, shards }: { readonly slowest: number; readonly shards: readonly PrShard[] },
@@ -465,8 +570,9 @@ function overCeiling(
 ): Error {
   const worst = shards.reduce((a, b) => (shardEstimate(b) > shardEstimate(a) ? b : a));
   const heaviest = [...worst.groups].sort((a, b) => b.weight - a.weight)[0]!;
+  const pack = heaviestPack(heaviest);
   return new Error(
-    `Even ${max} shards leave one at about ${Math.round(slowest)}s, over the ${SHARD_CEILING}s ceiling${about ? ` (${about})` : ''}. Its heaviest group is ${groupKey(heaviest)}, at about ${Math.round(heaviest.weight)}s.`,
+    `Even ${max} shards leave one at about ${Math.round(slowest)}s, over the ${SHARD_CEILING}s ceiling${about ? ` (${about})` : ''}. Its heaviest group is ${groupKey(heaviest)}, at about ${Math.round(heaviest.weight)}s${pack ? `, its heaviest changed pack ${pack}` : ''}.`,
   );
 }
 
@@ -490,6 +596,8 @@ export function pickShardCount(
   readonly directedShards: number;
   readonly sweepShards: number;
   readonly variantShards: number;
+  /** Whether the pack sweep alone needs more than SWEEP_MAX_SHARDS, so the most is CATALOG_MAX_SHARDS. */
+  readonly catalogScale: boolean;
   /** The most the count could be, and why it's over MAX_SHARDS, or null. */
   readonly max: number;
   readonly reason: string | null;
