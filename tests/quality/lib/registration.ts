@@ -5,7 +5,11 @@
 // interactions, primaryActions, and notApplicable. The harness reads both
 // directories, so a new surface, variant, pack, route, or fixture adds cells
 // without a harness edit. A file that exports anything else, or leaves a
-// field out, fails the plan, and with it the run.
+// field out, fails the plan, and with it the run. So does a unit whose id
+// the build under test registers as no variant or pack, with one exception:
+// the reference variant's, which registers only when a run installs it from
+// its tarball (--external-variant), so its unit stands in every run and
+// applies in those (unitProblems).
 //
 // A Studio surface, #8's Owner Studio and #9's Demo Studio, may also export
 // `requiresScript`, saying it needs its script by design and why: its cells
@@ -29,6 +33,7 @@
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { REFERENCE_ID } from '../../external-variant/id';
 import { isReason } from './checks';
 
 export const PROFILES = ['owner', 'demo', 'read-only'] as const;
@@ -387,6 +392,25 @@ export function validateUnit(exports: Exports, file: string): UnitRegistration {
     primaryActions: (exports.primaryActions as string[] | undefined) ?? [],
     notApplicable: (exports.notApplicable as NotApplicable[] | undefined) ?? [],
   };
+}
+
+/**
+ * What's wrong with `units` against the ids a build registers, its variants'
+ * and packs': a problem for each unit whose id is none of them. The
+ * reference variant's unit is the one exception, since a build registers it
+ * only under --external-variant; without it, its unit matches no cell.
+ */
+export function unitProblems(
+  units: readonly Pick<UnitRegistration, 'id'>[],
+  registered: Iterable<string>,
+): string[] {
+  const known = new Set(registered);
+  return units
+    .filter(({ id }) => id !== REFERENCE_ID && !known.has(id))
+    .map(
+      ({ id }) =>
+        `quality/units/${id}.ts names ${id}, which this build registers as no variant or pack`,
+    );
 }
 
 /** The repository's quality/ directory. */
