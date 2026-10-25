@@ -2,7 +2,7 @@
   "id": "bauhaus-geometric",
   "name": "Bauhaus Geometric",
   "description": "Square corners, strong borders, solid surfaces, normal density, no shadows, precise motion, and a geometric pattern.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "extended",
   "provenance": {
@@ -37,7 +37,10 @@
     "Under reduced motion, transforms and emphasis stop and entrances and exits fade; a paused boundary and print are instant.",
     "In forced colors, the material is a solid surface, and shadows and texture drop."
   ],
-  "caveats": ["A decorative gradient texture sits behind surfaces."],
+  "caveats": [
+    "A decorative gradient texture sits behind surfaces.",
+    "Its texture sits in the surfaces' padding, at their edges, not across them as the prototype's does, so no text is drawn over it."
+  ],
   "tokens": {
     "surface-material": "linear-gradient(var(--color-surface-default), var(--color-surface-default))",
     "radius-control": "0",
@@ -77,7 +80,7 @@
     "motion-enter": "fade-rise",
     "motion-exit": "fade",
     "motion-emphasis": "pulse-once",
-    "texture": "conic-gradient(from 45deg, color-mix(in srgb, var(--color-accent) 12%, transparent) 0 25%, transparent 0 50%, color-mix(in srgb, var(--color-information) 10%, transparent) 0 75%, transparent 0)",
+    "texture": "linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 12%, transparent) 0 20px, transparent 20px), radial-gradient(circle at 75% 100%, color-mix(in srgb, var(--color-information) 10%, transparent) 0 14px, transparent 15px)",
     "signature-fill": "linear-gradient(90deg, var(--color-signature-start), var(--color-signature-end))",
     "emphasis-glow": "none"
   }

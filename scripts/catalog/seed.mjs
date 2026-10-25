@@ -29,8 +29,9 @@
 //   `--color-<role>`, and it takes the contract's signature-fill and
 //   emphasis-glow at the fallback language's values. neumorphic's controls
 //   gain a border-strong hairline (BORDER_FIXES), and a focus ring too thin
-//   for #11's focus check is widened (FOCUS_FIXES), at version 1.1.0
-//   (FIXED_LANGUAGE_VERSION). A language that fails
+//   for #11's focus check is widened (FOCUS_FIXES), and a texture drawn
+//   under a surface's text moves into its padding (TEXTURE_PLACEMENTS),
+//   each at version 1.1.0 (FIXED_LANGUAGE_VERSION). A language that fails
 //   check:appearance moves, as written, from packs/ to held/, which
 //   registry generation never reads; this never writes it again.
 // - Generated schemes (brand-seed, material-hct, profile-image,
@@ -495,6 +496,32 @@ function focusFixCaveat(width, prototype, style) {
   return `Its ${ring} is ${width}, not the prototype's ${prototype}: at ${prototype}, ${FOCUS_FIX_REASONS[style]}.`;
 }
 
+/**
+ * Textures the prototype places where a surface's text sits: memphis's two
+ * dots at 25% 25% and 75% 70%, bauhaus-geometric's conic wedges across the
+ * whole surface, and neobrutalist's halftone dot at its center. The quality
+ * cells read text over their strongest pixel under 4.5:1 (obsidian-atelier's
+ * room label, editorial-evidence's writing summary). Each keeps its shapes,
+ * colors, and strength, moved into the surface's padding, which the
+ * platform keeps clear of text: memphis's dots as half dots on the top and
+ * bottom edges, bauhaus-geometric's wedge as a corner triangle and its
+ * second color as a half disc on the bottom edge, and neobrutalist's dot in
+ * the top corner. Every length stays inside the language's own
+ * space-surface padding.
+ */
+export const TEXTURE_PLACEMENTS = {
+  memphis:
+    'radial-gradient(circle at 25% 0, color-mix(in srgb, var(--color-accent) 20%, transparent) 0 14px, transparent 15px), radial-gradient(circle at 75% 100%, color-mix(in srgb, var(--color-information) 18%, transparent) 0 18px, transparent 19px)',
+  'bauhaus-geometric':
+    'linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 12%, transparent) 0 20px, transparent 20px), radial-gradient(circle at 75% 100%, color-mix(in srgb, var(--color-information) 10%, transparent) 0 14px, transparent 15px)',
+  neobrutalist:
+    'radial-gradient(circle at 8px 8px, var(--color-border-strong) 0 1px, transparent 1.5px)',
+};
+
+/** The caveat a placed texture adds. */
+const TEXTURE_PLACEMENT_CAVEAT =
+  "Its texture sits in the surfaces' padding, at their edges, not across them as the prototype's does, so no text is drawn over it.";
+
 /** The version a language ships at once a fix here changes the prototype's tokens. */
 export const FIXED_LANGUAGE_VERSION = '1.1.0';
 
@@ -523,6 +550,8 @@ export function languageManifest(language) {
     ? focusFixCaveat(FOCUS_FIXES[language.id], tokens['focus-width'], tokens['focus-style'])
     : null;
   if (focusFix) tokens['focus-width'] = FOCUS_FIXES[language.id];
+  const placed = Boolean(TEXTURE_PLACEMENTS[language.id]);
+  if (placed) tokens.texture = TEXTURE_PLACEMENTS[language.id];
   Object.assign(tokens, CONTRACT_LANGUAGE_TOKENS);
   const [, , material, , , motion, texture] = RECIPE_PARTS[language.recipe];
   const inspired = language.source.licenseState === 'independent-inspired-interpretation';
@@ -548,6 +577,7 @@ export function languageManifest(language) {
         ]
       : []),
     ...(focusFix ? [focusFix] : []),
+    ...(placed ? [TEXTURE_PLACEMENT_CAVEAT] : []),
     ...(unanimated.length > 0
       ? [
           `Its ${unanimated.map((key) => `${key.slice('motion-'.length)} motion, ${tokens[key]},`).join(' and ')} ${unanimated.length === 1 ? 'has' : 'have'} no keyframes in the platform yet, so ${unanimated.length === 1 ? "it doesn't" : "they don't"} animate.`,
@@ -560,7 +590,7 @@ export function languageManifest(language) {
     description: inspired
       ? `An independent interpretation of ${language.source.name}'s public design principles: ${words}. It ships no official component, token file, icon, or font.`
       : `${words.charAt(0).toUpperCase()}${words.slice(1)}.`,
-    version: focusFix ? FIXED_LANGUAGE_VERSION : LANGUAGE_VERSION,
+    version: focusFix || placed ? FIXED_LANGUAGE_VERSION : LANGUAGE_VERSION,
     tokenContract: 1,
     tier: language.status,
     provenance: {
