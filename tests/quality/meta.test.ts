@@ -199,6 +199,12 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'contrast/neighbour-glyphs',
     'contrast/neighbour-faint',
     'contrast/backdrop-numeral',
+    // High contrast at thresholds.json's 7:1: 5.5:1 text fails there and passes in normal mode.
+    'axe/high-contrast-solid-5-5',
+    'contrast/high-contrast-gradient-5-5',
+    'contrast/contrast-more-5-5',
+    'contrast/normal-5-5',
+    'contrast/high-contrast-7-5',
     'runner/no-javascript-scripting-media',
     'transparency/nav-over-image',
     'occlusion/grain-overlay',
