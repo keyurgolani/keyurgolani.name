@@ -34,7 +34,13 @@ import { DEFAULT_SITE } from './app-server.mjs';
 import { expect, test, type App, type AppOptions } from './fixtures';
 import { REFERENCE_MOUNT } from './reference-fixture';
 import { VARIANTS } from './registry';
-import { headerProblems, isPreviewPath, isStudioPath, withoutNonces } from './route-headers.mjs';
+import {
+  headerProblems,
+  isPreviewPath,
+  isSharedAsset,
+  isStudioPath,
+  withoutNonces,
+} from './route-headers.mjs';
 import { withRscHash } from './rsc';
 import { concrete, scanTargets } from './scan-targets';
 
@@ -1623,9 +1629,20 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
       expect(targets.length).toBeGreaterThan(3);
       for (const target of targets) {
         const slash = await request.get(`${target}/`, { maxRedirects: 0 });
-        expect(slash.status(), `${target}/`).toBe(308);
-        expect(slash.headers()['location'], `${target}/`).toBe(target);
-        expect(await slash.text(), `${target}/`).toBe(target);
+        if (isSharedAsset(target)) {
+          // Under the prefixes any origin may read (#7), such as #20's
+          // /_portfolio/scheme/, a trailing slash is proxy.ts's plain no-store
+          // 404 before the 308 could name another path: a file there has no
+          // path below it.
+          expect(slash.status(), `${target}/`).toBe(404);
+          expect(slash.headers()['location'], `${target}/`).toBeUndefined();
+          expect(slash.headers()['cache-control'], `${target}/`).toBe('no-store');
+          expect(slash.headers()['content-type'], `${target}/`).toMatch(/^text\/plain/);
+        } else {
+          expect(slash.status(), `${target}/`).toBe(308);
+          expect(slash.headers()['location'], `${target}/`).toBe(target);
+          expect(await slash.text(), `${target}/`).toBe(target);
+        }
         expectProfileHeaders(profile, slash, `${target}/`);
         // The repeated slash goes whole, so no one reads it as a host.
         const sent = `${app.origin}/${target}`;
