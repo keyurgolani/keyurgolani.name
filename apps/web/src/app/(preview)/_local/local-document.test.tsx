@@ -1,11 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createRequire, registerHooks } from 'node:module';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { axisFallback } from '@portfolio/appearance';
+import { FALLBACK_APPEARANCE, resolveDocumentAppearance } from '~/lib/document-appearance-core';
 import { frameSandbox } from '~/lib/preview-frame';
 import { runImport } from '~/lib/demo/import/pipeline';
 import {
@@ -298,4 +301,92 @@ test("the frame's module installs the post-pass, and its page renders no documen
   assert.match(shell, /import\('\.\/local-document'\)/);
   const page = readFileSync(new URL('../preview/local/page.tsx', import.meta.url), 'utf8');
   assert.doesNotMatch(page, /getLive|readLive|catalog\.getLive|getPublicView/);
+});
+
+/** brand-seed's committed record as #10 would store it: a well-formed entry, which renders its own sets. */
+function storedBrandSeed(): unknown {
+  const record = JSON.parse(
+    readFileSync(
+      new URL(
+        '../../../../../../packages/appearance-schemes/generated/brand-seed.json',
+        import.meta.url,
+      ),
+      'utf8',
+    ),
+  ) as { result: { generator: unknown; input: { seedColor: string }; tokens: unknown } };
+  return {
+    generator: record.result.generator,
+    inputsHash: createHash('sha256').update(record.result.input.seedColor).digest('hex'),
+    tokens: record.result.tokens,
+  };
+}
+
+test("an imported site that names a generated scheme renders the axis fallback in /preview/local: stored schemes are an owner revision's, the demo has none, and nothing imported pulls stored data in", async () => {
+  const { installPostPass } = await import('@portfolio/kit/markdown-local');
+  await installPostPass();
+  const { renderLocal } = await frame();
+  const stored = { 'brand-seed': storedBrandSeed() };
+  // The entry is well formed: given to the resolver, it renders brand-seed itself.
+  const given = resolveDocumentAppearance({
+    site: { appearance: { ...FALLBACK_APPEARANCE, colorScheme: 'brand-seed' } } as never,
+    variant: 'fallback',
+    profile: 'demo',
+    registry: registries.appearance,
+    schemes: stored,
+  });
+  assert.equal(given.selection.colorScheme, 'brand-seed');
+
+  const site = EXAMPLE.site.replace('  colorScheme: warm-parchment', '  colorScheme: brand-seed');
+  assert.notEqual(site, EXAMPLE.site);
+  const message = documentOf(pairFiles(EXAMPLE.portfolio, site));
+  // Stored data offered everywhere the frame might look, each read recorded: on the
+  // message, and in the browser's stores. No network either.
+  const reads: string[] = [];
+  const offered = Object.create(null) as Record<string, unknown>;
+  for (const key of ['schemes', 'derived', 'snapshots']) {
+    Object.defineProperty(offered, key, {
+      get: () => (reads.push(`message.${key}`), key === 'schemes' ? stored : { schemes: stored }),
+    });
+  }
+  const trapped = Object.assign(offered, message) as LocalDocumentMessage;
+  const globals = [
+    'fetch',
+    'XMLHttpRequest',
+    'localStorage',
+    'sessionStorage',
+    'indexedDB',
+    'caches',
+  ];
+  const kept = globals.map(
+    (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
+  );
+  for (const key of globals) {
+    Object.defineProperty(globalThis, key, {
+      configurable: true,
+      get: () => {
+        reads.push(key);
+        throw new Error(`the frame read ${key}`);
+      },
+    });
+  }
+  let render: LocalRender;
+  try {
+    render = await renderLocal({ document: trapped, route: '/', registries, origin: ORIGIN });
+  } finally {
+    for (const [key, descriptor] of kept) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete (globalThis as Record<string, unknown>)[key];
+    }
+  }
+  assert.deepEqual(reads, [], 'nothing stored was read, and nothing fetched');
+  assert.equal(render.kind, 'render');
+  if (render.kind !== 'render') return;
+  assert.equal(render.appearance.selection.colorScheme, axisFallback('colorScheme'));
+  assert.ok(render.appearance.fallbackAxes.includes('colorScheme'));
+  assert.deepEqual(
+    render.appearance.diagnostics
+      .filter(({ axis }) => axis === 'colorScheme')
+      .map(({ code }) => code),
+    ['appearance.input-missing'],
+  );
 });
