@@ -49,7 +49,7 @@ const SITE = `${readFileSync(DEFAULT_SITE, 'utf8').replace(
 test(
   "a revision grant's frame links its generated scheme from the grant's own _appearance path, loads it as a style, and renders its stored tokens (#20)",
   { annotation: [SHEETS] },
-  async ({ page, app }) => {
+  async ({ page, app, request }) => {
     expect(SITE).toContain('colorScheme: brand-seed');
     const csrf = await signIn(page, app, secret.password);
     const revision = await publish(app, await seedDraft(app, 'Scheme Person', SITE), {
@@ -78,12 +78,27 @@ test(
     );
     expect(await frame.locator('link[href^="/_portfolio/scheme/"]').count()).toBe(0);
 
-    // The browser loaded it as a style, and the grant's route answered it.
+    // The browser loaded it as a stylesheet, and the grant's route answered
+    // it. proxy.ts admits that path only for Sec-Fetch-Dest: style, so the
+    // 200 says the server saw the browser's style load. Playwright doesn't
+    // always report the browser's Fetch Metadata headers on the request.
     await expect.poll(() => sheets.length).toBeGreaterThan(0);
     const [sheet] = sheets;
     expect(new URL(sheet!.url()).pathname).toBe(href);
-    expect((await sheet!.request().allHeaders())['sec-fetch-dest']).toBe('style');
+    expect(sheet!.request().resourceType()).toBe('stylesheet');
     expect(sheet!.status()).toBe(200);
+    // Through one request context, the destination alone decides: a style
+    // load gets the sheet, and the same URL as an image gets the status
+    // document. A grant path reads no cookie (proxy.ts drops it), so neither
+    // needs the page's session or frame.
+    const load = (destination: string) =>
+      request.get(href!, { headers: { 'sec-fetch-dest': destination }, maxRedirects: 0 });
+    const styled = await load('style');
+    expect(styled.status()).toBe(200);
+    expect(styled.headers()['content-type']).toBe('text/css; charset=utf-8');
+    const unstyled = await load('image');
+    expect(unstyled.status()).toBe(404);
+    expect(unstyled.headers()['content-type']).toBe('text/html; charset=utf-8');
     const headers = sheet!.headers();
     expect(headers['content-type']).toBe('text/css; charset=utf-8');
     expect(headers['cache-control']).toBe('private, no-store');
