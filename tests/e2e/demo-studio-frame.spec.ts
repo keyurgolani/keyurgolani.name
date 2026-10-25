@@ -29,18 +29,19 @@ test(
   'below the fold the frame has no src and loads nothing, until its stage scrolls on screen, then loads once',
   { annotation: [STUDIO, DEMO] },
   async ({ page }) => {
-    // A short window, so the frame's stage starts more than a window's height below it.
-    await page.setViewportSize({ width: 1280, height: 200 });
+    // A short window, so the frame's stage starts more than two windows' height below it.
+    await page.setViewportSize({ width: 1280, height: 150 });
     const loads = sampleLoads(page);
     await page.goto('/studio?task=content');
-    await openTask(page, 'Content');
+    // The task's own controls, without following a link that would scroll.
+    await expect(page.getByRole('button', { name: 'Export setup' })).toBeVisible();
     const frame = page.locator('iframe');
     await expect(frame).toHaveCount(1);
     await expect(frame).toHaveAttribute('title', /^Demo sample, /);
     await expect(frame).toHaveAttribute('sandbox', 'allow-scripts');
     await expect(page.locator('.preview-surface__stage')).toHaveAttribute('aria-busy', 'true');
     const box = await page.locator('.preview-surface__stage').boundingBox();
-    expect(box && box.y >= 400, 'the stage starts two windows down').toBe(true);
+    expect(box && box.y >= 450, 'the stage starts three windows down').toBe(true);
     // Time for an idle callback or a late effect: still nothing.
     await page.waitForTimeout(1500);
     expect(await frame.getAttribute('src')).toBeNull();
@@ -81,5 +82,45 @@ test(
 
     await page.getByRole('button', { name: 'Reset demo' }).click();
     await expect(frame).toHaveAttribute('src', first!);
+  },
+);
+
+test(
+  'at a phone’s width the frame waits behind Show preview: no frame and no request, the import and export free, then one press loads it and moves focus',
+  { annotation: [STUDIO, DEMO] },
+  async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const loads = sampleLoads(page);
+    await page.goto('/studio?task=content');
+    const ask = page.getByRole('button', { name: 'Show preview' });
+    await expect(ask).toBeVisible();
+    await expect(page.getByText('Tap to load the preview')).toBeVisible();
+    await expect(page.locator('iframe')).toHaveCount(0);
+    // The import and export work before the preview is asked for.
+    await expect(page.getByLabel('Import your portfolio and site documents')).toBeEnabled();
+    await page.getByRole('button', { name: 'Export setup' }).click();
+    await expect(page.getByRole('list', { name: 'Exported files' })).toBeVisible();
+    await page.waitForTimeout(1000);
+    expect(loads).toHaveLength(0);
+
+    // By keyboard: the button takes focus, with a ring, and Enter asks.
+    await ask.focus();
+    await expect(ask).toBeFocused();
+    const ring = await ask.evaluate((element) => getComputedStyle(element).outlineStyle);
+    expect(ring).not.toBe('none');
+    await page.keyboard.press('Enter');
+    const frame = page.locator('iframe');
+    await expect(frame).toHaveAttribute('src', /^\/sample\?/);
+    await expect(frame).toHaveAttribute('sandbox', 'allow-scripts');
+    // The mobile viewport, at a phone's width.
+    await expect(frame).toHaveAttribute('title', /390 by 844$/);
+    await expect(page.getByRole('group', { name: /^Demo sample, / })).toBeFocused();
+    await expect(page.getByRole('status')).toHaveText('The preview has loaded.');
+    expect(loads).toHaveLength(1);
+
+    // Another task keeps it: no second ask.
+    await openTask(page, 'Appearance');
+    await expect(page.getByRole('button', { name: 'Show preview' })).toHaveCount(0);
+    await expect(page.locator('iframe')).toHaveAttribute('src', /^\/sample\?/);
   },
 );

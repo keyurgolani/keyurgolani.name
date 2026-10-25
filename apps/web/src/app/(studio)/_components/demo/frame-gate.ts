@@ -2,17 +2,40 @@
 // frame's /sample or /reference document runs a whole Next runtime of its
 // own, and Chromium runs a same-site sandboxed frame on the page's own main
 // thread, so loading it with the page puts its startup inside the page's.
-// The frame's stage sets its source once it comes within a screen's height
-// of the window, as an iframe's loading="lazy" does with its own margin.
-// Once the stage has loaded a document, every later
-// source (a new selection, the reference, a reset) loads straight away.
-// Framework-free, so tests drive it with a stand-in observer.
+// At a wide Studio, the frame's stage sets its source once it comes within
+// two windows' height below the window, much as an iframe's loading="lazy"
+// looks 1250 to 2500px ahead. At a phone's width, where the stage shares the
+// first screens with the task's controls and a margin like that would take
+// in the whole task, a poster stands in its place until the visitor asks for
+// the preview. Once the stage has loaded a document, every
+// later source (a new selection, the reference, a reset) loads straight
+// away. Framework-free, so tests drive it with a stand-in observer.
 
-/** Studio at a phone's width, where the frame defaults to the mobile viewport. */
+/** Studio at a phone's width, where the frame waits to be asked for and defaults to the mobile viewport. */
 export const NARROW_STUDIO = '(max-width: 47.99rem)';
 
-/** How near the window the stage counts as on screen: within one window's height below it. */
-export const STAGE_MARGIN = '0px 0px 100% 0px';
+/** How the stage waits for its first document: until it's near the window, or until the visitor asks. */
+export type FrameGate = 'visible' | 'asked';
+
+/** The gate for a Studio at a phone's width, or not. */
+export function frameGate(narrow: boolean): FrameGate {
+  return narrow ? 'asked' : 'visible';
+}
+
+/** What the poster says while the stage waits to be asked. */
+export const ASK_TEXT = 'Tap to load the preview';
+
+/** The button that asks for it. */
+export const ASK_LABEL = 'Show preview';
+
+/** What Studio's status says while the asked-for preview loads. */
+export const LOADING_TEXT = 'Loading the preview…';
+
+/** What Studio's status says once the asked-for preview has loaded. */
+export const LOADED_TEXT = 'The preview has loaded.';
+
+/** How near the window the stage counts as on screen: within two windows' height below it. */
+export const STAGE_MARGIN = '0px 0px 200% 0px';
 
 /** The part of IntersectionObserver the gate uses. */
 export interface StageObserver {

@@ -249,6 +249,37 @@
   transform-origin: 0 0;
 }
 
+/* Demo Studio's frame at a phone's width (#9): a poster in the stage's
+   place until the visitor asks for the preview, which loads nothing. Its
+   gap leaves room for the button's focus ring. */
+.demo-frame__poster {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+  padding: 1.25rem;
+  border: 1px dashed var(--studio-edge);
+  background: var(--studio-canvas);
+}
+
+.demo-frame__poster p {
+  margin: 0;
+}
+
+.demo-frame__ask {
+  font-weight: 650;
+}
+
+.demo-frame__what {
+  color: var(--studio-muted);
+  overflow-wrap: anywhere;
+}
+
+/* The stage the poster gave way to, which takes the button's focus. */
+.preview-surface__stage[role='group']:focus-visible {
+  outline: 2px solid var(--studio-ink);
+  outline-offset: 2px;
+}
+
 .preview-surface__state,
 .preview-surface__link {
   display: flex;

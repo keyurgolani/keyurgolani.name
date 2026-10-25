@@ -9,15 +9,26 @@ import { frameSource } from '~/lib/demo/url-state';
 import { VIEWPORTS } from '~/lib/preview-frame';
 import { DEMO_FRAME_SANDBOX, DemoFrame, stageSource } from './demo-frame';
 import { DemoStudio, frameViewportId } from './demo-studio';
-import { NARROW_STUDIO, STAGE_MARGIN, whenOnScreen, type StageObserverClass } from './frame-gate';
+import {
+  ASK_LABEL,
+  ASK_TEXT,
+  frameGate,
+  LOADED_TEXT,
+  LOADING_TEXT,
+  NARROW_STUDIO,
+  STAGE_MARGIN,
+  whenOnScreen,
+  type StageObserverClass,
+} from './frame-gate';
 
 // tsx compiles JSX to React.createElement calls, so the test supplies React.
 Object.assign(globalThis, { React });
 
 // When Demo Studio's frame loads its document (#9, #11's TBT budget): its
 // /sample document runs a Next runtime of its own on Studio's main thread,
-// so the stage loads it once it's on screen. tests/e2e/demo-studio-frame.spec.ts
-// drives the same in a browser.
+// so the stage loads it once it's near the window, or at a phone's width
+// once the visitor asks. tests/e2e/demo-studio-frame.spec.ts drives the
+// same in a browser.
 
 const POLICY = { profile: 'demo', allowed: ['sandbox.view'] } as const;
 
@@ -83,9 +94,9 @@ test('the gate lets the stage load once, the first time it is on screen, and the
   whenOnScreen(target, () => (loads += 1), Observer);
   assert.equal(made.length, 1);
   assert.deepEqual(made[0]!.observed, [target]);
-  // Within a window's height below the window, as loading="lazy" looks ahead.
+  // Within two windows' height below the window, as loading="lazy" looks ahead.
   assert.equal(made[0]!.margin, STAGE_MARGIN);
-  assert.equal(STAGE_MARGIN, '0px 0px 100% 0px');
+  assert.equal(STAGE_MARGIN, '0px 0px 200% 0px');
   made[0]!.report(false);
   assert.equal(loads, 0, 'off screen, nothing loads');
   made[0]!.report(true);
@@ -190,4 +201,55 @@ test('a frame let load keeps the source the selection names', () => {
       '&amp;',
     ),
   );
+});
+
+test('a phone’s width asks for the preview, and any other width waits for the stage', () => {
+  assert.equal(frameGate(true), 'asked');
+  assert.equal(frameGate(false), 'visible');
+});
+
+test('at a phone’s width the stage waits for Show preview: a poster with its state and a real button, and no frame', () => {
+  const html = renderToStaticMarkup(
+    <DemoFrame
+      src="/sample"
+      title="Demo sample, Acme Orbit"
+      viewport={VIEWPORTS[2]!}
+      gate="asked"
+    />,
+  );
+  assert.equal(frameAttributes(html), null, 'no iframe, so no document and no runtime');
+  assert.equal(ASK_TEXT, 'Tap to load the preview');
+  assert.ok(html.includes(`<p class="demo-frame__ask">${ASK_TEXT}</p>`));
+  assert.ok(html.includes('Demo sample, Acme Orbit'));
+  assert.equal(ASK_LABEL, 'Show preview');
+  assert.ok(html.includes(`<button type="button" class="studio-button">${ASK_LABEL}</button>`));
+  assert.doesNotMatch(html, /aria-busy|role="status"/, 'the page’s own status says when it loads');
+  assert.equal(LOADING_TEXT, 'Loading the preview…');
+  assert.equal(LOADED_TEXT, 'The preview has loaded.');
+});
+
+test('at a phone’s width, once asked, the stage holds the frame with its src, named, and able to take focus', () => {
+  for (const src of ['/sample?mode=dark', '/reference?mode=dark']) {
+    const html = renderToStaticMarkup(
+      <DemoFrame src={src} title="Demo sample" viewport={VIEWPORTS[2]!} gate="asked" requested />,
+    );
+    assert.equal(frameAttributes(html)?.src, src);
+    assert.match(html, /role="group" aria-label="Demo sample" tabindex="-1"/);
+    assert.doesNotMatch(html, new RegExp(ASK_LABEL));
+  }
+});
+
+test('a frame already let load on another task loads with no second ask', () => {
+  const html = renderToStaticMarkup(
+    <DemoStudio
+      catalog={CATALOG}
+      schemeModes={SCHEME_MODES}
+      policy={POLICY}
+      backend={backend()}
+      task="appearance"
+      initialFrameRequested
+    />,
+  );
+  assert.match(frameAttributes(html)?.src ?? '', /^\/sample\?/);
+  assert.doesNotMatch(html, new RegExp(ASK_LABEL));
 });

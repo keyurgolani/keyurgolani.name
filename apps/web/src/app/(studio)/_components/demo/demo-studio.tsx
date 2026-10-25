@@ -23,7 +23,7 @@ import { StudioFrame } from '../shell/studio-frame';
 import { ContentTask } from './demo-content';
 import { DemoFrame } from './demo-frame';
 import { LocalFrameHost } from './demo-local-frame';
-import { NARROW_STUDIO } from './frame-gate';
+import { frameGate, NARROW_STUDIO, type FrameGate } from './frame-gate';
 
 // Demo Studio (#9, design note sections 2 and 3): Studio's frame, with the
 // sandbox line in its header, over the demo's three tasks. Appearance has a
@@ -60,7 +60,7 @@ export interface DemoStudioProps {
   /**
    * Whether the frame may load its document from the start, as it may once
    * its gate let it (frame-gate.ts). The page starts without: the frame
-   * waits until its stage is on screen.
+   * waits until its stage is near the window, or at a phone's width until asked.
    */
   readonly initialFrameRequested?: boolean;
 }
@@ -172,8 +172,10 @@ export function DemoStudio({
   const [frameRequested, setFrameRequested] = useState(initialFrameRequested);
   const requestFrame = useCallback(() => setFrameRequested(true), []);
   const load: FrameLoad = {
+    gate: frameGate(narrow),
     requested: frameRequested,
     onRequest: requestFrame,
+    onAnnounce: setNotice,
   };
 
   // A backend the page hands over later brings its own selection, read as this renders.
@@ -429,8 +431,10 @@ interface FrameSource {
 
 /** When the sample's or the reference's frame loads its first document (frame-gate.ts). */
 interface FrameLoad {
+  readonly gate: FrameGate;
   readonly requested: boolean;
   readonly onRequest: () => void;
+  readonly onAnnounce: (text: string) => void;
 }
 
 /**
@@ -481,8 +485,10 @@ function ContentFrame({
       src={frameSource(selection, rules, { reduceMotion: reduced, source })}
       title={`${what}, ${name}, ${viewportLabel(viewport)}`}
       viewport={viewport}
+      gate={load.gate}
       requested={load.requested}
       onRequest={load.onRequest}
+      onAnnounce={load.onAnnounce}
     />
   );
 }
