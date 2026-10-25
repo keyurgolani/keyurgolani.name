@@ -21,8 +21,9 @@ import { DEMO_HOST, PROXY_HOST } from '../harness/proxy-stack.mjs';
 // Chromium's raw-header events, which this run never got: in CI each call
 // hung to the test's timeout. So nothing here reads them. A same-origin
 // answer is read by the page's own script, and a cross-origin one through a
-// CDP session's Network.responseReceived, which carries the status and the
-// headers. Which cookies the browser sends is what it holds for the owner's
+// CDP session's Network events, which carry the status and the headers, or
+// say the browser withheld the answer for its Cross-Origin-Resource-Policy
+// (origin-5), the one block that counts as answered. Which cookies the browser sends is what it holds for the owner's
 // origin (context.cookies()), and the server's answer shows a session cookie
 // was sent: a command that needs a session answers 401 without one, and is
 // refused for its Origin only once the session resolves.
@@ -47,34 +48,53 @@ test.beforeAll(() => {
 });
 
 interface Answer {
-  readonly status: number;
+  /** Its status, or null for a withheld answer with no raw headers to read it from. */
+  readonly status: number | null;
   readonly code: string | null;
   /** Its Access-Control-* headers, which would let another origin read it. */
   readonly cors: readonly string[];
   /**
    * How it was read: `checked`, a body was handed back, so its code counts;
    * `opaque-empty`, an opaque answer with no body at all, so only its status
-   * does.
+   * does; `withheld`, an answer Chromium kept from the page for its
+   * Cross-Origin-Resource-Policy (origin-5), whose status and headers only
+   * the raw-header event carries.
    */
-  readonly body: 'checked' | 'opaque-empty';
+  readonly body: 'checked' | 'opaque-empty' | 'withheld';
+  /** A withheld answer's Cross-Origin-Resource-Policy, when its raw headers came. */
+  readonly corp?: string | null;
 }
 
 /**
  * `answer` has `status` and, whenever a body came back, exactly `code`: a
- * missing or another code fails. Only an opaque answer with an empty body is
- * judged by its status alone. Each send's path is recorded on the test.
+ * missing or another code fails. Only a no-cors answer may come back empty,
+ * or withheld for its same-origin resource policy, and then its status counts
+ * whenever the browser reported it. Each send's path is recorded on the test
+ * and in the log.
  */
 function expectAnswer(
   answer: Answer,
   { what, status, code, opaque }: { what: string; status: number; code: string; opaque: boolean },
 ) {
-  const path = `${what}: ${answer.status}, ${answer.body === 'checked' ? `body checked, ${answer.code}` : 'opaque and empty'}`;
-  // On the test, and in the log, where a reader of the run sees it.
+  const how =
+    answer.body === 'checked'
+      ? `body checked, ${answer.code}`
+      : answer.body === 'opaque-empty'
+        ? 'opaque and empty'
+        : `withheld by Cross-Origin-Resource-Policy ${answer.corp ?? '(raw headers not reported)'}`;
+  const path = `${what}: ${answer.status ?? 'status not reported'}, ${how}`;
   test.info().annotations.push({ type: 'answer', description: path });
   console.log(`[demo-origin] ${path}`);
-  expect(answer.status, what).toBe(status);
-  // A request that isn't no-cors has a readable body: an empty one fails too.
+  // A request that isn't no-cors has a readable body: anything else fails.
   if (!opaque) expect(answer.body, `${what}: a body`).toBe('checked');
+  if (answer.body === 'withheld') {
+    if (answer.status !== null) {
+      expect(answer.status, what).toBe(status);
+      expect(answer.corp, `${what}: the resource policy`).toBe('same-origin');
+    }
+  } else {
+    expect(answer.status, what).toBe(status);
+  }
   if (answer.body === 'checked') expect(answer.code, what).toBe(code);
   expect(answer.cors, what).toEqual([]);
 }
@@ -116,17 +136,32 @@ interface Seen {
   loaded: boolean;
   /** Why the browser never delivered it: its error, block reason, or CORS error. */
   failed?: string;
+  blockedReason?: string;
 }
+
+/** The raw response headers, keyed by request, which Chromium may report for a blocked answer. */
+interface Raw {
+  readonly statusCode: number;
+  readonly headers: Record<string, string>;
+}
+
+const headerOf = (headers: Record<string, string>, name: string) =>
+  Object.entries(headers).find(([key]) => key.toLowerCase() === name)?.[1] ?? null;
 
 /**
  * The server's answers to what `page` sends under `prefix`, another origin,
  * as a CDP session sees them: the function it resolves to runs `send` and
- * resolves to the one new answer, once its body has loaded. A request the
- * browser stopped fails the test, naming why.
+ * resolves to the one new answer, once its body has loaded. An answer the
+ * browser withheld for its same-origin resource policy is `withheld`; any
+ * other request the browser stopped fails the test, naming why.
  */
 async function crossOrigin(page: Page, prefix: string) {
   const cdp = await page.context().newCDPSession(page);
   const answers = new Map<string, Seen>();
+  const raw = new Map<string, Raw>();
+  cdp.on('Network.responseReceivedExtraInfo', ({ requestId, statusCode, headers }) => {
+    raw.set(requestId, { statusCode, headers });
+  });
   cdp.on('Network.requestWillBeSent', ({ requestId, request }) => {
     if (request.url.startsWith(prefix)) answers.set(requestId, { loaded: false });
   });
@@ -144,6 +179,7 @@ async function crossOrigin(page: Page, prefix: string) {
       seen.failed = [errorText, blockedReason, corsErrorStatus?.corsError]
         .filter(Boolean)
         .join(', ');
+      seen.blockedReason = blockedReason;
     }
   });
   await cdp.send('Network.enable');
@@ -156,6 +192,21 @@ async function crossOrigin(page: Page, prefix: string) {
     await send();
     await expect.poll(() => fresh().length, { timeout: 15_000 }).toBe(1);
     const [requestId, seen] = fresh()[0]!;
+    if (seen.blockedReason === 'corp-not-same-origin') {
+      // Answered, and withheld from the page: its raw headers, when Chromium
+      // reports them, say what the server answered.
+      for (let waited = 0; waited < 2_000 && !raw.has(requestId); waited += 100) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      const headers = raw.get(requestId);
+      return {
+        status: headers?.statusCode ?? null,
+        code: null,
+        cors: corsOf(Object.keys(headers?.headers ?? {})),
+        body: 'withheld',
+        corp: headers ? headerOf(headers.headers, 'cross-origin-resource-policy') : null,
+      };
+    }
     expect(seen.failed, 'the browser delivered the request and its answer').toBeUndefined();
     expect(seen.status, 'an answer came back').toBeDefined();
     // CDP may keep no data for an opaque answer, and says so; any body it
@@ -189,8 +240,8 @@ async function ownerPage(context: BrowserContext): Promise<Page> {
  * Local Network Access treats it as public and blocks its requests to
  * loopback before they leave.)
  */
-async function standIn(context: BrowserContext): Promise<Page> {
-  const page = await context.newPage();
+async function standIn(context: BrowserContext, reuse?: Page): Promise<Page> {
+  const page = reuse ?? (await context.newPage());
   expect((await page.goto(`${DEMO}/`))?.status()).toBe(200);
   return page;
 }
@@ -315,58 +366,65 @@ test(
     const owner = await signedIn(browser, { bypassCSP: true });
     const demo = await standIn(owner.context);
     const next = await crossOrigin(demo, `${OWNER}/api/studio/`);
-    // A simple request, so no preflight stops it before the server.
-    const command = (page: Page, name: string, mode: RequestMode) =>
+    // Each command two ways, both simple requests no preflight stops before
+    // the server. A no-cors fetch, as a script that only wants the side
+    // effect sends it: Chromium withholds its answer from the page for its
+    // Cross-Origin-Resource-Policy, and reports the status only when it
+    // reports raw headers. And a text/plain form, a navigation, which no
+    // resource policy covers, so its status and its body always read.
+    const command = (page: Page, name: string) =>
       page.evaluate(
-        ([target, chosen]) =>
-          fetch(target!, {
+        (target) =>
+          fetch(target, {
             method: 'POST',
-            mode: chosen as RequestMode,
+            mode: 'no-cors',
             credentials: 'include',
             body: '{}',
           }).catch(() => null),
-        [`${OWNER}/api/studio/${name}`, mode] as const,
+        `${OWNER}/api/studio/${name}`,
       );
+    const form = async (page: Page, name: string) => {
+      await page.evaluate((action) => {
+        const posted = document.createElement('form');
+        posted.method = 'POST';
+        posted.enctype = 'text/plain';
+        posted.action = action;
+        const field = document.createElement('input');
+        field.name = '{"x":"';
+        field.value = '"}';
+        posted.append(field);
+        document.body.append(posted);
+        posted.submit();
+      }, `${OWNER}/api/studio/${name}`);
+    };
 
     // The control: with no owner cookie, the same command is a 401, so each
     // 403 below refuses a session the owner's cookie resolved.
     const stranger = await browser.newContext({ bypassCSP: true });
     const strangerPage = await standIn(stranger);
     const strangerNext = await crossOrigin(strangerPage, `${OWNER}/api/studio/`);
-    const control = await strangerNext(() =>
-      command(strangerPage, 'auth.session.extend', 'no-cors'),
-    );
-    expectAnswer(control, {
-      what: 'auth.session.extend, no cookie',
-      status: 401,
-      code: 'authentication_required',
+    const signedOut = { status: 401, code: 'authentication_required' };
+    const control = 'auth.session.extend, no cookie';
+    expectAnswer(await strangerNext(() => command(strangerPage, 'auth.session.extend')), {
+      what: `${control}, no-cors`,
+      ...signedOut,
       opaque: true,
+    });
+    expectAnswer(await strangerNext(() => form(strangerPage, 'auth.session.extend')), {
+      what: `${control}, a form`,
+      ...signedOut,
+      opaque: false,
     });
     await stranger.close();
 
-    // no-cors, as a script that only wants the side effect sends it. A
-    // cors-mode fetch reads nothing either, with no Access-Control-* header
-    // on any answer, which each check below holds.
+    // No Access-Control-* header on any answer, which each check holds, so
+    // a cors-mode fetch would read nothing either.
     for (const name of ['auth.session.extend', 'auth.sessions.revokeAll', 'auth.logout']) {
-      expectOriginRefusal(await next(() => command(demo, name, 'no-cors')), name, true);
+      expectOriginRefusal(await next(() => command(demo, name)), `${name}, no-cors`, true);
+      expectOriginRefusal(await next(() => form(demo, name)), `${name}, a form`, false);
+      // Back on the demo's page: the form left it for the owner's answer.
+      await standIn(owner.context, demo);
     }
-    // A text/plain form posted to auth.logout, a navigation the browser
-    // sends with the owner's cookie and no preflight.
-    const posted = await next(() =>
-      demo.evaluate((action) => {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.enctype = 'text/plain';
-        form.action = action;
-        const field = document.createElement('input');
-        field.name = '{"x":"';
-        field.value = '"}';
-        form.append(field);
-        document.body.append(form);
-        form.submit();
-      }, `${OWNER}/api/studio/auth.logout`),
-    );
-    expectOriginRefusal(posted, 'auth.logout, a form', false);
     // auth.logout sent either way ended nothing.
     expect(await sessionStatus(owner.page)).toBe(200);
     await owner.context.close();

@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import type { Frame, Page, Response } from '@playwright/test';
+import type { Frame, Page, Request } from '@playwright/test';
 import { encodings, REFERENCE_CANARIES } from '../harness/canaries.mjs';
 import { expect, test } from '../harness/fixtures';
 import { DEMO_APP } from '../harness/profile-matrix';
@@ -35,14 +35,26 @@ async function previewFrame(page: Page): Promise<Frame> {
   return frame!;
 }
 
+/** How long one finished response's body may take to read. */
+const READ_MS = 5_000;
+
 /**
- * Each canary of the reference's in `response`, read as it arrives: its
- * headers as the browser got them, which need no raw-header event (one that
- * waited for those, allHeaders(), hung in CI), and its body, which a page
- * that has since moved on may no longer hold.
+ * Each canary of the reference's in what `request` got, once it finished:
+ * its headers as the browser got them, which need no raw-header event (one
+ * that waited for those, allHeaders(), hung in CI), and its body, which a
+ * read bounded by READ_MS fetches. One that doesn't come back in time is a
+ * finding that names its URL, never a hang.
  */
-async function leaksOf(response: Response): Promise<string[]> {
-  const body = await response.body().catch(() => Buffer.alloc(0));
+async function leaksOf(request: Request): Promise<string[]> {
+  const response = await request.response();
+  if (!response) return [];
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<'timeout'>((resolve) => {
+    timer = setTimeout(() => resolve('timeout'), READ_MS);
+  });
+  const body = await Promise.race([response.body().catch(() => Buffer.alloc(0)), timeout]);
+  clearTimeout(timer);
+  if (body === 'timeout') return [`${response.url()}: its body didn't read in ${READ_MS} ms`];
   const text = `${JSON.stringify(response.headers())}\n${body.toString('latin1')}`;
   return LEAKS.filter((canary) => text.includes(canary)).map(
     (canary) => `${response.url()}: ${canary}`,
@@ -54,7 +66,7 @@ test(
   { annotation: [STUDIO, REFERENCE, DEMO] },
   async ({ page, app }) => {
     const scanned: Promise<string[]>[] = [];
-    page.on('response', (response) => void scanned.push(leaksOf(response)));
+    page.on('requestfinished', (request) => void scanned.push(leaksOf(request)));
     await open(page);
     await expect(page.locator('iframe')).toHaveAttribute('src', /^\/sample(?:\?|$)/);
     await expect(page.locator('[data-state="content"]')).toContainText(
