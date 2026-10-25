@@ -2,7 +2,7 @@
   "id": "blue-orange-color-safe",
   "name": "Blue Orange Color Safe",
   "description": "A blue and orange pair that stays distinct under the common color-vision deficiencies.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "stable",
   "provenance": {
@@ -14,7 +14,7 @@
     "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
     "researchedAt": "2026-10-17",
     "maintainer": "keyurgolani",
-    "derivation": "anchor-v1 from the reviewed prototype's blue-orange-color-safe anchors, with the light secondary #d46b08 to #cc680a, 4% toward text, so the signature fill reaches 3:1 on every surface."
+    "derivation": "anchor-v2 from the reviewed prototype's blue-orange-color-safe anchors. It puts the light secondary #cc680a back to #d46b08, undoing PR 2a's nudges: anchor-v2 solves the signature fill itself. adjustments lists the 13 roles it moves from anchor-v1."
   },
   "modes": ["light", "dark"],
   "accessibility": {
@@ -33,16 +33,16 @@
     "enhancement": 0
   },
   "fallbacks": [
-    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
   ],
   "caveats": [],
-  "derivation": "anchor-v1",
+  "derivation": "anchor-v2",
   "anchors": {
     "light": {
       "canvas": "#fffaf2",
       "text": "#17243a",
       "accent": "#0067b9",
-      "secondary": "#cc680a"
+      "secondary": "#d46b08"
     },
     "dark": {
       "canvas": "#101827",
@@ -51,5 +51,28 @@
       "secondary": "#ffad5c"
     }
   },
-  "swatches": ["#fffaf2", "#17243a", "#0067b9", "#cc680a"]
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#535b6a", "#4c5464"],
+      "text-muted": ["#5e6673", "#575f6d"],
+      "border-strong": ["#7b8089", "#757a84"],
+      "accent-text": ["#0067b9", "#0260ac"],
+      "data-categorical-2": ["#d46b08", "#c36100"],
+      "data-categorical-6": ["#535b6a", "#4c5464"],
+      "signature-end": ["#d46b08", "#ba610f"]
+    },
+    "dark": {
+      "text-secondary": ["#b6b6b6", "#babab9"],
+      "text-muted": ["#a8a9aa", "#adaeae"],
+      "border-strong": ["#84878a", "#8b8e90"],
+      "data-categorical-6": ["#b6b6b6", "#babab9"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#004378", "#004073"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#5eb3ff", "#6bb9ff"]
+    }
+  },
+  "swatches": ["#fffaf2", "#17243a", "#0067b9", "#d46b08"]
 }

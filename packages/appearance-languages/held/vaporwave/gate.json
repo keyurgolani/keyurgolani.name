@@ -3,7 +3,7 @@
   "id": "vaporwave",
   "kind": "design-language",
   "tier": "experimental",
-  "reason": "It fails check:appearance with 25 of 25 color schemes: its texture raises every target by 1.1, past where anchor-v1 solves each scheme's roles, and its 78% surfaces fall under the targets over a black or white backdrop.",
+  "reason": "It fails check:appearance with 25 of 25 color schemes: its floor is opaque: its 78% surfaces fall under the targets over a black or white backdrop at every opacity under 100%, and without its texture they'd pass at 97%.",
   "causes": [
     "texture",
     "translucency"
@@ -18,9 +18,9 @@
     "foreground": "accent-text",
     "ground": "surface-prominent",
     "backdrop": "#ffffff",
-    "ratio": 3.47,
+    "ratio": 3.81,
     "target": 7.7,
-    "scheme": "paper-ink"
+    "scheme": "botanical-sage"
   },
   "pairs": [
     {
@@ -29,9 +29,9 @@
       "foreground": "accent-text",
       "ground": "surface-prominent",
       "backdrop": "#ffffff",
-      "ratio": 3.47,
+      "ratio": 3.81,
       "target": 7.7,
-      "scheme": "paper-ink",
+      "scheme": "botanical-sage",
       "failing": 24
     },
     {
@@ -40,7 +40,7 @@
       "foreground": "accent-text",
       "ground": "surface-prominent",
       "backdrop": "#ffffff",
-      "ratio": 2.29,
+      "ratio": 2.52,
       "target": 4.95,
       "scheme": "neon-city",
       "failing": 23
@@ -51,32 +51,10 @@
       "foreground": "text-muted",
       "ground": "surface-prominent",
       "backdrop": "#ffffff",
-      "ratio": 2.36,
+      "ratio": 2.58,
       "target": 4.95,
-      "scheme": "paper-ink",
+      "scheme": "jewel-twilight",
       "failing": 24
-    },
-    {
-      "set": "high-contrast-dark",
-      "kind": "text",
-      "foreground": "accent-text",
-      "ground": "surface-default",
-      "backdrop": "#ffffff",
-      "ratio": 3.94,
-      "target": 7.7,
-      "scheme": "paper-ink",
-      "failing": 24
-    },
-    {
-      "set": "dark",
-      "kind": "text",
-      "foreground": "accent-text",
-      "ground": "surface-overlay",
-      "backdrop": "#ffffff",
-      "ratio": 2.54,
-      "target": 4.95,
-      "scheme": "sunset-ember",
-      "failing": 23
     },
     {
       "set": "dark",
@@ -98,6 +76,50 @@
       "ratio": 1.72,
       "target": 3.3,
       "scheme": "sepia-film",
+      "failing": 23
+    },
+    {
+      "set": "high-contrast-dark",
+      "kind": "text",
+      "foreground": "accent-text",
+      "ground": "surface-default",
+      "backdrop": "#ffffff",
+      "ratio": 4.32,
+      "target": 7.7,
+      "scheme": "graphite",
+      "failing": 24
+    },
+    {
+      "set": "dark",
+      "kind": "large-text",
+      "foreground": "signature-start to signature-end",
+      "ground": "surface-overlay",
+      "backdrop": "#ffffff",
+      "ratio": 1.88,
+      "target": 3.3,
+      "scheme": "sepia-film",
+      "failing": 24
+    },
+    {
+      "set": "dark",
+      "kind": "non-text",
+      "foreground": "focus",
+      "ground": "surface-overlay",
+      "backdrop": "#ffffff",
+      "ratio": 1.88,
+      "target": 3.3,
+      "scheme": "sepia-film",
+      "failing": 22
+    },
+    {
+      "set": "dark",
+      "kind": "text",
+      "foreground": "accent-text",
+      "ground": "surface-overlay",
+      "backdrop": "#ffffff",
+      "ratio": 2.83,
+      "target": 4.95,
+      "scheme": "cool-color-safe",
       "failing": 23
     },
     {
@@ -106,43 +128,43 @@
       "foreground": "text-muted",
       "ground": "surface-overlay",
       "backdrop": "#ffffff",
-      "ratio": 2.59,
+      "ratio": 2.85,
       "target": 4.95,
+      "scheme": "neutral-slate",
+      "failing": 24
+    },
+    {
+      "set": "dark",
+      "kind": "large-text",
+      "foreground": "signature-start to signature-end",
+      "ground": "surface-default",
+      "backdrop": "#ffffff",
+      "ratio": 1.97,
+      "target": 3.3,
       "scheme": "sepia-film",
       "failing": 24
     },
     {
-      "set": "light",
-      "kind": "large-text",
-      "foreground": "signature-start to signature-end",
-      "ground": "surface-prominent",
-      "backdrop": "#000000",
-      "ratio": 1.79,
-      "target": 3.3,
-      "scheme": "botanical-sage",
-      "failing": 23
-    },
-    {
-      "set": "light",
+      "set": "dark",
       "kind": "non-text",
       "foreground": "focus",
-      "ground": "surface-prominent",
-      "backdrop": "#000000",
-      "ratio": 1.79,
+      "ground": "surface-default",
+      "backdrop": "#ffffff",
+      "ratio": 1.97,
       "target": 3.3,
-      "scheme": "botanical-sage",
-      "failing": 22
+      "scheme": "sepia-film",
+      "failing": 21
     },
     {
       "set": "dark",
-      "kind": "text",
-      "foreground": "accent-text",
+      "kind": "non-text",
+      "foreground": "data-categorical-1",
       "ground": "surface-default",
       "backdrop": "#ffffff",
-      "ratio": 2.7,
-      "target": 4.95,
-      "scheme": "sunset-ember",
-      "failing": 23
+      "ratio": 1.97,
+      "target": 3.3,
+      "scheme": "sepia-film",
+      "failing": 21
     },
     {
       "set": "dark",
@@ -150,20 +172,9 @@
       "foreground": "text-secondary",
       "ground": "surface-prominent",
       "backdrop": "#ffffff",
-      "ratio": 2.72,
+      "ratio": 2.96,
       "target": 4.95,
-      "scheme": "sepia-film",
-      "failing": 24
-    },
-    {
-      "set": "dark",
-      "kind": "text",
-      "foreground": "text-muted",
-      "ground": "surface-default",
-      "backdrop": "#ffffff",
-      "ratio": 2.72,
-      "target": 4.95,
-      "scheme": "sepia-film",
+      "scheme": "jewel-twilight",
       "failing": 24
     },
     {
@@ -172,10 +183,32 @@
       "foreground": "accent-text",
       "ground": "surface-prominent",
       "backdrop": "#000000",
-      "ratio": 2.73,
+      "ratio": 2.97,
       "target": 4.95,
-      "scheme": "cool-color-safe",
+      "scheme": "jewel-twilight",
       "failing": 23
+    },
+    {
+      "set": "dark",
+      "kind": "text",
+      "foreground": "accent-text",
+      "ground": "surface-default",
+      "backdrop": "#ffffff",
+      "ratio": 2.98,
+      "target": 4.95,
+      "scheme": "sepia-film",
+      "failing": 23
+    },
+    {
+      "set": "dark",
+      "kind": "text",
+      "foreground": "text-muted",
+      "ground": "surface-default",
+      "backdrop": "#ffffff",
+      "ratio": 2.99,
+      "target": 4.95,
+      "scheme": "sepia-film",
+      "failing": 24
     },
     {
       "set": "high-contrast-light",
@@ -183,10 +216,21 @@
       "foreground": "accent-text",
       "ground": "surface-prominent",
       "backdrop": "#000000",
-      "ratio": 4.26,
+      "ratio": 4.66,
       "target": 7.7,
-      "scheme": "earthy-clay",
+      "scheme": "low-stimulus-warm",
       "failing": 25
+    },
+    {
+      "set": "light",
+      "kind": "large-text",
+      "foreground": "signature-start to signature-end",
+      "ground": "surface-prominent",
+      "backdrop": "#000000",
+      "ratio": 2,
+      "target": 3.3,
+      "scheme": "lavender-dusk",
+      "failing": 23
     },
     {
       "set": "light",
@@ -194,54 +238,21 @@
       "foreground": "text-muted",
       "ground": "surface-prominent",
       "backdrop": "#000000",
-      "ratio": 2.74,
+      "ratio": 3.02,
       "target": 4.95,
-      "scheme": "pastel-sorbet",
+      "scheme": "botanical-sage",
       "failing": 23
-    },
-    {
-      "set": "dark",
-      "kind": "large-text",
-      "foreground": "signature-start to signature-end",
-      "ground": "surface-overlay",
-      "backdrop": "#ffffff",
-      "ratio": 1.88,
-      "target": 3.3,
-      "scheme": "sepia-film",
-      "failing": 24
-    },
-    {
-      "set": "dark",
-      "kind": "non-text",
-      "foreground": "focus",
-      "ground": "surface-overlay",
-      "backdrop": "#ffffff",
-      "ratio": 1.88,
-      "target": 3.3,
-      "scheme": "sepia-film",
-      "failing": 22
-    },
-    {
-      "set": "high-contrast-dark",
-      "kind": "text",
-      "foreground": "accent-text",
-      "ground": "surface-subtle",
-      "backdrop": "#ffffff",
-      "ratio": 4.46,
-      "target": 7.7,
-      "scheme": "paper-ink",
-      "failing": 24
     },
     {
       "set": "light",
-      "kind": "large-text",
-      "foreground": "signature-start to signature-end",
+      "kind": "non-text",
+      "foreground": "data-categorical-1",
       "ground": "surface-default",
       "backdrop": "#000000",
-      "ratio": 1.92,
+      "ratio": 2.03,
       "target": 3.3,
-      "scheme": "iridescent-pearl",
-      "failing": 23
+      "scheme": "arctic-aurora",
+      "failing": 22
     },
     {
       "set": "light",
@@ -249,87 +260,21 @@
       "foreground": "data-categorical-2",
       "ground": "surface-default",
       "backdrop": "#000000",
-      "ratio": 1.92,
+      "ratio": 2.04,
       "target": 3.3,
-      "scheme": "iridescent-pearl",
+      "scheme": "sepia-film",
       "failing": 20
     },
     {
       "set": "light",
       "kind": "non-text",
       "foreground": "focus",
-      "ground": "surface-default",
+      "ground": "surface-prominent",
       "backdrop": "#000000",
-      "ratio": 1.94,
+      "ratio": 2.05,
       "target": 3.3,
       "scheme": "botanical-sage",
       "failing": 22
-    },
-    {
-      "set": "light",
-      "kind": "non-text",
-      "foreground": "data-categorical-1",
-      "ground": "surface-default",
-      "backdrop": "#000000",
-      "ratio": 1.94,
-      "target": 3.3,
-      "scheme": "botanical-sage",
-      "failing": 22
-    },
-    {
-      "set": "light",
-      "kind": "text",
-      "foreground": "accent-text",
-      "ground": "surface-default",
-      "backdrop": "#000000",
-      "ratio": 2.94,
-      "target": 4.95,
-      "scheme": "blue-orange-color-safe",
-      "failing": 23
-    },
-    {
-      "set": "light",
-      "kind": "text",
-      "foreground": "text-muted",
-      "ground": "surface-default",
-      "backdrop": "#000000",
-      "ratio": 2.95,
-      "target": 4.95,
-      "scheme": "iridescent-pearl",
-      "failing": 23
-    },
-    {
-      "set": "dark",
-      "kind": "large-text",
-      "foreground": "signature-start to signature-end",
-      "ground": "surface-default",
-      "backdrop": "#ffffff",
-      "ratio": 1.97,
-      "target": 3.3,
-      "scheme": "sepia-film",
-      "failing": 24
-    },
-    {
-      "set": "dark",
-      "kind": "non-text",
-      "foreground": "focus",
-      "ground": "surface-default",
-      "backdrop": "#ffffff",
-      "ratio": 1.97,
-      "target": 3.3,
-      "scheme": "sepia-film",
-      "failing": 21
-    },
-    {
-      "set": "dark",
-      "kind": "non-text",
-      "foreground": "data-categorical-1",
-      "ground": "surface-default",
-      "backdrop": "#ffffff",
-      "ratio": 1.97,
-      "target": 3.3,
-      "scheme": "sepia-film",
-      "failing": 21
     },
     {
       "set": "light",
@@ -337,163 +282,53 @@
       "foreground": "data-categorical-3",
       "ground": "surface-default",
       "backdrop": "#000000",
-      "ratio": 1.97,
+      "ratio": 2.09,
       "target": 3.3,
-      "scheme": "sepia-film",
-      "failing": 23
-    },
-    {
-      "set": "dark",
-      "kind": "text",
-      "foreground": "accent-text",
-      "ground": "surface-subtle",
-      "backdrop": "#ffffff",
-      "ratio": 2.97,
-      "target": 4.95,
-      "scheme": "sepia-film",
-      "failing": 23
-    },
-    {
-      "set": "dark",
-      "kind": "text",
-      "foreground": "text-secondary",
-      "ground": "surface-overlay",
-      "backdrop": "#ffffff",
-      "ratio": 2.98,
-      "target": 4.95,
-      "scheme": "sepia-film",
-      "failing": 24
-    },
-    {
-      "set": "dark",
-      "kind": "text",
-      "foreground": "text-muted",
-      "ground": "surface-subtle",
-      "backdrop": "#ffffff",
-      "ratio": 2.98,
-      "target": 4.95,
-      "scheme": "sepia-film",
-      "failing": 24
-    },
-    {
-      "set": "high-contrast-light",
-      "kind": "text",
-      "foreground": "accent-text",
-      "ground": "surface-default",
-      "backdrop": "#000000",
-      "ratio": 4.67,
-      "target": 7.7,
       "scheme": "earthy-clay",
-      "failing": 25
+      "failing": 23
     },
     {
-      "set": "light",
-      "kind": "non-text",
-      "foreground": "focus",
-      "ground": "surface-subtle",
-      "backdrop": "#000000",
-      "ratio": 2.02,
-      "target": 3.3,
-      "scheme": "botanical-sage",
-      "failing": 19
-    },
-    {
-      "set": "light",
-      "kind": "large-text",
-      "foreground": "signature-start to signature-end",
-      "ground": "surface-subtle",
-      "backdrop": "#000000",
-      "ratio": 2.02,
-      "target": 3.3,
-      "scheme": "coral-lagoon",
-      "failing": 22
-    },
-    {
-      "set": "light",
-      "kind": "large-text",
-      "foreground": "signature-start to signature-end",
-      "ground": "surface-overlay",
-      "backdrop": "#000000",
-      "ratio": 2.04,
-      "target": 3.3,
-      "scheme": "coral-lagoon",
-      "failing": 21
-    },
-    {
-      "set": "light",
+      "set": "high-contrast-dark",
       "kind": "text",
       "foreground": "accent-text",
       "ground": "surface-subtle",
-      "backdrop": "#000000",
-      "ratio": 3.09,
-      "target": 4.95,
-      "scheme": "cool-color-safe",
-      "failing": 23
-    },
-    {
-      "set": "light",
-      "kind": "non-text",
-      "foreground": "focus",
-      "ground": "surface-overlay",
-      "backdrop": "#000000",
-      "ratio": 2.06,
-      "target": 3.3,
-      "scheme": "coral-lagoon",
-      "failing": 18
-    },
-    {
-      "set": "light",
-      "kind": "text",
-      "foreground": "text-muted",
-      "ground": "surface-subtle",
-      "backdrop": "#000000",
-      "ratio": 3.12,
-      "target": 4.95,
-      "scheme": "blue-orange-color-safe",
-      "failing": 23
-    },
-    {
-      "set": "dark",
-      "kind": "text",
-      "foreground": "text-secondary",
-      "ground": "surface-default",
       "backdrop": "#ffffff",
-      "ratio": 3.12,
-      "target": 4.95,
-      "scheme": "sepia-film",
+      "ratio": 4.9,
+      "target": 7.7,
+      "scheme": "botanical-sage",
       "failing": 24
     },
     {
       "set": "light",
       "kind": "text",
       "foreground": "accent-text",
-      "ground": "surface-overlay",
+      "ground": "surface-default",
       "backdrop": "#000000",
-      "ratio": 3.17,
+      "ratio": 3.21,
       "target": 4.95,
-      "scheme": "blue-orange-color-safe",
+      "scheme": "jewel-twilight",
+      "failing": 23
+    },
+    {
+      "set": "light",
+      "kind": "large-text",
+      "foreground": "signature-start to signature-end",
+      "ground": "surface-default",
+      "backdrop": "#000000",
+      "ratio": 2.14,
+      "target": 3.3,
+      "scheme": "lavender-dusk",
       "failing": 23
     },
     {
       "set": "light",
       "kind": "text",
       "foreground": "text-muted",
-      "ground": "surface-overlay",
+      "ground": "surface-default",
       "backdrop": "#000000",
-      "ratio": 3.18,
+      "ratio": 3.23,
       "target": 4.95,
       "scheme": "iridescent-pearl",
-      "failing": 23
-    },
-    {
-      "set": "light",
-      "kind": "text",
-      "foreground": "text-secondary",
-      "ground": "surface-prominent",
-      "backdrop": "#000000",
-      "ratio": 3.24,
-      "target": 4.95,
-      "scheme": "pastel-sorbet",
       "failing": 23
     },
     {
@@ -519,26 +354,59 @@
       "failing": 16
     },
     {
-      "set": "high-contrast-dark",
+      "set": "dark",
       "kind": "text",
-      "foreground": "accent-text",
+      "foreground": "text-secondary",
       "ground": "surface-overlay",
       "backdrop": "#ffffff",
-      "ratio": 5.05,
-      "target": 7.7,
-      "scheme": "paper-ink",
+      "ratio": 3.26,
+      "target": 4.95,
+      "scheme": "sepia-film",
+      "failing": 24
+    },
+    {
+      "set": "dark",
+      "kind": "text",
+      "foreground": "text-muted",
+      "ground": "surface-subtle",
+      "backdrop": "#ffffff",
+      "ratio": 3.27,
+      "target": 4.95,
+      "scheme": "sepia-film",
+      "failing": 24
+    },
+    {
+      "set": "dark",
+      "kind": "text",
+      "foreground": "accent-text",
+      "ground": "surface-subtle",
+      "backdrop": "#ffffff",
+      "ratio": 3.27,
+      "target": 4.95,
+      "scheme": "sepia-film",
       "failing": 23
     },
     {
       "set": "high-contrast-light",
       "kind": "text",
       "foreground": "accent-text",
-      "ground": "surface-subtle",
+      "ground": "surface-default",
       "backdrop": "#000000",
       "ratio": 5.09,
       "target": 7.7,
-      "scheme": "botanical-sage",
+      "scheme": "low-stimulus-warm",
       "failing": 25
+    },
+    {
+      "set": "light",
+      "kind": "non-text",
+      "foreground": "focus",
+      "ground": "surface-default",
+      "backdrop": "#000000",
+      "ratio": 2.21,
+      "target": 3.3,
+      "scheme": "arctic-aurora",
+      "failing": 22
     },
     {
       "set": "dark",
@@ -552,10 +420,43 @@
       "failing": 20
     },
     {
+      "set": "light",
+      "kind": "large-text",
+      "foreground": "signature-start to signature-end",
+      "ground": "surface-subtle",
+      "backdrop": "#000000",
+      "ratio": 2.26,
+      "target": 3.3,
+      "scheme": "lavender-dusk",
+      "failing": 22
+    },
+    {
+      "set": "light",
+      "kind": "text",
+      "foreground": "accent-text",
+      "ground": "surface-subtle",
+      "backdrop": "#000000",
+      "ratio": 3.4,
+      "target": 4.95,
+      "scheme": "jewel-twilight",
+      "failing": 23
+    },
+    {
+      "set": "light",
+      "kind": "text",
+      "foreground": "text-muted",
+      "ground": "surface-subtle",
+      "backdrop": "#000000",
+      "ratio": 3.42,
+      "target": 4.95,
+      "scheme": "botanical-sage",
+      "failing": 23
+    },
+    {
       "set": "dark",
       "kind": "text",
       "foreground": "text-secondary",
-      "ground": "surface-subtle",
+      "ground": "surface-default",
       "backdrop": "#ffffff",
       "ratio": 3.42,
       "target": 4.95,
@@ -564,24 +465,90 @@
     },
     {
       "set": "light",
+      "kind": "large-text",
+      "foreground": "signature-start to signature-end",
+      "ground": "surface-overlay",
+      "backdrop": "#000000",
+      "ratio": 2.29,
+      "target": 3.3,
+      "scheme": "lavender-dusk",
+      "failing": 21
+    },
+    {
+      "set": "light",
+      "kind": "text",
+      "foreground": "accent-text",
+      "ground": "surface-overlay",
+      "backdrop": "#000000",
+      "ratio": 3.46,
+      "target": 4.95,
+      "scheme": "earthy-clay",
+      "failing": 23
+    },
+    {
+      "set": "light",
+      "kind": "non-text",
+      "foreground": "focus",
+      "ground": "surface-subtle",
+      "backdrop": "#000000",
+      "ratio": 2.31,
+      "target": 3.3,
+      "scheme": "coral-lagoon",
+      "failing": 19
+    },
+    {
+      "set": "light",
+      "kind": "text",
+      "foreground": "text-muted",
+      "ground": "surface-overlay",
+      "backdrop": "#000000",
+      "ratio": 3.47,
+      "target": 4.95,
+      "scheme": "earthy-clay",
+      "failing": 23
+    },
+    {
+      "set": "light",
+      "kind": "non-text",
+      "foreground": "focus",
+      "ground": "surface-overlay",
+      "backdrop": "#000000",
+      "ratio": 2.34,
+      "target": 3.3,
+      "scheme": "coral-lagoon",
+      "failing": 18
+    },
+    {
+      "set": "light",
       "kind": "text",
       "foreground": "text-secondary",
-      "ground": "surface-default",
+      "ground": "surface-prominent",
       "backdrop": "#000000",
-      "ratio": 3.49,
+      "ratio": 3.53,
       "target": 4.95,
-      "scheme": "blue-orange-color-safe",
+      "scheme": "botanical-sage",
+      "failing": 23
+    },
+    {
+      "set": "high-contrast-dark",
+      "kind": "text",
+      "foreground": "accent-text",
+      "ground": "surface-overlay",
+      "backdrop": "#ffffff",
+      "ratio": 5.54,
+      "target": 7.7,
+      "scheme": "high-contrast",
       "failing": 23
     },
     {
       "set": "high-contrast-light",
       "kind": "text",
       "foreground": "accent-text",
-      "ground": "surface-overlay",
+      "ground": "surface-subtle",
       "backdrop": "#000000",
       "ratio": 5.55,
       "target": 7.7,
-      "scheme": "botanical-sage",
+      "scheme": "low-stimulus-warm",
       "failing": 25
     },
     {
@@ -596,26 +563,26 @@
       "failing": 23
     },
     {
-      "set": "light",
+      "set": "dark",
       "kind": "text",
       "foreground": "text-secondary",
       "ground": "surface-subtle",
-      "backdrop": "#000000",
-      "ratio": 3.68,
+      "backdrop": "#ffffff",
+      "ratio": 3.74,
       "target": 4.95,
-      "scheme": "blue-orange-color-safe",
-      "failing": 22
+      "scheme": "sepia-film",
+      "failing": 24
     },
     {
       "set": "light",
       "kind": "text",
       "foreground": "text-secondary",
-      "ground": "surface-overlay",
+      "ground": "surface-default",
       "backdrop": "#000000",
-      "ratio": 3.76,
+      "ratio": 3.79,
       "target": 4.95,
-      "scheme": "blue-orange-color-safe",
-      "failing": 22
+      "scheme": "low-stimulus-warm",
+      "failing": 23
     },
     {
       "set": "dark",
@@ -640,6 +607,17 @@
       "failing": 23
     },
     {
+      "set": "high-contrast-light",
+      "kind": "text",
+      "foreground": "accent-text",
+      "ground": "surface-overlay",
+      "backdrop": "#000000",
+      "ratio": 6.04,
+      "target": 7.7,
+      "scheme": "low-stimulus-warm",
+      "failing": 25
+    },
+    {
       "set": "high-contrast-dark",
       "kind": "non-text",
       "foreground": "data-categorical-2",
@@ -662,6 +640,17 @@
       "failing": 22
     },
     {
+      "set": "light",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-subtle",
+      "backdrop": "#000000",
+      "ratio": 4,
+      "target": 4.95,
+      "scheme": "botanical-sage",
+      "failing": 22
+    },
+    {
       "set": "dark",
       "kind": "text",
       "foreground": "text-primary",
@@ -671,6 +660,17 @@
       "target": 4.95,
       "scheme": "low-stimulus-warm",
       "failing": 11
+    },
+    {
+      "set": "light",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-overlay",
+      "backdrop": "#000000",
+      "ratio": 4.05,
+      "target": 4.95,
+      "scheme": "low-stimulus-warm",
+      "failing": 22
     },
     {
       "set": "high-contrast-dark",
@@ -725,7 +725,7 @@
       "ratio": 4.67,
       "target": 4.95,
       "scheme": "earthy-clay",
-      "failing": 15
+      "failing": 13
     },
     {
       "set": "high-contrast-light",
@@ -736,18 +736,7 @@
       "ratio": 4.68,
       "target": 4.95,
       "scheme": "cool-color-safe",
-      "failing": 19
-    },
-    {
-      "set": "dark",
-      "kind": "non-text",
-      "foreground": "data-categorical-6",
-      "ground": "surface-default",
-      "backdrop": "#ffffff",
-      "ratio": 3.12,
-      "target": 3.3,
-      "scheme": "sepia-film",
-      "failing": 12
+      "failing": 20
     },
     {
       "set": "high-contrast-light",
@@ -777,18 +766,17 @@
       "foreground": "data-categorical-4",
       "ground": "surface-default",
       "backdrop": "#000000",
-      "ratio": 4.88,
+      "ratio": 4.89,
       "target": 4.95,
       "scheme": "arctic-aurora",
       "failing": 23
     }
   ],
   "opacityFloor": {
-    "withTexture": null,
-    "withoutTexture": 100
+    "withTexture": 100,
+    "withoutTexture": 97
   },
   "unblockedBy": [
-    "anchor-v2 textured targets (promoted from the backlog to #20 PR 2c: \"anchor-v2 solver\"), so a scheme meets the raised targets a texture sets",
-    "translucency floors (promoted from the backlog to #20 PR 2c: \"Translucency floors\"), so a translucent surface keeps its contrast over the worst backdrop"
+    "the owner's call: whether the approved design still holds at 100% surface-opacity, its floor, since no translucent opacity passes over the worst backdrop with its texture"
   ]
 }

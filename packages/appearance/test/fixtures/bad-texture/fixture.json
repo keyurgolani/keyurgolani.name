@@ -1,17 +1,18 @@
 {
   "kind": "design-language",
   "base": "platform-neutral",
-  "description": "platform-neutral with a grain texture, which raises the targets on canvas and surfaces by 10%, past what warm-parchment solves to.",
+  "description": "platform-neutral with a grain texture, which raises the targets on canvas and surfaces by 10%, and a signature fill from the accent itself, which reads at 3:1 on warm-parchment's light surfaces but not at the 3.3:1 the texture sets. anchor-v2 solves signature-start to the raised target, and this fill skips it.",
   "patch": {
     "tokens": {
-      "texture": "radial-gradient(circle, color-mix(in srgb, var(--color-text-primary) 12%, transparent) 0 0.5px, transparent 0.75px)"
+      "texture": "radial-gradient(circle, color-mix(in srgb, var(--color-text-primary) 12%, transparent) 0 0.5px, transparent 0.75px)",
+      "signature-fill": "linear-gradient(90deg, var(--color-accent), var(--color-signature-end))"
     }
   },
   "expect": [
     {
       "pair": {
         "set": "light",
-        "foreground": "text-muted",
+        "foreground": "accent to signature-end",
         "ground": "surface-prominent"
       }
     }

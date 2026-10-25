@@ -2,7 +2,7 @@
   "id": "earthy-clay",
   "name": "Earthy Clay",
   "description": "Fired clay with an olive secondary on a warm earth ground.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "stable",
   "provenance": {
@@ -14,7 +14,7 @@
     "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
     "researchedAt": "2026-10-17",
     "maintainer": "keyurgolani",
-    "derivation": "anchor-v1 from the reviewed prototype's earthy-clay anchors."
+    "derivation": "anchor-v2 from the reviewed prototype's earthy-clay anchors. The anchors stay as approved. adjustments lists the 12 roles it moves from anchor-v1."
   },
   "modes": ["light", "dark"],
   "accessibility": {
@@ -33,10 +33,10 @@
     "enhancement": 0
   },
   "fallbacks": [
-    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
   ],
   "caveats": [],
-  "derivation": "anchor-v1",
+  "derivation": "anchor-v2",
   "anchors": {
     "light": {
       "canvas": "#f3eadf",
@@ -49,6 +49,28 @@
       "text": "#efe2d4",
       "accent": "#c98568",
       "secondary": "#9ba080"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#5c4f48", "#574a43"],
+      "text-muted": ["#665a52", "#61554d"],
+      "border-strong": ["#80756c", "#7a6f66"],
+      "accent-text": ["#81503c", "#7a4c3a"],
+      "data-categorical-6": ["#5c4f48", "#574a43"]
+    },
+    "dark": {
+      "text-secondary": ["#c7bbaf", "#cec2b6"],
+      "text-muted": ["#bbafa4", "#c2b6ab"],
+      "border-strong": ["#998e84", "#a0958a"],
+      "accent-text": ["#d6a58d", "#daaf98"],
+      "data-categorical-6": ["#c7bbaf", "#cec2b6"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#653c2d", "#5b3629"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#d7a48e", "#d9a893"]
     }
   },
   "swatches": ["#f3eadf", "#382b24", "#9b5d45", "#677054"]

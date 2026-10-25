@@ -2,7 +2,7 @@
   "id": "sepia-film",
   "name": "Sepia Film",
   "description": "Sepia film stock: warm browns with a rust accent and an olive secondary.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "stable",
   "provenance": {
@@ -14,7 +14,7 @@
     "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
     "researchedAt": "2026-10-17",
     "maintainer": "keyurgolani",
-    "derivation": "anchor-v1 from the reviewed prototype's sepia-film anchors."
+    "derivation": "anchor-v2 from the reviewed prototype's sepia-film anchors. The anchors stay as approved. adjustments lists the 14 roles it moves from anchor-v1."
   },
   "modes": ["light", "dark"],
   "accessibility": {
@@ -33,10 +33,10 @@
     "enhancement": 0
   },
   "fallbacks": [
-    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
   ],
   "caveats": [],
-  "derivation": "anchor-v1",
+  "derivation": "anchor-v2",
   "anchors": {
     "light": {
       "canvas": "#f4e2c5",
@@ -49,6 +49,30 @@
       "text": "#f0d8b6",
       "accent": "#cb7654",
       "secondary": "#a0a77d"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#584b3d", "#534639"],
+      "text-muted": ["#625547", "#5d5043"],
+      "border-strong": ["#7e705e", "#786a59"],
+      "accent-text": ["#87472e", "#7d432c"],
+      "data-categorical-3": ["#268551", "#1e7f4b"],
+      "data-categorical-6": ["#584b3d", "#534639"],
+      "signature-end": ["#6e7658", "#697053"]
+    },
+    "dark": {
+      "text-secondary": ["#c4af92", "#cdb799"],
+      "text-muted": ["#b7a389", "#c0ab90"],
+      "border-strong": ["#97856f", "#9e8c75"],
+      "accent-text": ["#d89775", "#dca17f"],
+      "data-categorical-6": ["#c4af92", "#cdb799"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#6c3723", "#633320"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#db9f87", "#dea791"]
     }
   },
   "swatches": ["#f4e2c5", "#30251b", "#9a4f32", "#6e7658"]

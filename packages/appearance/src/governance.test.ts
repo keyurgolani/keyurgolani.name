@@ -37,8 +37,9 @@ test('the three fallback packs carry every governance field', () => {
     ['typography', HUMANIST_UI],
   ] as const) {
     assert.deepEqual(records(clone(manifest), kind), [], manifest.id);
-    // A semver version: platform-neutral went to 1.0.1 with #20 PR 2b's reduced-motion wording.
-    assert.match(manifest.version, /^1\.0\.\d+$/);
+    // A semver version: platform-neutral went to 1.0.1 with #20 PR 2b's reduced-motion
+    // wording, and warm-parchment to 1.1.0 with PR 2c's anchor-v2.
+    assert.match(manifest.version, kind === 'color-scheme' ? /^1\.1\.\d+$/ : /^1\.0\.\d+$/);
     assert.equal(manifest.tier, 'stable');
     assert.ok(manifest.provenance.source.url.startsWith('https://'));
     assert.ok(manifest.provenance.attribution);

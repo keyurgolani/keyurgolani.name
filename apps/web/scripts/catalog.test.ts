@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  anchorV2Adjustments,
   PLATFORM_DEFAULTS,
   type ColorSchemeManifest,
   type PackManifest,
@@ -98,7 +99,7 @@ test('every typography profile ships in its approved tier, from OS stacks with n
   }
 });
 
-test('seeded schemes keep the prototype anchors, less the recorded signature adjustments', async () => {
+test("seeded schemes keep the prototype anchors exactly, and anchor-v2 replaces PR 2a's nudges", async () => {
   const read = await sources();
   for (const scheme of COLOR_SCHEMES as readonly (SeedEntry & {
     modes: Record<string, Record<string, string>>;
@@ -120,18 +121,54 @@ test('seeded schemes keep the prototype anchors, less the recorded signature adj
         accent: seeded.accent,
         secondary: seeded.information,
       };
-      const adjustments = ANCHOR_ADJUSTMENTS as unknown as Record<
-        string,
-        Record<string, readonly [string, string, number]>
-      >;
-      const adjusted = mode === 'light' ? (adjustments[scheme.id] ?? {}) : {};
-      for (const [role, [from, to]] of Object.entries(adjusted)) {
-        assert.equal(expected[role], from);
-        expected[role] = to;
-      }
       assert.deepEqual(anchors, expected, `${scheme.id}'s ${mode} anchors`);
     }
-    assert.equal(pack.manifest.derivation, 'anchor-v1');
+    assert.equal(pack.manifest.derivation, 'anchor-v2');
+    assert.equal(pack.manifest.version, '1.1.0', scheme.id);
+    // The recorded derivation is the solver's output for these anchors.
+    assert.deepEqual(
+      pack.manifest.adjustments,
+      anchorV2Adjustments(pack.manifest.anchors!),
+      `${scheme.id}'s adjustments`,
+    );
+    const moves = Object.values(pack.manifest.adjustments ?? {}).reduce(
+      (count, set) => count + Object.keys(set ?? {}).length,
+      0,
+    );
+    const derivation = pack.manifest.provenance.derivation ?? '';
+    assert.match(derivation, /^anchor-v2 from /, scheme.id);
+    const listed = moves === 1 ? 'the role' : `the ${moves} roles`;
+    assert.ok(
+      derivation.endsWith(`adjustments lists ${listed} it moves from anchor-v1.`),
+      scheme.id,
+    );
+    // 2a's light nudges are undone, and the derivation says so.
+    const nudges = (
+      ANCHOR_ADJUSTMENTS as unknown as Record<string, Record<string, readonly [string, string]>>
+    )[scheme.id];
+    for (const [role, [from, to]] of Object.entries(nudges ?? {})) {
+      assert.ok(derivation.includes(`${role} ${to} back to ${from}`), `${scheme.id} ${role}`);
+    }
+    if (!nudges) assert.doesNotMatch(derivation, /PR 2a/, scheme.id);
+  }
+});
+
+test('the upstream palettes keep their credit under anchor-v2, which moves derived roles only', async () => {
+  const read = await sources();
+  const zinc = read.registry.packs.colorScheme.get('zinc')!.manifest;
+  assert.equal(zinc.provenance.license, 'MIT');
+  assert.match(zinc.provenance.attribution, /Tailwind Labs/);
+  assert.match(zinc.provenance.derivation!, /Tailwind CSS v3\.4\.17 zinc-50, zinc-900, zinc-600/);
+  assert.match(zinc.provenance.derivation!, /The anchors stay as credited/);
+  assert.deepEqual(zinc.anchors!.light, {
+    canvas: '#fafafa',
+    text: '#18181b',
+    accent: '#52525b',
+    secondary: '#7c3aed',
+  });
+  for (const set of Object.values(zinc.adjustments ?? {})) {
+    for (const role of ['canvas', 'text-primary', 'accent', 'information'])
+      assert.equal((set as Record<string, unknown>)[role], undefined, role);
   }
 });
 
@@ -191,19 +228,13 @@ test('a recipe applies as its ordinary axis ids, one query, and a diagnostic for
     held.diagnostics[0]!.message,
     /^names a held design language: It fails check:appearance/,
   );
-  // Five of the eight recipes name a held language.
+  // Two of the eight recipes name a held language. paper-tactile and carbon-inspired ship since #20 PR 2c.
   const holding = readRecipes(REPO_ROOT).flatMap((recipe) =>
     reasons.has(`designLanguage:${recipe.selection.designLanguage}`)
       ? [`${recipe.id} ${recipe.selection.designLanguage}`]
       : [],
   );
-  assert.deepEqual(holding, [
-    'editorial-warmth paper-tactile',
-    'systems-clarity carbon-inspired',
-    'night-gallery atelier-luxury',
-    'cinematic-archive paper-tactile',
-    'neon-maker cyberpunk',
-  ]);
+  assert.deepEqual(holding, ['night-gallery atelier-luxury', 'neon-maker cyberpunk']);
 });
 
 test('the catalog query reads and writes as one URL form, and refuses what it cannot take', () => {
@@ -272,7 +303,7 @@ test('search filters by words, axis, tier, status, license, and mode', async () 
   assert.ok(ids('axis=scheme&mode=light').every((id) => id !== 'oled-black' && id !== 'neon-city'));
   assert.deepEqual(ids('axis=scheme&tier=experimental'), ['neon-city']);
   assert.deepEqual(ids('status=excluded'), []);
-  assert.equal(ids('status=held').length, 27);
+  assert.equal(ids('status=held').length, 13);
   assert.deepEqual(ids('q=refractive&status=held'), ['refractive-glass', 'holographic-iridescent']);
   assert.deepEqual(ids('q=nord&status=research'), ['nord']);
   assert.deepEqual(ids('q=nothing-matches-this'), []);
@@ -291,7 +322,7 @@ test('show gives the provenance, and an unavailable id its reason or the resolve
     zinc,
     /Source: Tailwind CSS v3\.4\.17 colors, https:\/\/github\.com\/tailwindlabs\/tailwindcss\/blob\/v3\.4\.17\/src\/public\/colors\.js/,
   );
-  assert.match(zinc, /Version: 1\.0\.1/);
+  assert.match(zinc, /Version: 1\.1\.0/);
   assert.match(zinc, /License: MIT/);
   assert.match(zinc, /Attribution: Tailwind Labs/);
   assert.match(zinc, /Copyright: Copyright \(c\) Tailwind Labs, Inc\./);

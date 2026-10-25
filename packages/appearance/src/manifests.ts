@@ -221,8 +221,34 @@ function strictRecord<K extends string, T extends z.ZodTypeAny>(keys: readonly K
 /** One mode's colors, every role given. */
 export const ColorTokenSetSchema = strictRecord<ColorRole, typeof Hex>(COLOR_ROLES, Hex);
 
-/** The four colors `anchor-v1` derives a mode's set from. */
+/** The four colors `anchor-v1` and `anchor-v2` derive a mode's set from. */
 const AnchorsSchema = z.object({ canvas: Hex, text: Hex, accent: Hex, secondary: Hex }).strict();
+
+/** A role anchor-v2 moved: anchor-v1's value, then anchor-v2's. */
+const Move = z.tuple([Hex, Hex]);
+const SetMoves = z
+  .object(
+    Object.fromEntries(COLOR_ROLES.map((role) => [role, Move.optional()])) as Record<
+      ColorRole,
+      z.ZodOptional<typeof Move>
+    >,
+  )
+  .strict();
+
+/**
+ * Each role anchor-v2 moved from anchor-v1's value on the same anchors, by
+ * rendered set, as [anchor-v1's, anchor-v2's]. validatePackManifest() holds
+ * it to the solver's output, so the record can't drift from what renders.
+ */
+export const AdjustmentsSchema = z
+  .object({
+    light: SetMoves.optional(),
+    dark: SetMoves.optional(),
+    'high-contrast-light': SetMoves.optional(),
+    'high-contrast-dark': SetMoves.optional(),
+  })
+  .strict();
+export type SchemeAdjustments = z.infer<typeof AdjustmentsSchema>;
 
 const Generator = z
   .object({
@@ -236,8 +262,8 @@ const Generator = z
 
 /**
  * A scheme's colors come one of three ways: authored `light` and `dark` sets,
- * per-mode `anchors` that `derivation: "anchor-v1"` derives the sets from,
- * or a `generator`. A scheme with one base mode is single-mode, and that
+ * per-mode `anchors` that `derivation` ("anchor-v1" or "anchor-v2") derives
+ * the sets from, or a `generator`. A scheme with one base mode is single-mode, and that
  * mode is its native one. validatePackManifest() holds a scheme to one way.
  */
 export const ColorSchemeManifestSchema = z
@@ -249,7 +275,9 @@ export const ColorSchemeManifestSchema = z
       .object({ light: AnchorsSchema.optional(), dark: AnchorsSchema.optional() })
       .strict()
       .optional(),
-    derivation: z.literal('anchor-v1').optional(),
+    derivation: z.enum(['anchor-v1', 'anchor-v2']).optional(),
+    /** For an anchor-v2 scheme, every role it moved from anchor-v1's values. */
+    adjustments: AdjustmentsSchema.optional(),
     generator: Generator.optional(),
     /** Authored high-contrast sets, in place of the ones high-contrast-v1 derives. */
     highContrast: z
@@ -289,6 +317,18 @@ export const DesignLanguageManifestSchema = z
   .object({
     ...common,
     tokens: LanguageTokensSchema,
+    /**
+     * The approved design's surface-opacity, for a translucent language that
+     * ships its translucency floor instead (#20 PR 2c): the least opacity at
+     * which every surface passes over the worst backdrop. The lock records
+     * both.
+     */
+    approvedSurfaceOpacity: z
+      .string()
+      .regex(/^(?:\d|[1-9]\d)%$/, {
+        message: 'must be a whole percentage under 100%, such as 78%.',
+      })
+      .optional(),
     /** The language's stylesheet, compiled into its layer and scope (Slice 2). */
     stylesheet: PackFile('css').optional(),
   })

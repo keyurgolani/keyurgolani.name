@@ -424,4 +424,44 @@ test("the responsible pack: a focus ring's width and a translucent backdrop are 
     axis: 'designLanguage',
     id: 'lang',
   });
+  // A backdrop failure whose pair fails opaque too is the scheme's: no floor fixes it (#20 PR 2c).
+  const backdrop = {
+    ...failure,
+    pair: { ...failure.pair, ground: 'surface-default', backdrop: '#000000' },
+  };
+  const opaque = {
+    ...backdrop,
+    language: 'solid',
+    pair: { ...failure.pair, ground: 'surface-default' },
+  };
+  const check = { failures: [backdrop, opaque] } as unknown as Parameters<
+    typeof contrastRecords
+  >[0];
+  assert.deepEqual(
+    contrastRecords(check).map(({ pack, axis }) => `${axis}:${pack}`),
+    ['colorScheme:scheme', 'colorScheme:scheme'],
+  );
+  assert.deepEqual(
+    contrastRecords({ failures: [backdrop] } as unknown as Parameters<
+      typeof contrastRecords
+    >[0]).map(({ pack, axis }) => `${axis}:${pack}`),
+    ['designLanguage:lang'],
+  );
+  // Only the same scheme's same pair, in the same set on the same ground, failing opaque moves the blame.
+  for (const [what, other] of [
+    ['another scheme', { ...opaque, scheme: 'other-scheme' }],
+    ['another set', { ...opaque, pair: { ...opaque.pair, set: 'dark' as const } }],
+    ['another ground', { ...opaque, pair: { ...opaque.pair, ground: 'surface-subtle' } }],
+  ] as const) {
+    const records = contrastRecords({ failures: [backdrop, other] } as unknown as Parameters<
+      typeof contrastRecords
+    >[0]);
+    assert.equal(
+      records.find(
+        ({ tokenRole, tuple }) => tokenRole === 'text-muted' && (tuple ?? '').startsWith('lang/'),
+      )?.pack,
+      'lang',
+      `an opaque failure on ${what} leaves the backdrop failure with the language`,
+    );
+  }
 });

@@ -126,7 +126,18 @@ export interface ShardGroup {
   readonly part?: number;
   /** A variant's sweep server's cell group, or a part of one (lib/sweep.ts). */
   readonly sweep?: true;
+  /**
+   * A cell group whose every test is a changed variant's directed cell (the
+   * [37] rule's variant pairs), or a part of one: with the sweep's, the
+   * PR's directed load, which shardLimit() makes room for. A cell a changed
+   * pack also directs is a variant cell too; the directed load counts it once.
+   */
+  readonly variant?: true;
 }
+
+/** Whether a group is directed load: the pack sweep's, or a changed variant's. */
+export const isDirected = (group: Pick<ShardGroup, 'sweep' | 'variant'>) =>
+  group.sweep === true || group.variant === true;
 
 export const groupKey = (group: Pick<ShardGroup, 'project' | 'file' | 'part'>) =>
   `${group.project} ${group.file}${group.part === undefined ? '' : ` #${group.part}`}`;
@@ -215,6 +226,15 @@ export function planGroups(
         costs,
         weight: costs.reduce((sum, cost) => sum + cost, durations.group),
         ...(server.sweep ? { sweep: true as const } : {}),
+        // A changed variant's own cells, none of them a sentinel the PR runs anyway.
+        ...(!server.sweep &&
+        own.length > 0 &&
+        own.every(
+          (test) =>
+            !test.cell.sentinel && test.cell.changed?.some((by) => by.axis === 'variant') === true,
+        )
+          ? { variant: true as const }
+          : {}),
       });
       const perfHere = perfOf.get(id) ?? 0;
       if (perfHere > 0) {
@@ -291,6 +311,7 @@ export function splitGroups(
       tests: part.tests,
       weight: part.weight,
       ...(group.sweep ? { sweep: true as const } : {}),
+      ...(group.variant ? { variant: true as const } : {}),
     }));
   });
 }
@@ -381,28 +402,58 @@ function fewestShards(
   return { fits: false, count: max, slowest, shards };
 }
 
+/** The fewest shards `groups` alone need, up to SWEEP_MAX_SHARDS (and that many past it), or 0 for none. */
+function shardsAlone(
+  groups: readonly ShardGroup[],
+  durations: Pick<ShardDurations, 'group'>,
+): { readonly count: number; readonly fits: boolean } {
+  if (groups.length === 0) return { count: 0, fits: true };
+  const alone = fewestShards(splitGroups(groups, GROUP_BUDGET, durations), SWEEP_MAX_SHARDS);
+  return { count: alone.fits ? alone.count : SWEEP_MAX_SHARDS, fits: alone.fits };
+}
+
 /**
- * The most shards `groups` may take: MAX_SHARDS, plus the fewest the pack
- * sweep's groups alone need (lib/sweep.ts), split and placed as the whole
- * plan's are, up to SWEEP_MAX_SHARDS. The rest keeps its usual
- * MAX_SHARDS' worth, and the sweep brings its own on top. Only sweep groups
- * count toward `sweepShards`, so nothing else raises it.
+ * The most shards `groups` may take: MAX_SHARDS, plus the fewest the PR's
+ * directed load alone needs, up to SWEEP_MAX_SHARDS. The directed load is
+ * the pack sweep's groups (lib/sweep.ts) and a changed variant's
+ * (isDirected), split and placed as the whole plan's are. The undirected
+ * base keeps its usual MAX_SHARDS' worth, and the directed load brings its
+ * own on top. Only directed groups count toward `directedShards`, so
+ * nothing else raises it. `sweepShards` and `variantShards` say what each
+ * part alone needs, for the log.
  */
 export function shardLimit(
   groups: readonly ShardGroup[],
   durations: Pick<ShardDurations, 'group'> = loadDurations(),
-): { readonly max: number; readonly sweepShards: number; readonly reason: string | null } {
-  const sweep = groups.filter((group) => group.sweep);
-  if (sweep.length === 0) return { max: MAX_SHARDS, sweepShards: 0, reason: null };
-  const alone = fewestShards(splitGroups(sweep, GROUP_BUDGET, durations), SWEEP_MAX_SHARDS);
-  // A sweep that needs more than SWEEP_MAX_SHARDS on its own counts as that many: the most never passes it.
-  const sweepShards = alone.fits ? alone.count : SWEEP_MAX_SHARDS;
-  const max = Math.min(SWEEP_MAX_SHARDS, MAX_SHARDS + sweepShards);
-  const needs = alone.fits ? `${sweepShards} shard(s)` : `more than ${SWEEP_MAX_SHARDS} shards`;
+): {
+  readonly max: number;
+  readonly directedShards: number;
+  readonly sweepShards: number;
+  readonly variantShards: number;
+  readonly reason: string | null;
+} {
+  const directed = shardsAlone(groups.filter(isDirected), durations);
+  const sweepShards = shardsAlone(
+    groups.filter((group) => group.sweep),
+    durations,
+  ).count;
+  const variantShards = shardsAlone(
+    groups.filter((group) => group.variant),
+    durations,
+  ).count;
+  if (directed.count === 0) {
+    return { max: MAX_SHARDS, directedShards: 0, sweepShards, variantShards, reason: null };
+  }
+  const max = Math.min(SWEEP_MAX_SHARDS, MAX_SHARDS + directed.count);
+  const needs = directed.fits
+    ? `${directed.count} shard(s)`
+    : `more than ${SWEEP_MAX_SHARDS} shards`;
   return {
     max,
+    directedShards: directed.count,
     sweepShards,
-    reason: `the pack sweep's ${sweep.length} group(s) alone need ${needs}, so the most is ${max}`,
+    variantShards,
+    reason: `the directed groups alone need ${needs} (the pack sweep's ${sweepShards}, the changed variants' ${variantShards}), so the most is ${max}`,
   };
 }
 
@@ -422,8 +473,9 @@ function overCeiling(
 /**
  * The fewest shards, 1 to shardLimit()'s most, that keep every shard
  * within SHARD_CEILING, from `groups` as planGroups() weighs them, split
- * first. The groups outside the pack sweep must fit MAX_SHARDS on their
- * own, so a sweep never makes room for anything else. Needing more throws,
+ * first. The undirected base, every group outside the directed load, must
+ * fit MAX_SHARDS on its own, so directed load never makes room for
+ * anything else. Needing more throws,
  * naming the slowest shard's heaviest group and about how long that shard
  * would take.
  */
@@ -434,27 +486,29 @@ export function pickShardCount(
   readonly count: number;
   readonly slowest: number;
   readonly shards: PrShard[];
-  /** The fewest shards the pack sweep alone needs, 0 without one. */
+  /** The fewest shards the directed load alone needs, 0 without any, and each part's. */
+  readonly directedShards: number;
   readonly sweepShards: number;
+  readonly variantShards: number;
   /** The most the count could be, and why it's over MAX_SHARDS, or null. */
   readonly max: number;
   readonly reason: string | null;
 } {
-  const { max, sweepShards, reason } = shardLimit(groups, durations);
-  if (sweepShards > 0) {
-    const rest = fewestShards(
+  const limit = shardLimit(groups, durations);
+  if (limit.directedShards > 0) {
+    const base = fewestShards(
       splitGroups(
-        groups.filter((group) => !group.sweep),
+        groups.filter((group) => !isDirected(group)),
         GROUP_BUDGET,
         durations,
       ),
       MAX_SHARDS,
     );
-    if (!rest.fits) throw overCeiling(MAX_SHARDS, rest, 'the groups outside the pack sweep, alone');
+    if (!base.fits) throw overCeiling(MAX_SHARDS, base, 'the undirected base, alone');
   }
-  const picked = fewestShards(splitGroups(groups, GROUP_BUDGET, durations), max);
-  if (!picked.fits) throw overCeiling(max, picked, reason);
-  return { ...picked, sweepShards, max, reason };
+  const picked = fewestShards(splitGroups(groups, GROUP_BUDGET, durations), limit.max);
+  if (!picked.fits) throw overCeiling(limit.max, picked, limit.reason);
+  return { ...picked, ...limit };
 }
 
 /** The shard `text` (<n>/<m>) names, of the PR plan on `engines`, its groups split as pickShardCount() splits them. */

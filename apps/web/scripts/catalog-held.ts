@@ -8,8 +8,12 @@
 // published, exported, or bundled, as a Research record isn't.
 //
 // `pnpm catalog:held` writes each gate.json from the gate, as it runs now
-// against every registered scheme and profile. `pnpm check:appearance`
-// fails when one is stale, when a held manifest doesn't validate, when a
+// against every registered scheme and profile. Since #20 PR 2c every scheme
+// solves with anchor-v2, so texture alone holds nothing back, and a
+// translucent language ships at its translucency floor, the least
+// surface-opacity that passes (surfaceOpacityFloor). One whose floor is
+// 100% is opaque in effect, so it stays held for the owner's call.
+// `pnpm check:appearance` fails when one is stale, when a held manifest doesn't validate, when a
 // held id is registered or held twice, or when a held pack passes now,
 // so it can be promoted, in an owner-approved PR.
 
@@ -144,8 +148,6 @@ export function readHeld(root: string, packages: readonly PackPackage[]): HeldPa
   return held;
 }
 
-const floor2 = (value: number) => Math.floor(value * 100) / 100;
-
 /** The gate's failing pairs for a language's tokens, against every registered, non-fixture scheme and profile. */
 function failures(
   registry: AppearanceRegistry,
@@ -165,7 +167,7 @@ function failures(
   const pairs: HeldPair[] = [];
   const failing = new Set<string>();
   for (const scheme of schemes) {
-    const sets = schemeSets(scheme.sets, scheme.manifest.highContrast);
+    const sets = schemeSets(scheme.sets, scheme.manifest.highContrast, scheme.manifest.derivation);
     for (const [name, set] of Object.entries(sets)) {
       if (!set) continue;
       for (const typography of distinct) {
@@ -187,6 +189,28 @@ function failures(
     }
   }
   return { pairs, schemes: { failing, of: schemes.length } };
+}
+
+/**
+ * A translucent language's floor: the least whole percent of
+ * surface-opacity, from its own value up, at which it passes the gate
+ * with every registered scheme and profile over the worst of canvas,
+ * black, and white. Null when not even 100% passes, or when the tokens
+ * don't gate.
+ */
+export function surfaceOpacityFloor(
+  registry: AppearanceRegistry,
+  tokens: DesignLanguageManifest['tokens'],
+  targets: GateTargets,
+): number | null {
+  const read = gateLanguage(tokens);
+  if (!read.ok) return null;
+  const start = Math.ceil(read.language.surfaceOpacity * 100 - 1e-9);
+  for (let percent = start; percent <= 100; percent += 1) {
+    const at = failures(registry, { ...tokens, 'surface-opacity': `${percent}%` }, targets);
+    if (at && at.pairs.length === 0) return percent;
+  }
+  return null;
 }
 
 const severity = (pair: HeldPair) => pair.ratio / pair.target;
@@ -215,39 +239,66 @@ export function heldRecord(
   const pairs = [...groups.values()]
     .map((group) => {
       const worst = [...group].sort(byWorst)[0]!;
-      return {
-        ...worst,
-        ratio: floor2(worst.ratio),
-        failing: new Set(group.map((p) => p.scheme)).size,
-      };
+      // The gate already floors each ratio to two places. Flooring again
+      // drops some a step (5.06 * 100 is 505.99...), so the order would slip.
+      return { ...worst, failing: new Set(group.map((p) => p.scheme)).size };
     })
     .sort(byWorst);
   const worst = [...found.pairs].sort(byWorst)[0]!;
   const textured = manifest.tokens.texture !== 'none';
+  const opaque = manifest.tokens['surface-opacity'] === '100%';
+  // Texture holds a language back only when it fails with opaque surfaces too.
+  const solid = opaque
+    ? found
+    : failures(registry, { ...manifest.tokens, 'surface-opacity': '100%' }, targets);
+  const textureFails = textured && solid !== null && solid.pairs.length > 0;
   const translucent = found.pairs.some((pair) => pair.backdrop !== undefined);
+  const floor = !translucent
+    ? undefined
+    : {
+        withTexture: surfaceOpacityFloor(registry, manifest.tokens, targets),
+        withoutTexture: surfaceOpacityFloor(
+          registry,
+          { ...manifest.tokens, texture: 'none' },
+          targets,
+        ),
+      };
+  const floorIsOpaque = floor?.withTexture === 100;
+  // The texture is a cause too when it alone pushes the floor to opaque.
+  const untextured = floor?.withoutTexture ?? null;
+  const textureMakesOpaque = floorIsOpaque && untextured !== null && untextured < 100;
   const causes = [
-    ...(textured ? (['texture'] as const) : []),
+    ...(textureFails || textureMakesOpaque ? (['texture'] as const) : []),
     ...(translucent ? (['translucency'] as const) : []),
   ];
-  const passesAt = (tokens: DesignLanguageManifest['tokens']) => {
-    const start = Math.ceil(Number.parseFloat(manifest.tokens['surface-opacity']));
-    for (let percent = start; percent <= 100; percent += 1) {
-      const at = failures(registry, { ...tokens, 'surface-opacity': `${percent}%` }, targets);
-      if (at && at.pairs.length === 0) return percent;
-    }
-    return null;
-  };
-  // Each cause brings its sentence, and the work that would clear it.
-  const unblockedBy = causes.map((cause) =>
-    cause === 'texture'
-      ? 'anchor-v2 textured targets (promoted from the backlog to #20 PR 2c: "anchor-v2 solver"), so a scheme meets the raised targets a texture sets'
-      : 'translucency floors (promoted from the backlog to #20 PR 2c: "Translucency floors"), so a translucent surface keeps its contrast over the worst backdrop',
-  );
-  const sentence = causes.map((cause) =>
-    cause === 'texture'
-      ? `its texture raises every target by ${targets.textureRaise}, past where anchor-v1 solves each scheme's roles`
-      : `its ${manifest.tokens['surface-opacity']} surfaces fall under the targets over a black or white backdrop`,
-  );
+  const unblockedBy = [
+    ...(textureFails
+      ? [
+          'a scheme solver past anchor-v2, since every scheme already solves to the raised targets a texture sets',
+        ]
+      : []),
+    ...(floorIsOpaque
+      ? [
+          "the owner's call: whether the approved design still holds at 100% surface-opacity, its floor, since no translucent opacity passes over the worst backdrop with its texture",
+        ]
+      : translucent
+        ? [
+            `its translucency floor: surface-opacity ${floor?.withTexture ?? 'above 100'}%, the least that passes over the worst backdrop`,
+          ]
+        : []),
+  ];
+  const sentence = [
+    textureFails
+      ? `its texture raises every target by ${targets.textureRaise}, past where anchor-v2 solves each scheme's roles`
+      : null,
+    floorIsOpaque
+      ? `its floor is opaque: its ${manifest.tokens['surface-opacity']} surfaces fall under the targets over a black or white backdrop at every opacity under 100%${
+          textureMakesOpaque ? `, and without its texture they'd pass at ${untextured}%` : ''
+        }`
+      : translucent
+        ? `its ${manifest.tokens['surface-opacity']} surfaces fall under the targets over a black or white backdrop`
+        : null,
+  ].filter(Boolean);
   return {
     heldVersion: HELD_VERSION,
     id: manifest.id,
@@ -256,16 +307,9 @@ export function heldRecord(
     reason: `It fails check:appearance with ${found.schemes.failing.size} of ${found.schemes.of} color schemes: ${sentence.join(', and ')}.`,
     causes,
     schemes: { failing: found.schemes.failing.size, of: found.schemes.of },
-    worst: { ...worst, ratio: floor2(worst.ratio) },
+    worst,
     pairs,
-    ...(translucent
-      ? {
-          opacityFloor: {
-            withTexture: passesAt(manifest.tokens),
-            withoutTexture: passesAt({ ...manifest.tokens, texture: 'none' }),
-          },
-        }
-      : {}),
+    ...(floor ? { opacityFloor: floor } : {}),
     unblockedBy,
   };
 }
