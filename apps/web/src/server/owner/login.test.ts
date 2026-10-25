@@ -1,12 +1,13 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
   csrfToken,
   memoryAuditSink,
+  preflight,
   probeDataDirectory,
   type MemoryAuditSink,
 } from '@portfolio/core/owner';
@@ -55,7 +56,9 @@ interface Setup {
 async function setup(t: TestContext, options: Setup = {}) {
   const dataDir = mkdtempSync(path.join(tmpdir(), 'owner-login-'));
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
+  // As owner startup does: the store's preflight makes audit/.
   assert.equal(await probeDataDirectory(dataDir), null);
+  assert.equal(await preflight({ dataDir }), null);
   let at = Date.UTC(2026, 9, 20, 9, 0, 0);
   const now = () => at;
   const memory: MemoryAuditSink = memoryAuditSink(now);
@@ -228,6 +231,23 @@ test('login issues a new token and ends the session of any cookie sent with it',
   for (const token of [mine, theirs]) {
     assert.equal((await send(studio('auth.session', token))).status, 401);
   }
+});
+
+test("the first sign-in on a fresh data directory makes ephemeral/auth/sessions/ at 0700, and the session works", async (t) => {
+  const { send, dataDir } = await setup(t);
+  // Startup made the store's ephemeral/, and the provider wrote the
+  // fingerprint into ephemeral/auth/. No session has been written yet.
+  const sessions = path.join(dataDir, 'ephemeral', 'auth', 'sessions');
+  assert.deepEqual(readdirSync(path.join(dataDir, 'ephemeral', 'auth')), ['fingerprint']);
+  const signedIn = await send(login());
+  assert.equal(signedIn.status, 200);
+  const token = tokenOf(signedIn);
+  assert.ok(token);
+  for (const dir of ['ephemeral', 'ephemeral/auth', 'ephemeral/auth/sessions']) {
+    assert.equal(statSync(path.join(dataDir, dir)).mode & 0o777, 0o700, dir);
+  }
+  assert.equal(readdirSync(sessions).length, 1);
+  assert.equal((await send(studio('auth.session', token))).status, 200);
 });
 
 test('an auth command whose session ended during the request answers 401 and clears the cookie', async (t) => {

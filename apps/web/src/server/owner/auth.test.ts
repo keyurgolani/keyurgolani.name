@@ -12,6 +12,7 @@ import {
   filesystemSessionStore,
   isSessionHeld,
   memoryAuditSink,
+  preflight,
   probeDataDirectory,
   sessionDigest,
   sessionRef,
@@ -95,7 +96,9 @@ interface Setup {
 
 async function setup(t: TestContext, options: Setup = {}) {
   const dataDir = options.dataDir ?? dataDirectory(t);
+  // As owner startup does: the store's preflight makes audit/.
   assert.equal(await probeDataDirectory(dataDir), null);
+  assert.equal(await preflight({ dataDir }), null);
   let at = Date.UTC(2026, 9, 20, 9, 0, 0);
   const now = () => at;
   const audit: MemoryAuditSink = memoryAuditSink(now);

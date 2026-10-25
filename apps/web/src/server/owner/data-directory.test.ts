@@ -6,6 +6,7 @@ import {
   copyFileSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -15,19 +16,29 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SESSION_LIFETIME, SESSION_LIFETIME_RANGE } from '@portfolio/core/owner';
+import { storePaths } from '../../../../../packages/core/src/store/layout';
+import { storeDirectories } from '../../../../../packages/core/src/store/preflight';
 import type { AuthProviderFactory } from '../composition';
 import { SESSION_LIFETIME_KEYS, type Env } from '../config';
 import { runStartup, type StartupResult } from '../startup';
 
-// The data.directory startup requirement (#2): owner needs a data directory
-// the server can write, and makes its auth and audit directories there. A
-// provider double stands in for the real one, which the login slice
-// registers, so the data directory alone decides whether owner starts.
+// The data.directory startup requirement (#2, #3): owner needs a data
+// directory the server can write, and lays out the store there, with no
+// auth directory until a writer makes one. A provider double stands in for
+// the real one, which the login slice registers, so the data directory
+// alone decides whether owner starts.
 
 const EXAMPLES = {
   portfolio: fileURLToPath(new URL('../../../../../portfolio.example.yml', import.meta.url)),
   site: fileURLToPath(new URL('../../../../../site.example.yml', import.meta.url)),
 };
+/** An old one-file portfolio.yml, which owner refuses as legacy.document. */
+const LEGACY_ONLY = fileURLToPath(
+  new URL(
+    '../../../../../packages/schema/src/__fixtures__/startup/legacy-only/portfolio.yml',
+    import.meta.url,
+  ),
+);
 const VALID =
   'schemaVersion: 3\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n';
 const base64 = (bytes: Buffer) => bytes.toString('base64').replace(/=+$/, '');
@@ -111,14 +122,130 @@ test('owner refuses to start without a data directory it can write, naming the v
   }
 });
 
-test('owner startup makes the auth and audit directories in the data directory, 0700', async (t) => {
+/** Every entry under `dir`, relative to it, a directory's with a trailing slash, sorted. */
+function tree(dir: string): string[] {
+  const found: string[] = [];
+  const walk = (at: string) => {
+    for (const entry of readdirSync(at, { withFileTypes: true })) {
+      const full = path.join(at, entry.name);
+      const name = path.relative(dir, full);
+      if (entry.isDirectory()) {
+        found.push(`${name}/`);
+        walk(full);
+      } else {
+        found.push(name);
+      }
+    }
+  };
+  walk(dir);
+  return found.sort();
+}
+
+/**
+ * The valid empty store, from the store's own layout: store.json, the
+ * server's claim, and each store directory with those above it.
+ */
+function emptyStore(dataDir: string): string[] {
+  const paths = storePaths(dataDir);
+  const entries = new Set([
+    path.relative(paths.root, paths.storeFile),
+    path.relative(paths.root, paths.server),
+  ]);
+  for (const dir of storeDirectories(paths)) {
+    for (let at = dir; at !== paths.root; at = path.dirname(at)) {
+      entries.add(`${path.relative(paths.root, at)}/`);
+    }
+  }
+  return [...entries].sort();
+}
+
+test("owner refusing the old one-file config leaves the data directory a valid empty store and nothing more, the auth state's directories included", async (t) => {
+  const { root, env } = workspace(t);
+  // The rehearsal's image-old-config row (#12): an old-shape portfolio.yml
+  // alone, refused by documents.shape after data.directory has run.
+  const source = path.join(root, 'old-config');
+  mkdirSync(source);
+  copyFileSync(LEGACY_ONLY, path.join(source, 'portfolio.yml'));
+  const dataDir = path.join(root, 'data');
+  mkdirSync(dataDir, { mode: 0o700 });
+  // The build's own auth provider, as the image runs it.
+  const result = await runStartup({
+    env: { ...env, PORTFOLIO_SOURCE_DIR: source, PORTFOLIO_DATA_DIR: dataDir },
+    cwd: '/srv/app',
+    examples: EXAMPLES,
+    report: () => {},
+  });
+  assert.equal(result.ok, false);
+  assert.deepEqual(fatalCodes(result), ['PORTFOLIO_SOURCE_DIR:legacy.document']);
+  const expected = emptyStore(dataDir);
+  // What the store defines, named, so a change to it shows here too.
+  assert.deepEqual(expected, [
+    'assets/',
+    'assets/sha256/',
+    'audit/',
+    'drafts/',
+    'ephemeral/',
+    'publication/',
+    'publication/events/',
+    'publication/server.json',
+    'revisions/',
+    'store.json',
+  ]);
+  // The refused start lets its claim go as it returns, so the server's
+  // claim is the one entry of the empty store that's gone.
+  const claim = path.relative(dataDir, storePaths(dataDir).server);
+  assert.deepEqual(
+    tree(dataDir),
+    expected.filter((entry) => entry !== claim),
+  );
+});
+
+test('a start that succeeds makes the store, and no auth directory until a writer needs one', async (t) => {
   const { root, env } = workspace(t);
   const dataDir = path.join(root, 'data');
-  mkdirSync(dataDir);
+  mkdirSync(dataDir, { mode: 0o700 });
   const result = await start({ ...env, PORTFOLIO_DATA_DIR: dataDir });
   assert.ok(result.ok, JSON.stringify(result.issues));
-  for (const dir of ['ephemeral', 'ephemeral/auth', 'ephemeral/auth/sessions', 'audit']) {
+  if (result.ok) result.state.release?.();
+  for (const dir of ['ephemeral', 'audit']) {
     assert.equal(statSync(path.join(dataDir, dir)).mode & 0o777, 0o700, dir);
+  }
+  // The provider double writes nothing, so nothing is below ephemeral/.
+  assert.deepEqual(readdirSync(path.join(dataDir, 'ephemeral')), []);
+  assert.ok(!tree(dataDir).some((entry) => entry.startsWith('.probe-')), 'a probe was left');
+});
+
+test('a data directory that already holds the auth directories and a session keeps them, and starts', async (t) => {
+  const { root, env } = workspace(t);
+  const dataDir = path.join(root, 'data');
+  const sessions = path.join(dataDir, 'ephemeral', 'auth', 'sessions');
+  mkdirSync(sessions, { recursive: true, mode: 0o700 });
+  mkdirSync(path.join(dataDir, 'audit'), { mode: 0o700 });
+  const record = path.join(sessions, `${'a'.repeat(64)}.json`);
+  writeFileSync(record, '{}\n', { mode: 0o600 });
+  writeFileSync(path.join(dataDir, 'ephemeral', 'auth', 'fingerprint'), 'kept\n', { mode: 0o600 });
+  const result = await start({ ...env, PORTFOLIO_DATA_DIR: dataDir });
+  assert.ok(result.ok, JSON.stringify(result.issues));
+  if (result.ok) result.state.release?.();
+  assert.deepEqual(readdirSync(sessions), [path.basename(record)]);
+  assert.deepEqual(readdirSync(path.join(dataDir, 'ephemeral', 'auth')).sort(), [
+    'fingerprint',
+    'sessions',
+  ]);
+});
+
+test('a link at ephemeral/ or audit/ refuses startup, and nothing is made through it', async (t) => {
+  for (const linked of ['ephemeral', 'audit']) {
+    const { root, env } = workspace(t);
+    const dataDir = path.join(root, 'data');
+    mkdirSync(dataDir, { mode: 0o700 });
+    const elsewhere = path.join(root, 'elsewhere');
+    mkdirSync(elsewhere, { mode: 0o700 });
+    symlinkSync(elsewhere, path.join(dataDir, linked));
+    const result = await start({ ...env, PORTFOLIO_DATA_DIR: dataDir });
+    assert.equal(result.ok, false, linked);
+    assert.deepEqual(fatalCodes(result), ['PORTFOLIO_DATA_DIR:data_dir_linked'], linked);
+    assert.deepEqual(readdirSync(elsewhere), [], `${linked}: something was made through the link`);
   }
 });
 
