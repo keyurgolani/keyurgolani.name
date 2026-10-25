@@ -33,6 +33,7 @@ test('the PR plan: each sentinel at every viewport in the default row, and every
   // carries each state's sentinel; the fallback composition and Kinetic
   // Cosmos run complete.
   assert.deepEqual(ids.sort(), [
+    'demo-studio content /studio?task=content system',
     'editorial-evidence complete / system',
     'editorial-evidence last-known-good / system',
     'editorial-evidence missing-media / system',
@@ -75,6 +76,7 @@ test('the PR plan: each sentinel at every viewport in the default row, and every
     { kind: 'composition', id: 'kinetic-cosmos' },
     { kind: 'composition', id: 'obsidian-atelier' },
     { kind: 'composition', id: 'spatial-bento' },
+    { kind: 'surface', id: 'demo-studio' },
     { kind: 'surface', id: 'login' },
     { kind: 'surface', id: 'studio' },
   ]);
@@ -379,17 +381,24 @@ test('the plan is the same each time', () => {
 
 test("a surface's requiresScript reason goes on each of its cells, and on no other", () => {
   const plan = planCells({ meta: checkoutMeta(), registrations, mode: 'full' });
-  const reason = registrations.surfaces.find((each) => each.id === 'studio')?.requiresScript
-    ?.reason;
-  assert.ok(reason !== undefined && isReason(reason));
-  const studio = plan.cells.filter((cell) => cell.target === 'studio');
-  assert.ok(studio.length > 0);
-  for (const cell of studio) {
-    assert.equal(cell.requiresScript, reason, cell.id);
-    // Its report says why, from the start, so a cell that throws says so too.
-    assert.deepEqual(cellAnnotations(cell), [{ type: 'requires-script', description: reason }]);
+  // Owner Studio (#8) and Demo Studio (#9) each say why, in their own words.
+  const scripted = new Map(
+    registrations.surfaces.flatMap((each) =>
+      each.requiresScript ? [[each.id, each.requiresScript.reason] as const] : [],
+    ),
+  );
+  assert.deepEqual([...scripted.keys()].sort(), ['demo-studio', 'studio']);
+  for (const [id, reason] of scripted) {
+    assert.ok(isReason(reason), id);
+    const own = plan.cells.filter((cell) => cell.target === id);
+    assert.ok(own.length > 0, id);
+    for (const cell of own) {
+      assert.equal(cell.requiresScript, reason, cell.id);
+      // Its report says why, from the start, so a cell that throws says so too.
+      assert.deepEqual(cellAnnotations(cell), [{ type: 'requires-script', description: reason }]);
+    }
   }
-  for (const cell of plan.cells.filter((each) => each.target !== 'studio')) {
+  for (const cell of plan.cells.filter((each) => !scripted.has(each.target))) {
     assert.equal(cell.requiresScript, undefined, cell.id);
     assert.deepEqual(cellAnnotations(cell), [], cell.id);
   }
