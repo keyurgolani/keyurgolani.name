@@ -312,6 +312,13 @@ test.describe('touch', () => {
       ).toEqual(CHAPTERS.map(anchor));
       // A swipe up the screen: the page scrolls, never cancelled, and the chapter follows.
       const cdp = await page.context().newCDPSession(page);
+      // Whether the page is still scrolling: from a scroll event until the scrollend after it.
+      await page.evaluate(() => {
+        const page = window as Window & { __scrolling?: boolean };
+        page.__scrolling = false;
+        window.addEventListener('scroll', () => (page.__scrolling = true), { passive: true });
+        window.addEventListener('scrollend', () => (page.__scrolling = false));
+      });
       // Swipe until the page is past Prologue: each swipe is a real touch scroll, never cancelled.
       for (let swipe = 0; swipe < 12; swipe++) {
         const before = await page.evaluate(() => window.scrollY);
@@ -330,10 +337,16 @@ test.describe('touch', () => {
         await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
         if ((await read(page)).onScreen !== anchor('prologue')) break;
       }
+      // A swipe flings: the page goes on scrolling after the finger lifts, and a fling moves the
+      // page by its own steps, so one still running would carry the page on past the chapter a
+      // link below lands on. Wait for it to stop, and for the chapter to follow.
       await expect
         .poll(async () => {
+          const scrolling = await page.evaluate(
+            () => (window as Window & { __scrolling?: boolean }).__scrolling,
+          );
           const { current, onScreen } = await read(page);
-          return current === onScreen && current !== anchor('prologue');
+          return !scrolling && current === onScreen && current !== anchor('prologue');
         })
         .toBe(true);
       const swiped = await read(page);
