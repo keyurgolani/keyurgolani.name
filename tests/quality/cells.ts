@@ -126,6 +126,8 @@ export interface Cell {
    * it, its cells check its honest state, and their report says why.
    */
   readonly requiresScript?: string;
+  /** Which cells cover a surface's frame, when it declares framedContrast: its sampler leaves the frame out. */
+  readonly framedContrast?: string;
   /** True on the one cell a surface's perfState names: its first route in that state. */
   readonly perfState?: true;
   readonly tuple: Tuple;
@@ -165,6 +167,16 @@ export interface ChangedBy {
 
 /** The annotation that says why a cell's page requires script, in its report. */
 export const REQUIRES_SCRIPT_ANNOTATION = 'requires-script';
+/** The annotation that says how many frame items a cell's contrast sampler left out, and why. */
+export const FRAMED_CONTRAST_ANNOTATION = 'framed-contrast';
+
+/** What a framedContrast cell's report says it left out of the contrast sampler. */
+export function framedContrastNote(cell: Pick<Cell, 'framedContrast'>, leftOut: number) {
+  return {
+    type: FRAMED_CONTRAST_ANNOTATION,
+    description: `${leftOut} incomplete contrast item${leftOut === 1 ? '' : 's'} inside a frame left out of the sampler: ${cell.framedContrast}`,
+  };
+}
 
 /**
  * What a cell's report says of the cell itself, before any check runs: why
@@ -594,6 +606,7 @@ export function planCells({
           performanceTier: surface.performanceTier,
           ...(surface.auth === 'session' ? { auth: 'session' as const } : {}),
           ...(surface.requiresScript ? { requiresScript: surface.requiresScript.reason } : {}),
+          ...(surface.framedContrast ? { framedContrast: surface.framedContrast.reason } : {}),
           ...(routeIndex === 0 && surface.perfState === state.id
             ? { perfState: true as const }
             : {}),

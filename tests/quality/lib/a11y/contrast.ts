@@ -113,12 +113,29 @@ export function neededRatio(
   return large ? { rule: 'large-text', ratio: largeText } : { rule: 'text', ratio: text };
 }
 
-/** Each incomplete color-contrast element resolved against its worst background pixel. */
+/** Whether axe names `node` inside a frame: its target has a part for each document, the frame's first. */
+export const inFrame = (node: { readonly target: readonly unknown[] }): boolean =>
+  node.target.length > 1;
+
+/** How many incomplete color-contrast items axe names inside a frame. */
+export function framedItems(results: Pick<AxeResults, 'incomplete'>): number {
+  const nodes = results.incomplete.find((rule) => rule.id === 'color-contrast')?.nodes ?? [];
+  return nodes.filter(inFrame).length;
+}
+
+/**
+ * Each incomplete color-contrast element resolved against its worst
+ * background pixel. With `framed`, for a surface whose frame's document
+ * other cells cover, the items inside a frame are left out first, before
+ * anything samples; every item in the page itself stays.
+ */
 export async function incompleteContrastFindings(
   page: Page,
   results: Pick<AxeResults, 'incomplete'>,
+  framed = false,
 ): Promise<Finding[]> {
-  const nodes = results.incomplete.find((rule) => rule.id === 'color-contrast')?.nodes ?? [];
+  const incomplete = results.incomplete.find((rule) => rule.id === 'color-contrast')?.nodes ?? [];
+  const nodes = framed ? incomplete.filter((node) => !inFrame(node)) : incomplete;
   if (nodes.length === 0) return [];
   const findings: Finding[] = [];
   // This call's key: its style, its marks, and the texts the page keeps between calls carry it.

@@ -18,6 +18,12 @@
 // its default page as a visitor lands on it (lib/perf/plan.ts). A surface
 // with no such state may export `perfState`, the id of the state to measure
 // instead, and only then does a query go on its perf cell.
+//
+// A surface that shows a frame whose document other cells cover may export
+// `framedContrast`, saying which cells do: its cells' contrast sampler
+// leaves out the incomplete items axe names inside a frame, and each cell's
+// report says how many it left out, and why. axe's own pass still checks
+// the frame.
 
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
@@ -101,6 +107,8 @@ export interface SurfaceRegistration {
    * first route in a state with no query.
    */
   readonly perfState?: string;
+  /** Present for a surface whose frame's document other cells cover, and which ones. */
+  readonly framedContrast?: { readonly reason: string };
 }
 
 export interface UnitRegistration {
@@ -125,7 +133,7 @@ const SURFACE_EXPORTS = [
 ] as const;
 const UNIT_EXPORTS = ['interactions', 'primaryActions', 'notApplicable'] as const;
 /** What a surface may export besides SURFACE_EXPORTS. */
-const OPTIONAL_SURFACE_EXPORTS = ['requiresScript', 'perfState'] as const;
+const OPTIONAL_SURFACE_EXPORTS = ['requiresScript', 'perfState', 'framedContrast'] as const;
 
 /** Whether `route` is Studio's: /studio, or a path under it. */
 const isStudioRoute = (route: unknown) =>
@@ -145,6 +153,21 @@ function requiresScript(value: unknown, problems: string[]): void {
   if (!isReason(item.reason)) {
     problems.push(
       'requiresScript.reason says why it needs its script, in a sentence of three words or more',
+    );
+  }
+}
+
+function framedContrast(value: unknown, problems: string[]): void {
+  const item = value as Record<string, unknown> | null;
+  if (item === null || typeof item !== 'object') {
+    problems.push('framedContrast is an object, { reason }');
+    return;
+  }
+  const unknown = Object.keys(item).filter((key) => key !== 'reason');
+  if (unknown.length > 0) problems.push(`framedContrast has unknown fields: ${unknown.join(', ')}`);
+  if (!isReason(item.reason)) {
+    problems.push(
+      "framedContrast.reason names the cells that cover the frame's document, in a sentence of three words or more",
     );
   }
 }
@@ -311,6 +334,7 @@ export function validateSurface(exports: Exports, file: string): SurfaceRegistra
       problems.push('perfState names one of stateFixtures, by its id');
     }
   }
+  if ('framedContrast' in exports) framedContrast(exports.framedContrast, problems);
   if ('requiresScript' in exports) {
     requiresScript(exports.requiresScript, problems);
     // Only a Studio surface: every route of it /studio or under it, and signed in, or Demo

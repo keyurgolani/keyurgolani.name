@@ -252,6 +252,32 @@ test("a surface's perfState names one of its states, and nothing else", () => {
   }
 });
 
+test("a surface's framedContrast says which cells cover its frame, and only Demo Studio declares one", async () => {
+  const file = 'quality/surfaces/login.ts';
+  const reason = "The frame's document is checked by its composition cells.";
+  assert.deepEqual(problems({ ...LOGIN, framedContrast: { reason } }, file), []);
+  for (const [bad, problem] of [
+    [{}, 'framedContrast.reason names the cells'],
+    [{ reason: 'Covered.' }, 'framedContrast.reason names the cells'],
+    [{ reason, extra: 1 }, 'framedContrast has unknown fields: extra'],
+    [true, 'framedContrast is an object'],
+  ] as const) {
+    assert.ok(
+      problems({ ...LOGIN, framedContrast: bad }, file).some((each) => each.includes(problem)),
+      problem,
+    );
+  }
+  const { surfaces } = await loadRegistrations();
+  assert.deepEqual(
+    surfaces.filter((surface) => surface.framedContrast).map((surface) => surface.id),
+    ['demo-studio'],
+  );
+  assert.match(
+    surfaces.find((surface) => surface.id === 'demo-studio')!.framedContrast!.reason,
+    /composition cells/,
+  );
+});
+
 test('a registration file with a problem fails the load', async () => {
   const root = mkdtempSync(path.join(tmpdir(), 'quality-registrations-'));
   try {

@@ -9,6 +9,7 @@ import { PREFERENCE_ROWS, VIEWPORTS } from './matrix';
 import {
   axeFailures,
   colorPropertyFor,
+  nodeSelector,
   runnerFailure,
   type AxeResults,
   type CellContext,
@@ -196,4 +197,14 @@ test("a server's id is stable, names its project, and tags only its own cells' t
     servers.map((each) => each.id),
     [...servers.map((each) => each.id)].sort(),
   );
+});
+
+test('nodeSelector names an element in the page by its one selector, and none inside a frame or a shadow root', () => {
+  const node = (target: unknown[]) => ({ target }) as unknown as Parameters<typeof nodeSelector>[0];
+  assert.equal(nodeSelector(node(['main p.muted'])), 'main p.muted');
+  // A frame's: a part for each document, the frame's first. The last part names nothing in the page.
+  assert.equal(nodeSelector(node(['iframe', '.ee-plate__label'])), null);
+  // A shadow root's: its part is a list.
+  assert.equal(nodeSelector(node([['x-card', 'p']])), null);
+  assert.equal(nodeSelector(node([])), null);
 });
