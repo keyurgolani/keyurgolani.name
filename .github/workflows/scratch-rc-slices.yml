@@ -1,0 +1,95 @@
+# SCRATCH, do not merge (draft PR "scratch evidence, do not merge").
+# Runs --grep slices of the release candidate's own quality plan
+# (quality:full, as rc-quality runs it) on the scratch/kgn/rc-slices head
+# only, in the pinned Playwright image, and uploads each slice's reports.
+# Every job is gated on that head ref, so no other PR runs it, and ci.yml's
+# selector selects nothing for that ref. Slices and counts:
+# kgn-c-rc-risk-scan.md in stream C's notes.
+name: scratch-rc-slices
+
+on:
+  pull_request:
+    branches: [next]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scratch-rc-slices-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: 22.23.4
+  TZ: UTC
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  slice:
+    name: rc-slice-${{ matrix.id }}
+    if: ${{ github.head_ref == 'scratch/kgn/rc-slices' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          # Four visual cells, for the image's quality/fonts.observed.txt. They fail until fonts.txt lands.
+          - id: visual
+            timeout: 30
+            external: ''
+            grep: 'visual\.spec\.ts visual composition:(editorial-evidence|fallback) complete / \S+/platform-neutral/warm-parchment/humanist-ui/system '
+          # Slice 3: the surfaces' whole matrix, and states and work routes on every composition. 368 tests, about 61 min.
+          - id: s3-surfaces-states
+            timeout: 105
+            external: '1'
+            grep: 'cells\.spec\.ts (surface:|composition:\S+ (sparse|missing-media|not-found|complete /work/)\S* ?\S* \S+/platform-neutral/warm-parchment/humanist-ui/system (1440x900|390x844) default )'
+          # acme-reference: 35 dark pack x pack rows (every language, scheme, and typography they hold) and 12 high-contrast rows. 164 tests, about 43 min.
+          - id: acme-sample
+            timeout: 80
+            external: '1'
+            grep: 'cells\.spec\.ts composition:acme-reference complete / acme-reference/((ant-inspired/earthy-clay/accessible-reading|art-deco/ocean-abyss/neutral-ui|atelier-luxury/blue-orange-color-safe/geometric-display|atlassian-inspired/reduced-chroma/technical-sans-mono|bauhaus-geometric/cool-color-safe/editorial-serif|blueprint/neon-city/literary-reading|cyberpunk/pastel-sorbet/multilingual-system|handcrafted-collage/coral-lagoon/humanist-ui|carbon-inspired/graphite/accessible-reading|claymorphic/arctic-aurora/accessible-reading|fluent-2-inspired/botanical-sage/editorial-serif|glassmorphism/desert-terracotta/accessible-reading|industrial/forest-moss/accessible-reading|international-grid/high-contrast/accessible-reading|material-3-inspired/jewel-twilight/accessible-reading|material-expressive-inspired/low-stimulus-warm/accessible-reading|memphis/lavender-dusk/accessible-reading|minimal-flat/neutral-slate/accessible-reading|monochrome-functional/sepia-film/accessible-reading|neobrutalist/oled-black/accessible-reading|neumorphic/paper-ink/accessible-reading|paper-tactile/zinc/accessible-reading|platform-neutral/warm-parchment/accessible-reading|polaris-inspired/sunset-ember/neutral-ui|pixel-interface/blue-orange-color-safe/humanist-ui|primer-inspired/arctic-aurora/multilingual-system|radix-inspired/arctic-aurora/literary-reading|raw-brutalist/arctic-aurora/humanist-ui|retro-web/blue-orange-color-safe/humanist-ui|skeuomorphic/botanical-sage/neutral-ui|soft-organic/blue-orange-color-safe/multilingual-system|spectrum-2-inspired/arctic-aurora/accessible-reading|synthwave/blue-orange-color-safe/technical-sans-mono|terminal-chrome/arctic-aurora/accessible-reading|utility-dense/blue-orange-color-safe/geometric-display)/dark (1440x900 (default|forced-colors|reduced-motion)|390x844 default)|(ant-inspired/iridescent-pearl/accessible-reading|platform-neutral/warm-parchment/humanist-ui|art-deco/iridescent-pearl/accessible-reading|atlassian-inspired/iridescent-pearl/accessible-reading|bauhaus-geometric/iridescent-pearl/accessible-reading|blueprint/iridescent-pearl/accessible-reading|carbon-inspired/iridescent-pearl/accessible-reading|claymorphic/iridescent-pearl/accessible-reading|cyberpunk/iridescent-pearl/accessible-reading|handcrafted-collage/iridescent-pearl/accessible-reading|industrial/iridescent-pearl/accessible-reading|international-grid/iridescent-pearl/accessible-reading)/high-contrast 1440x900 (default|forced-colors))'
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install, with no cache
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: quality:full, the slice's --grep
+        shell: bash
+        env:
+          GREP: ${{ matrix.grep }}
+          EXTERNAL: ${{ matrix.external }}
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+        run: |
+          set --
+          if [ -n "$EXTERNAL" ]; then set -- --external-variant; fi
+          node ci/run.mjs quality-full -- pnpm exec tsx tests/quality/run.ts full -- "$@" --grep "$GREP"
+      - name: Scrub reports
+        id: scrub
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rc-slice-${{ matrix.id }}
+          path: reports/
+          if-no-files-found: error
+          retention-days: 7
