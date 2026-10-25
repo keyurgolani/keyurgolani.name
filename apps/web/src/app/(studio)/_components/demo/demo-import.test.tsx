@@ -397,3 +397,22 @@ test("a working copy this tab kept shows its own report, never one that says it 
   assert.doesNotMatch(renderToStaticMarkup(<ImportReport result={example} />), /data-kept/);
   assert.doesNotMatch(LOCAL_FRAME_FAILED, /finding/i);
 });
+
+test("the host's remount wiring: remount() starts a new nonce, both places a document goes hand deliver() remount, and the frame is the nonce's own element (handoff 2)", () => {
+  const source = readFileSync(new URL('./demo-local-frame.tsx', import.meta.url), 'utf8');
+  const body = (name: string) => {
+    const start = source.indexOf(`function ${name}(`);
+    assert.ok(start > 0, name);
+    return source.slice(start, source.indexOf('\n  }\n', start));
+  };
+  // A new frame document: loading again, on a nonce of its own.
+  assert.match(body('remount'), /setPhase\('loading'\);\s*setNonce\(localNonce\(\)\);/);
+  // The ready handler's document and every later one go through deliver(), with remount.
+  const delivered = [
+    ...source.matchAll(/deliver\(\s*budget\.current,[\s\S]*?\n\s*remount,\n\s*\);/g),
+  ];
+  assert.equal(delivered.length, 2, 'both documents go through deliver() with remount');
+  // And the iframe is localFrameElement's, keyed on the nonce the host holds.
+  assert.match(source, /\{localFrameElement\(nonce, \{ ref: frame, title, viewport, scale \}\)\}/);
+  assert.equal((source.match(/<iframe\b/g) ?? []).length, 1, 'one iframe, in localFrameElement');
+});

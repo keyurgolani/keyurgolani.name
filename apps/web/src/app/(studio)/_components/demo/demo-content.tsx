@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { DemoBackend, LocalSources } from '~/lib/demo/browser-backend';
 import type { ExportResult } from '~/lib/demo/export';
 import {
@@ -17,9 +17,10 @@ import {
 // the export says shows as text, never as markup: a finding's pointer and
 // message, the remote media it lists by kind and host, what it couldn't
 // check, and why it refused. A pick is checked by its count and sizes
-// before a byte of it is read, and an import still in the worker when the
-// task goes is stopped. A working copy this tab kept shows its findings
-// again from the worker's check of it. Nothing here logs, and nothing
+// before a byte of it is read. An import runs to its answer if the visitor
+// leaves the task, and the task shows that answer when they come back,
+// unless Reset demo came in between. A working copy this tab kept shows its
+// findings again from the worker's check of it. Nothing here logs, and nothing
 // leaves the browser: the files go to the worker, and the export to two
 // Blob links in this document.
 
@@ -146,13 +147,15 @@ export function pickRefusal(files: ArrayLike<{ readonly size: number }>): Import
 }
 
 export function ContentTask({ backend, onSource }: ContentTaskProps) {
-  const [busy, setBusy] = useState(false);
+  // An import picked before the task was last open is still running, or answered.
+  const [busy, setBusy] = useState(() => backend.importing() !== null);
   const [report, setReport] = useState<{
     readonly result: ImportResult;
     readonly kept: boolean;
-  } | null>(null);
-  // Aborted once the task goes, which stops an import still in the worker.
-  const mounted = useRef<AbortController | null>(null);
+  } | null>(() => {
+    const last = backend.lastImport();
+    return last ? { result: last, kept: false } : null;
+  });
   const [exported, setExported] = useState<{
     readonly links: readonly { readonly name: string; readonly href: string }[];
     readonly disclosure: ExportResult['disclosure'];
@@ -160,16 +163,25 @@ export function ContentTask({ backend, onSource }: ContentTaskProps) {
   const [exportFailed, setExportFailed] = useState(false);
 
   useEffect(() => {
-    const controller = new AbortController();
-    mounted.current = controller;
-    // The working copy this tab kept: its findings and notices, from the worker's check again.
-    if (backend.localSources()) {
+    let open = true;
+    const running = backend.importing();
+    if (running) {
+      // The import this task started before it closed: its answer, once it comes.
+      const done = (answer: ImportResult | null) => {
+        if (!open) return;
+        setBusy(false);
+        if (answer) setReport({ result: answer, kept: false });
+      };
+      running.then(done, () => done(null));
+    } else if (!backend.lastImport() && backend.localSources()) {
+      // The working copy this tab kept: its findings and notices, from the worker's check again.
       void backend.report().then((result) => {
-        if (controller.signal.aborted || !result) return;
-        setReport((shown) => shown ?? { result, kept: true });
+        if (open && result) setReport((shown) => shown ?? { result, kept: true });
       });
     }
-    return () => controller.abort();
+    return () => {
+      open = false;
+    };
   }, [backend]);
 
   // Each export's Blob URLs go when the next comes, or the task does.
@@ -182,8 +194,6 @@ export function ContentTask({ backend, onSource }: ContentTaskProps) {
 
   async function pick(files: FileList | null) {
     if (!files || files.length === 0) return;
-    const signal = mounted.current?.signal;
-    if (!signal || signal.aborted) return;
     setExported(null);
     // Too many, too few, or too big: refused before a byte is read.
     const early = pickRefusal(files);
@@ -194,20 +204,19 @@ export function ContentTask({ backend, onSource }: ContentTaskProps) {
     setBusy(true);
     try {
       const inputs = await Promise.all([...files].map(inputOf));
-      const answer = await backend.importFiles(inputs, { signal });
-      // The task went, or Reset demo came, while the worker read them: nothing to show.
-      if (signal.aborted || !answer) return;
+      // It runs to its answer if the task closes meanwhile: Studio's frame shows what it imported.
+      const answer = await backend.importFiles(inputs);
+      // Reset demo came while the worker read them: nothing to show.
+      if (!answer) return;
       setReport({ result: answer, kept: false });
       if (answer.kind === 'imported') onSource(backend.localSources());
     } catch {
-      if (!signal.aborted) {
-        setReport({
-          result: { kind: 'refused', code: 'worker_unavailable', diagnostics: [] },
-          kept: false,
-        });
-      }
+      setReport({
+        result: { kind: 'refused', code: 'worker_unavailable', diagnostics: [] },
+        kept: false,
+      });
     } finally {
-      if (!signal.aborted) setBusy(false);
+      setBusy(false);
     }
   }
 
