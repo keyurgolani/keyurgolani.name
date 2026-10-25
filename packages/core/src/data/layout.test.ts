@@ -14,12 +14,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { open, rename } from 'node:fs/promises';
-import {
-  authPaths,
-  preparePrivateDir,
-  probeDataDirectory,
-  writePrivateFile,
-} from './layout.mjs';
+import { authPaths, preparePrivateDir, probeDataDirectory, writePrivateFile } from './layout.mjs';
 
 function scratch(t: TestContext): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'layout-'));
@@ -64,13 +59,13 @@ test("a probe step that fails is the probe's finding, and its directory is still
   assert.deepEqual(readdirSync(dir), []);
   // The rename fails, after the file is written and synced.
   let renamed = 0;
-  const failingRename = async (from: string, to: string) => {
+  const failingRename = (async (from: string, to: string) => {
     renamed += 1;
     assert.ok(statSync(from).isFile());
     assert.equal(path.dirname(from), path.dirname(to));
     assert.notEqual(path.dirname(from), dir, 'the probe runs in a directory of its own');
     return refused();
-  };
+  }) as unknown as typeof rename;
   assert.equal(await probeDataDirectory(dir, { rename: failingRename }), 'data_dir_rename_failed');
   assert.equal(renamed, 1);
   assert.deepEqual(readdirSync(dir), []);
@@ -98,42 +93,49 @@ test('a writer makes its directory and each one above it at 0700 at its first wr
 
 test('a writer refuses a link, a file, a mode other than 0700, or another user, wherever it stands on the way', async (t) => {
   const paths = (dir: string) => authPaths(dir);
-  const cases: [what: string, arrange: (dir: string, elsewhere: string) => void, refusal: RegExp][] =
+  const cases: [
+    what: string,
+    arrange: (dir: string, elsewhere: string) => void,
+    refusal: RegExp,
+  ][] = [
     [
-      ['ephemeral/ a link', (d, e) => symlinkSync(e, paths(d).ephemeral), /^Error: ephemeral is a link/],
-      [
-        'ephemeral/auth/ a link',
-        (d, e) => {
-          mkdirSync(paths(d).ephemeral, { mode: 0o700 });
-          symlinkSync(e, paths(d).auth);
-        },
-        /^Error: ephemeral\/auth is a link/,
-      ],
-      [
-        'ephemeral/auth/ a file',
-        (d) => {
-          mkdirSync(paths(d).ephemeral, { mode: 0o700 });
-          writeFileSync(paths(d).auth, '');
-        },
-        /^Error: ephemeral\/auth isn't a directory/,
-      ],
-      [
-        'ephemeral/ loosened to 0755',
-        (d) => {
-          mkdirSync(paths(d).ephemeral, { mode: 0o700 });
-          chmodSync(paths(d).ephemeral, 0o755);
-        },
-        /^Error: ephemeral isn't 0700/,
-      ],
-      [
-        'ephemeral/auth/sessions/ narrowed to 0500',
-        (d) => {
-          mkdirSync(paths(d).sessions, { recursive: true, mode: 0o700 });
-          chmodSync(paths(d).sessions, 0o500);
-        },
-        /^Error: ephemeral\/auth\/sessions isn't 0700/,
-      ],
-    ];
+      'ephemeral/ a link',
+      (d, e) => symlinkSync(e, paths(d).ephemeral),
+      /^Error: ephemeral is a link/,
+    ],
+    [
+      'ephemeral/auth/ a link',
+      (d, e) => {
+        mkdirSync(paths(d).ephemeral, { mode: 0o700 });
+        symlinkSync(e, paths(d).auth);
+      },
+      /^Error: ephemeral\/auth is a link/,
+    ],
+    [
+      'ephemeral/auth/ a file',
+      (d) => {
+        mkdirSync(paths(d).ephemeral, { mode: 0o700 });
+        writeFileSync(paths(d).auth, '');
+      },
+      /^Error: ephemeral\/auth isn't a directory/,
+    ],
+    [
+      'ephemeral/ loosened to 0755',
+      (d) => {
+        mkdirSync(paths(d).ephemeral, { mode: 0o700 });
+        chmodSync(paths(d).ephemeral, 0o755);
+      },
+      /^Error: ephemeral isn't 0700/,
+    ],
+    [
+      'ephemeral/auth/sessions/ narrowed to 0500',
+      (d) => {
+        mkdirSync(paths(d).sessions, { recursive: true, mode: 0o700 });
+        chmodSync(paths(d).sessions, 0o500);
+      },
+      /^Error: ephemeral\/auth\/sessions isn't 0700/,
+    ],
+  ];
   for (const [what, arrange, refusal] of cases) {
     const dir = scratch(t);
     const elsewhere = scratch(t);
@@ -145,7 +147,7 @@ test('a writer refuses a link, a file, a mode other than 0700, or another user, 
   const dir = scratch(t);
   mkdirSync(paths(dir).ephemeral, { mode: 0o700 });
   const uid = process.getuid!();
-  t.mock.method(process, 'getuid', () => uid + 1);
+  t.mock.method(process as { getuid: () => number }, 'getuid', () => uid + 1);
   await assert.rejects(
     preparePrivateDir(dir, paths(dir).sessions),
     /^Error: ephemeral belongs to another user/,

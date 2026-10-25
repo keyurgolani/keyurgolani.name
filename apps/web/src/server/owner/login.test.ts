@@ -233,7 +233,7 @@ test('login issues a new token and ends the session of any cookie sent with it',
   }
 });
 
-test("the first sign-in on a fresh data directory makes ephemeral/auth/sessions/ at 0700, and the session works", async (t) => {
+test('the first sign-in on a fresh data directory makes ephemeral/auth/sessions/ at 0700, and the session works', async (t) => {
   const { send, dataDir } = await setup(t);
   // Startup made the store's ephemeral/, and the provider wrote the
   // fingerprint into ephemeral/auth/. No session has been written yet.

@@ -274,7 +274,7 @@ test('a session write refuses an auth directory another user owns', async (t) =>
   mkdirSync(authPaths(dir).sessions, { recursive: true, mode: 0o700 });
   // Only root can chown, so the server runs as another user instead.
   const uid = process.getuid!();
-  t.mock.method(process, 'getuid', () => uid + 1);
+  t.mock.method(process as { getuid: () => number }, 'getuid', () => uid + 1);
   await assert.rejects(filesystemSessionStore(dir).put(record()), /belongs to another user/);
   assert.deepEqual(readdirSync(authPaths(dir).sessions), []);
 });
