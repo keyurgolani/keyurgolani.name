@@ -10,6 +10,10 @@
 //   and each --ui-<key> in a language;
 // - bundle-size: the stylesheet within the pack's css budget, its fonts
 //   within its font budget, and its declared cost what it ships;
+// - reduced-motion: a design language's motion-fast is at most the limit
+//   quality/thresholds.json's reducedMotion.transitionMs sets (200 ms),
+//   since under reduced motion the platform runs every entrance, exit, and
+//   standard or slow duration at motion-fast (platform.ts, #11);
 // - boundary-isolation: nothing outside the pack's own layer and scope.
 //   The file starts with the layer order and opens one layer, its axis's;
 //   every rule selects the pack's own boundary attribute; a language's own
@@ -32,7 +36,12 @@ import {
 } from '../tokens';
 import { AXIS_BY_KIND, type PackManifest } from '../validate-pack';
 
-export const PACK_GATES = ['token-coverage', 'bundle-size', 'boundary-isolation'] as const;
+export const PACK_GATES = [
+  'token-coverage',
+  'bundle-size',
+  'reduced-motion',
+  'boundary-isolation',
+] as const;
 export type PackGate = (typeof PACK_GATES)[number];
 
 /** A pack gate's failure: one pack, and the role or file it's about. */
@@ -195,8 +204,28 @@ function roleOf(kind: PackKind, token: string): string {
   return token.slice(TOKEN_PREFIX[kind].length);
 }
 
+/**
+ * quality/thresholds.json's reducedMotion.transitionMs, the default for
+ * callers that don't pass the file's: `pnpm check:appearance` reads it, and
+ * apps/web/scripts/appearance-targets.test.ts fails when the two differ.
+ */
+export const REDUCED_MOTION_MS = 200;
+
+/** What the gates hold a pack to, past its own manifest. */
+export interface PackGateOptions {
+  /** The longest motion-fast a language may set, in ms: under reduced motion every duration is it. */
+  readonly reducedMotionMs?: number;
+}
+
+/** A CSS time in ms, or null for anything else. */
+function milliseconds(value: string): number | null {
+  const match = /^(\d+(?:\.\d+)?|\.\d+)(ms|s)$/.exec(value.trim());
+  if (!match) return null;
+  return Number.parseFloat(match[1]!) * (match[2] === 's' ? 1000 : 1);
+}
+
 /** Runs every pack gate over one compiled pack. */
-export function gatePack(pack: GatedPack): PackGateFailure[] {
+export function gatePack(pack: GatedPack, options: PackGateOptions = {}): PackGateFailure[] {
   const { kind, manifest } = pack;
   const axis = AXIS_BY_KIND[kind];
   const failures: PackGateFailure[] = [];
@@ -225,6 +254,26 @@ export function gatePack(pack: GatedPack): PackGateFailure[] {
       'bundle-size',
       `declares ${manifest.cost.assets} assets of ${manifest.cost.assetBytes} bytes, and ships ${pack.assets.length} of ${fontBytes}.`,
     );
+  }
+
+  // reduced-motion: under reduced motion, every duration is the language's fast one.
+  if (kind === 'design-language') {
+    const limit = options.reducedMotionMs ?? REDUCED_MOTION_MS;
+    const fast = (manifest as DesignLanguageManifest).tokens['motion-fast'];
+    const ms = milliseconds(fast);
+    if (ms === null) {
+      fail(
+        'reduced-motion',
+        `sets motion-fast to ${fast}, which isn't a time in ms or s, so reduced motion can't be held to ${limit}ms.`,
+        'motion-fast',
+      );
+    } else if (ms > limit) {
+      fail(
+        'reduced-motion',
+        `sets motion-fast to ${fast}, over the ${limit}ms reduced motion allows: under reduced motion every entrance, exit, and transition runs at motion-fast.`,
+        'motion-fast',
+      );
+    }
   }
 
   if (!pack.stylesheet) {

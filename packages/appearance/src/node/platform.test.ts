@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { LAYER_ORDER } from '../layers';
 import { COLOR_ROLES, LANGUAGE_KEYS } from '../tokens';
+import { catalogPacks, packPackages } from './catalog';
 import { compilePlatform, layerRules, platformStylesheet } from './platform';
 import { readLanguageStylesheet } from './stylesheet';
 
@@ -92,6 +94,9 @@ test('reduced motion keeps motion-fast feedback and stops or fades the rest', ()
     assert.equal(reduced.get('--ui-motion-enter'), 'fade');
     assert.equal(reduced.get('--ui-motion-exit'), 'fade');
     assert.equal(reduced.get('--ui-motion-emphasis'), 'none');
+    // Every duration is the fast one, which the pack gate holds to the reduced-motion limit (#11).
+    assert.equal(reduced.get('--ui-motion-standard'), 'var(--ui-motion-fast)');
+    assert.equal(reduced.get('--ui-motion-slow'), 'var(--ui-motion-fast)');
   }
   const paused = declarations(
     '  [data-appearance-boundary][data-motion="static"]',
@@ -136,7 +141,7 @@ test('reduced transparency and a browser without backdrop-filter get opaque surf
   }
 });
 
-test('high contrast makes the signature fill solid text-primary and drops the glow, however it is asked for', () => {
+test('high contrast makes the signature fill solid text-primary and drops the glow and the texture, however it is asked for', () => {
   const solid = 'linear-gradient(var(--color-text-primary), var(--color-text-primary))';
   const explicit = declarations(
     '  [data-appearance-boundary][data-display-mode="high-contrast"],\n  [data-appearance-boundary][data-contrast="more"]',
@@ -149,7 +154,19 @@ test('high contrast makes the signature fill solid text-primary and drops the gl
   for (const block of [explicit, preferred]) {
     assert.equal(block.get('--ui-signature-fill'), solid);
     assert.equal(block.get('--ui-emphasis-glow'), 'none');
+    // Every high-contrast set draws border-subtle in the text color, so a texture would stripe the text's ground (#11).
+    assert.equal(block.get('--ui-texture'), 'none');
   }
+  // The one block covers both the display mode and data-contrast="more".
+  for (const selector of ['[data-display-mode="high-contrast"]', '[data-contrast="more"]']) {
+    assert.ok(css.includes(`[data-appearance-boundary]${selector}`), selector);
+  }
+  // Print, where a dark-only scheme prints its light high-contrast set, drops it too.
+  const print = declarations('    [data-appearance-boundary]', '@media print');
+  assert.equal(print.get('--ui-texture'), 'none');
+  // As forced colors already does.
+  const forced = declarations('    [data-appearance-boundary]', '@media (forced-colors: active)');
+  assert.equal(forced.get('--ui-texture'), 'none');
 });
 
 test('every token a language may move, blur, or fade a part through is one the accessibility layer sets', () => {
@@ -252,4 +269,57 @@ test('the platform file is named by its content', () => {
   assert.match(file.name, /^_platform\.[0-9a-f]{12}\.css$/);
   assert.equal(new TextDecoder().decode(file.bytes), css);
   assert.equal(compilePlatform().sha256, file.sha256);
+});
+
+/** `value` with each var(--ui-*) replaced by what `tokens` sets it to, until none is left. */
+function resolveTokens(value: string, tokens: Readonly<Record<string, string>>): string {
+  let resolved = value;
+  for (let depth = 0; depth < 8 && /var\(--ui-/.test(resolved); depth++) {
+    resolved = resolved.replace(/var\((--ui-[a-z0-9-]+)\)/g, (_, name: string) => {
+      assert.ok(tokens[name] !== undefined, `${name} is set`);
+      return tokens[name]!;
+    });
+  }
+  assert.doesNotMatch(resolved, /var\(--ui-/, value);
+  return resolved;
+}
+
+test("under reduced motion, a toast's and an open dialog's fade, and a tooltip's, run at the language's fast duration, in every registered language (#11)", () => {
+  const animation = (selector: string) => {
+    const start = css.indexOf(`  ${selector} {\n`);
+    assert.ok(start >= 0, selector);
+    const body = css.slice(start, css.indexOf('}', start));
+    const value = /animation: ([^;]+);/.exec(body)?.[1];
+    assert.ok(value, `${selector} animates`);
+    // The shorthand's name, then its duration.
+    return value.split(' ')[1]!;
+  };
+  const durations = {
+    toast: animation("[data-ui-slot='toast']"),
+    dialog: animation("[data-ui-slot='dialog'][open]"),
+    tooltip: animation("[data-ui-slot='tooltip']:popover-open"),
+  };
+  const reducedBlocks = [
+    declarations('    [data-appearance-boundary]', '@media (prefers-reduced-motion: reduce)'),
+    declarations('  [data-appearance-boundary][data-motion="reduced"]', '@layer accessibility'),
+  ];
+  const root = fileURLToPath(new URL('../../../../', import.meta.url));
+  const languages = catalogPacks(root, packPackages(root)).filter(
+    ({ axis }) => axis === 'designLanguage',
+  );
+  assert.ok(languages.length >= 30, `${languages.length} languages`);
+  for (const pack of languages) {
+    const own = (pack.manifest as { tokens: Record<string, string> }).tokens;
+    const language = Object.fromEntries(
+      Object.entries(own).map(([key, value]) => [`--ui-${key}`, value]),
+    );
+    for (const reduced of reducedBlocks) {
+      const tokens = { ...language, ...Object.fromEntries(reduced) };
+      for (const [part, duration] of Object.entries(durations)) {
+        assert.equal(resolveTokens(duration, tokens), own['motion-fast'], `${pack.id} ${part}`);
+      }
+    }
+    // At full motion the toast keeps the language's own standard duration.
+    assert.equal(resolveTokens(durations.toast, language), own['motion-standard'], pack.id);
+  }
 });

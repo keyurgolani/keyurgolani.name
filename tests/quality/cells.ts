@@ -77,13 +77,14 @@ import {
   type PreferenceRow,
   type Viewport,
 } from './lib/matrix';
-import type {
-  CellField,
-  NotApplicable,
-  PerformanceTier,
-  Profile,
-  Registrations,
-  SurfaceRegistration,
+import {
+  unitProblems,
+  type CellField,
+  type NotApplicable,
+  type PerformanceTier,
+  type Profile,
+  type Registrations,
+  type SurfaceRegistration,
 } from './lib/registration';
 import { APPEARANCE_STATE, STATE_FIXTURES, type StateFixture } from './lib/state-fixtures';
 import { SWEEP_VIEWPORT, sweeps, type SweepCheck } from './lib/sweep';
@@ -356,6 +357,16 @@ export function planCells({
   sweepChecks,
 }: PlanInput): Plan {
   const registry = createAppearanceRegistry(meta);
+  // A unit for an id this build doesn't register would exclude nothing, so it fails the plan.
+  const strays = unitProblems(registrations.units, [
+    ...meta.VARIANTS.map(({ manifest }) => manifest.id),
+    ...(meta.PACKS ?? []).map((pack) => pack.manifest.id),
+  ]);
+  if (strays.length > 0) {
+    throw new Error(
+      `The plan has a unit for nothing registered:\n${strays.map((p) => `  - ${p}`).join('\n')}`,
+    );
+  }
   const variants = meta.VARIANTS.map(({ manifest }) => manifest).filter(
     (manifest) => !manifest.id.startsWith('fixture-'),
   );

@@ -18,6 +18,7 @@ import { tupleKey } from './coverage';
 import { isReason } from './lib/checks';
 import { requiredChecks } from './lib/checks';
 import { PREFERENCE_ROWS, VIEWPORTS } from './lib/matrix';
+import { REFERENCE_ID } from '../external-variant/id';
 import { loadRegistrations, type Registrations } from './lib/registration';
 import { checkoutMeta, clone, fallbackPacks, TIERS, withTierPacks } from './plan-fixtures';
 
@@ -370,6 +371,109 @@ test("a unit's notApplicable skips the cells it names with its reason, and an en
       .every((each) => each.skip !== 'Sparse has nothing to reflow at 390.'),
   );
   for (const each of other) assert.equal(each.skip, undefined);
+});
+
+/**
+ * `meta` with the reference variant registered, as --external-variant's
+ * install registers it, standing in as Obsidian Atelier's twin.
+ */
+function withReference(meta: BuildMeta): BuildMeta {
+  const base = meta.VARIANTS.find(({ manifest }) => manifest.id === 'obsidian-atelier')!;
+  return {
+    ...meta,
+    VARIANTS: [
+      ...meta.VARIANTS,
+      { ...base, manifest: { ...base.manifest, id: REFERENCE_ID, name: REFERENCE_ID } },
+    ],
+  } as BuildMeta;
+}
+
+/** The checkout's registrations without the unit for `id`: the plan before it had one. */
+const withoutUnit = (id: string): Registrations => ({
+  ...registrations,
+  units: registrations.units.filter((unit) => unit.id !== id),
+});
+
+const testKeys = (plan: ReturnType<typeof planCells>) =>
+  plan.tests.map((each) => `${each.cell.id} ${each.viewport.id} ${each.row.id}`);
+
+test("the reference variant's unit carries the in-repo units' high-contrast exclusion to its cells, and changes nothing else", () => {
+  const unit = registrations.units.find(({ id }) => id === REFERENCE_ID);
+  assert.ok(unit, `quality/units/${REFERENCE_ID}.ts registers`);
+  // The same entry, with the same reason, as each in-repo composition's.
+  const fallback = registrations.units.find(({ id }) => id === 'fallback')!;
+  assert.deepEqual(unit.notApplicable, fallback.notApplicable);
+  assert.deepEqual(unit.notApplicable[0]!.match, { row: 'high-contrast' });
+  const reason = unit.notApplicable[0]!.reason;
+
+  const meta = withReference(checkoutMeta());
+  const plan = planCells({ meta, registrations, mode: 'full' });
+  const before = planCells({ meta, registrations: withoutUnit(REFERENCE_ID), mode: 'full' });
+  const row = (each: (typeof plan.tests)[number]) =>
+    each.cell.target === REFERENCE_ID && each.row.id === 'high-contrast';
+  const ran = before.tests.filter((each) => row(each) && each.skip === undefined);
+  assert.ok(ran.length > 0, "without the unit, the row runs in the reference variant's cells");
+  const skipped = plan.tests.filter(row);
+  assert.ok(skipped.length > 0);
+  for (const each of skipped) assert.ok(each.skip, each.cell.id);
+  assert.equal(plan.tests.filter((each) => row(each) && each.skip === reason).length, ran.length);
+  assert.ok(
+    plan.tests.some((each) => each.cell.target === REFERENCE_ID && each.skip === undefined),
+    'its other rows still run',
+  );
+
+  // The same tests, each skipped as before, but the row in the reference variant's cells.
+  assert.deepEqual(testKeys(plan), testKeys(before));
+  const changed = plan.tests.filter((each, at) => each.skip !== before.tests[at]!.skip);
+  assert.equal(changed.length, ran.length);
+  for (const each of changed) assert.ok(row(each) && each.skip === reason, each.cell.id);
+  assert.deepEqual(plan.cells, before.cells);
+  assert.deepEqual(plan.reasons, before.reasons);
+});
+
+test('without the reference variant, its unit is accepted and plans nothing', () => {
+  const meta = checkoutMeta();
+  assert.ok(!meta.VARIANTS.some(({ manifest }) => manifest.id === REFERENCE_ID));
+  assert.ok(registrations.units.some(({ id }) => id === REFERENCE_ID));
+  for (const mode of ['pr', 'full'] as const) {
+    const plan = planCells({ meta, registrations, mode });
+    const before = planCells({ meta, registrations: withoutUnit(REFERENCE_ID), mode });
+    assert.deepEqual(
+      plan.tests.map((each) => [each.cell.id, each.viewport.id, each.row.id, each.skip]),
+      before.tests.map((each) => [each.cell.id, each.viewport.id, each.row.id, each.skip]),
+    );
+    assert.ok(plan.cells.every((cell) => cell.target !== REFERENCE_ID));
+  }
+});
+
+test('a unit for any other id the build registers as no variant or pack fails the plan', () => {
+  const unit = (id: string) => ({
+    id,
+    interactions: [],
+    primaryActions: [],
+    notApplicable: [
+      { match: { row: 'high-contrast' }, reason: 'A stray unit names nothing here.' },
+    ],
+  });
+  const stray = { ...registrations, units: [...registrations.units, unit('no-such-variant')] };
+  const named =
+    /quality\/units\/no-such-variant\.ts names no-such-variant, which this build registers as no variant or pack/;
+  assert.throws(
+    () => planCells({ meta: checkoutMeta(), registrations: stray, mode: 'full' }),
+    named,
+  );
+  // Registering the reference variant excuses its unit alone.
+  assert.throws(
+    () => planCells({ meta: withReference(checkoutMeta()), registrations: stray, mode: 'pr' }),
+    named,
+  );
+  // A pack's unit is a registered id's.
+  const pack = (checkoutMeta().PACKS ?? []).find((each) => !each.fixture)!.manifest.id;
+  planCells({
+    meta: checkoutMeta(),
+    registrations: { ...registrations, units: [...registrations.units, unit(pack)] },
+    mode: 'pr',
+  });
 });
 
 test('the plan is the same each time', () => {

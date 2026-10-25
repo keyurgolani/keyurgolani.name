@@ -23,6 +23,7 @@ import {
   reaches,
   worstRatio,
 } from './lib/a11y/contrast';
+import { clipAround, ringFindings, ringLength } from './lib/a11y/interaction';
 import { animationFindings, killSwitches } from './lib/a11y/motion';
 import { requiredChecks } from './lib/checks';
 import { displayModeProblems } from './lib/emulation';
@@ -326,6 +327,102 @@ test("on a framed surface, the sampler leaves out only the incomplete items axe 
     ['main .studio-content p'],
   );
   assert.deepEqual(looked, ['main .studio-content p'], 'nothing samples the frame item');
+});
+
+/** A white `width` by `height` image, as a blurred clip, with `ink` painted black, as its focused one. */
+function canvas(
+  width: number,
+  height: number,
+  ink: (x: number, y: number) => boolean = () => false,
+) {
+  const data = new Uint8Array(width * height * 4).fill(255);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (ink(x, y)) data.set([0, 0, 0, 255], (y * width + x) * 4);
+    }
+  }
+  return { width, height, data };
+}
+
+/**
+ * The clips of `box` in `viewport`, the focused one with a ring `offset` px
+ * out from the box, each side as many px wide as `sides` gives it.
+ */
+function ringClips(
+  box: { x: number; y: number; width: number; height: number },
+  viewport: { width: number; height: number },
+  sides: { top: number; right: number; bottom: number; left: number },
+  offset = 2,
+) {
+  const margin = 5;
+  const clip = clipAround(box, margin, viewport)!;
+  const left = box.x - clip.x - offset;
+  const top = box.y - clip.y - offset;
+  const right = box.x + box.width - clip.x + offset;
+  const bottom = box.y + box.height - clip.y + offset;
+  const inside = (x: number, y: number) =>
+    x >= left - 2 && x < right + 2 && y >= top - 2 && y < bottom + 2;
+  const focused = canvas(
+    clip.width,
+    clip.height,
+    (x, y) =>
+      inside(x, y) &&
+      ((y < top && y >= top - sides.top) ||
+        (y >= bottom && y < bottom + sides.bottom) ||
+        (x < left && x >= left - sides.left) ||
+        (x >= right && x < right + sides.right)),
+  );
+  return { focused, blurred: canvas(clip.width, clip.height), margin, clip };
+}
+
+const rules = (findings: readonly { rule: string }[]) => findings.map(({ rule }) => rule);
+
+test("a stop's ring length counts each side by the span of it the viewport shows (#11)", () => {
+  // In view: every side, whole.
+  assert.equal(
+    ringLength({ x: 10, y: 10, width: 100, height: 40 }, 5, { width: 200, height: 200 }),
+    280,
+  );
+  // Cut by the bottom edge: the top, and the 28px of each side above the fold. No bottom.
+  assert.equal(
+    ringLength({ x: 20, y: 740, width: 100, height: 60 }, 5, { width: 200, height: 768 }),
+    156,
+  );
+  // Cut by the left edge too: the 70px of the top in view, and no left side.
+  assert.equal(
+    ringLength({ x: -30, y: 740, width: 100, height: 60 }, 5, { width: 200, height: 768 }),
+    98,
+  );
+});
+
+test('a stop cut by the bottom edge passes with a 2px ring on what shows, and fails when a side it shows has 1px (#11)', () => {
+  const box = { x: 20, y: 30, width: 40, height: 300 };
+  const viewport = { width: 200, height: 200 };
+  const whole = ringClips(box, viewport, { top: 2, right: 2, bottom: 2, left: 2 });
+  assert.deepEqual(
+    ringFindings(whole.focused, whole.blurred, box, whole.margin, viewport, whole.clip),
+    [],
+  );
+  const thin = ringClips(box, viewport, { top: 2, right: 1, bottom: 2, left: 2 });
+  assert.deepEqual(
+    rules(ringFindings(thin.focused, thin.blurred, box, thin.margin, viewport, thin.clip)),
+    ['perimeter'],
+  );
+});
+
+test('a 1px ring round a stop in view, as the thin-indicator case draws, still fails the perimeter (#11)', () => {
+  const box = { x: 40, y: 40, width: 60, height: 24 };
+  const viewport = { width: 200, height: 200 };
+  const thin = ringClips(box, viewport, { top: 1, right: 1, bottom: 1, left: 1 }, 3);
+  assert.deepEqual(
+    rules(ringFindings(thin.focused, thin.blurred, box, thin.margin, viewport, thin.clip)),
+    ['perimeter'],
+  );
+  const none = ringClips(box, viewport, { top: 0, right: 0, bottom: 0, left: 0 });
+  assert.deepEqual(
+    rules(ringFindings(none.focused, none.blurred, box, none.margin, viewport, none.clip)),
+    ['visible'],
+  );
 });
 
 /** Whether axe runs rule `id`, tagged `tags`, under `options`, as axe-core's ruleShouldRun decides. */
