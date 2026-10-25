@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import type { DemoBackend, LocalSources } from '~/lib/demo/browser-backend';
 import { demoStateLines, SANDBOX_LINE } from '~/lib/demo/state-lines';
 import {
@@ -23,6 +23,7 @@ import { StudioFrame } from '../shell/studio-frame';
 import { ContentTask } from './demo-content';
 import { DemoFrame } from './demo-frame';
 import { LocalFrameHost } from './demo-local-frame';
+import { NARROW_STUDIO } from './frame-gate';
 
 // Demo Studio (#9, design note sections 2 and 3): Studio's frame, with the
 // sandbox line in its header, over the demo's three tasks. Appearance has a
@@ -56,6 +57,12 @@ export interface DemoStudioProps {
   readonly reference?: DemoReferenceProps | null;
   /** What the frame shows as the backend arrives: the source its URL named. */
   readonly initialSource?: DemoSource;
+  /**
+   * Whether the frame may load its document from the start, as it may once
+   * its gate let it (frame-gate.ts). The page starts without: the frame
+   * waits until its stage is on screen.
+   */
+  readonly initialFrameRequested?: boolean;
 }
 
 export interface DemoReferenceProps {
@@ -91,6 +98,29 @@ function useSystemReducesMotion(): boolean {
   );
 }
 
+function subscribeToWidth(change: () => void) {
+  const query = window.matchMedia(NARROW_STUDIO);
+  query.addEventListener('change', change);
+  return () => query.removeEventListener('change', change);
+}
+
+/** Whether Studio is at a phone's width (frame-gate.ts): false on the server. */
+function useNarrowStudio(): boolean {
+  return useSyncExternalStore(
+    subscribeToWidth,
+    () => window.matchMedia(NARROW_STUDIO).matches,
+    () => false,
+  );
+}
+
+/**
+ * The frame's viewport: the one the visitor picked, or until they pick one,
+ * the mobile preset at a phone's width and the desktop preset otherwise.
+ */
+export function frameViewportId(picked: Viewport['id'] | null, narrow: boolean): Viewport['id'] {
+  return picked ?? (narrow ? 'mobile' : 'desktop');
+}
+
 function subscribeToHash(change: () => void) {
   window.addEventListener('hashchange', change);
   return () => window.removeEventListener('hashchange', change);
@@ -116,6 +146,7 @@ export function DemoStudio({
   task: initialTask,
   reference = null,
   initialSource = 'sample',
+  initialFrameRequested = false,
 }: DemoStudioProps) {
   const rules: SelectionRules = useMemo(() => ({ catalog, schemeModes }), [catalog, schemeModes]);
   const tasks = useMemo(() => tasksFor(policy.allowed, 'demo'), [policy.allowed]);
@@ -132,9 +163,18 @@ export function DemoStudio({
   const [source, setSource] = useState<DemoSource>(reference ? initialSource : 'sample');
   const showing: DemoSource = reference ? source : 'sample';
   const [local, setLocal] = useState<LocalSources | null>(() => backend?.localSources() ?? null);
-  const [viewportId, setViewportId] = useState<Viewport['id']>('desktop');
+  const narrow = useNarrowStudio();
+  const [pickedViewport, setViewportId] = useState<Viewport['id'] | null>(null);
+  const viewportId = frameViewportId(pickedViewport, narrow);
   const [motion, setMotion] = useState<'system' | 'reduce'>('system');
   const systemReduces = useSystemReducesMotion();
+  // Whether the frame was let load its document (frame-gate.ts), kept across tasks.
+  const [frameRequested, setFrameRequested] = useState(initialFrameRequested);
+  const requestFrame = useCallback(() => setFrameRequested(true), []);
+  const load: FrameLoad = {
+    requested: frameRequested,
+    onRequest: requestFrame,
+  };
 
   // A backend the page hands over later brings its own selection, read as this renders.
   const [shown, setShown] = useState(backend);
@@ -305,6 +345,7 @@ export function DemoStudio({
               onViewport={setViewportId}
               onMotion={setMotion}
               onChoose={(axis, value) => void choose(axis, value)}
+              load={load}
               source={showing}
               {...(reference ? { referenceName: reference.name } : {})}
             />
@@ -331,6 +372,7 @@ export function DemoStudio({
                 local={local}
                 viewportId={viewportId}
                 reduced={motion === 'reduce' && !systemReduces}
+                load={load}
                 source={showing}
                 {...(reference ? { referenceName: reference.name } : {})}
               />
@@ -367,6 +409,7 @@ export function DemoStudio({
                 local={local}
                 viewportId={viewportId}
                 reduced={motion === 'reduce' && !systemReduces}
+                load={load}
                 source={showing}
                 {...(reference ? { referenceName: reference.name } : {})}
               />
@@ -384,6 +427,12 @@ interface FrameSource {
   readonly referenceName?: string;
 }
 
+/** When the sample's or the reference's frame loads its first document (frame-gate.ts). */
+interface FrameLoad {
+  readonly requested: boolean;
+  readonly onRequest: () => void;
+}
+
 /**
  * The frame: the read-only reference while the visitor asked for it, else the
  * visitor's own documents in /preview/local while this tab holds them, else
@@ -396,6 +445,7 @@ function ContentFrame({
   local,
   viewportId,
   reduced,
+  load,
   source,
   referenceName,
 }: {
@@ -405,6 +455,7 @@ function ContentFrame({
   local: LocalSources | null;
   viewportId: Viewport['id'];
   reduced: boolean;
+  load: FrameLoad;
 } & FrameSource) {
   const viewport = VIEWPORTS.find(({ id }) => id === viewportId) ?? VIEWPORTS[0]!;
   const name = optionNote(catalog, 'variant', selection.variant).option?.name ?? selection.variant;
@@ -430,6 +481,8 @@ function ContentFrame({
       src={frameSource(selection, rules, { reduceMotion: reduced, source })}
       title={`${what}, ${name}, ${viewportLabel(viewport)}`}
       viewport={viewport}
+      requested={load.requested}
+      onRequest={load.onRequest}
     />
   );
 }
@@ -445,6 +498,7 @@ function PreviewTask({
   onViewport,
   onMotion,
   onChoose,
+  load,
   source,
   referenceName,
 }: {
@@ -458,6 +512,7 @@ function PreviewTask({
   onViewport: (id: Viewport['id']) => void;
   onMotion: (motion: 'system' | 'reduce') => void;
   onChoose: (axis: CatalogAxis, value: string) => void;
+  load: FrameLoad;
 } & FrameSource) {
   const label = catalog.axes.find(({ axis }) => axis === 'displayMode')?.label ?? 'Display mode';
   return (
@@ -520,6 +575,7 @@ function PreviewTask({
         local={local}
         viewportId={viewportId}
         reduced={motion === 'reduce' && !systemReduces}
+        load={load}
         source={source}
         {...(referenceName ? { referenceName } : {})}
       />

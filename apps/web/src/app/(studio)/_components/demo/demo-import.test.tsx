@@ -203,7 +203,14 @@ test("the local frame keeps the demo frame's sandbox, scripts alone, and loads o
 test('while this tab holds an imported pair the frame is /preview/local, otherwise /sample, and the page names no source', async () => {
   const session = new FakeStorage();
   const sample = renderToStaticMarkup(
-    <DemoStudio catalog={CATALOG} policy={POLICY} backend={backend(session)} task="content" />,
+    <DemoStudio
+      catalog={CATALOG}
+      policy={POLICY}
+      backend={backend(session)}
+      task="content"
+      // The sample's frame once its gate let it load (frame-gate.test.tsx has the gate).
+      initialFrameRequested
+    />,
   );
   assert.match(frames(sample)[0]!.src ?? '', /^\/sample/);
   assert.doesNotMatch(sample, /data-source="local"/);
@@ -433,6 +440,7 @@ test('with a pair imported and the reference offered, the frame is the reference
         task="content"
         reference={reference}
         initialSource={initialSource}
+        initialFrameRequested
       />,
     );
   const asked = render('reference');

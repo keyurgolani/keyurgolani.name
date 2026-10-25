@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { fitScale, FRAME_ATTRIBUTES, type Viewport } from '~/lib/preview-frame';
+import { whenOnScreen } from './frame-gate';
 
 // Demo Studio's preview frame (#9, design note section 1): the server-rendered
 // sample at /sample, or the read-only reference at /reference, with the
@@ -11,7 +12,8 @@ import { fitScale, FRAME_ATTRIBUTES, type Viewport } from '~/lib/preview-frame';
 // channel, and never loads a /preview path: the demo mints nothing. Like
 // #7's PreviewSurface, it lays the document out at the viewport's width and
 // scales it to the room it has, from lib/preview-frame.ts, and stays hidden
-// until the document has loaded.
+// until the document has loaded. Its first document waits for its stage to
+// come on screen (frame-gate.ts).
 
 /** The one sandbox a demo frame gets, the sample's and the reference's alike: scripts, and nothing else. */
 export const DEMO_FRAME_SANDBOX = 'allow-scripts';
@@ -47,12 +49,23 @@ export interface DemoFrameProps {
   /** What the frame shows, for its accessible name. */
   readonly title: string;
   readonly viewport: Viewport;
+  /**
+   * Whether a stage on this page was already let load, which the page keeps
+   * across its tasks. Absent, the frame keeps its own.
+   */
+  readonly requested?: boolean;
+  /** Hears that the stage was let load. */
+  readonly onRequest?: () => void;
 }
 
-export function DemoFrame({ src, title, viewport }: DemoFrameProps) {
+export function DemoFrame({ src, title, viewport, requested: given, onRequest }: DemoFrameProps) {
   const stage = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
   const [loaded, setLoaded] = useState<string | null>(null);
+  // Whether the stage may load a document yet: once it may, it never waits again.
+  const [own, setOwn] = useState(false);
+  const requested = given ?? own;
+  const allowed = isDemoFrameSource(src);
 
   // Fit: the frame scales down to the room it has, its layout width the viewport's.
   useEffect(() => {
@@ -65,14 +78,24 @@ export function DemoFrame({ src, title, viewport }: DemoFrameProps) {
     return () => observer.disconnect();
   }, [viewport]);
 
-  if (!isDemoFrameSource(src)) {
+  // The gate: the first document loads once the stage comes on screen.
+  useEffect(() => {
+    const surface = stage.current;
+    if (requested || !surface) return;
+    return whenOnScreen(surface, () => {
+      setOwn(true);
+      onRequest?.();
+    });
+  }, [requested, allowed, onRequest]);
+
+  if (!allowed) {
     return (
       <p className="studio-alert" role="alert">
         This preview can only show the demo&apos;s own pages.
       </p>
     );
   }
-  const ready = loaded === src;
+  const ready = requested && loaded === src;
   return (
     <div
       ref={stage}
@@ -85,11 +108,15 @@ export function DemoFrame({ src, title, viewport }: DemoFrameProps) {
         key={src}
         className="preview-surface__frame"
         title={title}
-        src={src}
+        // No source until the gate lets the stage load: then this one, and each after it.
+        src={stageSource(src, requested)}
         sandbox={DEMO_FRAME_SANDBOX}
         referrerPolicy={FRAME_ATTRIBUTES.referrerPolicy}
         allow={FRAME_ATTRIBUTES.allow}
-        onLoad={() => setLoaded(src)}
+        // A frame with no source loads about:blank, which isn't the document.
+        onLoad={() => {
+          if (requested) setLoaded(src);
+        }}
         style={{
           inlineSize: `${viewport.width}px`,
           blockSize: `${viewport.height}px`,
@@ -99,4 +126,9 @@ export function DemoFrame({ src, title, viewport }: DemoFrameProps) {
       />
     </div>
   );
+}
+
+/** The frame's `src`: none until the stage may load, then the source it shows. */
+export function stageSource(src: string, requested: boolean): string | undefined {
+  return requested ? src : undefined;
 }
