@@ -469,17 +469,30 @@ const BORDER_FIX_WORDS = { neumorphic: 'hairline control borders' };
  * Focus rings the prototype draws too thin for #11's focus check, which
  * holds a ring's 3:1 change to the area of a 2px ring round the control
  * (quality/thresholds.json's focus.perimeterPx). A 2px ring round a pill's
- * or an organic radius's corners covers less than that, so it's 3px.
+ * or an organic radius's corners covers less than that, so it's 3px. A
+ * 3px double ring is two 1px lines and a 1px gap, and a 4px one two 1px
+ * lines and a 2px gap, so art-deco's is 5px, two 2px lines. blueprint's
+ * 3px dashed ring loses its gaps, so it's 4px.
  */
 export const FOCUS_FIXES = {
   'material-3-inspired': '3px',
   'material-expressive-inspired': '3px',
   'soft-organic': '3px',
+  'art-deco': '5px',
+  blueprint: '4px',
 };
 
-/** The caveat a widened focus ring adds, from the prototype's width. */
-function focusFixCaveat(width, prototype) {
-  return `Its focus ring is ${width}, not the prototype's ${prototype}: at ${prototype}, its rounded corners leave the ring short of the area a 2px ring covers at 3:1.`;
+/** Why each ring style falls short at the prototype's width. */
+const FOCUS_FIX_REASONS = {
+  solid: 'its rounded corners leave the ring short of the area a 2px ring covers at 3:1',
+  double: 'the ring is two 1px lines, short of the area a 2px ring covers at 3:1',
+  dashed: "the dashes' gaps leave the ring short of the area a 2px ring covers at 3:1",
+};
+
+/** The caveat a widened focus ring adds, from the prototype's width and style. */
+function focusFixCaveat(width, prototype, style) {
+  const ring = style === 'solid' ? 'focus ring' : `${style} focus ring`;
+  return `Its ${ring} is ${width}, not the prototype's ${prototype}: at ${prototype}, ${FOCUS_FIX_REASONS[style]}.`;
 }
 
 /** The version a language ships at once a fix here changes the prototype's tokens. */
@@ -507,7 +520,7 @@ export function languageManifest(language) {
   );
   if (BORDER_FIXES[language.id]) tokens['border-control'] = BORDER_FIXES[language.id];
   const focusFix = FOCUS_FIXES[language.id]
-    ? focusFixCaveat(FOCUS_FIXES[language.id], tokens['focus-width'])
+    ? focusFixCaveat(FOCUS_FIXES[language.id], tokens['focus-width'], tokens['focus-style'])
     : null;
   if (focusFix) tokens['focus-width'] = FOCUS_FIXES[language.id];
   Object.assign(tokens, CONTRACT_LANGUAGE_TOKENS);

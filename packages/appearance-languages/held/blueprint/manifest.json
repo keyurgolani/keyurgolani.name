@@ -2,7 +2,7 @@
   "id": "blueprint",
   "name": "Blueprint",
   "description": "Square corners, dashed borders, translucent surfaces, compact density, no shadows, precise motion, and a grid texture.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "extended",
   "provenance": {
@@ -39,7 +39,8 @@
   ],
   "caveats": [
     "Translucent surfaces with a backdrop blur cost paint time on slower devices, and read less clearly over busy content.",
-    "A decorative gradient texture sits behind surfaces."
+    "A decorative gradient texture sits behind surfaces.",
+    "Its dashed focus ring is 4px, not the prototype's 3px: at 3px, the dashes' gaps leave the ring short of the area a 2px ring covers at 3:1."
   ],
   "tokens": {
     "surface-material": "linear-gradient(color-mix(in srgb, var(--color-surface-default) 92%, transparent), color-mix(in srgb, var(--color-surface-default) 92%, transparent))",
@@ -62,7 +63,7 @@
     "space-control-block": "0.375rem",
     "space-surface-inline": "0.75rem",
     "space-surface-block": "0.625rem",
-    "focus-width": "3px",
+    "focus-width": "4px",
     "focus-offset": "3px",
     "focus-style": "dashed",
     "state-hover-transform": "translateY(-1px)",
