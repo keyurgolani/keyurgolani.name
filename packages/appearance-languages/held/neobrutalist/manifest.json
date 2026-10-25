@@ -2,7 +2,7 @@
   "id": "neobrutalist",
   "name": "Neobrutalist",
   "description": "Tight radii, heavy raw borders, solid surfaces, normal density, hard offset shadows, springy motion, and a halftone texture.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "stable",
   "provenance": {
@@ -40,6 +40,7 @@
   "caveats": [
     "A decorative gradient texture sits behind surfaces.",
     "Expressive state motion: hovers and presses move more than in a quiet language.",
+    "Its texture sits in the surfaces' padding, at their edges, not across them as the prototype's does, so no text is drawn over it.",
     "Its enter motion, spring-in, and emphasis motion, bounce-once, have no keyframes in the platform yet, so they don't animate."
   ],
   "tokens": {
@@ -81,7 +82,7 @@
     "motion-enter": "spring-in",
     "motion-exit": "fade",
     "motion-emphasis": "bounce-once",
-    "texture": "radial-gradient(circle, var(--color-border-strong) 0 1px, transparent 1.5px)",
+    "texture": "radial-gradient(circle at 8px 8px, var(--color-border-strong) 0 1px, transparent 1.5px)",
     "signature-fill": "linear-gradient(90deg, var(--color-signature-start), var(--color-signature-end))",
     "emphasis-glow": "none"
   }
