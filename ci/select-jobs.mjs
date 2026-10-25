@@ -130,6 +130,13 @@ export const RULES = [
     paths: ['tests/harness/proxy-stack.mjs'],
   },
   {
+    // #9: the demo's reference overlay, which the profiles smoke runs and the
+    // fresh-clone run skips (ci/fresh-clone.mjs's SECTION_SKIPPED).
+    class: 'container',
+    jobs: ['unit', 'image', 'profiles'],
+    paths: ['deploy/compose.demo.reference.yml'],
+  },
+  {
     // The profile smoke and the Compose examples it reads. profiles runs on
     // the image job's image, so image runs too.
     class: 'container',

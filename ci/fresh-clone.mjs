@@ -483,6 +483,19 @@ export const SKIPPED = Object.freeze({
 });
 
 /**
+ * The deployment.md section commands the run doesn't take, each with why,
+ * by section. A skip the section no longer has is a problem too.
+ */
+export const SECTION_SKIPPED = Object.freeze({
+  '### `demo`': {
+    "echo 'PORTFOLIO_REFERENCE_HOST_DIR=/srv/portfolio-reference' >> .env":
+      "the read-only reference needs a verified export of the reader's own portfolio, which a fresh clone has none of; the profiles smoke runs the overlay",
+    'docker compose -f compose.demo.yml -f compose.demo.reference.yml up --build':
+      "the read-only reference needs a verified export of the reader's own portfolio, which a fresh clone has none of; the profiles smoke runs the overlay",
+  },
+});
+
+/**
  * Problems between the docs and STEPS: a step whose command its doc's sh
  * fences no longer hold, and a command in a covered doc that's neither a
  * step nor skipped.
@@ -565,10 +578,18 @@ export function pathCommands(steps = STEPS) {
  * nothing more or less, so a command a section gains, loses, or moves
  * fails the run.
  */
-export function sectionProblems(text, steps = STEPS) {
+export function sectionProblems(text, steps = STEPS, skipped = SECTION_SKIPPED) {
   const problems = [];
   for (const { id, section, commands } of pathCommands(steps)) {
-    const expected = section ? sectionCommands(text, section) : null;
+    const all = section ? sectionCommands(text, section) : null;
+    const skips = Object.keys(skipped[section] ?? {});
+    for (const skip of skips) {
+      if (all && !all.includes(skip))
+        problems.push(
+          `docs/deployment.md's ${section} no longer has "${skip}", which the run skips`,
+        );
+    }
+    const expected = all?.filter((command) => !skips.includes(command));
     if (!expected) {
       problems.push(`docs/deployment.md has no section ${section}, which ${id} follows`);
     } else if (JSON.stringify(expected) !== JSON.stringify(commands)) {

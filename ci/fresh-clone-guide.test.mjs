@@ -4,6 +4,7 @@
 // what each step checks. The job itself runs in CI's fresh-clone job, and
 // locally as `pnpm fresh-clone`.
 import test from 'node:test';
+import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -41,6 +42,7 @@ import {
   sectionCommands,
   sectionProblems,
   verdictInput,
+  SECTION_SKIPPED,
 } from './fresh-clone.mjs';
 import { parse } from 'yaml';
 import { defaultComposition, LANDED, pendingProblems } from './lib/pending.mjs';
@@ -189,14 +191,50 @@ test('the run covers the guide the scope asks for: refusal and start under read-
   }
 });
 
+/**
+ * The fields production refuses as the bundled sample's (#141's
+ * sampleFields, apps/web/src/lib/sample-identity.ts), for each portfolio
+ * text, through tsx, read from the example as the server reads it.
+ */
+function refusedFields(texts) {
+  const code = `import { readFileSync } from 'node:fs';
+const pick = (m) => (m.sampleFields || m.parsePortfolio ? m : m.default);
+const { parsePortfolio } = pick(await import('@portfolio/schema'));
+const { bundledSample, sampleFields } = pick(await import('./src/lib/sample-identity.ts'));
+const sample = bundledSample(readFileSync('../../portfolio.example.yml', 'utf8'), 'portfolio.example.yml');
+const texts = JSON.parse(readFileSync(0, 'utf8'));
+process.stdout.write(JSON.stringify(texts.map((t) => {
+  const parsed = parsePortfolio(t, 'yaml', { name: 'portfolio.yml' });
+  return parsed.ok ? sampleFields(parsed.value, [sample]).map((f) => f.pointer) : ['unparsed'];
+})));`;
+  const result = spawnSync(
+    process.execPath,
+    ['--conditions=react-server', '--import', 'tsx', '--input-type=module', '-e', code],
+    { cwd: path.join(ROOT, 'apps', 'web'), input: JSON.stringify(texts), encoding: 'utf8' },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  return JSON.parse(result.stdout);
+}
+
+test("the guide's identity step clears every field production refuses as the sample's, and one it skips is refused", () => {
+  const sample = read('portfolio.example.yml');
+  const edit = (fields) => identityEdit(sample, fields, sample).text;
+  assert.deepEqual(
+    refusedFields([
+      sample,
+      edit(identityFields(STEPS.find((s) => s.id === 'identity').command)),
+      edit(['identity.name', 'meta.ogImage']),
+      edit(['identity.name', 'meta.title']),
+    ]),
+    [['/identity/name', '/meta/title', '/meta/ogImage'], [], ['/meta/title'], ['/meta/ogImage']],
+  );
+});
+
 test("the identity step's name is a fixture's, and the sample's is the one production refuses", () => {
-  // apps/web/src/lib/sample-identity.ts's BUNDLED_SAMPLE_NAMES, which startup refuses.
-  const names = /BUNDLED_SAMPLE_NAMES: readonly string\[\] = \[([^\]]*)\]/.exec(
-    read('apps/web/src/lib/sample-identity.ts'),
-  )[1];
-  assert.ok(names.includes(`'${SAMPLE_NAME}'`), names);
-  assert.ok(!names.includes(FIXTURE_NAME));
-  assert.match(read('portfolio.example.yml'), new RegExp(`^  name: ${SAMPLE_NAME}$`, 'm'));
+  const example = parse(read('portfolio.example.yml'));
+  assert.equal(example.identity.name, SAMPLE_NAME);
+  assert.notEqual(FIXTURE_NAME, SAMPLE_NAME);
+  assert.ok(!example.meta.title.includes(FIXTURE_NAME));
   for (const step of STEPS.filter((s) => s.kind === 'identity')) {
     assert.equal(
       step.command,
@@ -616,10 +654,35 @@ test("each deployment.md profile section is its path's commands, in order, both 
     ],
   );
   for (const { section, commands } of paths) {
-    assert.deepEqual(sectionCommands(DEPLOYMENT, section), commands, section);
+    const skips = Object.keys(SECTION_SKIPPED[section] ?? {});
+    assert.deepEqual(
+      sectionCommands(DEPLOYMENT, section).filter((c) => !skips.includes(c)),
+      commands,
+      section,
+    );
   }
   // Every root step names its section.
   for (const step of STEPS.filter((s) => s.kind === 'root')) assert.ok(step.section, step.id);
+});
+
+test("a section's skipped commands say why, and a skip the section lost or a command it gained unskipped fails", () => {
+  assert.deepEqual(Object.keys(SECTION_SKIPPED), ['### `demo`']);
+  for (const [section, skips] of Object.entries(SECTION_SKIPPED)) {
+    for (const [command, why] of Object.entries(skips)) {
+      assert.ok(sectionCommands(DEPLOYMENT, section).includes(command), command);
+      assert.ok(why.length > 20, command);
+    }
+  }
+  const overlay = 'docker compose -f compose.demo.yml -f compose.demo.reference.yml up --build';
+  const lost = sectionProblems(DEPLOYMENT.replace(`${overlay}\n`, ''));
+  assert.deepEqual(lost, [
+    `docs/deployment.md's ### \`demo\` no longer has "${overlay}", which the run skips`,
+  ]);
+  const gained = sectionProblems(
+    DEPLOYMENT.replace(`${overlay}\n`, `${overlay}\ndocker compose ps\n`),
+  );
+  assert.equal(gained.length, 1);
+  assert.match(gained[0], /^demo-path doesn't follow/);
 });
 
 test('a section that loses, moves, or gains a command fails the run, though another section still has it', () => {
