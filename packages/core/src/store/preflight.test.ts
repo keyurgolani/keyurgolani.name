@@ -11,7 +11,7 @@ import {
 import path from 'node:path';
 import { test } from 'node:test';
 import { nodeFs, type FsPort } from './fs-port';
-import { BACKUP_CLAIM, RESTORE_CLAIM, STORE_LAYOUT, storePaths } from './layout';
+import { BACKUP_CLAIM, isWithin, RESTORE_CLAIM, STORE_LAYOUT, storePaths } from './layout';
 import { preflight, storeDirectories } from './preflight';
 import { tempDir } from './test-support/fixtures';
 
@@ -83,6 +83,33 @@ test('a data directory inside the source mount, or holding it, is data_dir_in_so
   const apart = path.join(root, 'data');
   mkdirSync(apart, { mode: 0o700 });
   assert.equal(await preflight({ dataDir: apart, sourceDir: source }), null);
+});
+
+test('a data directory whose name starts with two dots, inside the source mount, is data_dir_in_source', async (t) => {
+  const root = tempDir(t);
+  const source = path.join(root, 'config');
+  mkdirSync(path.join(source, '..x'), { recursive: true, mode: 0o700 });
+  assert.equal(
+    await preflight({ dataDir: path.join(source, '..x'), sourceDir: source }),
+    'data_dir_in_source',
+  );
+  // And a source mount so named inside the data directory.
+  const data = path.join(root, 'data');
+  mkdirSync(path.join(data, '..config'), { recursive: true, mode: 0o700 });
+  assert.equal(
+    await preflight({ dataDir: data, sourceDir: path.join(data, '..config') }),
+    'data_dir_in_source',
+  );
+});
+
+test('isWithin takes a name below a directory that starts with two dots as below it, and only .., a path through it, or another root as outside', () => {
+  const base = path.resolve('/srv/data');
+  for (const inner of ['/srv/data', '/srv/data/..x', '/srv/data/...', '/srv/data/a/..b/c']) {
+    assert.equal(isWithin(base, path.resolve(inner)), true, inner);
+  }
+  for (const inner of ['/srv', '/srv/data-x', '/srv/..data', '/srv/other/..x', '/']) {
+    assert.equal(isWithin(base, path.resolve(inner)), false, inner);
+  }
 });
 
 test("a data directory its group or anyone may write, or another user's, is data_dir_not_private", async (t) => {

@@ -6,6 +6,7 @@ import {
   BACKUP_CLAIM,
   isRevisionId,
   isSha256,
+  isWithin as within,
   RESTORE_CLAIM,
   STORE_LAYOUT,
   tempBeside,
@@ -137,12 +138,6 @@ export type RestoreOutcome =
   | { readonly kind: 'refused'; readonly code: RestoreProblem; readonly path?: string };
 
 const abs = (root: string, file: string) => path.join(root, ...file.split('/'));
-
-/** Whether `inner` is `outer` or under it. */
-function within(outer: string, inner: string): boolean {
-  const relative = path.relative(path.resolve(outer), path.resolve(inner));
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
-}
 
 /**
  * What of the store a backup holds: its regular files the patterns name, in

@@ -101,8 +101,10 @@ export interface FsPort extends ReadFs {
    * Makes `dir` and its parents, each 0700, and sets `dir` to 0700 either
    * way. A symbolic link at `dir` fails with ELOOP and is left as it is.
    * At live.json's name or an event's, or under one, it fails with EPERM.
+   * With `exclusive`, it makes `dir` alone, in a parent that's there, and
+   * fails with EEXIST when anything is at its name already.
    */
-  mkdir(dir: string, point: CrashPoint): Promise<void>;
+  mkdir(dir: string, point: CrashPoint, options?: { readonly exclusive?: boolean }): Promise<void>;
   /**
    * Writes `data` to a new or truncated 0600 file, without syncing it. With
    * `exclusive`, it fails with EEXIST when the file is there. A symbolic
@@ -205,13 +207,13 @@ export const nodeFs: FsPort = Object.freeze({
       throw error;
     }
   },
-  async mkdir(dir: string) {
+  async mkdir(dir: string, _point: CrashPoint, options: { readonly exclusive?: boolean } = {}) {
     // A directory at live.json's name, or an event's, or above one, would
     // stand where the next pointer move writes. Nothing makes one.
     for (let at = path.resolve(dir); at !== path.dirname(at); at = path.dirname(at)) {
       if (isPointerFile(at)) throw pointerRefused(at);
     }
-    await mkdir(dir, { recursive: true, mode: 0o700 });
+    await mkdir(dir, options.exclusive ? { mode: 0o700 } : { recursive: true, mode: 0o700 });
     // chmod follows a link, so a link here is refused before it.
     if (!(await lstat(dir)).isDirectory()) throw linkError(dir);
     await chmod(dir, 0o700);

@@ -361,6 +361,16 @@ test('backup refuses a non-empty --out and one in the data directory, and writes
   assert.equal(existsSync(inside), false);
 });
 
+test('backup refuses an --out in the data directory whose name starts with two dots', async (t) => {
+  const store = await seeded(t);
+  const inside = path.join(store.paths.root, '..x');
+  assert.deepEqual(
+    await backupStore({ fs: nodeFs, paths: store.paths, lock: store.lock }, inside),
+    { kind: 'refused', code: 'target_overlaps' },
+  );
+  assert.equal(existsSync(inside), false);
+});
+
 test('the backup and restore commands print the live revision and unitHash, and say a restore brings back no session', async (t) => {
   const store = await seeded(t);
   const live = (await readLive(nodeFs, store.paths))!;

@@ -43,9 +43,9 @@ function intercepted(inner: FsPort, before: (call: FsCall) => void): FsPort {
     readdir: (dir) => inner.readdir(dir),
     stat: (target) => inner.stat(target),
     lstat: (target) => inner.lstat(target),
-    async mkdir(dir, point) {
+    async mkdir(dir, point, options) {
       before({ op: 'mkdir', point, target: dir });
-      return inner.mkdir(dir, point);
+      return inner.mkdir(dir, point, options);
     },
     async writeFile(file, data, point, options) {
       before({ op: 'writeFile', point, target: file });

@@ -135,6 +135,8 @@ if (checks) {
     env: process.env,
     checks,
     readSource: (dir) => readPairBytes(dir, context),
+    // An export's public view keeps what the server's does (#9).
+    extensions: CONTENT_EXTENSIONS,
     envBase: webDir(),
     // A path on the command line is from where pnpm ran, or the shell is.
     cwd: process.env.INIT_CWD || process.cwd(),
