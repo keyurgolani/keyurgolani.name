@@ -1200,7 +1200,7 @@ process.stdout.write(JSON.stringify({ files: [rel(p.storeFile), rel(p.server)], 
  * config at start: a valid empty store and nothing more (#3, item 3: a
  * refused start leaves a valid empty store, and the next start's first-start
  * import takes it over, with any stale claim). That is store.json, the
- * server's claim, and the store's 0700 directories, all of them empty, and
+ * server's claim, and the store's directories, all of them empty, and
  * `status` naming no live revision. Unlike portfolio-store, which reads the
  * source before it touches the data directory (#130, the native old-config
  * row), the server opens its store before it reads the source.
