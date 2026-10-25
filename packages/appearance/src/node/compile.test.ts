@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { anchorV1 } from '../derive';
+import { LENGTH_KEYS } from '../language-grammar';
 import { LAYER_ORDER } from '../layers';
 import type { DesignLanguageManifest, TypographyManifest } from '../manifests';
 import { schemeSets, type ColorSetName, type SchemeSets } from '../sets';
@@ -577,4 +578,25 @@ test('every first-party pack compiles from the directory its package ships', () 
     new TextDecoder().decode(translucent.pack.stylesheet!.bytes),
     /@scope \(\[data-design-language="fixture-translucent"\]\) to \(\[data-appearance-boundary\]\) \{\n {4}\[data-ui-slot="surface"\] \{\n {6}backdrop-filter: blur\(var\(--ui-backdrop-blur\)\);/,
   );
+});
+
+test("a one-length language token's bare 0 compiles to 0px, so it stays valid inside calc() (#11)", () => {
+  const css = (tokens: Partial<DesignLanguageManifest['tokens']>) => {
+    const manifest = { ...PLATFORM_NEUTRAL, tokens: { ...PLATFORM_NEUTRAL.tokens, ...tokens } };
+    const result = compilePack({ kind: 'design-language', manifest, dir: EMPTY_DIR });
+    assert.ok(result.ok);
+    return new TextDecoder().decode(result.pack.stylesheet!.bytes);
+  };
+  // calc(2px + 0) is invalid CSS, which would drop the field gap's whole max().
+  assert.match(css({ 'focus-offset': '0' }), /\n {4}--ui-focus-offset: 0px;\n/);
+  assert.match(css({ 'space-control-block': '0' }), /\n {4}--ui-space-control-block: 0px;\n/);
+  for (const key of LENGTH_KEYS) {
+    if (key === 'focus-width') continue; // Never 0: a focus ring always draws.
+    assert.match(css({ [key]: '0' }), new RegExp(`\\n {4}--ui-${key}: 0px;\\n`), key);
+  }
+  // A length that has its unit, and every other key, is written as the manifest gives it.
+  assert.match(css({ 'focus-offset': '2px' }), /\n {4}--ui-focus-offset: 2px;\n/);
+  assert.match(css({ 'radius-control': '0' }), /\n {4}--ui-radius-control: 0;\n/);
+  assert.ok(LENGTH_KEYS.has('focus-offset') && LENGTH_KEYS.has('space-control-block'));
+  assert.ok(!LENGTH_KEYS.has('radius-control') && !LENGTH_KEYS.has('surface-opacity'));
 });
