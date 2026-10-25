@@ -1,12 +1,14 @@
 import 'server-only';
 import { cache } from 'react';
 import { notFound, redirect } from 'next/navigation';
-import { documentAppearance } from '~/lib/document-appearance';
+import type { AppearanceStylesheets, ResolvedAppearance } from '@portfolio/appearance';
+import { documentAppearance, type DocumentAppearanceInput } from '~/lib/document-appearance';
 import { ExperienceDocument } from '~/lib/experience-document';
 import { ClientHostModules } from '~/lib/host-modules-client';
 import { variantLoader } from '~/lib/variant-loaders';
 import { resolveVisitorPath } from '~/lib/visitor-routes';
 import { getDeploymentState, requireDeploymentConfig } from './config-store';
+import { previewStylesheets } from './generated-schemes';
 import type { GrantChannel, OpenedGrant } from './preview-port';
 import { requestNonce } from './request-nonce';
 
@@ -40,6 +42,31 @@ export const grantChannel = cache(async (grant: string): Promise<GrantChannel | 
 });
 
 /**
+ * What a frame's document boundary renders for `grant`: the grant's
+ * environment, so the frame's first paint is right (Slice 4), through #19's
+ * resolver, what Studio asked for and never a visitor's value, with the
+ * generated schemes its subject stored (#20 PR 3), and their stylesheets
+ * under the grant, never /_portfolio/scheme/.
+ */
+export function frameAppearance(
+  grant: string,
+  opened: Pick<OpenedGrant, 'environment' | 'schemes'>,
+  site: DocumentAppearanceInput['site'],
+  variant: string,
+): { readonly appearance: ResolvedAppearance; readonly stylesheets: AppearanceStylesheets } {
+  return {
+    appearance: documentAppearance({
+      site,
+      variant,
+      profile: requireDeploymentConfig().profile,
+      environment: opened.environment,
+      schemes: opened.schemes,
+    }),
+    stylesheets: previewStylesheets(grant, opened.schemes),
+  };
+}
+
+/**
  * The frame's page: the portfolio at `route` inside the grant's link base,
  * exactly as a visitor would get it there. A grant that ended since proxy.ts
  * checked it renders nothing of its content: the 404 boundary answers.
@@ -59,16 +86,12 @@ export async function previewPage(grant: string, route: readonly string[]) {
     // renders through every variant's loader: frames are owner-only (#6).
     load: variantLoader(resolved.composition.rendered.manifest.id),
     hostModules: ClientHostModules,
-    // The grant's environment, so the frame's first paint is right (Slice 4),
-    // through #19's resolver: what Studio asked for, and never a visitor's value.
-    appearance: documentAppearance({
-      site: resolved.view.site,
-      variant: resolved.composition.rendered.manifest.id,
-      profile: requireDeploymentConfig().profile,
-      environment: opened.environment,
-      // The grant's own stored generated schemes (#20 PR 3).
-      schemes: opened.schemes,
-    }),
+    ...frameAppearance(
+      grant,
+      opened,
+      resolved.view.site,
+      resolved.composition.rendered.manifest.id,
+    ),
     linkBase: { basePath },
     route: resolved.target,
     origin: requireDeploymentConfig().origin,

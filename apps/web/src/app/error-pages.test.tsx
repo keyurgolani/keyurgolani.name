@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { PLATFORM_DEFAULTS } from '@portfolio/appearance';
+import { compileGeneratedScheme } from '@portfolio/appearance/node';
 import { FALLBACK_ID, validateManifest, type VariantRegistry } from '@portfolio/variant-contract';
 import { fallbackBoundary } from '~/lib/fallback-boundary';
 import { REGISTRY, variantStylesheet } from '~/lib/variants';
@@ -351,6 +352,49 @@ test("not-found.tsx renders the live revision's stored generated scheme in its d
     assert.ok(!without.includes('data-color-scheme="brand-seed"'), without);
     assert.ok(without.includes('data-appearance-fallback="color-scheme"'), without);
   }
+});
+
+test("not-found.tsx links the live revision's generated scheme from /_portfolio/scheme/, from the same read its boundary renders, and links none once it falls back (#20)", async (t) => {
+  t.after(() => setDeploymentState(undefined));
+  t.mock.method(preferenceCookie, 'read', async () => null);
+  const site = {
+    appearance: { ...PLATFORM_DEFAULTS, variant: FALLBACK_ID, colorScheme: 'brand-seed' },
+    motionPolicy: 'system',
+    sections: {},
+  };
+  const stored = storedBrandSeed();
+  const render = async (revisionId: string, snapshots: object) => {
+    setDeploymentState({
+      config: {
+        profile: 'read-only',
+        mode: 'production',
+        origin: 'https://rowan.test',
+        trustedProxyHops: 0,
+        secrets: {},
+      },
+      catalog: {
+        getLive: async () =>
+          ({ revisionId, unitHash: `hash-${revisionId}`, unit: { site, snapshots } }) as never,
+      },
+      dispatch: () => assert.fail('the 404 page runs no operation'),
+      degraded: [],
+    });
+    return renderToStaticMarkup(await NotFoundBody());
+  };
+  const css = compileGeneratedScheme(
+    'brand-seed',
+    stored.tokens as Parameters<typeof compileGeneratedScheme>[1],
+  );
+  const href = `/_portfolio/scheme/brand-seed.${createHash('sha256').update(css).digest('hex').slice(0, 12)}.css`;
+  const html = await render('nf-stored', { schemes: { 'brand-seed': stored } });
+  const boundary = /<div ([^>]*data-appearance-boundary="document"[^>]*)>/.exec(html)![1]!;
+  assert.ok(boundary.includes('data-color-scheme="brand-seed"'), boundary);
+  assert.ok(!boundary.includes('data-appearance-fallback'), boundary);
+  assert.ok(html.includes(`href="${href}"`), html);
+  // With no stored sets the scheme falls back, and no scheme file is linked.
+  const without = await render('nf-plain', {});
+  assert.ok(without.includes('data-appearance-fallback="color-scheme"'), without);
+  assert.ok(!without.includes('/_portfolio/scheme/'), without);
 });
 
 /** A registry of the fallback composition and the route tests' `chapters` fixture variant. */

@@ -6,7 +6,15 @@ import { fileURLToPath } from 'node:url';
 import { isValidElement } from 'react';
 import { readPair } from '@portfolio/schema/node';
 import { FALLBACK_ID, validateManifest, type VariantRegistry } from '@portfolio/variant-contract';
+import {
+  stylesheetHrefs,
+  type AppearanceStylesheets,
+  type ResolvedAppearance,
+  type VisitorAppearanceModel,
+} from '@portfolio/appearance';
 import { REGISTRY } from '~/lib/variants';
+import { GET as schemeRoute } from '../app/(site)/%5Fportfolio/scheme/[file]/route';
+import { appearancePreference } from './appearance-preference';
 import type { LiveRevision } from './catalog-port';
 import { recordingLive } from './composition';
 import { readDeploymentConfig } from './config';
@@ -414,4 +422,75 @@ test("a visitor page renders a generated scheme from the live revision's stored 
   const without = await answer('fixture-notes');
   assert.equal(boundaryAppearance(without.element).selection.colorScheme, 'warm-parchment');
   assert.deepEqual(asked, [], 'no operation, so no draft, was read');
+});
+
+/** The page's document boundary element's props: its appearance, stylesheets, and control. */
+function boundaryProps(element: unknown) {
+  const children = (element as { props: { children: unknown[] } }).props.children;
+  return (
+    children.find(
+      (child) =>
+        isValidElement(child) && (child.props as { appearance?: unknown }).appearance !== undefined,
+    ) as {
+      props: {
+        appearance: ResolvedAppearance;
+        stylesheets?: AppearanceStylesheets;
+        control?: { model: VisitorAppearanceModel };
+      };
+    }
+  ).props;
+}
+
+test('a site with a generated scheme renders it with its stylesheet linked from /_portfolio/scheme/, which serves the stored tokens, and the control preloads the same file (#20)', async (t) => {
+  const stored = storedBrandSeed();
+  deploy(t, () => branded({ 'brand-seed': stored }));
+  setLiveComposition('fixture-notes');
+  const live = await answer('fixture-notes');
+  assert.ok(live.element, JSON.stringify(live));
+  const { appearance, stylesheets, control } = boundaryProps(live.element);
+  // The generated scheme renders, not its fallback.
+  assert.equal(appearance.selection.colorScheme, 'brand-seed');
+  assert.ok(!appearance.fallbackAxes.includes('colorScheme'), 'no fallback on the scheme');
+  assert.ok(stylesheets, 'the page passes its own stylesheets');
+  const hrefs = stylesheetHrefs(appearance.selection, stylesheets);
+  const href = hrefs.find((each) => each.startsWith('/_portfolio/scheme/brand-seed.'));
+  assert.ok(href, JSON.stringify(hrefs));
+  assert.match(href, /^\/_portfolio\/scheme\/brand-seed\.[0-9a-f]{12}\.css$/);
+  // The control's model names no stylesheet (#132), and a save of the
+  // scheme answers with that same file, which the control preloads.
+  assert.ok(control, 'the page has its control');
+  assert.doesNotMatch(JSON.stringify(control.model), /_portfolio\/scheme\//);
+  const saved = await appearancePreference(
+    new Request('https://rowan.test/api/appearance', {
+      method: 'POST',
+      headers: { origin: 'https://rowan.test', 'content-type': 'application/json' },
+      body: JSON.stringify({ scheme: 'brand-seed' }),
+    }),
+    { origin: 'https://rowan.test' },
+  );
+  assert.equal(saved.status, 200);
+  assert.deepEqual(await saved.json(), { stylesheets: [href] });
+  // And the link serves the stored sets, compiled.
+  const file = href.slice('/_portfolio/scheme/'.length);
+  const response = await schemeRoute(new Request(`https://rowan.test${href}`), {
+    params: Promise.resolve({ file }),
+  });
+  assert.equal(response.status, 200);
+  const css = await response.text();
+  assert.match(css, /\[data-color-scheme="brand-seed"\]/);
+  const tokens = stored.tokens as { light: Record<string, string>; dark: Record<string, string> };
+  for (const value of [tokens.light.canvas, tokens.dark.canvas, tokens.light.accent]) {
+    assert.ok(css.includes(value!), `${value} renders`);
+  }
+  // With no stored sets, in a revision of its own, the scheme falls back,
+  // and links no scheme file at all.
+  const plain = branded(undefined);
+  assert.ok(plain.unit);
+  deploy(t, () => ({ ...plain, revisionId: 'doc-plain', unitHash: 'hash-plain' }));
+  const without = boundaryProps((await answer('fixture-notes')).element);
+  assert.ok(
+    !stylesheetHrefs(without.appearance.selection, without.stylesheets!).some((each) =>
+      each.startsWith('/_portfolio/scheme/'),
+    ),
+  );
 });

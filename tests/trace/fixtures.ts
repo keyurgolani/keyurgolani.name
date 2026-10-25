@@ -479,6 +479,9 @@ export async function purityOf(
     forbidden: rules.rules,
     forbiddenProblems: [...rules.problems, ...extra.problems],
     errorPacks,
+    // The trace's contract fixture stores no generated scheme (#20), so no
+    // /_portfolio/scheme/ file is any page's own, and naming one fails it.
+    generatedSchemes: {},
   });
   return {
     ...verdict,

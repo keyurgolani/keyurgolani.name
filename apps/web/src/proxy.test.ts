@@ -2003,3 +2003,82 @@ test('a production build keeps its strict preview and Studio policies under a se
   );
   assert.match(studioCsp('n', 'development'), /'unsafe-eval'/);
 });
+
+test("under owner a generated scheme's stylesheet under a grant goes on only as a style load for an active grant, and no other grant path admits a style load (#20)", async (t) => {
+  const { port, checked } = grantsPort();
+  deploy(t, 'owner', port);
+  const hash = 'a'.repeat(12);
+  const sheet = (grant: string) => `/preview-assets/${grant}/_appearance/brand-seed.${hash}.css`;
+  for (const method of ['GET', 'HEAD']) {
+    const response = await proxy(loaded(sheet(ACTIVE), 'style', method));
+    const what = `${method} as style`;
+    assert.equal(decision(response), 'served', what);
+    assert.equal(response.headers.get('x-middleware-request-cookie'), null, what);
+    assert.deepEqual(previewHeaderProblems(response), [], what);
+  }
+  checked.length = 0;
+  // Any other destination, or none, to the stylesheet: turned away unread.
+  for (const destination of [null, 'document', 'iframe', 'empty', 'image', 'font', 'script']) {
+    await assertStatusDocument(
+      await proxy(loaded(sheet(ACTIVE), destination)),
+      `the stylesheet as ${destination}`,
+    );
+  }
+  for (const method of ['POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']) {
+    await assertStatusDocument(await proxy(loaded(sheet(ACTIVE), 'style', method)), method);
+  }
+  // A style load of every other grant path: the frame's document, a
+  // rendition, the branch itself and below it, which [...path] takes, and
+  // the branch spelled percent-encoded.
+  const others = [
+    `/preview/${ACTIVE}`,
+    `/preview-assets/${ACTIVE}/a1/${'0'.repeat(64)}/large.webp`,
+    `/preview-assets/${ACTIVE}/_appearance`,
+    `/preview-assets/${ACTIVE}/_appearance/brand-seed/${hash}.css`,
+    `/preview-assets/${ACTIVE}/%5Fappearance/brand-seed.${hash}.css`,
+  ];
+  for (const path of others) {
+    await assertStatusDocument(await proxy(loaded(path, 'style')), `${path} as style`);
+  }
+  assert.deepEqual(checked, [], 'none of those asked about the grant');
+  // A grant that isn't active.
+  for (const grant of [ENDED, 'x']) {
+    await assertStatusDocument(await proxy(loaded(sheet(grant), 'style')), grant);
+  }
+  assert.deepEqual(checked, [ENDED, 'x']);
+});
+
+test('/_portfolio/scheme/ takes GET and HEAD alone: any other method is the plain 405, in every profile, and GET and HEAD go on to its route (#20)', async (t) => {
+  const hash = 'a'.repeat(12);
+  const sheet = `/_portfolio/scheme/brand-seed.${hash}.css`;
+  for (const profile of PROFILES) {
+    deploy(t, profile);
+    for (const method of ['POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']) {
+      const what = `${profile} ${method}`;
+      const response = await proxy(visitor(sheet, method));
+      assert.equal(response.status, 405, what);
+      assert.equal(response.headers.get('allow'), 'GET, HEAD', what);
+      assert.equal(response.headers.get('cache-control'), 'no-store', what);
+    }
+    for (const method of ['GET', 'HEAD']) {
+      assert.equal(decision(await proxy(visitor(sheet, method))), 'served', `${profile} ${method}`);
+    }
+    // Spelled so Next can't route it there, or below it: never on to the route.
+    for (const path of [
+      `/_portfolio/%73cheme/brand-seed.${hash}.css`,
+      `/_portfolio/scheme/brand-seed/${hash}.css`,
+    ]) {
+      assert.notEqual(decision(await proxy(visitor(path))), 'served', `${profile} ${path}`);
+    }
+    // A trailing slash is the plain no-store 404, never a 308 naming a path, to any method.
+    for (const method of ['GET', 'HEAD', 'POST']) {
+      const what = `${profile} ${method} ${sheet}/`;
+      const slashed = await proxy(visitor(`${sheet}/`, method));
+      assert.equal(slashed.status, 404, what);
+      assert.equal(slashed.headers.get('location'), null, what);
+      assert.equal(slashed.headers.get('cache-control'), 'no-store', what);
+      assert.equal(slashed.headers.get('content-type'), 'text/plain; charset=utf-8', what);
+      assert.equal(onward(slashed), false, what);
+    }
+  }
+});

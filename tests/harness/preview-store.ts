@@ -22,8 +22,18 @@ export type StoreStep =
       readonly documents: UnitInput;
       readonly blobs?: readonly { readonly base64: string; readonly mediaType: string }[];
     }
-  /** Publishes a draft as the operator would, which removes it, and returns the new revision. */
-  | { readonly op: 'publish'; readonly draftId: DraftId; readonly draftVersion: number };
+  /**
+   * Publishes a draft as the operator would, which removes it, and returns
+   * the new revision, with `snapshots` frozen beside its documents, as
+   * publish's own derivation would write them (#20: a generated scheme's
+   * stored sets, which #10's 10h freezes at publish).
+   */
+  | {
+      readonly op: 'publish';
+      readonly draftId: DraftId;
+      readonly draftVersion: number;
+      readonly snapshots?: Readonly<Record<string, unknown>>;
+    };
 
 export interface StoreTask {
   readonly id: number;
@@ -36,17 +46,21 @@ export type StoreAnswer =
   | { readonly id: number; readonly ok: false; readonly error: string };
 
 /** The server's revision store, opened as the operator's CLI opens it. */
-async function storeOf(dataDir: string) {
+async function storeOf(dataDir: string, snapshots?: Readonly<Record<string, unknown>>) {
   const problem = await preflight({ dataDir });
   if (problem) throw new Error(`preflight: ${problem}`);
   return openStore({
     dataDir,
-    checks: { validate: (pair) => validatePublicationUnit(pair), appVersion: 'test' },
+    checks: {
+      validate: (pair) => validatePublicationUnit(pair),
+      appVersion: 'test',
+      ...(snapshots ? { snapshots: () => snapshots } : {}),
+    },
   });
 }
 
 async function run({ dataDir, step }: Omit<StoreTask, 'id'>): Promise<unknown> {
-  const store = await storeOf(dataDir);
+  const store = await storeOf(dataDir, step.op === 'publish' ? step.snapshots : undefined);
   if (step.op === 'seed') {
     for (const { base64, mediaType } of step.blobs ?? []) {
       await store.assets.put(Buffer.from(base64, 'base64'), mediaType);

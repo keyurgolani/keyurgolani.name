@@ -10,7 +10,7 @@ import {
   type AppearanceStylesheets,
   type SelectionValues,
 } from '@portfolio/appearance';
-import { APPEARANCE_STYLESHEETS } from '~/lib/appearance-registry';
+import { liveSchemeSheets, liveStylesheets } from './generated-schemes';
 import { APPEARANCE_COOKIE } from '~/lib/document-appearance';
 
 // POST /api/appearance (#19, Slice 4): the visitor's appearance preference,
@@ -44,7 +44,9 @@ import { APPEARANCE_COOKIE } from '~/lib/document-appearance';
 // the registry's own URLs by stylesheetHrefs(), never anything the request
 // said, so the control preloads them before it refreshes and the page
 // carries no stylesheet URL of its own for that (#6's purity check). A
-// reset, or an id this build doesn't register, adds none. Every answer is
+// reset, or an id this build doesn't register, adds none. A generated
+// scheme's is the live revision's file under /_portfolio/scheme/ (#20), and
+// one the live revision stores no sets for adds none. Every answer is
 // no-store. A name given twice is refused, in a form or in JSON.
 // Anything else is refused with nothing set: 403 for the origin, 413 past
 // the cap, 415 for another body type, and 400 for a body the schema doesn't
@@ -84,7 +86,11 @@ const FormBody = z
 export interface PreferenceOptions {
   /** The canonical origin, never one read from the request. */
   readonly origin: string;
-  /** Where each pack's compiled stylesheet is: this build's registry's, unless a test gives others. */
+  /**
+   * Where each pack's compiled stylesheet is: this build's registry's, and
+   * the live revision's generated schemes under /_portfolio/scheme/ (#20),
+   * unless a test gives others.
+   */
   readonly stylesheets?: AppearanceStylesheets;
 }
 
@@ -93,7 +99,7 @@ export const PREFERENCE_CACHE = 'no-store';
 
 export async function appearancePreference(
   request: Request,
-  { origin, stylesheets = APPEARANCE_STYLESHEETS }: PreferenceOptions,
+  { origin, stylesheets }: PreferenceOptions,
 ): Promise<Response> {
   if (!fromOrigin(request, origin)) return refused(403, 'Forbidden.');
   const type = bodyType(request.headers.get('content-type'));
@@ -114,7 +120,10 @@ export async function appearancePreference(
   const headers = new Headers({ 'cache-control': PREFERENCE_CACHE, 'set-cookie': cookie });
   if (location === null) {
     headers.set('content-type', 'application/json; charset=utf-8');
-    const saved = body.reset ? [] : savedStylesheets(body.values, stylesheets);
+    // A generated scheme's file is the live revision's, never the request's (#20).
+    const saved = body.reset
+      ? []
+      : savedStylesheets(body.values, stylesheets ?? liveStylesheets(await liveSchemeSheets()));
     return new Response(JSON.stringify({ stylesheets: saved }), { status: 200, headers });
   }
   headers.set('location', `${new URL(origin).origin}${location}`);
