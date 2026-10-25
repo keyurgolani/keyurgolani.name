@@ -262,14 +262,17 @@ test(
       siteSelecting('fixture-environment'),
     );
     await expect(frame.locator('.fe-enhanced')).toHaveCount(1);
+    // Enhancements off is a new grant, so the frame loads a new document.
+    // Until it has, an evaluate can land in the document that's going and
+    // lose its context. The frame's URL says the new grant's document is
+    // there, and the stage's ready, which only its agent's ready sets, says
+    // it hydrated.
+    const before = new URL(frame.url()).pathname;
     await select(page, 'Enhancements', 'off');
-    await expect
-      .poll(async () => environmentIn(await grantFrame(page)))
-      .toMatchObject({
-        enhancement: 'off',
-      });
+    await expect.poll(() => new URL(frame.url()).pathname).not.toBe(before);
     await expect(stage(page)).toHaveAttribute('data-phase', 'ready');
     const off = await grantFrame(page);
+    expect(await environmentIn(off)).toMatchObject({ enhancement: 'off' });
     await expect(off.locator('[data-variant="fixture-environment"]')).toHaveCount(1);
     await expect(off.locator('.fe-enhanced')).toHaveCount(0);
   },
