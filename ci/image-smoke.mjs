@@ -340,21 +340,32 @@ async function smoke() {
 
   // The image's build is a default one, so it ships no browser source map
   // (#6), under the build's static tree or in public/, which the server
-  // serves at the site root. The static tree has to be there to check.
+  // serves at the site root. The static tree has to be there to check. By
+  // check:source-maps' one rule (ci/lib/source-maps.mjs), the static tree may
+  // hold the empty map Turbopack writes for a module worker, which nothing
+  // points at, and no symlink, which the scan doesn't follow; public/ may
+  // hold no map at all.
   for (const root of [IMAGE_STATIC, IMAGE_PUBLIC]) {
     const maps = JSON.parse(
       container(['exec', name, 'node', '-e', MAPS_SNIPPET, root]).stdout || '{}',
     );
-    if ((root === IMAGE_STATIC && maps.exists !== true) || maps.count !== 0) {
+    const shipped = [...(maps.maps ?? []), ...(root === IMAGE_PUBLIC ? (maps.empty ?? []) : [])];
+    const linked = maps.linked ?? [];
+    const symlinks = root === IMAGE_STATIC ? (maps.symlinks ?? []) : [];
+    const found = [...shipped, ...linked, ...symlinks];
+    if ((root === IMAGE_STATIC && maps.exists !== true) || found.length > 0) {
       throw new SmokeFailure(
         maps.exists === true
-          ? `the image ships ${maps.count} browser source map(s) under ${root}: ${maps.maps.join(', ')}`
+          ? `the image ships ${shipped.length} browser source map(s), ${linked.length} file(s) pointing at one, and ${symlinks.length} symlink(s) under ${root}: ${found.slice(0, 20).join(', ')}`
           : `the image has no ${root} to check for source maps`,
         {
           test: 'image ships no source maps',
-          asset: maps.maps?.[0] ? `${root}/${maps.maps[0]}` : root,
-          expected: `no .map file under ${IMAGE_STATIC} or ${IMAGE_PUBLIC}`,
-          actual: maps.exists === true ? `${maps.count} .map files` : 'no such directory',
+          asset: found[0] ? `${root}/${found[0]}` : root,
+          expected: `no source map but an empty one under ${IMAGE_STATIC}, none pointed at, no symlink there, and no .map file under ${IMAGE_PUBLIC}`,
+          actual:
+            maps.exists === true
+              ? `${shipped.length} source maps, ${linked.length} files pointing at one, ${symlinks.length} symlinks`
+              : 'no such directory',
         },
       );
     }

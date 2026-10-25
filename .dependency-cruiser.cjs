@@ -365,34 +365,48 @@ module.exports = {
       to: { path: '^apps/web/src/app/\\(studio\\)/', reachable: true },
     },
     {
-      name: 'demo-studio-reaches-no-owner-code',
+      name: 'demo-reaches-no-owner-code',
       severity: 'error',
       comment:
-        "Demo Studio (#9) keeps everything in the visitor's browser, so nothing in lib/demo or " +
-        "its components reaches Owner Studio's adapter, its transport (studioFetch, which sends " +
-        "the owner's CSRF token), or any server module: not by an import of its own, and not " +
-        'through a shared module that imports one. Tests and their test support may.',
+        "The demo's browser modules (#9) run for anonymous visitors and keep everything in " +
+        "their browser, so nothing under lib/demo, Demo Studio's components, or the local " +
+        "frame's client code, app/(preview)/_local, which renders a visitor's import, reaches Owner " +
+        "Studio's adapter, its transport (studioFetch, which sends the owner's CSRF token), " +
+        'or any server module, the owner ones among them: not by an import of its own, and ' +
+        "not through a shared module that imports one. #137's and 9-1b's rules, as one. " +
+        'Tests and their test support may.',
       from: {
-        path: '^apps/web/src/(?:lib/demo/|app/\\(studio\\)/_components/demo/)',
+        path: '^apps/web/src/(?:lib/demo/|app/\\(studio\\)/_components/demo/|app/\\(preview\\)/_local/)',
         pathNot: ['\\.test\\.tsx?$', '^apps/web/src/lib/demo/test-support\\.ts$'],
       },
       to: {
-        path: '^apps/web/src/(?:lib/studio/owner-backend\\.ts$|lib/studio-fetch\\.ts$|server/)',
+        path: [
+          '^apps/web/src/lib/studio/owner-backend\\.ts$',
+          '^apps/web/src/lib/studio-fetch\\.ts$',
+          '^apps/web/src/server/',
+        ],
         reachable: true,
       },
     },
     {
-      name: 'owner-code-loads-no-demo-code',
+      name: 'owner-code-reaches-no-demo',
       severity: 'error',
       comment:
-        "Owner Studio's libraries and every server module stay clear of Demo Studio's code (#9): " +
-        "the demo's browser backend loads only from Demo Studio's own shell, with an import() " +
-        'of its own. Tests may.',
+        "Owner code never loads the demo's modules (#9): not Owner Studio's libraries, its " +
+        'backend or fetch client, any server module, the owner ones among them, nor ' +
+        "@portfolio/core, by an import of its own or through anything it imports. The demo's " +
+        "browser backend loads only from Demo Studio's own shell, with an import() of its " +
+        "own. #137's and 9-1b's rules, as one. Tests may import anything.",
       from: {
-        path: '^apps/web/src/(?:lib/studio/|server/)',
-        pathNot: '\\.test\\.tsx?$',
+        path: [
+          '^apps/web/src/lib/studio/',
+          '^apps/web/src/lib/studio-fetch\\.ts$',
+          '^apps/web/src/server/',
+          '^packages/core/',
+        ],
+        pathNot: '\\.test\\.(?:tsx?|mjs)$',
       },
-      to: { path: '^apps/web/src/lib/demo/' },
+      to: { path: '^apps/web/src/lib/demo/', reachable: true },
     },
     {
       name: 'preview-protocol-imports-zod-and-ids-only',
@@ -488,41 +502,6 @@ module.exports = {
         pathNot:
           '^(?:apps/web/src/|~/)preview/(?:agent|report-status|status|frame-channel)(?:\\.ts|\\.tsx)?$',
       },
-    },
-    {
-      name: 'demo-reaches-no-owner-code',
-      severity: 'error',
-      comment:
-        "The demo's browser modules (#9) run for anonymous visitors, so nothing under lib/demo " +
-        "reaches Owner Studio's backend, its fetch client, or the owner server modules, by " +
-        'an import of its own or through anything it imports. Tests may import anything.',
-      from: { path: '^apps/web/src/lib/demo/', pathNot: '\\.test\\.tsx?$' },
-      to: {
-        path: [
-          '^apps/web/src/lib/studio/owner-backend\\.ts$',
-          '^apps/web/src/lib/studio-fetch\\.ts$',
-          '^apps/web/src/server/owner/',
-        ],
-        reachable: true,
-      },
-    },
-    {
-      name: 'owner-code-reaches-no-demo',
-      severity: 'error',
-      comment:
-        "Owner code never loads the demo's modules (#9): not the owner server modules, Owner " +
-        "Studio's backend or fetch client, nor @portfolio/core, by an import of its own or " +
-        'through anything it imports. Tests may import anything.',
-      from: {
-        path: [
-          '^apps/web/src/server/owner/',
-          '^apps/web/src/lib/studio/owner-backend\\.ts$',
-          '^apps/web/src/lib/studio-fetch\\.ts$',
-          '^packages/core/',
-        ],
-        pathNot: '\\.test\\.(?:tsx?|mjs)$',
-      },
-      to: { path: '^apps/web/src/lib/demo/', reachable: true },
     },
     {
       name: 'store-test-support-only-from-tests',

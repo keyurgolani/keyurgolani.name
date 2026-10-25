@@ -459,6 +459,7 @@ test('the shared renderers show every field of every visible record, section, an
 /** The labels the shared renderers may add (#10, slice 1, item 7), as the markup has them. */
 const FIXED_LABELS = new Set([
   'Image unavailable',
+  'Not loaded in the demo',
   'Case study',
   'Read the case study',
   'Archive',
@@ -691,6 +692,25 @@ test('an unavailable image keeps its box, caption, credit, and rights with Image
     'atlas-plate',
   ];
   assert.equal(markup.match(/Image unavailable/g)?.length, visiblePlacements.length);
+});
+
+test("where the host loads no media, as Demo Studio's local frame (#9), each placement says Not loaded in the demo", () => {
+  const local = inputFor();
+  const media = Object.fromEntries(
+    Object.entries(local.media).map(([id, asset]) => [
+      id,
+      {
+        ...asset,
+        derived: { state: 'unavailable' as const, reason: 'not-loaded' as const, since: null },
+      },
+    ]),
+  );
+  const works = render('selected-work', { ...local, media } as typeof local);
+  assert.match(
+    works,
+    /<span class="pf-media-box" data-media-state="unavailable" data-media-reason="not-loaded"><span class="pf-media-box__label">Not loaded in the demo<\/span><\/span>/,
+  );
+  assert.doesNotMatch(works, /Image unavailable/);
 });
 
 test('an image without alt text has none, never one made from its title or caption', () => {

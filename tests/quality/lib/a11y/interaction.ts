@@ -6,6 +6,9 @@
 //
 // - keyboard: Tab from the top until focus leaves the page. Every control
 //   is reached once (reachable), focus never loops short of the end (trap),
+//   and, on a framed surface's page, a frame Tab enters is one stop however
+//   many of its own it has, until focus leaves it (or a trap, past
+//   FRAME_PRESSES presses inside it), with no ring measured there,
 //   and each stop is shown in the viewport while it has focus
 //   (hidden-focusable), so the skip link passes and a pixel-clipped link
 //   fails.
@@ -54,6 +57,12 @@ const MIN_MARGIN = 4;
  * 99% of its area in Chromium. A 1px ring, at half, still fails.
  */
 const EDGE_ALLOWANCE = 0.9;
+/**
+ * How many presses a framed walk takes inside one frame before it calls the
+ * frame a trap. While Tab moves through a frame's own document, the page's
+ * activeElement stays the frame, so the walk sees one stop there.
+ */
+export const FRAME_PRESSES = 500;
 
 /**
  * Two frames drawn, and `ms` more. With JavaScript off the page runs no
@@ -175,6 +184,18 @@ export interface KeyboardOptions {
   readonly focus?: boolean;
   /** Hit-test each stop's center. */
   readonly occlusion?: boolean;
+  /**
+   * The page is a framed surface's (its registration's `framed`): a frame
+   * Tab enters is one stop, and its document, focus rings included, is its
+   * composition cells' to check.
+   */
+  readonly framed?: boolean;
+  /**
+   * The most presses the walk makes, all told, for the meta cases: past it
+   * the walk stops with a finding of its own, so one that lost a bound
+   * fails at once rather than running on.
+   */
+  readonly pressCeiling?: number;
 }
 
 /** A pixel channel that moves more than this when the layers go is the layers' doing. */
@@ -252,7 +273,20 @@ export async function keyboardFindings(
   }
   const stops: Active[] = [];
   let ended = false;
-  for (let press = 0; press < tabbables.length * 2 + 10; press++) {
+  // Presses inside a frame on a framed page, which don't count against the page's own.
+  let inFrame = 0;
+  for (let press = 0; press < tabbables.length * 2 + 10 + inFrame; press++) {
+    if (options.pressCeiling !== undefined && press >= options.pressCeiling) {
+      findings.push({
+        gate: 'keyboard',
+        rule: 'ceiling',
+        path: stops.at(-1)?.path,
+        expected: `the walk ends within ${options.pressCeiling} presses`,
+        actual: `the walk was still going after ${options.pressCeiling} presses`,
+      });
+      ended = true;
+      break;
+    }
     await page.keyboard.press('Tab');
     // Frames for what focus scrolls to, and for what that scroll shows, such as a footer.
     if (options.occlusion) await frames(page, 50);
@@ -261,6 +295,24 @@ export async function keyboardFindings(
     if (active.none) {
       ended = true;
       break;
+    }
+    // Still inside the frame Tab entered just before: its own stops, which this page
+    // can't see, are one. Only the stop straight after counts, so a page that loops
+    // back to the frame from a control past it is still a trap below.
+    if (options.framed && active.tag === 'iframe' && stops.at(-1)?.path === active.path) {
+      inFrame += 1;
+      if (inFrame > FRAME_PRESSES) {
+        findings.push({
+          gate: 'keyboard',
+          rule: 'trap',
+          path: active.path,
+          expected: 'Tab moves on through the frame and out of it',
+          actual: `focus never left the frame after ${FRAME_PRESSES} presses inside it`,
+        });
+        ended = true;
+        break;
+      }
+      continue;
     }
     if (stops.some((stop) => stop.path === active.path)) {
       findings.push({
@@ -295,7 +347,13 @@ export async function keyboardFindings(
         actual: `${active.hit || 'nothing'} is there`,
       });
     }
-    if (options.focus) findings.push(...(await focusFindings(page, active)));
+    // On a framed page, a frame's ring is its own document's, inside it, which a clip of
+    // the frame here can't tell from the frame's content: its composition cells check
+    // it. The frame's own box was checked above, as every stop's is, for being shown
+    // in the viewport while focus is in it.
+    if (options.focus && !(options.framed && active.tag === 'iframe')) {
+      findings.push(...(await focusFindings(page, active)));
+    }
   }
   await page.evaluate(() => document.querySelector('style[data-quality-pointer]')?.remove());
   if (!ended) {

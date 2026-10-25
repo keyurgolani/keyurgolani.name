@@ -412,12 +412,13 @@ test('a catalog-scale sweep, one that fits 16 neither alone nor beside the base,
   }
 });
 
-test('an ordinary PR plans 4 to 7 shards, as the base PR set does, and one with directed cells at most its own limit: a changed variant over 12, within 16, a changed pack 7 of 13', (t) => {
+test('an ordinary PR plans 4 to 8 shards, as the base PR set does, and one with directed cells at most its own limit: a changed variant over 12, within 16, a changed pack 8 of 13', (t) => {
   const directed = (plan: Plan) => plan.cells.some((cell) => cell.changed);
-  // The base sets: no directed cell, so 4 to 7 and the usual 12.
+  // The base sets: no directed cell, so 4 to 8 and the usual 12. Demo Studio's Content task
+  // (#9) took the base PR set from 7 to 8, 2,378 s of weight at a slowest shard of 285 s.
   for (const { name, plan } of plans.filter(({ plan }) => !directed(plan))) {
     const { count, max, reason } = pickShardCount(planGroups(plan, ENGINES));
-    assert.ok(count >= 4 && count <= 7, `${name}: ${count}`);
+    assert.ok(count >= 4 && count <= 8, `${name}: ${count}`);
     assert.equal(max, MAX_SHARDS, name);
     assert.equal(reason, null, name);
   }
@@ -461,7 +462,7 @@ test('an ordinary PR plans 4 to 7 shards, as the base PR set does, and one with 
   assert.ok(base.count <= MAX_SHARDS, `the undirected base alone picks ${base.count}`);
   t.diagnostic(`${name}: the undirected base alone picks ${base.count} of ${MAX_SHARDS}`);
   assert.deepEqual(pick('the PR set with one changed non-default pack'), {
-    count: 7,
+    count: 8,
     directedShards: 1,
     sweepShards: 1,
     variantShards: 0,

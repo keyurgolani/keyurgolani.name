@@ -28,6 +28,7 @@ import {
 } from '../lib/a11y/conditions';
 import { incompleteContrastFindings } from '../lib/a11y/contrast';
 import {
+  FRAME_PRESSES,
   frames,
   hoverFindings,
   keyboardFindings,
@@ -264,6 +265,43 @@ const MANY_LINKS = built(
   Array.from({ length: 60 }, (_, i) => `<p><a href="#l${i}">Link ${i}</a></p>`).join(''),
 );
 
+/**
+ * A page with a link before and after a sandboxed frame of `links` links, as
+ * Demo Studio's Content task frames the sample: opaque, scripts alone. With
+ * `trap`, the frame's document keeps Tab on its first link.
+ */
+function framedPage(links: number, trap = false): string {
+  const inner = `<!doctype html><html lang='en'><body>${Array.from(
+    { length: links },
+    (_, i) => `<p><a href='#f${i}'>Framed ${i}</a></p>`,
+  ).join('')}${
+    trap
+      ? "<script>document.addEventListener('keydown', (event) => { if (event.key === 'Tab') { event.preventDefault(); document.querySelector('a').focus(); } });</script>"
+      : ''
+  }</body></html>`;
+  const srcdoc = inner.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  return built(
+    'A page with a frame',
+    'iframe { display: block; width: 40rem; height: 20rem; }',
+    `<p><a href="#before" id="before">Before</a></p><iframe title="Framed" sandbox="allow-scripts" srcdoc="${srcdoc}"></iframe><p><a href="#after" id="after">After</a></p>`,
+  );
+}
+const FRAMED_MANY = framedPage(60);
+const FRAMED_TRAP = framedPage(3, true);
+/** The keyboard walk, with the focus check, as a framed surface's cells run it. */
+const framedWalk = (page: Page) => keyboardFindings(page, { focus: true, framed: true });
+/**
+ * The framed walk under a ceiling a little past the frame's own bound: its
+ * page takes two presses to reach the frame and FRAME_PRESSES + 1 inside it,
+ * so a walk that lost that bound stops here with another reason, and fails
+ * its case at once rather than running on.
+ */
+const FRAMED_TRAP_CEILING = FRAME_PRESSES + 50;
+const framedTrapWalk = (page: Page) =>
+  keyboardFindings(page, { focus: true, framed: true, pressCeiling: FRAMED_TRAP_CEILING });
+/** The keyboard walk alone, as a cell without the flag runs it. */
+const unframedWalk = (page: Page) => keyboardFindings(page);
+
 /** More controls that toggle something than the overlay check takes. */
 const MANY_TRIGGERS = built(
   'Many toggles',
@@ -342,6 +380,33 @@ const auditOutcome = (css: string): MetaOutcome => {
 
 export const A11Y_CASES: readonly MetaCase[] = [
   bad('trap', 'keyboard-trap.html', 'keyboard', 'trap|reachable', keyboard),
+  {
+    id: 'keyboard/framed-many-links',
+    gate: 'keyboard',
+    input:
+      "a framed surface's page with a sandboxed frame of sixty links between two of its own: Tab goes in, through, and out",
+    expect: 'pass',
+    browser: true,
+    run: () => onPage(FRAMED_MANY, framedWalk),
+  },
+  builtCase(
+    'unframed-many-links',
+    'keyboard',
+    'the same page, with no framed flag: the page sees the frame at every press, and calls it a trap',
+    FRAMED_MANY,
+    /^(?:keyboard trap: focus came back to it after \d+ stops, short of the end|keyboard reachable: Tab never reached it)$/,
+    unframedWalk,
+  ),
+  builtCase(
+    'framed-trap',
+    'keyboard',
+    `a framed surface's page whose frame keeps Tab on its first link: past ${FRAME_PRESSES} presses inside it, a trap`,
+    FRAMED_TRAP,
+    new RegExp(
+      `^(?:keyboard trap: focus never left the frame after ${FRAME_PRESSES} presses inside it|keyboard reachable: Tab never reached it)$`,
+    ),
+    framedTrapWalk,
+  ),
   bad('hidden-focusable', 'keyboard-hidden.html', 'keyboard', 'hidden-focusable', keyboard),
   bad('unreachable', 'keyboard-unreachable.html', 'keyboard', 'reachable', keyboard),
   good('keyboard', keyboard),

@@ -86,7 +86,14 @@ export function demoStore(local: StorageLike | null, session: StorageLike | null
           memory.delete(key);
           return;
         } catch {
-          // Full, or refused: the value stays in memory below.
+          // Full, or refused: the value stays in memory below, and what the
+          // store held under the key before goes, so a reload brings back
+          // nothing older than what the page showed.
+          try {
+            store.removeItem(key);
+          } catch {
+            // A store that throws on remove too holds nothing this page can clear.
+          }
         }
       }
       memory.set(key, value);

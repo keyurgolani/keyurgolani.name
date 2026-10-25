@@ -4,11 +4,13 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { defaultTuple, type Cell } from '../cells';
-import { writeCellFailures } from './failure-records';
+import { cellFailureRecord, failureKey, writeCellFailures } from './failure-records';
 import { PREFERENCE_ROWS, VIEWPORTS } from './matrix';
 import {
   axeFailures,
   colorPropertyFor,
+  nodeSelector,
+  nodeTarget,
   runnerFailure,
   type AxeResults,
   type CellContext,
@@ -110,6 +112,7 @@ test('one failure per failing rule and element, naming the cell, the input mode,
       uiSlot: undefined,
       tokenRole: undefined,
       selector: 'a[href$="#thesis"]',
+      target: undefined,
     },
     expected: 'All touch targets must be 24px large, or leave sufficient space',
     actual: 'Target has insufficient size (78.9px by 18px, should be at least 24px by 24px)',
@@ -196,4 +199,53 @@ test("a server's id is stable, names its project, and tags only its own cells' t
     servers.map((each) => each.id),
     [...servers.map((each) => each.id)].sort(),
   );
+});
+
+test('nodeSelector names an element in the page by its one selector, and none inside a frame or a shadow root', () => {
+  const node = (target: unknown[]) => ({ target }) as unknown as Parameters<typeof nodeSelector>[0];
+  assert.equal(nodeSelector(node(['main p.muted'])), 'main p.muted');
+  // A frame's: a part for each document, the frame's first. The last part names nothing in the page.
+  assert.equal(nodeSelector(node(['iframe', '.ee-plate__label'])), null);
+  // A shadow root's: its part is a list.
+  assert.equal(nodeSelector(node([['x-card', 'p']])), null);
+  assert.equal(nodeSelector(node([])), null);
+});
+
+test('a violation inside a frame or a shadow root keeps its target chain beside its null selector, for a reader alone: no key or written record reads it', () => {
+  const node = (target: unknown[]) => ({ target }) as unknown as Parameters<typeof nodeTarget>[0];
+  assert.equal(nodeTarget(node(['main p.muted'])), undefined);
+  assert.equal(nodeTarget(node([])), undefined);
+  assert.equal(nodeTarget(node(['iframe', '.inner'])), 'iframe >>> .inner');
+  assert.equal(nodeTarget(node([['x-card', 'p']])), 'x-card >>> p');
+  assert.equal(
+    nodeTarget(node(['#preview', ['x-card', 'a.more']])),
+    '#preview >>> x-card >>> a.more',
+  );
+  const violations = (target: unknown[]) =>
+    ({
+      violations: [
+        {
+          id: 'link-name',
+          help: 'Links must have discernible text',
+          description: 'Ensure links have discernible text',
+          nodes: [{ target, any: [], failureSummary: 'Fix all of the following:\n  No text' }],
+        },
+      ],
+    }) as unknown as Pick<AxeResults, 'violations'>;
+  const details = { 'link-name': [{ found: false }] };
+  const [framed] = axeFailures(CONTEXT, violations(['iframe', '.inner']), details);
+  assert.equal(framed?.element?.selector, undefined);
+  assert.equal(framed?.element?.target, 'iframe >>> .inner');
+  const [page] = axeFailures(CONTEXT, violations(['main a']), details);
+  assert.equal(page?.element?.selector, 'main a');
+  assert.equal(page?.element?.target, undefined);
+  // Display alone: two frame violations of one rule share a key whatever their chains,
+  // and the written record has no field for it.
+  const [other] = axeFailures(CONTEXT, violations(['iframe', '.other']), details);
+  assert.equal(failureKey(framed!), failureKey(other!));
+  const record = cellFailureRecord(framed!, {
+    gate: 'quality-pr',
+    reproCommand: 'pnpm quality:pr',
+  });
+  assert.ok(!JSON.stringify(record).includes('>>>'), JSON.stringify(record));
 });

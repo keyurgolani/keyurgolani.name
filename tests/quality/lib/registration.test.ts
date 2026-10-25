@@ -234,6 +234,56 @@ test('a signed-in Studio surface may say it needs its script, with why; nothing 
   );
 });
 
+test("a surface's perfState names one of its states, and nothing else", () => {
+  const file = 'quality/surfaces/studio.ts';
+  const states = [
+    { id: 'content', query: {}, status: 200 },
+    { id: 'history', query: { task: 'history' }, status: 200 },
+  ];
+  const studio = { ...LOGIN, id: 'studio', routes: ['/studio'], stateFixtures: states };
+  assert.deepEqual(problems({ ...studio, perfState: 'history' }, file), []);
+  for (const bad of ['media', '', 7, null]) {
+    assert.ok(
+      problems({ ...studio, perfState: bad }, file).some((each) =>
+        each.includes('perfState names one of stateFixtures'),
+      ),
+      String(bad),
+    );
+  }
+});
+
+test("a surface's framed says which cells cover its frame, the old framedContrast is refused, and only Demo Studio declares framed", async () => {
+  const file = 'quality/surfaces/login.ts';
+  const reason = "The frame's document is checked by its composition cells.";
+  assert.deepEqual(problems({ ...LOGIN, framed: { reason } }, file), []);
+  for (const [bad, problem] of [
+    [{}, 'framed.reason names the cells'],
+    [{ reason: 'Covered.' }, 'framed.reason names the cells'],
+    [{ reason, extra: 1 }, 'framed has unknown fields: extra'],
+    [true, 'framed is an object'],
+  ] as const) {
+    assert.ok(
+      problems({ ...LOGIN, framed: bad }, file).some((each) => each.includes(problem)),
+      problem,
+    );
+  }
+  // The flag's old name, which covered the contrast sampler alone, is no export a surface may have.
+  assert.ok(
+    problems({ ...LOGIN, framedContrast: { reason } }, file).some((each) =>
+      each.includes('framedContrast'),
+    ),
+  );
+  const { surfaces } = await loadRegistrations();
+  assert.deepEqual(
+    surfaces.filter((surface) => surface.framed).map((surface) => surface.id),
+    ['demo-studio'],
+  );
+  assert.match(
+    surfaces.find((surface) => surface.id === 'demo-studio')!.framed!.reason,
+    /composition cells check its contrast and its focus/,
+  );
+});
+
 test('a registration file with a problem fails the load', async () => {
   const root = mkdtempSync(path.join(tmpdir(), 'quality-registrations-'));
   try {

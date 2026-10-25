@@ -5,10 +5,11 @@ import type { ResolvedAppearance } from '@portfolio/appearance';
 import { PresentationBoundary } from '@portfolio/appearance/react';
 import { installPostPass } from '@portfolio/kit/markdown-local';
 import type { VariantComponent } from '@portfolio/kit/sections';
-import { resolvePortfolioView, type Context, type Site } from '@portfolio/schema';
+import { resolvePortfolioView, type Context, type PublicView, type Site } from '@portfolio/schema';
 import {
   buildRenderInput,
   contractValidators,
+  type RouteTarget,
   type VariantRenderInput,
 } from '@portfolio/variant-contract';
 import { appearanceCatalog, appearanceValidator } from '~/lib/appearance-checks';
@@ -21,6 +22,7 @@ import { ClientHostModules } from '~/lib/host-modules-client';
 import { resolveVisitorPathIn } from '~/lib/visitor-dispatch';
 import {
   reportFrameStatus,
+  reportLocalRoute,
   routeOf,
   startFrameChannel,
   type FrameChannelOptions,
@@ -53,6 +55,9 @@ export type LocalRender =
   | {
       readonly kind: 'render';
       readonly input: VariantRenderInput;
+      /** The public view it renders, and the route in it: what the server would render from. */
+      readonly view: PublicView;
+      readonly target: RouteTarget;
       readonly composition: Composition;
       readonly appearance: ResolvedAppearance;
       readonly lang?: 'en';
@@ -115,7 +120,7 @@ export async function renderLocal({
   const view = resolvePortfolioView(
     { portfolio, site: withSelection(site, document.selection) },
     {},
-    { mediaBase: '/local-media', extensions: CONTENT_EXTENSIONS },
+    { mediaBase: '/local-media', extensions: CONTENT_EXTENSIONS, unloadedMedia: 'not-loaded' },
   );
   const segments = route === '/' ? [] : route.slice(1).split('/');
   const resolved = await resolveVisitorPathIn(
@@ -149,10 +154,26 @@ export async function renderLocal({
   return {
     kind: 'render',
     input,
+    view: resolved.view,
+    target: resolved.target,
     composition: resolved.composition,
     appearance,
     ...(lang ? { lang } : {}),
   };
+}
+
+/**
+ * The route a render moved to on its own, a redirect, which goes to Studio
+ * as `navigated` through `report`, as a link's move does; or null for any
+ * other render, which reports nothing.
+ */
+export function followRedirect(
+  render: LocalRender,
+  report: (route: string) => void = reportLocalRoute,
+): string | null {
+  if (render.kind !== 'redirect') return null;
+  report(render.route);
+  return render.route;
 }
 
 /** A rendered local document: #19's boundary, the variant's and packs' stylesheets, and the variant. */
@@ -268,7 +289,9 @@ export function LocalFrame({
     void renderLocal({ document, route, registries, origin: studioOrigin })
       .then(async (render) => {
         if (cancelled) return;
-        if (render.kind === 'redirect') return setRoute(render.route);
+        // The channel keeps the route it shows, and tells Studio, as a link's move does.
+        const moved = followRedirect(render);
+        if (moved !== null) return setRoute(moved);
         if (render.kind !== 'render') throw new Error(render.kind);
         const load = VARIANT_LOADERS[render.composition.rendered.manifest.id];
         if (!load) throw new Error('unregistered');

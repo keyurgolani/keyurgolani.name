@@ -214,7 +214,7 @@ test("every hostile fixture the import takes renders inert in every composition,
   assert.ok(checked > 0);
 });
 
-test("no media source the content names reaches the page: a remote one renders as unavailable, and a data: one doesn't import", async () => {
+test("no media source the content names reaches the page: a remote one renders as Not loaded in the demo, and a data: one doesn't import", async () => {
   const { installPostPass } = await import('@portfolio/kit/markdown-local');
   await installPostPass();
   const { renderLocal } = await frame();
@@ -235,6 +235,7 @@ test("no media source the content names reaches the page: a remote one renders a
     ),
   );
   assert.equal(withData.kind, 'refused');
+  let shownNotLoaded = 0;
   for (const { manifest } of registries.variants.filter(
     ({ manifest }) => manifest.id !== 'fallback',
   )) {
@@ -247,10 +248,80 @@ test("no media source the content names reaches the page: a remote one renders a
       }),
     );
     assert.ok(!html.includes('evil.example'), manifest.id);
+    // A placeholder says why: the demo loads no media, never that it's still processing.
+    assert.doesNotMatch(html, /data-media-reason="(?!not-loaded")/, manifest.id);
+    if (/data-media-reason=/.test(html)) {
+      shownNotLoaded += 1;
+      assert.match(html, /Not loaded in the demo/, manifest.id);
+    }
     assert.ok(!html.includes(Buffer.from(CANARY).toString('base64')), manifest.id);
     // Nothing loads from anywhere but the build's own files.
     for (const url of loads(html)) {
       assert.doesNotMatch(url, /^(?:https?:|data:|blob:|\/\/)/, `${manifest.id}: ${url}`);
+    }
+  }
+  assert.ok(shownNotLoaded > 0, 'some composition shows a media placeholder');
+});
+
+/** `html` with every CSP nonce as `<nonce>`, so two renders that differ in nothing else compare equal. */
+const withoutNonces = (html: string) => html.replace(/\bnonce="[^"]*"/g, 'nonce="<nonce>"');
+
+test("the frame's client render of the sample is ExperienceDocument's server markup, nonces aside, in the site's own composition and every other (risk 3)", async () => {
+  const { installPostPass } = await import('@portfolio/kit/markdown-local');
+  await installPostPass();
+  const { renderLocal } = await frame();
+  const { ExperienceDocument } = await import('~/lib/experience-document');
+  const { documentAppearance } = await import('~/lib/document-appearance');
+  const { ClientHostModules } = await import('~/lib/host-modules-client');
+  const requestTime = new Date('2026-10-25T00:00:00.000Z');
+  const compositions = [
+    undefined,
+    ...registries.variants.map(({ manifest }) => manifest.id).filter((id) => id !== 'fallback'),
+  ];
+  for (const variant of compositions) {
+    const render = await renderLocal({
+      document: documentOf(pairFiles(EXAMPLE.portfolio), variant ? { variant } : {}),
+      route: '/',
+      registries,
+      origin: ORIGIN,
+      requestTime,
+    });
+    if (render.kind !== 'render') assert.fail(render.kind);
+    const id = render.composition.rendered.manifest.id;
+    const what = variant ?? `the site's own, ${id}`;
+    // What the server renders for the same view, route, composition, and time.
+    const server = renderToStaticMarkup(
+      await ExperienceDocument({
+        unit: render.view,
+        selection: render.composition,
+        load: VARIANT_LOADERS[id]!,
+        hostModules: ClientHostModules,
+        appearance: documentAppearance({ site: render.view.site, variant: id, profile: 'demo' }),
+        linkBase: { basePath: '/preview/local' },
+        route: render.target,
+        origin: ORIGIN,
+        requestTime,
+        nonce: 'server-nonce',
+      }),
+    );
+    const client = await markup(render);
+    // The same appearance from the frame's catalog as from the server's registry.
+    assert.deepEqual(
+      render.appearance,
+      documentAppearance({ site: render.view.site, variant: id, profile: 'demo' }),
+      what,
+    );
+    // Each is the whole document: the boundary, its skip link, and the sample in the composition.
+    assert.match(client, new RegExp(`data-variant="${id}"`), what);
+    assert.match(client, /Skip to content/, what);
+    assert.match(client, /Anamika Devi/, what);
+    const [a, b] = [withoutNonces(client), withoutNonces(server)];
+    if (a !== b) {
+      let at = 0;
+      while (at < a.length && a[at] === b[at]) at++;
+      assert.fail(
+        `${what}: the frame's markup differs at ${at}:\n  frame:  ${a.slice(at - 80, at + 160)}\n  server: ${b.slice(at - 80, at + 160)}`,
+      );
     }
   }
 });
@@ -299,6 +370,10 @@ test("the frame's module installs the post-pass, and its page renders no documen
   const shell = readFileSync(new URL('./local-preview.tsx', import.meta.url), 'utf8');
   assert.match(shell, /ssr: false/);
   assert.match(shell, /import\('\.\/local-document'\)/);
+  // The frame installs the kit's own post-pass by default, before any document renders.
+  const frame = readFileSync(new URL('./local-document.tsx', import.meta.url), 'utf8');
+  assert.match(frame, /\binstall = installPostPass\b/);
+  assert.match(frame, /install\(\)\.then\(/);
   const page = readFileSync(new URL('../preview/local/page.tsx', import.meta.url), 'utf8');
   assert.doesNotMatch(page, /getLive|readLive|catalog\.getLive|getPublicView/);
 });
@@ -388,5 +463,55 @@ test("an imported site that names a generated scheme renders the axis fallback i
       .filter(({ axis }) => axis === 'colorScheme')
       .map(({ code }) => code),
     ['appearance.input-missing'],
+  );
+});
+
+/** The route fixture that declares a /notes view, which no registered composition does. */
+const NOTES = JSON.parse(
+  readFileSync(
+    new URL('../../../../../../tests/fixtures/variants/notes/manifest.json', import.meta.url),
+    'utf8',
+  ),
+);
+
+test("a route the renderer redirects goes to Studio as navigated, through the frame channel's own report (handoff 3)", async () => {
+  const { followRedirect, renderLocal } = await frame();
+  // Another installed composition declares /notes, so the site's own redirects it home.
+  const withNotes = {
+    ...registries,
+    variants: [
+      ...registries.variants,
+      { packageName: 'fixture-notes', version: '0.0.0', manifest: NOTES },
+    ],
+  };
+  const render = await renderLocal({
+    document: documentOf(pairFiles(EXAMPLE.portfolio)),
+    route: '/notes',
+    registries: withNotes,
+    origin: ORIGIN,
+  });
+  assert.deepEqual(render, { kind: 'redirect', route: '/' });
+  const reported: string[] = [];
+  assert.equal(
+    followRedirect(render, (route) => reported.push(route)),
+    '/',
+  );
+  assert.deepEqual(reported, ['/']);
+  // Any other render moves nothing, and reports nothing.
+  for (const other of [{ kind: 'invalid' }, { kind: 'not-found' }] as const) {
+    assert.equal(
+      followRedirect(other, (route) => reported.push(route)),
+      null,
+    );
+  }
+  assert.deepEqual(reported, ['/']);
+
+  // With no report given, it's the frame channel's own, which frame-channel.test.ts shows
+  // posts navigated to Studio; and the frame's render takes it with none given.
+  const source = readFileSync(new URL('./local-document.tsx', import.meta.url), 'utf8');
+  assert.match(source, /report: \(route: string\) => void = reportLocalRoute,/);
+  assert.match(
+    source,
+    /const moved = followRedirect\(render\);\n\s*if \(moved !== null\) return setRoute\(moved\);/,
   );
 });

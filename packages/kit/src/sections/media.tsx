@@ -7,7 +7,8 @@ import { present, Ui, type RenderContext } from './primitives';
 // Everything about the picture itself comes from derived data: its
 // renditions, width, and height. Until a rendition exists, a placement that
 // isn't decorative keeps its box, its caption, and its credit, and says
-// "Image unavailable"; a decorative one renders nothing. Every placement
+// "Image unavailable", or "Not loaded in the demo" where the host loads no
+// media (#9's local frame); a decorative one renders nothing. Every placement
 // goes through placedMedia() in placement.tsx, so each shows its caption,
 // and when, where, and with what tags it was taken. Alt text is the owner's
 // alone, never a title or a caption. The focal point is the one inline style
@@ -168,7 +169,11 @@ function UnavailableBox({
       data-media-reason={placed.image.state === 'unavailable' ? placed.image.reason : undefined}
     >
       <span className="pf-media-box__label">
-        <Ui ctx={ctx}>Image unavailable</Ui>
+        <Ui ctx={ctx}>
+          {placed.image.state === 'unavailable' && placed.image.reason === 'not-loaded'
+            ? 'Not loaded in the demo'
+            : 'Image unavailable'}
+        </Ui>
       </span>
     </span>
   );

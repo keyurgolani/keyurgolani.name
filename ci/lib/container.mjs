@@ -1,7 +1,9 @@
 // Checks that run inside a container under test. The in-container functions
 // are serialized into `node -e` snippets, so they may use only Node built-ins
 // and nothing from their enclosing scope. The image scan, scanTree, also runs
-// on the build's own tree, in pnpm check:standalone.
+// on the build's own tree, in pnpm check:standalone. The source-map scan is
+// ci/lib/source-maps.mjs's, the one check:source-maps runs.
+import { scanSourceMaps } from './source-maps.mjs';
 
 /**
  * Fetches a path from the app inside its own container, at the address
@@ -170,29 +172,6 @@ export function scanTree(root) {
 }
 
 /**
- * Lists the browser source maps under `root`, the image's
- * apps/web/.next/static or apps/web/public (#6, Slice 1): only the analyze
- * build pnpm test:trace reads has any, under .next/static, and the image is
- * never one. Prints JSON: { exists, count, maps }, with the first 20 paths.
- */
-function sourceMapsFromInside(root) {
-  const fs = process.getBuiltinModule('node:fs');
-  const path = process.getBuiltinModule('node:path');
-  if (!fs.existsSync(root)) {
-    process.stdout.write(JSON.stringify({ exists: false, count: 0, maps: [] }));
-    return;
-  }
-  const maps = fs
-    .readdirSync(root, { withFileTypes: true, recursive: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.map'))
-    .map((entry) => path.relative(root, path.join(entry.parentPath, entry.name)))
-    .sort();
-  process.stdout.write(
-    JSON.stringify({ exists: true, count: maps.length, maps: maps.slice(0, 20) }),
-  );
-}
-
-/**
  * Lists what under `root` the user `uid`, in group `gid`, could change: a
  * path it owns, one its group can write, or one anyone can write. Links are
  * skipped, since what they point to is checked where it lives. Prints JSON:
@@ -296,7 +275,12 @@ export const WRITABLE_SNIPPET = `(${writableFromInside.toString()})(process.argv
 export const REQUESTS_SNIPPET = `(${requestsFromInside.toString()})(process.getBuiltinModule('node:fs').readFileSync(0, 'utf8'))`;
 export const HOST_REQUESTS_SNIPPET = `(${hostRequestsFromInside.toString()})(process.getBuiltinModule('node:fs').readFileSync(0, 'utf8'))`;
 export const SCAN_SNIPPET = `process.stdout.write(JSON.stringify((${scanTree.toString()})(process.argv[1])))`;
-export const MAPS_SNIPPET = `(${sourceMapsFromInside.toString()})(process.argv[1])`;
+/**
+ * The browser source maps under `root`, the image's apps/web/.next/static
+ * or apps/web/public (#6, Slice 1), by ci/lib/source-maps.mjs's one rule, as
+ * check:source-maps reads them: JSON { exists, maps, empty, linked, symlinks }.
+ */
+export const MAPS_SNIPPET = `process.stdout.write(JSON.stringify((${scanSourceMaps.toString()})(process.argv[1])))`;
 export const TREE_SNIPPET = `(${treeFromInside.toString()})(process.argv[1])`;
 export const WRITE_SNIPPET = `(${writeFromInside.toString()})(JSON.parse(process.argv[1]))`;
 /** The server's own /proc/1/status: its ids, capability sets, and NoNewPrivs. */

@@ -212,9 +212,30 @@ test('each registered target gets one representative perf cell, on its first rou
     ['surface:studio'],
   );
   for (const cell of cells) {
-    assert.equal(cell.path, cell.route, `${cell.id} carries no state query`);
+    // No query but the one a surface's perfState names.
+    if (cell.perfState !== true) {
+      assert.equal(cell.path, cell.route, `${cell.id} carries no state query`);
+    }
     assert.ok(['light', 'medium', 'heavy'].includes(cell.performanceTier));
   }
+  // The surfaces that name no perfState keep the row they had: their first route, no query.
+  const rowOf = (target: string) => {
+    const cell = plannedPerf(plan).find((each) => each.target === `surface:${target}`)?.cell;
+    return plan.cells.find((each) => each.id === cell);
+  };
+  assert.deepEqual(
+    [rowOf('login'), rowOf('studio')].map((cell) => [cell?.path, cell?.state, cell?.perfState]),
+    [
+      ['/studio/sign-in', 'signed-out', undefined],
+      ['/studio', 'content', undefined],
+    ],
+  );
+  // Demo Studio names its Content task's state, query and all (quality/surfaces/demo-studio.ts).
+  const demo = rowOf('demo-studio');
+  assert.deepEqual(
+    [demo?.path, demo?.state, demo?.perfState],
+    ['/studio?task=content', 'content', true],
+  );
   const fallback = cells.find((cell) => cell.target === 'fallback')!;
   assert.equal(fallback.path, '/');
   assert.equal(fallback.state, 'complete');
@@ -453,4 +474,44 @@ test("summary.json's budget block copies check:budgets' report when the job has 
   } finally {
     rmSync(reports, { recursive: true, force: true });
   }
+});
+
+test("a surface's perfState is the one way a query goes on its perf cell, and a surface with neither has none", async () => {
+  const plan = planCells({
+    meta: readBuildMeta(WEB),
+    registrations: await loadRegistrations(),
+    mode: 'pr',
+  });
+  const login = plan.cells.find((cell) => cell.target === 'login' && cell.sentinel)!;
+  const target = [{ kind: 'surface' as const, id: 'login' }];
+  const queried = { ...login, id: `${login.id}?failed`, path: `${login.route}?state=failed` };
+  // Named: its cell, query and all, even after a cell with no query.
+  assert.deepEqual(
+    perfCells({ cells: [login, { ...queried, perfState: true }], targets: target, mode: 'pr' }).map(
+      (cell) => cell.path,
+    ),
+    [queried.path],
+  );
+  // Not named: the cell with no query, never a queried one, and with only queried ones, none.
+  assert.deepEqual(
+    perfCells({ cells: [queried, login], targets: target, mode: 'pr' }).map((cell) => cell.path),
+    [login.path],
+  );
+  assert.deepEqual(perfCells({ cells: [queried], targets: target, mode: 'pr' }), []);
+  // From a registration: the state it names, on its first route, carries it to the plan.
+  const registrations = await loadRegistrations();
+  const named = {
+    ...registrations,
+    surfaces: registrations.surfaces.map((surface) =>
+      surface.id === 'studio' ? { ...surface, perfState: 'history' } : surface,
+    ),
+  };
+  const full = planCells({ meta: readBuildMeta(WEB), registrations: named, mode: 'full' });
+  const row = plannedPerf(full).find((each) => each.target === 'surface:studio')?.cell;
+  const cell = full.cells.find((each) => each.id === row);
+  assert.deepEqual(
+    [cell?.path, cell?.state, cell?.perfState],
+    ['/studio?task=history', 'history', true],
+  );
+  assert.equal(full.cells.filter((each) => each.target === 'studio' && each.perfState).length, 1);
 });

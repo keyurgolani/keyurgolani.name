@@ -1,7 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -179,16 +187,23 @@ test("CI's build job checks for source maps right after its default build", () =
   assert.equal(scripts['check:source-maps'], 'node ci/check-source-maps.mjs');
 });
 
-/** A temporary static tree holding `files`, removed after the test. */
+/**
+ * A temporary static tree holding `files`, removed after the test: a list of
+ * names, each empty, or an object of names and their contents.
+ */
 function staticTree(t, files) {
   const dir = mkdtempSync(path.join(tmpdir(), 'source-maps-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  for (const file of files) {
+  const entries = Array.isArray(files) ? files.map((file) => [file, '']) : Object.entries(files);
+  for (const [file, text] of entries) {
     mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
-    writeFileSync(path.join(dir, file), '');
+    writeFileSync(path.join(dir, file), text);
   }
   return dir;
 }
+
+/** The map Turbopack in Next 16.4.1 writes beside a new URL module worker's bundle, as it writes it. */
+const WORKER_MAP = '{\n  "version": 3,\n  "sources": [],\n  "sections": []\n}';
 
 test('a build with no .map file passes', (t) => {
   const dir = staticTree(t, ['chunks/a.js', 'chunks/b.css', 'media/font.woff2', 'map/index.js']);
@@ -247,12 +262,157 @@ test("the image smoke's scan finds every .map under the image's static tree", (t
   const dir = staticTree(t, ['chunks/a.js', 'chunks/a.js.map', 'css/b.css.map', 'media/f.woff2']);
   assert.deepEqual(mapsInside(dir), {
     exists: true,
-    count: 2,
     maps: ['chunks/a.js.map', 'css/b.css.map'],
+    empty: [],
+    linked: [],
+    symlinks: [],
   });
   const clean = staticTree(t, ['chunks/a.js']);
-  assert.deepEqual(mapsInside(clean), { exists: true, count: 0, maps: [] });
-  assert.deepEqual(mapsInside(path.join(clean, 'none')), { exists: false, count: 0, maps: [] });
+  assert.deepEqual(mapsInside(clean), {
+    exists: true,
+    maps: [],
+    empty: [],
+    linked: [],
+    symlinks: [],
+  });
+  assert.deepEqual(mapsInside(path.join(clean, 'none')), {
+    exists: false,
+    maps: [],
+    empty: [],
+    linked: [],
+    symlinks: [],
+  });
+});
+
+test('an empty map, as Turbopack writes for a new URL module worker, passes, in both checks, and only under the static tree', (t) => {
+  for (const text of [WORKER_MAP, '{"version":3,"sources":[],"sections":[]}', '{"version":3}']) {
+    const dir = staticTree(t, { 'chunks/a.js': 'a()', 'chunks/2z3sh82dl8glu.js.map': text });
+    assert.equal(checkSourceMaps(dir, {}), null, text);
+    assert.deepEqual(mapsInside(dir), {
+      exists: true,
+      maps: [],
+      empty: ['chunks/2z3sh82dl8glu.js.map'],
+      linked: [],
+      symlinks: [],
+    });
+  }
+  // public/ stays strict: no .map of any kind, an empty one included.
+  const built = staticTree(t, ['chunks/a.js']);
+  const served = staticTree(t, { 'vendor/x.js.map': WORKER_MAP });
+  assert.match(
+    checkSourceMaps(built, {}, served),
+    /holds 1 source map file\(s\): vendor\/x\.js\.map/,
+  );
+  assert.deepEqual(mapsInside(served).empty, ['vendor/x.js.map'], 'which the image smoke fails');
+});
+
+test('a map that holds anything of a source fails, in both checks, as does one that is not a map', (t) => {
+  const nested = (map) =>
+    JSON.stringify({ version: 3, sections: [{ offset: { line: 0, column: 0 }, map }] });
+  for (const [what, text] of [
+    ['one source', '{"version":3,"sources":["a.ts"],"mappings":""}'],
+    ['sourcesContent', '{"version":3,"sources":[],"sourcesContent":[]}'],
+    ['mappings', '{"version":3,"sources":[],"mappings":"AAAA"}'],
+    ['names', '{"version":3,"sources":[],"names":["x"]}'],
+    ['a nested section with a source', nested({ version: 3, sources: ['a.ts'] })],
+    ['a nested section with mappings', nested({ version: 3, mappings: ';;AAAA' })],
+    ['a section with no map', JSON.stringify({ version: 3, sections: [{ offset: {} }] })],
+    ['sections that are not a list', '{"version":3,"sections":{}}'],
+    ['version 2', '{"version":2,"sources":[]}'],
+    ['a list', '[]'],
+    ['null', 'null'],
+    ['no JSON at all', '{'],
+  ]) {
+    const dir = staticTree(t, { 'chunks/a.js': 'a()', 'chunks/a.js.map': text });
+    assert.match(
+      checkSourceMaps(dir, {}) ?? '',
+      /shipped 1 source map file\(s\) under .*: chunks\/a\.js\.map\./,
+      what,
+    );
+    assert.deepEqual(mapsInside(dir).maps, ['chunks/a.js.map'], what);
+  }
+  // An empty map beside it doesn't hide it.
+  const both = staticTree(t, {
+    'chunks/a.js.map': '{"version":3,"sources":["a.ts"]}',
+    'chunks/b.js.map': WORKER_MAP,
+  });
+  assert.match(
+    checkSourceMaps(both, {}),
+    /shipped 1 source map file\(s\) under .*: chunks\/a\.js\.map\./,
+  );
+});
+
+test("a shipped script or stylesheet that points at a map fails, in both checks, and a string that only mentions one, as postcss's does, doesn't", (t) => {
+  const dir = staticTree(t, {
+    'chunks/a.js': 'a();\n//# sourceMappingURL=a.js.map',
+    'css/b.css': 'b{}\n/*# sourceMappingURL=b.css.map */',
+    'chunks/c.mjs': 'c();\n  //@ sourceMappingURL=c.mjs.map',
+    'chunks/2irfnzd7tc7gz.js':
+      'let e,t="/*# sourceMappingURL=",r="";this.css+=t+"/*# sourceMappingURL="+e+" */";',
+    'chunks/2z3sh82dl8glu.js.map': WORKER_MAP,
+  });
+  assert.match(
+    checkSourceMaps(dir, {}),
+    /chunks\/a\.js, chunks\/c\.mjs, css\/b\.css point at a source map with a sourceMappingURL comment\. No default build may\./,
+  );
+  assert.deepEqual(mapsInside(dir).linked, ['chunks/a.js', 'chunks/c.mjs', 'css/b.css']);
+  const mentions = staticTree(t, {
+    'chunks/2irfnzd7tc7gz.js':
+      'let e,t="/*# sourceMappingURL=",r="";this.css+=t+"/*# sourceMappingURL="+e+" */";',
+    'chunks/2z3sh82dl8glu.js.map': WORKER_MAP,
+  });
+  assert.equal(checkSourceMaps(mentions, {}), null);
+  assert.deepEqual(mapsInside(mentions).linked, []);
+});
+
+test("a comment that names a map on a file's last line, after a statement's end, a block's, or a space, fails, in both checks, and the post-pass chunk's mid-line strings still pass", (t) => {
+  const trailing = {
+    'chunks/a.js': 'a();//# sourceMappingURL=a.js.map',
+    'chunks/b.js': 'b()\n}//@ sourceMappingURL=b.js.map\n',
+    'chunks/c.js': 'c(); /*# sourceMappingURL=c.js.map */\n\n',
+    'css/d.css': 'd{color:red}/*# sourceMappingURL=d.css.map */',
+  };
+  const dir = staticTree(t, trailing);
+  assert.match(
+    checkSourceMaps(dir, {}) ?? '',
+    /chunks\/a\.js, chunks\/b\.js, chunks\/c\.js, css\/d\.css point at a source map/,
+  );
+  assert.deepEqual(mapsInside(dir).linked, Object.keys(trailing));
+  // The post-pass chunk is one line, so its last: each mention follows a quote, so neither is one.
+  const chunk = 'let e,t="/*# sourceMappingURL=",r="";this.css+=t+"/*# sourceMappingURL="+e+" */";';
+  // Above the last line, a mention after a space is only a mention: the rule reads the last alone.
+  const above = 'x(e+" /*# sourceMappingURL="+t);\ny();';
+  for (const text of [chunk, `${chunk}\n`, `x();\n${chunk}`, above]) {
+    const mentions = staticTree(t, { 'chunks/2irfnzd7tc7gz.js': text });
+    assert.equal(checkSourceMaps(mentions, {}), null, text);
+    assert.deepEqual(mapsInside(mentions).linked, [], text);
+  }
+});
+
+test('a symlink anywhere under the static tree fails, in both checks, whatever it points at', (t) => {
+  const outside = staticTree(t, { 'a.js.map': '{"version":3,"sources":["a.ts"]}', 'b.js': 'b()' });
+  const dir = staticTree(t, { 'chunks/a.js': 'a()' });
+  mkdirSync(path.join(dir, 'media'));
+  // A map, a script, a directory, and a link to nothing.
+  symlinkSync(path.join(outside, 'a.js.map'), path.join(dir, 'chunks', 'a.js.map'));
+  symlinkSync(path.join(outside, 'b.js'), path.join(dir, 'chunks', 'b.js'));
+  symlinkSync(outside, path.join(dir, 'media', 'all'));
+  symlinkSync(path.join(outside, 'none'), path.join(dir, 'gone'));
+  assert.match(
+    checkSourceMaps(dir, {}) ?? '',
+    /chunks\/a\.js\.map, chunks\/b\.js, gone, media\/all are symlinks, which the check doesn't follow\. No default build may hold one\./,
+  );
+  assert.deepEqual(mapsInside(dir), {
+    exists: true,
+    maps: [],
+    empty: [],
+    linked: [],
+    symlinks: ['chunks/a.js.map', 'chunks/b.js', 'gone', 'media/all'],
+  });
+  const one = staticTree(t, { 'chunks/a.js': 'a()' });
+  symlinkSync(path.join(one, 'chunks', 'a.js'), path.join(one, 'chunks', 'b.js'));
+  assert.match(checkSourceMaps(one, {}) ?? '', /chunks\/b\.js is a symlink/);
+  assert.deepEqual(mapsInside(one).symlinks, ['chunks/b.js']);
 });
 
 test('the image smoke fails an image with a source map in its static tree or public/, or no static tree (CI only: it needs Docker)', () => {
@@ -261,8 +421,20 @@ test('the image smoke fails an image with a source map in its static tree or pub
   assert.match(smoke, /const IMAGE_PUBLIC = '\/app\/apps\/web\/public';/);
   assert.match(smoke, /for \(const root of \[IMAGE_STATIC, IMAGE_PUBLIC\]\) \{/);
   assert.match(smoke, /container\(\['exec', name, 'node', '-e', MAPS_SNIPPET, root\]\)/);
+  // An empty map passes under the static tree alone; public/ holds none, and nothing points at one.
   assert.match(
     smoke,
-    /if \(\(root === IMAGE_STATIC && maps\.exists !== true\) \|\| maps\.count !== 0\) \{\n\s+throw new SmokeFailure\(/,
+    /const shipped = \[\.\.\.\(maps\.maps \?\? \[\]\), \.\.\.\(root === IMAGE_PUBLIC \? \(maps\.empty \?\? \[\]\) : \[\]\)\];/,
+  );
+  assert.match(smoke, /const linked = maps\.linked \?\? \[\];/);
+  // A symlink fails under the static tree, as check:source-maps fails one.
+  assert.match(
+    smoke,
+    /const symlinks = root === IMAGE_STATIC \? \(maps\.symlinks \?\? \[\]\) : \[\];/,
+  );
+  assert.match(smoke, /const found = \[\.\.\.shipped, \.\.\.linked, \.\.\.symlinks\];/);
+  assert.match(
+    smoke,
+    /if \(\(root === IMAGE_STATIC && maps\.exists !== true\) \|\| found\.length > 0\) \{\n\s+throw new SmokeFailure\(/,
   );
 });

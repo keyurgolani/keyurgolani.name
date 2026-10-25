@@ -22,7 +22,7 @@ import type { CDPSession, Page, TestInfo } from '@playwright/test';
 import { reportsDir } from '../../../ci/lib/reports.mjs';
 import { QUERY_KEYS } from '../../../packages/appearance/src/axes';
 import { COLOR_ROLES, TOKEN_PROPERTIES } from '../../../packages/appearance/src/roles';
-import { cellAnnotations, type Cell } from '../cells';
+import { cellAnnotations, framedNote, type Cell } from '../cells';
 import { axeFor } from './axe';
 import {
   CHECKS_ANNOTATION,
@@ -66,7 +66,7 @@ import {
   reflowFindings,
   transparencyFindings,
 } from './a11y/conditions';
-import { incompleteContrastFindings } from './a11y/contrast';
+import { framedItems, incompleteContrastFindings } from './a11y/contrast';
 import {
   frames,
   hoverFindings,
@@ -203,6 +203,8 @@ interface SuiteRun {
   readonly conditions: boolean;
   /** A Studio surface that needs JavaScript: without it, its notice stands in for its content. */
   readonly scriptRequired: boolean;
+  /** A surface whose frame's document its composition cells cover: the walk takes the frame as one stop. */
+  readonly framed?: boolean;
 }
 
 /** Slice 2's suites on the page `run.at` names, as `run.owed` says. Motion runs before axe, in runCell. */
@@ -218,7 +220,11 @@ async function suites(run: SuiteRun): Promise<Finding[]> {
   const scripts = await page.evaluate(() => [...document.scripts].map((script) => script.src));
   if (owed.has('keyboard')) {
     findings.push(
-      ...(await keyboardFindings(page, { focus: does('focus'), occlusion: does('occlusion') })),
+      ...(await keyboardFindings(page, {
+        focus: does('focus'),
+        occlusion: does('occlusion'),
+        framed: run.framed ?? false,
+      })),
     );
     ran.add('keyboard');
   }
@@ -231,7 +237,10 @@ async function suites(run: SuiteRun): Promise<Finding[]> {
     await page.setViewportSize({ width, height });
     await page.goto(at, { waitUntil: 'load' });
     await frames(page);
-    for (const finding of await keyboardFindings(page, { occlusion: true })) {
+    for (const finding of await keyboardFindings(page, {
+      occlusion: true,
+      framed: run.framed ?? false,
+    })) {
       if (finding.gate === 'occlusion')
         findings.push({ ...finding, viewport: `${width}x${height}` });
     }
@@ -276,7 +285,7 @@ const ANIMATION_WAIT_MS = 2_000;
  */
 export const SWEEP_AXE_RULES = ['color-contrast', 'link-in-text-block', 'target-size'] as const;
 
-export async function audit(page: Page, row: PreferenceRow, sweptRules = false) {
+export async function audit(page: Page, row: PreferenceRow, sweptRules = false, framed = false) {
   const forced = row.context.forcedColors === 'active';
   const cdp = scriptless.get(page);
   // Read before script turns on: a query axe's pass would flip fails the row.
@@ -306,8 +315,10 @@ export async function audit(page: Page, row: PreferenceRow, sweptRules = false) 
     }
     if (forced) builder.disableRules(['color-contrast']);
     const results: AxeResults = await builder.analyze();
-    const contrast = forced ? [] : await incompleteContrastFindings(page, results);
-    return { results, contrast: [...scripting, ...contrast] };
+    const contrast = forced ? [] : await incompleteContrastFindings(page, results, framed);
+    // What the sampler left out, which the cell's report says.
+    const framedLeftOut = framed && !forced ? framedItems(results) : 0;
+    return { results, contrast: [...scripting, ...contrast], framedLeftOut };
   } finally {
     await cdp?.send('Emulation.setScriptExecutionDisabled', { value: true });
   }
@@ -378,6 +389,8 @@ export interface Pass {
   readonly failures: readonly CellFailure[];
   readonly ran: ReadonlySet<string>;
   readonly tokenPages: readonly { route: string; tokens: ResolvedTokens; file: string }[];
+  /** How many items inside a frame a framed cell's contrast sampler left out. */
+  readonly framedLeftOut?: number;
 }
 
 /**
@@ -426,7 +439,12 @@ export async function runPass(
 
   // Under reduced motion the frame window after load passes before axe, whose own frames would count.
   const motion = owed.has('motion') ? await motionFindings(page) : [];
-  const { results, contrast } = await audit(page, row, cell.sweep ?? false);
+  const { results, contrast, framedLeftOut } = await audit(
+    page,
+    row,
+    cell.sweep ?? false,
+    cell.framed !== undefined,
+  );
   ran.add('axe');
   const details: Record<string, ElementDetails[]> = {};
   for (const rule of results.violations) {
@@ -502,6 +520,7 @@ export async function runPass(
       ran,
       conditions: row.id === 'default',
       scriptRequired: cell.requiresScript !== undefined,
+      framed: cell.framed !== undefined,
     })),
     // The no-JavaScript row on a surface that needs it: its honest state, axe having run above.
     ...(noticeRow
@@ -612,6 +631,7 @@ export async function runPass(
     failures,
     ran,
     tokenPages,
+    framedLeftOut,
   };
 }
 
@@ -648,6 +668,11 @@ export async function runCell(run: CellRun, pass: typeof runPass = runPass) {
     [...pass.ran].map((check) => (cell.sweep ? sweepCheck(pass.row.id, check) : check)),
   );
   testInfo.annotations.push({ type: CHECKS_ANNOTATION, description: ran.join(' ') });
+  // A cell that leaves its frame out of the contrast sampler says how many items, and why.
+  if (cell.framed !== undefined) {
+    const leftOut = passes.reduce((sum, each) => sum + (each.framedLeftOut ?? 0), 0);
+    testInfo.annotations.push(framedNote(cell, leftOut));
+  }
   // A change-directed cell's failures name the changed axis, and the tokens it resolved.
   const diagnostic = changeDiagnostic(
     cell,

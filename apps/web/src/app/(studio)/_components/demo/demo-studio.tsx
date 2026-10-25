@@ -1,11 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import type { DemoBackend } from '~/lib/demo/browser-backend';
+import type { DemoBackend, LocalSources } from '~/lib/demo/browser-backend';
 import { demoStateLines, SANDBOX_LINE } from '~/lib/demo/state-lines';
 import {
+  frameKind,
   frameSource,
+  sourceAfterImport,
   studioLocation,
+  taskFragment,
   type DemoSelection,
   type DemoSource,
   type SchemeModes,
@@ -17,17 +20,22 @@ import type { StudioPolicy } from '~/lib/studio/backend';
 import { tasksFor, type StudioTask, type TaskId } from '~/lib/studio/tasks';
 import { AxisField } from '../shell/axis-field';
 import { StudioFrame } from '../shell/studio-frame';
+import { ContentTask } from './demo-content';
 import { DemoFrame } from './demo-frame';
+import { LocalFrameHost } from './demo-local-frame';
 
-// Demo Studio (#9, design note section 2): Studio's frame, with the sandbox
-// line in its header, over the demo's two tasks. Appearance has a field and
-// a reset for each of the five axes and one reset for the whole demo;
-// Preview has the frame's viewport, display mode, and motion. Each shows one
-// frame of the sample with the selection, or, once the visitor asks for it
-// and only when the server verified one, of the read-only reference (#9),
-// which nothing here can change. It reaches storage only through
-// the browser backend its page hands it, and never a server. Nothing here
-// publishes, saves a draft, or signs anyone in or out.
+// Demo Studio (#9, design note sections 2 and 3): Studio's frame, with the
+// sandbox line in its header, over the demo's three tasks. Appearance has a
+// field and a reset for each of the five axes and one reset for the whole
+// demo; Preview has the frame's viewport, display mode, and motion; Content
+// imports a pair of documents and exports the current one. Each shows one
+// frame with the selection: the sample at /sample; once the visitor asks for
+// it and only when the server verified one, the read-only reference (#9),
+// which nothing here can change; and otherwise, once the visitor has
+// imported a pair, /preview/local with their documents, which only this tab
+// holds and the URL never names. It reaches storage only through the browser
+// backend its page hands it, and never a server. Nothing here publishes,
+// saves a draft, or signs anyone in or out.
 
 export interface DemoStudioProps {
   /** What the build offers on each axis, without generated schemes, which /sample can't render. */
@@ -123,6 +131,7 @@ export function DemoStudio({
   // The sample unless the page has a reference and the visitor asked for it.
   const [source, setSource] = useState<DemoSource>(reference ? initialSource : 'sample');
   const showing: DemoSource = reference ? source : 'sample';
+  const [local, setLocal] = useState<LocalSources | null>(() => backend?.localSources() ?? null);
   const [viewportId, setViewportId] = useState<Viewport['id']>('desktop');
   const [motion, setMotion] = useState<'system' | 'reduce'>('system');
   const systemReduces = useSystemReducesMotion();
@@ -133,16 +142,17 @@ export function DemoStudio({
     setShown(backend);
     setSelection(backend?.selection() ?? null);
     setSource(reference ? initialSource : 'sample');
+    setLocal(backend?.localSources() ?? null);
   }
 
   // The URL follows the selection, in place, so Back leaves Studio.
   useEffect(() => {
     if (!selection) return;
-    const { pathname, hash } = window.location;
+    const { pathname, search, hash } = window.location;
     window.history.replaceState(
       window.history.state,
       '',
-      studioLocation(pathname, hash, selection, rules, showing),
+      studioLocation(pathname, taskFragment(search, hash), selection, rules, showing),
     );
   }, [selection, rules, showing]);
 
@@ -186,7 +196,9 @@ export function DemoStudio({
     setNotice(
       next === 'reference'
         ? `Showing ${reference.name}'s published portfolio, read-only. Nothing here changes ${reference.name}'s site.`
-        : 'Showing the neutral sample again.',
+        : local
+          ? 'Showing your documents again.'
+          : 'Showing the neutral sample again.',
     );
   }
 
@@ -194,6 +206,7 @@ export function DemoStudio({
     if (!backend) return;
     setSource('sample');
     setSelection(backend.resetAll());
+    setLocal(null);
     setNotice(
       "The demo is back to the sample's own appearance, and this browser holds none of it.",
     );
@@ -241,7 +254,7 @@ export function DemoStudio({
             <div className="studio-source__actions">
               {showing === 'reference' ? (
                 <button type="button" className="studio-button" onClick={() => show('sample')}>
-                  Back to the neutral sample
+                  {local ? 'Back to your documents' : 'Back to the neutral sample'}
                 </button>
               ) : (
                 <button type="button" className="studio-button" onClick={() => show('reference')}>
@@ -285,6 +298,7 @@ export function DemoStudio({
               catalog={catalog}
               selection={selection}
               rules={rules}
+              local={local}
               viewportId={viewportId}
               motion={motion}
               systemReduces={systemReduces}
@@ -294,6 +308,33 @@ export function DemoStudio({
               source={showing}
               {...(reference ? { referenceName: reference.name } : {})}
             />
+          ) : active.id === 'content' ? (
+            <>
+              <ContentTask
+                backend={backend}
+                onSource={(sources) => {
+                  setLocal(sources);
+                  // An import shows in the frame: off the reference, and on the visitor's own look.
+                  const next = sourceAfterImport(showing, sources !== null);
+                  if (next !== showing) {
+                    setSelection(backend.showSource(null));
+                    setSource(next);
+                  } else {
+                    setSelection(backend.selection());
+                  }
+                }}
+              />
+              <ContentFrame
+                catalog={catalog}
+                selection={selection}
+                rules={rules}
+                local={local}
+                viewportId={viewportId}
+                reduced={motion === 'reduce' && !systemReduces}
+                source={showing}
+                {...(reference ? { referenceName: reference.name } : {})}
+              />
+            </>
           ) : (
             <>
               <div className="studio-appearance__form">
@@ -323,6 +364,7 @@ export function DemoStudio({
                 catalog={catalog}
                 selection={selection}
                 rules={rules}
+                local={local}
                 viewportId={viewportId}
                 reduced={motion === 'reduce' && !systemReduces}
                 source={showing}
@@ -342,10 +384,16 @@ interface FrameSource {
   readonly referenceName?: string;
 }
 
+/**
+ * The frame: the read-only reference while the visitor asked for it, else the
+ * visitor's own documents in /preview/local while this tab holds them, else
+ * the sample.
+ */
 function ContentFrame({
   catalog,
   selection,
   rules,
+  local,
   viewportId,
   reduced,
   source,
@@ -354,6 +402,7 @@ function ContentFrame({
   catalog: AppearanceCatalog;
   selection: DemoSelection;
   rules: SelectionRules;
+  local: LocalSources | null;
   viewportId: Viewport['id'];
   reduced: boolean;
 } & FrameSource) {
@@ -363,6 +412,19 @@ function ContentFrame({
     source === 'reference' && referenceName
       ? `${referenceName}'s published portfolio, read-only`
       : 'Demo sample';
+  if (local && frameKind(source, local !== null) === 'local') {
+    return (
+      <LocalFrameHost
+        // A new frame for a change of motion, as /sample's query reloads its own.
+        key={reduced ? 'reduced' : 'full'}
+        sources={local}
+        selection={selection}
+        title={`Your documents, ${name}, ${viewportLabel(viewport)}`}
+        viewport={viewport}
+        reduced={reduced}
+      />
+    );
+  }
   return (
     <DemoFrame
       src={frameSource(selection, rules, { reduceMotion: reduced, source })}
@@ -376,6 +438,7 @@ function PreviewTask({
   catalog,
   selection,
   rules,
+  local,
   viewportId,
   motion,
   systemReduces,
@@ -388,6 +451,7 @@ function PreviewTask({
   catalog: AppearanceCatalog;
   selection: DemoSelection;
   rules: SelectionRules;
+  local: LocalSources | null;
   viewportId: Viewport['id'];
   motion: 'system' | 'reduce';
   systemReduces: boolean;
@@ -453,6 +517,7 @@ function PreviewTask({
         catalog={catalog}
         selection={selection}
         rules={rules}
+        local={local}
         viewportId={viewportId}
         reduced={motion === 'reduce' && !systemReduces}
         source={source}

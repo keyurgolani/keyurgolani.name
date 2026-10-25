@@ -13,6 +13,18 @@
 // it shows, and under failed enhancement its failure state, in place of
 // comparing its content (lib/a11y/conditions.ts). No composition may: a
 // visitor's page works without JavaScript.
+//
+// A surface's performance cell is its first route in a state with no query,
+// its default page as a visitor lands on it (lib/perf/plan.ts). A surface
+// with no such state may export `perfState`, the id of the state to measure
+// instead, and only then does a query go on its perf cell.
+//
+// A surface that shows a frame whose document other cells cover may export
+// `framed`, saying which cells do. Its cells' contrast sampler leaves out
+// the incomplete items axe names inside a frame, and their keyboard walk
+// takes a frame Tab enters as one stop, without measuring a focus ring
+// there; each cell's report says so, and why. axe's own pass still checks
+// the frame, and the walk still checks the frame's box is shown.
 
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
@@ -90,6 +102,14 @@ export interface SurfaceRegistration {
   readonly notApplicable: readonly NotApplicable[];
   /** Present for a Studio surface that needs its script by design. */
   readonly requiresScript?: RequiresScript;
+  /**
+   * The state whose cell, on the first route, the perf test measures, for a
+   * surface that says so: one of stateFixtures' ids. Absent, it measures the
+   * first route in a state with no query.
+   */
+  readonly perfState?: string;
+  /** Present for a surface whose frame's document other cells cover, and which ones. */
+  readonly framed?: { readonly reason: string };
 }
 
 export interface UnitRegistration {
@@ -114,7 +134,7 @@ const SURFACE_EXPORTS = [
 ] as const;
 const UNIT_EXPORTS = ['interactions', 'primaryActions', 'notApplicable'] as const;
 /** What a surface may export besides SURFACE_EXPORTS. */
-const OPTIONAL_SURFACE_EXPORTS = ['requiresScript'] as const;
+const OPTIONAL_SURFACE_EXPORTS = ['requiresScript', 'perfState', 'framed'] as const;
 
 /** Whether `route` is Studio's: /studio, or a path under it. */
 const isStudioRoute = (route: unknown) =>
@@ -134,6 +154,21 @@ function requiresScript(value: unknown, problems: string[]): void {
   if (!isReason(item.reason)) {
     problems.push(
       'requiresScript.reason says why it needs its script, in a sentence of three words or more',
+    );
+  }
+}
+
+function framed(value: unknown, problems: string[]): void {
+  const item = value as Record<string, unknown> | null;
+  if (item === null || typeof item !== 'object') {
+    problems.push('framed is an object, { reason }');
+    return;
+  }
+  const unknown = Object.keys(item).filter((key) => key !== 'reason');
+  if (unknown.length > 0) problems.push(`framed has unknown fields: ${unknown.join(', ')}`);
+  if (!isReason(item.reason)) {
+    problems.push(
+      "framed.reason names the cells that cover the frame's document, in a sentence of three words or more",
     );
   }
 }
@@ -292,6 +327,15 @@ export function validateSurface(exports: Exports, file: string): SurfaceRegistra
   interactions(exports.interactions, problems);
   strings(exports.primaryActions, 'primaryActions', problems);
   notApplicable(exports.notApplicable, problems);
+  if ('perfState' in exports) {
+    const ids = Array.isArray(exports.stateFixtures)
+      ? (exports.stateFixtures as { id?: unknown }[]).map((state) => state?.id)
+      : [];
+    if (!isString(exports.perfState) || !ids.includes(exports.perfState)) {
+      problems.push('perfState names one of stateFixtures, by its id');
+    }
+  }
+  if ('framed' in exports) framed(exports.framed, problems);
   if ('requiresScript' in exports) {
     requiresScript(exports.requiresScript, problems);
     // Only a Studio surface: every route of it /studio or under it, and signed in, or Demo

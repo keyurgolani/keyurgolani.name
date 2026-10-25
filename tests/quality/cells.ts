@@ -126,6 +126,13 @@ export interface Cell {
    * it, its cells check its honest state, and their report says why.
    */
   readonly requiresScript?: string;
+  /**
+   * Which cells cover a surface's frame, when it declares `framed`: its
+   * contrast sampler and its keyboard walk leave the frame's document to them.
+   */
+  readonly framed?: string;
+  /** True on the one cell a surface's perfState names: its first route in that state. */
+  readonly perfState?: true;
   readonly tuple: Tuple;
   /** The path the cell loads, its state's query included. */
   readonly path: string;
@@ -163,6 +170,16 @@ export interface ChangedBy {
 
 /** The annotation that says why a cell's page requires script, in its report. */
 export const REQUIRES_SCRIPT_ANNOTATION = 'requires-script';
+/** The annotation that says what a framed cell's checks left to its frame's own cells, and why. */
+export const FRAMED_ANNOTATION = 'framed';
+
+/** What a framed cell's report says the contrast sampler and the focus walk left inside its frame. */
+export function framedNote(cell: Pick<Cell, 'framed'>, leftOut: number) {
+  return {
+    type: FRAMED_ANNOTATION,
+    description: `${leftOut} contrast item${leftOut === 1 ? '' : 's'} and the focus walk inside the frame left to its composition cells: ${cell.framed}`,
+  };
+}
 
 /**
  * What a cell's report says of the cell itself, before any check runs: why
@@ -592,6 +609,10 @@ export function planCells({
           performanceTier: surface.performanceTier,
           ...(surface.auth === 'session' ? { auth: 'session' as const } : {}),
           ...(surface.requiresScript ? { requiresScript: surface.requiresScript.reason } : {}),
+          ...(surface.framed ? { framed: surface.framed.reason } : {}),
+          ...(routeIndex === 0 && surface.perfState === state.id
+            ? { perfState: true as const }
+            : {}),
           tuple,
           path: query ? `${route}?${query}` : route,
           route,

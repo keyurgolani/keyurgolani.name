@@ -613,6 +613,22 @@
   pointer-events: none;
 }
 
+/* Demo Studio's Content task (#9): the import, with its hint and its
+   report, then Export setup, each a column of its own. The gaps leave room
+   for a control's focus ring, 2px at a 2px offset, so the picker's ring
+   never lands on Export setup below it (WCAG 2.4.7 and 1.4.11). */
+.studio-content {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.studio-import,
+.studio-export {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+}
+
 /* The Appearance workspace (#8, Slice 5). */
 .studio-appearance {
   display: grid;
