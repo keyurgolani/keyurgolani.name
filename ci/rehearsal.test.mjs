@@ -5,6 +5,7 @@
 // release.yml's rc-rehearsal.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { finalVerdict } from './lib/verdict.mjs';
@@ -12,6 +13,7 @@ import { sampleImport } from './lib/pending.mjs';
 import { identityProblems } from './lib/identity.mjs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 import {
   BASELINES,
@@ -40,6 +42,9 @@ import {
   showsRevision,
   verdictInput,
 } from './rehearsal.mjs';
+
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
+const GUARD = path.join(ROOT, 'tests', 'harness', 'egress-guard.cjs');
 
 function tree(t, files) {
   const root = mkdtempSync(path.join(tmpdir(), 'rehearsal-test-'));
@@ -432,6 +437,22 @@ test("the native old-config row requires an empty data directory, and the image'
   assert.deepEqual(empty.files, ['store.json', 'publication/server.json']);
   for (const dir of ['drafts', 'revisions', 'publication', 'publication/events', 'assets/sha256'])
     assert.ok(empty.dirs.includes(dir), dir);
+
+  // The image row reads it through run.node, whose NODE_OPTIONS loads the egress guard, and
+  // the guard's banner on stderr isn't part of what the layout code printed.
+  const guarded = {
+    node(args) {
+      const r = spawnSync(process.execPath, args, {
+        cwd: ROOT,
+        encoding: 'utf8',
+        env: { ...process.env, NODE_OPTIONS: `--require ${GUARD}` },
+      });
+      return { status: r.status, out: `${r.stdout}${r.stderr}`, stdout: r.stdout };
+    },
+  };
+  const viaRun = guarded.node(['-e', '']);
+  assert.match(viaRun.out, /\[egress-guard\] loaded/, 'the guard prints its banner under run.node');
+  assert.deepEqual(emptyStoreEntries(guarded), empty);
 
   const EMPTY_STATUS = 'state: empty\n';
   const ok = (files, dirs = []) => refusedVolumeProblems({ files, dirs }, empty, EMPTY_STATUS);

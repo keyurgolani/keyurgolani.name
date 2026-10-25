@@ -209,7 +209,11 @@ class Run {
     };
   }
 
-  /** Runs node with `args` in the repo and returns { status, out }, its stdout and stderr together. */
+  /**
+   * Runs node with `args` in the repo and returns { status, out, stdout }: out is its stdout and
+   * stderr together, for the log and the egress check, and stdout alone is what it printed, the
+   * egress guard's banner on stderr left out, for a caller that parses it.
+   */
   node(args, { env = {}, cwd = REPO_ROOT, input } = {}) {
     const result = spawnSync(process.execPath, args, {
       cwd,
@@ -227,7 +231,7 @@ class Run {
     this.log.push(`$ node ${shown(logged)}\n${out}[exit ${result.status ?? result.signal}]\n`);
     const refused = egressRefusals(out);
     if (refused.length > 0) throw new Error(`a command reached outside the machine: ${refused[0]}`);
-    return { status: result.status, out };
+    return { status: result.status, out, stdout: result.stdout ?? '' };
   }
 
   /** portfolio-store, as `pnpm run store` runs it, on `dataDir`. */
@@ -1184,9 +1188,11 @@ process.stdout.write(JSON.stringify({ files: [rel(p.storeFile), rel(p.server)], 
             encoding: 'utf8',
           },
         );
-        return { status: r.status, out: `${r.stdout}${r.stderr}` };
+        return { status: r.status, out: `${r.stdout}${r.stderr}`, stdout: r.stdout };
       })();
-  const entries = parseJson(result.out);
+  // Only what the code printed: under run.node, NODE_OPTIONS loads the egress guard, whose
+  // banner on stderr is in `out` too.
+  const entries = parseJson(result.stdout);
   expect(
     result.status === 0 && Array.isArray(entries?.files) && Array.isArray(entries?.dirs),
     "the store's layout could be read",
