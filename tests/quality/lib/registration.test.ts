@@ -234,6 +234,24 @@ test('a signed-in Studio surface may say it needs its script, with why; nothing 
   );
 });
 
+test("a surface's perfState names one of its states, and nothing else", () => {
+  const file = 'quality/surfaces/studio.ts';
+  const states = [
+    { id: 'content', query: {}, status: 200 },
+    { id: 'history', query: { task: 'history' }, status: 200 },
+  ];
+  const studio = { ...LOGIN, id: 'studio', routes: ['/studio'], stateFixtures: states };
+  assert.deepEqual(problems({ ...studio, perfState: 'history' }, file), []);
+  for (const bad of ['media', '', 7, null]) {
+    assert.ok(
+      problems({ ...studio, perfState: bad }, file).some((each) =>
+        each.includes('perfState names one of stateFixtures'),
+      ),
+      String(bad),
+    );
+  }
+});
+
 test('a registration file with a problem fails the load', async () => {
   const root = mkdtempSync(path.join(tmpdir(), 'quality-registrations-'));
   try {
