@@ -18,12 +18,13 @@
 
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
+import type { AxeBuilder } from '@axe-core/playwright';
 import type { CDPSession, Page, TestInfo } from '@playwright/test';
 import { reportsDir } from '../../../ci/lib/reports.mjs';
 import { QUERY_KEYS } from '../../../packages/appearance/src/axes';
 import { COLOR_ROLES, TOKEN_PROPERTIES } from '../../../packages/appearance/src/roles';
 import { cellAnnotations, framedNote, type Cell } from '../cells';
-import { axeFor } from './axe';
+import { AXE_TAGS, axeFor } from './axe';
 import {
   CHECKS_ANNOTATION,
   NOTICE_CHECK,
@@ -66,7 +67,16 @@ import {
   reflowFindings,
   transparencyFindings,
 } from './a11y/conditions';
-import { framedItems, incompleteContrastFindings } from './a11y/contrast';
+import {
+  CONTRAST_RULE,
+  ENHANCED_CONTRAST_RULE,
+  framedItems,
+  HIGH_CONTRAST_BOUNDARY,
+  highContrastViolations,
+  incompleteContrastFindings,
+  MORE_CONTRAST,
+  rendersHighContrastScript,
+} from './a11y/contrast';
 import {
   frames,
   hoverFindings,
@@ -285,6 +295,42 @@ const ANIMATION_WAIT_MS = 2_000;
  */
 export const SWEEP_AXE_RULES = ['color-contrast', 'link-in-text-block', 'target-size'] as const;
 
+/** axe's run options, which audit() hands the cells' builder in place of its tags. */
+export type AxeRunOptions = Parameters<AxeBuilder['options']>[0];
+
+/** Whether `row` itself puts the page in high contrast: prefers-contrast: more, or the display mode. */
+export const rowIsHighContrast = (row: PreferenceRow): boolean =>
+  row.context.contrast === 'more' || row.displayMode === 'high-contrast';
+
+/**
+ * The axe options audit() runs: the cells' tags, or a swept cell's rules
+ * alone. Under forced colors neither contrast rule runs. Where the page
+ * renders high contrast, color-contrast-enhanced, WCAG's AAA rule at 7 and
+ * 4.5, runs beside color-contrast, to quality/thresholds.json's
+ * highContrast ratios; nowhere else does it run.
+ */
+export function axeRunOptions({
+  swept,
+  forced,
+  highContrast,
+}: {
+  readonly swept: boolean;
+  readonly forced: boolean;
+  readonly highContrast: boolean;
+}): AxeRunOptions {
+  const enhanced = highContrast && !forced;
+  if (swept) {
+    const rules = SWEEP_AXE_RULES.filter((rule) => !forced || rule !== CONTRAST_RULE);
+    return {
+      runOnly: { type: 'rule', values: [...rules, ...(enhanced ? [ENHANCED_CONTRAST_RULE] : [])] },
+    };
+  }
+  const runOnly = { type: 'tag' as const, values: [...AXE_TAGS] };
+  if (forced) return { runOnly, rules: { [CONTRAST_RULE]: { enabled: false } } };
+  if (enhanced) return { runOnly, rules: { [ENHANCED_CONTRAST_RULE]: { enabled: true } } };
+  return { runOnly };
+}
+
 export async function audit(page: Page, row: PreferenceRow, sweptRules = false, framed = false) {
   const forced = row.context.forcedColors === 'active';
   const cdp = scriptless.get(page);
@@ -309,12 +355,18 @@ export async function audit(page: Page, row: PreferenceRow, sweptRules = false, 
         ]),
       ANIMATION_WAIT_MS,
     );
-    const builder = axeFor(page);
-    if (sweptRules) {
-      builder.withRules(SWEEP_AXE_RULES.filter((rule) => !forced || rule !== 'color-contrast'));
-    }
-    if (forced) builder.disableRules(['color-contrast']);
-    const results: AxeResults = await builder.analyze();
+    // The row's mode, or a boundary's, such as a tuple cell's in high contrast.
+    const highContrast =
+      !forced &&
+      (rowIsHighContrast(row) ||
+        (await page.evaluate(rendersHighContrastScript, {
+          query: MORE_CONTRAST,
+          boundary: HIGH_CONTRAST_BOUNDARY,
+        })));
+    const builder = axeFor(page).options(
+      axeRunOptions({ swept: sweptRules, forced, highContrast }),
+    );
+    const results: AxeResults = await highContrastViolations(page, await builder.analyze());
     const contrast = forced ? [] : await incompleteContrastFindings(page, results, framed);
     // What the sampler left out, which the cell's report says.
     const framedLeftOut = framed && !forced ? framedItems(results) : 0;
