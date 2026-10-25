@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { GATE_TARGETS, validatePackManifest } from '@portfolio/appearance';
+import { REDUCED_MOTION_MS } from '@portfolio/appearance/node';
 import { loadThresholds } from '../../../quality/thresholds';
 import { appearanceTargets } from './appearance-targets';
 import { REPO_ROOT } from './registry-options';
@@ -64,4 +65,8 @@ test("the registry refuses a focus ring under the file's perimeter, and takes on
     JSON.stringify(thin.ok ? [] : thin.diagnostics),
     new RegExp(`from ${perimeter}px or ${perimeter / 16}rem`),
   );
+});
+
+test("the pack gate's reduced-motion default is the file's limit (#11)", () => {
+  assert.equal(REDUCED_MOTION_MS, loadThresholds().reducedMotion.transitionMs);
 });
