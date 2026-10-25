@@ -297,61 +297,64 @@ test.describe('touch', () => {
     },
   );
 
-  test(
-    'on a phone the chapters stack in order, a swipe moves the page, and rotation keeps the chapter',
-    { annotation, tag },
-    async ({ page }) => {
-      await load(page);
-      const start = await read(page);
-      expect(start.layout).toBe('vertical');
-      // The same five chapters, in order, with the same URLs.
-      expect(
-        await page
-          .locator('.hc-filmstrip a')
-          .evaluateAll((links) => links.map((link) => link.getAttribute('href'))),
-      ).toEqual(CHAPTERS.map(anchor));
-      // A swipe up the screen: the page scrolls, never cancelled, and the chapter follows.
-      const cdp = await page.context().newCDPSession(page);
-      // Swipe until the page is past Prologue: each swipe is a real touch scroll, never cancelled.
-      for (let swipe = 0; swipe < 12; swipe++) {
-        const before = await page.evaluate(() => window.scrollY);
-        // A finger down, ten moves up the screen, and up: the browser's own touch scrolling.
-        await cdp.send('Input.dispatchTouchEvent', {
-          type: 'touchStart',
-          touchPoints: [{ x: 195, y: 700 }],
-        });
-        for (let move = 1; move <= 10; move++) {
+  // SCRATCH, not for merge: the same test five times, for #146's CI evidence.
+  for (const run of [1, 2, 3, 4, 5]) {
+    test(
+      `on a phone the chapters stack in order, a swipe moves the page, and rotation keeps the chapter (scratch repeat ${run}/5)`,
+      { annotation, tag },
+      async ({ page }) => {
+        await load(page);
+        const start = await read(page);
+        expect(start.layout).toBe('vertical');
+        // The same five chapters, in order, with the same URLs.
+        expect(
+          await page
+            .locator('.hc-filmstrip a')
+            .evaluateAll((links) => links.map((link) => link.getAttribute('href'))),
+        ).toEqual(CHAPTERS.map(anchor));
+        // A swipe up the screen: the page scrolls, never cancelled, and the chapter follows.
+        const cdp = await page.context().newCDPSession(page);
+        // Swipe until the page is past Prologue: each swipe is a real touch scroll, never cancelled.
+        for (let swipe = 0; swipe < 12; swipe++) {
+          const before = await page.evaluate(() => window.scrollY);
+          // A finger down, ten moves up the screen, and up: the browser's own touch scrolling.
           await cdp.send('Input.dispatchTouchEvent', {
-            type: 'touchMove',
-            touchPoints: [{ x: 195, y: 700 - move * 50 }],
+            type: 'touchStart',
+            touchPoints: [{ x: 195, y: 700 }],
           });
+          for (let move = 1; move <= 10; move++) {
+            await cdp.send('Input.dispatchTouchEvent', {
+              type: 'touchMove',
+              touchPoints: [{ x: 195, y: 700 - move * 50 }],
+            });
+          }
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+          await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
+          if ((await read(page)).onScreen !== anchor('prologue')) break;
         }
-        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-        await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
-        if ((await read(page)).onScreen !== anchor('prologue')) break;
-      }
-      await expect
-        .poll(async () => {
-          const { current, onScreen } = await read(page);
-          return current === onScreen && current !== anchor('prologue');
-        })
-        .toBe(true);
-      const swiped = await read(page);
-      expect(swiped.current).not.toBe(anchor('prologue'));
-      expect(swiped).toMatchObject({ hash: swiped.current, history: start.history });
+        await expect
+          .poll(async () => {
+            const { current, onScreen } = await read(page);
+            return current === onScreen && current !== anchor('prologue');
+          })
+          .toBe(true);
+        const swiped = await read(page);
+        expect(swiped.current).not.toBe(anchor('prologue'));
+        expect(swiped).toMatchObject({ hash: swiped.current, history: start.history });
 
-      // Rotation at every chapter keeps the chapter.
-      for (const chapter of CHAPTERS) {
-        await page.setViewportSize({ width: 390, height: 844 });
-        await load(page, `/${anchor(chapter)}`);
-        await expectAt(page, chapter);
-        await page.setViewportSize({ width: 844, height: 390 });
-        await expectAt(page, chapter);
-        await page.setViewportSize({ width: 390, height: 844 });
-        await expectAt(page, chapter);
-      }
-    },
-  );
+        // Rotation at every chapter keeps the chapter.
+        for (const chapter of CHAPTERS) {
+          await page.setViewportSize({ width: 390, height: 844 });
+          await load(page, `/${anchor(chapter)}`);
+          await expectAt(page, chapter);
+          await page.setViewportSize({ width: 844, height: 390 });
+          await expectAt(page, chapter);
+          await page.setViewportSize({ width: 390, height: 844 });
+          await expectAt(page, chapter);
+        }
+      },
+    );
+  }
 });
 
 test.describe('reduced motion', () => {
