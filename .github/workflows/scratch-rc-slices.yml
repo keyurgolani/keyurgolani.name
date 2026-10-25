@@ -34,19 +34,69 @@ jobs:
       max-parallel: 4
       matrix:
         include:
+          # High contrast first: the high-contrast ROW on acme-reference, which no unit excludes: 6 tests.
+          - id: hc-row-acme-probe
+            timeout: 30
+            external: '1'
+            grep: 'cells\.spec\.ts composition:acme-reference (complete|sparse) / acme-reference/platform-neutral/warm-parchment/humanist-ui/system (1440x900|1024x768|390x844) high-contrast '
+          # High contrast first: every high-contrast display-mode cell of its target(s): 9 cells, 216 tests, about 56 min.
+          - id: hc-acme-a-c
+            timeout: 75
+            external: '1'
+            grep: 'cells\.spec\.ts composition:acme-reference \S+ \S+ acme-reference/[a-c]\S*/high-contrast '
+          # High contrast first: every high-contrast display-mode cell of its target(s): 12 cells, 288 tests, about 71 min.
+          - id: hc-acme-d-m
+            timeout: 95
+            external: '1'
+            grep: 'cells\.spec\.ts composition:acme-reference \S+ \S+ acme-reference/[d-m]\S*/high-contrast '
+          # High contrast first: every high-contrast display-mode cell of its target(s): 17 cells, 408 tests, about 86 min.
+          - id: hc-acme-n-z
+            timeout: 115
+            external: '1'
+            grep: 'cells\.spec\.ts composition:acme-reference \S+ \S+ acme-reference/[n-z]\S*/high-contrast '
+          # High contrast first: every high-contrast display-mode cell of its target(s): 18 cells, 432 tests, about 82 min.
+          - id: hc-editorial-evidence
+            timeout: 110
+            external: '1'
+            grep: 'cells\.spec\.ts composition:editorial-evidence \S+ \S+ \S+/high-contrast '
+          # High contrast first: every high-contrast display-mode cell of its target(s): 13 cells, 312 tests, about 58 min.
+          - id: hc-fallback
+            timeout: 80
+            external: '1'
+            grep: 'cells\.spec\.ts composition:fallback \S+ \S+ \S+/high-contrast '
+          # High contrast first: every high-contrast display-mode cell of its target(s): 13 cells, 312 tests, about 58 min.
+          - id: hc-horizontal-cinema
+            timeout: 80
+            external: '1'
+            grep: 'cells\.spec\.ts composition:horizontal-cinema \S+ \S+ \S+/high-contrast '
+          # High contrast first: every high-contrast display-mode cell of its target(s): 12 cells, 288 tests, about 54 min.
+          - id: hc-kinetic-cosmos
+            timeout: 75
+            external: '1'
+            grep: 'cells\.spec\.ts composition:kinetic-cosmos \S+ \S+ \S+/high-contrast '
+          # High contrast first: every high-contrast display-mode cell of its target(s): 15 cells, 360 tests, about 68 min.
+          - id: hc-obsidian-atelier
+            timeout: 90
+            external: '1'
+            grep: 'cells\.spec\.ts composition:obsidian-atelier \S+ \S+ \S+/high-contrast '
+          # High contrast first: every high-contrast display-mode cell of its target(s): 14 cells, 336 tests, about 63 min.
+          - id: hc-spatial-bento
+            timeout: 85
+            external: '1'
+            grep: 'cells\.spec\.ts composition:spatial-bento \S+ \S+ \S+/high-contrast'
           # Round 2, slice 1: editorial-evidence, fallback, obsidian-atelier x every stable language, 1440 every row + default at every viewport. 360 tests, about 60 min.
           - id: s1-vl-light
-            timeout: 100
+            timeout: 120
             external: '1'
             grep: 'cells\.spec\.ts composition:(editorial-evidence|fallback|obsidian-atelier) complete / \S+/(platform-neutral|carbon-inspired|fluent-2-inspired|glassmorphism|international-grid|material-3-inspired|minimal-flat|neobrutalist|paper-tactile|primer-inspired|soft-organic|spectrum-2-inspired)/warm-parchment/humanist-ui/system (1440x900 \S+|\S+ default) '
           # Round 2, slice 1b: horizontal-cinema, kinetic-cosmos, the same rows. 240 tests, about 40 min.
           - id: s1b-vl-medium
-            timeout: 75
+            timeout: 85
             external: '1'
             grep: 'cells\.spec\.ts composition:(horizontal-cinema|kinetic-cosmos) complete / \S+/(platform-neutral|carbon-inspired|fluent-2-inspired|glassmorphism|international-grid|material-3-inspired|minimal-flat|neobrutalist|paper-tactile|primer-inspired|soft-organic|spectrum-2-inspired)/warm-parchment/humanist-ui/system (1440x900 \S+|\S+ default) '
           # Round 2, slice 2: every variant (acme-reference included) x the stable languages at 1024 and 390 in reduced-motion, forced-colors, contrast-more. 462 tests, about 64 min.
           - id: s2-vl-narrow
-            timeout: 110
+            timeout: 120
             external: '1'
             grep: 'cells\.spec\.ts composition:\S+ complete / \S+/(carbon-inspired|fluent-2-inspired|glassmorphism|international-grid|material-3-inspired|minimal-flat|neobrutalist|paper-tactile|primer-inspired|soft-organic|spectrum-2-inspired)/warm-parchment/humanist-ui/system (390x844|1024x768) (reduced-motion|forced-colors|contrast-more) '
     container:
