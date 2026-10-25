@@ -7,6 +7,8 @@ import {
   accepts,
   cellAnnotations,
   defaultTuple,
+  FRAMED_CONTRAST_ANNOTATION,
+  framedContrastNote,
   planCells,
   siteTextFor,
   workRoutes,
@@ -428,4 +430,22 @@ test("a PR's sentinel rows don't grow with the catalog: three shipping packs or 
   // The full plan still covers every pack.
   const full = planCells({ meta: large, registrations, mode: 'full' });
   assert.ok(full.cells.some((cell) => cell.tuple.designLanguage === 'catalog-pack-1'));
+});
+
+test("a surface's framedContrast reason goes on each of its cells, and on no other, and its report's note says how many frame items it left out", () => {
+  const plan = planCells({ meta: checkoutMeta(), registrations, mode: 'full' });
+  const reason = registrations.surfaces.find((each) => each.id === 'demo-studio')?.framedContrast
+    ?.reason;
+  assert.ok(reason !== undefined && isReason(reason));
+  const demo = plan.cells.filter((cell) => cell.target === 'demo-studio');
+  assert.ok(demo.length > 0);
+  for (const cell of demo) assert.equal(cell.framedContrast, reason, cell.id);
+  for (const cell of plan.cells.filter((each) => each.target !== 'demo-studio')) {
+    assert.equal(cell.framedContrast, undefined, cell.id);
+  }
+  assert.deepEqual(framedContrastNote(demo[0]!, 25), {
+    type: FRAMED_CONTRAST_ANNOTATION,
+    description: `25 incomplete contrast items inside a frame left out of the sampler: ${reason}`,
+  });
+  assert.match(framedContrastNote(demo[0]!, 1).description, /^1 incomplete contrast item inside/);
 });
