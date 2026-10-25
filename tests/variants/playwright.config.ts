@@ -29,6 +29,13 @@ const reports = path.join(reportsDir(), 'variants');
  */
 const NO_WEBGL = { launchOptions: { args: ['--disable-3d-apis'] } };
 
+/** Demo Studio's Content task (#9), on the bundled sample under demo, with its own screenshot. */
+const DEMO_STUDIO = {
+  name: 'demo-studio',
+  testMatch: ['demo-studio.spec.ts'],
+  use: { ...devices['Desktop Chrome'], ...NO_WEBGL, appOptions: SAMPLE_APP },
+};
+
 export default defineConfig({
   ...base,
   testDir: '.',
@@ -85,8 +92,14 @@ export default defineConfig({
     // A run for the variants PORTFOLIO_VARIANTS_ONLY lists, such as
     // test:external-variant's, leaves them to the full run, since they
     // check no variant.
+    // And Demo Studio's Content task (#9), on the bundled sample under demo:
+    // the one Studio panel with a committed baseline. It checks no variant,
+    // so it too is the full run's.
     ...(LISTED_ONLY
       ? []
-      : [{ name: 'modes', testMatch: ['modes.spec.ts'], use: { ...devices['Desktop Chrome'] } }]),
+      : [
+          { name: 'modes', testMatch: ['modes.spec.ts'], use: { ...devices['Desktop Chrome'] } },
+          DEMO_STUDIO,
+        ]),
   ],
 });
