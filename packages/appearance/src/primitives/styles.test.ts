@@ -10,7 +10,9 @@ import {
   TYPOGRAPHY_ROLES,
 } from '../tokens';
 import { LAYER_ORDER } from '../layers';
+import type { DesignLanguageManifest } from '../manifests';
 import { catalogPacks, packPackages } from '../node/catalog';
+import { compilePack } from '../node/compile';
 import { NAMED_COLORS } from '../node/source-audit';
 import { SLOT_VALUES } from '../slots';
 
@@ -284,9 +286,11 @@ function ruleValue(selectors: string, property: string): string {
   assert.fail(`no ${property} in ${selectors}`);
 }
 
-/** A length token in CSS px: px, or rem at the 16px default. */
+/**
+ * A length token in CSS px: px, or rem at the 16px default. A bare 0 fails,
+ * since calc() can't add it to a length (#11): the compiler writes it 0px.
+ */
 function px(value: string): number {
-  if (value.trim() === '0') return 0;
   const match = /^(-?\d*\.?\d+)(px|rem)$/.exec(value.trim());
   assert.ok(match, `${value} is a px or rem length`);
   return Number.parseFloat(match[1]!) * (match[2] === 'rem' ? 16 : 1);
@@ -330,4 +334,37 @@ test("the part after a field's or select's control, and a tooltip, stand off the
       );
     }
   }
+});
+
+test("a language's bare 0 focus-offset still leaves the gap at the ring's reach, as the compiler writes it (#11)", () => {
+  const root = fileURLToPath(new URL('../../../../', import.meta.url));
+  const neutral = catalogPacks(root, packPackages(root)).find(
+    ({ id }) => id === 'platform-neutral',
+  )!;
+  const manifest = neutral.manifest as unknown as DesignLanguageManifest;
+  const result = compilePack({
+    kind: 'design-language',
+    manifest: {
+      ...manifest,
+      tokens: {
+        ...manifest.tokens,
+        'focus-offset': '0',
+        // Half of it, 1px, is under the 2px ring, so the ring's reach sets the gap.
+        'space-control-block': '0.125rem',
+      },
+    },
+    dir: fileURLToPath(new URL(`${neutral.dir}/`, `file://${root}/`)),
+  });
+  assert.ok(result.ok);
+  const compiled = new TextDecoder().decode(result.pack.stylesheet!.bytes);
+  const tokens = Object.fromEntries(
+    [...compiled.matchAll(/--ui-([a-z0-9-]+): ([^;]+);/g)].map(([, key, value]) => [key!, value!]),
+  );
+  assert.equal(tokens['focus-offset'], '0px');
+  const gap = ruleValue("[data-ui-slot='field'], [data-ui-slot='select']", 'gap');
+  assert.equal(resolve(gap, tokens), px(tokens['focus-width']!));
+  assert.equal(
+    resolve(ruleValue("[data-ui-slot='tooltip']", 'margin-block-end'), tokens),
+    px(tokens['focus-width']!),
+  );
 });

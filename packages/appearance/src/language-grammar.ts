@@ -215,6 +215,10 @@ const FOCUS_WIDTH: Grammar = {
   expected:
     'a length in px or rem from 2px or 0.125rem to 64px or 4rem, such as 2px: a focus ring always draws',
 };
+const FOCUS_OFFSET: Grammar = {
+  accepts: capped(pattern(SIGNED_LENGTH)),
+  expected: 'a length in px or rem, within 64px or 4rem either way, such as 2px',
+};
 const STATE_OPACITY: Grammar = {
   accepts: (value) => pattern(`${NUMBER}%?`)(value) && between(value, 0.3, 1),
   expected:
@@ -267,10 +271,7 @@ export const LANGUAGE_GRAMMARS: Readonly<Record<LanguageKey, Grammar>> = {
   'space-surface-inline': SIZE,
   'space-surface-block': SIZE,
   'focus-width': FOCUS_WIDTH,
-  'focus-offset': {
-    accepts: capped(pattern(SIGNED_LENGTH)),
-    expected: 'a length in px or rem, within 64px or 4rem either way, such as 2px',
-  },
+  'focus-offset': FOCUS_OFFSET,
   'focus-style': {
     accepts: oneOf([
       'auto',
@@ -322,6 +323,18 @@ export const LANGUAGE_GRAMMARS: Readonly<Record<LanguageKey, Grammar>> = {
   },
   'emphasis-glow': SHADOWS,
 };
+
+/**
+ * The keys whose value is one length, which the platform may read inside
+ * calc(), such as the field gap's `calc(var(--ui-focus-width) +
+ * var(--ui-focus-offset))`. A bare 0 there makes the calc() invalid, so the
+ * compiler writes it as 0px (#11).
+ */
+export const LENGTH_KEYS: ReadonlySet<LanguageKey> = new Set(
+  (Object.keys(LANGUAGE_GRAMMARS) as LanguageKey[]).filter((key) =>
+    [SIZE, FOCUS_WIDTH, FOCUS_OFFSET].includes(LANGUAGE_GRAMMARS[key]),
+  ),
+);
 
 /**
  * Why `value` can't be the design-language token `key`, or null when it can:

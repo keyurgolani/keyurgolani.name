@@ -23,6 +23,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { DisplayMode } from '@portfolio/schema';
 import type { PackKind } from '../axes';
+import { LENGTH_KEYS } from '../language-grammar';
 import { LAYER_ORDER } from '../layers';
 import type { ColorSchemeManifest, DesignLanguageManifest, TypographyManifest } from '../manifests';
 import type { GeneratedScheme } from '../resolve-tokens';
@@ -42,6 +43,7 @@ import {
   TYPOGRAPHY_MEASURES,
   TYPOGRAPHY_ROLES,
   type ColorTokens,
+  type LanguageKey,
 } from '../tokens';
 import { SCRIPT_FILE, type PackManifest } from '../validate-pack';
 import { readLanguageStylesheet, writeStyleNodes, type LintRule } from './stylesheet';
@@ -422,7 +424,10 @@ function compileLanguage(manifest: DesignLanguageManifest, dir: string): Compile
       rules = `@scope (${scope}) to ([data-appearance-boundary]) {\n${writeStyleNodes(sheet.nodes, '  ')}}\n`;
     }
   }
-  const tokens = LANGUAGE_KEYS.map((key) => `  --ui-${key}: ${manifest.tokens[key]};\n`).join('');
+  // A one-length token's bare 0 is written 0px, so it stays valid inside calc() (#11).
+  const value = (key: LanguageKey) =>
+    LENGTH_KEYS.has(key) && manifest.tokens[key].trim() === '0' ? '0px' : manifest.tokens[key];
+  const tokens = LANGUAGE_KEYS.map((key) => `  --ui-${key}: ${value(key)};\n`).join('');
   const css = `${header('Design language', manifest.id)}@layer language {\n${indent(
     `${scope} {\n${tokens}}\n${rules}`,
     '  ',
