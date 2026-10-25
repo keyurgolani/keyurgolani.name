@@ -11,6 +11,9 @@ import test from 'node:test';
 import { PNG } from 'pngjs';
 import { REPO_ROOT } from '../../quality/thresholds';
 import {
+  framedItems,
+  incompleteContrastFindings,
+  inFrame,
   NEIGHBOUR_MARGIN,
   neededRatio,
   neighbourTexts,
@@ -262,4 +265,44 @@ test('every preference mode has its row, and the high-contrast row fails when no
     /renders light, not high-contrast: .* ignored$/,
   );
   assert.deepEqual(displayModeProblems(PREFERENCE_ROWS[0]!, []), []);
+});
+
+test("with framedContrast, the sampler leaves out only the incomplete items axe names inside a frame, before it samples any; without it, a frame's item says it's inside a frame", async () => {
+  const top = { target: ['main .studio-content p'] };
+  const framed = { target: ['iframe', '.ee-plate__label'] };
+  const results = {
+    incomplete: [{ id: 'color-contrast', nodes: [top, framed] }],
+  } as unknown as Parameters<typeof incompleteContrastFindings>[1];
+  assert.deepEqual([top, framed].map(inFrame), [false, true]);
+  assert.equal(framedItems(results), 1);
+  // A page whose every element has no box, recording what the sampler looked up.
+  const looked: string[] = [];
+  const page = {
+    evaluate: async () => undefined,
+    locator: (selector: string) => {
+      looked.push(selector);
+      const element = {
+        scrollIntoViewIfNeeded: async () => undefined,
+        evaluate: async () => {
+          throw new Error('no element');
+        },
+      };
+      return { first: () => element };
+    },
+  } as unknown as Parameters<typeof incompleteContrastFindings>[0];
+  const unflagged = await incompleteContrastFindings(page, results);
+  assert.deepEqual(
+    unflagged.map(({ path, actual }) => [path, actual]),
+    [
+      ['main .studio-content p', 'it has no box in the viewport to sample'],
+      [undefined, "axe named it inside a frame or shadow root, which the sampler can't reach"],
+    ],
+  );
+  looked.length = 0;
+  const flagged = await incompleteContrastFindings(page, results, true);
+  assert.deepEqual(
+    flagged.map(({ path }) => path),
+    ['main .studio-content p'],
+  );
+  assert.deepEqual(looked, ['main .studio-content p'], 'nothing samples the frame item');
 });

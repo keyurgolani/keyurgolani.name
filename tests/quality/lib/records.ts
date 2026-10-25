@@ -30,10 +30,14 @@ export function colorPropertyFor(rule: string): ColorProperty | null {
   return /contrast|color|link-in-text-block/.test(rule) ? 'color' : null;
 }
 
-/** The element a node result names: its last selector, outside any frame or shadow root. */
+/**
+ * The element a node result names, by its selector in the page, or null for
+ * one inside a frame, whose target has a part for each document, or inside a
+ * shadow root, whose part is a list: nothing in the page itself is it.
+ */
 export function nodeSelector(node: NodeResult): string | null {
-  const last = node.target.at(-1);
-  return typeof last === 'string' ? last : null;
+  const [only, ...more] = node.target;
+  return more.length === 0 && typeof only === 'string' ? only : null;
 }
 
 /** What the failure was against: a contrast check's ratios, or the rule's help and what the node failed. */
