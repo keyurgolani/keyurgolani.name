@@ -20,7 +20,7 @@ import {
   readRevokedBefore,
   writeSessionFile,
 } from '../../../packages/core/src/auth/session-files.mjs';
-import { prepareAuthDirectories } from '../../../packages/core/src/data/layout.mjs';
+import { probeDataDirectory } from '../../../packages/core/src/data/layout.mjs';
 import { main, readHidden } from './owner.mjs';
 
 // apps/web/bin/owner.mjs (#2). hash-password: the password comes from a
@@ -274,7 +274,7 @@ test('--out refuses a file that exists before it asks for anything, and keeps no
 /** A data directory, prepared as owner startup leaves it, holding `count` session records. */
 async function dataDirWith(t, count) {
   const dir = tempDir(t);
-  assert.equal(await prepareAuthDirectories(dir), null);
+  assert.equal(await probeDataDirectory(dir), null);
   const at = Date.UTC(2026, 9, 20, 9, 0, 0);
   for (let index = 0; index < count; index += 1) {
     await writeSessionFile(dir, {
@@ -320,9 +320,12 @@ test('revoke-sessions writes revoked-before, deletes every session record, and a
   const again = await run(['revoke-sessions'], '', { PORTFOLIO_DATA_DIR_FILE: pointer });
   assert.equal(again.code, 0, again.stderr);
   assert.match(again.stderr, /^Revoked 0 sessions\./);
-  for (const sub of ['ephemeral', 'ephemeral/auth', 'ephemeral/auth/sessions', 'audit']) {
+  // Each writer makes its own directory: revoked-before's and the audit
+  // log's. With no session to delete, sessions/ isn't made.
+  for (const sub of ['ephemeral', 'ephemeral/auth', 'audit']) {
     assert.equal(statSync(path.join(fresh, sub)).mode & 0o777, 0o700, sub);
   }
+  assert.equal(existsSync(path.join(fresh, 'ephemeral/auth/sessions')), false);
 });
 
 test('revoke-sessions with no usable data directory revokes nothing', async (t) => {

@@ -1,19 +1,21 @@
 import 'server-only';
-import { ensurePrivateDir, prepareAuthDirectories } from '@portfolio/core/owner';
+import { ensurePrivateDir, probeDataDirectory } from '@portfolio/core/owner';
 import type { ConfigIssue, DeploymentConfig } from '../config';
 import { recordOwnerModule } from '../load-trace';
 import { ownerStoreOf } from './store';
 
 // The data.directory startup requirement (#2, #3): owner needs
 // PORTFOLIO_DATA_DIR, a directory the server's user can write. #2's half
-// creates ephemeral/auth/sessions/ and audit/ there at 0700, and proves a
-// write, a sync, and a rename work, the way session records are written.
-// #3's half runs the store's preflight, which makes its directories and
-// checks it sits outside PORTFOLIO_SOURCE_DIR and holds a layout this build
-// reads, then claims publication/server.json, so a second server refuses to
-// start. Under `next dev`, the default .data is made if it's missing. A
-// finding names the variable and the reason, never the path. Typed by
-// shape, so this module doesn't import the composition root.
+// proves a write, a sync, and a rename work there, the way session records
+// are written, in a temporary directory it always removes. It makes no auth
+// directory: each auth writer makes its own at its first write. #3's half
+// runs the store's preflight, which makes its directories and checks it
+// sits outside PORTFOLIO_SOURCE_DIR and holds a layout this build reads,
+// then claims publication/server.json, so a second server refuses to
+// start. A start a later requirement refuses leaves the empty store and
+// nothing more. Under `next dev`, the default .data is made if it's
+// missing. A finding names the variable and the reason, never the path.
+// Typed by shape, so this module doesn't import the composition root.
 
 recordOwnerModule('server/owner/data-directory');
 
@@ -44,7 +46,7 @@ export async function check({
 }): Promise<readonly ConfigIssue[]> {
   if (config.dataDir === undefined) return [fatal('required')];
   if (config.dataDirDefault) await ensurePrivateDir(config.dataDir).catch(() => {});
-  const problem = await prepareAuthDirectories(config.dataDir);
+  const problem = await probeDataDirectory(config.dataDir);
   if (problem !== null) return [fatal(problem)];
   return (await ownerStoreOf(owner)?.checkDirectory()) ?? [];
 }

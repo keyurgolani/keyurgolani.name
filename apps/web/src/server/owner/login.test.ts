@@ -7,7 +7,7 @@ import path from 'node:path';
 import {
   csrfToken,
   memoryAuditSink,
-  prepareAuthDirectories,
+  probeDataDirectory,
   type MemoryAuditSink,
 } from '@portfolio/core/owner';
 import { revokeAllSessionFiles } from '../../../../../packages/core/src/auth/session-files.mjs';
@@ -55,7 +55,7 @@ interface Setup {
 async function setup(t: TestContext, options: Setup = {}) {
   const dataDir = mkdtempSync(path.join(tmpdir(), 'owner-login-'));
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
-  assert.equal(await prepareAuthDirectories(dataDir), null);
+  assert.equal(await probeDataDirectory(dataDir), null);
   let at = Date.UTC(2026, 9, 20, 9, 0, 0);
   const now = () => at;
   const memory: MemoryAuditSink = memoryAuditSink(now);

@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { memoryAuditSink } from '../audit/sink';
-import { authPaths, prepareAuthDirectories } from '../data/layout.mjs';
+import { authPaths, probeDataDirectory } from '../data/layout.mjs';
 import { syncCredentialFingerprint } from './fingerprint';
 import { filesystemSessionStore } from './session-store';
 import { createSessions } from './sessions';
@@ -15,13 +15,18 @@ const B = 'qJ3x0bQd9kVb4m2ZcLw8Tg';
 test('a new hash at owner startup appends credential_changed by the operator, and a first start writes the fingerprint with no event', async (t) => {
   const dir = mkdtempSync(path.join(tmpdir(), 'fingerprint-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  assert.equal(await prepareAuthDirectories(dir), null);
+  assert.equal(await probeDataDirectory(dir), null);
   const audit = memoryAuditSink();
   const file = authPaths(dir).fingerprint;
   const sync = (fingerprint: string) =>
     syncCredentialFingerprint({ dataDir: dir, fingerprint, audit });
 
+  // Startup's probe made no auth directory; the first write makes ephemeral/auth/, 0700.
+  assert.equal(existsSync(path.join(dir, 'ephemeral')), false);
   assert.equal(await sync('MKhpw6F1Y5AkDvbeT_fgmw'), 'written');
+  for (const each of [authPaths(dir).ephemeral, authPaths(dir).auth]) {
+    assert.equal(statSync(each).mode & 0o777, 0o700, each);
+  }
   assert.equal(readFileSync(file, 'utf8'), 'MKhpw6F1Y5AkDvbeT_fgmw\n');
   assert.equal(statSync(file).mode & 0o777, 0o600);
   assert.equal(await sync('MKhpw6F1Y5AkDvbeT_fgmw'), 'same');
@@ -40,7 +45,7 @@ test('a new hash at owner startup appends credential_changed by the operator, an
 test('a session signed in under one hash stays signed out after the hash changes and changes back', async (t) => {
   const dir = mkdtempSync(path.join(tmpdir(), 'fingerprint-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  assert.equal(await prepareAuthDirectories(dir), null);
+  assert.equal(await probeDataDirectory(dir), null);
   let at = Date.UTC(2026, 9, 20, 9, 0, 0);
   const now = () => at;
   const audit = memoryAuditSink(now);
@@ -77,7 +82,8 @@ test('a session signed in under one hash stays signed out after the hash changes
 test('an empty fingerprint file is no fingerprint: it is written, and nothing is revoked or audited', async (t) => {
   const dir = mkdtempSync(path.join(tmpdir(), 'fingerprint-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  assert.equal(await prepareAuthDirectories(dir), null);
+  assert.equal(await probeDataDirectory(dir), null);
+  mkdirSync(authPaths(dir).auth, { recursive: true, mode: 0o700 });
   writeFileSync(authPaths(dir).fingerprint, '\n');
   const audit = memoryAuditSink();
   assert.equal(await syncCredentialFingerprint({ dataDir: dir, fingerprint: A, audit }), 'written');

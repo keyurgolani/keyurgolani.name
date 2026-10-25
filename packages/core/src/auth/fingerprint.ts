@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import type { AuditSink } from '../audit/sink';
-import { authPaths, writePrivateFile } from '../data/layout.mjs';
+import { authPaths, preparePrivateDir, writePrivateFile } from '../data/layout.mjs';
 import { recordOwnerModule } from '../load-trace';
 import { revokeAllSessionFiles } from './session-files.mjs';
 
@@ -9,7 +10,8 @@ import { revokeAllSessionFiles } from './session-files.mjs';
 // hash no longer counts. A new hash also revokes every session at the
 // restart, as revoke-sessions does, so going back to the old hash later
 // brings none of them back. ephemeral/auth/fingerprint holds the last one
-// the server started with, and the change goes in the audit log.
+// the server started with, and the change goes in the audit log. The
+// first write makes ephemeral/auth/, at 0700.
 
 recordOwnerModule('core/auth/fingerprint');
 
@@ -38,6 +40,7 @@ export async function syncCredentialFingerprint({
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
   if (previous === fingerprint) return 'same';
+  await preparePrivateDir(dataDir, path.dirname(file));
   if (previous === null || previous === '') {
     await writePrivateFile(file, `${fingerprint}\n`);
     return 'written';

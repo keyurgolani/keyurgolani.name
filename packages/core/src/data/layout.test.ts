@@ -13,7 +13,13 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { authPaths, prepareAuthDirectories, writePrivateFile } from './layout.mjs';
+import { open, rename } from 'node:fs/promises';
+import {
+  authPaths,
+  preparePrivateDir,
+  probeDataDirectory,
+  writePrivateFile,
+} from './layout.mjs';
 
 function scratch(t: TestContext): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'layout-'));
@@ -26,34 +32,139 @@ function scratch(t: TestContext): string {
 
 const mode = (file: string) => statSync(file).mode & 0o777;
 
-test('owner startup makes the auth and audit directories 0700, and puts back a mode an operator loosened', async (t) => {
+test("owner startup's probe writes, syncs, and renames in a directory of its own, and leaves nothing behind", async (t) => {
   const dir = scratch(t);
-  assert.equal(await prepareAuthDirectories(dir), null);
+  assert.equal(await probeDataDirectory(dir), null);
+  // No auth directory: each writer makes its own.
+  assert.deepEqual(readdirSync(dir), []);
+  // In a data directory that already holds them, they stay as they are.
   const paths = authPaths(dir);
-  for (const directory of [paths.ephemeral, paths.auth, paths.sessions, paths.audit]) {
-    assert.equal(mode(directory), 0o700, directory);
-  }
-  // The probe leaves nothing behind.
+  mkdirSync(paths.sessions, { recursive: true, mode: 0o700 });
+  mkdirSync(paths.audit, { mode: 0o700 });
+  assert.equal(await probeDataDirectory(dir), null);
+  assert.deepEqual(readdirSync(dir).sort(), ['audit', 'ephemeral']);
   assert.deepEqual(readdirSync(paths.auth), ['sessions']);
-  chmodSync(paths.sessions, 0o755);
-  chmodSync(paths.audit, 0o777);
-  assert.equal(await prepareAuthDirectories(dir), null);
-  assert.equal(mode(paths.sessions), 0o700);
-  assert.equal(mode(paths.audit), 0o700);
+  assert.deepEqual(readdirSync(paths.sessions), []);
+});
+
+test("a probe step that fails is the probe's finding, and its directory is still removed", async (t) => {
+  const dir = scratch(t);
+  const refused = async () => {
+    throw Object.assign(new Error('refused'), { code: 'EXDEV' });
+  };
+  // The write fails once the file is open: the handle is closed, and the directory removed.
+  let opened = 0;
+  const failingWrite = (async (file: string, flags: string, fileMode: number) => {
+    const handle = await open(file, flags, fileMode);
+    opened += 1;
+    return { writeFile: refused, sync: () => handle.sync(), close: () => handle.close() };
+  }) as unknown as typeof open;
+  assert.equal(await probeDataDirectory(dir, { open: failingWrite }), 'data_dir_not_writable');
+  assert.equal(opened, 1);
+  assert.deepEqual(readdirSync(dir), []);
+  // The rename fails, after the file is written and synced.
+  let renamed = 0;
+  const failingRename = async (from: string, to: string) => {
+    renamed += 1;
+    assert.ok(statSync(from).isFile());
+    assert.equal(path.dirname(from), path.dirname(to));
+    assert.notEqual(path.dirname(from), dir, 'the probe runs in a directory of its own');
+    return refused();
+  };
+  assert.equal(await probeDataDirectory(dir, { rename: failingRename }), 'data_dir_rename_failed');
+  assert.equal(renamed, 1);
+  assert.deepEqual(readdirSync(dir), []);
+  // And with the real rename, nothing either.
+  assert.equal(await probeDataDirectory(dir, { rename }), null);
+  assert.deepEqual(readdirSync(dir), []);
+});
+
+test('a writer makes its directory and each one above it at 0700 at its first write, whatever the umask', async (t) => {
+  const dir = scratch(t);
+  // One that would take the owner's write bit off a plain mkdir.
+  const umask = process.umask(0o277);
+  t.after(() => process.umask(umask));
+  const paths = authPaths(dir);
+  await preparePrivateDir(dir, paths.sessions);
+  for (const each of [paths.ephemeral, paths.auth, paths.sessions]) {
+    assert.equal(mode(each), 0o700, each);
+  }
+  // Again, with each one there: nothing changes.
+  await preparePrivateDir(dir, paths.sessions);
+  assert.deepEqual(readdirSync(paths.auth), ['sessions']);
+  await assert.rejects(preparePrivateDir(dir, dir), TypeError);
+  await assert.rejects(preparePrivateDir(dir, path.join(dir, '..', 'outside')), TypeError);
+});
+
+test('a writer refuses a link, a file, a mode other than 0700, or another user, wherever it stands on the way', async (t) => {
+  const paths = (dir: string) => authPaths(dir);
+  const cases: [what: string, arrange: (dir: string, elsewhere: string) => void, refusal: RegExp][] =
+    [
+      ['ephemeral/ a link', (d, e) => symlinkSync(e, paths(d).ephemeral), /^Error: ephemeral is a link/],
+      [
+        'ephemeral/auth/ a link',
+        (d, e) => {
+          mkdirSync(paths(d).ephemeral, { mode: 0o700 });
+          symlinkSync(e, paths(d).auth);
+        },
+        /^Error: ephemeral\/auth is a link/,
+      ],
+      [
+        'ephemeral/auth/ a file',
+        (d) => {
+          mkdirSync(paths(d).ephemeral, { mode: 0o700 });
+          writeFileSync(paths(d).auth, '');
+        },
+        /^Error: ephemeral\/auth isn't a directory/,
+      ],
+      [
+        'ephemeral/ loosened to 0755',
+        (d) => {
+          mkdirSync(paths(d).ephemeral, { mode: 0o700 });
+          chmodSync(paths(d).ephemeral, 0o755);
+        },
+        /^Error: ephemeral isn't 0700/,
+      ],
+      [
+        'ephemeral/auth/sessions/ narrowed to 0500',
+        (d) => {
+          mkdirSync(paths(d).sessions, { recursive: true, mode: 0o700 });
+          chmodSync(paths(d).sessions, 0o500);
+        },
+        /^Error: ephemeral\/auth\/sessions isn't 0700/,
+      ],
+    ];
+  for (const [what, arrange, refusal] of cases) {
+    const dir = scratch(t);
+    const elsewhere = scratch(t);
+    arrange(dir, elsewhere);
+    await assert.rejects(preparePrivateDir(dir, paths(dir).sessions), refusal, what);
+    assert.deepEqual(readdirSync(elsewhere), [], `${what}: something was made through it`);
+  }
+  // Another user's: the server runs as someone else, since only root can chown.
+  const dir = scratch(t);
+  mkdirSync(paths(dir).ephemeral, { mode: 0o700 });
+  const uid = process.getuid!();
+  t.mock.method(process, 'getuid', () => uid + 1);
+  await assert.rejects(
+    preparePrivateDir(dir, paths(dir).sessions),
+    /^Error: ephemeral belongs to another user/,
+  );
+  assert.deepEqual(readdirSync(paths(dir).ephemeral), []);
 });
 
 test('a data directory that is missing, a file, or not writable is refused by reason', async (t) => {
   const dir = scratch(t);
-  assert.equal(await prepareAuthDirectories(path.join(dir, 'absent')), 'data_dir_missing');
+  assert.equal(await probeDataDirectory(path.join(dir, 'absent')), 'data_dir_missing');
   const file = path.join(dir, 'file');
   writeFileSync(file, '');
-  assert.equal(await prepareAuthDirectories(file), 'data_dir_missing');
+  assert.equal(await probeDataDirectory(file), 'data_dir_missing');
   // Root writes anywhere, so a read-only directory only means something otherwise.
   if (process.getuid?.() !== 0) {
     const readOnly = mkdtempSync(path.join(dir, 'read-only-'));
     chmodSync(readOnly, 0o500);
     try {
-      assert.equal(await prepareAuthDirectories(readOnly), 'data_dir_not_writable');
+      assert.equal(await probeDataDirectory(readOnly), 'data_dir_not_writable');
     } finally {
       chmodSync(readOnly, 0o700);
     }
@@ -65,14 +176,14 @@ test("a data directory the server can't reach is its own finding, apart from a m
   // A link that loops.
   const loop = path.join(dir, 'loop');
   symlinkSync(loop, loop);
-  assert.equal(await prepareAuthDirectories(loop), 'data_dir_unreachable');
+  assert.equal(await probeDataDirectory(loop), 'data_dir_unreachable');
   // A directory under one the server may not look in. Root looks anywhere.
   if (process.getuid?.() !== 0) {
     const closed = path.join(dir, 'closed');
     mkdirSync(path.join(closed, 'data'), { recursive: true });
     chmodSync(closed, 0o000);
     try {
-      assert.equal(await prepareAuthDirectories(path.join(closed, 'data')), 'data_dir_unreachable');
+      assert.equal(await probeDataDirectory(path.join(closed, 'data')), 'data_dir_unreachable');
     } finally {
       chmodSync(closed, 0o700);
     }

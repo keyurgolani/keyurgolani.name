@@ -16,7 +16,7 @@ import {
   memoryAuditSink,
   openStore,
   preflight,
-  prepareAuthDirectories,
+  probeDataDirectory,
   previewPaths,
   type Draft,
   type Store,
@@ -103,7 +103,7 @@ async function setup(
   const dataDir = mkdtempSync(path.join(tmpdir(), 'owner-preview-'));
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
   assert.equal(await preflight({ dataDir }), null);
-  assert.equal(await prepareAuthDirectories(dataDir), null);
+  assert.equal(await probeDataDirectory(dataDir), null);
   const read = readDeploymentConfig(
     {
       NODE_ENV: 'production',

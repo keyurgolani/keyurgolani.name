@@ -11,9 +11,12 @@
 //   audit/<yyyy-mm>.jsonl                   AuditSink (#2, #3)
 //
 // Directories are 0700 and files 0600. ephemeral/ is never backed up (#3).
-// preview/grant-store.ts makes ephemeral/preview/ at the first mint.
+// The store's preflight makes ephemeral/ and audit/ at owner startup, and
+// nothing below ephemeral/ is made then: each writer makes its directory at
+// its first write, through preparePrivateDir(), so a start that's refused
+// leaves the empty store and nothing more.
 import { randomBytes } from 'node:crypto';
-import { chmod, mkdir, open, rename, rm, stat } from 'node:fs/promises';
+import { chmod, lstat, mkdir, open, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 // The owner load trace (#1, item 14), by the symbol load-trace.ts uses.
@@ -62,16 +65,49 @@ export async function ensurePrivateDir(dir) {
   await chmod(dir, 0o700);
 }
 
+/** @param {unknown} error */
+const errorCode = (error) => /** @type {NodeJS.ErrnoException} */ (error)?.code;
+
 /**
- * Makes ephemeral/, ephemeral/auth/, ephemeral/auth/sessions/, and audit/
- * under `dataDir`, each 0700.
+ * Makes `dir`, and each directory between `dataDir` and it that's missing,
+ * at 0700, for a writer at its first write. Each one, made now or already
+ * there, is then checked with lstat: a link, anything but a directory, one
+ * another user owns, or one whose mode isn't 0700 throws, so nothing is
+ * written through it. `dataDir` itself is the operator's mount, which the
+ * store's preflight checks at startup.
  *
  * @param {string} dataDir
+ * @param {string} dir under `dataDir`
  */
-export async function ensureAuthDirectories(dataDir) {
-  const paths = authPaths(dataDir);
-  for (const dir of [paths.ephemeral, paths.auth, paths.sessions, paths.audit]) {
-    await ensurePrivateDir(dir);
+export async function preparePrivateDir(dataDir, dir) {
+  const root = path.resolve(dataDir);
+  const relative = path.relative(root, path.resolve(dir));
+  if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new TypeError('Not a directory under the data directory.');
+  }
+  const uid = typeof process.getuid === 'function' ? process.getuid() : null;
+  let at = root;
+  for (const part of relative.split(path.sep)) {
+    at = path.join(at, part);
+    const name = path.relative(root, at);
+    let made = true;
+    try {
+      await mkdir(at, { mode: 0o700 });
+    } catch (error) {
+      if (errorCode(error) !== 'EEXIST') throw error;
+      made = false;
+    }
+    let found = await lstat(at);
+    if (found.isSymbolicLink()) throw new Error(`${name} is a link.`);
+    if (!found.isDirectory()) throw new Error(`${name} isn't a directory.`);
+    // A umask can take bits off a new directory's mode. One made here is
+    // put right, then checked like any other.
+    if (made && (found.mode & 0o777) !== 0o700) {
+      await chmod(at, 0o700);
+      found = await lstat(at);
+    }
+    if (uid !== null && found.uid !== uid) throw new Error(`${name} belongs to another user.`);
+    if ((found.mode & 0o777) !== 0o700) throw new Error(`${name} isn't 0700.`);
   }
 }
 
@@ -104,50 +140,54 @@ export async function writePrivateFile(file, text) {
 }
 
 /**
- * Gets the data directory ready for auth state at owner startup: creates
- * ephemeral/, ephemeral/auth/, ephemeral/auth/sessions/, and audit/ at 0700,
- * then writes, syncs, and renames a probe file the way session records are
- * written. Returns null when it's ready, or why it isn't:
+ * The auth half of owner startup's data.directory check (#2): the data
+ * directory is a directory, and a write, a sync, and a rename work in it,
+ * the way session records are written. The probe runs in a temporary
+ * directory of its own, removed however the probe ends, so the check makes
+ * nothing that outlasts it. Returns null when it's ready, or why it isn't:
  * `data_dir_missing` (nothing there, or a file), `data_dir_unreachable`
  * (the server may not look, or a link loops), `data_dir_not_writable`, or
- * `data_dir_rename_failed`.
+ * `data_dir_rename_failed`. Tests pass `io` to make a step fail.
  *
  * @param {string} dataDir
+ * @param {{ readonly open?: typeof open, readonly rename?: typeof rename }} [io]
  * @returns {Promise<'data_dir_missing' | 'data_dir_unreachable' | 'data_dir_not_writable' | 'data_dir_rename_failed' | null>}
  */
-export async function prepareAuthDirectories(dataDir) {
+export async function probeDataDirectory(dataDir, io = {}) {
+  const openFile = io.open ?? open;
+  const renameFile = io.rename ?? rename;
   try {
     if (!(await stat(dataDir)).isDirectory()) return 'data_dir_missing';
   } catch (error) {
-    const code = /** @type {NodeJS.ErrnoException} */ (error)?.code;
+    const code = errorCode(error);
     return code === 'ENOENT' || code === 'ENOTDIR' ? 'data_dir_missing' : 'data_dir_unreachable';
   }
-  const paths = authPaths(dataDir);
+  const dir = path.join(dataDir, `.probe-${randomBytes(6).toString('hex')}`);
   try {
-    await ensureAuthDirectories(dataDir);
+    await mkdir(dir, { mode: 0o700 });
   } catch {
     return 'data_dir_not_writable';
   }
-  const probe = path.join(paths.auth, `.probe-${randomBytes(6).toString('hex')}`);
   try {
-    const handle = await open(probe, 'wx', 0o600);
+    const probe = path.join(dir, 'probe');
     try {
-      await handle.writeFile('probe\n');
-      await handle.sync();
-    } finally {
-      await handle.close();
+      const handle = await openFile(probe, 'wx', 0o600);
+      try {
+        await handle.writeFile('probe\n');
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+    } catch {
+      return 'data_dir_not_writable';
     }
-  } catch {
-    await rm(probe, { force: true }).catch(() => {});
-    return 'data_dir_not_writable';
-  }
-  try {
-    await rename(probe, `${probe}.renamed`);
-  } catch {
-    return 'data_dir_rename_failed';
+    try {
+      await renameFile(probe, `${probe}.renamed`);
+    } catch {
+      return 'data_dir_rename_failed';
+    }
+    return null;
   } finally {
-    await rm(probe, { force: true }).catch(() => {});
-    await rm(`${probe}.renamed`, { force: true }).catch(() => {});
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
   }
-  return null;
 }

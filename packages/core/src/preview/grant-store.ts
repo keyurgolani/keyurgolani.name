@@ -1,6 +1,6 @@
-import { lstat, readdir, readFile, rm } from 'node:fs/promises';
+import { readdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { ensurePrivateDir, writePrivateFile } from '../data/layout.mjs';
+import { preparePrivateDir, writePrivateFile } from '../data/layout.mjs';
 import { recordOwnerModule } from '../load-trace';
 import { isDraftId, isRevisionId, type DraftId, type RevisionId } from '../store/layout';
 import type { DocumentInput, UnitInput } from '../catalog/unit';
@@ -328,8 +328,9 @@ async function names(dir: string): Promise<string[]> {
 
 /**
  * The store on disk under `dataDir`, which owner startup has prepared. Its
- * own directories are made at the first write, 0700, and refused when one is
- * a link, so a write never lands outside the data directory.
+ * own directories are made at the first write, 0700, by preparePrivateDir(),
+ * which refuses one that's a link, another user's, or not 0700, so a write
+ * never lands outside the data directory.
  */
 export function filesystemGrantStore(dataDir: string): GrantStore {
   const paths = previewPaths(dataDir);
@@ -342,18 +343,7 @@ export function filesystemGrantStore(dataDir: string): GrantStore {
     return path.join(paths.drafts, `${draftId}.json`);
   };
 
-  async function prepared(dir: string): Promise<void> {
-    for (const each of [path.join(dataDir, 'ephemeral'), paths.root, dir]) {
-      try {
-        if ((await lstat(each)).isSymbolicLink()) {
-          throw new Error(`${path.relative(dataDir, each)} is a link.`);
-        }
-      } catch (error) {
-        if (!missing(error)) throw error;
-      }
-      await ensurePrivateDir(each);
-    }
-  }
+  const prepared = (dir: string): Promise<void> => preparePrivateDir(dataDir, dir);
 
   async function get(digest: string): Promise<GrantRecord | null> {
     const file = recordFile(digest);

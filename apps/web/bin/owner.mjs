@@ -54,7 +54,7 @@ import {
   passwordProblem,
 } from '../../../packages/core/src/auth/phc.mjs';
 import { revokeAllSessionFiles } from '../../../packages/core/src/auth/session-files.mjs';
-import { ensureAuthDirectories } from '../../../packages/core/src/data/layout.mjs';
+import { authPaths, preparePrivateDir } from '../../../packages/core/src/data/layout.mjs';
 
 const USAGE = [
   'Usage: node apps/web/bin/owner.mjs hash-password [--out <path>] [--stdin]',
@@ -368,13 +368,15 @@ async function revokeSessionsCommand(env, io, now) {
   const at = now();
   let count;
   try {
-    await ensureAuthDirectories(dir);
+    // It makes ephemeral/auth/ for revoked-before, as the server's writers do.
     count = (await revokeAllSessionFiles(dir, at)).length;
   } catch {
     say("The data directory can't be written. Run revoke-sessions again once it can.");
     return 1;
   }
   try {
+    // The store's preflight makes audit/ at the server's start; this may run before one.
+    await preparePrivateDir(dir, authPaths(dir).audit);
     await appendAuditRecord(
       dir,
       auditRecord({

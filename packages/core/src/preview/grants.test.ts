@@ -16,7 +16,7 @@ import { memoryAuditSink } from '../audit/sink';
 import { revokeAllSessionFiles } from '../auth/session-files.mjs';
 import { filesystemSessionStore } from '../auth/session-store';
 import { createSessions, type Sessions, type SessionLifetime } from '../auth/sessions';
-import { prepareAuthDirectories } from '../data/layout.mjs';
+import { probeDataDirectory } from '../data/layout.mjs';
 import { onStoreEvent } from '../store/common';
 import { draftInput, type Draft } from '../store/drafts';
 import type { Store } from '../store/store';
@@ -81,7 +81,7 @@ async function setup(
   const now = () => at;
   const store = await newStore(t, { now });
   const dataDir = store.paths.root;
-  assert.equal(await prepareAuthDirectories(dataDir), null);
+  assert.equal(await probeDataDirectory(dataDir), null);
   const sessions = createSessions({
     store: filesystemSessionStore(dataDir),
     audit: memoryAuditSink(now),

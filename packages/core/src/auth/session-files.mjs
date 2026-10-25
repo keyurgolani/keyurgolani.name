@@ -1,10 +1,11 @@
 // Session records on disk (#2): one JSON file per session under
 // ephemeral/auth/sessions/, named for the SHA-256 digest of its token, so the
-// directory never holds a token. Plain ESM with node:* imports only, so
-// owner.mjs revoke-sessions shares it with the server.
+// directory never holds a token. Each writer makes its directory at its first
+// write; a reader takes a missing one as empty. Plain ESM with node:* imports
+// only, so owner.mjs revoke-sessions shares it with the server.
 import { readdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { authPaths, writePrivateFile } from '../data/layout.mjs';
+import { authPaths, preparePrivateDir, writePrivateFile } from '../data/layout.mjs';
 
 // The owner load trace (#1, item 14), by the symbol load-trace.ts uses.
 const TRACE = Symbol.for('keyurgolani.portfolio.owner-modules');
@@ -138,6 +139,7 @@ export async function readSessionFile(dataDir, digest) {
  * @param {SessionRecord} record
  */
 export async function writeSessionFile(dataDir, record) {
+  await preparePrivateDir(dataDir, authPaths(dataDir).sessions);
   await writePrivateFile(recordFile(dataDir, record.digest), serializeSession(record));
 }
 
@@ -210,6 +212,7 @@ export async function readRevokedBefore(dataDir) {
  * @returns {Promise<string[]>}
  */
 export async function revokeAllSessionFiles(dataDir, at) {
+  await preparePrivateDir(dataDir, authPaths(dataDir).auth);
   await writePrivateFile(authPaths(dataDir).revokedBefore, `${new Date(at).toISOString()}\n`);
   const deleted = [];
   for (const digest of await listSessionDigests(dataDir)) {

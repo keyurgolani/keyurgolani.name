@@ -12,7 +12,7 @@ import {
   filesystemSessionStore,
   isSessionHeld,
   memoryAuditSink,
-  prepareAuthDirectories,
+  probeDataDirectory,
   sessionDigest,
   sessionRef,
   type MemoryAuditSink,
@@ -95,7 +95,7 @@ interface Setup {
 
 async function setup(t: TestContext, options: Setup = {}) {
   const dataDir = options.dataDir ?? dataDirectory(t);
-  assert.equal(await prepareAuthDirectories(dataDir), null);
+  assert.equal(await probeDataDirectory(dataDir), null);
   let at = Date.UTC(2026, 9, 20, 9, 0, 0);
   const now = () => at;
   const audit: MemoryAuditSink = memoryAuditSink(now);
