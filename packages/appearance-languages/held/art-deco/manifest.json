@@ -2,7 +2,7 @@
   "id": "art-deco",
   "name": "Art Deco",
   "description": "Stepped corners, double borders, brushed-metal surfaces, normal density, low elevation, precise motion, and an etched-line texture.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "extended",
   "provenance": {
@@ -39,7 +39,8 @@
   ],
   "caveats": [
     "Translucent surfaces with a backdrop blur cost paint time on slower devices, and read less clearly over busy content.",
-    "A decorative gradient texture sits behind surfaces."
+    "A decorative gradient texture sits behind surfaces.",
+    "Its double focus ring is 5px, not the prototype's 3px: at 3px, the ring is two 1px lines, short of the area a 2px ring covers at 3:1."
   ],
   "tokens": {
     "surface-material": "linear-gradient(135deg, var(--color-surface-subtle), var(--color-surface-prominent) 45%, var(--color-surface-default) 55%, var(--color-surface-subtle))",
@@ -62,7 +63,7 @@
     "space-control-block": "0.625rem",
     "space-surface-inline": "1rem",
     "space-surface-block": "1rem",
-    "focus-width": "3px",
+    "focus-width": "5px",
     "focus-offset": "3px",
     "focus-style": "double",
     "state-hover-transform": "translateY(-1px)",
