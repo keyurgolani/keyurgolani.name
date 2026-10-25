@@ -40,7 +40,8 @@
   "caveats": [
     "Translucent surfaces with a backdrop blur cost paint time on slower devices, and read less clearly over busy content.",
     "A decorative gradient texture sits behind surfaces.",
-    "Its double focus ring is 5px, not the prototype's 3px: at 3px, the ring is two 1px lines, short of the area a 2px ring covers at 3:1."
+    "Its double focus ring is 5px, not the prototype's 3px: at 3px, the ring is two 1px lines, short of the area a 2px ring covers at 3:1.",
+    "Ships opaque: its approved 96% translucent surfaces fall under the contrast targets with its texture over a black or white backdrop, so its surfaces are 100% opaque, and only a dialog's backdrop is blurred. This supersedes the translucency caveats above."
   ],
   "tokens": {
     "surface-material": "linear-gradient(135deg, var(--color-surface-subtle), var(--color-surface-prominent) 45%, var(--color-surface-default) 55%, var(--color-surface-subtle))",
@@ -56,7 +57,7 @@
     "shadow-overlay": "0 10px 28px color-mix(in srgb, var(--color-text-primary) 16%, transparent)",
     "shadow-raised": "0 10px 28px color-mix(in srgb, var(--color-text-primary) 16%, transparent)",
     "shadow-inset": "inset 2px 2px 5px color-mix(in srgb, var(--color-text-primary) 16%, transparent)",
-    "surface-opacity": "96%",
+    "surface-opacity": "100%",
     "backdrop-blur": "4px",
     "control-height": "2.5rem",
     "space-control-inline": "0.875rem",
@@ -84,5 +85,6 @@
     "texture": "repeating-linear-gradient(135deg, transparent 0 5px, color-mix(in srgb, var(--color-border-subtle) 50%, transparent) 5px 6px)",
     "signature-fill": "linear-gradient(90deg, var(--color-signature-start), var(--color-signature-end))",
     "emphasis-glow": "none"
-  }
+  },
+  "approvedSurfaceOpacity": "96%"
 }

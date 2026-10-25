@@ -209,32 +209,32 @@ test('a recipe applies as its ordinary axis ids, one query, and a diagnostic for
     neon.query,
     'variant=kinetic-cosmos&language=cyberpunk&scheme=neon-city&type=geometric-display&mode=dark',
   );
-  // kinetic-cosmos, neon-city, and geometric-display ship; cyberpunk is held.
-  assert.deepEqual(
-    neon.diagnostics.map(({ axis, code }) => [axis, code]),
-    [['designLanguage', 'appearance.unavailable']],
-  );
+  // kinetic-cosmos, cyberpunk (opaque since #20 PR 2d), neon-city, and geometric-display all ship.
+  assert.deepEqual(neon.diagnostics, []);
   // With the held packs, the diagnostic says held, with the reason, not that nothing registers it.
   const read = await sources();
   const reasons = new Map(
     read.held.map(({ manifest, reason }) => [`designLanguage:${manifest.id}`, reason]),
   );
+  // No recipe names a held language since #20 PR 2d, so the check takes one that would.
+  const recipe = readRecipes(REPO_ROOT).find(({ id }) => id === 'neon-maker')!;
   const held = applyRecipe(
     registry,
-    readRecipes(REPO_ROOT).find(({ id }) => id === 'neon-maker')!,
+    { ...recipe, selection: { ...recipe.selection, designLanguage: 'frutiger-aero' } },
     reasons,
   );
   assert.match(
     held.diagnostics[0]!.message,
     /^names a held design language: It fails check:appearance/,
   );
-  // Two of the eight recipes name a held language. paper-tactile and carbon-inspired ship since #20 PR 2c.
+  // None of the eight recipes names a held language: paper-tactile and carbon-inspired ship since
+  // #20 PR 2c, and atelier-luxury and cyberpunk since PR 2d.
   const holding = readRecipes(REPO_ROOT).flatMap((recipe) =>
     reasons.has(`designLanguage:${recipe.selection.designLanguage}`)
       ? [`${recipe.id} ${recipe.selection.designLanguage}`]
       : [],
   );
-  assert.deepEqual(holding, ['night-gallery atelier-luxury', 'neon-maker cyberpunk']);
+  assert.deepEqual(holding, []);
 });
 
 test('the catalog query reads and writes as one URL form, and refuses what it cannot take', () => {
@@ -303,7 +303,7 @@ test('search filters by words, axis, tier, status, license, and mode', async () 
   assert.ok(ids('axis=scheme&mode=light').every((id) => id !== 'oled-black' && id !== 'neon-city'));
   assert.deepEqual(ids('axis=scheme&tier=experimental'), ['neon-city']);
   assert.deepEqual(ids('status=excluded'), []);
-  assert.equal(ids('status=held').length, 13);
+  assert.equal(ids('status=held').length, 5);
   assert.deepEqual(ids('q=refractive&status=held'), ['refractive-glass', 'holographic-iridescent']);
   assert.deepEqual(ids('q=nord&status=research'), ['nord']);
   assert.deepEqual(ids('q=nothing-matches-this'), []);
