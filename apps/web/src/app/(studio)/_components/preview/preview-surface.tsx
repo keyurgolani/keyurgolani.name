@@ -79,6 +79,12 @@ export interface PreviewSurfaceProps {
    * side (#7, item 7).
    */
   readonly name?: string;
+  /**
+   * What its live region says: every phase, as /studio/preview has it, or
+   * only what went wrong, for the Appearance view's frame, which loads again
+   * on every pick (owner direction, 2026-10-25).
+   */
+  readonly announce?: 'all' | 'problems';
   /** Whether the frame tells Studio as its reader scrolls, which a linked pair turns on. */
   readonly scrollSync?: boolean;
   /** The frame loaded `route`: its ready. */
@@ -106,7 +112,7 @@ export interface PreviewSurfaceHandle {
 /** How long a focused section's outline shows. */
 const FOCUS_OUTLINE_MS = 2500;
 
-type Phase = 'loading' | 'ready' | 'failed' | 'blocked' | 'outdated' | 'expired';
+export type Phase = 'loading' | 'ready' | 'failed' | 'blocked' | 'outdated' | 'expired';
 
 const ANNOUNCEMENTS: Readonly<Record<Phase, string>> = {
   loading: 'Loading the preview.',
@@ -180,8 +186,17 @@ function sendSafely<K extends 'navigate' | 'scroll-to'>(
   }
 }
 
+/** The phases that say nothing went wrong, which a surface that announces only problems keeps quiet. */
+const QUIET: ReadonlySet<Phase> = new Set<Phase>(['loading', 'ready']);
+
 /** `text`, as the live region of the surface called `name` says it. */
 const announced = (name: string, text: string) => (name === 'Preview' ? text : `${name}: ${text}`);
+
+/** What the live region of the surface called `name` says in `phase`. */
+export function announcement(name: string, phase: Phase, which: 'all' | 'problems'): string {
+  if (which === 'problems' && QUIET.has(phase)) return '';
+  return announced(name, ANNOUNCEMENTS[phase]);
+}
 
 /** `name` inside a sentence: First preview becomes first preview. */
 const lowered = (name: string) => `${name.charAt(0).toLowerCase()}${name.slice(1)}`;
@@ -597,7 +612,7 @@ export function PreviewSurface(props: PreviewSurfaceProps) {
         End of {lowered(name)}
       </p>
       <p className="preview-surface__live" role="status" aria-live="polite">
-        {announced(name, ANNOUNCEMENTS[phase])}
+        {announcement(name, phase, props.announce ?? 'all')}
       </p>
     </section>
   );

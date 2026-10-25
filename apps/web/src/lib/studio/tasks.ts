@@ -3,18 +3,12 @@
 // page's policy. This pull request builds the content task's expert source
 // mode and the validation summary. The rest show an empty state that says
 // which of #8's pull requests brings them, until it does. #9's Demo Studio
-// lists its own three, behind sandbox.view: Appearance, Preview, and Content,
-// where a visitor imports and exports a pair of documents.
+// lists its own two, behind sandbox.view: Appearance, whose preview sits
+// beside its controls (owner direction, 2026-10-25), and Content, where a
+// visitor imports and exports a pair of documents.
 
 export type TaskId =
-  | 'content'
-  | 'case-studies'
-  | 'media'
-  | 'appearance'
-  | 'site'
-  | 'validation'
-  | 'history'
-  | 'preview';
+  'content' | 'case-studies' | 'media' | 'appearance' | 'site' | 'validation' | 'history';
 
 export interface StudioTask {
   readonly id: TaskId;
@@ -63,10 +57,9 @@ export const STUDIO_TASKS: readonly StudioTask[] = Object.freeze([
   },
 ]);
 
-/** Demo Studio's tasks (#9): the appearance, the preview, and the content's import and export. */
+/** Demo Studio's tasks (#9): the appearance with its preview beside it, and the content's import and export. */
 export const DEMO_TASKS: readonly StudioTask[] = Object.freeze([
   { id: 'appearance', label: 'Appearance', capability: 'sandbox.view', pending: null },
-  { id: 'preview', label: 'Preview', capability: 'sandbox.view', pending: null },
   { id: 'content', label: 'Content', capability: 'sandbox.view', pending: null },
 ]);
 

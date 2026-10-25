@@ -24,13 +24,16 @@ export function frameGate(narrow: boolean): FrameGate {
 
 /**
  * What the visitor did that bears on the frame: picked a value it shows,
- * picked its viewport, imported a pair it showed them, or cleared that pair.
+ * picked its viewport, showed the Appearance split's preview pane (below
+ * 64rem, where one pane shows at a time), imported a pair it showed them, or
+ * cleared that pair.
  */
-export type FrameEvent = 'choose' | 'viewport' | 'imported' | 'cleared';
+export type FrameEvent = 'choose' | 'viewport' | 'shown' | 'imported' | 'cleared';
 
 /**
  * Whether the frame may load after `event`. Once it may, it always may. A
- * pick of what the frame shows or of its viewport asks to see it, so the
+ * pick of what the frame shows or of its viewport, or showing the preview
+ * pane, asks to see it, so the
  * stage loads even if its observer never fires, and an import has already
  * shown the visitor a frame, so clearing it brings no poster back.
  */

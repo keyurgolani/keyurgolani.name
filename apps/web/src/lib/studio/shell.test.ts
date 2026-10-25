@@ -36,12 +36,11 @@ test("the navigation covers the owner's seven tasks, each behind a capability", 
   assert.deepEqual(tasksFor([]), []);
 });
 
-test("Demo Studio lists its three tasks behind sandbox.view, and none of the owner's", () => {
+test("Demo Studio lists its two tasks behind sandbox.view, its preview beside the Appearance controls,, and none of the owner's", () => {
   assert.deepEqual(
     DEMO_TASKS.map((task) => [task.id, task.label, task.capability, task.pending]),
     [
       ['appearance', 'Appearance', 'sandbox.view', null],
-      ['preview', 'Preview', 'sandbox.view', null],
       ['content', 'Content', 'sandbox.view', null],
     ],
   );

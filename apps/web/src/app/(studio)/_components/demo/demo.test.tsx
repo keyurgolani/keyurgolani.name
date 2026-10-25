@@ -126,17 +126,26 @@ test('the Appearance task has a picker and a reset for each axis, a full reset, 
   assert.match(html, /Composition: Acme Orbit/);
 });
 
-test('the Preview task has the viewports, the display mode, and Follow system and Reduced motion', () => {
+test("the Appearance view's preview has the device widths and Follow system and Reduced motion in its toolbar, after the controls and before the frame", () => {
   const html = renderToStaticMarkup(
-    <DemoStudio catalog={CATALOG} policy={POLICY} backend={backend()} task="preview" />,
+    <DemoStudio catalog={CATALOG} policy={POLICY} backend={backend()} task="appearance" />,
   );
-  for (const viewport of VIEWPORTS) assert.ok(html.includes(`value="${viewport.id}"`), viewport.id);
-  assert.match(html, /<select id="studio-appearance-displayMode"/);
+  for (const viewport of VIEWPORTS) {
+    assert.ok(html.includes(`data-viewport="${viewport.id}"`), viewport.id);
+  }
+  // The display mode is an appearance axis, once, among the controls.
+  assert.equal((html.match(/<select id="studio-appearance-displayMode"/g) ?? []).length, 1);
   assert.match(
     html,
     /<option value="system"[^>]*>Follow system<\/option><option value="reduce">Reduced<\/option>/,
   );
   assert.equal((html.match(/<iframe\b/g) ?? []).length, 1);
+  // Tab order: the controls, the toolbar, then the frame.
+  const controls = html.indexOf('id="studio-appearance-variant"');
+  const toolbar = html.indexOf('aria-label="Preview controls"');
+  assert.ok(controls > 0 && controls < toolbar, 'the controls before the toolbar');
+  assert.ok(toolbar < html.indexOf('<iframe'), 'the toolbar before the frame');
+  assert.ok(html.indexOf('>Reset demo<') < toolbar, 'Reset demo among the controls');
 });
 
 test("a value the build doesn't offer says what shows in its place in the demo, and never mentions publishing", () => {
@@ -163,7 +172,7 @@ test("a value the build doesn't offer says what shows in its place in the demo, 
 });
 
 test('no Demo Studio view offers publishing, a draft, signing in or out, or settings', () => {
-  for (const task of ['appearance', 'preview', 'content'] as const) {
+  for (const task of ['appearance', 'content'] as const) {
     const html = renderToStaticMarkup(
       <DemoStudio catalog={CATALOG} policy={POLICY} backend={backend()} task={task} />,
     );
@@ -175,7 +184,7 @@ test('no Demo Studio view offers publishing, a draft, signing in or out, or sett
   }
 });
 
-test('Demo Studio has its three tasks in the frame, and the sandbox line where Owner Studio says who is signed in', () => {
+test('Demo Studio has its two tasks in the frame, and the sandbox line where Owner Studio says who is signed in', () => {
   const html = renderToStaticMarkup(
     <DemoStudio catalog={CATALOG} policy={POLICY} backend={backend()} task="appearance" />,
   );
@@ -190,7 +199,7 @@ test('Demo Studio has its three tasks in the frame, and the sandbox line where O
         /<a href="#([a-z-]+)" class="studio-shell__task"(?: aria-current="page")?>([^<]+)<\/a>/g,
       ),
     ].map(([, id, label]) => `${id} ${label}`),
-    ['appearance Appearance', 'preview Preview', 'content Content'],
+    ['appearance Appearance', 'content Content'],
   );
   assert.match(html, /<a href="#appearance" class="studio-shell__task" aria-current="page">/);
   // Without JavaScript it says it needs it, and where the sample works without.

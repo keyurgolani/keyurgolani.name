@@ -177,11 +177,14 @@ test('the frame defaults to the mobile viewport at a phone’s width, the deskto
       schemeModes={SCHEME_MODES}
       policy={POLICY}
       backend={backend()}
-      task="preview"
+      task="appearance"
       initialFrameRequested
     />,
   );
-  assert.match(html, /<option value="desktop" selected="">/);
+  assert.match(
+    html,
+    /<button type="button" class="studio-split__width" data-viewport="desktop" aria-pressed="true">/,
+  );
   assert.match(frameAttributes(html)?.style ?? '', /inline-size:1440px/);
 });
 
@@ -268,8 +271,8 @@ test('Show preview lets the stage load, moves focus to it, and says in the page�
   assert.equal(LOADING_TEXT, 'Loading the preview…');
 });
 
-test('a pick of what the frame shows or of its viewport loads it, an import keeps it loaded, and nothing unloads it', () => {
-  for (const event of ['choose', 'viewport', 'imported'] as const) {
+test('a pick of what the frame shows or of its viewport, or showing the preview pane, loads it, an import keeps it loaded, and nothing unloads it', () => {
+  for (const event of ['choose', 'viewport', 'shown', 'imported'] as const) {
     assert.equal(frameRequestedAfter(false, event), true, event);
     assert.equal(frameRequestedAfter(true, event), true, event);
   }

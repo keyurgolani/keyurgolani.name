@@ -20,6 +20,7 @@ import type { StudioPolicy } from '~/lib/studio/backend';
 import { tasksFor, type StudioTask, type TaskId } from '~/lib/studio/tasks';
 import { AxisField } from '../shell/axis-field';
 import { StudioFrame } from '../shell/studio-frame';
+import { DeviceWidths, StudioSplit, useSettled } from '../split/studio-split';
 import { ContentTask } from './demo-content';
 import { DemoFrame } from './demo-frame';
 import { LocalFrameHost } from './demo-local-frame';
@@ -32,11 +33,13 @@ import {
 } from './frame-gate';
 
 // Demo Studio (#9, design note sections 2 and 3): Studio's frame, with the
-// sandbox line in its header, over the demo's three tasks. Appearance has a
+// sandbox line in its header, over the demo's two tasks. Appearance has a
 // field and a reset for each of the five axes and one reset for the whole
-// demo; Preview has the frame's viewport, display mode, and motion; Content
-// imports a pair of documents and exports the current one. Each shows one
-// frame with the selection: the sample at /sample; once the visitor asks for
+// demo, in the split's controls pane, with the frame beside them and its
+// device widths and motion in the preview's toolbar (owner direction,
+// 2026-10-25: no trip to a Preview task); Content imports a pair of
+// documents and exports the current one. Each shows one frame with the
+// selection: the sample at /sample; once the visitor asks for
 // it and only when the server verified one, the read-only reference (#9),
 // which nothing here can change; and otherwise, once the visitor has
 // imported a pair, /preview/local with their documents, which only this tab
@@ -353,23 +356,7 @@ export function DemoStudio({
           <h2 id="studio-task-heading" className="studio-task__heading">
             {active.label}
           </h2>
-          {active.id === 'preview' ? (
-            <PreviewTask
-              catalog={catalog}
-              selection={selection}
-              rules={rules}
-              local={local}
-              viewportId={viewportId}
-              motion={motion}
-              systemReduces={systemReduces}
-              onViewport={pickViewport}
-              onMotion={setMotion}
-              onChoose={(axis, value) => void choose(axis, value)}
-              load={load}
-              source={showing}
-              {...(reference ? { referenceName: reference.name } : {})}
-            />
-          ) : active.id === 'content' ? (
+          {active.id === 'content' ? (
             <>
               <ContentTask
                 backend={backend}
@@ -400,30 +387,50 @@ export function DemoStudio({
               />
             </>
           ) : (
-            <>
-              <div className="studio-appearance__form">
-                {catalog.axes.map(({ axis, label }) => (
-                  <div key={axis} className="studio-appearance__axis">
-                    <AxisField
-                      id={`studio-appearance-${axis}`}
-                      axis={axis}
-                      label={label}
-                      value={selection[axis]}
-                      catalog={catalog}
-                      unoffered={demoUnoffered}
-                      onChange={(value) => void choose(axis, value)}
-                    />
-                    <button type="button" className="studio-button" onClick={() => resetAxis(axis)}>
-                      Reset {label.toLowerCase()}
+            <StudioSplit
+              controlsLabel="Appearance controls"
+              previewHeading="Preview"
+              // Showing the preview pane is asking to see it: no poster after it.
+              onView={(view) => {
+                if (view === 'preview') frameAfter('shown');
+              }}
+              controls={
+                <div className="studio-appearance__form">
+                  {catalog.axes.map(({ axis, label }) => (
+                    <div key={axis} className="studio-appearance__axis">
+                      <AxisField
+                        id={`studio-appearance-${axis}`}
+                        axis={axis}
+                        label={label}
+                        value={selection[axis]}
+                        catalog={catalog}
+                        unoffered={demoUnoffered}
+                        onChange={(value) => void choose(axis, value)}
+                      />
+                      <button
+                        type="button"
+                        className="studio-button"
+                        onClick={() => resetAxis(axis)}
+                      >
+                        Reset {label.toLowerCase()}
+                      </button>
+                    </div>
+                  ))}
+                  <div className="studio-source__actions">
+                    <button type="button" className="studio-button" onClick={resetAll}>
+                      Reset demo
                     </button>
                   </div>
-                ))}
-                <div className="studio-source__actions">
-                  <button type="button" className="studio-button" onClick={resetAll}>
-                    Reset demo
-                  </button>
                 </div>
-              </div>
+              }
+            >
+              <PreviewToolbar
+                viewportId={viewportId}
+                motion={motion}
+                systemReduces={systemReduces}
+                onViewport={pickViewport}
+                onMotion={setMotion}
+              />
               <ContentFrame
                 catalog={catalog}
                 selection={selection}
@@ -435,7 +442,7 @@ export function DemoStudio({
                 source={showing}
                 {...(reference ? { referenceName: reference.name } : {})}
               />
-            </>
+            </StudioSplit>
           )}
         </section>
       ) : null}
@@ -483,6 +490,9 @@ function ContentFrame({
 } & FrameSource) {
   const viewport = VIEWPORTS.find(({ id }) => id === viewportId) ?? VIEWPORTS[0]!;
   const name = optionNote(catalog, 'variant', selection.variant).option?.name ?? selection.variant;
+  // The sample and the reference load again for each selection, so a run of picks loads once.
+  // The local frame takes each over its channel instead, at once.
+  const src = useSettled(frameSource(selection, rules, { reduceMotion: reduced, source }));
   const what =
     source === 'reference' && referenceName
       ? `${referenceName}'s published portfolio, read-only`
@@ -502,7 +512,7 @@ function ContentFrame({
   }
   return (
     <DemoFrame
-      src={frameSource(selection, rules, { reduceMotion: reduced, source })}
+      src={src}
       title={`${what}, ${name}, ${viewportLabel(viewport)}`}
       viewport={viewport}
       gate={load.gate}
@@ -513,98 +523,52 @@ function ContentFrame({
   );
 }
 
-function PreviewTask({
-  catalog,
-  selection,
-  rules,
-  local,
+/**
+ * The preview's toolbar: the device widths, and the frame's motion, which
+ * only reduces. The display mode is an appearance axis, so it's among the
+ * controls, where it changes the selection the URL and the frame carry.
+ */
+function PreviewToolbar({
   viewportId,
   motion,
   systemReduces,
   onViewport,
   onMotion,
-  onChoose,
-  load,
-  source,
-  referenceName,
 }: {
-  catalog: AppearanceCatalog;
-  selection: DemoSelection;
-  rules: SelectionRules;
-  local: LocalSources | null;
   viewportId: Viewport['id'];
   motion: 'system' | 'reduce';
   systemReduces: boolean;
   onViewport: (id: Viewport['id']) => void;
   onMotion: (motion: 'system' | 'reduce') => void;
-  onChoose: (axis: CatalogAxis, value: string) => void;
-  load: FrameLoad;
-} & FrameSource) {
-  const label = catalog.axes.find(({ axis }) => axis === 'displayMode')?.label ?? 'Display mode';
+}) {
   return (
-    <>
-      <div className="studio-preview__controls">
-        <div className="studio-preview__field">
-          <label className="studio-label" htmlFor="studio-demo-viewport">
-            Width (simulated)
-          </label>
-          <select
-            id="studio-demo-viewport"
-            className="studio-input"
-            value={viewportId}
-            onChange={(event) => onViewport(event.currentTarget.value as Viewport['id'])}
-          >
-            {VIEWPORTS.map((each) => (
-              <option key={each.id} value={each.id}>
-                {viewportLabel(each)}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="studio-preview__field">
-          <AxisField
-            id="studio-appearance-displayMode"
-            axis="displayMode"
-            label={label}
-            value={selection.displayMode}
-            catalog={catalog}
-            unoffered={demoUnoffered}
-            onChange={(value) => onChoose('displayMode', value)}
-          />
-        </div>
-        <div className="studio-preview__field">
-          <label className="studio-label" htmlFor="studio-demo-motion">
-            Motion
-          </label>
-          <select
-            id="studio-demo-motion"
-            className="studio-input"
-            value={systemReduces ? 'reduce' : motion}
-            disabled={systemReduces}
-            aria-describedby={systemReduces ? 'studio-demo-motion-note' : undefined}
-            onChange={(event) => onMotion(event.currentTarget.value as 'system' | 'reduce')}
-          >
-            <option value="system">Follow system</option>
-            <option value="reduce">Reduced</option>
-          </select>
-          {systemReduces ? (
-            <p id="studio-demo-motion-note" className="studio-preview__note">
-              Reduced by system
-            </p>
-          ) : null}
-        </div>
+    <div
+      className="studio-preview__controls studio-split__toolbar"
+      role="group"
+      aria-label="Preview controls"
+    >
+      <DeviceWidths value={viewportId} onChange={onViewport} />
+      <div className="studio-preview__field">
+        <label className="studio-label" htmlFor="studio-demo-motion">
+          Motion
+        </label>
+        <select
+          id="studio-demo-motion"
+          className="studio-input"
+          value={systemReduces ? 'reduce' : motion}
+          disabled={systemReduces}
+          aria-describedby={systemReduces ? 'studio-demo-motion-note' : undefined}
+          onChange={(event) => onMotion(event.currentTarget.value as 'system' | 'reduce')}
+        >
+          <option value="system">Follow system</option>
+          <option value="reduce">Reduced</option>
+        </select>
+        {systemReduces ? (
+          <p id="studio-demo-motion-note" className="studio-preview__note">
+            Reduced by system
+          </p>
+        ) : null}
       </div>
-      <ContentFrame
-        catalog={catalog}
-        selection={selection}
-        rules={rules}
-        local={local}
-        viewportId={viewportId}
-        reduced={motion === 'reduce' && !systemReduces}
-        load={load}
-        source={source}
-        {...(referenceName ? { referenceName } : {})}
-      />
-    </>
+    </div>
   );
 }

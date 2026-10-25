@@ -218,7 +218,7 @@ test('while this tab holds an imported pair the frame is /preview/local, otherwi
   assert.equal((await importer.importFiles(pairFiles(EXAMPLE.portfolio)))?.kind, 'imported');
   assert.ok(session.getItem(WORKING_KEY));
   // A page in the same tab, as after a reload, shows the local frame on every task.
-  for (const task of ['appearance', 'preview', 'content'] as const) {
+  for (const task of ['appearance', 'content'] as const) {
     const html = renderToStaticMarkup(
       <DemoStudio catalog={CATALOG} policy={POLICY} backend={backend(session)} task={task} />,
     );

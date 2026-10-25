@@ -1,6 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import type { AppearanceSelection } from '@portfolio/schema';
 import {
   customViewport,
@@ -15,6 +23,7 @@ import {
   type Viewport,
 } from '~/lib/preview-frame';
 import type { MintRequest } from './grant-session';
+import { DeviceWidths } from '../split/studio-split';
 import { AppearanceControls } from './appearance-controls';
 import { createFrameLink, type FrameSide } from './frame-link';
 import { PreviewSurface, type PreviewSurfaceHandle } from './preview-surface';
@@ -30,6 +39,14 @@ import { PreviewSurface, type PreviewSurfaceHandle } from './preview-surface';
 // appearance override, and linking their scrolling and navigation is off
 // until the owner turns it on (frame-link.ts). #8's Studio shell takes these
 // controls in.
+//
+// In the Appearance view's split (owner direction, 2026-10-25), the
+// workspace's own controls drive the frame: its pending selection is the
+// frame's appearance override, which a new grant renders in a copy of the
+// site's text, never the draft. There the toolbar has the device widths as
+// buttons, the display mode, motion, and contrast, which change the frame in
+// place, and Refresh; the full-window preview keeps the rest. Its live region
+// says only what went wrong, since every pick reloads the frame.
 
 /** Something the content control offers: the draft, the live revision, or a fixture. */
 export interface PreviewChoice {
@@ -58,6 +75,16 @@ export interface StudioPreviewProps {
    * the first frame scrolls to and outlines, once it's ready. Null for none.
    */
   readonly focusAnchor?: string | null;
+  /**
+   * `split` for the Appearance view's preview pane: one frame, whose
+   * appearance override is `override`, and the toolbar's controls alone.
+   * `page`, the default, is /studio/preview's.
+   */
+  readonly layout?: 'page' | 'split';
+  /** In the split, the frame's appearance override: the workspace's pending selection, or null for the site's own. */
+  readonly override?: AppearanceSelection | null;
+  /** In the split, more of the toolbar, after its own controls: the workspace's section picker and links. */
+  readonly toolbar?: ReactNode;
 }
 
 type Environment = MintRequest['environment'];
@@ -85,7 +112,11 @@ export function StudioPreview({
   signIn,
   appearanceOptions,
   focusAnchor = null,
+  layout = 'page',
+  override = null,
+  toolbar = null,
 }: StudioPreviewProps) {
+  const split = layout === 'split';
   const ids = useId();
   const [choiceId, setChoiceId] = useState(choices[0]?.id ?? '');
   const [viewportId, setViewportId] = useState<Viewport['id']>('desktop');
@@ -111,12 +142,14 @@ export function StudioPreview({
   // and appearance override, and linking, off until the owner turns it on.
   const [compare, setCompare] = useState(false);
   const [linked, setLinked] = useState(false);
-  const [overrides, setOverrides] = useState<readonly (AppearanceSelection | null)[]>([null, null]);
+  const [own, setOverrides] = useState<readonly (AppearanceSelection | null)[]>([null, null]);
+  // The split's frame takes the workspace's selection; the page's frames, their own controls'.
+  const overrides = split ? [override, null] : own;
   const link = useRef(createFrameLink());
   const first = useRef<PreviewSurfaceHandle | null>(null);
   const second = useRef<PreviewSurfaceHandle | null>(null);
   const handles = [first, second] as const;
-  const isLinked = compare && linked;
+  const isLinked = !split && compare && linked;
   useEffect(() => {
     link.current.setLinked(isLinked);
   }, [isLinked]);
@@ -153,9 +186,9 @@ export function StudioPreview({
   const reloadFrom = (control: HTMLElement) => {
     cause.current = control;
   };
-  const sides: readonly FrameSide[] = compare ? [0, 1] : [0];
+  const sides: readonly FrameSide[] = compare && !split ? [0, 1] : [0];
   const named = (side: FrameSide) =>
-    compare ? (side === 0 ? 'First preview' : 'Second preview') : 'Preview';
+    sides.length === 2 ? (side === 0 ? 'First preview' : 'Second preview') : 'Preview';
   const titleOf = (side: FrameSide) => {
     const selected = overrides[side]?.variant ?? choice.appearance?.variant ?? null;
     const variant = overrides[side]
@@ -165,9 +198,136 @@ export function StudioPreview({
       choice.kind,
       variant,
       viewport,
-      compare ? (side === 0 ? 'first' : 'second') : undefined,
+      sides.length === 2 ? (side === 0 ? 'first' : 'second') : undefined,
     );
   };
+
+  const surface = (side: FrameSide) => (
+    <PreviewSurface
+      handle={handles[side]}
+      name={named(side)}
+      csrfToken={csrfToken}
+      request={requestFor(side)}
+      sandbox={javascript ? sandbox : ''}
+      previewOrigin={previewOrigin}
+      viewport={viewport}
+      title={titleOf(side)}
+      refresh={refresh}
+      signIn={signIn}
+      onSettled={onSettled}
+      announce={split ? 'problems' : 'all'}
+      scrollSync={isLinked}
+      onArrived={(route) => {
+        link.current.arrived(side, route);
+        if (side === 0 && focus.current) handles[0].current?.focus(focus.current);
+      }}
+      onNavigated={(route) => {
+        const to = link.current.navigated(side, route);
+        const otherSide: FrameSide = side === 0 ? 1 : 0;
+        if (to !== null && other(side)?.navigate(to)) link.current.moved(otherSide, to);
+      }}
+      onScrolled={(position) => {
+        const to = link.current.scrolled(side, position);
+        if (to !== null) other(side)?.scrollTo(to);
+      }}
+    />
+  );
+
+  if (split) {
+    return (
+      <div className="studio-preview" data-layout="split">
+        <form
+          className="studio-preview__controls studio-split__toolbar"
+          aria-label="Preview controls"
+          onSubmit={(event) => event.preventDefault()}
+        >
+          <DeviceWidths value={viewportId} onChange={setViewportId} />
+          <div className="studio-preview__field">
+            <label className="studio-label" htmlFor={`${ids}-mode`}>
+              Display mode
+            </label>
+            <select
+              id={`${ids}-mode`}
+              className="studio-input"
+              value={environment.displayMode}
+              onChange={(event) =>
+                setEnvironment({
+                  ...environment,
+                  displayMode: event.currentTarget.value as Environment['displayMode'],
+                })
+              }
+            >
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+              <option value="high-contrast">High contrast</option>
+            </select>
+          </div>
+          <div className="studio-preview__field">
+            <label className="studio-label" htmlFor={`${ids}-motion`}>
+              Motion
+            </label>
+            <select
+              id={`${ids}-motion`}
+              className="studio-input"
+              value={motion}
+              disabled={systemReduces}
+              aria-describedby={systemReduces ? `${ids}-motion-note` : undefined}
+              onChange={(event) =>
+                setEnvironment({
+                  ...environment,
+                  motion: event.currentTarget.value as Environment['motion'],
+                })
+              }
+            >
+              <option value="system">System</option>
+              <option value="reduce">Reduce</option>
+            </select>
+            {systemReduces ? (
+              <p id={`${ids}-motion-note`} className="studio-preview__note">
+                Reduced by system
+              </p>
+            ) : null}
+          </div>
+          <div className="studio-preview__field">
+            <label className="studio-label" htmlFor={`${ids}-contrast`}>
+              Contrast
+            </label>
+            <select
+              id={`${ids}-contrast`}
+              className="studio-input"
+              value={environment.contrast}
+              onChange={(event) =>
+                setEnvironment({
+                  ...environment,
+                  contrast: event.currentTarget.value as Environment['contrast'],
+                })
+              }
+            >
+              <option value="system">System</option>
+              <option value="more">More</option>
+            </select>
+          </div>
+          <div className="studio-preview__field">
+            <button
+              type="button"
+              className="studio-button"
+              onClick={(event) => {
+                reloadFrom(event.currentTarget);
+                setRefresh((count) => count + 1);
+              }}
+            >
+              Refresh
+            </button>
+          </div>
+          {toolbar}
+        </form>
+        <div className="studio-preview__frames">
+          <div className="studio-preview__frame">{surface(0)}</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="studio-preview">
@@ -405,33 +565,7 @@ export function StudioPreview({
                 setOverrides((now) => now.map((each, at) => (at === side ? next : each)));
               }}
             />
-            <PreviewSurface
-              handle={handles[side]}
-              name={named(side)}
-              csrfToken={csrfToken}
-              request={requestFor(side)}
-              sandbox={javascript ? sandbox : ''}
-              previewOrigin={previewOrigin}
-              viewport={viewport}
-              title={titleOf(side)}
-              refresh={refresh}
-              signIn={signIn}
-              onSettled={onSettled}
-              scrollSync={isLinked}
-              onArrived={(route) => {
-                link.current.arrived(side, route);
-                if (side === 0 && focus.current) handles[0].current?.focus(focus.current);
-              }}
-              onNavigated={(route) => {
-                const to = link.current.navigated(side, route);
-                const otherSide: FrameSide = side === 0 ? 1 : 0;
-                if (to !== null && other(side)?.navigate(to)) link.current.moved(otherSide, to);
-              }}
-              onScrolled={(position) => {
-                const to = link.current.scrolled(side, position);
-                if (to !== null) other(side)?.scrollTo(to);
-              }}
-            />
+            {surface(side)}
           </div>
         ))}
       </div>
