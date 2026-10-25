@@ -138,6 +138,48 @@ test('the example renders in the composition its site selects, and in each one S
   }
 });
 
+/** Link markup a document could name, in Markdown and in plain-text fields, to make the frame fetch. */
+const LINKS = [
+  `<link rel="prefetch" href="https://evil.example/${CANARY}-prefetch">`,
+  `<link rel=preconnect href=//evil.example/${CANARY}-preconnect>`,
+  `<LINK REL="dns-prefetch" HREF="https://evil.example/${CANARY}-dns">`,
+  `<link rel="stylesheet" href="https://evil.example/${CANARY}.css">`,
+].join(' ');
+
+test("link markup in a document's Markdown and plain-text fields renders no <link> element in any composition, so content can't make the frame prefetch (threat preview-7)", async () => {
+  const { installPostPass } = await import('@portfolio/kit/markdown-local');
+  await installPostPass();
+  const { renderLocal } = await frame();
+  const portfolio = portfolioWith((data) => {
+    (data.practice as Record<string, unknown>).thesis = `Before ${LINKS} after.`;
+    const [work] = data.works as { summary?: string; description?: string }[];
+    work!.summary = LINKS;
+    work!.description = `A list:\n\n- ${LINKS}\n\n> ${LINKS}`;
+    (data.identity as Record<string, unknown>).tagline = LINKS;
+  });
+  for (const { manifest } of registries.variants.filter(
+    ({ manifest }) => manifest.id !== 'fallback',
+  )) {
+    for (const route of ['/']) {
+      const render = await renderLocal({
+        document: documentOf(pairFiles(portfolio), { variant: manifest.id }),
+        route,
+        registries,
+        origin: ORIGIN,
+      });
+      const html = await markup(render);
+      const what = `${manifest.id} ${route}`;
+      // The only <link> elements are the frame's own stylesheets, from the build's files.
+      const links = [...html.matchAll(/<link\b[^>]*>/gi)].map(([tag]) => tag);
+      for (const tag of links) {
+        assert.match(tag, /^<link rel="stylesheet" href="\/_portfolio\//, `${what}: ${tag}`);
+      }
+      assert.doesNotMatch(html, /<link\b[^>]*(?:prefetch|preconnect|evil\.example)/i, what);
+      assert.doesNotMatch(html, new RegExp(`<[^>]*${CANARY}[^>]*>`), what);
+    }
+  }
+});
+
 test("every hostile fixture the import takes renders inert in every composition, through the server's post-pass", async () => {
   const { installPostPass } = await import('@portfolio/kit/markdown-local');
   await installPostPass();
