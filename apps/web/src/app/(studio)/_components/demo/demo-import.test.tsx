@@ -416,3 +416,31 @@ test("the host's remount wiring: remount() starts a new nonce, both places a doc
   assert.match(source, /\{localFrameElement\(nonce, \{ ref: frame, title, viewport, scale \}\)\}/);
   assert.equal((source.match(/<iframe\b/g) ?? []).length, 1, 'one iframe, in localFrameElement');
 });
+
+test('with a pair imported and the reference offered, the frame is the reference only while the visitor asked for it, and its toggle goes back to their documents', async () => {
+  const session = new FakeStorage();
+  assert.equal(
+    (await backend(session).importFiles(pairFiles(EXAMPLE.portfolio)))?.kind,
+    'imported',
+  );
+  const reference = { name: 'Wren Halloway', defaults: { ...DEFAULTS, displayMode: 'dark' } };
+  const render = (initialSource: 'sample' | 'reference') =>
+    renderToStaticMarkup(
+      <DemoStudio
+        catalog={CATALOG}
+        policy={POLICY}
+        backend={backend(session)}
+        task="content"
+        reference={reference}
+        initialSource={initialSource}
+      />,
+    );
+  const asked = render('reference');
+  assert.match(frames(asked)[0]!.src ?? '', /^\/reference(?:\?|$)/);
+  assert.doesNotMatch(asked, /data-source="local"/);
+  assert.match(asked, />Back to your documents</);
+  const own = render('sample');
+  assert.match(own, /data-source="local"/);
+  assert.equal(frames(own)[0]!.src, undefined);
+  assert.match(own, /Show Wren Halloway&#x27;s published portfolio \(read-only\)/);
+});

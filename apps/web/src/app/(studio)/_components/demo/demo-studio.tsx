@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import type { DemoBackend, LocalSources } from '~/lib/demo/browser-backend';
 import { demoStateLines, SANDBOX_LINE } from '~/lib/demo/state-lines';
 import {
+  frameKind,
   frameSource,
+  sourceAfterImport,
   studioLocation,
   taskFragment,
   type DemoSelection,
@@ -313,9 +315,10 @@ export function DemoStudio({
                 onSource={(sources) => {
                   setLocal(sources);
                   // An import shows in the frame: off the reference, and on the visitor's own look.
-                  if (sources && showing === 'reference') {
+                  const next = sourceAfterImport(showing, sources !== null);
+                  if (next !== showing) {
                     setSelection(backend.showSource(null));
-                    setSource('sample');
+                    setSource(next);
                   } else {
                     setSelection(backend.selection());
                   }
@@ -409,7 +412,7 @@ function ContentFrame({
     source === 'reference' && referenceName
       ? `${referenceName}'s published portfolio, read-only`
       : 'Demo sample';
-  if (local && source !== 'reference') {
+  if (local && frameKind(source, local !== null) === 'local') {
     return (
       <LocalFrameHost
         // A new frame for a change of motion, as /sample's query reloads its own.
