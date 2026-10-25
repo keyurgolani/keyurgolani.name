@@ -230,6 +230,12 @@ test('each registered target gets one representative perf cell, on its first rou
       ['/studio', 'content', undefined],
     ],
   );
+  // Demo Studio names its Content task's state, query and all (quality/surfaces/demo-studio.ts).
+  const demo = rowOf('demo-studio');
+  assert.deepEqual(
+    [demo?.path, demo?.state, demo?.perfState],
+    ['/studio?task=content', 'content', true],
+  );
   const fallback = cells.find((cell) => cell.target === 'fallback')!;
   assert.equal(fallback.path, '/');
   assert.equal(fallback.state, 'complete');
