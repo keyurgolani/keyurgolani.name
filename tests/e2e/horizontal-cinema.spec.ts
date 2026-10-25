@@ -312,6 +312,13 @@ test.describe('touch', () => {
       ).toEqual(CHAPTERS.map(anchor));
       // A swipe up the screen: the page scrolls, never cancelled, and the chapter follows.
       const cdp = await page.context().newCDPSession(page);
+      // Whether the page is still scrolling: from a scroll event until the scrollend after it.
+      await page.evaluate(() => {
+        const page = window as Window & { __scrolling?: boolean };
+        page.__scrolling = false;
+        window.addEventListener('scroll', () => (page.__scrolling = true), { passive: true });
+        window.addEventListener('scrollend', () => (page.__scrolling = false));
+      });
       // Swipe until the page is past Prologue: each swipe is a real touch scroll, never cancelled.
       for (let swipe = 0; swipe < 12; swipe++) {
         const before = await page.evaluate(() => window.scrollY);
@@ -330,10 +337,16 @@ test.describe('touch', () => {
         await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
         if ((await read(page)).onScreen !== anchor('prologue')) break;
       }
+      // A swipe flings: the page goes on scrolling after the finger lifts, and a fling moves the
+      // page by its own steps, so one still running would carry the page on past the chapter a
+      // link below lands on. Wait for it to stop, and for the chapter to follow.
       await expect
         .poll(async () => {
+          const scrolling = await page.evaluate(
+            () => (window as Window & { __scrolling?: boolean }).__scrolling,
+          );
           const { current, onScreen } = await read(page);
-          return current === onScreen && current !== anchor('prologue');
+          return !scrolling && current === onScreen && current !== anchor('prologue');
         })
         .toBe(true);
       const swiped = await read(page);
@@ -403,6 +416,22 @@ test(
       slider.setAttribute('aria-label', 'Probe');
       slider.setAttribute('aria-valuenow', '1');
       slider.tabIndex = 0;
+      // A slider takes its own arrows: it moves its value and cancels the key. Uncancelled, each
+      // arrow would scroll the stage 40px, smoothly, and ArrowLeft pressed before ArrowRight's
+      // scroll has moved the stage scrolls nothing, which leaves the stage 40px on. The handler
+      // runs above the experience, as a React widget's does, so the controller meets the key
+      // uncancelled and has only the role to go by, and after watchKeys' listener, so what that
+      // records is still what the controller left.
+      window.addEventListener('keydown', (event) => {
+        if (event.target !== slider || !['ArrowRight', 'ArrowLeft'].includes(event.key)) return;
+        const by = event.key === 'ArrowRight' ? 1 : -1;
+        slider.setAttribute(
+          'aria-valuenow',
+          String(Number(slider.getAttribute('aria-valuenow')) + by),
+        );
+        slider.dataset.moves = String(Number(slider.dataset.moves ?? 0) + 1);
+        event.preventDefault();
+      });
       prologue.prepend(field, slider);
     });
     for (const id of ['probe-field', 'probe-slider']) {
@@ -413,6 +442,9 @@ test(
     await page.waitForTimeout(400);
     await expectAt(page, 'prologue');
     expect(await keys(page)).toEqual([false, false, false, false]);
+    // The slider had both its keys: one step up, one back.
+    await expect(page.locator('#probe-slider')).toHaveAttribute('data-moves', '2');
+    await expect(page.locator('#probe-slider')).toHaveAttribute('aria-valuenow', '1');
   },
 );
 
