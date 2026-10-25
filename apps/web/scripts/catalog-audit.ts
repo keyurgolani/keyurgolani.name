@@ -74,6 +74,7 @@ export const BRANDED_TERMS: readonly BrandedTerm[] = [
   { term: 'Fiori', owner: 'SAP' },
   { term: 'Geist', owner: 'Vercel' },
   { term: 'Vercel', owner: 'Vercel' },
+  { term: 'Blueprint', owner: 'Palantir, the Blueprint toolkit' },
   { term: 'Frutiger', owner: 'Linotype, the Frutiger typeface' },
   { term: 'Helvetica', owner: 'Linotype, the Helvetica typeface' },
   { term: 'Futura', owner: 'the Futura typeface' },
@@ -95,7 +96,17 @@ export const BRANDED_TERMS: readonly BrandedTerm[] = [
  * Names the audit matches that a reviewer cleared, by pack id and term,
  * with why. Each must still match something, or it's a finding.
  */
-export const REVIEWED_NAMES: Readonly<Record<string, Readonly<Record<string, string>>>> = {};
+export const REVIEWED_NAMES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  'frutiger-aero': {
+    Frutiger:
+      'it names the 2000s Frutiger Aero aesthetic, not the typeface, and it references no Frutiger font (the typeface-reference rule holds it to that).',
+    Aero: 'it names the same aesthetic, not Windows Aero, and ships no Microsoft asset.',
+  },
+  blueprint: {
+    Blueprint:
+      "it names the technical-drawing style, not Palantir's toolkit, and takes none of its components or tokens.",
+  },
+};
 
 /** How a catalog entry stands toward what it names. */
 export type AuditStatus =
@@ -130,13 +141,19 @@ export interface AuditFinding {
     | 'research-palette'
     | 'upstream-palette'
     | 'typeface-name'
+    | 'typeface-reference'
     | 'stale-review';
   readonly message: string;
 }
 
 export interface AuditInput {
   /** Every shipping pack, as registry generation read it. */
-  readonly packs: readonly { readonly kind: PackKind; readonly manifest: PackManifest }[];
+  readonly packs: readonly {
+    readonly kind: PackKind;
+    readonly manifest: PackManifest;
+    /** Its stylesheet's text, for a language that has one. */
+    readonly stylesheetText?: string;
+  }[];
   /** Every Research record. */
   readonly research: readonly ResearchRecord[];
   /** The reviewed exceptions; REVIEWED_NAMES by default. */
@@ -256,7 +273,7 @@ export function auditCatalog(input: AuditInput): AuditReport {
   const entries: AuditEntry[] = [];
   const findings: AuditFinding[] = [];
 
-  for (const { kind, manifest } of input.packs) {
+  for (const { kind, manifest, stylesheetText } of input.packs) {
     const axis = AXIS_BY_KIND[kind];
     const subject = `The ${AXIS_NAMES[axis]} ${manifest.id}`;
     const { license, source, attribution } = manifest.provenance;
@@ -354,6 +371,28 @@ export function auditCatalog(input: AuditInput): AuditReport {
               message: `${subject} shares ${[...shared].join(', ')} with the Research record ${record.id}, whose license isn't verified: a shipping scheme can't carry its palette.`,
             });
           }
+        }
+      }
+    }
+
+    // A language names no typeface in what it ships: its tokens, and its stylesheet when it has one.
+    if (kind === 'design-language') {
+      const shipped =
+        `${JSON.stringify((manifest as { tokens?: unknown }).tokens ?? {})} ${stylesheetText ?? ''}`
+          .split(manifest.id)
+          .join(' ');
+      for (const { term, owner } of BRANDED_TERMS.filter(({ owner }) =>
+        owner.includes('typeface'),
+      )) {
+        if (
+          new RegExp(`(^|[^\\p{L}\\p{N}])${escape(term)}($|[^\\p{L}\\p{N}])`, 'iu').test(shipped)
+        ) {
+          findings.push({
+            pack: manifest.id,
+            axis,
+            rule: 'typeface-reference',
+            message: `${subject} references ${term} (${owner}) in what it ships: a design language takes no font.`,
+          });
         }
       }
     }

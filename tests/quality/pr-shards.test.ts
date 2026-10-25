@@ -238,10 +238,12 @@ test('a pack sweep adds the shards it alone needs to the usual 12, up to 16, and
   );
 });
 
-test('an ordinary PR plans 4 to 7 shards, as the base PR set plans 7, and one that changes a pack plans 7, its most 13', () => {
+test('an ordinary PR plans 4 to 7 shards, as the base PR set plans 7, one that changes a variant at most 12, and one that changes a pack 7, its most 13', () => {
   for (const { name, plan } of plans.filter(({ plan }) => !plan.cells.some((cell) => cell.sweep))) {
     const { count, reason } = pickShardCount(planGroups(plan, ENGINES));
-    assert.ok(count >= 4 && count <= 7, `${name}: ${count}`);
+    // A changed variant meets every stable design language, which the catalog adds to (#20).
+    const most = plan.cells.some((cell) => cell.changed) ? MAX_SHARDS : 7;
+    assert.ok(count >= 4 && count <= most, `${name}: ${count}`);
     assert.equal(reason, null, name);
   }
   const onePack = plans.find(

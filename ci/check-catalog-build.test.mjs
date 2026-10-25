@@ -332,6 +332,36 @@ test("a pack package's held/<id>/ packs are read as records, each with its gate'
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
-  // This checkout holds none yet.
-  assert.deepEqual(heldRecords(), []);
+});
+
+test("the held packs are read from each pack package's held/, and the build holds them as it holds a Research record", () => {
+  const root = path.resolve(import.meta.dirname, '..');
+  const held = heldRecords();
+  const dirs = readdirSync(path.join(root, 'packages/appearance-languages/held')).sort();
+  assert.equal(dirs.length, 27);
+  assert.deepEqual(
+    held.map(({ id }) => id),
+    dirs,
+  );
+  for (const record of held) assert.ok(record.reason, `${record.id} records why it's held`);
+  // A held id registered, in the metadata module or as a static chunk's registry key, fails.
+  const glass = held.find(({ id }) => id === 'glassmorphism');
+  const web = build({
+    'src/lib/generated/registry.meta.ts':
+      'export const PACKS = [{"manifest":{"id":"glassmorphism"}}];',
+    '.next/static/chunks/held.js': 'var p={"id":"glassmorphism"};',
+    '.next/standalone/packages/appearance-languages/held/glassmorphism/manifest.json': '{}',
+  });
+  try {
+    assert.deepEqual(
+      researchInBuild(web, [glass]).map(({ id, where }) => `${id} ${where}`),
+      [
+        'glassmorphism the generated modules',
+        'glassmorphism .next/static',
+        'glassmorphism the image',
+      ],
+    );
+  } finally {
+    rmSync(web, { recursive: true, force: true });
+  }
 });

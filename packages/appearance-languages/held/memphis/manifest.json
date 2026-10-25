@@ -1,0 +1,89 @@
+{
+  "id": "memphis",
+  "name": "Memphis",
+  "description": "Organic, uneven radii, strong borders, solid surfaces, comfortable density, hard offset shadows, springy motion, and a dotted pattern.",
+  "version": "1.1.0",
+  "tokenContract": 1,
+  "tier": "extended",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "The reviewed prototype's memphis recipe, with its --appearance-* references read as --color-*, and the contract's signature-fill and emphasis-glow at the fallback language's values."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "focus-ring", "stylesheet-lint"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "Under reduced transparency, without backdrop-filter, in forced colors, and in print, surfaces render opaque and the backdrop blur is 0.",
+    "Under reduced motion, transforms and emphasis stop and entrances and exits fade; a paused boundary and print are instant.",
+    "In forced colors, the material is a solid surface, and shadows and texture drop."
+  ],
+  "caveats": [
+    "A decorative gradient texture sits behind surfaces.",
+    "Expressive state motion: hovers and presses move more than in a quiet language.",
+    "Its texture sits in the surfaces' padding, at their edges, not across them as the prototype's does, so no text is drawn over it.",
+    "Its enter motion, spring-in, and emphasis motion, bounce-once, have no keyframes in the platform yet, so they don't animate."
+  ],
+  "tokens": {
+    "surface-material": "linear-gradient(var(--color-surface-default), var(--color-surface-default))",
+    "radius-control": "16px 24px",
+    "radius-card": "28px 18px 30px 16px",
+    "radius-overlay": "30px 20px",
+    "radius-media": "24px 16px",
+    "radius-badge": "999px",
+    "border-control": "2px solid",
+    "border-card": "2px solid",
+    "border-divider": "2px solid",
+    "shadow-card": "5px 5px 0 var(--color-border-strong)",
+    "shadow-overlay": "8px 8px 0 var(--color-border-strong)",
+    "shadow-raised": "8px 8px 0 var(--color-border-strong)",
+    "shadow-inset": "none",
+    "surface-opacity": "100%",
+    "backdrop-blur": "0px",
+    "control-height": "2.875rem",
+    "space-control-inline": "1.125rem",
+    "space-control-block": "0.75rem",
+    "space-surface-inline": "1.25rem",
+    "space-surface-block": "1.25rem",
+    "focus-width": "3px",
+    "focus-offset": "3px",
+    "focus-style": "solid",
+    "state-hover-transform": "translateY(-2px) scale(1.01)",
+    "state-active-transform": "scale(0.96)",
+    "state-selected-emphasis": "3px",
+    "state-disabled-opacity": "0.45",
+    "state-loading-opacity": "0.65",
+    "state-validation-emphasis": "3px",
+    "icon-stroke-width": "1.5",
+    "icon-fill": "currentColor",
+    "motion-fast": "160ms",
+    "motion-standard": "320ms",
+    "motion-slow": "480ms",
+    "motion-easing": "cubic-bezier(0.16, 1, 0.3, 1)",
+    "motion-enter": "spring-in",
+    "motion-exit": "fade",
+    "motion-emphasis": "bounce-once",
+    "texture": "radial-gradient(circle at 25% 0, color-mix(in srgb, var(--color-accent) 20%, transparent) 0 14px, transparent 15px), radial-gradient(circle at 75% 100%, color-mix(in srgb, var(--color-information) 18%, transparent) 0 18px, transparent 19px)",
+    "signature-fill": "linear-gradient(90deg, var(--color-signature-start), var(--color-signature-end))",
+    "emphasis-glow": "none"
+  }
+}

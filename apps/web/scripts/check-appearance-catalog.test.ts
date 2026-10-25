@@ -83,7 +83,11 @@ test('the repository passes every governance check', async () => {
     gated: shipping,
     locked: shipping,
     research: 24,
-    audited: shipping + 23,
+    // The held languages too (#20, PR 2b).
+    audited:
+      shipping +
+      23 +
+      fs.readdirSync(path.join(REPO_ROOT, 'packages/appearance-languages/held')).length,
   });
 });
 
@@ -322,23 +326,47 @@ test('two packs on one axis with one display name fail: a derived counterpart ta
   );
 });
 
-test('a contrast failure is one record per display mode, naming the one pack it excludes', async () => {
+test('a contrast failure is one record per pack, rule, role pair, and display mode, naming the one pack it excludes', async () => {
   const result = await shipped({ QUALITY_FIXTURES: 'meta' });
   const meta = registryMeta(result, renderOptions({ QUALITY_FIXTURES: 'meta' }));
-  const check = checkAppearance(
-    createAppearanceRegistry({ VARIANTS: meta.VARIANTS, PACKS: meta.PACKS as readonly MetaPack[] }),
-    { gateFixture: () => true },
-  );
+  const packs = meta.PACKS as readonly MetaPack[];
+  const run = (extra: readonly MetaPack[]) =>
+    checkAppearance(
+      createAppearanceRegistry({ VARIANTS: meta.VARIANTS, PACKS: [...packs, ...extra] }),
+      { gateFixture: () => true },
+    );
+  const check = run([]);
   assert.ok(check.failures.length > 0, 'the meta fixture fails the gate');
   const records = contrastRecords(check);
-  assert.ok(records.length >= check.failures.length);
   for (const record of records) {
     valid(record);
     assert.equal(record.pack, 'fixture-scheme-experimental-low-contrast');
     assert.equal(record.axis, 'colorScheme');
     assert.ok(record.tokenRole && record.displayMode && record.tuple);
     assert.ok(record.tuple!.endsWith(`/${record.displayMode}`));
+    // Its tuple count and its first tuple, in the test it names.
+    assert.match(
+      record.test,
+      / in \d+ tuples?, first [a-z0-9-]+\/fixture-scheme-experimental-low-contrast\//,
+    );
   }
+  // One record per pack, rule, role pair, set, and mode: no two the same.
+  const keys = records.map((r) => `${r.pack} ${r.rule} ${r.test.split(',')[0]} ${r.displayMode}`);
+  assert.equal(new Set(keys).size, keys.length);
+  // Twelve more languages that pass multiply the failing tuples, and leave the records as they are.
+  const language = packs.find((pack) => pack.kind === 'design-language' && !pack.fixture)!;
+  const more = Array.from({ length: 12 }, (_, index) => ({
+    ...language,
+    manifest: { ...language.manifest, id: `copy-language-${index + 1}`, name: `Copy ${index + 1}` },
+  })) as MetaPack[];
+  const wider = run(more);
+  assert.ok(wider.failures.length > check.failures.length, 'the failing tuples grow');
+  const grown = contrastRecords(wider);
+  assert.equal(grown.length, records.length);
+  assert.deepEqual(
+    grown.map(({ test, ...rest }) => ({ ...rest, test: test.replace(/ in \d+ tuples/, '') })),
+    records.map(({ test, ...rest }) => ({ ...rest, test: test.replace(/ in \d+ tuples/, '') })),
+  );
   hierarchyRecords(check).forEach(valid);
 });
 

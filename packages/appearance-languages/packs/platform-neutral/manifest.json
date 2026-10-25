@@ -2,7 +2,7 @@
   "id": "platform-neutral",
   "name": "Platform Neutral",
   "description": "The platform's fallback design language: quiet geometry, solid surfaces, strong control borders, low elevation, and no texture.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "tokenContract": 1,
   "tier": "stable",
   "provenance": {
@@ -34,7 +34,7 @@
   },
   "fallbacks": [
     "Under reduced transparency, without backdrop-filter, in forced colors, and in print, surfaces render opaque and the backdrop blur is 0.",
-    "Under reduced motion, the state transforms are none and motion is instant."
+    "Under reduced motion, transforms and emphasis stop and entrances and exits fade; a paused boundary and print are instant."
   ],
   "caveats": [],
   "tokens": {

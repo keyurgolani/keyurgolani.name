@@ -156,6 +156,9 @@ test(
   async ({ page }) => {
     await openFixtures(page);
     const languages = await registeredPacks(page, 'Design language');
+    // About 1.7 s a language on CI (30 s ran out 18 languages in, at #20's 35),
+    // so the budget grows with the catalog, at twice that and then some.
+    test.setTimeout(30_000 + languages.length * 4_000);
     for (const language of languages) {
       await openFixtures(page, `?language=${language}`);
       await expect(page.locator(DOCUMENT)).toHaveAttribute('data-design-language', language);

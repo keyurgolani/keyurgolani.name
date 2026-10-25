@@ -1,6 +1,6 @@
 // What `pnpm catalog` reads and prints (#20): the catalog as one list of
-// entries, every shipping pack, every pack the build left out, and every
-// Research record, each with its tier and provenance; a search over it
+// entries, every shipping pack, every pack the build left out, every held
+// pack, and every Research record, each with its tier and provenance; a search over it
 // with filters that read and write as a URL query; and the recipes, each
 // applied as the ordinary axis ids it stands for, with a diagnostic for
 // each id this build can't take. It's the smallest piece Verify needs. The
@@ -27,14 +27,15 @@ import {
   type CatalogTier,
   type ExcludedPack,
   type PackAxis,
+  type PackKind,
   type PackManifest,
   type ResearchRecord,
 } from '@portfolio/appearance';
 import { REGISTRY_ID_PATTERN, type AppearanceSelection } from '@portfolio/schema';
 
 /** Where an entry stands in this build. */
-export type EntryStatus = 'shipping' | 'excluded' | 'research';
-export const ENTRY_STATUSES: readonly EntryStatus[] = ['shipping', 'excluded', 'research'];
+export type EntryStatus = 'shipping' | 'excluded' | 'held' | 'research';
+export const ENTRY_STATUSES: readonly EntryStatus[] = ['shipping', 'excluded', 'held', 'research'];
 
 export interface CatalogEntry {
   readonly id: string;
@@ -70,6 +71,13 @@ export interface CatalogSources {
   }[];
   /** Every Research record, as its package holds it. */
   readonly research: readonly { readonly packageName: string; readonly record: ResearchRecord }[];
+  /** Every held pack (catalog-held.ts), with the reason its gate record gives. */
+  readonly held?: readonly {
+    readonly kind: PackKind;
+    readonly packageName: string;
+    readonly manifest: PackManifest;
+    readonly reason: string;
+  }[];
 }
 
 const TIER_ORDER = new Map(CATALOG_TIERS.map((tier, index) => [tier, index]));
@@ -122,6 +130,11 @@ export function catalogEntries(sources: CatalogSources): CatalogEntry[] {
         fromManifest(axis, manifest, pack.packageName, 'excluded', pack.reason, manifest.modes),
       );
     }
+  }
+  for (const { kind, packageName, manifest, reason } of sources.held ?? []) {
+    entries.push(
+      fromManifest(AXIS_BY_KIND[kind], manifest, packageName, 'held', reason, manifest.modes),
+    );
   }
   for (const { packageName, record } of sources.research) {
     entries.push({
@@ -317,7 +330,9 @@ export function formatEntry(entry: CatalogEntry): string[] {
         ? 'shipping, selectable in this build'
         : entry.status === 'excluded'
           ? `excluded from this build: ${entry.reason}`
-          : `Research, never registered, selectable, published, exported, or bundled: ${entry.reason}`
+          : entry.status === 'held'
+            ? `held, never registered or selectable until it passes its gate: ${entry.reason}`
+            : `Research, never registered, selectable, published, exported, or bundled: ${entry.reason}`
     }`,
   ];
   if (entry.version) lines.push(`  Version: ${entry.version}`);
@@ -416,12 +431,27 @@ export interface AppliedRecipe {
  * as any selection is. Which of them this build can't take is reported,
  * per axis; whether a recipe is offered at all is Studio's (deferred).
  */
-export function applyRecipe(registry: AppearanceRegistry, recipe: Recipe): AppliedRecipe {
+export function applyRecipe(
+  registry: AppearanceRegistry,
+  recipe: Recipe,
+  /** The held packs, by axis and id, with their reasons: a recipe naming one says it's held. */
+  held: ReadonlyMap<string, string> = new Map(),
+): AppliedRecipe {
   const selection = recipe.selection;
   const current = selection as AppearanceSelection;
-  const diagnostics = APPEARANCE_AXES.flatMap((axis) => {
+  const diagnostics = APPEARANCE_AXES.flatMap((axis): AppearanceDiagnostic[] => {
     const problem = valueProblem(registry, axis, selection[axis], current);
-    return problem ? [problem] : [];
+    if (!problem) return [];
+    const reason = held.get(`${axis}:${selection[axis]}`);
+    return [
+      reason
+        ? {
+            ...problem,
+            message: `names a held ${AXIS_NAMES[axis]}: ${reason}`,
+            remediation: `It ships once it passes its gate (#20 PR 2c). Until then, select another ${AXIS_NAMES[axis]}.`,
+          }
+        : problem,
+    ];
   });
   return { recipe, selection, query: serializeSelection(selection), diagnostics };
 }

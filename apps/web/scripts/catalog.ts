@@ -7,11 +7,11 @@
 //   pnpm catalog audit                                       the branded-name audit, entry by entry
 //
 // search takes the filters as a URL query: q (words), axis (language,
-// scheme, or type), tier, status (shipping, excluded, or research),
+// scheme, or type), tier, status (shipping, excluded, held, or research),
 // license, and mode (light or dark), and prints the query it read back in
 // its one canonical form. Add --json for the entries as JSON.
 
-import { AXIS_NAMES } from '@portfolio/appearance';
+import { AXIS_BY_KIND, AXIS_NAMES } from '@portfolio/appearance';
 import { formatRegistryDiagnostics } from '@portfolio/variant-contract/node';
 import { auditCatalog } from './catalog-audit';
 import {
@@ -25,11 +25,18 @@ import {
   serializeCatalogQuery,
   unavailable,
 } from './catalog-query';
-import { readCatalogSources } from './catalog-sources';
+import { readCatalogSources, type ReadSources } from './catalog-sources';
 import { REPO_ROOT } from './registry-options';
 
 const USAGE = 'Usage: pnpm catalog search [<query>] [--json] | show <id> | recipe [<id>] | audit\n';
 const TAG = '[catalog]';
+
+/** The held packs' reasons, by axis and id, for a recipe's diagnostics. */
+function heldReasons(read: ReadSources): Map<string, string> {
+  return new Map(
+    read.held.map(({ kind, manifest, reason }) => [`${AXIS_BY_KIND[kind]}:${manifest.id}`, reason]),
+  );
+}
 
 async function main(args: readonly string[]): Promise<number> {
   const [command, ...rest] = args;
@@ -86,14 +93,26 @@ async function main(args: readonly string[]): Promise<number> {
       out(
         chosen.flatMap((recipe, index) => [
           ...(index > 0 ? [''] : []),
-          ...formatRecipe(applyRecipe(read.registry, recipe)),
+          ...formatRecipe(applyRecipe(read.registry, recipe, heldReasons(read))),
         ]),
       );
       return 0;
     }
     case 'audit': {
       const report = auditCatalog({
-        packs: read.packs.filter(({ fixture }) => !fixture),
+        packs: [
+          ...read.packs
+            .filter(({ fixture }) => !fixture)
+            .map((pack) => {
+              const text = pack.stylesheet ? read.stylesheets.get(pack.stylesheet.url) : undefined;
+              return {
+                kind: pack.kind,
+                manifest: pack.manifest,
+                ...(pack.kind === 'design-language' && text ? { stylesheetText: text } : {}),
+              };
+            }),
+          ...(read.held ?? []).map(({ kind, manifest }) => ({ kind, manifest })),
+        ],
         research: read.research.map(({ record }) => record),
       });
       out([

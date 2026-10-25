@@ -172,11 +172,38 @@ test('a recipe applies as its ordinary axis ids, one query, and a diagnostic for
     neon.query,
     'variant=kinetic-cosmos&language=cyberpunk&scheme=neon-city&type=geometric-display&mode=dark',
   );
-  // kinetic-cosmos, neon-city, and geometric-display ship; cyberpunk is PR 2b's.
+  // kinetic-cosmos, neon-city, and geometric-display ship; cyberpunk is held.
   assert.deepEqual(
     neon.diagnostics.map(({ axis, code }) => [axis, code]),
     [['designLanguage', 'appearance.unavailable']],
   );
+  // With the held packs, the diagnostic says held, with the reason, not that nothing registers it.
+  const read = await sources();
+  const reasons = new Map(
+    read.held.map(({ manifest, reason }) => [`designLanguage:${manifest.id}`, reason]),
+  );
+  const held = applyRecipe(
+    registry,
+    readRecipes(REPO_ROOT).find(({ id }) => id === 'neon-maker')!,
+    reasons,
+  );
+  assert.match(
+    held.diagnostics[0]!.message,
+    /^names a held design language: It fails check:appearance/,
+  );
+  // Five of the eight recipes name a held language.
+  const holding = readRecipes(REPO_ROOT).flatMap((recipe) =>
+    reasons.has(`designLanguage:${recipe.selection.designLanguage}`)
+      ? [`${recipe.id} ${recipe.selection.designLanguage}`]
+      : [],
+  );
+  assert.deepEqual(holding, [
+    'editorial-warmth paper-tactile',
+    'systems-clarity carbon-inspired',
+    'night-gallery atelier-luxury',
+    'cinematic-archive paper-tactile',
+    'neon-maker cyberpunk',
+  ]);
 });
 
 test('the catalog query reads and writes as one URL form, and refuses what it cannot take', () => {
@@ -245,6 +272,8 @@ test('search filters by words, axis, tier, status, license, and mode', async () 
   assert.ok(ids('axis=scheme&mode=light').every((id) => id !== 'oled-black' && id !== 'neon-city'));
   assert.deepEqual(ids('axis=scheme&tier=experimental'), ['neon-city']);
   assert.deepEqual(ids('status=excluded'), []);
+  assert.equal(ids('status=held').length, 27);
+  assert.deepEqual(ids('q=refractive&status=held'), ['refractive-glass', 'holographic-iridescent']);
   assert.deepEqual(ids('q=nord&status=research'), ['nord']);
   assert.deepEqual(ids('q=nothing-matches-this'), []);
   assert.equal(ids('').length, entries.length);
@@ -345,18 +374,25 @@ const research: ResearchRecord = {
 };
 
 const audit = (packs: AuditInput['packs'], reviewed?: AuditInput['reviewed']) =>
-  auditCatalog({ packs, research: [research], ...(reviewed ? { reviewed } : {}) }).findings.map(
+  auditCatalog({ packs, research: [research], reviewed: reviewed ?? {} }).findings.map(
     ({ pack, rule }) => `${pack} ${rule}`,
   );
 
 test('the branded-name audit passes the shipping catalog', async () => {
   const read = await sources();
+  // Every shipping and held pack, and every Research record.
   const report = auditCatalog({
-    packs: read.packs.filter(({ fixture }) => !fixture),
+    packs: [
+      ...read.packs.filter(({ fixture }) => !fixture),
+      ...read.held.map(({ kind, manifest }) => ({ kind, manifest })),
+    ],
     research: read.research.map(({ record }) => record),
   });
   assert.deepEqual(report.findings, []);
-  assert.equal(report.entries.length, 57);
+  assert.equal(report.entries.length, 46 + 27 + 23);
+  const aero = report.entries.find(({ id }) => id === 'frutiger-aero')!;
+  assert.deepEqual(aero.names, ['Aero', 'Frutiger']);
+  assert.ok(aero.notes.every((note) => note.includes('reviewed')));
   const zinc = report.entries.find(({ id }) => id === 'zinc')!;
   assert.equal(zinc.status, 'upstream');
   assert.deepEqual(zinc.names, ['Tailwind']);
@@ -510,6 +546,69 @@ test("the branded-name audit refuses a Research record's palette under another n
     },
   });
   assert.deepEqual(audit([{ kind: 'color-scheme', manifest: one }]), []);
+});
+
+test('the typeface rule refuses a language naming a typeface in its tokens or its stylesheet', () => {
+  const language = (tokens: Record<string, string>) =>
+    ({
+      id: 'glass-ink',
+      name: 'Glass Ink',
+      description: 'A test language.',
+      tier: 'extended',
+      provenance: {
+        source: { name: 'Test', url: 'https://example.com' },
+        license: 'first-party',
+        attribution: 'Test.',
+        researchedAt: '2026-10-23',
+        maintainer: 'test',
+      },
+      tokens,
+    }) as unknown as PackManifest;
+  const kind = 'design-language' as const;
+  const clean = language({ texture: 'none' });
+  assert.deepEqual(audit([{ kind, manifest: clean }]), []);
+  assert.deepEqual(
+    audit([
+      { kind, manifest: clean, stylesheetText: '[data-ui-slot="action"]{border-radius:2px}' },
+    ]),
+    [],
+  );
+  // A token that names one.
+  assert.deepEqual(
+    audit([{ kind, manifest: language({ texture: 'none', note: 'Frutiger LT' }) }]),
+    ['glass-ink typeface-reference'],
+  );
+  // A stylesheet that names one, in any case.
+  assert.deepEqual(
+    audit([
+      {
+        kind,
+        manifest: clean,
+        stylesheetText: '[data-ui-slot="action"]{font-family:"Frutiger LT", sans-serif}',
+      },
+    ]),
+    ['glass-ink typeface-reference'],
+  );
+  assert.deepEqual(
+    audit([
+      { kind, manifest: clean, stylesheetText: '[data-ui-slot="action"]{font-family:helvetica}' },
+    ]),
+    ['glass-ink typeface-reference'],
+  );
+  // The pack's own id, in its boundary selector, isn't a reference.
+  assert.deepEqual(
+    audit(
+      [
+        {
+          kind,
+          manifest: { ...clean, id: 'frutiger-aero' } as PackManifest,
+          stylesheetText: '@scope ([data-design-language="frutiger-aero"]) {}',
+        },
+      ],
+      { 'frutiger-aero': { Frutiger: 'reviewed', Aero: 'reviewed' } },
+    ),
+    [],
+  );
 });
 
 test('the branded-name audit refuses a profile named for a typeface it references, and stale reviews', () => {
