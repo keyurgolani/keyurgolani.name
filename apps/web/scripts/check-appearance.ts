@@ -65,6 +65,7 @@ import {
   writeCatalogRecords,
 } from './check-appearance-catalog';
 import { appearanceTargets } from './appearance-targets';
+import { generatedEntries, referenceSets } from './catalog-generated';
 import { heldFindings, readHeld } from './catalog-held';
 import { generateRegistry, PACK_OUT, plural, renderOptions, REPO_ROOT } from './registry-options';
 
@@ -219,9 +220,13 @@ async function main(): Promise<number> {
   }
 
   const gated = gatedFixturePackages(result);
+  // #20 PR 3: each registered generator scheme is gated with its reference
+  // record's sets, every language and profile with it, as an authored scheme is.
+  const references = generatedEntries(REPO_ROOT, packPackages(REPO_ROOT)).entries;
   const check = checkAppearance(registry, {
     targets,
     gateFixture: ({ packageName }) => gated.has(packageName),
+    generated: referenceSets(references),
   });
   const compiled = (packs ?? [])
     .filter(({ name }) => name.endsWith('.css'))
@@ -249,7 +254,8 @@ async function main(): Promise<number> {
   for (const { axis, id, reason } of check.skipped)
     process.stdout.write(`${TAG} Skipped ${axis} ${id}: ${reason}.\n`);
   for (const pack of (excluded ?? []).filter(
-    ({ packageName }) => !packageName.startsWith('@portfolio/'),
+    ({ packageName, awaiting }) =>
+      !packageName.startsWith('@portfolio/') || awaiting === 'owner-acceptance',
   ))
     process.stdout.write(
       `${TAG} Excluded ${pack.kind} ${pack.id} in ${pack.packageName}: ${pack.reason}\n`,
@@ -297,6 +303,8 @@ async function main(): Promise<number> {
       `${plural(catalog.counts.gated, 'pack')} passed the pack gates; the lock pins ${plural(catalog.counts.locked, 'pack')} and the notices are current; ` +
       `${plural(catalog.counts.research, 'Research record')} checked, none registered; ` +
       `${plural(held.held.length, 'held pack')}, none registered, each record current; ` +
+      `${plural(catalog.counts.generated, 'generated scheme')}, each reference record current, ` +
+      `${plural((excluded ?? []).filter(({ awaiting }) => awaiting === 'owner-acceptance').length, 'image-derived scheme')} waiting for the owner; ` +
       `the branded-name audit read ${catalog.counts.audited} ${catalog.counts.audited === 1 ? 'entry' : 'entries'}, with no finding.\n`,
   );
   return 0;

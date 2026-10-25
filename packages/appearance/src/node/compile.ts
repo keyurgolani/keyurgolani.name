@@ -180,7 +180,7 @@ export function schemeBaseSets(
 
 /** The stylesheet of a generator scheme's generated sets, which Slice 4's route and #7's grant path serve. */
 export function compileGeneratedScheme(id: string, generated: GeneratedScheme): string {
-  return compileSchemeStylesheet(id, schemeSets(generated));
+  return compileSchemeStylesheet(id, schemeSets(generated, generated.highContrast));
 }
 
 /** What a file holds before its first rule: the layer order, then the pack it is. */

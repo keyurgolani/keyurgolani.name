@@ -249,6 +249,12 @@ export function ownerPreviews({
   }
 
   const views = new Map<string, PublicView>();
+  /**
+   * A revision's or fixture's stored generated schemes, its
+   * snapshots/schemes.json as read (#20 PR 3), by the grant's digest, kept
+   * and dropped with its view.
+   */
+  const storedSchemes = new Map<string, unknown>();
 
   /**
    * The owner service a grant's content is read through: it takes the token
@@ -283,14 +289,18 @@ export function ownerPreviews({
         { mediaBase: `/preview-assets/${grant}`, extensions },
       );
       views.set(record.digest, view);
+      storedSchemes.set(record.digest, content.snapshots.schemes);
       for (const key of views.keys()) {
         if (views.size <= VIEWS) break;
         views.delete(key);
+        storedSchemes.delete(key);
       }
     }
-    // A draft grant's generated schemes, as pinned at mint, each checked: one
-    // that doesn't is left out, so its axis falls back, and logged by id (10h).
-    const pinned = record.subject.kind === 'draft' ? record.schemes : undefined;
+    // The grant's generated schemes, each checked: a draft grant's as pinned at
+    // mint (10h), a revision's or fixture's its own stored ones (#20 PR 3). One
+    // that doesn't check is left out, so its axis falls back, and logged by id.
+    const pinned =
+      record.subject.kind === 'draft' ? record.schemes : storedSchemes.get(record.digest);
     const pinnedRead = pinned === undefined ? null : readDerivedSchemes(pinned);
     for (const problem of pinnedRead?.problems ?? []) {
       log({

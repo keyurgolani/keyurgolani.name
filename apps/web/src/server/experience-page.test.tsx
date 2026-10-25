@@ -1,5 +1,6 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { isValidElement } from 'react';
@@ -15,10 +16,11 @@ import {
   setDeploymentState,
   setLiveCaseStudies,
   setLiveComposition,
+  type DeploymentState,
 } from './config-store';
 import { segmentFor } from './experience';
 import { experiencePage } from './experience-page';
-import { preferenceCookie } from './visitor-appearance';
+import { liveSchemes, preferenceCookie } from './visitor-appearance';
 
 // A visitor page renders in its composition's experience segment (#6, Slice
 // 2). proxy.ts picks the segment from the live composition config-store
@@ -72,6 +74,7 @@ function deploy(
   t: TestContext,
   live: () => LiveRevision,
   profile: 'read-only' | 'demo' = 'read-only',
+  dispatch: DeploymentState['dispatch'] = () => assert.fail('a page runs no operation'),
 ) {
   const read = readDeploymentConfig(
     profile === 'demo'
@@ -90,7 +93,7 @@ function deploy(
   setDeploymentState({
     config: read.config,
     catalog: recordingLive({ getLive: async () => live() }, BUILD),
-    dispatch: () => assert.fail('a page runs no operation'),
+    dispatch,
     degraded: [],
   });
   t.after(() => {
@@ -329,4 +332,86 @@ test('under read-only, /sample is no page at all, whatever its query', async (t)
   setLiveComposition('fixture-notes');
   const answered = await answer('fixture-notes', ['sample'], { mode: 'sepia' });
   assert.match(answered.digest ?? '', /^NEXT_HTTP_ERROR_FALLBACK;404$/);
+});
+
+/** brand-seed's reference record (#20 PR 3), as the live revision's snapshots/schemes.json holds it. */
+function storedBrandSeed() {
+  const record = JSON.parse(
+    readFileSync(
+      new URL('../../../../packages/appearance-schemes/generated/brand-seed.json', import.meta.url),
+      'utf8',
+    ),
+  ) as { result: { generator: unknown; input: { seedColor: string }; tokens: unknown } };
+  return {
+    generator: record.result.generator,
+    inputsHash: createHash('sha256').update(record.result.input.seedColor).digest('hex'),
+    tokens: record.result.tokens,
+  };
+}
+
+/** The live revision selecting brand-seed, with `schemes` as its snapshots/schemes.json. */
+function branded(schemes: unknown): LiveRevision {
+  const site = {
+    ...PAIR.site,
+    appearance: { ...PAIR.site.appearance, variant: 'fixture-notes', colorScheme: 'brand-seed' },
+  };
+  return {
+    state: 'live',
+    revisionId: 'doc-branded',
+    unitHash: 'hash-branded',
+    unit: {
+      portfolio: PAIR.portfolio,
+      site,
+      snapshots: schemes === undefined ? {} : { schemes },
+    },
+  };
+}
+
+/** The appearance the page's document boundary renders. */
+function boundaryAppearance(element: unknown) {
+  const children = (element as { props: { children: unknown[] } }).props.children;
+  const boundary = children.find(
+    (child) =>
+      isValidElement(child) && (child.props as { appearance?: unknown }).appearance !== undefined,
+  ) as { props: { appearance: { selection: { colorScheme: string } } } };
+  return boundary.props.appearance;
+}
+
+test("a visitor page's stored schemes come from the request's own live revision, the cached getLive() its view reads (#20 PR 3)", () => {
+  // React's cache() keeps one answer per request render, which a test outside
+  // a request can't show, so this holds the read path: liveSchemes() and
+  // getPublicView() read the one getLive() server/catalog.ts exports, and
+  // neither reads the catalog port on its own.
+  const source = (file: string) => readFileSync(new URL(`./${file}`, import.meta.url), 'utf8');
+  for (const file of ['visitor-appearance.ts', 'public-view.ts']) {
+    assert.match(source(file), /^import \{ getLive \} from '\.\/catalog';$/m, file);
+    assert.doesNotMatch(source(file), /catalog\.getLive\(/, file);
+  }
+  assert.match(source('catalog.ts'), /^export \{ getLive \} from '\.\/live-revision';$/m);
+  assert.match(source('live-revision.ts'), /export const getLive = cache\(/);
+});
+
+test("a visitor page renders a generated scheme from the live revision's stored sets, and only the live revision's (#20 PR 3)", async (t) => {
+  const stored = storedBrandSeed();
+  let current = branded({ 'brand-seed': stored });
+  // A working draft with brand-seed's sets in its derived schemes, which any
+  // operation would hand back: a visitor page never asks for it.
+  const asked: string[] = [];
+  const draft = { derived: { schemes: { 'brand-seed': stored } }, site: current.unit!.site };
+  deploy(t, () => current, 'read-only', (async (operation: string) => {
+    asked.push(operation);
+    return { ok: true, value: draft };
+  }) as never);
+  setLiveComposition('fixture-notes');
+  assert.deepEqual(await liveSchemes(), { 'brand-seed': stored });
+  const live = await answer('fixture-notes');
+  assert.ok(live.element, JSON.stringify(live));
+  assert.equal(boundaryAppearance(live.element).selection.colorScheme, 'brand-seed');
+  // The draft holds brand-seed's sets, and a visitor page reads the live
+  // revision alone: one with no stored sets renders the scheme's fallback.
+  current = branded(undefined);
+  assert.equal(await liveSchemes(), undefined);
+  const without = await answer('fixture-notes');
+  assert.equal(boundaryAppearance(without.element).selection.colorScheme, 'warm-parchment');
+  assert.deepEqual(asked, [], 'no operation, so no draft, was read');
 });

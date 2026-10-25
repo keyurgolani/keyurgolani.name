@@ -1,21 +1,32 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   createAppearanceRegistry,
   resolveAppearance,
   PLATFORM_DEFAULTS,
 } from '@portfolio/appearance';
+import {
+  ACCEPTANCE_FILE,
+  GENERATED_DIR,
+  recordDigest,
+  referenceFile,
+} from '@portfolio/appearance/node';
 import { readRegistry, registryMeta, type RegistryResult } from '@portfolio/variant-contract/node';
 import {
   excludePacks,
   registryOptions,
   renderExcludedPacks,
   renderOptions,
+  REPO_ROOT,
 } from './registry-options';
 
 // #20: a valid pack under a license off the allowlist leaves the build at
 // registry generation, before anything renders or is served, and keeps its
-// reason; selecting it renders its axis's fallback with that reason.
+// reason; selecting it renders its axis's fallback with that reason. PR 3:
+// so does an image-derived scheme the owner hasn't accepted.
 
 async function shipped(): Promise<RegistryResult> {
   const result = await readRegistry(registryOptions({}));
@@ -38,19 +49,126 @@ function withThirdParty(result: RegistryResult, license: string): RegistryResult
   };
 }
 
-test('a pack under an allowed license stays, and nothing is excluded', async () => {
+/** The image-derived schemes (#20 PR 3). */
+const IMAGE_DERIVED = ['portfolio-artwork', 'profile-image'];
+
+/** The image-derived schemes the committed acceptance.json doesn't accept, which wait for the owner. */
+const AWAITING = (() => {
+  const accepted = JSON.parse(
+    fs.readFileSync(
+      path.join(REPO_ROOT, 'packages/appearance-schemes', GENERATED_DIR, ACCEPTANCE_FILE),
+      'utf8',
+    ),
+  ) as Record<string, unknown>;
+  return IMAGE_DERIVED.filter((id) => !(id in accepted));
+})();
+
+test('a pack under an allowed license stays, and only the image-derived schemes the owner has not accepted wait', async () => {
   const read = await shipped();
   const { result, excluded } = excludePacks(read);
-  assert.equal(result, read);
-  assert.deepEqual(excluded, []);
+  assert.deepEqual(
+    excluded.map(({ id, awaiting }) => [id, awaiting]),
+    AWAITING.map((id) => [id, 'owner-acceptance']),
+  );
+  assert.deepEqual(
+    result.packs.map(({ manifest }) => manifest.id),
+    read.packs.map(({ manifest }) => manifest.id).filter((id) => !AWAITING.includes(id)),
+  );
   const kept = excludePacks(withThirdParty(read, 'MIT'));
   assert.ok(kept.result.packs.some(({ manifest }) => manifest.id === 'acme-ocean'));
-  assert.deepEqual(kept.excluded, []);
+  assert.deepEqual(
+    kept.excluded.map(({ id }) => id),
+    AWAITING,
+  );
+});
+
+/** `read` with profile-image's pack directory in a scratch package holding its record and `acceptance`. */
+function withAcceptance(
+  read: RegistryResult,
+  acceptance: (digest: string) => unknown,
+): RegistryResult {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'kgn-acceptance-'));
+  const record = fs.readFileSync(
+    path.join(REPO_ROOT, 'packages/appearance-schemes', referenceFile('profile-image')),
+    'utf8',
+  );
+  fs.mkdirSync(path.join(scratch, GENERATED_DIR), { recursive: true });
+  fs.writeFileSync(path.join(scratch, referenceFile('profile-image')), record);
+  fs.writeFileSync(
+    path.join(scratch, GENERATED_DIR, ACCEPTANCE_FILE),
+    JSON.stringify(acceptance(recordDigest(record))),
+  );
+  return {
+    ...read,
+    packs: read.packs.map((pack) =>
+      pack.manifest.id === 'profile-image'
+        ? { ...pack, dir: path.join(scratch, 'packs', 'profile-image') }
+        : pack,
+    ),
+  };
+}
+
+test("an image-derived scheme ships once the owner's acceptance pins its current record, and waits again when it's stale", async () => {
+  const read = await shipped();
+  const accepted = excludePacks(
+    withAcceptance(read, (digest) => ({
+      'profile-image': { record: digest, acceptedBy: 'keyurgolani', acceptedAt: '2026-10-24' },
+    })),
+  );
+  assert.ok(accepted.result.packs.some(({ manifest }) => manifest.id === 'profile-image'));
+  assert.deepEqual(
+    accepted.excluded.map(({ id }) => id),
+    AWAITING.filter((id) => id !== 'profile-image'),
+  );
+  const stale = excludePacks(
+    withAcceptance(read, () => ({
+      'profile-image': {
+        record: `sha256-${'0'.repeat(64)}`,
+        acceptedBy: 'keyurgolani',
+        acceptedAt: '2026-10-24',
+      },
+    })),
+  );
+  const waiting = stale.excluded.find(({ id }) => id === 'profile-image');
+  assert.equal(waiting?.awaiting, 'owner-acceptance');
+  assert.match(waiting!.reason, /accepted an earlier reference record/);
+});
+
+test('selecting an image-derived scheme that waits falls back with its reason, which blocks publish', async () => {
+  const { result, excluded } = excludePacks(await shipped());
+  const meta = registryMeta(result, renderOptions({}));
+  assert.ok(!meta.PACKS.some(({ manifest }) => manifest.id === 'profile-image'));
+  const registry = createAppearanceRegistry({
+    VARIANTS: meta.VARIANTS,
+    PACKS: meta.PACKS as never,
+    EXCLUDED_PACKS: excluded,
+  });
+  const resolved = resolveAppearance({
+    published: { ...PLATFORM_DEFAULTS, colorScheme: 'profile-image' },
+    visitorControls: {
+      variant: 'locked',
+      designLanguage: 'locked',
+      colorScheme: 'locked',
+      typography: 'locked',
+      displayMode: 'locked',
+    },
+    motionPolicy: 'respect-os',
+    profile: 'read-only',
+    registry,
+  });
+  assert.equal(resolved.selection.colorScheme, PLATFORM_DEFAULTS.colorScheme);
+  const scheme = resolved.diagnostics.filter(({ axis }) => axis === 'colorScheme');
+  assert.deepEqual(
+    scheme.map(({ code }) => code),
+    ['appearance.unavailable'],
+  );
+  assert.match(scheme[0]!.message, /waits for the owner to accept its reference record/);
 });
 
 test('a pack under any other license is left out with a reason that names it', async () => {
   const read = withThirdParty(await shipped(), 'LicenseRef-Proprietary');
-  const { result, excluded } = excludePacks(read);
+  const { result, excluded: all } = excludePacks(read);
+  const excluded = all.filter(({ awaiting }) => awaiting === undefined);
   assert.ok(!result.packs.some(({ manifest }) => manifest.id === 'acme-ocean'));
   assert.deepEqual(
     excluded.map(({ kind, id, packageName }) => [kind, id, packageName]),

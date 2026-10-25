@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A date after an en dash, in dark mode, known-good</title>
+    <!--
+      #20's .pf-period: an en dash before the end date, in an Arial-metric
+      font, on a dark gradient axe can't measure. The dash has no side
+      bearing, and the date is pulled onto it here, by 0.1em, so its edge
+      lands inside the date's box in any font, within the sampler's 2 px
+      edge band. The text is light on near-black,
+      far over 4.5:1, so only the dash's own glyph could fail the date: the
+      sampler hides it as it hides the date's.
+    -->
+    <style>
+      body {
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #000;
+        color: #e8e8e8;
+        color-scheme: dark;
+      }
+      .pf-period {
+        display: inline-block;
+        padding: 0.5rem;
+        background: linear-gradient(90deg, #0a0a0a, #161616);
+      }
+      .pf-period time {
+        margin-left: -0.1em;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Experience</h1>
+      <p class="pf-period">2019–<time datetime="2021">2021</time></p>
+    </main>
+  </body>
+</html>

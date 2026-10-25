@@ -16,6 +16,12 @@ import type { ColorTokens, LanguageTokens, TypographyMeasures, TypographyRoles }
 export interface GeneratedScheme {
   readonly light: ColorTokens;
   readonly dark: ColorTokens;
+  /**
+   * The high-contrast sets a generator solved with its base sets (#20's
+   * generators, with high-contrast-v2), which render as they are. Without
+   * them, high-contrast-v1 derives them from the base sets.
+   */
+  readonly highContrast?: { readonly light: ColorTokens; readonly dark: ColorTokens };
 }
 
 /** Generated sets by scheme id. */
@@ -28,10 +34,14 @@ export function generatedSets(
 ): GeneratedScheme | undefined {
   const entry = generated && Object.hasOwn(generated, schemeId) ? generated[schemeId] : undefined;
   if (!entry) return undefined;
-  return ColorTokenSetSchema.safeParse(entry.light).success &&
-    ColorTokenSetSchema.safeParse(entry.dark).success
-    ? entry
-    : undefined;
+  const complete = (set: unknown) => ColorTokenSetSchema.safeParse(set).success;
+  if (!complete(entry.light) || !complete(entry.dark)) return undefined;
+  if (
+    entry.highContrast &&
+    !(complete(entry.highContrast.light) && complete(entry.highContrast.dark))
+  )
+    return undefined;
+  return entry;
 }
 
 /** Whether a registered scheme can render: authored or anchored sets, or complete generated ones. */
@@ -117,13 +127,14 @@ export function resolveTokens(
   const polarity = scheme.modes.includes(request.polarity) ? request.polarity : scheme.modes[0]!;
   const highContrast = request.highContrast === true;
   const color = highContrast
-    ? highContrastSet(
+    ? (generated?.highContrast?.[polarity] ??
+      highContrastSet(
         generated ?? scheme,
         sets,
         scheme.manifest.highContrast?.[polarity],
         polarity,
         generated ? undefined : scheme.manifest.derivation,
-      )
+      ))
     : sets[polarity]!;
 
   return {

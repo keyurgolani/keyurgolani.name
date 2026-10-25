@@ -1,0 +1,108 @@
+// What #20's four generators share (PR 3): each one picks a mode's four
+// anchors, and compose() makes them a scheme. The one step a generator
+// takes itself is on the accent: an accent with OKLCH lightness under 0.15
+// or over 0.9 moves to that bound, so its hover and active states have room
+// to move away from on-accent, as #19's fixture-seed does more widely. The
+// refined body's on-accent step needs no code: black or white always reads
+// at 4.5:1 on any color (ON_ACCENT_TARGET). Then 2c's anchor-v2 solves every role
+// and high-contrast-v2 the high-contrast sets, so a generated scheme passes
+// with every shipping language, textured ones included, as an authored
+// anchor-v2 scheme does. Every move is recorded: the generator's own on the
+// anchors, and anchor-v2's from anchor-v1's values.
+
+import type { BaseMode } from '../axes';
+import { anchorV2, anchorV2Adjustments, highContrastV2, type Adjustments } from '../anchor-v2';
+import { lightness, withLightness } from '../color';
+import type { Anchors } from '../derive';
+import type { GeneratedScheme } from '../resolve-tokens';
+
+/** The anchors a generator picks, per mode, before its own step. */
+export type ModeAnchors = { readonly light: Anchors; readonly dark: Anchors };
+
+/** A color an image generator scored, as its record keeps it. */
+export interface ExtractedColor {
+  readonly hex: string;
+  /** Its cluster's share of the sampled pixels, from 0 to 1, to four places. */
+  readonly share: number;
+  /** Share times OKLCH chroma, to four places; 0 for a color that can't score. */
+  readonly score: number;
+}
+
+/** What a generator chose and why, before compose() solves it. */
+export interface Composition {
+  /** The algorithm, named and versioned, such as hct@1 or image-palette@1. */
+  readonly algorithm: string;
+  readonly anchors: ModeAnchors;
+  /** For an image generator, the colors it scored, best first. */
+  readonly extracted?: readonly ExtractedColor[];
+  /** Plain-language notes on any fallback it took, such as the approved secondary. */
+  readonly notes: readonly string[];
+}
+
+/** An anchor a generator moved: [picked, used]. */
+export type AnchorMoves = {
+  readonly [M in BaseMode]?: { readonly [K in keyof Anchors]?: readonly [string, string] };
+};
+
+export interface Composed {
+  /** The anchors as used, after the generator's own step. */
+  readonly anchors: ModeAnchors;
+  readonly adjustments: {
+    /** The generator's own moves on its anchors. */
+    readonly generator: AnchorMoves;
+    /** anchor-v2's moves from anchor-v1's values on the used anchors. */
+    readonly 'anchor-v2': Adjustments;
+  };
+  /** Both base sets and both high-contrast sets, so render derives nothing. */
+  readonly tokens: GeneratedScheme;
+}
+
+/**
+ * What on-accent reads at on the accent at least. Every sRGB color reads at
+ * 4.58:1 or more against black or white, whichever anchor-v1 picks, so no
+ * accent needs a step for it, and its hover and active states only add to
+ * it: schemes.test.ts holds the floor over every 8-bit gray and a grid of
+ * colors.
+ */
+export const ON_ACCENT_TARGET = 4.5;
+
+/** The accent's OKLCH lightness bounds, which leave its states room on either side. */
+export const ACCENT_LIGHTNESS = { least: 0.15, most: 0.9 } as const;
+
+/** `accent` with its lightness held within ACCENT_LIGHTNESS: the generator's one step. */
+export function generatorAccent(accent: string): string {
+  const at = lightness(accent);
+  const held =
+    at < ACCENT_LIGHTNESS.least
+      ? withLightness(accent, ACCENT_LIGHTNESS.least)
+      : at > ACCENT_LIGHTNESS.most
+        ? withLightness(accent, ACCENT_LIGHTNESS.most)
+        : accent;
+  return held;
+}
+
+/** A composition's scheme: the generator's step, then anchor-v2 and high-contrast-v2. */
+export function compose(composition: Composition): Composed {
+  const generator: { -readonly [M in BaseMode]?: Record<string, readonly [string, string]> } = {};
+  const used = {} as { -readonly [M in BaseMode]: Anchors };
+  for (const mode of ['light', 'dark'] as const) {
+    const picked = composition.anchors[mode];
+    const accent = generatorAccent(picked.accent);
+    if (accent !== picked.accent) generator[mode] = { accent: [picked.accent, accent] };
+    used[mode] = { ...picked, accent };
+  }
+  const light = anchorV2(used.light, 'light');
+  const dark = anchorV2(used.dark, 'dark');
+  return {
+    anchors: used,
+    adjustments: { generator, 'anchor-v2': anchorV2Adjustments(used) },
+    tokens: {
+      light,
+      dark,
+      highContrast: {
+        light: highContrastV2({ light, dark }, 'light'),
+        dark: highContrastV2({ light, dark }, 'dark'),
+      },
+    },
+  };
+}

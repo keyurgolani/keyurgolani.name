@@ -35,7 +35,7 @@ import type { HandlerContext } from '../dispatcher';
 import { authorize } from '../authorize';
 import { listOperations } from '../operations';
 import { previewAsset } from '../preview-asset';
-import type { GrantSessionPort } from '../preview-port';
+import type { GrantSessionPort, PreviewFixture } from '../preview-port';
 import { schemeGenerators } from '../scheme-generators';
 import type { Session } from '../session';
 import { isStudioResult } from '../studio-result';
@@ -89,8 +89,17 @@ interface Setup {
 
 async function setup(
   t: TestContext,
-  options: { readonly schemes?: SchemeGenerators } = {},
+  options: {
+    readonly schemes?: SchemeGenerators;
+    /** The fixtures a fixture grant opens, `complete` alone unless a test passes its own. */
+    readonly fixtures?: (id: string) => PreviewFixture | null;
+    /** The clock grants run on, the real one unless a test passes its own. */
+    readonly now?: () => number;
+  } = {},
 ): Promise<Setup> {
+  const fixtures =
+    options.fixtures ??
+    ((id: string) => (id === 'complete' ? pair(portfolio('Fixture Person')) : null));
   const dataDir = mkdtempSync(path.join(tmpdir(), 'owner-preview-'));
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
   assert.equal(await preflight({ dataDir }), null);
@@ -136,7 +145,8 @@ async function setup(
     config,
     sessions: port,
     ...liveContext(),
-    fixtures: (id) => (id === 'complete' ? pair(portfolio('Fixture Person')) : null),
+    fixtures,
+    ...(options.now ? { now: options.now } : {}),
   });
   t.after(() => previews.close());
   setDeploymentState({
@@ -750,4 +760,152 @@ test('a grant serves the renditions of the media it pinned, private and no-store
   // The session ends, and the grant with it.
   await endSession();
   await refused(await get(next, `portrait/${'c'.repeat(64)}/w480-a1.webp`), 'after the session');
+});
+
+test("a revision grant renders the schemes of the revision it was minted for, never the live one's, after a newer one goes live (#20 PR 3)", async (t) => {
+  const build = schemeGenerators(APPEARANCE_REGISTRY);
+  const schemes: SchemeGenerators = {
+    ...build,
+    declared: (schemeId) =>
+      schemeId === 'fixture-seed'
+        ? { id: 'fixture-seed', version: 1, input: 'seed-color' }
+        : build.declared(schemeId),
+  };
+  const { store, previews, command } = await setup(t, { schemes });
+  const seeded = (seedColor: string) =>
+    pair(
+      portfolio('Live Person'),
+      applyEdits(SITE, 'yaml', [
+        { op: 'set', pointer: '/appearanceInputs', value: { 'fixture-seed': { seedColor } } },
+      ]),
+    );
+  /** Saves `seedColor` as a draft and publishes it: the revision and the scheme it froze. */
+  const publish = async (seedColor: string, expectedLiveRevisionId: `rev_${string}` | null) => {
+    const created = await createDraft(store, seeded(seedColor));
+    const made = created.derived?.schemes?.['fixture-seed'];
+    assert.ok(made, `the save made ${seedColor}'s scheme`);
+    // Its newly generated tokens are a derived change the owner accepts first (#113).
+    const decided = await store.drafts.decideChanges(
+      {
+        draftId: created.draftId,
+        expectedVersion: created.version,
+        changeIds: (created.derived?.changes ?? []).map(({ id }) => id),
+        decision: 'accepted',
+      },
+      'owner',
+    );
+    assert.equal(decided.kind, 'saved', JSON.stringify(decided));
+    const draft = (decided as { draft: Draft }).draft;
+    const published = await store.publication.publish(
+      { draftId: draft.draftId, draftVersion: draft.version, expectedLiveRevisionId },
+      'operator',
+    );
+    assert.equal(published.kind, 'committed', JSON.stringify(published));
+    return { revisionId: (published as { revisionId: `rev_${string}` }).revisionId, made };
+  };
+  const mint = async (revisionId: `rev_${string}`) =>
+    minted(
+      await command('preview.grant.mint', {
+        subject: { revision: revisionId },
+        environment: ENVIRONMENT,
+      }),
+    );
+  const older = await publish('#3366ff', null);
+  const pinned = await mint(older.revisionId);
+  assert.deepEqual((await previews.port.open(pinned))?.schemes, { 'fixture-seed': older.made });
+
+  // A newer revision goes live with another seed's scheme.
+  const newer = await publish('#aa5500', older.revisionId);
+  assert.notDeepEqual(newer.made, older.made);
+  assert.equal((await store.publication.status()).liveRevisionId, newer.revisionId);
+  // The open grant, and a new one on the older revision, read the older one's.
+  assert.deepEqual((await previews.port.open(pinned))?.schemes, { 'fixture-seed': older.made });
+  const later = await mint(older.revisionId);
+  assert.deepEqual((await previews.port.open(later))?.schemes, { 'fixture-seed': older.made });
+  // And a grant on the live one reads its own.
+  const live = await mint(newer.revisionId);
+  assert.deepEqual((await previews.port.open(live))?.schemes, { 'fixture-seed': newer.made });
+});
+
+/** A stored generated scheme, as a revision's snapshots/schemes.json holds one (#20 PR 3). */
+function storedScheme(seed: string) {
+  const record = JSON.parse(
+    readFileSync(
+      new URL(
+        '../../../../../packages/appearance-schemes/generated/brand-seed.json',
+        import.meta.url,
+      ),
+      'utf8',
+    ),
+  ) as { result: { generator: unknown; tokens: unknown } };
+  return {
+    generator: record.result.generator,
+    inputsHash: createHash('sha256').update(seed).digest('hex'),
+    tokens: record.result.tokens,
+  };
+}
+
+test("a grant opens with its own subject's stored schemes, checked, never another grant's, and none once it's revoked or expired (#20 PR 3)", async (t) => {
+  const first = storedScheme('#5b5bd6');
+  const second = storedScheme('#3366ff');
+  let clock = Date.now();
+  const lines: string[] = [];
+  t.mock.method(console, 'log', (line: unknown) => lines.push(String(line)));
+  const { command, previews } = await setup(t, {
+    fixtures: (id) =>
+      id === 'complete'
+        ? { ...pair(portfolio('First Person')), snapshots: { schemes: { 'brand-seed': first } } }
+        : id === 'other'
+          ? {
+              ...pair(portfolio('Second Person')),
+              snapshots: { schemes: { 'brand-seed': second, broken: { generator: 7 } } },
+            }
+          : id === 'plain'
+            ? pair(portfolio('Plain Person'))
+            : id === 'unchecked'
+              ? {
+                  ...pair(portfolio('Unchecked Person')),
+                  snapshots: { schemes: { 'brand-seed': { generator: 7 } } },
+                }
+              : null,
+    now: () => clock,
+  });
+  const mint = async (fixture: string) =>
+    minted(await command('preview.grant.mint', { subject: { fixture }, environment: ENVIRONMENT }));
+  const a = await mint('complete');
+  const b = await mint('other');
+  const plain = await mint('plain');
+  const unchecked = await mint('unchecked');
+  // Each grant's own, read twice so the second comes from its cache entry.
+  for (let read = 0; read < 2; read += 1) {
+    assert.deepEqual((await previews.port.open(a))?.schemes, { 'brand-seed': first });
+    // An entry that doesn't check is left out, and logged by its id.
+    assert.deepEqual((await previews.port.open(b))?.schemes, { 'brand-seed': second });
+    assert.equal((await previews.port.open(plain))?.schemes, undefined);
+    // None left after the check: no schemes at all, never an empty record.
+    const opened = await previews.port.open(unchecked);
+    assert.ok(opened && !('schemes' in opened));
+  }
+  const dropped = lines
+    .map((line) => JSON.parse(line) as Record<string, unknown>)
+    .filter((entry) => entry.event === 'preview.scheme_dropped');
+  assert.deepEqual(
+    dropped.map(({ grantRef, schemeId, level }) => [grantRef, schemeId, level]),
+    [
+      [grantDigest(b).slice(0, 8), 'broken', 'warn'],
+      [grantDigest(unchecked).slice(0, 8), 'brand-seed', 'warn'],
+      [grantDigest(b).slice(0, 8), 'broken', 'warn'],
+      [grantDigest(unchecked).slice(0, 8), 'brand-seed', 'warn'],
+    ],
+  );
+  for (const entry of dropped) {
+    assert.deepEqual(Object.keys(entry).sort(), ['event', 'grantRef', 'level', 'schemeId', 'ts']);
+  }
+  // A revoked grant opens nothing, its schemes included.
+  assert.deepEqual(await command('preview.grant.revoke', { grant: a }), { revoked: true });
+  assert.equal(await previews.port.open(a), null);
+  assert.deepEqual((await previews.port.open(b))?.schemes, { 'brand-seed': second });
+  // An expired one opens nothing either.
+  clock += 366 * 24 * 60 * 60 * 1000;
+  assert.equal(await previews.port.open(b), null);
 });

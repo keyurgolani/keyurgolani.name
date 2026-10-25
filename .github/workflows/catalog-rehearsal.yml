@@ -1,0 +1,172 @@
+# #20's sharded cross-product rehearsal (tests/catalog/plan.ts, REHEARSAL),
+# which a pull request asks for by changing tests/catalog/rehearsal.json in
+# its head commit, naming that commit's parent as its `for`. `request`
+# (ci/rehearsal-request.mjs) runs the rest only then, so a later push that
+# leaves the file alone, the commit that removes it, a restack that rewrites
+# the parent, or a reopen, runs nothing, and one request is one run. There's
+# no manual trigger and no schedule; the owner asks again before a release
+# the same way, on a release candidate's pull request.
+#
+# - `shard`, eight of them, in the pinned Playwright image: the static smoke
+#   over its share of every tuple, generated schemes through their
+#   reference records, writing every tuple's resolved tokens; then a plain
+#   production build and the browser smoke over its share of the wider
+#   sample, each tuple a JPEG screenshot.
+# - `states`: every primitive state on the appearance fixtures page, in
+#   every shipping language and profile and display mode, from its own
+#   APPEARANCE_FIXTURES=1 build.
+# - `review`: the image-derived schemes' review pages, for the owner.
+#
+# Each job uploads its reports as reports-rehearsal-<job>. The timeouts are
+# plan.ts's, and together they're under REHEARSAL.capRunnerMinutes, which
+# plan.test.ts holds. It isn't one of ci.yml's checks, so `gate` never waits
+# on it. It reads the repository and nothing else.
+name: catalog-rehearsal
+
+on:
+  pull_request:
+    branches: [main, next]
+    # No reopen: a request runs once, when the push that carries it lands.
+    types: [opened, synchronize]
+    paths:
+      - tests/catalog/rehearsal.json
+
+permissions:
+  contents: read
+
+concurrency:
+  # A later push never cancels a rehearsal that's running.
+  group: catalog-rehearsal-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: 22.23.4
+  TZ: UTC
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  request:
+    name: request
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The merge, its two parents, and the head's own parent.
+          fetch-depth: 3
+      - name: Decide
+        id: decide
+        run: node ci/rehearsal-request.mjs --github
+
+  shard:
+    name: rehearsal (${{ matrix.shard }}/8)
+    needs: request
+    if: ${{ needs.request.outputs.run == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        # The install action from this same checkout; actionlint rejects the `$/` form.
+        uses: ./.github/actions/install # zizmor: ignore[self-repository]
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm --filter @portfolio/web build:registry
+        run: pnpm --filter @portfolio/web build:registry
+      - name: pnpm ci:catalog-static (shard ${{ matrix.shard }}/8)
+        env:
+          CATALOG_SHARD: ${{ matrix.shard }}/8
+          CATALOG_PLAN: rehearsal
+          CI_REPRO_COMMAND: CATALOG_PLAN=rehearsal CATALOG_SHARD=${{ matrix.shard }}/8 pnpm ci:catalog-static
+        run: pnpm ci:catalog-static
+      - name: pnpm build
+        if: ${{ !cancelled() }}
+        run: pnpm build
+      - name: pnpm ci:catalog-full (shard ${{ matrix.shard }}/8)
+        if: ${{ !cancelled() }}
+        env:
+          CATALOG_SHARD: ${{ matrix.shard }}/8
+          CATALOG_PLAN: rehearsal
+          CI_REPRO_COMMAND: CATALOG_PLAN=rehearsal CATALOG_SHARD=${{ matrix.shard }}/8 pnpm ci:catalog-full
+        run: pnpm ci:catalog-full
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-rehearsal-${{ matrix.shard }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  states:
+    name: rehearsal states
+    needs: request
+    if: ${{ needs.request.outputs.run == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 29
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        # The install action from this same checkout; actionlint rejects the `$/` form.
+        uses: ./.github/actions/install # zizmor: ignore[self-repository]
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm ci:catalog-states
+        run: pnpm ci:catalog-states
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-rehearsal-states
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  review:
+    name: rehearsal review pages
+    needs: request
+    if: ${{ needs.request.outputs.run == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        # The install action from this same checkout; actionlint rejects the `$/` form.
+        uses: ./.github/actions/install # zizmor: ignore[self-repository]
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm catalog review
+        run: pnpm catalog review --out reports/catalog/review
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-rehearsal-review
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 30

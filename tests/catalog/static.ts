@@ -11,7 +11,8 @@
 // - token coverage, bundle size, and boundary isolation: the per-axis pack
 //   gates (pack-gates.ts) over each pack's compiled files;
 // - the contrast table: #19's gate over the tuple's language, scheme, and
-//   profile in its display mode, and the scheme's hierarchy.
+//   profile in its display mode, and the scheme's hierarchy. A generated
+//   scheme is gated with the sets it's given (#20 PR 3's reference records).
 //
 // What a tuple shares with others is checked once and read for each, so a
 // tuple costs a few lookups after its resolve. A finding names one pack,
@@ -25,6 +26,7 @@ import {
   AXIS_BY_KIND,
   createAppearanceRegistry,
   PACK_AXES,
+  type GeneratedSchemes,
   type PackAxis,
   type PackManifest,
 } from '../../packages/appearance/src/index';
@@ -95,6 +97,7 @@ export function staticSmoke(
   meta: BuildMeta,
   read: ServedReader,
   tuples: readonly Tuple[],
+  generated?: GeneratedSchemes,
 ): StaticFinding[] {
   const registry = createAppearanceRegistry(meta);
   const packs = new Map<string, (typeof meta.PACKS & object)[number]>();
@@ -158,7 +161,8 @@ export function staticSmoke(
   };
 
   // The contrast table, once over every combination, read by tuple.
-  const check = checkAppearance(registry);
+  // A generator scheme is gated with its generated sets, the reference records' (#20 PR 3).
+  const check = checkAppearance(registry, generated ? { generated } : {});
   const opaque = opaqueFailing(check.failures);
   const contrast = new Map<string, { axis: PackAxis; id: string; message: string }[]>();
   for (const failure of check.failures) {

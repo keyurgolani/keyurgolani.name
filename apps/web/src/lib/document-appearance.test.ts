@@ -1,16 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   boundaryAttributes,
   DEFAULT_VISITOR_CONTROLS,
   PLATFORM_DEFAULTS,
+  resolveTokens,
+  type DerivedScheme,
+  type GeneratedScheme,
   type Profile,
 } from '@portfolio/appearance';
 import type { DisplayMode, MotionPolicy, VisitorControls } from '@portfolio/schema';
 import { FALLBACK_ID } from '@portfolio/variant-contract';
+import { APPEARANCE_REGISTRY } from './appearance-registry';
 import {
   documentAppearance,
   FALLBACK_APPEARANCE,
+  storedSchemes,
   visitorControlModel,
 } from './document-appearance';
 import {
@@ -199,4 +207,118 @@ test("the visitor control offers the site's selectable axes but the variant, and
       ['value', 'label'],
     );
   assert.doesNotMatch(JSON.stringify(model), /_portfolio\/pack\//);
+});
+
+/** brand-seed's reference record (#20 PR 3) as the draft save would store it. */
+function brandSeed(): DerivedScheme {
+  const record = JSON.parse(
+    fs.readFileSync(
+      fileURLToPath(
+        new URL(
+          '../../../../packages/appearance-schemes/generated/brand-seed.json',
+          import.meta.url,
+        ),
+      ),
+      'utf8',
+    ),
+  ) as {
+    result: {
+      generator: DerivedScheme['generator'];
+      input: { seedColor: string };
+      tokens: GeneratedScheme;
+    };
+  };
+  return {
+    generator: record.result.generator,
+    inputsHash: createHash('sha256').update(record.result.input.seedColor).digest('hex'),
+    tokens: record.result.tokens,
+  };
+}
+
+const BRANDED = { ...SITE, appearance: { ...SITE.appearance, colorScheme: 'brand-seed' } };
+
+test("a site's stored generated scheme renders its own sets, and render never runs a generator (#20 PR 3)", () => {
+  const stored = brandSeed();
+  const resolved = documentAppearance({
+    site: BRANDED,
+    variant: FALLBACK_ID,
+    profile: 'read-only',
+    schemes: { 'brand-seed': stored },
+  });
+  assert.equal(resolved.selection.colorScheme, 'brand-seed');
+  assert.ok(!resolved.fallbackAxes.includes('colorScheme'));
+  assert.deepEqual(
+    resolved.diagnostics.filter(({ axis }) => axis === 'colorScheme'),
+    [],
+  );
+  const tokens = resolveTokens(
+    APPEARANCE_REGISTRY,
+    { ...PLATFORM_DEFAULTS, colorScheme: 'brand-seed', polarity: 'light' },
+    { generated: storedSchemes({ 'brand-seed': stored }) },
+  );
+  assert.deepEqual(tokens.color, stored.tokens.light);
+  const high = resolveTokens(
+    APPEARANCE_REGISTRY,
+    { ...PLATFORM_DEFAULTS, colorScheme: 'brand-seed', polarity: 'dark', highContrast: true },
+    { generated: storedSchemes({ 'brand-seed': stored }) },
+  );
+  assert.deepEqual(
+    high.color,
+    stored.tokens.highContrast!.dark,
+    'its own high-contrast set, as solved',
+  );
+  // The visitor control offers it once it has sets.
+  const selectable = (model: ReturnType<typeof visitorControlModel>) =>
+    model.controls[0]!.groups.some(({ choices }) =>
+      choices.some(({ value, unavailable }) => value === 'brand-seed' && !unavailable),
+    );
+  assert.ok(
+    selectable(
+      visitorControlModel(BRANDED, 'read-only', resolved, APPEARANCE_REGISTRY, {
+        'brand-seed': stored,
+      }),
+    ),
+  );
+  // With nothing stored, a visitor can't pick it: it shows only as what's applied.
+  assert.ok(!selectable(visitorControlModel(BRANDED, 'read-only', resolved)));
+});
+
+test('a stored scheme that is missing, malformed, or from another generator or version falls back on its axis, with a diagnostic', () => {
+  const stored = brandSeed();
+  const { light, ...noLight } = stored.tokens;
+  void light;
+  const cases: Record<string, unknown> = {
+    missing: {},
+    'not an object': 'brand-seed',
+    'entry not an object': { 'brand-seed': 7 },
+    'no inputs hash': { 'brand-seed': { ...stored, inputsHash: undefined } },
+    'a short inputs hash': { 'brand-seed': { ...stored, inputsHash: 'abc' } },
+    'an incomplete set': {
+      'brand-seed': { ...stored, tokens: { ...stored.tokens, dark: { canvas: '#000000' } } },
+    },
+    'a missing set': { 'brand-seed': { ...stored, tokens: noLight } },
+    'another generator': {
+      'brand-seed': { ...stored, generator: { id: 'hct-tonal', version: 1 } },
+    },
+    'another version': {
+      'brand-seed': { ...stored, generator: { id: 'brand-seed', version: 2 } },
+    },
+  };
+  for (const [what, schemes] of Object.entries(cases)) {
+    const resolved = documentAppearance({
+      site: BRANDED,
+      variant: FALLBACK_ID,
+      profile: 'read-only',
+      schemes,
+    });
+    assert.equal(resolved.selection.colorScheme, PLATFORM_DEFAULTS.colorScheme, what);
+    assert.deepEqual(
+      resolved.diagnostics.filter(({ axis }) => axis === 'colorScheme').map(({ code }) => code),
+      ['appearance.input-missing'],
+      what,
+    );
+    assert.deepEqual(storedSchemes(schemes), {}, what);
+  }
+  // An entry for an id that isn't a generator scheme is left out too.
+  assert.deepEqual(storedSchemes({ 'warm-parchment': stored }), {});
 });

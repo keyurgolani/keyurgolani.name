@@ -28,14 +28,16 @@ import { capabilityPolicy, type NavLink } from '~/server/policy';
 const HOME: readonly NavLink[] = [{ href: '/', label: 'Home' }];
 
 /**
- * The live site document, or null before startup and while the catalog
- * can't serve: the request's own read, so a 404 inside the site's layout
- * renders from the layout's revision.
+ * The live site document and its revision's stored generated schemes
+ * (#20 PR 3), or null before startup and while the catalog can't serve: the
+ * request's own read, so a 404 inside the site's layout renders from the
+ * layout's revision, its schemes included.
  */
-async function liveSite(): Promise<Site | null> {
+async function liveSite(): Promise<{ readonly site: Site; readonly schemes: unknown } | null> {
   if (!getDeploymentState()) return null;
   try {
-    return (await getLive()).unit?.site ?? null;
+    const { unit } = await getLive();
+    return unit ? { site: unit.site, schemes: unit.snapshots?.schemes } : null;
   } catch {
     return null;
   }
@@ -54,7 +56,8 @@ export async function NotFoundBody({
 } = {}) {
   const state = getDeploymentState();
   const links = state ? capabilityPolicy(state.config.profile).navigation(null) : HOME;
-  const site = await liveSite();
+  const served = await liveSite();
+  const site = served?.site;
   const page = (
     <main id="main" tabIndex={-1} className="host-chrome">
       <h1>Page not found</h1>
@@ -94,7 +97,13 @@ export async function NotFoundBody({
       : compositionFor(segment, registry);
   return (
     <DocumentBoundary
-      appearance={await visitorPageAppearance(site, composition.rendered.manifest.id)}
+      appearance={await visitorPageAppearance(
+        site,
+        composition.rendered.manifest.id,
+        undefined,
+        false,
+        served?.schemes,
+      )}
       main="main"
       nonce={nonce}
     >

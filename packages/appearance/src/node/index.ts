@@ -93,6 +93,26 @@ export {
   type PackProblem,
   type SkippedPack,
 } from './check';
+export {
+  ACCEPTANCE_FILE,
+  GENERATED_DIR,
+  inputsHash,
+  pixelsSha256,
+  readAcceptance,
+  readPng,
+  recordDigest,
+  REFERENCE_SOURCES,
+  referenceFile,
+  referenceRecord,
+  renderReference,
+  reviewExclusion,
+  seedInputsHash,
+  type Acceptance,
+  type DecodedPng,
+  type DeclaredGenerator,
+  type ReferenceRecord,
+  type ReferenceSource,
+} from './generated';
 export { LAYER_ORDER, startsWithLayerOrder } from '../layers';
 export {
   auditCodeText,

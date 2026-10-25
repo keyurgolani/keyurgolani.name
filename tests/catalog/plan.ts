@@ -14,9 +14,9 @@
 //   once per variant and per display mode (coverageSample), and a seeded
 //   draw from the shard's own tuples fills each shard to its budget.
 //
-// The full browser cross-product, with its stored artifacts, is #20 PR 3's
-// one-time sharded rehearsal. Covering arrays stay deferred, so neither
-// part uses one.
+// #20 PR 3's sharded rehearsal (REHEARSAL, below) runs both parts wider,
+// with stored resolved tokens and screenshots. Covering arrays stay
+// deferred, so no part uses one.
 //
 // A tuple is in the cross-product when #19's resolver renders it as asked
 // under demo: a single-mode scheme meets the modes it has. Shards take
@@ -33,6 +33,9 @@ import {
   DISPLAY_MODES,
   PACK_AXES,
   QUERY_KEYS,
+  resolveAppearance,
+  type AppearanceRegistry,
+  type GeneratedSchemes,
   type PackAxis,
 } from '../../packages/appearance/src/index';
 import { MISSING_VARIANT_ID } from '../../packages/variant-contract/src/ids';
@@ -81,8 +84,48 @@ export function registeredVariants(meta: BuildMeta): string[] {
     .sort();
 }
 
-/** The complete registered cross-product, as the resolver renders it under demo, sorted. */
-export function crossProduct(meta: BuildMeta): Tuple[] {
+/**
+ * Whether the resolver renders `tuple` as asked under demo with `generated`
+ * sets, as accepts() in tests/quality/cells.ts says with none: the same ids,
+ * the asked mode, not pinned, and no diagnostic but the fallback
+ * composition's own.
+ */
+function rendersWith(
+  registry: AppearanceRegistry,
+  tuple: Tuple,
+  generated: GeneratedSchemes,
+): boolean {
+  const resolved = resolveAppearance({
+    published: tuple as never,
+    visitorControls: {
+      variant: 'locked',
+      designLanguage: 'locked',
+      colorScheme: 'locked',
+      typography: 'locked',
+      displayMode: 'locked',
+    },
+    motionPolicy: 'respect-os',
+    profile: 'demo',
+    registry,
+    generated,
+  });
+  const same = (Object.keys(tuple) as (keyof Tuple)[]).every(
+    (axis) => resolved.selection[axis] === tuple[axis],
+  );
+  const diagnostics = resolved.diagnostics.filter(
+    (diagnostic) => !(tuple.variant === FALLBACK_ID && diagnostic.axis === 'variant'),
+  );
+  return same && !resolved.modeLocked && diagnostics.length === 0;
+}
+
+/**
+ * The complete registered cross-product, as the resolver renders it under
+ * demo, sorted. A generator scheme renders only from generated sets: with
+ * `generated` (the reference records', #20 PR 3) it joins the static
+ * smoke's cross-product, and with none, as in the browser, where no site
+ * input reaches the demo, it doesn't.
+ */
+export function crossProduct(meta: BuildMeta, generated?: GeneratedSchemes): Tuple[] {
   const registry = createAppearanceRegistry(meta);
   const tuples: Tuple[] = [];
   const [languages, schemes, typographies] = PACK_AXES.map((axis) => shippingPacks(meta, axis)) as [
@@ -96,7 +139,15 @@ export function crossProduct(meta: BuildMeta): Tuple[] {
         for (const typography of typographies) {
           for (const displayMode of DISPLAY_MODES) {
             const tuple = { variant, designLanguage, colorScheme, typography, displayMode };
-            if (accepts(registry, tuple, 'demo')) tuples.push(tuple);
+            const generatedScheme =
+              generated !== undefined &&
+              registry.packs.colorScheme.get(colorScheme)?.manifest.generator !== undefined;
+            if (
+              generatedScheme
+                ? rendersWith(registry, tuple, generated)
+                : accepts(registry, tuple, 'demo')
+            )
+              tuples.push(tuple);
           }
         }
       }
@@ -331,4 +382,86 @@ export function browserPlan(
   const covered = new Set(coverage.map(key));
   const pool = shardTuples(tuples, shard).filter((tuple) => !covered.has(key(tuple)));
   return [...mine, ...seededDraw(pool, budget - mine.length, seed + shard.index)];
+}
+
+/**
+ * #20 PR 3's sharded cross-product rehearsal (catalog-rehearsal.yml), which
+ * a pull request asks for by changing tests/catalog/rehearsal.json in its
+ * head commit, and the owner can ask for again before a release. It runs
+ * the scheduled job's two parts wider: the static smoke over every tuple,
+ * generated schemes included through their reference records, storing
+ * every tuple's resolved tokens, and the browser smoke over a wider sample,
+ * each screenshot a JPEG; and one more shard of every primitive state, in
+ * every shipping language and profile, on the appearance fixtures page.
+ * plan.test.ts holds catalog-rehearsal.yml's matrix and timeouts, and
+ * rehearsal.json when it's there, to these.
+ */
+export const REHEARSAL = {
+  /** Shards of the two parts. */
+  shards: 8,
+  /**
+   * Static smoke tuples a shard checks: its share of every tuple, 22,260 at
+   * 8 shards with the 6 variants of #128's catalog and 28 schemes, the
+   * generated ones the catalog registers included. 30,000 holds 8 variants
+   * at this many packs (29,680), and at the measured rate it adds 2 seconds
+   * to a shard, which stays at 17 minutes.
+   */
+  staticPerShard: 30_000,
+  /**
+   * Browser smoke tuples a shard loads: the coverage sample (70 a shard at 35
+   * languages) and a seeded draw. 136 keeps a shard at 17 minutes, so the
+   * state shard's 172 pages still fit under the cap.
+   */
+  browserPerShard: 136,
+  seed: SAMPLE_SEED,
+  /** The screenshots' JPEG quality, so 1,088 of them stay near 100 MB. */
+  jpegQuality: 80,
+  /** The state shard's fixed part: the fixture host's own build, on top of a shard's. */
+  statesBuildSeconds: 240,
+  /** What every job may take together, at the jobs' timeouts: the cost signed off. */
+  capRunnerMinutes: 180,
+} as const;
+
+/** Whether CATALOG_PLAN asks for the rehearsal: `rehearsal`, or unset for the nightly plan. It throws on anything else. */
+export function readPlan(value: string | undefined): 'nightly' | 'rehearsal' {
+  if (value === undefined || value === '' || value === 'nightly') return 'nightly';
+  if (value === 'rehearsal') return 'rehearsal';
+  throw new Error(`CATALOG_PLAN is ${value}, and it must be nightly or rehearsal.`);
+}
+
+/** The budgets a plan takes per shard. */
+export const planBudget = (plan: 'nightly' | 'rehearsal') =>
+  plan === 'rehearsal'
+    ? { static: REHEARSAL.staticPerShard, browser: REHEARSAL.browserPerShard }
+    : { static: BUDGET.staticPerShard, browser: BUDGET.browserPerShard };
+
+/** A rehearsal shard job's timeout-minutes: its fixed part and both parts at its budget, twice over. */
+export function rehearsalTimeoutMinutes(): number {
+  const seconds =
+    MEASURED.fixedSeconds +
+    REHEARSAL.staticPerShard / MEASURED.staticTuplesPerSecond +
+    REHEARSAL.browserPerShard * MEASURED.browserSecondsPerTuple;
+  return Math.ceil((2 * seconds) / 60);
+}
+
+/** The state shard's pages: every shipping language, then every profile, in each display mode. */
+export function statesPlan(meta: BuildMeta): {
+  readonly axis: 'designLanguage' | 'typography';
+  readonly id: string;
+  readonly displayMode: string;
+}[] {
+  const pages: { axis: 'designLanguage' | 'typography'; id: string; displayMode: string }[] = [];
+  for (const axis of ['designLanguage', 'typography'] as const) {
+    for (const id of shippingPacks(meta, axis)) {
+      for (const displayMode of DISPLAY_MODES) pages.push({ axis, id, displayMode });
+    }
+  }
+  return pages;
+}
+
+/** The state shard job's timeout-minutes: the fixture host's build, a fixed part, and its pages, twice over. */
+export function statesTimeoutMinutes(pages: number): number {
+  const seconds =
+    MEASURED.fixedSeconds + REHEARSAL.statesBuildSeconds + pages * MEASURED.browserSecondsPerTuple;
+  return Math.ceil((2 * seconds) / 60);
 }
