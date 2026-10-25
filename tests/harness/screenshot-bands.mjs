@@ -20,7 +20,8 @@
 // screenshot is, and refuses the rest, as packages/appearance's readPng
 // does for its input: every chunk's CRC is checked, the header comes first
 // and once and the end chunk last, nothing follows it, and the image data
-// inflates to exactly its rows. A tRNS chunk, which pngjs would apply and
+// inflates to exactly its rows. A critical chunk PNG doesn't define is
+// refused, as pngjs refuses it; other ancillary chunks are skipped. A tRNS chunk, which pngjs would apply and
 // Chromium never writes, is refused rather than ignored. Only pixelmatch,
 // the comparator SCREENSHOT_COMPARISON uses, is banded here.
 
@@ -32,9 +33,17 @@ import filterRows from 'pngjs/lib/filter-pack.js';
 /** Rows compared at a time: a 1440-pixel-wide band is under 1.5 MB of RGBA. */
 export const BAND_ROWS = 256;
 
-/** The widest PNG it reads, and the most pixels: 16,384 by 16,384. */
+/**
+ * The widest PNG it reads, and the most pixels: 16,384 by 16,384, about
+ * 268M. Memory follows the band, so the cap bounds the work, not what's
+ * held. The tallest baseline today is 1440 by 58,798, about 85M pixels:
+ * a 1440-wide page could grow to 186,413 rows before this refuses it.
+ */
 export const MAX_PNG_WIDTH = 16384;
 export const MAX_PNG_PIXELS = 16384 * 16384;
+
+/** The critical chunks PNG defines. Any other with an uppercase first letter is refused. */
+const CRITICAL = new Set(['IHDR', 'PLTE', 'IDAT', 'IEND']);
 
 /** Rows past a pixel pixelmatch's antialiasing check reads, on either side. */
 const HALO = 2;
@@ -105,6 +114,9 @@ export function openPng(bytes) {
     const body = buffer.subarray(at + 8, at + 8 + length);
     if (crc32(buffer.subarray(at + 4, at + 8 + length)) !== buffer.readUInt32BE(at + 8 + length)) {
       throw new TypeError(`The PNG's ${type} chunk fails its CRC.`);
+    }
+    if ((buffer[at + 4] & 0x20) === 0 && !CRITICAL.has(type)) {
+      throw new TypeError(`The PNG has a critical ${type} chunk this doesn't read.`);
     }
     if ((header === null) !== (type === 'IHDR')) {
       throw new TypeError('The PNG has to start with its image header, and have only one.');
@@ -205,8 +217,9 @@ async function* bands(data, { width, height, channels }, rows) {
  * band and its halo at a time: row `y` is at `(y - origin) * width * 4`.
  */
 class RowWindow {
-  constructor(png, width, height, rows) {
+  constructor(png, width, height, rows, which) {
     this.png = png;
+    this.which = which;
     this.height = height;
     this.rowBytes = width * 4;
     this.data = new Uint8Array((rows + 2 * HALO) * this.rowBytes);
@@ -219,6 +232,14 @@ class RowWindow {
 
   /** Reads rows until row `until` is in hand. */
   async fill(until) {
+    try {
+      await this.read(until);
+    } catch (error) {
+      throw naming(this.which, error);
+    }
+  }
+
+  async read(until) {
     const own = this.png.width * 4;
     while (this.end < until) {
       const to = (this.end - this.origin) * this.rowBytes;
@@ -246,11 +267,32 @@ class RowWindow {
 
   /** Reads the PNG to its end, so a fault past its last row still throws, as a whole decode does. */
   async finish() {
-    if (!(await this.source.next()).done) throw new TypeError("The PNG's image data is long.");
+    let next;
+    try {
+      next = await this.source.next();
+    } catch (error) {
+      throw naming(this.which, error);
+    }
+    if (!next.done) throw naming(this.which, new TypeError("The PNG's image data is long."));
   }
 
   async close() {
     await this.source.return();
+  }
+}
+
+/** A refusal of `which` image, actual or expected, named as that image's. */
+function naming(which, error) {
+  if (!(error instanceof TypeError)) return error;
+  return new TypeError(`${which} image: ${error.message}`, { cause: error });
+}
+
+/** `bytes` opened by openPng, with a refusal named as `which` image's. */
+function opening(which, bytes) {
+  try {
+    return openPng(bytes);
+  } catch (error) {
+    throw naming(which, error);
   }
 }
 
@@ -450,8 +492,8 @@ function drawGrayPixel(img, i, alpha, output, o) {
  * the diff PNG pixelmatch draws.
  */
 async function scan(expected, actual, width, height, threshold, rows, draw) {
-  const one = new RowWindow(expected, width, height, rows);
-  const two = new RowWindow(actual, width, height, rows);
+  const one = new RowWindow(expected, width, height, rows, 'expected');
+  const two = new RowWindow(actual, width, height, rows, 'actual');
   const diff = draw ? new DiffPng(width, height, rows) : null;
   const output = draw ? new Uint8Array(rows * width * 4) : null;
   const maxDelta = 35215 * threshold * threshold;
@@ -523,8 +565,8 @@ export async function compareScreenshots(
     return { errorMessage: 'Actual result should be a Buffer.' };
   }
   if (!isPng(expected)) throw new Error('Could not decode expected image as PNG.');
-  const actualPng = openPng(actual);
-  const expectedPng = openPng(expected);
+  const actualPng = opening('actual', actual);
+  const expectedPng = opening('expected', expected);
   const width = Math.max(expectedPng.width, actualPng.width);
   const height = Math.max(expectedPng.height, actualPng.height);
   let sizesMismatchError = '';

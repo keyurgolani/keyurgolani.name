@@ -366,13 +366,27 @@ test('the reader refuses what a screenshot never is, and a PNG that is broken an
     'no pixels': [made(header(0, 4), end), /PNGs of 1 to/],
     'too wide': [made(header(16385, 1), end), /PNGs of 1 to/],
     'a tRNS chunk': [made(header(4, 4), chunk('tRNS', Buffer.alloc(6)), idat(data), end), /tRNS/],
+    'a critical chunk PNG has no such type for': [
+      made(header(4, 4), chunk('ABCD', Buffer.alloc(3)), idat(data), end),
+      /critical ABCD chunk/,
+    ],
     'no end chunk': [made(header(4, 4), idat(data)), /ends before its end chunk/],
     'a chunk cut short': [good.subarray(0, good.length - 20), /ends inside a chunk|ends before/],
     'data after the end': [Buffer.concat([good, Buffer.from([0])]), /data after its end chunk/],
   };
+  // A comparison names the image it refuses: actual or expected.
+  const as = (which, refusal) => new RegExp(`TypeError: ${which} image: .*(?:${refusal.source})`);
   for (const [name, [bytes, refusal]] of Object.entries(opens)) {
     assert.throws(() => openPng(bytes), refusal, name);
+    await assert.rejects(compareScreenshots(bytes, good), as('actual', refusal), name);
+    if (name === 'not a PNG') continue; // Playwright's own refusal of an expected non-PNG, above.
+    await assert.rejects(compareScreenshots(good, bytes), as('expected', refusal), name);
   }
+  // Playwright refuses the unknown critical chunk too, and both skip an unknown ancillary one.
+  assert.throws(() => compare(opens['a critical chunk PNG has no such type for'][0], good));
+  const ancillary = made(header(4, 4), chunk('abCD', Buffer.alloc(3)), idat(data), end);
+  assert.equal(compare(ancillary, good), null);
+  assert.equal(await compareScreenshots(ancillary, good), null);
   const reads = {
     'no image data': [made(header(4, 4), end), /image data is short|doesn't inflate to its rows/],
     'too few rows': [made(header(4, 5), idat(data), end), /image data is short/],
@@ -392,12 +406,8 @@ test('the reader refuses what a screenshot never is, and a PNG that is broken an
   };
   for (const [name, [bytes, refusal]] of Object.entries(reads)) {
     await assert.rejects(decodeBanded(bytes, 2), refusal, name);
-    await assert.rejects(compareScreenshots(bytes, good), refusal, `${name}, as the actual image`);
-    await assert.rejects(
-      compareScreenshots(good, bytes),
-      refusal,
-      `${name}, as the expected image`,
-    );
+    await assert.rejects(compareScreenshots(bytes, good), as('actual', refusal), name);
+    await assert.rejects(compareScreenshots(good, bytes), as('expected', refusal), name);
   }
   // A fault past the last row a comparison needs still fails it, as a whole decode would.
   const long = made(
@@ -405,7 +415,8 @@ test('the reader refuses what a screenshot never is, and a PNG that is broken an
     idat(deflateSync(Buffer.concat([scanlines(pixels, 4, 4, 4, () => 0), Buffer.alloc(1)]))),
     end,
   );
-  await assert.rejects(compareScreenshots(long, good), /doesn't inflate to its rows|long/);
+  await assert.rejects(compareScreenshots(long, good), as('actual', /doesn't inflate|long/));
+  await assert.rejects(compareScreenshots(good, long), as('expected', /doesn't inflate|long/));
 });
 
 const names = existsSync(BASELINES)
