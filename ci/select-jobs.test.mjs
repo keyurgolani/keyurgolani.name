@@ -96,6 +96,12 @@ const CLASSES = [
     jobs: ['static', 'unit', 'build'],
   },
   {
+    // #20: the scheduled provenance check runs only on schedule, its tests in unit.
+    name: 'the catalog provenance check',
+    files: ['ci/check-catalog-provenance.mjs', 'ci/check-catalog-provenance.test.mjs'],
+    jobs: ['static', 'unit'],
+  },
+  {
     name: 'one variant',
     files: ['packages/variant-aurora/src/layout.tsx', 'packages/variant-aurora/manifest.json'],
     jobs: [

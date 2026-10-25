@@ -1,6 +1,6 @@
 # Scheduled checks across the whole product, outside any PR: every night,
 # #11's quality matrix and #20's catalog cross-product, and on Mondays, the
-# links check too. A failure opens or
+# links check and #20's catalog provenance check too. A failure opens or
 # updates one rolling issue, and the first passing run in which every job ran,
 # a Monday's, closes it (ci/report-issue.mjs).
 #
@@ -12,26 +12,27 @@
 # Every job sets timeout-minutes. A job that hits it is reported as
 # cancelled or as failure, and the reporter counts anything but success as a
 # failure, so nothing hangs or ages silently. The one exception is a skip
-# report's EXPECTED_SKIPS names: links, on the nights it doesn't run. Only
-# `report` holds `issues: write`.
+# report's EXPECTED_SKIPS names: links and catalog-provenance, on the nights
+# they don't run. Only `report` holds `issues: write`.
 #
 # Cross-product jobs join here: #11's quality matrix (quality-full, a
 # night's slice of it, judged whole by quality-verdict), #20's catalog
-# cross-product (catalog-full),
-# and #20's report-only catalog provenance refresh once its catalog
-# exists. Each one
-# sets timeout-minutes, uploads its reports as reports-<job>, runs its check
-# as `pnpm ci:<job>` (the reporter names that as its local command), and goes
-# into report's needs.
+# cross-product (catalog-full), and #20's catalog provenance check
+# (catalog-provenance). Each one sets timeout-minutes, uploads its reports
+# as reports-<job>, runs its check as `pnpm ci:<job>` (the reporter names
+# that as its local command, or the one its COMMANDS gives), and goes into
+# report's needs.
 name: scheduled
 
 on:
   schedule:
-    # Mondays at 06:23 UTC: every job, links included. Only this run can
-    # close the report, since every job runs in it.
+    # Mondays at 06:23 UTC: every job, links and catalog-provenance
+    # included. Only this run can close the report, since every job runs in
+    # it, so a weekly job runs on Mondays too.
     - cron: '23 6 * * 1'
-    # Every other night at 06:23 UTC: every job but links. Monday is left
-    # out, so the quality matrix runs once a night.
+    # Every other night at 06:23 UTC: every job but links and
+    # catalog-provenance. Monday is left out, so the quality matrix runs
+    # once a night.
     - cron: '23 6 * * 0,2-6'
 
 permissions:
@@ -46,9 +47,10 @@ env:
   TZ: UTC
 
 jobs:
-  # The docs check, then every external link requested once. This job is the
-  # one place CI reaches outside hosts on purpose; it never requests a local,
-  # reserved, or live-site host (ci/docs-check.mjs).
+  # The docs check, then every external link requested once. This job and
+  # catalog-provenance are the places CI reaches outside hosts on purpose;
+  # neither requests a local, reserved, or live-site host
+  # (ci/docs-check.mjs).
   links:
     name: links
     # Mondays only. On the other nights it skips, and report's EXPECTED_SKIPS
@@ -74,6 +76,50 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: reports-links
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  # #20's catalog provenance check (ci/check-catalog-provenance.mjs): every
+  # source URL the catalog's packs, held packs, Research records, and
+  # generated schemes name, requested once, and each pack under an upstream
+  # license held to the license file at its pinned tag. A dead source, or
+  # license or copyright drift, fails it and is a failure record; an
+  # unverifiable source or a newer upstream is in the job summary only. It
+  # needs no install: the check is pure Node.
+  catalog-provenance:
+    name: catalog-provenance
+    # Mondays only, with links. On the other nights it skips, and report's
+    # EXPECTED_SKIPS names it, so that skip alone isn't a failure.
+    if: ${{ github.event.schedule == '23 6 * * 1' }}
+    runs-on: ubuntu-24.04
+    # The worst case, when every host stalls: each URL has one 60 s deadline
+    # across its three attempts (HEAD, then GET, each up to 6 hops, every
+    # request and DNS lookup capped at 12 s) and their backoff, four URLs at
+    # once, so 25 URLs take at most 7 minutes. The upstream stage then runs
+    # serially, each of its up to 8 GETs per pinned repository (the tag, 5
+    # license file names, the latest release, the tags) under its own 60 s
+    # deadline: 8 minutes for the one repository pinned today.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: pnpm ci:catalog-provenance
+        env:
+          # The workflow's contents: read token, which the check sends to
+          # api.github.com alone, for its rate limit.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node ci/run.mjs catalog-provenance -- node ci/check-catalog-provenance.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-catalog-provenance
           path: reports/
           if-no-files-found: ignore
           retention-days: 30
@@ -287,7 +333,7 @@ jobs:
 
   report:
     name: report
-    needs: [links, quality-night, quality-full, quality-verdict, catalog-full]
+    needs: [links, catalog-provenance, quality-night, quality-full, quality-verdict, catalog-full]
     if: ${{ always() && github.event_name == 'schedule' }}
     runs-on: ubuntu-24.04
     # It downloads every job's reports, the eight quality shards' among them.
@@ -315,8 +361,9 @@ jobs:
       - name: Open, update, or close the report
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-          # The jobs this run skips by design: links, on every night but Monday.
-          EXPECTED_SKIPS: ${{ github.event.schedule != '23 6 * * 1' && 'links' || '' }}
+          # The jobs this run skips by design: links and catalog-provenance,
+          # on every night but Monday.
+          EXPECTED_SKIPS: ${{ github.event.schedule != '23 6 * * 1' && 'links catalog-provenance' || '' }}
           GITHUB_TOKEN: ${{ github.token }}
           REPORTS: ${{ runner.temp }}/reports
         run: node ci/report-issue.mjs --records "$REPORTS"

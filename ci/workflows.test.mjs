@@ -259,6 +259,49 @@ test('every scheduled job sets timeout-minutes, and only report may write issues
   }
 });
 
+test('catalog-provenance runs weekly with links, reads only, and report expects its skip (#20)', () => {
+  const MONDAY = '23 6 * * 1';
+  const job = SCHEDULED.jobs['catalog-provenance'];
+  assert.ok(job, 'scheduled.yml has a catalog-provenance job');
+  // Weekly: on the Monday schedule only, the one run that can close the report.
+  assert.ok(
+    SCHEDULED.on.schedule.some((s) => s.cron === MONDAY),
+    'the Monday schedule is there',
+  );
+  assert.equal(job.if, `\${{ github.event.schedule == '${MONDAY}' }}`);
+  assert.equal(job.if, SCHEDULED.jobs.links.if, 'it runs on the nights links does');
+  // contents: read alone, the workflow's, and no job-level grant.
+  assert.equal(job.permissions, undefined);
+  assert.deepEqual(SCHEDULED.permissions, { contents: 'read' });
+  assert.ok(Number.isInteger(job['timeout-minutes']) && job['timeout-minutes'] <= 30);
+  // Its check runs through the runner as its gate, with the token on that step alone.
+  const steps = job.steps;
+  const check = steps.find((s) => s.name === 'pnpm ci:catalog-provenance');
+  assert.equal(
+    check.run,
+    'node ci/run.mjs catalog-provenance -- node ci/check-catalog-provenance.mjs',
+  );
+  assert.deepEqual(check.env, { GITHUB_TOKEN: '${{ github.token }}' });
+  for (const step of steps.filter((s) => s !== check)) {
+    assert.doesNotMatch(JSON.stringify(step), /GITHUB_TOKEN|github\.token|secrets\./, step.name);
+  }
+  assert.doesNotMatch(JSON.stringify(job), /secrets\./);
+  for (const checkout of steps.filter((s) => /^actions\/checkout@/.test(s.uses ?? ''))) {
+    assert.equal(checkout.with['persist-credentials'], false);
+  }
+  const upload = steps.find((s) => /^actions\/upload-artifact@/.test(s.uses ?? ''));
+  assert.equal(upload.with.name, 'reports-catalog-provenance');
+  assert.equal(upload.if, '${{ always() }}');
+  // report needs it, and expects its skip on exactly the nights it doesn't run.
+  const report = SCHEDULED.jobs.report;
+  assert.ok(report.needs.includes('catalog-provenance'));
+  const step = report.steps.find((s) => s.env?.EXPECTED_SKIPS);
+  assert.equal(
+    step.env.EXPECTED_SKIPS,
+    `\${{ github.event.schedule != '${MONDAY}' && 'links catalog-provenance' || '' }}`,
+  );
+});
+
 test('no workflow has a manual trigger', () => {
   for (const workflow of [CI, SCHEDULED]) {
     assert.ok(!('workflow_dispatch' in workflow.on));
