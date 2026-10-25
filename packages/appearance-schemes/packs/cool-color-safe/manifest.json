@@ -1,0 +1,55 @@
+{
+  "id": "cool-color-safe",
+  "name": "Cool Color Safe",
+  "description": "Cool blues and violets chosen to stay distinct under the common color-vision deficiencies.",
+  "version": "1.0.0",
+  "tokenContract": 1,
+  "tier": "stable",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v1 from the reviewed prototype's cool-color-safe anchors."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [],
+  "derivation": "anchor-v1",
+  "anchors": {
+    "light": {
+      "canvas": "#f7fbff",
+      "text": "#132238",
+      "accent": "#1769aa",
+      "secondary": "#6f4aa8"
+    },
+    "dark": {
+      "canvas": "#0f1824",
+      "text": "#eef7ff",
+      "accent": "#68b5e8",
+      "secondary": "#b99ae8"
+    }
+  },
+  "swatches": ["#f7fbff", "#132238", "#1769aa", "#6f4aa8"]
+}

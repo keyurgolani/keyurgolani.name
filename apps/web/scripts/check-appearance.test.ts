@@ -34,16 +34,29 @@ const findings = (stderr: string) =>
     .split('\n')
     .filter((line) => line.startsWith('[check:appearance] ') && !/ \d+ findings?\.$/.test(line));
 
+/** How many packs each first-party package ships (#20's catalog), as the summary counts them. */
+const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
+const shipped = (dir: string) => fs.readdirSync(path.join(ROOT, 'packages', dir, 'packs')).length;
+const LANGUAGES = shipped('appearance-languages');
+const SCHEMES = shipped('appearance-schemes');
+const PROFILES = shipped('appearance-typography');
+const counted = (count: number, one: string, many: string) =>
+  `${count} ${count === 1 ? one : many}`;
+/** The summary's pack counts, with `extra` tier packs on each axis. */
+const packCounts = (extra = 0) =>
+  `${counted(LANGUAGES + extra, 'design language', 'design languages')}, ${counted(SCHEMES + extra, 'color scheme', 'color schemes')}, and ${counted(PROFILES + extra, 'typography profile', 'typography profiles')}`;
+
 const TIER_PACKS = ['language', 'scheme', 'typography'].flatMap((axis) =>
   ['stable', 'extended', 'experimental'].map((tier) => `fixture-${axis}-${tier}`),
 );
 
-test('it passes on the fallback packs, and says what it checked, the source audit included', () => {
+test('it passes on the shipping packs, and says what it checked, the source audit included', () => {
   const run = check([]);
   assert.equal(run.status, 0, run.stderr);
+  assert.ok(run.stdout.includes(`${packCounts()}: `), run.stdout);
   assert.match(
     run.stdout,
-    /1 design language, 1 color scheme, and 1 typography profile: 4 combinations and \d+ pairs checked, none failing; the hierarchy holds; \d+ layered stylesheets, each starting with the layer order; \d+ known-bad inputs in packages\/appearance\/test\/fixtures, each failing as it names; the source audit read \d+ files, with \d+ reviewed exceptions?, each still needed\./,
+    /typography profiles?: \d+ combinations and \d+ pairs checked, none failing; the hierarchy holds; \d+ layered stylesheets, each starting with the layer order; \d+ known-bad inputs in packages\/appearance\/test\/fixtures, each failing as it names; the source audit read \d+ files, with \d+ reviewed exceptions?, each still needed\./,
   );
   assert.doesNotMatch(run.stdout, /Skipped/);
 });
@@ -54,21 +67,20 @@ test('with APPEARANCE_FIXTURES=1 it skips the fixture packs, which no production
   for (const id of ['fixture-translucent', 'fixture-dark-only', 'fixture-seed', 'fixture-font']) {
     assert.match(run.stdout, new RegExp(`Skipped \\w+ ${id}: a fixture pack`));
   }
-  // The gate checks what a production registry ships: the fallback packs alone.
-  assert.match(
-    run.stdout,
-    /1 design language, 1 color scheme, and 1 typography profile: 4 combinations and \d+ pairs checked, none failing/,
-  );
+  // The gate checks what a production registry ships: the first-party packs alone.
+  assert.ok(run.stdout.includes(`${packCounts()}: `), run.stdout);
+  assert.match(run.stdout, /\d+ combinations and \d+ pairs checked, none failing/);
 });
 
 test('with QUALITY_FIXTURES=1 it gates the nine tier fixtures as shipping packs, and they pass', () => {
   const run = check([], { QUALITY_FIXTURES: '1' });
   assert.equal(run.status, 0, run.stderr);
   assert.doesNotMatch(run.stdout, /Skipped/);
-  // The fallback pack and the three tiers on each axis: 4 x 4 x 4 tuples, in 4 modes.
+  // The shipping packs and the three tiers on each axis.
+  assert.ok(run.stdout.includes(`${packCounts(3)}: `), run.stdout);
   assert.match(
     run.stdout,
-    /4 design languages, 4 color schemes, and 4 typography profiles: 256 combinations and \d+ pairs checked, none failing; the hierarchy holds;/,
+    /\d+ combinations and \d+ pairs checked, none failing; the hierarchy holds;/,
   );
 });
 
@@ -79,10 +91,7 @@ test("with APPEARANCE_FIXTURES=1 too, it still skips #19's fixture packs and gat
     assert.match(run.stdout, new RegExp(`Skipped \\w+ ${id}: a fixture pack`));
   }
   for (const id of TIER_PACKS) assert.doesNotMatch(run.stdout, new RegExp(`Skipped \\w+ ${id}:`));
-  assert.match(
-    run.stdout,
-    /4 design languages, 4 color schemes, and 4 typography profiles: 256 combinations/,
-  );
+  assert.ok(run.stdout.includes(`${packCounts(3)}: `), run.stdout);
 });
 
 test("with QUALITY_FIXTURES=meta it fails on the low-contrast scheme's light text-muted, and nothing else", () => {

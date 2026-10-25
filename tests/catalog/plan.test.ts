@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import type { MetaPack } from '../../packages/appearance/src/index';
 import { PLATFORM_DEFAULTS } from '../../packages/appearance/src/index';
 import { readBuildMeta, type BuildMeta } from '../quality/cells';
+import { fallbackPacks } from '../quality/plan-fixtures';
 import { tupleKey, type Tuple } from '../quality/coverage';
 import { readFileSync } from 'node:fs';
 import { parse } from 'yaml';
@@ -74,7 +75,7 @@ function wider(meta: BuildMeta): BuildMeta {
 }
 
 test('the cross-product is every registered variant against every shipping pack in every mode it renders', () => {
-  const meta = wider(checkoutMeta());
+  const meta = wider(fallbackPacks(checkoutMeta()));
   const variants = registeredVariants(meta);
   assert.ok(variants.includes('fallback'));
   assert.deepEqual(shippingPacks(meta, 'designLanguage'), ['platform-neutral', 'second-language']);
@@ -116,11 +117,17 @@ test('CATALOG_SHARD reads n/m, 1/1 when unset, and refuses anything else', () =>
 /**
  * A catalog the size #20 PR 2 brings, by cloning the checkout's packs: ten
  * languages, twenty-five schemes, ten profiles, and a dark-only scheme, so
- * the sample has more than one of each to cover.
+ * the sample has more than one of each to cover. It tops each axis up to
+ * that size, so a checkout that already ships part of the catalog isn't
+ * counted twice.
  */
 function catalog(meta: BuildMeta, languages = 10, schemes = 25, typographies = 10): BuildMeta {
+  const shipped = (kind: string) =>
+    (meta.PACKS ?? []).filter((pack) => pack.kind === kind && !pack.fixture).length;
   const clones = (kind: string, count: number) =>
-    Array.from({ length: count - 1 }, (_, at) => packLike(meta, kind, `${kind}-${at + 2}`));
+    Array.from({ length: Math.max(0, count - shipped(kind)) }, (_, at) =>
+      packLike(meta, kind, `${kind}-${at + 2}`),
+    );
   const scheme = (meta.PACKS ?? []).find((pack) => pack.kind === 'color-scheme')!;
   const anchors = (scheme.manifest as { anchors: { dark: unknown } }).anchors;
   return {
@@ -369,7 +376,11 @@ test("the static smoke checks every tuple's packs, compiled files, and contrast,
   assert.equal(findings[0]!.axis, 'colorScheme');
   assert.equal(findings[0]!.id, 'warm-parchment');
   assert.match(findings[0]!.message, /isn't the file registry generation hashed/);
-  assert.equal(findings[0]!.tuples.length, tuples.length);
+  // Every tuple warm-parchment is in, and only those.
+  assert.equal(
+    findings[0]!.tuples.length,
+    tuples.filter((tuple) => tuple.colorScheme === 'warm-parchment').length,
+  );
   // A scheme under its contrast targets fails the contrast table in every tuple and mode it renders.
   const low = JSON.parse(
     readFileSync(
@@ -400,7 +411,10 @@ test("the static smoke checks every tuple's packs, compiled files, and contrast,
     assert.ok(finding.tuples.every((tuple) => tuple.colorScheme === low.id));
   }
   // A pack whose stylesheet sets another boundary's rules fails its pack gate.
-  const clone = catalog(meta, 1, 2, 1);
+  const clone = {
+    ...meta,
+    PACKS: [...(meta.PACKS ?? []), packLike(meta, 'color-scheme', 'color-scheme-2')],
+  };
   const gated = staticSmoke(clone, WEB, crossProduct(clone)).filter(
     ({ check }) => check === 'pack gate',
   );

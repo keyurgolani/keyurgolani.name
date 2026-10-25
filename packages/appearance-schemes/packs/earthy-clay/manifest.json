@@ -1,0 +1,55 @@
+{
+  "id": "earthy-clay",
+  "name": "Earthy Clay",
+  "description": "Fired clay with an olive secondary on a warm earth ground.",
+  "version": "1.0.0",
+  "tokenContract": 1,
+  "tier": "stable",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v1 from the reviewed prototype's earthy-clay anchors."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v1 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [],
+  "derivation": "anchor-v1",
+  "anchors": {
+    "light": {
+      "canvas": "#f3eadf",
+      "text": "#382b24",
+      "accent": "#9b5d45",
+      "secondary": "#677054"
+    },
+    "dark": {
+      "canvas": "#2a211d",
+      "text": "#efe2d4",
+      "accent": "#c98568",
+      "secondary": "#9ba080"
+    }
+  },
+  "swatches": ["#f3eadf", "#382b24", "#9b5d45", "#677054"]
+}

@@ -33,6 +33,7 @@ import {
   type NoticePack,
 } from '@portfolio/appearance/node';
 import type { RegistryResult } from '@portfolio/variant-contract/node';
+import { auditCatalog } from './catalog-audit';
 import { REPO_ROOT } from './registry-options';
 
 /** A failure record's fields, less the gate and command ci/run.mjs gives it. */
@@ -60,6 +61,8 @@ export interface CatalogFindings {
     readonly gated: number;
     readonly locked: number;
     readonly research: number;
+    /** Entries the branded-name audit read: shipping packs and Research records. */
+    readonly audited: number;
   };
 }
 
@@ -308,6 +311,9 @@ export function catalogFindings(
 
   // The Research records: well formed, and never an id anything else has.
   const packages = packPackages(root);
+  const fixturePackages = new Set(
+    packages.filter(({ fixture }) => fixture).map(({ name }) => name),
+  );
   const research = researchRecords(root, packages);
   const taken = new Map<string, string>([
     ...result.variants.map(({ manifest }) => [manifest.id, 'a variant'] as const),
@@ -329,9 +335,32 @@ export function catalogFindings(
     seen.add(record.id);
   }
 
+  // The branded-name audit, over every shipping pack and every Research record.
+  const audit = auditCatalog({
+    packs: result.packs
+      .filter((pack) => !pack.fixture)
+      .map((pack) => ({ kind: pack.kind, manifest: pack.manifest as PackManifest })),
+    research: research.flatMap(({ record, packageName }) =>
+      record && !fixturePackages.has(packageName) ? [record] : [],
+    ),
+  });
+  for (const finding of audit.findings) {
+    add(finding.message, {
+      test: `branded-name audit ${finding.rule}`,
+      pack: finding.pack,
+      axis: finding.axis,
+      rule: finding.rule,
+    });
+  }
+
   return {
     lines,
     records,
-    counts: { gated: result.packs.length, locked: locked.length, research: research.length },
+    counts: {
+      gated: result.packs.length,
+      locked: locked.length,
+      research: research.length,
+      audited: audit.entries.length,
+    },
   };
 }

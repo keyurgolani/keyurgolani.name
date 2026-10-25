@@ -45,6 +45,7 @@ import {
   timeoutMinutes,
   VISUAL_SECONDS,
   VISUAL_SPEC,
+  type NightlyPlan,
   type NightSlice,
 } from './lib/full-shards';
 import { RUN_ENGINES } from './lib/matrix';
@@ -73,7 +74,7 @@ import { externalVariantHost, planFullRun, runsPlaywright, type ReferenceSteps }
 import { fullOutputs, runFullPlan } from './full-plan';
 import { loadPlan } from './plan';
 import { QUALITY_BUILD_ENV } from './lib/build.mjs';
-import type { MetaPack } from '../../packages/appearance/src/index';
+import { PLATFORM_DEFAULTS, type MetaPack } from '../../packages/appearance/src/index';
 
 // quality:full's shards (lib/full-shards.ts): the nightly rotation and the
 // release plan, at the cap, within their timeouts, from quality:pr's
@@ -125,10 +126,10 @@ const step = (job: Job, match: (step: Step) => boolean, what: string) => {
 
 /**
  * #20's catalog as it ships, by axis, tier, and the display modes a scheme
- * has: the shipping packs the registry of D's kgn/20-3-generated, bdf8abf0,
- * holds (the whole catalog, 2a to 2d and 3), built with the quality host's
- * flags. Five languages are held back, and its two generated schemes, which
- * have no anchors and take no cells, are left out.
+ * has: the shipping packs the registry of D's kgn/20-3-generated, 6b403c60,
+ * holds (the whole catalog, 2a to 2d and 3), 35 languages, 26 schemes that
+ * take cells, and 8 profiles. Its two generated schemes, brand-seed and
+ * hct-tonal, have no anchors and take no cells, so the model leaves them out.
  */
 const CATALOG = [
   ['design-language', 'stable', 12, 'both'],
@@ -143,50 +144,83 @@ const CATALOG = [
   ['typography', 'extended', 2, 'both'],
 ] as const;
 /**
- * The plan bdf8abf0's shipping packs give with this checkout's variants and
- * the reference variant, in seconds, by this planner on next 18a1fd81's
+ * The full plan 6b403c60's registry gives, with its variants (next's, at
+ * a56358cd) and the reference variant, in seconds, by its own planner and
  * weights: what the model stands in for.
  */
-const CATALOG_SOURCE = { commit: 'bdf8abf0', next: '18a1fd81', seconds: 676_496 } as const;
+const CATALOG_SOURCE = { commit: '6b403c60', seconds: 694_784 } as const;
+
+type Modes = 'both' | 'light' | 'dark';
+
+/** The display modes a pack has: a scheme's anchors, and both for the other axes. */
+function modesOf(pack: MetaPack): Modes | 'none' {
+  if (pack.kind !== 'color-scheme') return 'both';
+  const anchors = (pack.manifest as { anchors?: Record<string, unknown> }).anchors ?? {};
+  if (anchors.light && anchors.dark) return 'both';
+  return anchors.light ? 'light' : anchors.dark ? 'dark' : 'none';
+}
 
 /** `pack` with only the display modes `modes` gives, for a scheme: its other anchor dropped. */
-function withModes(pack: MetaPack, modes: 'both' | 'light' | 'dark'): MetaPack {
+function withModes(pack: MetaPack, modes: Modes): MetaPack {
   if (modes === 'both' || pack.kind !== 'color-scheme') return pack;
   const anchors = { ...(pack.manifest.anchors as Record<string, unknown>) };
   delete anchors[modes === 'light' ? 'dark' : 'light'];
   return { ...pack, manifest: { ...pack.manifest, anchors } } as MetaPack;
 }
 
+/** The platform's default packs, which every plan pairs from, so the model keeps them. */
+const DEFAULT_PACKS: ReadonlySet<string> = new Set([
+  PLATFORM_DEFAULTS.designLanguage,
+  PLATFORM_DEFAULTS.colorScheme,
+  PLATFORM_DEFAULTS.typography,
+]);
+
 /**
- * The packs the model adds to `meta` for #20's catalog: on each axis and
- * tier, CATALOG's packs less as many as the shipping packs `meta` registers
- * there already, the platform defaults among them. Once #20 lands, the
- * registry holds the real catalog and the model adds none, so it plans
- * that alone.
+ * #20's model: `meta` with CATALOG's shipping packs in place of its own. Its
+ * fixture packs and the platform defaults stay, and each axis, tier, and
+ * modes is filled to CATALOG's count with copies of that axis's default. So
+ * it's a fixed input, the same whichever packs a checkout ships, and its
+ * figures are pinned; the checkout's own plan is held to invariants.
  */
-function catalogPacks(meta: BuildMeta): MetaPack[] {
-  const packs = (meta.PACKS ?? []).filter((each) => !each.fixture);
-  const wanted = new Map<string, MetaPack[]>();
-  for (const [kind, tier, count, modes] of CATALOG) {
-    const base = packs.find((each) => each.kind === kind)!;
-    const own = wanted.get(`${kind} ${tier}`) ?? [];
-    for (let at = 0; at < count; at += 1) {
-      own.push(
-        withModes(clone(base, `catalog-${kind}-${tier}-${modes}-${at}`, tier, false), modes),
-      );
-    }
-    wanted.set(`${kind} ${tier}`, own);
-  }
-  return [...wanted].flatMap(([key, own]) => {
-    const registered = packs.filter((each) => `${each.kind} ${each.manifest.tier}` === key).length;
-    return own.slice(registered);
+function catalogMeta(meta: BuildMeta): BuildMeta {
+  const kept = (meta.PACKS ?? []).filter(
+    (each) => each.fixture || DEFAULT_PACKS.has(each.manifest.id),
+  );
+  const added = CATALOG.flatMap(([kind, tier, count, modes]) => {
+    const base = kept.find((each) => !each.fixture && each.kind === kind)!;
+    const own = kept.filter(
+      (each) =>
+        !each.fixture &&
+        each.kind === kind &&
+        each.manifest.tier === tier &&
+        modesOf(each) === modes,
+    ).length;
+    return Array.from({ length: count - own }, (_, at) =>
+      withModes(clone(base, `catalog-${kind}-${tier}-${modes}-${at}`, tier, false), modes),
+    );
   });
+  return { ...meta, PACKS: [...kept, ...added] };
 }
 
-/** Whether `meta` holds every pack of #20's catalog. */
-const holdsCatalog = (meta: BuildMeta) => catalogPacks(meta).length === 0;
+/** The shipping packs of `meta`, counted by axis, tier, and modes. */
+function shippingCounts(meta: BuildMeta): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const pack of (meta.PACKS ?? []).filter((each) => !each.fixture)) {
+    const key = `${pack.kind} ${pack.manifest.tier} ${modesOf(pack)}`;
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts;
+}
 
-/** The cycle and release shard count today's plan runs at: the first of each. */
+/** The model's cycle and release shard count. */
+const CATALOG_NIGHTS = 28;
+const CATALOG_SHARDS = 128;
+
+/**
+ * The first cycle and release shard count, which the synthetic plans here
+ * are sized to. The checkout's own plan runs at whatever its registry needs
+ * (fewestNights, fewestShards).
+ */
 const NIGHTS = NIGHT_COUNTS[0]!;
 const RELEASE_SHARDS = RELEASE_COUNTS[0]!;
 
@@ -195,13 +229,14 @@ const RELEASE_SHARDS = RELEASE_COUNTS[0]!;
  * tier packs a QUALITY_FIXTURES=1 build registers, and the reference variant
  * the runs install from its tarball (--external-variant), which registers a
  * composition; it stands in as Obsidian Atelier's twin, as pr-shards.test.ts's
- * fifth composition does. With `catalog`, #20's packs too (catalogPacks).
+ * fifth composition does. With `catalog`, #20's model's packs in place of
+ * the checkout's (catalogMeta).
  */
 function fullModel(
   registrations: Registrations,
   { catalog = false, extra = [] as string[] } = {},
 ): Plan {
-  const meta = withTierPacks(checkoutMeta());
+  const meta = withTierPacks(catalog ? catalogMeta(checkoutMeta()) : checkoutMeta());
   const base = meta.VARIANTS.find(({ manifest }) => manifest.id === 'obsidian-atelier')!;
   const unit = registrations.units.find(({ id }) => id === 'obsidian-atelier')!;
   const variants = ['acme-reference', ...extra];
@@ -212,7 +247,6 @@ function fullModel(
         ...meta.VARIANTS,
         ...variants.map((id) => ({ ...base, manifest: { ...base.manifest, id, name: id } })),
       ],
-      PACKS: [...meta.PACKS!, ...(catalog ? catalogPacks(checkoutMeta()) : [])],
     } as BuildMeta,
     registrations: {
       ...registrations,
@@ -223,9 +257,9 @@ function fullModel(
 }
 
 let registrations: Registrations;
-/** Today's full plan. */
+/** The checkout's full plan, from its registry. */
 let plan: Plan;
-/** The full plan once #20's catalog lands. */
+/** #20's model's full plan. */
 let catalog: Plan;
 test.before(async () => {
   registrations = await loadRegistrations();
@@ -262,16 +296,70 @@ const synthetic = (
 const night = (days: number) =>
   new Date((dayNumber('2026-10-24') + days) * 86_400_000).toISOString().slice(0, 10);
 
-/** Each planned test's night of the cycle, from 1, by test key. */
-function testNights(each: Plan, durations?: ShardDurations): Map<string, number> {
-  const { slices } = nightlyPlan(fullGroups(each, ENGINES, durations), durations);
-  const nights = new Map<string, number>();
+/**
+ * The rotation `groups` run at, held to what rotationFor promises: N is one
+ * of NIGHT_COUNTS, every night keeps its shards within the ceiling, and the
+ * cycle before it doesn't fit.
+ */
+function fewestNights(groups: readonly ShardGroup[]): NightlyPlan {
+  const rotation = rotationFor(groups);
+  assert.ok(NIGHT_COUNTS.includes(rotation.nights), String(rotation.nights));
+  assert.ok(rotation.nights <= MAX_NIGHTS);
+  assert.equal(rotation.slices.length, rotation.nights);
+  assert.ok(rotation.slowest <= NIGHTLY_CEILING);
+  for (const shard of rotation.slices.flat()) assert.ok(fullEstimate(shard) <= NIGHTLY_CEILING);
+  const before = NIGHT_COUNTS[NIGHT_COUNTS.indexOf(rotation.nights) - 1];
+  if (before !== undefined) {
+    assert.throws(
+      () => nightlyPlan(groups, loadDurations(), FULL_SHARDS, before),
+      new RegExp(`^Error: Night \\d+ of ${before} holds`),
+    );
+  }
+  return rotation;
+}
+
+/**
+ * The release plan `groups` run at, held to what releaseFor promises: the
+ * count is one of RELEASE_COUNTS, every shard within the ceiling, and the
+ * count before it doesn't fit.
+ */
+function fewestShards(groups: readonly ShardGroup[]): ReturnType<typeof releaseFor> {
+  const release = releaseFor(groups);
+  assert.ok(RELEASE_COUNTS.includes(release.count), String(release.count));
+  assert.ok(release.count <= MAX_RELEASE_SHARDS);
+  assert.equal(release.shards.length, release.count);
+  assert.ok(release.slowest <= RELEASE_CEILING);
+  for (const shard of release.shards) assert.ok(fullEstimate(shard) <= RELEASE_CEILING);
+  const before = RELEASE_COUNTS[RELEASE_COUNTS.indexOf(release.count) - 1];
+  if (before !== undefined) {
+    assert.throws(
+      () => releasePlan(groups, loadDurations(), before),
+      new RegExp(`^Error: The release plan in ${before} shards leaves a shard at about \\d+s`),
+    );
+  }
+  return release;
+}
+
+/**
+ * Each planned test's night of a cycle of `nights`, from 1, by test key: its
+ * group's night (groupNight), however heavy the nights come out.
+ */
+function testNights(
+  each: Plan,
+  nights: number,
+  durations: ShardDurations = loadDurations(),
+): Map<string, number> {
+  const slices = rotationSlices(
+    bucketGroups(fullGroups(each, ENGINES, durations), durations),
+    nights,
+  );
+  const byTest = new Map<string, number>();
   slices.forEach((slice, at) => {
     for (const key of slice.flatMap((shard) => shard.groups.flatMap((group) => group.tests))) {
-      nights.set(key, at + 1);
+      byTest.set(key, at + 1);
     }
   });
-  return nights;
+  return byTest;
 }
 
 /** The salts the balance test rolls the nights with: the plan's own, the empty one, and 49 more. */
@@ -280,7 +368,7 @@ const SALTS = ['', ...Array.from({ length: 49 }, (_, at) => `salt-${at + 1}:`)];
 test('the cap: eight shard jobs at once, nightly and at release, and the release in as many waves of them as rc-quality-plan counts', () => {
   assert.equal(FULL_SHARDS, 8, 'PR CI keeps 12 of the account’s 20 job slots');
   assert.deepEqual(NIGHT_COUNTS, [7, 14, 28, 56]);
-  assert.deepEqual(RELEASE_COUNTS, [32, 64, 128]);
+  assert.deepEqual(RELEASE_COUNTS, [32, 64, 128, 256]);
   const count = '${{ needs.rc-quality-plan.outputs.count }}';
   assert.deepEqual(SCHEDULED['quality-full']!.strategy?.matrix?.shard, [1, 2, 3, 4, 5, 6, 7, 8]);
   assert.equal(
@@ -340,36 +428,33 @@ test('the cap: eight shard jobs at once, nightly and at release, and the release
   assert.equal(SCHEDULED['catalog-full']!.if, '${{ !cancelled() }}');
 });
 
-test("the nightly timeout is the lead's 90 minutes, and N the fewest nights that fit it: 7 today, and within 56 for #20's whole catalog, however the hash falls", (t) => {
+test("the nightly timeout is the lead's 90 minutes, and N the fewest nights that fit it: the registry's own, and 28 for #20's model, however the hash falls", (t) => {
   assert.equal(NIGHTLY_TIMEOUT_MINUTES, 90);
   assert.equal(SCHEDULED['quality-full']!['timeout-minutes'], NIGHTLY_TIMEOUT_MINUTES);
   assert.equal(timeoutMinutes(NIGHTLY_CEILING), NIGHTLY_TIMEOUT_MINUTES);
-  // Today's plan runs a weekly cycle.
-  const today = rotationFor(fullGroups(plan, ENGINES));
+  // The checkout's plan, whatever its registry ships, runs the fewest nights that fit.
+  const own = fullGroups(plan, ENGINES);
+  const today = fewestNights(own);
   t.diagnostic(
-    `today: ${today.nights} nights, the slowest shard about ${Math.round(today.slowest)}s`,
+    `this checkout: about ${Math.round(total(own))}s, ${today.nights} nights, the slowest shard about ${Math.round(today.slowest)}s of ${NIGHTLY_CEILING}s`,
   );
-  assert.equal(today.nights, 7);
-  // #20's whole catalog, as bdf8abf0's registry ships it.
+  // #20's model, within 15% of the plan 6b403c60's registry gives.
   const groups = fullGroups(catalog, ENGINES);
   const seconds = total(groups);
-  if (!holdsCatalog(checkoutMeta())) {
-    // The model is the real catalog's counts on this checkout's packs: within 15% of bdf8abf0's plan.
-    const off = (seconds - CATALOG_SOURCE.seconds) / CATALOG_SOURCE.seconds;
-    t.diagnostic(
-      `the model: about ${Math.round(seconds)}s, ${(off * 100).toFixed(1)}% from ${CATALOG_SOURCE.commit}'s ${CATALOG_SOURCE.seconds}s`,
-    );
-    assert.ok(
-      Math.abs(seconds - CATALOG_SOURCE.seconds) <= CATALOG_SOURCE.seconds * 0.15,
-      `the model is about ${Math.round(seconds)}s, ${CATALOG_SOURCE.commit}'s plan ${CATALOG_SOURCE.seconds}s`,
-    );
-  }
-  const rotation = rotationFor(groups);
+  const off = (seconds - CATALOG_SOURCE.seconds) / CATALOG_SOURCE.seconds;
+  t.diagnostic(
+    `the model: about ${Math.round(seconds)}s, ${(off * 100).toFixed(1)}% from ${CATALOG_SOURCE.commit}'s ${CATALOG_SOURCE.seconds}s`,
+  );
+  assert.ok(
+    Math.abs(off) <= 0.15,
+    `the model is about ${Math.round(seconds)}s, ${CATALOG_SOURCE.commit}'s plan ${CATALOG_SOURCE.seconds}s`,
+  );
+  const rotation = fewestNights(groups);
   const loads = rotation.slices.map((slice) => total(slice.flatMap((shard) => shard.groups)));
   t.diagnostic(
-    `after #20: about ${Math.round(seconds)}s, ${rotation.nights} nights, the heaviest night about ${Math.round(Math.max(...loads))}s of tests, its slowest shard about ${Math.round(rotation.slowest)}s of ${NIGHTLY_CEILING}s`,
+    `the model: ${rotation.nights} nights, the heaviest night about ${Math.round(Math.max(...loads))}s of tests, its slowest shard about ${Math.round(rotation.slowest)}s of ${NIGHTLY_CEILING}s`,
   );
-  assert.ok(rotation.nights <= MAX_NIGHTS);
+  assert.equal(rotation.nights, CATALOG_NIGHTS);
   // On 50 draws of the hash, as #20's real pack ids roll it again, the cycle stays within the cap.
   const bucketed = bucketGroups(groups);
   const counts = new Map<number, number>();
@@ -388,41 +473,60 @@ test("the nightly timeout is the lead's 90 minutes, and N the fewest nights that
   assert.ok([...counts.keys()].every((nights) => nights <= MAX_NIGHTS));
 });
 
-test('the #20 model stands in for the catalog until the registry holds it, then adds nothing', () => {
+test("the #20 model is a fixed input: CATALOG's shipping packs, the platform defaults among them, whichever packs the checkout ships", () => {
   const meta = checkoutMeta();
-  const shipping = (meta.PACKS ?? []).filter((each) => !each.fixture).length;
-  const wanted = CATALOG.reduce((sum, [, , count]) => sum + count, 0);
-  // Before #20: the model adds the catalog, less the platform's own packs.
-  assert.equal(catalogPacks(meta).length, wanted - shipping);
-  assert.equal(holdsCatalog(meta), false);
-  // After: the registry holds the catalog, so the model adds none and plans the real packs.
-  const landed = { ...meta, PACKS: [...meta.PACKS!, ...catalogPacks(meta)] } as BuildMeta;
-  assert.deepEqual(catalogPacks(landed), []);
-  assert.equal(holdsCatalog(landed), true);
-  // Part of it landed: the model adds only the rest.
-  const half = catalogPacks(meta).filter((_, at) => at % 2 === 0);
-  const partly = { ...meta, PACKS: [...meta.PACKS!, ...half] } as BuildMeta;
-  assert.equal(catalogPacks(partly).length, wanted - shipping - half.length);
+  const model = catalogMeta(meta);
+  assert.deepEqual(
+    shippingCounts(model),
+    Object.fromEntries(
+      CATALOG.map(([kind, tier, count, modes]) => [`${kind} ${tier} ${modes}`, count]),
+    ),
+  );
+  const ids = (each: BuildMeta) => (each.PACKS ?? []).map((pack) => pack.manifest.id);
+  for (const id of DEFAULT_PACKS) assert.ok(ids(model).includes(id), id);
+  // The checkout's fixture packs stay as they are.
+  assert.deepEqual(
+    (model.PACKS ?? []).filter((pack) => pack.fixture),
+    (meta.PACKS ?? []).filter((pack) => pack.fixture),
+  );
+  // More shipping packs, of any axis, tier, or modes, or a generated scheme with no anchors, change nothing.
+  const language = (meta.PACKS ?? []).find(
+    (pack) => pack.manifest.id === PLATFORM_DEFAULTS.designLanguage,
+  )!;
+  const scheme = (meta.PACKS ?? []).find(
+    (pack) => pack.manifest.id === PLATFORM_DEFAULTS.colorScheme,
+  )!;
+  const generated = clone(scheme, 'generated-scheme', 'extended', false);
+  const shipped = {
+    ...meta,
+    PACKS: [
+      ...(meta.PACKS ?? []),
+      clone(language, 'shipped-language', 'stable', false),
+      withModes(clone(scheme, 'shipped-dark', 'experimental', false), 'dark'),
+      { ...generated, manifest: { ...generated.manifest, anchors: {} } } as MetaPack,
+    ],
+  } as BuildMeta;
+  assert.equal(modesOf((shipped.PACKS ?? []).at(-1)!), 'none');
+  assert.deepEqual(ids(catalogMeta(shipped)), ids(model));
 });
 
-test("the release plan fits rc-quality's timeout in the fewest shards that do: 32 today, and within 128 for #20's whole catalog, every group once", (t) => {
+test("the release plan fits rc-quality's timeout in the fewest shards that do: the registry's own count, and 128 for #20's model, a step under the most, every group once", (t) => {
+  // #20's whole catalog leaves a step of headroom: its count is never the most the plan takes.
+  assert.ok(CATALOG_SHARDS < MAX_RELEASE_SHARDS);
   const job = RELEASE['rc-quality']!;
   assert.equal(job['timeout-minutes'], releaseTimeoutMinutes());
   assert.equal(releaseTimeoutMinutes(), timeoutMinutes(RELEASE_CEILING));
   assert.ok(releaseTimeoutMinutes() <= JOB_LIMIT_MINUTES);
   for (const [name, each] of [
-    ['today', plan],
-    ['after #20', catalog],
+    ['this checkout', plan],
+    ['the model', catalog],
   ] as const) {
     const groups = fullGroups(each, ENGINES);
-    const { count, shards, slowest } = releaseFor(groups);
+    const { count, shards, slowest } = fewestShards(groups);
     t.diagnostic(
-      `${name}: ${count} shards, the slowest about ${Math.round(slowest)}s of ${RELEASE_CEILING}s`,
+      `${name}: ${count} shards, the slowest about ${Math.round(slowest)}s of ${RELEASE_CEILING}s, ${Math.round(RELEASE_CEILING - slowest)}s to spare`,
     );
-    if (each === plan) assert.equal(count, 32);
-    assert.ok(count <= MAX_RELEASE_SHARDS);
-    assert.equal(shards.length, count);
-    for (const shard of shards) assert.ok(fullEstimate(shard) <= RELEASE_CEILING, name);
+    if (each === catalog) assert.equal(count, CATALOG_SHARDS);
     // Every planned test once, and every harness, perf, and visual group once.
     assert.deepEqual(
       shards.flatMap((shard) => shard.groups.flatMap((group) => group.tests)).sort(),
@@ -468,10 +572,9 @@ test("the release plan fits rc-quality's timeout in the fewest shards that do: 3
   assert.equal(upload.with?.name, 'reports-quality-release-${{ matrix.shard }}');
 });
 
-test('a cycle of NIGHTS nights runs every test of every cell exactly once, a cell on at most BUCKETS nights, and the harness and perf cells every night', () => {
+test('a cycle of N nights runs every test of every cell exactly once, a cell on at most BUCKETS nights, and the harness and perf cells every night', () => {
   const groups = fullGroups(plan, ENGINES);
-  const { slices } = nightlyPlan(groups);
-  assert.equal(slices.length, NIGHTS);
+  const { nights: cycle, slices } = fewestNights(groups);
   const seen: string[] = [];
   const visual: string[] = [];
   const everyNight = groups
@@ -519,7 +622,7 @@ test('a cycle of NIGHTS nights runs every test of every cell exactly once, a cel
     );
   }
   // A cell's tests spread over its buckets' nights, and the record names each one.
-  const nights = testNights(plan);
+  const nights = testNights(plan, cycle);
   const rotation = fullShard(plan, ENGINES, `1/${FULL_SHARDS}`, night(0)).slice!.rotation;
   const spread = new Map<string, Set<number>>();
   for (const [key, at] of nights) {
@@ -538,36 +641,38 @@ test('a cycle of NIGHTS nights runs every test of every cell exactly once, a cel
       cell,
     );
   }
-  // Seven nights in a row run each night of the cycle once, and each test on its own night.
+  // N nights in a row, as run.ts plans each (its shards together, as one machine runs them), run
+  // each night of the cycle once, and each test on its own night.
   const indexes: number[] = [];
   const ran = new Set<string>();
-  for (let day = 0; day < NIGHTS; day += 1) {
-    const shards = Array.from({ length: FULL_SHARDS }, (_, at) =>
-      fullShard(plan, ENGINES, `${at + 1}/${FULL_SHARDS}`, night(day)),
-    );
-    indexes.push(shards[0]!.slice!.index);
-    for (const key of shards.flatMap((each) => each.shard.groups.flatMap((group) => group.tests))) {
+  for (let day = 0; day < cycle; day += 1) {
+    const whole = fullShard(plan, ENGINES, null, night(day));
+    assert.equal(whole.slice!.nights, cycle);
+    indexes.push(whole.slice!.index);
+    for (const key of whole.shard.groups.flatMap((group) => group.tests)) {
       assert.equal(ran.has(key), false, key);
       ran.add(key);
-      assert.equal(nights.get(key), shards[0]!.slice!.index, key);
+      assert.equal(nights.get(key), whole.slice!.index, key);
     }
   }
   assert.deepEqual(
     indexes.sort((a, b) => a - b),
-    Array.from({ length: NIGHTS }, (_, at) => at + 1),
+    Array.from({ length: cycle }, (_, at) => at + 1),
   );
   assert.equal(ran.size, everyTest(plan).length);
 });
 
-test("a plan change moves no other test's night: a new composition, a new test, or a weight changing", () => {
-  const before = testNights(plan);
+test("a plan change moves no other test's night while N holds: a new composition, a new test, or a weight changing", () => {
+  const { nights: cycle } = rotationFor(fullGroups(plan, ENGINES));
+  const before = testNights(plan, cycle);
   // A fifth composition, Obsidian Atelier's twin, brings servers, cells, and tests of its own.
   const grown = fullModel(registrations, { extra: ['fifth-composition'] });
-  const after = testNights(grown);
+  const after = testNights(grown, cycle);
   assert.ok(after.size > before.size);
-  // The covering array may pick other tuples for the bigger plan; every test both plans hold keeps its night.
+  // The covering array may pick other tuples for the bigger plan, more of them the bigger the
+  // catalog; every test both plans hold keeps its night, and they hold some on every night.
   const shared = [...before.keys()].filter((key) => after.has(key));
-  assert.ok(shared.length > before.size * 0.8, `${shared.length} tests shared`);
+  assert.equal(new Set(shared.map((key) => before.get(key))).size, cycle);
   for (const key of shared) assert.equal(after.get(key), before.get(key), key);
   // A test added to a server's group moves none of the group's other tests.
   const group = fullGroups(plan, ENGINES).find(
@@ -598,7 +703,7 @@ test("a plan change moves no other test's night: a new composition, a new test, 
     pack: scale(durations.pack, 2),
     composition: scale(durations.composition, 1.1),
   };
-  assert.deepEqual(testNights(plan, heavier), before);
+  assert.deepEqual(testNights(plan, cycle, heavier), before);
   // A group's night is its server's and bucket's alone: its engine, file, weight, tests, and part don't move it.
   for (const other of [
     { ...group, bucket: 1 },
@@ -1006,7 +1111,7 @@ test('a test waits at most N nights between runs, and across a change of N at mo
   assert.ok(longest(4 * NIGHTS, NIGHTS) <= 4 * NIGHTS, 'two steps down');
 });
 
-test('N and the release shard count are the fewest that fit, a doubling only splits each night in two, and a plan past 56 nights or 128 shards fails', () => {
+test('N and the release shard count are the fewest that fit, a doubling only splits each night in two, and a plan past 56 nights or 256 shards fails', () => {
   const durations = { group: 5 };
   // Visual groups of 2,000 s, as many as it takes for each step to fail before the next fits.
   const visual = (count: number) => synthetic(count, 2000, VISUAL_SPEC, (at) => `chromium v${at}`);
@@ -1033,12 +1138,17 @@ test('N and the release shard count are the fewest that fit, a doubling only spl
     [4 * 32, 32],
     [4 * 32 + 1, 64],
     [4 * 64 + 1, 128],
+    [4 * 128, 128],
+    [4 * 128 + 1, 256],
+    [4 * 256, 256],
   ] as const) {
     assert.equal(releaseFor(synthetic(count, 2000), durations).count, shards, String(count));
   }
+  // Past 256, the most jobs a GitHub matrix makes, it fails, naming the heaviest group.
+  assert.equal(MAX_RELEASE_SHARDS, 256);
   assert.throws(
-    () => releaseFor(synthetic(4 * 128 + 1, 2000), durations),
-    /^Error: Even 128 release shards don't fit \(MAX_RELEASE_SHARDS\): The release plan in 128 shards leaves a shard at about \d+s, over the 4800s ceiling\. Its heaviest group is chromium s\d+ cells\.spec\.ts, at about 2000s\.$/,
+    () => releaseFor(synthetic(4 * 256 + 1, 2000), durations),
+    /^Error: Even 256 release shards don't fit \(MAX_RELEASE_SHARDS\): The release plan in 256 shards leaves a shard at about \d+s, over the 4800s ceiling\. Its heaviest group is chromium s\d+ cells\.spec\.ts, at about 2000s\.$/,
   );
   // Each count is the last doubled, and a group's night at 2N is its night at N, or that plus N.
   NIGHT_COUNTS.slice(1).forEach((nights, at) => assert.equal(nights, 2 * NIGHT_COUNTS[at]!));
@@ -1153,8 +1263,9 @@ test("full-plan.ts writes the plan's own release count, matrix, and cycle to GIT
 
 test("a release shard runs the count it's handed, and a count too small for the ceiling fails rather than taking another", () => {
   // The count rc-quality-plan worked out is the one each shard plans with.
-  const handed = fullShard(plan, ENGINES, '1/64', null);
-  assert.equal(handed.shard.count, 64);
+  const { count } = releaseFor(fullGroups(plan, ENGINES));
+  const handed = fullShard(plan, ENGINES, `1/${count}`, null);
+  assert.equal(handed.shard.count, count);
   assert.equal(runProjects([handed.shard]).size > 0, true);
   // Two shards can't hold today's plan within the ceiling: the shard fails, naming its heaviest group.
   assert.throws(
