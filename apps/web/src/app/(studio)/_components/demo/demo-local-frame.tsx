@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type Ref } from 'react';
 import type { LocalSources } from '~/lib/demo/browser-backend';
 import type { DemoSelection } from '~/lib/demo/url-state';
 import { fitScale, FRAME_ATTRIBUTES, type Viewport } from '~/lib/preview-frame';
@@ -20,6 +20,14 @@ import { DEMO_FRAME_SANDBOX } from './demo-frame';
 
 /** How long the frame has to say it rendered before Studio says it didn't load (#7). */
 export const LOCAL_FRAME_TIMEOUT_MS = 10_000;
+
+/**
+ * What Studio says when the frame refuses or can't render the documents:
+ * never that findings show, since a task without the import's report, or a
+ * working copy whose check found nothing the frame did, shows none.
+ */
+export const LOCAL_FRAME_FAILED =
+  "Your documents didn't render in the preview. Import another pair in Content, or use Reset demo in Appearance for the sample.";
 
 /** The only source a local frame loads: /preview/local, with a channel nonce in its fragment. */
 const LOCAL_SOURCE = /^\/preview\/local#nonce=[A-Za-z0-9_-]{22}$/;
@@ -70,6 +78,58 @@ export function frameBudget(limit: number = LIMITS.frame) {
   };
 }
 
+/** What one frame document has taken: frameBudget's answer. */
+export type FrameBudget = ReturnType<typeof frameBudget>;
+
+/**
+ * Sends `message` to the frame document showing now when its budget takes
+ * it, or else calls `remount`, so the message goes to a new frame document
+ * once that one says ready. Never to a document that would drop it.
+ */
+export function deliver<T>(
+  budget: FrameBudget,
+  message: T,
+  send: (message: T) => void,
+  remount: () => void,
+): void {
+  if (budget.take(message)) send(message);
+  else remount();
+}
+
+export interface LocalFrameElementProps {
+  readonly ref: Ref<HTMLIFrameElement>;
+  readonly title: string;
+  readonly viewport: Viewport;
+  readonly scale: number;
+}
+
+/**
+ * The iframe of the frame document that `nonce` names, keyed on it. A new
+ * nonce is a new element, so a new browsing context and a new document. On
+ * the same element, a `src` that differs only in its fragment is a
+ * fragment navigation: the old document would stay, with its old nonce and
+ * all it had taken, and never say ready on the new channel.
+ */
+export function localFrameElement(nonce: string, props: LocalFrameElementProps) {
+  const { ref, title, viewport, scale } = props;
+  return (
+    <iframe
+      key={nonce}
+      ref={ref}
+      className="preview-surface__frame"
+      title={title}
+      sandbox={DEMO_FRAME_SANDBOX}
+      referrerPolicy={FRAME_ATTRIBUTES.referrerPolicy}
+      allow={FRAME_ATTRIBUTES.allow}
+      style={{
+        inlineSize: `${viewport.width}px`,
+        blockSize: `${viewport.height}px`,
+        transform: `scale(${scale})`,
+      }}
+    />
+  );
+}
+
 export interface LocalFrameHostProps {
   readonly sources: LocalSources;
   readonly selection: DemoSelection;
@@ -114,7 +174,7 @@ export function LocalFrameHost({
 
   const src = `/preview/local#nonce=${nonce}`;
 
-  /** A new frame document, with a new nonce, which says ready and gets the latest document. */
+  /** A new frame element and document, with a new nonce, which says ready and gets the latest document. */
   function remount() {
     setPhase('loading');
     setNonce(localNonce());
@@ -129,10 +189,17 @@ export function LocalFrameHost({
       const open = channel.current;
       if (!open?.connected) return;
       const { sources: now, selection: chosen, reduced: still } = latest.current;
-      const message = documentMessage(now, chosen);
-      if (!budget.current.take(message)) return remount();
-      open.send('document', message);
-      if (still) {
+      let sent = false;
+      deliver(
+        budget.current,
+        documentMessage(now, chosen),
+        (message) => {
+          open.send('document', message);
+          sent = true;
+        },
+        remount,
+      );
+      if (sent && still) {
         open.send('environment', {
           displayMode: DISPLAY_MODES.has(chosen.displayMode)
             ? (chosen.displayMode as 'system')
@@ -166,9 +233,12 @@ export function LocalFrameHost({
   useEffect(() => {
     const open = channel.current;
     if (!open?.connected) return;
-    const message = documentMessage(sources, selection);
-    if (budget.current.take(message)) open.send('document', message);
-    else remount();
+    deliver(
+      budget.current,
+      documentMessage(sources, selection),
+      (message) => open.send('document', message),
+      remount,
+    );
   }, [sources, selection]);
 
   // A frame that never says it rendered says so, rather than loading forever.
@@ -189,8 +259,7 @@ export function LocalFrameHost({
     <>
       {phase === 'failed' ? (
         <p className="studio-alert" role="alert">
-          Your documents didn&apos;t render in the preview. The import&apos;s findings above say
-          what to change.
+          {LOCAL_FRAME_FAILED}
         </p>
       ) : phase === 'timeout' ? (
         <p className="studio-alert" role="alert">
@@ -205,19 +274,7 @@ export function LocalFrameHost({
         aria-busy={phase === 'loading' ? true : undefined}
         style={{ blockSize: `${Math.ceil(viewport.height * scale)}px` }}
       >
-        <iframe
-          ref={frame}
-          className="preview-surface__frame"
-          title={title}
-          sandbox={DEMO_FRAME_SANDBOX}
-          referrerPolicy={FRAME_ATTRIBUTES.referrerPolicy}
-          allow={FRAME_ATTRIBUTES.allow}
-          style={{
-            inlineSize: `${viewport.width}px`,
-            blockSize: `${viewport.height}px`,
-            transform: `scale(${scale})`,
-          }}
-        />
+        {localFrameElement(nonce, { ref: frame, title, viewport, scale })}
       </div>
     </>
   );

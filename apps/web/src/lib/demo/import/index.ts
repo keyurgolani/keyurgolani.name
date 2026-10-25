@@ -36,10 +36,11 @@ import type { ImportInput, ImportRefusal, ImportResult } from './pipeline';
 //
 // Parsing never happens on this thread: this module imports pipeline.ts for
 // its types alone. It checks only the file count and each file's byteLength
-// first, so an oversize pick is never copied, and posts the worker a copy
-// of each file's own bytes, which the worker checks again. One module
-// worker runs each import, and it's terminated once it answers, times out,
-// or the import is aborted. Nothing here logs, fetches, or posts anywhere
+// first, through sizeRefusal, which a picker also asks with each file's
+// size before it reads one, so an oversize pick is never read or copied.
+// It posts the worker a copy of each file's own bytes, which the worker
+// checks again. One module worker runs each import, and it's terminated
+// once it answers, times out, or the import is aborted. Nothing here logs, fetches, or posts anywhere
 // but to that worker. A diagnostic never repeats a value from a file, and
 // every key the schema doesn't name is `(unknown key)` in its pointer,
 // message, and stableId. Render diagnostics as text, never as HTML.
@@ -64,6 +65,21 @@ export const IMPORT_TIMEOUT_MS = 5000;
 export const IMPORT_TIMEOUT_RANGE_MS = { min: 1000, max: 30_000 } as const;
 /** #4's document cap, 1 MiB, as the worker applies it (pipeline.ts's IMPORT_MAX_BYTES). */
 export const IMPORT_MAX_BYTES = 1024 * 1024;
+/** How many files an import takes: a portfolio document and a site document. */
+export const IMPORT_FILE_COUNT = 2;
+
+/**
+ * The refusal for files of these sizes, by count and size alone, or null
+ * when they may be read: what importFiles checks first. A page's picker
+ * asks it with each file's size, before it reads a byte, so an oversize
+ * pick is never read into memory either.
+ */
+export function sizeRefusal(sizes: readonly number[]): ImportRefusal | null {
+  if (sizes.length > IMPORT_FILE_COUNT) return 'too_many_files';
+  if (sizes.length < IMPORT_FILE_COUNT) return 'not_one_document';
+  if (sizes.some((size) => size > IMPORT_MAX_BYTES)) return 'too_large';
+  return null;
+}
 
 export interface ImportOptions {
   readonly signal?: AbortSignal;
@@ -99,11 +115,8 @@ export function importFiles(
   // decode, no parse, and nothing that throws: an entry out of shape is
   // `invalid`, as the worker would answer it.
   if (!Array.isArray(files) || !files.every(isInput)) return Promise.resolve(refused('invalid'));
-  if (files.length > 2) return Promise.resolve(refused('too_many_files'));
-  if (files.length < 2) return Promise.resolve(refused('not_one_document'));
-  if (files.some(({ bytes }) => bytes.byteLength > IMPORT_MAX_BYTES)) {
-    return Promise.resolve(refused('too_large'));
-  }
+  const early = sizeRefusal(files.map(({ bytes }) => bytes.byteLength));
+  if (early) return Promise.resolve(refused(early));
   // Each file's own bytes in a buffer of their own, never the buffer a view
   // sits on. Uint8Array's own slice, since a Buffer's shares its memory, and
   // transferring that would detach the caller's.

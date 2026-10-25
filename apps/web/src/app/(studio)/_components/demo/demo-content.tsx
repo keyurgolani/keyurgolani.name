@@ -1,9 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { DemoBackend, LocalSources } from '~/lib/demo/browser-backend';
 import type { ExportResult } from '~/lib/demo/export';
-import type { ImportInput, ImportRefusal, ImportResult } from '~/lib/demo/import';
+import {
+  sizeRefusal,
+  type ImportInput,
+  type ImportRefusal,
+  type ImportResult,
+} from '~/lib/demo/import';
 
 // Demo Studio's Content task (#9, design note section 3): a file picker for
 // exactly two documents, a portfolio and a site, which #137's import reads in
@@ -11,9 +16,12 @@ import type { ImportInput, ImportRefusal, ImportResult } from '~/lib/demo/import
 // imported pair or the sample, as two YAML files. Everything the import or
 // the export says shows as text, never as markup: a finding's pointer and
 // message, the remote media it lists by kind and host, what it couldn't
-// check, and why it refused. Nothing here logs, and nothing leaves the
-// browser: the files go to the worker, and the export to two Blob links in
-// this document.
+// check, and why it refused. A pick is checked by its count and sizes
+// before a byte of it is read, and an import still in the worker when the
+// task goes is stopped. A working copy this tab kept shows its findings
+// again from the worker's check of it. Nothing here logs, and nothing
+// leaves the browser: the files go to the worker, and the export to two
+// Blob links in this document.
 
 /** What a refusal says, by its code: never a value from the files. */
 export const REFUSAL_TEXT: Readonly<Record<ImportRefusal, string>> = {
@@ -34,16 +42,40 @@ const OMITTED_TEXT: Readonly<Record<ExportResult['disclosure']['omitted'][number
   'yaml-comments': 'comments in your YAML, since the files are written from the data',
 };
 
-/** The import's answer, as lines of text. */
-export function ImportReport({ result }: { readonly result: ImportResult }) {
+/** What the report says of a working copy this tab kept, checked again. */
+export const KEPT_TEXT = {
+  imported: 'The preview shows the documents this tab kept, and only this tab keeps them.',
+  refused:
+    "The documents this tab kept don't pass the checks now. Import another pair, or use Reset demo in Appearance for the sample.",
+  unchecked:
+    "The documents this tab kept couldn't be checked again here, so their findings don't show.",
+} as const;
+
+/** What the report's status line says. */
+function statusOf(result: ImportResult, kept: boolean): string {
+  if (result.kind === 'imported') {
+    return kept
+      ? KEPT_TEXT.imported
+      : 'Imported. The preview shows your documents, and only this tab keeps them.';
+  }
+  if (!kept) return REFUSAL_TEXT[result.code];
+  return result.code === 'timeout' || result.code === 'worker_unavailable'
+    ? KEPT_TEXT.unchecked
+    : KEPT_TEXT.refused;
+}
+
+/** The import's answer, as lines of text: for a pick, or for the working copy this tab `kept`. */
+export function ImportReport({
+  result,
+  kept = false,
+}: {
+  readonly result: ImportResult;
+  readonly kept?: boolean;
+}) {
   const findings = result.diagnostics;
   return (
-    <div className="studio-import__report" data-import={result.kind}>
-      <p role="status">
-        {result.kind === 'imported'
-          ? 'Imported. The preview shows your documents, and only this tab keeps them.'
-          : REFUSAL_TEXT[result.code]}
-      </p>
+    <div className="studio-import__report" data-import={result.kind} data-kept={kept || undefined}>
+      <p role="status">{statusOf(result, kept)}</p>
       {findings.length > 0 ? (
         <ul className="studio-import__findings" aria-label="Findings">
           {findings.map((finding, index) => (
@@ -108,14 +140,37 @@ export interface ContentTaskProps {
   readonly onSource: (sources: LocalSources | null) => void;
 }
 
+/** Why the files picked can't be read, by their count and sizes alone, before any is: the core's own rule. */
+export function pickRefusal(files: ArrayLike<{ readonly size: number }>): ImportRefusal | null {
+  return sizeRefusal(Array.from(files, ({ size }) => size));
+}
+
 export function ContentTask({ backend, onSource }: ContentTaskProps) {
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<ImportResult | null>(null);
+  const [report, setReport] = useState<{
+    readonly result: ImportResult;
+    readonly kept: boolean;
+  } | null>(null);
+  // Aborted once the task goes, which stops an import still in the worker.
+  const mounted = useRef<AbortController | null>(null);
   const [exported, setExported] = useState<{
     readonly links: readonly { readonly name: string; readonly href: string }[];
     readonly disclosure: ExportResult['disclosure'];
   } | null>(null);
   const [exportFailed, setExportFailed] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    mounted.current = controller;
+    // The working copy this tab kept: its findings and notices, from the worker's check again.
+    if (backend.localSources()) {
+      void backend.report().then((result) => {
+        if (controller.signal.aborted || !result) return;
+        setReport((shown) => shown ?? { result, kept: true });
+      });
+    }
+    return () => controller.abort();
+  }, [backend]);
 
   // Each export's Blob URLs go when the next comes, or the task does.
   useEffect(
@@ -127,17 +182,32 @@ export function ContentTask({ backend, onSource }: ContentTaskProps) {
 
   async function pick(files: FileList | null) {
     if (!files || files.length === 0) return;
-    setBusy(true);
+    const signal = mounted.current?.signal;
+    if (!signal || signal.aborted) return;
     setExported(null);
+    // Too many, too few, or too big: refused before a byte is read.
+    const early = pickRefusal(files);
+    if (early) {
+      setReport({ result: { kind: 'refused', code: early, diagnostics: [] }, kept: false });
+      return;
+    }
+    setBusy(true);
     try {
       const inputs = await Promise.all([...files].map(inputOf));
-      const answer = await backend.importFiles(inputs);
-      setResult(answer);
+      const answer = await backend.importFiles(inputs, { signal });
+      // The task went, or Reset demo came, while the worker read them: nothing to show.
+      if (signal.aborted || !answer) return;
+      setReport({ result: answer, kept: false });
       if (answer.kind === 'imported') onSource(backend.localSources());
     } catch {
-      setResult({ kind: 'refused', code: 'worker_unavailable', diagnostics: [] });
+      if (!signal.aborted) {
+        setReport({
+          result: { kind: 'refused', code: 'worker_unavailable', diagnostics: [] },
+          kept: false,
+        });
+      }
     } finally {
-      setBusy(false);
+      if (!signal.aborted) setBusy(false);
     }
   }
 
@@ -189,8 +259,8 @@ export function ContentTask({ backend, onSource }: ContentTaskProps) {
           <p className="studio-import__busy" aria-busy="true">
             Importing…
           </p>
-        ) : result ? (
-          <ImportReport result={result} />
+        ) : report ? (
+          <ImportReport result={report.result} kept={report.kept} />
         ) : null}
       </div>
       <div className="studio-export">

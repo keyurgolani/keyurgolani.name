@@ -148,6 +148,21 @@ export function selectionQuery(selection: DemoSelection, rules: SelectionRules):
   return query;
 }
 
+/** A task's id, as a task link's fragment or a `task` query names it. */
+const TASK_ID = /^[a-z][a-z-]*$/;
+
+/**
+ * The task fragment Studio's URL keeps: the fragment it has, or else the
+ * task a `task` query named, as a link or the quality harness opens one
+ * with. The shell reads the fragment first, so writing the selection's
+ * query in place of the URL's never loses the task.
+ */
+export function taskFragment(search: string, hash: string): string {
+  if (hash) return hash;
+  const task = new URLSearchParams(search).get('task');
+  return task && TASK_ID.test(task) ? `#${task}` : '';
+}
+
 /**
  * The Studio page's own URL for `selection`: its path, the selection's
  * query, `source=reference` while the reference shows, and its task fragment.

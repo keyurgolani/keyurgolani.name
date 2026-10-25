@@ -6,11 +6,13 @@ import {
   DEMO_DRAFT_ID,
   LOCAL_DRAFT_ID,
   NOT_STARTED,
+  RESET_WHILE_CHECKED,
   storedSelection,
   storedWorking,
+  type ImportOptions,
   type Importer,
 } from './browser-backend';
-import type { ImportInput } from './import';
+import type { ImportInput, ImportResult } from './import';
 import { runImport } from './import/pipeline';
 import { CANARY, EXAMPLE, HOSTILE_FIXTURES, pairFiles } from './import/test-support/hostile';
 import { demoStore, SELECTION_KEY, WORKING_KEY } from './storage';
@@ -30,12 +32,31 @@ function importer() {
   return { run, calls };
 }
 
+/** An importer that answers only once the test releases it, as a slow worker would. */
+function gated() {
+  const calls: { files: readonly ImportInput[]; options?: ImportOptions }[] = [];
+  const waiting: (() => void)[] = [];
+  const run: Importer = (files, options) => {
+    calls.push({ files, ...(options ? { options } : {}) });
+    return new Promise<ImportResult>((resolve) => waiting.push(() => resolve(runImport(files))));
+  };
+  /** Lets every import the worker holds answer, and waits for their callers to go on. */
+  const release = async () => {
+    for (const answer of waiting.splice(0)) answer();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+  return { run, calls, release };
+}
+
 function setup(
   initial = DEFAULTS,
-  { local = new FakeStorage(), session = new FakeStorage() } = {},
+  {
+    local = new FakeStorage(),
+    session = new FakeStorage(),
+    checks = importer() as { run: Importer; calls: (readonly ImportInput[])[] },
+  } = {},
 ) {
   const store = demoStore(local, session);
-  const checks = importer();
   const backend = browserBackend({
     unit: UNIT,
     catalog: CATALOG,
@@ -125,7 +146,7 @@ test("an import #4's validator takes becomes the local source, in this tab's ses
   const { backend, local, session, calls } = setup();
   const files = example();
   const result = await backend.importFiles(files);
-  assert.equal(result.kind, 'imported');
+  assert.equal(result?.kind, 'imported');
   assert.equal(calls.length, 1);
   assert.equal(calls[0], files);
   const sources = backend.localSources();
@@ -152,14 +173,14 @@ test("an import #4's validator takes becomes the local source, in this tab's ses
 test('a refused import changes nothing, and neither does a second that is refused after one that imported', async () => {
   const { backend, session } = setup();
   const bomb = HOSTILE_FIXTURES.find(({ expect }) => expect === 'parse_limits')!;
-  assert.equal((await backend.importFiles(bomb.files)).kind, 'refused');
+  assert.equal((await backend.importFiles(bomb.files))?.kind, 'refused');
   assert.equal(backend.localSources(), null);
   assert.deepEqual([...session.items.keys()], []);
   await backend.importFiles(example());
   const first = backend.localSources();
   const stored = session.getItem(WORKING_KEY);
   const invalid = HOSTILE_FIXTURES.find(({ expect }) => expect === 'invalid')!;
-  assert.equal((await backend.importFiles(invalid.files)).kind, 'refused');
+  assert.equal((await backend.importFiles(invalid.files))?.kind, 'refused');
   assert.equal(backend.localSources(), first);
   assert.equal(session.getItem(WORKING_KEY), stored);
 });
@@ -491,4 +512,94 @@ test("while the reference shows, an edit or an axis reset stays in the page, so 
     ...DEFAULTS,
     displayMode: 'light',
   });
+});
+
+test('an import still in the worker when Reset demo comes keeps nothing: no local source, no working copy, and nothing to report (F2)', async () => {
+  const worker = gated();
+  const { backend, session } = setup(DEFAULTS, { checks: { run: worker.run, calls: [] } });
+  const controller = new AbortController();
+  const pending = backend.importFiles(example(), { signal: controller.signal });
+  // The signal goes to the worker's import, which stops on it.
+  assert.equal(worker.calls[0]?.options?.signal, controller.signal);
+  backend.resetAll();
+  await worker.release();
+  assert.equal(await pending, null);
+  assert.equal(backend.localSources(), null);
+  assert.deepEqual([...session.items.keys()], []);
+  assert.equal(await backend.report(), null);
+  const working = await backend.workingDraft();
+  assert.equal(working.kind === 'read' && working.value?.draftId, DEMO_DRAFT_ID);
+  // One that starts after the reset is kept as ever.
+  const next = backend.importFiles(example());
+  await worker.release();
+  assert.equal((await next)?.kind, 'imported');
+  assert.ok(backend.localSources());
+});
+
+test('a save still in the worker when Reset demo comes saves nothing, and says so (F2)', async () => {
+  const worker = gated();
+  const { backend, session } = setup(DEFAULTS, { checks: { run: worker.run, calls: [] } });
+  const started = await backend.startDraft();
+  const draft = started.kind === 'saved' ? started.draft : assert.fail();
+  const pending = backend.saveDraft({
+    draftId: LOCAL_DRAFT_ID,
+    expectedVersion: draft.version,
+    documents: {
+      portfolio: { format: 'yaml', sourceText: EXAMPLE.portfolio },
+      site: { format: 'yaml', sourceText: EXAMPLE.site },
+    },
+  });
+  backend.resetAll();
+  await worker.release();
+  assert.deepEqual(await pending, {
+    kind: 'failed',
+    code: 'not_found',
+    message: RESET_WHILE_CHECKED,
+  });
+  assert.equal(backend.localSources(), null);
+  assert.deepEqual([...session.items.keys()], []);
+});
+
+test("report() gives an import's own answer, and checks a working copy a reload brought back in the worker once, so its findings and notices show again (F6)", async () => {
+  const { backend, local, session, calls } = setup();
+  assert.equal(await backend.report(), null);
+  const imported = await backend.importFiles(example());
+  assert.equal(imported?.kind, 'imported');
+  assert.equal(calls.length, 1);
+  // The import's own answer, with no second check.
+  assert.equal(await backend.report(), imported);
+  assert.equal(calls.length, 1);
+  // A reload: the copy reads back by shape, and nothing checks it until it's asked for.
+  const again = setup(DEFAULTS, { local, session });
+  assert.deepEqual(again.calls, []);
+  const kept = await again.backend.report();
+  assert.equal(kept?.kind, 'imported');
+  assert.deepEqual(kept, imported);
+  assert.equal(again.calls.length, 1);
+  assert.deepEqual(decoded(again.calls[0]!), [EXAMPLE.portfolio, EXAMPLE.site]);
+  // Once per copy: a task opened again reads the same answer.
+  assert.equal(await again.backend.report(), kept);
+  assert.equal(again.calls.length, 1);
+  again.backend.resetAll();
+  assert.equal(await again.backend.report(), null);
+});
+
+test("a kept copy's check that couldn't run is tried again the next time, and one the worker refuses stays refused (F6)", async () => {
+  const session = new FakeStorage();
+  const first = setup(DEFAULTS, { session });
+  await first.backend.importFiles(example());
+  let answer: ImportResult = { kind: 'refused', code: 'worker_unavailable', diagnostics: [] };
+  const calls: (readonly ImportInput[])[] = [];
+  const flaky: Importer = async (files) => {
+    calls.push(files);
+    return answer;
+  };
+  const { backend } = setup(DEFAULTS, { session, checks: { run: flaky, calls } });
+  assert.equal((await backend.report())?.kind, 'refused');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  answer = runImport(example());
+  assert.equal((await backend.report())?.kind, 'imported');
+  assert.equal(calls.length, 2);
+  assert.equal((await backend.report())?.kind, 'imported');
+  assert.equal(calls.length, 2);
 });

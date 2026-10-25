@@ -22,7 +22,12 @@ import {
 // sessionStorage under `portfolio-demo:v1:working` and nowhere else.
 // startDraft() starts that copy from the sample's documents, and saveDraft()
 // and importFiles() replace it with documents #4's validator took, in the
-// import's module worker: nothing parses on this thread. The visitor's
+// import's module worker: the import and a save parse there, never on this
+// thread. Export (lib/demo/export) reads the accepted or the sample's text
+// again on the page, under #4's pre-parse limits. A full reset drops
+// whatever an import or a save still in the worker answers. A working copy
+// a reload brings back is read by shape, and report() checks it in the
+// worker again, so its findings and notices show again. The visitor's
 // selection stays apart from both, so an edit sets one of the five
 // `/appearance/<axis>` pointers of the site to a value the catalog offers,
 // and anything else is refused. Every selection change goes to the demo's
@@ -47,8 +52,16 @@ export interface LocalSources {
   readonly site: LocalSource;
 }
 
+/** What an import may be given: a signal that stops it, as #137's importFiles takes. */
+export interface ImportOptions {
+  readonly signal?: AbortSignal;
+}
+
 /** How a pair of files is checked: the import's module worker, or a test's stand-in. */
-export type Importer = (files: readonly ImportInput[]) => Promise<ImportResult>;
+export type Importer = (
+  files: readonly ImportInput[],
+  options?: ImportOptions,
+) => Promise<ImportResult>;
 
 export interface BrowserBackendOptions extends SelectionRules {
   readonly unit: DemoUnit;
@@ -88,8 +101,16 @@ export interface DemoBackend extends StudioBackend {
   /**
    * Imports a pair of files through the worker. What it imports becomes the
    * local source, in place of any before it; what it refuses changes nothing.
+   * Null when a full reset came while the worker read them: nothing is kept,
+   * and there is nothing to report.
    */
-  importFiles(files: readonly ImportInput[]): Promise<ImportResult>;
+  importFiles(files: readonly ImportInput[], options?: ImportOptions): Promise<ImportResult | null>;
+  /**
+   * The import's answer for the local source as it is now, or null while
+   * there is none: the import's or the save's own, or, for a working copy a
+   * reload brought back, the worker's check of it again, made once.
+   */
+  report(): Promise<ImportResult | null>;
 }
 
 /** The draft ID of the demo's sample, the source until an import. */
@@ -100,6 +121,10 @@ export const LOCAL_DRAFT_ID = 'demo-local';
 /** What an edit, a save, or a draft the demo doesn't offer gets. */
 export const NOT_OFFERED =
   "The demo changes the appearance only. Editing content isn't part of the demo yet.";
+
+/** What a save gets when a full reset came while the worker checked its documents. */
+export const RESET_WHILE_CHECKED =
+  'The demo was reset while the documents were checked, so nothing was saved.';
 
 /** What a save gets while there is no local source to save over. */
 export const NOT_STARTED =
@@ -112,6 +137,9 @@ const notOffered = (message = NOT_OFFERED): BackendFailure => ({
 });
 
 const POINTER = /^\/appearance\/([A-Za-z]+)$/;
+
+/** Refusals that say the check couldn't run, not what the documents are. */
+const TRANSIENT: ReadonlySet<string> = new Set(['timeout', 'worker_unavailable']);
 
 const isSource = (value: unknown): value is LocalSource => {
   const entry = record(value);
@@ -195,13 +223,17 @@ export function browserBackend(options: BrowserBackendOptions): DemoBackend {
   let defaults: DemoSelection = options.defaults;
   const rules: SelectionRules = { catalog: options.catalog, schemeModes: options.schemeModes };
   const now = options.now ?? (() => new Date());
-  const importer: Importer = options.importer ?? ((files) => workerImport(files));
+  const importer: Importer = options.importer ?? ((files, given) => workerImport(files, given));
   let selection: DemoSelection = options.initial ?? defaults;
   let version = 1;
   let updatedAt = now().toISOString();
   // The local source: a reload in this tab brings back what the tab holds.
   let local: LocalSources | null = storedWorking(store);
   let models: { readonly portfolio?: unknown; readonly site?: unknown } = {};
+  // Each full reset, which an import or a save the worker still holds checks for.
+  let generation = 0;
+  // The import's answer for the local source it's about.
+  let checked: { readonly of: LocalSources; readonly result: Promise<ImportResult> } | null = null;
 
   // While the reference shows, edits stay in the page: the stored selection
   // is the sample's, which a bare /studio opens on, never the reference's look.
@@ -219,10 +251,12 @@ export function browserBackend(options: BrowserBackendOptions): DemoBackend {
     site: sampleSource('site'),
   });
 
-  /** `sources` as the working copy: in this tab's sessionStorage, and in memory. */
-  function adopt(sources: LocalSources, parsed: typeof models): StudioDraft {
+  /** `result`'s documents as the working copy: in this tab's sessionStorage, and in memory. */
+  function adopt(result: Extract<ImportResult, { kind: 'imported' }>): StudioDraft {
+    const { sources } = result.unit;
     local = { portfolio: sources.portfolio, site: sources.site };
-    models = parsed;
+    models = result.unit.models;
+    checked = { of: local, result: Promise.resolve(result) };
     store.write(WORKING_KEY, JSON.stringify({ sources: local }));
     version += 1;
     updatedAt = now().toISOString();
@@ -307,28 +341,58 @@ export function browserBackend(options: BrowserBackendOptions): DemoBackend {
     // The local source, from the sample's own documents when there is none yet.
     async startDraft(): Promise<SaveResult> {
       if (local) return { kind: 'saved', draft: draft() };
-      return { kind: 'saved', draft: adopt(sampleSources(), {}) };
+      local = sampleSources();
+      models = {};
+      store.write(WORKING_KEY, JSON.stringify({ sources: local }));
+      version += 1;
+      updatedAt = now().toISOString();
+      return { kind: 'saved', draft: draft() };
     },
     async saveDraft({ draftId, expectedVersion, documents }): Promise<SaveResult> {
       if (!local) return notOffered(NOT_STARTED);
       const problem = stale(draftId, expectedVersion);
       if (problem) return problem;
+      const at = generation;
       const result = await importer(
         filesOf({
           portfolio: { format: documents.portfolio.format, text: documents.portfolio.sourceText },
           site: { format: documents.site.format, text: documents.site.sourceText },
         }),
       );
+      if (generation !== at) {
+        return { kind: 'failed', code: 'not_found', message: RESET_WHILE_CHECKED };
+      }
       if (result.kind !== 'imported') return refusal(result);
       // Another save or an import may have moved it while the worker checked.
       const later = stale(draftId, expectedVersion);
       if (later) return later;
-      return { kind: 'saved', draft: adopt(result.unit.sources, result.unit.models) };
+      return { kind: 'saved', draft: adopt(result) };
     },
-    async importFiles(files) {
-      const result = await importer(files);
-      if (result.kind === 'imported') adopt(result.unit.sources, result.unit.models);
+    async importFiles(files, given = {}) {
+      const at = generation;
+      const result = await importer(files, given);
+      // Reset demo came while the worker read them: the reset stands.
+      if (generation !== at) return null;
+      if (result.kind === 'imported') adopt(result);
       return result;
+    },
+    async report() {
+      const of = local;
+      if (!of) return null;
+      let entry = checked;
+      if (entry?.of !== of) {
+        entry = { of, result: importer(filesOf(of)) };
+        checked = entry;
+        const mine = entry;
+        // A check that couldn't run is tried again next time.
+        void mine.result.then((answer) => {
+          if (answer.kind === 'refused' && TRANSIENT.has(answer.code) && checked === mine) {
+            checked = null;
+          }
+        });
+      }
+      const answer = await entry.result;
+      return local === of ? answer : null;
     },
     localSources: () => local,
     sources: () => local ?? sampleSources(),
@@ -371,11 +435,13 @@ export function browserBackend(options: BrowserBackendOptions): DemoBackend {
       return moved(shown ?? defaults);
     },
     resetAll() {
+      generation += 1;
       store.clearAll();
       showingReference = false;
       defaults = options.defaults;
       local = null;
       models = {};
+      checked = null;
       return moved(defaults);
     },
   };
