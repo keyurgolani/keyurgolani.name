@@ -174,7 +174,15 @@ export interface ScrollTops {
 
 /** The page's record of a section's top at each scroll event. */
 interface ScrollRecorder {
-  __scrollTops?: { tops: number[]; record: () => void };
+  __scrollTops?: { tops: number[]; record: () => void; arm: () => void };
+}
+
+export interface ScrollTopsOptions {
+  /**
+   * Runs once the page is recording and before the click: a check of what a
+   * scroll before the click does to the record, which is nothing.
+   */
+  readonly beforeClick?: () => Promise<void>;
 }
 
 /**
@@ -184,9 +192,16 @@ interface ScrollRecorder {
  * records each scroll event itself, so no round trip to the browser can miss
  * the frames between, and records it on the document in the capture phase,
  * so a scroll inside one of the composition's own scroll containers, whose
- * events don't bubble, counts as much as the window's.
+ * events don't bubble, counts as much as the window's. It records from the
+ * click on: Playwright scrolls a link below the fold into view before it
+ * clicks, and under load that scroll can reach a frame of its own, which is
+ * the harness's movement, not the composition's.
  */
-export async function scrollTops(page: Page, href: string): Promise<ScrollTops> {
+export async function scrollTops(
+  page: Page,
+  href: string,
+  options: ScrollTopsOptions = {},
+): Promise<ScrollTops> {
   const id = href.slice(1);
   const top = () =>
     page.evaluate(
@@ -205,13 +220,24 @@ export async function scrollTops(page: Page, href: string): Promise<ScrollTops> 
     const page = window as Window & ScrollRecorder;
     if (page.__scrollTops) {
       document.removeEventListener('scroll', page.__scrollTops.record, { capture: true });
+      document.removeEventListener('click', page.__scrollTops.arm, { capture: true });
     }
     const tops: number[] = [];
-    const record = () =>
-      tops.push(Math.round(document.getElementById(sectionId)!.getBoundingClientRect().top));
-    page.__scrollTops = { tops, record };
+    // The click's capture phase runs before the link's default action, so
+    // every scroll the click starts counts and none from before it does.
+    let clicked = false;
+    const arm = () => {
+      clicked = true;
+    };
+    const record = () => {
+      if (clicked)
+        tops.push(Math.round(document.getElementById(sectionId)!.getBoundingClientRect().top));
+    };
+    page.__scrollTops = { tops, record, arm };
+    document.addEventListener('click', arm, { capture: true });
     document.addEventListener('scroll', record, { capture: true, passive: true });
   }, id);
+  await options.beforeClick?.();
   await page.locator(`nav a[href="${href}"]`).first().click();
   // Settled once two samples 150 ms apart agree. The first sample never
   // counts, since a smooth scroll can take a frame or two to start moving.
@@ -230,6 +256,7 @@ export async function scrollTops(page: Page, href: string): Promise<ScrollTops> 
   const tops = await page.evaluate(() => {
     const page = window as Window & ScrollRecorder;
     document.removeEventListener('scroll', page.__scrollTops!.record, { capture: true });
+    document.removeEventListener('click', page.__scrollTops!.arm, { capture: true });
     return page.__scrollTops!.tops;
   });
   const settled = last!;

@@ -30,15 +30,22 @@ const SECTIONS = Array.from(
     `<section id="s${index}" style="min-height: 400px"><h2>Section ${index}</h2></section>`,
 ).join('');
 
-/** A composition's page, with `css` in its head and `extra` in its last section. */
-async function plant(page: Page, css: string, extra = ''): Promise<void> {
+const HEADER_NAV = '<header><nav><a href="#contact">Contact</a></nav></header>';
+
+/**
+ * A composition's page, with `css` in its head and `extra` in its last
+ * section. `footer` moves the link to the contact section from a header nav
+ * to a footer nav below the fold, as Horizontal Cinema's chapter index has it.
+ */
+async function plant(page: Page, css: string, extra = '', footer = false): Promise<void> {
   await watchFrames(page);
   // A navigation runs the init script; setContent() alone doesn't.
   await page.goto('about:blank');
   await page.setContent(`<!doctype html><html><head><style>body { margin: 0 } ${css}</style></head><body>
 <div data-variant="probe" data-motion-policy="reduce">
-  <header><nav><a href="#contact">Contact</a></nav></header>
+  ${footer ? '' : HEADER_NAV}
   <main id="main">${SECTIONS}<section id="contact" style="min-height: 400px"><h2>Contact</h2>${extra}</section></main>
+  ${footer ? '<footer style="min-height: 600px"><nav><a href="#contact">Contact</a></nav></footer>' : ''}
 </div></body></html>`);
   await nextFrames(page);
 }
@@ -57,6 +64,32 @@ test("a jump inside the composition's own scroll container is a jump, and a smoo
   const smooth = await scrollTops(page, '#contact');
   expect(smooth.before - smooth.settled).toBeGreaterThan(100);
   expect(smooth.farthest).toBeGreaterThan(50);
+});
+
+test('a scroll before the click is no part of the jump, and a smooth scroll after it still is', async ({
+  page,
+}) => {
+  // A scroll that reaches a frame of its own after the page starts recording
+  // and before the click, as Playwright's scroll of a link into view can under load.
+  const scrollFirst = async () => {
+    await page.evaluate(() => window.scrollTo({ top: 600, behavior: 'instant' }));
+    await nextFrames(page);
+  };
+  await plant(page, '');
+  const jump = await scrollTops(page, '#contact', { beforeClick: scrollFirst });
+  expect(jump.before - jump.settled).toBeGreaterThan(100);
+  expect(jump.farthest).toBeLessThan(4);
+
+  await plant(page, 'html { scroll-behavior: smooth; }');
+  const smooth = await scrollTops(page, '#contact', { beforeClick: scrollFirst });
+  expect(smooth.before - smooth.settled).toBeGreaterThan(100);
+  expect(smooth.farthest).toBeGreaterThan(50);
+
+  // A link below the fold, which Playwright scrolls into view before it clicks.
+  await plant(page, '', '', true);
+  const below = await scrollTops(page, '#contact');
+  expect(below.before - below.settled).toBeGreaterThan(100);
+  expect(below.farthest).toBeLessThan(4);
 });
 
 test('an endless animation that starts once its section is in view shows after the jump and on the way down', async ({
