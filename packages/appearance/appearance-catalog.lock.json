@@ -31,7 +31,7 @@
       "version": "1.1.0",
       "tier": "extended",
       "license": "first-party",
-      "digest": "sha256-b16737fd6eaf37e569c3d343022a128cfe9b513e37c504dd247b5e289b8c0dd8",
+      "digest": "sha256-44d10e945f9fa58363870dac5ea9ec43f40c0250b73d7a12c70f1dfa6a3ed297",
       "surfaceOpacity": {
         "approved": "96%",
         "shipped": "100%"
@@ -79,7 +79,7 @@
       "version": "1.1.0",
       "tier": "extended",
       "license": "first-party",
-      "digest": "sha256-126b6cf3930832f6c9467554d0b8d20393ca5d315da2d521700da5f07fe9b587",
+      "digest": "sha256-169dbe66d509f587115adf842fb8330136e6230126ba5220fe83bc0d83df798e",
       "surfaceOpacity": {
         "approved": "92%",
         "shipped": "100%"
@@ -551,7 +551,7 @@
       "version": "1.1.0",
       "tier": "extended",
       "license": "first-party",
-      "digest": "sha256-d20a9192c8be7c6af48e18d8183b1235b496d39d126a37536ece35102005f128",
+      "digest": "sha256-2670dba7c2830ba79033c311b92cd42620096c25f207bd1ecc01a6668e15fcea",
       "surfaceOpacity": {
         "approved": "92%",
         "shipped": "100%"
