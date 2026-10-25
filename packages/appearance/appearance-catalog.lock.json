@@ -172,18 +172,18 @@
     "material-3-inspired": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "tier": "stable",
       "license": "independent-inspired-interpretation",
-      "digest": "sha256-f3d3602ffb7ebc4c75f06aa48e2cf32bf12e47210e04b5526211d7e6008b0038"
+      "digest": "sha256-bf6bccfd653a14bd816b81096d9278fdaf34708bb08ce19a7427116a4fe9c9fd"
     },
     "material-expressive-inspired": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "tier": "extended",
       "license": "independent-inspired-interpretation",
-      "digest": "sha256-1025b61c8046b74fbf22761fd74fa24eecfac8b12376e2c3b25fb690d73a13b9"
+      "digest": "sha256-fc8b7517c09f5847da7238b0ba716b9ba8d4f062d89c47adc129218f24f63aab"
     },
     "minimal-flat": {
       "axis": "designLanguage",
