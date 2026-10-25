@@ -43,7 +43,7 @@ const CLASSES = [
   {
     name: 'docs-only',
     files: ['docs/deployment.md', 'README.md', 'docs/screenshots/01-home-hero-editorial.png'],
-    jobs: ['static', 'unit', 'docs'],
+    jobs: ['static', 'unit', 'docs', 'fresh-clone'],
   },
   {
     name: 'schema-only',
@@ -140,7 +140,7 @@ const CLASSES = [
   {
     name: 'container',
     files: ['deploy/compose.owner.yml', 'docker-compose.yml', 'ci/image-smoke.mjs'],
-    jobs: ['static', 'unit', 'image', 'profiles'],
+    jobs: ['static', 'unit', 'image', 'profiles', 'fresh-clone'],
   },
   {
     name: 'image smoke only',
@@ -177,13 +177,42 @@ const CLASSES = [
   },
   {
     name: 'profile smoke',
-    files: ['ci/smoke-profiles.mjs', 'ci/lib/profile-checks.mjs', 'ci/profile-checks.test.mjs'],
+    files: ['ci/smoke-profiles.mjs', 'ci/profile-checks.test.mjs'],
     jobs: ['static', 'unit', 'image', 'profiles'],
+  },
+  {
+    name: "profile smoke's checks, which the rehearsal uses too",
+    files: ['ci/lib/profile-checks.mjs'],
+    jobs: ['static', 'unit', 'image', 'profiles', 'rehearsal', 'fresh-clone'],
+  },
+  {
+    name: 'release rehearsal',
+    files: ['ci/rehearsal.mjs', 'ci/fixtures/rehearsal/baseline/yaml/portfolio.yml'],
+    jobs: ['static', 'unit', 'image', 'rehearsal'],
+  },
+  {
+    name: 'revision store',
+    files: ['packages/core/src/store/backup.ts', 'packages/core/src/cli.ts'],
+    jobs: [
+      'static',
+      'unit',
+      'build',
+      'browser',
+      'routes',
+      'image',
+      'profiles',
+      'rehearsal',
+      'fresh-clone',
+      'preview-fixtures-browser',
+      'quality-pr-plan',
+      'quality-pr',
+      'quality-pr-verdict',
+    ],
   },
   {
     name: 'one Compose example under deploy/',
     files: ['deploy/compose.demo.yml'],
-    jobs: ['static', 'unit', 'image', 'profiles'],
+    jobs: ['static', 'unit', 'image', 'profiles', 'fresh-clone'],
   },
   { name: 'Dockerignore', files: ['.dockerignore'], jobs: ALL, complete: true },
   {
@@ -231,6 +260,7 @@ const CLASSES = [
       'static',
       'unit',
       'docs',
+      'fresh-clone',
       'build',
       'browser',
       'routes',
@@ -367,10 +397,51 @@ test('the image, the Dockerfile, .dockerignore, deploy/, the profile smoke, and 
   }
 });
 
-test('every rule that selects profiles selects image, whose saved image profiles loads', () => {
+test('every rule that selects profiles or rehearsal selects image, whose saved image both load', () => {
   for (const rule of RULES) {
-    if (rule.complete || !rule.jobs.includes('profiles')) continue;
+    if (rule.complete) continue;
+    if (!rule.jobs.includes('profiles') && !rule.jobs.includes('rehearsal')) continue;
     assert.ok(rule.jobs.includes('image'), `${rule.class} (${rule.paths[0]}) leaves out image`);
+  }
+});
+
+test('docs, deploy/, the Dockerfile, the sample config, the skills, and the command lines select fresh-clone', () => {
+  for (const file of [
+    'docs/getting-started.md',
+    'README.md',
+    'deploy/compose.owner.yml',
+    'docker-compose.yml',
+    'Dockerfile',
+    'portfolio.example.yml',
+    'site.example.yml',
+    'skills/portfolio-author/scripts/validate.mjs',
+    'apps/web/bin/owner.mjs',
+    'apps/web/scripts/portfolio-store.ts',
+    'packages/core/src/cli.ts',
+    'packages/core/src/catalog/unit.ts',
+    'packages/core/src/audit/sink.ts',
+    'ci/fresh-clone.mjs',
+    'ci/lib/pending.mjs',
+  ]) {
+    assert.ok(draft([file]).jobs.includes('fresh-clone'), file);
+  }
+});
+
+test('the rehearsal, the store, and the command lines select rehearsal', () => {
+  for (const file of [
+    'ci/rehearsal.mjs',
+    'ci/rehearsal.test.mjs',
+    'ci/fixtures/rehearsal/baseline/toml/portfolio.toml',
+    'packages/core/src/store/publication.ts',
+    'packages/core/src/cli.ts',
+    'packages/core/src/catalog/source.ts',
+    'packages/core/src/audit/sink.ts',
+    'apps/web/scripts/portfolio-store.ts',
+    'apps/web/scripts/config.mjs',
+    'packages/schema/src/migrate/index.ts',
+  ]) {
+    const selection = draft([file]);
+    assert.ok(selection.jobs.includes('rehearsal') && selection.jobs.includes('image'), file);
   }
 });
 

@@ -15,7 +15,7 @@ A candidate tagged before the quality gate joined this workflow has no `rc-quali
 
 ## A release candidate
 
-Pushing `vX.Y.Z-rc.N` runs these jobs in order (the quality gate beside the build), and each one stops the release when it fails:
+Pushing `vX.Y.Z-rc.N` runs these jobs in order (the quality gate and the rehearsal beside the build), and each one stops the release when it fails:
 
 1. **classify** reads the tag. Anything but `vX.Y.Z-rc.N` or `vX.Y.Z` fails here.
 2. **rc-verify** refuses the tag unless its commit is on `main` and has a green complete `ci` run: a `ci.yml` run for the push to `main` on exactly that commit, where `gate` passed and the run concluded success. `gate` passes only on a complete run, so a draft PR's selected run never counts, and a PR's run doesn't either, since its `gate` checked a merge commit. It reads both through the API with `contents: read` and `actions: read` ([`ci/release/verify-rc.mjs`](../ci/release/verify-rc.mjs)).
@@ -23,8 +23,9 @@ Pushing `vX.Y.Z-rc.N` runs these jobs in order (the quality gate beside the buil
 4. **rc-build** builds `linux/amd64` on `ubuntu-24.04` and `linux/arm64` on `ubuntu-24.04-arm`, once each and natively, with BuildKit's SLSA provenance at `mode=max` and an SPDX SBOM. Each leg pushes its platform's index to `ghcr.io/<owner>/<repo>` by digest, with no tag.
 5. **rc-merge** merges the two indexes into one with `docker buildx imagetools create`, which keeps each platform's attestation manifest, and pushes it by digest, with no tag ([`ci/release/merge-index.mjs`](../ci/release/merge-index.mjs)). The merged index must hold one image and one attestation manifest for each platform, and no attestation for an image it doesn't hold. It checks that both platforms carry the provenance and an SBOM ([`ci/release/attestations.mjs`](../ci/release/attestations.mjs)), and attests the merged digest with `actions/attest-build-provenance`, which signs the provenance through Sigstore and stores it with GitHub and on GHCR. The check runs after the push, so when it fails the digests are already on GHCR, untagged and never promoted: delete those package versions in the package settings.
 6. **rc-scan** runs Grype on the merged digest, once per platform, and on the production dependencies ([Scans](#scans)).
-7. **rc-tag** tags the scanned digest `X.Y.Z-rc.N` on GHCR once `rc-scan` and `rc-quality-verdict` both passed, and checks the tag resolves to it.
-8. **rc-release** creates the GitHub pre-release, with notes that name the pull source by digest and the two SBOMs attached.
+7. **rc-rehearsal** runs beside the build, after `rc-verify`: the upgrade rehearsal ([The rehearsal](#the-rehearsal)), on an image of the tagged commit it builds itself with no cache and never pushes, so nothing comes from GHCR.
+8. **rc-tag** tags the scanned digest `X.Y.Z-rc.N` on GHCR once `rc-scan`, `rc-quality-verdict`, and `rc-rehearsal` all passed, and checks the tag resolves to it.
+9. **rc-release** creates the GitHub pre-release, with notes that name the pull source by digest and the two SBOMs attached.
 
 ## Promotion
 
@@ -60,6 +61,25 @@ The workflow's token is `contents: read`. Each job that writes gets only what it
 A pull request into `next` or `main` that changes `release.yml`, `ci/release/`, the `Dockerfile`, `.dockerignore`, `.grype.yaml`, or `pnpm-lock.yaml` runs the dry run. `dry-run-build` builds each platform natively on the same runners as `rc-build`, with the same provenance and SBOM settings, into an OCI layout it keeps as a one-day artifact. `dry-run` pushes both layouts by digest into a `registry:2` container on its runner, published on its loopback only, merges them there with the same helper as `rc-merge`, checks the attestations on the merged index, runs both scans, tags the digest `0.0.0-rc.1` and then promotes it to `0.0.0`, `0.0`, `0`, and `latest` in that registry, and renders the notes into the job summary. It holds `contents: read` and no secret, never logs in to GHCR, and attests nothing, since signing needs `id-token: write`.
 
 Grype downloads its vulnerability database on the runner. The dry run is not a required check: `gate` is the only one.
+
+## The rehearsal
+
+`pnpm rehearse` ([`ci/rehearsal.mjs`](../ci/rehearsal.mjs)) rehearses an upgrade from a clean data directory, each row on what the one before it left:
+
+1. **Old configs.** Frozen copies of `62a0f06`'s one-file portfolio, as YAML and JSON, and one in TOML ([`ci/fixtures/rehearsal/baseline/`](../ci/fixtures/rehearsal/baseline/)), are each refused by `portfolio-store import` with `legacy.document`, and nothing is written: the data directory stays empty, and `status` says `empty`.
+2. **Migration.** `pnpm config:migrate` writes the new pair from the YAML and the JSON one. A second run over the new pair says there's nothing to migrate and writes nothing, and migrating the old file again writes the same bytes. The TOML one writes nothing at all.
+3. **Import, publish, rollback.** `import --expect empty` makes the migrated pair revision 1, an edited pair becomes revision 2, and `rollback --to` makes revision 1 live again.
+4. **A backup during a publish.** A publish from another process is held just before its pointer moves, holding the publication lock. `backup` started then gives up with `lock_timeout` and leaves nothing behind. The publish is killed with SIGKILL: revision 1 is still live, and `verify` passes on the store it died in. `backup` then succeeds, and `restore` into a clean directory serves the same live revision with its media, and passes `verify`.
+5. **Last known good.** In clean restores, the newest revision is damaged three ways: a missing file, a bad hash, and a revision the build's validator rejects. `status` serves the last known good, `degraded`, with the reason, and `recover` makes it live.
+6. **The image.** These rows need Docker and an image, `REHEARSAL_IMAGE`, so they run in CI, on an internal network, hardened as the Compose examples are, never pulling. A container there reaches no public address. Under `owner`, on an empty data volume, and under `read-only`, the image exits non-zero on the frozen YAML config with `legacy.document`, and owner's volume holds a valid empty store and nothing more: `store.json`, the server's claim, and the store's directories as the store's own layout names them, no revision, publication, or draft, and `status` naming no live revision. The server opens its store before it reads the source, where `portfolio-store` reads the source first (#130), and the next start's first-start import takes that empty store over (#3, item 3). The image's own `portfolio-store` imports the migrated pair and publishes revision 2, and `owner` reaches ready on it. Its name, canonical link, `og:url`, Open Graph image, sitemap, robots host, feed, and JSON-LD follow revision 2's identity and the origin, and never name the bundled sample, `example.com`, the build host, or a container path ([`ci/lib/identity.mjs`](../ci/lib/identity.mjs)). The owner signs in and rolls back to revision 1 in the app. With revision 1's files damaged, `owner` restarts on the last known good, `/api/ready` `degraded`, and logs `store.catalog.degraded`.
+7. **The previous image.** The previous release's image (the PR base's on a pull request), built in the job from `REHEARSAL_PREVIOUS_REF`, imports the old site and backs it up. The new image publishes on that store, as an upgrade would. Then the previous image, with the pre-upgrade backup restored into a new volume, serves the old site.
+8. **Identity under read-only and demo.** `read-only` on revision 2's pair publishes the same identity on its origin. `demo` shows the bundled sample alone, on the demo origin: the sample's name, no JSON-LD, an empty sitemap, no feed, `noindex`, and no fixture's name anywhere on the page.
+
+Every row runs on the default composition, `editorial-evidence`, which the run first proves registered by importing the bundled sample pair with the build's own `portfolio-store`. No row is pending. One that has to wait on something again is declared with what it waits on, and the run fails once that lands while it still waits.
+
+Every command runs with an empty `HOME`, its own `TMPDIR`, `TZ=UTC`, no token, and the test harness's egress guard, which fails a row on any request outside the machine; the containers run on an internal network, hardened as the Compose examples are. A per-run canary in every command's environment, another in revision 2's content, and the owner password and hash the image's `hash-password --stdin` makes for the run never appear in any output or report. The reports go to `reports/rehearsal/`.
+
+CI's `rehearsal` job runs it on a pull request whose changes select it (the rehearsal, the store, its command line and what it runs on, the migration, and every complete run), on the image the `image` job built, with the base tip as the previous release. `rc-rehearsal` runs the same script and rows on every release candidate, and differs only in where the images come from: an image of the tagged commit it builds itself, and the previous release from [`ci/release/previous-release.mjs`](../ci/release/previous-release.mjs): the newest final release in the commit's history that ships the revision store, or the commit's parent until one does. It fails when such releases exist but none is in the history.
 
 ## Scans
 
@@ -144,4 +164,4 @@ docker buildx imagetools inspect ghcr.io/<owner>/<repo>@sha256:<digest> --format
 
 ## Not here yet
 
-Release versioning (the tag matching `package.json`, and a `release.json` on each release), native arm64 runners, a freshness gate on the scheduled workflow, and the gate for the first final release are in the backlog. So are the release-candidate rehearsal of migration, backup, restore, and rollback (#12's last PR) and the profile container checks against the candidate's digest.
+Release versioning (the tag matching `package.json`, and a `release.json` on each release), native arm64 runners, a freshness gate on the scheduled workflow, and the gate for the first final release are in the backlog. So are the profile container checks against the candidate's digest, and the rehearsal's store migration and blue-green cutover.

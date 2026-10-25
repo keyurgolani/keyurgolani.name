@@ -14,6 +14,7 @@ import {
   pnpmProblem,
   pnpmReferences,
   renderSummary,
+  scriptPaths,
   slug,
   splitMarkdown,
 } from './docs-check.mjs';
@@ -229,6 +230,47 @@ test('external links fail on 4xx and 5xx and network errors, and only warn on 40
     renderSummary({ title: 'links', ...result }),
     /\| problem \| README.md:1 \| https:\/\/gone.dev\/ answered 404 \|/,
   );
+});
+
+test('the tree check reports a script a node or tsx command runs that the tree lacks', () => {
+  const root = tree({
+    ...PACKAGES,
+    'README.md': [
+      '# Title',
+      'Run `node --test ci/here.test.mjs` and `node ci/gone.mjs --flag`.',
+      '```sh',
+      'pnpm exec tsx --test packages/kit/src/gone.test.ts',
+      "node --test 'ci/**/*.test.mjs' && node ci/<script>.mjs",
+      'docker run image node bin/portfolio-store.mjs status',
+      'npx tsx tests/also-gone.ts',
+      '```',
+    ].join('\n'),
+    'ci/here.test.mjs': 'x',
+  });
+  try {
+    const { problems } = checkDocs({ root, files: ['README.md'] });
+    assert.deepEqual(
+      problems.map((p) => [p.line, p.message]),
+      [
+        [2, "ci/gone.mjs: there's no such script"],
+        [4, "packages/kit/src/gone.test.ts: there's no such script"],
+        [4, "tests/also-gone.ts: there's no such script"],
+      ],
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('script paths are the repository files after node or tsx, never a glob, placeholder, or image path', () => {
+  assert.deepEqual(scriptPaths('node --test ci/a.test.mjs ci/b.test.mjs; ls ci/c.mjs'), [
+    'ci/a.test.mjs',
+    'ci/b.test.mjs',
+  ]);
+  assert.deepEqual(scriptPaths("node --test 'ci/**/*.test.mjs'"), []);
+  assert.deepEqual(scriptPaths('node bin/portfolio-store.mjs import'), []);
+  assert.deepEqual(scriptPaths('node --import tsx tests/x.ts | tee out'), ['tests/x.ts']);
+  assert.deepEqual(scriptPaths('nodejs ci/x.mjs'), []);
 });
 
 test("the repository's own docs pass", () => {

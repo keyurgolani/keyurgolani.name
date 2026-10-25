@@ -46,10 +46,10 @@ Start from the bones of the two examples:
 ```sh
 cp portfolio.example.yml config/portfolio.yml
 cp site.example.yml config/site.yml
-# edit config/portfolio.yml
+# edit config/portfolio.yml: identity.name, meta.title, meta.ogImage
 ```
 
-`portfolio.yml` holds the content, and `site.yml` how it looks and which sections show. Edit the content first. Start with `identity` and `sections`. Save, then reload the page. `config/` is gitignored, so your content stays out of commits.
+`portfolio.yml` holds the content, and `site.yml` how it looks and which sections show. Edit the content first. Start with the three fields that say whose site it is. `pnpm dev` renders the sample's, but a production server refuses to start while any of them is still the bundled sample's. `identity.name` above all, still `Anamika Devi`. Then `meta.title`, which titles every page, the feed, and each link preview. Link previews show a card the server draws from `identity.name`, so the name is what changes their picture. `meta.ogImage` isn't rendered yet, but it places the sample's own picture (`og-image`), which production refuses too: point it at one of yours under `media`, or delete it. Then `sections`. Save, then reload the page. `config/` is gitignored, so your content stays out of commits.
 
 `portfolio.example.yml` exercises every section kind. Cherry-pick the ones you need; delete the rest.
 

@@ -74,7 +74,7 @@ echo 'PORTFOLIO_ORIGIN=https://jane.name' > .env
 docker compose up --build
 ```
 
-This mounts `config/` read-only at `/config`, and `assets/` read-only at `/media`, the media root (`PORTFOLIO_MEDIA_ROOT`) the portfolio's media sources resolve under ([Media](#media)). Nothing mounts into the app's `public/`: images serve as renditions from `/media` ([Media](#media)), and `/assets/<file>` is a 404 in every profile. Nothing in the container is writable but a tmpfs at Next.js's cache, `/app/apps/web/.next/cache`, and one at the media cache `read-only` derives into, `/tmp/portfolio-media`, owned by the server's user.
+Make the copy yours before the first start: a production server won't start while `identity.name`, `meta.title`, or the picture `meta.ogImage` places is the sample's ([Getting started](getting-started.md#1-create-configportfolioyml-and-configsiteyml)). This mounts `config/` read-only at `/config`, and `assets/` read-only at `/media`, the media root (`PORTFOLIO_MEDIA_ROOT`) the portfolio's media sources resolve under ([Media](#media)). Nothing mounts into the app's `public/`: images serve as renditions from `/media` ([Media](#media)), and `/assets/<file>` is a 404 in every profile. Nothing in the container is writable but a tmpfs at Next.js's cache, `/app/apps/web/.next/cache`, and one at the media cache `read-only` derives into, `/tmp/portfolio-media`, owned by the server's user.
 
 ### `demo`
 
@@ -101,7 +101,21 @@ The overlay mounts that directory read-only at `/reference`, sets `PORTFOLIO_REF
 
 At its first start, on an empty volume, the server publishes `../config` as revision 1, or refuses to start on a pair a publish refuses ([Importing](#importing)). From then on the data directory is what visitors see, and `../config` is import input: an edit there changes nothing live until `portfolio-store import` or a Studio publish. The image ships the store's command line as `/app/bin/portfolio-store.mjs` ([The revision store](#the-revision-store)).
 
-It needs the owner password's hash before it starts ([Owner authentication](#owner-authentication)). Set `PORTFOLIO_TRUSTED_PROXY_HOPS` in `deploy/.env` to the number of proxies in front that append to `X-Forwarded-For`, usually `1`: `compose.owner.yml` passes it through, and leaves it at `0` when it's unset, which gives sign-in only its global limits ([Signing in](#signing-in)).
+It needs the owner password's hash before it starts ([Owner authentication](#owner-authentication)). From the repo, the whole sequence: copy the documents, build the image (`portfolio:latest`), write the hash with it, set the origin, and start:
+
+```sh
+cp portfolio.example.yml config/portfolio.yml   # then make it yours
+cp site.example.yml config/site.yml             # its appearance and which sections show
+cd deploy
+docker build -t portfolio:latest ..
+mkdir -m 0700 secrets && sudo chown 1001:1001 secrets
+docker run --rm -it --user 1001:1001 -v "$PWD/secrets:/out" portfolio:latest \
+  node apps/web/bin/owner.mjs hash-password --out /out/owner_password_hash
+echo 'PORTFOLIO_ORIGIN=https://jane.name' > .env
+docker compose -f compose.owner.yml up --build
+```
+
+Like every production server, it refuses to start while `identity.name`, `meta.title`, or the picture `meta.ogImage` places in `config/portfolio.yml` is the bundled sample's ([Getting started](getting-started.md#1-create-configportfolioyml-and-configsiteyml)). Set `PORTFOLIO_TRUSTED_PROXY_HOPS` in `deploy/.env` to the number of proxies in front that append to `X-Forwarded-For`, usually `1`: `compose.owner.yml` passes it through, and leaves it at `0` when it's unset, which gives sign-in only its global limits ([Signing in](#signing-in)).
 
 ### What the image does
 
@@ -200,11 +214,11 @@ Add `includeSubDomains` only when every subdomain serves HTTPS.
 
 `hash-password` asks for the password twice, with echo off, and prints its hash, one line starting `$scrypt$ln=17,r=8,p=1$`. The password takes 15 to 256 characters, and it's compared after Unicode NFKC normalization, so the same password typed on another keyboard still matches. The command never takes the password as an argument, and reads it only from a terminal. Its `--stdin` flag, which reads both entries as two lines of standard input, is for tests.
 
-From `deploy/`, write the hash where `compose.owner.yml` reads it, with the image you run:
+From `deploy/`, write the hash where `compose.owner.yml` reads it, with the image you run: `portfolio:latest`, which `docker build -t portfolio:latest ..` builds as the [`owner`](#owner) sequence does, or the image reference you deploy.
 
 ```sh
 mkdir -m 0700 secrets && sudo chown 1001:1001 secrets
-docker run --rm -it --user 1001:1001 -v "$PWD/secrets:/out" <image> \
+docker run --rm -it --user 1001:1001 -v "$PWD/secrets:/out" portfolio:latest \
   node apps/web/bin/owner.mjs hash-password --out /out/owner_password_hash
 ```
 
