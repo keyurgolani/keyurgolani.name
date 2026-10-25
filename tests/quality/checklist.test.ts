@@ -88,8 +88,8 @@ test('an id nothing registers fails, naming what is registered', () => {
     'spatial-bento',
   ]);
   assert.throws(
-    () => checklist('demo-studio', registrations, compositions),
-    /Nothing registers demo-studio\. Registered: login, studio, editorial-evidence, fallback, horizontal-cinema, kinetic-cosmos, obsidian-atelier, spatial-bento\./,
+    () => checklist('no-such-surface', registrations, compositions),
+    /Nothing registers no-such-surface\. Registered: demo-studio, login, studio, editorial-evidence, fallback, horizontal-cinema, kinetic-cosmos, obsidian-atelier, spatial-bento\./,
   );
 });
 
