@@ -40,7 +40,10 @@ const LINKED_HOSTS = [
   'evil.example',
 ];
 
-test.use({ appOptions: DEMO_APP, blockedHosts: LINKED_HOSTS });
+// The local frame is opaque, so it can't register a service worker either
+// way: allowing them only keeps Playwright's own init script, which reads
+// navigator.serviceWorker, from throwing in the frame (as demo-local-frame.spec.ts).
+test.use({ appOptions: DEMO_APP, blockedHosts: LINKED_HOSTS, serviceWorkers: 'allow' });
 
 type Helpers = typeof Hostile & Pick<typeof Export, 'exportUnit'>;
 let outdir: string | undefined;
