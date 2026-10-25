@@ -28,7 +28,9 @@
 // - A design language's `--appearance-<role>` references read as
 //   `--color-<role>`, and it takes the contract's signature-fill and
 //   emphasis-glow at the fallback language's values. neumorphic's controls
-//   gain a border-strong hairline (BORDER_FIXES). A language that fails
+//   gain a border-strong hairline (BORDER_FIXES), and a focus ring too thin
+//   for #11's focus check is widened (FOCUS_FIXES), at version 1.1.0
+//   (FIXED_LANGUAGE_VERSION). A language that fails
 //   check:appearance moves, as written, from packs/ to held/, which
 //   registry generation never reads; this never writes it again.
 // - Generated schemes (brand-seed, material-hct, profile-image,
@@ -464,6 +466,26 @@ export const BORDER_FIXES = { neumorphic: '1px solid var(--color-border-strong)'
 const BORDER_FIX_WORDS = { neumorphic: 'hairline control borders' };
 
 /**
+ * Focus rings the prototype draws too thin for #11's focus check, which
+ * holds a ring's 3:1 change to the area of a 2px ring round the control
+ * (quality/thresholds.json's focus.perimeterPx). A 2px ring round a pill's
+ * or an organic radius's corners covers less than that, so it's 3px.
+ */
+export const FOCUS_FIXES = {
+  'material-3-inspired': '3px',
+  'material-expressive-inspired': '3px',
+  'soft-organic': '3px',
+};
+
+/** The caveat a widened focus ring adds, from the prototype's width. */
+function focusFixCaveat(width, prototype) {
+  return `Its focus ring is ${width}, not the prototype's ${prototype}: at ${prototype}, its rounded corners leave the ring short of the area a 2px ring covers at 3:1.`;
+}
+
+/** The version a language ships at once a fix here changes the prototype's tokens. */
+export const FIXED_LANGUAGE_VERSION = '1.1.0';
+
+/**
  * The motion names the platform stylesheet has keyframes for (#19's, in
  * packages/appearance/src/primitives/styles.css). A language names others,
  * as the prototype does, but they animate nothing until the platform
@@ -484,6 +506,10 @@ export function languageManifest(language) {
     Object.entries(language.tokens).map(([key, value]) => [key, contractColor(value)]),
   );
   if (BORDER_FIXES[language.id]) tokens['border-control'] = BORDER_FIXES[language.id];
+  const focusFix = FOCUS_FIXES[language.id]
+    ? focusFixCaveat(FOCUS_FIXES[language.id], tokens['focus-width'])
+    : null;
+  if (focusFix) tokens['focus-width'] = FOCUS_FIXES[language.id];
   Object.assign(tokens, CONTRACT_LANGUAGE_TOKENS);
   const [, , material, , , motion, texture] = RECIPE_PARTS[language.recipe];
   const inspired = language.source.licenseState === 'independent-inspired-interpretation';
@@ -508,6 +534,7 @@ export function languageManifest(language) {
           "Controls carry a hairline border the prototype didn't have, so they meet 3:1 non-text contrast.",
         ]
       : []),
+    ...(focusFix ? [focusFix] : []),
     ...(unanimated.length > 0
       ? [
           `Its ${unanimated.map((key) => `${key.slice('motion-'.length)} motion, ${tokens[key]},`).join(' and ')} ${unanimated.length === 1 ? 'has' : 'have'} no keyframes in the platform yet, so ${unanimated.length === 1 ? "it doesn't" : "they don't"} animate.`,
@@ -520,7 +547,7 @@ export function languageManifest(language) {
     description: inspired
       ? `An independent interpretation of ${language.source.name}'s public design principles: ${words}. It ships no official component, token file, icon, or font.`
       : `${words.charAt(0).toUpperCase()}${words.slice(1)}.`,
-    version: LANGUAGE_VERSION,
+    version: focusFix ? FIXED_LANGUAGE_VERSION : LANGUAGE_VERSION,
     tokenContract: 1,
     tier: language.status,
     provenance: {

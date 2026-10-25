@@ -2,7 +2,7 @@
   "id": "soft-organic",
   "name": "Soft Organic",
   "description": "Organic, uneven radii, hairline borders, solid surfaces, comfortable density, low elevation, springy motion, and a grain texture.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "stable",
   "provenance": {
@@ -40,6 +40,7 @@
   "caveats": [
     "A decorative gradient texture sits behind surfaces.",
     "Expressive state motion: hovers and presses move more than in a quiet language.",
+    "Its focus ring is 3px, not the prototype's 2px: at 2px, its rounded corners leave the ring short of the area a 2px ring covers at 3:1.",
     "Its enter motion, spring-in, and emphasis motion, bounce-once, have no keyframes in the platform yet, so they don't animate."
   ],
   "tokens": {
@@ -63,7 +64,7 @@
     "space-control-block": "0.75rem",
     "space-surface-inline": "1.25rem",
     "space-surface-block": "1.25rem",
-    "focus-width": "2px",
+    "focus-width": "3px",
     "focus-offset": "2px",
     "focus-style": "solid",
     "state-hover-transform": "translateY(-2px) scale(1.01)",

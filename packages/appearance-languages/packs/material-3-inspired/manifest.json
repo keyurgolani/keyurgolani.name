@@ -2,7 +2,7 @@
   "id": "material-3-inspired",
   "name": "Material 3 Inspired",
   "description": "An independent interpretation of Material Design's public design principles: pill controls, hairline borders, solid surfaces, comfortable density, medium elevation, fluid motion, and no texture. It ships no official component, token file, icon, or font.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "stable",
   "provenance": {
@@ -37,6 +37,7 @@
     "Under reduced motion, transforms and emphasis stop and entrances and exits fade; a paused boundary and print are instant."
   ],
   "caveats": [
+    "Its focus ring is 3px, not the prototype's 2px: at 2px, its rounded corners leave the ring short of the area a 2px ring covers at 3:1.",
     "Its emphasis motion, float-once, has no keyframes in the platform yet, so it doesn't animate."
   ],
   "tokens": {
@@ -60,7 +61,7 @@
     "space-control-block": "0.75rem",
     "space-surface-inline": "1.25rem",
     "space-surface-block": "1.25rem",
-    "focus-width": "2px",
+    "focus-width": "3px",
     "focus-offset": "2px",
     "focus-style": "solid",
     "state-hover-transform": "translateY(-2px)",
