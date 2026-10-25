@@ -22,7 +22,7 @@ import type { CDPSession, Page, TestInfo } from '@playwright/test';
 import { reportsDir } from '../../../ci/lib/reports.mjs';
 import { QUERY_KEYS } from '../../../packages/appearance/src/axes';
 import { COLOR_ROLES, TOKEN_PROPERTIES } from '../../../packages/appearance/src/roles';
-import { cellAnnotations, framedContrastNote, type Cell } from '../cells';
+import { cellAnnotations, framedNote, type Cell } from '../cells';
 import { axeFor } from './axe';
 import {
   CHECKS_ANNOTATION,
@@ -203,6 +203,8 @@ interface SuiteRun {
   readonly conditions: boolean;
   /** A Studio surface that needs JavaScript: without it, its notice stands in for its content. */
   readonly scriptRequired: boolean;
+  /** A surface whose frame's document its composition cells cover: the walk takes the frame as one stop. */
+  readonly framed?: boolean;
 }
 
 /** Slice 2's suites on the page `run.at` names, as `run.owed` says. Motion runs before axe, in runCell. */
@@ -218,7 +220,11 @@ async function suites(run: SuiteRun): Promise<Finding[]> {
   const scripts = await page.evaluate(() => [...document.scripts].map((script) => script.src));
   if (owed.has('keyboard')) {
     findings.push(
-      ...(await keyboardFindings(page, { focus: does('focus'), occlusion: does('occlusion') })),
+      ...(await keyboardFindings(page, {
+        focus: does('focus'),
+        occlusion: does('occlusion'),
+        framed: run.framed ?? false,
+      })),
     );
     ran.add('keyboard');
   }
@@ -231,7 +237,10 @@ async function suites(run: SuiteRun): Promise<Finding[]> {
     await page.setViewportSize({ width, height });
     await page.goto(at, { waitUntil: 'load' });
     await frames(page);
-    for (const finding of await keyboardFindings(page, { occlusion: true })) {
+    for (const finding of await keyboardFindings(page, {
+      occlusion: true,
+      framed: run.framed ?? false,
+    })) {
       if (finding.gate === 'occlusion')
         findings.push({ ...finding, viewport: `${width}x${height}` });
     }
@@ -380,7 +389,7 @@ export interface Pass {
   readonly failures: readonly CellFailure[];
   readonly ran: ReadonlySet<string>;
   readonly tokenPages: readonly { route: string; tokens: ResolvedTokens; file: string }[];
-  /** How many items inside a frame a framedContrast cell's contrast sampler left out. */
+  /** How many items inside a frame a framed cell's contrast sampler left out. */
   readonly framedLeftOut?: number;
 }
 
@@ -434,7 +443,7 @@ export async function runPass(
     page,
     row,
     cell.sweep ?? false,
-    cell.framedContrast !== undefined,
+    cell.framed !== undefined,
   );
   ran.add('axe');
   const details: Record<string, ElementDetails[]> = {};
@@ -511,6 +520,7 @@ export async function runPass(
       ran,
       conditions: row.id === 'default',
       scriptRequired: cell.requiresScript !== undefined,
+      framed: cell.framed !== undefined,
     })),
     // The no-JavaScript row on a surface that needs it: its honest state, axe having run above.
     ...(noticeRow
@@ -659,9 +669,9 @@ export async function runCell(run: CellRun, pass: typeof runPass = runPass) {
   );
   testInfo.annotations.push({ type: CHECKS_ANNOTATION, description: ran.join(' ') });
   // A cell that leaves its frame out of the contrast sampler says how many items, and why.
-  if (cell.framedContrast !== undefined) {
+  if (cell.framed !== undefined) {
     const leftOut = passes.reduce((sum, each) => sum + (each.framedLeftOut ?? 0), 0);
-    testInfo.annotations.push(framedContrastNote(cell, leftOut));
+    testInfo.annotations.push(framedNote(cell, leftOut));
   }
   // A change-directed cell's failures name the changed axis, and the tokens it resolved.
   const diagnostic = changeDiagnostic(
