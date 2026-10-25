@@ -32,7 +32,7 @@ import type { Page } from '@playwright/test';
 import { loadThresholds } from '../../../../quality/thresholds';
 import type { Interaction } from '../registration';
 import type { InputMode } from '../vocabulary';
-import { contrast, decodePng, pixel } from '../pixels';
+import { contrast, decodePng, pixel, type Image } from '../pixels';
 import { inPage, type Active, type Box } from './probe';
 
 export interface Finding {
@@ -92,7 +92,7 @@ export async function frames(page: Page, ms = 0): Promise<void> {
 }
 
 /** `box` and `margin` round it, in whole pixels, cut to the viewport; null when none of it is in view. */
-function clipAround(
+export function clipAround(
   box: Box,
   margin: number,
   viewport: { width: number; height: number },
@@ -106,18 +106,79 @@ function clipAround(
 
 /**
  * The length of a 1px ring round `box`, counting only the sides whose
- * margin is in the viewport: an indicator past the edge can't be seen or
- * measured there.
+ * margin is in the viewport, each by the span of it the viewport shows: an
+ * indicator past the edge can't be seen or measured there, and the clip the
+ * check diffs is cut to the viewport too (#11).
  */
-function ringLength(box: Box, margin: number, viewport: { width: number; height: number }): number {
-  const width = Math.min(box.width, viewport.width);
-  const height = Math.min(box.height, viewport.height);
+export function ringLength(
+  box: Box,
+  margin: number,
+  viewport: { width: number; height: number },
+): number {
+  const width = Math.max(0, Math.min(box.x + box.width, viewport.width) - Math.max(box.x, 0));
+  const height = Math.max(0, Math.min(box.y + box.height, viewport.height) - Math.max(box.y, 0));
   return (
     (box.y - margin >= 0 ? width : 0) +
     (box.y + box.height + margin <= viewport.height ? width : 0) +
     (box.x - margin >= 0 ? height : 0) +
     (box.x + box.width + margin <= viewport.width ? height : 0)
   );
+}
+
+/**
+ * The focus check's verdict on one stop's clips, `focused` and `blurred`,
+ * taken of `clip` round `box` with `margin`: visible, contrast, and
+ * perimeter, as focusFindings() reports them, without the path.
+ */
+export function ringFindings(
+  focused: Image,
+  blurred: Image,
+  box: Box,
+  margin: number,
+  viewport: { width: number; height: number },
+  clip: Box,
+): Omit<Finding, 'path'>[] {
+  let changed = 0;
+  let strong = 0;
+  for (let i = 0; i < focused.width * focused.height; i++) {
+    const [a, b] = [pixel(focused, i), pixel(blurred, i)];
+    if (a[0] === b[0] && a[1] === b[1] && a[2] === b[2]) continue;
+    changed++;
+    if (contrast(a, b) >= thresholds.contrast.nonText) strong++;
+  }
+  const ring = ringLength(box, margin, viewport) * (focused.width / clip.width) ** 2;
+  const need = Math.round(ring * thresholds.focus.perimeterPx);
+  if (changed === 0) {
+    return [
+      {
+        gate: 'focus',
+        rule: 'visible',
+        expected: 'focus changes how it looks',
+        actual: 'no pixel changes when it takes focus',
+      },
+    ];
+  }
+  if (strong < ring) {
+    return [
+      {
+        gate: 'focus',
+        rule: 'contrast',
+        expected: `the change reaches ${thresholds.contrast.nonText}:1 over a 1px ring`,
+        actual: `${strong} of ${changed} changed pixels reach ${thresholds.contrast.nonText}:1, under the ${Math.round(ring)} a 1px ring needs`,
+      },
+    ];
+  }
+  if (strong < need * EDGE_ALLOWANCE) {
+    return [
+      {
+        gate: 'focus',
+        rule: 'perimeter',
+        expected: `${need} pixels at ${thresholds.contrast.nonText}:1, a ${thresholds.focus.perimeterPx}px ring`,
+        actual: `${strong}`,
+      },
+    ];
+  }
+  return [];
 }
 
 /** The focus check on the stop that has focus. It leaves focus where it found it. */
@@ -135,48 +196,10 @@ export async function focusFindings(page: Page, active: Active): Promise<Finding
     (path) => (document.querySelector(path) as HTMLElement | null)?.focus(),
     active.path,
   );
-  let changed = 0;
-  let strong = 0;
-  for (let i = 0; i < focused.width * focused.height; i++) {
-    const [a, b] = [pixel(focused, i), pixel(blurred, i)];
-    if (a[0] === b[0] && a[1] === b[1] && a[2] === b[2]) continue;
-    changed++;
-    if (contrast(a, b) >= thresholds.contrast.nonText) strong++;
-  }
-  const ring = ringLength(active.box, margin, viewport) * (focused.width / clip.width) ** 2;
-  const need = Math.round(ring * thresholds.focus.perimeterPx);
-  const base = { gate: 'focus', path: active.path };
-  if (changed === 0) {
-    return [
-      {
-        ...base,
-        rule: 'visible',
-        expected: 'focus changes how it looks',
-        actual: 'no pixel changes when it takes focus',
-      },
-    ];
-  }
-  if (strong < ring) {
-    return [
-      {
-        ...base,
-        rule: 'contrast',
-        expected: `the change reaches ${thresholds.contrast.nonText}:1 over a 1px ring`,
-        actual: `${strong} of ${changed} changed pixels reach ${thresholds.contrast.nonText}:1, under the ${Math.round(ring)} a 1px ring needs`,
-      },
-    ];
-  }
-  if (strong < need * EDGE_ALLOWANCE) {
-    return [
-      {
-        ...base,
-        rule: 'perimeter',
-        expected: `${need} pixels at ${thresholds.contrast.nonText}:1, a ${thresholds.focus.perimeterPx}px ring`,
-        actual: `${strong}`,
-      },
-    ];
-  }
-  return [];
+  return ringFindings(focused, blurred, active.box, margin, viewport, clip).map((finding) => ({
+    ...finding,
+    path: active.path,
+  }));
 }
 
 export interface KeyboardOptions {

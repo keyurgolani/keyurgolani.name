@@ -3,8 +3,11 @@
 // measured weights, its split of a group too heavy for one worker, and its
 // heaviest-first assignment. Nothing here weighs a test again.
 //
-// The cap. No run holds more than FULL_SHARDS of the account's 20 job slots
-// at once (max-parallel), so PR CI keeps the rest.
+// The caps. A night holds no more than FULL_SHARDS of the account's 20 job
+// slots at once, and a release candidate no more than RELEASE_PARALLEL
+// (max-parallel), so PR CI keeps the rest: 12 a night, and 4 while a
+// candidate runs, which the owner accepted to get a candidate through in
+// about half the time.
 //
 // The nightly rotation. The complete plan is more than one night of
 // FULL_SHARDS shards can run, so it runs over a cycle of N nights, the
@@ -30,7 +33,7 @@
 //
 // The release plan. Before a release, every group runs, in the smallest of
 // RELEASE_COUNTS (32, 64, 128, 256) shards that keeps each within
-// RELEASE_CEILING (releaseFor), FULL_SHARDS at a time, so in waves;
+// RELEASE_CEILING (releaseFor), RELEASE_PARALLEL at a time, so in waves;
 // rc-quality's timeout is sized from that ceiling (releaseTimeoutMinutes).
 // release.yml's rc-quality-plan works the count out (full-plan.ts) and hands
 // it to the matrix. #20's whole catalog takes 128, so 256 is headroom that
@@ -62,17 +65,19 @@ import { visualCells, VISUAL_VIEWPORTS } from './visual';
 
 export const VISUAL_SPEC = 'visual.spec.ts';
 
-/** The cap: the most shard jobs of a nightly or release run at once, and the nightly's shard count. */
+/** The nightly's cap: the most shard jobs of a night at once, and the nightly's shard count. */
 export const FULL_SHARDS = 8;
+/** The release's cap: the most rc-quality shard jobs at once, rc-quality's max-parallel. */
+export const RELEASE_PARALLEL = 16;
 /** The cycle lengths the rotation takes, the smallest that fits: a week, doubled each time. */
 export const NIGHT_COUNTS: readonly number[] = [7, 14, 28, 56];
 /** The longest cycle: past eight weeks, the nightly needs more shards or a longer night instead. */
 export const MAX_NIGHTS = NIGHT_COUNTS.at(-1)!;
 /** How many buckets a server's cell tests are split into, each with a night of its own. */
 export const BUCKETS = 4;
-/** The release plan's shard counts, the smallest that fits, each run FULL_SHARDS at a time. */
+/** The release plan's shard counts, the smallest that fits, each run RELEASE_PARALLEL at a time. */
 export const RELEASE_COUNTS: readonly number[] = [32, 64, 128, 256];
-/** The most release shards: 32 waves of eight, and the most jobs a GitHub matrix makes. */
+/** The most release shards: 16 waves of 16, and the most jobs a GitHub matrix makes. */
 export const MAX_RELEASE_SHARDS = RELEASE_COUNTS.at(-1)!;
 /**
  * A full shard job's fixed part, in seconds: quality-pr's (SHARD_FIXED, 95 s)

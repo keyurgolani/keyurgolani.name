@@ -4,11 +4,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { catalogPacks, packPackages, REDUCED_MOTION } from '@portfolio/appearance/node';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { AnimatedCounter } from '../animated-counter';
 import { MotionPolicyProvider } from '../motion';
-import { AuroraGradient, HolographicPanel, MagneticCursor, ScanlineOverlay } from '../spatial';
+import {
+  AuroraGradient,
+  HolographicPanel,
+  MagneticCursor,
+  ScanlineOverlay,
+  SpotlightMask,
+} from '../spatial';
 import { hidesSystemCursor } from '../spatial/magnetic-cursor';
 import { nextDpr, startingDpr, type SpatialCanvasProps } from '../spatial-r3f/spatial-canvas';
 import { TypingAnimation } from '../typing-animation';
@@ -117,4 +125,34 @@ test('the custom cursor hides the system pointer only while it runs', () => {
   assert.equal(hidesSystemCursor('static', false, true), false);
   assert.equal(hidesSystemCursor('active', true, true), false);
   assert.equal(hidesSystemCursor('active', false, false), false);
+});
+
+test("under reduced motion the spotlight mask's fade runs at the language's fast duration, in every registered language (#11)", () => {
+  const html = renderToStaticMarkup(<SpotlightMask />);
+  const transition = /transition:([^;"]*)/.exec(html)?.[1]?.trim();
+  assert.equal(transition, 'opacity var(--ui-motion-standard) var(--ui-motion-easing)');
+  const duration = transition!.split(' ')[1]!;
+  const resolve = (value: string, tokens: Readonly<Record<string, string>>) => {
+    let resolved = value;
+    for (let depth = 0; depth < 8 && /var\(--ui-/.test(resolved); depth++) {
+      resolved = resolved.replace(/var\((--ui-[a-z0-9-]+)\)/g, (_, name: string) => tokens[name]!);
+    }
+    return resolved;
+  };
+  const root = fileURLToPath(new URL('../../../../', import.meta.url));
+  const languages = catalogPacks(root, packPackages(root)).filter(
+    ({ axis }) => axis === 'designLanguage',
+  );
+  assert.ok(languages.length >= 30, `${languages.length} languages`);
+  for (const pack of languages) {
+    const own = (pack.manifest as { tokens: Record<string, string> }).tokens;
+    const language = Object.fromEntries(
+      Object.entries(own).map(([key, value]) => [`--ui-${key}`, value]),
+    );
+    assert.equal(
+      resolve(duration, { ...language, ...REDUCED_MOTION }),
+      own['motion-fast'],
+      pack.id,
+    );
+  }
 });

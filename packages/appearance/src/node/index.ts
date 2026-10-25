@@ -21,7 +21,7 @@ export {
   type PackFile,
   type PackSource,
 } from './compile';
-export { compilePlatform, platformStylesheet } from './platform';
+export { compilePlatform, platformStylesheet, REDUCED_MOTION } from './platform';
 export {
   baseLockProblems,
   catalogPacks,
@@ -49,10 +49,12 @@ export {
 export {
   gatePack,
   PACK_GATES,
+  REDUCED_MOTION_MS,
   type GatedFile,
   type GatedPack,
   type PackGate,
   type PackGateFailure,
+  type PackGateOptions,
 } from './pack-gates';
 export {
   decodeEscapes,

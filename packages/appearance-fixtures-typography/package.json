@@ -1,6 +1,6 @@
 {
   "name": "@portfolio/appearance-fixtures-typography",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Typography test fixtures (#19): fixture-font, which ships a font file. It registers only when APPEARANCE_FIXTURES=1.",
   "portfolio": {

@@ -1,6 +1,6 @@
 {
   "name": "@portfolio/variant-horizontal-cinema",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "Horizontal Cinema: five finite chapters, each with its media and its evidence, that every input steps through the same way, and the same chapters in a vertical sequence on narrow and touch screens.",
