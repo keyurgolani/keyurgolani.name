@@ -47,8 +47,15 @@ export interface DemoBackend extends StudioBackend {
   version(): number;
   /** False once the selection could only stay in memory: a reload loses it. */
   persistent(): boolean;
-  /** One axis back to the sample's own value; the other four stay. */
+  /** One axis back to the shown source's own value; the other four stay. */
   resetAxis(axis: CatalogAxis): DemoSelection;
+  /**
+   * The selection, and each axis reset's target, set to a source's own: the
+   * read-only reference's selection as it loads (#9), or null for the
+   * sample's own as it goes back. Nothing is stored: a reload opens on the
+   * sample.
+   */
+  showSource(defaults: DemoSelection | null, selection?: DemoSelection): DemoSelection;
   /** Every `portfolio-demo:` key gone from both stores, and the sample's own selection back. */
   resetAll(): DemoSelection;
 }
@@ -97,14 +104,21 @@ export function storedSelection(
 }
 
 export function browserBackend(options: BrowserBackendOptions): DemoBackend {
-  const { unit, defaults, store } = options;
+  const { unit, store } = options;
+  // The reset target: the sample's own, or the reference's while it shows.
+  let defaults: DemoSelection = options.defaults;
   const rules: SelectionRules = { catalog: options.catalog, schemeModes: options.schemeModes };
   const now = options.now ?? (() => new Date());
   let selection: DemoSelection = options.initial ?? defaults;
   let version = 1;
   let updatedAt = now().toISOString();
 
-  const persist = () => store.write(SELECTION_KEY, JSON.stringify(selection));
+  // While the reference shows, edits stay in the page: the stored selection
+  // is the sample's, which a bare /studio opens on, never the reference's look.
+  let showingReference = false;
+  const persist = () => {
+    if (!showingReference) store.write(SELECTION_KEY, JSON.stringify(selection));
+  };
 
   function draft(): StudioDraft {
     const site: DraftDocument = unit.documents.site;
@@ -192,8 +206,15 @@ export function browserBackend(options: BrowserBackendOptions): DemoBackend {
       persist();
       return selection;
     },
+    showSource(next, shown) {
+      showingReference = next !== null;
+      defaults = next ?? options.defaults;
+      return moved(shown ?? defaults);
+    },
     resetAll() {
       store.clearAll();
+      showingReference = false;
+      defaults = options.defaults;
       return moved(defaults);
     },
   };

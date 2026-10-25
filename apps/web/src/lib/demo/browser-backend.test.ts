@@ -257,3 +257,52 @@ test('a stored selection reads back through the catalog, axis by axis', () => {
     variant: 'acme-orbit',
   });
 });
+
+test("showing the reference takes its own selection as the reset target, stores none of it, and a full reset goes back to the sample's (#9)", () => {
+  const { backend, local, session } = setup();
+  const own = { ...DEFAULTS, variant: 'acme-orbit' };
+  assert.deepEqual(backend.showSource(own), own);
+  assert.deepEqual(backend.selection(), own);
+  assert.equal(local.length + session.length, 0, 'nothing stored: a reload opens on the sample');
+  // An axis resets to the reference's own while it shows.
+  assert.deepEqual(backend.showSource(own, { ...own, variant: DEFAULTS.variant }), {
+    ...own,
+    variant: DEFAULTS.variant,
+  });
+  assert.deepEqual(backend.resetAxis('variant'), own);
+  // Back to the sample: its own selection, and its resets again.
+  assert.deepEqual(backend.showSource(null), DEFAULTS);
+  backend.showSource(own);
+  assert.deepEqual(backend.resetAll(), DEFAULTS);
+  assert.deepEqual(backend.resetAxis('variant'), DEFAULTS);
+});
+
+test("while the reference shows, an edit or an axis reset stays in the page, so a bare /studio still opens the sample's own selection", async () => {
+  const { backend, local } = setup();
+  const edit = (value: string) =>
+    backend.applyEdits({
+      draftId: DEMO_DRAFT_ID,
+      expectedVersion: backend.version(),
+      edits: [set('displayMode', value)],
+    });
+  // The sample's own choice, kept.
+  assert.equal((await edit('dark')).kind, 'saved');
+  const sample = local.items.get(SELECTION_KEY);
+  assert.equal(JSON.parse(sample!).displayMode, 'dark');
+
+  const own = { ...DEFAULTS, variant: 'acme-orbit' };
+  backend.showSource(own);
+  assert.equal((await edit('light')).kind, 'saved');
+  assert.equal(backend.selection().displayMode, 'light');
+  assert.equal(backend.selection().variant, 'acme-orbit');
+  backend.resetAxis('displayMode');
+  assert.equal(local.items.get(SELECTION_KEY), sample, "the reference's look is never stored");
+
+  // Back on the sample, an edit is kept again.
+  backend.showSource(null);
+  assert.equal((await edit('light')).kind, 'saved');
+  assert.deepEqual(JSON.parse(local.items.get(SELECTION_KEY)!), {
+    ...DEFAULTS,
+    displayMode: 'light',
+  });
+});

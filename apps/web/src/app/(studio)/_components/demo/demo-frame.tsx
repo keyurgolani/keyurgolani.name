@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { fitScale, FRAME_ATTRIBUTES, type Viewport } from '~/lib/preview-frame';
 
 // Demo Studio's preview frame (#9, design note section 1): the server-rendered
-// sample at /sample, with the selection in its query, in an iframe sandboxed
+// sample at /sample, or the read-only reference at /reference, with the
+// selection in its query, in an iframe sandboxed
 // to `allow-scripts` alone, so its document has an opaque origin and can
 // reach neither Studio's storage nor its DOM. It holds no grant, opens no
 // channel, and never loads a /preview path: the demo mints nothing. Like
@@ -12,23 +13,36 @@ import { fitScale, FRAME_ATTRIBUTES, type Viewport } from '~/lib/preview-frame';
 // scales it to the room it has, from lib/preview-frame.ts, and stays hidden
 // until the document has loaded.
 
-/** The one sandbox a demo frame gets: scripts, and nothing else. */
+/** The one sandbox a demo frame gets, the sample's and the reference's alike: scripts, and nothing else. */
 export const DEMO_FRAME_SANDBOX = 'allow-scripts';
 
-/** Whether `src` is a frame source Demo Studio may load: a path on its own origin under /sample. */
+/**
+ * Whether `src` is a frame source Demo Studio may load: a path on its own
+ * origin under /sample, or under /reference but for its renditions route,
+ * /reference/media, which is no page. Its path is read decoded, as
+ * proxy.ts's demoPagePath() reads it, so /%72eference counts as /reference;
+ * one that doesn't decode, or that decodes to a dot segment or a backslash,
+ * such as /sample/..%2fstudio, is refused.
+ */
 export function isDemoFrameSource(src: string): boolean {
   if (!src.startsWith('/') || src.startsWith('//')) return false;
-  let url: URL;
+  const base = 'http://studio.invalid';
+  let path: string;
   try {
-    url = new URL(src, 'http://studio.invalid');
+    const url = new URL(src, base);
+    if (url.origin !== base) return false;
+    path = decodeURIComponent(url.pathname);
+    // Decoded, it names the same path a browser would resolve it to.
+    if (path.includes('\\') || new URL(path, base).pathname !== path) return false;
   } catch {
     return false;
   }
-  return url.origin === 'http://studio.invalid' && /^\/sample(?:\/|$)/.test(url.pathname);
+  if (/^\/sample(?:\/|$)/.test(path)) return true;
+  return /^\/reference(?:\/|$)/.test(path) && !/^\/reference\/media(?:\/|$)/.test(path);
 }
 
 export interface DemoFrameProps {
-  /** Where the frame loads: /sample with the selection's query, from lib/demo/url-state.ts. */
+  /** Where the frame loads: /sample or /reference with the selection's query, from lib/demo/url-state.ts. */
   readonly src: string;
   /** What the frame shows, for its accessible name. */
   readonly title: string;
@@ -54,7 +68,7 @@ export function DemoFrame({ src, title, viewport }: DemoFrameProps) {
   if (!isDemoFrameSource(src)) {
     return (
       <p className="studio-alert" role="alert">
-        This preview can only show the sample.
+        This preview can only show the demo&apos;s own pages.
       </p>
     );
   }

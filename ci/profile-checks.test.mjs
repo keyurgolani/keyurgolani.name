@@ -44,6 +44,12 @@ import {
   processProblems,
   redact,
   redactArtifacts,
+  REFERENCE_HOST_DIR,
+  REFERENCE_OVERLAY,
+  REFERENCE_TARGET,
+  referenceOverlayProblems,
+  referenceRefusalProblems,
+  referenceRunArgs,
   renditionIn,
   renditionProblems,
   reproFor,
@@ -476,6 +482,96 @@ test('Compose examples: a wide publish, a writable root, or a missing flag fail'
     "web doesn't set no-new-privileges",
   ]);
   assert.deepEqual(composeProblems({}), ['the example has no service']);
+});
+
+/** `compose config` for demo's example with the reference overlay (#9). */
+const withReference = (change = () => {}) =>
+  composed((web) => {
+    web.environment = { PORTFOLIO_PROFILE: 'demo', PORTFOLIO_REFERENCE_DIR: REFERENCE_TARGET };
+    web.volumes = [
+      {
+        type: 'bind',
+        source: '/srv/wren-export',
+        target: REFERENCE_TARGET,
+        read_only: true,
+        bind: { create_host_path: false },
+      },
+    ];
+    change(web);
+  });
+
+test('the reference overlay, as written, mounts one read-only bind it never makes, and refuses an unset directory (#9)', () => {
+  const overlay = parseYaml(readFileSync(path.join(REPO, REFERENCE_OVERLAY), 'utf8'));
+  assert.deepEqual(Object.keys(overlay.services), ['web']);
+  const web = overlay.services.web;
+  assert.deepEqual(Object.keys(web).sort(), ['environment', 'volumes']);
+  assert.deepEqual(web.environment, { PORTFOLIO_REFERENCE_DIR: REFERENCE_TARGET });
+  assert.deepEqual(web.volumes, [
+    {
+      type: 'bind',
+      source: `\${${REFERENCE_HOST_DIR}:?set ${REFERENCE_HOST_DIR} in .env to the verified export's directory}`,
+      target: REFERENCE_TARGET,
+      read_only: true,
+      bind: { create_host_path: false },
+    },
+  ]);
+});
+
+test("the reference overlay layered over demo's example keeps #12's hardening and mounts the reference read-only alone (#9)", () => {
+  assert.deepEqual(referenceOverlayProblems(withReference()), []);
+  const cases = [
+    [(web) => void (web.read_only = false), 'web has a writable root'],
+    [(web) => void (web.ports[0].host_ip = '0.0.0.0'), 'web publishes 3000 on 0.0.0.0'],
+    [(web) => void (web.volumes[0].read_only = false), 'the reference mount is writable'],
+    [(web) => void delete web.volumes[0].read_only, 'the reference mount is writable'],
+    [(web) => void (web.volumes[0].type = 'volume'), 'the reference is a volume mount, not a bind'],
+    [
+      (web) => void (web.volumes[0].source = 'export'),
+      'the reference mount names no host directory',
+    ],
+    [
+      (web) => void web.volumes.push({ type: 'volume', source: 'data', target: '/data' }),
+      'web mounts /data beside the reference',
+    ],
+    [(web) => void (web.volumes = []), 'web mounts nothing at /reference'],
+    [
+      (web) => void (web.environment.PORTFOLIO_REFERENCE_DIR = '/data'),
+      'web sets PORTFOLIO_REFERENCE_DIR to /data, not /reference',
+    ],
+    [(web) => void (web.environment.PORTFOLIO_PROFILE = 'owner'), 'web runs owner, not demo'],
+  ];
+  for (const [change, expected] of cases) {
+    assert.deepEqual(referenceOverlayProblems(withReference(change)), [expected], expected);
+  }
+});
+
+test('the reference run mounts what the resolved overlay says, as a read-only bind docker never makes (#9)', () => {
+  assert.deepEqual(referenceRunArgs(withReference()), {
+    env: { PORTFOLIO_REFERENCE_DIR: '/reference' },
+    mounts: ['--mount', 'type=bind,source=/srv/wren-export,target=/reference,readonly'],
+  });
+});
+
+test('with the reference directory unset or missing, Compose must refuse, say why, and make no directory (#9)', () => {
+  const names = /PORTFOLIO_REFERENCE_HOST_DIR|does not exist/;
+  const refusal = { status: 1, stderr: 'bind source path does not exist: /srv/missing' };
+  assert.deepEqual(referenceRefusalProblems(refusal, { names }), []);
+  assert.deepEqual(
+    referenceRefusalProblems(
+      { status: 15, stderr: 'required variable PORTFOLIO_REFERENCE_HOST_DIR is missing a value' },
+      { names },
+    ),
+    [],
+  );
+  assert.deepEqual(referenceRefusalProblems({ status: 0, stderr: '' }, { names }), [
+    'Compose went ahead',
+  ]);
+  assert.deepEqual(referenceRefusalProblems({ status: 1, stderr: 'no space left' }, { names }), [
+    'Compose failed without saying why: no space left',
+  ]);
+  assert.deepEqual(referenceRefusalProblems(refusal, { names, created: true }), [
+    'Compose made the missing directory',
+  ]);
 });
 
 test('hermetic: in CI no GitHub token reaches the smoke', () => {

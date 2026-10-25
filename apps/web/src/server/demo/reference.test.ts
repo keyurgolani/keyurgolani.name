@@ -473,6 +473,60 @@ test('/reference/media is a no-store 404 for anything the view does not keep', a
   }
 });
 
+test('an export whose events carry a reason and an idempotency key opens, and neither reaches anything the demo serves or warns about', async (t) => {
+  // export-revision never writes either field, so the committed fixture has
+  // neither: this bundle is made here, the fixture's with both added.
+  const EVENT_CANARIES = ['CANARY-REF-EVENT-REASON', 'canary-ref-event-idempotency-key'];
+  const source = readSource();
+  const files = buildReferenceFixture(source, CHECKS);
+  const bundle = JSON.parse(files.get('bundle.json')!.toString('utf8')) as {
+    events: Record<string, unknown>[];
+  };
+  bundle.events = bundle.events.map((event) => ({
+    ...event,
+    reason: EVENT_CANARIES[0],
+    idempotencyKey: EVENT_CANARIES[1],
+  }));
+  files.set('bundle.json', Buffer.from(`${JSON.stringify(bundle, null, 2)}\n`));
+  const dir = written(t, source, files);
+  assert.ok(readFileSync(path.join(dir, 'bundle.json'), 'utf8').includes(EVENT_CANARIES[0]!));
+
+  const result = await openReference({ dir, checks: CHECKS });
+  assert.ok(result.ok, JSON.stringify(result.issues));
+  const { reference } = result;
+  serving(t, reference);
+  const answers: string[] = [JSON.stringify(result.issues)];
+  answers.push(
+    JSON.stringify({
+      view: reference.view,
+      slugs: [...reference.caseStudies],
+      composition: reference.composition,
+      revisionId: reference.revisionId,
+    }),
+  );
+  const rendition = (assetId: string) => {
+    const found = record(dir, assetId);
+    const [first] = found.renditions;
+    return [assetId, found.sha256, `${first!.name}.${first!.ext}`];
+  };
+  for (const segments of [
+    ...renditionSegments(reference),
+    rendition(REFERENCE_CANARIES.privateAsset),
+    rendition('ref-unplaced'),
+    ['bundle.json'],
+  ]) {
+    const response = await get(segments);
+    answers.push(
+      JSON.stringify([...response.headers]),
+      Buffer.from(await response.arrayBuffer()).toString('latin1'),
+    );
+  }
+  assert.ok(answers.join('\n').includes('Wren Halloway'), 'it served the reference');
+  for (const canary of [...EVENT_CANARIES, ...CANARIES]) {
+    assert.ok(!answers.join('\n').includes(canary), canary);
+  }
+});
+
 test('/reference/media checks the view itself: with every blob held, a private or unplaced asset is still a 404', async (t) => {
   const reference = await opened(FIXTURE_DIR);
   const all = new Map(

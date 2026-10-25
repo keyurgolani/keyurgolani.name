@@ -935,6 +935,15 @@ jobs:
         run: pnpm ci:security-proxy
         env:
           PORTFOLIO_IMAGE: ${{ env.IMAGE_TAG }}
+      # The demo origin against the owner's in Chromium over https (#9,
+      # threat rows origin-1 and origin-2): the owner and the demo behind the
+      # same proxy, and the spec in the browser jobs' Playwright image, with
+      # the checkout read-only, no token, and no container socket.
+      - name: pnpm ci:demo-origin
+        if: ${{ !cancelled() && steps.image.outcome == 'success' }}
+        run: pnpm ci:demo-origin
+        env:
+          PORTFOLIO_IMAGE: ${{ env.IMAGE_TAG }}
       - name: Failure summary
         if: ${{ always() }}
         run: node ci/summarize.mjs

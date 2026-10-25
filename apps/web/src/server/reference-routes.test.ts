@@ -156,7 +156,7 @@ test('proxy.ts marks a reference page for the layout, and drops a client’s cop
   const page = await send('/reference', 'other');
   assert.equal(page.headers.get('x-middleware-next'), '1');
   assert.equal(mark(page), 'reference', 'its own mark, not the client’s');
-  assert.match(page.headers.get('content-security-policy') ?? '', /frame-ancestors 'none'/);
+  assert.match(page.headers.get('content-security-policy') ?? '', /frame-ancestors 'self'/);
 
   for (const path of [
     '/',

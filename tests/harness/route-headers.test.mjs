@@ -245,7 +245,7 @@ test("under demo, the showroom and every /sample path need the demo policy, whic
   assert.notDeepEqual(headerProblems('/studio', STUDIO_PAGE, { demo: true }), []);
 });
 
-test('under demo, every /reference path, its renditions included, needs the demo policy framed by no one (#9)', () => {
+test("under demo, every /reference path, its renditions included, needs the demo policy framed by the demo's own pages alone (#9)", () => {
   const page = (/** @type {string} */ framing) => ({
     ...BASELINE_HEADERS,
     'content-security-policy': demoPolicy(framing),
@@ -256,8 +256,9 @@ test('under demo, every /reference path, its renditions included, needs the demo
     '/reference/media/a/b/c.png',
     '/%72eference',
   ]) {
-    assert.deepEqual(headerProblems(path, page("'none'"), { demo: true, studio: false }), [], path);
-    assert.notDeepEqual(headerProblems(path, page("'self'"), { demo: true }), [], path);
+    assert.deepEqual(headerProblems(path, page("'self'"), { demo: true, studio: false }), [], path);
+    // Framed by no one, as before Demo Studio framed it, fails.
+    assert.notDeepEqual(headerProblems(path, page("'none'"), { demo: true }), [], path);
     assert.notDeepEqual(headerProblems(path, { ...BASELINE_HEADERS }, { demo: true }), [], path);
   }
   for (const path of ['/references', '/x/reference']) {

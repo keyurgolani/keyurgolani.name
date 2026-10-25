@@ -552,7 +552,7 @@ test('every public response, in every profile, gets the public policy with a non
 const DEMO_CSP =
   /^default-src 'self'; script-src 'self' 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; frame-src 'self'; frame-ancestors ('self'|'none'); form-action 'none'; base-uri 'none'; object-src 'none'$/;
 
-test('under demo the showroom, every /sample path, and every Studio path get the demo policy with a nonce of its own, which only /sample lets the demo frame, and every other demo path keeps the public one (#9)', async (t) => {
+test('under demo the showroom, every /sample and /reference path, and every Studio path get the demo policy with a nonce of its own, which only /sample and /reference let the demo frame, and every other demo path keeps the public one (#9)', async (t) => {
   deploy(t, 'demo');
   const nonces = new Set<string>();
   const framed: Array<[path: string, ancestors: string]> = [
@@ -562,6 +562,13 @@ test('under demo the showroom, every /sample path, and every Studio path get the
     ['/sample?variant=canary-variant&mode=dark', "'self'"],
     ['/sample/nowhere', "'self'"],
     ['/%73ample', "'self'"],
+    // The read-only reference, which Demo Studio's frame shows (9-4a), its
+    // renditions and pages no demo has included, as the route table reads them.
+    ['/reference', "'self'"],
+    ['/reference?mode=dark', "'self'"],
+    ['/reference/work/x', "'self'"],
+    ['/%72eference', "'self'"],
+    ['/reference/media/a/b/c.png', "'self'"],
     // Demo Studio, which nothing may frame, and every other Studio path.
     ['/studio', "'none'"],
     ['/studio?variant=canary-variant', "'none'"],
@@ -604,7 +611,7 @@ test('under demo the showroom, every /sample path, and every Studio path get the
   // No other profile sends the demo policy anywhere.
   for (const profile of ['owner', 'read-only'] as const) {
     deploy(t, profile);
-    for (const path of ['/', '/sample', '/studio']) {
+    for (const path of ['/', '/sample', '/studio', '/reference']) {
       const csp = (await proxy(request(path))).headers.get('content-security-policy') ?? '';
       assert.doesNotMatch(csp, /worker-src|form-action 'none'/, `${profile} ${path}`);
     }
