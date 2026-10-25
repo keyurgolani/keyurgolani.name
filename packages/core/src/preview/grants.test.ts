@@ -6,6 +6,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -640,6 +641,35 @@ test('a damaged grant file counts as no grant and is deleted, and a link in plac
   assert.deepEqual(filesUnder(elsewhere), []);
   rmSync(previewPaths(dataDir).root);
   mkdirSync(previewPaths(dataDir).root, { mode: 0o700 });
+});
+
+test('a link planted in place of ephemeral/preview/grants/, to a directory holding a valid grant, never yields the grant: the check is unavailable', async (t) => {
+  const { store, dataDir, sessions, grants } = await setup(t);
+  const { session } = await signIn(sessions);
+  const draft = await newDraft(store);
+  const { token, record } = await mintDraft(grants, session, draft);
+  assert.equal(await statusOf(grants, token), 'active');
+  // The grants directory moved elsewhere, the valid record with it, and a link left in its place.
+  const paths = previewPaths(dataDir);
+  const elsewhere = path.join(mkdtempSync(path.join(tmpdir(), 'grants-planted-')), 'grants');
+  t.after(() => rmSync(path.dirname(elsewhere), { recursive: true, force: true }));
+  renameSync(paths.grants, elsewhere);
+  symlinkSync(elsewhere, paths.grants);
+  assert.equal(await statusOf(grants, token), 'unavailable');
+  const fsStore = filesystemGrantStore(dataDir);
+  await assert.rejects(fsStore.get(record.digest), /is a link/);
+  await assert.rejects(fsStore.list(), /is a link/);
+  await assert.rejects(fsStore.delete(record.digest), /is a link/);
+  // The same for the draft markers.
+  renameSync(paths.drafts, `${elsewhere}-drafts`);
+  symlinkSync(`${elsewhere}-drafts`, paths.drafts);
+  await assert.rejects(fsStore.newestDraftVersion(draft.draftId), /is a link/);
+  await assert.rejects(fsStore.listDraftMarkers(), /is a link/);
+  await assert.rejects(fsStore.deleteDraftMarker(draft.draftId), /is a link/);
+  assert.ok(
+    existsSync(path.join(elsewhere, `${record.digest}.json`)),
+    'the planted grant was touched',
+  );
 });
 
 test('a grant store directory an operator loosened is put back to 0700, and the next mint goes through', async (t) => {

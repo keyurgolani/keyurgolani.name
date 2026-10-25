@@ -13,8 +13,16 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { open, rename } from 'node:fs/promises';
-import { authPaths, preparePrivateDir, probeDataDirectory, writePrivateFile } from './layout.mjs';
+import { lstat, open, rename } from 'node:fs/promises';
+import {
+  authPaths,
+  checkPrivateDir,
+  preparePrivateDir,
+  PrivateDirError,
+  privateDirProblem,
+  probeDataDirectory,
+  writePrivateFile,
+} from './layout.mjs';
 
 function scratch(t: TestContext): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'layout-'));
@@ -74,6 +82,21 @@ test("a probe step that fails is the probe's finding, and its directory is still
   assert.deepEqual(readdirSync(dir), []);
 });
 
+test('given ephemeral/, the probe runs there, on the filesystem the auth state lives on, and leaves it as it was', async (t) => {
+  const dir = scratch(t);
+  const ephemeral = authPaths(dir).ephemeral;
+  mkdirSync(ephemeral, { mode: 0o700 });
+  let where = '';
+  const watching = (async (from: string, to: string) => {
+    where = path.dirname(path.dirname(from));
+    return rename(from, to);
+  }) as unknown as typeof rename;
+  assert.equal(await probeDataDirectory(dir, { within: ephemeral, rename: watching }), null);
+  assert.equal(where, ephemeral);
+  assert.deepEqual(readdirSync(ephemeral), []);
+  assert.deepEqual(readdirSync(dir), ['ephemeral']);
+});
+
 test('a writer makes its directory and each one above it at 0700 at its first write, whatever the umask', async (t) => {
   const dir = scratch(t);
   // One that would take the owner's write bit off a plain mkdir.
@@ -102,20 +125,93 @@ test('a writer puts back a mode an operator loosened or narrowed, on each direct
   for (const each of [paths.ephemeral, paths.auth, paths.sessions]) {
     assert.equal(mode(each), 0o700, each);
   }
+  // The reader's twin repairs the same way, and makes nothing.
+  chmodSync(paths.auth, 0o750);
+  await checkPrivateDir(dir, paths.sessions);
+  assert.equal(mode(paths.auth), 0o700);
   // A chmod that doesn't take, as on a volume that ignores modes: refused.
   chmodSync(paths.auth, 0o755);
   let chmods = 0;
-  const ignored = (async () => {
-    chmods += 1;
-  }) as unknown as typeof import('node:fs/promises').chmod;
+  const ignoring = (async (file: string, flags: number) => {
+    const handle = await open(file, flags);
+    return {
+      stat: () => handle.stat(),
+      chmod: async () => {
+        chmods += 1;
+      },
+      close: () => handle.close(),
+    };
+  }) as unknown as typeof open;
   await assert.rejects(
-    preparePrivateDir(dir, paths.sessions, { chmod: ignored }),
-    /^Error: ephemeral\/auth isn't 0700/,
+    preparePrivateDir(dir, paths.sessions, { open: ignoring }),
+    /^PrivateDirError: ephemeral\/auth isn't 0700/,
   );
   assert.equal(chmods, 1);
 });
 
-test('a writer refuses a link, a file, or another user, wherever it stands on the way', async (t) => {
+test('the repair opens the directory without following a link, so one swapped in after the lstat is refused and what it points at is never chmodded', async (t) => {
+  const dir = scratch(t);
+  const paths = authPaths(dir);
+  mkdirSync(paths.auth, { recursive: true, mode: 0o700 });
+  chmodSync(paths.auth, 0o755);
+  // Another loosened directory of ours, which the link points at.
+  const elsewhere = scratch(t);
+  chmodSync(elsewhere, 0o755);
+  let swapped = false;
+  const swapping = (async (file: string) => {
+    const found = await lstat(file);
+    if (file === paths.auth && !swapped) {
+      swapped = true;
+      rmSync(paths.auth, { recursive: true });
+      symlinkSync(elsewhere, paths.auth);
+    }
+    return found;
+  }) as unknown as typeof lstat;
+  await assert.rejects(
+    preparePrivateDir(dir, paths.sessions, { lstat: swapping }),
+    /^PrivateDirError: ephemeral\/auth is a link/,
+  );
+  assert.ok(swapped);
+  assert.equal(mode(elsewhere), 0o755, 'the repair followed the link');
+  assert.deepEqual(readdirSync(elsewhere), []);
+});
+
+test("the checks run in order, and another user's directory is refused before any chmod, loosened or not", async (t) => {
+  const stats = (kind: 'link' | 'file' | 'dir', uid: number, mode: number) => ({
+    isSymbolicLink: () => kind === 'link',
+    isDirectory: () => kind === 'dir',
+    uid,
+    mode,
+  });
+  // A link is a link whatever else it is, then a file, then the owner, then the mode.
+  assert.equal(privateDirProblem(stats('link', 2, 0o777), 1), 'link');
+  assert.equal(privateDirProblem(stats('file', 2, 0o777), 1), 'not_directory');
+  assert.equal(privateDirProblem(stats('dir', 2, 0o777), 1), 'other_owner');
+  assert.equal(privateDirProblem(stats('dir', 1, 0o755), 1), 'loose');
+  assert.equal(privateDirProblem(stats('dir', 1, 0o700), 1), null);
+  assert.equal(privateDirProblem(stats('dir', 2, 0o700), null), null);
+
+  // On disk: a loosened directory another user owns is refused, and its mode left alone.
+  const dir = scratch(t);
+  const paths = authPaths(dir);
+  mkdirSync(paths.ephemeral, { mode: 0o700 });
+  chmodSync(paths.ephemeral, 0o755);
+  const uid = process.getuid!();
+  t.mock.method(process as { getuid: () => number }, 'getuid', () => uid + 1);
+  for (const run of [preparePrivateDir, checkPrivateDir]) {
+    await assert.rejects(
+      run(dir, paths.sessions),
+      (error: unknown) =>
+        error instanceof PrivateDirError &&
+        error.code === 'not_private' &&
+        /^ephemeral belongs to another user/.test(error.message),
+    );
+    assert.equal(mode(paths.ephemeral), 0o755, `${run.name} chmodded another user's directory`);
+  }
+  assert.deepEqual(readdirSync(paths.ephemeral), []);
+});
+
+test('a writer refuses a link, a file, or another user, wherever it stands on the way, and the reader twin refuses the same and makes nothing', async (t) => {
   const paths = (dir: string) => authPaths(dir);
   const cases: [
     what: string,
@@ -125,7 +221,7 @@ test('a writer refuses a link, a file, or another user, wherever it stands on th
     [
       'ephemeral/ a link',
       (d, e) => symlinkSync(e, paths(d).ephemeral),
-      /^Error: ephemeral is a link/,
+      /^PrivateDirError: ephemeral is a link/,
     ],
     [
       'ephemeral/auth/ a link',
@@ -133,7 +229,7 @@ test('a writer refuses a link, a file, or another user, wherever it stands on th
         mkdirSync(paths(d).ephemeral, { mode: 0o700 });
         symlinkSync(e, paths(d).auth);
       },
-      /^Error: ephemeral\/auth is a link/,
+      /^PrivateDirError: ephemeral\/auth is a link/,
     ],
     [
       'ephemeral/auth/ a file',
@@ -141,7 +237,7 @@ test('a writer refuses a link, a file, or another user, wherever it stands on th
         mkdirSync(paths(d).ephemeral, { mode: 0o700 });
         writeFileSync(paths(d).auth, '');
       },
-      /^Error: ephemeral\/auth isn't a directory/,
+      /^PrivateDirError: ephemeral\/auth isn't a directory/,
     ],
   ];
   for (const [what, arrange, refusal] of cases) {
@@ -149,8 +245,13 @@ test('a writer refuses a link, a file, or another user, wherever it stands on th
     const elsewhere = scratch(t);
     arrange(dir, elsewhere);
     await assert.rejects(preparePrivateDir(dir, paths(dir).sessions), refusal, what);
+    await assert.rejects(checkPrivateDir(dir, paths(dir).sessions), refusal, what);
     assert.deepEqual(readdirSync(elsewhere), [], `${what}: something was made through it`);
   }
+  // Nothing there: the twin reads it as empty and makes nothing.
+  const empty = scratch(t);
+  await checkPrivateDir(empty, paths(empty).sessions);
+  assert.deepEqual(readdirSync(empty), []);
   // Another user's: the server runs as someone else, since only root can chown.
   const dir = scratch(t);
   mkdirSync(paths(dir).ephemeral, { mode: 0o700 });
@@ -158,7 +259,7 @@ test('a writer refuses a link, a file, or another user, wherever it stands on th
   t.mock.method(process as { getuid: () => number }, 'getuid', () => uid + 1);
   await assert.rejects(
     preparePrivateDir(dir, paths(dir).sessions),
-    /^Error: ephemeral belongs to another user/,
+    /^PrivateDirError: ephemeral belongs to another user/,
   );
   assert.deepEqual(readdirSync(paths(dir).ephemeral), []);
 });

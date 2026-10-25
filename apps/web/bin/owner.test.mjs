@@ -3,12 +3,15 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import {
+  chmodSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -326,6 +329,39 @@ test('revoke-sessions writes revoked-before, deletes every session record, and a
     assert.equal(statSync(path.join(fresh, sub)).mode & 0o777, 0o700, sub);
   }
   assert.equal(existsSync(path.join(fresh, 'ephemeral/auth/sessions')), false);
+});
+
+test('revoke-sessions in auth directories an operator loosened puts them back to 0700 and still deletes every session', async (t) => {
+  const dir = await dataDirWith(t, 2);
+  const auth = path.join(dir, 'ephemeral', 'auth');
+  chmodSync(path.join(dir, 'ephemeral'), 0o755);
+  chmodSync(auth, 0o777);
+  chmodSync(path.join(auth, 'sessions'), 0o755);
+  const { code, stderr } = await run(['revoke-sessions'], '', { PORTFOLIO_DATA_DIR: dir });
+  assert.equal(code, 0, stderr);
+  assert.match(stderr, /^Revoked 2 sessions\./);
+  assert.deepEqual(await listSessionDigests(dir), []);
+  assert.ok((await readRevokedBefore(dir)) !== null);
+  for (const sub of ['ephemeral', 'ephemeral/auth', 'ephemeral/auth/sessions']) {
+    assert.equal(statSync(path.join(dir, sub)).mode & 0o777, 0o700, sub);
+  }
+});
+
+test('revoke-sessions names a link planted in place of ephemeral/auth/, and the server reads no session through it either', async (t) => {
+  // The planted directory holds a valid session record.
+  const planted = await dataDirWith(t, 1);
+  const dir = tempDir(t);
+  mkdirSync(path.join(dir, 'ephemeral'), { mode: 0o700 });
+  symlinkSync(path.join(planted, 'ephemeral', 'auth'), path.join(dir, 'ephemeral', 'auth'));
+  const { code, stdout, stderr } = await run(['revoke-sessions'], '', { PORTFOLIO_DATA_DIR: dir });
+  assert.equal(code, 1);
+  assert.equal(stdout, '');
+  assert.match(stderr, /^ephemeral\/auth is a link\. /);
+  assert.match(stderr, /Nothing was revoked\./);
+  assert.ok(!stderr.includes(dir), 'it names the data directory itself');
+  // What it refuses, the server's readers refuse too: no session counts.
+  await assert.rejects(listSessionDigests(dir), /is a link/);
+  await assert.rejects(readRevokedBefore(dir), /is a link/);
 });
 
 test('revoke-sessions with no usable data directory revokes nothing', async (t) => {

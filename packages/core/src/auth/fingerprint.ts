@@ -1,7 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { AuditSink } from '../audit/sink';
-import { authPaths, preparePrivateDir, writePrivateFile } from '../data/layout.mjs';
+import {
+  authPaths,
+  checkPrivateDir,
+  preparePrivateDir,
+  writePrivateFile,
+} from '../data/layout.mjs';
 import { recordOwnerModule } from '../load-trace';
 import { revokeAllSessionFiles } from './session-files.mjs';
 
@@ -33,6 +38,7 @@ export async function syncCredentialFingerprint({
   readonly now?: () => number;
 }): Promise<'written' | 'changed' | 'same'> {
   const file = authPaths(dataDir).fingerprint;
+  await checkPrivateDir(dataDir, path.dirname(file));
   let previous: string | null = null;
   try {
     previous = (await readFile(file, 'utf8')).trim();

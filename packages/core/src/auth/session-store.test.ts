@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { memoryAuditSink } from '../audit/sink';
 import { authPaths, probeDataDirectory } from '../data/layout.mjs';
-import { revokeAllSessionFiles } from './session-files.mjs';
+import { listSessionDigests, revokeAllSessionFiles } from './session-files.mjs';
 import {
   filesystemSessionStore,
   memorySessionStore,
@@ -281,6 +281,48 @@ test('a session write puts an auth directory an operator loosened back to 0700, 
   assert.deepEqual(await store.revokeAll(at), [entry.digest]);
   assert.equal(statSync(paths.auth).mode & 0o777, 0o700);
   assert.equal(await store.revokedBefore(), at);
+});
+
+test('a link planted in place of ephemeral/auth/, to a directory holding a valid session, yields no session: every reader refuses it, resolve is unavailable, and touch lets go', async (t) => {
+  const at = Date.UTC(2026, 9, 20, 12, 0, 0);
+  const now = () => at;
+  const audit = memoryAuditSink(now);
+  // A valid session, signed in under this hash, in another data directory.
+  const other = await dataDir(t);
+  const planted = createSessions({
+    store: filesystemSessionStore(other),
+    audit,
+    fingerprint: FINGERPRINT,
+    now,
+  });
+  const { token, record } = await planted.issue({ uaFamily: 'firefox' });
+  assert.equal((await planted.resolve(token)).status, 'valid');
+
+  const dir = await dataDir(t);
+  mkdirSync(authPaths(dir).ephemeral, { mode: 0o700 });
+  symlinkSync(authPaths(other).auth, authPaths(dir).auth);
+  const store = filesystemSessionStore(dir);
+  await assert.rejects(store.list(), /is a link/);
+  await assert.rejects(listSessionDigests(dir), /is a link/);
+  await assert.rejects(store.get(record.digest), /is a link/);
+  await assert.rejects(store.revokedBefore(), /is a link/);
+  await assert.rejects(store.delete(record.digest), /is a link/);
+
+  const logged: string[] = [];
+  const sessions = createSessions({
+    store,
+    audit,
+    fingerprint: FINGERPRINT,
+    now,
+    log: (entry) => logged.push(entry.event),
+  });
+  assert.deepEqual(await sessions.resolve(token), { status: 'unavailable' });
+  assert.deepEqual(await sessions.resolveDigest(record.digest), { status: 'unavailable' });
+  // A request holding the record from before the link: its touch lets go of it.
+  assert.equal(await sessions.touch(record, { kind: 'command', extend: true }), null);
+  assert.ok(logged.includes('session.touch_failed'));
+  // Nothing was written through the link.
+  assert.deepEqual(readdirSync(authPaths(other).sessions), [`${record.digest}.json`]);
 });
 
 test('a session write refuses an auth directory another user owns', async (t) => {

@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import {
   chmodSync,
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -15,7 +16,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SESSION_LIFETIME, SESSION_LIFETIME_RANGE } from '@portfolio/core/owner';
+import { PrivateDirError, SESSION_LIFETIME, SESSION_LIFETIME_RANGE } from '@portfolio/core/owner';
 import { storePaths } from '../../../../../packages/core/src/store/layout';
 import { storeDirectories } from '../../../../../packages/core/src/store/preflight';
 import type { AuthProviderFactory } from '../composition';
@@ -247,6 +248,102 @@ test('a link at ephemeral/ or audit/ refuses startup, and nothing is made throug
     assert.deepEqual(fatalCodes(result), ['PORTFOLIO_DATA_DIR:data_dir_linked'], linked);
     assert.deepEqual(readdirSync(elsewhere), [], `${linked}: something was made through the link`);
   }
+});
+
+test('a link planted in place of an auth or preview directory under ephemeral/ stops startup with data_dir_linked, and lets the claim go', async (t) => {
+  for (const linked of [
+    'ephemeral/auth',
+    'ephemeral/auth/sessions',
+    'ephemeral/preview',
+    'ephemeral/preview/grants',
+    'ephemeral/preview/drafts',
+  ]) {
+    const { root, env } = workspace(t);
+    const dataDir = path.join(root, 'data');
+    mkdirSync(path.join(dataDir, path.dirname(linked)), { recursive: true, mode: 0o700 });
+    const elsewhere = path.join(root, 'elsewhere');
+    mkdirSync(elsewhere, { mode: 0o700 });
+    symlinkSync(elsewhere, path.join(dataDir, linked));
+    // The provider double writes nothing, so data.directory alone must refuse it.
+    const result = await start({ ...env, PORTFOLIO_DATA_DIR: dataDir });
+    assert.equal(result.ok, false, linked);
+    assert.deepEqual(fatalCodes(result), ['PORTFOLIO_DATA_DIR:data_dir_linked'], linked);
+    assert.ok(!JSON.stringify(result.issues).includes(root), `${linked}: a finding names the path`);
+    assert.equal(existsSync(storePaths(dataDir).server), false, `${linked}: the claim was kept`);
+    assert.deepEqual(readdirSync(elsewhere), [], `${linked}: something was made through it`);
+  }
+});
+
+test("with the build's own provider, a planted ephemeral/auth/ link holding a valid-looking session refuses startup, first start or later, and nothing is read or written through it", async (t) => {
+  const { root, env } = workspace(t);
+  const dataDir = path.join(root, 'data');
+  mkdirSync(path.join(dataDir, 'ephemeral'), { recursive: true, mode: 0o700 });
+  const elsewhere = path.join(root, 'elsewhere');
+  mkdirSync(path.join(elsewhere, 'sessions'), { recursive: true, mode: 0o700 });
+  writeFileSync(path.join(elsewhere, 'sessions', `${'b'.repeat(64)}.json`), '{}\n');
+  symlinkSync(elsewhere, path.join(dataDir, 'ephemeral', 'auth'));
+  for (const round of ['first start', 'second start']) {
+    const result = await runStartup({
+      env: { ...env, PORTFOLIO_DATA_DIR: dataDir },
+      cwd: '/srv/app',
+      examples: EXAMPLES,
+      report: () => {},
+    });
+    assert.equal(result.ok, false, round);
+    assert.deepEqual(fatalCodes(result), ['PORTFOLIO_DATA_DIR:data_dir_linked'], round);
+    assert.equal(existsSync(storePaths(dataDir).server), false, `${round}: the claim was kept`);
+  }
+  assert.deepEqual(readdirSync(elsewhere).sort(), ['sessions'], 'the fingerprint went through it');
+});
+
+test('a loosened auth or preview directory is put back to 0700 at startup, and owner starts', async (t) => {
+  const { root, env } = workspace(t);
+  const dataDir = path.join(root, 'data');
+  const dirs = ['ephemeral/auth', 'ephemeral/auth/sessions', 'ephemeral/preview/grants'];
+  for (const dir of dirs) mkdirSync(path.join(dataDir, dir), { recursive: true, mode: 0o700 });
+  chmodSync(path.join(dataDir, 'ephemeral/auth'), 0o755);
+  chmodSync(path.join(dataDir, 'ephemeral/auth/sessions'), 0o777);
+  chmodSync(path.join(dataDir, 'ephemeral/preview/grants'), 0o750);
+  const result = await start({ ...env, PORTFOLIO_DATA_DIR: dataDir });
+  assert.ok(result.ok, JSON.stringify(result.issues));
+  if (result.ok) result.state.release?.();
+  for (const dir of dirs) {
+    assert.equal(statSync(path.join(dataDir, dir)).mode & 0o777, 0o700, dir);
+  }
+});
+
+test('a provider that stops on a refused directory gives a coded finding, and any other failure there still lets the claim go', async (t) => {
+  const refusing = (error: Error): AuthProviderFactory => ({
+    name: 'refusing',
+    load: async () => {
+      throw error;
+    },
+  });
+  const { root, env } = workspace(t);
+  const dataDir = path.join(root, 'data');
+  mkdirSync(dataDir, { mode: 0o700 });
+  const startWith = (factory: AuthProviderFactory) =>
+    runStartup({
+      env: { ...env, PORTFOLIO_DATA_DIR: dataDir },
+      cwd: '/srv/app',
+      examples: EXAMPLES,
+      report: () => {},
+      authProviders: [factory],
+    });
+  for (const [code, finding] of [
+    ['linked', 'PORTFOLIO_DATA_DIR:data_dir_linked'],
+    ['not_private', 'PORTFOLIO_DATA_DIR:data_dir_not_private'],
+  ] as const) {
+    const result = await startWith(
+      refusing(new PrivateDirError(code, `ephemeral/auth at ${root} is refused.`)),
+    );
+    assert.equal(result.ok, false, code);
+    assert.deepEqual(fatalCodes(result), [finding], code);
+    assert.ok(!JSON.stringify(result.issues).includes(root), `${code}: a finding names the path`);
+    assert.equal(existsSync(storePaths(dataDir).server), false, `${code}: the claim was kept`);
+  }
+  await assert.rejects(startWith(refusing(new Error('something else'))), /something else/);
+  assert.equal(existsSync(storePaths(dataDir).server), false, 'the claim was kept');
 });
 
 test('under next dev an unset data directory is .data, made at 0700 whatever the umask, or put back to 0700', async (t) => {

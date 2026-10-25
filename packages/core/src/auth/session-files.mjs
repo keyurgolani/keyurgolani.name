@@ -1,11 +1,17 @@
 // Session records on disk (#2): one JSON file per session under
 // ephemeral/auth/sessions/, named for the SHA-256 digest of its token, so the
 // directory never holds a token. Each writer makes its directory at its first
-// write; a reader takes a missing one as empty. Plain ESM with node:* imports
-// only, so owner.mjs revoke-sessions shares it with the server.
+// write; a reader checks the same directories, makes none, and takes a missing
+// one as empty. Plain ESM with node:* imports only, so owner.mjs
+// revoke-sessions shares it with the server.
 import { readdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { authPaths, preparePrivateDir, writePrivateFile } from '../data/layout.mjs';
+import {
+  authPaths,
+  checkPrivateDir,
+  preparePrivateDir,
+  writePrivateFile,
+} from '../data/layout.mjs';
 
 // The owner load trace (#1, item 14), by the symbol load-trace.ts uses.
 const TRACE = Symbol.for('keyurgolani.portfolio.owner-modules');
@@ -122,6 +128,7 @@ const missing = (error) => /** @type {NodeJS.ErrnoException} */ (error)?.code ==
  */
 export async function readSessionFile(dataDir, digest) {
   const file = recordFile(dataDir, digest);
+  await checkPrivateDir(dataDir, authPaths(dataDir).sessions);
   let text;
   try {
     text = await readFile(file, 'utf8');
@@ -151,8 +158,10 @@ export async function writeSessionFile(dataDir, record) {
  * @returns {Promise<boolean>}
  */
 export async function deleteSessionFile(dataDir, digest) {
+  const file = recordFile(dataDir, digest);
+  await checkPrivateDir(dataDir, authPaths(dataDir).sessions);
   try {
-    await rm(recordFile(dataDir, digest));
+    await rm(file);
     return true;
   } catch (error) {
     if (missing(error)) return false;
@@ -167,6 +176,7 @@ export async function deleteSessionFile(dataDir, digest) {
  * @returns {Promise<string[]>}
  */
 export async function listSessionDigests(dataDir) {
+  await checkPrivateDir(dataDir, authPaths(dataDir).sessions);
   let names;
   try {
     names = await readdir(authPaths(dataDir).sessions);
@@ -191,6 +201,7 @@ export async function listSessionDigests(dataDir) {
  * @returns {Promise<number | null>}
  */
 export async function readRevokedBefore(dataDir) {
+  await checkPrivateDir(dataDir, authPaths(dataDir).auth);
   let text;
   try {
     text = await readFile(authPaths(dataDir).revokedBefore, 'utf8');
