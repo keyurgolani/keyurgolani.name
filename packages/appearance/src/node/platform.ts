@@ -14,9 +14,11 @@
 // - Reduced transparency, and a browser without backdrop-filter: opaque
 //   surfaces and no blur.
 // - High contrast (the mode, data-contrast="more", or prefers-contrast:
-//   more): the signature fill is solid text-primary and emphasis-glow none.
-// - Print: opaque, and still. Each scheme's stylesheet prints its light set
-//   or its light high-contrast set, since only it has the values.
+//   more): the signature fill is solid text-primary, emphasis-glow none, and
+//   no texture, since every high-contrast set draws border-subtle in the
+//   text color and a texture's ink would stripe the text's own ground (#11).
+// - Print: opaque, still, and untextured. Each scheme's stylesheet prints its
+//   light set or its light high-contrast set, since only it has the values.
 // - Focus (Slice 3): every focusable [data-ui-slot] part draws its ring here,
 //   from the focus tokens and --color-focus, so no language stylesheet can
 //   remove or hide it. A language shapes the ring through --ui-focus-*
@@ -156,6 +158,7 @@ const OPAQUE = {
 const HIGH_CONTRAST = {
   '--ui-signature-fill': SOLID_TEXT,
   '--ui-emphasis-glow': 'none',
+  '--ui-texture': 'none',
 };
 
 const FORCED_EFFECTS = {
@@ -166,7 +169,7 @@ const FORCED_EFFECTS = {
   '--ui-shadow-overlay': 'none',
   '--ui-shadow-raised': 'none',
   '--ui-shadow-inset': 'none',
-  '--ui-texture': 'none',
+  // HIGH_CONTRAST drops the texture too.
   ...HIGH_CONTRAST,
 };
 
@@ -249,7 +252,7 @@ export function platformStylesheet(): string {
     ),
     wrap('@media (prefers-contrast: more)', block([BOUNDARY], HIGH_CONTRAST)),
     wrap('@media (forced-colors: active)', block([BOUNDARY], { ...forced, ...FORCED_EFFECTS })),
-    wrap('@media print', block([BOUNDARY], { ...OPAQUE, ...STATIC })),
+    wrap('@media print', block([BOUNDARY], { ...OPAQUE, ...STATIC, '--ui-texture': 'none' })),
   ].join('');
   return [
     LAYER_ORDER,
