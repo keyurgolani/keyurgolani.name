@@ -1,6 +1,6 @@
 {
   "name": "@portfolio/core",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "Server-only code: the CatalogReader port and read-only's SourceCatalogReader, and for owner the auth provider, the session store, the audit sink, and the revision store.",

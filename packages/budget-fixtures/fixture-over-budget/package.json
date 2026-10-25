@@ -1,6 +1,6 @@
 {
   "name": "@portfolio/fixture-over-budget",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "A budget test fixture (#6): a light variant over its JavaScript and CSS limits, with a remote @import, which #6's budget check must report. Registers only in a build with BUDGET_FIXTURES=over, never in a release.",

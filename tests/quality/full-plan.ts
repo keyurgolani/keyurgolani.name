@@ -33,7 +33,7 @@ import { externalVariantHost } from './run';
 
 /** What GITHUB_OUTPUT gets: the release shard count, its matrix list, and the cycle's nights. */
 export function fullOutputs(count: number, nights: number) {
-  // rc-quality's max-parallel is FULL_SHARDS, so it takes no `parallel`.
+  // rc-quality's max-parallel is RELEASE_PARALLEL, a constant, so it takes no `parallel`.
   const { count: shardCount, shards } = shardOutputs(count);
   return { count: shardCount, shards, nights: String(nights) };
 }

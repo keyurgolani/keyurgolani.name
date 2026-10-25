@@ -8,7 +8,14 @@ import { fileURLToPath } from 'node:url';
 import type { MetaPack } from '../../packages/appearance/src/index';
 import { changePairs, planCells, readBuildMeta, type BuildMeta } from './cells';
 import { tupleKey } from './coverage';
-import { changedFiles, mapChanges, METADATA_KEYS, readChanges, renderedKeys } from './lib/changes';
+import {
+  changedFiles,
+  keysButVersion,
+  mapChanges,
+  METADATA_KEYS,
+  readChanges,
+  renderedKeys,
+} from './lib/changes';
 import { PREFERENCE_ROWS, VIEWPORTS } from './lib/matrix';
 import { loadRegistrations, type Registrations } from './lib/registration';
 import { changeDiagnostic, changeFields } from './lib/records';
@@ -242,6 +249,72 @@ test("a pack manifest whose change is metadata alone directs nothing, and any ot
   }
   assert.equal(renderedKeys('[]'), null);
   assert.equal(renderedKeys('{"name":"a","id":"x"}'), renderedKeys('{"id":"x","name":"b"}'));
+});
+
+test("a workspace package.json whose change is the version alone directs nothing, and any other key's change still does (#12, v1.0.0)", () => {
+  const repo = mkdtempSync(path.join(tmpdir(), 'quality-changes-version-'));
+  const git = (...args: string[]) =>
+    execFileSync(
+      'git',
+      ['-c', 'user.name=Quality Test', '-c', 'user.email=quality@example.test', ...args],
+      { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+  const write = (file: string, value: unknown) => {
+    mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
+    writeFileSync(path.join(repo, file), typeof value === 'string' ? value : JSON.stringify(value));
+  };
+  const pkg = (extra: Record<string, unknown>) => ({
+    name: '@portfolio/a',
+    version: '0.1.0',
+    exports: { '.': './src/index.ts' },
+    dependencies: { '@portfolio/kit': 'workspace:*' },
+    ...extra,
+  });
+  const files = {
+    version: 'packages/appearance-languages/package.json',
+    nested: 'packages/budget-fixtures/one/package.json',
+    dependency: 'packages/variant-a/package.json',
+    exports: 'packages/appearance-schemes/package.json',
+    outside: 'apps/web/package.json',
+    broken: 'packages/broken/package.json',
+  };
+  try {
+    git('init', '-q', '-b', 'base');
+    for (const file of Object.values(files)) write(file, pkg({}));
+    git('add', '-A');
+    git('commit', '-q', '-m', 'base');
+    git('switch', '-q', '-c', 'branch');
+    write(files.version, pkg({ version: '1.0.0' }));
+    write(files.nested, pkg({ version: '1.0.0' }));
+    write(
+      files.dependency,
+      pkg({ version: '1.0.0', dependencies: { '@portfolio/kit': '^1.0.0' } }),
+    );
+    write(files.exports, pkg({ version: '1.0.0', exports: { '.': './src/other.ts' } }));
+    // A package.json outside packages/ isn't a pack's or a variant's package, and stays as it was.
+    write(files.outside, pkg({ version: '1.0.0' }));
+    write(files.broken, '{ not json');
+    git('add', '-A');
+    git('commit', '-q', '-m', 'branch');
+
+    const changed = changedFiles({ QUALITY_CHANGED_BASE: 'base' }, repo);
+    assert.deepEqual(
+      [...changed!.files].sort(),
+      [files.broken, files.dependency, files.exports, files.outside].sort(),
+    );
+    assert.equal(
+      changed!.source,
+      'git diff base...HEAD, less 2 package.json(s) whose change is the version alone',
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+  assert.equal(keysButVersion('[]'), null);
+  assert.equal(
+    keysButVersion('{"version":"0.1.0","a":1}'),
+    keysButVersion('{"a":1,"version":"1.0.0"}'),
+  );
+  assert.notEqual(keysButVersion('{"version":"1","a":1}'), keysButVersion('{"version":"1","a":2}'));
 });
 
 test('the changed paths come from QUALITY_CHANGED_FILES, else a git base, else none, and a base git cannot read fails', () => {

@@ -64,9 +64,12 @@ test('fonts.txt reads as a font list, and an empty one fails against any image, 
 });
 
 test('fonts.observed.txt is fonts.txt as a visual run writes it, so the first scheduled run bootstraps the list byte for byte', () => {
-  // The committed list starts as the header alone: no font is made up before the image lists its own.
-  assert.equal(readFileSync(FONTS_FILE, 'utf8'), `${FONTS_HEADER}\n`);
-  assert.deepEqual(expectedFonts(FONTS_FILE), []);
+  // The committed list is a visual run's own output, written byte for byte: the header, then
+  // the image's fonts, sorted, each once. No font is made up; every one came from the image.
+  const committed = readFileSync(FONTS_FILE, 'utf8');
+  assert.ok(committed.startsWith(`${FONTS_HEADER}\n`));
+  assert.deepEqual(observedFontsProblems(committed), []);
+  assert.ok(expectedFonts(FONTS_FILE).length > 0);
   const fonts = [
     '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf: DejaVu Sans:style=Book',
     '/usr/share/fonts/truetype/liberation/LiberationMono-Bold.ttf: Liberation Mono:style=Bold',

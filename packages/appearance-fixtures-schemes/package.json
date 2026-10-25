@@ -1,6 +1,6 @@
 {
   "name": "@portfolio/appearance-fixtures-schemes",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Color-scheme test fixtures (#19): fixture-dark-only, fixture-light-only, fixture-seed, and fixture-research. They register only when APPEARANCE_FIXTURES=1.",
   "portfolio": {

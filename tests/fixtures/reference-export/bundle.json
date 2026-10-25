@@ -7,7 +7,7 @@
   "source": {
     "kind": "draft"
   },
-  "appVersion": "0.1.1",
+  "appVersion": "1.0.0",
   "unitHash": "sha256:3460c73ea6d515222ae19c2636e28530e434146af34d8a8dcf62ea814136ce34",
   "documents": {
     "portfolio": {
@@ -58,7 +58,7 @@
   "rendering": {
     "variant": {
       "id": "spatial-bento",
-      "version": "0.1.0"
+      "version": "1.0.0"
     },
     "packs": [],
     "contracts": {
