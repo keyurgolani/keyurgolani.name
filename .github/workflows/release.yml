@@ -327,13 +327,13 @@ jobs:
           SHA: ${{ github.sha }}
         run: node ci/release/verify-rc.mjs
 
-  # How many shards #11's release plan runs in: the smallest of 32, 64, and
-  # 128 that keeps each within the release ceiling (releaseFor,
+  # How many shards #11's release plan runs in: the smallest of 32, 64, 128,
+  # and 256 that keeps each within the release ceiling (releaseFor,
   # tests/quality/lib/full-shards.ts), from the plan of a worktree with the
   # reference variant installed and its registry generated with the quality
-  # flags, as each shard plans (tests/quality/full-plan.ts). A plan past 128
-  # fails here, naming its heaviest group. It installs fresh, with no cache,
-  # and holds contents: read and no secret.
+  # flags, as each shard plans (tests/quality/full-plan.ts). A plan past 256,
+  # the most jobs a matrix makes, fails here, naming its heaviest group. It
+  # installs fresh, with no cache, and holds contents: read and no secret.
   rc-quality-plan:
     name: rc-quality-plan
     needs: [classify, rc-verify]
