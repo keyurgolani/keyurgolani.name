@@ -526,8 +526,65 @@ test(
   },
 );
 
+/** Holds every script request `loaded` doesn't name, the import's worker among them, until release(). */
+async function holdWorker(page: Page, loaded: ReadonlySet<string>) {
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const held: string[] = [];
+  await page.route('**/_next/static/**', async (route) => {
+    if (loaded.has(route.request().url())) return route.fallback();
+    held.push(route.request().url());
+    await gate;
+    await route.fallback().catch(() => {});
+  });
+  return { release: () => release(), held };
+}
+
+/** Every resource the page has loaded so far, which holdWorker() lets through. */
+const loadedSoFar = async (page: Page) =>
+  new Set(
+    await page.evaluate(() =>
+      performance.getEntriesByType('resource').map((entry) => entry.name.split('#')[0]!),
+    ),
+  );
+
 test(
-  'an import still in the worker when the visitor leaves the Content task and presses Reset demo keeps nothing: the worker stops, and no answer brings the documents back',
+  'a visitor who leaves the Content task mid-import finds its answer when they come back, and the frame shows what it imported',
+  { annotation: ANNOTATION },
+  async ({ page }) => {
+    await openContent(page);
+    const { release, held } = await holdWorker(page, await loadedSoFar(page));
+    const tag = randomBytes(5).toString('hex');
+    await page.locator(PICKER).setInputFiles(
+      named(tag).map(({ name, bytes }) => ({
+        name,
+        mimeType: 'application/yaml',
+        buffer: Buffer.from(bytes),
+      })),
+    );
+    await expect(page.locator('.studio-import__busy')).toBeVisible();
+    await expect.poll(() => held.length, 'the worker script was asked for').toBeGreaterThan(0);
+    // Away and back while the worker holds it: the task says it's still importing.
+    await openTask(page, 'Appearance');
+    await openTask(page, 'Content');
+    await expect(page.locator('.studio-import__busy')).toBeVisible();
+    release();
+    await expect(page.locator('.studio-import__report [role="status"]')).toHaveText(
+      'Imported. The preview shows your documents, and only this tab keeps them.',
+    );
+    await localFrame(page, `Visitor ${tag}`);
+    // Away while it answers, then back: the answer is still there, and the frame too.
+    await openTask(page, 'Appearance');
+    await localFrame(page, `Visitor ${tag}`);
+    await openTask(page, 'Content');
+    await expect(page.locator('.studio-import__report')).not.toHaveAttribute('data-kept', 'true');
+    await expect(page.locator('.studio-import__report [role="status"]')).toContainText('Imported.');
+    expect(await demoKeys(page)).toContain('portfolio-demo:v1:working');
+  },
+);
+
+test(
+  "an import still in the worker when the visitor leaves the Content task and presses Reset demo keeps nothing: the worker's answer after the reset brings nothing back",
   { annotation: ANNOTATION },
   async ({ page }) => {
     await openContent(page);
@@ -536,16 +593,7 @@ test(
         performance.getEntriesByType('resource').map((entry) => entry.name.split('#')[0]!),
       ),
     );
-    // The worker's script waits until the test lets it through.
-    let release: () => void = () => {};
-    const gate = new Promise<void>((resolve) => (release = resolve));
-    const held: string[] = [];
-    await page.route('**/_next/static/**', async (route) => {
-      if (loaded.has(route.request().url())) return route.fallback();
-      held.push(route.request().url());
-      await gate;
-      await route.fallback().catch(() => {});
-    });
+    const { release, held } = await holdWorker(page, loaded);
     const tag = randomBytes(5).toString('hex');
     await page.locator(PICKER).setInputFiles(
       named(tag).map(({ name, bytes }) => ({
@@ -559,7 +607,7 @@ test(
     await openTask(page, 'Appearance');
     await page.getByRole('button', { name: 'Reset demo', exact: true }).click();
     release();
-    // Long enough for a worker the import didn't stop to answer, many times over.
+    // Long enough for the worker to answer, many times over.
     await page.waitForTimeout(2_000);
     await expect(page.locator('iframe')).toHaveAttribute('src', /^\/sample/);
     await expect(page.locator('[data-source="local"]')).toHaveCount(0);

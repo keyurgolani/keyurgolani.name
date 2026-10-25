@@ -25,7 +25,9 @@ import {
 // import's module worker: the import and a save parse there, never on this
 // thread. Export (lib/demo/export) reads the accepted or the sample's text
 // again on the page, under #4's pre-parse limits. A full reset drops
-// whatever an import or a save still in the worker answers. A working copy
+// whatever an import or a save still in the worker answers; otherwise an
+// import runs to its answer however the page moves, and the Content task
+// shows it when it opens again. A working copy
 // a reload brings back is read by shape, and report() checks it in the
 // worker again, so its findings and notices show again. The visitor's
 // selection stays apart from both, so an edit sets one of the five
@@ -105,6 +107,10 @@ export interface DemoBackend extends StudioBackend {
    * and there is nothing to report.
    */
   importFiles(files: readonly ImportInput[], options?: ImportOptions): Promise<ImportResult | null>;
+  /** The import still in the worker, while one is, which a Content task opened meanwhile waits for. */
+  importing(): Promise<ImportResult | null> | null;
+  /** The last import's answer in this page load, imported or refused, until a full reset. */
+  lastImport(): ImportResult | null;
   /**
    * The import's answer for the local source as it is now, or null while
    * there is none: the import's or the save's own, or, for a working copy a
@@ -232,6 +238,9 @@ export function browserBackend(options: BrowserBackendOptions): DemoBackend {
   let models: { readonly portfolio?: unknown; readonly site?: unknown } = {};
   // Each full reset, which an import or a save the worker still holds checks for.
   let generation = 0;
+  // The import in the worker, and the last one's answer.
+  let pending: Promise<ImportResult | null> | null = null;
+  let last: ImportResult | null = null;
   // The import's answer for the local source it's about.
   let checked: { readonly of: LocalSources; readonly result: Promise<ImportResult> } | null = null;
 
@@ -368,14 +377,24 @@ export function browserBackend(options: BrowserBackendOptions): DemoBackend {
       if (later) return later;
       return { kind: 'saved', draft: adopt(result) };
     },
-    async importFiles(files, given = {}) {
+    importFiles(files, given = {}) {
       const at = generation;
-      const result = await importer(files, given);
-      // Reset demo came while the worker read them: the reset stands.
-      if (generation !== at) return null;
-      if (result.kind === 'imported') adopt(result);
-      return result;
+      const running = importer(files, given).then((result) => {
+        // Reset demo came while the worker read them: the reset stands.
+        if (generation !== at) return null;
+        if (result.kind === 'imported') adopt(result);
+        last = result;
+        return result;
+      });
+      pending = running;
+      const settle = () => {
+        if (pending === running) pending = null;
+      };
+      running.then(settle, settle);
+      return running;
     },
+    importing: () => pending,
+    lastImport: () => last,
     async report() {
       const of = local;
       if (!of) return null;
@@ -442,6 +461,7 @@ export function browserBackend(options: BrowserBackendOptions): DemoBackend {
       local = null;
       models = {};
       checked = null;
+      last = null;
       return moved(defaults);
     },
   };
