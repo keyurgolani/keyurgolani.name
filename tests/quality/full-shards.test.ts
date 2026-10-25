@@ -368,7 +368,7 @@ const SALTS = ['', ...Array.from({ length: 49 }, (_, at) => `salt-${at + 1}:`)];
 test('the cap: eight shard jobs at once, nightly and at release, and the release in as many waves of them as rc-quality-plan counts', () => {
   assert.equal(FULL_SHARDS, 8, 'PR CI keeps 12 of the account’s 20 job slots');
   assert.deepEqual(NIGHT_COUNTS, [7, 14, 28, 56]);
-  assert.deepEqual(RELEASE_COUNTS, [32, 64, 128]);
+  assert.deepEqual(RELEASE_COUNTS, [32, 64, 128, 256]);
   const count = '${{ needs.rc-quality-plan.outputs.count }}';
   assert.deepEqual(SCHEDULED['quality-full']!.strategy?.matrix?.shard, [1, 2, 3, 4, 5, 6, 7, 8]);
   assert.equal(
@@ -510,7 +510,9 @@ test("the #20 model is a fixed input: CATALOG's shipping packs, the platform def
   assert.deepEqual(ids(catalogMeta(shipped)), ids(model));
 });
 
-test("the release plan fits rc-quality's timeout in the fewest shards that do: the registry's own count, and 128 for #20's model, every group once", (t) => {
+test("the release plan fits rc-quality's timeout in the fewest shards that do: the registry's own count, and 128 for #20's model, a step under the most, every group once", (t) => {
+  // #20's whole catalog leaves a step of headroom: its count is never the most the plan takes.
+  assert.ok(CATALOG_SHARDS < MAX_RELEASE_SHARDS);
   const job = RELEASE['rc-quality']!;
   assert.equal(job['timeout-minutes'], releaseTimeoutMinutes());
   assert.equal(releaseTimeoutMinutes(), timeoutMinutes(RELEASE_CEILING));
@@ -1109,7 +1111,7 @@ test('a test waits at most N nights between runs, and across a change of N at mo
   assert.ok(longest(4 * NIGHTS, NIGHTS) <= 4 * NIGHTS, 'two steps down');
 });
 
-test('N and the release shard count are the fewest that fit, a doubling only splits each night in two, and a plan past 56 nights or 128 shards fails', () => {
+test('N and the release shard count are the fewest that fit, a doubling only splits each night in two, and a plan past 56 nights or 256 shards fails', () => {
   const durations = { group: 5 };
   // Visual groups of 2,000 s, as many as it takes for each step to fail before the next fits.
   const visual = (count: number) => synthetic(count, 2000, VISUAL_SPEC, (at) => `chromium v${at}`);
@@ -1136,12 +1138,17 @@ test('N and the release shard count are the fewest that fit, a doubling only spl
     [4 * 32, 32],
     [4 * 32 + 1, 64],
     [4 * 64 + 1, 128],
+    [4 * 128, 128],
+    [4 * 128 + 1, 256],
+    [4 * 256, 256],
   ] as const) {
     assert.equal(releaseFor(synthetic(count, 2000), durations).count, shards, String(count));
   }
+  // Past 256, the most jobs a GitHub matrix makes, it fails, naming the heaviest group.
+  assert.equal(MAX_RELEASE_SHARDS, 256);
   assert.throws(
-    () => releaseFor(synthetic(4 * 128 + 1, 2000), durations),
-    /^Error: Even 128 release shards don't fit \(MAX_RELEASE_SHARDS\): The release plan in 128 shards leaves a shard at about \d+s, over the 4800s ceiling\. Its heaviest group is chromium s\d+ cells\.spec\.ts, at about 2000s\.$/,
+    () => releaseFor(synthetic(4 * 256 + 1, 2000), durations),
+    /^Error: Even 256 release shards don't fit \(MAX_RELEASE_SHARDS\): The release plan in 256 shards leaves a shard at about \d+s, over the 4800s ceiling\. Its heaviest group is chromium s\d+ cells\.spec\.ts, at about 2000s\.$/,
   );
   // Each count is the last doubled, and a group's night at 2N is its night at N, or that plus N.
   NIGHT_COUNTS.slice(1).forEach((nights, at) => assert.equal(nights, 2 * NIGHT_COUNTS[at]!));
