@@ -7,8 +7,8 @@ import {
   accepts,
   cellAnnotations,
   defaultTuple,
-  FRAMED_CONTRAST_ANNOTATION,
-  framedContrastNote,
+  FRAMED_ANNOTATION,
+  framedNote,
   planCells,
   siteTextFor,
   workRoutes,
@@ -432,20 +432,19 @@ test("a PR's sentinel rows don't grow with the catalog: three shipping packs or 
   assert.ok(full.cells.some((cell) => cell.tuple.designLanguage === 'catalog-pack-1'));
 });
 
-test("a surface's framedContrast reason goes on each of its cells, and on no other, and its report's note says how many frame items it left out", () => {
+test("a surface's framed reason goes on each of its cells, and on no other, and its report's note names both checks it left to the frame's cells", () => {
   const plan = planCells({ meta: checkoutMeta(), registrations, mode: 'full' });
-  const reason = registrations.surfaces.find((each) => each.id === 'demo-studio')?.framedContrast
-    ?.reason;
+  const reason = registrations.surfaces.find((each) => each.id === 'demo-studio')?.framed?.reason;
   assert.ok(reason !== undefined && isReason(reason));
   const demo = plan.cells.filter((cell) => cell.target === 'demo-studio');
   assert.ok(demo.length > 0);
-  for (const cell of demo) assert.equal(cell.framedContrast, reason, cell.id);
+  for (const cell of demo) assert.equal(cell.framed, reason, cell.id);
   for (const cell of plan.cells.filter((each) => each.target !== 'demo-studio')) {
-    assert.equal(cell.framedContrast, undefined, cell.id);
+    assert.equal(cell.framed, undefined, cell.id);
   }
-  assert.deepEqual(framedContrastNote(demo[0]!, 25), {
-    type: FRAMED_CONTRAST_ANNOTATION,
-    description: `25 incomplete contrast items inside a frame left out of the sampler: ${reason}`,
+  assert.deepEqual(framedNote(demo[0]!, 25), {
+    type: FRAMED_ANNOTATION,
+    description: `25 contrast items and the focus walk inside the frame left to its composition cells: ${reason}`,
   });
-  assert.match(framedContrastNote(demo[0]!, 1).description, /^1 incomplete contrast item inside/);
+  assert.match(framedNote(demo[0]!, 1).description, /^1 contrast item and the focus walk inside/);
 });

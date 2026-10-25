@@ -20,10 +20,11 @@
 // instead, and only then does a query go on its perf cell.
 //
 // A surface that shows a frame whose document other cells cover may export
-// `framedContrast`, saying which cells do: its cells' contrast sampler
-// leaves out the incomplete items axe names inside a frame, and each cell's
-// report says how many it left out, and why. axe's own pass still checks
-// the frame.
+// `framed`, saying which cells do. Its cells' contrast sampler leaves out
+// the incomplete items axe names inside a frame, and their keyboard walk
+// takes a frame Tab enters as one stop, without measuring a focus ring
+// there; each cell's report says so, and why. axe's own pass still checks
+// the frame, and the walk still checks the frame's box is shown.
 
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
@@ -108,7 +109,7 @@ export interface SurfaceRegistration {
    */
   readonly perfState?: string;
   /** Present for a surface whose frame's document other cells cover, and which ones. */
-  readonly framedContrast?: { readonly reason: string };
+  readonly framed?: { readonly reason: string };
 }
 
 export interface UnitRegistration {
@@ -133,7 +134,7 @@ const SURFACE_EXPORTS = [
 ] as const;
 const UNIT_EXPORTS = ['interactions', 'primaryActions', 'notApplicable'] as const;
 /** What a surface may export besides SURFACE_EXPORTS. */
-const OPTIONAL_SURFACE_EXPORTS = ['requiresScript', 'perfState', 'framedContrast'] as const;
+const OPTIONAL_SURFACE_EXPORTS = ['requiresScript', 'perfState', 'framed'] as const;
 
 /** Whether `route` is Studio's: /studio, or a path under it. */
 const isStudioRoute = (route: unknown) =>
@@ -157,17 +158,17 @@ function requiresScript(value: unknown, problems: string[]): void {
   }
 }
 
-function framedContrast(value: unknown, problems: string[]): void {
+function framed(value: unknown, problems: string[]): void {
   const item = value as Record<string, unknown> | null;
   if (item === null || typeof item !== 'object') {
-    problems.push('framedContrast is an object, { reason }');
+    problems.push('framed is an object, { reason }');
     return;
   }
   const unknown = Object.keys(item).filter((key) => key !== 'reason');
-  if (unknown.length > 0) problems.push(`framedContrast has unknown fields: ${unknown.join(', ')}`);
+  if (unknown.length > 0) problems.push(`framed has unknown fields: ${unknown.join(', ')}`);
   if (!isReason(item.reason)) {
     problems.push(
-      "framedContrast.reason names the cells that cover the frame's document, in a sentence of three words or more",
+      "framed.reason names the cells that cover the frame's document, in a sentence of three words or more",
     );
   }
 }
@@ -334,7 +335,7 @@ export function validateSurface(exports: Exports, file: string): SurfaceRegistra
       problems.push('perfState names one of stateFixtures, by its id');
     }
   }
-  if ('framedContrast' in exports) framedContrast(exports.framedContrast, problems);
+  if ('framed' in exports) framed(exports.framed, problems);
   if ('requiresScript' in exports) {
     requiresScript(exports.requiresScript, problems);
     // Only a Studio surface: every route of it /studio or under it, and signed in, or Demo

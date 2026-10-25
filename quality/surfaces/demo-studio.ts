@@ -47,13 +47,16 @@ export const stateFixtures: readonly SurfaceState[] = [
 export const perfState = 'content';
 
 // The frame shows the sample, the reference, or a visitor's own pair, in a
-// composition whose own cells check its document, contrast included, and the
-// sampler can't reach into a frame: so this surface's sampler leaves out what
-// axe names inside it, and each cell's report says how much. Studio's own
-// chrome stays under the sampler, and axe still checks all of it.
-export const framedContrast = {
+// composition whose own cells check its document, its contrast and its focus
+// rings included, and this page's checks can't reach into a frame. So this
+// surface's contrast sampler leaves out what axe names inside it, and its
+// keyboard walk takes the frame as one stop while Tab moves through it,
+// without measuring a ring there; each cell's report says so. Studio's own
+// chrome stays under both, axe still checks all of it, and the frame's own
+// box is still checked for being shown while it has focus.
+export const framed = {
   reason:
-    "The frame's document is the sample, the reference, or an imported pair in a registered composition, whose own composition cells check its contrast.",
+    "The frame's document is the sample, the reference, or an imported pair in a registered composition, whose own composition cells check its contrast and its focus.",
 } as const;
 
 export const performanceTier: PerformanceTier = 'medium';

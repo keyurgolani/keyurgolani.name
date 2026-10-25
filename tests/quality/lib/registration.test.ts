@@ -252,29 +252,35 @@ test("a surface's perfState names one of its states, and nothing else", () => {
   }
 });
 
-test("a surface's framedContrast says which cells cover its frame, and only Demo Studio declares one", async () => {
+test("a surface's framed says which cells cover its frame, the old framedContrast is refused, and only Demo Studio declares framed", async () => {
   const file = 'quality/surfaces/login.ts';
   const reason = "The frame's document is checked by its composition cells.";
-  assert.deepEqual(problems({ ...LOGIN, framedContrast: { reason } }, file), []);
+  assert.deepEqual(problems({ ...LOGIN, framed: { reason } }, file), []);
   for (const [bad, problem] of [
-    [{}, 'framedContrast.reason names the cells'],
-    [{ reason: 'Covered.' }, 'framedContrast.reason names the cells'],
-    [{ reason, extra: 1 }, 'framedContrast has unknown fields: extra'],
-    [true, 'framedContrast is an object'],
+    [{}, 'framed.reason names the cells'],
+    [{ reason: 'Covered.' }, 'framed.reason names the cells'],
+    [{ reason, extra: 1 }, 'framed has unknown fields: extra'],
+    [true, 'framed is an object'],
   ] as const) {
     assert.ok(
-      problems({ ...LOGIN, framedContrast: bad }, file).some((each) => each.includes(problem)),
+      problems({ ...LOGIN, framed: bad }, file).some((each) => each.includes(problem)),
       problem,
     );
   }
+  // The flag's old name, which covered the contrast sampler alone, is no export a surface may have.
+  assert.ok(
+    problems({ ...LOGIN, framedContrast: { reason } }, file).some((each) =>
+      each.includes('framedContrast'),
+    ),
+  );
   const { surfaces } = await loadRegistrations();
   assert.deepEqual(
-    surfaces.filter((surface) => surface.framedContrast).map((surface) => surface.id),
+    surfaces.filter((surface) => surface.framed).map((surface) => surface.id),
     ['demo-studio'],
   );
   assert.match(
-    surfaces.find((surface) => surface.id === 'demo-studio')!.framedContrast!.reason,
-    /composition cells/,
+    surfaces.find((surface) => surface.id === 'demo-studio')!.framed!.reason,
+    /composition cells check its contrast and its focus/,
   );
 });
 
