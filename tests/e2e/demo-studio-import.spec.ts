@@ -165,6 +165,20 @@ test(
     const seen = watch(page);
     const workers: string[] = [];
     page.on('worker', (worker) => workers.push(worker.url()));
+    // Which of Next's chunks carry #10's post-pass, by sanitize-html's own names, and who loaded them.
+    const postPass: Promise<{ readonly url: string; readonly frame: string }[]>[] = [];
+    page.on('response', (answer) => {
+      const url = answer.url();
+      if (!/\/_next\/static\/.*\.js$/.test(url)) return;
+      const frame = answer.request().frame().url();
+      postPass.push(
+        answer.text().then(
+          (text) =>
+            /recursiveEscape|allowedSchemesAppliedToAttributes/.test(text) ? [{ url, frame }] : [],
+          () => [],
+        ),
+      );
+    });
     const response = await openContent(page);
     expect(response.headers()['content-security-policy']).toMatch(
       /(?:^|; )worker-src 'self'(?:;|$)/,
@@ -182,6 +196,10 @@ test(
     await expect(iframe).toHaveAttribute('sandbox', 'allow-scripts');
     await expect(iframe).toHaveAttribute('src', /^\/preview\/local#nonce=[A-Za-z0-9_-]{22}$/);
     await localFrame(page, `Visitor ${tag}`);
+    // The frame rendered through the server's own post-pass, which it loaded, and Studio didn't.
+    const loaded = (await Promise.all(postPass)).flat();
+    expect(loaded.length, 'the post-pass chunk loaded').toBeGreaterThan(0);
+    expect(loaded.filter(({ frame }) => new URL(frame).pathname !== '/preview/local')).toEqual([]);
     // Studio's URL never names the source.
     expect(page.url()).not.toContain(tag);
     expect(await violations(page)).toEqual([]);
