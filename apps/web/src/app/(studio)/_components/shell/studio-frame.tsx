@@ -16,7 +16,7 @@ export interface StudioFrameProps {
   readonly tasks: readonly StudioTask[];
   /** The task on screen, which its link marks as the current page. */
   readonly current: TaskId | undefined;
-  /** What the first task's anchor says without JavaScript, which Studio needs by design. */
+  /** What the Content task's anchor, or else the first task's, says without JavaScript, which Studio needs by design. */
   readonly noScript: ReactNode;
   /** The state section's body, below its heading. */
   readonly state: ReactNode;
@@ -33,6 +33,7 @@ export function StudioFrame({
   state,
   children,
 }: StudioFrameProps) {
+  const noticeAt = tasks.some((each) => each.id === 'content') ? 'content' : tasks[0]?.id;
   return (
     <div className="studio-shell">
       <header className="studio-shell__header">
@@ -58,11 +59,13 @@ export function StudioFrame({
       <main className="studio-shell__main" id="studio-main" tabIndex={-1}>
         {/* Each task link's fragment names an element, with or without the shell's script. */}
         <div className="studio-shell__anchors">
-          {tasks.map((each, index) =>
+          {tasks.map((each) =>
             // Focusable, so a task link moves focus to the task area, as a skip link does.
-            index === 0 ? (
+            each.id === noticeAt ? (
               <div key={each.id} id={each.id} tabIndex={-1}>
-                {/* Studio needs JavaScript by design, and says so where its first task starts.
+                {/* Studio needs JavaScript by design, and says so where its Content task
+                    starts, in both Studios, since a visitor who lands with no script
+                    reads it there; a task list with no Content task says so at its first.
                     Without it the shell never loads, so its waiting line goes too. */}
                 <noscript>
                   <style>{'.studio-state__waiting { display: none; }'}</style>

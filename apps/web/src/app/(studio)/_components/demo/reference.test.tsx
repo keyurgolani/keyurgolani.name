@@ -53,6 +53,8 @@ function render(props: Partial<React.ComponentProps<typeof DemoStudio>> = {}) {
       policy={POLICY}
       backend={backend()}
       task="appearance"
+      // The frame as it is once its gate let it load (frame-gate.test.tsx has the gate).
+      initialFrameRequested
       {...props}
     />,
   );

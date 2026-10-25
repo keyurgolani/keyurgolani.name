@@ -4,7 +4,7 @@
 # A release candidate, vX.Y.Z-rc.N: rc-verify refuses a commit that isn't on
 # main or has no green complete ci run. rc-quality runs #11's complete
 # quality matrix on the commit, every cell, in the shards rc-quality-plan
-# counts, eight at a time, and
+# counts, 16 at a time, and
 # rc-quality-verdict judges them whole with the release gates
 # (pnpm quality:release). rc-build builds amd64 and arm64 once
 # each, natively on its own runner, with BuildKit provenance (mode=max) and
@@ -360,9 +360,9 @@ jobs:
 
   # #11's release plan: quality:full over every cell, against a worktree
   # with the reference variant installed from its tarball, in as many shards
-  # as rc-quality-plan counts, by measured weight. They run eight at a time,
-  # the cap (FULL_SHARDS), so in waves, and PR CI keeps the rest of the
-  # account's job slots. The timeout is releaseTimeoutMinutes(), the release
+  # as rc-quality-plan counts, by measured weight. They run 16 at a time,
+  # the release's cap (RELEASE_PARALLEL), so in waves, and PR CI keeps the
+  # other 4 of the account's 20 job slots. The timeout is releaseTimeoutMinutes(), the release
   # ceiling with its margin, and each shard fails before any test when the
   # plan leaves a shard over that ceiling, naming its heaviest group. It
   # installs fresh, with no cache, in the pinned Playwright image, and holds
@@ -377,7 +377,7 @@ jobs:
     timeout-minutes: 120
     strategy:
       fail-fast: false
-      max-parallel: 8
+      max-parallel: 16
       matrix:
         shard: ${{ fromJSON(needs.rc-quality-plan.outputs.shards) }}
     container:

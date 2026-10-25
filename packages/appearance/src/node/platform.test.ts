@@ -141,7 +141,7 @@ test('reduced transparency and a browser without backdrop-filter get opaque surf
   }
 });
 
-test('high contrast makes the signature fill solid text-primary and drops the glow, however it is asked for', () => {
+test('high contrast makes the signature fill solid text-primary and drops the glow and the texture, however it is asked for', () => {
   const solid = 'linear-gradient(var(--color-text-primary), var(--color-text-primary))';
   const explicit = declarations(
     '  [data-appearance-boundary][data-display-mode="high-contrast"],\n  [data-appearance-boundary][data-contrast="more"]',
@@ -154,7 +154,19 @@ test('high contrast makes the signature fill solid text-primary and drops the gl
   for (const block of [explicit, preferred]) {
     assert.equal(block.get('--ui-signature-fill'), solid);
     assert.equal(block.get('--ui-emphasis-glow'), 'none');
+    // Every high-contrast set draws border-subtle in the text color, so a texture would stripe the text's ground (#11).
+    assert.equal(block.get('--ui-texture'), 'none');
   }
+  // The one block covers both the display mode and data-contrast="more".
+  for (const selector of ['[data-display-mode="high-contrast"]', '[data-contrast="more"]']) {
+    assert.ok(css.includes(`[data-appearance-boundary]${selector}`), selector);
+  }
+  // Print, where a dark-only scheme prints its light high-contrast set, drops it too.
+  const print = declarations('    [data-appearance-boundary]', '@media print');
+  assert.equal(print.get('--ui-texture'), 'none');
+  // As forced colors already does.
+  const forced = declarations('    [data-appearance-boundary]', '@media (forced-colors: active)');
+  assert.equal(forced.get('--ui-texture'), 'none');
 });
 
 test('every token a language may move, blur, or fade a part through is one the accessibility layer sets', () => {

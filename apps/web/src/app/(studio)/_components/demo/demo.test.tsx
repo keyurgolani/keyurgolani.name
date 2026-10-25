@@ -52,8 +52,9 @@ function frameAttributes(html: string): Record<string, string> {
 
 test('a demo frame loads /sample, sandboxed to scripts alone, with no referrer and no permissions', () => {
   const src = '/sample?variant=acme-orbit&mode=dark';
+  // Once its gate has let it load (frame-gate.test.tsx has the gate itself).
   const html = renderToStaticMarkup(
-    <DemoFrame src={src} title="Demo sample" viewport={VIEWPORTS[2]!} />,
+    <DemoFrame src={src} title="Demo sample" viewport={VIEWPORTS[2]!} requested />,
   );
   const attributes = frameAttributes(html);
   assert.equal(DEMO_FRAME_SANDBOX, 'allow-scripts');
@@ -107,6 +108,7 @@ test('the Appearance task has a picker and a reset for each axis, a full reset, 
       policy={POLICY}
       backend={demo}
       task="appearance"
+      initialFrameRequested
     />,
   );
   for (const { axis, label } of CATALOG.axes) {

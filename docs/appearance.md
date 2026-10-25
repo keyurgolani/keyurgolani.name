@@ -13,7 +13,7 @@ How a portfolio looks is four independent choices, plus a display mode (#19): th
 | Color scheme    | Every semantic color, in each display mode                                                      | Anything but color                             |
 | Typography      | Text roles, font files, scale, rhythm, reading measures, and script fallbacks                   | Color, layout                                  |
 
-The display mode, `system`, `light`, `dark`, or `high-contrast`, is an environment, not a scheme: every scheme renders in it, or says which modes it lacks. Reduced motion, forced colors, and reduced transparency override every creative choice: whatever a pack or a variant sets, the accessibility layer and the visitor's operating system win.
+The display mode, `system`, `light`, `dark`, or `high-contrast`, is an environment, not a scheme: every scheme renders in it, or says which modes it lacks. Reduced motion, forced colors, and reduced transparency override every creative choice: whatever a pack or a variant sets, the accessibility layer and the visitor's operating system win. High contrast and print drop the language's texture, as forced colors does, since every high-contrast set draws its borders, a texture's ink among them, in the text color.
 
 ## The selection
 

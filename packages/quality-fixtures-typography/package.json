@@ -1,6 +1,6 @@
 {
   "name": "@portfolio/quality-fixtures-typography",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Typography tier fixtures (#11): fixture-typography-stable, fixture-typography-extended, and fixture-typography-experimental, which the quality gates run as shipping packs of each tier. They register only when QUALITY_FIXTURES is 1 or meta.",
   "portfolio": {
