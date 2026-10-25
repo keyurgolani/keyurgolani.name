@@ -169,6 +169,24 @@ function good(
   };
 }
 
+/** A known-good case on a fixture of its own: `file` passes `check`. */
+function goodFile(
+  id: string,
+  file: string,
+  gate: string,
+  check: (page: Page) => Promise<Finding[]>,
+  options?: PageOptions,
+): MetaCase {
+  return {
+    id: `${gate}/${id}`,
+    gate,
+    input: `tests/quality/fixtures/a11y/${file}`,
+    expect: 'pass',
+    browser: true,
+    run: () => onPage(file, check, options),
+  };
+}
+
 /** Whether the page settles, as settle() and the reload conditions wait for it. */
 const settled = async (page: Page): Promise<Finding[]> =>
   (await notBusy(page)) ? [] : [{ gate: 'runner', rule: 'settled', actual: STILL_BUSY }];
@@ -593,6 +611,27 @@ export const A11Y_CASES: readonly MetaCase[] = [
     contrast,
   ),
   good('contrast', contrast),
+  // #20's .pf-period in dark mode: an en dash's edge inside the date's box isn't its background.
+  goodFile('neighbour-glyphs', 'contrast-neighbour.html', 'contrast', contrast, {
+    colorScheme: 'dark',
+  }),
+  // Text behind an element is its backdrop, not a neighbour: a large aria-hidden numeral behind a
+  // heading stays in the sample, and the heading fails over it.
+  // The finding must be the sampler's own measure against the numeral, about 2.1:1, not a
+  // case it couldn't sample.
+  builtCase(
+    'backdrop-numeral',
+    'contrast',
+    'tests/quality/fixtures/a11y/contrast-backdrop.html',
+    readFileSync(path.join(FIXTURES, 'contrast-backdrop.html'), 'utf8'),
+    /^contrast large-text: [12]\.\d+:1 against its worst background pixel$/,
+    contrast,
+    { colorScheme: 'dark' },
+  ),
+  // And hiding the dash doesn't hide a date that's faint itself.
+  bad('neighbour-faint', 'contrast-neighbour-faint.html', 'contrast', 'text', contrast, {
+    colorScheme: 'dark',
+  }),
   bad('button-name', 'axe-semantics.html', 'axe', 'button-name', axeRule('button-name')),
   bad('target-size', 'axe-semantics.html', 'axe', 'target-size', axeRule('target-size')),
   bad('color-contrast', 'axe-semantics.html', 'axe', 'color-contrast', axeRule('color-contrast')),

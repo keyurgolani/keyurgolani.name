@@ -10,7 +10,13 @@ import path from 'node:path';
 import test from 'node:test';
 import { PNG } from 'pngjs';
 import { REPO_ROOT } from '../../quality/thresholds';
-import { neededRatio, worstRatio } from './lib/a11y/contrast';
+import {
+  NEIGHBOUR_MARGIN,
+  neededRatio,
+  neighbourTexts,
+  reaches,
+  worstRatio,
+} from './lib/a11y/contrast';
 import { animationFindings, killSwitches } from './lib/a11y/motion';
 import { requiredChecks } from './lib/checks';
 import { displayModeProblems } from './lib/emulation';
@@ -69,6 +75,66 @@ test('text over a background is held to the worst pixel, at the large-text size 
   assert.deepEqual(neededRatio(24, 400), { rule: 'large-text', ratio: 3 });
   assert.deepEqual(neededRatio(18.67, 700), { rule: 'large-text', ratio: 3 });
   assert.deepEqual(neededRatio(18.67, 400), { rule: 'text', ratio: 4.5 });
+});
+
+test("a neighbour's glyph at the sampled box's edge is hidden with it, as an en dash before a date, and a backdrop or a faint date still fails", () => {
+  // The date's content box, and the en dash's line box right before it: no side bearing, so it
+  // ends where the date begins, and its antialiased edge lands in the date's first column.
+  const date = { x: 100, y: 10, width: 40, height: 18 };
+  const dash = { x: 88, y: 10, width: 12, height: 18 };
+  assert.equal(NEIGHBOUR_MARGIN, 2);
+  // On the same line: touching, or overlapping or short by less than the margin, is the edge.
+  assert.equal(reaches(dash, date), true, 'touching at the edge');
+  assert.equal(reaches({ ...dash, x: 87 }, date), true, 'a pixel short');
+  assert.equal(reaches({ ...dash, x: 90 }, date), true, 'overlapping by the margin');
+  assert.equal(reaches({ ...dash, x: 86 }, date), false, 'the margin short');
+  assert.equal(reaches({ ...dash, x: 80 }, date), false, 'further away');
+  assert.equal(reaches({ ...dash, x: 91 }, date), false, 'overlapping past the margin');
+  assert.equal(reaches({ ...dash, x: 140 }, date), true, 'touching the far edge');
+  assert.equal(reaches({ ...dash, x: 129 }, date), false, 'past the margin at the far edge');
+  // The line above or below: overlapping down by the margin or less.
+  assert.equal(reaches({ ...date, y: -6 }, date), true, 'the line above, overlapping by 2');
+  assert.equal(reaches({ ...date, y: -5 }, date), false, 'the line above, overlapping by 3');
+  assert.equal(reaches({ ...date, y: -6, x: 200 }, date), false, 'the line above, off to the side');
+  assert.equal(reaches({ ...date, y: 26 }, date), true, 'the line below, overlapping by 2');
+  assert.equal(reaches({ ...date, y: 40 }, date), false, 'the next line, apart');
+  // Text that covers the box, or sits over it, is its backdrop, not an edge.
+  assert.equal(reaches({ x: 60, y: -20, width: 200, height: 80 }, date), false, 'a full cover');
+  assert.equal(reaches(date, date), false, 'the same box');
+  // An empty line box paints nothing, even one right at the edge.
+  assert.equal(reaches({ ...dash, x: 100, width: 0 }, date), false, 'no width');
+  assert.equal(reaches({ ...dash, height: 0 }, date), false, 'no height');
+  // Only the in-flow texts at the edge, by index, among every text the page found near it.
+  const inFlow = (...rects: { x: number; y: number; width: number; height: number }[]) => ({
+    rects,
+    outOfFlow: false,
+  });
+  assert.deepEqual(
+    neighbourTexts(
+      [
+        inFlow({ ...date, x: 20, width: 60 }),
+        inFlow(dash),
+        inFlow(),
+        inFlow({ ...date, y: 40 }, { ...dash, x: 60, width: 41 }),
+        // A big numeral behind it, in flow or out of it, stays: it's the backdrop.
+        inFlow({ x: 60, y: -20, width: 200, height: 80 }),
+        // Out of flow, even at the edge, stays too.
+        { rects: [dash], outOfFlow: true },
+      ],
+      date,
+    ),
+    [1, 3],
+  );
+  // Why: the dash's edge, a light column inside the date's dark box, takes the light date to
+  // about 1:1, and with it hidden the date reads far over 4.5:1.
+  const dark = [10, 10, 10] as const;
+  const edge = [200, 200, 200] as const;
+  const box = (first: readonly [number, number, number]) =>
+    png(Array.from({ length: 3 }, () => [first, dark, dark, dark]));
+  assert.ok(worstRatio(box(edge), 'rgb(232, 232, 232)')! < 1.5);
+  assert.ok(worstRatio(box(dark), 'rgb(232, 232, 232)')! > 4.5);
+  // A faint date over the same dark box still fails, dash or none.
+  assert.ok(worstRatio(box(dark), 'rgb(58, 58, 58)')! < 2);
 });
 
 test('the audit finds a universal !important motion kill switch, inside at-rules too, and nothing else', () => {
