@@ -329,7 +329,7 @@ async function names(dir: string): Promise<string[]> {
 /**
  * The store on disk under `dataDir`, which owner startup has prepared. Its
  * own directories are made at the first write, 0700, by preparePrivateDir(),
- * which refuses one that's a link, another user's, or not 0700, so a write
+ * which puts a loosened mode back and refuses a link or another user's, so a write
  * never lands outside the data directory.
  */
 export function filesystemGrantStore(dataDir: string): GrantStore {

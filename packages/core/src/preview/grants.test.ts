@@ -1,6 +1,7 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -639,6 +640,23 @@ test('a damaged grant file counts as no grant and is deleted, and a link in plac
   assert.deepEqual(filesUnder(elsewhere), []);
   rmSync(previewPaths(dataDir).root);
   mkdirSync(previewPaths(dataDir).root, { mode: 0o700 });
+});
+
+test('a grant store directory an operator loosened is put back to 0700, and the next mint goes through', async (t) => {
+  const { store, dataDir, sessions, grants } = await setup(t);
+  const { session } = await signIn(sessions);
+  const draft = await newDraft(store);
+  await mintDraft(grants, session, draft);
+  const paths = previewPaths(dataDir);
+  chmodSync(paths.root, 0o755);
+  chmodSync(paths.grants, 0o777);
+  chmodSync(paths.drafts, 0o750);
+  // Another draft, so the mint writes its draft marker too.
+  const { token } = await mintDraft(grants, session, await newDraft(store));
+  for (const dir of [paths.root, paths.grants, paths.drafts]) {
+    assert.equal(statSync(dir).mode & 0o777, 0o700, dir);
+  }
+  assert.equal(await statusOf(grants, token), 'active');
 });
 
 test('an end is never undone by a renewal that read the grant before it', async (t) => {

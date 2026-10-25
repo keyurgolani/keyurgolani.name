@@ -71,42 +71,49 @@ const errorCode = (error) => /** @type {NodeJS.ErrnoException} */ (error)?.code;
 /**
  * Makes `dir`, and each directory between `dataDir` and it that's missing,
  * at 0700, for a writer at its first write. Each one, made now or already
- * there, is then checked with lstat: a link, anything but a directory, one
- * another user owns, or one whose mode isn't 0700 throws, so nothing is
- * written through it. `dataDir` itself is the operator's mount, which the
- * store's preflight checks at startup.
+ * there, is then checked with lstat: a link, anything but a directory, or
+ * one another user owns throws, so nothing is written through it. One of
+ * ours whose mode isn't 0700, from a umask or an operator who loosened it,
+ * is put back to 0700, as startup used to do, and checked again; it throws
+ * only if it's still wrong. `dataDir` itself is the operator's mount, which
+ * the store's preflight checks at startup. Tests pass `io` for a chmod that
+ * doesn't take.
  *
  * @param {string} dataDir
  * @param {string} dir under `dataDir`
+ * @param {{ readonly chmod?: typeof chmod }} [io]
  */
-export async function preparePrivateDir(dataDir, dir) {
+export async function preparePrivateDir(dataDir, dir, io = {}) {
+  const chmodDir = io.chmod ?? chmod;
   const root = path.resolve(dataDir);
   const relative = path.relative(root, path.resolve(dir));
   if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
     throw new TypeError('Not a directory under the data directory.');
   }
   const uid = typeof process.getuid === 'function' ? process.getuid() : null;
+  /** @param {string} at @param {string} name */
+  const checked = async (at, name) => {
+    const found = await lstat(at);
+    if (found.isSymbolicLink()) throw new Error(`${name} is a link.`);
+    if (!found.isDirectory()) throw new Error(`${name} isn't a directory.`);
+    if (uid !== null && found.uid !== uid) throw new Error(`${name} belongs to another user.`);
+    return found;
+  };
   let at = root;
   for (const part of relative.split(path.sep)) {
     at = path.join(at, part);
     const name = path.relative(root, at);
-    let made = true;
     try {
       await mkdir(at, { mode: 0o700 });
     } catch (error) {
       if (errorCode(error) !== 'EEXIST') throw error;
-      made = false;
     }
-    let found = await lstat(at);
-    if (found.isSymbolicLink()) throw new Error(`${name} is a link.`);
-    if (!found.isDirectory()) throw new Error(`${name} isn't a directory.`);
-    // A umask can take bits off a new directory's mode. One made here is
-    // put right, then checked like any other.
-    if (made && (found.mode & 0o777) !== 0o700) {
-      await chmod(at, 0o700);
-      found = await lstat(at);
+    let found = await checked(at, name);
+    if ((found.mode & 0o777) !== 0o700) {
+      // chmod follows a link, so it runs only once lstat found a directory.
+      await chmodDir(at, 0o700);
+      found = await checked(at, name);
     }
-    if (uid !== null && found.uid !== uid) throw new Error(`${name} belongs to another user.`);
     if ((found.mode & 0o777) !== 0o700) throw new Error(`${name} isn't 0700.`);
   }
 }

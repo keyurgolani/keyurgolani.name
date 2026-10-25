@@ -91,7 +91,31 @@ test('a writer makes its directory and each one above it at 0700 at its first wr
   await assert.rejects(preparePrivateDir(dir, path.join(dir, '..', 'outside')), TypeError);
 });
 
-test('a writer refuses a link, a file, a mode other than 0700, or another user, wherever it stands on the way', async (t) => {
+test('a writer puts back a mode an operator loosened or narrowed, on each directory on the way, and refuses one a chmod leaves wrong', async (t) => {
+  const dir = scratch(t);
+  const paths = authPaths(dir);
+  mkdirSync(paths.sessions, { recursive: true, mode: 0o700 });
+  chmodSync(paths.ephemeral, 0o755);
+  chmodSync(paths.auth, 0o777);
+  chmodSync(paths.sessions, 0o500);
+  await preparePrivateDir(dir, paths.sessions);
+  for (const each of [paths.ephemeral, paths.auth, paths.sessions]) {
+    assert.equal(mode(each), 0o700, each);
+  }
+  // A chmod that doesn't take, as on a volume that ignores modes: refused.
+  chmodSync(paths.auth, 0o755);
+  let chmods = 0;
+  const ignored = (async () => {
+    chmods += 1;
+  }) as unknown as typeof import('node:fs/promises').chmod;
+  await assert.rejects(
+    preparePrivateDir(dir, paths.sessions, { chmod: ignored }),
+    /^Error: ephemeral\/auth isn't 0700/,
+  );
+  assert.equal(chmods, 1);
+});
+
+test('a writer refuses a link, a file, or another user, wherever it stands on the way', async (t) => {
   const paths = (dir: string) => authPaths(dir);
   const cases: [
     what: string,
@@ -118,22 +142,6 @@ test('a writer refuses a link, a file, a mode other than 0700, or another user, 
         writeFileSync(paths(d).auth, '');
       },
       /^Error: ephemeral\/auth isn't a directory/,
-    ],
-    [
-      'ephemeral/ loosened to 0755',
-      (d) => {
-        mkdirSync(paths(d).ephemeral, { mode: 0o700 });
-        chmodSync(paths(d).ephemeral, 0o755);
-      },
-      /^Error: ephemeral isn't 0700/,
-    ],
-    [
-      'ephemeral/auth/sessions/ narrowed to 0500',
-      (d) => {
-        mkdirSync(paths(d).sessions, { recursive: true, mode: 0o700 });
-        chmodSync(paths(d).sessions, 0o500);
-      },
-      /^Error: ephemeral\/auth\/sessions isn't 0700/,
     ],
   ];
   for (const [what, arrange, refusal] of cases) {

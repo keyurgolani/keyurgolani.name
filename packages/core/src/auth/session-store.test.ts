@@ -221,7 +221,7 @@ test('revokeAll on a data directory with no auth directory makes ephemeral/auth/
   assert.equal(existsSync(paths.sessions), false);
 });
 
-test('a session write refuses a link, a file, or a loosened mode in place of an auth directory, and writes nothing through it', async (t) => {
+test('a session write refuses a link or a file in place of an auth directory, and writes nothing through it', async (t) => {
   const paths = (dir: string) => authPaths(dir);
   const cases: [what: string, arrange: (dir: string, elsewhere: string) => void][] = [
     ['ephemeral/ a link', (dir, elsewhere) => symlinkSync(elsewhere, paths(dir).ephemeral)],
@@ -246,13 +246,6 @@ test('a session write refuses a link, a file, or a loosened mode in place of an 
         writeFileSync(paths(dir).auth, '');
       },
     ],
-    [
-      'ephemeral/auth/ loosened to 0755',
-      (dir) => {
-        mkdirSync(paths(dir).auth, { recursive: true, mode: 0o700 });
-        chmodSync(paths(dir).auth, 0o755);
-      },
-    ],
   ];
   for (const [what, arrange] of cases) {
     const dir = await dataDir(t);
@@ -260,13 +253,34 @@ test('a session write refuses a link, a file, or a loosened mode in place of an 
     t.after(() => rmSync(elsewhere, { recursive: true, force: true }));
     arrange(dir, elsewhere);
     const store = filesystemSessionStore(dir);
-    await assert.rejects(store.put(record()), /is a link|isn't a directory|isn't 0700/, what);
+    await assert.rejects(store.put(record()), /is a link|isn't a directory/, what);
     // revoked-before sits in ephemeral/auth/, so only a fault at or above it stops revokeAll.
     if (!what.startsWith('ephemeral/auth/sessions/')) {
-      await assert.rejects(store.revokeAll(Date.now()), /is a link|isn't a directory|isn't 0700/);
+      await assert.rejects(store.revokeAll(Date.now()), /is a link|isn't a directory/);
     }
     assert.deepEqual(readdirSync(elsewhere), [], `${what}: something was written through it`);
   }
+});
+
+test('a session write puts an auth directory an operator loosened back to 0700, and the write goes through', async (t) => {
+  const dir = await dataDir(t);
+  const paths = authPaths(dir);
+  mkdirSync(paths.sessions, { recursive: true, mode: 0o700 });
+  chmodSync(paths.auth, 0o755);
+  chmodSync(paths.sessions, 0o777);
+  const store = filesystemSessionStore(dir);
+  const entry = record();
+  await store.put(entry);
+  for (const each of [paths.auth, paths.sessions]) {
+    assert.equal(statSync(each).mode & 0o777, 0o700, each);
+  }
+  assert.deepEqual(await store.get(entry.digest), entry);
+  // And revoked-before's writer puts ephemeral/auth/ back too.
+  chmodSync(paths.auth, 0o750);
+  const at = Date.UTC(2026, 9, 20, 12, 0, 0);
+  assert.deepEqual(await store.revokeAll(at), [entry.digest]);
+  assert.equal(statSync(paths.auth).mode & 0o777, 0o700);
+  assert.equal(await store.revokedBefore(), at);
 });
 
 test('a session write refuses an auth directory another user owns', async (t) => {
