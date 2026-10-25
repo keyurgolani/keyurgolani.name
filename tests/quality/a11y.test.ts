@@ -267,7 +267,7 @@ test('every preference mode has its row, and the high-contrast row fails when no
   assert.deepEqual(displayModeProblems(PREFERENCE_ROWS[0]!, []), []);
 });
 
-test("with framedContrast, the sampler leaves out only the incomplete items axe names inside a frame, before it samples any; without it, a frame's item says it's inside a frame", async () => {
+test("on a framed surface, the sampler leaves out only the incomplete items axe names inside a frame, before it samples any; without it, a frame's item says it's inside a frame", async () => {
   const top = { target: ['main .studio-content p'] };
   const framed = { target: ['iframe', '.ee-plate__label'] };
   const results = {

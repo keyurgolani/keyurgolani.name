@@ -126,8 +126,11 @@ export interface Cell {
    * it, its cells check its honest state, and their report says why.
    */
   readonly requiresScript?: string;
-  /** Which cells cover a surface's frame, when it declares framedContrast: its sampler leaves the frame out. */
-  readonly framedContrast?: string;
+  /**
+   * Which cells cover a surface's frame, when it declares `framed`: its
+   * contrast sampler and its keyboard walk leave the frame's document to them.
+   */
+  readonly framed?: string;
   /** True on the one cell a surface's perfState names: its first route in that state. */
   readonly perfState?: true;
   readonly tuple: Tuple;
@@ -167,14 +170,14 @@ export interface ChangedBy {
 
 /** The annotation that says why a cell's page requires script, in its report. */
 export const REQUIRES_SCRIPT_ANNOTATION = 'requires-script';
-/** The annotation that says how many frame items a cell's contrast sampler left out, and why. */
-export const FRAMED_CONTRAST_ANNOTATION = 'framed-contrast';
+/** The annotation that says what a framed cell's checks left to its frame's own cells, and why. */
+export const FRAMED_ANNOTATION = 'framed';
 
-/** What a framedContrast cell's report says it left out of the contrast sampler. */
-export function framedContrastNote(cell: Pick<Cell, 'framedContrast'>, leftOut: number) {
+/** What a framed cell's report says the contrast sampler and the focus walk left inside its frame. */
+export function framedNote(cell: Pick<Cell, 'framed'>, leftOut: number) {
   return {
-    type: FRAMED_CONTRAST_ANNOTATION,
-    description: `${leftOut} incomplete contrast item${leftOut === 1 ? '' : 's'} inside a frame left out of the sampler: ${cell.framedContrast}`,
+    type: FRAMED_ANNOTATION,
+    description: `${leftOut} contrast item${leftOut === 1 ? '' : 's'} and the focus walk inside the frame left to its composition cells: ${cell.framed}`,
   };
 }
 
@@ -606,7 +609,7 @@ export function planCells({
           performanceTier: surface.performanceTier,
           ...(surface.auth === 'session' ? { auth: 'session' as const } : {}),
           ...(surface.requiresScript ? { requiresScript: surface.requiresScript.reason } : {}),
-          ...(surface.framedContrast ? { framedContrast: surface.framedContrast.reason } : {}),
+          ...(surface.framed ? { framed: surface.framed.reason } : {}),
           ...(routeIndex === 0 && surface.perfState === state.id
             ? { perfState: true as const }
             : {}),
