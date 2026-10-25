@@ -78,7 +78,21 @@ test('the seed is the review lab catalog, byte for byte', () => {
  */
 const RENAMED: Readonly<Record<string, string>> = { 'material-hct': 'hct-tonal' };
 
-test('every scheme ships in its approved tier, the generated four included, and the image-derived two wait for the owner', async () => {
+/** The image-derived schemes (#20 PR 3), which wait until the owner's acceptance pins their record. */
+const IMAGE_DERIVED = ['portfolio-artwork', 'profile-image'] as const;
+
+/** The image-derived schemes the committed acceptance.json doesn't accept: the ones that wait. */
+function waiting(): string[] {
+  const accepted = JSON.parse(
+    fs.readFileSync(
+      path.join(REPO_ROOT, 'packages/appearance-schemes/generated/acceptance.json'),
+      'utf8',
+    ),
+  ) as Record<string, unknown>;
+  return IMAGE_DERIVED.filter((id) => !(id in accepted));
+}
+
+test("every scheme ships in its approved tier, the generated four included, and an image-derived one waits until the owner's acceptance pins it", async () => {
   const entries = catalogEntries(await sources()).filter(({ axis }) => axis === 'colorScheme');
   for (const scheme of COLOR_SCHEMES as readonly SeedEntry[]) {
     const id = RENAMED[scheme.id] ?? scheme.id;
@@ -89,7 +103,7 @@ test('every scheme ships in its approved tier, the generated four included, and 
       undefined,
     );
     assert.equal(entry.tier, scheme.status, `${id}'s tier`);
-    const waits = id === 'profile-image' || id === 'portfolio-artwork';
+    const waits = waiting().includes(id);
     assert.equal(
       entry.status,
       scheme.status === 'research' ? 'research' : waits ? 'excluded' : 'shipping',
@@ -101,14 +115,17 @@ test('every scheme ships in its approved tier, the generated four included, and 
     Object.keys(RENAMED).filter((id) => !GENERATED_SCHEMES.has(id)),
     [],
   );
+  // neon-city, and each image-derived scheme the owner accepted, are the Experimental ones that ship.
+  const accepted = IMAGE_DERIVED.length - waiting().length;
   assert.deepEqual(tally(entries.filter(({ status }) => status === 'shipping')), {
     stable: 18,
     extended: 8,
-    experimental: 1,
+    experimental: 1 + accepted,
   });
-  assert.deepEqual(tally(entries.filter(({ status }) => status === 'excluded')), {
-    experimental: 2,
-  });
+  assert.deepEqual(
+    tally(entries.filter(({ status }) => status === 'excluded')),
+    waiting().length > 0 ? { experimental: waiting().length } : {},
+  );
   assert.equal(entries.filter(({ status }) => status === 'research').length, 23);
 });
 
@@ -334,8 +351,8 @@ test('search filters by words, axis, tier, status, license, and mode', async () 
     'portfolio-artwork',
     'profile-image',
   ]);
-  // The image-derived schemes, which wait for the owner's acceptance (#20 PR 3).
-  assert.deepEqual(ids('status=excluded'), ['portfolio-artwork', 'profile-image']);
+  // The image-derived schemes the owner hasn't accepted wait (#20 PR 3).
+  assert.deepEqual(ids('status=excluded'), waiting());
   assert.equal(ids('status=held').length, 5);
   assert.deepEqual(ids('q=refractive&status=held'), ['refractive-glass', 'holographic-iridescent']);
   assert.deepEqual(ids('q=nord&status=research'), ['nord']);
@@ -453,8 +470,9 @@ test('the branded-name audit passes the shipping catalog', async () => {
     research: read.research.map(({ record }) => record),
   });
   assert.deepEqual(report.findings, []);
-  // The 62 registered packs (PR 3's two image-derived schemes wait, unregistered), 13 held, 23 Research.
-  assert.equal(report.entries.length, 62 + 13 + 23);
+  // The 70 registered packs besides the image-derived schemes, each of those the owner
+  // accepted (#20 PR 3; the others wait, unregistered), 5 held, and 23 Research.
+  assert.equal(report.entries.length, 70 + (IMAGE_DERIVED.length - waiting().length) + 5 + 23);
   const aero = report.entries.find(({ id }) => id === 'frutiger-aero')!;
   assert.deepEqual(aero.names, ['Aero', 'Frutiger']);
   assert.ok(aero.notes.every((note) => note.includes('reviewed')));

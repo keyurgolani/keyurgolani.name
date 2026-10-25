@@ -116,6 +116,10 @@ test('an acceptance names only an image-derived scheme, and the owner accepts th
   const root = scratch();
   try {
     const packages = packPackages(root);
+    // What the repository's acceptance.json holds already, which a new acceptance keeps.
+    const before = JSON.parse(
+      fs.readFileSync(path.join(root, RECORDS, 'acceptance.json'), 'utf8'),
+    ) as Record<string, unknown>;
     assert.deepEqual(acceptScheme(root, packages, 'brand-seed', 'keyurgolani').ok, false);
     assert.equal(acceptScheme(root, packages, 'nebula', 'keyurgolani').ok, false);
     assert.equal(acceptScheme(root, packages, 'profile-image', 'Not A Login').ok, false);
@@ -131,6 +135,7 @@ test('an acceptance names only an image-derived scheme, and the owner accepts th
       fs.readFileSync(path.join(root, RECORDS, 'acceptance.json'), 'utf8'),
     );
     assert.deepEqual(written, {
+      ...before,
       'profile-image': {
         record: recordDigest(
           fs.readFileSync(path.join(root, RECORDS, 'profile-image.json'), 'utf8'),
@@ -161,11 +166,29 @@ test('an acceptance names only an image-derived scheme, and the owner accepts th
   }
 });
 
-test('catalog show names the reference record and whether it waits, and catalog review writes a page per scheme, images first', () => {
-  const lines = generatedLines(REPO_ROOT, packPackages(REPO_ROOT), 'portfolio-artwork').join('\n');
-  assert.match(lines, /Generator: portfolio-artwork, version 1 \(image-palette@1, anchor-v2\)/);
-  assert.match(lines, /example-media\/gallery\/looking-1\.png/);
-  assert.match(lines, /Review: waits for the owner's acceptance/);
+test('catalog show names the reference record and whether it waits or was accepted, and catalog review writes a page per scheme, images first', () => {
+  const show = (id: string) => generatedLines(REPO_ROOT, packPackages(REPO_ROOT), id).join('\n');
+  const accepted = JSON.parse(
+    fs.readFileSync(path.join(REPO_ROOT, RECORDS, 'acceptance.json'), 'utf8'),
+  ) as Record<string, { acceptedBy: string; acceptedAt: string }>;
+  for (const [id, file] of [
+    ['portfolio-artwork', 'example-media/gallery/looking-1.png'],
+    ['profile-image', 'example-media/anamika/portrait.png'],
+  ] as const) {
+    const lines = show(id);
+    assert.match(lines, new RegExp(`Generator: ${id}, version 1 \\(image-palette@1, anchor-v2\\)`));
+    assert.ok(lines.includes(file), id);
+    // Whichever the committed acceptance.json says: accepted, by whom and when, or waiting.
+    const by = accepted[id];
+    assert.ok(
+      lines.includes(
+        by
+          ? `Review: accepted by ${by.acceptedBy} on ${by.acceptedAt}`
+          : "Review: waits for the owner's acceptance",
+      ),
+      `${id}\n${lines}`,
+    );
+  }
   assert.deepEqual(generatedLines(REPO_ROOT, packPackages(REPO_ROOT), 'warm-parchment'), []);
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'kgn-review-pages-'));
   try {

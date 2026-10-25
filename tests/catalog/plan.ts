@@ -400,10 +400,11 @@ export const REHEARSAL = {
   /** Shards of the two parts. */
   shards: 8,
   /**
-   * Static smoke tuples a shard checks: its share of every tuple, 21,420 at
-   * 8 shards with the 6 variants of #128's catalog, generated schemes
-   * included. 30,000 holds 8 variants at this many packs, and at the
-   * measured rate it adds 2 seconds to a shard, which stays at 17 minutes.
+   * Static smoke tuples a shard checks: its share of every tuple, 22,260 at
+   * 8 shards with the 6 variants of #128's catalog and 28 schemes, the
+   * generated ones the catalog registers included. 30,000 holds 8 variants
+   * at this many packs (29,680), and at the measured rate it adds 2 seconds
+   * to a shard, which stays at 17 minutes.
    */
   staticPerShard: 30_000,
   /**
