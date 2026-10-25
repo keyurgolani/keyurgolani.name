@@ -465,3 +465,53 @@ test("an imported site that names a generated scheme renders the axis fallback i
     ['appearance.input-missing'],
   );
 });
+
+/** The route fixture that declares a /notes view, which no registered composition does. */
+const NOTES = JSON.parse(
+  readFileSync(
+    new URL('../../../../../../tests/fixtures/variants/notes/manifest.json', import.meta.url),
+    'utf8',
+  ),
+);
+
+test("a route the renderer redirects goes to Studio as navigated, through the frame channel's own report (handoff 3)", async () => {
+  const { followRedirect, renderLocal } = await frame();
+  // Another installed composition declares /notes, so the site's own redirects it home.
+  const withNotes = {
+    ...registries,
+    variants: [
+      ...registries.variants,
+      { packageName: 'fixture-notes', version: '0.0.0', manifest: NOTES },
+    ],
+  };
+  const render = await renderLocal({
+    document: documentOf(pairFiles(EXAMPLE.portfolio)),
+    route: '/notes',
+    registries: withNotes,
+    origin: ORIGIN,
+  });
+  assert.deepEqual(render, { kind: 'redirect', route: '/' });
+  const reported: string[] = [];
+  assert.equal(
+    followRedirect(render, (route) => reported.push(route)),
+    '/',
+  );
+  assert.deepEqual(reported, ['/']);
+  // Any other render moves nothing, and reports nothing.
+  for (const other of [{ kind: 'invalid' }, { kind: 'not-found' }] as const) {
+    assert.equal(
+      followRedirect(other, (route) => reported.push(route)),
+      null,
+    );
+  }
+  assert.deepEqual(reported, ['/']);
+
+  // With no report given, it's the frame channel's own, which frame-channel.test.ts shows
+  // posts navigated to Studio; and the frame's render takes it with none given.
+  const source = readFileSync(new URL('./local-document.tsx', import.meta.url), 'utf8');
+  assert.match(source, /report: \(route: string\) => void = reportLocalRoute,/);
+  assert.match(
+    source,
+    /const moved = followRedirect\(render\);\n\s*if \(moved !== null\) return setRoute\(moved\);/,
+  );
+});

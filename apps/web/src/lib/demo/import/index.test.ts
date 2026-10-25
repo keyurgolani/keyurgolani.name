@@ -4,9 +4,11 @@ import {
   importFiles,
   importTimeout,
   isResult,
+  IMPORT_FILE_COUNT,
   IMPORT_MAX_BYTES,
   IMPORT_TIMEOUT_MS,
   IMPORT_TIMEOUT_RANGE_MS,
+  sizeRefusal,
 } from './index';
 import {
   importMessage,
@@ -126,6 +128,31 @@ test('the count and each byteLength are checked here before anything is copied, 
   assert.equal((await importFiles([portfolio, view])).kind, 'imported');
   const sent = (FakeWorker.built[0]!.posted[0] as { files: ImportInput[] }).files;
   assert.equal(sent[1]!.bytes.buffer.byteLength, site.bytes.byteLength);
+});
+
+test("a picker asks sizeRefusal with its files' sizes alone, before it reads any, and gets the answer importFiles would give", async (t) => {
+  useWorker(t, FakeWorker);
+  assert.equal(IMPORT_FILE_COUNT, 2);
+  const [portfolio, site] = files as [ImportInput, ImportInput];
+  const huge = { name: 'x', bytes: new Uint8Array(IMPORT_MAX_BYTES + 1) };
+  const full = { name: 'y', bytes: new Uint8Array(IMPORT_MAX_BYTES) };
+  for (const [pick, expected] of [
+    [[portfolio, site, site], 'too_many_files'],
+    [[portfolio], 'not_one_document'],
+    [[], 'not_one_document'],
+    [[portfolio, huge], 'too_large'],
+    // More files than it takes says so first, whatever their sizes.
+    [[huge, huge, huge], 'too_many_files'],
+  ] as const) {
+    const sizes = pick.map(({ bytes }) => bytes.byteLength);
+    assert.equal(sizeRefusal(sizes), expected, `${sizes}`);
+    const answer = await importFiles(pick);
+    assert.equal(answer.kind === 'refused' && answer.code, expected, `${sizes}`);
+  }
+  // Up to the cap each, two files may be read: the worker decides the rest.
+  assert.equal(sizeRefusal([portfolio.bytes.byteLength, full.bytes.byteLength]), null);
+  assert.equal(sizeRefusal([IMPORT_MAX_BYTES, IMPORT_MAX_BYTES]), null);
+  assert.equal(FakeWorker.built.length, 0);
 });
 
 test("a Node Buffer's bytes are copied into a buffer of their own, so the caller's pooled memory is never detached", async (t) => {

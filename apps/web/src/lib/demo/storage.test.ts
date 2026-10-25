@@ -53,8 +53,24 @@ test('a full store keeps the write in memory from then on, and the page says so'
   local.full = true;
   store.write(SELECTION_KEY, 'second');
   assert.equal(store.read(SELECTION_KEY), 'second');
-  assert.equal(local.items.get(SELECTION_KEY), 'first');
+  // What the store held before goes with the failed write, so a reload can't bring it back.
+  assert.equal(local.items.has(SELECTION_KEY), false);
   assert.equal(store.persistent(), false);
+});
+
+test('a working copy too big for sessionStorage leaves none there: a reload brings back the sample, never the import before it', () => {
+  const session = new FakeStorage();
+  const store = demoStore(new FakeStorage(), session);
+  store.write(WORKING_KEY, '{"import":"A"}');
+  assert.equal(session.items.get(WORKING_KEY), '{"import":"A"}');
+  session.full = true;
+  store.write(WORKING_KEY, '{"import":"B"}');
+  // The page has B, in memory, and says a reload won't keep it.
+  assert.equal(store.read(WORKING_KEY), '{"import":"B"}');
+  assert.equal(store.persistent(), false);
+  // The reload: a page over the same tab's store finds no working copy at all.
+  assert.deepEqual([...session.items.keys()], []);
+  assert.equal(demoStore(new FakeStorage(), session).read(WORKING_KEY), null);
 });
 
 test('the notice follows the store each write used: blocking only sessionStorage keeps the selection kept', () => {
