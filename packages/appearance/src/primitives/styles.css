@@ -389,11 +389,18 @@
     text-decoration-thickness: var(--ui-state-selected-emphasis);
   }
 
-  /* Field and Select: a labelled control, its help, and its error. */
+  /*
+   * Field and Select: a labelled control, its help, and its error. The gap
+   * is at least the focus ring's reach, so the part after the control, such
+   * as the error's fill, never paints over the ring (#11).
+   */
   [data-ui-slot='field'],
   [data-ui-slot='select'] {
     display: grid;
-    gap: calc(var(--ui-space-control-block) / 2);
+    gap: max(
+      calc(var(--ui-space-control-block) / 2),
+      calc(var(--ui-focus-width) + var(--ui-focus-offset))
+    );
     justify-items: start;
   }
 
@@ -665,7 +672,9 @@
   /*
    * Shown with its action as the source, it sits above the action, or below
    * when there's no room. Without anchor positioning it keeps its own place
-   * in the flow, just after the action.
+   * in the flow, just after the action. It stands off the action by at least
+   * the focus ring's reach, so it never covers the ring of the action it
+   * describes (#11).
    */
   [data-ui-slot='tooltip'] {
     position-area: block-start span-inline-end;
@@ -674,7 +683,10 @@
     inline-size: max-content;
     max-inline-size: min(18rem, 100vw - 2 * var(--ui-space-control-inline));
     margin: 0;
-    margin-block-end: calc(var(--ui-space-control-block) / 2);
+    margin-block-end: max(
+      calc(var(--ui-space-control-block) / 2),
+      calc(var(--ui-focus-width) + var(--ui-focus-offset))
+    );
     padding-block: calc(var(--ui-space-control-block) / 2);
     padding-inline: var(--ui-space-control-block);
     color: var(--color-text-primary);

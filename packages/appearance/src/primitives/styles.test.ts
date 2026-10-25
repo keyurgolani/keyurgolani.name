@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   COLOR_ROLES,
   LANGUAGE_KEYS,
@@ -9,6 +10,7 @@ import {
   TYPOGRAPHY_ROLES,
 } from '../tokens';
 import { LAYER_ORDER } from '../layers';
+import { catalogPacks, packPackages } from '../node/catalog';
 import { NAMED_COLORS } from '../node/source-audit';
 import { SLOT_VALUES } from '../slots';
 
@@ -258,5 +260,74 @@ test('only the display role lets a word break anywhere, so a 320px headline fits
   assert.match(block('display'), /overflow-wrap: anywhere;/);
   for (const role of ['headline', 'body', 'label']) {
     assert.doesNotMatch(block(role), /overflow-wrap/, role);
+  }
+});
+
+/** The value `property` takes in the one rule whose selector list is exactly `selectors`. */
+function ruleValue(selectors: string, property: string): string {
+  for (const block of CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const prelude = block[1]!
+      .split(',')
+      .map((part) => part.trim())
+      .join(', ');
+    if (prelude !== selectors) continue;
+    for (const piece of block[2]!.split(';')) {
+      const colon = piece.indexOf(':');
+      if (colon >= 0 && piece.slice(0, colon).trim() === property) {
+        return piece
+          .slice(colon + 1)
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+    }
+  }
+  assert.fail(`no ${property} in ${selectors}`);
+}
+
+/** A length token in CSS px: px, or rem at the 16px default. */
+function px(value: string): number {
+  if (value.trim() === '0') return 0;
+  const match = /^(-?\d*\.?\d+)(px|rem)$/.exec(value.trim());
+  assert.ok(match, `${value} is a px or rem length`);
+  return Number.parseFloat(match[1]!) * (match[2] === 'rem' ? 16 : 1);
+}
+
+/** `value`, a calc() or max() of --ui-* lengths, resolved in px with `tokens`. */
+function resolve(value: string, tokens: Record<string, string>): number {
+  const expression = value
+    .replace(/var\(--ui-([a-z0-9-]+)\)/g, (_, key: string) => {
+      assert.ok(tokens[key] !== undefined, `the pack sets ${key}`);
+      return `(${px(tokens[key]!)})`;
+    })
+    .replace(/calc\(/g, '(')
+    .replace(/max\(/g, 'Math.max(');
+  assert.match(expression.replace(/Math\.max/g, ''), /^[\d\s.+\-*/(),]*$/, expression);
+  return Function(`return ${expression};`)() as number;
+}
+
+test("the part after a field's or select's control, and a tooltip, stand off the focus ring's reach in every registered language (#11)", () => {
+  const root = fileURLToPath(new URL('../../../../', import.meta.url));
+  const languages = catalogPacks(root, packPackages(root)).filter(
+    (pack) => pack.axis === 'designLanguage',
+  );
+  assert.ok(languages.length >= 30, `${languages.length} languages`);
+  const spacing = {
+    'field and select gap': ruleValue("[data-ui-slot='field'], [data-ui-slot='select']", 'gap'),
+    'tooltip offset': ruleValue("[data-ui-slot='tooltip']", 'margin-block-end'),
+  };
+  for (const pack of languages) {
+    const tokens = (pack.manifest as { tokens: Record<string, string> }).tokens;
+    const reach = px(tokens['focus-width']!) + px(tokens['focus-offset']!);
+    for (const [what, value] of Object.entries(spacing)) {
+      const resolved = resolve(value, tokens);
+      assert.ok(
+        resolved >= reach,
+        `${pack.id}: the ${what} is ${resolved}px, under the ring's ${reach}px`,
+      );
+      assert.ok(
+        resolved >= px(tokens['space-control-block']!) / 2,
+        `${pack.id}: the ${what} keeps the language's own spacing as its floor`,
+      );
+    }
   }
 });
