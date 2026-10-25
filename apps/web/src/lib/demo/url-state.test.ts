@@ -4,12 +4,14 @@ import { QUERY_KEYS } from '@portfolio/appearance';
 import { CATALOG, DEFAULTS, SCHEME_MODES } from './test-support';
 import {
   carriesSelection,
+  frameKind,
   frameSource,
   loadSelection,
   modeFits,
   selectionFrom,
   selectionProblem,
   selectionQuery,
+  sourceAfterImport,
   sourceFrom,
   studioLocation,
   taskFragment,
@@ -218,4 +220,36 @@ test("the URL keeps the task a `task` query opened, as its fragment, once the se
     }),
     '/studio#content',
   );
+});
+
+test("Demo Studio's frame is the reference while the visitor asked for it, else their imported pair, else the sample, and a new import switches off the reference", () => {
+  type State = { source: 'sample' | 'reference'; imported: boolean };
+  const shows = ({ source, imported }: State) => frameKind(source, imported);
+  const importLands = (state: State): State => ({
+    source: sourceAfterImport(state.source, true),
+    imported: true,
+  });
+  // The sample alone.
+  let state: State = { source: 'sample', imported: false };
+  assert.equal(shows(state), 'sample');
+  // The reference asked for, with no import.
+  state = { ...state, source: 'reference' };
+  assert.equal(shows(state), 'reference');
+  // An import, with no reference asked for.
+  assert.equal(shows(importLands({ source: 'sample', imported: false })), 'local');
+  // The reference asked for, then an import lands: the frame is local, and the reference is off.
+  state = importLands(state);
+  assert.deepEqual(state, { source: 'sample', imported: true });
+  assert.equal(shows(state), 'local');
+  // The reference asked for again while the pair is there: the reference, and back, the pair.
+  state = { ...state, source: 'reference' };
+  assert.equal(shows(state), 'reference');
+  state = { ...state, source: 'sample' };
+  assert.equal(shows(state), 'local');
+  // Reset demo: no pair, the sample's source, the sample.
+  state = { source: 'sample', imported: false };
+  assert.equal(shows(state), 'sample');
+  // No import landing, a refusal or a reset's null, leaves the source as it was.
+  assert.equal(sourceAfterImport('reference', false), 'reference');
+  assert.equal(sourceAfterImport('sample', false), 'sample');
 });

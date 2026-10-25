@@ -15,6 +15,23 @@ import { AXES, type AppearanceCatalog, type CatalogAxis } from '../studio/appear
  */
 export type DemoSource = 'sample' | 'reference';
 
+/** What Demo Studio's frame shows: the read-only reference, the visitor's imported pair, or the sample. */
+export type DemoFrameKind = 'reference' | 'local' | 'sample';
+
+/**
+ * Which frame shows: the reference while the visitor has asked for it, else
+ * their imported pair while this tab holds one, else the sample.
+ */
+export function frameKind(source: DemoSource, imported: boolean): DemoFrameKind {
+  if (source === 'reference') return 'reference';
+  return imported ? 'local' : 'sample';
+}
+
+/** The source once an import lands: a new import switches off the reference, so the frame shows it. */
+export function sourceAfterImport(source: DemoSource, imported: boolean): DemoSource {
+  return imported ? 'sample' : source;
+}
+
 /** The Studio URL's key for the source. The frame's own path says it, so its URL never carries one. */
 export const SOURCE_KEY = 'source';
 
