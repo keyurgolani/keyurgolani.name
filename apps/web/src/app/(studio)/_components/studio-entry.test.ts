@@ -32,8 +32,21 @@ const OWNER = [
   'portfolio-studio:',
   'Portfolio Studio needs JavaScript',
 ];
-/** Strings only Demo Studio's client code holds. */
-const DEMO = ['The demo changes the appearance only.', 'portfolio-demo:', 'Demo sandbox'];
+/**
+ * Strings only Demo Studio's client code holds: its backend's, its storage's,
+ * its shell's, and one each from the Content task (its picker's refusal and
+ * Export setup), the local frame host, and the export, whose omission keys
+ * the Content task's disclosure shares.
+ */
+const DEMO = [
+  'The demo changes the appearance only.',
+  'portfolio-demo:',
+  'Demo sandbox',
+  'Pick exactly two files',
+  'Export setup',
+  'Import another pair in Content',
+  'local-images',
+];
 
 const CHUNK = /static\/chunks\/[\w.-]+\.js/g;
 

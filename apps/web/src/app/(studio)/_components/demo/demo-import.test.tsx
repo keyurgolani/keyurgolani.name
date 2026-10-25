@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { browserBackend, type LocalSources } from '~/lib/demo/browser-backend';
 import { exportUnit } from '~/lib/demo/export';
-import type { ImportRefusal, ImportResult } from '~/lib/demo/import';
+import { IMPORT_MAX_BYTES, type ImportRefusal, type ImportResult } from '~/lib/demo/import';
 import { runImport } from '~/lib/demo/import/pipeline';
 import {
   CANARY,
@@ -16,11 +17,21 @@ import { demoStore, WORKING_KEY } from '~/lib/demo/storage';
 import { CATALOG, DEFAULTS, FakeStorage, SCHEME_MODES, UNIT } from '~/lib/demo/test-support';
 import { VIEWPORTS } from '~/lib/preview-frame';
 import { envelope, LIMITS, readMessage, sizeOf, TO_FRAME } from '~/preview/protocol';
-import { ContentTask, ExportDisclosure, ImportReport, REFUSAL_TEXT } from './demo-content';
 import {
+  ContentTask,
+  ExportDisclosure,
+  ImportReport,
+  KEPT_TEXT,
+  pickRefusal,
+  REFUSAL_TEXT,
+} from './demo-content';
+import {
+  deliver,
   documentMessage,
   frameBudget,
   isLocalFrameSource,
+  LOCAL_FRAME_FAILED,
+  localFrameElement,
   LocalFrameHost,
   localNonce,
 } from './demo-local-frame';
@@ -197,7 +208,7 @@ test('while this tab holds an imported pair the frame is /preview/local, otherwi
   assert.match(frames(sample)[0]!.src ?? '', /^\/sample/);
   assert.doesNotMatch(sample, /data-source="local"/);
   const importer = backend(session);
-  assert.equal((await importer.importFiles(pairFiles(EXAMPLE.portfolio))).kind, 'imported');
+  assert.equal((await importer.importFiles(pairFiles(EXAMPLE.portfolio)))?.kind, 'imported');
   assert.ok(session.getItem(WORKING_KEY));
   // A page in the same tab, as after a reload, shows the local frame on every task.
   for (const task of ['appearance', 'preview', 'content'] as const) {
@@ -304,4 +315,85 @@ test("a frame document takes documents up to #7's 100 MiB in all, and the next o
   assert.equal(small.take(message), false);
   assert.equal(small.take(message), false);
   assert.equal(frameBudget(bytes * 2).take(message), true);
+});
+
+test("past a frame document's budget, the next document goes to a new frame document, on an iframe of its own keyed on its nonce, so it loads a new document rather than moving the old one's fragment (handoff 2)", () => {
+  const sources: LocalSources = {
+    portfolio: { name: 'portfolio.yml', format: 'yaml', text: EXAMPLE.portfolio },
+    site: { name: 'site.yml', format: 'yaml', text: EXAMPLE.site },
+  };
+  const message = documentMessage(sources, DEFAULTS);
+  const bytes = sizeOf(message, LIMITS.document);
+  const events: string[] = [];
+  const send = () => events.push('send');
+  const remount = () => events.push('remount');
+  let budget = frameBudget(bytes * 2);
+  for (let index = 0; index < 3; index++) deliver(budget, message, send, remount);
+  assert.deepEqual(events, ['send', 'send', 'remount']);
+  // The new frame document's budget, which its ready gets the document from.
+  budget = frameBudget(bytes * 2);
+  deliver(budget, message, send, remount);
+  assert.deepEqual(events, ['send', 'send', 'remount', 'send']);
+
+  // Each nonce's frame is an element of its own: React replaces an element
+  // whose key changes, and a new iframe is a new browsing context.
+  const props = { ref: null, title: 'Your documents', viewport: VIEWPORTS[2]!, scale: 1 };
+  const [first, second] = [localNonce(), localNonce()];
+  const before = localFrameElement(first, props);
+  const after = localFrameElement(second, props);
+  assert.equal(before.type, 'iframe');
+  assert.equal(before.key, first);
+  assert.equal(after.key, second);
+  assert.notEqual(before.key, after.key);
+  // Neither names a source: the host's effect sets it once the channel is open.
+  for (const element of [before, after]) {
+    const attributes = frames(renderToStaticMarkup(element))[0]!;
+    assert.equal(attributes.sandbox, 'allow-scripts');
+    assert.equal(attributes.src, undefined);
+  }
+});
+
+test("a pick is refused by its count and sizes before any file is read, with the core's own codes (F4)", () => {
+  // A file the picker must never read: reading it fails the test.
+  const file = (size: number) => ({
+    size,
+    arrayBuffer: () => assert.fail('read before the count and sizes were checked'),
+  });
+  assert.equal(pickRefusal([file(10), file(10), file(10)]), 'too_many_files');
+  assert.equal(pickRefusal([file(10)]), 'not_one_document');
+  assert.equal(pickRefusal([file(10), file(IMPORT_MAX_BYTES + 1)]), 'too_large');
+  assert.equal(pickRefusal([file(IMPORT_MAX_BYTES), file(1)]), null);
+  // The picker asks before it reads: pickRefusal comes first in pick(), and returns early.
+  const source = readFileSync(new URL('./demo-content.tsx', import.meta.url), 'utf8');
+  const body = source.slice(source.indexOf('async function pick('));
+  const asked = body.indexOf('pickRefusal(files)');
+  const read = body.indexOf('.map(inputOf)');
+  assert.ok(asked > 0 && read > asked, 'pickRefusal before any file is read');
+  assert.match(body.slice(asked, read), /if \(early\) \{[\s\S]*?\n\s*return;\n\s*\}/);
+});
+
+test("a working copy this tab kept shows its own report, never one that says it was just imported, and the frame's alert never points at findings (F6)", () => {
+  const example = runImport(pairFiles(EXAMPLE.portfolio));
+  if (example.kind !== 'imported') assert.fail(example.code);
+  const text = (html: string) => html.replace(/&#x27;/g, "'");
+  const kept = text(renderToStaticMarkup(<ImportReport result={example} kept />));
+  assert.ok(kept.includes(`<p role="status">${KEPT_TEXT.imported}</p>`));
+  assert.equal(kept.includes('Imported.'), false);
+  assert.match(kept, /data-kept="true"/);
+  for (const [code, expected] of [
+    ['invalid', KEPT_TEXT.refused],
+    ['parse_limits', KEPT_TEXT.refused],
+    ['timeout', KEPT_TEXT.unchecked],
+    ['worker_unavailable', KEPT_TEXT.unchecked],
+  ] as const) {
+    const html = text(
+      renderToStaticMarkup(
+        <ImportReport result={{ kind: 'refused', code, diagnostics: [] }} kept />,
+      ),
+    );
+    assert.ok(html.includes(`<p role="status">${expected}</p>`), code);
+  }
+  // A pick's report is as before.
+  assert.doesNotMatch(renderToStaticMarkup(<ImportReport result={example} />), /data-kept/);
+  assert.doesNotMatch(LOCAL_FRAME_FAILED, /finding/i);
 });

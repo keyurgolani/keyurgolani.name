@@ -446,3 +446,222 @@ test(
     }
   },
 );
+
+/** `files` with YAML comments added to each, to just under the import's 1 MiB cap: a big document that's cheap to render. */
+function padded(files: Files): Files {
+  const line = `# ${'x'.repeat(97)}\n`;
+  return files.map(({ name, bytes }) => {
+    let text = new TextDecoder().decode(bytes);
+    if (!text.endsWith('\n')) text += '\n';
+    const room = 1024 * 1024 - 512 - new TextEncoder().encode(text).byteLength;
+    return {
+      name,
+      bytes: new TextEncoder().encode(text + line.repeat(Math.floor(room / line.length))),
+    };
+  });
+}
+
+/** The composition select's options, as value and name. */
+async function compositions(page: Page) {
+  return page
+    .getByLabel('Composition', { exact: true })
+    .locator('option')
+    .evaluateAll((options) =>
+      options.map((option) => ({
+        value: (option as HTMLOptionElement).value,
+        name: (option.textContent ?? '').trim(),
+      })),
+    );
+}
+
+test(
+  'past the 100 MiB a frame document takes, the next document goes to a new frame element and document, which says ready on its own nonce and renders it and every change after (handoff 2)',
+  { annotation: ANNOTATION },
+  async ({ page }) => {
+    test.setTimeout(300_000);
+    await openContent(page);
+    const tag = randomBytes(5).toString('hex');
+    // Two documents of just under 1 MiB each: each document message is about 2 MiB, so a frame
+    // document takes 50 of them, and the 51st goes to a new one.
+    expect(await pick(page, padded(named(tag)))).toBe('imported');
+    await openTask(page, 'Appearance');
+    await localFrame(page, `Visitor ${tag}`);
+    const iframe = page.locator('[data-source="local"] iframe');
+    const first = await iframe.elementHandle();
+    const firstSource = await iframe.getAttribute('src');
+    const [a, b] = await compositions(page);
+    expect(b, 'the build offers a second composition').toBeDefined();
+    const select = page.getByLabel('Composition', { exact: true });
+    const notice = page.locator('.studio-state__notice');
+    let shown = await select.inputValue();
+    let changes = 0;
+    // Each change sends the pair again, until one wouldn't fit the frame document.
+    while (changes < 60 && (await first!.evaluate((element) => element.isConnected))) {
+      const next = shown === a!.value ? b! : a!;
+      const said = (await notice.textContent()) ?? '';
+      await select.selectOption(next.value);
+      // The two names take turns, so each change says something new.
+      await expect(notice).toContainText('Composition is now');
+      await expect(notice).not.toHaveText(said);
+      shown = next.value;
+      changes += 1;
+    }
+    // The frame document took the first one and 49 changes; the 50th went to a new one.
+    expect(changes, 'changes until the frame was replaced').toBeGreaterThanOrEqual(49);
+    expect(changes).toBeLessThanOrEqual(51);
+    expect(await first!.evaluate((element) => element.isConnected)).toBe(false);
+    // A new element, a new nonce, and a new document, which says ready and shows the latest.
+    await expect(iframe).toHaveAttribute('src', /^\/preview\/local#nonce=[A-Za-z0-9_-]{22}$/);
+    expect(await iframe.getAttribute('src')).not.toBe(firstSource);
+    const frame = await localFrame(page, `Visitor ${tag}`);
+    await expect(frame.locator('[data-variant]').first()).toHaveAttribute('data-variant', shown);
+    // And the next change after it.
+    const after = shown === a!.value ? b! : a!;
+    await select.selectOption(after.value);
+    await expect(frame.locator('[data-variant]').first()).toHaveAttribute(
+      'data-variant',
+      after.value,
+    );
+    await expect(page.locator('.studio-alert')).toHaveCount(0);
+  },
+);
+
+test(
+  'an import still in the worker when the visitor leaves the Content task and presses Reset demo keeps nothing: the worker stops, and no answer brings the documents back',
+  { annotation: ANNOTATION },
+  async ({ page }) => {
+    await openContent(page);
+    const loaded = new Set(
+      await page.evaluate(() =>
+        performance.getEntriesByType('resource').map((entry) => entry.name.split('#')[0]!),
+      ),
+    );
+    // The worker's script waits until the test lets it through.
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const held: string[] = [];
+    await page.route('**/_next/static/**', async (route) => {
+      if (loaded.has(route.request().url())) return route.fallback();
+      held.push(route.request().url());
+      await gate;
+      await route.fallback().catch(() => {});
+    });
+    const tag = randomBytes(5).toString('hex');
+    await page.locator(PICKER).setInputFiles(
+      named(tag).map(({ name, bytes }) => ({
+        name,
+        mimeType: 'application/yaml',
+        buffer: Buffer.from(bytes),
+      })),
+    );
+    await expect(page.locator('.studio-import__busy')).toBeVisible();
+    await expect.poll(() => held.length, 'the worker script was asked for').toBeGreaterThan(0);
+    await openTask(page, 'Appearance');
+    await page.getByRole('button', { name: 'Reset demo', exact: true }).click();
+    release();
+    // Long enough for a worker the import didn't stop to answer, many times over.
+    await page.waitForTimeout(2_000);
+    await expect(page.locator('iframe')).toHaveAttribute('src', /^\/sample/);
+    await expect(page.locator('[data-source="local"]')).toHaveCount(0);
+    expect(await demoKeys(page)).toEqual([]);
+    await openTask(page, 'Content');
+    await expect(page.locator('.studio-import__report')).toHaveCount(0);
+    await expect(page.locator('iframe')).toHaveAttribute('src', /^\/sample/);
+    expect(await demoKeys(page)).toEqual([]);
+    expect(page.url()).not.toContain(tag);
+  },
+);
+
+test(
+  'a pick of too many files, or one over 1 MiB, is refused by count and size before the page reads a byte of it',
+  { annotation: ANNOTATION },
+  async ({ page }) => {
+    // Counts every read of a picked file's bytes in the page.
+    await page.addInitScript(() => {
+      (window as unknown as { kgnReads: number }).kgnReads = 0;
+      for (const method of ['arrayBuffer', 'text', 'bytes', 'stream'] as const) {
+        const own = (Blob.prototype as unknown as Record<string, unknown>)[method];
+        if (typeof own !== 'function') continue;
+        Object.defineProperty(Blob.prototype, method, {
+          configurable: true,
+          value(this: Blob, ...args: unknown[]) {
+            (window as unknown as { kgnReads: number }).kgnReads += 1;
+            return (own as (...rest: unknown[]) => unknown).apply(this, args);
+          },
+        });
+      }
+    });
+    await openContent(page);
+    const reads = () => page.evaluate(() => (window as unknown as { kgnReads: number }).kgnReads);
+    const [portfolio, site] = named(randomBytes(5).toString('hex'));
+    const upload = (files: { name: string; bytes: Uint8Array }[]) =>
+      page.locator(PICKER).setInputFiles(
+        files.map(({ name, bytes }) => ({
+          name,
+          mimeType: 'application/yaml',
+          buffer: Buffer.from(bytes),
+        })),
+      );
+    const status = page.locator('.studio-import__report [role="status"]');
+    const before = await reads();
+    await upload([portfolio!, site!, site!]);
+    await expect(status).toHaveText(
+      'Pick exactly two files: one portfolio document and one site document.',
+    );
+    expect(await reads()).toBe(before);
+    await upload([
+      portfolio!,
+      { name: 'big.yml', bytes: new Uint8Array(1024 * 1024 + 1).fill(0x23) },
+    ]);
+    await expect(status).toHaveText("A file is over 1 MiB, so it wasn't read.");
+    expect(await reads()).toBe(before);
+    // A pair that fits is read, once a file.
+    expect(await pick(page, [portfolio!, site!])).toBe('imported');
+    expect(await reads()).toBe(before + 2);
+    expect(await demoKeys(page)).toEqual(['portfolio-demo:v1:working']);
+  },
+);
+
+test(
+  "after a reload, the Content task checks the working copy this tab kept in the worker again, and shows its report: the remote media it lists, a host's markup as text",
+  { annotation: ANNOTATION },
+  async ({ page }) => {
+    const workers: string[] = [];
+    page.on('worker', (worker) => workers.push(worker.url()));
+    await openContent(page);
+    const tag = randomBytes(5).toString('hex');
+    // A host #4's URL rules take, with markup's characters as entities in it: shown as text, it
+    // stays as it is; as markup, it would be x<img>.example.
+    const host = 'x&lt;img&gt;.example';
+    const files = H.pairFiles(
+      H.portfolioWith((data) => {
+        (data.identity as Record<string, unknown>).name = `Visitor ${tag}`;
+        (data.media as { source: string }[])[0]!.source = `https://${host}/a.png`;
+      }),
+    );
+    expect(await pick(page, files)).toBe('imported');
+    const remote = page.getByRole('list', { name: 'Remote media' });
+    const listed = async () => (await remote.evaluate((list) => list.textContent)) ?? '';
+    await expect(remote).toBeVisible();
+    expect(await listed()).toContain(`from ${host} (`);
+    expect(await remote.locator('img').count()).toBe(0);
+    expect(workers).toHaveLength(1);
+    await page.reload();
+    await openTask(page, 'Content');
+    const report = page.locator('.studio-import__report');
+    await expect(report).toHaveAttribute('data-kept', 'true');
+    await expect(report.locator('[role="status"]')).toHaveText(
+      'The preview shows the documents this tab kept, and only this tab keeps them.',
+    );
+    await expect(remote).toBeVisible();
+    expect(await listed()).toContain(`from ${host} (`);
+    expect(await remote.locator('img').count()).toBe(0);
+    // Checked again in a worker of its own, once a page load: another task and back reads the same answer.
+    expect(workers).toHaveLength(2);
+    await openTask(page, 'Appearance');
+    await openTask(page, 'Content');
+    await expect(report).toHaveAttribute('data-kept', 'true');
+    expect(workers).toHaveLength(2);
+    await localFrame(page, `Visitor ${tag}`);
+  },
+);

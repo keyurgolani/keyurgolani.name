@@ -6,6 +6,7 @@ import { demoStateLines, SANDBOX_LINE } from '~/lib/demo/state-lines';
 import {
   frameSource,
   studioLocation,
+  taskFragment,
   type DemoSelection,
   type DemoSource,
   type SchemeModes,
@@ -145,11 +146,11 @@ export function DemoStudio({
   // The URL follows the selection, in place, so Back leaves Studio.
   useEffect(() => {
     if (!selection) return;
-    const { pathname, hash } = window.location;
+    const { pathname, search, hash } = window.location;
     window.history.replaceState(
       window.history.state,
       '',
-      studioLocation(pathname, hash, selection, rules, showing),
+      studioLocation(pathname, taskFragment(search, hash), selection, rules, showing),
     );
   }, [selection, rules, showing]);
 

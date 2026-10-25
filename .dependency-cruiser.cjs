@@ -369,13 +369,14 @@ module.exports = {
       severity: 'error',
       comment:
         "The demo's browser modules (#9) run for anonymous visitors and keep everything in " +
-        "their browser, so nothing under lib/demo or Demo Studio's components reaches Owner " +
+        "their browser, so nothing under lib/demo, Demo Studio's components, or the local " +
+        "frame's client code, app/(preview)/_local, which renders a visitor's import, reaches Owner " +
         "Studio's adapter, its transport (studioFetch, which sends the owner's CSRF token), " +
         'or any server module, the owner ones among them: not by an import of its own, and ' +
         "not through a shared module that imports one. #137's and 9-1b's rules, as one. " +
         'Tests and their test support may.',
       from: {
-        path: '^apps/web/src/(?:lib/demo/|app/\\(studio\\)/_components/demo/)',
+        path: '^apps/web/src/(?:lib/demo/|app/\\(studio\\)/_components/demo/|app/\\(preview\\)/_local/)',
         pathNot: ['\\.test\\.tsx?$', '^apps/web/src/lib/demo/test-support\\.ts$'],
       },
       to: {

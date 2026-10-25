@@ -12,6 +12,7 @@ import {
   selectionQuery,
   sourceFrom,
   studioLocation,
+  taskFragment,
 } from './url-state';
 
 // Demo Studio's selection in the URL (#9): #19's query keys, checked
@@ -193,4 +194,28 @@ test('the Studio URL carries source=reference while the reference shows, and its
   );
   // A source key in the Studio URL is no selection: a stored one still waits for a bare visit.
   assert.equal(carriesSelection(query('source=reference')), false);
+});
+
+test("the URL keeps the task a `task` query opened, as its fragment, once the selection's query takes the query's place", () => {
+  assert.equal(taskFragment('?task=content', ''), '#content');
+  assert.equal(taskFragment('?variant=acme-orbit&task=appearance', ''), '#appearance');
+  // A fragment the URL has wins, as the shell reads it first.
+  assert.equal(taskFragment('?task=content', '#preview'), '#preview');
+  assert.equal(taskFragment('', ''), '');
+  // Nothing but a task's id goes into the fragment.
+  for (const search of [
+    '?task=',
+    '?task=Content',
+    '?task=%3Cimg%3E',
+    '?task=a%23b',
+    '?task=../x',
+  ]) {
+    assert.equal(taskFragment(search, ''), '', search);
+  }
+  assert.equal(
+    studioLocation('/studio', taskFragment('?task=content', ''), DEFAULTS, {
+      catalog: { axes: [] },
+    }),
+    '/studio#content',
+  );
 });

@@ -160,6 +160,8 @@ const DEMO = {
   'apps/web/src/lib/demo/storage.ts': 'export const storage = 1;\n',
   'apps/web/src/app/(studio)/_components/demo/demo-shell.tsx':
     "import { storage } from '~/lib/demo/storage';\nexport const shell = storage;\n",
+  'apps/web/src/app/(preview)/_local/local-document.tsx':
+    "import { storage } from '~/lib/demo/storage';\nexport const frame = storage;\n",
 };
 
 test("check:deps holds the demo and owner code apart, both ways, through a shared module too: #137's mutants and 9-1b's, under one pair of rules (#9)", (t) => {
@@ -180,6 +182,10 @@ test("check:deps holds the demo and owner code apart, both ways, through a share
       "import { ownerBackend } from '~/lib/studio/owner-backend';\nimport { studioFetch } from '~/lib/studio-fetch';\nexport const shell = [ownerBackend, studioFetch];\n",
     'apps/web/src/lib/studio/journal.ts':
       "import { storage } from '../demo/storage';\nexport const journal = storage;\n",
+    // 9-4b2's: the local frame's client code, which renders a visitor's import,
+    // importing studioFetch.
+    'apps/web/src/app/(preview)/_local/local-document.tsx':
+      "import { studioFetch } from '~/lib/studio-fetch';\nexport const frame = studioFetch;\n",
     // Through a shared module: a lib/demo module that reaches any server module.
     'apps/web/src/lib/demo/url-state.ts':
       "import { head } from '~/lib/shared-head';\nexport const state = head;\n",
@@ -193,6 +199,7 @@ test("check:deps holds the demo and owner code apart, both ways, through a share
     'demo-reaches-no-owner-code: apps/web/src/lib/demo/storage.ts -> apps/web/src/lib/studio-fetch.ts',
     'demo-reaches-no-owner-code: apps/web/src/app/(studio)/_components/demo/demo-shell.tsx -> apps/web/src/lib/studio/owner-backend.ts',
     'demo-reaches-no-owner-code: apps/web/src/app/(studio)/_components/demo/demo-shell.tsx -> apps/web/src/lib/studio-fetch.ts',
+    'demo-reaches-no-owner-code: apps/web/src/app/(preview)/_local/local-document.tsx -> apps/web/src/lib/studio-fetch.ts',
     'owner-code-reaches-no-demo: apps/web/src/server/owner/auth.ts -> apps/web/src/lib/demo/storage.ts',
     'owner-code-reaches-no-demo: apps/web/src/lib/studio/journal.ts -> apps/web/src/lib/demo/storage.ts',
   ]) {
