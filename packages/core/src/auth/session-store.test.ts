@@ -254,10 +254,14 @@ test('a session write refuses a link or a file in place of an auth directory, an
     arrange(dir, elsewhere);
     const store = filesystemSessionStore(dir);
     await assert.rejects(store.put(record()), /is a link|isn't a directory/, what);
-    // revoked-before sits in ephemeral/auth/, so only a fault at or above it stops revokeAll.
-    if (!what.startsWith('ephemeral/auth/sessions/')) {
-      await assert.rejects(store.revokeAll(Date.now()), /is a link|isn't a directory/);
-    }
+    // revokeAll checks every directory it uses before it writes revoked-before,
+    // so a refusal leaves no revocation half done.
+    await assert.rejects(store.revokeAll(Date.now()), /is a link|isn't a directory/, what);
+    assert.equal(
+      existsSync(paths(dir).revokedBefore),
+      false,
+      `${what}: revoked-before was written`,
+    );
     assert.deepEqual(readdirSync(elsewhere), [], `${what}: something was written through it`);
   }
 });

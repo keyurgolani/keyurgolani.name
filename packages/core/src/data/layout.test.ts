@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -174,6 +175,34 @@ test('the repair opens the directory without following a link, so one swapped in
   assert.ok(swapped);
   assert.equal(mode(elsewhere), 0o755, 'the repair followed the link');
   assert.deepEqual(readdirSync(elsewhere), []);
+});
+
+test('after the repair, a path that names another directory than the one it repaired, even a 0700 one of ours, is refused', async (t) => {
+  const dir = scratch(t);
+  const paths = authPaths(dir);
+  mkdirSync(paths.auth, { recursive: true, mode: 0o700 });
+  chmodSync(paths.auth, 0o755);
+  const moved = path.join(dir, 'moved');
+  // The repaired directory is moved aside the moment its chmod lands, and a new one of ours
+  // stands in its place, at 0700.
+  const swapping = (async (file: string, flags: number) => {
+    const handle = await open(file, flags);
+    return {
+      stat: () => handle.stat(),
+      chmod: async (mode: number) => {
+        await handle.chmod(mode);
+        renameSync(paths.auth, moved);
+        mkdirSync(paths.auth, { mode: 0o700 });
+      },
+      close: () => handle.close(),
+    };
+  }) as unknown as typeof open;
+  await assert.rejects(
+    preparePrivateDir(dir, paths.sessions, { open: swapping }),
+    /^PrivateDirError: ephemeral\/auth was replaced while it was checked/,
+  );
+  assert.equal(mode(paths.auth), 0o700);
+  assert.deepEqual(readdirSync(paths.auth), [], 'it went on into the directory swapped in');
 });
 
 test("the checks run in order, and another user's directory is refused before any chmod, loosened or not", async (t) => {

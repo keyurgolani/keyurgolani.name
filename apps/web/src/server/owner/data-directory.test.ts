@@ -13,6 +13,8 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import fsPromises from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -199,6 +201,36 @@ test("owner refusing the old one-file config leaves the data directory a valid e
     tree(dataDir),
     expected.filter((entry) => entry !== claim),
   );
+});
+
+test("startup's write, sync, and rename probe runs in ephemeral/, where the auth state lives, and is removed", async (t) => {
+  const { root, env } = workspace(t);
+  const dataDir = path.join(root, 'data');
+  mkdirSync(dataDir, { mode: 0o700 });
+  // Every rename startup makes, seen through node:fs/promises, whose named
+  // exports the probe's module imports.
+  const renamed: string[] = [];
+  const real = fsPromises.rename;
+  fsPromises.rename = async (from, to) => {
+    renamed.push(String(from));
+    return real(from, to);
+  };
+  syncBuiltinESMExports();
+  let result: StartupResult;
+  try {
+    result = await start({ ...env, PORTFOLIO_DATA_DIR: dataDir });
+  } finally {
+    fsPromises.rename = real;
+    syncBuiltinESMExports();
+  }
+  assert.ok(result.ok, JSON.stringify(result.issues));
+  if (result.ok) result.state.release?.();
+  const probes = renamed.filter((file) => path.basename(file) === 'probe');
+  assert.equal(probes.length, 1, renamed.join(', '));
+  const probeDir = path.dirname(probes[0]!);
+  assert.equal(path.dirname(probeDir), path.join(dataDir, 'ephemeral'));
+  assert.match(path.basename(probeDir), /^\.probe-[0-9a-f]{12}$/);
+  assert.deepEqual(readdirSync(path.join(dataDir, 'ephemeral')), [], 'the probe was left');
 });
 
 test('a start that succeeds makes the store, and no auth directory until a writer needs one', async (t) => {

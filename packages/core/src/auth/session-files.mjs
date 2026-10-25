@@ -224,6 +224,9 @@ export async function readRevokedBefore(dataDir) {
  */
 export async function revokeAllSessionFiles(dataDir, at) {
   await preparePrivateDir(dataDir, authPaths(dataDir).auth);
+  // Every directory it reads or deletes in is checked before revoked-before is
+  // written, so a refusal leaves nothing half done and says so truly.
+  await checkPrivateDir(dataDir, authPaths(dataDir).sessions);
   await writePrivateFile(authPaths(dataDir).revokedBefore, `${new Date(at).toISOString()}\n`);
   const deleted = [];
   for (const digest of await listSessionDigests(dataDir)) {

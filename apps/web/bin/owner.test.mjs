@@ -364,6 +364,23 @@ test('revoke-sessions names a link planted in place of ephemeral/auth/, and the 
   await assert.rejects(readRevokedBefore(dir), /is a link/);
 });
 
+test('revoke-sessions refuses a link at ephemeral/auth/sessions/ before it writes revoked-before, so "Nothing was revoked" is true', async (t) => {
+  const planted = await dataDirWith(t, 1);
+  const dir = tempDir(t);
+  mkdirSync(path.join(dir, 'ephemeral', 'auth'), { recursive: true, mode: 0o700 });
+  symlinkSync(
+    path.join(planted, 'ephemeral', 'auth', 'sessions'),
+    path.join(dir, 'ephemeral', 'auth', 'sessions'),
+  );
+  const { code, stderr } = await run(['revoke-sessions'], '', { PORTFOLIO_DATA_DIR: dir });
+  assert.equal(code, 1);
+  assert.match(stderr, /^ephemeral\/auth\/sessions is a link\. /);
+  assert.match(stderr, /Nothing was revoked\./);
+  assert.equal(existsSync(path.join(dir, 'ephemeral', 'auth', 'revoked-before')), false);
+  assert.equal(existsSync(path.join(dir, 'audit')), false, 'it audited a revocation');
+  assert.equal((await listSessionDigests(planted)).length, 1, 'it deleted through the link');
+});
+
 test('revoke-sessions with no usable data directory revokes nothing', async (t) => {
   const dir = await dataDirWith(t, 1);
   const file = path.join(tempDir(t), 'a-file');

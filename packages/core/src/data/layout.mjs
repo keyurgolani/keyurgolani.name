@@ -192,7 +192,9 @@ async function settlePrivateDir(at, name, io) {
       const last = privateDirProblem(after, uid);
       // The path must still name the directory the handle holds.
       if (last === 'link' || last === 'not_directory') refuse(last);
-      if (after.ino !== held.ino || after.dev !== held.dev) refuse('link');
+      if (after.ino !== held.ino || after.dev !== held.dev) {
+        throw new PrivateDirError('linked', `${name} was replaced while it was checked.`);
+      }
       refuse(last);
     }
   } finally {
