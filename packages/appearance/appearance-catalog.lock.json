@@ -49,6 +49,14 @@
       "license": "first-party",
       "digest": "sha256-9df624cb04caf40b3b7cbcfe2c3e142d18c8824d38481e3564b547db21459d02"
     },
+    "carbon-inspired": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "stable",
+      "license": "independent-inspired-interpretation",
+      "digest": "sha256-ad280290c9262e1a1476de123407273f7ad7cfd0448705d9a1d199d89e2bef98"
+    },
     "cool-color-safe": {
       "axis": "colorScheme",
       "package": "@portfolio/appearance-schemes",
@@ -128,6 +136,14 @@
       "tier": "stable",
       "license": "provided-by-operating-system",
       "digest": "sha256-a9b6c8b8471d89f75fbe109909e35732fedb358a5ba49ed143f704c74e75e3e8"
+    },
+    "international-grid": {
+      "axis": "designLanguage",
+      "package": "@portfolio/appearance-languages",
+      "version": "1.0.1",
+      "tier": "stable",
+      "license": "first-party",
+      "digest": "sha256-a55d521820b832b12aa889b7b23ff6d16d0dd6f7c89da98639afdb02fcba9866"
     },
     "iridescent-pearl": {
       "axis": "colorScheme",

@@ -3,166 +3,456 @@
   "id": "paper-tactile",
   "kind": "design-language",
   "tier": "stable",
-  "reason": "It fails check:appearance with 24 of 25 color schemes: its texture raises every target by 1.1, past where anchor-v1 solves each scheme's roles.",
+  "reason": "It fails check:appearance with 25 of 25 color schemes: text on its surfaces falls under the targets over its texture's worst pixel.",
   "causes": [
     "texture"
   ],
   "schemes": {
-    "failing": 24,
+    "failing": 25,
     "of": 25
   },
   "worst": {
-    "set": "light",
-    "kind": "large-text",
-    "foreground": "signature-start to signature-end",
+    "set": "high-contrast-dark",
+    "kind": "text",
+    "foreground": "accent-text",
     "ground": "surface-prominent",
-    "ratio": 3,
-    "target": 3.3,
-    "scheme": "botanical-sage"
+    "texture": true,
+    "ratio": 2.16,
+    "target": 7,
+    "scheme": "paper-ink"
   },
   "pairs": [
     {
-      "set": "light",
-      "kind": "large-text",
-      "foreground": "signature-start to signature-end",
-      "ground": "surface-prominent",
-      "ratio": 3,
-      "target": 3.3,
-      "scheme": "botanical-sage",
-      "failing": 11
-    },
-    {
-      "set": "light",
-      "kind": "non-text",
-      "foreground": "focus",
-      "ground": "surface-prominent",
-      "ratio": 3,
-      "target": 3.3,
-      "scheme": "botanical-sage",
-      "failing": 7
-    },
-    {
-      "set": "dark",
+      "set": "high-contrast-dark",
       "kind": "text",
       "foreground": "accent-text",
       "ground": "surface-prominent",
-      "ratio": 4.51,
-      "target": 4.95,
-      "scheme": "sunset-ember",
-      "failing": 16
+      "texture": true,
+      "ratio": 2.16,
+      "target": 7,
+      "scheme": "paper-ink",
+      "failing": 24
     },
     {
-      "set": "light",
+      "set": "high-contrast-dark",
       "kind": "text",
       "foreground": "accent-text",
-      "ground": "surface-prominent",
-      "ratio": 4.55,
-      "target": 4.95,
-      "scheme": "cool-color-safe",
-      "failing": 19
+      "ground": "surface-default",
+      "texture": true,
+      "ratio": 2.4,
+      "target": 7,
+      "scheme": "paper-ink",
+      "failing": 24
+    },
+    {
+      "set": "high-contrast-dark",
+      "kind": "text",
+      "foreground": "accent-text",
+      "ground": "surface-subtle",
+      "texture": true,
+      "ratio": 2.62,
+      "target": 7,
+      "scheme": "paper-ink",
+      "failing": 24
+    },
+    {
+      "set": "high-contrast-dark",
+      "kind": "text",
+      "foreground": "accent-text",
+      "ground": "surface-overlay",
+      "texture": true,
+      "ratio": 2.92,
+      "target": 7,
+      "scheme": "paper-ink",
+      "failing": 24
     },
     {
       "set": "high-contrast-light",
       "kind": "text",
       "foreground": "accent-text",
       "ground": "surface-prominent",
-      "ratio": 7.1,
-      "target": 7.7,
+      "texture": true,
+      "ratio": 2.93,
+      "target": 7,
       "scheme": "earthy-clay",
-      "failing": 20
+      "failing": 25
+    },
+    {
+      "set": "high-contrast-light",
+      "kind": "text",
+      "foreground": "accent-text",
+      "ground": "surface-default",
+      "texture": true,
+      "ratio": 3.21,
+      "target": 7,
+      "scheme": "botanical-sage",
+      "failing": 25
+    },
+    {
+      "set": "high-contrast-light",
+      "kind": "text",
+      "foreground": "accent-text",
+      "ground": "surface-subtle",
+      "texture": true,
+      "ratio": 3.46,
+      "target": 7,
+      "scheme": "botanical-sage",
+      "failing": 25
+    },
+    {
+      "set": "high-contrast-dark",
+      "kind": "non-text",
+      "foreground": "data-categorical-2",
+      "ground": "surface-default",
+      "texture": true,
+      "ratio": 2.39,
+      "target": 4.5,
+      "scheme": "high-contrast",
+      "failing": 24
+    },
+    {
+      "set": "high-contrast-dark",
+      "kind": "non-text",
+      "foreground": "data-categorical-1",
+      "ground": "surface-default",
+      "texture": true,
+      "ratio": 2.4,
+      "target": 4.5,
+      "scheme": "paper-ink",
+      "failing": 24
+    },
+    {
+      "set": "high-contrast-light",
+      "kind": "text",
+      "foreground": "accent-text",
+      "ground": "surface-overlay",
+      "texture": true,
+      "ratio": 3.76,
+      "target": 7,
+      "scheme": "botanical-sage",
+      "failing": 25
+    },
+    {
+      "set": "high-contrast-dark",
+      "kind": "non-text",
+      "foreground": "data-categorical-5",
+      "ground": "surface-default",
+      "texture": true,
+      "ratio": 2.54,
+      "target": 4.5,
+      "scheme": "arctic-aurora",
+      "failing": 24
+    },
+    {
+      "set": "high-contrast-dark",
+      "kind": "non-text",
+      "foreground": "data-categorical-3",
+      "ground": "surface-default",
+      "texture": true,
+      "ratio": 3.07,
+      "target": 4.5,
+      "scheme": "arctic-aurora",
+      "failing": 24
+    },
+    {
+      "set": "high-contrast-light",
+      "kind": "non-text",
+      "foreground": "data-categorical-1",
+      "ground": "surface-default",
+      "texture": true,
+      "ratio": 3.21,
+      "target": 4.5,
+      "scheme": "botanical-sage",
+      "failing": 25
+    },
+    {
+      "set": "high-contrast-light",
+      "kind": "non-text",
+      "foreground": "data-categorical-2",
+      "ground": "surface-default",
+      "texture": true,
+      "ratio": 3.21,
+      "target": 4.5,
+      "scheme": "cool-color-safe",
+      "failing": 25
+    },
+    {
+      "set": "high-contrast-light",
+      "kind": "non-text",
+      "foreground": "data-categorical-3",
+      "ground": "surface-default",
+      "texture": true,
+      "ratio": 3.22,
+      "target": 4.5,
+      "scheme": "arctic-aurora",
+      "failing": 25
     },
     {
       "set": "high-contrast-dark",
       "kind": "text",
+      "foreground": "text-primary",
+      "ground": "surface-prominent",
+      "texture": true,
+      "ratio": 5.01,
+      "target": 7,
+      "scheme": "arctic-aurora",
+      "failing": 24
+    },
+    {
+      "set": "high-contrast-dark",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-prominent",
+      "texture": true,
+      "ratio": 5.01,
+      "target": 7,
+      "scheme": "arctic-aurora",
+      "failing": 24
+    },
+    {
+      "set": "high-contrast-dark",
+      "kind": "text",
+      "foreground": "text-muted",
+      "ground": "surface-prominent",
+      "texture": true,
+      "ratio": 5.01,
+      "target": 7,
+      "scheme": "arctic-aurora",
+      "failing": 24
+    },
+    {
+      "set": "high-contrast-light",
+      "kind": "non-text",
+      "foreground": "data-categorical-5",
+      "ground": "surface-default",
+      "texture": true,
+      "ratio": 3.23,
+      "target": 4.5,
+      "scheme": "neon-city",
+      "failing": 25
+    },
+    {
+      "set": "high-contrast-light",
+      "kind": "non-text",
+      "foreground": "data-categorical-4",
+      "ground": "surface-default",
+      "texture": true,
+      "ratio": 3.36,
+      "target": 4.5,
+      "scheme": "arctic-aurora",
+      "failing": 25
+    },
+    {
+      "set": "high-contrast-dark",
+      "kind": "non-text",
+      "foreground": "data-categorical-4",
+      "ground": "surface-default",
+      "texture": true,
+      "ratio": 3.5,
+      "target": 4.5,
+      "scheme": "arctic-aurora",
+      "failing": 24
+    },
+    {
+      "set": "high-contrast-dark",
+      "kind": "text",
+      "foreground": "text-primary",
+      "ground": "surface-default",
+      "texture": true,
+      "ratio": 5.57,
+      "target": 7,
+      "scheme": "arctic-aurora",
+      "failing": 24
+    },
+    {
+      "set": "high-contrast-dark",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-default",
+      "texture": true,
+      "ratio": 5.57,
+      "target": 7,
+      "scheme": "arctic-aurora",
+      "failing": 24
+    },
+    {
+      "set": "high-contrast-dark",
+      "kind": "text",
+      "foreground": "text-muted",
+      "ground": "surface-default",
+      "texture": true,
+      "ratio": 5.57,
+      "target": 7,
+      "scheme": "arctic-aurora",
+      "failing": 24
+    },
+    {
+      "set": "high-contrast-dark",
+      "kind": "text",
+      "foreground": "text-primary",
+      "ground": "surface-subtle",
+      "texture": true,
+      "ratio": 6.09,
+      "target": 7,
+      "scheme": "arctic-aurora",
+      "failing": 24
+    },
+    {
+      "set": "high-contrast-dark",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-subtle",
+      "texture": true,
+      "ratio": 6.09,
+      "target": 7,
+      "scheme": "arctic-aurora",
+      "failing": 24
+    },
+    {
+      "set": "high-contrast-dark",
+      "kind": "text",
+      "foreground": "text-muted",
+      "ground": "surface-subtle",
+      "texture": true,
+      "ratio": 6.09,
+      "target": 7,
+      "scheme": "arctic-aurora",
+      "failing": 24
+    },
+    {
+      "set": "high-contrast-light",
+      "kind": "text",
+      "foreground": "text-primary",
+      "ground": "surface-prominent",
+      "texture": true,
+      "ratio": 6.57,
+      "target": 7,
+      "scheme": "arctic-aurora",
+      "failing": 25
+    },
+    {
+      "set": "high-contrast-light",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-prominent",
+      "texture": true,
+      "ratio": 6.57,
+      "target": 7,
+      "scheme": "arctic-aurora",
+      "failing": 25
+    },
+    {
+      "set": "high-contrast-light",
+      "kind": "text",
+      "foreground": "text-muted",
+      "ground": "surface-prominent",
+      "texture": true,
+      "ratio": 6.57,
+      "target": 7,
+      "scheme": "arctic-aurora",
+      "failing": 25
+    },
+    {
+      "set": "dark",
+      "kind": "text",
       "foreground": "accent-text",
       "ground": "surface-prominent",
-      "ratio": 7.1,
-      "target": 7.7,
-      "scheme": "paper-ink",
-      "failing": 20
+      "texture": true,
+      "ratio": 4.3,
+      "target": 4.5,
+      "scheme": "sunset-ember",
+      "failing": 15
     },
     {
       "set": "dark",
       "kind": "text",
       "foreground": "text-muted",
       "ground": "surface-prominent",
-      "ratio": 4.59,
-      "target": 4.95,
-      "scheme": "low-stimulus-warm",
-      "failing": 20
+      "texture": true,
+      "ratio": 4.34,
+      "target": 4.5,
+      "scheme": "paper-ink",
+      "failing": 14
+    },
+    {
+      "set": "light",
+      "kind": "large-text",
+      "foreground": "signature-start to signature-end",
+      "ground": "surface-prominent",
+      "texture": true,
+      "ratio": 2.9,
+      "target": 3,
+      "scheme": "blue-orange-color-safe",
+      "failing": 8
+    },
+    {
+      "set": "high-contrast-dark",
+      "kind": "text",
+      "foreground": "text-primary",
+      "ground": "surface-overlay",
+      "texture": true,
+      "ratio": 6.79,
+      "target": 7,
+      "scheme": "arctic-aurora",
+      "failing": 24
+    },
+    {
+      "set": "high-contrast-dark",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-overlay",
+      "texture": true,
+      "ratio": 6.79,
+      "target": 7,
+      "scheme": "arctic-aurora",
+      "failing": 24
+    },
+    {
+      "set": "high-contrast-dark",
+      "kind": "text",
+      "foreground": "text-muted",
+      "ground": "surface-overlay",
+      "texture": true,
+      "ratio": 6.79,
+      "target": 7,
+      "scheme": "arctic-aurora",
+      "failing": 24
+    },
+    {
+      "set": "light",
+      "kind": "non-text",
+      "foreground": "focus",
+      "ground": "surface-prominent",
+      "texture": true,
+      "ratio": 2.91,
+      "target": 3,
+      "scheme": "botanical-sage",
+      "failing": 6
+    },
+    {
+      "set": "light",
+      "kind": "text",
+      "foreground": "accent-text",
+      "ground": "surface-prominent",
+      "texture": true,
+      "ratio": 4.42,
+      "target": 4.5,
+      "scheme": "blue-orange-color-safe",
+      "failing": 9
     },
     {
       "set": "light",
       "kind": "text",
       "foreground": "text-muted",
       "ground": "surface-prominent",
-      "ratio": 4.59,
-      "target": 4.95,
-      "scheme": "pastel-sorbet",
-      "failing": 23
-    },
-    {
-      "set": "light",
-      "kind": "large-text",
-      "foreground": "signature-start to signature-end",
-      "ground": "surface-default",
-      "ratio": 3.24,
-      "target": 3.3,
-      "scheme": "blue-orange-color-safe",
-      "failing": 6
-    },
-    {
-      "set": "light",
-      "kind": "non-text",
-      "foreground": "data-categorical-2",
-      "ground": "surface-default",
-      "ratio": 3.24,
-      "target": 3.3,
+      "texture": true,
+      "ratio": 4.44,
+      "target": 4.5,
       "scheme": "blue-orange-color-safe",
       "failing": 5
-    },
-    {
-      "set": "light",
-      "kind": "non-text",
-      "foreground": "focus",
-      "ground": "surface-default",
-      "ratio": 3.24,
-      "target": 3.3,
-      "scheme": "botanical-sage",
-      "failing": 4
-    },
-    {
-      "set": "light",
-      "kind": "non-text",
-      "foreground": "data-categorical-1",
-      "ground": "surface-default",
-      "ratio": 3.24,
-      "target": 3.3,
-      "scheme": "botanical-sage",
-      "failing": 4
-    },
-    {
-      "set": "light",
-      "kind": "non-text",
-      "foreground": "data-categorical-3",
-      "ground": "surface-default",
-      "ratio": 3.26,
-      "target": 3.3,
-      "scheme": "sepia-film",
-      "failing": 1
-    },
-    {
-      "set": "light",
-      "kind": "text",
-      "foreground": "accent-text",
-      "ground": "surface-default",
-      "ratio": 4.94,
-      "target": 4.95,
-      "scheme": "blue-orange-color-safe",
-      "failing": 2
     }
   ],
   "unblockedBy": [
-    "anchor-v2 textured targets (promoted from the backlog to #20 PR 2c: \"anchor-v2 solver\"), so a scheme meets the raised targets a texture sets"
+    "a re-solve of the text it carries against the texture's worst pixel, at the strength the language draws it (#20 PR 2b, the measured texture gate)"
   ]
 }

@@ -23,6 +23,7 @@ test('appearanceTargets maps every threshold the gate reads, and nothing else', 
   moved.contrast.largeText = 3.5;
   moved.contrast.nonText = 3.25;
   moved.contrast.highContrast = { text: 7.5, largeText: 5, nonText: 5.5 };
+  // The gate measures a texture's own pixels (texture.ts), so the file's textureRaise moves nothing.
   moved.contrast.textureRaise = 1.2;
   moved.contrast.largeTextPt = 20;
   moved.contrast.largeBoldTextPt = 15;
@@ -35,7 +36,6 @@ test('appearanceTargets maps every threshold the gate reads, and nothing else', 
     highContrastText: 7.5,
     highContrastLargeText: 5,
     highContrastNonText: 5.5,
-    textureRaise: 1.2,
     focusWidth: 3,
     largeTextPt: 20,
     largeBoldTextPt: 15,

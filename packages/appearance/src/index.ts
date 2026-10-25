@@ -93,6 +93,14 @@ export {
   type GateTypography,
 } from './gate';
 export {
+  REFERENCE_SURFACES,
+  TEXTURE_DITHER,
+  texturePixels,
+  textureProblem,
+  type TextureInset,
+  type TexturePixel,
+} from './texture';
+export {
   ACCESSIBILITY_CHECKS,
   ALLOWED_LICENSES,
   CATALOG_TIERS,

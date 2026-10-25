@@ -191,7 +191,7 @@ test('a recipe applies as its ordinary axis ids, one query, and a diagnostic for
     held.diagnostics[0]!.message,
     /^names a held design language: It fails check:appearance/,
   );
-  // Five of the eight recipes name a held language.
+  // Four of the eight recipes name a held language: systems-clarity's carbon-inspired ships, since its grid sits in the surface's padding, under no text.
   const holding = readRecipes(REPO_ROOT).flatMap((recipe) =>
     reasons.has(`designLanguage:${recipe.selection.designLanguage}`)
       ? [`${recipe.id} ${recipe.selection.designLanguage}`]
@@ -199,7 +199,6 @@ test('a recipe applies as its ordinary axis ids, one query, and a diagnostic for
   );
   assert.deepEqual(holding, [
     'editorial-warmth paper-tactile',
-    'systems-clarity carbon-inspired',
     'night-gallery atelier-luxury',
     'cinematic-archive paper-tactile',
     'neon-maker cyberpunk',
@@ -272,7 +271,7 @@ test('search filters by words, axis, tier, status, license, and mode', async () 
   assert.ok(ids('axis=scheme&mode=light').every((id) => id !== 'oled-black' && id !== 'neon-city'));
   assert.deepEqual(ids('axis=scheme&tier=experimental'), ['neon-city']);
   assert.deepEqual(ids('status=excluded'), []);
-  assert.equal(ids('status=held').length, 27);
+  assert.equal(ids('status=held').length, 25);
   assert.deepEqual(ids('q=refractive&status=held'), ['refractive-glass', 'holographic-iridescent']);
   assert.deepEqual(ids('q=nord&status=research'), ['nord']);
   assert.deepEqual(ids('q=nothing-matches-this'), []);

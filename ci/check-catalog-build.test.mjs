@@ -338,7 +338,7 @@ test("the held packs are read from each pack package's held/, and the build hold
   const root = path.resolve(import.meta.dirname, '..');
   const held = heldRecords();
   const dirs = readdirSync(path.join(root, 'packages/appearance-languages/held')).sort();
-  assert.equal(dirs.length, 27);
+  assert.equal(dirs.length, 25);
   assert.deepEqual(
     held.map(({ id }) => id),
     dirs,

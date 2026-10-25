@@ -55,6 +55,7 @@ test('./generators loads none of the packages manifests need, so its bundle stay
     'index.ts',
     'roles.ts',
     'sets.ts',
+    'texture.ts',
   ]);
 });
 

@@ -55,6 +55,18 @@ export function composite(color: string, backdrop: string, alpha: number): strin
   return hex(top.map((value, index) => Math.round(value * alpha + bottom[index]! * (1 - alpha))));
 }
 
+/**
+ * The colors in `parts` mixed by their weights, which sum to 1, each
+ * channel rounded: what a texture's layers composite to over a surface.
+ */
+export function blend(parts: readonly (readonly [string, number])[]): string {
+  const sum = [0, 0, 0];
+  for (const [color, weight] of parts) {
+    channels(color).forEach((value, index) => (sum[index]! += value * weight));
+  }
+  return hex(sum.map((value) => Math.min(255, Math.max(0, Math.round(value)))));
+}
+
 function toLinear(channel: number): number {
   const value = channel / 255;
   return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
@@ -64,10 +76,22 @@ function toGamma(value: number): number {
   return value <= 0.0031308 ? 12.92 * value : 1.055 * value ** (1 / 2.4) - 0.055;
 }
 
+/** Each channel value, linearized: the gate reads thousands of colors a pair. */
+const LINEAR = Array.from({ length: 256 }, (_, channel) => toLinear(channel));
+
 /** WCAG 2 relative luminance. */
 export function luminance(color: string): number {
-  const [r, g, b] = channels(color).map(toLinear) as unknown as Channels;
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return channelLuminance(channels(color));
+}
+
+/** A color's three 0 to 255 channels. */
+export function rgb(color: string): readonly [number, number, number] {
+  return channels(color);
+}
+
+/** WCAG 2 relative luminance of three 0 to 255 channels. */
+export function channelLuminance([r, g, b]: readonly number[]): number {
+  return 0.2126 * LINEAR[r!]! + 0.7152 * LINEAR[g!]! + 0.0722 * LINEAR[b!]!;
 }
 
 /** The WCAG 2 contrast ratio of two colors, from 1 to 21. */

@@ -119,7 +119,9 @@ test('a failure names its pack on each axis, the set, the pair, and the modes th
   assert.equal(failure.scheme, 'warm-parchment');
   assert.equal(failure.typography, 'humanist-ui');
   assert.deepEqual(failure.modes, ['system', 'light', 'dark']);
-  assert.equal(failure.pair.target, 4.95);
+  // Read under the texture, at the plain target: the texture's own pixel is what fails it.
+  assert.equal(failure.pair.target, 4.5);
+  assert.equal(failure.pair.texture, true);
 });
 
 test('the hierarchy check holds the accent states and the quieter text roles apart', () => {

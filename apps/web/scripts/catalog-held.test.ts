@@ -24,9 +24,12 @@ import { generateRegistry, renderOptions, REPO_ROOT } from './registry-options';
 import { DESIGN_LANGUAGES } from '../../../scripts/catalog/seed/appearance-catalog.js';
 import { BORDER_FIXES, languageManifest } from '../../../scripts/catalog/seed.mjs';
 
-// #20, PR 2b: the 40 design languages. The 13 that pass check:appearance
-// ship; the 27 that fail it, on texture or translucency, are held with
-// their gate records until anchor-v2 and translucency floors land.
+// #20, PR 2b: the 40 design languages. The 15 that pass check:appearance
+// ship; the 25 that fail it, on texture or translucency, are held with
+// their gate records until a re-solve over their textures and translucency
+// floors land. The gate reads a texture at its worst pixel under a
+// surface's text, so carbon-inspired's and international-grid's grids, in
+// the padding, hold neither back.
 
 interface SeedLanguage {
   readonly id: string;
@@ -62,7 +65,7 @@ const tally = (tiers: readonly string[]) =>
     return counts;
   }, {});
 
-test('the 40 approved languages: 13 ship and 27 are held, each in its approved tier', async () => {
+test('the 40 approved languages: 15 ship and 25 are held, each in its approved tier', async () => {
   const { registry } = await production();
   const shipping = [...registry.packs.designLanguage.values()].filter((pack) => !pack.fixture);
   const holding = held();
@@ -75,12 +78,12 @@ test('the 40 approved languages: 13 ship and 27 are held, each in its approved t
     assert.equal(tier, language.status, `${language.id}'s tier`);
   }
   assert.deepEqual(tally(shipping.map(({ manifest }) => manifest.tier)), {
-    stable: 5,
+    stable: 7,
     extended: 7,
     experimental: 1,
   });
   assert.deepEqual(tally(holding.map(({ manifest }) => manifest!.tier)), {
-    stable: 7,
+    stable: 5,
     extended: 11,
     experimental: 9,
   });
@@ -151,19 +154,21 @@ test('each held language records the gate it fails, its worst pair and scheme, a
   assert.deepEqual(glass.causes, ['translucency']);
   assert.deepEqual(glass.opacityFloor, { withTexture: 100, withoutTexture: 100 });
   assert.match(glass.unblockedBy.join(' '), /Translucency floors/);
-  const carbon = JSON.parse(
-    held().find(({ id }) => id === 'carbon-inspired')!.recorded!,
-  ) as HeldRecord;
-  assert.deepEqual(carbon.causes, ['texture']);
-  assert.equal(carbon.opacityFloor, undefined);
-  assert.match(carbon.unblockedBy.join(' '), /anchor-v2 solver/);
+  // memphis is held on its texture alone: text under its accent dot's worst pixel.
+  const memphis = JSON.parse(held().find(({ id }) => id === 'memphis')!.recorded!) as HeldRecord;
+  assert.deepEqual(memphis.causes, ['texture']);
+  assert.equal(memphis.opacityFloor, undefined);
+  assert.equal(memphis.worst.texture, true);
+  assert.equal(memphis.worst.target, 4.5);
+  assert.match(memphis.reason, /over its texture's worst pixel/);
+  assert.match(memphis.unblockedBy.join(' '), /the measured texture gate/);
 });
 
 test('check:appearance reads every held pack as held, with no finding', async () => {
   const { registry } = await production();
   const report = heldFindings(registry, held(), targets);
   assert.deepEqual(report.findings, []);
-  assert.equal(report.held.length, 27);
+  assert.equal(report.held.length, 25);
   for (const line of report.held)
     assert.match(
       line,

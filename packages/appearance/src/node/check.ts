@@ -182,12 +182,12 @@ export function hierarchyFailures(scheme: string, sets: SchemeSets): HierarchyFa
 
 /**
  * The pack a contrast failure excludes (#20): one pack, never the pair. A
- * focus ring's width, or a translucent surface read over its worst backdrop,
- * is the design language's; every other pair is between the color scheme's
- * own roles.
+ * focus ring's width, a translucent surface read over its worst backdrop,
+ * or a pair read under the texture's worst pixel, is the design
+ * language's; every other pair is between the color scheme's own roles.
  */
 export function responsiblePack(failure: GateFailure): { axis: PackAxis; id: string } {
-  if (failure.pair.kind === 'focus-width' || failure.pair.backdrop) {
+  if (failure.pair.kind === 'focus-width' || failure.pair.backdrop || failure.pair.texture) {
     return { axis: 'designLanguage', id: failure.language };
   }
   return { axis: 'colorScheme', id: failure.scheme };

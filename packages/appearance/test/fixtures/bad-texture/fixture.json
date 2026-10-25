@@ -1,7 +1,7 @@
 {
   "kind": "design-language",
   "base": "platform-neutral",
-  "description": "platform-neutral with a grain texture, which raises the targets on canvas and surfaces by 10%, past what warm-parchment solves to.",
+  "description": "platform-neutral with a grain texture: its 12% text-primary dot sits where a surface's text does, and text-muted falls under 4.5:1 over it on warm-parchment's prominent surface.",
   "patch": {
     "tokens": {
       "texture": "radial-gradient(circle, color-mix(in srgb, var(--color-text-primary) 12%, transparent) 0 0.5px, transparent 0.75px)"

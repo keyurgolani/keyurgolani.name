@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { contrast, mix } from './color';
 import { anchorV1 } from './derive';
 import {
   contrastReport,
@@ -18,8 +19,8 @@ import type { LanguageTokens } from './tokens';
 import { HUMANIST_UI, PLATFORM_NEUTRAL, WARM_PARCHMENT } from './test-support/packs';
 
 // The computed gate (#19, Slice 2, items 2 and 8): the pairs, the targets,
-// compositing at surface-opacity over the worst backdrop, and the texture
-// raise, by the refined body.
+// compositing at surface-opacity over the worst backdrop, and text read
+// over a texture's worst pixel (#20 PR 2b), by the refined body.
 
 const SETS = schemeSets({
   light: anchorV1(WARM_PARCHMENT.anchors!.light!, 'light'),
@@ -46,7 +47,6 @@ test('the targets are the refined body and #11 targets', () => {
       highContrastText: 7,
       highContrastLargeText: 4.5,
       highContrastNonText: 4.5,
-      textureRaise: 1.1,
       focusWidth: 2,
       largeTextPt: 18,
       largeBoldTextPt: 14,
@@ -162,37 +162,124 @@ test('a translucent surface composites over the worst of canvas, black, and whit
   }
 });
 
-test('a texture raises the targets on canvas and surfaces by 10%, and fills keep theirs', () => {
-  const pairs = gateSet(
-    SETS.light!,
-    'light',
-    language({
-      texture: 'radial-gradient(circle, var(--color-text-primary) 0 1px, transparent 1px)',
-    }),
-    { largeSignature: true },
-  );
-  assert.equal(find(pairs, 'text-muted', 'canvas').target, 4.95);
-  assert.equal(find(pairs, 'focus', 'surface-subtle').target, 3.3);
-  assert.equal(find(pairs, 'data-categorical-1', 'surface-default').target, 3.3);
-  assert.equal(find(pairs, 'signature-start to signature-end', 'canvas').target, 3.3);
-  assert.equal(find(pairs, 'on-accent', 'accent').target, 4.5);
-  assert.equal(find(pairs, 'on-status', 'warning').target, 4.5);
-  assert.equal(find(pairs, 'on-scrim', 'scrim').target, 4.5);
+const MEMPHIS =
+  'radial-gradient(circle at 25% 25%, color-mix(in srgb, var(--color-accent) 20%, transparent) 0 8%, transparent 9%), radial-gradient(circle at 75% 70%, color-mix(in srgb, var(--color-information) 18%, transparent) 0 10%, transparent 11%)';
+const SCANLINES =
+  'repeating-linear-gradient(0deg, transparent 0 3px, color-mix(in srgb, var(--color-text-primary) 10%, transparent) 3px 4px)';
+const GEOMETRIC =
+  'conic-gradient(from 45deg, color-mix(in srgb, var(--color-accent) 12%, transparent) 0 25%, transparent 0 50%, color-mix(in srgb, var(--color-information) 10%, transparent) 0 75%, transparent 0)';
+const HALFTONE = 'radial-gradient(circle, var(--color-border-strong) 0 1px, transparent 1.5px)';
+const GRID =
+  'linear-gradient(var(--color-border-subtle) 1px, transparent 1px), linear-gradient(90deg, var(--color-border-subtle) 1px, transparent 1px)';
+
+test("a texture keeps every target; its surfaces are read under it, and the canvas and fills aren't", () => {
+  const pairs = gateSet(SETS.light!, 'light', language({ texture: SCANLINES }), {
+    largeSignature: true,
+  });
+  assert.equal(find(pairs, 'text-muted', 'canvas').target, 4.5);
+  assert.equal(find(pairs, 'text-muted', 'canvas').texture, undefined);
+  assert.equal(find(pairs, 'text-muted', 'surface-prominent').target, 4.5);
+  assert.equal(find(pairs, 'text-muted', 'surface-prominent').texture, true);
+  assert.equal(find(pairs, 'focus', 'surface-subtle').target, 3);
+  assert.equal(find(pairs, 'data-categorical-1', 'surface-default').target, 3);
+  assert.equal(find(pairs, 'signature-start to signature-end', 'canvas').target, 3);
+  for (const [foreground, ground] of [
+    ['on-accent', 'accent'],
+    ['on-status', 'warning'],
+    ['on-scrim', 'scrim'],
+  ] as const) {
+    assert.equal(find(pairs, foreground, ground).target, 4.5);
+    assert.equal(find(pairs, foreground, ground).texture, undefined);
+  }
   const high = gateSet(
     SETS['high-contrast-light']!,
     'high-contrast-light',
-    language({ texture: 'linear-gradient(var(--color-border-subtle), transparent)' }),
+    language({ texture: SCANLINES }),
     SMALL_SIGNATURE,
   );
-  assert.equal(find(high, 'text-primary', 'canvas').target, 7.7);
-  assert.equal(find(high, 'focus', 'canvas').target, 4.95);
+  assert.equal(find(high, 'text-primary', 'canvas').target, 7);
+  assert.equal(find(high, 'focus', 'canvas').target, 4.5);
   assert.equal(find(high, 'on-accent', 'accent').target, 7);
+});
+
+// The flat raise this replaces held a textured language's text to 4.95:1 on
+// the plain surface. A texture can cost more than that 10%: memphis's 20%
+// accent dot does. A mutant that raises flat again passes this pair.
+test("text is held to 4.5:1 over the texture's worst pixel, which a flat 10% raise misses", () => {
+  const prominent = SETS.light!['surface-prominent'];
+  let muted = SETS.light!['text-muted'];
+  for (let percent = 2; contrast(muted, prominent) < 4.95; percent += 2) {
+    muted = mix(SETS.light!['text-muted'], SETS.light!['text-primary'], percent);
+  }
+  const flat = contrast(muted, prominent);
+  assert.ok(flat >= 4.95 && flat < 5.4, `flat ${flat}`);
+  const set = { ...SETS.light!, 'text-muted': muted };
+  const plain = find(
+    gateSet(set, 'light', language(), SMALL_SIGNATURE),
+    'text-muted',
+    'surface-prominent',
+  );
+  assert.equal(plain.passes, true);
+  const memphis = find(
+    gateSet(set, 'light', language({ texture: MEMPHIS }), SMALL_SIGNATURE),
+    'text-muted',
+    'surface-prominent',
+  );
+  assert.equal(memphis.texture, true);
+  assert.equal(memphis.target, 4.5);
+  assert.equal(memphis.passes, false, `${memphis.ratio} over memphis's dot`);
+  assert.ok(memphis.ratio < flat / 1.1, `${memphis.ratio} costs more than 10% of ${flat}`);
+});
+
+// What the quality cells' contrast sampler read, run 40157257841 and again
+// locally, on warm-parchment's anchor-v2 light set: obsidian-atelier's room
+// label (accent-text) and editorial-evidence's writing summary
+// (text-primary), each over its surface's worst pixel. The gate reads each
+// at or under the browser's number, so it never passes what the cells fail.
+test("the gate reads a texture's worst pixel at or under the browser's contrast sampler", () => {
+  const set = {
+    ...SETS.light!,
+    'surface-prominent': '#e2d9c9',
+    'surface-default': '#eae1d0',
+    'text-primary': '#2b241c',
+    'accent-text': '#84492a',
+    accent: '#b95f32',
+    information: '#5f7653',
+    'border-strong': '#797165',
+  };
+  for (const [texture, foreground, ground, browser] of [
+    [GEOMETRIC, 'accent-text', 'surface-prominent', 4.41],
+    [MEMPHIS, 'accent-text', 'surface-prominent', 4.04],
+    [SCANLINES, 'accent-text', 'surface-prominent', 4.14],
+    [HALFTONE, 'text-primary', 'surface-default', 3.18],
+  ] as const) {
+    const pair = find(
+      gateSet(set, 'light', language({ texture }), SMALL_SIGNATURE),
+      foreground,
+      ground,
+    );
+    assert.equal(pair.texture, true, texture);
+    assert.ok(
+      pair.ratio <= browser,
+      `${pair.ratio} over ${texture}, where the browser read ${browser}`,
+    );
+    assert.ok(
+      pair.ratio >= browser - 0.1,
+      `${pair.ratio} over ${texture}, near the browser's ${browser}`,
+    );
+  }
+});
+
+test('a texture drawn only where no text sits, such as a grid at the padding edge, adds no pixel', () => {
+  assert.deepEqual(language({ texture: GRID }).texture, []);
+  const pairs = gateSet(SETS.light!, 'light', language({ texture: GRID }), SMALL_SIGNATURE);
+  assert.ok(pairs.every((pair) => pair.texture === undefined));
 });
 
 test("what the gate reads from a language, and what it can't compute fails", () => {
   assert.deepEqual(language(), {
     surfaceOpacity: 1,
-    textured: false,
+    texture: [],
     borderControl: 'border-strong',
     focusWidth: 2,
     signature: ['signature-start', 'signature-end'],
@@ -217,6 +304,17 @@ test("what the gate reads from a language, and what it can't compute fails", () 
       '1px solid var(--color-accent) var(--color-focus)',
       /one var\(--color-<role>\)/,
     ],
+    [
+      'texture',
+      'linear-gradient(rgb(0 0 0 / 10%), transparent)',
+      /--ui-texture has a color the gate can't measure/,
+    ],
+    [
+      'texture',
+      'radial-gradient(40px 20px, var(--color-accent), transparent)',
+      /a radial size the gate can't read/,
+    ],
+    ['space-surface-block', 'auto', /space-surface-block and space-surface-inline must be lengths/],
   ] as const) {
     const read = gateLanguage({ ...PLATFORM_NEUTRAL.tokens, [key]: value });
     assert.equal(read.ok, false, `${key}: ${value}`);

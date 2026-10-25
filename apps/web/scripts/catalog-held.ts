@@ -45,7 +45,7 @@ export interface HeldRecord {
   readonly tier: string;
   /** Why it's held, in a sentence. */
   readonly reason: string;
-  /** The gate's causes: texture, which raises every target, and translucency, read over the worst backdrop. */
+  /** The gate's causes: texture, read at its worst pixel under a surface's text, and translucency, read over the worst backdrop. */
   readonly causes: readonly ('texture' | 'translucency')[];
   /** How many of the registered schemes it fails with, of how many. */
   readonly schemes: { readonly failing: number; readonly of: number };
@@ -72,6 +72,8 @@ export interface HeldPair {
   readonly foreground: string;
   readonly ground: string;
   readonly backdrop?: string;
+  /** Read under the texture's worst pixel. */
+  readonly texture?: true;
   readonly ratio: number;
   readonly target: number;
   /** The scheme it's measured with. */
@@ -178,6 +180,7 @@ function failures(
             foreground: pair.foreground,
             ground: pair.ground,
             ...(pair.backdrop ? { backdrop: pair.backdrop } : {}),
+            ...(pair.texture ? { texture: true as const } : {}),
             ratio: pair.ratio,
             target: pair.target,
             scheme: scheme.manifest.id,
@@ -209,7 +212,7 @@ export function heldRecord(
   if (!found || found.pairs.length === 0) return null;
   const groups = new Map<string, HeldPair[]>();
   for (const pair of found.pairs) {
-    const key = `${pair.set} ${pair.kind} ${pair.foreground} ${pair.ground} ${pair.backdrop ?? ''}`;
+    const key = `${pair.set} ${pair.kind} ${pair.foreground} ${pair.ground} ${pair.backdrop ?? ''} ${pair.texture ? 'texture' : ''}`;
     groups.set(key, [...(groups.get(key) ?? []), pair]);
   }
   const pairs = [...groups.values()]
@@ -223,7 +226,7 @@ export function heldRecord(
     })
     .sort(byWorst);
   const worst = [...found.pairs].sort(byWorst)[0]!;
-  const textured = manifest.tokens.texture !== 'none';
+  const textured = found.pairs.some((pair) => pair.texture);
   const translucent = found.pairs.some((pair) => pair.backdrop !== undefined);
   const causes = [
     ...(textured ? (['texture'] as const) : []),
@@ -240,12 +243,12 @@ export function heldRecord(
   // Each cause brings its sentence, and the work that would clear it.
   const unblockedBy = causes.map((cause) =>
     cause === 'texture'
-      ? 'anchor-v2 textured targets (promoted from the backlog to #20 PR 2c: "anchor-v2 solver"), so a scheme meets the raised targets a texture sets'
+      ? "a re-solve of the text it carries against the texture's worst pixel, at the strength the language draws it (#20 PR 2b, the measured texture gate)"
       : 'translucency floors (promoted from the backlog to #20 PR 2c: "Translucency floors"), so a translucent surface keeps its contrast over the worst backdrop',
   );
   const sentence = causes.map((cause) =>
     cause === 'texture'
-      ? `its texture raises every target by ${targets.textureRaise}, past where anchor-v1 solves each scheme's roles`
+      ? "text on its surfaces falls under the targets over its texture's worst pixel"
       : `its ${manifest.tokens['surface-opacity']} surfaces fall under the targets over a black or white backdrop`,
   );
   return {

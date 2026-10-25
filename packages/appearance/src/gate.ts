@@ -8,9 +8,12 @@
 // 3:1, and 4.5:1 in a high-contrast set. The signature fill on display and
 // headline text needs 3:1 (4.5:1) only when both are WCAG large text. A
 // surface composites at the language's surface-opacity over the worst of
-// canvas, black, and white. A textured language raises every target on
-// canvas and surfaces by 10%; pairs on fills (on-accent, on-status, on-scrim)
-// keep theirs.
+// canvas, black, and white. A textured language's surfaces are read under
+// its texture too (texture.ts): every pixel the texture puts where a
+// surface's text sits, at the strength the language draws it, with the
+// gradient dither the browser adds, so a pair holds over the texture's
+// worst pixel as the quality cells' contrast sampler holds it. The texture
+// doesn't touch the canvas or the fills (on-accent, on-status, on-scrim).
 //
 // The targets are #11's, in quality/thresholds.json (#11, AC5). `pnpm
 // check:appearance` reads them from that file and passes them in. A browser
@@ -18,7 +21,8 @@
 // gets, and apps/web/scripts/appearance-targets.test.ts fails when it drifts
 // from the file.
 
-import { BLACK, composite, contrast, mix, WHITE } from './color';
+import { BLACK, blend, channelLuminance, composite, contrast, mix, rgb, WHITE } from './color';
+import { TEXTURE_DITHER, texturePixels, type TexturePixel } from './texture';
 import { isHighContrastSet, type ColorSetName } from './sets';
 import {
   COLOR_ROLES,
@@ -37,8 +41,6 @@ export interface GateTargets {
   readonly highContrastText: number;
   readonly highContrastLargeText: number;
   readonly highContrastNonText: number;
-  /** A textured language multiplies the targets on canvas and surfaces by this. */
-  readonly textureRaise: number;
   /** The narrowest focus ring, in CSS px. */
   readonly focusWidth: number;
   /** WCAG large text: at least this many points... */
@@ -56,7 +58,6 @@ export const GATE_TARGETS: GateTargets = Object.freeze({
   highContrastText: 7,
   highContrastLargeText: 4.5,
   highContrastNonText: 4.5,
-  textureRaise: 1.1,
   focusWidth: 2,
   largeTextPt: 18,
   largeBoldTextPt: 14,
@@ -100,8 +101,11 @@ export const CATEGORICAL_ROLES = [
 export interface GateLanguage {
   /** --ui-surface-opacity, from 0 to 1. */
   readonly surfaceOpacity: number;
-  /** --ui-texture is anything but none. */
-  readonly textured: boolean;
+  /**
+   * The pixels --ui-texture puts under a surface's text, past the surface
+   * alone (texture.ts): none for an untextured language.
+   */
+  readonly texture: readonly TexturePixel[];
   /** The color --ui-border-control draws in, or null when controls draw no border. */
   readonly borderControl: ColorRole | null;
   /** --ui-focus-width, in CSS px. */
@@ -119,7 +123,7 @@ export interface GateTypography {
 /** An opaque, untextured language with strong control borders, for a scheme's own report. */
 export const NEUTRAL_LANGUAGE: GateLanguage = Object.freeze({
   surfaceOpacity: 1,
-  textured: false,
+  texture: Object.freeze([]),
   borderControl: 'border-strong',
   focusWidth: GATE_TARGETS.focusWidth,
   signature: Object.freeze(['signature-start', 'signature-end'] as const),
@@ -137,6 +141,8 @@ export interface GatePair {
   readonly ground: string;
   /** For a translucent surface, the backdrop it reads worst over. */
   readonly backdrop?: string;
+  /** The worst is under the language's texture, at its worst pixel. */
+  readonly texture?: true;
   /** The contrast ratio, or the width in px for focus-width, rounded down to two places. */
   readonly ratio: number;
   readonly target: number;
@@ -216,12 +222,26 @@ export function gateLanguage(
     // With no color, a border draws in the control's text color.
     borderControl = 'text-primary';
   }
+  const inset = {
+    block: pixels(tokens['space-surface-block']),
+    inline: pixels(tokens['space-surface-inline']),
+  };
+  let texture: readonly TexturePixel[] = [];
+  if (inset.block === null || inset.inline === null) {
+    problems.push(
+      "space-surface-block and space-surface-inline must be lengths in px, rem, or em, for the gate to find where a surface's text sits under its texture.",
+    );
+  } else {
+    const drawn = texturePixels(tokens.texture, { block: inset.block, inline: inset.inline });
+    if (typeof drawn === 'string') problems.push(`${drawn}, so the gate can't read text over it.`);
+    else texture = drawn.filter((pixel) => pixel.surface < 1);
+  }
   if (problems.length > 0) return { ok: false, problems };
   return {
     ok: true,
     language: {
       surfaceOpacity: surfaceOpacity!,
-      textured: tokens.texture !== 'none',
+      texture,
       borderControl,
       focusWidth: focusWidth!,
       signature: colorReferences(tokens['signature-fill']),
@@ -249,38 +269,81 @@ export function gateTypography(
 
 /** A ratio rounded down to two places, so a reported 4.50 always passes 4.5. */
 const floor2 = (value: number) => Math.floor(value * 100) / 100;
-/** A target raised for texture, at three places. */
-const raised = (target: number, by: number) => Math.round(target * by * 1000) / 1000;
+interface View {
+  readonly backdrop?: string;
+  readonly color: string;
+  /** Under the texture: the browser's dither can move it TEXTURE_DITHER toward the text. */
+  readonly textured?: true;
+}
 
 interface Ground {
   readonly role: ColorRole;
-  /** The ground as each backdrop shows it, or the opaque ground alone. */
-  readonly views: readonly { readonly backdrop?: string; readonly color: string }[];
+  /** The ground as each backdrop shows it, or the opaque ground alone, then under each texture pixel. */
+  readonly views: readonly View[];
 }
 
-/** The canvas, then each surface composited over the canvas, black, and white. */
-function grounds(set: ColorTokens, alpha: number): Ground[] {
+/**
+ * The canvas, then each surface composited over the canvas, black, and
+ * white, and each of those under every pixel of the language's texture.
+ */
+function grounds(set: ColorTokens, alpha: number, texture: readonly TexturePixel[] = []): Ground[] {
   return GROUND_ROLES.map((role) => {
-    if (role === 'canvas' || alpha >= 1) return { role, views: [{ color: set[role] }] };
-    const backdrops = [...new Set([set.canvas, BLACK, WHITE])];
-    return {
-      role,
-      views: backdrops.map((backdrop) => ({
-        backdrop: backdrop === set.canvas ? 'canvas' : backdrop,
-        color: composite(set[role], backdrop, alpha),
-      })),
-    };
+    if (role === 'canvas') return { role, views: [{ color: set[role] }] };
+    const backdrops = alpha >= 1 ? [null] : [...new Set([set.canvas, BLACK, WHITE])];
+    const views: View[] = [];
+    for (const backdrop of backdrops) {
+      const color = backdrop === null ? set[role] : composite(set[role], backdrop, alpha);
+      const where =
+        backdrop === null ? {} : { backdrop: backdrop === set.canvas ? 'canvas' : backdrop };
+      views.push({ ...where, color });
+      const seen = new Set<string>([color]);
+      for (const pixel of texture) {
+        const under = blend([
+          [color, pixel.surface],
+          ...Object.entries(pixel.roles).map(
+            ([r, share]) => [set[r as ColorRole], share!] as const,
+          ),
+        ]);
+        if (seen.has(under)) continue;
+        seen.add(under);
+        views.push({ ...where, color: under, textured: true });
+      }
+    }
+    return { role, views };
   });
 }
 
-/** The worst ratio of any of `colors` on any view of `ground`, and the backdrop it's on. */
-function worstOn(colors: readonly string[], ground: Ground): { ratio: number; backdrop?: string } {
-  let worst: { ratio: number; backdrop?: string } = { ratio: Infinity };
-  for (const view of ground.views) {
-    for (const color of colors) {
-      const ratio = contrast(color, view.color);
+interface Worst {
+  readonly ratio: number;
+  readonly backdrop?: string;
+  readonly texture?: true;
+}
+
+/** The worst ratio of any of `colors` on any view of `ground`, the backdrop it's on, and whether it's under the texture. */
+function worstOn(colors: readonly string[], ground: Ground): Worst {
+  let worst: Worst = { ratio: Infinity };
+  for (const color of colors) {
+    const fg = rgb(color);
+    const lit = channelLuminance(fg);
+    for (const view of ground.views) {
+      let under = rgb(view.color);
+      // The dither moves each channel up to TEXTURE_DITHER toward the text's.
+      if (view.textured) {
+        under = under.map((value, index) => {
+          const goal = fg[index]!;
+          return value < goal
+            ? Math.min(goal, value + TEXTURE_DITHER)
+            : Math.max(goal, value - TEXTURE_DITHER);
+        }) as unknown as typeof under;
+      }
+      const other = channelLuminance(under);
+      const ratio = (Math.max(lit, other) + 0.05) / (Math.min(lit, other) + 0.05);
       if (ratio < worst.ratio) {
-        worst = view.backdrop === undefined ? { ratio } : { ratio, backdrop: view.backdrop };
+        worst = {
+          ratio,
+          ...(view.backdrop === undefined ? {} : { backdrop: view.backdrop }),
+          ...(view.textured ? { texture: true as const } : {}),
+        };
       }
     }
   }
@@ -312,16 +375,15 @@ export function gateSet(
   targets: GateTargets = GATE_TARGETS,
 ): GatePair[] {
   const highContrast = isHighContrastSet(name);
-  const raise = language.textured ? targets.textureRaise : 1;
   const text = highContrast ? targets.highContrastText : targets.text;
   const nonText = highContrast ? targets.highContrastNonText : targets.nonText;
-  const ground = grounds(set, language.surfaceOpacity);
+  const ground = grounds(set, language.surfaceOpacity, language.texture);
   const pairs: GatePair[] = [];
   const add = (
     kind: GatePair['kind'],
     foreground: string,
     on: string,
-    result: { ratio: number; backdrop?: string },
+    result: Worst,
     target: number,
   ) => {
     pairs.push({
@@ -330,6 +392,7 @@ export function gateSet(
       foreground,
       ground: on,
       ...(result.backdrop !== undefined ? { backdrop: result.backdrop } : {}),
+      ...(result.texture ? { texture: true as const } : {}),
       ratio: floor2(result.ratio),
       target,
       passes: result.ratio >= target,
@@ -337,7 +400,7 @@ export function gateSet(
   };
 
   for (const role of TEXT_ROLES) {
-    for (const g of ground) add('text', role, g.role, worstOn([set[role]], g), raised(text, raise));
+    for (const g of ground) add('text', role, g.role, worstOn([set[role]], g), text);
   }
   for (const [on, fills] of FILL_PAIRS) {
     for (const fill of fills) {
@@ -360,7 +423,7 @@ export function gateSet(
         signature.join(' to '),
         g.role,
         worstOn(colors, g),
-        raised(target, raise),
+        target,
       );
     }
   }
@@ -368,12 +431,11 @@ export function gateSet(
   if (language.borderControl && language.borderControl !== 'focus')
     outlines.push(language.borderControl);
   for (const role of outlines) {
-    for (const g of ground)
-      add('non-text', role, g.role, worstOn([set[role]], g), raised(nonText, raise));
+    for (const g of ground) add('non-text', role, g.role, worstOn([set[role]], g), nonText);
   }
   const surface = ground.find((g) => g.role === 'surface-default')!;
   for (const role of CATEGORICAL_ROLES) {
-    add('non-text', role, 'surface-default', worstOn([set[role]], surface), raised(nonText, raise));
+    add('non-text', role, 'surface-default', worstOn([set[role]], surface), nonText);
   }
   pairs.push({
     set: name,
