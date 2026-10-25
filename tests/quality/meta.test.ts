@@ -195,6 +195,10 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'reflow/undeclared-scroller',
     'transparency/see-through-gradient',
     'contrast/past-forty',
+    // #20's .pf-period: a neighbour's glyph in the sampled box, and a faint date beside it.
+    'contrast/neighbour-glyphs',
+    'contrast/neighbour-faint',
+    'contrast/backdrop-numeral',
     'runner/no-javascript-scripting-media',
     'transparency/nav-over-image',
     'occlusion/grain-overlay',
