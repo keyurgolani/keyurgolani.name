@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import type { Page, Request } from '@playwright/test';
 import { expect, test } from '../harness/fixtures';
 import { DEMO_APP } from '../harness/profile-matrix';
@@ -103,12 +104,30 @@ test(
     await page.waitForTimeout(1000);
     expect(loads).toHaveLength(0);
 
-    // By keyboard: the button takes focus, with a ring, and Enter asks.
-    await ask.focus();
+    // By keyboard: Tab reaches the button, with a ring, and Enter asks.
+    for (
+      let step = 0;
+      step < 30 && !(await ask.evaluate((el) => el === document.activeElement));
+      step += 1
+    ) {
+      await page.keyboard.press('Tab');
+    }
     await expect(ask).toBeFocused();
     const ring = await ask.evaluate((element) => getComputedStyle(element).outlineStyle);
     expect(ring).not.toBe('none');
+    // The sample's document held back, so the status shows while it loads.
+    let release = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await page.route(
+      (url) => url.pathname === '/sample',
+      async (route) => {
+        await held;
+        await route.continue();
+      },
+    );
     await page.keyboard.press('Enter');
+    await expect(page.getByRole('status')).toHaveText('Loading the preview…');
+    release();
     const frame = page.locator('iframe');
     await expect(frame).toHaveAttribute('src', /^\/sample\?/);
     await expect(frame).toHaveAttribute('sandbox', 'allow-scripts');
@@ -120,6 +139,56 @@ test(
 
     // Another task keeps it: no second ask.
     await openTask(page, 'Appearance');
+    await expect(page.getByRole('button', { name: 'Show preview' })).toHaveCount(0);
+    await expect(page.locator('iframe')).toHaveAttribute('src', /^\/sample\?/);
+  },
+);
+
+test(
+  'at a phone’s width a pick of the frame’s viewport or of what it shows loads it, with no Show preview',
+  { annotation: [STUDIO, DEMO] },
+  async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/studio?task=preview');
+    await expect(page.getByRole('button', { name: 'Show preview' })).toBeVisible();
+    await page.getByLabel('Width (simulated)').selectOption('tablet');
+    await expect(page.locator('iframe')).toHaveAttribute('src', /^\/sample\?/);
+    await expect(page.getByRole('button', { name: 'Show preview' })).toHaveCount(0);
+
+    // A fresh visitor's first pick of a composition does the same.
+    await page.evaluate(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
+    await page.goto('/studio?task=appearance');
+    await expect(page.getByRole('button', { name: 'Show preview' })).toBeVisible();
+    const select = page.getByLabel('Composition', { exact: true });
+    const own = await select.inputValue();
+    const values = await select
+      .locator('option')
+      .evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value));
+    await select.selectOption(values.find((value) => value !== own)!);
+    await expect(page.locator('iframe')).toHaveAttribute('src', /^\/sample\?/);
+    await expect(page.getByRole('button', { name: 'Show preview' })).toHaveCount(0);
+  },
+);
+
+test(
+  'at a phone’s width, after an import, Reset demo shows the sample’s frame, not the poster',
+  { annotation: [STUDIO, DEMO, { type: 'route', description: '/preview/local' }] },
+  async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/studio?task=content');
+    await page
+      .locator('#studio-demo-import')
+      .setInputFiles([
+        fileURLToPath(new URL('../../portfolio.example.yml', import.meta.url)),
+        fileURLToPath(new URL('../../site.example.yml', import.meta.url)),
+      ]);
+    await expect(page.locator('[data-source="local"]')).toHaveCount(1);
+    await openTask(page, 'Appearance');
+    await page.getByRole('button', { name: 'Reset demo', exact: true }).click();
+    await expect(page.locator('[data-source="local"]')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Show preview' })).toHaveCount(0);
     await expect(page.locator('iframe')).toHaveAttribute('src', /^\/sample\?/);
   },

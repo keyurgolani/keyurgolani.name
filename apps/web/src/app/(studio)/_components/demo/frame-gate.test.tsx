@@ -3,16 +3,19 @@ import assert from 'node:assert/strict';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { browserBackend } from '~/lib/demo/browser-backend';
+import { runImport } from '~/lib/demo/import/pipeline';
+import { EXAMPLE, pairFiles } from '~/lib/demo/import/test-support/hostile';
 import { demoStore } from '~/lib/demo/storage';
 import { CATALOG, DEFAULTS, FakeStorage, SCHEME_MODES, UNIT } from '~/lib/demo/test-support';
 import { frameSource } from '~/lib/demo/url-state';
 import { VIEWPORTS } from '~/lib/preview-frame';
-import { DEMO_FRAME_SANDBOX, DemoFrame, stageSource } from './demo-frame';
+import { askForPreview, DEMO_FRAME_SANDBOX, DemoFrame, stageSource } from './demo-frame';
 import { DemoStudio, frameViewportId } from './demo-studio';
 import {
   ASK_LABEL,
   ASK_TEXT,
   frameGate,
+  frameRequestedAfter,
   LOADED_TEXT,
   LOADING_TEXT,
   NARROW_STUDIO,
@@ -251,5 +254,54 @@ test('a frame already let load on another task loads with no second ask', () => 
     />,
   );
   assert.match(frameAttributes(html)?.src ?? '', /^\/sample\?/);
+  assert.doesNotMatch(html, new RegExp(ASK_LABEL));
+});
+
+test('Show preview lets the stage load, moves focus to it, and says in the page’s status that it’s loading', () => {
+  const done: string[] = [];
+  askForPreview({
+    request: () => done.push('request'),
+    focus: () => done.push('focus'),
+    announce: (text) => done.push(`announce ${text}`),
+  });
+  assert.deepEqual(done, ['request', 'focus', `announce ${LOADING_TEXT}`]);
+  assert.equal(LOADING_TEXT, 'Loading the preview…');
+});
+
+test('a pick of what the frame shows or of its viewport loads it, an import keeps it loaded, and nothing unloads it', () => {
+  for (const event of ['choose', 'viewport', 'imported'] as const) {
+    assert.equal(frameRequestedAfter(false, event), true, event);
+    assert.equal(frameRequestedAfter(true, event), true, event);
+  }
+  // Clearing an import never brings the poster back once a frame showed, and lets nothing load on its own.
+  assert.equal(frameRequestedAfter(true, 'cleared'), true);
+  assert.equal(frameRequestedAfter(false, 'cleared'), false);
+});
+
+test('a tab that already holds an import skips the poster: the reference it shows loads with no ask', async () => {
+  const session = new FakeStorage();
+  const store = demoStore(new FakeStorage(), session);
+  const importing = () =>
+    browserBackend({
+      unit: UNIT,
+      catalog: CATALOG,
+      schemeModes: SCHEME_MODES,
+      defaults: DEFAULTS,
+      store,
+      importer: async (files) => runImport(files),
+    });
+  assert.equal((await importing().importFiles(pairFiles(EXAMPLE.portfolio)))?.kind, 'imported');
+  const html = renderToStaticMarkup(
+    <DemoStudio
+      catalog={CATALOG}
+      schemeModes={SCHEME_MODES}
+      policy={POLICY}
+      backend={importing()}
+      task="appearance"
+      reference={{ name: 'Wren Halloway', defaults: DEFAULTS }}
+      initialSource="reference"
+    />,
+  );
+  assert.match(frameAttributes(html)?.src ?? '', /^\/reference(?:\?|$)/);
   assert.doesNotMatch(html, new RegExp(ASK_LABEL));
 });

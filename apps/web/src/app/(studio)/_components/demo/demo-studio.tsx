@@ -23,7 +23,13 @@ import { StudioFrame } from '../shell/studio-frame';
 import { ContentTask } from './demo-content';
 import { DemoFrame } from './demo-frame';
 import { LocalFrameHost } from './demo-local-frame';
-import { frameGate, NARROW_STUDIO, type FrameGate } from './frame-gate';
+import {
+  frameGate,
+  frameRequestedAfter,
+  NARROW_STUDIO,
+  type FrameEvent,
+  type FrameGate,
+} from './frame-gate';
 
 // Demo Studio (#9, design note sections 2 and 3): Studio's frame, with the
 // sandbox line in its header, over the demo's three tasks. Appearance has a
@@ -169,8 +175,17 @@ export function DemoStudio({
   const [motion, setMotion] = useState<'system' | 'reduce'>('system');
   const systemReduces = useSystemReducesMotion();
   // Whether the frame was let load its document (frame-gate.ts), kept across tasks.
-  const [frameRequested, setFrameRequested] = useState(initialFrameRequested);
+  // A tab that already holds an import has shown the visitor a preview: no poster after it.
+  const [frameRequested, setFrameRequested] = useState(
+    () => initialFrameRequested || Boolean(backend?.localSources()),
+  );
   const requestFrame = useCallback(() => setFrameRequested(true), []);
+  const frameAfter = (event: FrameEvent) =>
+    setFrameRequested((requested) => frameRequestedAfter(requested, event));
+  const pickViewport = (id: Viewport['id']) => {
+    setViewportId(id);
+    frameAfter('viewport');
+  };
   const load: FrameLoad = {
     gate: frameGate(narrow),
     requested: frameRequested,
@@ -185,6 +200,7 @@ export function DemoStudio({
     setSelection(backend?.selection() ?? null);
     setSource(reference ? initialSource : 'sample');
     setLocal(backend?.localSources() ?? null);
+    if (backend?.localSources()) frameAfter('imported');
   }
 
   // The URL follows the selection, in place, so Back leaves Studio.
@@ -205,6 +221,8 @@ export function DemoStudio({
 
   async function choose(axis: CatalogAxis, value: string) {
     if (!backend) return;
+    // A change to what the frame shows is asking to see it.
+    frameAfter('choose');
     const working = await backend.workingDraft();
     if (working.kind !== 'read' || !working.value) return;
     const result = await backend.applyEdits({
@@ -344,7 +362,7 @@ export function DemoStudio({
               viewportId={viewportId}
               motion={motion}
               systemReduces={systemReduces}
-              onViewport={setViewportId}
+              onViewport={pickViewport}
               onMotion={setMotion}
               onChoose={(axis, value) => void choose(axis, value)}
               load={load}
@@ -357,6 +375,8 @@ export function DemoStudio({
                 backend={backend}
                 onSource={(sources) => {
                   setLocal(sources);
+                  // The visitor has seen their documents in a frame: clearing them brings no poster.
+                  frameAfter(sources !== null ? 'imported' : 'cleared');
                   // An import shows in the frame: off the reference, and on the visitor's own look.
                   const next = sourceAfterImport(showing, sources !== null);
                   if (next !== showing) {

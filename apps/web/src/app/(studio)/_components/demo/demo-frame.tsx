@@ -135,12 +135,16 @@ export function DemoFrame({
         <button
           type="button"
           className="studio-button"
-          onClick={() => {
-            setOwn(true);
-            setAsked(true);
-            onRequest?.();
-            onAnnounce?.(LOADING_TEXT);
-          }}
+          onClick={() =>
+            askForPreview({
+              request: () => {
+                setOwn(true);
+                onRequest?.();
+              },
+              focus: () => setAsked(true),
+              ...(onAnnounce ? { announce: onAnnounce } : {}),
+            })
+          }
         >
           {ASK_LABEL}
         </button>
@@ -182,6 +186,24 @@ export function DemoFrame({
       />
     </div>
   );
+}
+
+/**
+ * What Show preview does: lets the stage load, moves focus to it once it's
+ * there, and says in the page's status that the preview is loading.
+ */
+export function askForPreview({
+  request,
+  focus,
+  announce,
+}: {
+  readonly request: () => void;
+  readonly focus: () => void;
+  readonly announce?: (text: string) => void;
+}): void {
+  request();
+  focus();
+  announce?.(LOADING_TEXT);
 }
 
 /** The frame's `src`: none until the stage may load, then the source it shows. */

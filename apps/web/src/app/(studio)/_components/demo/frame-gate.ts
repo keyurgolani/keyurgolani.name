@@ -22,6 +22,22 @@ export function frameGate(narrow: boolean): FrameGate {
   return narrow ? 'asked' : 'visible';
 }
 
+/**
+ * What the visitor did that bears on the frame: picked a value it shows,
+ * picked its viewport, imported a pair it showed them, or cleared that pair.
+ */
+export type FrameEvent = 'choose' | 'viewport' | 'imported' | 'cleared';
+
+/**
+ * Whether the frame may load after `event`. Once it may, it always may. A
+ * pick of what the frame shows or of its viewport asks to see it, so the
+ * stage loads even if its observer never fires, and an import has already
+ * shown the visitor a frame, so clearing it brings no poster back.
+ */
+export function frameRequestedAfter(requested: boolean, event: FrameEvent): boolean {
+  return requested || event !== 'cleared';
+}
+
 /** What the poster says while the stage waits to be asked. */
 export const ASK_TEXT = 'Tap to load the preview';
 
