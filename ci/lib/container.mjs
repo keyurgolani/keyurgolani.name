@@ -278,7 +278,7 @@ export const SCAN_SNIPPET = `process.stdout.write(JSON.stringify((${scanTree.toS
 /**
  * The browser source maps under `root`, the image's apps/web/.next/static
  * or apps/web/public (#6, Slice 1), by ci/lib/source-maps.mjs's one rule, as
- * check:source-maps reads them: JSON { exists, maps, empty, linked }.
+ * check:source-maps reads them: JSON { exists, maps, empty, linked, symlinks }.
  */
 export const MAPS_SNIPPET = `process.stdout.write(JSON.stringify((${scanSourceMaps.toString()})(process.argv[1])))`;
 export const TREE_SNIPPET = `(${treeFromInside.toString()})(process.argv[1])`;

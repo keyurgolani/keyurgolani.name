@@ -6,7 +6,8 @@
 // build left a .map file that holds anything of a source under
 // apps/web/.next/static, the tree a server serves at /_next/static, or a
 // script or stylesheet there that points at a map with a sourceMappingURL
-// comment, or when apps/web/public, which the server serves at the site root
+// comment, or a symlink of any kind there, which the scan can't see through,
+// or when apps/web/public, which the server serves at the site root
 // and the image ships, holds any .map file at all. An empty map passes in
 // the static tree alone: Turbopack in Next 16.4.1 writes one beside a
 // `new URL` module worker's bundle whatever productionBrowserSourceMaps says
@@ -59,7 +60,7 @@ export function checkSourceMaps(dir, env = process.env, publicDir = PUBLIC_DIR) 
     return `No build at ${path.relative(REPO_ROOT, dir)}. Run pnpm build first.`;
   }
   const problems = [];
-  const { maps, linked } = scanSourceMaps(dir);
+  const { maps, linked, symlinks } = scanSourceMaps(dir);
   if (maps.length > 0) {
     problems.push(
       `The default build shipped ${maps.length} source map file(s) under ${path.relative(REPO_ROOT, dir)}: ${listed(maps)}. Only a PORTFOLIO_ANALYZE=1 build may. (An empty map, which Turbopack writes for a new URL module worker, passes.)`,
@@ -68,6 +69,11 @@ export function checkSourceMaps(dir, env = process.env, publicDir = PUBLIC_DIR) 
   if (linked.length > 0) {
     problems.push(
       `Under ${path.relative(REPO_ROOT, dir)}, ${listed(linked)} point at a source map with a sourceMappingURL comment. No default build may.`,
+    );
+  }
+  if (symlinks.length > 0) {
+    problems.push(
+      `Under ${path.relative(REPO_ROOT, dir)}, ${listed(symlinks)} ${symlinks.length === 1 ? 'is a symlink' : 'are symlinks'}, which the check doesn't follow. No default build may hold one.`,
     );
   }
   const served = existsSync(publicDir) ? sourceMapFiles(publicDir) : [];
@@ -97,9 +103,9 @@ function main(argv) {
   reportError(problem, { title: 'source maps' });
   const gate = currentGate();
   if (gate) {
-    const scan = existsSync(dir) ? scanSourceMaps(dir) : { maps: [], linked: [] };
+    const scan = existsSync(dir) ? scanSourceMaps(dir) : { maps: [], linked: [], symlinks: [] };
     const maps = [
-      ...[...scan.maps, ...scan.linked].map((file) => path.join(dir, file)),
+      ...[...scan.maps, ...scan.linked, ...scan.symlinks].map((file) => path.join(dir, file)),
       ...(existsSync(publicDir) ? sourceMapFiles(publicDir) : []).map((file) =>
         path.join(publicDir, file),
       ),
@@ -109,7 +115,7 @@ function main(argv) {
       test: 'a default build ships no browser source maps',
       asset: maps[0] ? path.relative(REPO_ROOT, maps[0]) : undefined,
       expected:
-        'no source map but an empty one under apps/web/.next/static, none pointed at, and no .map file under apps/web/public',
+        'no source map but an empty one under apps/web/.next/static, none pointed at, no symlink there, and no .map file under apps/web/public',
       actual: problem,
     });
   }
