@@ -36,10 +36,10 @@
     "bauhaus-geometric": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "tier": "extended",
       "license": "first-party",
-      "digest": "sha256-0fb3584a1e2ae8e8ae901765e99916b875064f0882b95595e539b21bd4e04ba7"
+      "digest": "sha256-0d7769f7113c4dde9ef126800ce7db39776d40136a6c8fbbcb1611802c7156af"
     },
     "blue-orange-color-safe": {
       "axis": "colorScheme",
@@ -240,10 +240,10 @@
     "memphis": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "tier": "extended",
       "license": "first-party",
-      "digest": "sha256-5334bac9e9f255298b92ebe843a3677a3f5c64841e295142c51e0264aa19f1fb"
+      "digest": "sha256-ac53d61d81301ee645f5b5a3e51c0440a839017eb1ea2e8d6ec27f54774f47e0"
     },
     "minimal-flat": {
       "axis": "designLanguage",
@@ -272,10 +272,10 @@
     "neobrutalist": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-575985dfa82a458364fe1612efd4d55d3eb6ebb3e7a4fbb589922b8597aeec87"
+      "digest": "sha256-f5b441904cd7f2f4fb58c71744febb14a0665436146b474cba6ce9ad246cef37"
     },
     "neon-city": {
       "axis": "colorScheme",
@@ -432,10 +432,10 @@
     "soft-organic": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "tier": "stable",
       "license": "first-party",
-      "digest": "sha256-d42f82b4057fab5f6e57761c329965a8e1e2946033cdbfa86c0bd190eb3823a5"
+      "digest": "sha256-705fd09b69837f8ccaa8a5fc435c06aca60082e78c858faec2f69722b8fd73d6"
     },
     "spectrum-2-inspired": {
       "axis": "designLanguage",
