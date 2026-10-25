@@ -1,6 +1,6 @@
 {
   "name": "@portfolio/fixture-variant-medium",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "A budget test fixture (#6): a medium variant with a WebGL2 fragment shader over an SSR still, an infinite CSS animation, and one enhancement that loads when its slot is visible. Registers only in a build with BUDGET_FIXTURES=1, never in a release.",

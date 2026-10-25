@@ -1,6 +1,6 @@
 {
   "name": "@portfolio/fixture-variant-light",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "A budget test fixture (#6): a light variant with one small client island. Registers only in a build with BUDGET_FIXTURES=1, never in a release.",

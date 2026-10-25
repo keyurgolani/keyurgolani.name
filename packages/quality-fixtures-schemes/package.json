@@ -1,6 +1,6 @@
 {
   "name": "@portfolio/quality-fixtures-schemes",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Color-scheme tier fixtures (#11): fixture-scheme-stable, fixture-scheme-extended, and fixture-scheme-experimental, which the quality gates run as shipping packs of each tier. They register only when QUALITY_FIXTURES is 1 or meta.",
   "portfolio": {

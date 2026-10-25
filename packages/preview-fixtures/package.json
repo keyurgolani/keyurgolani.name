@@ -1,6 +1,6 @@
 {
   "name": "@portfolio/preview-fixtures",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "The preview's environment fixture (#7): fixture-environment, a composition styled only by the environment attributes. It registers only when PREVIEW_FIXTURES=1.",

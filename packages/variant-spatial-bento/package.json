@@ -1,6 +1,6 @@
 {
   "name": "@portfolio/variant-spatial-bento",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "Spatial Bento: the portfolio as a bento of tiles, with a still of its spatial stage beside the opening.",
