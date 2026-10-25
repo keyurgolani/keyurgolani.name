@@ -619,14 +619,25 @@
    never lands on Export setup below it (WCAG 2.4.7 and 1.4.11). */
 .studio-content {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1.5rem;
 }
 
+/* One column that never grows past its room, so the picker shrinks and
+   wraps at 320px and at 200% text (WCAG 1.4.10) rather than overflowing. */
 .studio-import,
 .studio-export {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.5rem;
   justify-items: start;
+  min-width: 0;
+}
+
+.studio-import .studio-input {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* The Appearance workspace (#8, Slice 5). */
