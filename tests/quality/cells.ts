@@ -126,6 +126,8 @@ export interface Cell {
    * it, its cells check its honest state, and their report says why.
    */
   readonly requiresScript?: string;
+  /** True on the one cell a surface's perfState names: its first route in that state. */
+  readonly perfState?: true;
   readonly tuple: Tuple;
   /** The path the cell loads, its state's query included. */
   readonly path: string;
@@ -592,6 +594,9 @@ export function planCells({
           performanceTier: surface.performanceTier,
           ...(surface.auth === 'session' ? { auth: 'session' as const } : {}),
           ...(surface.requiresScript ? { requiresScript: surface.requiresScript.reason } : {}),
+          ...(routeIndex === 0 && surface.perfState === state.id
+            ? { perfState: true as const }
+            : {}),
           tuple,
           path: query ? `${route}?${query}` : route,
           route,
