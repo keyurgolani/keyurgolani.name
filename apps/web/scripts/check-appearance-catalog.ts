@@ -34,6 +34,7 @@ import {
   type NoticePack,
 } from '@portfolio/appearance/node';
 import type { RegistryResult } from '@portfolio/variant-contract/node';
+import { loadThresholds } from '../../../quality/thresholds';
 import { auditCatalog } from './catalog-audit';
 import { generatedEntries } from './catalog-generated';
 import { readHeld } from './catalog-held';
@@ -283,15 +284,20 @@ export function catalogFindings(
     records.push({ schemaVersion: '1.1', test: record.test ?? line.slice(0, 500), ...record });
   };
 
-  // The per-axis pack gates, over every pack registry generation compiled.
+  // The per-axis pack gates, over every pack registry generation compiled,
+  // with quality/thresholds.json's reduced-motion limit.
+  const reducedMotionMs = loadThresholds().reducedMotion.transitionMs;
   for (const pack of result.packs) {
     const axis = AXIS_BY_KIND[pack.kind];
-    for (const failure of gatePack({
-      kind: pack.kind,
-      manifest: pack.manifest as PackManifest,
-      stylesheet: pack.stylesheet,
-      assets: pack.assets,
-    })) {
+    for (const failure of gatePack(
+      {
+        kind: pack.kind,
+        manifest: pack.manifest as PackManifest,
+        stylesheet: pack.stylesheet,
+        assets: pack.assets,
+      },
+      { reducedMotionMs },
+    )) {
       add(`${AXIS_NAMES[axis]} ${failure.pack} (${failure.gate}): ${failure.message}`, {
         test: `pack gate ${failure.gate}`,
         pack: failure.pack,

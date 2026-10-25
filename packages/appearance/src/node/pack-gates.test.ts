@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import type { PackKind } from '../axes';
+import type { DesignLanguageManifest } from '../manifests';
 import {
   FONT,
   HUMANIST_UI,
@@ -12,6 +13,7 @@ import {
   WARM_PARCHMENT,
 } from '../test-support/packs';
 import type { PackManifest } from '../validate-pack';
+import { catalogPacks, packPackages } from './catalog';
 import { compilePack } from './compile';
 import { gatePack, PACK_GATES, type GatedPack, type PackGate } from './pack-gates';
 
@@ -63,8 +65,55 @@ const only = (pack: GatedPack, gate: PackGate) => {
   return failures;
 };
 
-test('the gates are the three #20 names', () => {
-  assert.deepEqual([...PACK_GATES], ['token-coverage', 'bundle-size', 'boundary-isolation']);
+test("the gates are #20's three and #11's reduced-motion", () => {
+  assert.deepEqual(
+    [...PACK_GATES],
+    ['token-coverage', 'bundle-size', 'reduced-motion', 'boundary-isolation'],
+  );
+});
+
+test('reduced-motion: a language whose motion-fast is over the limit fails on motion-fast, since reduced motion runs every duration at it (#11)', () => {
+  const language = SHIPPED[0]!;
+  const fast = (value: string): GatedPack => ({
+    ...language,
+    manifest: {
+      ...language.manifest,
+      tokens: { ...(language.manifest as DesignLanguageManifest).tokens, 'motion-fast': value },
+    } as PackManifest,
+  });
+  const slow = only(fast('240ms'), 'reduced-motion');
+  assert.deepEqual(
+    slow.map(({ pack, axis, role }) => [pack, axis, role]),
+    [['platform-neutral', 'designLanguage', 'motion-fast']],
+  );
+  assert.match(slow[0]!.message, /240ms, over the 200ms reduced motion allows/);
+  only(fast('0.25s'), 'reduced-motion');
+  only(fast('fast'), 'reduced-motion');
+  assert.deepEqual(gatePack(fast('200ms')), []);
+  assert.deepEqual(gatePack(fast('0.01ms')), []);
+  // The limit is the caller's: check:appearance passes quality/thresholds.json's.
+  assert.deepEqual(gatePack(language, { reducedMotionMs: 100 }), []);
+  assert.deepEqual(
+    gatePack(language, { reducedMotionMs: 99 }).map(({ gate }) => gate),
+    ['reduced-motion'],
+  );
+});
+
+test('reduced-motion: every registered language keeps motion-fast within the limit (#11)', () => {
+  const root = fileURLToPath(new URL('../../../../', import.meta.url));
+  const languages = catalogPacks(root, packPackages(root)).filter(
+    ({ axis }) => axis === 'designLanguage',
+  );
+  assert.ok(languages.length >= 30, `${languages.length} languages`);
+  for (const pack of languages) {
+    const failures = gatePack({
+      kind: 'design-language',
+      manifest: pack.manifest as unknown as PackManifest,
+      stylesheet: null,
+      assets: [],
+    }).filter(({ gate }) => gate === 'reduced-motion');
+    assert.deepEqual(failures, [], pack.id);
+  }
 });
 
 test('every shipped and fixture pack passes every gate, the generator scheme included', () => {

@@ -5,7 +5,9 @@
 // accessibility layer, last in LAYER_ORDER, wins over every pack.
 //
 // - OS reduced motion and data-motion="reduced": motion-fast feedback stays;
-//   movement stops, entrances and exits fade, and emphasis stops.
+//   movement stops, entrances and exits fade, emphasis stops, and whatever
+//   runs at motion-standard or motion-slow runs at motion-fast, which the
+//   pack gate holds to quality/thresholds.json's reduced-motion limit (#11).
 //   data-motion="static" (#6's pause) stops everything.
 // - Forced colors: every color role maps to a system color, and shadows,
 //   blur, translucency, texture, and glow drop.
@@ -119,14 +121,20 @@ const FOCUS_RING = {
   'outline-offset': 'var(--ui-focus-offset)',
 };
 
-/** Reduced motion: feedback stays, movement stops, entrances and exits fade. */
-const REDUCED = {
+/**
+ * Reduced motion: feedback stays, movement stops, entrances and exits fade,
+ * and every duration is the language's fast one, so a toast's or a dialog's
+ * fade, or a variant's standard transition, is as short as feedback (#11).
+ */
+export const REDUCED_MOTION: Readonly<Record<string, string>> = Object.freeze({
   '--ui-state-hover-transform': 'none',
   '--ui-state-active-transform': 'none',
   '--ui-motion-enter': 'fade',
   '--ui-motion-exit': 'fade',
   '--ui-motion-emphasis': 'none',
-};
+  '--ui-motion-standard': 'var(--ui-motion-fast)',
+  '--ui-motion-slow': 'var(--ui-motion-fast)',
+});
 
 /** Paused: nothing moves or fades. */
 const STATIC = {
@@ -227,8 +235,8 @@ export function platformStylesheet(): string {
     block([`${BOUNDARY} [data-ui-slot='toast'][data-status] [data-ui-slot]:focus-visible`], {
       'outline-color': 'var(--color-on-status)',
     }),
-    wrap('@media (prefers-reduced-motion: reduce)', block([BOUNDARY], REDUCED)),
-    block([`${BOUNDARY}[data-motion="reduced"]`], REDUCED),
+    wrap('@media (prefers-reduced-motion: reduce)', block([BOUNDARY], REDUCED_MOTION)),
+    block([`${BOUNDARY}[data-motion="reduced"]`], REDUCED_MOTION),
     block([`${BOUNDARY}[data-motion="static"]`], STATIC),
     wrap('@media (prefers-reduced-transparency: reduce)', block([BOUNDARY], OPAQUE)),
     wrap(
