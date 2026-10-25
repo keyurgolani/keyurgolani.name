@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { memoryAuditSink } from '../audit/sink';
-import { prepareAuthDirectories } from '../data/layout.mjs';
+import { probeDataDirectory } from '../data/layout.mjs';
 import { revokeAllSessionFiles, writeSessionFile } from './session-files.mjs';
 import {
   filesystemSessionStore,
@@ -65,7 +65,7 @@ const statusOf = (resolution: Resolution) =>
 async function dataDir(t: TestContext): Promise<string> {
   const dir = mkdtempSync(path.join(tmpdir(), 'sessions-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  assert.equal(await prepareAuthDirectories(dir), null);
+  assert.equal(await probeDataDirectory(dir), null);
   return dir;
 }
 

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { chmodSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { prepareAuthDirectories } from '../data/layout.mjs';
+import { probeDataDirectory } from '../data/layout.mjs';
+import { preflight } from '../store/preflight';
 import { auditRecord } from './record.mjs';
 import {
   aggregateAnonymous,
@@ -21,7 +22,9 @@ async function dataDir(t: TestContext): Promise<string> {
     chmodSync(dir, 0o700);
     rmSync(dir, { recursive: true, force: true });
   });
-  assert.equal(await prepareAuthDirectories(dir), null);
+  // As owner startup does: the store's preflight makes audit/.
+  assert.equal(await probeDataDirectory(dir), null);
+  assert.equal(await preflight({ dataDir: dir }), null);
   return dir;
 }
 

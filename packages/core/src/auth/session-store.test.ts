@@ -1,11 +1,22 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { memoryAuditSink } from '../audit/sink';
-import { authPaths, prepareAuthDirectories } from '../data/layout.mjs';
-import { revokeAllSessionFiles } from './session-files.mjs';
+import { authPaths, probeDataDirectory } from '../data/layout.mjs';
+import { listSessionDigests, revokeAllSessionFiles } from './session-files.mjs';
 import {
   filesystemSessionStore,
   memorySessionStore,
@@ -33,7 +44,7 @@ function record(overrides: Partial<SessionRecord> = {}): SessionRecord {
 async function dataDir(t: TestContext): Promise<string> {
   const dir = mkdtempSync(path.join(tmpdir(), 'session-store-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  assert.equal(await prepareAuthDirectories(dir), null);
+  assert.equal(await probeDataDirectory(dir), null);
   return dir;
 }
 
@@ -153,6 +164,7 @@ test('a session file that is not a record counts as none, and is deleted', async
     JSON.stringify({ ...good, credentialFingerprint: 'short' }),
     JSON.stringify({ ...good, uaFamily: 'Mozilla/5.0 (X11; Linux x86_64)' }),
   ];
+  mkdirSync(authPaths(dir).sessions, { recursive: true, mode: 0o700 });
   for (const text of bad) {
     const digest = sessionDigest(newSessionToken());
     const file = path.join(authPaths(dir).sessions, `${digest}.json`);
@@ -174,4 +186,155 @@ test('a record write replaces the file whole, and leaves no temporary file', asy
   assert.deepEqual(readdirSync(authPaths(dir).sessions), [`${entry.digest}.json`]);
   const kept = await store.get(entry.digest);
   assert.ok(kept && kept.lastSeenAt >= entry.lastSeenAt && kept.lastSeenAt < entry.lastSeenAt + 20);
+});
+
+test('with no auth directory yet, the store reads as empty, and the first record write makes ephemeral/auth/sessions/ at 0700', async (t) => {
+  const dir = await dataDir(t);
+  const store = filesystemSessionStore(dir);
+  const paths = authPaths(dir);
+  assert.equal(existsSync(paths.ephemeral), false);
+  assert.deepEqual(await store.list(), []);
+  assert.equal(await store.get(record().digest), null);
+  assert.equal(await store.delete(record().digest), false);
+  assert.equal(await store.revokedBefore(), null);
+  // Reading made nothing.
+  assert.equal(existsSync(paths.ephemeral), false);
+
+  const entry = record();
+  await store.put(entry);
+  for (const each of [paths.ephemeral, paths.auth, paths.sessions]) {
+    assert.equal(statSync(each).mode & 0o777, 0o700, each);
+  }
+  assert.deepEqual(await store.get(entry.digest), entry);
+});
+
+test('revokeAll on a data directory with no auth directory makes ephemeral/auth/ at 0700 for revoked-before', async (t) => {
+  const dir = await dataDir(t);
+  const store = filesystemSessionStore(dir);
+  const at = Date.UTC(2026, 9, 20, 12, 0, 0);
+  assert.deepEqual(await store.revokeAll(at), []);
+  const paths = authPaths(dir);
+  for (const each of [paths.ephemeral, paths.auth]) {
+    assert.equal(statSync(each).mode & 0o777, 0o700, each);
+  }
+  assert.equal(await store.revokedBefore(), at);
+  assert.equal(existsSync(paths.sessions), false);
+});
+
+test('a session write refuses a link or a file in place of an auth directory, and writes nothing through it', async (t) => {
+  const paths = (dir: string) => authPaths(dir);
+  const cases: [what: string, arrange: (dir: string, elsewhere: string) => void][] = [
+    ['ephemeral/ a link', (dir, elsewhere) => symlinkSync(elsewhere, paths(dir).ephemeral)],
+    [
+      'ephemeral/auth/ a link',
+      (dir, elsewhere) => {
+        mkdirSync(paths(dir).ephemeral, { mode: 0o700 });
+        symlinkSync(elsewhere, paths(dir).auth);
+      },
+    ],
+    [
+      'ephemeral/auth/sessions/ a link',
+      (dir, elsewhere) => {
+        mkdirSync(paths(dir).auth, { recursive: true, mode: 0o700 });
+        symlinkSync(elsewhere, paths(dir).sessions);
+      },
+    ],
+    [
+      'ephemeral/auth/ a file',
+      (dir) => {
+        mkdirSync(paths(dir).ephemeral, { mode: 0o700 });
+        writeFileSync(paths(dir).auth, '');
+      },
+    ],
+  ];
+  for (const [what, arrange] of cases) {
+    const dir = await dataDir(t);
+    const elsewhere = mkdtempSync(path.join(tmpdir(), 'session-store-elsewhere-'));
+    t.after(() => rmSync(elsewhere, { recursive: true, force: true }));
+    arrange(dir, elsewhere);
+    const store = filesystemSessionStore(dir);
+    await assert.rejects(store.put(record()), /is a link|isn't a directory/, what);
+    // revokeAll checks every directory it uses before it writes revoked-before,
+    // so a refusal leaves no revocation half done.
+    await assert.rejects(store.revokeAll(Date.now()), /is a link|isn't a directory/, what);
+    assert.equal(
+      existsSync(paths(dir).revokedBefore),
+      false,
+      `${what}: revoked-before was written`,
+    );
+    assert.deepEqual(readdirSync(elsewhere), [], `${what}: something was written through it`);
+  }
+});
+
+test('a session write puts an auth directory an operator loosened back to 0700, and the write goes through', async (t) => {
+  const dir = await dataDir(t);
+  const paths = authPaths(dir);
+  mkdirSync(paths.sessions, { recursive: true, mode: 0o700 });
+  chmodSync(paths.auth, 0o755);
+  chmodSync(paths.sessions, 0o777);
+  const store = filesystemSessionStore(dir);
+  const entry = record();
+  await store.put(entry);
+  for (const each of [paths.auth, paths.sessions]) {
+    assert.equal(statSync(each).mode & 0o777, 0o700, each);
+  }
+  assert.deepEqual(await store.get(entry.digest), entry);
+  // And revoked-before's writer puts ephemeral/auth/ back too.
+  chmodSync(paths.auth, 0o750);
+  const at = Date.UTC(2026, 9, 20, 12, 0, 0);
+  assert.deepEqual(await store.revokeAll(at), [entry.digest]);
+  assert.equal(statSync(paths.auth).mode & 0o777, 0o700);
+  assert.equal(await store.revokedBefore(), at);
+});
+
+test('a link planted in place of ephemeral/auth/, to a directory holding a valid session, yields no session: every reader refuses it, resolve is unavailable, and touch lets go', async (t) => {
+  const at = Date.UTC(2026, 9, 20, 12, 0, 0);
+  const now = () => at;
+  const audit = memoryAuditSink(now);
+  // A valid session, signed in under this hash, in another data directory.
+  const other = await dataDir(t);
+  const planted = createSessions({
+    store: filesystemSessionStore(other),
+    audit,
+    fingerprint: FINGERPRINT,
+    now,
+  });
+  const { token, record } = await planted.issue({ uaFamily: 'firefox' });
+  assert.equal((await planted.resolve(token)).status, 'valid');
+
+  const dir = await dataDir(t);
+  mkdirSync(authPaths(dir).ephemeral, { mode: 0o700 });
+  symlinkSync(authPaths(other).auth, authPaths(dir).auth);
+  const store = filesystemSessionStore(dir);
+  await assert.rejects(store.list(), /is a link/);
+  await assert.rejects(listSessionDigests(dir), /is a link/);
+  await assert.rejects(store.get(record.digest), /is a link/);
+  await assert.rejects(store.revokedBefore(), /is a link/);
+  await assert.rejects(store.delete(record.digest), /is a link/);
+
+  const logged: string[] = [];
+  const sessions = createSessions({
+    store,
+    audit,
+    fingerprint: FINGERPRINT,
+    now,
+    log: (entry) => logged.push(entry.event),
+  });
+  assert.deepEqual(await sessions.resolve(token), { status: 'unavailable' });
+  assert.deepEqual(await sessions.resolveDigest(record.digest), { status: 'unavailable' });
+  // A request holding the record from before the link: its touch lets go of it.
+  assert.equal(await sessions.touch(record, { kind: 'command', extend: true }), null);
+  assert.ok(logged.includes('session.touch_failed'));
+  // Nothing was written through the link.
+  assert.deepEqual(readdirSync(authPaths(other).sessions), [`${record.digest}.json`]);
+});
+
+test('a session write refuses an auth directory another user owns', async (t) => {
+  const dir = await dataDir(t);
+  mkdirSync(authPaths(dir).sessions, { recursive: true, mode: 0o700 });
+  // Only root can chown, so the server runs as another user instead.
+  const uid = process.getuid!();
+  t.mock.method(process as { getuid: () => number }, 'getuid', () => uid + 1);
+  await assert.rejects(filesystemSessionStore(dir).put(record()), /belongs to another user/);
+  assert.deepEqual(readdirSync(authPaths(dir).sessions), []);
 });

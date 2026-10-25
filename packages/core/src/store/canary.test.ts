@@ -14,7 +14,7 @@ import { filesystemSessionStore } from '../auth/session-store';
 import { createSessions } from '../auth/sessions';
 import { csrfToken } from '../auth/token';
 import { filesystemAuditSink } from '../audit/sink';
-import { prepareAuthDirectories } from '../data/layout.mjs';
+import { probeDataDirectory } from '../data/layout.mjs';
 import { backupStore, restoreStore } from './backup';
 import { readLive } from './pointer';
 import { nodeFs } from './fs-port';
@@ -41,7 +41,7 @@ const base64 = (bytes: Buffer) => bytes.toString('base64').replace(/=+$/, '');
  */
 async function everyWrite(t: TestContext) {
   const dataDir = tempDir(t);
-  assert.equal(await prepareAuthDirectories(dataDir), null);
+  assert.equal(await probeDataDirectory(dataDir), null);
   assert.equal(await preflight({ dataDir }), null);
 
   // What the server holds that a revision must never: the password hash and

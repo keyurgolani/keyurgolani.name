@@ -16,6 +16,7 @@ import { storeHandlers } from './store-handlers';
 recordOwnerModule('server/owner/index');
 
 /** For the auth provider: composition.ts hands it on as the provider loads. */
+export { privateDirFinding } from './data-directory';
 export { mintSession } from './session-mint';
 /** The revision store and owner's reader (#3), which the owner requirements share. */
 export { ownerStore, type OwnerStore, type OwnerStoreInput } from './store';

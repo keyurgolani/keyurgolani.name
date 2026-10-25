@@ -1,6 +1,6 @@
-import { lstat, readdir, readFile, rm } from 'node:fs/promises';
+import { readdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { ensurePrivateDir, writePrivateFile } from '../data/layout.mjs';
+import { checkPrivateDir, preparePrivateDir, writePrivateFile } from '../data/layout.mjs';
 import { recordOwnerModule } from '../load-trace';
 import { isDraftId, isRevisionId, type DraftId, type RevisionId } from '../store/layout';
 import type { DocumentInput, UnitInput } from '../catalog/unit';
@@ -328,8 +328,10 @@ async function names(dir: string): Promise<string[]> {
 
 /**
  * The store on disk under `dataDir`, which owner startup has prepared. Its
- * own directories are made at the first write, 0700, and refused when one is
- * a link, so a write never lands outside the data directory.
+ * own directories are made at the first write, 0700, by preparePrivateDir(),
+ * which puts a loosened mode back and refuses a link or another user's, and
+ * each read checks them through checkPrivateDir(), so a write
+ * never lands outside the data directory and a read never comes from outside it.
  */
 export function filesystemGrantStore(dataDir: string): GrantStore {
   const paths = previewPaths(dataDir);
@@ -342,21 +344,14 @@ export function filesystemGrantStore(dataDir: string): GrantStore {
     return path.join(paths.drafts, `${draftId}.json`);
   };
 
-  async function prepared(dir: string): Promise<void> {
-    for (const each of [path.join(dataDir, 'ephemeral'), paths.root, dir]) {
-      try {
-        if ((await lstat(each)).isSymbolicLink()) {
-          throw new Error(`${path.relative(dataDir, each)} is a link.`);
-        }
-      } catch (error) {
-        if (!missing(error)) throw error;
-      }
-      await ensurePrivateDir(each);
-    }
-  }
+  const prepared = (dir: string): Promise<void> => preparePrivateDir(dataDir, dir);
+  // Readers check the same directories and make none, so a link planted in
+  // place of one never yields a grant.
+  const checked = (dir: string): Promise<void> => checkPrivateDir(dataDir, dir);
 
   async function get(digest: string): Promise<GrantRecord | null> {
     const file = recordFile(digest);
+    await checked(paths.grants);
     const text = await readText(file);
     if (text === null) return null;
     const record = parseGrant(digest, text);
@@ -375,8 +370,10 @@ export function filesystemGrantStore(dataDir: string): GrantStore {
     },
     get,
     async delete(digest) {
+      const file = recordFile(digest);
+      await checked(paths.grants);
       try {
-        await rm(recordFile(digest));
+        await rm(file);
         return true;
       } catch (error) {
         if (missing(error)) return false;
@@ -385,6 +382,7 @@ export function filesystemGrantStore(dataDir: string): GrantStore {
     },
     async list() {
       const found: GrantRecord[] = [];
+      await checked(paths.grants);
       for (const name of await names(paths.grants)) {
         const match = RECORD_FILE.exec(name);
         if (!match?.[1]) continue;
@@ -395,6 +393,7 @@ export function filesystemGrantStore(dataDir: string): GrantStore {
     },
     async newestDraftVersion(draftId) {
       const file = markerFile(draftId);
+      await checked(paths.drafts);
       const text = await readText(file);
       if (text === null) return null;
       let value: unknown;
@@ -414,9 +413,12 @@ export function filesystemGrantStore(dataDir: string): GrantStore {
       await writePrivateFile(markerFile(draftId), `${JSON.stringify({ v: 1, newest: version })}\n`);
     },
     async deleteDraftMarker(draftId) {
-      await rm(markerFile(draftId), { force: true });
+      const file = markerFile(draftId);
+      await checked(paths.drafts);
+      await rm(file, { force: true });
     },
     async listDraftMarkers() {
+      await checked(paths.drafts);
       return (await names(paths.drafts)).flatMap((name) => {
         const match = MARKER_FILE.exec(name);
         return match?.[1] ? [match[1] as DraftId] : [];

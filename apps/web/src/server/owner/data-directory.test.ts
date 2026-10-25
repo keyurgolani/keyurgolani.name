@@ -4,30 +4,44 @@ import { randomBytes } from 'node:crypto';
 import {
   chmodSync,
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   rmSync,
   statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import fsPromises from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SESSION_LIFETIME, SESSION_LIFETIME_RANGE } from '@portfolio/core/owner';
+import { PrivateDirError, SESSION_LIFETIME, SESSION_LIFETIME_RANGE } from '@portfolio/core/owner';
+import { storePaths } from '../../../../../packages/core/src/store/layout';
+import { storeDirectories } from '../../../../../packages/core/src/store/preflight';
 import type { AuthProviderFactory } from '../composition';
 import { SESSION_LIFETIME_KEYS, type Env } from '../config';
 import { runStartup, type StartupResult } from '../startup';
 
-// The data.directory startup requirement (#2): owner needs a data directory
-// the server can write, and makes its auth and audit directories there. A
-// provider double stands in for the real one, which the login slice
-// registers, so the data directory alone decides whether owner starts.
+// The data.directory startup requirement (#2, #3): owner needs a data
+// directory the server can write, and lays out the store there, with no
+// auth directory until a writer makes one. A provider double stands in for
+// the real one, which the login slice registers, so the data directory
+// alone decides whether owner starts.
 
 const EXAMPLES = {
   portfolio: fileURLToPath(new URL('../../../../../portfolio.example.yml', import.meta.url)),
   site: fileURLToPath(new URL('../../../../../site.example.yml', import.meta.url)),
 };
+/** An old one-file portfolio.yml, which owner refuses as legacy.document. */
+const LEGACY_ONLY = fileURLToPath(
+  new URL(
+    '../../../../../packages/schema/src/__fixtures__/startup/legacy-only/portfolio.yml',
+    import.meta.url,
+  ),
+);
 const VALID =
   'schemaVersion: 3\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n';
 const base64 = (bytes: Buffer) => bytes.toString('base64').replace(/=+$/, '');
@@ -111,15 +125,257 @@ test('owner refuses to start without a data directory it can write, naming the v
   }
 });
 
-test('owner startup makes the auth and audit directories in the data directory, 0700', async (t) => {
+/** Every entry under `dir`, relative to it, a directory's with a trailing slash, sorted. */
+function tree(dir: string): string[] {
+  const found: string[] = [];
+  const walk = (at: string) => {
+    for (const entry of readdirSync(at, { withFileTypes: true })) {
+      const full = path.join(at, entry.name);
+      const name = path.relative(dir, full);
+      if (entry.isDirectory()) {
+        found.push(`${name}/`);
+        walk(full);
+      } else {
+        found.push(name);
+      }
+    }
+  };
+  walk(dir);
+  return found.sort();
+}
+
+/**
+ * The valid empty store, from the store's own layout: store.json, the
+ * server's claim, and each store directory with those above it.
+ */
+function emptyStore(dataDir: string): string[] {
+  const paths = storePaths(dataDir);
+  const entries = new Set([
+    path.relative(paths.root, paths.storeFile),
+    path.relative(paths.root, paths.server),
+  ]);
+  for (const dir of storeDirectories(paths)) {
+    for (let at = dir; at !== paths.root; at = path.dirname(at)) {
+      entries.add(`${path.relative(paths.root, at)}/`);
+    }
+  }
+  return [...entries].sort();
+}
+
+test("owner refusing the old one-file config leaves the data directory a valid empty store and nothing more, the auth state's directories included", async (t) => {
+  const { root, env } = workspace(t);
+  // The rehearsal's image-old-config row (#12): an old-shape portfolio.yml
+  // alone, refused by documents.shape after data.directory has run.
+  const source = path.join(root, 'old-config');
+  mkdirSync(source);
+  copyFileSync(LEGACY_ONLY, path.join(source, 'portfolio.yml'));
+  const dataDir = path.join(root, 'data');
+  mkdirSync(dataDir, { mode: 0o700 });
+  // The build's own auth provider, as the image runs it.
+  const result = await runStartup({
+    env: { ...env, PORTFOLIO_SOURCE_DIR: source, PORTFOLIO_DATA_DIR: dataDir },
+    cwd: '/srv/app',
+    examples: EXAMPLES,
+    report: () => {},
+  });
+  assert.equal(result.ok, false);
+  assert.deepEqual(fatalCodes(result), ['PORTFOLIO_SOURCE_DIR:legacy.document']);
+  const expected = emptyStore(dataDir);
+  // What the store defines, named, so a change to it shows here too.
+  assert.deepEqual(expected, [
+    'assets/',
+    'assets/sha256/',
+    'audit/',
+    'drafts/',
+    'ephemeral/',
+    'publication/',
+    'publication/events/',
+    'publication/server.json',
+    'revisions/',
+    'store.json',
+  ]);
+  // The refused start lets its claim go as it returns, so the server's
+  // claim is the one entry of the empty store that's gone.
+  const claim = path.relative(dataDir, storePaths(dataDir).server);
+  assert.deepEqual(
+    tree(dataDir),
+    expected.filter((entry) => entry !== claim),
+  );
+});
+
+test("startup's write, sync, and rename probe runs in ephemeral/, where the auth state lives, and is removed", async (t) => {
   const { root, env } = workspace(t);
   const dataDir = path.join(root, 'data');
-  mkdirSync(dataDir);
+  mkdirSync(dataDir, { mode: 0o700 });
+  // Every rename startup makes, seen through node:fs/promises, whose named
+  // exports the probe's module imports.
+  const renamed: string[] = [];
+  const real = fsPromises.rename;
+  fsPromises.rename = async (from, to) => {
+    renamed.push(String(from));
+    return real(from, to);
+  };
+  syncBuiltinESMExports();
+  let result: StartupResult;
+  try {
+    result = await start({ ...env, PORTFOLIO_DATA_DIR: dataDir });
+  } finally {
+    fsPromises.rename = real;
+    syncBuiltinESMExports();
+  }
+  assert.ok(result.ok, JSON.stringify(result.issues));
+  if (result.ok) result.state.release?.();
+  const probes = renamed.filter((file) => path.basename(file) === 'probe');
+  assert.equal(probes.length, 1, renamed.join(', '));
+  const probeDir = path.dirname(probes[0]!);
+  assert.equal(path.dirname(probeDir), path.join(dataDir, 'ephemeral'));
+  assert.match(path.basename(probeDir), /^\.probe-[0-9a-f]{12}$/);
+  assert.deepEqual(readdirSync(path.join(dataDir, 'ephemeral')), [], 'the probe was left');
+});
+
+test('a start that succeeds makes the store, and no auth directory until a writer needs one', async (t) => {
+  const { root, env } = workspace(t);
+  const dataDir = path.join(root, 'data');
+  mkdirSync(dataDir, { mode: 0o700 });
   const result = await start({ ...env, PORTFOLIO_DATA_DIR: dataDir });
   assert.ok(result.ok, JSON.stringify(result.issues));
-  for (const dir of ['ephemeral', 'ephemeral/auth', 'ephemeral/auth/sessions', 'audit']) {
+  if (result.ok) result.state.release?.();
+  for (const dir of ['ephemeral', 'audit']) {
     assert.equal(statSync(path.join(dataDir, dir)).mode & 0o777, 0o700, dir);
   }
+  // The provider double writes nothing, so nothing is below ephemeral/.
+  assert.deepEqual(readdirSync(path.join(dataDir, 'ephemeral')), []);
+  assert.ok(!tree(dataDir).some((entry) => entry.startsWith('.probe-')), 'a probe was left');
+});
+
+test('a data directory that already holds the auth directories and a session keeps them, and starts', async (t) => {
+  const { root, env } = workspace(t);
+  const dataDir = path.join(root, 'data');
+  const sessions = path.join(dataDir, 'ephemeral', 'auth', 'sessions');
+  mkdirSync(sessions, { recursive: true, mode: 0o700 });
+  mkdirSync(path.join(dataDir, 'audit'), { mode: 0o700 });
+  const record = path.join(sessions, `${'a'.repeat(64)}.json`);
+  writeFileSync(record, '{}\n', { mode: 0o600 });
+  writeFileSync(path.join(dataDir, 'ephemeral', 'auth', 'fingerprint'), 'kept\n', { mode: 0o600 });
+  const result = await start({ ...env, PORTFOLIO_DATA_DIR: dataDir });
+  assert.ok(result.ok, JSON.stringify(result.issues));
+  if (result.ok) result.state.release?.();
+  assert.deepEqual(readdirSync(sessions), [path.basename(record)]);
+  assert.deepEqual(readdirSync(path.join(dataDir, 'ephemeral', 'auth')).sort(), [
+    'fingerprint',
+    'sessions',
+  ]);
+});
+
+test('a link at ephemeral/ or audit/ refuses startup, and nothing is made through it', async (t) => {
+  for (const linked of ['ephemeral', 'audit']) {
+    const { root, env } = workspace(t);
+    const dataDir = path.join(root, 'data');
+    mkdirSync(dataDir, { mode: 0o700 });
+    const elsewhere = path.join(root, 'elsewhere');
+    mkdirSync(elsewhere, { mode: 0o700 });
+    symlinkSync(elsewhere, path.join(dataDir, linked));
+    const result = await start({ ...env, PORTFOLIO_DATA_DIR: dataDir });
+    assert.equal(result.ok, false, linked);
+    assert.deepEqual(fatalCodes(result), ['PORTFOLIO_DATA_DIR:data_dir_linked'], linked);
+    assert.deepEqual(readdirSync(elsewhere), [], `${linked}: something was made through the link`);
+  }
+});
+
+test('a link planted in place of an auth or preview directory under ephemeral/ stops startup with data_dir_linked, and lets the claim go', async (t) => {
+  for (const linked of [
+    'ephemeral/auth',
+    'ephemeral/auth/sessions',
+    'ephemeral/preview',
+    'ephemeral/preview/grants',
+    'ephemeral/preview/drafts',
+  ]) {
+    const { root, env } = workspace(t);
+    const dataDir = path.join(root, 'data');
+    mkdirSync(path.join(dataDir, path.dirname(linked)), { recursive: true, mode: 0o700 });
+    const elsewhere = path.join(root, 'elsewhere');
+    mkdirSync(elsewhere, { mode: 0o700 });
+    symlinkSync(elsewhere, path.join(dataDir, linked));
+    // The provider double writes nothing, so data.directory alone must refuse it.
+    const result = await start({ ...env, PORTFOLIO_DATA_DIR: dataDir });
+    assert.equal(result.ok, false, linked);
+    assert.deepEqual(fatalCodes(result), ['PORTFOLIO_DATA_DIR:data_dir_linked'], linked);
+    assert.ok(!JSON.stringify(result.issues).includes(root), `${linked}: a finding names the path`);
+    assert.equal(existsSync(storePaths(dataDir).server), false, `${linked}: the claim was kept`);
+    assert.deepEqual(readdirSync(elsewhere), [], `${linked}: something was made through it`);
+  }
+});
+
+test("with the build's own provider, a planted ephemeral/auth/ link holding a valid-looking session refuses startup, first start or later, and nothing is read or written through it", async (t) => {
+  const { root, env } = workspace(t);
+  const dataDir = path.join(root, 'data');
+  mkdirSync(path.join(dataDir, 'ephemeral'), { recursive: true, mode: 0o700 });
+  const elsewhere = path.join(root, 'elsewhere');
+  mkdirSync(path.join(elsewhere, 'sessions'), { recursive: true, mode: 0o700 });
+  writeFileSync(path.join(elsewhere, 'sessions', `${'b'.repeat(64)}.json`), '{}\n');
+  symlinkSync(elsewhere, path.join(dataDir, 'ephemeral', 'auth'));
+  for (const round of ['first start', 'second start']) {
+    const result = await runStartup({
+      env: { ...env, PORTFOLIO_DATA_DIR: dataDir },
+      cwd: '/srv/app',
+      examples: EXAMPLES,
+      report: () => {},
+    });
+    assert.equal(result.ok, false, round);
+    assert.deepEqual(fatalCodes(result), ['PORTFOLIO_DATA_DIR:data_dir_linked'], round);
+    assert.equal(existsSync(storePaths(dataDir).server), false, `${round}: the claim was kept`);
+  }
+  assert.deepEqual(readdirSync(elsewhere).sort(), ['sessions'], 'the fingerprint went through it');
+});
+
+test('a loosened auth or preview directory is put back to 0700 at startup, and owner starts', async (t) => {
+  const { root, env } = workspace(t);
+  const dataDir = path.join(root, 'data');
+  const dirs = ['ephemeral/auth', 'ephemeral/auth/sessions', 'ephemeral/preview/grants'];
+  for (const dir of dirs) mkdirSync(path.join(dataDir, dir), { recursive: true, mode: 0o700 });
+  chmodSync(path.join(dataDir, 'ephemeral/auth'), 0o755);
+  chmodSync(path.join(dataDir, 'ephemeral/auth/sessions'), 0o777);
+  chmodSync(path.join(dataDir, 'ephemeral/preview/grants'), 0o750);
+  const result = await start({ ...env, PORTFOLIO_DATA_DIR: dataDir });
+  assert.ok(result.ok, JSON.stringify(result.issues));
+  if (result.ok) result.state.release?.();
+  for (const dir of dirs) {
+    assert.equal(statSync(path.join(dataDir, dir)).mode & 0o777, 0o700, dir);
+  }
+});
+
+test('a provider that stops on a refused directory gives a coded finding, and any other failure there still lets the claim go', async (t) => {
+  const refusing = (error: Error): AuthProviderFactory => ({
+    name: 'refusing',
+    load: async () => {
+      throw error;
+    },
+  });
+  const { root, env } = workspace(t);
+  const dataDir = path.join(root, 'data');
+  mkdirSync(dataDir, { mode: 0o700 });
+  const startWith = (factory: AuthProviderFactory) =>
+    runStartup({
+      env: { ...env, PORTFOLIO_DATA_DIR: dataDir },
+      cwd: '/srv/app',
+      examples: EXAMPLES,
+      report: () => {},
+      authProviders: [factory],
+    });
+  for (const [code, finding] of [
+    ['linked', 'PORTFOLIO_DATA_DIR:data_dir_linked'],
+    ['not_private', 'PORTFOLIO_DATA_DIR:data_dir_not_private'],
+  ] as const) {
+    const result = await startWith(
+      refusing(new PrivateDirError(code, `ephemeral/auth at ${root} is refused.`)),
+    );
+    assert.equal(result.ok, false, code);
+    assert.deepEqual(fatalCodes(result), [finding], code);
+    assert.ok(!JSON.stringify(result.issues).includes(root), `${code}: a finding names the path`);
+    assert.equal(existsSync(storePaths(dataDir).server), false, `${code}: the claim was kept`);
+  }
+  await assert.rejects(startWith(refusing(new Error('something else'))), /something else/);
+  assert.equal(existsSync(storePaths(dataDir).server), false, 'the claim was kept');
 });
 
 test('under next dev an unset data directory is .data, made at 0700 whatever the umask, or put back to 0700', async (t) => {
