@@ -32,6 +32,13 @@ function importer() {
   return { run, calls };
 }
 
+/** A tab's sessionStorage as another page in it would read it, apart from the first. */
+function copyOf(session: FakeStorage): FakeStorage {
+  const copy = new FakeStorage();
+  for (const [key, value] of session.items) copy.items.set(key, value);
+  return copy;
+}
+
 /** An importer that answers only once the test releases it, as a slow worker would. */
 function gated() {
   const calls: { files: readonly ImportInput[]; options?: ImportOptions }[] = [];
@@ -602,4 +609,52 @@ test("a kept copy's check that couldn't run is tried again the next time, and on
   assert.equal(calls.length, 2);
   assert.equal((await backend.report())?.kind, 'imported');
   assert.equal(calls.length, 2);
+});
+
+test("a kept copy's check still in the worker when Reset demo comes, or an import replaces the copy, reports nothing (N2)", async () => {
+  const session = new FakeStorage();
+  await setup(DEFAULTS, { session }).backend.importFiles(example());
+  for (const then of ['reset', 'import'] as const) {
+    const worker = gated();
+    const { backend } = setup(DEFAULTS, {
+      session: then === 'reset' ? session : copyOf(session),
+      checks: { run: worker.run, calls: [] },
+    });
+    const pending = backend.report();
+    if (then === 'reset') backend.resetAll();
+    else void backend.importFiles(example());
+    await worker.release();
+    assert.equal(await pending, null, then);
+  }
+});
+
+test('an import runs to its answer however the page moves, and a Content task opened meanwhile finds it: importing() while it runs, lastImport() after, until a reset (N3)', async () => {
+  const worker = gated();
+  const { backend } = setup(DEFAULTS, { checks: { run: worker.run, calls: [] } });
+  assert.equal(backend.importing(), null);
+  assert.equal(backend.lastImport(), null);
+  const pending = backend.importFiles(example());
+  assert.equal(backend.importing(), pending);
+  await worker.release();
+  const answer = await pending;
+  assert.equal(answer?.kind, 'imported');
+  assert.equal(backend.importing(), null);
+  assert.equal(backend.lastImport(), answer);
+  assert.ok(backend.localSources());
+  // A refusal is the last answer too, and keeps the source it had.
+  const bomb = HOSTILE_FIXTURES.find(({ expect }) => expect === 'parse_limits')!;
+  const refused = backend.importFiles(bomb.files);
+  await worker.release();
+  assert.equal((await refused)?.kind, 'refused');
+  assert.equal(backend.lastImport(), await refused);
+  assert.ok(backend.localSources());
+  backend.resetAll();
+  assert.equal(backend.lastImport(), null);
+  // One the reset overtook is no answer at all.
+  const overtaken = backend.importFiles(example());
+  backend.resetAll();
+  await worker.release();
+  assert.equal(await overtaken, null);
+  assert.equal(backend.lastImport(), null);
+  assert.equal(backend.importing(), null);
 });
