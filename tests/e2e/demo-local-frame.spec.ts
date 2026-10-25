@@ -46,6 +46,14 @@ const HOSTS = {
 // reads navigator.serviceWorker, from throwing in the frame.
 test.use({ appOptions: DEMO_APP, routeWebSockets: false, serviceWorkers: 'allow' });
 
+/** A file of the build's own that the frame may link: under /_next/static/ or /_portfolio/, plain path characters only. */
+const OWN_FILE = /^\/(?:_next\/static|_portfolio)\/[A-Za-z0-9._/-]+$/;
+
+// Allowing service workers registers none: the frame is opaque, and nothing here asks for one.
+test.afterEach(({ page }) => {
+  expect(page.context().serviceWorkers()).toEqual([]);
+});
+
 type Helpers = typeof Hostile & Pick<typeof Pipeline, 'runImport'>;
 let outdir: string | undefined;
 let H: Helpers;
@@ -465,7 +473,8 @@ test(
         .filter(
           ({ rel, href }) =>
             !/^(?:stylesheet|preload|modulepreload)$/.test(rel) ||
-            !/^\/(?:_next\/static|_portfolio)\//.test(href),
+            !OWN_FILE.test(href) ||
+            href.split('/').includes('..'),
         )
         .map(({ html }) => html),
       "a link that isn't the frame's own",
