@@ -1,6 +1,6 @@
 {
   "name": "@portfolio/appearance-languages",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "The platform's design-language packs (#19): platform-neutral, every axis's fallback for design languages.",
   "portfolio": {

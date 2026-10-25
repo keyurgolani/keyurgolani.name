@@ -29,10 +29,10 @@
     "manifest": "./manifest.json"
   },
   "peerDependencies": {
-    "@portfolio/appearance": "^0.1.0",
-    "@portfolio/kit": "^0.1.0",
-    "@portfolio/schema": "^0.1.0",
-    "@portfolio/variant-contract": "^0.1.0",
+    "@portfolio/appearance": "^1.0.0",
+    "@portfolio/kit": "^1.0.0",
+    "@portfolio/schema": "^1.0.0",
+    "@portfolio/variant-contract": "^1.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   }

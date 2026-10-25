@@ -31,6 +31,7 @@ import {
   planFingerprint,
   RELEASE_CEILING,
   RELEASE_COUNTS,
+  RELEASE_PARALLEL,
   releaseFor,
   releasePlan,
   releaseTimeoutMinutes,
@@ -365,8 +366,13 @@ function testNights(
 /** The salts the balance test rolls the nights with: the plan's own, the empty one, and 49 more. */
 const SALTS = ['', ...Array.from({ length: 49 }, (_, at) => `salt-${at + 1}:`)];
 
-test('the cap: eight shard jobs at once, nightly and at release, and the release in as many waves of them as rc-quality-plan counts', () => {
-  assert.equal(FULL_SHARDS, 8, 'PR CI keeps 12 of the account’s 20 job slots');
+test('the caps: eight shard jobs at once a night, 16 at release, and the release in as many waves of them as rc-quality-plan counts', () => {
+  assert.equal(FULL_SHARDS, 8, 'PR CI keeps 12 of the account’s 20 job slots a night');
+  assert.equal(
+    RELEASE_PARALLEL,
+    16,
+    'PR CI keeps 4 of the account’s 20 job slots while a candidate runs',
+  );
   assert.deepEqual(NIGHT_COUNTS, [7, 14, 28, 56]);
   assert.deepEqual(RELEASE_COUNTS, [32, 64, 128, 256]);
   const count = '${{ needs.rc-quality-plan.outputs.count }}';
@@ -375,11 +381,11 @@ test('the cap: eight shard jobs at once, nightly and at release, and the release
     RELEASE['rc-quality']!.strategy?.matrix?.shard,
     '${{ fromJSON(needs.rc-quality-plan.outputs.shards) }}',
   );
-  for (const [where, job, total] of [
-    ['scheduled.yml quality-full', SCHEDULED['quality-full']!, String(FULL_SHARDS)],
-    ['release.yml rc-quality', RELEASE['rc-quality']!, count],
+  for (const [where, job, total, cap] of [
+    ['scheduled.yml quality-full', SCHEDULED['quality-full']!, String(FULL_SHARDS), FULL_SHARDS],
+    ['release.yml rc-quality', RELEASE['rc-quality']!, count, RELEASE_PARALLEL],
   ] as const) {
-    assert.equal(job.strategy?.['max-parallel'], FULL_SHARDS, where);
+    assert.equal(job.strategy?.['max-parallel'], cap, where);
     assert.equal(job.strategy?.['fail-fast'], false, where);
     assert.equal(job.name?.endsWith(`(\${{ matrix.shard }}/${total})`), true, where);
     const run = step(job, (each) => /pnpm ci:quality-full/.test(each.run ?? ''), where);

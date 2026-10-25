@@ -92,10 +92,17 @@ export function changedFiles(
     );
   }
   const files = out.split('\0').filter((file) => file !== '');
-  const metadata = metadataOnlyManifests(files, base, root);
+  const metadata = unchangedForCells(files, base, root, PACK_MANIFEST, renderedKeys);
+  const versions = unchangedForCells(files, base, root, WORKSPACE_PACKAGE, keysButVersion);
+  const less = [
+    metadata.length > 0 ? `${metadata.length} manifest(s) whose change is metadata alone` : '',
+    versions.length > 0
+      ? `${versions.length} package.json(s) whose change is the version alone`
+      : '',
+  ].filter(Boolean);
   return {
-    source: `git diff ${base}...HEAD${metadata.length > 0 ? `, less ${metadata.length} manifest(s) whose change is metadata alone` : ''}`,
-    files: files.filter((file) => !metadata.includes(file)),
+    source: `git diff ${base}...HEAD${less.length > 0 ? `, less ${less.join(' and ')}` : ''}`,
+    files: files.filter((file) => !metadata.includes(file) && !versions.includes(file)),
   };
 }
 
@@ -114,15 +121,26 @@ export const METADATA_KEYS: ReadonlySet<string> = new Set([
 
 const PACK_MANIFEST = /^packages\/[^/]+\/packs\/[^/]+\/manifest\.json$/;
 
-/** A manifest's keys a cell can read, as one canonical string, or null when it isn't JSON. */
-export function renderedKeys(text: string): string | null {
-  let manifest: unknown;
+/**
+ * A workspace package's package.json, under packages/. Its version alone is
+ * read by no cell, so a release's version bump across every package directs
+ * nothing; any other key (a dependency, an export, a script) still does. No
+ * page renders a package's version. A variant's reaches a revision's
+ * rendering record for render drift (unit-checks.ts), but the quality host
+ * publishes fresh each run, so no cell sees it change. apps/web's version is
+ * a revision's appVersion, and its package.json is outside this pattern.
+ */
+const WORKSPACE_PACKAGE = /^packages\/(?:[^/]+\/)+package\.json$/;
+
+/** `text`'s keys but `dropped`, as one canonical string, or null when it isn't a JSON object. */
+function keptKeys(text: string, dropped: ReadonlySet<string>): string | null {
+  let json: unknown;
   try {
-    manifest = JSON.parse(text);
+    json = JSON.parse(text);
   } catch {
     return null;
   }
-  if (typeof manifest !== 'object' || manifest === null || Array.isArray(manifest)) return null;
+  if (typeof json !== 'object' || json === null || Array.isArray(json)) return null;
   const canonical = (value: unknown): unknown =>
     Array.isArray(value)
       ? value.map(canonical)
@@ -133,15 +151,34 @@ export function renderedKeys(text: string): string | null {
               .map((key) => [key, canonical((value as Record<string, unknown>)[key])]),
           )
         : value;
-  const kept = Object.fromEntries(
-    Object.entries(manifest).filter(([key]) => !METADATA_KEYS.has(key)),
-  );
+  const kept = Object.fromEntries(Object.entries(json).filter(([key]) => !dropped.has(key)));
   return JSON.stringify(canonical(kept));
 }
 
-/** The pack manifests among `files` whose change from the merge base is metadata alone. */
-function metadataOnlyManifests(files: readonly string[], base: string, root: string): string[] {
-  const candidates = files.filter((file) => PACK_MANIFEST.test(file));
+/** A manifest's keys a cell can read, as one canonical string, or null when it isn't JSON. */
+export function renderedKeys(text: string): string | null {
+  return keptKeys(text, METADATA_KEYS);
+}
+
+const VERSION_KEY: ReadonlySet<string> = new Set(['version']);
+
+/** A package.json's keys but its version, as one canonical string, or null when it isn't JSON. */
+export function keysButVersion(text: string): string | null {
+  return keptKeys(text, VERSION_KEY);
+}
+
+/**
+ * The files among `files` matching `pattern` whose change from the merge base
+ * leaves `keys` the same: a pack manifest's metadata, or a package's version.
+ */
+function unchangedForCells(
+  files: readonly string[],
+  base: string,
+  root: string,
+  pattern: RegExp,
+  keys: (text: string) => string | null,
+): string[] {
+  const candidates = files.filter((file) => pattern.test(file));
   if (candidates.length === 0) return [];
   const git = (...args: string[]): string | null => {
     try {
@@ -161,8 +198,8 @@ function metadataOnlyManifests(files: readonly string[], base: string, root: str
     const before = git('show', `${mergeBase}:${file}`);
     const after = git('show', `HEAD:${file}`);
     if (before === null || after === null) return false;
-    const keys = renderedKeys(before);
-    return keys !== null && keys === renderedKeys(after);
+    const kept = keys(before);
+    return kept !== null && kept === keys(after);
   });
 }
 
