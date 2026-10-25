@@ -19,7 +19,10 @@ COPY pnpm-workspace.yaml package.json .npmrc pnpm-lock.yaml .pnpmfile.cjs ./
 COPY apps apps
 COPY packages packages
 
-RUN pnpm install --frozen-lockfile
+# Under QEMU, the arm64 install sometimes hits a SIGILL that dumps core, and
+# BuildKit then waits forever. With core dumps off the crash should fail the
+# step in seconds. The build step's 25-minute timeout (#93) is the backstop.
+RUN ulimit -c 0 && pnpm install --frozen-lockfile
 
 # ─── builder ───────────────────────────────────────────────────────────────
 FROM node:22.23.4-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS builder
