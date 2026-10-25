@@ -34,21 +34,21 @@ jobs:
       max-parallel: 4
       matrix:
         include:
-          # Four visual cells, for the image's quality/fonts.observed.txt. They fail until fonts.txt lands.
-          - id: visual
-            timeout: 30
-            external: ''
-            grep: 'visual\.spec\.ts visual composition:(editorial-evidence|fallback) complete / \S+/platform-neutral/warm-parchment/humanist-ui/system '
-          # Slice 3: the surfaces' whole matrix, and states and work routes on every composition. 368 tests, about 61 min.
-          - id: s3-surfaces-states
-            timeout: 105
+          # Round 2, slice 1: editorial-evidence, fallback, obsidian-atelier x every stable language, 1440 every row + default at every viewport. 360 tests, about 60 min.
+          - id: s1-vl-light
+            timeout: 100
             external: '1'
-            grep: 'cells\.spec\.ts (surface:|composition:\S+ (sparse|missing-media|not-found|complete /work/)\S* ?\S* \S+/platform-neutral/warm-parchment/humanist-ui/system (1440x900|390x844) default )'
-          # acme-reference: 35 dark pack x pack rows (every language, scheme, and typography they hold) and 12 high-contrast rows. 164 tests, about 43 min.
-          - id: acme-sample
-            timeout: 80
+            grep: 'cells\.spec\.ts composition:(editorial-evidence|fallback|obsidian-atelier) complete / \S+/(platform-neutral|carbon-inspired|fluent-2-inspired|glassmorphism|international-grid|material-3-inspired|minimal-flat|neobrutalist|paper-tactile|primer-inspired|soft-organic|spectrum-2-inspired)/warm-parchment/humanist-ui/system (1440x900 \S+|\S+ default) '
+          # Round 2, slice 1b: horizontal-cinema, kinetic-cosmos, the same rows. 240 tests, about 40 min.
+          - id: s1b-vl-medium
+            timeout: 75
             external: '1'
-            grep: 'cells\.spec\.ts composition:acme-reference complete / acme-reference/((ant-inspired/earthy-clay/accessible-reading|art-deco/ocean-abyss/neutral-ui|atelier-luxury/blue-orange-color-safe/geometric-display|atlassian-inspired/reduced-chroma/technical-sans-mono|bauhaus-geometric/cool-color-safe/editorial-serif|blueprint/neon-city/literary-reading|cyberpunk/pastel-sorbet/multilingual-system|handcrafted-collage/coral-lagoon/humanist-ui|carbon-inspired/graphite/accessible-reading|claymorphic/arctic-aurora/accessible-reading|fluent-2-inspired/botanical-sage/editorial-serif|glassmorphism/desert-terracotta/accessible-reading|industrial/forest-moss/accessible-reading|international-grid/high-contrast/accessible-reading|material-3-inspired/jewel-twilight/accessible-reading|material-expressive-inspired/low-stimulus-warm/accessible-reading|memphis/lavender-dusk/accessible-reading|minimal-flat/neutral-slate/accessible-reading|monochrome-functional/sepia-film/accessible-reading|neobrutalist/oled-black/accessible-reading|neumorphic/paper-ink/accessible-reading|paper-tactile/zinc/accessible-reading|platform-neutral/warm-parchment/accessible-reading|polaris-inspired/sunset-ember/neutral-ui|pixel-interface/blue-orange-color-safe/humanist-ui|primer-inspired/arctic-aurora/multilingual-system|radix-inspired/arctic-aurora/literary-reading|raw-brutalist/arctic-aurora/humanist-ui|retro-web/blue-orange-color-safe/humanist-ui|skeuomorphic/botanical-sage/neutral-ui|soft-organic/blue-orange-color-safe/multilingual-system|spectrum-2-inspired/arctic-aurora/accessible-reading|synthwave/blue-orange-color-safe/technical-sans-mono|terminal-chrome/arctic-aurora/accessible-reading|utility-dense/blue-orange-color-safe/geometric-display)/dark (1440x900 (default|forced-colors|reduced-motion)|390x844 default)|(ant-inspired/iridescent-pearl/accessible-reading|platform-neutral/warm-parchment/humanist-ui|art-deco/iridescent-pearl/accessible-reading|atlassian-inspired/iridescent-pearl/accessible-reading|bauhaus-geometric/iridescent-pearl/accessible-reading|blueprint/iridescent-pearl/accessible-reading|carbon-inspired/iridescent-pearl/accessible-reading|claymorphic/iridescent-pearl/accessible-reading|cyberpunk/iridescent-pearl/accessible-reading|handcrafted-collage/iridescent-pearl/accessible-reading|industrial/iridescent-pearl/accessible-reading|international-grid/iridescent-pearl/accessible-reading)/high-contrast 1440x900 (default|forced-colors))'
+            grep: 'cells\.spec\.ts composition:(horizontal-cinema|kinetic-cosmos) complete / \S+/(platform-neutral|carbon-inspired|fluent-2-inspired|glassmorphism|international-grid|material-3-inspired|minimal-flat|neobrutalist|paper-tactile|primer-inspired|soft-organic|spectrum-2-inspired)/warm-parchment/humanist-ui/system (1440x900 \S+|\S+ default) '
+          # Round 2, slice 2: every variant (acme-reference included) x the stable languages at 1024 and 390 in reduced-motion, forced-colors, contrast-more. 462 tests, about 64 min.
+          - id: s2-vl-narrow
+            timeout: 110
+            external: '1'
+            grep: 'cells\.spec\.ts composition:\S+ complete / \S+/(carbon-inspired|fluent-2-inspired|glassmorphism|international-grid|material-3-inspired|minimal-flat|neobrutalist|paper-tactile|primer-inspired|soft-organic|spectrum-2-inspired)/warm-parchment/humanist-ui/system (390x844|1024x768) (reduced-motion|forced-colors|contrast-more) '
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
       options: --user 1001 --ipc=host --init
