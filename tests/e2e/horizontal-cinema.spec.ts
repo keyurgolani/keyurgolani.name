@@ -416,6 +416,22 @@ test(
       slider.setAttribute('aria-label', 'Probe');
       slider.setAttribute('aria-valuenow', '1');
       slider.tabIndex = 0;
+      // A slider takes its own arrows: it moves its value and cancels the key. Uncancelled, each
+      // arrow would scroll the stage 40px, smoothly, and ArrowLeft pressed before ArrowRight's
+      // scroll has moved the stage scrolls nothing, which leaves the stage 40px on. The handler
+      // runs above the experience, as a React widget's does, so the controller meets the key
+      // uncancelled and has only the role to go by, and after watchKeys' listener, so what that
+      // records is still what the controller left.
+      window.addEventListener('keydown', (event) => {
+        if (event.target !== slider || !['ArrowRight', 'ArrowLeft'].includes(event.key)) return;
+        const by = event.key === 'ArrowRight' ? 1 : -1;
+        slider.setAttribute(
+          'aria-valuenow',
+          String(Number(slider.getAttribute('aria-valuenow')) + by),
+        );
+        slider.dataset.moves = String(Number(slider.dataset.moves ?? 0) + 1);
+        event.preventDefault();
+      });
       prologue.prepend(field, slider);
     });
     for (const id of ['probe-field', 'probe-slider']) {
@@ -426,6 +442,9 @@ test(
     await page.waitForTimeout(400);
     await expectAt(page, 'prologue');
     expect(await keys(page)).toEqual([false, false, false, false]);
+    // The slider had both its keys: one step up, one back.
+    await expect(page.locator('#probe-slider')).toHaveAttribute('data-moves', '2');
+    await expect(page.locator('#probe-slider')).toHaveAttribute('aria-valuenow', '1');
   },
 );
 
