@@ -1,7 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -257,14 +265,22 @@ test("the image smoke's scan finds every .map under the image's static tree", (t
     maps: ['chunks/a.js.map', 'css/b.css.map'],
     empty: [],
     linked: [],
+    symlinks: [],
   });
   const clean = staticTree(t, ['chunks/a.js']);
-  assert.deepEqual(mapsInside(clean), { exists: true, maps: [], empty: [], linked: [] });
+  assert.deepEqual(mapsInside(clean), {
+    exists: true,
+    maps: [],
+    empty: [],
+    linked: [],
+    symlinks: [],
+  });
   assert.deepEqual(mapsInside(path.join(clean, 'none')), {
     exists: false,
     maps: [],
     empty: [],
     linked: [],
+    symlinks: [],
   });
 });
 
@@ -277,6 +293,7 @@ test('an empty map, as Turbopack writes for a new URL module worker, passes, in 
       maps: [],
       empty: ['chunks/2z3sh82dl8glu.js.map'],
       linked: [],
+      symlinks: [],
     });
   }
   // public/ stays strict: no .map of any kind, an empty one included.
@@ -348,6 +365,56 @@ test("a shipped script or stylesheet that points at a map fails, in both checks,
   assert.deepEqual(mapsInside(mentions).linked, []);
 });
 
+test("a comment that names a map on a file's last line, after a statement's end, a block's, or a space, fails, in both checks, and the post-pass chunk's mid-line strings still pass", (t) => {
+  const trailing = {
+    'chunks/a.js': 'a();//# sourceMappingURL=a.js.map',
+    'chunks/b.js': 'b()\n}//@ sourceMappingURL=b.js.map\n',
+    'chunks/c.js': 'c(); /*# sourceMappingURL=c.js.map */\n\n',
+    'css/d.css': 'd{color:red}/*# sourceMappingURL=d.css.map */',
+  };
+  const dir = staticTree(t, trailing);
+  assert.match(
+    checkSourceMaps(dir, {}) ?? '',
+    /chunks\/a\.js, chunks\/b\.js, chunks\/c\.js, css\/d\.css point at a source map/,
+  );
+  assert.deepEqual(mapsInside(dir).linked, Object.keys(trailing));
+  // The post-pass chunk is one line, so its last: each mention follows a quote, so neither is one.
+  const chunk = 'let e,t="/*# sourceMappingURL=",r="";this.css+=t+"/*# sourceMappingURL="+e+" */";';
+  // Above the last line, a mention after a space is only a mention: the rule reads the last alone.
+  const above = 'x(e+" /*# sourceMappingURL="+t);\ny();';
+  for (const text of [chunk, `${chunk}\n`, `x();\n${chunk}`, above]) {
+    const mentions = staticTree(t, { 'chunks/2irfnzd7tc7gz.js': text });
+    assert.equal(checkSourceMaps(mentions, {}), null, text);
+    assert.deepEqual(mapsInside(mentions).linked, [], text);
+  }
+});
+
+test('a symlink anywhere under the static tree fails, in both checks, whatever it points at', (t) => {
+  const outside = staticTree(t, { 'a.js.map': '{"version":3,"sources":["a.ts"]}', 'b.js': 'b()' });
+  const dir = staticTree(t, { 'chunks/a.js': 'a()' });
+  mkdirSync(path.join(dir, 'media'));
+  // A map, a script, a directory, and a link to nothing.
+  symlinkSync(path.join(outside, 'a.js.map'), path.join(dir, 'chunks', 'a.js.map'));
+  symlinkSync(path.join(outside, 'b.js'), path.join(dir, 'chunks', 'b.js'));
+  symlinkSync(outside, path.join(dir, 'media', 'all'));
+  symlinkSync(path.join(outside, 'none'), path.join(dir, 'gone'));
+  assert.match(
+    checkSourceMaps(dir, {}) ?? '',
+    /chunks\/a\.js\.map, chunks\/b\.js, gone, media\/all are symlinks, which the check doesn't follow\. No default build may hold one\./,
+  );
+  assert.deepEqual(mapsInside(dir), {
+    exists: true,
+    maps: [],
+    empty: [],
+    linked: [],
+    symlinks: ['chunks/a.js.map', 'chunks/b.js', 'gone', 'media/all'],
+  });
+  const one = staticTree(t, { 'chunks/a.js': 'a()' });
+  symlinkSync(path.join(one, 'chunks', 'a.js'), path.join(one, 'chunks', 'b.js'));
+  assert.match(checkSourceMaps(one, {}) ?? '', /chunks\/b\.js is a symlink/);
+  assert.deepEqual(mapsInside(one).symlinks, ['chunks/b.js']);
+});
+
 test('the image smoke fails an image with a source map in its static tree or public/, or no static tree (CI only: it needs Docker)', () => {
   const smoke = readFileSync(path.join(ROOT, 'ci', 'image-smoke.mjs'), 'utf8');
   assert.match(smoke, /const IMAGE_STATIC = '\/app\/apps\/web\/\.next\/static';/);
@@ -360,8 +427,14 @@ test('the image smoke fails an image with a source map in its static tree or pub
     /const shipped = \[\.\.\.\(maps\.maps \?\? \[\]\), \.\.\.\(root === IMAGE_PUBLIC \? \(maps\.empty \?\? \[\]\) : \[\]\)\];/,
   );
   assert.match(smoke, /const linked = maps\.linked \?\? \[\];/);
+  // A symlink fails under the static tree, as check:source-maps fails one.
   assert.match(
     smoke,
-    /if \(\n\s+\(root === IMAGE_STATIC && maps\.exists !== true\) \|\|\n\s+shipped\.length > 0 \|\|\n\s+linked\.length > 0\n\s+\) \{\n\s+throw new SmokeFailure\(/,
+    /const symlinks = root === IMAGE_STATIC \? \(maps\.symlinks \?\? \[\]\) : \[\];/,
+  );
+  assert.match(smoke, /const found = \[\.\.\.shipped, \.\.\.linked, \.\.\.symlinks\];/);
+  assert.match(
+    smoke,
+    /if \(\(root === IMAGE_STATIC && maps\.exists !== true\) \|\| found\.length > 0\) \{\n\s+throw new SmokeFailure\(/,
   );
 });

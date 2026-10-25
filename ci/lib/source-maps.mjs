@@ -11,7 +11,12 @@
 // only sections that are themselves such maps. Anything else fails as
 // before, a map that doesn't parse included. And no shipped script or
 // stylesheet may point at a map with a sourceMappingURL comment, so an
-// empty map is never wired to anything.
+// empty map is never wired to anything: one at the start of a line, or on
+// the file's last line after a statement's end or a space, where a minifier
+// leaves it. A string that only mentions one mid-line, as postcss's does,
+// isn't one. Nor may the tree hold a symlink of any kind: the scan reads
+// only regular files, so a link could put a map or a source where it never
+// looks.
 //
 // scanSourceMaps reads the filesystem through process.getBuiltinModule and
 // closes over nothing, since the image smoke runs its source in the
@@ -19,12 +24,12 @@
 
 /**
  * What a static tree holds of source maps. `maps` are the .map files the
- * rule fails, `empty` the ones it lets through, and `linked` the .js and
- * .css files with a sourceMappingURL comment, each relative to `root` and
- * sorted.
+ * rule fails, `empty` the ones it lets through, `linked` the .js and .css
+ * files with a sourceMappingURL comment, and `symlinks` every symlink, each
+ * relative to `root` and sorted.
  *
  * @param {string} root
- * @returns {{ exists: boolean, maps: string[], empty: string[], linked: string[] }}
+ * @returns {{ exists: boolean, maps: string[], empty: string[], linked: string[], symlinks: string[] }}
  */
 export function scanSourceMaps(root) {
   const fs = process.getBuiltinModule('node:fs');
@@ -45,13 +50,25 @@ export function scanSourceMaps(root) {
   };
   /** A comment that names a map, at the start of a line, as a bundler writes it. */
   const COMMENT = /^[ \t]*(?:\/\/|\/\*)[#@][ \t]*sourceMappingURL=/m;
-  const result = { exists: fs.existsSync(root), maps: [], empty: [], linked: [] };
+  /** One on the last line, after a statement's end, a block's, or a space, as a minifier leaves it. */
+  const TRAILING = /(?:^|[;}\s])(?:\/\/|\/\*)[#@]\s*sourceMappingURL=/;
+  const points = (text) => COMMENT.test(text) || TRAILING.test(text.trimEnd().split('\n').at(-1));
+  const result = { exists: fs.existsSync(root), maps: [], empty: [], linked: [], symlinks: [] };
   if (!result.exists) return result;
-  const files = fs
-    .readdirSync(root, { withFileTypes: true, recursive: true })
-    .filter((entry) => entry.isFile())
-    .map((entry) => path.relative(root, path.join(entry.parentPath, entry.name)))
-    .sort();
+  // A walk of its own: readdirSync's recursive option goes into a symlinked
+  // directory, so a link would bring another tree's files in under this one.
+  const files = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isSymbolicLink()) result.symlinks.push(path.relative(root, full));
+      else if (entry.isDirectory()) walk(full);
+      else if (entry.isFile()) files.push(path.relative(root, full));
+    }
+  };
+  walk(root);
+  result.symlinks.sort();
+  files.sort();
   for (const file of files) {
     const read = () => fs.readFileSync(path.join(root, file), 'utf8');
     if (file.endsWith('.map')) {
@@ -62,7 +79,7 @@ export function scanSourceMaps(root) {
         map = null;
       }
       (isEmpty(map) ? result.empty : result.maps).push(file);
-    } else if (/\.(?:m?js|css)$/.test(file) && COMMENT.test(read())) {
+    } else if (/\.(?:m?js|css)$/.test(file) && points(read())) {
       result.linked.push(file);
     }
   }

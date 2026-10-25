@@ -290,6 +290,15 @@ const FRAMED_MANY = framedPage(60);
 const FRAMED_TRAP = framedPage(3, true);
 /** The keyboard walk, with the focus check, as a framed surface's cells run it. */
 const framedWalk = (page: Page) => keyboardFindings(page, { focus: true, framed: true });
+/**
+ * The framed walk under a ceiling a little past the frame's own bound: its
+ * page takes two presses to reach the frame and FRAME_PRESSES + 1 inside it,
+ * so a walk that lost that bound stops here with another reason, and fails
+ * its case at once rather than running on.
+ */
+const FRAMED_TRAP_CEILING = FRAME_PRESSES + 50;
+const framedTrapWalk = (page: Page) =>
+  keyboardFindings(page, { focus: true, framed: true, pressCeiling: FRAMED_TRAP_CEILING });
 /** The keyboard walk alone, as a cell without the flag runs it. */
 const unframedWalk = (page: Page) => keyboardFindings(page);
 
@@ -396,7 +405,7 @@ export const A11Y_CASES: readonly MetaCase[] = [
     new RegExp(
       `^(?:keyboard trap: focus never left the frame after ${FRAME_PRESSES} presses inside it|keyboard reachable: Tab never reached it)$`,
     ),
-    framedWalk,
+    framedTrapWalk,
   ),
   bad('hidden-focusable', 'keyboard-hidden.html', 'keyboard', 'hidden-focusable', keyboard),
   bad('unreachable', 'keyboard-unreachable.html', 'keyboard', 'reachable', keyboard),
