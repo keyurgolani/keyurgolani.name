@@ -8,12 +8,12 @@
 // jobs uploaded. A job that timed out, was cancelled, or was skipped counts
 // as failed, so nothing ages silently, with one exception: a job named in
 // EXPECTED_SKIPS (comma- or space-separated) that skipped, as the workflow
-// skips links on the nights it doesn't run. A named job that ran and didn't
-// succeed still fails, any other skip still fails, and EXPECTED_SKIPS naming
-// a job outside report's needs is an error. When every job passed, it
-// comments and closes the open issue, if any, but only when every job ran:
-// a run with an expected skip never closes it. The issue is found by a
-// marker in its body, among open issues github-actions opened.
+// skips links and catalog-provenance on the nights they don't run. A named
+// job that ran and didn't succeed still fails, any other skip still fails,
+// and EXPECTED_SKIPS naming a job outside report's needs is an error. When
+// every job passed, it comments and closes the open issue, if any, but only
+// when every job ran: a run with an expected skip never closes it. The issue
+// is found by a marker in its body, among open issues github-actions opened.
 //
 // Only this job holds `issues: write`. Pure Node with no dependencies.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -30,6 +30,7 @@ export const COMMANDS = {
   links: 'pnpm check:docs && pnpm check:links',
   // It runs no check: it takes the night's UTC date for quality-full's shards.
   'quality-night': 'date -u +%F',
+  'catalog-provenance': 'pnpm check:catalog-provenance',
 };
 export const commandFor = (job) => COMMANDS[job] ?? `pnpm ci:${job}`;
 

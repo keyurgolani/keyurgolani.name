@@ -196,10 +196,17 @@ export const RULES = [
   },
   {
     // The scheduled workflow's scripts. The workflow file itself is a
-    // workflow change, and the reporter's tests run in unit.
+    // workflow change, and the reporter's and the catalog provenance
+    // check's tests run in unit.
     class: 'scheduled',
     jobs: ['unit'],
-    paths: ['ci/report-issue.mjs', 'ci/report-issue.test.mjs', 'ci/fixtures/report-issue/**'],
+    paths: [
+      'ci/report-issue.mjs',
+      'ci/report-issue.test.mjs',
+      'ci/fixtures/report-issue/**',
+      'ci/check-catalog-provenance.mjs',
+      'ci/check-catalog-provenance.test.mjs',
+    ],
   },
   {
     // #20's production build check, which the build job runs after pnpm build.

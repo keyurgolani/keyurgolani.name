@@ -1,0 +1,8 @@
+{
+  "for": "3df0856ad0d65538c68d57197fb0250e9ca006cc",
+  "shards": 8,
+  "staticPerShard": 30000,
+  "browserPerShard": 136,
+  "seed": 20,
+  "capRunnerMinutes": 180
+}

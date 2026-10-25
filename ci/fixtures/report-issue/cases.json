@@ -141,7 +141,7 @@
     ],
     "bodyIncludes": [
       "| ` links ` | was cancelled or timed out | ` pnpm check:docs && pnpm check:links ` |",
-      "| ` catalog-provenance ` | was skipped, so it never ran | ` pnpm ci:catalog-provenance ` |"
+      "| ` catalog-provenance ` | was skipped, so it never ran | ` pnpm check:catalog-provenance ` |"
     ],
     "bodyExcludes": []
   },
