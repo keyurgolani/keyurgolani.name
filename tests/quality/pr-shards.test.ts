@@ -9,6 +9,7 @@ import { RUN_ENGINES } from './lib/matrix';
 import { perfCells } from './lib/perf/plan';
 import {
   assignShards,
+  CATALOG_MAX_SHARDS,
   CELL_SPEC,
   GROUP_BUDGET,
   groupKey,
@@ -21,6 +22,7 @@ import {
   PERF_SPEC,
   PERF_TAG,
   pickShardCount,
+  PR_PARALLEL,
   planGroups,
   projectGrep,
   prShard,
@@ -63,7 +65,10 @@ interface Job {
   readonly needs?: readonly string[];
   readonly outputs?: Readonly<Record<string, string>>;
   readonly env?: Readonly<Record<string, string>>;
-  readonly strategy?: { readonly matrix?: { readonly shard?: unknown } };
+  readonly strategy?: {
+    readonly 'max-parallel'?: number | string;
+    readonly matrix?: { readonly shard?: unknown };
+  };
   readonly steps?: readonly {
     readonly id?: string;
     readonly name?: string;
@@ -200,6 +205,7 @@ test("a PR's directed load, its pack sweep and its changed variants, adds the sh
     directedShards: 0,
     sweepShards: 0,
     variantShards: 0,
+    catalogScale: false,
     reason: null,
   });
   assert.throws(
@@ -243,6 +249,7 @@ test("a PR's directed load, its pack sweep and its changed variants, adds the sh
     directedShards: 1,
     sweepShards: 1,
     variantShards: 0,
+    catalogScale: false,
     reason:
       "the directed groups alone need 1 shard(s) (the pack sweep's 1, the changed variants' 0), so the most is 13",
   });
@@ -260,15 +267,149 @@ test("a PR's directed load, its pack sweep and its changed variants, adds the sh
       /^Error: Even 12 shards leave one at about \d+s, over the 300s ceiling \(the undirected base, alone\)\. Its heaviest group is chromium s\d+ cells\.spec\.ts, at about 200s\.$/,
     );
   }
-  // The most is never over 16, however much the directed load needs.
-  for (const count of [1, 8, 16, 24, 40]) {
+  // The most is never over 16 while the sweep alone fits 16, and a changed variant's load never
+  // takes it past 16, however much it needs.
+  for (const count of [1, 8, 16, 24, 32]) {
     assert.ok(shardLimit(swept(count, 200), durations).max <= SWEEP_MAX_SHARDS, `${count}`);
+  }
+  for (const count of [1, 8, 16, 24, 40, 120]) {
     assert.ok(shardLimit(varied(count, 200), durations).max <= SWEEP_MAX_SHARDS, `${count}`);
   }
   assert.throws(
     () => pickShardCount(varied(40, 200), durations),
     /^Error: Even 16 shards leave one at about \d+s, over the 300s ceiling \(the directed groups alone need more than 16 shards \(the pack sweep's 0, the changed variants' 16\), so the most is 16\)\./,
   );
+});
+
+test('a catalog-scale sweep, one that fits 16 neither alone nor beside the base, takes the fewest that fit up to 48, and only sweep load steps it up', () => {
+  const durations = { group: 5 };
+  assert.equal(CATALOG_MAX_SHARDS, 48);
+  // Each pack one 195 s test on a variant's sweep server: two packs a shard, one a worker.
+  const packs = (count: number, from = 0): ShardGroup[] =>
+    Array.from({ length: count }, (_, at) => {
+      const cell = `composition:v complete / v/pack-${from + at}/s/t/system`;
+      return {
+        project: `chromium sweep${from + at}`,
+        file: CELL_SPEC,
+        tests: [testKey(cell, '1440x900', 'default', 'chromium')],
+        costs: [195],
+        packs: [`language: pack-${from + at}`],
+        weight: 200,
+        sweep: true as const,
+      };
+    });
+  const varied = (count: number): ShardGroup[] =>
+    synthetic(count, 200).map((group, at) => ({
+      ...group,
+      project: `chromium variant${at}`,
+      variant: true as const,
+    }));
+  // A normal PR's sweep stays within 16: 12 plus what it alone needs.
+  const normal = pickShardCount([...synthetic(12, 200), ...packs(16)], durations);
+  assert.deepEqual([normal.catalogScale, normal.max, normal.count], [false, 16, 14]);
+  // A sweep that alone fits 16 exactly doesn't step up.
+  const full = pickShardCount(packs(32), durations);
+  assert.deepEqual(
+    [full.catalogScale, full.sweepShards, full.max, full.count],
+    [false, 16, SWEEP_MAX_SHARDS, 16],
+  );
+  // #20's whole catalog in a PR: the sweep alone needs 33, so the count is the fewest the plan
+  // fits, here 39 with the base's 6, between 17 and 48.
+  const catalog = pickShardCount([...synthetic(12, 200), ...packs(66)], durations);
+  assert.deepEqual(
+    [catalog.catalogScale, catalog.sweepShards, catalog.max, catalog.count],
+    [true, 33, CATALOG_MAX_SHARDS, 39],
+  );
+  assert.ok(catalog.count > SWEEP_MAX_SHARDS && catalog.count <= CATALOG_MAX_SHARDS);
+  assert.ok(catalog.slowest <= SHARD_CEILING);
+  assert.equal(
+    catalog.reason,
+    'a catalog-scale sweep: the pack sweep alone needs 33 shards, more than 16, so the most is 48',
+  );
+  const fewer = Math.max(
+    ...assignShards(
+      splitGroups([...synthetic(12, 200), ...packs(66)], GROUP_BUDGET, durations),
+      38,
+    ).map(shardEstimate),
+  );
+  assert.ok(fewer > SHARD_CEILING, `38 shards: ${fewer}s`);
+  // A sweep that fits 16 by itself, but not beside the base: every language changed after #20,
+  // 13 shards alone and about 19 with the base. It steps up too, and fits.
+  const band = pickShardCount([...synthetic(12, 200), ...packs(26)], durations);
+  assert.deepEqual(
+    [band.catalogScale, band.sweepShards, band.max, band.count],
+    [true, 13, CATALOG_MAX_SHARDS, 19],
+  );
+  assert.equal(
+    band.reason,
+    'a catalog-scale sweep: the pack sweep alone needs 13 shards, and with the rest of the plan but the changed variants more than 16, so the most is 48',
+  );
+  // A real sweep's groups name each test's changed pack, by axis.
+  const swept = planGroups(
+    plans.find((each) => each.name === 'the PR set with one changed non-default pack')!.plan,
+    ENGINES,
+  ).filter((group) => group.sweep);
+  assert.ok(swept.length > 0);
+  for (const group of swept) {
+    assert.equal(group.packs?.length, group.tests.length, groupKey(group));
+    for (const pack of group.packs!)
+      assert.match(pack, /^(language|scheme|typography): [a-z0-9-]+$/);
+  }
+  // Once the sweep has stepped the plan up, changed variants' groups share the larger limit.
+  const shared = pickShardCount([...synthetic(12, 200), ...packs(66), ...varied(4)], durations);
+  assert.deepEqual([shared.catalogScale, shared.max, shared.count], [true, CATALOG_MAX_SHARDS, 41]);
+  // Past 48 it fails, naming the heaviest group and its changed pack.
+  assert.throws(
+    () => pickShardCount(packs(97), durations),
+    /^Error: Even 48 shards leave one at about \d+s, over the 300s ceiling \(a catalog-scale sweep: the pack sweep alone needs more than 48 shards, more than 16, so the most is 48\)\. Its heaviest group is chromium sweep\d+ cells\.spec\.ts, at about 200s, its heaviest changed pack language: pack-\d+\.$/,
+  );
+  // As the real sweep is: one group per variant, each test a changed pack, split into parts. A part
+  // still names its heaviest pack.
+  const perVariant = Array.from({ length: 20 }, (_, variant): ShardGroup => {
+    const ids = Array.from({ length: 20 }, (_, pack) => pack);
+    return {
+      project: `chromium sweep-v${variant}`,
+      file: CELL_SPEC,
+      tests: ids.map((pack) =>
+        testKey(
+          `composition:v${variant} complete / v${variant}/lang-${pack}/s/t/system`,
+          '1440x900',
+          'default',
+          'chromium',
+        ),
+      ),
+      // Four packs a part, the second of each the heaviest.
+      costs: ids.map((pack) => (pack % 4 === 1 ? 50 : 45)),
+      packs: ids.map((pack) => `language: lang-${pack}`),
+      weight: 5 + 15 * 45 + 5 * 50,
+      sweep: true as const,
+    };
+  });
+  const parts = splitGroups(perVariant, GROUP_BUDGET, durations);
+  assert.equal(parts.length, 100);
+  for (const part of parts) {
+    assert.ok(part.part !== undefined && part.tests.length === 4, groupKey(part));
+    assert.deepEqual(
+      part.packs,
+      part.tests.map((key) => `language: ${(JSON.parse(key) as string[])[0]!.split('/')[2]}`),
+    );
+  }
+  assert.throws(
+    () => pickShardCount(perVariant, durations),
+    /^Error: Even 48 shards leave one at about \d+s, over the 300s ceiling \(a catalog-scale sweep: the pack sweep alone needs more than 48 shards, more than 16, so the most is 48\)\. Its heaviest group is chromium sweep-v\d+ cells\.spec\.ts #\d, at about 190s, its heaviest changed pack language: lang-(1|5|9|13|17)\.$/,
+  );
+  // The undirected base must still fit 12 by itself.
+  assert.throws(
+    () => pickShardCount([...synthetic(26, 200), ...packs(66)], durations),
+    /^Error: Even 12 shards leave one at about \d+s, over the 300s ceiling \(the undirected base, alone\)\. Its heaviest group is chromium s\d+ cells\.spec\.ts, at about 200s\.$/,
+  );
+  // Only the sweep's own load steps it up: a changed variant's, however large, beside a sweep that
+  // fits 16, keeps the most at 16, and fails there.
+  for (const groups of [varied(120), [...packs(8), ...varied(80)]]) {
+    const limit = shardLimit(groups, durations);
+    assert.deepEqual([limit.catalogScale, limit.max], [false, SWEEP_MAX_SHARDS]);
+    assert.throws(() => pickShardCount(groups, durations), /^Error: Even 16 shards leave one/);
+  }
 });
 
 test('an ordinary PR plans 4 to 7 shards, as the base PR set does, and one with directed cells at most its own limit: a changed variant over 12, within 16, a changed pack 7 of 13', (t) => {
@@ -639,11 +780,18 @@ test('quality-pr-plan emits the count, and the matrix, the verdict, gate, and se
   assert.deepEqual(plan.outputs, {
     count: '${{ steps.count.outputs.count }}',
     shards: '${{ steps.count.outputs.shards }}',
+    parallel: '${{ steps.count.outputs.parallel }}',
   });
   const count = '${{ needs.quality-pr-plan.outputs.count }}';
   const pr = jobs['quality-pr']!;
   assert.deepEqual(pr.needs, ['changes', 'quality-pr-plan']);
   assert.equal(pr.strategy?.matrix?.shard, '${{ fromJSON(needs.quality-pr-plan.outputs.shards) }}');
+  // How many run at once is the plan's: ten for a catalog-scale sweep, every shard otherwise.
+  assert.equal(PR_PARALLEL, 10);
+  assert.equal(
+    pr.strategy?.['max-parallel'],
+    '${{ fromJSON(needs.quality-pr-plan.outputs.parallel) }}',
+  );
   assert.equal(pr.name, `quality-pr (\${{ matrix.shard }}/${count})`);
   const run = pr.steps?.find((each) => /pnpm ci:quality-pr /.test(each.run ?? ''));
   assert.equal(run?.env?.SHARD, `\${{ matrix.shard }}/${count}`);
@@ -683,8 +831,26 @@ test('quality-pr-plan emits the count, and the matrix, the verdict, gate, and se
     );
   }
   // What the planner writes is what the matrix and the verdict read.
-  assert.deepEqual(shardOutputs(3), { count: '3', shards: '[1,2,3]' });
+  // An ordinary plan's are today's, and it runs every shard at once, in one wave.
+  assert.deepEqual(shardOutputs(3), { count: '3', shards: '[1,2,3]', parallel: '3' });
+  assert.deepEqual(shardOutputs(14, false), {
+    count: '14',
+    shards: JSON.stringify(Array.from({ length: 14 }, (_, at) => at + 1)),
+    parallel: '14',
+  });
   assert.deepEqual(JSON.parse(shardOutputs(picked()).shards).length, picked());
+  const ordinary = pickShardCount(planGroups(plans[0]!.plan, ENGINES));
+  assert.equal(ordinary.catalogScale, false);
+  assert.equal(
+    shardOutputs(ordinary.count, ordinary.catalogScale).parallel,
+    String(ordinary.count),
+  );
+  // A catalog-scale plan runs ten at a time.
+  assert.deepEqual(shardOutputs(33, true), {
+    count: '33',
+    shards: JSON.stringify(Array.from({ length: 33 }, (_, at) => at + 1)),
+    parallel: String(PR_PARALLEL),
+  });
 });
 
 test("the shards' groups and cell tests union exactly to the unsharded plan's, for any count", () => {

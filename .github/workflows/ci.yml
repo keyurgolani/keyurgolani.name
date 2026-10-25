@@ -658,8 +658,12 @@ jobs:
   # registry the quality host builds and the paths the merge changes, and
   # picks the fewest shards that keep each within about 5 minutes
   # (tests/quality/pr-count.ts), at most 12, or with a pack sweep 12 plus what
-  # the sweep alone needs, up to 16. Needing more fails, naming the heaviest
-  # group.
+  # the sweep alone needs, up to 16, or for a catalog-scale sweep, one that
+  # doesn't fit 16 alone or beside the rest of the plan but the changed
+  # variants, the fewest that fit up to 48. Needing more
+  # fails, naming the heaviest group. It also says how many run at once,
+  # which quality-pr's max-parallel reads: 10 for a catalog-scale sweep, so
+  # it runs in waves, and every shard for any other plan, so it runs in one.
   quality-pr-plan:
     name: quality-pr-plan
     needs: [changes]
@@ -669,6 +673,7 @@ jobs:
     outputs:
       count: ${{ steps.count.outputs.count }}
       shards: ${{ steps.count.outputs.shards }}
+      parallel: ${{ steps.count.outputs.parallel }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -703,6 +708,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
+      max-parallel: ${{ fromJSON(needs.quality-pr-plan.outputs.parallel) }}
       matrix:
         shard: ${{ fromJSON(needs.quality-pr-plan.outputs.shards) }}
     container:
