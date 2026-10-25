@@ -155,9 +155,11 @@ export function actionElement(
       disabled={(disabled && !keepsFocus) || undefined}
       aria-disabled={loading || (disabled && keepsFocus) || undefined}
       aria-pressed={pressed}
-      // React passes these through lowercase, as the HTML attributes are spelled.
-      commandfor={command?.for}
-      command={command?.action}
+      // React passes these through lowercase, as the HTML attributes are spelled. A browser
+      // runs an invoker command with no script, and aria-disabled stops nothing, so an
+      // action that isn't available, loading or disabled, carries none.
+      commandfor={unavailable ? undefined : command?.for}
+      command={unavailable ? undefined : command?.action}
     >
       {content}
     </button>

@@ -18,7 +18,7 @@ import {
   type RuntimeState,
 } from '@portfolio/kit/runtime';
 import type { SpatialFailure } from '@portfolio/kit/spatial-canvas';
-import { decideStage, type StageReason } from './policy';
+import { decideStage, exitedAfterPress, exitPressed, type StageReason } from './policy';
 import { Runtime } from './runtime';
 
 // The stage's slot (#16): the still, and on a device the policy lets run
@@ -26,8 +26,9 @@ import { Runtime } from './runtime';
 //
 // - The exit is always there, on the server, in a plate, and in every
 //   state, so the page's controls are the same whatever the device and
-//   whether the stage runs: pressed while the stage runs, enabled while it
-//   runs or could, and aria-disabled while it can't, so a stage that fails
+//   whether the stage runs: pressed while the stage is mounted, and not
+//   while it waits for the lifecycle or the runtime, enabled while it runs
+//   or could, and aria-disabled while it can't, so a stage that fails
 //   while the exit has focus leaves the focus where it was.
 // - A plate renders the still alone, before any runtime hook: no
 //   subscription, observer, listener, or attribute of the runtime's.
@@ -332,8 +333,8 @@ function LiveSlot({
       <Exit
         idPrefix={idPrefix}
         offered={decision.offered}
-        pressed={decision.offered && !exited}
-        onToggle={() => setExited((value) => !value)}
+        pressed={exitPressed(decision)}
+        onToggle={() => setExited(exitedAfterPress(decision))}
       />
     </div>
   );
