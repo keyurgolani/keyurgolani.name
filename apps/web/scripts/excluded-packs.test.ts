@@ -49,10 +49,21 @@ function withThirdParty(result: RegistryResult, license: string): RegistryResult
   };
 }
 
-/** The image-derived schemes, which wait for the owner's acceptance (#20 PR 3). */
-const AWAITING = ['portfolio-artwork', 'profile-image'];
+/** The image-derived schemes (#20 PR 3). */
+const IMAGE_DERIVED = ['portfolio-artwork', 'profile-image'];
 
-test('a pack under an allowed license stays, and only the image-derived schemes wait', async () => {
+/** The image-derived schemes the committed acceptance.json doesn't accept, which wait for the owner. */
+const AWAITING = (() => {
+  const accepted = JSON.parse(
+    fs.readFileSync(
+      path.join(REPO_ROOT, 'packages/appearance-schemes', GENERATED_DIR, ACCEPTANCE_FILE),
+      'utf8',
+    ),
+  ) as Record<string, unknown>;
+  return IMAGE_DERIVED.filter((id) => !(id in accepted));
+})();
+
+test('a pack under an allowed license stays, and only the image-derived schemes the owner has not accepted wait', async () => {
   const read = await shipped();
   const { result, excluded } = excludePacks(read);
   assert.deepEqual(
@@ -107,7 +118,7 @@ test("an image-derived scheme ships once the owner's acceptance pins its current
   assert.ok(accepted.result.packs.some(({ manifest }) => manifest.id === 'profile-image'));
   assert.deepEqual(
     accepted.excluded.map(({ id }) => id),
-    ['portfolio-artwork'],
+    AWAITING.filter((id) => id !== 'profile-image'),
   );
   const stale = excludePacks(
     withAcceptance(read, () => ({
