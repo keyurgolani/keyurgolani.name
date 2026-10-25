@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { AuditSink, OwnerLog } from '../audit/sink';
+import { isPrivateDirError } from '../data/layout.mjs';
 import { recordOwnerModule } from '../load-trace';
 import { DIGEST } from './session-files.mjs';
 import type { SessionRecord, SessionStore, UaFamily } from './session-store';
@@ -527,9 +528,12 @@ export function createSessions({
           const next: SessionRecord = Object.freeze({ ...current, lastSeenAt: at });
           await store.put(next);
           return next;
-        } catch {
+        } catch (error) {
           log({ level: 'warn', event: 'session.touch_failed' });
-          return record;
+          // A directory the store refuses, such as a link planted in place of
+          // ephemeral/auth/, ends the request's hold on the session: nothing
+          // read through it may count.
+          return isPrivateDirError(error) ? null : record;
         }
       });
     },

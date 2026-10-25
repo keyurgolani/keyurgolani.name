@@ -1,7 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -74,6 +82,22 @@ test("the entry runs the store's CLI with this build's publish checks: a variant
   assert.match(tsx('status').out, /^live revision: rev_[0-9a-f]+ \(seq 1\)$/m);
 });
 
+test('the entry exports the live revision as this build checks it, and verify-revision passes the export with no data directory (#9)', (t) => {
+  const data = scratch(t, 'store-export-');
+  const tsx = (env, ...args) => run([TSX, '--conditions=react-server', ENTRY, ...args], env);
+  const imported = tsx({ PORTFOLIO_DATA_DIR: data }, 'import', '--from', examplePair(t));
+  assert.equal(imported.code, 0, imported.err);
+  // A real path: export-revision refuses a target with a link above it, as tmpdir() has on macOS.
+  const out = path.join(realpathSync(scratch(t, 'store-export-out-')), 'reference');
+  const exported = tsx({ PORTFOLIO_DATA_DIR: data }, 'export-revision', 'live', '--out', out);
+  assert.equal(exported.code, 0, exported.err);
+  const revision = /^revision: (rev_[0-9a-f]{32})$/m.exec(exported.out)?.[1];
+  assert.ok(revision, exported.out);
+  const verified = tsx({}, 'verify-revision', out);
+  assert.equal(verified.code, 0, `${verified.out}${verified.err}`);
+  assert.match(verified.out, new RegExp(`^revision: ${revision}$`, 'm'));
+});
+
 test('the bundle needs Node and nothing else: it runs from a directory outside the repo', async (t) => {
   const built = await bundleStore(path.join(scratch(t, 'store-bundle-'), 'portfolio-store.mjs'));
   const text = readFileSync(built, 'utf8');
@@ -106,6 +130,8 @@ test('the bundle needs Node and nothing else: it runs from a directory outside t
     'unlock',
     'backup',
     'restore',
+    'export-revision',
+    'verify-revision',
     'retention',
   ]) {
     assert.match(help.out, new RegExp(`^  ${command}\\b`, 'm'), command);

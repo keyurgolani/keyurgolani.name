@@ -1,10 +1,12 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -16,7 +18,7 @@ import { memoryAuditSink } from '../audit/sink';
 import { revokeAllSessionFiles } from '../auth/session-files.mjs';
 import { filesystemSessionStore } from '../auth/session-store';
 import { createSessions, type Sessions, type SessionLifetime } from '../auth/sessions';
-import { prepareAuthDirectories } from '../data/layout.mjs';
+import { probeDataDirectory } from '../data/layout.mjs';
 import { onStoreEvent } from '../store/common';
 import { draftInput, type Draft } from '../store/drafts';
 import type { Store } from '../store/store';
@@ -81,7 +83,7 @@ async function setup(
   const now = () => at;
   const store = await newStore(t, { now });
   const dataDir = store.paths.root;
-  assert.equal(await prepareAuthDirectories(dataDir), null);
+  assert.equal(await probeDataDirectory(dataDir), null);
   const sessions = createSessions({
     store: filesystemSessionStore(dataDir),
     audit: memoryAuditSink(now),
@@ -639,6 +641,52 @@ test('a damaged grant file counts as no grant and is deleted, and a link in plac
   assert.deepEqual(filesUnder(elsewhere), []);
   rmSync(previewPaths(dataDir).root);
   mkdirSync(previewPaths(dataDir).root, { mode: 0o700 });
+});
+
+test('a link planted in place of ephemeral/preview/grants/, to a directory holding a valid grant, never yields the grant: the check is unavailable', async (t) => {
+  const { store, dataDir, sessions, grants } = await setup(t);
+  const { session } = await signIn(sessions);
+  const draft = await newDraft(store);
+  const { token, record } = await mintDraft(grants, session, draft);
+  assert.equal(await statusOf(grants, token), 'active');
+  // The grants directory moved elsewhere, the valid record with it, and a link left in its place.
+  const paths = previewPaths(dataDir);
+  const elsewhere = path.join(mkdtempSync(path.join(tmpdir(), 'grants-planted-')), 'grants');
+  t.after(() => rmSync(path.dirname(elsewhere), { recursive: true, force: true }));
+  renameSync(paths.grants, elsewhere);
+  symlinkSync(elsewhere, paths.grants);
+  assert.equal(await statusOf(grants, token), 'unavailable');
+  const fsStore = filesystemGrantStore(dataDir);
+  await assert.rejects(fsStore.get(record.digest), /is a link/);
+  await assert.rejects(fsStore.list(), /is a link/);
+  await assert.rejects(fsStore.delete(record.digest), /is a link/);
+  // The same for the draft markers.
+  renameSync(paths.drafts, `${elsewhere}-drafts`);
+  symlinkSync(`${elsewhere}-drafts`, paths.drafts);
+  await assert.rejects(fsStore.newestDraftVersion(draft.draftId), /is a link/);
+  await assert.rejects(fsStore.listDraftMarkers(), /is a link/);
+  await assert.rejects(fsStore.deleteDraftMarker(draft.draftId), /is a link/);
+  assert.ok(
+    existsSync(path.join(elsewhere, `${record.digest}.json`)),
+    'the planted grant was touched',
+  );
+});
+
+test('a grant store directory an operator loosened is put back to 0700, and the next mint goes through', async (t) => {
+  const { store, dataDir, sessions, grants } = await setup(t);
+  const { session } = await signIn(sessions);
+  const draft = await newDraft(store);
+  await mintDraft(grants, session, draft);
+  const paths = previewPaths(dataDir);
+  chmodSync(paths.root, 0o755);
+  chmodSync(paths.grants, 0o777);
+  chmodSync(paths.drafts, 0o750);
+  // Another draft, so the mint writes its draft marker too.
+  const { token } = await mintDraft(grants, session, await newDraft(store));
+  for (const dir of [paths.root, paths.grants, paths.drafts]) {
+    assert.equal(statSync(dir).mode & 0o777, 0o700, dir);
+  }
+  assert.equal(await statusOf(grants, token), 'active');
 });
 
 test('an end is never undone by a renewal that read the grant before it', async (t) => {

@@ -143,3 +143,17 @@ export const isRestoreLeftover = (name: string): boolean =>
 /** A name for a temporary file beside `file`, which no listing mistakes for what it replaces. */
 export const tempBeside = (file: string): string =>
   path.join(path.dirname(file), `.${path.basename(file)}.${randomBytes(6).toString('hex')}.tmp`);
+
+/**
+ * Whether `inner` is `outer` itself or below it (#3, #9), each resolved
+ * first. A name below `outer` may start with two dots, as `..x` does: only
+ * `..` itself, a path through it, or another root is outside. Preflight,
+ * backup, restore, and export-revision keep directories apart with it.
+ */
+export function isWithin(outer: string, inner: string): boolean {
+  const relative = path.relative(path.resolve(outer), path.resolve(inner));
+  return (
+    relative === '' ||
+    (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative))
+  );
+}

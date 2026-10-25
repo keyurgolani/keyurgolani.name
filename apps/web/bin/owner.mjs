@@ -54,7 +54,11 @@ import {
   passwordProblem,
 } from '../../../packages/core/src/auth/phc.mjs';
 import { revokeAllSessionFiles } from '../../../packages/core/src/auth/session-files.mjs';
-import { ensureAuthDirectories } from '../../../packages/core/src/data/layout.mjs';
+import {
+  authPaths,
+  isPrivateDirError,
+  preparePrivateDir,
+} from '../../../packages/core/src/data/layout.mjs';
 
 const USAGE = [
   'Usage: node apps/web/bin/owner.mjs hash-password [--out <path>] [--stdin]',
@@ -368,13 +372,25 @@ async function revokeSessionsCommand(env, io, now) {
   const at = now();
   let count;
   try {
-    await ensureAuthDirectories(dir);
+    // It makes ephemeral/auth/ for revoked-before, as the server's writers do.
     count = (await revokeAllSessionFiles(dir, at)).length;
-  } catch {
+  } catch (error) {
+    // A directory it refuses is named, relative to the data directory, with
+    // what to do; the server refuses it too, so no session counts meanwhile.
+    if (isPrivateDirError(error)) {
+      say(
+        `${error.message} The server never reads or writes sessions through it. Remove it, ` +
+          'and the server makes the directory itself; then run revoke-sessions again. ' +
+          'Nothing was revoked.',
+      );
+      return 1;
+    }
     say("The data directory can't be written. Run revoke-sessions again once it can.");
     return 1;
   }
   try {
+    // The store's preflight makes audit/ at the server's start; this may run before one.
+    await preparePrivateDir(dir, authPaths(dir).audit);
     await appendAuditRecord(
       dir,
       auditRecord({

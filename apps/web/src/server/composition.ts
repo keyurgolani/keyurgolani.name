@@ -408,18 +408,30 @@ export async function compose(input: CompositionInput): Promise<Composition> {
         setServable,
         github: owner.githubAdapterFor(config, input.githubFetch),
       });
-      const late = await runRequirements(requirements, { ...context, owner: store }, async (row) =>
-        row.load?.(),
-      );
-      issues = [...issues, ...late.issues];
-      if (failed(late.issues)) {
+      // Whatever stops startup from here to the provider lets the store's
+      // claim go, and a directory the auth or grant store refuses, as at the
+      // first fingerprint write, is a finding, never a raw error.
+      let late: Checked;
+      let provider: AuthBindings;
+      try {
+        late = await runRequirements(requirements, { ...context, owner: store }, async (row) =>
+          row.load?.(),
+        );
+        issues = [...issues, ...late.issues];
+        if (failed(late.issues)) {
+          store.release();
+          return { ok: false, issues };
+        }
+        // The auth.provider requirement made sure of one.
+        const factory = authProviders[0];
+        if (!factory) throw new Error('The owner profile has no authentication provider.');
+        provider = await factory.load({ config, mintSession: owner.mintSession });
+      } catch (error) {
         store.release();
-        return { ok: false, issues };
+        const finding = owner.privateDirFinding(error);
+        if (finding) return { ok: false, issues: [...issues, finding] };
+        throw error;
       }
-      // The auth.provider requirement made sure of one.
-      const factory = authProviders[0];
-      if (!factory) throw new Error('The owner profile has no authentication provider.');
-      const provider = await factory.load({ config, mintSession: owner.mintSession });
       // #7's preview grants, bound to the provider's sessions by digest, and
       // checked against what startup checks the live pair against.
       const previews = provider.grantSessions
