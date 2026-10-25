@@ -26,7 +26,11 @@ import {
   scriptingMediaFindings,
   transparencyFindings,
 } from '../lib/a11y/conditions';
-import { incompleteContrastFindings } from '../lib/a11y/contrast';
+import {
+  CONTRAST_RULE,
+  ENHANCED_CONTRAST_RULE,
+  incompleteContrastFindings,
+} from '../lib/a11y/contrast';
 import {
   FRAME_PRESSES,
   frames,
@@ -244,6 +248,49 @@ const axeAll = async (page: Page): Promise<Finding[]> =>
   }));
 const contrast = async (page: Page) =>
   incompleteContrastFindings(page, await axeFor(page).analyze());
+
+/**
+ * A row's axe pass and its sampler, as run-cell.ts's audit() runs them on
+ * `rowId`: the contrast rules' violations, color-contrast-enhanced's among
+ * them where the page renders high contrast, and the incomplete items
+ * resampled.
+ */
+const rowContrast =
+  (rowId: string) =>
+  async (page: Page): Promise<Finding[]> => {
+    const row = PREFERENCE_ROWS.find((each) => each.id === rowId)!;
+    const { results, contrast: resampled } = await audit(page, row);
+    const axe = results.violations
+      .filter((rule) => rule.id === CONTRAST_RULE || rule.id === ENHANCED_CONTRAST_RULE)
+      .flatMap((rule) =>
+        rule.nodes.map((node) => ({
+          gate: 'axe',
+          rule: rule.id,
+          actual: node.failureSummary ?? rule.help,
+        })),
+      );
+    return [...axe, ...resampled];
+  };
+
+/**
+ * 16px text at `color` on white, and over a near-white gradient that axe
+ * leaves to the sampler, inside a presentation boundary rendering `mode`.
+ * #696969 on white is 5.49:1, past AA's 4.5 and short of high contrast's
+ * 7; #545454 is 7.57:1.
+ */
+const modeText = (
+  title: string,
+  color: string,
+  mode: string,
+  over: 'solid' | 'gradient' | 'both',
+) =>
+  built(
+    title,
+    `.on { color: ${color}; background: #fff; } .over { color: ${color}; background-image: linear-gradient(#fff, #fefefe); } p { font-size: 16px; font-weight: 400; }`,
+    `<div data-appearance-boundary="document" data-display-mode="${mode}" data-contrast="no-preference">${
+      over === 'gradient' ? '' : '<p class="on">Text on a solid surface.</p>'
+    }${over === 'solid' ? '' : '<p class="over">Text over a gradient.</p>'}</div>`,
+  );
 
 const REDUCED: BrowserContextOptions = { reducedMotion: 'reduce' };
 
@@ -697,6 +744,54 @@ export const A11Y_CASES: readonly MetaCase[] = [
   bad('neighbour-faint', 'contrast-neighbour-faint.html', 'contrast', 'text', contrast, {
     colorScheme: 'dark',
   }),
+  // High contrast holds text to thresholds.json's highContrast ratio, 7, by the element's own
+  // boundary (a tuple cell's, here on the default row) or by prefers-contrast: more: axe's
+  // color-contrast-enhanced on a solid surface, and the sampler over a gradient.
+  builtCase(
+    'high-contrast-solid-5-5',
+    'axe',
+    '16px text at 5.49:1 on a solid surface, in a boundary rendering high-contrast',
+    modeText('High contrast, solid', '#696969', 'high-contrast', 'solid'),
+    /^axe color-contrast-enhanced: /,
+    rowContrast('default'),
+  ),
+  builtCase(
+    'high-contrast-gradient-5-5',
+    'contrast',
+    '16px text at 5.49:1 over a gradient, in a boundary rendering high-contrast',
+    modeText('High contrast, gradient', '#696969', 'high-contrast', 'gradient'),
+    /^contrast high-contrast-text: 5\.\d+:1 against its worst background pixel$/,
+    rowContrast('default'),
+  ),
+  builtCase(
+    'contrast-more-5-5',
+    'contrast',
+    '16px text at 5.49:1, solid and over a gradient, under prefers-contrast: more',
+    modeText('Contrast more', '#696969', 'light', 'both'),
+    /^(?:axe color-contrast-enhanced|contrast high-contrast-text): /,
+    rowContrast('contrast-more'),
+    { contrast: 'more' },
+  ),
+  {
+    id: 'contrast/normal-5-5',
+    gate: 'contrast',
+    input: '16px text at 5.49:1, solid and over a gradient, in a boundary rendering light',
+    expect: 'pass',
+    browser: true,
+    run: () => onPage(modeText('Normal', '#696969', 'light', 'both'), rowContrast('default')),
+  },
+  {
+    id: 'contrast/high-contrast-7-5',
+    gate: 'contrast',
+    input: '16px text at 7.57:1, solid and over a gradient, in a boundary rendering high-contrast',
+    expect: 'pass',
+    browser: true,
+    run: () =>
+      onPage(
+        modeText('High contrast, 7.5', '#545454', 'high-contrast', 'both'),
+        rowContrast('high-contrast'),
+      ),
+  },
   bad('button-name', 'axe-semantics.html', 'axe', 'button-name', axeRule('button-name')),
   bad('target-size', 'axe-semantics.html', 'axe', 'target-size', axeRule('target-size')),
   bad('color-contrast', 'axe-semantics.html', 'axe', 'color-contrast', axeRule('color-contrast')),
