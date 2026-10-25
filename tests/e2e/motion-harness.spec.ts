@@ -92,6 +92,19 @@ test('a scroll before the click is no part of the jump, and a smooth scroll afte
   expect(below.farthest).toBeLessThan(4);
 });
 
+test('a click the record never sees fails the check, rather than passing it as a jump', async ({
+  page,
+}) => {
+  await plant(page, 'html { scroll-behavior: smooth; }');
+  // A page handler first in the click's path that keeps every other listener from it.
+  await page.evaluate(() =>
+    window.addEventListener('click', (event) => event.stopImmediatePropagation(), {
+      capture: true,
+    }),
+  );
+  await expect(scrollTops(page, '#contact')).rejects.toThrow(/never reached the scroll record/);
+});
+
 test('an endless animation that starts once its section is in view shows after the jump and on the way down', async ({
   page,
 }) => {
