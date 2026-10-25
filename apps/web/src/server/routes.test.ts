@@ -876,7 +876,11 @@ test("every Studio page but /studio/sign-in, and every Studio route handler, met
   let checked = 0;
   for (const route of routeFiles()) {
     const inGroup = !path.relative(STUDIO_GROUP, route.file).startsWith('..');
-    if (!inGroup && !isStudioPage(route.pattern)) continue;
+    // Demo Studio's pages outside the group too, as its local preview frame is (#9).
+    const demoStudio = listRoutes().some(
+      (entry) => entry.pattern === route.pattern && entry.capability === 'sandbox.view',
+    );
+    if (!inGroup && !isStudioPage(route.pattern) && !demoStudio) continue;
     if (route.pattern === SIGN_IN) continue;
     const entries = listRoutes().filter((entry) => entry.pattern === route.pattern);
     assert.ok(entries.length > 0, `${path.relative(SRC, route.file)} has no route table entry`);
@@ -1277,7 +1281,7 @@ test("the policies relax only by the mode the code compiled in: COMPILED_MODE is
   ]);
   // The proxy's two policies take it as their mode, and nothing else that could relax them.
   const proxy = parse(path.join(SRC, 'proxy.ts'));
-  const modes: Record<string, string[]> = { studioCsp: [], previewCsp: [] };
+  const modes: Record<string, string[]> = { studioCsp: [], previewCsp: [], localPreviewCsp: [] };
   const findCalls = (node: ts.Node) => {
     if (
       ts.isCallExpression(node) &&
@@ -1303,6 +1307,8 @@ test("the policies relax only by the mode the code compiled in: COMPILED_MODE is
   assert.deepEqual(modes, {
     studioCsp: ['COMPILED_MODE'],
     previewCsp: ["'production'", 'COMPILED_MODE'],
+    // Demo Studio's local frame's (#9), which is the preview's with blob: media.
+    localPreviewCsp: ['COMPILED_MODE'],
   });
 });
 
@@ -1391,6 +1397,8 @@ test("what every profile serves: #2's Studio pages under owner, and Demo Studio'
       '/reference/[[...path]]',
       '/reference/media/[...path]',
       '/studio',
+      // Demo Studio's local preview frame (#7, Slice 6).
+      '/preview/local',
     ].sort(),
   );
 });

@@ -59,6 +59,14 @@ export interface FrameChannelOptions {
    * and motion.
    */
   readonly selection?: EnvironmentSelection;
+  /** In local mode (Slice 6), what renders a `document` Studio sends: Demo Studio's local frame (#9). */
+  readonly onDocument?: (document: ToFramePayload<'document'>) => void;
+  /**
+   * In local mode, where the frame goes: an internal link or Studio's
+   * `navigate` keeps the route in memory and hands it here, with no
+   * document load, and the frame says `navigated`.
+   */
+  readonly onRoute?: (route: string) => void;
 }
 
 /**
@@ -216,14 +224,19 @@ function sectionOf(document: Document, anchor: string): Element | null {
 }
 
 /**
- * Starts the frame's channel in `win`, with the settings the server
- * rendered. Returns what stops it, or null when the document isn't framed.
+ * The nonce each local frame's document read from its fragment, by window:
+ * read once, as the document loads, so a channel started again in the same
+ * document, as React's Strict Mode starts every effect twice under next dev,
+ * says hello with it though the fragment is gone.
  */
-export function startFrameChannel(win: Window, options: FrameChannelOptions): (() => void) | null {
-  if (win.parent === win) return null;
-  const { mode, studioOrigin, linkBase } = options;
-  const nonce = mode === 'server' ? (options.nonce ?? null) : nonceFromFragment(win.location.hash);
-  if (mode === 'local' && win.location.hash !== '') {
+const fragmentNonces = new WeakMap<object, string | null>();
+
+/** The local frame's nonce: from the fragment the first time, which then leaves the URL. */
+function localNonce(win: Window): string | null {
+  if (fragmentNonces.has(win)) return fragmentNonces.get(win)!;
+  const nonce = nonceFromFragment(win.location.hash);
+  fragmentNonces.set(win, nonce);
+  if (win.location.hash !== '') {
     // The nonce leaves the URL once read, so nothing reads it later.
     try {
       win.history.replaceState(win.history.state, '', win.location.pathname + win.location.search);
@@ -231,6 +244,17 @@ export function startFrameChannel(win: Window, options: FrameChannelOptions): ((
       // A frame that can't rewrite its URL keeps it.
     }
   }
+  return nonce;
+}
+
+/**
+ * Starts the frame's channel in `win`, with the settings the server
+ * rendered. Returns what stops it, or null when the document isn't framed.
+ */
+export function startFrameChannel(win: Window, options: FrameChannelOptions): (() => void) | null {
+  if (win.parent === win) return null;
+  const { mode, studioOrigin, linkBase } = options;
+  const nonce = mode === 'server' ? (options.nonce ?? null) : localNonce(win);
   const now = () => win.performance.now();
   let seq = 0;
   let port: MessagePort | null = null;
@@ -261,15 +285,27 @@ export function startFrameChannel(win: Window, options: FrameChannelOptions): ((
     else {
       send('ready', {
         renderedVersion: options.renderedVersion,
-        route: routeOf(win.location.pathname, linkBase),
+        route: mode === 'local' ? localRoute : routeOf(win.location.pathname, linkBase),
       });
     }
   };
   const onStatus = (status: FrameStatus) => send('status', status);
 
-  /** Loads `url`, a path under the link base, after telling Studio where to. */
+  /** The route a local frame shows, which it keeps in memory. */
+  let localRoute = '/';
+
+  /**
+   * Loads `url`, a path under the link base, after telling Studio where to.
+   * A local frame keeps the route in memory instead and renders it there.
+   */
   const load = (url: URL) => {
-    send('navigated', { route: routeOf(url.pathname, linkBase) });
+    const route = routeOf(url.pathname, linkBase);
+    send('navigated', { route });
+    if (mode === 'local') {
+      localRoute = route;
+      options.onRoute?.(route);
+      return;
+    }
     win.location.assign(url.href);
   };
 
@@ -357,9 +393,8 @@ export function startFrameChannel(win: Window, options: FrameChannelOptions): ((
         scrollSync = message.payload.scroll;
         return;
       case 'document':
-        // Slice 6 renders it.
         if (!take(sizeOf(message.payload, LIMITS.document))) return drop('size', 'document');
-        return;
+        return options.onDocument?.(message.payload);
       case 'asset':
         if (!take(message.payload.blob.size)) return drop('size', 'asset');
         return;

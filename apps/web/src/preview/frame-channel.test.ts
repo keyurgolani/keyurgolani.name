@@ -509,7 +509,13 @@ test("Studio's environment goes on the boundary through environmentAttributes, a
 });
 
 test("the agent reads Studio's messages over the port, and drops what the protocol refuses with no side effect (#7, Slice 3)", async (t) => {
-  const { win, drops, received, send, handshake } = setup(t);
+  // A server frame hands no document to a renderer and keeps no route in memory.
+  const local: unknown[] = [];
+  const { win, drops, received, send, handshake } = setup(t, {
+    ...SERVER,
+    onDocument: (document) => local.push(['document', document]),
+    onRoute: (route) => local.push(['route', route]),
+  });
   const port = await handshake();
   received.length = 0;
   // Each refused, and nothing moves: another version, an unknown type, a
@@ -592,6 +598,101 @@ test("the agent reads Studio's messages over the port, and drops what the protoc
       ['navigated', { route: '/work/small-traces' }],
     ],
   );
+  assert.deepEqual(local, []);
+});
+
+test("a local frame's channel started again in the same document, as Strict Mode starts every effect twice, still says hello with the fragment's nonce (#9)", async (t) => {
+  const local: FrameChannelOptions = {
+    mode: 'local',
+    studioOrigin: STUDIO,
+    linkBase: '/preview/local',
+    renderedVersion: null,
+  };
+  const win = new FakeFrame(`${STUDIO}/preview/local#nonce=${NONCE}`);
+  // Started, stopped at once, and started again, before any hello goes.
+  startFrameChannel(win as unknown as Window, local)?.();
+  const stop = startFrameChannel(win as unknown as Window, local);
+  t.after(() => stop?.());
+  // The fragment left the URL once, on the first start.
+  assert.deepEqual(win.replaced, ['/preview/local']);
+  assert.equal(win.location.hash, '');
+  await until(() => win.parent.posted.length > 0, "the second start's hello");
+  const nonces = win.parent.posted.map(
+    ({ message }) => (message as { payload: { nonce: string } }).payload.nonce,
+  );
+  assert.ok(nonces.length > 0 && nonces.every((nonce) => nonce === NONCE), JSON.stringify(nonces));
+  // Another document, with no fragment of its own, says none.
+  const other = new FakeFrame(`${STUDIO}/preview/local`);
+  const stopOther = startFrameChannel(other as unknown as Window, local);
+  t.after(() => stopOther?.());
+  await wait(5);
+  assert.deepEqual(other.parent.posted, []);
+});
+
+test("a local frame hands each document Studio sends to its renderer, and keeps its route in memory: Studio's navigate and an internal link move it with no document load (#9)", async (t) => {
+  const documents: unknown[] = [];
+  const routes: string[] = [];
+  const { win, drops, received, send, handshake, connect } = setup(
+    t,
+    {
+      mode: 'local',
+      studioOrigin: STUDIO,
+      linkBase: '/preview/local',
+      renderedVersion: null,
+      onDocument: (document) => documents.push(document),
+      onRoute: (route) => routes.push(route),
+    },
+    `${STUDIO}/preview/local#nonce=${NONCE}`,
+  );
+  const port = await handshake();
+  assert.deepEqual(
+    received.map(({ type, payload }) => [type, payload]),
+    [['ready', { renderedVersion: null, route: '/' }]],
+  );
+  received.length = 0;
+  const document = {
+    sources: {
+      portfolio: { name: 'portfolio.yml', format: 'yaml', text: 'schemaVersion: 1\n' },
+      site: { name: 'site.yml', format: 'yaml', text: 'schemaVersion: 1\n' },
+    },
+    selection: { variant: 'editorial-evidence' },
+  };
+  send(port, 'document', document);
+  await until(() => documents.length > 0, 'the document');
+  assert.deepEqual(documents, [document]);
+  // Studio's navigate: the route in memory, `navigated` first, no load.
+  send(port, 'navigate', { route: '/work/small-traces' });
+  await until(() => received.length > 0, 'navigated');
+  assert.deepEqual(routes, ['/work/small-traces']);
+  // An internal link: cancelled, and the same move.
+  const internal = click('/preview/local/work/tide-tables');
+  win.fire('click', internal);
+  assert.equal(internal.defaultPrevented, true);
+  assert.deepEqual(routes, ['/work/small-traces', '/work/tide-tables']);
+  // A link outside the frame's base goes to Studio, and moves nothing.
+  const live = click('/studio');
+  win.fire('click', live);
+  assert.equal(live.defaultPrevented, true);
+  await until(() => received.length >= 3, 'navigated twice and the link');
+  assert.deepEqual(
+    received.map(({ type, payload }) => [type, payload]),
+    [
+      ['navigated', { route: '/work/small-traces' }],
+      ['navigated', { route: '/work/tide-tables' }],
+      ['link', { href: `${STUDIO}/studio`, kind: 'live' }],
+    ],
+  );
+  assert.deepEqual(routes, ['/work/small-traces', '/work/tide-tables']);
+  assert.deepEqual(win.assigned, [], 'the frame loads no document');
+  // A new port hears the route the frame shows.
+  received.length = 0;
+  connect();
+  await until(() => received.length > 0, 'ready again');
+  assert.deepEqual(
+    received.map(({ type, payload }) => [type, payload]),
+    [['ready', { renderedVersion: null, route: '/work/tide-tables' }]],
+  );
+  assert.deepEqual(drops, []);
 });
 
 test('a local frame takes documents and assets up to their limits and 100 MiB in all, and reads its nonce from the fragment alone (#7, Slice 3)', async (t) => {

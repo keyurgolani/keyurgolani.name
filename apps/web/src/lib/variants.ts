@@ -1,13 +1,7 @@
 import type { AppearanceCatalog, ContentExtension, UnitValidator } from '@portfolio/schema';
-import {
-  contractValidators,
-  FALLBACK_ID,
-  findUnit,
-  findVariant,
-  type RegisteredVariant,
-  type VariantRegistry,
-} from '@portfolio/variant-contract';
+import { contractValidators, findUnit, type VariantRegistry } from '@portfolio/variant-contract';
 import { appearanceCatalog, appearanceValidator } from './appearance-checks';
+import { compositionIn, type Composition } from './composition';
 import { APPEARANCE_REGISTRY } from './appearance-registry';
 import { CONTENT_EXTENSIONS, EXTENSION_RENDERED_KINDS } from './generated/registry.extensions';
 import { ASSET_MANIFEST, VARIANTS } from './generated/registry.meta';
@@ -31,34 +25,17 @@ export const REGISTRY: VariantRegistry = VARIANTS;
 
 export { CONTENT_EXTENSIONS };
 
-/** What renders for a selection. */
-export interface Composition {
-  /** The variant that renders. */
-  readonly rendered: RegisteredVariant;
-  /** The id the site selected. */
-  readonly requested: string;
-  /**
-   * Whether the fallback composition stands in: the selection isn't
-   * registered, or it leaves a work's own page to the host (#10b).
-   */
-  readonly fallback: boolean;
-}
+export type { Composition } from './composition';
 
 /**
  * The registered variant `selected` names, else the fallback composition in
- * its place. The fallback itself is never a selection (the site schema
- * refuses it), so naming it gets the stand-in too.
+ * its place, against this build's registry by default.
  */
 export function compositionFor(
   selected: string,
   registry: VariantRegistry = REGISTRY,
 ): Composition {
-  const registered = selected === FALLBACK_ID ? undefined : findVariant(registry, selected);
-  if (registered) return { rendered: registered, requested: selected, fallback: false };
-  const fallback = findVariant(registry, FALLBACK_ID);
-  // Registry generation fails without it, so only a broken build gets here.
-  if (!fallback) throw new Error('This build registers no fallback composition.');
-  return { rendered: fallback, requested: selected, fallback: true };
+  return compositionIn(selected, registry);
 }
 
 /**

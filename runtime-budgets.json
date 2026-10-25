@@ -95,6 +95,14 @@
         "enhancement": 15360
       }
     },
+    "routes": {
+      "description": "Ceilings on what one route's browser chunks weigh, from the build alone (#9). pnpm check:markdown-pass measures them in gzip bytes at level 9, as the trace measures a chunk: js is every chunk the route's client reference manifest reaches, at once or on demand, every composition's included, and postPass is the part of it that holds the Markdown post-pass.",
+      "/preview/local": {
+        "js": 737280,
+        "postPass": 76800,
+        "why": "Demo Studio's local frame renders a visitor's document in the browser, so it loads the server's own Markdown post-pass there, sanitize-html with it, which no other page or route may reach. A default build of 9-4b1 on de81b52 measured 647,061 B across the 29 chunks it reaches, every variant's included, Horizontal Cinema among them, and 64,922 B for the one post-pass chunk. The js ceiling is about 14% over its measurement, and postPass's about 18%."
+      }
+    },
     "basis": {
       "js": {
         "restsOn": [

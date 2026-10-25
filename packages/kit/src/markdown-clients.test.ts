@@ -15,12 +15,19 @@ const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const RENDERER = 'packages/kit/src/markdown.ts';
 
 /**
- * The client modules that reach the renderer, and why each may. None does
- * today: host-modules-client.tsx imports the kit's host-modules subpath, not
- * the sections barrel (#6, Slice 2), so the browser registry carries no
- * renderer. #9's in-browser render adds itself here with its post-pass.
+ * The client modules that reach the renderer, and why each may.
+ * host-modules-client.tsx isn't one: it imports the kit's host-modules
+ * subpath, not the sections barrel (#6, Slice 2), so the browser registry
+ * carries no renderer. Demo Studio's local frame (#9) is the one that does,
+ * through the server's own post-pass, which markdown-local.ts installs
+ * first: the renderer renders nothing until it's in.
  */
-const CLIENT_CALLERS: Readonly<Record<string, string>> = {};
+const CLIENT_CALLERS: Readonly<Record<string, string>> = {
+  'apps/web/src/app/(preview)/_local/local-document.tsx':
+    "Demo Studio's local frame renders the visitor's document in the browser, through markdown-local.ts's post-pass (#9)",
+  'apps/web/src/app/(preview)/_local/local-preview.tsx':
+    "the local frame's shell, which loads local-document.tsx on demand in the browser alone (#9)",
+};
 
 /** Every module under the workspace's sources whose first statement is 'use client', tests aside. */
 function clientModules(): string[] {
@@ -50,11 +57,15 @@ function clientModules(): string[] {
   return found.sort();
 }
 
-/** Every bare import but the workspace's own, and the generated registry, stays out of the bundle. */
+/**
+ * Every bare import but the workspace's own, and the generated registry, as
+ * `./generated/` or the web app's `~/lib/generated/`, stays out of the bundle:
+ * a checkout that hasn't run registry generation has none of it.
+ */
 const externals: Plugin = {
   name: 'externals',
   setup(builder) {
-    builder.onResolve({ filter: /^[^./~]|^\.\/generated\// }, (args) =>
+    builder.onResolve({ filter: /^[^./~]|^\.\/generated\/|^~\/lib\/generated\// }, (args) =>
       args.path.startsWith('@portfolio/') ? undefined : { path: args.path, external: true },
     );
   },

@@ -96,6 +96,13 @@ export interface App {
 interface TestFixtures {
   /** More hosts a page may try to reach, such as the bundled sample's image host. */
   blockedHosts: readonly string[];
+  /**
+   * Whether the harness routes the context's WebSockets, true by default.
+   * Playwright's routing puts a mock in every frame in the browser's own
+   * WebSocket's place, so a spec that tests what a page's CSP does to a
+   * socket turns it off, and the browser's own refuses or connects.
+   */
+  routeWebSockets: boolean;
   /** URLs the browser tried to fetch outside the app; all were aborted. */
   blockedRequests: string[];
   /** Fails the test when the server tried to reach a host outside the app during it. */
@@ -112,6 +119,7 @@ interface WorkerFixtures {
 export const test = base.extend<TestFixtures, WorkerFixtures>({
   appOptions: [{}, { scope: 'worker', option: true }],
   blockedHosts: [[], { option: true }],
+  routeWebSockets: [true, { option: true }],
 
   app: [
     async ({ appOptions }, provide, workerInfo) => {
@@ -149,7 +157,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
   },
 
   blockedRequests: [
-    async ({ context, app, blockedHosts }, provide, testInfo) => {
+    async ({ context, app, blockedHosts, routeWebSockets }, provide, testInfo) => {
       const blocked: string[] = [];
       const appHost = new URL(app.origin).host;
       await context.route('**/*', (route) => {
@@ -159,13 +167,15 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         blocked.push(url);
         return route.abort('blockedbyclient');
       });
-      await context.routeWebSocket(/.*/, (ws) => {
-        if (new URL(ws.url()).host === appHost) ws.connectToServer();
-        else {
-          blocked.push(ws.url());
-          ws.close();
-        }
-      });
+      if (routeWebSockets) {
+        await context.routeWebSocket(/.*/, (ws) => {
+          if (new URL(ws.url()).host === appHost) ws.connectToServer();
+          else {
+            blocked.push(ws.url());
+            ws.close();
+          }
+        });
+      }
       await provide(blocked);
       if (blocked.length > 0) {
         await testInfo.attach('blocked-requests.txt', {

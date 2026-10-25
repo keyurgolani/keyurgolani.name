@@ -166,6 +166,70 @@ test("given the app's origin, a preview's frame-ancestors must be that origin an
   }
 });
 
+test("under demo, /preview/local alone needs the local frame's policy, the preview's with blob: images and media, and every other preview path, and every other profile's, the preview's own (#9)", () => {
+  const LOCAL_PAGE = {
+    ...PREVIEW_PAGE,
+    'content-security-policy': PREVIEW_CSP_VALUE.replace(
+      "img-src 'self' data:; media-src 'self';",
+      "img-src 'self' data: blob:; media-src 'self' blob:;",
+    ).replace("form-action 'none'; ", "form-action 'none'; sandbox allow-scripts; "),
+  };
+  assert.notEqual(LOCAL_PAGE['content-security-policy'], PREVIEW_CSP_VALUE);
+  const origin = 'https://rowan.test';
+  for (const path of ['/preview/local', '/preview/%6Cocal', '/%70review/local']) {
+    assert.deepEqual(headerProblems(path, LOCAL_PAGE, { demo: true, origin }), [], path);
+    assert.notDeepEqual(headerProblems(path, PREVIEW_PAGE, { demo: true }), [], path);
+    assert.deepEqual(
+      headerProblems(path, LOCAL_PAGE, { demo: true, origin: 'https://evil.test' }),
+      [`frame-ancestors is ${origin}, not https://evil.test`],
+      path,
+    );
+    // Under owner and read-only it's a preview path like any other.
+    assert.deepEqual(headerProblems(path, PREVIEW_PAGE, { demo: false }), [], path);
+    assert.notDeepEqual(headerProblems(path, LOCAL_PAGE, { demo: false }), [], path);
+  }
+  for (const path of ['/preview/local/x', '/preview/Local', '/preview/localx', '/preview/x']) {
+    assert.deepEqual(headerProblems(path, PREVIEW_PAGE, { demo: true }), [], path);
+    assert.notDeepEqual(headerProblems(path, LOCAL_PAGE, { demo: true }), [], path);
+  }
+  // Still no connection, no worker, and the rest of the preview's headers.
+  for (const [name, value] of [
+    [
+      'content-security-policy',
+      LOCAL_PAGE['content-security-policy'].replace("connect-src 'none'", "connect-src 'self'"),
+    ],
+    [
+      'content-security-policy',
+      LOCAL_PAGE['content-security-policy'].replace("frame-src 'none'", 'frame-src blob:'),
+    ],
+    [
+      'content-security-policy',
+      LOCAL_PAGE['content-security-policy'].replace("media-src 'self' blob:", 'media-src *'),
+    ],
+    // The sandbox gone, or loosened: the document could have an origin of its own.
+    [
+      'content-security-policy',
+      LOCAL_PAGE['content-security-policy'].replace('sandbox allow-scripts; ', ''),
+    ],
+    [
+      'content-security-policy',
+      LOCAL_PAGE['content-security-policy'].replace(
+        'sandbox allow-scripts',
+        'sandbox allow-scripts allow-same-origin',
+      ),
+    ],
+    ['x-robots-tag', undefined],
+    ['cache-control', 'no-store'],
+    ['referrer-policy', 'same-origin'],
+  ]) {
+    assert.notDeepEqual(
+      headerProblems('/preview/local', { ...LOCAL_PAGE, [name]: value }, { demo: true }),
+      [],
+      `${name}: ${value}`,
+    );
+  }
+});
+
 test('only /_next/static and /_portfolio allow any origin (#7)', () => {
   const shared = { ...BASELINE_HEADERS, 'access-control-allow-origin': '*' };
   for (const path of ['/_next/static/chunks/app.js', '/_portfolio/generated/a.css']) {

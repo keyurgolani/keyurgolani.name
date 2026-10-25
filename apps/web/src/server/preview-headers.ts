@@ -71,6 +71,46 @@ export function previewCsp(nonce: string, { mode, studioOrigin }: PreviewPolicyO
   ].join('; ');
 }
 
+/** Demo Studio's local preview frame (#7, Slice 6; #9): its one path, as the route table reads it. */
+export const LOCAL_PREVIEW_PATH = '/preview/local';
+
+/** Whether `pathname`, percent-decoded, is exactly the local preview's path. */
+export function isLocalPreviewPath(pathname: string): boolean {
+  let path = pathname;
+  try {
+    path = decodeURIComponent(pathname);
+  } catch {
+    return false;
+  }
+  return path === LOCAL_PREVIEW_PATH;
+}
+
+/**
+ * The local preview frame's policy (#7, Slice 6): the preview's, with
+ * `blob:` beside `data:` for images and `blob:` for media, which the frame
+ * builds only from the visitor's own files' asset messages. It still
+ * connects to nothing: `connect-src 'none'`, no worker source, so `fetch`,
+ * `sendBeacon`, and `WebSocket` from anything the frame renders reach no
+ * host, its own included. Only Studio, on the deployment's origin, may
+ * frame it. `sandbox allow-scripts` makes its document's origin opaque
+ * whatever frames it, or loads it top level: Studio's iframe sandbox says the
+ * same, and the policy holds without it.
+ */
+export function localPreviewCsp(nonce: string, options: PreviewPolicyOptions): string {
+  return previewCsp(nonce, options)
+    .split('; ')
+    .flatMap((directive) =>
+      directive.startsWith('img-src ')
+        ? ["img-src 'self' data: blob:"]
+        : directive.startsWith('media-src ')
+          ? ["media-src 'self' blob:"]
+          : directive.startsWith('frame-ancestors ')
+            ? ['sandbox allow-scripts', directive]
+            : [directive],
+    )
+    .join('; ');
+}
+
 /**
  * Whether `policy`, a request's Content-Security-Policy, is the preview's,
  * as proxy.ts sets it on a preview request: no other policy starts with

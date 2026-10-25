@@ -302,6 +302,12 @@ const ROUTES = [
   // The owner's preview page (#7, Slice 4), on PreviewSurface. Demo's preview
   // is #9's (Demo Studio), so under demo the path is as unknown as any.
   { pattern: '/studio/preview', kind: 'page', capability: 'preview.grant' },
+  // Demo Studio's local preview frame (#7, Slice 6; #9): an empty shell that
+  // renders the document Studio sends it, in the browser, so it reads no
+  // published site, and no visitor data reaches the server. Its fixed
+  // segment outranks a grant's; demo alone serves it, and under owner it's
+  // the absent route a grant path no grant admits is, the status document.
+  { pattern: '/preview/local', kind: 'page', capability: 'sandbox.view' },
   // The preview's dev fixture route (#7). It renders fixtures, never the
   // published site, so it isn't a visitor route either.
   devPreviewRoute(PREVIEW_DEV),
