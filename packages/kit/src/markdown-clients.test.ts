@@ -57,11 +57,15 @@ function clientModules(): string[] {
   return found.sort();
 }
 
-/** Every bare import but the workspace's own, and the generated registry, stays out of the bundle. */
+/**
+ * Every bare import but the workspace's own, and the generated registry, as
+ * `./generated/` or the web app's `~/lib/generated/`, stays out of the bundle:
+ * a checkout that hasn't run registry generation has none of it.
+ */
 const externals: Plugin = {
   name: 'externals',
   setup(builder) {
-    builder.onResolve({ filter: /^[^./~]|^\.\/generated\// }, (args) =>
+    builder.onResolve({ filter: /^[^./~]|^\.\/generated\/|^~\/lib\/generated\// }, (args) =>
       args.path.startsWith('@portfolio/') ? undefined : { path: args.path, external: true },
     );
   },

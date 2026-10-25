@@ -31,8 +31,20 @@ const ANNOTATION = [
 ];
 /** A host no request may reach: any that got this far would show in the canary route. */
 const REMOTE = 'https://kgn-local-canary.invalid';
+/** A host of its own for each load a page makes unasked, so its violation says which one was tried. */
+const HOSTS = {
+  socket: 'kgn-socket-canary.invalid',
+  css: 'kgn-css-canary.invalid',
+  prefetch: 'kgn-prefetch-canary.invalid',
+  ping: 'kgn-ping-canary.invalid',
+} as const;
 
-test.use({ appOptions: DEMO_APP });
+// The frame's sockets meet its own connect-src: the harness routes no WebSocket
+// here, since Playwright's routing puts a mock in every frame in the browser's
+// place. And the frame is opaque, so it can't register a service worker
+// either way: allowing them only keeps Playwright's own init script, which
+// reads navigator.serviceWorker, from throwing in the frame.
+test.use({ appOptions: DEMO_APP, routeWebSockets: false, serviceWorkers: 'allow' });
 
 type Helpers = typeof Hostile & Pick<typeof Pipeline, 'runImport'>;
 let outdir: string | undefined;
@@ -168,10 +180,6 @@ async function openFrame(page: Page) {
     hits.push(route.request().url());
     return route.fulfill({ status: 204, body: '' });
   });
-  await page.routeWebSocket(/\/__canary\//, (socket) => {
-    hits.push(socket.url());
-    void socket.close();
-  });
   await recordViolations(page);
   return { requests, hits, dialogs, errors };
 }
@@ -225,7 +233,7 @@ test(
     const marker = `kgn-local-script-${randomBytes(6).toString('hex')}`;
     const host = new URL(app.origin).host;
     const outcomes = await frame.evaluate(
-      async ({ origin, host: own, remote, marker: planted }) => {
+      async ({ origin, host: own, remote, marker: planted, hosts }) => {
         const out: Record<string, string> = {};
         const settle = (wait: Promise<string>) =>
           Promise.race([
@@ -253,7 +261,7 @@ test(
         }
         for (const [name, url] of [
           ['socket, own origin', `ws://${own}/__canary/socket?${planted}`],
-          ['socket, remote', `${remote.replace('https:', 'wss:')}/__canary/socket?${planted}`],
+          ['socket, remote', `wss://${hosts.socket}/__canary/socket?${planted}`],
         ] as const) {
           try {
             const socket = new WebSocket(url);
@@ -276,10 +284,10 @@ test(
           }),
         );
         // What a page loads without a script asking: a CSS url(), a prefetch, and a link's ping.
-        document.body.style.backgroundImage = `url("${remote}/__canary/css.png?${planted}")`;
+        document.body.style.backgroundImage = `url("https://${hosts.css}/__canary/css.png?${planted}")`;
         const prefetch = document.createElement('link');
         prefetch.rel = 'prefetch';
-        prefetch.href = `${remote}/__canary/prefetch?${planted}`;
+        prefetch.href = `https://${hosts.prefetch}/__canary/prefetch?${planted}`;
         document.head.append(prefetch);
         const ownPrefetch = document.createElement('link');
         ownPrefetch.rel = 'prefetch';
@@ -289,7 +297,7 @@ test(
         pinged.href = '#canary-ping';
         pinged.setAttribute(
           'ping',
-          `${remote}/__canary/ping?${planted} ${origin}/__canary/ping-own?${planted}`,
+          `https://${hosts.ping}/__canary/ping?${planted} ${origin}/__canary/ping-own?${planted}`,
         );
         pinged.textContent = 'ping';
         document.body.append(pinged);
@@ -298,7 +306,7 @@ test(
         await new Promise((done) => setTimeout(done, 1500));
         return out;
       },
-      { origin: app.origin, host, remote: REMOTE, marker },
+      { origin: app.origin, host, remote: REMOTE, marker, hosts: HOSTS },
     );
     // fetch and the image fail, the sockets never open, and whatever a beacon queued never left.
     expect(outcomes).toMatchObject({
@@ -315,15 +323,31 @@ test(
     // response and never finished.
     await settled(requests, [marker]);
     expect(escaped(requests, [marker]), 'a request with the marker that left').toEqual([]);
-    // And the frame's policy is what stopped each: connect-src for the
-    // connections, img-src for the image.
+    // And the frame's policy is what stopped each, which shows each was tried:
+    // connect-src for both sockets, the fetches, and the ping, img-src for the
+    // image and the CSS url(), and default-src for the prefetches.
     const seen = await violations(frame);
-    expect(seen.filter((line) => line.startsWith('connect-src blocked')).length).toBeGreaterThan(0);
-    expect(
-      seen.some(
-        (line) => line.startsWith('img-src blocked') && line.includes(new URL(REMOTE).host),
-      ),
-    ).toBe(true);
+    const stopped = (directive: RegExp, needle: string) =>
+      seen.some((line) => directive.test(line) && line.includes(needle));
+    for (const [what, directive, needle] of [
+      ['the socket to its own host', /^connect-src blocked /, `ws://${host}`],
+      ['the socket to another host', /^connect-src blocked /, `wss://${HOSTS.socket}`],
+      ['the fetch to another host', /^connect-src blocked /, new URL(REMOTE).host],
+      ['the image', /^img-src blocked /, new URL(REMOTE).host],
+      ['the CSS url()', /^img-src blocked /, HOSTS.css],
+      ['the prefetch to another host', /^(?:default-src|prefetch-src) blocked /, HOSTS.prefetch],
+      [
+        'the prefetch to its own host',
+        /^(?:default-src|prefetch-src) blocked /,
+        '/__canary/prefetch-own',
+      ],
+      ['the ping', /^connect-src blocked /, HOSTS.ping],
+    ] as const) {
+      expect(
+        stopped(directive, needle),
+        `${what} was tried, and the policy stopped it:\n${seen.join('\n')}`,
+      ).toBe(true);
+    }
     expect(dialogs).toEqual([]);
     expect(errors).toEqual([]);
   },

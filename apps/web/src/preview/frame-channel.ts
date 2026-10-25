@@ -224,10 +224,6 @@ function sectionOf(document: Document, anchor: string): Element | null {
 }
 
 /**
- * Starts the frame's channel in `win`, with the settings the server
- * rendered. Returns what stops it, or null when the document isn't framed.
- */
-/**
  * The nonce each local frame's document read from its fragment, by window:
  * read once, as the document loads, so a channel started again in the same
  * document, as React's Strict Mode starts every effect twice under next dev,
@@ -251,6 +247,10 @@ function localNonce(win: Window): string | null {
   return nonce;
 }
 
+/**
+ * Starts the frame's channel in `win`, with the settings the server
+ * rendered. Returns what stops it, or null when the document isn't framed.
+ */
 export function startFrameChannel(win: Window, options: FrameChannelOptions): (() => void) | null {
   if (win.parent === win) return null;
   const { mode, studioOrigin, linkBase } = options;
