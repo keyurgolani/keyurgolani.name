@@ -1,7 +1,9 @@
 // Which cells the performance tests run on (#11, 11-3): one representative
 // route per registered target, a composition's first route on the
 // `complete` fixture under its published default appearance, and a
-// surface's first route in its first state. Each carries its target's
+// surface's first route in a state with no query, its default page, or in
+// the state its registration's perfState names, the one way a query goes on
+// a surface's perf cell. Each carries its target's
 // performanceTier from the registry or its registration, and the tier picks
 // its ceilings. The verdict's perf-coverage rule (verdict.ts) holds the run
 // to them, from plannedPerf(), fail-closed, the way it holds the cell tests
@@ -41,11 +43,16 @@ function representatives(plan: Pick<Plan, 'cells' | 'targets'>): Cell[] {
               cell.path === '/' &&
               tupleKey(cell.tuple) === tupleKey(defaultTuple(cell.target, 'system')),
           )
-        : own.find(
+        : (own.find(
+            (cell) =>
+              cell.perfState === true &&
+              tupleKey(cell.tuple) === tupleKey(defaultTuple(FALLBACK_ID, 'system')),
+          ) ??
+          own.find(
             (cell) =>
               cell.path === cell.route &&
               tupleKey(cell.tuple) === tupleKey(defaultTuple(FALLBACK_ID, 'system')),
-          );
+          ));
     if (pick && !pick.pending) chosen.push(pick);
   }
   return chosen;
