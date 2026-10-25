@@ -5,6 +5,11 @@
 // every background pixel in its content box, must reach the text or
 // large-text ratio of quality/thresholds.json against the worst one. One it
 // can't sample fails too, so an incomplete result never passes by default.
+// Where the element renders high contrast, by its own presentation
+// boundary's display mode or contrast, or by prefers-contrast: more, the
+// ratios are the file's highContrast ones, 7 and 4.5, and axe's AAA rule,
+// color-contrast-enhanced, runs beside color-contrast (run-cell.ts): its
+// incomplete items come here with color-contrast's, each element once.
 //
 // Its neighbours' glyphs at the box's edge are hidden too (neighbourTexts):
 // another in-flow text whose line box overlaps the sampled box by no more
@@ -79,8 +84,24 @@ export function neighbourTexts(texts: readonly NearText[], box: Box): number[] {
   );
 }
 
+/** axe's AA contrast rule, and its AAA one, which runs where the page renders high contrast. */
+export const CONTRAST_RULE = 'color-contrast';
+export const ENHANCED_CONTRAST_RULE = 'color-contrast-enhanced';
+
+/** Whether text is held to the normal ratios or to quality/thresholds.json's highContrast ones. */
+export type ContrastMode = 'normal' | 'high-contrast';
+
+/** The query under which every boundary renders high contrast, as the platform stylesheet has it. */
+export const MORE_CONTRAST = '(prefers-contrast: more)';
+
+/** A presentation boundary that renders high contrast: the mode, or data-contrast="more". */
+export const HIGH_CONTRAST_BOUNDARY =
+  '[data-appearance-boundary][data-display-mode="high-contrast"], [data-appearance-boundary][data-contrast="more"]';
+
 interface Sample {
   readonly color: string;
+  /** What the element's own boundary renders, or prefers-contrast: more for the whole page. */
+  readonly mode: ContrastMode;
   readonly fontSize: number;
   readonly fontWeight: number;
   readonly box: Box;
@@ -101,40 +122,138 @@ export function worstRatio(shot: Uint8Array, color: string): number | null {
   return worst;
 }
 
-/** The ratio text needs at `fontSize` px and `fontWeight`: large text's, or normal text's. */
+/** The contrast rule a sampled element fails, as the exceptions file names it (lib/exceptions.ts). */
+export type ContrastRule =
+  'text' | 'large-text' | 'high-contrast-text' | 'high-contrast-large-text';
+
+/**
+ * The ratio text needs at `fontSize` px and `fontWeight` in `mode`: large
+ * text's, or normal text's, from the file's highContrast ratios when the
+ * element renders high contrast.
+ */
 export function neededRatio(
   fontSize: number,
   fontWeight: number,
-): { rule: 'text' | 'large-text'; ratio: number } {
-  const { text, largeText, largeTextPt, largeBoldTextPt, largeBoldWeight } = thresholds.contrast;
+  mode: ContrastMode = 'normal',
+): { rule: ContrastRule; ratio: number } {
+  const { largeTextPt, largeBoldTextPt, largeBoldWeight } = thresholds.contrast;
+  const { text, largeText } =
+    mode === 'high-contrast' ? thresholds.contrast.highContrast : thresholds.contrast;
   const large =
     fontSize >= largeTextPt * PX_PER_PT - 0.01 ||
     (fontSize >= largeBoldTextPt * PX_PER_PT - 0.01 && fontWeight >= largeBoldWeight);
-  return large ? { rule: 'large-text', ratio: largeText } : { rule: 'text', ratio: text };
+  const prefix = mode === 'high-contrast' ? 'high-contrast-' : '';
+  return large
+    ? { rule: `${prefix}large-text`, ratio: largeText }
+    : { rule: `${prefix}text`, ratio: text };
+}
+
+/**
+ * Whether anything on the page renders high contrast: prefers-contrast:
+ * more, or a presentation boundary in the mode or at data-contrast="more".
+ * Runs in the browser.
+ */
+export function rendersHighContrastScript({
+  query,
+  boundary,
+}: {
+  readonly query: string;
+  readonly boundary: string;
+}): boolean {
+  return window.matchMedia(query).matches || document.querySelector(boundary) !== null;
+}
+
+/**
+ * Whether each element `selectors` names renders high contrast: every one
+ * under prefers-contrast: more, and otherwise each whose own presentation
+ * boundary, the closest, renders it. A null selector, for a node in a frame
+ * or shadow root, or one that matches nothing, says false there. Runs in
+ * the browser.
+ */
+export function elementsHighContrastScript({
+  query,
+  boundary,
+  selectors,
+}: {
+  readonly query: string;
+  readonly boundary: string;
+  readonly selectors: readonly (string | null)[];
+}): boolean[] {
+  const more = window.matchMedia(query).matches;
+  return selectors.map((selector) => {
+    if (more) return true;
+    const el = selector === null ? null : document.querySelector(selector);
+    return el?.closest('[data-appearance-boundary]')?.matches(boundary) === true;
+  });
+}
+
+/**
+ * `results` with color-contrast-enhanced's violations kept only on the
+ * elements that render high contrast, so a nested boundary in another
+ * mode, or a node the page can't read, stays under color-contrast's AA
+ * ratios alone.
+ */
+export async function highContrastViolations<T extends Pick<AxeResults, 'violations'>>(
+  page: Page,
+  results: T,
+): Promise<T> {
+  const at = results.violations.findIndex((rule) => rule.id === ENHANCED_CONTRAST_RULE);
+  if (at === -1) return results;
+  const rule = results.violations[at]!;
+  const high = await page.evaluate(elementsHighContrastScript, {
+    query: MORE_CONTRAST,
+    boundary: HIGH_CONTRAST_BOUNDARY,
+    selectors: rule.nodes.map(nodeSelector),
+  });
+  const nodes = rule.nodes.filter((_, index) => high[index]);
+  const violations = [...results.violations];
+  if (nodes.length === 0) violations.splice(at, 1);
+  else violations[at] = { ...rule, nodes };
+  return { ...results, violations };
+}
+
+/**
+ * The incomplete contrast items, color-contrast's and color-contrast-
+ * enhanced's, each element once, by its target: the sampler holds each to
+ * the ratios its own mode needs, whichever rule named it.
+ */
+export function incompleteContrastNodes(
+  results: Pick<AxeResults, 'incomplete'>,
+): AxeResults['incomplete'][number]['nodes'] {
+  const seen = new Set<string>();
+  return results.incomplete
+    .filter((rule) => rule.id === CONTRAST_RULE || rule.id === ENHANCED_CONTRAST_RULE)
+    .flatMap((rule) => rule.nodes)
+    .filter((node) => {
+      const key = JSON.stringify(node.target);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
 /** Whether axe names `node` inside a frame: its target has a part for each document, the frame's first. */
 export const inFrame = (node: { readonly target: readonly unknown[] }): boolean =>
   node.target.length > 1;
 
-/** How many incomplete color-contrast items axe names inside a frame. */
+/** How many incomplete contrast items axe names inside a frame. */
 export function framedItems(results: Pick<AxeResults, 'incomplete'>): number {
-  const nodes = results.incomplete.find((rule) => rule.id === 'color-contrast')?.nodes ?? [];
-  return nodes.filter(inFrame).length;
+  return incompleteContrastNodes(results).filter(inFrame).length;
 }
 
 /**
- * Each incomplete color-contrast element resolved against its worst
- * background pixel. With `framed`, for a surface whose frame's document
- * other cells cover, the items inside a frame are left out first, before
- * anything samples; every item in the page itself stays.
+ * Each incomplete contrast element resolved against its worst background
+ * pixel, at the ratios its own mode needs. With `framed`, for a surface
+ * whose frame's document other cells cover, the items inside a frame are
+ * left out first, before anything samples; every item in the page itself
+ * stays.
  */
 export async function incompleteContrastFindings(
   page: Page,
   results: Pick<AxeResults, 'incomplete'>,
   framed = false,
 ): Promise<Finding[]> {
-  const incomplete = results.incomplete.find((rule) => rule.id === 'color-contrast')?.nodes ?? [];
+  const incomplete = incompleteContrastNodes(results);
   const nodes = framed ? incomplete.filter((node) => !inFrame(node)) : incomplete;
   if (nodes.length === 0) return [];
   const findings: Finding[] = [];
@@ -181,8 +300,11 @@ export async function incompleteContrastFindings(
       await locator.scrollIntoViewIfNeeded({ timeout: 2_000 }).catch(() => undefined);
       const sample = await locator
         .evaluate(
-          (el, { key, near }) => {
+          (el, { key, near, query, boundary }) => {
             const style = getComputedStyle(el);
+            const high =
+              window.matchMedia(query).matches ||
+              el.closest('[data-appearance-boundary]')?.matches(boundary) === true;
             const r = el.getBoundingClientRect();
             const fill = style.webkitTextFillColor;
             const x = Math.max(
@@ -257,6 +379,7 @@ export async function incompleteContrastFindings(
             }
             (window as unknown as Record<string, Text[]>)[near] = nodes;
             return {
+              mode: high ? ('high-contrast' as const) : ('normal' as const),
               color:
                 fill && fill !== style.color && !/^rgba?\(0, 0, 0, 0\)$/.test(fill)
                   ? fill
@@ -267,7 +390,7 @@ export async function incompleteContrastFindings(
               texts,
             };
           },
-          { key, near },
+          { key, near, query: MORE_CONTRAST, boundary: HIGH_CONTRAST_BOUNDARY },
           { timeout: 2_000 },
         )
         .catch(() => null as Sample | null);
@@ -294,7 +417,7 @@ export async function incompleteContrastFindings(
       await unmark();
       await unmarkNeighbours();
       const worst = worstRatio(shot, sample.color);
-      const need = neededRatio(sample.fontSize, sample.fontWeight);
+      const need = neededRatio(sample.fontSize, sample.fontWeight, sample.mode);
       if (worst === null) unresolved(`its color ${sample.color} isn't one the sampler reads`);
       else if (worst < need.ratio) {
         findings.push({

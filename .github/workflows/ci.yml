@@ -66,7 +66,15 @@ jobs:
         env:
           PR_DRAFT: ${{ github.event.pull_request.draft }}
           BASE_REF: ${{ github.base_ref }}
-        run: node ci/select-jobs.mjs --github
+        # SCRATCH, do not merge: the scratch evidence branch selects no job,
+        # so its draft PR runs only scratch-rc-slices.yml.
+        run: |
+          if [ "$GITHUB_HEAD_REF" = "scratch/kgn/rc-slices" ]; then
+            printf 'jobs=[]\ncomplete=false\n' >> "$GITHUB_OUTPUT"
+            echo "scratch/kgn/rc-slices: no ci job selected, see scratch-rc-slices.yml"
+            exit 0
+          fi
+          node ci/select-jobs.mjs --github
 
   static:
     name: static

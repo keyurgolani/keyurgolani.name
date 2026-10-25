@@ -1,0 +1,110 @@
+# SCRATCH, do not merge (draft PR "scratch evidence, do not merge").
+# Runs --grep slices of the release candidate's own quality plan
+# (quality:full, as rc-quality runs it) on the scratch/kgn/rc-slices head
+# only, in the pinned Playwright image, and uploads each slice's reports.
+# Every job is gated on that head ref, so no other PR runs it, and ci.yml's
+# selector selects nothing for that ref. Slices and counts:
+# kgn-c-rc-risk-scan.md in stream C's notes.
+name: scratch-rc-slices
+
+on:
+  pull_request:
+    branches: [next]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scratch-rc-slices-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: 22.23.4
+  TZ: UTC
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  slice:
+    name: rc-slice-${{ matrix.id }}
+    if: ${{ github.head_ref == 'scratch/kgn/rc-slices' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          # Round 3: round 2's two textured editorial-evidence high-contrast findings (pixel-interface/zinc, paper-tactile/warm-parchment), on #164's texture-off. 2 cells, 48 tests, about 15 min.
+          - id: r3-ee-textured
+            timeout: 30
+            external: '1'
+            grep: 'cells\.spec\.ts composition:editorial-evidence complete / editorial-evidence/(pixel-interface/zinc|paper-tactile/warm-parchment)/editorial-serif/high-contrast '
+          # Round 3, the 7:1 high-contrast harness on #164: 9 cells, 216 tests, about 56 min.
+          - id: r3-hc-acme-a-c
+            timeout: 75
+            external: '1'
+            grep: 'cells\.spec\.ts composition:acme-reference \S+ \S+ acme-reference/[a-c]\S*/high-contrast '
+          # Round 3, the 7:1 high-contrast harness on #164: 12 cells, 288 tests, about 71 min.
+          - id: r3-hc-acme-d-m
+            timeout: 95
+            external: '1'
+            grep: 'cells\.spec\.ts composition:acme-reference \S+ \S+ acme-reference/[d-m]\S*/high-contrast '
+          # Round 3, the 7:1 high-contrast harness on #164: 17 cells, 408 tests, about 86 min.
+          - id: r3-hc-acme-n-z
+            timeout: 115
+            external: '1'
+            grep: 'cells\.spec\.ts composition:acme-reference \S+ \S+ acme-reference/[n-z]\S*/high-contrast '
+          # Round 3, the 7:1 high-contrast harness on #164: 12 cells, 288 tests, about 54 min.
+          - id: r3-hc-kinetic-cosmos
+            timeout: 75
+            external: '1'
+            grep: 'cells\.spec\.ts composition:kinetic-cosmos \S+ \S+ \S+/high-contrast '
+          # Round 3, the 7:1 high-contrast harness on #164: 13 cells, 312 tests, about 58 min.
+          - id: r3-hc-horizontal-cinema
+            timeout: 80
+            external: '1'
+            grep: 'cells\.spec\.ts composition:horizontal-cinema \S+ \S+ \S+/high-contrast '
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install, with no cache
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: quality:full, the slice's --grep
+        shell: bash
+        env:
+          GREP: ${{ matrix.grep }}
+          EXTERNAL: ${{ matrix.external }}
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+        run: |
+          set --
+          if [ -n "$EXTERNAL" ]; then set -- --external-variant; fi
+          node ci/run.mjs quality-full -- pnpm exec tsx tests/quality/run.ts full -- "$@" --grep "$GREP"
+      - name: Scrub reports
+        id: scrub
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rc-slice-${{ matrix.id }}
+          path: reports/
+          if-no-files-found: error
+          retention-days: 7

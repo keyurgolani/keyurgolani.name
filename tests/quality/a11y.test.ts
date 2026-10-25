@@ -11,8 +11,11 @@ import test from 'node:test';
 import { PNG } from 'pngjs';
 import { REPO_ROOT } from '../../quality/thresholds';
 import {
+  CONTRAST_RULE,
+  ENHANCED_CONTRAST_RULE,
   framedItems,
   incompleteContrastFindings,
+  incompleteContrastNodes,
   inFrame,
   NEIGHBOUR_MARGIN,
   neededRatio,
@@ -26,6 +29,7 @@ import { requiredChecks } from './lib/checks';
 import { displayModeProblems } from './lib/emulation';
 import { PREFERENCE_ROWS, VIEWPORTS } from './lib/matrix';
 import { contrast, decodePng, parseCssColor, pixel } from './lib/pixels';
+import { axeRunOptions, rowIsHighContrast, type AxeRunOptions } from './lib/run-cell';
 import { PREFERENCE_MODES } from './lib/vocabulary';
 
 /** An RGB PNG of `rows`, each a list of [r, g, b], as a screenshot would be. */
@@ -79,6 +83,23 @@ test('text over a background is held to the worst pixel, at the large-text size 
   assert.deepEqual(neededRatio(24, 400), { rule: 'large-text', ratio: 3 });
   assert.deepEqual(neededRatio(18.67, 700), { rule: 'large-text', ratio: 3 });
   assert.deepEqual(neededRatio(18.67, 400), { rule: 'text', ratio: 4.5 });
+  assert.deepEqual(neededRatio(16, 400, 'normal'), { rule: 'text', ratio: 4.5 });
+});
+
+test("under high contrast, text is held to thresholds.json's highContrast ratios, 7 and 4.5 at large size", () => {
+  assert.deepEqual(neededRatio(16, 400, 'high-contrast'), { rule: 'high-contrast-text', ratio: 7 });
+  assert.deepEqual(neededRatio(24, 400, 'high-contrast'), {
+    rule: 'high-contrast-large-text',
+    ratio: 4.5,
+  });
+  assert.deepEqual(neededRatio(18.67, 700, 'high-contrast'), {
+    rule: 'high-contrast-large-text',
+    ratio: 4.5,
+  });
+  assert.deepEqual(neededRatio(18.67, 400, 'high-contrast'), {
+    rule: 'high-contrast-text',
+    ratio: 7,
+  });
 });
 
 test("a neighbour's glyph at the sampled box's edge is hidden with it, as an en dash before a date, and a backdrop or a faint date still fails", () => {
@@ -401,5 +422,89 @@ test('a 1px ring round a stop in view, as the thin-indicator case draws, still f
   assert.deepEqual(
     rules(ringFindings(none.focused, none.blurred, box, none.margin, viewport, none.clip)),
     ['visible'],
+  );
+});
+
+/** Whether axe runs rule `id`, tagged `tags`, under `options`, as axe-core's ruleShouldRun decides. */
+function axeRuns(options: AxeRunOptions, id: string, tags: readonly string[]): boolean {
+  const runOnly = (options.runOnly ?? {}) as { type?: string; values?: readonly string[] };
+  const enabled = options.rules?.[id]?.enabled;
+  if (runOnly.type === 'rule') return runOnly.values?.includes(id) ?? false;
+  if (typeof enabled === 'boolean') return enabled;
+  return tags.some((tag) => runOnly.values?.includes(tag));
+}
+// The two rules' WCAG level tags, as axe-core 4.14 has them.
+const AA_TAGS = ['wcag2aa'];
+const AAA_TAGS = ['wcag2aaa'];
+
+test('high-contrast rows run color-contrast-enhanced beside color-contrast, and no other row runs it', () => {
+  const high = new Set(['contrast-more', 'high-contrast']);
+  for (const swept of [false, true]) {
+    for (const row of PREFERENCE_ROWS) {
+      const options = axeRunOptions({
+        swept,
+        forced: row.context.forcedColors === 'active',
+        highContrast: rowIsHighContrast(row),
+      });
+      const where = `${row.id}${swept ? ', swept' : ''}`;
+      assert.equal(axeRuns(options, ENHANCED_CONTRAST_RULE, AAA_TAGS), high.has(row.id), where);
+      assert.equal(axeRuns(options, CONTRAST_RULE, AA_TAGS), row.id !== 'forced-colors', where);
+    }
+  }
+  // A tuple cell whose boundary renders high contrast, on the default row, runs it too.
+  const tuple = axeRunOptions({ swept: false, forced: false, highContrast: true });
+  assert.equal(axeRuns(tuple, ENHANCED_CONTRAST_RULE, AAA_TAGS), true);
+  assert.equal(axeRuns(tuple, CONTRAST_RULE, AA_TAGS), true);
+  assert.equal(axeRuns(tuple, 'button-name', ['wcag2a']), true, 'the tags still run');
+  // Forced colors replace the page's palette: neither contrast rule runs, whatever the mode.
+  const forced = axeRunOptions({ swept: false, forced: true, highContrast: true });
+  assert.equal(axeRuns(forced, ENHANCED_CONTRAST_RULE, AAA_TAGS), false);
+  assert.equal(axeRuns(forced, CONTRAST_RULE, AA_TAGS), false);
+});
+
+test("color-contrast-enhanced's incomplete items reach the sampler with color-contrast's, each element once, and a high-contrast element needs 7:1", async () => {
+  const both = { target: ['main p.both'] };
+  const enhancedOnly = { target: ['main p.enhanced'] };
+  const results = {
+    incomplete: [
+      { id: CONTRAST_RULE, nodes: [both] },
+      { id: ENHANCED_CONTRAST_RULE, nodes: [{ target: ['main p.both'] }, enhancedOnly] },
+      { id: 'link-in-text-block', nodes: [{ target: ['main a'] }] },
+    ],
+  } as unknown as Parameters<typeof incompleteContrastFindings>[1];
+  assert.deepEqual(
+    incompleteContrastNodes(results).map((node) => node.target),
+    [['main p.both'], ['main p.enhanced']],
+  );
+  // White behind 16px text at #696969, 5.49:1: AA's 4.5 passes it, high contrast's 7 doesn't.
+  const white = png([[[255, 255, 255]]]);
+  const sampled = (mode: 'normal' | 'high-contrast') =>
+    ({
+      evaluate: async () => undefined,
+      screenshot: async () => white,
+      locator: () => {
+        const element = {
+          scrollIntoViewIfNeeded: async () => undefined,
+          evaluate: async () => ({
+            mode,
+            color: 'rgb(105, 105, 105)',
+            fontSize: 16,
+            fontWeight: 400,
+            box: { x: 0, y: 0, width: 10, height: 10 },
+            texts: [],
+          }),
+        };
+        return { first: () => element };
+      },
+    }) as unknown as Parameters<typeof incompleteContrastFindings>[0];
+  assert.deepEqual(await incompleteContrastFindings(sampled('normal'), results), []);
+  assert.deepEqual(
+    (await incompleteContrastFindings(sampled('high-contrast'), results)).map(
+      ({ rule, path, expected, actual }) => [rule, path, expected, actual],
+    ),
+    [
+      ['high-contrast-text', 'main p.both', '7:1', '5.49:1 against its worst background pixel'],
+      ['high-contrast-text', 'main p.enhanced', '7:1', '5.49:1 against its worst background pixel'],
+    ],
   );
 });
