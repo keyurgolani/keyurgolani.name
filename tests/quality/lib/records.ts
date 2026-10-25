@@ -40,6 +40,21 @@ export function nodeSelector(node: NodeResult): string | null {
   return more.length === 0 && typeof only === 'string' ? only : null;
 }
 
+/**
+ * The target chain of a node nodeSelector() names no element for, to show
+ * a reader where it is: each part's selector, a frame's and a shadow host's
+ * first, joined by ` >>> `, such as `iframe >>> .inner`. Undefined for a
+ * node in the page itself. It's for display alone: no key, exception, or
+ * record field matches on it.
+ */
+export function nodeTarget(node: NodeResult): string | undefined {
+  if (nodeSelector(node) !== null || node.target.length === 0) return undefined;
+  return (node.target as readonly unknown[])
+    .flatMap((part) => (Array.isArray(part) ? part : [part]))
+    .map(String)
+    .join(' >>> ');
+}
+
 /** What the failure was against: a contrast check's ratios, or the rule's help and what the node failed. */
 function measures(rule: Result, node: NodeResult): { expected?: string; actual?: string } {
   const data = node.any.find((check) => check.data && typeof check.data === 'object')?.data as
@@ -120,6 +135,7 @@ export function axeFailures(
           uiSlot: element?.uiSlot,
           tokenRole: element?.tokenRole,
           selector: nodeSelector(node) ?? undefined,
+          target: nodeTarget(node),
         },
         ...measures(rule, node),
       };

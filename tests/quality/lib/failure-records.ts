@@ -39,6 +39,12 @@ export interface FailingElement {
    * and the cell's axe JSON keeps it.
    */
   readonly selector?: string;
+  /**
+   * For an element inside a frame or a shadow root, which has no selector,
+   * where it is, as nodeTarget() shows it: `iframe >>> .inner`. For a
+   * reader alone: it isn't written, keyed, or matched.
+   */
+  readonly target?: string;
 }
 
 /** One rule failing on one element in one cell. */

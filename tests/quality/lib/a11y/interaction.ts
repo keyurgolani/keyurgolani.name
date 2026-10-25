@@ -190,6 +190,12 @@ export interface KeyboardOptions {
    * composition cells' to check.
    */
   readonly framed?: boolean;
+  /**
+   * The most presses the walk makes, all told, for the meta cases: past it
+   * the walk stops with a finding of its own, so one that lost a bound
+   * fails at once rather than running on.
+   */
+  readonly pressCeiling?: number;
 }
 
 /** A pixel channel that moves more than this when the layers go is the layers' doing. */
@@ -270,6 +276,17 @@ export async function keyboardFindings(
   // Presses inside a frame on a framed page, which don't count against the page's own.
   let inFrame = 0;
   for (let press = 0; press < tabbables.length * 2 + 10 + inFrame; press++) {
+    if (options.pressCeiling !== undefined && press >= options.pressCeiling) {
+      findings.push({
+        gate: 'keyboard',
+        rule: 'ceiling',
+        path: stops.at(-1)?.path,
+        expected: `the walk ends within ${options.pressCeiling} presses`,
+        actual: `the walk was still going after ${options.pressCeiling} presses`,
+      });
+      ended = true;
+      break;
+    }
     await page.keyboard.press('Tab');
     // Frames for what focus scrolls to, and for what that scroll shows, such as a footer.
     if (options.occlusion) await frames(page, 50);
