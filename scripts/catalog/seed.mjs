@@ -30,8 +30,9 @@
 //   emphasis-glow at the fallback language's values. neumorphic's controls
 //   gain a border-strong hairline (BORDER_FIXES), and a focus ring too thin
 //   for #11's focus check is widened (FOCUS_FIXES), and a texture drawn
-//   under a surface's text moves into its padding (TEXTURE_PLACEMENTS),
-//   each at version 1.1.0 (FIXED_LANGUAGE_VERSION). A language that fails
+//   under a surface's text moves into its padding (TEXTURE_PLACEMENTS)
+//   or draws away from the text (TEXTURE_RECOLORS), each at version 1.1.0
+//   (FIXED_LANGUAGE_VERSION). A language that fails
 //   check:appearance moves, as written, from packs/ to held/, which
 //   registry generation never reads; this never writes it again.
 // - Generated schemes (brand-seed, material-hct, profile-image,
@@ -522,6 +523,26 @@ export const TEXTURE_PLACEMENTS = {
 const TEXTURE_PLACEMENT_CAVEAT =
   "Its texture sits in the surfaces' padding, at their edges, not across them as the prototype's does, so no text is drawn over it.";
 
+/**
+ * Scanlines the prototype draws toward the text: terminal-chrome's 10% of
+ * text-primary darkens a light surface under dark text and lightens a dark
+ * one under light text, and the quality cells read obsidian-atelier's room
+ * label at 4.14:1 and editorial-evidence's aside links at 4.19:1 over them.
+ * The same lines, at the same 10%, draw in the canvas color, which every
+ * scheme's surfaces step away from toward the text, so the lines move each
+ * surface back toward the canvas and text over them only gains contrast:
+ * on all 25 shipping schemes and #11's 3 tier fixtures, light, dark, and
+ * both high-contrast sets.
+ */
+export const TEXTURE_RECOLORS = {
+  'terminal-chrome':
+    'repeating-linear-gradient(0deg, transparent 0 3px, color-mix(in srgb, var(--color-canvas) 10%, transparent) 3px 4px)',
+};
+
+/** The caveat recolored scanlines add. */
+const TEXTURE_RECOLOR_CAVEAT =
+  "Its scanlines draw in the canvas color, not the prototype's text color, so they sit away from the text and never take contrast from it.";
+
 /** The version a language ships at once a fix here changes the prototype's tokens. */
 export const FIXED_LANGUAGE_VERSION = '1.1.0';
 
@@ -552,6 +573,8 @@ export function languageManifest(language) {
   if (focusFix) tokens['focus-width'] = FOCUS_FIXES[language.id];
   const placed = Boolean(TEXTURE_PLACEMENTS[language.id]);
   if (placed) tokens.texture = TEXTURE_PLACEMENTS[language.id];
+  const recolored = Boolean(TEXTURE_RECOLORS[language.id]);
+  if (recolored) tokens.texture = TEXTURE_RECOLORS[language.id];
   Object.assign(tokens, CONTRACT_LANGUAGE_TOKENS);
   const [, , material, , , motion, texture] = RECIPE_PARTS[language.recipe];
   const inspired = language.source.licenseState === 'independent-inspired-interpretation';
@@ -578,6 +601,7 @@ export function languageManifest(language) {
       : []),
     ...(focusFix ? [focusFix] : []),
     ...(placed ? [TEXTURE_PLACEMENT_CAVEAT] : []),
+    ...(recolored ? [TEXTURE_RECOLOR_CAVEAT] : []),
     ...(unanimated.length > 0
       ? [
           `Its ${unanimated.map((key) => `${key.slice('motion-'.length)} motion, ${tokens[key]},`).join(' and ')} ${unanimated.length === 1 ? 'has' : 'have'} no keyframes in the platform yet, so ${unanimated.length === 1 ? "it doesn't" : "they don't"} animate.`,
@@ -590,7 +614,7 @@ export function languageManifest(language) {
     description: inspired
       ? `An independent interpretation of ${language.source.name}'s public design principles: ${words}. It ships no official component, token file, icon, or font.`
       : `${words.charAt(0).toUpperCase()}${words.slice(1)}.`,
-    version: focusFix || placed ? FIXED_LANGUAGE_VERSION : LANGUAGE_VERSION,
+    version: focusFix || placed || recolored ? FIXED_LANGUAGE_VERSION : LANGUAGE_VERSION,
     tokenContract: 1,
     tier: language.status,
     provenance: {
