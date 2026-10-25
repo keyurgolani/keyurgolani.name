@@ -145,23 +145,29 @@ test(
 );
 
 test(
-  'at a phone’s width a pick of the frame’s viewport or of what it shows loads it, with no Show preview',
+  'at a phone’s width a press of Preview or a pick of what the frame shows loads it, with no Show preview',
   { annotation: [STUDIO, DEMO] },
   async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/studio?task=preview');
-    await expect(page.getByRole('button', { name: 'Show preview' })).toBeVisible();
-    await page.getByLabel('Width (simulated)').selectOption('tablet');
+    await page.goto('/studio?task=appearance');
+    await expect(page.getByRole('button', { name: 'Reset demo' })).toBeVisible();
+    // The preview pane waits behind the split's switch, its frame unloaded.
+    await expect(page.locator('iframe')).toHaveCount(0);
+    await page
+      .getByRole('group', { name: 'Show' })
+      .getByRole('button', { name: 'Preview', exact: true })
+      .click();
     await expect(page.locator('iframe')).toHaveAttribute('src', /^\/sample\?/);
     await expect(page.getByRole('button', { name: 'Show preview' })).toHaveCount(0);
 
-    // A fresh visitor's first pick of a composition does the same.
+    // A fresh visitor's first pick of a composition does the same, from the controls.
     await page.evaluate(() => {
       localStorage.clear();
       sessionStorage.clear();
     });
     await page.goto('/studio?task=appearance');
-    await expect(page.getByRole('button', { name: 'Show preview' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Reset demo' })).toBeVisible();
+    await expect(page.locator('iframe')).toHaveCount(0);
     const select = page.getByLabel('Composition', { exact: true });
     const own = await select.inputValue();
     const values = await select

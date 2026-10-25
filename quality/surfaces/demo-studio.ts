@@ -28,6 +28,7 @@ export const sources: readonly string[] = [
   'apps/web/src/app/(studio)/_components/studio-entry.tsx',
   'apps/web/src/app/(studio)/_components/demo/**',
   'apps/web/src/app/(studio)/_components/shell/**',
+  'apps/web/src/app/(studio)/_components/split/**',
   'apps/web/src/app/(studio)/layout.tsx',
   'apps/web/src/app/(studio)/studio.css',
   'apps/web/src/lib/demo/**',
