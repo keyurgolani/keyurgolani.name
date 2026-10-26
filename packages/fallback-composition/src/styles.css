@@ -1,0 +1,294 @@
+/*
+ * The fallback composition (#5): one readable column. Composition only:
+ * spacing and arrangement, with color, type, and motion left to #19's
+ * appearance axes. Every length is a shared space step, and the few
+ * elements it designs itself, the name, the Menu's destinations, the index,
+ * and the closing block, take only the shared tokens: a type step, a role's
+ * weight, and a text color. Every rule sits under [data-variant='fallback'],
+ * and every property is logical, so a right-to-left page reads the same.
+ * The column and the stack take their lengths from the platform's scales:
+ * the main is the kit's pf-stack, which puts the section rhythm between the
+ * sections, and a ledger of figures (pf-stats--leaders) for evidence that's
+ * figures alone.
+ */
+
+[data-variant='fallback'] {
+  display: block;
+  box-sizing: border-box;
+  padding-block: var(--space-m) var(--rhythm-section);
+  padding-inline: var(--layout-grid-margin);
+  /* A word too long for the line, such as a name or a URL, breaks rather than widening the page. */
+  overflow-wrap: anywhere;
+}
+
+/*
+ * The reading column at the body measure, centred. The bar above it frames
+ * the column rather than the window: the column and a 3xl step either side,
+ * never under 48rem, where its one line still fits, nor over the page's width.
+ */
+[data-variant='fallback'] > * {
+  max-inline-size: var(--layout-width-text);
+  margin-inline: auto;
+}
+
+[data-variant='fallback'] > .fc-header {
+  max-inline-size: min(
+    var(--layout-width-page),
+    max(48rem, calc(var(--layout-width-text) + 2 * var(--space-3xl)))
+  );
+}
+
+/*
+ * The chrome: the name, then the destinations as one short run beside it,
+ * then the visitor control. On a narrow screen the destinations give way to
+ * the Menu, on the content's end edge, and the control moves into it.
+ */
+[data-variant='fallback'] .fc-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs) var(--space-l);
+  margin-block-end: var(--space-xl);
+}
+
+/* An empty control slot, as on a page with no control or once the Menu holds it, takes no room. */
+[data-variant='fallback'] .fc-header > [data-visitor-control-slot]:empty {
+  display: none;
+}
+
+/* In the bar the control is one more item on its line, unruled: its chevron says it opens. */
+[data-variant='fallback'] .fc-header > [data-visitor-control-slot] [data-ui-slot='disclosure'] {
+  border-block: none;
+  padding-block: 0;
+}
+
+[data-variant='fallback'] .fc-nav {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs) var(--space-l);
+}
+
+/* The name leads the chrome: a step up, a title's weight, the primary ink, underlined only on hover. */
+[data-variant='fallback'] .fc-home {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--type-step-1);
+  font-weight: var(--type-title-font-weight);
+  color: var(--color-text-primary);
+}
+
+/*
+ * The links it designs, the closing block's primary action among them: no
+ * underline at rest, one on hover, on focus, and on the Menu's current
+ * destination.
+ */
+[data-variant='fallback']
+  :is(
+    .fc-home,
+    .fc-menu__destinations a,
+    .fc-index__head,
+    .fc-index__links a,
+    .fc-closing li:first-child > .pf-action
+  ) {
+  text-decoration-line: none;
+}
+
+[data-variant='fallback']
+  :is(
+    .fc-home,
+    .fc-menu__destinations a,
+    .fc-index__head,
+    .fc-index__links a,
+    .fc-closing li:first-child > .pf-action
+  ):is(:hover, :focus-visible, [aria-current]) {
+  text-decoration-line: underline;
+}
+
+/* Its own lists are bare. */
+[data-variant='fallback'] :is(.fc-menu__destinations, .fc-index__groups, .fc-index__links) {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * The destinations are #19's navigation primitive, which the platform
+ * stylesheet sizes: a target of at least 24 by 24 CSS px, WCAG 2.2's AA
+ * floor (2.5.8), and 32 by 32 at 768 px wide and below. The composition
+ * spaces the list and sets no size of its own on a link.
+ */
+[data-variant='fallback'] .fc-destinations {
+  gap: var(--space-3xs) var(--space-m);
+}
+
+/*
+ * The Menu is the kit's NavigationMenuSlot: the host's Dialog, or a plain
+ * link to the index where no host fills it or no script runs.
+ */
+[data-variant='fallback'] .fc-menu {
+  display: none;
+}
+
+/* Whether the link shows is the slot's; its target grows with the line. */
+[data-variant='fallback'] .fc-menu [data-navigation-menu-link] {
+  padding-block: var(--space-2xs);
+}
+
+@media (width < 48rem) {
+  [data-variant='fallback'] .fc-destinations {
+    display: none;
+  }
+
+  [data-variant='fallback'] .fc-menu {
+    display: block;
+    margin-inline-start: auto;
+  }
+}
+
+/* In the Menu: the five destinations first, as large targets, then every section behind one disclosure. */
+[data-variant='fallback'] .fc-menu__destinations {
+  display: grid;
+}
+
+[data-variant='fallback'] .fc-menu__destinations a {
+  display: flex;
+  align-items: center;
+  min-block-size: 44px;
+  padding-block: var(--space-2xs);
+  color: var(--color-text-primary);
+}
+
+[data-variant='fallback'] .fc-menu__all {
+  margin-block-start: var(--space-m);
+}
+
+/* The visitor's control follows it in the Menu with a rule of its own, so the two rows share one. */
+[data-variant='fallback'] .fc-menu__all:has(+ [data-navigation-menu-control]) {
+  border-block-end: none;
+}
+
+/* The page's end: the index, then the one closing block, so the invitation is the last thing. */
+[data-variant='fallback'] .fc-footer {
+  display: grid;
+  gap: var(--space-2xl);
+  margin-block-start: var(--space-2xl);
+}
+
+[data-variant='fallback'] .fc-index__title {
+  margin-block: 0 var(--space-m);
+}
+
+/*
+ * Two columns at most: the groups run down in reading order, each whole in
+ * one column under its own head, so no group's tail opens the next column
+ * headless.
+ */
+[data-variant='fallback'] .fc-index__groups {
+  columns: 2 11rem;
+  column-gap: var(--space-l);
+}
+
+[data-variant='fallback'] .fc-index__group {
+  break-inside: avoid;
+}
+
+[data-variant='fallback'] .fc-index__group + .fc-index__group {
+  margin-block-start: var(--space-m);
+}
+
+/* Each head links where its destination does, in the primary ink; its entries follow, quieter. */
+[data-variant='fallback'] .fc-index__head {
+  display: block;
+  break-after: avoid;
+  padding-block: var(--space-3xs);
+  color: var(--color-text-primary);
+}
+
+[data-variant='fallback'] .fc-index__links li {
+  break-inside: avoid;
+}
+
+/* The quieter links, the index's entries and the closing block's other ways in: centred in a target a touch screen grows. */
+[data-variant='fallback'] :is(.fc-index__links a, .fc-closing .pf-links a) {
+  display: inline-flex;
+  align-items: center;
+  padding-block: var(--space-3xs);
+  color: var(--color-text-secondary);
+}
+
+/* Heads with nothing under them, as at a case study's end: one run of links at the body's size. */
+[data-variant='fallback'] .fc-index__groups--flat {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs) var(--space-l);
+}
+
+/*
+ * The closing block: one heading, one message, the actions with the address
+ * beside them, then the other ways to get in touch, a quieter row last. One
+ * spacing step runs through it; the only larger gap is the footer's, above it.
+ */
+[data-variant='fallback'] .fc-closing {
+  display: grid;
+  gap: var(--space-s);
+  justify-items: start;
+}
+
+/* Its parts step down to the block's one gap, the kit's spacing between a section's parts included. */
+[data-variant='fallback'] .fc-closing :is(p, ul, header, .fc-closing__ask) {
+  margin: 0;
+}
+
+/* The call to action leads: its heading and message whole lines, its actions and the address one wrapping row. */
+[data-variant='fallback'] .fc-closing__ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-s);
+}
+
+/* The call to action's title opens the message on a line of its own, at the message's size and line gap. */
+[data-variant='fallback'] .fc-closing__ask > :is(header, .pf-message) {
+  flex-basis: 100%;
+  white-space: pre-line;
+}
+
+[data-variant='fallback'] :is(.fc-closing__address, .fc-closing .pf-action--quiet) {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='fallback'] .fc-closing .pf-actions {
+  align-items: center;
+}
+
+[data-variant='fallback'] .fc-closing li:first-child > .pf-action {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 44px;
+  padding-inline: var(--space-m);
+  font-weight: var(--type-label-font-weight);
+  color: var(--color-text-primary);
+  border: var(--ui-border-control);
+  border-radius: var(--ui-radius-control);
+}
+
+/* On a touch screen, every link the composition designs is a 44 px target at least (#11). */
+@media (pointer: coarse) {
+  [data-variant='fallback']
+    :is(.fc-home, .fc-index__head, .fc-index__links a, .fc-closing .pf-links a) {
+    min-block-size: 44px;
+  }
+}
+
+/* On paper: the destinations in full, and no Menu. */
+@media print {
+  [data-variant='fallback'] .fc-destinations {
+    display: flex;
+  }
+
+  [data-variant='fallback'] .fc-menu {
+    display: none;
+  }
+}
