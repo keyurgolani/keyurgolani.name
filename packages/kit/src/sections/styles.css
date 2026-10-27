@@ -1,0 +1,291 @@
+/*
+ * @portfolio/kit/sections (#5, Slice 2; the redesign's kit pass): the shared
+ * parts' layout, the least a part needs to read well with no help from a
+ * composition. It's opt-in by class: a rule keys on a kit part's own pf-
+ * class, or on an element inside one ([class*='pf-'], since every part's
+ * class starts pf- and no composition prefix holds it), never on how the
+ * frame was rendered, so a part a composition places in its own markup
+ * keeps its layout. The one exception is the section gap shared frames
+ * have always had, kept until a composition moves onto pf-stack.
+ *
+ * Every rule sits under [data-variant] inside :where(), so it weighs nothing
+ * and any composition rule for the same element wins; a pseudo-element goes
+ * after the :where(), since the browser drops a rule with one inside it. It
+ * sets layout alone, from the platform's scales: color stays currentColor
+ * and type stays inherited, but for the type roles the markup names and
+ * figures' numerals. Every property is logical, so a right-to-left page
+ * reads the same. The compiled stylesheet counts against every
+ * composition's css budget (apps/web/scripts/variant-css-budgets.test.ts).
+ */
+
+/* A word too long for the line, such as a URL, breaks rather than widening the page. */
+:where([data-variant] [class*='pf-']) {
+  overflow-wrap: anywhere;
+}
+
+/* The gap a shared section frame has always had, until its composition stacks its sections. */
+:where([data-variant] [data-renderer='shared']) {
+  margin-block: 0 3rem;
+}
+
+/*
+ * The browser's margins go, inline ones too, so nothing sits 40 px in from
+ * the text edge. Every block here balances its lines, as headings do, and
+ * so does what it holds, such as a caption, a stat's term, or its note;
+ * running text, below, wraps without orphans instead (pretty).
+ */
+:where(
+  [data-variant]
+    :is(h1, h2, h3, h4, h5, h6, p, figure, blockquote, dl, dd):is([class*='pf-'], [class*='pf-'] *)
+) {
+  margin: 0;
+  text-wrap: balance;
+}
+
+/* A release's tracks and a case study's decisions are sequences, so they keep their numbers. */
+:where([data-variant] :is(ul, ol)[class*='pf-']:not(.pf-tracks, .pf-decisions)) {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+:where([data-variant] :is(.pf-highlights, .pf-short-list)) {
+  padding-inline-start: var(--space-s);
+  list-style: disc;
+}
+
+:where([data-variant] :is(.pf-tracks, .pf-decisions, .pf-rich-text :is(ul, ol))) {
+  margin: 0;
+  padding-inline-start: var(--space-m);
+}
+
+/* Flow inside a part: a step between blocks, more above a heading, less below one. */
+:where(
+  [data-variant]
+    *
+    + :is(p, ul, ol, dl, figure, blockquote, .pf-rich-text):is([class*='pf-'], [class*='pf-'] *)
+) {
+  margin-block-start: var(--space-xs);
+}
+
+:where([data-variant] [class*='pf-'] * + :is(h2, h3, h4, h5, h6)) {
+  margin-block-start: var(--space-m);
+}
+
+/* Below a heading, and above a figure's caption, the smallest step. */
+:where(
+  [data-variant]
+    :is(:is(h2, h3, h4, h5, h6):is([class*='pf-'], [class*='pf-'] *) + *, .pf-figure > figcaption)
+) {
+  margin-block-start: var(--space-2xs);
+}
+
+:where([data-variant] .pf-section__header) {
+  margin-block-end: var(--rhythm-head);
+}
+
+:where([data-variant] .pf-case-study > * + *) {
+  margin-block-start: var(--rhythm-group);
+}
+
+/*
+ * Measure (G5): the typography profile's measures, counts of characters
+ * the compiler resolves to its body face's width in em (R11), so each is
+ * of the text that reads it. Running text at the body measure, at most the
+ * body measure of its own text. A tagline takes the compact measure once
+ * it's set larger than body, the body measure at body size; a subtitle the
+ * compact measure, a caption the body measure.
+ */
+:where(
+  [data-variant]
+    :is(
+      p:is([class*='pf-'], [class*='pf-'] *),
+      .pf-rich-text,
+      :is(.pf-highlights, .pf-short-list, .pf-tracks) > li,
+      .pf-figure > figcaption
+    )
+) {
+  max-inline-size: min(var(--layout-width-text), var(--type-measure-body));
+  text-wrap: pretty;
+}
+
+:where([data-variant] :is(.pf-hero__tagline, .pf-hero__subtagline)) {
+  max-inline-size: max(
+    var(--type-measure-compact),
+    min(var(--layout-width-text), var(--type-measure-body))
+  );
+  text-wrap: balance;
+}
+
+:where([data-variant] .pf-section__subtitle) {
+  max-inline-size: var(--type-measure-compact);
+}
+
+/*
+ * A list's entries, a group's, a case study's decisions: an item apart, by
+ * the list's own gap, never a margin on each item, so a composition that
+ * grids the list sets its gap and every cell's top stays level. The
+ * evidence a work or a custom item cites is a step closer. A stats list
+ * that's evidence takes its grid from .pf-stats, which comes after.
+ */
+:where([data-variant] :is(.pf-list, .pf-groups, .pf-decisions, .pf-evidence)) {
+  display: flex;
+  flex-flow: column;
+  gap: var(--rhythm-item);
+}
+
+:where([data-variant] .pf-evidence:not(.pf-list)) {
+  gap: var(--space-s);
+}
+
+/* Rows of short things, apart by the gap, never by a dot. */
+:where([data-variant] :is(.pf-meta, .pf-hero__details, .pf-tags, .pf-links, .pf-actions)) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-s);
+}
+
+:where([data-variant] .pf-actions) {
+  gap: var(--space-xs) var(--space-m);
+}
+
+/* A link among a meta line's parts, such as a quote's source, wraps as one
+   box, so its focus ring is one ring around it, never one piece per line. */
+:where([data-variant] .pf-meta a) {
+  display: inline-block;
+}
+
+/* A case study's link is the work's title, its target grown by padding, which an inline box lays over its neighbors without moving them. */
+:where([data-variant] .pf-stretch) {
+  padding-block: var(--space-2xs);
+}
+
+:where([data-variant] img:is([class*='pf-'], [class*='pf-'] *)) {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+  /* The owner's focal point, from the one inline style a shared renderer sets, for any crop. */
+  object-position: calc(var(--focal-x, 0.5) * 100%) calc(var(--focal-y, 0.5) * 100%);
+}
+
+/* A backdrop (K-8) covers the box its composition gives it, at the owner's focal point. */
+:where([data-variant] .pf-backdrop) {
+  inline-size: 100%;
+  block-size: 100%;
+  max-inline-size: none;
+  object-fit: cover;
+}
+
+/* A cover sits on the outset track, whatever its rendition's width (G6). */
+:where([data-variant] .pf-cover) {
+  inline-size: 100%;
+  max-inline-size: var(--layout-width-outset);
+}
+
+/* An image with no rendition yet keeps its place, with its label in the middle. */
+:where([data-variant] .pf-media-box) {
+  display: grid;
+  place-items: center;
+  inline-size: 100%;
+  aspect-ratio: 3 / 2;
+  padding-inline: var(--space-s);
+}
+
+:where([data-variant] .pf-media-box--small) {
+  display: inline-grid;
+  inline-size: auto;
+  aspect-ratio: auto;
+}
+
+:where([data-variant] :is(.pf-logo, .pf-avatar)) {
+  inline-size: 3rem;
+  block-size: 3rem;
+  object-fit: contain;
+}
+
+:where([data-variant] .pf-gallery) {
+  display: grid;
+  gap: var(--space-s);
+  grid-template-columns: repeat(auto-fill, minmax(min(16rem, 100%), 1fr));
+}
+
+/* A quote is set off by its type role at the text edge; who said it sits on its start edge. */
+:where([data-variant] .pf-quote > figcaption) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-block-start: var(--space-xs);
+}
+
+/* An excerpt is a quotation, set off by the marks the content's language uses. */
+:where([data-variant] .pf-excerpt p:first-child)::before {
+  content: open-quote;
+}
+
+:where([data-variant] .pf-excerpt p:last-child)::after {
+  content: close-quote;
+}
+
+/*
+ * Figures (C6): a dl, each term with its value in one cell, in tabular
+ * lining numerals, on a grid of at most three columns, two for four, apart
+ * enough that a value never reads with the next term. pf-stats--leaders,
+ * on the list or an ancestor, makes it a ledger: one figure a row, with a
+ * dotted leader in the text's own color.
+ */
+:where([data-variant] .pf-stats) {
+  display: grid;
+  gap: var(--space-s) var(--space-2xl);
+  grid-template-columns: repeat(auto-fit, minmax(max(min(100%, 12rem), 26%), 1fr));
+}
+
+:where([data-variant] .pf-stats[data-count='4']) {
+  grid-template-columns: repeat(auto-fit, minmax(max(min(100%, 12rem), 40%), 1fr));
+}
+
+:where([data-variant] .pf-stat__value) {
+  order: 2;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+:where([data-variant] .pf-stat__note) {
+  flex-basis: 100%;
+  order: 3;
+}
+
+:where([data-variant] .pf-stats--leaders .pf-stat) {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  align-items: last baseline;
+  gap: 0 var(--space-2xs);
+}
+
+:where([data-variant] .pf-stats--leaders .pf-stat)::after {
+  content: '';
+  flex: 1 0 var(--space-s);
+  order: 1;
+  border-block-end: thin dotted;
+}
+
+/*
+ * The section rhythm (G4): a stack spaces what it holds, a section apart
+ * by default, and a chapter or a group where a child's data-rhythm says so
+ * (sectionRhythms()).
+ */
+:where([data-variant] .pf-stack > *) {
+  margin-block: 0;
+}
+
+:where([data-variant] .pf-stack > * + *) {
+  margin-block-start: var(--rhythm-section);
+}
+
+:where([data-variant] .pf-stack > [data-rhythm='chapter']) {
+  margin-block-start: var(--rhythm-chapter);
+}
+
+:where([data-variant] .pf-stack > [data-rhythm='group']) {
+  margin-block-start: var(--rhythm-group);
+}

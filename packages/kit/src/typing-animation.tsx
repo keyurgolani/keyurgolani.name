@@ -1,0 +1,138 @@
+'use client';
+
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import type { MotionPolicy } from '@portfolio/schema';
+import { formatList } from './format';
+import { useEnhancementRuntime } from './runtime';
+
+export interface TypingAnimationProps {
+  /** Strings to cycle through. Empty array renders nothing. */
+  texts: string[];
+  /** Milliseconds per character while typing. Default 80. */
+  typingSpeed?: number;
+  /** Milliseconds per character while deleting. Default 40. */
+  deletingSpeed?: number;
+  /** Pause between completed text and start of deletion. Default 2000. */
+  pauseDuration?: number;
+  /** Per-text override array — index N overrides pauseDuration for texts[N]. */
+  pauseDurations?: number[];
+  className?: string;
+  /** Override portfolio motion preference; default `respect-os`. */
+  motionPreference?: MotionPolicy;
+  /**
+   * Render the blinking caret. Default true. Set false if your variant
+   * supplies its own caret CSS.
+   */
+  caret?: boolean;
+}
+
+type Phase = 'typing' | 'pausing' | 'deleting';
+
+/** Out of sight, and still read: the full text a screen reader takes in place of the animated one. */
+const VISUALLY_HIDDEN: CSSProperties = {
+  position: 'absolute',
+  inlineSize: '1px',
+  blockSize: '1px',
+  overflow: 'hidden',
+  clipPath: 'inset(50%)',
+  whiteSpace: 'nowrap',
+};
+
+/**
+ * Multi-text typing/deleting animation. Cycles forever through `texts`.
+ *
+ * It runs on the kit runtime. The server, a first client render, and
+ * reduced motion show the current text whole, so the page reads the same
+ * without JavaScript; once the runtime is active it holds that text for its
+ * pause, then deletes it and types the next. It stops where it is while the
+ * document is hidden, the text is offscreen, or the visitor paused motion.
+ *
+ * The animated text is hidden from assistive technology, with no live
+ * region, so a screen reader never has a keystroke or half a word announced
+ * (#14); in its place, out of sight, is every text once, as a list. The
+ * optional caret span is hidden too. Variants restyle via the `className` prop and a CSS rule on
+ * `.kc-typing__caret` (or an equivalent caret class of their choosing — the
+ * caret carries no class itself if you override the markup).
+ */
+export function TypingAnimation({
+  texts,
+  typingSpeed = 80,
+  deletingSpeed = 40,
+  pauseDuration = 2000,
+  pauseDurations,
+  className,
+  motionPreference,
+  caret = true,
+}: TypingAnimationProps) {
+  const normalized = useMemo(() => (texts.length > 0 ? texts : ['']), [texts]);
+  // It starts with the first text typed out, as the server rendered it.
+  const [displayed, setDisplayed] = useState(() => normalized[0] ?? '');
+  const [phase, setPhase] = useState<Phase>('pausing');
+  const [textIndex, setTextIndex] = useState(0);
+  const runtime = useEnhancementRuntime({ motionPolicy: motionPreference });
+  const { attachRoot } = runtime;
+  const still = runtime.state === 'static';
+  const active = runtime.state === 'active';
+
+  const current = normalized[textIndex] ?? '';
+  const currentPause =
+    pauseDurations && pauseDurations[textIndex] !== undefined
+      ? pauseDurations[textIndex]!
+      : pauseDuration;
+
+  useEffect(() => {
+    if (!active || normalized.length === 0) return;
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    if (phase === 'typing') {
+      if (displayed.length < current.length) {
+        timeoutId = setTimeout(() => {
+          setDisplayed(current.slice(0, displayed.length + 1));
+        }, typingSpeed);
+      } else {
+        timeoutId = setTimeout(() => setPhase('pausing'), 0);
+      }
+    } else if (phase === 'pausing') {
+      timeoutId = setTimeout(() => setPhase('deleting'), currentPause);
+    } else {
+      if (displayed.length > 0) {
+        timeoutId = setTimeout(() => {
+          setDisplayed(displayed.slice(0, -1));
+        }, deletingSpeed);
+      } else {
+        timeoutId = setTimeout(() => {
+          setTextIndex((i) => (i + 1) % normalized.length);
+          setPhase('typing');
+        }, 0);
+      }
+    }
+
+    return () => clearTimeout(timeoutId);
+  }, [
+    displayed,
+    phase,
+    textIndex,
+    current,
+    currentPause,
+    typingSpeed,
+    deletingSpeed,
+    active,
+    normalized.length,
+  ]);
+
+  if (texts.length === 0) return null;
+  const visible = still ? current : displayed;
+
+  return (
+    <span ref={attachRoot} className={className}>
+      {/* Every text once, for assistive technology, which never reads the one being typed. */}
+      <span style={VISUALLY_HIDDEN}>{formatList(texts)}</span>
+      <span aria-hidden="true">{visible}</span>
+      {caret ? (
+        <span className="kc-typing__caret" aria-hidden="true">
+          |
+        </span>
+      ) : null}
+    </span>
+  );
+}

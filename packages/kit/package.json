@@ -1,0 +1,68 @@
+{
+  "name": "@portfolio/kit",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./pretext": "./src/pretext/index.ts",
+    "./markdown": {
+      "react-server": "./src/markdown.server.ts",
+      "default": "./src/markdown.ts"
+    },
+    "./markdown-local": "./src/markdown-local.ts",
+    "./sections": "./src/sections/index.ts",
+    "./host-modules": "./src/entries/host-modules.ts",
+    "./sections/styles.css": "./src/sections/styles.css",
+    "./enhancements": "./src/enhancements/index.tsx",
+    "./runtime": "./src/runtime/index.ts",
+    "./spatial": "./src/spatial/index.ts",
+    "./spatial-r3f": "./src/spatial-r3f/index.ts",
+    "./spatial-canvas": "./src/spatial-r3f/spatial-canvas.tsx",
+    "./seo": "./src/seo/index.ts",
+    "./timeline": "./src/timeline/index.ts",
+    "./motion-fx": "./src/motion-fx/index.ts",
+    "./social-brand": "./src/social-brand/index.ts",
+    "./studio-thumbnail": "./src/studio-thumbnail.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test 'src/**/*.test.ts' 'src/**/*.test.tsx'"
+  },
+  "dependencies": {
+    "@chenglou/pretext": "^0.0.6",
+    "@portfolio/appearance": "workspace:*",
+    "@portfolio/schema": "workspace:*",
+    "@portfolio/variant-contract": "workspace:*",
+    "@react-three/drei": "^10.0.0",
+    "@react-three/fiber": "^9.0.0",
+    "@react-three/postprocessing": "^3.0.0",
+    "clsx": "^2.1.1",
+    "marked": "^15.0.6",
+    "sanitize-html": "2.18.1",
+    "three": "^0.170.0"
+  },
+  "peerDependencies": {
+    "framer-motion": "^12.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "framer-motion": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/three": "^0.170.0",
+    "esbuild": "0.27.7",
+    "framer-motion": "^12.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.7.2"
+  }
+}

@@ -1,0 +1,58 @@
+import { isAllowedUrl } from '@portfolio/schema';
+import type { VariantRenderInput } from '@portfolio/variant-contract';
+import { cn } from '../cn';
+import { escapeHtml, unescapeHtml } from '../html-escape';
+// By the package's name, so React Server Components get the post-pass (markdown.server.ts).
+import { renderInlineMarkdown, renderMarkdown } from '@portfolio/kit/markdown';
+import { hrefFor } from './primitives';
+
+/**
+ * Markdown from the content. It's the one way a variant renders markdown, and
+ * the renderers it calls write only allowlisted markup (see markdown.ts).
+ * `inline` renders a phrase, without paragraphs, for inside a heading or a
+ * sentence. Given the render input, a link to a `#fragment` or `/#fragment`
+ * takes the render's id prefix and mount point, as link fields do, so it
+ * still lands on its section.
+ */
+export function RichText({
+  source,
+  inline = false,
+  className,
+  typeRole,
+  input,
+}: {
+  source: string;
+  inline?: boolean;
+  className?: string;
+  /** The type role it's set in, such as title for a case study's decision. */
+  typeRole?: string;
+  input?: VariantRenderInput;
+}) {
+  const rendered = inline ? renderInlineMarkdown(source) : renderMarkdown(source);
+  const html = input ? prefixFragments(rendered, input) : rendered;
+  return inline ? (
+    <span
+      className={cn('pf-rich-text', className)}
+      data-type-role={typeRole}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  ) : (
+    <div
+      className={cn('pf-rich-text', className)}
+      data-type-role={typeRole}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
+/**
+ * Each `href="#id"` and `href="/#id"` in rendered markdown, through hrefFor().
+ * The renderer writes every link as `<a href="...">`, escaped, so the URL is
+ * read back, prefixed, held to the link rule again, and escaped once more.
+ */
+function prefixFragments(html: string, input: VariantRenderInput): string {
+  return html.replace(/<a href="(\/?#[^"]+)">/g, (link, written: string) => {
+    const href = hrefFor(unescapeHtml(written), input);
+    return isAllowedUrl(href) ? `<a href="${escapeHtml(href)}">` : link;
+  });
+}
