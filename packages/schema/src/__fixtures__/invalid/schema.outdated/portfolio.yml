@@ -1,0 +1,10 @@
+# schema.outdated: a version 2 portfolio, which pnpm config:migrate converts.
+schemaVersion: 2
+locale: en
+direction: ltr
+identity:
+  name: Rowan Fixture
+sections:
+  - kind: lede
+    id: about
+    body: Builds calm software.

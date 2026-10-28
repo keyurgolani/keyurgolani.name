@@ -1,0 +1,19 @@
+# A valid portfolio document with a GitHub section. Its snapshot beside it
+# was refreshed after the live revision's in live/, and no one accepted that.
+schemaVersion: 3
+locale: en
+direction: ltr
+identity:
+  name: Rowan Fixture
+links:
+  - url: https://rowan.name
+    label: Site
+sections:
+  - kind: lede
+    id: about
+    title: About
+    body: Builds calm software.
+  - kind: github
+    id: code
+    title: Code
+    username: rowan

@@ -1,0 +1,10 @@
+# Mapping row: no old color scheme or typography id carries over, even one
+# that names a current id, so both need a value.
+identity:
+  name: Rowan Noir
+colorScheme: noir
+typography: modernist
+sections:
+  - kind: lede
+    id: about
+    body: Hello.

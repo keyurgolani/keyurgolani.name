@@ -1,0 +1,49 @@
+# Shaped like the live owner file (#4, item 21): Editorial in its warm scheme
+# and classic typeset, meta.url on another origin, a hidden section, and a key
+# the old schema dropped. #18 (homelab migration) runs the tool on the real
+# one. owner.json is its JSON twin.
+identity:
+  name: Rowan Owner
+  tagline: Builds calm software
+  location: Lisbon
+  email: rowan@rowan.test
+
+variant: editorial
+theme: system
+colorScheme: warm
+typography: classic
+
+links:
+  - platform: github
+    url: https://code.rowan.test/rowan
+    label: Code
+
+meta:
+  title: Rowan Owner
+  description: Engineer and writer.
+  url: https://rowan-old.test
+
+sections:
+  - kind: hero
+    greeting: Hello, I'm
+    tagline: I build calm software.
+  - kind: lede
+    title: About
+    body: I write about the quiet parts of software.
+  - kind: experience
+    title: Experience
+    items:
+      - role: Staff Engineer
+        organization: Acme
+        period: { start: '2021' }
+  # Hidden while the list is rebuilt.
+  - kind: talks
+    title: Talks
+    hidden: true
+    items:
+      - title: Calm systems
+        venue: Example Conf
+  - kind: contact
+    title: Contact
+    message: Say hello.
+    subtitel: Write any time

@@ -1,0 +1,16 @@
+# Mapping row: hidden: true on a section moves to site.sections.<id>.hidden,
+# and hidden: false is dropped.
+identity:
+  name: Rowan Hidden
+sections:
+  - kind: lede
+    title: About
+    body: Shown.
+  - kind: now
+    title: Now
+    hidden: true
+    body: Hidden for now.
+  - kind: lede
+    id: notes
+    hidden: false
+    body: Shown too.

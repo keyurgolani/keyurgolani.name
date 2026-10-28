@@ -1,0 +1,17 @@
+# appearance.unknown: a color scheme the schema tests' catalog does not register.
+schemaVersion: 2
+appearance:
+  variant: missing-variant
+  designLanguage: platform-neutral
+  colorScheme: neon
+  typography: humanist-ui
+  displayMode: system
+visitorControls:
+  variant: locked
+  designLanguage: locked
+  colorScheme: selectable
+  typography: locked
+  displayMode: selectable
+motionPolicy: respect-os
+features:
+  feed: true

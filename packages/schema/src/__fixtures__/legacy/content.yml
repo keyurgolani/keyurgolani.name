@@ -1,0 +1,16 @@
+# Mapping row: identity, links, sections, and meta's title, description, and
+# ogImage keep their pointers in the portfolio document.
+identity:
+  name: Rowan Content
+  avatar: { src: /me.jpg, alt: Rowan at the desk }
+links:
+  - { platform: web, url: https://rowan.test, label: Site }
+meta:
+  title: Rowan Content
+  description: Content that keeps its place.
+  ogImage: { src: /card.png, alt: Rowan's card }
+sections:
+  - kind: lede
+    id: about
+    title: About
+    body: Hello.

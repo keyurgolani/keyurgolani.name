@@ -1,0 +1,39 @@
+{
+  "identity": {
+    "name": "Rowan Owner",
+    "tagline": "Builds calm software",
+    "location": "Lisbon",
+    "email": "rowan@rowan.test"
+  },
+  "variant": "editorial",
+  "theme": "system",
+  "colorScheme": "warm",
+  "typography": "classic",
+  "links": [{ "platform": "github", "url": "https://code.rowan.test/rowan", "label": "Code" }],
+  "meta": {
+    "title": "Rowan Owner",
+    "description": "Engineer and writer.",
+    "url": "https://rowan-old.test"
+  },
+  "sections": [
+    { "kind": "hero", "greeting": "Hello, I'm", "tagline": "I build calm software." },
+    { "kind": "lede", "title": "About", "body": "I write about the quiet parts of software." },
+    {
+      "kind": "experience",
+      "title": "Experience",
+      "items": [{ "role": "Staff Engineer", "organization": "Acme", "period": { "start": "2021" } }]
+    },
+    {
+      "kind": "talks",
+      "title": "Talks",
+      "hidden": true,
+      "items": [{ "title": "Calm systems", "venue": "Example Conf" }]
+    },
+    {
+      "kind": "contact",
+      "title": "Contact",
+      "message": "Say hello.",
+      "subtitel": "Write any time"
+    }
+  ]
+}

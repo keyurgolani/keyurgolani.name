@@ -1,0 +1,9 @@
+# Mapping row: motionPreference becomes motionPolicy, and full becomes
+# respect-os.
+identity:
+  name: Rowan Motion
+motionPreference: full
+sections:
+  - kind: lede
+    id: about
+    body: Hello.

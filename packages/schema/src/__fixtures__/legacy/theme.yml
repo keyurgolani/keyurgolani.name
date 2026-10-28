@@ -1,0 +1,8 @@
+# Mapping row: theme becomes appearance.displayMode with the same value.
+identity:
+  name: Rowan Dark
+theme: dark
+sections:
+  - kind: lede
+    id: about
+    body: Hello.

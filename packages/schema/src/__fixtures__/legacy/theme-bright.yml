@@ -1,0 +1,8 @@
+# Mapping row: bright and black have no display mode now, so they need a value.
+identity:
+  name: Rowan Bright
+theme: bright
+sections:
+  - kind: lede
+    id: about
+    body: Hello.

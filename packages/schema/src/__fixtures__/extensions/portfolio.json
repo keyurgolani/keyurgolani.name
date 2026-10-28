@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 3,
+  "locale": "en",
+  "direction": "ltr",
+  "identity": {
+    "name": "Rowan Fixture",
+    "extensions": {
+      "@acme/portfolio-photography": {
+        "camera": "Leica M6",
+        "film": true
+      },
+      "@other/portfolio-music": {
+        "ensembles": [
+          "Quartet",
+          "Orchestra"
+        ],
+        "instrument": "cello"
+      }
+    }
+  },
+  "works": [
+    {
+      "id": "harbor-plates",
+      "title": "Plates",
+      "medium": "image-series",
+      "media": [
+        {
+          "asset": "harbor-at-dawn",
+          "caption": "Harbor"
+        }
+      ]
+    }
+  ],
+  "media": [
+    {
+      "id": "harbor-at-dawn",
+      "kind": "image",
+      "source": "plates/harbor.jpg",
+      "alt": "A harbor at dawn",
+      "extensions": {
+        "@acme/portfolio-photography": {
+          "lens": "35mm"
+        }
+      }
+    }
+  ],
+  "sections": [
+    {
+      "kind": "works",
+      "id": "plates",
+      "title": "Plates",
+      "items": [
+        "harbor-plates"
+      ]
+    },
+    {
+      "kind": "@acme/portfolio-photography/exhibitions",
+      "id": "exhibitions",
+      "title": "Exhibitions",
+      "data": {
+        "items": [
+          {
+            "city": "Nowhere",
+            "title": "Low Tide",
+            "url": "https://harbor.test/low-tide",
+            "venue": "Harbor Gallery",
+            "year": 2024
+          }
+        ]
+      }
+    },
+    {
+      "kind": "@other/portfolio-music/releases",
+      "id": "releases",
+      "title": "Releases",
+      "data": {
+        "albums": [
+          {
+            "name": "First Light",
+            "tracks": 9
+          }
+        ]
+      }
+    }
+  ]
+}

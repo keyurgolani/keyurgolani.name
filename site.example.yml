@@ -1,0 +1,51 @@
+# ────────────────────────────────────────────────────────────────────────────
+# Site configuration
+#
+# Copy this file to config/site.yml, next to config/portfolio.yml, and edit it
+# there
+# How the portfolio is presented and which product behavior is on. No
+# deployment setting (profile, origin, Studio, preview origin, proxies) and no
+# secret: those come from the environment (docs/deployment.md)
+# Check both documents with `pnpm config:validate config`, and see
+# docs/configuration.md for every field
+# ────────────────────────────────────────────────────────────────────────────
+
+schemaVersion: 2
+
+# The published appearance. variant is an installed variant package's id.
+# Editorial Evidence is the platform default, which this build installs;
+# another it lacks renders as the fallback composition, with a warning. The
+# design language, color scheme, and typography are #19's appearance axes:
+# each names a pack this build registers, and these are the platform's defaults
+appearance:
+  variant: editorial-evidence
+  designLanguage: platform-neutral
+  colorScheme: warm-parchment
+  typography: humanist-ui
+  # system, light, dark, or high-contrast
+  displayMode: system
+
+# Whether visitors may change each appearance field for themselves:
+# locked or selectable, all five required. The visitor's appearance control
+# renders in each variant's visitor control slot, with one choice per
+# selectable field, and keeps the visitor's choice in a cookie
+visitorControls:
+  variant: locked
+  designLanguage: locked
+  colorScheme: selectable
+  typography: locked
+  displayMode: selectable
+
+# respect-os follows the visitor's reduced-motion setting, and reduce always
+# reduces motion. Nothing forces motion past a visitor's reduce setting
+motionPolicy: respect-os
+
+features:
+  # Serve /feed.xml
+  feed: true
+  productAttribution: false
+
+# Hide a section without deleting it, by its id in portfolio.yml:
+# sections:
+#   patents:
+#     hidden: true

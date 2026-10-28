@@ -1,0 +1,10 @@
+# Mapping row: meta.url is removed, and its origin is printed as the proposed
+# PORTFOLIO_ORIGIN.
+identity:
+  name: Rowan Origin
+meta:
+  url: https://rowan-old.test/portfolio/
+sections:
+  - kind: lede
+    id: about
+    body: Hello.

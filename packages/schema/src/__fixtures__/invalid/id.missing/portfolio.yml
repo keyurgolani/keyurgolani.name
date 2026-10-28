@@ -1,0 +1,17 @@
+# id.missing: a work with no id.
+schemaVersion: 3
+locale: en
+direction: ltr
+identity:
+  name: Rowan Fixture
+links:
+  - url: https://rowan.name
+    label: Site
+works:
+  - title: Tidewater Atlas
+    medium: interface
+sections:
+  - kind: lede
+    id: about
+    title: About
+    body: Builds calm software.
