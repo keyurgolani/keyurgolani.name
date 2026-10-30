@@ -1,0 +1,635 @@
+// Module boundary rules for `pnpm check:deps`, including the variant contract's
+// (#5): what a variant may import, and what the contract's browser-safe root
+// entry may.
+const { readdirSync, readFileSync } = require('node:fs');
+const path = require('node:path');
+
+/**
+ * The workspace packages that are variants, as paths under packages/: their
+ * package.json says `portfolio.kind: "variant"`, whatever their folder is
+ * called, so a renamed or new one is covered the moment it's declared. They
+ * sit where pnpm-workspace.yaml looks: packages/* and #6's
+ * packages/budget-fixtures/*.
+ */
+function variantDirs() {
+  const packages = path.join(__dirname, 'packages');
+  const under = (parent) => {
+    try {
+      return readdirSync(path.join(packages, parent)).map((dir) => path.posix.join(parent, dir));
+    } catch {
+      return [];
+    }
+  };
+  return [...under('.'), ...under('budget-fixtures')]
+    .map((dir) => path.posix.normalize(dir))
+    .filter((dir) => {
+      try {
+        const manifest = JSON.parse(readFileSync(path.join(packages, dir, 'package.json'), 'utf8'));
+        return manifest.portfolio?.kind === 'variant';
+      } catch {
+        return false;
+      }
+    });
+}
+
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// A pattern that matches nothing when there's no variant.
+const VARIANT_DIRS = variantDirs().map(escapeRegExp).join('|') || '(?!)';
+
+/** @type {import('dependency-cruiser').IConfiguration} */
+module.exports = {
+  forbidden: [
+    {
+      name: 'no-circular',
+      severity: 'error',
+      comment: 'Import cycles make module order fragile and block tree-shaking.',
+      from: {},
+      to: { circular: true },
+    },
+    {
+      name: 'not-to-unresolvable',
+      severity: 'error',
+      comment:
+        "Every import in the web app's source resolves, so the rules below see where it goes. " +
+        'An import this cruise leaves unresolved is an edge no rule checks: every ~/ alias was ' +
+        'one until the cruise read apps/web/tsconfig.depcruise.json, so the preview and ' +
+        'owner-code rules passed alias imports they exist to refuse (#7). check:deps generates ' +
+        'the registry first, so its modules resolve too.',
+      from: { path: '^apps/web/src/' },
+      to: { couldNotResolve: true },
+    },
+    {
+      name: 'packages-not-to-apps',
+      severity: 'error',
+      comment: 'Shared packages must not depend on an app; apps depend on packages.',
+      from: { path: '^packages/' },
+      to: { path: '^apps/' },
+    },
+    {
+      name: 'variants-import-only-the-contract-packages',
+      severity: 'error',
+      comment:
+        "A variant imports @portfolio/schema, @portfolio/variant-contract, @portfolio/kit, and #19's " +
+        '@portfolio/appearance, never the host, the server-only @portfolio/core, or another variant ' +
+        '(#5). Its own files and third-party libraries are fine. A variant is a package whose ' +
+        'package.json has portfolio.kind "variant".',
+      from: { path: `^packages/(${VARIANT_DIRS})/` },
+      to: {
+        path: '^(?:packages|apps)/',
+        pathNot: ['^packages/$1/', '^packages/(?:schema|kit|variant-contract|appearance)/'],
+      },
+    },
+    {
+      name: 'host-loads-variants-only-through-the-registry',
+      severity: 'error',
+      comment:
+        'A variant reaches the host only through what registry generation writes (#6, Slice 2): ' +
+        "each registered variant's import() in generated/registry.loaders.ts, which loads it only " +
+        "when a page renders it, and its declared enhancements' in " +
+        "generated/registry.enhancements.ts, and each variant's experience segment, " +
+        'app/(site)/%5Fexperience/<id>/, whose page and client host modules import that variant ' +
+        "alone, and Studio's thumbnails, generated/registry.thumbnails.ts, which imports each " +
+        "variant's studio-thumbnail module and nothing else of it (the two rules below hold " +
+        'both ends). No other host module imports a variant package, statically or with ' +
+        "import(), so no page's chunks hold another variant's code. Tests may. A variant is a " +
+        'package whose package.json has portfolio.kind "variant".',
+      from: {
+        path: '^apps/web/',
+        pathNot: [
+          '^apps/web/src/lib/generated/registry\\.(?:loaders|enhancements)\\.ts$',
+          '^apps/web/src/lib/generated/registry\\.thumbnails\\.ts$',
+          '^apps/web/src/app/\\(site\\)/%5Fexperience/[a-z][a-z0-9-]*/(?:\\[\\[\\.\\.\\.route\\]\\]/page|host-modules)\\.tsx$',
+          '\\.test\\.(?:tsx?|mjs)$',
+        ],
+      },
+      to: { path: `^packages/(?:${VARIANT_DIRS})/` },
+    },
+    {
+      name: 'studio-thumbnails-reach-only-the-thumbnail',
+      severity: 'error',
+      comment:
+        "Studio's thumbnails map, generated/registry.thumbnails.ts, imports each variant's " +
+        './studio-thumbnail export, its src/studio-thumbnail.tsx, and no other file of any ' +
+        "variant, so Studio's picker bundles the drawings and none of a composition's code.",
+      from: { path: '^apps/web/src/lib/generated/registry\\.thumbnails\\.ts$' },
+      to: {
+        path: `^packages/(?:${VARIANT_DIRS})/`,
+        pathNot: '/src/studio-thumbnail\\.tsx$',
+      },
+    },
+    {
+      name: 'a-studio-thumbnail-stands-alone',
+      severity: 'error',
+      comment:
+        "A variant's studio-thumbnail module is a pure drawing: it imports @portfolio/kit (its " +
+        "studio-thumbnail helpers) and React, never the variant's other files nor another " +
+        'package of the workspace, so the map above reaches only drawings.',
+      from: { path: `^packages/(?:${VARIANT_DIRS})/src/studio-thumbnail\\.tsx$` },
+      to: {
+        path: '^(?:packages|apps)/',
+        pathNot: '^packages/kit/',
+      },
+    },
+    {
+      name: 'visitor-pages-reach-no-other-variant',
+      severity: 'error',
+      comment:
+        'Turbopack gives a page one client chunk group of every client module its server graph ' +
+        "reaches, so a visitor page that reached every variant's loader would put every " +
+        "variant's client code on every visitor's wire (#6, Slice 2). Nothing in the site's route " +
+        "group, an experience segment's files among them, nor the 404 and error documents a " +
+        'public page can end in, reaches the modules that load every variant or name every ' +
+        'enhancement: generated/registry.loaders.ts and registry.enhancements.ts, ' +
+        "lib/variant-loaders.ts, and lib/host-modules-client.tsx, nor Studio's every-variant " +
+        "thumbnails, generated/registry.thumbnails.ts. Only #7's preview routes, the startup " +
+        'health check, and Studio use those.',
+      from: {
+        path: '^apps/web/src/app/(?:\\(site\\)/|_chrome/|global-(?:not-found|error)\\.tsx$)',
+        pathNot: '\\.test\\.tsx?$',
+      },
+      to: {
+        path: [
+          '^apps/web/src/lib/generated/registry\\.(?:loaders|enhancements|thumbnails)\\.ts$',
+          '^apps/web/src/lib/(?:variant-loaders\\.ts|host-modules-client\\.tsx)$',
+        ],
+        reachable: true,
+      },
+    },
+    {
+      name: 'variant-contract-root-stays-browser-safe',
+      severity: 'error',
+      comment:
+        "@portfolio/variant-contract's root entry runs in browsers, in #7's preview frame and #9's " +
+        'in-browser render, so it imports only zod and the browser-safe @portfolio/schema (#5, ' +
+        'Slice 1). Node-only code goes in its ./node subpath; tests may import anything.',
+      from: {
+        path: '^packages/variant-contract/src/',
+        pathNot: ['\\.test\\.ts$', '^packages/variant-contract/src/node/'],
+      },
+      to: {
+        pathNot: [
+          '^packages/variant-contract/src/(?!node/)',
+          '^packages/schema/src/(?!node\\.ts$|migrate/)',
+          '^node_modules/(\\.pnpm/zod@|zod/)',
+        ],
+      },
+    },
+    {
+      name: 'appearance-root-stays-browser-safe',
+      severity: 'error',
+      comment:
+        "@portfolio/appearance's root entry runs in browsers too, in #7's preview frames and #9's " +
+        'Demo Studio, and so do its ./generators, so they import only zod, the browser-safe ' +
+        "@portfolio/schema, and @portfolio/variant-contract's root: no React, no Node, no next/*, " +
+        'not the Node-only ./node (#19, Slices 1 and 2), and not the React entries, ./react and ' +
+        './primitives (Slice 3). It imports the token contract version from that root, which the ' +
+        'rule above keeps from importing back. ./generators loads no package at all, which its ' +
+        'own test holds it to. Tests and their test support may import anything.',
+      from: {
+        path: '^packages/appearance/src/',
+        pathNot: [
+          '\\.test\\.tsx?$',
+          '^packages/appearance/src/test-support/',
+          '^packages/appearance/src/(node|react|primitives)/',
+        ],
+      },
+      to: {
+        pathNot: [
+          '^packages/appearance/src/(?!test-support/|node/|react/|primitives/)',
+          '^packages/variant-contract/src/(?!node/)',
+          '^packages/schema/src/(?!node\\.ts$|migrate/)',
+          '^node_modules/(\\.pnpm/zod@|zod/)',
+        ],
+      },
+    },
+    {
+      name: 'appearance-react-entries-stay-browser-safe',
+      severity: 'error',
+      comment:
+        "@portfolio/appearance's ./react and ./primitives render on the server and in the browser, " +
+        "in #7's frames and #9's Demo Studio too, so they import what the root may, each other, and " +
+        'React itself, and nothing from Node, next/*, react-dom/server, or the Node-only ./node ' +
+        '(#19, Slice 3). The host passes VisitorAppearance its refresh. Tests and their test ' +
+        'support may import anything.',
+      from: {
+        path: '^packages/appearance/src/(react|primitives)/',
+        pathNot: ['\\.test\\.tsx?$'],
+      },
+      to: {
+        pathNot: [
+          '^packages/appearance/src/(?!test-support/|node/)',
+          '^packages/variant-contract/src/(?!node/)',
+          '^packages/schema/src/(?!node\\.ts$|migrate/)',
+          '^node_modules/(\\.pnpm/zod@|zod/)',
+          '^node_modules/\\.pnpm/react@[^/]+/node_modules/react/',
+          '^node_modules/\\.pnpm/react-dom@[^/]+/node_modules/react-dom/(?!server)',
+        ],
+      },
+    },
+    {
+      name: 'owner-code-only-from-composition',
+      severity: 'error',
+      comment:
+        'Owner code loads only through the composition root, so demo and read-only never ' +
+        'evaluate it (#1, item 14). All of @portfolio/core is owner code (#2), and its modules ' +
+        'import each other, except its public entry, src/index.ts, and src/catalog/, which ' +
+        'every profile loads (#3, item 19). The owner CLI, apps/web/bin/owner.mjs, runs on its ' +
+        "own and imports the PHC module by path, and so does the store's CLI, portfolio-store " +
+        '(#3). Tests may import it.',
+      from: {
+        pathNot: [
+          '^apps/web/src/server/(owner/|composition\\.ts$)',
+          '^packages/core/',
+          '^apps/web/bin/owner\\.mjs$',
+          '^apps/web/scripts/portfolio-store\\.ts$',
+          '\\.test\\.(?:tsx?|mjs)$',
+        ],
+      },
+      to: { path: ['^apps/web/src/server/owner/', '^packages/core/src/(?!index\\.ts$|catalog/)'] },
+    },
+    {
+      name: 'core-public-entry-imports-no-owner-code',
+      severity: 'error',
+      comment:
+        "@portfolio/core's public entry and src/catalog/ are what read-only and demo load " +
+        "(#3, item 19): read-only's SourceCatalogReader and the publication unit. They import " +
+        'no owner module of the package, so loading them puts nothing in the owner load trace.',
+      from: { path: '^packages/core/src/(?:index\\.ts$|catalog/)', pathNot: '\\.test\\.ts$' },
+      to: { path: '^packages/core/src/(?!index\\.ts$|catalog/)' },
+    },
+    {
+      name: 'bundle-reader-reaches-no-store',
+      severity: 'error',
+      comment:
+        "@portfolio/core's bundle reader (#9, #3's provisional bundle format 1) is what the " +
+        "demo's read-only reference is verified with, at startup, with no store: nothing it " +
+        'reaches, by any path, is the revision store, owner code, the owner load trace, a ' +
+        "file write, or #10's derivation and its sharp. It reads files only through the port " +
+        'its caller hands it.',
+      from: { path: '^packages/core/src/catalog/bundle\\.ts$' },
+      to: {
+        reachable: true,
+        path: [
+          '^packages/core/src/(?:store|auth|audit|preview|data)/',
+          '^packages/core/src/(?:load-trace|owner|cli)\\.ts$',
+          '^packages/core/src/catalog/(?:source|media/)',
+          '^apps/',
+          '^node_modules/\\.pnpm/sharp@',
+          '^node:fs',
+          '^fs$',
+        ],
+      },
+    },
+    {
+      name: 'demo-code-only-from-composition',
+      severity: 'error',
+      comment:
+        "Demo code, server/demo/ (#9's read-only reference), loads only through the " +
+        "composition root's demo branch, so owner and read-only never evaluate it. Tests may " +
+        'import it.',
+      from: {
+        pathNot: ['^apps/web/src/server/(demo/|composition\\.ts$)', '\\.test\\.(?:tsx?|mjs)$'],
+      },
+      to: { path: '^apps/web/src/server/demo/' },
+    },
+    {
+      name: 'composition-loads-demo-code-only-through-import',
+      severity: 'error',
+      comment:
+        'The composition root reaches demo code only through import() in its demo branch, ' +
+        'never a static or type import (#9), as it reaches owner code.',
+      from: { path: '^apps/web/src/server/composition\\.ts$' },
+      to: { path: '^apps/web/src/server/demo/', dependencyTypesNot: ['dynamic-import'] },
+    },
+    {
+      name: 'demo-code-imports-no-owner-code',
+      severity: 'error',
+      comment:
+        "The demo's read-only reference (#9) opens no store and no data directory: server/demo/ " +
+        "imports no owner module, of the app or of @portfolio/core, and the core's owner entry " +
+        'least of all.',
+      from: { path: '^apps/web/src/server/demo/', pathNot: '\\.test\\.ts$' },
+      to: {
+        path: [
+          '^apps/web/src/server/owner/',
+          '^packages/core/src/(?!index\\.ts$|catalog/)',
+          '^apps/web/src/server/(?:catalog-source|startup-media|live-media)\\.ts$',
+        ],
+      },
+    },
+    {
+      name: 'composition-loads-owner-code-only-through-import',
+      severity: 'error',
+      comment:
+        'startup.ts imports the composition root in every profile, so the root reaches owner ' +
+        'code only through import() in its owner branch, never a static or type import (#1, item 14). ' +
+        "@portfolio/core's public entry is no owner code.",
+      from: { path: '^apps/web/src/server/composition\\.ts$' },
+      to: {
+        path: ['^apps/web/src/server/owner/', '^packages/core/src/(?!index\\.ts$|catalog/)'],
+        dependencyTypesNot: ['dynamic-import'],
+      },
+    },
+    {
+      name: 'proxy-reads-only-the-route-table-and-config',
+      severity: 'error',
+      comment:
+        'proxy.ts runs before every request; it imports only the route table, the capability ' +
+        'matrix behind it, the frozen config (#1, item 15), the body /api/ready answers ' +
+        "before startup (item 19), for Studio (#2) its headers, the session cookie's name, " +
+        'and returnTo, for preview (#7) its headers and its status document, the public ' +
+        "site's CSP (#6, server/public-headers.ts), the demo's (#9, server/demo-headers.ts), and the mode the " +
+        'code compiled in and the files the registry wrote under /_portfolio/, none of which ' +
+        'reads a session. A grant path is checked through the port the owner composition binds ' +
+        'into the frozen config, which reads the grant and its session by digest, never a cookie. ' +
+        "A visitor page's experience segment (#6, Slice 2) comes from server/experience.ts, " +
+        'which reads only the live composition config-store holds and the query, and goes on ' +
+        'in the header server/route-header.ts names, which next.config.ts reads too. The static ' +
+        "503 (#19, Slice 4) is server/unavailable-page.ts's, the fallback packs' boundary " +
+        'written out from the files the registry wrote, which reads nothing of the request.',
+      from: { path: '^apps/web/src/proxy\\.ts$' },
+      to: {
+        pathNot: [
+          '^apps/web/src/server/(capabilities|routes|route-header|config-store|ready-starting|experience)\\.ts$',
+          '^apps/web/src/server/(studio-headers|session-cookie|return-to|preview-headers|public-headers|demo-headers)\\.ts$',
+          '^apps/web/src/server/(compiled-mode|portfolio-files|unavailable-page)\\.ts$',
+          '^apps/web/src/preview/status\\.ts$',
+          '^node_modules/(\\.pnpm/next@|next/)',
+        ],
+      },
+    },
+    {
+      name: 'route-table-imports-no-zod-yaml-or-package-roots',
+      severity: 'error',
+      comment:
+        'The route table and what it reads run in the proxy, before every request, so they ' +
+        'import zod, yaml, the schema root, and the variant contract root at run time not at ' +
+        'all (#7): what they need comes through subpaths that bring none of them, and types ' +
+        'bring no code. depcruise follows type-only imports for reachability, so ' +
+        'server/proxy-imports.test.ts walks the whole run time graph from proxy.ts; this ' +
+        'holds the direct imports.',
+      from: {
+        path: '^apps/web/src/(?:proxy|server/(?:routes|capabilities|compiled-mode|portfolio-files)|lib/(?:preview-environment|sample))\\.ts$',
+      },
+      to: {
+        path: [
+          '^node_modules/\\.pnpm/(?:zod|yaml)@',
+          '^packages/schema/src/index\\.ts$',
+          '^packages/variant-contract/src/index\\.ts$',
+        ],
+        dependencyTypesNot: ['type-only'],
+      },
+    },
+    {
+      name: 'preview-imports-no-studio',
+      severity: 'error',
+      comment:
+        'A preview document (#7) shows what a visitor gets, so nothing in app/(preview) or ' +
+        "src/preview reaches Studio's route group, whose stylesheet's sentinel and " +
+        'markup would reach the frame (threat preview-9): not by an import of its own, and ' +
+        'not through a shared module that imports one. Tests may.',
+      from: {
+        path: '^apps/web/src/(?:app/\\(preview\\)/|preview/)',
+        pathNot: '\\.test\\.tsx?$',
+      },
+      to: { path: '^apps/web/src/app/\\(studio\\)/', reachable: true },
+    },
+    {
+      name: 'demo-reaches-no-owner-code',
+      severity: 'error',
+      comment:
+        "The demo's browser modules (#9) run for anonymous visitors and keep everything in " +
+        "their browser, so nothing under lib/demo, Demo Studio's components, or the local " +
+        "frame's client code, app/(preview)/_local, which renders a visitor's import, reaches Owner " +
+        "Studio's adapter, its transport (studioFetch, which sends the owner's CSRF token), " +
+        'or any server module, the owner ones among them: not by an import of its own, and ' +
+        "not through a shared module that imports one. #137's and 9-1b's rules, as one. " +
+        'Tests and their test support may.',
+      from: {
+        path: '^apps/web/src/(?:lib/demo/|app/\\(studio\\)/_components/demo/|app/\\(preview\\)/_local/)',
+        pathNot: ['\\.test\\.tsx?$', '^apps/web/src/lib/demo/test-support\\.ts$'],
+      },
+      to: {
+        path: [
+          '^apps/web/src/lib/studio/owner-backend\\.ts$',
+          '^apps/web/src/lib/studio-fetch\\.ts$',
+          '^apps/web/src/server/',
+        ],
+        reachable: true,
+      },
+    },
+    {
+      name: 'owner-code-reaches-no-demo',
+      severity: 'error',
+      comment:
+        "Owner code never loads the demo's modules (#9): not Owner Studio's libraries, its " +
+        'backend or fetch client, any server module, the owner ones among them, nor ' +
+        "@portfolio/core, by an import of its own or through anything it imports. The demo's " +
+        "browser backend loads only from Demo Studio's own shell, with an import() of its " +
+        "own. #137's and 9-1b's rules, as one. Tests may import anything.",
+      from: {
+        path: [
+          '^apps/web/src/lib/studio/',
+          '^apps/web/src/lib/studio-fetch\\.ts$',
+          '^apps/web/src/server/',
+          '^packages/core/',
+        ],
+        pathNot: '\\.test\\.(?:tsx?|mjs)$',
+      },
+      to: { path: '^apps/web/src/lib/demo/', reachable: true },
+    },
+    {
+      name: 'preview-protocol-imports-zod-and-ids-only',
+      severity: 'error',
+      comment:
+        "The preview's message protocol (#7, Slice 3) is read by both sides and by Node tests, " +
+        'so it imports zod and the browser-safe @portfolio/schema/ids and nothing else: no ' +
+        'React, no Next, no server code.',
+      from: { path: '^apps/web/src/preview/protocol\\.ts$' },
+      to: {
+        pathNot: ['^node_modules/(\\.pnpm/zod@|zod/)', '^packages/schema/src/ids\\.ts$'],
+      },
+    },
+    {
+      name: 'preview-studio-channel-imports-protocol-only',
+      severity: 'error',
+      comment:
+        "Studio's half of the preview channel (#7, Slice 3) imports the protocol and nothing " +
+        "else, so nothing a frame sends can reach Studio's transport through it (threat " +
+        'preview-3), and Slice 4 wraps it without its UI. An import spelled with ~/ resolves ' +
+        'here too, and not-to-unresolvable fails one that does not. protocol.test.ts walks ' +
+        "the imports as well, and the browser spec's chunk check covers what reaches a page.",
+      from: { path: '^apps/web/src/preview/studio-channel\\.ts$' },
+      to: { pathNot: '^apps/web/src/preview/protocol\\.ts$' },
+    },
+    {
+      name: 'preview-agent-imports-the-frame-channel-only',
+      severity: 'error',
+      comment:
+        'The preview agent (#7, Slice 3) runs in every preview document, so every module in ' +
+        "src/preview but the protocol and Studio's half, the agent, the status report and " +
+        "texts, and the frame's half of the channel among them, imports the frame's half, the " +
+        "protocol, React, and Slice 4's environment function, and nothing else: never Studio's " +
+        'half, which would ship in the frame (threat preview-3). An allowlist, so an import ' +
+        'of anything else fails it, relative or spelled with ~/. Tests may import anything.',
+      from: {
+        path: '^apps/web/src/preview/',
+        pathNot: ['\\.test\\.tsx?$', '^apps/web/src/preview/(?:protocol|studio-channel)\\.ts$'],
+      },
+      to: {
+        pathNot: [
+          '^apps/web/src/preview/(?:frame-channel|protocol)\\.ts$',
+          '^apps/web/src/lib/environment\\.ts$',
+          '^node_modules/(?:\\.pnpm/react@|react/)',
+        ],
+      },
+    },
+    {
+      name: 'preview-documents-never-import-studios-half',
+      severity: 'error',
+      comment:
+        "A backstop to the two allowlists (#7, Slice 4): no module of the agent's side of " +
+        "src/preview, and nothing in app/(preview), imports Studio's half of the channel by " +
+        'any path that ends in its name, however the path gets there, ~/lib/../preview/ and ' +
+        '~/./preview/ included. Tests may import anything.',
+      from: {
+        path: ['^apps/web/src/preview/', '^apps/web/src/app/\\(preview\\)/'],
+        pathNot: ['\\.test\\.tsx?$', '^apps/web/src/preview/studio-channel\\.ts$'],
+      },
+      to: { path: '(?:^|/)studio-channel(?:\\.ts|\\.tsx)?$' },
+    },
+    {
+      name: 'environment-imports-schema-types-only',
+      severity: 'error',
+      comment:
+        'The environment function (#7, Slice 4) runs in the preview agent and in Studio, so ' +
+        "it imports the schema's types and nothing at run time.",
+      from: { path: '^apps/web/src/lib/environment\\.ts$' },
+      to: {
+        pathNot: '^packages/schema/src/(?!node\\.ts$|migrate/)',
+      },
+    },
+    {
+      name: 'environment-imports-nothing-at-run-time',
+      severity: 'error',
+      comment:
+        'What the environment function imports from the schema is types alone (#7, Slice 4).',
+      from: { path: '^apps/web/src/lib/environment\\.ts$' },
+      to: { dependencyTypesNot: ['type-only'] },
+    },
+    {
+      name: 'preview-documents-import-only-the-agent-side',
+      severity: 'error',
+      comment:
+        "A preview document (#7, Slice 3) loads the agent's side of the channel and never " +
+        "Studio's: from src/preview, app/(preview) imports the agent, the status report and " +
+        "texts, and the frame channel's types, and nothing else. An allowlist within " +
+        "src/preview, in either spelling, so an import of Studio's half written with ~/ fails " +
+        'it too. Tests may import anything.',
+      from: { path: '^apps/web/src/app/\\(preview\\)/', pathNot: '\\.test\\.tsx?$' },
+      to: {
+        path: '^(?:apps/web/src/|~/)preview/',
+        pathNot:
+          '^(?:apps/web/src/|~/)preview/(?:agent|report-status|status|frame-channel)(?:\\.ts|\\.tsx)?$',
+      },
+    },
+    {
+      name: 'store-test-support-only-from-tests',
+      severity: 'error',
+      comment:
+        "The revision store's test support, with the only FsPort whose crash points act, is for " +
+        'tests: nothing but a test, or the test support itself, imports it (#3).',
+      from: {
+        pathNot: ['\\.test\\.(?:tsx?|mjs)$', '^packages/core/src/store/test-support/'],
+      },
+      to: { path: '^packages/core/src/store/test-support/' },
+    },
+    {
+      name: 'schema-test-support-only-from-tests',
+      severity: 'error',
+      comment:
+        "The schema package's test support, whose scratch directories remove themselves on a " +
+        'stop signal, is for tests: nothing but a test, or the test support itself, imports it ' +
+        '(#12).',
+      from: {
+        pathNot: ['\\.test\\.(?:tsx?|mjs)$', '^packages/schema/src/test-support/'],
+      },
+      to: { path: '^packages/schema/src/test-support/' },
+    },
+    {
+      name: 'migration-only-from-its-command',
+      severity: 'error',
+      comment:
+        'The migration converts old documents offline (#4, item 19). The web runtime, the kit, ' +
+        'the variants, and the rest of the schema package never import it, so no page or ' +
+        'server ships it; pnpm config:migrate and tests may.',
+      from: {
+        pathNot: ['^packages/schema/src/migrate/', '^apps/web/scripts/', '\\.test\\.(?:tsx?|mjs)$'],
+      },
+      to: { path: '^packages/schema/src/migrate/' },
+    },
+    {
+      name: 'pair-loader-only-on-the-server',
+      severity: 'error',
+      comment:
+        '@portfolio/schema/node reads the pair from disk (#4, item 5), so only server code, ' +
+        "the config command, read-only's SourceCatalogReader in @portfolio/core (#3), and " +
+        'tests import it. The validator it wraps stays browser-safe.',
+      from: {
+        pathNot: [
+          '^apps/web/src/server/',
+          '^apps/web/scripts/',
+          '^packages/core/src/catalog/',
+          '\\.test\\.(?:tsx?|mjs)$',
+        ],
+      },
+      to: { path: '^packages/schema/src/node\\.ts$' },
+    },
+    {
+      name: 'operation-registry-imports-no-handlers',
+      severity: 'error',
+      comment:
+        'The operation registry is data; the composition root binds handlers by name, so ' +
+        'loading the registry never loads owner code (#1, item 10).',
+      from: { path: '^apps/web/src/server/operations\\.ts$' },
+      to: {
+        pathNot: [
+          '^apps/web/src/server/capabilities\\.ts$',
+          // #3's store entries' schemas, data like the rest.
+          '^apps/web/src/server/store-schemas\\.ts$',
+          '^node_modules/(\\.pnpm/zod@|zod/)',
+        ],
+      },
+    },
+    {
+      name: 'store-schemas-are-data',
+      severity: 'error',
+      comment:
+        "The store entries' schemas load with the registry in every profile, so they import " +
+        'zod and nothing else (#3, item 22).',
+      from: { path: '^apps/web/src/server/store-schemas\\.ts$' },
+      to: { pathNot: ['^node_modules/(\\.pnpm/zod@|zod/)'] },
+    },
+  ],
+  options: {
+    doNotFollow: { path: 'node_modules' },
+    exclude: { path: '(^|/)(\\.next|dist|coverage|__fixtures__)/' },
+    // Workspace packages resolve through their pnpm symlinks to packages/*.
+    preserveSymlinks: false,
+    tsPreCompilationDeps: true,
+    // Absolute, so the tsconfig's own `extends` resolves from apps/web. It's
+    // apps/web's tsconfig with a baseUrl: the tsconfig plugin
+    // dependency-cruiser loads reads a `paths` entry with none from the
+    // working directory, the repository root, so apps/web's `~/*` resolved
+    // nowhere and no rule saw a `~/` import (#6, Slice 2).
+    tsConfig: {
+      fileName: require('node:path').join(__dirname, 'apps/web/tsconfig.depcruise.json'),
+    },
+    enhancedResolveOptions: {
+      exportsFields: ['exports'],
+      conditionNames: ['import', 'require', 'node', 'default', 'types'],
+      extensions: ['.ts', '.tsx', '.mts', '.js', '.mjs', '.cjs', '.json'],
+      mainFields: ['module', 'main', 'types'],
+    },
+  },
+};

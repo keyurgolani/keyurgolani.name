@@ -1,0 +1,35 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+  # #6's budget fixture variants, one directory each.
+  - 'packages/budget-fixtures/*'
+  - 'experiments/*'
+
+# Dependency install scripts are reviewed. A dependency that ships one must be
+# listed below, or the install fails (strictDepBuilds).
+strictDepBuilds: true
+
+# Allowed to run install scripts. None needs one today.
+onlyBuiltDependencies: []
+
+# Reviewed and not run.
+ignoredBuiltDependencies:
+  # The platform binary arrives as an optional dependency (@esbuild/*). The
+  # script only re-checks it and swaps in a faster launcher.
+  - esbuild
+  # IBM Plex Mono's font files, which the typography packs vendor. Its
+  # postinstall runs IBM's usage telemetry (ibmtelemetry, from
+  # @ibm/telemetry-js) and builds nothing, so it never runs here.
+  - '@ibm/plex-mono'
+  # Prebuilt binaries arrive as optional dependencies (@img/sharp-*). The
+  # script compiles from source only when a system libvips or a source build
+  # is requested.
+  - sharp
+  # ESLint's import resolver. The native binding arrives as an optional
+  # dependency (@unrs/resolver-binding-*). The script only downloads one when
+  # it is missing.
+  - unrs-resolver
+
+# Exact pins for packages that arrive only through other dependencies.
+overrides:
+  source-map-js: 1.2.2

@@ -1,0 +1,33 @@
+# Prettier also skips everything in .gitignore.
+
+# Lockfile
+pnpm-lock.yaml
+
+# Binary and public assets
+apps/web/public/
+assets/
+docs/screenshots/
+
+# Test inputs whose exact bytes are the point, such as the contract fixtures'
+# copies of #4's pairs
+**/__fixtures__/
+packages/variant-contract/fixtures/
+# #20's known-bad pack CSS, spelled to slip past a check: Prettier would
+# lowercase an @IMPORT or rewrite an escape, and undo what each one tests
+packages/appearance/test/fixtures/lint-*/styles.css
+# pnpm-lock.yaml excerpts, byte for byte, for ci/lib/lockfile-drift.mjs's tests
+ci/fixtures/lockfile-drift/
+# #9's reference fixture, a full export whose bundle.json holds every file's
+# hash: `pnpm fixture:reference` writes it, and a reformat would break them
+tests/fixtures/reference-export/
+# #20's seed: the approved review lab's catalog, copied byte for byte
+scripts/catalog/seed/
+# #20's held-pack gate records, which pnpm catalog:held writes and check:appearance compares byte for byte
+packages/*/held/*/gate.json
+# #20's generated schemes' reference records, which pnpm catalog:generated writes and check:appearance compares byte for byte
+packages/*/generated/*.json
+!packages/*/generated/acceptance.json
+# The release rehearsal's frozen old configs, which stand for an owner's files
+ci/fixtures/rehearsal/
+# A built server's own answers, byte for byte, for ci/identity.test.mjs
+ci/fixtures/identity/
