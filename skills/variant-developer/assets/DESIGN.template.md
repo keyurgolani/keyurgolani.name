@@ -1,0 +1,167 @@
+# DESIGN.md: variant-<id>
+
+> Fill this out BEFORE writing any code, and get the user's approval before
+> implementation. See `skills/variant-developer/references/design-contract.md`.
+
+> **Porting from a reference?** (a v1 variant from git history, another platform's
+> design, a Figma mockup) Also fill out `## Component inventory`,
+> `## Signature interactions`, `## Data-shape diff`, and `## Fidelity targets`
+> at the bottom. They drive Wave 2's scope and Phase 3's sign-off. See
+> `skills/variant-developer/references/fidelity-comparison.md`.
+
+## Composition idea
+
+> One sentence, which becomes the manifest's `promise`. Examples: "a printed
+> monograph spread, read front to back", "a terminal session log", "a bento
+> grid where each card is one piece of evidence".
+
+## Manifest summary
+
+| Field | Value |
+|-------|-------|
+| `id` / `name` | ... |
+| `compositionFamily` | `monograph \| kinetic \| gallery \| bento \| sequence \| document \| custom` |
+| `motionIntent` | `still \| subtle \| kinetic \| adaptive \| directed` |
+| `performanceTier` | `light \| medium \| heavy` |
+| `textDirection` | `["ltr"]` or `["ltr", "rtl"]` |
+| `visitorControl.placement` | `header \| navigation \| footer` |
+| `routes` | home and work: `shared \| bespoke`; views: ... |
+
+## Arrangement
+
+> Section order, emphasis, grouping. Density: spacing rhythm, measure, grid.
+> In logical terms (start and end, block and inline).
+
+## Navigation and reveal
+
+> How a visitor finds and moves between sections. What shows at once, and
+> what waits.
+
+## Motion plan
+
+> What moves and what it conveys. What it does under reduced motion (it
+> settles, and links jump). Enhancements and their `requires`.
+
+## Section coverage map
+
+> Every kind in `CORE_SECTION_KINDS`: bespoke (in `renderedKinds`), shared
+> (the kit's renderer), or unsupported (in `unsupportedKinds`, with a reason).
+
+| Kind | Treatment | Notes |
+|------|-----------|-------|
+| `works` | bespoke / shared | ... |
+| `evidence` | bespoke / shared | ... |
+| `chronology` | bespoke / shared | ... |
+| `practice` | bespoke / shared | ... |
+| `contact` | bespoke / shared | ... |
+| `custom` | bespoke / shared | ... |
+| `hero` | bespoke / shared | ... |
+| `lede` | bespoke / shared | ... |
+| `now` | bespoke / shared | ... |
+| `quote` | bespoke / shared | ... |
+| `focus` | bespoke / shared | ... |
+| `fun-facts` | bespoke / shared | ... |
+| `cta` | bespoke / shared | ... |
+| `github` | bespoke / shared | ... |
+
+## Controls and content slots
+
+> Owner-tunable composition choices (layout, order, emphasis, interaction;
+> never appearance), and the content the composition needs, with what happens
+> when it's missing.
+
+## Kit usage map
+
+**Will use:** ... (`@portfolio/kit` pieces). **Expect to hoist:** ... (patterns to promote).
+
+## Performance tier
+
+> Why this tier. What's an enhancement. Mobile behavior.
+
+## Accessibility
+
+> Focus order, heading levels, alt text, keyboard reach, reduced motion.
+
+## Appearance boundary
+
+> The roles the composition picks, never their values: see `docs/appearance.md`.
+>
+> - **Text roles:** which `data-type-role` each kind of text takes (`display`,
+>   `headline`, `title`, `body`, `body-compact`, `label`, `caption`, `quote`,
+>   `code`, `numeric`).
+> - **Surfaces and colors:** each region's surface emphasis (`subtle`,
+>   `default`, `prominent`, `overlay`) and the color roles its text reads,
+>   such as `text-secondary` for quiet metadata.
+> - **Primitives:** which shared primitives it renders, and with what
+>   emphasis (an `Action` as `primary`, `secondary`, or `quiet`; a
+>   `Disclosure`; a `Badge` and its status).
+> - **Layout properties:** the `--layout-*` properties it defines, its only
+>   own custom properties.
+> - **Selections to judge it under:** at least two design languages, two
+>   color schemes, two typography profiles, and every display mode.
+> - **Moved to packs:** which of a reference's palettes, fonts, materials, or
+>   theme modes became packs instead, as `provenance` records them.
+
+---
+
+# Port-only sections (omit if greenfield)
+
+## Component inventory
+
+> Every visually distinct primitive in the reference. Each row drives a
+> Wave 1.5 hoist decision and a Wave 2 task.
+
+| Primitive | What it does | Hoist plan |
+|---|---|---|
+| `<TypingAnimation>` | Cycles through role text | In `@portfolio/kit` already. Use it. |
+| `<AnimatedCounter>` | Ramps a stat from zero | In `@portfolio/kit` already. Use it. |
+| `<FloatingElements>` | Profile cards in a parallax orbit | Compose from `useScrollDispersal` and `useFirstInteraction` (kit). The component stays local. |
+| `<TactileEventCard>` | A timeline card that tilts with the cursor | `useMouseTilt` from the kit. The JSX stays local. |
+| `<Lightbox>` | A gallery overlay with keyboard navigation | Hoist when a second variant needs it; until then, local. |
+| `<ProgressBar>` | Per-skill proficiency bar | The schema has no proficiency: dropped. Say so in `## Fidelity targets`. |
+| ... | | |
+
+## Signature interactions
+
+> The motion and interaction patterns that define the reference's character.
+> Missing one on launch reads as "doesn't feel like the original".
+
+- "Floaters fade and disperse outward as you scroll past the hero."
+- "Project cards expand on click, revealing their technologies."
+- "Timeline cards tilt with the cursor."
+- "Stats ramp from zero when they scroll into view."
+- "The typing animation cycles through five roles."
+- ...
+
+## Data-shape diff
+
+> For each field the reference's renderers touch, its schema equivalent. For
+> each lost field: inferable, composed from several kinds, or not portable.
+
+| Reference field | Schema equivalent | Plan |
+|---|---|---|
+| `experienceTracks[].entries[].dateRange.from` | `chronology[].period.start` | Renamed; pass through. |
+| `track.branch` | `chronology[].thread` | Renamed; the owner writes it. Never infer it. |
+| `entry.skills[].proficiency` | not modeled | Not portable. Drop the progress bar. |
+| `experienceTracks` (several tracks) | `chronology`, with `works` and `evidence` it points at | Composed: roles and studies in one stream, with the awards and publications they cite. |
+| ... | | |
+
+## Fidelity targets
+
+> The Phase 3 sign-off contract. Every box checked, or dropped with a reason,
+> before the variant ships. Palettes, fonts, and theme modes aren't targets:
+> they're #19's.
+
+The variant ports `<reference>`. Signature elements that must be present:
+
+- [ ] Profile cards in a parallax orbit, draggable.
+- [ ] Multi-text typing animation cycling roles.
+- [ ] Animated counters in stats tiles.
+- [ ] A fork-and-merge timeline with a branch per kind.
+- [ ] Project cards that expand on click and show technologies as chips.
+- ...
+
+Signature elements **intentionally dropped** (with reason):
+
+- Skill proficiency bars: the schema has no per-skill `proficiency`.
+- ...

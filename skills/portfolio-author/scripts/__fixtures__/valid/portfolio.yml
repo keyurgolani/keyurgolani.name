@@ -1,0 +1,31 @@
+schemaVersion: 3
+locale: en
+direction: ltr
+
+identity:
+  name: Test User
+  tagline: Engineer & writer
+  pronouns: they/them
+  location: Bengaluru, India
+  email: test@example.com
+
+meta:
+  title: Test User's portfolio
+  description: A minimal valid portfolio fixture.
+
+contact:
+  message: Email is best.
+
+sections:
+  - kind: hero
+    id: top
+    greeting: Hello, I'm
+    tagline: I build calm software at scale.
+    subtagline: Currently focused on reliability.
+    ctas:
+      - url: '#contact'
+        label: Get in touch
+
+  - kind: contact
+    id: contact
+    title: Contact

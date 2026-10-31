@@ -1,0 +1,15 @@
+schemaVersion: 3
+locale: en
+direction: ltr
+
+identity:
+  tagline: Engineer & writer
+  pronouns: they/them
+  location: Bengaluru, India
+
+meta: { title: Test User }
+
+sections:
+  - kind: hero
+    id: top
+    tagline: I build calm software at scale.
