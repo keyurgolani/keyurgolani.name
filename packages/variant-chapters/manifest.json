@@ -1,0 +1,186 @@
+{
+  "id": "chapters",
+  "name": "Chapters",
+  "promise": "The portfolio as a bound book: a title page and contents, one chapter for each era of the chronology, and an index.",
+  "description": "A paged composition. Home is the front matter: a title page set from the thesis, the signature work facing it as the frontispiece, the contents and the preface. Each era of the chronology is a chapter page of its own, laid out as spreads of two pages around one gutter, with a running head, folios, a drop-capped opening and the era's works and evidence as plates and pages. The back matter holds the author, the engagements, uncollected work and an index of skills and tools with page numbers. A fore-edge shows the whole book and your place in it. The chapters come from the content, a page turn moves between them, and everything reads without JavaScript.",
+  "contract": "2.1",
+  "schemas": {
+    "portfolio": {
+      "min": 3,
+      "max": 3
+    },
+    "site": {
+      "min": 2,
+      "max": 2
+    }
+  },
+  "tokenContract": 1,
+  "compositionFamily": "document",
+  "motionIntent": "directed",
+  "performanceTier": "light",
+  "budgets": {
+    "js": 0,
+    "css": 9216,
+    "image": 65536,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "stills": [
+    {
+      "file": "./stills/1440.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "file": "./stills/720.webp",
+      "width": 720,
+      "height": 450
+    }
+  ],
+  "renderedKinds": [
+    "works",
+    "evidence",
+    "chronology",
+    "practice",
+    "contact",
+    "custom",
+    "hero",
+    "lede",
+    "now",
+    "quote",
+    "focus",
+    "fun-facts",
+    "cta",
+    "github"
+  ],
+  "unsupportedKinds": [],
+  "kitLayout": false,
+  "contentSlots": [],
+  "routes": {
+    "home": "bespoke",
+    "work": "bespoke",
+    "views": [
+      {
+        "id": "chapter",
+        "under": "home",
+        "type": "path",
+        "segment": "chapters/{chapter}"
+      },
+      {
+        "id": "back-matter",
+        "under": "home",
+        "type": "path",
+        "segment": "back-matter"
+      }
+    ]
+  },
+  "controls": {
+    "version": 1,
+    "items": [
+      {
+        "type": "integer",
+        "id": "maxChapters",
+        "label": "Most chapters",
+        "description": "Eras merge, shortest first, until the book has at most this many chapters.",
+        "min": 2,
+        "max": 7,
+        "step": 1,
+        "default": 6
+      },
+      {
+        "type": "enum",
+        "id": "chapterTitles",
+        "label": "Chapter titles",
+        "description": "Name each chapter by its organizations, its principal role, or its years.",
+        "options": [
+          {
+            "value": "organization",
+            "label": "Organizations"
+          },
+          {
+            "value": "role",
+            "label": "Role"
+          },
+          {
+            "value": "years",
+            "label": "Years"
+          }
+        ],
+        "default": "organization"
+      },
+      {
+        "type": "boolean",
+        "id": "chapterAccents",
+        "label": "Tell chapters apart",
+        "description": "Mark each chapter's numeral, opener and fore-edge segment as its own. Off, every chapter reads alike.",
+        "default": true
+      },
+      {
+        "type": "enum",
+        "id": "spine",
+        "label": "Fore-edge",
+        "description": "Where the book's position marker sits on wide screens. Phones always use the top bar.",
+        "options": [
+          {
+            "value": "left",
+            "label": "Left edge"
+          },
+          {
+            "value": "top",
+            "label": "Top bar"
+          },
+          {
+            "value": "off",
+            "label": "Off"
+          }
+        ],
+        "default": "left"
+      },
+      {
+        "type": "boolean",
+        "id": "folios",
+        "label": "Page numbers",
+        "description": "Show folios and page locators. Off, the contents and index point by chapter.",
+        "default": true
+      },
+      {
+        "type": "periodList",
+        "id": "chapters",
+        "label": "Your own chapters",
+        "description": "Optional. Each entry names a chapter and the month it starts; records place by date between them. Leave empty to derive chapters from the chronology.",
+        "max": 7,
+        "default": []
+      },
+      {
+        "type": "recordPlacement",
+        "id": "place",
+        "label": "Move a record",
+        "description": "Optional. Put a work or evidence record in a chapter other than the one its date picks.",
+        "default": {}
+      }
+    ],
+    "migrations": []
+  },
+  "visitorControl": {
+    "placement": "footer"
+  },
+  "textDirection": ["ltr", "rtl"],
+  "transitions": {
+    "crossDocument": true,
+    "names": ["chapters-runhead", "chapters-edge", "chapters-mark", "chapters-place"]
+  },
+  "provenance": {
+    "provisional": true,
+    "sources": [
+      {
+        "source": "The Chapters concept, kgn-variants-10 (P-0 approved with conditions)",
+        "disposition": "preserved"
+      }
+    ]
+  },
+  "studio": {
+    "signature": "A bound book",
+    "order": 15
+  }
+}

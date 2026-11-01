@@ -1,0 +1,1733 @@
+/* Chapters: a bound book. Layout, the book's furniture and its one load
+   moment; every value reads a token. Two equal pages around a 1px gutter on
+   an 88rem book block, set on a quieter ground (F6). */
+[data-variant='chapters'] {
+  --layout-edge: clamp(1.25rem, 0.25rem + 3.2vw, 3rem);
+  --layout-inner: clamp(1.25rem, 0.4rem + 2.4vw, 2.75rem);
+  --layout-outer: clamp(1.25rem, -0.5rem + 4.6vw, 4rem);
+  --layout-book: 88rem;
+  --layout-runhead: 3.5rem;
+  --layout-bleed: calc(max(0px, (100% - var(--layout-book)) / 2) + var(--layout-edge));
+  --layout-hair: color-mix(in oklab, var(--color-border-default) 72%, var(--color-canvas));
+  --layout-line-hair: 1px solid var(--layout-hair);
+  /* C2: the measures count characters as the size-adjusted faces render them. */
+  --layout-measure-scale: calc(var(--type-body-size-adjust) / var(--type-body-aspect));
+  --layout-ink: var(--color-accent);
+  --layout-ink-text: color-mix(in oklab, var(--layout-ink) 62%, var(--color-text-primary));
+  scroll-padding-block-start: calc(var(--layout-runhead) + var(--space-s));
+  /* The window scrolls, not the book, so the padding above holds only where the book is the
+     root. The platform gives what a jump lands on and what takes focus this scroll margin
+     (2.4.11): the quality cell found the contents' chapter 2 link focused under the head. */
+  --layout-sticky-offset: calc(var(--layout-runhead) + var(--space-s));
+}
+[data-variant='chapters'] [data-ink='1'] {
+  --layout-ink: var(--color-data-categorical-1);
+}
+[data-variant='chapters'] [data-ink='2'] {
+  --layout-ink: var(--color-data-categorical-2);
+}
+[data-variant='chapters'] [data-ink='3'] {
+  --layout-ink: var(--color-data-categorical-3);
+}
+[data-variant='chapters'] [data-ink='4'] {
+  --layout-ink: var(--color-data-categorical-4);
+}
+[data-variant='chapters'] [data-ink='5'] {
+  --layout-ink: var(--color-data-categorical-5);
+}
+[data-variant='chapters'] [data-ink] {
+  --layout-ink-text: color-mix(in oklab, var(--layout-ink) 62%, var(--color-text-primary));
+}
+
+[data-variant='chapters'] .ch {
+  background: var(--color-surface-subtle);
+  color: var(--color-text-primary);
+}
+[data-variant='chapters'] .ch :where(h1, h2, h3, h4, p, ol, ul, dl, dd, figure, blockquote) {
+  margin: 0;
+}
+[data-variant='chapters'] .ch :where(ol, ul)[role='list'] {
+  padding: 0;
+  list-style: none;
+}
+[data-variant='chapters'] .ch :where(h1, h2, h3, h4, .fp__t, .pl__t, .ts__t) {
+  text-wrap: balance;
+  hyphens: manual;
+}
+[data-variant='chapters'] .ch :where(p, li, dd) {
+  text-wrap: pretty;
+}
+[data-variant='chapters']
+  .ch
+  :where(.it__text, .it__quote, .cl__body, .ri__text, .ab__facts)
+  p
+  + p {
+  margin-block-start: var(--space-2xs);
+}
+[data-variant='chapters'] .ch :where(img) {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+}
+[data-variant='chapters'] :is(.ch-date, .ch-nobreak, .op-map__pg, .toc__pg) {
+  white-space: nowrap;
+}
+[data-variant='chapters'] .ch-sr {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+[data-variant='chapters'] .ch-frame {
+  display: contents;
+}
+[data-variant='chapters'] .ch :where(a[href]) {
+  color: inherit;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  text-decoration-color: color-mix(in oklab, currentColor 38%, transparent);
+  transition: text-decoration-color var(--ui-motion-fast) var(--ui-motion-easing);
+}
+[data-variant='chapters'] .ch :where(a[href]):is(:hover, :focus-visible) {
+  text-decoration-color: currentColor;
+}
+/* One furniture voice: the caption role, in capitals, at the chrome floor. */
+[data-variant='chapters'] .ch-caps {
+  font-family: var(--type-caption-font-family);
+  font-size: var(--type-label-font-size);
+  font-weight: var(--type-caption-font-weight);
+  line-height: 1.3;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+/* Compact prose reads at most 0.85 of the body's measure, not a narrow column beside it. */
+[data-variant='chapters'] .ch :where([data-type-role='body-compact']) {
+  max-inline-size: calc(var(--type-measure-body) * 0.85);
+}
+/* C2: rows that are tables or meta lines take the page's width; prose keeps its measure. */
+[data-variant='chapters']
+  :is(
+    .ch-facts,
+    .ch-facts *,
+    .op-map li,
+    .tp-proof li,
+    .it__meta,
+    .toc__yr,
+    .toc__in,
+    .pl__tracks li,
+    .ch-bars li,
+    .op-roles,
+    .tp-who,
+    .tp-now,
+    .ch-runhead *,
+    .fp__cap > *,
+    .ix li,
+    .cl__asof,
+    .op-entry__m
+  ) {
+  max-inline-size: none;
+}
+
+/* C2: a list or a fact sheet set in a compact role is a table, never a column of prose. */
+[data-variant='chapters'] .ch :is(ul, ol, dl)[data-type-role] {
+  max-inline-size: none;
+}
+[data-variant='chapters'] :is(.op-along, .op-skills, .pl__xref) {
+  max-inline-size: var(--type-measure-body);
+}
+/* A word longer than its page breaks rather than widening the page; links laid out side by
+   side, an address or a URL break anywhere, since they set their own width. */
+[data-variant='chapters'] .ch {
+  overflow-wrap: break-word;
+}
+/* break-word leaves a word's min-content whole, and an implicit `auto` track can't shrink below
+   it, so a one-column grid (the imprint's columns, the fact sheets, the entries) would widen to
+   the longest word. Implicit tracks start at zero instead and still stretch to fill: the word
+   breaks inside its page. Explicit tracks set their own floor. */
+[data-variant='chapters'] :is(.ch, .ch *) {
+  grid-auto-columns: minmax(0, auto);
+}
+[data-variant='chapters'] :is(.tp-more, .fp__go, .it__links, .ch-endpaper__actions) a {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The running head: the book's name on the verso, the ways out on the recto. */
+[data-variant='chapters'] .ch-runhead {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr);
+  box-sizing: border-box;
+  /* A head too long for one line grows a line rather than clip (the quality cell's reflow). */
+  min-block-size: var(--layout-runhead);
+  max-inline-size: var(--layout-book);
+  margin-inline: auto;
+  padding-inline: var(--layout-edge);
+  /* P2-C: its ground and rule are the book's, not the window's. */
+  background: var(--color-canvas);
+  border-block-end: var(--layout-line-hair);
+  view-transition-name: chapters-runhead;
+}
+[data-variant='chapters'] :is(.ch-runhead__verso, .ch-runhead__recto, .ch-runhead__recto ul) {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  min-inline-size: 0;
+}
+[data-variant='chapters'] .ch-runhead__verso {
+  flex-wrap: wrap;
+  row-gap: 0;
+  align-content: center;
+  justify-content: space-between;
+  padding-inline: var(--layout-outer) var(--layout-inner);
+}
+/* P1-4: the recto's links sit on its page's text block: the padding is the nav's, not the list's. */
+[data-variant='chapters'] .ch-runhead__recto {
+  padding-inline: var(--layout-inner) var(--layout-outer);
+}
+[data-variant='chapters'] .ch-runhead__recto ul {
+  flex: 1;
+  block-size: 100%;
+}
+[data-variant='chapters'] .ch-runhead__recto li:first-child {
+  margin-inline-end: auto;
+}
+[data-variant='chapters'] .ch-runhead__gutter {
+  border-inline-start: 1px solid var(--color-border-default);
+}
+[data-variant='chapters'] .ch-runhead__name {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+[data-variant='chapters'] .ch-runhead__here {
+  view-transition-name: chapters-place;
+  min-inline-size: 0;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+[data-variant='chapters'] .ch-short {
+  display: none;
+}
+@media (width < 30rem) {
+  [data-variant='chapters'] .ch-long {
+    display: none;
+  }
+  [data-variant='chapters'] .ch-short {
+    display: inline;
+  }
+}
+[data-variant='chapters'] .ch-runhead__recto a {
+  text-decoration-color: transparent;
+}
+
+/* The fore-edge: the whole book in segments sized by their pages, your place marked. */
+[data-variant='chapters'] .ch-edge {
+  position: fixed;
+  z-index: 2;
+  inset-block: calc(var(--layout-runhead) + var(--space-m)) var(--space-m);
+  /* P2-C: in the book's outer margin, wherever the book sits in a wide window. */
+  inset-inline-start: max(0px, (100% - var(--layout-book)) / 2);
+  inline-size: var(--layout-edge);
+  view-transition-name: chapters-edge;
+}
+[data-variant='chapters'] .ch-edge ol {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  block-size: 100%;
+}
+[data-variant='chapters'] .ch-edge__seg {
+  display: flex;
+  flex: 1 1 0;
+  min-block-size: 2.75rem;
+}
+[data-variant='chapters'] .ch-edge__seg a {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3xs);
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+[data-variant='chapters'] .ch-edge__track {
+  position: relative;
+  flex: 1;
+  inline-size: 3px;
+  background: var(--color-border-subtle);
+  container-type: size;
+}
+[data-variant='chapters'] .ch-edge__seg[data-state='read'] .ch-edge__track {
+  background: color-mix(in oklab, var(--color-text-primary) 46%, var(--color-canvas));
+}
+[data-variant='chapters'] .ch-edge__seg[data-state='here'] .ch-edge__n {
+  color: var(--color-text-primary);
+}
+[data-variant='chapters'] .ch-edge__fill {
+  position: absolute;
+  inset: 0;
+  background: var(--layout-ink);
+  transform-origin: top;
+}
+[data-variant='chapters'] .ch-edge__seg:not([data-state='here']) .ch-edge__fill {
+  display: none;
+}
+[data-variant='chapters'] .ch-edge__mark {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: -0.375rem;
+  inline-size: 0.9375rem;
+  block-size: 3px;
+  background: var(--color-text-primary);
+  view-transition-name: chapters-mark;
+}
+[data-variant='chapters'] .ch-edge__label {
+  position: absolute;
+  z-index: 4;
+  inset-block-start: 0;
+  inset-inline-start: calc(100% + var(--space-3xs));
+  display: grid;
+  gap: var(--space-3xs);
+  inline-size: max-content;
+  max-inline-size: 18rem;
+  padding: var(--space-xs) var(--space-s);
+  color: var(--color-text-primary);
+  background: var(--color-surface-overlay);
+  border: var(--ui-border-card);
+  border-radius: var(--ui-radius-card);
+  box-shadow: none;
+  opacity: 0;
+  pointer-events: none;
+  /* Closed, it is clipped away too, so it never stands over the page it opens beside (the
+     quality cell's focus check read it as a fixed cover over the contents and scrolled a link
+     under the running head to clear it). It still names its link. It closes after it fades. */
+  clip-path: inset(50%);
+  transition:
+    opacity var(--ui-motion-fast) var(--ui-motion-easing),
+    clip-path var(--ui-motion-fast) step-end;
+}
+[data-variant='chapters'] .ch-edge__title {
+  font-weight: 600;
+}
+[data-variant='chapters'] .ch-edge__sub {
+  color: var(--color-text-secondary);
+}
+[data-variant='chapters'] .ch-edge__seg a:is(:hover, :focus-visible) .ch-edge__label {
+  opacity: 1;
+  clip-path: none;
+  transition: opacity var(--ui-motion-fast) var(--ui-motion-easing);
+}
+[data-variant='chapters'] .ch-edge__seg a:is(:hover, :focus-visible) .ch-edge__track {
+  background: var(--layout-ink);
+}
+[data-variant='chapters'] .ch-edge__seg a:is(:hover, :focus-visible) .ch-edge__n {
+  color: var(--layout-ink-text);
+}
+/* The top bar: the fore-edge as one rule under the running head, a phone's always, a wide
+   screen's when the spine control says top. */
+[data-variant='chapters'] .ch-progress {
+  position: fixed;
+  z-index: 3;
+  inset-block-start: var(--layout-runhead);
+  inset-inline: max(0px, (100% - var(--layout-book)) / 2);
+  display: none;
+  gap: 2px;
+  block-size: 3px;
+  background: var(--color-canvas);
+}
+[data-variant='chapters'] .ch-progress__seg {
+  flex: 1 1 0;
+  background: var(--color-border-subtle);
+}
+[data-variant='chapters'] .ch-progress__seg[data-state='read'] {
+  background: color-mix(in oklab, var(--color-text-primary) 46%, var(--color-canvas));
+}
+[data-variant='chapters'] .ch-progress__seg[data-state='here'] {
+  align-self: flex-start;
+  block-size: 5px;
+  background: var(--layout-ink);
+}
+[data-variant='chapters'] .ch[data-spine='top'] .ch-progress {
+  display: flex;
+}
+[data-variant='chapters'] .ch:is([data-spine='top'], [data-spine='off']) .ch-edge {
+  display: none;
+}
+
+/* Spreads: verso, gutter, recto, and the folios on their own row. */
+[data-variant='chapters'] .ch-spread {
+  position: relative;
+  display: grid;
+  grid-template-columns: [verso] minmax(0, 1fr) [gutter] 1px [recto] minmax(0, 1fr) [end];
+  grid-template-rows: [page] 1fr [folio] auto;
+  box-sizing: border-box;
+  max-inline-size: var(--layout-book);
+  margin-inline: auto;
+  padding-inline: var(--layout-edge);
+  background: var(--color-canvas);
+}
+/* Borders, not fills, so forced colours keep the gutter. */
+[data-variant='chapters'] .ch-gutter {
+  grid-column: gutter;
+  grid-row: 1 / -1;
+  border-inline-start: 1px solid var(--color-border-default);
+}
+[data-variant='chapters'] .ch-page {
+  grid-row: page;
+  min-inline-size: 0;
+  padding-block: var(--space-2xl) var(--space-m);
+}
+[data-variant='chapters'] .ch-page__in {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+[data-variant='chapters'] .ch-page--verso {
+  grid-column: verso;
+  padding-inline: var(--layout-outer) var(--layout-inner);
+}
+[data-variant='chapters'] .ch-page--recto {
+  grid-column: recto;
+  padding-inline: var(--layout-inner) var(--layout-outer);
+}
+/* The shorter page of a plate holds still while its text scrolls. */
+[data-variant='chapters'] .ch-spread--plate .ch-page__in {
+  position: sticky;
+  inset-block-start: calc(var(--layout-runhead) + var(--space-l));
+}
+/* C5: folios on their row's baseline. */
+[data-variant='chapters'] .ch-folio {
+  grid-row: folio;
+  align-self: baseline;
+  padding-block: var(--space-xs) var(--space-m);
+  color: var(--color-text-muted);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+/* The folios control, off: no page numbers, and the spread keeps its foot. */
+[data-variant='chapters'] .ch[data-folios='off'] .ch-folio {
+  display: none;
+}
+[data-variant='chapters'] .ch[data-folios='off'] .ch-spread {
+  padding-block-end: var(--space-m);
+}
+[data-variant='chapters'] .ch-folio--verso {
+  grid-column: verso;
+  padding-inline-start: var(--layout-outer);
+}
+[data-variant='chapters'] .ch-folio--recto {
+  grid-column: recto;
+  padding-inline-end: var(--layout-outer);
+  text-align: end;
+}
+
+/* Reading size: long prose one step over the body role. Book paragraphs indent. */
+[data-variant='chapters'] :is(.op-desc, .pf__text, .pl__desc, .cl__body, .fl--prose) {
+  font-size: calc(var(--type-body-font-size) * 1.125);
+}
+[data-variant='chapters']
+  :is(.op-desc, .pf__text, .pl__desc, .cl__body, .fl--prose, .aw__text, .ri__text)
+  p
+  + p {
+  text-indent: 1.5em;
+}
+/* The drop cap: three lines in the chapter's ink, only on a paragraph long enough (F8). */
+[data-variant='chapters'] .ch-cap > p:first-child::first-letter {
+  float: inline-start;
+  font-family: var(--type-display-font-family);
+  font-weight: var(--type-display-font-weight);
+  font-size: calc(1em * var(--type-body-line-height) * 2.62);
+  line-height: 0.84;
+  margin-block-start: 0.06em;
+  margin-inline-end: 0.07em;
+  color: var(--layout-ink);
+}
+@supports (initial-letter: 3) {
+  [data-variant='chapters'] .ch-cap > p:first-child::first-letter {
+    float: none;
+    initial-letter: 3;
+    margin: 0;
+    margin-inline-end: 0.08em;
+    font-size: inherit;
+    line-height: inherit;
+  }
+}
+[data-variant='chapters'] .ch-cap--open > p:first-child::first-letter {
+  margin-inline-end: -0.04em;
+}
+/* 2px ink bars instead of bullets. */
+[data-variant='chapters'] .ch-bars {
+  display: grid;
+  gap: var(--space-2xs);
+}
+[data-variant='chapters'] .ch-bars li {
+  position: relative;
+  padding-inline-start: var(--space-m);
+}
+[data-variant='chapters'] .ch-bars li::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-start: 0.72em;
+  inline-size: var(--space-xs);
+  block-size: 2px;
+  background: var(--layout-ink);
+}
+[data-variant='chapters'] .ch-facts {
+  display: grid;
+  border-block-start: var(--layout-line-hair);
+}
+[data-variant='chapters'] .ch-facts > div {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  column-gap: var(--space-s);
+  align-items: baseline;
+  padding-block: var(--space-2xs);
+  border-block-end: var(--layout-line-hair);
+}
+[data-variant='chapters'] .ch-facts dt {
+  color: var(--color-text-secondary);
+}
+
+/* The title page and its frontispiece, the imprint across their foot. */
+[data-variant='chapters'] .ch-spread--title {
+  min-block-size: calc(100svh - var(--layout-runhead));
+  grid-template-rows: [page] 1fr [band] auto [folio] auto;
+}
+[data-variant='chapters'] .ch-spread--title .ch-page {
+  padding-block: var(--space-l) var(--space-xs);
+}
+[data-variant='chapters'] .ch-spread--title .ch-page__in {
+  gap: 0;
+}
+[data-variant='chapters'] .ch-spread--title .ch-page--recto {
+  padding-block-start: calc(var(--space-l) * 2 + var(--type-title-font-size) * 1.4);
+}
+[data-variant='chapters'] .tp-notice {
+  margin-block-end: var(--space-m);
+  padding-block: var(--space-xs);
+  border-block: var(--layout-line-hair);
+}
+[data-variant='chapters'] .tp-author {
+  font-size: var(--type-title-font-size);
+  color: var(--color-text-secondary);
+}
+[data-variant='chapters'] .tp-title {
+  margin-block-start: var(--space-l);
+  font-size: var(--type-step-7);
+  line-height: 0.98;
+  letter-spacing: max(var(--type-display-letter-spacing), -0.03em);
+}
+[data-variant='chapters'] .tp-sub {
+  margin-block-start: var(--space-m);
+  max-inline-size: var(--type-measure-compact);
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+[data-variant='chapters'] .tp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2xs) var(--space-l);
+  margin-block-start: var(--space-m);
+}
+[data-variant='chapters'] :is(.tp-begin, .pl__case a, .ch-endpaper__mail a) {
+  color: var(--color-text-primary);
+  text-decoration-thickness: 2px;
+  text-decoration-color: var(--layout-ink);
+  text-underline-offset: 0.25em;
+}
+/* At the address's size its underline runs where the focus ring is drawn, ink under ring, so
+   with focus the ring alone marks it (the quality cell's focus perimeter). The line goes, not
+   its colour, which forced colors would put back. */
+[data-variant='chapters'] :is(.tp-begin, .pl__case a, .ch-endpaper__mail a):focus-visible {
+  text-decoration-line: none;
+}
+[data-variant='chapters'] :is(.tp-more, .fp__go, .ch-endpaper__actions, .it__links) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-s);
+  color: var(--color-text-secondary);
+}
+[data-variant='chapters'] .tp-band {
+  grid-column: verso / end;
+  grid-row: band;
+  display: grid;
+  grid-template-columns: subgrid;
+}
+[data-variant='chapters'] :is(.tp-band__v, .tp-band__r) {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3xs);
+  padding-block-start: var(--space-s);
+  border-block-start: var(--layout-line-hair);
+}
+[data-variant='chapters'] .tp-band__v {
+  grid-column: verso;
+  margin-inline: var(--layout-outer) var(--layout-inner);
+}
+[data-variant='chapters'] .tp-band__r {
+  grid-column: recto;
+  margin-inline: var(--layout-inner) var(--layout-outer);
+}
+[data-variant='chapters'] :is(.tp-who, .tp-from) {
+  color: var(--color-text-secondary);
+}
+/* P1-10: the figures' column is as wide as the widest figure (at least its track), and every
+   row shares it (subgrid), so the figures keep one right edge and never print over their words. */
+[data-variant='chapters'] .tp-proof {
+  display: grid;
+  grid-template-columns: minmax(4rem, max-content) minmax(0, 1fr);
+  row-gap: var(--space-3xs);
+  column-gap: var(--space-xs);
+  color: var(--color-text-secondary);
+}
+/* A section that prints only here frames its own figures, under its title as a label. */
+[data-variant='chapters'] .tp-proof__frame {
+  display: grid;
+  gap: var(--space-3xs);
+}
+[data-variant='chapters'] .tp-proof__h {
+  color: var(--color-text-secondary);
+}
+[data-variant='chapters'] .tp-proof li {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+}
+[data-variant='chapters'] .tp-proof__n {
+  color: var(--color-text-primary);
+  text-align: end;
+  white-space: nowrap;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+[data-variant='chapters'] .fp {
+  display: grid;
+  gap: var(--space-s);
+}
+[data-variant='chapters'] :is(.fp__img, .pl__img) {
+  inline-size: 100%;
+  border-radius: var(--ui-radius-media);
+  outline: 1px solid color-mix(in oklab, var(--color-text-primary) 12%, transparent);
+  outline-offset: -1px;
+}
+[data-variant='chapters'] .pf-media-box {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 3 / 2;
+  background: var(--color-surface-subtle);
+  color: var(--color-text-secondary);
+  border-radius: var(--ui-radius-media);
+}
+[data-variant='chapters'] .fp__cap {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: var(--space-3xs) var(--space-s);
+}
+[data-variant='chapters'] .fp__cap > * {
+  grid-column: 2;
+}
+[data-variant='chapters'] .fp__label {
+  grid-column: 1;
+  grid-row: 1 / span 4;
+  padding-block-start: 0.2em;
+  color: var(--color-text-secondary);
+}
+[data-variant='chapters'] .fp__text {
+  color: var(--color-text-secondary);
+}
+
+/* The contents: chapter numerals in their inks, a tick for each page. */
+[data-variant='chapters'] .ch-spread--contents .ch-page {
+  padding-block-start: var(--space-3xl);
+}
+[data-variant='chapters'] :is(.toc__h, .pf__h) {
+  margin-block-end: var(--space-l);
+}
+[data-variant='chapters'] .toc {
+  display: grid;
+  gap: var(--space-l);
+}
+[data-variant='chapters'] .toc > li {
+  display: grid;
+  grid-template-columns: [n] 4.25rem [t] minmax(0, 1fr) [pg] auto;
+  column-gap: var(--space-s);
+  align-items: baseline;
+  transition: opacity var(--ui-motion-standard) var(--ui-motion-easing);
+}
+[data-variant='chapters'] .toc__fm > a {
+  grid-column: t;
+}
+[data-variant='chapters'] .toc__fm--back {
+  padding-block-start: var(--space-s);
+  border-block-start: var(--layout-line-hair);
+}
+[data-variant='chapters'] .toc__a {
+  grid-column: n / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  text-decoration: none;
+}
+[data-variant='chapters'] .toc__n {
+  font-family: var(--type-display-font-family);
+  font-weight: var(--type-display-font-weight);
+  font-size: var(--type-step-5);
+  line-height: 0.8;
+  color: var(--layout-ink);
+  font-variant-numeric: lining-nums;
+}
+[data-variant='chapters'] .toc__t {
+  font-size: var(--type-step-2);
+  text-decoration: underline 1px transparent;
+  text-underline-offset: 0.16em;
+  transition: text-decoration-color var(--ui-motion-fast) var(--ui-motion-easing);
+}
+[data-variant='chapters'] .toc__a:is(:hover, :focus-visible) .toc__t {
+  text-decoration-color: currentColor;
+}
+[data-variant='chapters'] .toc__pg {
+  grid-column: pg;
+  grid-row: 1;
+  color: var(--color-text-secondary);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+[data-variant='chapters'] :is(.toc__yr, .toc__teaser, .toc__in, .toc__ticks) {
+  grid-column: t / -1;
+}
+[data-variant='chapters'] .toc__yr {
+  margin-block-start: var(--space-2xs);
+  color: var(--color-text-secondary);
+}
+/* P2-F: the span and the roles each move to the next line whole, and wrap only when one is
+   longer than the line. */
+[data-variant='chapters'] .toc__run {
+  display: inline-block;
+}
+[data-variant='chapters'] .toc__in {
+  color: var(--color-text-muted);
+}
+/* The owner's word on their own chapter, in the contents and under its opener's span. */
+[data-variant='chapters'] .toc__teaser {
+  margin-block-start: var(--space-3xs);
+}
+[data-variant='chapters'] .op-teaser {
+  margin-block-start: var(--space-s);
+  max-inline-size: var(--type-measure-compact);
+}
+[data-variant='chapters'] .toc__ticks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-block-start: var(--space-xs);
+}
+[data-variant='chapters'] .toc__ticks i {
+  inline-size: 2px;
+  block-size: 0.75rem;
+  background: var(--color-border-default);
+  transition: background-color var(--ui-motion-standard) var(--ui-motion-easing);
+}
+[data-variant='chapters'] .toc__ch:has(.toc__a:is(:hover, :focus-visible)) .toc__ticks i {
+  background: var(--layout-ink);
+}
+[data-variant='chapters'] .toc:has(.toc__a:focus-visible) > li:not(:has(.toc__a:focus-visible)) {
+  opacity: 0.42;
+}
+@media (hover: hover) and (pointer: fine) {
+  [data-variant='chapters'] .toc:has(.toc__a:hover) > li:not(:has(.toc__a:hover)) {
+    opacity: 0.42;
+  }
+}
+/* A contents entry under the pointer or focus lights its segment on the fore-edge. */
+[data-variant='chapters']
+  .ch:has(.toc__ch[data-n='1'] .toc__a:is(:hover, :focus-visible))
+  .ch-edge__seg[data-n='1']
+  .ch-edge__track,
+[data-variant='chapters']
+  .ch:has(.toc__ch[data-n='2'] .toc__a:is(:hover, :focus-visible))
+  .ch-edge__seg[data-n='2']
+  .ch-edge__track,
+[data-variant='chapters']
+  .ch:has(.toc__ch[data-n='3'] .toc__a:is(:hover, :focus-visible))
+  .ch-edge__seg[data-n='3']
+  .ch-edge__track,
+[data-variant='chapters']
+  .ch:has(.toc__ch[data-n='4'] .toc__a:is(:hover, :focus-visible))
+  .ch-edge__seg[data-n='4']
+  .ch-edge__track,
+[data-variant='chapters']
+  .ch:has(.toc__ch[data-n='5'] .toc__a:is(:hover, :focus-visible))
+  .ch-edge__seg[data-n='5']
+  .ch-edge__track,
+[data-variant='chapters']
+  .ch:has(.toc__ch[data-n='6'] .toc__a:is(:hover, :focus-visible))
+  .ch-edge__seg[data-n='6']
+  .ch-edge__track,
+[data-variant='chapters']
+  .ch:has(.toc__ch[data-n='7'] .toc__a:is(:hover, :focus-visible))
+  .ch-edge__seg[data-n='7']
+  .ch-edge__track {
+  background: var(--layout-ink);
+}
+[data-variant='chapters'] .epi {
+  align-self: end;
+  inline-size: 78%;
+}
+[data-variant='chapters'] .epi figure {
+  display: grid;
+  gap: var(--space-2xs);
+}
+[data-variant='chapters'] .epi blockquote {
+  font-style: italic;
+}
+[data-variant='chapters'] :is(.epi figcaption, .pf__lead, .cs-lede, .pl__lede, .sr__sub, .gp__sub) {
+  color: var(--color-text-secondary);
+}
+[data-variant='chapters'] .pf__lead {
+  margin-block-end: var(--space-m);
+  max-inline-size: var(--type-measure-compact);
+  color: var(--color-text-primary);
+}
+
+[data-variant='chapters'] .ch-spread--solo .ch-page--verso {
+  grid-column: verso / end;
+}
+[data-variant='chapters'] .ch-spread--wide .fl {
+  padding-block-start: var(--space-3xl);
+}
+[data-variant='chapters'] .ch-spread--wide .toc {
+  display: block;
+}
+[data-variant='chapters'] .ch-spread--wide .toc > li {
+  break-inside: avoid;
+  margin-block-end: var(--space-l);
+}
+[data-variant='chapters'] .toc__head {
+  display: grid;
+  gap: var(--space-s);
+}
+[data-variant='chapters'] .ch-spread--wide .toc__head {
+  column-span: all;
+  margin-block-end: var(--space-l);
+}
+[data-variant='chapters'] .toc__from {
+  color: var(--color-text-secondary);
+}
+[data-variant='chapters'] .ch-folio--both {
+  display: none;
+}
+
+/* The chapter opener. */
+[data-variant='chapters'] .ch-spread--opener .ch-page {
+  padding-block-start: var(--space-3xl);
+}
+[data-variant='chapters'] .ch-spread--opener .ch-page__in {
+  min-block-size: 100%;
+  gap: 0;
+}
+[data-variant='chapters'] .op-num {
+  font-family: var(--type-display-font-family);
+  font-weight: var(--type-display-font-weight);
+  font-size: var(--type-step-7);
+  line-height: 0.78;
+  letter-spacing: -0.02em;
+  color: var(--layout-ink);
+  font-variant-numeric: lining-nums;
+}
+[data-variant='chapters'] .op-title {
+  margin-block-start: var(--space-l);
+}
+/* An owner's section title where the book sets the section as one of its own parts. */
+[data-variant='chapters'] .ch-label {
+  margin-block-end: var(--space-2xs);
+  color: var(--color-text-secondary);
+}
+[data-variant='chapters'] .op-kicker {
+  display: block;
+  margin-block-end: var(--space-xs);
+  color: var(--color-text-secondary);
+}
+[data-variant='chapters'] .op-title__t {
+  display: block;
+  font-size: var(--type-step-5);
+  line-height: 1.02;
+}
+[data-variant='chapters'] .op-span {
+  margin-block-start: var(--space-s);
+  font-size: var(--type-title-font-size);
+  color: var(--layout-ink-text);
+}
+[data-variant='chapters'] .op-roles {
+  margin-block-start: var(--space-2xs);
+  color: var(--color-text-secondary);
+}
+[data-variant='chapters'] .op-map {
+  margin-block-start: auto;
+  padding-block-start: var(--space-2xl);
+}
+[data-variant='chapters'] .op-map__h {
+  margin-block-end: var(--space-xs);
+  color: var(--color-text-muted);
+}
+[data-variant='chapters'] .op-map ol {
+  display: grid;
+  border-block-start: var(--layout-line-hair);
+}
+[data-variant='chapters'] .op-map li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--space-s);
+  align-items: baseline;
+  padding-block: var(--space-2xs);
+  border-block-end: var(--layout-line-hair);
+}
+[data-variant='chapters'] :is(.op-map, .cs-from) a {
+  text-decoration-color: transparent;
+}
+[data-variant='chapters'] .op-map__pg {
+  color: var(--color-text-secondary);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+[data-variant='chapters'] .op-entry + .op-entry {
+  margin-block-start: var(--space-l);
+}
+[data-variant='chapters'] .op-entry__m {
+  margin-block: var(--space-3xs) var(--space-2xs);
+  color: var(--color-text-secondary);
+}
+[data-variant='chapters'] .op-hl {
+  margin-block-start: var(--space-m);
+}
+[data-variant='chapters'] .op-foot {
+  padding-block-start: var(--space-xl);
+}
+[data-variant='chapters'] :is(.op-along, .op-skills) {
+  margin-block-start: var(--space-m);
+  color: var(--color-text-secondary);
+}
+[data-variant='chapters'] :is(.op-along, .op-skills, .pl__xref, .dc__alt) b {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+/* Plates face their text; the series is the one thing across the gutter. */
+[data-variant='chapters'] .pl {
+  display: grid;
+  gap: var(--space-xs);
+}
+/* P1-3: a caption is one run of text, its punctuation against its words. */
+[data-variant='chapters'] .pl__cap {
+  font-size: var(--type-label-font-size);
+  color: var(--color-text-secondary);
+}
+[data-variant='chapters'] .pl__no {
+  color: var(--layout-ink-text);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+[data-variant='chapters'] .ch-spread--plate .ch-page__in {
+  gap: var(--space-m);
+}
+[data-variant='chapters'] .pl__lede {
+  max-inline-size: var(--type-measure-compact);
+}
+[data-variant='chapters'] .pl__tracks {
+  display: grid;
+  padding-inline-start: var(--space-m);
+  border-block-start: var(--layout-line-hair);
+}
+[data-variant='chapters'] .pl__tracks li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  padding-block: var(--space-3xs);
+  border-block-end: var(--layout-line-hair);
+}
+[data-variant='chapters'] .pl__tracks li::marker {
+  color: var(--color-text-muted);
+}
+[data-variant='chapters'] .pl__xref {
+  color: var(--color-text-secondary);
+}
+[data-variant='chapters'] .ch-spread--series {
+  grid-template-rows: [head] auto [page] auto [folio] auto;
+}
+[data-variant='chapters'] :is(.sr__head, .dc__head) {
+  grid-column: verso / end;
+  grid-row: head;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: end;
+  padding-block: var(--space-2xl) var(--space-l);
+}
+[data-variant='chapters'] :is(.sr__t, .dc__h) {
+  grid-column: verso;
+  padding-inline: var(--layout-outer) var(--layout-inner);
+}
+[data-variant='chapters'] :is(.sr__sub, .dc__sub) {
+  grid-column: recto;
+  padding-inline: var(--layout-inner) var(--layout-outer);
+  font-style: italic;
+}
+[data-variant='chapters'] .sr__row {
+  grid-column: verso / end;
+  grid-row: page;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--space-s);
+  padding-inline: var(--layout-outer);
+  align-items: start;
+}
+[data-variant='chapters'] .sr__row:has(> :nth-child(3):last-child) {
+  grid-template-columns: minmax(0, 2.06fr) minmax(0, 1fr);
+}
+[data-variant='chapters'] .sr__row:has(> :nth-child(3):last-child) > :first-child {
+  grid-row: span 2;
+}
+[data-variant='chapters'] .sr__fig {
+  display: grid;
+  gap: var(--space-xs);
+}
+[data-variant='chapters'] .sr__where {
+  color: var(--color-text-muted);
+}
+
+/* Group pages and their entries. */
+[data-variant='chapters'] .ch-spread--groups .ch-page {
+  padding-block-start: var(--space-xl);
+}
+[data-variant='chapters'] .ch-spread--groups .ch-page__in {
+  gap: var(--space-2xl);
+}
+[data-variant='chapters'] .gp__t {
+  margin-block-end: var(--space-xs);
+  font-size: calc(var(--type-title-font-size) * 1.2);
+}
+[data-variant='chapters'] .gp__sub {
+  margin-block-end: var(--space-s);
+  font-style: italic;
+}
+[data-variant='chapters'] .gp__list {
+  display: grid;
+  gap: var(--space-m);
+}
+[data-variant='chapters'] .it {
+  display: grid;
+  gap: var(--space-3xs);
+  break-inside: avoid;
+}
+[data-variant='chapters'] .it__t {
+  font-size: calc(var(--type-title-font-size) * 0.86);
+}
+[data-variant='chapters']
+  :is(
+    .it__meta,
+    .it--praise figcaption,
+    .cs-praise figcaption,
+    .cs-from,
+    .aw__h,
+    .ix__k,
+    .ix__see,
+    .dc__alt
+  ) {
+  color: var(--color-text-secondary);
+}
+[data-variant='chapters'] :is(.it__quote, .ix__see, .aw__text) {
+  font-style: italic;
+}
+[data-variant='chapters'] :is(.it__num, .ix__l) {
+  color: var(--layout-ink-text);
+}
+/* P2-2: a label that isn't a link (a paper's award, a site's address) is quiet text, never
+   coloured like a link. */
+[data-variant='chapters'] :is(.it__note, .it__url) {
+  color: var(--color-text-secondary);
+}
+[data-variant='chapters'] .it__figs .it__fig {
+  font-variant-numeric: lining-nums tabular-nums;
+}
+[data-variant='chapters'] .it--episode {
+  grid-template-columns: 4rem minmax(0, 1fr);
+  column-gap: var(--space-xs);
+  align-items: baseline;
+}
+[data-variant='chapters'] .it__praise {
+  font-size: calc(var(--type-quote-font-size) * 0.92);
+  font-style: italic;
+}
+[data-variant='chapters'] .it__praise p {
+  text-indent: -0.42em;
+}
+[data-variant='chapters'] .it__praise p::before {
+  content: '\201C';
+}
+[data-variant='chapters'] .it__praise p::after {
+  content: '\201D';
+}
+[data-variant='chapters'] :is(.it--praise, .cs-praise) figcaption {
+  margin-block-start: var(--space-2xs);
+}
+[data-variant='chapters'] .it__who {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+/* P1-10: as the title page's proof, the figures' column fits the widest figure and every row
+   shares it; a list in a flowed column (.fl, a block) sizes each row's figure on its own. */
+[data-variant='chapters'] .gp__list--figures {
+  grid-template-columns: minmax(6.5rem, max-content) minmax(0, 1fr);
+  gap: var(--space-s);
+}
+[data-variant='chapters'] .it--figure p {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, max-content) minmax(0, 1fr);
+  column-gap: var(--space-s);
+  align-items: baseline;
+}
+[data-variant='chapters'] .gp__list--figures > .it--figure,
+[data-variant='chapters'] .gp__list--figures > .it--figure > p {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+[data-variant='chapters'] .fl .gp__list--figures > .it--figure {
+  grid-column: auto;
+  grid-template-columns: none;
+}
+[data-variant='chapters'] .fl .gp__list--figures > .it--figure > p {
+  grid-column: auto;
+  grid-template-columns: minmax(6.5rem, max-content) minmax(0, 1fr);
+}
+[data-variant='chapters'] .it__fig {
+  font-size: var(--type-step-4);
+  line-height: 1;
+  color: var(--layout-ink);
+  text-align: end;
+  white-space: nowrap;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+/* A lone group runs across both pages in two columns; the column rule is the gutter. */
+[data-variant='chapters'] .ch-spread--flow {
+  grid-template-rows: [page] auto [folio] auto;
+}
+[data-variant='chapters'] .fl {
+  grid-column: verso / end;
+  grid-row: page;
+  padding: var(--space-xl) var(--layout-outer) var(--space-s);
+  columns: 2;
+  column-gap: calc(var(--layout-inner) * 2 + 1px);
+  column-rule: var(--layout-line-hair);
+}
+[data-variant='chapters'] .fl :is(.gp__t, .gp__sub, .ix__kinds) {
+  column-span: all;
+}
+[data-variant='chapters'] .fl .gp__sub {
+  margin-block-end: var(--space-l);
+}
+[data-variant='chapters'] .fl .gp__list {
+  display: block;
+}
+[data-variant='chapters'] .fl .gp__list > li + li {
+  margin-block-start: var(--space-m);
+}
+
+/* Still being written, and the turnstile. */
+[data-variant='chapters'] .ch-spread--close .ch-page__in {
+  gap: var(--space-l);
+}
+[data-variant='chapters'] .cl__asof {
+  margin-block-end: var(--space-s);
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+[data-variant='chapters'] .cl__h {
+  margin-block-end: var(--space-s);
+}
+[data-variant='chapters'] .cl__repos {
+  display: grid;
+  gap: var(--space-m);
+  margin-block-start: var(--space-l);
+}
+[data-variant='chapters'] .ch-spread--turn {
+  grid-template-rows: [page] auto;
+  border-block-start: var(--layout-line-hair);
+}
+[data-variant='chapters'] .ch-spread--turn .ch-page {
+  padding-block: 0;
+}
+[data-variant='chapters'] .ts__a {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2xs);
+  min-block-size: 100%;
+  padding-block: var(--space-2xl) var(--space-3xl);
+  text-decoration: none;
+}
+[data-variant='chapters'] .ts__a--next {
+  justify-items: end;
+  text-align: end;
+}
+[data-variant='chapters'] :is(.ts__dir, .ts__sub) {
+  color: var(--color-text-secondary);
+}
+[data-variant='chapters'] .ts__n {
+  font-family: var(--type-display-font-family);
+  font-weight: var(--type-display-font-weight);
+  font-size: var(--type-step-6);
+  line-height: 0.85;
+  color: var(--layout-ink);
+}
+[data-variant='chapters'] .ts__t {
+  text-decoration: underline 1px transparent;
+  text-underline-offset: 0.14em;
+  transition: text-decoration-color var(--ui-motion-fast) var(--ui-motion-easing);
+}
+[data-variant='chapters'] .ts__a:is(:hover, :focus-visible) .ts__t {
+  text-decoration-color: currentColor;
+}
+
+/* The endpaper: the colophon, tinted by the chapter's ink; home's from the ink of the text (F7). */
+[data-variant='chapters'] .ch-endpaper {
+  background: color-mix(in oklab, var(--layout-ink) 9%, var(--color-canvas));
+}
+[data-variant='chapters'] .ch[data-ink='0'] .ch-endpaper {
+  background: color-mix(in oklab, var(--color-text-primary) 6%, var(--color-canvas));
+}
+[data-variant='chapters'] .ch-endpaper__book {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr);
+  padding-inline: var(--layout-bleed);
+}
+[data-variant='chapters'] .ch-endpaper__gutter {
+  border-inline-start: 1px solid color-mix(in oklab, var(--layout-ink) 22%, var(--layout-hair));
+}
+[data-variant='chapters'] :is(.ch-endpaper__verso, .ch-endpaper__recto) {
+  display: grid;
+  align-content: start;
+  gap: var(--space-s);
+  padding-block: var(--space-2xl) var(--space-xl);
+}
+[data-variant='chapters'] .ch-endpaper__verso {
+  padding-inline: var(--layout-outer) var(--layout-inner);
+}
+[data-variant='chapters'] .ch-endpaper__recto {
+  padding-inline: var(--layout-inner) var(--layout-outer);
+}
+[data-variant='chapters']
+  :is(.ch-endpaper__lede, .ch-endpaper__note, .ch-endpaper__elsewhere, .ch-endpaper__end) {
+  color: var(--color-text-secondary);
+}
+[data-variant='chapters'] .ch-endpaper__actions {
+  margin-block-start: var(--space-xs);
+}
+[data-variant='chapters'] .ch-endpaper__mail a {
+  overflow-wrap: anywhere;
+  font-size: calc(var(--type-title-font-size) * 1.3);
+}
+[data-variant='chapters'] .ch-endpaper__end {
+  margin-block-start: auto;
+  padding-block-start: var(--space-l);
+}
+
+/* The back matter and its index. */
+[data-variant='chapters'] .ch-spread--back .op-map {
+  margin-block-start: 0;
+}
+[data-variant='chapters'] .ab__facts {
+  margin-block-start: var(--space-l);
+}
+[data-variant='chapters'] .ch-spread--index .fl {
+  columns: auto;
+}
+[data-variant='chapters'] .ix__kinds {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: var(--space-m) var(--space-l);
+  margin-block-end: var(--space-xl);
+}
+[data-variant='chapters'] .ix__k {
+  margin-block-end: var(--space-2xs);
+}
+[data-variant='chapters'] .ix__terms {
+  columns: 4 12rem;
+  column-gap: var(--space-l);
+  column-rule: var(--layout-line-hair);
+}
+[data-variant='chapters'] .ix__letter {
+  break-inside: avoid;
+  margin-block-end: var(--space-s);
+}
+[data-variant='chapters'] .ix li {
+  padding-inline-start: 1em;
+  text-indent: -1em;
+}
+/* P1-7: an author's group is a headword; its members sit under it, indented, with their pages. */
+[data-variant='chapters'] .ix__sub {
+  padding-inline-start: 1em;
+}
+[data-variant='chapters'] .ix__desc {
+  color: var(--color-text-secondary);
+}
+[data-variant='chapters'] .cs-more {
+  display: grid;
+  gap: var(--space-m);
+  margin-block-start: var(--space-l);
+}
+[data-variant='chapters'] .it__cite {
+  color: var(--color-text-muted);
+}
+[data-variant='chapters'] .ix__pg {
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* The case study, a section of its chapter. */
+[data-variant='chapters'] .ch-spread--casehead {
+  min-block-size: calc(100svh - var(--layout-runhead));
+}
+[data-variant='chapters'] .ch-spread--casehead .ch-page__in {
+  gap: var(--space-m);
+}
+[data-variant='chapters'] .cs-title {
+  font-size: var(--type-step-6);
+  line-height: 0.98;
+  letter-spacing: max(var(--type-display-letter-spacing), -0.03em);
+}
+[data-variant='chapters'] .cs-lede {
+  max-inline-size: var(--type-measure-compact);
+}
+[data-variant='chapters'] .ch-spread--prose .fl {
+  padding-block-start: var(--space-2xl);
+}
+[data-variant='chapters'] .ri {
+  margin-block-start: var(--space-s);
+}
+[data-variant='chapters'] .ri__h {
+  display: inline;
+  font-size: 1em;
+}
+[data-variant='chapters'] .ri__text,
+[data-variant='chapters'] .ri__text > p:first-child {
+  display: inline;
+}
+[data-variant='chapters'] .ch-spread--decisions {
+  grid-template-rows: [head] auto [page] auto [folio] auto;
+}
+[data-variant='chapters'] .dc__list {
+  grid-column: verso / end;
+  grid-row: page;
+  display: grid;
+  grid-template-columns: subgrid;
+  row-gap: var(--space-xl);
+}
+[data-variant='chapters'] .dc {
+  grid-column: verso / end;
+  display: grid;
+  grid-template-columns: subgrid;
+}
+[data-variant='chapters'] .dc__v {
+  grid-column: verso;
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+  column-gap: var(--space-s);
+  align-items: baseline;
+  padding-inline: var(--layout-outer) var(--layout-inner);
+}
+[data-variant='chapters'] .dc__n {
+  font-family: var(--type-display-font-family);
+  font-weight: var(--type-display-font-weight);
+  font-size: var(--type-step-4);
+  line-height: 0.8;
+  color: var(--layout-ink);
+  text-align: end;
+}
+[data-variant='chapters'] .dc__r {
+  grid-column: recto;
+  display: grid;
+  gap: var(--space-2xs);
+  padding-inline: var(--layout-inner) var(--layout-outer);
+}
+[data-variant='chapters'] .aw__h {
+  margin-block-end: var(--space-xs);
+}
+[data-variant='chapters'] .cs-praise {
+  display: grid;
+  gap: var(--space-2xs);
+  padding-block-start: var(--space-m);
+  border-block-start: var(--layout-line-hair);
+}
+
+/* One orchestrated moment on the title page: the book binds, then the title is set. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='chapters']:not([data-motion='reduced'], [data-motion='static'])
+    .ch[data-view='home']
+    .ch-spread--title
+    > .ch-gutter {
+    transform-origin: top;
+    animation: chapters-bind calc(var(--ui-motion-slow) * 2.2) var(--ui-motion-easing) both;
+  }
+  [data-variant='chapters']:not([data-motion='reduced'], [data-motion='static'])
+    .ch[data-view='home']
+    .tp-title {
+    animation: chapters-rise calc(var(--ui-motion-slow) * 1.6) var(--ui-motion-easing)
+      calc(var(--ui-motion-slow) * 0.3) both;
+  }
+  [data-variant='chapters']:not([data-motion='reduced'], [data-motion='static'])
+    .ch[data-view='home']
+    .tp-sub {
+    animation: chapters-rise-s calc(var(--ui-motion-slow) * 1.4) var(--ui-motion-easing)
+      calc(var(--ui-motion-slow) * 0.62) both;
+  }
+  [data-variant='chapters']:not([data-motion='reduced'], [data-motion='static'])
+    .ch[data-view='home']
+    :is(.tp-actions, .tp-band, .fp__cap) {
+    animation: chapters-fade calc(var(--ui-motion-slow) * 1.2) var(--ui-motion-easing)
+      calc(var(--ui-motion-slow) * 1.05) both;
+  }
+  [data-variant='chapters']:not([data-motion='reduced'], [data-motion='static'])
+    .ch[data-view='home']
+    .fp__img {
+    animation: chapters-unmask calc(var(--ui-motion-slow) * 2.2) var(--ui-motion-easing)
+      calc(var(--ui-motion-slow) * 0.4) both;
+  }
+}
+@keyframes chapters-bind {
+  from {
+    scale: 1 0;
+  }
+}
+/* The words are on the page from the first frame, read by anyone who reads before the entrance
+   ends (the quality cell's inventory under each condition): the entrance moves them, never hides
+   them. Only the frontispiece unmasks, and its words are its caption. */
+@keyframes chapters-rise {
+  from {
+    translate: 0 1.75rem;
+  }
+}
+@keyframes chapters-rise-s {
+  from {
+    translate: 0 0.875rem;
+  }
+}
+@keyframes chapters-fade {
+  from {
+    translate: 0 0.5rem;
+  }
+}
+@keyframes chapters-unmask {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+}
+/* The fore-edge fills as you read (scroll-linked, so it never runs idle). */
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-variant='chapters']:not([data-motion='reduced'], [data-motion='static'])
+      .ch-edge__seg[data-state='here']
+      .ch-edge__fill {
+      animation: chapters-fill linear both;
+      animation-timeline: scroll(root block);
+    }
+    [data-variant='chapters']:not([data-motion='reduced'], [data-motion='static'])
+      .ch-edge__seg[data-state='here']
+      .ch-edge__mark {
+      animation: chapters-mark linear both;
+      animation-timeline: scroll(root block);
+    }
+  }
+}
+@keyframes chapters-fill {
+  from {
+    scale: 1 0;
+  }
+}
+@keyframes chapters-mark {
+  to {
+    translate: 0 calc(100cqb - 3px);
+  }
+}
+/* The page turn: the running head and the fore-edge hold, and the place mark slides to the new chapter.
+   The host crossfades the rest, and under reduced motion fades everything with no travel. */
+::view-transition-group(chapters-mark) {
+  animation-duration: calc(var(--ui-motion-slow) * 1.9);
+  animation-timing-function: var(--ui-motion-easing);
+}
+::view-transition-group(chapters-runhead),
+::view-transition-group(chapters-edge) {
+  animation-duration: var(--ui-motion-standard);
+  animation-timing-function: var(--ui-motion-easing);
+}
+/* The place label hands over, one chapter's name out and then the next one's in, never both. */
+::view-transition-group(chapters-place) {
+  animation-duration: calc(var(--ui-motion-fast) * 2);
+}
+::view-transition-old(chapters-place) {
+  animation: chapters-fade-out var(--ui-motion-fast) var(--ui-motion-easing) both;
+}
+::view-transition-new(chapters-place) {
+  animation: chapters-fade var(--ui-motion-fast) var(--ui-motion-easing) var(--ui-motion-fast) both;
+}
+@keyframes chapters-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* One page at a time below 60rem: the fore-edge becomes a bar, and Write stays beside Contents (C4). */
+@media (width < 60rem) {
+  [data-variant='chapters'] .ch-runhead {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: var(--space-s);
+    padding-inline: var(--layout-edge);
+  }
+  [data-variant='chapters'] :is(.ch-runhead__verso, .ch-runhead__recto) {
+    padding-inline: 0;
+  }
+  [data-variant='chapters'] .ch-runhead__recto ul {
+    gap: var(--space-s);
+  }
+  [data-variant='chapters'] :is(.ch-runhead__gutter, .ch-wide, .ch-edge, .tp-author) {
+    display: none;
+  }
+  [data-variant='chapters'] .ch-runhead__recto li:first-child {
+    margin-inline-end: 0;
+  }
+  [data-variant='chapters'] .ch:not([data-view='chapter']) .ch-runhead__here,
+  [data-variant='chapters'] .ch[data-view='chapter'] .ch-runhead__name {
+    display: none;
+  }
+  [data-variant='chapters'] .ch-progress {
+    display: flex;
+  }
+  [data-variant='chapters'] :is(.ch-spread, .ch-endpaper__book) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    padding-inline: 0;
+  }
+  [data-variant='chapters'] :is(.ch-gutter, .ch-endpaper__gutter) {
+    display: none;
+  }
+  [data-variant='chapters'] .ch-page__in {
+    position: static;
+  }
+  /* One column: every part in source order, the pages and their folios placed below. */
+  [data-variant='chapters'] .ch-spread > * {
+    grid-row: auto;
+  }
+  [data-variant='chapters'] .ch-page {
+    grid-column: 1;
+    padding: var(--space-xl) var(--layout-edge) var(--space-s);
+  }
+  [data-variant='chapters'] .ch-page--verso {
+    grid-row: 1;
+  }
+  [data-variant='chapters'] .ch-folio--verso {
+    grid-row: 2;
+  }
+  [data-variant='chapters'] .ch-page--recto {
+    grid-row: 3;
+  }
+  [data-variant='chapters'] .ch-folio--recto {
+    grid-row: 4;
+  }
+  [data-variant='chapters'] .ch-folio {
+    grid-column: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--space-s);
+    padding: var(--space-s) var(--layout-edge);
+    text-align: center;
+  }
+  [data-variant='chapters'] .ch-folio::before,
+  [data-variant='chapters'] .ch-folio::after {
+    content: '';
+    flex: 1;
+    block-size: 1px;
+    background: var(--layout-hair);
+  }
+  [data-variant='chapters'] .ch-spread--title {
+    min-block-size: 0;
+    grid-template-rows: none;
+  }
+  [data-variant='chapters'] .ch-spread--title .ch-page--recto {
+    grid-row: 2;
+    padding-block-start: var(--space-m);
+  }
+  [data-variant='chapters'] .tp-band {
+    grid-column: 1;
+    grid-row: 3;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-s);
+    padding-inline: var(--layout-edge);
+  }
+  [data-variant='chapters'] :is(.tp-band__v, .tp-band__r) {
+    grid-column: 1;
+    margin-inline: 0;
+  }
+  [data-variant='chapters'] .tp-band__r {
+    border-block-start: 0;
+    padding-block-start: 0;
+  }
+  [data-variant='chapters'] .ch-spread--title :is(.ch-folio--verso, .ch-folio--both) {
+    grid-row: 4;
+  }
+  [data-variant='chapters'] .ch-spread--title .ch-folio--recto {
+    display: none;
+  }
+  [data-variant='chapters'] .tp-title {
+    margin-block-start: 0;
+  }
+  [data-variant='chapters'] :is(.ch-spread--contents, .ch-spread--opener) .ch-page {
+    padding-block-start: var(--space-xl);
+  }
+  [data-variant='chapters'] .ch-spread--casehead {
+    min-block-size: 0;
+  }
+  [data-variant='chapters'] .op-map {
+    padding-block-start: var(--space-l);
+  }
+  [data-variant='chapters'] .toc > li {
+    grid-template-columns: [n] 3rem [t] minmax(0, 1fr) [pg] auto;
+  }
+  [data-variant='chapters'] .epi {
+    inline-size: auto;
+    margin-inline-start: 12%;
+  }
+  [data-variant='chapters'] .fp__cap {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  [data-variant='chapters'] :is(.fp__cap > *, .fp__label) {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  [data-variant='chapters'] :is(.sr__head, .dc__head, .dc__list, .dc) {
+    grid-column: 1;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  [data-variant='chapters'] :is(.sr__t, .sr__sub, .dc__h, .dc__sub, .dc__v, .dc__r) {
+    grid-column: 1;
+    padding-inline: var(--layout-edge);
+  }
+  [data-variant='chapters'] :is(.sr__head, .dc__head) {
+    padding-block: var(--space-xl) var(--space-m);
+    gap: var(--space-xs);
+  }
+  [data-variant='chapters'] .sr__row {
+    grid-column: 1;
+    grid-template-columns: minmax(0, 1fr);
+    padding-inline: var(--layout-edge);
+  }
+  [data-variant='chapters'] .sr__row:has(> :nth-child(3):last-child) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  [data-variant='chapters'] .dc__r {
+    margin-block-start: var(--space-xs);
+    padding-inline-start: calc(var(--layout-edge) + 3.5rem + var(--space-s));
+  }
+  [data-variant='chapters']
+    :is(.ch-spread--decisions, .ch-spread--series, .ch-spread--flow)
+    > .ch-folio {
+    grid-row: auto;
+  }
+  [data-variant='chapters'] .fl {
+    grid-column: 1;
+    columns: 1;
+    padding-inline: var(--layout-edge);
+  }
+  [data-variant='chapters'] .ix__terms {
+    columns: 2;
+  }
+  /* P2-5: two columns from 22rem, one below. */
+  @media (width < 22rem) {
+    [data-variant='chapters'] .ix__terms {
+      columns: 1;
+    }
+  }
+  [data-variant='chapters'] .ch-spread--turn .ch-page {
+    padding-inline: var(--layout-edge);
+  }
+  [data-variant='chapters'] .ch-spread--turn .ch-page--recto {
+    grid-row: 2;
+    border-block-start: var(--layout-line-hair);
+  }
+  [data-variant='chapters'] .ts__a {
+    padding-block: var(--space-l);
+  }
+  [data-variant='chapters'] :is(.ch-endpaper__verso, .ch-endpaper__recto) {
+    padding: var(--space-xl) var(--layout-edge) var(--space-s);
+  }
+  [data-variant='chapters'] :is(.it--figure p, .gp__list--figures),
+  [data-variant='chapters'] .fl .gp__list--figures > .it--figure > p {
+    grid-template-columns: minmax(4.5rem, max-content) minmax(0, 1fr);
+  }
+  [data-variant='chapters'] .ch-facts > div {
+    grid-template-columns: 6rem minmax(0, 1fr);
+  }
+  [data-variant='chapters'] .tp-proof {
+    grid-template-columns: minmax(6rem, max-content) minmax(0, 1fr);
+  }
+  /* The spread folds: the title page is a whole page, its title block set at the optical
+     centre, and the frontispiece is the page that faces it. */
+  [data-variant='chapters'] .ch-spread--title .ch-page--verso {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-block-size: calc(100svh - var(--layout-runhead) - 3px);
+    box-sizing: border-box;
+  }
+  /* The frontispiece is a plate on its own page, inside the page's margins. */
+  [data-variant='chapters'] .ch-spread--title .ch-page--recto {
+    padding-block-start: var(--space-xl);
+  }
+  /* P2-1: a spread across both pages (a series, a lone group's two columns) is one page here,
+     so its folios print once, after it. A plate's two pages stay two (P1-6). */
+  [data-variant='chapters']
+    .ch-spread:has(> .ch-folio--both)
+    > :is(.ch-folio--verso, .ch-folio--recto) {
+    display: none;
+  }
+  [data-variant='chapters'] .ch-folio--both {
+    display: flex;
+    grid-row: auto;
+  }
+}
+
+/* Print: each spread is a printed spread; the chrome goes. */
+@media print {
+  [data-variant='chapters'] :is(.ch-progress, .ch-endpaper__slot, .ch-edge__track) {
+    display: none;
+  }
+  /* Each fore-edge label stays to name its link (axe link-name), visually hidden in place: on
+     the printed row a label laid out beside its segment ran past the page's right edge (1669px
+     of page in a 1440px window), and a clip-path hides it without taking it out of overflow. */
+  [data-variant='chapters'] .ch-edge__label {
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    inline-size: 1px;
+    max-inline-size: none;
+    block-size: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    border: 0;
+    white-space: nowrap;
+  }
+  /* The navigation stays on paper as plain text: the running head, and the fore-edge as one row. */
+  [data-variant='chapters'] :is(.ch-runhead, .ch-edge, .ch-spread .ch-page__in) {
+    position: static;
+  }
+  [data-variant='chapters'] .ch-edge {
+    inline-size: auto;
+    padding-inline: var(--layout-bleed);
+  }
+  [data-variant='chapters'] .ch-edge ol {
+    flex-direction: row;
+  }
+  [data-variant='chapters'] .ch-spread {
+    break-inside: avoid;
+    min-block-size: 0;
+  }
+}

@@ -1,0 +1,2586 @@
+/*
+ * Terra Field: the field-and-arc document. Composition only: every colour
+ * is a role, every size a step or a role's size, every space a step, every
+ * duration a motion slot. The composition owns the field and its arc (a
+ * ::before whose edge is masked to an ellipse by the arc's depth), the seal,
+ * the axial masthead, the anchor band's 2fr 1fr 1fr grid, the field heads,
+ * the series template and the choreography; the scheme owns the field's
+ * colour (accent and on-accent, or, quiet, the prominent surface and the
+ * primary text). Logical properties throughout, so a right-to-left page
+ * mirrors.
+ */
+
+[data-variant='terra-field'] {
+  --layout-grid-columns: 12;
+  --layout-grid-gutter: var(--space-m);
+  --layout-grid-margin: var(--space-s-l);
+  --layout-motion-curve: cubic-bezier(0.25, 0.6, 0.3, 1);
+  --layout-motion-feedback: 200ms;
+  --layout-motion-scene: 700ms;
+  --layout-sticky-offset: calc(var(--space-2xl) + var(--space-s));
+  --layout-round: 50%;
+  /* The arc: how far the field's edge bows, at the window's middle against its edges. */
+  --layout-arc: clamp(var(--space-xl), calc(var(--space-s) + 8vw), calc(var(--space-3xl) * 1.15));
+  --layout-seal: calc(var(--space-3xl) + var(--space-s));
+  --layout-gap-field: var(--space-3xl);
+  --layout-gap-section: var(--space-3xl);
+  --layout-field-ground: var(--color-accent);
+  --layout-field-ink: var(--color-on-accent);
+  display: block;
+  font-variant-numeric: lining-nums;
+}
+
+[data-variant='terra-field'] .tf-root[data-tf-field='quiet'] {
+  --layout-field-ground: var(--color-surface-prominent);
+  --layout-field-ink: var(--color-text-primary);
+}
+
+[data-variant='terra-field'] .tf-root {
+  --layout-on-field-rule: color-mix(
+    in oklab,
+    var(--layout-field-ink) 34%,
+    var(--layout-field-ground)
+  );
+  /*
+   * A word longer than its line breaks rather than widen the page (X1).
+   * break-word leaves min-content alone, so labels, figures and buttons keep
+   * their words whole; the seal's label opts out besides (TF-M2).
+   */
+  overflow-wrap: break-word;
+}
+
+[data-variant='terra-field'] :where(h1, h2, h3, h4, h5, h6, p, ul, ol, dl, dd, figure, blockquote) {
+  margin: 0;
+}
+
+[data-variant='terra-field'] :where(ul, ol) {
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='terra-field'] :where(img) {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+}
+
+[data-variant='terra-field'] :where(h1, h2, h3, h4, h5, h6) {
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+
+[data-variant='terra-field'] :where(p, li, dd, dt, blockquote) {
+  text-wrap: pretty;
+  overflow-wrap: break-word;
+}
+
+[data-variant='terra-field'] :where(time, .tf-num) {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+[data-variant='terra-field'] .tf-sr {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+[data-variant='terra-field'] .tf-out {
+  margin-inline-start: 0.15em;
+}
+
+/* ---------- The type voices, from the roles ---------- */
+
+[data-variant='terra-field'] .tf-display {
+  font-family: var(--type-display-font-family);
+  font-weight: var(--type-display-font-weight);
+  font-size: var(--type-step-7);
+  line-height: var(--type-display-line-height);
+  letter-spacing: var(--type-display-letter-spacing);
+  font-variation-settings: var(--type-display-font-variation-settings);
+}
+
+[data-variant='terra-field'] .tf-headline {
+  font-family: var(--type-headline-font-family);
+  font-weight: var(--type-headline-font-weight);
+  font-size: var(--type-step-3);
+  line-height: var(--type-headline-line-height);
+  letter-spacing: var(--type-headline-letter-spacing);
+  font-variation-settings: var(--type-headline-font-variation-settings);
+}
+
+[data-variant='terra-field'] .tf-title {
+  font-family: var(--type-title-font-family);
+  font-weight: var(--type-title-font-weight);
+  font-size: var(--type-step-1);
+  line-height: var(--type-title-line-height);
+  letter-spacing: var(--type-title-letter-spacing);
+  font-variation-settings: var(--type-title-font-variation-settings);
+}
+
+[data-variant='terra-field'] .tf-quote {
+  font-family: var(--type-quote-font-family);
+  font-weight: var(--type-quote-font-weight);
+  font-size: var(--type-step-2);
+  line-height: var(--type-quote-line-height);
+  letter-spacing: var(--type-quote-letter-spacing);
+  font-variation-settings: var(--type-quote-font-variation-settings);
+}
+
+[data-variant='terra-field'] .tf-compact {
+  font-family: var(--type-body-compact-font-family);
+  font-size: var(--type-step--1);
+  line-height: var(--type-body-compact-line-height);
+  font-weight: var(--type-body-compact-font-weight);
+}
+
+[data-variant='terra-field'] .tf-label {
+  font-family: var(--type-label-font-family);
+  font-size: var(--type-step--1);
+  font-weight: var(--type-label-font-weight);
+  line-height: var(--type-label-line-height);
+  letter-spacing: var(--type-label-letter-spacing);
+}
+
+[data-variant='terra-field'] .tf-caption {
+  font-family: var(--type-caption-font-family);
+  font-size: var(--type-step--1);
+  line-height: var(--type-caption-line-height);
+  font-weight: var(--type-caption-font-weight);
+  font-variation-settings: var(--type-caption-font-variation-settings);
+  font-style: italic;
+}
+
+[data-variant='terra-field'] .tf-strong {
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='terra-field'] .tf-second {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='terra-field'] .tf-muted {
+  color: var(--color-text-muted);
+}
+
+[data-variant='terra-field'] .tf-kicker {
+  color: var(--color-accent-text);
+}
+
+[data-variant='terra-field'] .tf-kicker strong {
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='terra-field'] .pf-rich-text {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+[data-variant='terra-field'] .pf-rich-text:where(span) {
+  display: inline;
+}
+
+/* ---------- Links and actions ---------- */
+
+[data-variant='terra-field'] :where(a) {
+  color: inherit;
+  text-decoration-line: underline;
+  text-decoration-thickness: from-font;
+  text-decoration-color: color-mix(in oklab, currentColor 42%, transparent);
+  text-underline-offset: 0.22em;
+  transition: text-decoration-color var(--motion-feedback) var(--motion-curve);
+}
+
+[data-variant='terra-field'] :where(a):hover {
+  text-decoration-color: currentColor;
+}
+
+[data-variant='terra-field'] .tf-act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--ui-control-height);
+  padding-inline: var(--ui-space-control-inline);
+  padding-block: var(--ui-space-control-block);
+  border-radius: var(--ui-radius-badge);
+  border: var(--ui-border-control);
+  font-family: var(--type-label-font-family);
+  font-size: var(--type-step--1);
+  font-weight: var(--type-label-font-weight);
+  text-decoration-line: none;
+  transition: background-color var(--motion-feedback) var(--motion-curve);
+}
+
+[data-variant='terra-field'] .tf-act:active {
+  transform: var(--ui-state-active-transform);
+}
+
+/* On the field, the action takes the canvas: under the primary text, which every scheme pairs (TF-M1). */
+[data-variant='terra-field'] .tf-act--canvas {
+  background-color: var(--color-canvas);
+  color: var(--color-text-primary);
+  border-color: var(--color-canvas);
+}
+
+[data-variant='terra-field'] .tf-act--canvas:hover {
+  background-color: var(--color-surface-subtle);
+}
+
+/* Quiet, the field is a surface, so the action takes the accent and its pair instead. */
+[data-variant='terra-field'] .tf-root[data-tf-field='quiet'] .tf-act--canvas {
+  background-color: var(--color-accent);
+  color: var(--color-on-accent);
+  border-color: var(--color-accent);
+}
+
+[data-variant='terra-field'] .tf-root[data-tf-field='quiet'] .tf-act--canvas:hover {
+  background-color: var(--color-accent-hover);
+}
+
+[data-variant='terra-field'] .tf-linkbtn {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  text-decoration-line: underline;
+  text-decoration-thickness: from-font;
+  text-underline-offset: 0.22em;
+  text-decoration-color: color-mix(in oklab, currentColor 42%, transparent);
+}
+
+[data-variant='terra-field'] .tf-linkbtn:hover {
+  text-decoration-color: currentColor;
+}
+
+[data-variant='terra-field'] .tf-glyph {
+  inline-size: 1.4em;
+  block-size: auto;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+/* ---------- The page grid: twelve columns on the page width ---------- */
+
+[data-variant='terra-field'] .tf-page {
+  inline-size: min(100% - 2 * var(--layout-grid-margin), var(--layout-width-page));
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+}
+
+[data-variant='terra-field'] .tf-page > * {
+  grid-column: 1 / -1;
+  min-inline-size: 0;
+}
+
+/* ---------- The field: a ground whose edge is the arc ---------- */
+/*
+ * The ground is a ::before under the content. Its edge is an ellipse,
+ * masked: a block over the straight part and an ellipse as wide as the
+ * field and twice the depth tall at the bowed edge, so the edge bows by
+ * the depth at the middle and meets the straight part at each end.
+ */
+
+[data-variant='terra-field'] :is(.tf-hero, .tf-fieldhead, .tf-close, .tf-notes__ground) {
+  position: relative;
+  isolation: isolate;
+}
+
+[data-variant='terra-field'] :is(.tf-hero, .tf-fieldhead, .tf-close, .tf-notes__ground)::before,
+[data-variant='terra-field'] .tf-fieldhead[data-edge]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-color: var(--layout-field-ground);
+  mask-image:
+    linear-gradient(black, black),
+    radial-gradient(farthest-side, black calc(100% - 1px), transparent);
+  mask-repeat: no-repeat;
+  mask-size:
+    100% calc(100% - var(--layout-depth)),
+    100% calc(2 * var(--layout-depth));
+  mask-position: top, bottom;
+}
+
+[data-variant='terra-field']
+  :is(.tf-hero, .tf-notes__ground, .tf-fieldhead[data-arc='sag'])::before {
+  transform-origin: 50% 0;
+}
+
+[data-variant='terra-field'] :is(.tf-close, .tf-fieldhead[data-arc='rise'])::before,
+[data-variant='terra-field'] .tf-fieldhead[data-arc='rise']::after {
+  mask-position: bottom, top;
+}
+
+/* A subtle ground's hairline on its arc (S-5): the same shape under it, a pixel toward the paper. */
+[data-variant='terra-field'] .tf-fieldhead[data-edge]::after {
+  z-index: -2;
+  background-color: var(--color-border-strong);
+  translate: 0 1px;
+}
+
+[data-variant='terra-field'] .tf-fieldhead[data-edge='accent']::after {
+  background-color: var(--color-accent);
+}
+
+[data-variant='terra-field'] .tf-fieldhead[data-arc='rise']::after {
+  translate: 0 -1px;
+}
+
+[data-variant='terra-field'] .tf-hero,
+[data-variant='terra-field'] .tf-notes__ground,
+[data-variant='terra-field'] .tf-close {
+  --layout-depth: var(--layout-arc);
+}
+
+/* ---------- The masthead: one row on the field, the name on the axis ---------- */
+
+[data-variant='terra-field'] .tf-mast {
+  background-color: var(--layout-field-ground);
+  color: var(--layout-field-ink);
+  padding-block: var(--space-m) var(--space-s);
+}
+
+[data-variant='terra-field'] .tf-mast__row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  column-gap: var(--layout-grid-gutter);
+}
+
+[data-variant='terra-field'] .tf-mast__end {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  column-gap: var(--space-m);
+}
+
+[data-variant='terra-field'] .tf-mast__list {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-m);
+  row-gap: var(--space-3xs);
+}
+
+[data-variant='terra-field'] .tf-mast a,
+[data-variant='terra-field'] .tf-mast .tf-linkbtn {
+  font-family: var(--type-body-compact-font-family);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='terra-field'] .tf-mast__list a {
+  text-decoration-color: transparent;
+}
+
+[data-variant='terra-field'] .tf-mast__list a:hover,
+[data-variant='terra-field'] .tf-mast__list a[aria-current] {
+  text-decoration-color: currentColor;
+}
+
+[data-variant='terra-field'] .tf-mast .tf-mast__name {
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-step-1);
+  font-weight: var(--type-title-font-weight);
+  text-align: center;
+  text-decoration-color: transparent;
+}
+
+/* ---------- The opening ---------- */
+
+[data-variant='terra-field'] .tf-hero {
+  /* Over the band, so the seal sits on the photograph's corner. */
+  z-index: 1;
+  color: var(--layout-field-ink);
+  padding-block: var(--space-l) calc(var(--layout-arc) + var(--space-xl));
+}
+
+/* The seal is as wide as its widest word needs, so the opening keeps that much room above it. */
+/*
+ * It holds its figure on one line and its label on two at most, so it is
+ * at least as wide as each, and as tall as both together: a circle, always.
+ */
+[data-variant='terra-field'] .tf-root {
+  --layout-seal-figure-size: var(--type-step-4);
+  --layout-seal-size: max(
+    var(--layout-seal),
+    calc(var(--layout-seal-chars, 0) * 1ch + 2 * var(--space-m)),
+    calc(var(--layout-seal-figure, 0) * 0.62 * var(--layout-seal-figure-size) + 2 * var(--space-m)),
+    calc(var(--layout-seal-figure-size) + 2.9 * var(--type-step--1) + 2 * var(--space-m))
+  );
+}
+
+/* No seal on the arc: the field closes a step under its last line, not a seal's reserve lower. */
+[data-variant='terra-field'] .tf-hero:not([data-seal]) {
+  padding-block-end: calc(var(--layout-arc) + var(--space-l));
+}
+
+[data-variant='terra-field'] .tf-hero[data-seal] {
+  padding-block-end: calc(var(--layout-seal-size) * 0.5 + var(--space-l));
+}
+
+[data-variant='terra-field'] .tf-hero__inner {
+  grid-column: 2 / 12;
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+
+/*
+ * Centred lines (the opening, the standfirst, the field heads, the lede,
+ * the sayings and the close) are only as wide as their text: there a word
+ * longer than the column may break anywhere, or it would set the line's
+ * width and spill past the window. Actions and the seal keep their words.
+ * The paragraphs inside them too: rich text is a grid, so each paragraph is
+ * a grid item sized by its longest word, and it sets break-word itself.
+ */
+[data-variant='terra-field'] .tf-hero__inner > :not(.tf-hero__acts),
+[data-variant='terra-field'] .tf-thesis > *,
+[data-variant='terra-field'] .tf-fieldhead__inner > :is(h2, p),
+[data-variant='terra-field'] .tf-lede__text,
+[data-variant='terra-field'] :is(.tf-now, .tf-standalone, .tf-saying) > *,
+[data-variant='terra-field'] .tf-close__inner > :is(h2, p),
+[data-variant='terra-field'] .tf-close__ask > *,
+[data-variant='terra-field']
+  :is(
+    .tf-hero__inner > :not(.tf-hero__acts),
+    .tf-thesis > *,
+    .tf-lede__text,
+    :is(.tf-now, .tf-standalone, .tf-saying) > *,
+    .tf-close__ask > *
+  )
+  :where(p, li, dd, dt, blockquote) {
+  overflow-wrap: anywhere;
+}
+
+[data-variant='terra-field'] .tf-hero .tf-kicker {
+  color: inherit;
+}
+
+[data-variant='terra-field'] .tf-hero__line {
+  margin-block-start: var(--space-s);
+  max-inline-size: 20ch;
+}
+
+/* The lede in the quote voice at step 1: the opening keeps four sizes (T1), the seal its one big figure. */
+[data-variant='terra-field'] .tf-hero__lede {
+  margin-block-start: var(--space-m);
+  max-inline-size: 44ch;
+  font-size: var(--type-step-1);
+}
+
+[data-variant='terra-field'] .tf-hero__acts {
+  margin-block-start: var(--space-m);
+}
+
+[data-variant='terra-field'] .tf-hero__sub {
+  margin-block-start: var(--space-m);
+  max-inline-size: 60ch;
+  text-wrap: balance;
+}
+
+[data-variant='terra-field'] .tf-hero a:not(.tf-act, .tf-seal__link) {
+  color: inherit;
+}
+
+/* The seal: on paper, centred on the arc's lowest point, as large as its words need. */
+[data-variant='terra-field'] .tf-seal {
+  position: absolute;
+  inset-block-end: calc(var(--layout-seal-size) * -0.5);
+  inset-inline: 0;
+  margin-inline: auto;
+  inline-size: var(--layout-seal-size);
+  aspect-ratio: 1;
+  border-radius: var(--layout-round);
+  background-color: var(--color-canvas);
+  color: var(--color-text-primary);
+  z-index: 1;
+}
+
+/*
+ * The seal straddles the field and the paper, so what takes focus is a
+ * circle inset inside it, far enough that the platform's ring (its width
+ * and offset) lies wholly on the seal's own ground (C2, TF-M7).
+ */
+[data-variant='terra-field'] .tf-seal__link {
+  position: absolute;
+  inset: calc(var(--ui-focus-width) + var(--ui-focus-offset) + var(--space-3xs));
+  border-radius: var(--layout-round);
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-3xs);
+  text-align: center;
+  color: inherit;
+  text-decoration-line: none;
+}
+
+[data-variant='terra-field'] .tf-seal::after {
+  content: '';
+  position: absolute;
+  inset: var(--space-2xs);
+  border-radius: var(--layout-round);
+  border: var(--ui-border-divider);
+  border-color: var(--color-border-default);
+  pointer-events: none;
+}
+
+[data-variant='terra-field'] .tf-seal__value {
+  font-family: var(--type-headline-font-family);
+  font-weight: var(--type-headline-font-weight);
+  font-size: var(--layout-seal-figure-size);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+[data-variant='terra-field'] .tf-seal__label {
+  font-family: var(--type-body-compact-font-family);
+  font-size: var(--type-step--1);
+  line-height: var(--type-body-compact-line-height);
+  /* Never a broken word (TF-M2): the label is at least its widest word wide. */
+  min-inline-size: min-content;
+  max-inline-size: calc(var(--layout-seal-size) - 2 * var(--space-m));
+  overflow-wrap: normal;
+  word-break: keep-all;
+  hyphens: manual;
+  text-wrap: balance;
+}
+
+/* ---------- The anchor band: 2fr 1fr 1fr under the arc ---------- */
+
+/*
+ * The band starts at the arc's low point: the photograph is the plate the
+ * arc opens onto (TF-M4), its top edge there, the seal over its inner
+ * corner; the plates drop below the seal.
+ */
+[data-variant='terra-field'] .tf-band {
+  margin-block-start: 0;
+  row-gap: var(--space-l);
+  align-items: start;
+}
+
+[data-variant='terra-field'] .tf-band__photo {
+  grid-column: 1 / 7;
+  position: relative;
+}
+
+[data-variant='terra-field'] .tf-band[data-photo='none'] .tf-plate[data-plate='1'],
+[data-variant='terra-field'] .tf-band[data-plates='1'] .tf-plate {
+  grid-column: 1 / 7;
+}
+
+[data-variant='terra-field'] .tf-band[data-photo='none'] .tf-plate[data-plate='2'] {
+  grid-column: 7 / 13;
+}
+
+[data-variant='terra-field'] .tf-band[data-photo=''] .tf-plate[data-plate='1'] {
+  grid-column: 7 / 10;
+}
+
+[data-variant='terra-field'] .tf-band[data-photo=''] .tf-plate[data-plate='2'] {
+  grid-column: 10 / 13;
+}
+
+[data-variant='terra-field'] .tf-band[data-photo=''][data-plates='1'] .tf-plate {
+  grid-column: 7 / 13;
+}
+
+[data-variant='terra-field'] .tf-band__frame {
+  overflow: hidden;
+  border-radius: var(--ui-radius-media);
+}
+
+/* An image that isn't ready keeps its place as a framed plate, never bare words on the paper. */
+[data-variant='terra-field'] .pf-media-box {
+  display: grid;
+  place-items: center;
+  min-block-size: var(--space-3xl);
+  padding: var(--space-s);
+  background-color: var(--color-surface-subtle);
+  color: var(--color-text-secondary);
+  border: var(--ui-border-divider);
+  border-color: var(--color-border-strong);
+  border-radius: var(--ui-radius-media);
+}
+
+[data-variant='terra-field'] .tf-band__frame :is(img, .pf-media-box) {
+  inline-size: 100%;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+}
+
+/* The photograph's own caption on its line, the series and its count on the next (S-3). */
+[data-variant='terra-field'] .tf-band__cap {
+  display: grid;
+  position: absolute;
+  inset-inline-start: var(--space-s);
+  inset-block-end: var(--space-s);
+  max-inline-size: calc(100% - 2 * var(--space-s));
+  background-color: var(--color-canvas);
+  color: var(--color-text-primary);
+  border-radius: var(--ui-radius-control);
+  padding-block: var(--space-2xs);
+  padding-inline: var(--space-s);
+}
+
+/* A companion: a captioned plate on the paper, a hairline over it, never a card. */
+[data-variant='terra-field'] .tf-plate {
+  margin-block-start: calc(var(--layout-seal-size) * 0.5 + var(--space-s));
+  display: grid;
+  gap: var(--space-xs);
+  align-content: start;
+  padding-block-start: var(--space-s);
+  border-block-start: var(--ui-border-divider);
+  border-color: var(--color-border-default);
+  min-inline-size: 0;
+}
+
+/* No seal on the arc: the plates start a step under its low point, not a seal's half lower. */
+[data-variant='terra-field'] .tf-root:not(:has(.tf-seal)) .tf-plate {
+  margin-block-start: var(--space-l);
+}
+
+[data-variant='terra-field'] .tf-plate__cap {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+[data-variant='terra-field'] .tf-plate__title a {
+  text-decoration-color: transparent;
+}
+
+[data-variant='terra-field'] .tf-plate__title a:hover {
+  text-decoration-color: currentColor;
+}
+
+/* Smaller than the seal's figure: the seal stays the opening's only proof (F3). */
+[data-variant='terra-field'] .tf-plate__figure {
+  font-size: var(--type-step-1);
+  line-height: 1;
+  color: var(--color-accent-text);
+  margin-block-start: var(--space-xs);
+}
+
+[data-variant='terra-field'] .tf-plate__figure a {
+  text-decoration-color: transparent;
+}
+
+[data-variant='terra-field'] .tf-plate__unit {
+  font-size: var(--type-step-1);
+}
+
+/* ---------- The standfirst: the thesis on the axis ---------- */
+
+[data-variant='terra-field'] .tf-thesis {
+  padding-block-start: var(--layout-gap-section);
+  justify-items: center;
+  row-gap: var(--space-s);
+  text-align: center;
+}
+
+[data-variant='terra-field'] .tf-thesis > * {
+  grid-column: 3 / 11;
+}
+
+[data-variant='terra-field'] .tf-thesis__text {
+  font-size: var(--type-step-3);
+  line-height: calc(var(--type-quote-line-height) * 0.92);
+}
+
+/* ---------- The marker: a horizon gauge that sticks on the axis ---------- */
+
+[data-variant='terra-field'] .tf-marker {
+  position: sticky;
+  inset-block-start: var(--space-s);
+  block-size: 0;
+  margin-block-start: var(--space-2xl);
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+[data-variant='terra-field'] .tf-marker__chip {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-s);
+  background-color: var(--color-surface-overlay);
+  color: var(--color-text-primary);
+  border-radius: var(--ui-radius-badge);
+  box-shadow: var(--ui-shadow-raised);
+  padding-block: var(--space-2xs);
+  padding-inline: var(--space-s) var(--space-m);
+}
+
+[data-variant='terra-field'] .tf-gauge {
+  inline-size: calc(var(--space-2xl) * 0.62);
+  block-size: auto;
+  overflow: visible;
+}
+
+[data-variant='terra-field'] .tf-gauge__arc {
+  fill: none;
+  stroke: var(--color-border-strong);
+  stroke-width: 1.5;
+}
+
+[data-variant='terra-field'] .tf-gauge__dot {
+  fill: var(--color-accent-text);
+}
+
+[data-variant='terra-field'] .tf-marker__where {
+  min-inline-size: 6ch;
+}
+
+/* Above every field the marker names none: the gauge and Field notes only. */
+[data-variant='terra-field'] .tf-marker__where:empty,
+[data-variant='terra-field'] .tf-marker__where:empty + .tf-marker__rule {
+  display: none;
+}
+
+[data-variant='terra-field'] .tf-marker__rule {
+  inline-size: 1px;
+  align-self: stretch;
+  background-color: var(--color-border-default);
+}
+
+/* ---------- The fields: each destination on its own ground ---------- */
+
+[data-variant='terra-field'] .tf-field {
+  padding-block-start: var(--layout-gap-field);
+}
+
+[data-variant='terra-field'] .tf-fieldhead {
+  --layout-depth: calc(var(--layout-arc) * 0.6);
+  --layout-tone: var(--color-surface-prominent);
+  --layout-field-ground: var(--layout-tone);
+  --layout-field-ink: var(--color-text-primary);
+  color: var(--layout-field-ink);
+  padding-block: var(--space-2xl) calc(var(--layout-depth) + var(--space-xl));
+}
+
+[data-variant='terra-field'] .tf-fieldhead[data-arc='rise'] {
+  padding-block: calc(var(--layout-depth) + var(--space-xl)) var(--space-2xl);
+}
+
+[data-variant='terra-field'] .tf-fieldhead[data-depth='shallow'] {
+  --layout-depth: calc(var(--layout-arc) * 0.35);
+}
+
+[data-variant='terra-field'] .tf-fieldhead[data-depth='mid'] {
+  --layout-depth: calc(var(--layout-arc) * 0.5);
+}
+
+[data-variant='terra-field'] .tf-fieldhead[data-depth='deep'] {
+  --layout-depth: calc(var(--layout-arc) * 0.7);
+}
+
+[data-variant='terra-field'] .tf-fieldhead[data-tone='subtle'] {
+  --layout-tone: var(--color-surface-subtle);
+}
+
+[data-variant='terra-field'] .tf-fieldhead[data-tone='default'] {
+  --layout-tone: var(--color-surface-default);
+}
+
+[data-variant='terra-field']
+  .tf-root:not([data-tf-field='quiet'])
+  .tf-fieldhead[data-tone='accent'] {
+  --layout-tone: var(--color-accent);
+  --layout-field-ink: var(--color-on-accent);
+}
+
+[data-variant='terra-field'] .tf-fieldhead__inner {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-s);
+  text-align: center;
+}
+
+[data-variant='terra-field'] .tf-fieldhead__word {
+  font-size: var(--type-step-6);
+}
+
+[data-variant='terra-field'] .tf-fieldhead__index {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  column-gap: var(--space-m);
+  row-gap: var(--space-3xs);
+  max-inline-size: 64ch;
+}
+
+[data-variant='terra-field'] .tf-fieldhead__index a {
+  text-decoration-color: color-mix(in oklab, currentColor 34%, transparent);
+}
+
+[data-variant='terra-field'] .tf-field__body {
+  display: grid;
+}
+
+/* A section on paper: its title, a horizon line to the edge, its count. */
+[data-variant='terra-field'] .tf-section {
+  padding-block-start: var(--space-2xl);
+  row-gap: var(--space-xl);
+  align-items: start;
+}
+
+[data-variant='terra-field'] .tf-field__body > .tf-section:first-child {
+  padding-block-start: var(--space-xl);
+}
+
+[data-variant='terra-field'] .tf-sechead {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+[data-variant='terra-field'] .tf-sechead__line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-s);
+}
+
+[data-variant='terra-field'] .tf-sechead__line::after {
+  content: '';
+  order: 1;
+  flex: 1;
+  border-block-start: var(--ui-border-divider);
+  border-color: var(--color-border-default);
+}
+
+[data-variant='terra-field'] .tf-sechead__count {
+  order: 2;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+[data-variant='terra-field'] .tf-sechead__sub {
+  max-inline-size: 56ch;
+  color: var(--color-text-secondary);
+}
+
+/* The full record, folded: the title, a horizon line, the count, and an arc that turns. */
+[data-variant='terra-field'] .tf-section[data-fold] {
+  padding-block-start: var(--space-m);
+}
+
+[data-variant='terra-field'] .tf-fold__summary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-s);
+  min-block-size: var(--ui-control-height);
+  padding-block: var(--space-xs);
+  list-style: none;
+  cursor: pointer;
+}
+
+[data-variant='terra-field'] .tf-fold__summary::-webkit-details-marker {
+  display: none;
+}
+
+[data-variant='terra-field'] .tf-fold__summary::before {
+  content: '';
+  order: 1;
+  flex: 1;
+  border-block-start: var(--ui-border-divider);
+  border-color: var(--color-border-default);
+}
+
+[data-variant='terra-field'] .tf-fold__summary .tf-sechead__count {
+  order: 2;
+}
+
+[data-variant='terra-field'] .tf-fold__summary::after {
+  content: '';
+  order: 3;
+  flex: none;
+  align-self: center;
+  /* The fold's cue (P1 S-8): an arc the size of a control's glyph, in the ink, not a hint. */
+  inline-size: var(--space-m);
+  block-size: var(--space-xs);
+  border: var(--ui-border-control);
+  border-color: var(--color-text-primary);
+  border-block-end: 0;
+  border-start-start-radius: var(--layout-round);
+  border-start-end-radius: var(--layout-round);
+}
+
+[data-variant='terra-field'] .tf-fold[open] > .tf-fold__summary::after {
+  rotate: 180deg;
+}
+
+[data-variant='terra-field'] .tf-fold__summary:hover .tf-sechead__title {
+  text-decoration-line: underline;
+  text-decoration-thickness: from-font;
+  text-underline-offset: 0.22em;
+}
+
+[data-variant='terra-field'] .tf-fold__body {
+  display: grid;
+  gap: var(--space-xl);
+  padding-block: var(--space-l) var(--space-s);
+}
+
+/* What moves as feedback (a press, the fold's arc turning) moves only under no-preference and full motion. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static'])
+    .tf-fold__summary::after {
+    transition: rotate var(--motion-feedback) var(--motion-curve);
+  }
+
+  [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static']) .tf-act {
+    transition:
+      background-color var(--motion-feedback) var(--motion-curve),
+      transform var(--motion-feedback) var(--motion-curve);
+  }
+}
+
+/* With no script, a link to a folded section shows its content, as the enhancement would open it. */
+@media (scripting: none) {
+  [data-variant='terra-field']
+    :is(:target > details.tf-fold, details.tf-fold:has(:target))
+    > :not(summary) {
+    display: grid;
+  }
+
+  [data-variant='terra-field']
+    :is(:target > details.tf-fold, details.tf-fold:has(:target))::details-content {
+    content-visibility: visible;
+    block-size: auto;
+  }
+}
+
+/* ---------- Works: the series template, one form for every work ---------- */
+
+[data-variant='terra-field'] .tf-series {
+  display: grid;
+  grid-template-columns: subgrid;
+}
+
+[data-variant='terra-field'] .tf-entry {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  row-gap: var(--space-m);
+  align-items: start;
+  padding-block: var(--space-xl);
+  border-block-start: var(--ui-border-divider);
+  border-color: var(--color-border-default);
+}
+
+[data-variant='terra-field'] .tf-series > :first-child {
+  padding-block-start: 0;
+  border-block-start: 0;
+}
+
+[data-variant='terra-field'] .tf-entry__text {
+  grid-column: 1 / 6;
+  display: grid;
+  gap: var(--space-s);
+  align-content: start;
+}
+
+[data-variant='terra-field'] .tf-entry[data-lead='none'] .tf-entry__text {
+  grid-column: 1 / 9;
+}
+
+[data-variant='terra-field'] .tf-entry__lead {
+  grid-column: 7 / 13;
+}
+
+[data-variant='terra-field'] .tf-entry__title a {
+  text-decoration-color: transparent;
+}
+
+[data-variant='terra-field'] .tf-entry__sum {
+  color: var(--color-text-secondary);
+  max-inline-size: var(--type-measure-compact);
+}
+
+[data-variant='terra-field'] .tf-ruled > li {
+  padding-block: var(--space-xs);
+  border-block-start: var(--ui-border-divider);
+  border-color: var(--color-border-subtle);
+}
+
+[data-variant='terra-field'] .tf-ruled > li:last-child {
+  border-block-end: var(--ui-border-divider);
+  border-block-end-color: var(--color-border-subtle);
+}
+
+[data-variant='terra-field'] .tf-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-3xs) var(--space-m);
+}
+
+[data-variant='terra-field'] .tf-facts > div {
+  display: contents;
+}
+
+[data-variant='terra-field'] .tf-facts dt {
+  color: var(--color-text-muted);
+}
+
+[data-variant='terra-field'] .tf-entry__links,
+[data-variant='terra-field'] .tf-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs) var(--space-m);
+}
+
+[data-variant='terra-field'] .tf-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--ui-radius-media);
+}
+
+[data-variant='terra-field'] .tf-frame :is(img, .pf-media-box) {
+  inline-size: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+}
+
+[data-variant='terra-field'] .tf-standfirst {
+  padding-block: var(--space-l);
+  border-block: var(--ui-border-divider);
+  border-color: var(--color-border-default);
+  font-style: italic;
+}
+
+[data-variant='terra-field'] .tf-backref {
+  grid-column: 1 / -1;
+  padding-block: var(--space-m);
+  border-block-start: var(--ui-border-divider);
+  border-color: var(--color-border-default);
+  color: var(--color-text-secondary);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-variant='terra-field'] .tf-entry {
+    transition: opacity var(--motion-feedback) var(--motion-curve);
+  }
+
+  [data-variant='terra-field'] .tf-series:has(.tf-entry:hover) .tf-entry:not(:hover) {
+    opacity: 0.5;
+  }
+
+  [data-variant='terra-field'] .tf-entry:hover .tf-entry__title a {
+    text-decoration-color: currentColor;
+  }
+}
+
+[data-variant='terra-field'] .tf-series:has(.tf-entry:focus-within) .tf-entry:not(:focus-within) {
+  opacity: 0.5;
+}
+
+[data-variant='terra-field'] .tf-entry:focus-within .tf-entry__title a {
+  text-decoration-color: currentColor;
+}
+
+/* Recordings: the episode log. */
+[data-variant='terra-field'] .tf-log > li {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  row-gap: var(--space-2xs);
+  align-items: baseline;
+  padding-block: var(--space-m);
+  border-block-start: var(--ui-border-divider);
+  border-color: var(--color-border-default);
+}
+
+[data-variant='terra-field'] .tf-log > li:last-child {
+  border-block-end: var(--ui-border-divider);
+  border-block-end-color: var(--color-border-default);
+}
+
+[data-variant='terra-field'] .tf-log__no {
+  grid-column: 1 / 3;
+  color: var(--color-accent-text);
+}
+
+[data-variant='terra-field'] .tf-log__main {
+  grid-column: 3 / 9;
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+[data-variant='terra-field'] .tf-log__date {
+  grid-column: 9 / 11;
+}
+
+[data-variant='terra-field'] .tf-log__len {
+  grid-column: 11 / 13;
+  display: grid;
+  justify-items: end;
+  gap: var(--space-3xs);
+  text-align: end;
+}
+
+/* Photographs: one large, its companions beside it, one caption system. */
+[data-variant='terra-field'] .tf-gallery {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  row-gap: var(--space-l);
+}
+
+[data-variant='terra-field'] .tf-gallery__title {
+  grid-column: 1 / -1;
+}
+
+[data-variant='terra-field'] .tf-gallery__frame {
+  grid-column: span 4;
+  display: grid;
+  gap: var(--space-xs);
+  align-content: start;
+}
+
+[data-variant='terra-field'] .tf-gallery__frame:first-of-type {
+  grid-column: 1 / 9;
+  grid-row: span 2;
+}
+
+[data-variant='terra-field'] .tf-gallery[data-count='1'] .tf-gallery__frame {
+  grid-column: 3 / 11;
+}
+
+[data-variant='terra-field'] .tf-gallery__frame:first-of-type .tf-frame :is(img, .pf-media-box) {
+  aspect-ratio: 4 / 3;
+}
+
+[data-variant='terra-field'] .tf-gallery__frame .tf-frame :is(img, .pf-media-box) {
+  aspect-ratio: 3 / 2;
+}
+
+[data-variant='terra-field'] .tf-cap {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3xs) var(--space-s);
+}
+
+/* Music: the sleeve and its tracks. */
+[data-variant='terra-field'] .tf-sleeve {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  row-gap: var(--space-l);
+  align-items: start;
+}
+
+[data-variant='terra-field'] .tf-sleeve__cover {
+  grid-column: 1 / 5;
+}
+
+[data-variant='terra-field'] .tf-sleeve__cover :is(img, .pf-media-box) {
+  aspect-ratio: 1;
+}
+
+[data-variant='terra-field'] .tf-sleeve__text {
+  grid-column: 6 / 13;
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='terra-field'] .tf-sleeve[data-cover='none'] .tf-sleeve__text {
+  grid-column: 3 / 11;
+}
+
+[data-variant='terra-field'] .tf-sleeve__desc {
+  max-inline-size: var(--type-measure-body);
+}
+
+[data-variant='terra-field'] .tf-tracks li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-s);
+}
+
+/* Writing: reading columns with hairlines between them. */
+[data-variant='terra-field'] .tf-essays {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  row-gap: var(--space-xl);
+}
+
+[data-variant='terra-field'] .tf-essay {
+  grid-column: span 4;
+  position: relative;
+  display: grid;
+  gap: var(--space-s);
+  align-content: start;
+}
+
+[data-variant='terra-field'] .tf-essays[data-count='2'] .tf-essay {
+  grid-column: span 6;
+}
+
+[data-variant='terra-field'] .tf-essays[data-count='1'] .tf-essay {
+  grid-column: 3 / 11;
+}
+
+[data-variant='terra-field'] .tf-essay + .tf-essay::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(var(--layout-grid-gutter) * -0.5);
+  border-inline-start: var(--ui-border-divider);
+  border-color: var(--color-border-default);
+}
+
+[data-variant='terra-field'] .tf-essay__title a {
+  text-decoration-color: transparent;
+}
+
+[data-variant='terra-field'] .tf-essay__title a:hover {
+  text-decoration-color: currentColor;
+}
+
+[data-variant='terra-field'] .tf-essay__pull {
+  font-style: italic;
+}
+
+/* ---------- Evidence ---------- */
+
+/* The ledger: the record's words, then its figure at the rule's end. */
+[data-variant='terra-field'] .tf-ledger {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+}
+
+[data-variant='terra-field'] .tf-ledger > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: first baseline;
+  gap: var(--space-l);
+  padding-block: var(--space-m);
+  border-block-start: var(--ui-border-divider);
+  border-color: var(--color-border-default);
+}
+
+[data-variant='terra-field'] .tf-ledger > div:nth-last-child(-n + 2) {
+  border-block-end: var(--ui-border-divider);
+  border-block-end-color: var(--color-border-default);
+}
+
+[data-variant='terra-field'] .tf-ledger dt {
+  display: grid;
+  gap: var(--space-3xs);
+  max-inline-size: 40ch;
+}
+
+[data-variant='terra-field'] .tf-ledger dd {
+  flex: none;
+  font-family: var(--type-headline-font-family);
+  font-weight: var(--type-headline-font-weight);
+  font-size: var(--type-step-4);
+  line-height: 1;
+  color: var(--color-accent-text);
+}
+
+[data-variant='terra-field'] .tf-ledger__unit {
+  font-size: var(--type-step-1);
+}
+
+/* Voices: the first large, the others beside it. */
+[data-variant='terra-field'] .tf-voices {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  row-gap: var(--space-xl);
+  align-items: start;
+}
+
+[data-variant='terra-field'] .tf-voice {
+  grid-column: 8 / 13;
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='terra-field'] .tf-voice:first-child {
+  grid-column: 1 / 7;
+  grid-row: span 3;
+}
+
+[data-variant='terra-field'] .tf-voice:first-child .tf-quote {
+  font-size: var(--type-step-3);
+}
+
+[data-variant='terra-field'] .tf-voices[data-count='1'] .tf-voice {
+  grid-column: 3 / 11;
+  text-align: center;
+}
+
+[data-variant='terra-field'] .tf-voice + .tf-voice + .tf-voice {
+  padding-block-start: var(--space-l);
+  border-block-start: var(--ui-border-divider);
+  border-color: var(--color-border-default);
+}
+
+[data-variant='terra-field'] .tf-voice__who {
+  font-weight: var(--type-title-font-weight);
+}
+
+/* Citations, press, places, offers: plates on paper, two to a row. */
+[data-variant='terra-field'] :is(.tf-cites, .tf-press, .tf-places, .tf-offers, .tf-notes-list) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  row-gap: var(--space-xl);
+  align-items: start;
+}
+
+[data-variant='terra-field'] :is(.tf-cite, .tf-pull, .tf-place, .tf-offer) {
+  display: grid;
+  gap: var(--space-xs);
+  align-content: start;
+  padding-block-start: var(--space-s);
+  border-block-start: var(--ui-border-divider);
+  border-color: var(--color-border-default);
+}
+
+[data-variant='terra-field'] .tf-cite__title a,
+[data-variant='terra-field'] .tf-pull__title a {
+  text-decoration-color: transparent;
+}
+
+[data-variant='terra-field'] .tf-cite__title a:hover,
+[data-variant='terra-field'] .tf-pull__title a:hover {
+  text-decoration-color: currentColor;
+}
+
+[data-variant='terra-field'] .tf-pull blockquote {
+  font-style: italic;
+}
+
+[data-variant='terra-field'] .tf-place__figs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs) var(--space-l);
+}
+
+[data-variant='terra-field'] .tf-place__figs > div {
+  display: grid;
+}
+
+[data-variant='terra-field'] .tf-emph {
+  color: var(--color-accent-text);
+}
+
+/* Talks, and the ruled fallback: rows on the grid. */
+[data-variant='terra-field'] :is(.tf-talks, .tf-rows, .tf-chron) > li {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  row-gap: var(--space-2xs);
+  align-items: baseline;
+  padding-block: var(--space-m);
+  border-block-start: var(--ui-border-divider);
+  border-color: var(--color-border-default);
+}
+
+[data-variant='terra-field'] :is(.tf-talks, .tf-rows, .tf-chron) > li:last-child {
+  border-block-end: var(--ui-border-divider);
+  border-block-end-color: var(--color-border-default);
+}
+
+[data-variant='terra-field'] :is(.tf-talks__when, .tf-rows__when, .tf-chron__when) {
+  grid-column: 1 / 3;
+  color: var(--color-text-muted);
+}
+
+[data-variant='terra-field'] .tf-talks__main {
+  grid-column: 3 / 8;
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+[data-variant='terra-field'] .tf-talks__where {
+  grid-column: 8 / 11;
+}
+
+[data-variant='terra-field'] .tf-talks__links {
+  grid-column: 11 / 13;
+  justify-content: end;
+}
+
+[data-variant='terra-field'] .tf-rows__main {
+  grid-column: 3 / 11;
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+[data-variant='terra-field'] .tf-rows__media {
+  grid-column: 1 / 3;
+}
+
+[data-variant='terra-field'] .tf-rows > li[data-media] .tf-rows__main {
+  grid-column: 3 / 13;
+}
+
+[data-variant='terra-field'] .tf-chron > li {
+  padding-block: var(--space-l);
+}
+
+[data-variant='terra-field'] .tf-chron__who {
+  grid-column: 3 / 7;
+  display: grid;
+  gap: var(--space-3xs);
+  align-content: start;
+}
+
+[data-variant='terra-field'] .tf-chron__what {
+  grid-column: 7 / 13;
+  display: grid;
+  gap: var(--space-xs);
+  max-inline-size: var(--type-measure-body);
+}
+
+[data-variant='terra-field'] .tf-dashes {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+[data-variant='terra-field'] .tf-dashes li {
+  position: relative;
+  padding-inline-start: var(--space-s);
+}
+
+[data-variant='terra-field'] .tf-dashes li::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-start: 0.75em;
+  inline-size: var(--space-2xs);
+  border-block-start: var(--ui-border-divider);
+  border-color: var(--color-text-muted);
+}
+
+/* Awards: year seals on the field's ground. */
+[data-variant='terra-field'] .tf-awards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  row-gap: var(--space-l);
+}
+
+[data-variant='terra-field'] .tf-award {
+  display: flex;
+  gap: var(--space-l);
+  align-items: center;
+}
+
+[data-variant='terra-field'] .tf-award__seal {
+  flex: none;
+  inline-size: calc(var(--layout-seal) * 0.72);
+  aspect-ratio: 1;
+  border-radius: var(--layout-round);
+  display: grid;
+  place-content: center;
+  background-color: var(--layout-field-ground);
+  color: var(--layout-field-ink);
+}
+
+[data-variant='terra-field'] .tf-award__text {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+/* ---------- Practice ---------- */
+
+[data-variant='terra-field'] .tf-skills {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  row-gap: var(--space-l);
+}
+
+[data-variant='terra-field'] .tf-skill {
+  position: relative;
+  display: grid;
+  gap: var(--space-xs);
+  align-content: start;
+}
+
+[data-variant='terra-field'] .tf-skill + .tf-skill::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(var(--layout-grid-gutter) * -0.5);
+  border-inline-start: var(--ui-border-divider);
+  border-color: var(--color-border-default);
+}
+
+[data-variant='terra-field'] .tf-skill ul {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+[data-variant='terra-field'] .tf-stack > div {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  align-items: baseline;
+  padding-block: var(--space-s);
+  border-block-start: var(--ui-border-divider);
+  border-color: var(--color-border-default);
+}
+
+[data-variant='terra-field'] .tf-stack > div:last-child {
+  border-block-end: var(--ui-border-divider);
+  border-block-end-color: var(--color-border-default);
+}
+
+[data-variant='terra-field'] .tf-stack dt {
+  grid-column: 1 / 4;
+}
+
+[data-variant='terra-field'] .tf-stack dd {
+  grid-column: 4 / 13;
+}
+
+[data-variant='terra-field'] .tf-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-m);
+}
+
+[data-variant='terra-field'] .tf-offer .tf-ruled {
+  margin-block: var(--space-2xs);
+}
+
+/* The GitHub snapshot: the year as dots, its facts in the caption beside it. */
+[data-variant='terra-field'] .tf-gh {
+  display: grid;
+  gap: var(--space-l);
+}
+
+[data-variant='terra-field'] .tf-gh__field {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='terra-field'] .tf-gh__dots {
+  inline-size: 100%;
+  block-size: auto;
+}
+
+[data-variant='terra-field'] .tf-gh__dots circle {
+  fill: var(--color-border-subtle);
+}
+
+[data-variant='terra-field'] .tf-gh__dots .l1 {
+  fill: var(--color-data-sequential-start);
+}
+
+[data-variant='terra-field'] .tf-gh__dots .l2 {
+  fill: var(--color-data-sequential-middle);
+}
+
+[data-variant='terra-field'] .tf-gh__dots .l3 {
+  fill: var(--color-data-sequential-end);
+}
+
+[data-variant='terra-field'] .tf-gh__dots .l4 {
+  fill: var(--color-accent-text);
+}
+
+[data-variant='terra-field'] .tf-repos {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  row-gap: var(--space-l);
+}
+
+[data-variant='terra-field'] .tf-repos > li {
+  display: grid;
+  gap: var(--space-3xs);
+  align-content: start;
+  padding-block-start: var(--space-s);
+  border-block-start: var(--ui-border-divider);
+  border-color: var(--color-border-default);
+}
+
+/* ---------- About ---------- */
+
+[data-variant='terra-field'] .tf-lede {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  row-gap: var(--space-l);
+  justify-items: center;
+}
+
+[data-variant='terra-field'] .tf-lede > * {
+  grid-column: 3 / 11;
+}
+
+[data-variant='terra-field'] .tf-lede__portrait {
+  inline-size: calc(var(--layout-seal) * 1.1);
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--layout-round);
+}
+
+[data-variant='terra-field'] .tf-lede__portrait :is(img, .pf-media-box) {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+[data-variant='terra-field'] .tf-lede__text {
+  max-inline-size: var(--type-measure-body);
+  gap: var(--space-s);
+}
+
+[data-variant='terra-field'] .tf-now,
+[data-variant='terra-field'] .tf-standalone {
+  display: grid;
+  gap: var(--space-s);
+  justify-items: center;
+  text-align: center;
+}
+
+[data-variant='terra-field'] .tf-now > *,
+[data-variant='terra-field'] .tf-standalone > * {
+  max-inline-size: var(--type-measure-body);
+}
+
+[data-variant='terra-field'] .tf-focus {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+}
+
+[data-variant='terra-field'] .tf-notes-list > li {
+  padding-block-start: var(--space-s);
+  border-block-start: var(--ui-border-divider);
+  border-color: var(--color-border-default);
+}
+
+[data-variant='terra-field'] .tf-saying {
+  display: grid;
+  gap: var(--space-m);
+  justify-items: center;
+  text-align: center;
+}
+
+[data-variant='terra-field'] .tf-saying .tf-quote {
+  font-size: var(--type-step-4);
+  max-inline-size: 24ch;
+  text-wrap: balance;
+}
+
+[data-variant='terra-field'] .tf-custom {
+  display: grid;
+  gap: var(--space-l);
+}
+
+/* ---------- The close: the second field, its arc rising ---------- */
+
+[data-variant='terra-field'] .tf-close {
+  margin-block-start: var(--layout-gap-field);
+  color: var(--layout-field-ink);
+  padding-block: calc(var(--layout-arc) + var(--space-2xl)) var(--space-2xl);
+}
+
+[data-variant='terra-field'] .tf-close a:not(.tf-act) {
+  color: inherit;
+}
+
+[data-variant='terra-field'] .tf-close__inner {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-m);
+  text-align: center;
+}
+
+[data-variant='terra-field'] .tf-close__head .tf-headline {
+  font-size: var(--type-step-5);
+}
+
+[data-variant='terra-field'] .tf-close__msg {
+  display: grid;
+  gap: var(--space-xs);
+  max-inline-size: var(--type-measure-compact);
+}
+
+[data-variant='terra-field'] .tf-close__ask {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-m);
+}
+
+[data-variant='terra-field'] .tf-close__mail {
+  font-family: var(--type-display-font-family);
+  font-weight: var(--type-display-font-weight);
+  font-size: var(--type-step-5);
+  line-height: var(--type-headline-line-height);
+  letter-spacing: var(--type-display-letter-spacing);
+}
+
+[data-variant='terra-field'] .tf-close__acts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-s) var(--space-l);
+}
+
+[data-variant='terra-field'] .tf-close__ways {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2xs) var(--space-l);
+  padding-block-start: var(--space-m);
+}
+
+/* ---------- The footer, on the closing field's ground ---------- */
+
+/* It overlaps the close's ground by a hairline, so the two grounds meet with no seam of paper
+   between them, and the row's rule is the one device between them (S-10). */
+[data-variant='terra-field'] .tf-foot {
+  position: relative;
+  margin-block-start: -1px;
+  background-color: var(--layout-field-ground);
+  color: var(--layout-field-ink);
+  padding-block: 0 var(--space-xl);
+}
+
+[data-variant='terra-field'] .tf-foot a,
+[data-variant='terra-field'] .tf-foot .tf-linkbtn {
+  color: inherit;
+}
+
+[data-variant='terra-field'] .tf-foot__row {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  row-gap: var(--space-m);
+  align-items: start;
+  padding-block-start: var(--space-l);
+  border-block-start: var(--ui-border-divider);
+  border-color: var(--layout-on-field-rule);
+}
+
+[data-variant='terra-field'] .tf-foot__who {
+  grid-column: 1 / 5;
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+[data-variant='terra-field'] .tf-foot__nav {
+  grid-column: 5 / 8;
+}
+
+[data-variant='terra-field'] .tf-foot__nav ul {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+[data-variant='terra-field'] .tf-foot__end {
+  grid-column: 8 / 13;
+  justify-self: end;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-s) var(--space-l);
+}
+
+/* ---------- Field notes: the index, dropped from the top as the field ---------- */
+
+[data-variant='terra-field'] .tf-notes {
+  inline-size: 100%;
+  max-inline-size: 100%;
+  max-block-size: 100%;
+  margin: 0;
+  inset-block: 0 auto;
+  border: 0;
+  padding: 0;
+  background-color: transparent;
+  color: var(--layout-field-ink);
+  overflow: visible;
+}
+
+[data-variant='terra-field'] .tf-notes::backdrop {
+  background-color: color-mix(in oklab, var(--color-scrim) 40%, transparent);
+}
+
+[data-variant='terra-field'] .tf-notes__ground {
+  padding-block: var(--space-m) var(--layout-arc);
+}
+
+/* The rows scroll in a box that ends above the curve, so the arc never clips one (S2). */
+[data-variant='terra-field'] .tf-notes__scroll {
+  max-block-size: calc(92vh - var(--layout-arc) - var(--space-m));
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-block-end: var(--space-l);
+}
+
+[data-variant='terra-field'] .tf-notes__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-m);
+}
+
+[data-variant='terra-field'] .tf-notes a,
+[data-variant='terra-field'] .tf-notes .tf-linkbtn {
+  color: inherit;
+}
+
+[data-variant='terra-field'] .tf-notes__reach {
+  margin-block-start: var(--space-s);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs) var(--space-l);
+}
+
+[data-variant='terra-field'] .tf-notes__cols {
+  margin-block-start: var(--space-xl);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  row-gap: var(--space-xl);
+}
+
+[data-variant='terra-field'] .tf-notes__col {
+  display: grid;
+  gap: var(--space-s);
+  align-content: start;
+}
+
+[data-variant='terra-field'] .tf-notes__col ul {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+[data-variant='terra-field'] .tf-notes__dest {
+  text-decoration-color: transparent;
+}
+
+/* ---------- Motion: one orchestrated opening, the arc settling ---------- */
+
+/*
+ * Everything that travels or scales is gated twice: on the visitor's
+ * preference and on the boundary's motion (the owner's reduce sets
+ * data-motion='reduced', the visitor's pause 'static'), as the other
+ * compositions do. Scroll-linked parts have no duration to shorten, so
+ * they stop entirely outside full motion; the gauge's dot then rests at
+ * its start.
+ */
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static'])
+    .tf-hero::before {
+    animation: terra-field-settle calc(var(--motion-scene) * 1.3) var(--motion-curve) both;
+  }
+
+  [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static']) .tf-hero__line {
+    animation: terra-field-rise var(--motion-scene) var(--motion-curve) both;
+  }
+
+  [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static'])
+    .tf-hero__kicker,
+  [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static']) .tf-hero__lede {
+    animation: terra-field-rise-s var(--motion-scene) var(--motion-curve)
+      calc(var(--motion-scene) * 0.18) both;
+  }
+
+  [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static']) .tf-hero__acts,
+  [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static']) .tf-hero__sub {
+    animation: terra-field-rise-s var(--motion-scene) var(--motion-curve)
+      calc(var(--motion-scene) * 0.36) both;
+  }
+
+  [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static']) .tf-seal {
+    animation: terra-field-fade var(--motion-scene) var(--motion-curve)
+      calc(var(--motion-scene) * 0.5) both;
+  }
+
+  [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static'])
+    .tf-notes[open]
+    .tf-notes__ground {
+    animation: terra-field-drop var(--motion-scene) var(--motion-curve) both;
+  }
+
+  [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static'])
+    .tf-notes[open]::backdrop {
+    animation: terra-field-fade calc(var(--motion-scene) * 0.5) var(--motion-curve) both;
+  }
+
+  @supports (animation-timeline: view()) {
+    [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static']) .tf-hero {
+      view-timeline: --terra-field-hero block;
+    }
+
+    /* The arc deepens a little as the opening leaves: scaleY 1 to 1.04. */
+    [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static'])
+      .tf-hero::before {
+      animation:
+        terra-field-settle calc(var(--motion-scene) * 1.3) var(--motion-curve) both,
+        terra-field-deepen linear both;
+      animation-timeline: auto, --terra-field-hero;
+      animation-range:
+        normal,
+        exit 0% exit 100%;
+    }
+
+    [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static'])
+      .tf-band__photo {
+      view-timeline: --terra-field-band block;
+    }
+
+    /* The photograph drifts 8 px at most inside its frame. */
+    [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static'])
+      .tf-band__frame
+      img {
+      scale: 1.04;
+      animation: terra-field-drift linear both;
+      animation-timeline: --terra-field-band;
+    }
+  }
+
+  @supports (animation-timeline: scroll()) {
+    [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static'])
+      .tf-gauge__dot {
+      animation: terra-field-gauge linear both;
+      animation-timeline: scroll(root);
+    }
+  }
+}
+
+/* Reduced motion, the visitor's or the owner's: the opening fades in, short, and nothing travels. */
+@media (prefers-reduced-motion: reduce) {
+  [data-variant='terra-field']:not([data-motion='static']) .tf-hero__inner {
+    animation: terra-field-fade var(--motion-feedback) linear both;
+  }
+}
+
+[data-variant='terra-field'][data-motion='reduced'] .tf-hero__inner {
+  animation: terra-field-fade var(--motion-feedback) linear both;
+}
+
+@keyframes terra-field-settle {
+  from {
+    transform: scaleY(0.94);
+  }
+}
+
+@keyframes terra-field-deepen {
+  to {
+    transform: scaleY(1.04);
+  }
+}
+
+@keyframes terra-field-drift {
+  from {
+    translate: 0 calc(var(--space-2xs) * -0.8);
+  }
+
+  to {
+    translate: 0 calc(var(--space-2xs) * 0.8);
+  }
+}
+
+@keyframes terra-field-rise {
+  from {
+    opacity: 0;
+    translate: 0 var(--space-m);
+  }
+}
+
+@keyframes terra-field-rise-s {
+  from {
+    opacity: 0;
+    translate: 0 var(--space-xs);
+  }
+}
+
+@keyframes terra-field-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes terra-field-drop {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--space-xl) * -1)) scaleY(0.97);
+  }
+}
+
+@keyframes terra-field-gauge {
+  0% {
+    cx: 2px;
+    cy: 13px;
+  }
+
+  25% {
+    cx: 13px;
+    cy: 6.25px;
+  }
+
+  50% {
+    cx: 24px;
+    cy: 4px;
+  }
+
+  75% {
+    cx: 35px;
+    cy: 6.25px;
+  }
+
+  100% {
+    cx: 46px;
+    cy: 13px;
+  }
+}
+
+/* ---------- Narrower windows: re-span, never shrink ---------- */
+
+/*
+ * Under 64rem the masthead is the name and Field notes alone: five
+ * destinations, the name and the button don't fit one row at 768 (N1).
+ */
+@media (width < 64rem) {
+  [data-variant='terra-field'] .tf-mast__list {
+    display: none;
+  }
+
+  [data-variant='terra-field'] .tf-mast__row {
+    grid-template-columns: 1fr auto;
+  }
+
+  [data-variant='terra-field'] .tf-mast__start {
+    display: none;
+  }
+
+  [data-variant='terra-field'] .tf-mast .tf-mast__name {
+    text-align: start;
+  }
+
+  [data-variant='terra-field'] .tf-band__photo {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='terra-field'] .tf-band[data-photo] .tf-plate[data-plate='1'],
+  [data-variant='terra-field'] .tf-band[data-photo='none'] .tf-plate[data-plate='1'] {
+    grid-column: 1 / 7;
+  }
+
+  [data-variant='terra-field'] .tf-band[data-photo] .tf-plate[data-plate='2'],
+  [data-variant='terra-field'] .tf-band[data-photo='none'] .tf-plate[data-plate='2'] {
+    grid-column: 7 / 13;
+  }
+
+  [data-variant='terra-field'] .tf-entry__text {
+    grid-column: 1 / 7;
+  }
+
+  [data-variant='terra-field'] .tf-skills {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  [data-variant='terra-field'] .tf-skill:nth-child(odd)::before {
+    display: none;
+  }
+
+  [data-variant='terra-field'] .tf-notes__cols {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (width < 48rem) {
+  [data-variant='terra-field'] {
+    --layout-grid-columns: 6;
+    --layout-arc: var(--space-l);
+    --layout-seal: calc(var(--space-2xl) + var(--space-m));
+    --layout-gap-section: var(--space-2xl);
+  }
+
+  [data-variant='terra-field'] .tf-hero__inner,
+  [data-variant='terra-field'] .tf-thesis > * {
+    grid-column: 1 / -1;
+  }
+
+  /*
+   * On a phone the field starts a step under the masthead and the line drops
+   * one step, so at 390 the field closes above the fold: the arc, the whole
+   * seal and the photograph's top are in the first view (S-4), the plates
+   * under it. At 320 the field still fills the first view (a recorded
+   * deviation: only hiding the owner's words would bring the arc up).
+   * The line and the destination words share step 6 here, a recorded phone
+   * deviation kept for margin, not for the gate: with the words a step
+   * down the box guard's Raw Grid pair measured 0.504, under its 0.533
+   * limit but 0.03 closer to it; and in the sample the two never share a view.
+   */
+  [data-variant='terra-field'] .tf-hero {
+    padding-block-start: var(--space-s);
+  }
+
+  [data-variant='terra-field'] .tf-hero__line {
+    margin-block-start: var(--space-xs);
+    font-size: var(--type-step-6);
+  }
+
+  /* Phone rhythm (S-2): sections a step closer, the standfirst at the lede's size. */
+  [data-variant='terra-field'] .tf-section {
+    padding-block-start: var(--space-xl);
+  }
+
+  [data-variant='terra-field'] .tf-field__body > .tf-section:first-child {
+    padding-block-start: var(--space-l);
+  }
+
+  [data-variant='terra-field'] .tf-thesis__text {
+    font-size: var(--type-step-1);
+  }
+
+  [data-variant='terra-field'] .tf-root {
+    --layout-seal-figure-size: var(--type-step-3);
+  }
+
+  /*
+   * On a phone the band stacks. The photograph still starts at the arc's low
+   * point, the seal over its top edge (TF-M4, as at 1440); with no
+   * photograph the plates start below the seal.
+   */
+  [data-variant='terra-field'] .tf-band[data-photo='none'] {
+    margin-block-start: calc(var(--layout-seal-size) * 0.5 + var(--space-m));
+  }
+
+  /* A taller crop under the seal, from the owner's focal point, so the subject clears it (S-11). */
+  [data-variant='terra-field'] .tf-band__frame :is(img, .pf-media-box) {
+    aspect-ratio: 4 / 3;
+  }
+
+  [data-variant='terra-field'] .tf-band .tf-plate {
+    margin-block-start: 0;
+  }
+
+  [data-variant='terra-field'] .tf-root:not(:has(.tf-seal)) .tf-band[data-photo='none'] {
+    margin-block-start: var(--space-l);
+  }
+
+  [data-variant='terra-field'] .tf-root:not(:has(.tf-seal)) .tf-band .tf-plate {
+    margin-block-start: 0;
+  }
+
+  [data-variant='terra-field'] .tf-band .tf-plate,
+  [data-variant='terra-field'] .tf-band[data-photo] .tf-plate[data-plate],
+  [data-variant='terra-field'] .tf-band[data-photo='none'] .tf-plate[data-plate] {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='terra-field'] .tf-entry__text,
+  [data-variant='terra-field'] .tf-entry[data-lead='none'] .tf-entry__text,
+  [data-variant='terra-field'] .tf-entry__lead {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='terra-field'] .tf-entry__lead.tf-frame {
+    grid-row: 1;
+  }
+
+  [data-variant='terra-field'] .tf-log__no {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='terra-field'] .tf-log__main {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='terra-field'] .tf-log__date {
+    grid-column: 1 / 4;
+  }
+
+  [data-variant='terra-field'] .tf-log__len {
+    grid-column: 4 / 7;
+  }
+
+  [data-variant='terra-field'] .tf-gallery__frame,
+  [data-variant='terra-field'] .tf-gallery__frame:first-of-type,
+  [data-variant='terra-field'] .tf-gallery[data-count='1'] .tf-gallery__frame {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
+  [data-variant='terra-field'] .tf-gallery__frame:nth-of-type(n + 2) {
+    grid-column: span 3;
+  }
+
+  [data-variant='terra-field'] .tf-sleeve__cover {
+    grid-column: 1 / 4;
+  }
+
+  [data-variant='terra-field'] .tf-sleeve__text,
+  [data-variant='terra-field'] .tf-sleeve[data-cover='none'] .tf-sleeve__text {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='terra-field'] .tf-essay,
+  [data-variant='terra-field'] .tf-essays[data-count] .tf-essay {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='terra-field'] .tf-essay + .tf-essay {
+    padding-block-start: var(--space-l);
+  }
+
+  [data-variant='terra-field'] .tf-essay + .tf-essay::before {
+    inset-inline: 0;
+    inset-block: 0 auto;
+    border-inline-start: 0;
+    border-block-start: var(--ui-border-divider);
+    border-color: var(--color-border-default);
+  }
+
+  [data-variant='terra-field']
+    :is(
+      .tf-ledger,
+      .tf-cites,
+      .tf-press,
+      .tf-places,
+      .tf-offers,
+      .tf-notes-list,
+      .tf-awards,
+      .tf-repos,
+      .tf-focus
+    ) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='terra-field'] .tf-ledger > div:nth-last-child(2) {
+    border-block-end: 0;
+  }
+
+  [data-variant='terra-field'] .tf-voice,
+  [data-variant='terra-field'] .tf-voice:first-child,
+  [data-variant='terra-field'] .tf-voices[data-count='1'] .tf-voice {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
+  [data-variant='terra-field']
+    :is(
+      .tf-talks__when,
+      .tf-rows__when,
+      .tf-chron__when,
+      .tf-talks__main,
+      .tf-rows__main,
+      .tf-chron__who,
+      .tf-chron__what,
+      .tf-talks__where,
+      .tf-rows__media
+    ),
+  [data-variant='terra-field'] .tf-rows > li[data-media] .tf-rows__main {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='terra-field'] .tf-talks__links {
+    grid-column: 1 / -1;
+    justify-content: start;
+  }
+
+  [data-variant='terra-field'] .tf-skills {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='terra-field'] .tf-skill::before {
+    display: none;
+  }
+
+  [data-variant='terra-field'] .tf-stack dt,
+  [data-variant='terra-field'] .tf-stack dd {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='terra-field'] .tf-lede > * {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='terra-field'] .tf-close__mail {
+    font-size: var(--type-step-3);
+  }
+
+  [data-variant='terra-field'] .tf-foot__who,
+  [data-variant='terra-field'] .tf-foot__nav,
+  [data-variant='terra-field'] .tf-foot__end {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  [data-variant='terra-field'] .tf-notes__cols {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-block-start: var(--space-l);
+  }
+
+  [data-variant='terra-field'] .tf-marker__chip {
+    padding-inline: var(--space-xs) var(--space-s);
+  }
+}
+
+/* ---------- A work's own page: a short field the cover overlaps, then the account on paper ---------- */
+
+[data-variant='terra-field'] .tf-hero.tf-hero--case {
+  padding-block-end: calc(var(--layout-arc) + var(--space-2xl));
+}
+
+/* The cover rises into the field by as much as the field holds under the lede, so the arc runs behind it. */
+[data-variant='terra-field'] .tf-hero--case[data-cover] {
+  padding-block-end: calc(var(--layout-arc) + var(--space-3xl) * 2);
+}
+
+[data-variant='terra-field'] .tf-casecover {
+  position: relative;
+  z-index: 2;
+  margin-block-start: calc(var(--space-3xl) * -2);
+}
+
+[data-variant='terra-field'] .tf-crumb {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2xs) var(--space-s);
+}
+
+[data-variant='terra-field'] .tf-hero--case .tf-hero__lede {
+  max-inline-size: 36ch;
+}
+
+[data-variant='terra-field'] .tf-casecover__frame,
+[data-variant='terra-field'] .tf-factsheet {
+  grid-column: 3 / 11;
+}
+
+/* The account reads on the page's axis, a centred column under the cover and the facts (MF-1). */
+[data-variant='terra-field'] .tf-casepart {
+  grid-column: 4 / 10;
+}
+
+[data-variant='terra-field'] .tf-casecover__frame {
+  overflow: hidden;
+  border-radius: var(--ui-radius-media);
+}
+
+[data-variant='terra-field'] .tf-casecover__frame :is(img, .pf-media-box) {
+  inline-size: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+[data-variant='terra-field'] :is(.tf-casefacts, .tf-caseparts, .tf-casebody, .tf-casenext) {
+  padding-block-start: var(--space-2xl);
+}
+
+/* The fact sheet: ruled rows on paper, two columns, the term in the muted voice. */
+[data-variant='terra-field'] .tf-factsheet {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  border-block-end: var(--ui-border-divider);
+  border-color: var(--color-border-default);
+}
+
+[data-variant='terra-field'] .tf-factsheet > div {
+  display: grid;
+  grid-template-columns: 12ch minmax(0, 1fr);
+  gap: var(--space-s);
+  padding-block: var(--space-xs);
+  border-block-start: var(--ui-border-divider);
+  border-color: var(--color-border-default);
+}
+
+[data-variant='terra-field'] .tf-factsheet dt {
+  color: var(--color-text-muted);
+}
+
+[data-variant='terra-field'] .tf-caseparts__list {
+  grid-column: 2 / 12;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2xs) var(--space-m);
+}
+
+[data-variant='terra-field'] .tf-casebody {
+  row-gap: var(--space-2xl);
+}
+
+[data-variant='terra-field'] .tf-casepart {
+  display: grid;
+  gap: var(--space-s);
+  align-content: start;
+}
+
+/* The reading measure at every width: 4/10 bounds it at 1440, the measure under 64rem (R4). */
+[data-variant='terra-field'] .tf-casepart > :not(.tf-sechead, .tf-cited) {
+  max-inline-size: var(--type-measure-body);
+}
+
+[data-variant='terra-field'] .tf-casepart__lead {
+  font-size: var(--type-step-1);
+}
+
+/* The decisions, numbered in the order they were made: the figure hangs in its own column. */
+[data-variant='terra-field'] .tf-decisions,
+[data-variant='terra-field'] .tf-cited {
+  display: grid;
+  gap: var(--space-l);
+}
+
+/* The cited records keep their home forms, one to a row in the account's column. */
+[data-variant='terra-field'] .tf-cited > * {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-variant='terra-field'] .tf-cited .tf-voices .tf-voice {
+  grid-column: 1 / -1;
+  text-align: start;
+}
+
+[data-variant='terra-field'] .tf-decision {
+  display: grid;
+  grid-template-columns: var(--space-xl) minmax(0, 1fr);
+  column-gap: var(--space-s);
+  row-gap: var(--space-2xs);
+}
+
+[data-variant='terra-field'] .tf-decision > * {
+  grid-column: 2;
+}
+
+[data-variant='terra-field'] .tf-decision__no {
+  grid-column: 1;
+  grid-row: 1 / span 3;
+  font-family: var(--type-headline-font-family);
+  font-size: var(--type-step-3);
+  line-height: 1;
+  color: var(--color-accent-text);
+}
+
+[data-variant='terra-field'] .tf-casenext {
+  align-items: end;
+  row-gap: var(--space-l);
+}
+
+[data-variant='terra-field'] .tf-casenext__all {
+  grid-column: 1 / 7;
+  display: grid;
+  gap: var(--space-xs);
+}
+
+[data-variant='terra-field'] .tf-casenext__related {
+  grid-column: 7 / 13;
+  margin-block-start: 0;
+}
+
+[data-variant='terra-field'] .tf-casenext__related:has(> .tf-frame) {
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  align-items: center;
+  column-gap: var(--space-m);
+}
+
+@media (width < 64rem) {
+  [data-variant='terra-field'] .tf-casecover__frame,
+  [data-variant='terra-field'] .tf-factsheet {
+    grid-column: 2 / 12;
+  }
+
+  [data-variant='terra-field'] .tf-casepart {
+    grid-column: 2 / 12;
+  }
+}
+
+@media (width < 48rem) {
+  [data-variant='terra-field'] .tf-casecover__frame,
+  [data-variant='terra-field'] .tf-factsheet,
+  [data-variant='terra-field'] .tf-caseparts__list,
+  [data-variant='terra-field'] .tf-casepart,
+  [data-variant='terra-field'] .tf-casenext__all,
+  [data-variant='terra-field'] .tf-casenext__related {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='terra-field'] .tf-factsheet,
+  [data-variant='terra-field'] .tf-casenext__related:has(> .tf-frame) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='terra-field'] .tf-hero--case[data-cover] {
+    padding-block-end: calc(var(--layout-arc) + var(--space-3xl));
+  }
+
+  /* The crumb's two parts stack on a phone, so its separator never dangles at a line's end. */
+  [data-variant='terra-field'] .tf-crumb {
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-3xs);
+  }
+
+  [data-variant='terra-field'] .tf-crumb > [aria-hidden] {
+    display: none;
+  }
+
+  [data-variant='terra-field'] .tf-casecover {
+    margin-block-start: calc(var(--space-3xl) * -1);
+  }
+}
+
+/* ---------- Print: the page as it reads, the grounds dropped ---------- */
+
+@media print {
+  [data-variant='terra-field'] .tf-root {
+    --layout-field-ground: transparent;
+    --layout-field-ink: var(--color-text-primary);
+  }
+
+  [data-variant='terra-field'] .tf-marker,
+  [data-variant='terra-field'] .tf-notes,
+  [data-variant='terra-field'] .tf-fold__summary::after {
+    display: none;
+  }
+
+  /* A printed page holds the whole record, the closed folds too. */
+  [data-variant='terra-field'] details.tf-fold > :not(summary) {
+    display: grid;
+  }
+
+  [data-variant='terra-field'] details.tf-fold::details-content {
+    content-visibility: visible;
+    block-size: auto;
+  }
+
+  [data-variant='terra-field'] :is(.tf-hero, .tf-fieldhead, .tf-close)::before {
+    animation: none;
+  }
+}
+
+/* ---------- Forced colours: every ground keeps an edge ---------- */
+
+@media (forced-colors: active) {
+  [data-variant='terra-field']
+    :is(.tf-hero, .tf-fieldhead, .tf-close, .tf-notes__ground, .tf-marker__chip, .tf-seal) {
+    border: 1px solid currentColor;
+  }
+}

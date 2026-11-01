@@ -1,0 +1,2926 @@
+/*
+ * Obsidian Atelier (redesign, stream C): a private viewing. Composition
+ * only. The page alternates walls, a surface-prominent plane with a darker
+ * floor at its foot, and the canvas between them, where the reading is.
+ * Everything sits on the platform's 12-column grid, named lines `col 1` to
+ * `col 12` between full-bleed edges, and spaces itself from the shared
+ * scale; every color is a --color-* role, every size a --type-* role or a
+ * --space-* step, and every duration a --motion-* the platform works out
+ * from the slots below. Type is near-monoscale: the body size reads,
+ * labels and catalogue numbers are the label role, and one title size,
+ * the headline role, is bold for names and signage and regular for
+ * statements. Every rule sits under [data-variant='obsidian-atelier'],
+ * every property is logical, and every motion is an enhancement of a page
+ * that's whole without it.
+ */
+
+[data-variant='obsidian-atelier'] {
+  position: relative;
+  --layout-grid-gutter: var(--space-s);
+  --layout-grid-margin: var(--space-m);
+  /* One house curve: expo in-out, slow and deliberate, with no overshoot. */
+  --layout-motion-curve: cubic-bezier(0.87, 0, 0.13, 1);
+  --layout-motion-feedback: 300ms;
+  --layout-motion-scene: 900ms;
+  /* A column: the page width, less the margins and the gutters, in twelve. */
+  --layout-track: calc(
+    (
+        min(100% - 2 * var(--layout-grid-margin), var(--layout-width-page)) -
+          (var(--layout-grid-columns) - 1) * var(--layout-grid-gutter)
+      ) /
+      var(--layout-grid-columns)
+  );
+  --layout-columns: [full-start] minmax(0, 1fr) [content-start]
+    repeat(var(--layout-grid-columns), [col] var(--layout-track)) [content-end] minmax(0, 1fr)
+    [full-end];
+  /* The floor at a wall's foot, and the chrome's band above everything, which walls keep clear. */
+  --layout-floor: var(--space-2xl);
+  --layout-chrome: calc(var(--space-s) + var(--space-l));
+  /* The composition's own lengths, each named. */
+  --layout-underline: 0.3em;
+  --layout-hairline: 1px;
+  --layout-pool-foot: 40%;
+  --layout-plate: 60svh;
+  /* The entrance's work: at most this tall, so its foot stands just above the floor line, and this wide. */
+  --layout-plate-entrance: 54svh;
+  --layout-plate-wide: 55vw;
+  --layout-room: 100svh;
+  /* A wall room's wall: the window less a band, so the reading beside it may run on. */
+  --layout-room-wall: 78svh;
+  /* The pinned chrome's touch target, as the shared primitives size their own. */
+  --layout-target: 44px;
+  /* The floor's ground: the wall mixed toward the scheme's own shadow. */
+  --layout-floor-ground: color-mix(
+    in oklab,
+    var(--color-surface-prominent),
+    var(--color-shadow) 16%
+  );
+  /* The running head's strip: the plates' height and the space above and under them. */
+  --layout-strip: calc(var(--layout-target) + var(--space-xs) + var(--space-2xs));
+  /* Index's plate: wide enough for its label as a link or as the dialog's padded button. */
+  --layout-index: 6rem;
+  /* Where the window's plates end: the content's end line, the page's margin in from the window's edge. */
+  --layout-pin-end: calc(
+    (100% - min(100% - 2 * var(--layout-grid-margin), var(--layout-width-page))) / 2
+  );
+  display: block;
+  /* A word too long for the line, such as a name or a URL, breaks rather than widening the page. */
+  overflow-wrap: break-word;
+  font-variant-numeric: lining-nums;
+}
+
+/* Every band of the page is the grid, and its parts start on its column lines. */
+[data-variant='obsidian-atelier']
+  :is(
+    .oa-entrance,
+    .oa-intro,
+    .oa-room,
+    .oa-collection,
+    .oa-bays,
+    .oa-gallery,
+    .oa-exit,
+    .oa-colophon,
+    .oa-installation,
+    .oa-casebar,
+    .oa-case,
+    .oa-reflection,
+    .oa-backmatter
+  ) {
+  display: grid;
+  grid-template-columns: var(--layout-columns);
+  column-gap: var(--layout-grid-gutter);
+  box-sizing: border-box;
+}
+
+[data-variant='obsidian-atelier']
+  :is(
+    .oa-entrance,
+    .oa-intro,
+    .oa-room,
+    .oa-collection,
+    .oa-bays,
+    .oa-gallery,
+    .oa-exit,
+    .oa-colophon,
+    .oa-installation,
+    .oa-casebar,
+    .oa-case,
+    .oa-reflection,
+    .oa-backmatter
+  )
+  > * {
+  grid-column: content;
+  min-inline-size: 0;
+}
+
+[data-variant='obsidian-atelier'] :is(h1, h2, h3, p, ul, ol, dl, dd, figure, blockquote, table) {
+  margin: 0;
+}
+
+[data-variant='obsidian-atelier'] :is(ul, ol)[role='list'],
+[data-variant='obsidian-atelier'] :is(.oa-plan, .oa-decisions) {
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='obsidian-atelier'] :is(h1, h2, h3, .oa-statement, .oa-inscription p) {
+  text-wrap: balance;
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-prose, .oa-premise, .oa-entry__more) {
+  text-wrap: pretty;
+}
+
+[data-variant='obsidian-atelier'] a {
+  color: inherit;
+  text-decoration-thickness: from-font;
+  text-underline-offset: var(--layout-underline);
+}
+
+[data-variant='obsidian-atelier'] .oa-quiet,
+[data-variant='obsidian-atelier'] .oa-note {
+  color: var(--color-text-secondary);
+}
+
+/* The one title size: bold for names and signage, regular for statements. */
+[data-variant='obsidian-atelier']
+  :is(.oa-roomtitle, .oa-signage, .oa-statement, .oa-inscription p, .oa-address) {
+  font-size: var(--type-headline-fluid-size);
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-signage, .oa-roomtitle) {
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='obsidian-atelier'] .oa-statement,
+[data-variant='obsidian-atelier'] .oa-inscription p {
+  font-weight: var(--type-body-font-weight);
+}
+
+/* A section's title: body size, the label's weight, twice as far from what's above as from its own. */
+[data-variant='obsidian-atelier'] :is(.oa-h3, .oa-materials__name, .oa-entry__title) {
+  font-size: var(--type-body-font-size);
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='obsidian-atelier'] .oa-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+[data-variant='obsidian-atelier'] .oa-block > :is(.oa-h3 + .oa-note) {
+  margin-block-start: calc(-1 * var(--space-2xs));
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-prose, .oa-premise) {
+  display: grid;
+  gap: var(--space-s);
+  max-inline-size: var(--layout-width-text);
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-prose, .oa-premise, .oa-unfold__case dd) p {
+  margin: 0;
+}
+
+/* Words for assistive technology alone: which work a disclosure unfolds, and a bay checklist's column heads. */
+[data-variant='obsidian-atelier'] :is(.oa-visually-hidden, .oa-table thead) {
+  position: absolute;
+  inline-size: var(--layout-hairline);
+  block-size: var(--layout-hairline);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* A drawn plus: two strokes of the text's own color, which Fold turns to a cross. */
+[data-variant='obsidian-atelier'] .oa-plus {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  inline-size: var(--space-xs);
+  block-size: var(--space-xs);
+}
+
+[data-variant='obsidian-atelier'] .oa-plus::before,
+[data-variant='obsidian-atelier'] .oa-plus::after {
+  content: '';
+  position: absolute;
+  inset: 50% 0 auto;
+  border-block-start: var(--ui-border-divider);
+  border-block-start-color: currentColor;
+}
+
+[data-variant='obsidian-atelier'] .oa-plus::after {
+  rotate: 90deg;
+}
+
+[data-variant='obsidian-atelier'] .oa-dot {
+  display: inline-block;
+  flex: none;
+  inline-size: var(--space-2xs);
+  block-size: var(--space-2xs);
+  border-radius: var(--ui-radius-badge);
+  background-color: var(--color-accent-text);
+}
+
+/* Links in a row, and lists of short links. */
+[data-variant='obsidian-atelier'] :is(.oa-links, .oa-actions) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2xs) var(--space-m);
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-links, .oa-actions, .oa-pager, .oa-plan) a {
+  display: inline-block;
+  min-block-size: var(--space-m);
+}
+
+/* ── The corner chrome: type on the column lines, with no ground ────── */
+
+/*
+ * The chrome spans the window on the page's own columns, in the band at
+ * its top that every wall and corridor keeps clear: the mark from the
+ * first column line, the room switch on the middle columns, the running
+ * head and Index ending on the last line, the one every label ends on.
+ * There's no ground behind any of it, only the caption's type.
+ */
+[data-variant='obsidian-atelier'] .oa-chrome {
+  position: absolute;
+  z-index: 3;
+  inset-block-start: 0;
+  inset-inline: 0;
+  display: grid;
+  grid-template-columns: var(--layout-columns);
+  column-gap: var(--layout-grid-gutter);
+  align-items: center;
+  padding-block-start: var(--space-xs);
+  pointer-events: none;
+}
+
+[data-variant='obsidian-atelier'] .oa-chrome > * {
+  grid-row: 1;
+  pointer-events: auto;
+}
+
+/* Every corner is one line the height of a touch target, so the type in all of them lines up. */
+[data-variant='obsidian-atelier']
+  :is(.oa-chrome__mark, .oa-chrome__rooms a, .oa-chrome__index-link) {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--layout-target);
+}
+
+[data-variant='obsidian-atelier'] .oa-chrome__mark {
+  grid-column: col 1 / span 6;
+  justify-self: start;
+  font-weight: var(--type-label-font-weight);
+  text-decoration: none;
+}
+
+/* The switch starts on the sixth column line and keeps to four columns, a column clear of the running head. */
+[data-variant='obsidian-atelier'] .oa-chrome__rooms {
+  display: none;
+  grid-column: col 6 / span 4;
+  justify-self: start;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
+[data-variant='obsidian-atelier'] .oa-chrome__rooms ul {
+  display: flex;
+  gap: var(--space-s);
+  margin: 0;
+  padding: 0;
+}
+
+[data-variant='obsidian-atelier'] .oa-chrome__rooms li {
+  min-inline-size: 0;
+}
+
+[data-variant='obsidian-atelier'] .oa-chrome__rooms a {
+  gap: var(--space-3xs);
+  min-inline-size: var(--space-m);
+  max-inline-size: 100%;
+  text-decoration: none;
+  color: var(--color-text-secondary);
+}
+
+/* Where the visitor is, in the room switch and the case bar's stops. */
+[data-variant='obsidian-atelier'] :is(.oa-chrome__rooms, .oa-casebar__stops) a[aria-current] {
+  color: var(--color-text-primary);
+  font-weight: var(--type-label-font-weight);
+  text-decoration: underline;
+}
+
+/* A room's name: its work's title, cut at a word in the model (layout.ts, roomName), on one line, clipped as a last resort. */
+[data-variant='obsidian-atelier'] .oa-chrome__name {
+  display: none;
+  min-inline-size: 0;
+  overflow: clip;
+  white-space: pre;
+}
+
+/*
+ * The running head stands at the content's end line in the first view's
+ * top row and scrolls away with the page, as the mark and the switch do;
+ * past the top, the gallery titles on their rails, the room numbers, and
+ * the floors' counters say where the visitor is.
+ */
+[data-variant='obsidian-atelier'] .oa-chrome__corner {
+  grid-column: content;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: var(--space-m);
+  min-block-size: var(--layout-target);
+}
+
+/*
+ * Index, the one control that stays in the window: one constant object on
+ * the last column line, a plain plate of the wall's surface in the
+ * language's control shape, the primary ink on it (floor-contrast.test.ts
+ * holds it at 4.95:1 in every scheme). Its place in the top row is kept,
+ * so the running head stands beside it there. The plate is the same with
+ * no script, when Index is the footer plan's link.
+ */
+[data-variant='obsidian-atelier'] .oa-chrome__dock {
+  flex: none;
+  inline-size: var(--layout-index);
+  block-size: var(--layout-target);
+}
+
+[data-variant='obsidian-atelier'] .oa-chrome__pin {
+  position: fixed;
+  z-index: 3;
+  inset-block-start: var(--space-xs);
+  inset-inline-end: var(--layout-pin-end);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--layout-index);
+  block-size: var(--layout-target);
+  border-radius: var(--ui-radius-control);
+  /*
+   * The plate is the button's own box, the target's height and no more.
+   * Its edge, the language's hairline in the strong border, is drawn just
+   * inside it, so on a wall of its own surface it still reads as an
+   * object, and the focus ring, outside the button, stands apart from it.
+   */
+  outline: var(--ui-border-divider);
+  outline-color: var(--color-border-strong);
+  outline-offset: calc(-1 * var(--layout-hairline));
+  background-color: var(--color-surface-prominent);
+  color: var(--color-text-primary);
+}
+
+/*
+ * The dialog's button is the plate's own item, not set on a line, so its label sits on the row's
+ * centre, and it fills the plate, so the focus ring, outside it, never runs over the plate's edge.
+ */
+[data-variant='obsidian-atelier'] .oa-chrome__index {
+  display: grid;
+  flex: 1;
+}
+
+/* From a tablet's width, the room switch joins the corners; on a phone, the name and Index alone. */
+@media (min-width: 48rem) {
+  [data-variant='obsidian-atelier'] .oa-chrome__rooms {
+    display: block;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-chrome__mark {
+    grid-column: col 1 / span 4;
+  }
+}
+
+/* From a wide window, each room's numeral has its work's title beside it. */
+@media (min-width: 80rem) {
+  [data-variant='obsidian-atelier'] .oa-chrome__name {
+    display: block;
+  }
+}
+
+[data-variant='obsidian-atelier'] .oa-chrome__here {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  min-inline-size: 0;
+  /* Two fifths of a short measure at most, so a long place name ends in an ellipsis before it reaches the switch. */
+  max-inline-size: calc(var(--type-measure-compact) / 2.5);
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The place's name is what gives way: the dot stays, the words end in an ellipsis. */
+[data-variant='obsidian-atelier'] .oa-chrome__here > :last-child {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+ * The position marker: past five windows down (here.tsx), the running head
+ * stays in the window as a plate of the wall's surface beside Index, with
+ * the same edge and the same height, so a long page always says where it
+ * is. On a phone it takes the top's other corner, where the name was.
+ */
+/*
+ * Past five windows, the plates stand on a strip of the wall's surface
+ * across the window's top, a hairline under it, so what scrolls under them
+ * goes under the strip and never prints through around them (P1-2).
+ */
+[data-variant='obsidian-atelier'] .oa-chrome__strip {
+  display: none;
+}
+
+[data-variant='obsidian-atelier'] .oa-chrome[data-oa-deep] .oa-chrome__strip {
+  display: block;
+  position: fixed;
+  z-index: 2;
+  inset-block-start: 0;
+  inset-inline: 0;
+  block-size: var(--layout-strip);
+  border-block-end: var(--ui-border-divider);
+  background-color: var(--color-surface-default);
+}
+
+[data-variant='obsidian-atelier'] .oa-chrome[data-oa-deep] .oa-chrome__here {
+  position: fixed;
+  z-index: 3;
+  inset-block-start: var(--space-xs);
+  inset-inline-end: calc(var(--layout-pin-end) + var(--layout-index) + var(--space-xs));
+  min-block-size: var(--layout-target);
+  /* A place's whole name, "Room V, Record", before the ellipsis. */
+  max-inline-size: calc(var(--type-measure-compact) / 1.5);
+  padding-inline: var(--space-s);
+  border-radius: var(--ui-radius-control);
+  outline: var(--ui-border-divider);
+  outline-color: var(--color-border-strong);
+  outline-offset: calc(-1 * var(--layout-hairline));
+  background-color: var(--color-surface-prominent);
+  color: var(--color-text-primary);
+}
+
+/* From where the case bar sticks, a case page's position marker is the bar: no plate or strip over its stops. */
+@media (min-width: 48rem) {
+  [data-variant='obsidian-atelier']:has(.oa-casebar)
+    .oa-chrome[data-oa-deep]
+    :is(.oa-chrome__here, .oa-chrome__strip) {
+    display: none;
+  }
+}
+
+@media (max-width: 47.99rem) {
+  /* A phone's corners are the name's plaque and Index (C2); the running head comes back as the marker. */
+  [data-variant='obsidian-atelier'] .oa-chrome:not([data-oa-deep]) .oa-chrome__here {
+    display: none;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-chrome[data-oa-deep] .oa-chrome__here {
+    inset-inline: var(--layout-grid-margin) auto;
+  }
+}
+
+/* With no control in the slot, its place closes up. */
+[data-variant='obsidian-atelier'] .oa-chrome__appearance:has([data-visitor-control-slot]:empty) {
+  display: none;
+}
+
+/*
+ * Index: a link to the footer's plan with no script, and the dialog's own
+ * button once the running head's script has run.
+ */
+/*
+ * The dialog's label is a block of its own in the button's label, not an
+ * inline box on a line, whose strut would sit it off the plate's centre.
+ */
+[data-variant='obsidian-atelier'] .oa-chrome__index-label {
+  display: flex;
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-chrome__index-link, .oa-chrome__index-label) {
+  align-items: center;
+  gap: var(--space-2xs);
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+/*
+ * The word is centred by its capitals, not its line box, whose ascent
+ * sits it a few pixels high in the plate: trimmed to the cap height and
+ * the baseline, the plate's centre is the word's.
+ */
+[data-variant='obsidian-atelier'] .oa-chrome__index-word {
+  text-box: trim-both cap alphabetic;
+}
+
+[data-variant='obsidian-atelier'] .oa-chrome:not([data-oa-script]) .oa-chrome__index {
+  display: none;
+}
+
+[data-variant='obsidian-atelier'] .oa-chrome[data-oa-script] .oa-chrome__index-link {
+  display: none;
+}
+
+/* ── Walls: the plane, the floor at its foot, and the light on it ──── */
+
+[data-variant='obsidian-atelier'] .oa-wall {
+  position: relative;
+  isolation: isolate;
+  /* The light may spill past the work, never past the wall's own edges. */
+  overflow-x: clip;
+  background-color: var(--color-surface-prominent);
+}
+
+/*
+ * The floor: the wall mixed toward the scheme's own shadow, a clear step
+ * darker in every scheme. Text on it is the primary ink, which
+ * floor-contrast.test.ts holds at 4.5:1 in every shipping scheme and mode.
+ */
+[data-variant='obsidian-atelier'] .oa-wall::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset-inline: 0;
+  inset-block-end: 0;
+  block-size: var(--layout-floor);
+  background-color: var(--layout-floor-ground);
+}
+
+/* What stands on a wall's floor: the way on, and the work's number of the whole. */
+[data-variant='obsidian-atelier'] .oa-wallfloor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2xs) var(--space-m);
+  box-sizing: border-box;
+  min-block-size: var(--layout-floor);
+  margin: 0;
+  padding-block: var(--space-xs);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-variant='obsidian-atelier'] .oa-wallfloor__count {
+  margin-inline-start: auto;
+}
+
+/*
+ * On the floor the platform's ring, in the scheme's focus color, falls under
+ * 3:1, so what has focus there takes the floor's ink as its ground, held at
+ * 4.5:1 on the floor by floor-contrast.test.ts, and the inverse ink on it.
+ * At rest its box already reaches past its glyphs and under its hanging
+ * underline, its margins giving that back, so focus changes colors alone.
+ */
+[data-variant='obsidian-atelier'] :is(.oa-wallfloor, .oa-floor__on) a {
+  margin: 0 calc(-1 * var(--space-3xs)) calc(-1 * var(--layout-underline));
+  padding: 0 var(--space-3xs) var(--layout-underline);
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-wallfloor, .oa-floor__on) a:focus-visible {
+  background-color: var(--color-text-primary);
+  color: var(--color-text-inverse);
+}
+
+/*
+ * The light: a pool on the entrance wall over the signature, and on a
+ * case's installation wall over its work, ambience only. It sits behind
+ * the work and around its top edge, never under a line of text. Its
+ * brightest is the lit surface, the role K-2 made for it: lighter than
+ * the wall in light and dark, the primary ink on it at 4.95:1, and the
+ * canvas in high contrast, so there it's no light at all.
+ * floor-contrast.test.ts holds the primary ink over its brightest anyway.
+ */
+[data-variant='obsidian-atelier'] .oa-hang__work {
+  position: relative;
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-entrance, .oa-installation) .oa-hang__work::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset-block: calc(-1 * var(--space-3xl)) var(--layout-pool-foot);
+  inset-inline: calc(-1 * var(--space-xl));
+  background-image: radial-gradient(50% 50% at 50% 50%, var(--color-surface-lit), transparent);
+  pointer-events: none;
+}
+
+/* ── The entrance: one room, the work on the page's axis over its floor ── */
+
+/*
+ * In the page's order at every width: the plaque in the wall's corner,
+ * under the chrome's name; the work on its deep mat, cropped square, on the
+ * page's axis, its foot a step above the floor line; the floor line; on
+ * the floor, the room's title, centred at the work's foot; and at the
+ * floor's front edge where the owner is and the way on. A phone hangs the
+ * label under the work; a wide window pins it to the work's bottom-left.
+ */
+[data-variant='obsidian-atelier'] :is(.oa-entrance, .oa-installation) {
+  grid-template-rows: [plaque] auto [plate] auto [floor-start] auto [facts] auto [floor-end];
+  padding-block-start: var(--layout-chrome);
+  scroll-margin-block-start: 0;
+}
+
+/* The floor is a grid item here: it starts at the title, wherever the work's foot is. */
+[data-variant='obsidian-atelier'] :is(.oa-entrance, .oa-installation)::after {
+  position: static;
+  grid-row: floor-start / floor-end;
+  grid-column: full;
+  block-size: auto;
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-entrance, .oa-installation)::before {
+  content: '';
+  z-index: -1;
+  grid-row: floor-start;
+  grid-column: full;
+  align-self: start;
+  border-block-start: var(--ui-border-divider);
+  border-block-start-color: var(--color-border-strong);
+}
+
+[data-variant='obsidian-atelier'] .oa-plaque {
+  grid-row: plaque;
+  display: grid;
+  gap: var(--space-3xs);
+  justify-self: start;
+}
+
+[data-variant='obsidian-atelier'] .oa-plaque__name {
+  display: grid;
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='obsidian-atelier'] .oa-plaque__role,
+[data-variant='obsidian-atelier'] .oa-plaque__label {
+  color: var(--color-text-secondary);
+  font-weight: var(--type-body-font-weight);
+}
+
+/* The work on its mat, on the page's axis, its label under it (pinned to its bottom-left from 64rem). */
+[data-variant='obsidian-atelier'] :is(.oa-entrance, .oa-installation) .oa-hang {
+  grid-row: plate;
+  grid-column: content;
+  justify-items: center;
+  align-items: end;
+  gap: var(--space-s);
+  padding-block: var(--space-m) var(--space-l);
+}
+
+/* The work whole, at its own aspect, on an even mat: the column's width on a phone (C2), as tall as the wall lets it. */
+[data-variant='obsidian-atelier'] :is(.oa-entrance, .oa-installation) .oa-hang__work {
+  box-sizing: border-box;
+  max-inline-size: 100%;
+  padding: var(--space-m);
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-entrance, .oa-installation) .oa-mount img {
+  max-block-size: var(--layout-plate-entrance);
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-entrance, .oa-installation) .oa-label {
+  justify-self: stretch;
+  max-inline-size: none;
+}
+
+[data-variant='obsidian-atelier']
+  :is(.oa-entrance, .oa-installation)
+  .oa-label
+  > :not(.oa-label__no, .oa-label__title) {
+  color: var(--color-text-secondary);
+}
+
+/* The room's title, on the floor at the work's foot, centred in the regular weight. */
+[data-variant='obsidian-atelier'] :is(.oa-entrance__statement, .oa-installation__title) {
+  grid-row: floor-start;
+  display: grid;
+  justify-items: center;
+  padding-block: var(--space-l) var(--space-m);
+  text-align: center;
+}
+
+[data-variant='obsidian-atelier'] .oa-entrance__title {
+  font-size: var(--type-step-5);
+  font-weight: var(--type-body-font-weight);
+  line-height: var(--type-display-line-height);
+}
+
+[data-variant='obsidian-atelier'] .oa-entrance__title[data-long] {
+  font-size: var(--type-headline-fluid-size);
+  max-inline-size: var(--type-measure-compact);
+}
+
+/* The floor's front edge: where the owner is, and the way on at the line's end. */
+[data-variant='obsidian-atelier'] :is(.oa-entrance, .oa-installation) > .oa-floor__on {
+  grid-row: facts;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2xs) var(--space-m);
+  padding-block-end: var(--space-m);
+  color: var(--color-text-primary);
+}
+
+/* Over the floor links' own margins. */
+[data-variant='obsidian-atelier'] .oa-floor__on > .oa-floor__way {
+  margin-inline-start: auto;
+}
+
+/* The case's room title: where the work hangs over it, its premise under it at a lede's measure. */
+[data-variant='obsidian-atelier'] .oa-installation__title {
+  gap: var(--space-xs);
+}
+
+[data-variant='obsidian-atelier'] .oa-installation__lede {
+  max-inline-size: calc(var(--type-measure-compact) * 0.65);
+}
+
+/*
+ * On the floor everything is the primary ink, the one floor-contrast.test.ts
+ * holds at 4.5:1 there: the secondary ink on the floor falls short (N1).
+ */
+[data-variant='obsidian-atelier']
+  :is(.oa-entrance__statement, .oa-installation__title)
+  :is(.oa-no, p) {
+  color: var(--color-text-primary);
+}
+
+/* After the wall, on the canvas before Room I: the rest of the thesis, the hero's words and links. */
+[data-variant='obsidian-atelier'] .oa-intro {
+  row-gap: var(--space-s);
+  padding-block-start: var(--space-l);
+}
+
+/* A word longer than the line, such as a coined subtitle, breaks rather than widening the page. */
+[data-variant='obsidian-atelier'] .oa-intro__words {
+  display: grid;
+  gap: var(--space-xs);
+  min-inline-size: 0;
+  max-inline-size: var(--layout-width-text);
+  overflow-wrap: anywhere;
+}
+
+[data-variant='obsidian-atelier'] .oa-intro__thesis {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+/* ── A hang: the work mounted flush, its wall label at its base ────── */
+
+[data-variant='obsidian-atelier'] .oa-hang {
+  display: grid;
+  gap: var(--space-s);
+  align-items: end;
+}
+
+[data-variant='obsidian-atelier'] .oa-mount .pf-figure {
+  margin: 0;
+}
+
+/* The mount: the picture on a mat of the canvas, the mat raised off the wall. */
+[data-variant='obsidian-atelier'] .oa-mount {
+  box-sizing: border-box;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  padding: var(--space-s);
+  background-color: var(--color-canvas);
+  box-shadow: var(--ui-shadow-raised);
+}
+
+[data-variant='obsidian-atelier'] .oa-mount img {
+  display: block;
+  inline-size: auto;
+  max-inline-size: 100%;
+  block-size: auto;
+  max-block-size: var(--layout-plate);
+}
+
+/* A picture that isn't there yet keeps its box and says so. */
+[data-variant='obsidian-atelier'] :is(.oa-mount, .oa-work__object) .pf-media-box {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  inline-size: 100%;
+  aspect-ratio: 3 / 2;
+  padding: var(--space-s);
+  color: var(--color-text-secondary);
+  background-color: var(--color-surface-default);
+  border: var(--ui-border-card);
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-mount, .oa-work__object) figcaption {
+  display: grid;
+  margin-block-start: var(--space-2xs);
+  color: var(--color-text-secondary);
+}
+
+/* The wall label: type on the wall under a hairline, the catalogue's lines, never a card. */
+[data-variant='obsidian-atelier'] .oa-label {
+  display: grid;
+  align-content: start;
+  gap: 0;
+  box-sizing: border-box;
+  max-inline-size: var(--type-measure-compact);
+  padding-block-start: var(--space-xs);
+  border-block-start: var(--ui-border-divider);
+  border-block-start-color: var(--color-border-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-variant='obsidian-atelier'] .oa-label__title {
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='obsidian-atelier'] .oa-label > :not(.oa-label__no, .oa-label__title, a) {
+  color: var(--color-text-secondary);
+}
+
+/* ── Rooms ────────────────────────────────────────────────────────── */
+
+[data-variant='obsidian-atelier'] .oa-room {
+  row-gap: var(--space-l);
+  padding-block: var(--space-xl-3xl);
+  scroll-margin-block-start: var(--layout-chrome);
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-room__head, .oa-side, .oa-reading__body) {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: var(--space-s);
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-no, .oa-pager__rel) {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Its box reaches as far under the line as its rule hangs, so the focus ring's foot passes under the rule, never over it. */
+[data-variant='obsidian-atelier'] .oa-roomtitle a {
+  padding-block-end: var(--layout-underline);
+  text-decoration-thickness: from-font;
+  text-decoration-color: var(--color-border-strong);
+}
+
+/* Focused as hovered. */
+[data-variant='obsidian-atelier'] .oa-roomtitle a:is(:hover, :focus-visible) {
+  text-decoration-color: currentColor;
+}
+
+[data-variant='obsidian-atelier'] .oa-premise {
+  font-size: var(--type-body-font-size);
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='obsidian-atelier'] .oa-highlights {
+  display: grid;
+  gap: 0;
+  inline-size: 100%;
+}
+
+[data-variant='obsidian-atelier'] .oa-highlights li {
+  padding-block: var(--space-2xs);
+  border-block-end: var(--ui-border-divider);
+}
+
+[data-variant='obsidian-atelier'] .oa-pager {
+  display: grid;
+  gap: var(--space-xs);
+  margin-block-start: var(--space-m);
+}
+
+[data-variant='obsidian-atelier'] .oa-pager a {
+  display: grid;
+  text-decoration-line: none;
+}
+
+[data-variant='obsidian-atelier'] .oa-pager__title {
+  text-decoration-line: underline;
+  text-decoration-thickness: from-font;
+  text-underline-offset: var(--layout-underline);
+}
+
+/* Unfold the case: a plus that turns, and its words. */
+[data-variant='obsidian-atelier'] .oa-unfold {
+  inline-size: 100%;
+  max-inline-size: var(--layout-width-text);
+}
+
+/* A disclosure's summary: the plus, its words, and the whole line its target. */
+[data-variant='obsidian-atelier'] .oa-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-block-size: var(--space-l);
+  cursor: pointer;
+  list-style: none;
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='obsidian-atelier'] .oa-summary::-webkit-details-marker {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  [data-variant='obsidian-atelier'] .oa-summary {
+    min-block-size: var(--space-xl);
+  }
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-unfold, .oa-checklist)[open] .oa-plus {
+  rotate: 45deg;
+}
+
+/* The rest of a bay: its checklist under the hung pieces, across the bay. */
+[data-variant='obsidian-atelier'] .oa-checklist {
+  inline-size: 100%;
+  padding-block-start: var(--space-xs);
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='obsidian-atelier'] .oa-checklist__table {
+  margin-block-start: var(--space-s);
+}
+
+[data-variant='obsidian-atelier'] .oa-checklist__no {
+  font-variant-numeric: tabular-nums;
+}
+
+[data-variant='obsidian-atelier'] .oa-unfold:not([open]) .oa-unfold__verb--close,
+[data-variant='obsidian-atelier'] .oa-unfold[open] .oa-unfold__verb--open {
+  display: none;
+}
+
+[data-variant='obsidian-atelier'] .oa-unfold__case {
+  display: grid;
+  gap: var(--space-m);
+  padding-block: var(--space-s) var(--space-xs);
+}
+
+[data-variant='obsidian-atelier'] .oa-unfold__case dt {
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='obsidian-atelier'] .oa-unfold__case dd {
+  display: grid;
+  gap: var(--space-2xs);
+  margin: var(--space-2xs) 0 0;
+}
+
+[data-variant='obsidian-atelier'] .oa-decisions {
+  display: grid;
+  gap: var(--space-s);
+  counter-reset: oa-decision;
+}
+
+[data-variant='obsidian-atelier'] .oa-decisions li {
+  display: grid;
+  grid-template-columns: var(--space-l) minmax(0, 1fr);
+  counter-increment: oa-decision;
+}
+
+[data-variant='obsidian-atelier'] .oa-decisions li::before {
+  content: counter(oa-decision);
+  grid-row: 1 / span 2;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Room III's wall (C5): the essay's title page hung on it as one plate, a
+ * page of the canvas raised off the wall, and its wall label beside it at
+ * its foot. No case, no plinth, no card in a card.
+ */
+[data-variant='obsidian-atelier'] .oa-vitrine {
+  display: grid;
+  align-items: end;
+  gap: var(--space-l) var(--layout-grid-gutter);
+  padding: var(--space-xl) var(--space-l);
+}
+
+/* No floor under the title page: its wall is the plate and its label, nothing standing empty (P1-8). */
+[data-variant='obsidian-atelier'] .oa-vitrine.oa-wall::after {
+  display: none;
+}
+
+[data-variant='obsidian-atelier'] .oa-vitrine > .oa-folio {
+  justify-self: center;
+  inline-size: min(100%, var(--type-measure-compact));
+}
+
+[data-variant='obsidian-atelier'] .oa-folio {
+  display: grid;
+  gap: var(--space-s);
+  box-sizing: border-box;
+  inline-size: 100%;
+  padding: var(--space-l);
+  border-block-start: var(--ui-border-divider);
+  border-block-start-color: var(--color-border-strong);
+  background-color: var(--color-canvas);
+  box-shadow: var(--ui-shadow-raised);
+}
+
+[data-variant='obsidian-atelier'] .oa-folio__title {
+  font-size: var(--type-title-font-size);
+  font-weight: var(--type-label-font-weight);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='obsidian-atelier'] .oa-folio__excerpt {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='obsidian-atelier'] .oa-folio__excerpt p::before {
+  content: open-quote;
+}
+
+[data-variant='obsidian-atelier'] .oa-folio__excerpt p::after {
+  content: close-quote;
+}
+
+[data-variant='obsidian-atelier'] .oa-folio__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-s);
+  padding-block-start: var(--space-xs);
+  border-block-start: var(--ui-border-divider);
+  color: var(--color-text-secondary);
+}
+
+/* ── The collection: one salon wall, a bay for each works section ─── */
+
+/* The wall is the container its objects measure by: a subgrid can't be one, or it stops being a subgrid. */
+[data-variant='obsidian-atelier'] .oa-collection {
+  container: oa-wall / inline-size;
+  row-gap: var(--space-xl);
+  padding-block: var(--space-xl-3xl) 0;
+  scroll-margin-block-start: 0;
+}
+
+/* With nothing on its floor, the wall still ends on one. */
+[data-variant='obsidian-atelier'] .oa-collection:not(:has(> .oa-wallfloor)) {
+  padding-block-end: var(--layout-floor);
+}
+
+[data-variant='obsidian-atelier'] .oa-collection__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2xs) var(--space-xl);
+}
+
+[data-variant='obsidian-atelier'] .oa-bays {
+  grid-column: content;
+  grid-template-columns: subgrid;
+  row-gap: var(--space-xl);
+  align-items: start;
+}
+
+/* A bay runs across the wall on a phone; a wider wall gives it its span. */
+[data-variant='obsidian-atelier'] .oa-bay {
+  /* One of the wall's columns, from the wall's own width, as the page's grid works it out. */
+  --layout-wall-track: calc(
+    (
+        min(100cqi - 2 * var(--layout-grid-margin), var(--layout-width-page)) -
+          (var(--layout-grid-columns) - 1) * var(--layout-grid-gutter)
+      ) /
+      var(--layout-grid-columns)
+  );
+  grid-column: 1 / -1;
+  display: grid;
+  align-content: start;
+  gap: var(--space-s);
+  scroll-margin-block-start: var(--layout-chrome);
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-bay__head, .oa-plates) {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-bay__note, .oa-bay__head .oa-note) {
+  max-inline-size: var(--type-measure-compact);
+  color: var(--color-text-secondary);
+}
+
+/* Objects stand a gutter apart, so a bay of two columns an object holds them on one row. */
+[data-variant='obsidian-atelier'] .oa-hangs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-l) var(--layout-grid-gutter);
+}
+
+[data-variant='obsidian-atelier'] .oa-work {
+  position: relative;
+  display: grid;
+  gap: var(--space-xs);
+  /* Two of the wall's columns and the gutter between them. */
+  --layout-object: calc(2 * var(--layout-wall-track) + var(--layout-grid-gutter));
+  flex: 1 1 var(--layout-object);
+  min-inline-size: 0;
+  max-inline-size: calc(var(--layout-object) * 1.5);
+}
+
+[data-variant='obsidian-atelier'] .oa-work--print {
+  flex: 1 1 100%;
+  max-inline-size: none;
+}
+
+[data-variant='obsidian-atelier'] .oa-work__object {
+  display: grid;
+  min-inline-size: 0;
+  box-sizing: border-box;
+  inline-size: 100%;
+}
+
+[data-variant='obsidian-atelier'] .oa-work__object img {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+}
+
+/* A screen: flush, its picture inset by a hairline so a pale one keeps its edge. */
+[data-variant='obsidian-atelier'] .oa-screen {
+  border: var(--ui-border-card);
+  box-shadow: var(--ui-shadow-raised);
+}
+
+/* A sheet: the work's own title page. */
+[data-variant='obsidian-atelier'] .oa-work > * {
+  min-inline-size: 0;
+}
+
+/* A title breaks between words, hyphenated in its language where a word is too long; only a host breaks anywhere. */
+[data-variant='obsidian-atelier'] :is(.oa-sheet, .oa-sleeve) {
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+[data-variant='obsidian-atelier'] .oa-sheet__kind {
+  overflow-wrap: anywhere;
+  hyphens: manual;
+}
+
+[data-variant='obsidian-atelier'] .oa-sheet {
+  align-content: space-between;
+  gap: var(--space-l);
+  aspect-ratio: 4 / 5;
+  padding: var(--space-s);
+  background-color: var(--color-canvas);
+  box-shadow: var(--ui-shadow-raised);
+}
+
+[data-variant='obsidian-atelier'] .oa-sheet__title {
+  font-size: var(--type-title-font-size);
+  font-weight: var(--type-label-font-weight);
+  line-height: var(--type-title-line-height);
+  text-wrap: balance;
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-sheet__kind, .oa-sheet__time) {
+  color: var(--color-text-secondary);
+}
+
+/* A sleeve: the scheme's inverse, its number large. */
+[data-variant='obsidian-atelier'] .oa-sleeve {
+  align-content: space-between;
+  gap: var(--space-s);
+  aspect-ratio: 1;
+  padding: var(--space-s);
+  color: var(--color-text-inverse);
+  background-color: var(--color-text-primary);
+  box-shadow: var(--ui-shadow-raised);
+}
+
+[data-variant='obsidian-atelier'] .oa-sleeve__number {
+  font-size: var(--type-step-5);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A print: framed in the text's own color, on a mat of the canvas. */
+[data-variant='obsidian-atelier'] .oa-plates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-l) var(--space-xl);
+}
+
+[data-variant='obsidian-atelier'] .oa-plate {
+  display: grid;
+  gap: var(--space-xs);
+  flex: 3 1 calc(2 * var(--layout-wall-track));
+}
+
+[data-variant='obsidian-atelier'] .oa-plate:nth-child(3n + 2) {
+  flex-grow: 4;
+}
+
+/* A print, and a case's plate, framed in the text's own color on a mat of the canvas. */
+[data-variant='obsidian-atelier'] :is(.oa-print, .oa-caseplate__frame) {
+  padding: var(--space-s);
+  background-color: var(--color-canvas);
+  border: var(--space-3xs) solid var(--color-text-primary);
+  box-shadow: var(--ui-shadow-raised);
+}
+
+/* A ledge: the record's sleeve standing on a narrow shelf. */
+[data-variant='obsidian-atelier'] .oa-ledge {
+  padding-block-end: var(--space-3xs);
+  border-block-end: var(--space-3xs) solid var(--color-border-strong);
+}
+
+[data-variant='obsidian-atelier'] .oa-ledge img {
+  box-shadow: var(--ui-shadow-raised);
+}
+
+/* The caption system: the title, the number at the line's end, the credit below. */
+[data-variant='obsidian-atelier'] .oa-caption {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--space-s);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-variant='obsidian-atelier'] .oa-caption__no {
+  text-align: end;
+}
+
+[data-variant='obsidian-atelier'] .oa-caption__credit {
+  grid-column: 1 / -1;
+  color: var(--color-text-secondary);
+}
+
+/* The caption's title is the work's one link, stretched over its object. */
+[data-variant='obsidian-atelier'] .oa-caption__link {
+  text-decoration-line: none;
+}
+
+[data-variant='obsidian-atelier'] .oa-caption__link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+[data-variant='obsidian-atelier'] .oa-caption__link:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+}
+
+/* ── Galleries: signage on the first columns, the content from the third ── */
+
+[data-variant='obsidian-atelier'] .oa-gallery {
+  row-gap: var(--space-xl);
+  padding-block: max(var(--space-l-2xl), var(--layout-chrome)) var(--space-xl);
+  scroll-margin-block-start: 0;
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-block, .oa-room) {
+  scroll-margin-block-start: var(--layout-chrome);
+}
+
+[data-variant='obsidian-atelier'] .oa-gallery__main {
+  display: grid;
+  align-content: start;
+  row-gap: var(--space-xl);
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(100%, calc(var(--type-measure-compact) / 2)), 1fr)
+  );
+  column-gap: var(--layout-grid-gutter);
+}
+
+[data-variant='obsidian-atelier'] .oa-gallery__main > .oa-block--custom {
+  grid-column: 1 / -1;
+}
+
+[data-variant='obsidian-atelier'] .oa-statement {
+  max-inline-size: calc(var(--type-measure-compact) * 0.6);
+  line-height: var(--type-headline-line-height);
+}
+
+[data-variant='obsidian-atelier'] .oa-statement p {
+  margin: 0;
+}
+
+/* Ruled lists: the materials list, the notices, the visitors' entries. */
+[data-variant='obsidian-atelier'] .oa-ruled {
+  display: grid;
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='obsidian-atelier'] .oa-ruled > li {
+  display: grid;
+  gap: var(--space-3xs);
+  padding-block: var(--space-xs);
+  border-block-end: var(--ui-border-divider);
+}
+
+[data-variant='obsidian-atelier'] .oa-repos > li {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+}
+
+[data-variant='obsidian-atelier'] .oa-dateline {
+  color: var(--color-text-secondary);
+}
+
+/* The GitHub account's figures: each number at the title size over its label, side by side. */
+[data-variant='obsidian-atelier'] .oa-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-s) var(--space-l);
+}
+
+[data-variant='obsidian-atelier'] .oa-stat {
+  display: grid;
+}
+
+[data-variant='obsidian-atelier'] .oa-stat dt {
+  order: 2;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='obsidian-atelier'] .oa-stat__figure {
+  order: 1;
+  margin: 0;
+  font-size: var(--type-title-font-size);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * A bay's checklist, at every width a stack (P1-3): each work's number
+ * beside its title, its credit under the title, a hairline between works,
+ * the column heads for assistive technology alone.
+ */
+[data-variant='obsidian-atelier'] .oa-table {
+  display: block;
+  inline-size: 100%;
+}
+
+[data-variant='obsidian-atelier'] .oa-table tbody {
+  display: grid;
+}
+
+[data-variant='obsidian-atelier'] .oa-table tr {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3xs) var(--space-s);
+  padding-block: var(--space-xs);
+  border-block-end: var(--ui-border-divider);
+}
+
+[data-variant='obsidian-atelier'] .oa-table tbody :is(th, td) {
+  display: block;
+  padding: 0;
+  font-weight: var(--type-body-font-weight);
+  text-align: start;
+}
+
+[data-variant='obsidian-atelier'] .oa-table .oa-checklist__no {
+  grid-row: 1 / span 2;
+}
+
+[data-variant='obsidian-atelier'] .oa-table tbody :is(th, td):not(.oa-checklist__no) {
+  grid-column: 2;
+}
+
+[data-variant='obsidian-atelier'] .oa-table tbody td:last-child {
+  color: var(--color-text-secondary);
+}
+
+/*
+ * Practice's shelf: its lists as labels, a title over its quiet lines,
+ * with no rule between them.
+ */
+[data-variant='obsidian-atelier'] .oa-checks {
+  display: grid;
+  gap: var(--space-xs);
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='obsidian-atelier'] .oa-check {
+  display: grid;
+}
+
+[data-variant='obsidian-atelier'] .oa-check__title {
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='obsidian-atelier'] .oa-check__line {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='obsidian-atelier'] .oa-check__line > :is(p, div) + :is(p, div) {
+  margin-block-start: var(--space-2xs);
+}
+
+[data-variant='obsidian-atelier'] .oa-check__figure {
+  color: var(--color-text-primary);
+  font-weight: var(--type-label-font-weight);
+}
+
+/*
+ * The vitrine (labels.tsx): a mat of the canvas standing on the room's
+ * wall, lit along its top edge, holding the catalogue checklist: number,
+ * title, where, and when, a hairline under the heads alone, never a rule
+ * between rows.
+ */
+[data-variant='obsidian-atelier'] .oa-vitrine-mat {
+  padding: var(--space-m) var(--space-l) var(--space-l);
+  border-block-start: var(--ui-border-divider);
+  border-block-start-color: var(--color-border-strong);
+  background-color: var(--color-canvas);
+  box-shadow: var(--ui-shadow-raised);
+}
+
+[data-variant='obsidian-atelier'] .oa-checktable {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-variant='obsidian-atelier'] .oa-checktable thead th {
+  padding-block: 0 var(--space-xs);
+  border-block-end: var(--ui-border-divider);
+  color: var(--color-text-secondary);
+  font-weight: var(--type-body-font-weight);
+  text-align: start;
+}
+
+[data-variant='obsidian-atelier'] .oa-checktable :is(td, th) {
+  padding-inline-end: var(--space-m);
+  vertical-align: top;
+}
+
+[data-variant='obsidian-atelier'] .oa-checktable tbody :is(td, th) {
+  padding-block: var(--space-xs);
+  font-weight: var(--type-body-font-weight);
+  text-align: start;
+}
+
+[data-variant='obsidian-atelier'] .oa-checktable tbody tr:first-child :is(td, th) {
+  padding-block-start: var(--space-s);
+}
+
+[data-variant='obsidian-atelier'] .oa-checktable :is(.oa-checktable__no, .oa-checktable__when) {
+  inline-size: 1%;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+[data-variant='obsidian-atelier'] .oa-checktable .oa-checktable__when {
+  padding-inline-end: 0;
+  text-align: end;
+}
+
+[data-variant='obsidian-atelier'] .oa-checktable__title,
+[data-variant='obsidian-atelier'] .oa-checktable__title b {
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='obsidian-atelier'] .oa-checktable__more {
+  margin-block-start: var(--space-3xs);
+  color: var(--color-text-secondary);
+}
+
+/* At a glance: one wall label in sentences, a hairline over it. */
+[data-variant='obsidian-atelier'] :is(.oa-block:has(> .oa-glance), .oa-block--cta) {
+  padding-block-start: var(--space-xs);
+  border-block-start: var(--ui-border-divider);
+  border-block-start-color: var(--color-border-strong);
+}
+
+[data-variant='obsidian-atelier'] .oa-glance {
+  max-inline-size: var(--type-measure-compact);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A hall's one summary, At a glance or Practice's first paragraph, across its wall at the title size. */
+[data-variant='obsidian-atelier'] .oa-hall__lead :is(.oa-glance, .oa-prose) {
+  max-inline-size: none;
+  font-size: var(--type-title-font-size);
+  line-height: var(--type-title-line-height);
+  text-wrap: pretty;
+}
+
+/*
+ * Practice's notice (OBS-4): Now, hung on the room's wall beside its words
+ * as a dated sheet, on the canvas's ground and raised off the wall as the
+ * whole practice's vitrine is, its words at body size.
+ */
+[data-variant='obsidian-atelier'] .oa-hall__lead > .oa-block--now {
+  display: grid;
+  align-self: start;
+  align-content: start;
+  gap: var(--space-xs);
+  /* Its top hangs level with the words' label; a phone's padding is the gutter's, so its measure holds. */
+  margin-block-start: var(--space-xs);
+  padding: var(--space-s-l);
+  background-color: var(--color-canvas);
+  box-shadow: var(--ui-shadow-raised);
+}
+
+[data-variant='obsidian-atelier'] .oa-hall__lead > .oa-block--now .oa-prose {
+  font-size: var(--type-body-font-size);
+  line-height: var(--type-body-line-height);
+}
+
+/* Quotes, mounted as framed inscriptions: the words in a frame on a mat, the credit under it. */
+[data-variant='obsidian-atelier'] .oa-frames {
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(100%, calc(var(--type-measure-compact) / 1.6)), 1fr)
+  );
+  gap: var(--space-l) var(--layout-grid-gutter);
+  align-items: start;
+}
+
+[data-variant='obsidian-atelier'] .oa-frame {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+[data-variant='obsidian-atelier'] .oa-frame__mat {
+  padding: var(--space-l);
+  border: var(--space-3xs) solid var(--color-text-primary);
+  background-color: var(--color-canvas);
+  box-shadow: var(--ui-shadow-raised);
+}
+
+[data-variant='obsidian-atelier'] .oa-frame blockquote {
+  font-size: var(--type-title-font-size);
+  line-height: var(--type-title-line-height);
+  hanging-punctuation: first;
+}
+
+[data-variant='obsidian-atelier'] .oa-frame blockquote p::before {
+  content: open-quote;
+}
+
+[data-variant='obsidian-atelier'] .oa-frame blockquote p::after {
+  content: close-quote;
+}
+
+/*
+ * Practice and Record, hung as rooms (C1): a wall of their own with a
+ * floor, the room's running head in the left track, its one summary,
+ * and the rest of it folded under that (item 8).
+ */
+[data-variant='obsidian-atelier'] .oa-hall {
+  row-gap: var(--space-xl);
+  padding-block: var(--space-xl-3xl) 0;
+}
+
+[data-variant='obsidian-atelier'] .oa-hall:not(:has(> .oa-wallfloor)) {
+  padding-block-end: var(--layout-floor);
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-hall__rail, .oa-hall__lead) {
+  display: grid;
+  align-content: start;
+  gap: var(--space-xl) var(--layout-grid-gutter);
+}
+
+[data-variant='obsidian-atelier'] .oa-hall__rail {
+  gap: var(--space-2xs);
+}
+
+[data-variant='obsidian-atelier'] .oa-hall__plaque {
+  color: var(--color-text-secondary);
+}
+
+/* The whole practice: its lists stand in one vitrine, in columns that end level. */
+[data-variant='obsidian-atelier'] .oa-gallery--about .oa-whole__main {
+  display: block;
+  columns: calc(var(--type-measure-compact) / 2) 3;
+  column-gap: calc(2 * var(--layout-grid-gutter));
+  padding: var(--space-l);
+  border-block-start: var(--ui-border-divider);
+  border-block-start-color: var(--color-border-strong);
+  background-color: var(--color-canvas);
+  box-shadow: var(--ui-shadow-raised);
+}
+
+[data-variant='obsidian-atelier'] .oa-whole__main > * {
+  break-inside: avoid;
+  margin-block-end: var(--space-l);
+}
+
+/* The whole record: one disclosure, closed, the rest of the record in two columns that end level. */
+/* The record's own runs in one: its checklists need the hall's width, and its voices pair up across it. */
+[data-variant='obsidian-atelier'] .oa-gallery--record .oa-whole__main {
+  columns: auto;
+}
+
+[data-variant='obsidian-atelier'] .oa-whole__main {
+  columns: var(--type-measure-compact) 2;
+  column-gap: var(--space-xl);
+  padding-block-start: var(--space-m);
+}
+
+/*
+ * Focus is never under the fixed plates (focus not obscured): a control
+ * scrolled to by the keyboard stops clear of Index and the marker.
+ */
+[data-variant='obsidian-atelier']
+  :is(a[href], button, summary, input, select, textarea, [tabindex]) {
+  scroll-margin-block-start: calc(var(--layout-target) + 2 * var(--space-xs));
+}
+
+[data-variant='obsidian-atelier'] .oa-whole[open] .oa-plus {
+  rotate: 45deg;
+}
+
+/* Bibliography entries. */
+[data-variant='obsidian-atelier'] .oa-entries {
+  display: grid;
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='obsidian-atelier'] .oa-entry {
+  display: grid;
+  gap: var(--space-3xs);
+  padding-block: var(--space-s);
+  border-block-end: var(--ui-border-divider);
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-entry__facts, .oa-entry__more, .oa-credit) {
+  color: var(--color-text-secondary);
+}
+
+/*
+ * Contact: the address at the one title size, and the primary action. The
+ * address's box reaches as far under the line as its rule hangs, as a room
+ * title's does, so the focus ring's foot passes under the rule, never over it:
+ * on the ink the scheme's focus colour is under 3:1.
+ */
+[data-variant='obsidian-atelier'] .oa-address a {
+  padding-block-end: var(--layout-underline);
+  text-decoration-thickness: from-font;
+}
+
+[data-variant='obsidian-atelier'] .oa-actions__first {
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='obsidian-atelier'] .oa-custom__image img {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+}
+
+/* ── The exit wall: one inscription, a bookend to the entrance ─────── */
+
+[data-variant='obsidian-atelier'] .oa-exit {
+  row-gap: var(--space-2xl);
+  padding-block: var(--space-2xl) 0;
+}
+
+[data-variant='obsidian-atelier'] .oa-exit > * {
+  grid-column: col 3 / span 8;
+}
+
+/* A hall's floor stands over its sticky rail, on the floor's own ground: the rail passes behind it, never over its link. */
+[data-variant='obsidian-atelier'] .oa-hall > .oa-wallfloor {
+  position: relative;
+  z-index: 1;
+  background-color: var(--layout-floor-ground);
+}
+
+[data-variant='obsidian-atelier'] .oa-exit > .oa-wallfloor {
+  grid-column: content;
+}
+
+/* The exit wall's label (OA-S10): Contact's call to work together, a wall label at the inscription's foot. */
+[data-variant='obsidian-atelier'] .oa-exit[data-labelled] > .oa-block--cta {
+  grid-column: content;
+  align-self: end;
+}
+
+[data-variant='obsidian-atelier'] .oa-inscription {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-m);
+  text-align: center;
+}
+
+[data-variant='obsidian-atelier'] .oa-inscription p {
+  max-inline-size: calc(var(--type-measure-compact) / 2);
+  line-height: var(--type-headline-line-height);
+}
+
+[data-variant='obsidian-atelier'] .oa-gallery .oa-inscription {
+  justify-items: start;
+  text-align: start;
+}
+
+/* ── The colophon, and the plan of the exhibition ──────────────────── */
+
+[data-variant='obsidian-atelier'] .oa-colophon {
+  row-gap: var(--space-xl);
+  padding-block: var(--space-xl) var(--space-l);
+  background-color: var(--color-surface-subtle);
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-colophon__plan, .oa-colophon__text) {
+  display: grid;
+  align-content: start;
+  gap: var(--space-s);
+}
+
+[data-variant='obsidian-atelier'] .oa-colophon__name {
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='obsidian-atelier'] .oa-colophon__base {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2xs) var(--space-m);
+  padding-block-start: var(--space-s);
+  color: var(--color-text-secondary);
+  border-block-start: var(--ui-border-divider);
+}
+
+/* The plan: rooms as hairline walls, each with a door gap at its top edge. */
+[data-variant='obsidian-atelier'] .oa-plan {
+  display: grid;
+  border: var(--ui-border-card);
+  border-radius: 0;
+}
+
+/* Each wing is a row of the drawing, its rooms sharing the row's width. */
+[data-variant='obsidian-atelier'] .oa-plan__rooms {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+[data-variant='obsidian-atelier'] .oa-plan__room {
+  position: relative;
+  flex: 1 1 calc(var(--type-measure-compact) / 4);
+  display: grid;
+  align-content: start;
+  gap: var(--space-2xs);
+  padding: var(--space-s);
+  outline: var(--ui-border-divider);
+}
+
+/* The door: a gap in the room's top wall, in the plan's own ground. */
+[data-variant='obsidian-atelier'] .oa-plan__room::before {
+  content: '';
+  position: absolute;
+  inset-block-start: calc(var(--space-3xs) / -2);
+  inset-inline-start: var(--space-s);
+  inline-size: var(--space-l);
+  border-block-start: var(--space-3xs) solid var(--color-surface-subtle);
+}
+
+[data-variant='obsidian-atelier'] .oa-plan--index .oa-plan__room::before {
+  border-block-start-color: var(--color-surface-overlay);
+}
+
+[data-variant='obsidian-atelier'] .oa-plan__room--wide {
+  flex: 2 1 calc(var(--type-measure-compact) / 2);
+}
+
+[data-variant='obsidian-atelier'] .oa-plan__name {
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='obsidian-atelier'] .oa-plan__room:not(.oa-plan__room--wide) .oa-plan__count {
+  display: block;
+}
+
+[data-variant='obsidian-atelier'] .oa-plan__count {
+  color: var(--color-text-secondary);
+  font-weight: var(--type-body-font-weight);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-variant='obsidian-atelier'] .oa-plan__doors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-s);
+}
+
+[data-variant='obsidian-atelier'] .oa-plan a[aria-current]::before {
+  content: '';
+  display: inline-block;
+  inline-size: var(--space-2xs);
+  block-size: var(--space-2xs);
+  margin-inline-end: var(--space-2xs);
+  border-radius: var(--ui-radius-badge);
+  background-color: var(--color-accent-text);
+}
+
+@media (max-width: 30rem) {
+  [data-variant='obsidian-atelier'] .oa-plan__room,
+  [data-variant='obsidian-atelier'] .oa-plan__room--wide {
+    flex-basis: 100%;
+  }
+
+  /* Two sheets to a row: their titles a step down, so a long word keeps whole. */
+  [data-variant='obsidian-atelier'] .oa-sheet__title {
+    font-size: var(--type-step-1);
+  }
+}
+
+/* ── On a phone: tables read as ruled stacks; objects hang two to a row ─ */
+
+@media (max-width: 63.99rem) {
+  [data-variant='obsidian-atelier'] .oa-room--wall .oa-room__wall {
+    grid-column: full;
+    display: grid;
+    gap: var(--space-m);
+    padding: var(--space-xl) var(--layout-grid-margin) 0;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-room--wall {
+    padding-block-start: 0;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-work {
+    flex: 0 1 calc((100% - var(--layout-grid-gutter)) / 2);
+    max-inline-size: none;
+  }
+
+  /* A print, or an object alone in its bay, takes the bay's width, not half of it with nothing beside it. */
+  [data-variant='obsidian-atelier'] :is(.oa-work--print, .oa-hangs > .oa-work:only-child) {
+    flex: 1 1 100%;
+  }
+
+  /* An object alone in its bay is as tall as its words, not a page's proportion at the bay's width (P1-4). */
+  [data-variant='obsidian-atelier'] .oa-hangs > .oa-work:only-child :is(.oa-sheet, .oa-sleeve) {
+    aspect-ratio: auto;
+  }
+}
+
+@media (max-width: 47.99rem) {
+  /* The checklist reads as a stack on a phone: its number beside each entry, the heads for assistive technology. */
+  [data-variant='obsidian-atelier'] .oa-checktable thead {
+    position: absolute;
+    inline-size: var(--layout-hairline);
+    block-size: var(--layout-hairline);
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  [data-variant='obsidian-atelier'] .oa-checktable tr {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: var(--space-s);
+    padding-block: var(--space-xs);
+  }
+
+  [data-variant='obsidian-atelier'] .oa-checktable tbody :is(td, th) {
+    display: block;
+    padding: 0;
+    text-align: start;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-checktable .oa-checktable__no {
+    grid-row: 1 / span 3;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-checktable tbody :is(td, th):not(.oa-checktable__no) {
+    grid-column: 2;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-checktable .oa-checktable__when {
+    inline-size: auto;
+    text-align: start;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-plate {
+    flex-basis: 100%;
+  }
+}
+
+/* ── From 48rem to 64rem: the bays two to a wall, a full one across it ── */
+
+@media (min-width: 48rem) and (max-width: 63.99rem) {
+  [data-variant='obsidian-atelier'] .oa-bay {
+    grid-column: span 6;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-bay:has(.oa-work--print),
+  [data-variant='obsidian-atelier'] .oa-bay:has(.oa-hangs > :nth-child(3)) {
+    grid-column: span 12;
+  }
+}
+
+/* ── From 48rem: the chrome's destinations; the bays share the wall ─ */
+
+@media (min-width: 48rem) {
+  [data-variant='obsidian-atelier'] .oa-gallery > .oa-signage {
+    grid-column: col 1 / span 12;
+  }
+
+  /* The plan takes the colophon's width; beside it the ways in touch, only when there's no Contact gallery. */
+  [data-variant='obsidian-atelier'] .oa-colophon:has(> .oa-colophon__text) .oa-colophon__plan {
+    grid-column: col 1 / span 8;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-colophon__text {
+    grid-column: col 9 / span 4;
+  }
+}
+
+/* ── From 64rem: the walls hang, and every part takes its columns ──── */
+
+@media (min-width: 64rem) {
+  /*
+   * The entrance: the wall the window's height, the work on the page's
+   * axis with its label pinned to its bottom-left, the floor from the
+   * work's foot to the window's, the room's title centred on it.
+   */
+  [data-variant='obsidian-atelier'] :is(.oa-entrance, .oa-installation) {
+    grid-template-rows: [plaque] auto [plate] auto [floor-start] 1fr [facts] auto [floor-end];
+    min-block-size: var(--layout-room);
+  }
+
+  [data-variant='obsidian-atelier'] :is(.oa-entrance, .oa-installation) .oa-hang {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    column-gap: var(--layout-grid-gutter);
+  }
+
+  [data-variant='obsidian-atelier'] :is(.oa-entrance, .oa-installation) .oa-hang__work {
+    grid-row: 1;
+    grid-column: 2;
+    /* About 55% of the window, on an even mat (P1-1). */
+    max-inline-size: min(100%, var(--layout-plate-wide));
+    padding: calc(var(--space-l) + var(--space-2xs));
+  }
+
+  [data-variant='obsidian-atelier'] :is(.oa-entrance, .oa-installation) .oa-label {
+    grid-row: 1;
+    grid-column: 1;
+    justify-self: end;
+    max-inline-size: calc(var(--type-measure-compact) / 1.5);
+  }
+
+  [data-variant='obsidian-atelier'] :is(.oa-entrance__statement, .oa-installation__title) {
+    align-self: center;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-intro {
+    padding-block-start: var(--space-xl);
+  }
+
+  [data-variant='obsidian-atelier'] .oa-intro > * {
+    grid-column: col 4 / span 6;
+  }
+
+  /*
+   * The standfirst (OBS-4): the thesis's rest is wall text across the
+   * nine columns from c4, at the title size the halls' summaries use, so
+   * it starts on the rooms' edge and reaches the wall's far side; the
+   * owner's lines under it keep the body's size and measure.
+   */
+  [data-variant='obsidian-atelier'] .oa-intro > .oa-intro__words {
+    grid-column: col 4 / span 9;
+    max-inline-size: none;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-intro__words > * {
+    max-inline-size: var(--layout-width-text);
+  }
+
+  [data-variant='obsidian-atelier'] .oa-intro__thesis p {
+    max-inline-size: none;
+  }
+
+  /* The body's measure near the title size's, so the line reads at about 80 characters and stops by the plate's edge. */
+  [data-variant='obsidian-atelier'] .oa-intro__words > .oa-intro__thesis {
+    max-inline-size: calc(var(--layout-width-text) * 1.4);
+    font-size: var(--type-title-font-size);
+    line-height: var(--type-title-line-height);
+    text-wrap: pretty;
+  }
+
+  /*
+   * Room I: the head rail stays beside the reading as it scrolls. Rail on
+   * c1 to c3 and words from c4, as the halls' are, so the standfirst above
+   * and every room's words start on one edge (OBS-4).
+   */
+  [data-variant='obsidian-atelier'] .oa-reading__head {
+    grid-column: col 1 / span 3;
+    align-self: start;
+    position: sticky;
+    inset-block-start: calc(var(--layout-strip) + var(--space-s));
+    padding-inline-end: var(--space-m);
+  }
+
+  [data-variant='obsidian-atelier'] .oa-reading__body {
+    grid-column: col 4 / span 6;
+    grid-row: 1;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-reading__aside {
+    grid-column: col 10 / span 3;
+    grid-row: 1;
+    align-self: start;
+  }
+
+  /* A wall room: the wall runs to the page's edge on its side, the reading beside it. */
+  [data-variant='obsidian-atelier'] .oa-room--wall .oa-room__wall > .oa-wallfloor {
+    grid-column: col 1 / span 8;
+    padding-inline-end: var(--space-m);
+  }
+
+  [data-variant='obsidian-atelier'] .oa-room--wall[data-side='end'] .oa-room__wall > .oa-wallfloor {
+    grid-column: col 5 / span 8;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-room--wall {
+    padding-block: 0;
+    row-gap: 0;
+  }
+
+  /*
+   * The wall: the work's foot a step above the floor line, the floor under
+   * it. It's its own height, the window's less a band, not the reading's:
+   * pinned beside a longer reading, it stays in view while the reading runs
+   * on past its floor onto the canvas.
+   */
+  [data-variant='obsidian-atelier'] .oa-room--wall .oa-room__wall {
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: full-start / col 9;
+    grid-row: 1;
+    /* The work's row is what the wall's height leaves over, so the work stands just above the floor line. */
+    grid-template-rows:
+      minmax(
+        calc(var(--layout-room-wall) - var(--space-2xl) - var(--space-m) - var(--layout-floor)),
+        auto
+      )
+      auto;
+    align-self: start;
+    position: sticky;
+    inset-block-start: 0;
+    row-gap: var(--space-m);
+    padding-block: var(--space-2xl) 0;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-room--wall .oa-hang {
+    grid-column: col 1 / span 8;
+    grid-template-columns: subgrid;
+    column-gap: var(--layout-grid-gutter);
+  }
+
+  [data-variant='obsidian-atelier'] .oa-room--wall .oa-hang__work {
+    grid-column: 1 / span 6;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-room--wall .oa-label {
+    grid-column: 7 / span 2;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-room--wall .oa-side {
+    grid-column: col 9 / span 4;
+    grid-row: 1;
+    align-self: center;
+    padding-block: var(--space-2xl);
+    padding-inline-start: var(--space-l);
+  }
+
+  [data-variant='obsidian-atelier'] .oa-room--wall[data-side='end'] .oa-room__wall {
+    grid-column: col 5 / full-end;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-room--wall[data-side='end'] .oa-hang {
+    grid-column: col 5 / span 8;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-room--wall[data-side='end'] .oa-side {
+    grid-column: col 1 / span 4;
+    padding-inline: 0 var(--space-l);
+  }
+
+  /*
+   * Room III's title, beside the title page that shows it, is for a reader
+   * alone from here (C5, P1-8); narrower, the head comes first and keeps it.
+   */
+  [data-variant='obsidian-atelier'] .oa-room--vitrine .oa-roomtitle {
+    position: absolute;
+    inline-size: var(--layout-hairline);
+    block-size: var(--layout-hairline);
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* A vitrine room: the reading, then its wall with the title page and its label. */
+  [data-variant='obsidian-atelier'] .oa-room--vitrine .oa-side {
+    grid-column: col 1 / span 4;
+    align-self: center;
+  }
+
+  /* Its wall runs to the window's edge on the page's columns: the title page on four, its label on the last three, inside the margin. */
+  [data-variant='obsidian-atelier'] .oa-room--vitrine .oa-vitrine {
+    grid-column: col 6 / full-end;
+    grid-row: 1;
+    grid-template-columns: subgrid;
+    /* The title page stands in from the wall's edge as far as from its top (N4). */
+    padding-inline: var(--space-xl) 0;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-room--vitrine .oa-vitrine > .oa-folio {
+    grid-column: 1 / span 4;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-room--vitrine .oa-vitrine > .oa-label {
+    grid-column: 5 / span 3;
+  }
+
+  /*
+   * The collection: one salon wall, hung a row at a time, each bay as wide
+   * as the columns its row gives it, so every row runs from the wall's
+   * first column line to its last (collection.tsx, baySpans).
+   */
+  [data-variant='obsidian-atelier'] .oa-bay--span-2 {
+    grid-column: span 2;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-bay--span-3 {
+    grid-column: span 3;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-bay--span-4 {
+    grid-column: span 4;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-bay--span-5 {
+    grid-column: span 5;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-bay--span-6 {
+    grid-column: span 6;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-bay--span-7 {
+    grid-column: span 7;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-bay--span-8 {
+    grid-column: span 8;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-bay--span-9 {
+    grid-column: span 9;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-bay--span-10 {
+    grid-column: span 10;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-bay--span-11 {
+    grid-column: span 11;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-bay--span-12 {
+    grid-column: span 12;
+  }
+
+  /* Each gallery: its signage on the first three columns, its blocks after it. */
+  /* Its signage stays on the rail beside the gallery as it scrolls, as Room I's head does. */
+  [data-variant='obsidian-atelier'] .oa-gallery > .oa-signage {
+    grid-column: col 1 / span 3;
+    grid-row: 1 / span 2;
+    align-self: start;
+    position: sticky;
+    inset-block-start: calc(var(--layout-strip) + var(--space-s));
+  }
+
+  /*
+   * A hall at a wide window: its running head on the first three columns,
+   * sticky beside the room as it's read; its summary and the rest of it,
+   * folded, on the nine after it.
+   */
+  /*
+   * The rail spans the summary's row and the fold's, no more, so the floor
+   * comes one gap under the fold's summary, not under two empty rows (OBS-4).
+   */
+  [data-variant='obsidian-atelier'] .oa-hall__rail {
+    grid-column: col 1 / span 3;
+    grid-row: 1 / span 2;
+    align-self: start;
+    position: sticky;
+    inset-block-start: calc(var(--layout-strip) + var(--space-s));
+  }
+
+  [data-variant='obsidian-atelier'] .oa-hall > :is(.oa-hall__lead, .oa-whole) {
+    grid-column: col 4 / span 9;
+  }
+
+  /* The summary on the hall's nine columns: the words on five, an object hung beside them on four. */
+  [data-variant='obsidian-atelier'] .oa-hall__lead {
+    grid-template-columns: repeat(9, minmax(0, 1fr));
+    column-gap: var(--layout-grid-gutter);
+  }
+
+  [data-variant='obsidian-atelier'] .oa-hall__lead > * {
+    grid-column: span 5;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-hall__lead > .oa-block--now {
+    grid-column: span 4;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-hall__lead > :only-child {
+    grid-column: 1 / -1;
+  }
+
+  /* Contact: blocks in halves of the content's columns, or across them. */
+  [data-variant='obsidian-atelier'] .oa-gallery--contact .oa-gallery__main {
+    grid-column: col 4 / span 9;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-xl);
+  }
+
+  [data-variant='obsidian-atelier'] .oa-gallery__main > [data-oa-span='wide'] {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-exit > * {
+    grid-column: col 3 / span 8;
+  }
+
+  /* With its label, the inscription keeps the wall's first columns and the label the last, side by side. */
+  [data-variant='obsidian-atelier'] .oa-exit[data-labelled] > .oa-inscription {
+    grid-row: 1;
+    grid-column: col 2 / span 7;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-exit[data-labelled] > .oa-block--cta {
+    grid-row: 1;
+    grid-column: col 10 / span 3;
+  }
+}
+
+/* ── A work's own page: the case, hung as a room of its own ──────────── */
+
+/*
+ * work-page.tsx, in the page's order, which a phone keeps: the
+ * installation view, the work on the entrance's mat with its museum label
+ * and the room's title on its floor; the case bar; the case, the analytical
+ * column paired row by row with its plates; the reflection wall; the back
+ * matter and the next room. Every band is the page's grid (the bands'
+ * rule at the top), on the chrome's column lines.
+ */
+/*
+ * The challenge's notes (OBS-3): its context, the owner's part, and the
+ * constraints, read on in the column under the challenge, each run in as
+ * the parts are, a step quieter, so the wall beside the words holds plates
+ * alone and the column never waits out a plate's height.
+ */
+[data-variant='obsidian-atelier'] .oa-casenotes {
+  display: grid;
+  gap: var(--space-s);
+  color: var(--color-text-secondary);
+}
+
+/* The notes and the highlights are the part's own, so they stand in at the decisions' inset. */
+[data-variant='obsidian-atelier'] .oa-case__part > :is(.oa-casenotes, .oa-highlights) {
+  box-sizing: border-box;
+  padding-inline-start: calc(var(--space-l) + var(--space-xs));
+}
+
+[data-variant='obsidian-atelier'] .oa-casenotes dt {
+  float: inline-start;
+  margin-inline-end: var(--space-3xs);
+  color: var(--color-text-primary);
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='obsidian-atelier'] .oa-casenotes dt::after {
+  content: '.';
+}
+
+[data-variant='obsidian-atelier'] .oa-casenotes dd {
+  margin: 0;
+}
+
+/* The case bar: the case's own index, its stops named by plate; Index's plate keeps the last column. */
+[data-variant='obsidian-atelier'] .oa-casebar {
+  z-index: 2;
+  align-items: center;
+  padding-block: var(--space-2xs);
+  background-color: var(--color-canvas);
+  border-block-end: var(--ui-border-divider);
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-casebar__name, .oa-casebar__count) {
+  display: none;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+[data-variant='obsidian-atelier'] .oa-casebar__stops {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-m);
+}
+
+[data-variant='obsidian-atelier'] .oa-casebar__stops a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--layout-target);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+
+/* The case: the analytical column and the plates beside it, a row to each part. */
+[data-variant='obsidian-atelier'] .oa-case {
+  row-gap: var(--space-2xl);
+  padding-block: var(--space-2xl) var(--space-3xl);
+}
+
+[data-variant='obsidian-atelier'] .oa-case__row {
+  display: grid;
+  grid-template-columns: subgrid;
+  row-gap: var(--space-l);
+  align-items: start;
+  scroll-margin-block-start: calc(var(--layout-target) + var(--space-l));
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-case__text, .oa-case__plate) {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--space-s);
+  min-inline-size: 0;
+}
+
+[data-variant='obsidian-atelier'] .oa-case__text {
+  grid-row: 1;
+  row-gap: var(--space-xl);
+  max-inline-size: var(--layout-width-text);
+}
+
+/* In a single column the words come first and their plate under them. */
+[data-variant='obsidian-atelier'] .oa-case__plate {
+  grid-row: 2;
+}
+
+[data-variant='obsidian-atelier'] .oa-case__part {
+  display: grid;
+  gap: var(--space-s);
+}
+
+/* A group with nothing beside it: its words take the row, in two columns at a reading measure. */
+[data-variant='obsidian-atelier'] .oa-case__row[data-bare] > .oa-case__text {
+  display: block;
+  grid-column: 1 / -1;
+  max-inline-size: none;
+  columns: var(--type-measure-compact) 2;
+  column-gap: calc(2 * var(--layout-grid-gutter));
+}
+
+[data-variant='obsidian-atelier'] .oa-case__row[data-bare] .oa-case__part {
+  break-inside: avoid;
+  margin-block-end: var(--space-xl);
+}
+
+/* The run-in: the part's head at body size, floated into its first line, so the words read on from it. */
+[data-variant='obsidian-atelier'] .oa-runon {
+  display: block;
+}
+
+/* The case's words take their spacing from the case's own gaps, not the shared prose margins. */
+[data-variant='obsidian-atelier'] .oa-case .pf-rich-text {
+  margin-block-start: 0;
+}
+
+[data-variant='obsidian-atelier'] .oa-runin {
+  float: inline-start;
+  margin-inline-end: var(--space-3xs);
+  font-size: var(--type-body-font-size);
+  font-weight: var(--type-label-font-weight);
+  line-height: var(--type-body-line-height);
+}
+
+[data-variant='obsidian-atelier'] .oa-runin--alone {
+  float: none;
+  margin-block-end: var(--space-xs);
+}
+
+[data-variant='obsidian-atelier'] .oa-casetext {
+  text-wrap: pretty;
+}
+
+[data-variant='obsidian-atelier'] .oa-casetext p + p {
+  margin-block-start: var(--space-s);
+}
+
+[data-variant='obsidian-atelier'] .oa-casedecisions {
+  display: grid;
+  gap: var(--space-m);
+}
+
+[data-variant='obsidian-atelier'] .oa-casedecisions li {
+  display: grid;
+  grid-template-columns: var(--space-l) minmax(0, 1fr);
+  column-gap: var(--space-xs);
+  row-gap: var(--space-2xs);
+  padding-block-start: var(--space-s);
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='obsidian-atelier'] .oa-casedecisions__no {
+  grid-row: 1 / span 3;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-variant='obsidian-atelier'] .oa-casedecisions li > :not(.oa-casedecisions__no) {
+  grid-column: 2;
+}
+
+[data-variant='obsidian-atelier'] .oa-casedecisions__what {
+  font-weight: var(--type-label-font-weight);
+}
+
+/*
+ * The plates: each hung as what it is, under the one caption system. A
+ * clipping is its words straight on its plate at the title size; a figure
+ * is framed in the text's own color, its figure in the mat; a citation is
+ * matted, a hairline window cut in its mat; a study is mounted as the
+ * wall's works are. None holds a card.
+ */
+[data-variant='obsidian-atelier'] .oa-caseplate {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+[data-variant='obsidian-atelier'] .oa-caseplate__mat {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-s);
+  padding: var(--space-xl) var(--space-l);
+  background-color: var(--color-surface-prominent);
+  box-shadow: var(--ui-shadow-raised);
+}
+
+[data-variant='obsidian-atelier'] .oa-caseplate--citation .oa-caseplate__mat {
+  padding: var(--space-2xl) var(--space-xl);
+  outline: var(--ui-border-divider);
+  outline-color: var(--color-border-strong);
+  outline-offset: calc(-1 * var(--space-s));
+}
+
+[data-variant='obsidian-atelier'] .oa-caseplate__frame .oa-caseplate__mat {
+  justify-items: center;
+  padding-block: var(--space-2xl);
+  box-shadow: none;
+}
+
+[data-variant='obsidian-atelier'] .oa-caseplate__quote {
+  max-inline-size: calc(var(--type-measure-compact) * 0.6);
+  font-size: var(--type-headline-fluid-size);
+  line-height: var(--type-headline-line-height);
+  hanging-punctuation: first;
+}
+
+[data-variant='obsidian-atelier'] .oa-caseplate__quote p::before {
+  content: open-quote;
+}
+
+[data-variant='obsidian-atelier'] .oa-caseplate__quote p::after {
+  content: close-quote;
+}
+
+[data-variant='obsidian-atelier'] .oa-caseplate__figure {
+  font-size: var(--type-step-5);
+  line-height: var(--type-display-line-height);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+[data-variant='obsidian-atelier'] .oa-caseplate__unit {
+  font-size: var(--type-headline-fluid-size);
+}
+
+[data-variant='obsidian-atelier'] .oa-caseplate__award {
+  max-inline-size: calc(var(--type-measure-compact) * 0.6);
+  font-size: var(--type-headline-fluid-size);
+  font-weight: var(--type-label-font-weight);
+  line-height: var(--type-headline-line-height);
+}
+
+[data-variant='obsidian-atelier'] .oa-caseplate__words {
+  display: grid;
+  gap: var(--space-2xs);
+  max-inline-size: calc(var(--type-measure-compact) * 0.7);
+  color: var(--color-text-secondary);
+}
+
+/* Plates past the parts hang side by side across the case. */
+[data-variant='obsidian-atelier'] .oa-case__hangs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--type-measure-compact)), 1fr));
+  gap: var(--space-xl) var(--layout-grid-gutter);
+  align-items: start;
+}
+
+/* The reflection wall: the closing inscription, its floor band naming it and the way on. */
+[data-variant='obsidian-atelier'] .oa-reflection {
+  row-gap: var(--space-2xl);
+  padding-block-start: var(--space-3xl);
+}
+
+/* The reflection, the case's last word, centred on the page's axis as the entrance's title is (P1-9). */
+[data-variant='obsidian-atelier'] .oa-reflection__text {
+  display: grid;
+  gap: var(--space-s);
+  justify-self: center;
+  max-inline-size: calc(var(--type-measure-compact) * 0.75);
+  text-align: center;
+  font-size: var(--type-headline-fluid-size);
+  line-height: var(--type-headline-line-height);
+  text-wrap: balance;
+}
+
+/* The back matter: the sources, then the next room at the title size. */
+[data-variant='obsidian-atelier'] .oa-backmatter {
+  row-gap: var(--space-xl);
+  align-items: start;
+  padding-block: var(--space-2xl) var(--space-3xl);
+}
+
+[data-variant='obsidian-atelier'] :is(.oa-backmatter__sources, .oa-nextroom) {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='obsidian-atelier'] .oa-nextroom__link {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  align-items: center;
+  gap: var(--space-l);
+  padding: var(--space-l);
+  background-color: var(--color-surface-prominent);
+  text-decoration: none;
+}
+
+[data-variant='obsidian-atelier'] .oa-nextroom__thumb img {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+}
+
+[data-variant='obsidian-atelier'] .oa-nextroom__text {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+[data-variant='obsidian-atelier'] .oa-nextroom__title {
+  font-size: var(--type-headline-fluid-size);
+  font-weight: var(--type-label-font-weight);
+  line-height: var(--type-headline-line-height);
+  text-decoration-line: underline;
+  text-decoration-thickness: from-font;
+  text-decoration-color: var(--color-border-strong);
+}
+
+[data-variant='obsidian-atelier'] .oa-nextroom__link:hover .oa-nextroom__title {
+  text-decoration-color: currentColor;
+}
+
+@media (max-width: 47.99rem) {
+  [data-variant='obsidian-atelier'] .oa-nextroom__link {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* From a tablet's width the case bar stays at the window's top while the case is read. */
+@media (min-width: 48rem) {
+  [data-variant='obsidian-atelier'] .oa-casebar {
+    position: sticky;
+    inset-block-start: 0;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-casebar__stops {
+    grid-column: col 1 / span 9;
+  }
+}
+
+/* From 64rem: the case bar's name and count, the plates beside the words, the back matter in two. */
+@media (min-width: 64rem) {
+  [data-variant='obsidian-atelier'] :is(.oa-casebar__name, .oa-casebar__count) {
+    display: block;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-casebar__name {
+    grid-column: col 1 / span 2;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-casebar__stops {
+    grid-column: col 3 / span 8;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-casebar__count {
+    grid-column: col 11 / span 1;
+    justify-self: end;
+  }
+
+  /*
+   * The case as one reading column and one wall (OBS-3): the words run on
+   * in c1 to c6 at the body's measure, part after part, with no row's
+   * height to wait out; each plate hangs in c7 to c12 from where its words
+   * start, or under the plate before it when that one still hangs there.
+   * The rows are blocks in the case's flow, so each still starts where its
+   * words do (the case bar's stops land on them), and the plates float
+   * beside them, the case holding them all.
+   */
+  [data-variant='obsidian-atelier'] .oa-case {
+    display: flow-root;
+    padding-inline: var(--layout-pin-end);
+  }
+
+  [data-variant='obsidian-atelier'] .oa-case__row {
+    display: block;
+  }
+
+  /* A part with no plate of its own is its words alone: the wall beside them is the plates' above. */
+  [data-variant='obsidian-atelier'] .oa-case__row:not([data-bare]):not(:has(> .oa-case__plate)) {
+    max-inline-size: var(--layout-width-text);
+  }
+
+  /* One step between parts, the same whether a plate hangs beside them or not. */
+  [data-variant='obsidian-atelier'] .oa-case__row + .oa-case__row {
+    margin-block-start: var(--space-xl);
+  }
+
+  /* A plate whose words run on past it goes along with them, just under the case bar. */
+  [data-variant='obsidian-atelier'] .oa-case__plate {
+    position: sticky;
+    inset-block-start: calc(var(--layout-target) + var(--space-l));
+    float: inline-end;
+    clear: inline-end;
+    /* c7 to c12: six of the case's twelve columns and the five gutters between them. */
+    inline-size: calc(50% - var(--layout-grid-gutter) / 2);
+    /* Close enough under the plate before it that a plate held up by it still starts level with its words. */
+    margin-block-end: var(--space-m);
+  }
+
+  /* The highlights hung on the wall: a short ruled list, its top rule the decisions' own. */
+  [data-variant='obsidian-atelier'] .oa-case__plate > .oa-highlights {
+    border-block-start: var(--ui-border-divider);
+  }
+
+  [data-variant='obsidian-atelier'] .oa-case__hangs {
+    clear: both;
+    margin-block-start: var(--space-2xl);
+  }
+
+  [data-variant='obsidian-atelier'] .oa-backmatter__sources {
+    grid-column: col 1 / span 5;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-nextroom {
+    grid-column: col 7 / span 6;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-backmatter:not(:has(.oa-backmatter__sources)) .oa-nextroom {
+    grid-column: col 1 / span 6;
+  }
+}
+
+/*
+ * Gallery lights (C1): what's pointed at or focused stays in the light,
+ * raised off the wall; every other object on the wall goes out of it, its
+ * picture greyed and lowered toward the wall, a sheet's or a print's
+ * ground stepped down to the wall's own, its shadow gone. No text fades:
+ * every word keeps its ink and its ground's contrast. Focus earns what
+ * hover does.
+ */
+[data-variant='obsidian-atelier']
+  .oa-bays:has(.oa-caption__link:focus-visible)
+  .oa-work:not(:has(.oa-caption__link:focus-visible))
+  :is(.oa-work__object, .oa-print),
+[data-variant='obsidian-atelier']
+  .oa-bays:has(.oa-work:hover)
+  .oa-work:not(:hover)
+  :is(.oa-work__object, .oa-print) {
+  box-shadow: none;
+}
+
+[data-variant='obsidian-atelier']
+  .oa-bays:has(.oa-caption__link:focus-visible)
+  .oa-work:not(:has(.oa-caption__link:focus-visible))
+  :is(.oa-sheet, .oa-print, .oa-sleeve),
+[data-variant='obsidian-atelier']
+  .oa-bays:has(.oa-work:hover)
+  .oa-work:not(:hover)
+  :is(.oa-sheet, .oa-print, .oa-sleeve) {
+  background-color: var(--color-surface-prominent);
+  outline: var(--ui-border-divider);
+  outline-color: var(--color-border-strong);
+}
+
+/* A sleeve out of the light turns to the wall's ground, and its words to the wall's ink. */
+[data-variant='obsidian-atelier']
+  .oa-bays:has(.oa-caption__link:focus-visible)
+  .oa-work:not(:has(.oa-caption__link:focus-visible))
+  .oa-sleeve,
+[data-variant='obsidian-atelier'] .oa-bays:has(.oa-work:hover) .oa-work:not(:hover) .oa-sleeve {
+  color: var(--color-text-primary);
+}
+
+[data-variant='obsidian-atelier']
+  .oa-bays:has(.oa-caption__link:focus-visible)
+  .oa-work:not(:has(.oa-caption__link:focus-visible))
+  img,
+[data-variant='obsidian-atelier'] .oa-bays:has(.oa-work:hover) .oa-work:not(:hover) img {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
+/* The lit object: its shadow deepens, so it stands off the wall the rest went back into. */
+[data-variant='obsidian-atelier']
+  .oa-work:is(:hover, :has(.oa-caption__link:focus-visible))
+  :is(.oa-work__object, .oa-print) {
+  box-shadow: var(--ui-shadow-overlay);
+}
+
+/* ── Motion: one orchestrated entrance, and the gallery lights ─────── */
+
+/*
+ * Motion runs only with full motion on both sides: the visitor's system
+ * asks for none of it reduced, and the site's own motion policy, the
+ * boundary's data-motion, is neither reduced nor static.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  /* The entrance: the light comes up, the work is unveiled top-down, the label settles. */
+  [data-variant='obsidian-atelier']:not([data-motion='reduced'], [data-motion='static'])
+    :is(.oa-entrance, .oa-installation)
+    .oa-hang__work::before {
+    animation: obsidian-atelier-light var(--motion-scene) var(--motion-curve) backwards;
+  }
+
+  [data-variant='obsidian-atelier']:not([data-motion='reduced'], [data-motion='static'])
+    :is(.oa-entrance, .oa-installation)
+    .oa-hang__work {
+    animation: obsidian-atelier-unveil var(--motion-scene) var(--motion-curve)
+      calc(var(--motion-scene) / 4) backwards;
+  }
+
+  [data-variant='obsidian-atelier']:not([data-motion='reduced'], [data-motion='static'])
+    :is(.oa-entrance, .oa-installation)
+    .oa-label {
+    animation: obsidian-atelier-settle var(--motion-feedback) var(--motion-curve)
+      var(--motion-scene) backwards;
+  }
+
+  /* The lights move slowly: the lit object lifts, the rest settle out of the light. */
+  [data-variant='obsidian-atelier']:not([data-motion='reduced'], [data-motion='static'])
+    :is(.oa-work__object, .oa-print) {
+    /* Grounds and ink change at once, so no word passes through a low contrast on the way. */
+    transition:
+      box-shadow calc(var(--motion-feedback) * 2) var(--motion-curve),
+      translate var(--motion-scene) var(--motion-curve);
+  }
+
+  [data-variant='obsidian-atelier']:not([data-motion='reduced'], [data-motion='static'])
+    .oa-work
+    img {
+    transition:
+      filter calc(var(--motion-feedback) * 2) var(--motion-curve),
+      opacity calc(var(--motion-feedback) * 2) var(--motion-curve);
+  }
+
+  [data-variant='obsidian-atelier']:not([data-motion='reduced'], [data-motion='static'])
+    .oa-work:has(.oa-caption__link:focus-visible)
+    .oa-work__object {
+    translate: 0 calc(-1 * var(--space-2xs));
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    [data-variant='obsidian-atelier']:not([data-motion='reduced'], [data-motion='static'])
+      .oa-work:hover
+      :is(.oa-work__object, .oa-print) {
+      translate: 0 calc(-1 * var(--space-2xs));
+    }
+  }
+
+  /* Unfold the case grows open where the browser can size it. */
+  [data-variant='obsidian-atelier']:not([data-motion='reduced'], [data-motion='static'])
+    :is(.oa-unfold, .oa-checklist) {
+    interpolate-size: allow-keywords;
+  }
+
+  [data-variant='obsidian-atelier']:not([data-motion='reduced'], [data-motion='static'])
+    :is(.oa-unfold, .oa-checklist)::details-content {
+    block-size: 0;
+    overflow: clip;
+    transition:
+      block-size var(--motion-scene) var(--motion-curve),
+      content-visibility var(--motion-scene) allow-discrete;
+  }
+
+  [data-variant='obsidian-atelier']:not([data-motion='reduced'], [data-motion='static'])
+    :is(.oa-unfold, .oa-checklist)[open]::details-content {
+    block-size: auto;
+  }
+
+  [data-variant='obsidian-atelier']:not([data-motion='reduced'], [data-motion='static']) .oa-plus {
+    transition: rotate var(--motion-feedback) var(--motion-curve);
+  }
+
+  /* The next room's picture lifts off its wall when the link is pointed at or focused. */
+  [data-variant='obsidian-atelier']:not([data-motion='reduced'], [data-motion='static'])
+    .oa-nextroom__thumb {
+    transition: translate var(--motion-scene) var(--motion-curve);
+  }
+
+  [data-variant='obsidian-atelier']:not([data-motion='reduced'], [data-motion='static'])
+    .oa-nextroom__link:is(:hover, :focus-visible)
+    .oa-nextroom__thumb {
+    translate: 0 calc(-1 * var(--space-2xs));
+  }
+}
+
+/* The entrance's light coming up, the plate unveiled, and its label settling. */
+@keyframes obsidian-atelier-light {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes obsidian-atelier-unveil {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+}
+
+@keyframes obsidian-atelier-settle {
+  from {
+    opacity: 0;
+    translate: 0 var(--space-2xs);
+  }
+}
+
+/*
+ * Forced colors: no light and no tone, edges drawn instead. High contrast
+ * needs no rule of its own for the light: the lit surface is the canvas
+ * there, so the pool is gone through its role.
+ */
+@media (forced-colors: active) {
+  [data-variant='obsidian-atelier'] .oa-hang__work::before {
+    display: none;
+  }
+}
+
+@media (forced-colors: active), (prefers-contrast: more) {
+  [data-variant='obsidian-atelier'] .oa-wall {
+    border-block: var(--ui-border-divider);
+  }
+}
+
+/* Print: the reading order, each object whole on its page, the case open. */
+@media print {
+  /* The chrome prints once, at the top: Index is not fixed on every page, and the marker and its strip don't print. */
+  [data-variant='obsidian-atelier'] :is(.oa-chrome, .oa-chrome__pin) {
+    position: static;
+  }
+
+  [data-variant='obsidian-atelier']
+    .oa-chrome[data-oa-deep]
+    :is(.oa-chrome__here, .oa-chrome__strip) {
+    display: none;
+  }
+
+  /* Every rail held beside its room on screen, at its own rule's weight: the head, the bar, the hall's rail, the signage, the wall. */
+  [data-variant='obsidian-atelier']
+    :is(
+      .oa-reading__head,
+      .oa-casebar,
+      .oa-hall__rail,
+      .oa-gallery > .oa-signage,
+      .oa-room--wall .oa-room__wall
+    ) {
+    position: static;
+  }
+
+  [data-variant='obsidian-atelier'] .oa-hang__work::before {
+    display: none;
+  }
+
+  [data-variant='obsidian-atelier'] :is(.oa-hang, .oa-work, .oa-plate, .oa-vitrine, .oa-caseplate) {
+    break-inside: avoid;
+  }
+
+  /* Every fold prints open: the rooms' cases, the bays' checklists, the whole practice and record. */
+  [data-variant='obsidian-atelier'] details::details-content {
+    block-size: auto;
+    content-visibility: visible;
+  }
+}

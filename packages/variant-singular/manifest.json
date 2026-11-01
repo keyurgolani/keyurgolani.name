@@ -1,0 +1,182 @@
+{
+  "id": "singular",
+  "name": "Singular",
+  "promise": "One question per screen, one answer, one action.",
+  "description": "Six full-viewport panels in a fixed order: who this is, the best work, the numbers, more work, who vouches, and how to get in touch. Each answers one question and ends on one full-width action band on the opposite ground, its counter inside it; the grounds alternate paper and ink by position, and the last is the accent. A labelled dot rail marks the place, and everything else follows as one even record, so nothing depends on the panels.",
+  "contract": "2.0",
+  "schemas": {
+    "portfolio": {
+      "min": 3,
+      "max": 3
+    },
+    "site": {
+      "min": 2,
+      "max": 2
+    }
+  },
+  "tokenContract": 1,
+  "compositionFamily": "sequence",
+  "motionIntent": "directed",
+  "performanceTier": "light",
+  "budgets": {
+    "js": 1024,
+    "css": 8192,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 4096
+  },
+  "renderedKinds": [
+    "hero",
+    "lede",
+    "now",
+    "works",
+    "evidence",
+    "chronology",
+    "practice",
+    "contact",
+    "custom",
+    "quote",
+    "focus",
+    "fun-facts",
+    "cta",
+    "github"
+  ],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": {
+    "home": "bespoke",
+    "work": "bespoke",
+    "views": []
+  },
+  "controls": {
+    "version": 1,
+    "items": [
+      {
+        "type": "enum",
+        "id": "snap",
+        "label": "Snap",
+        "description": "How the page settles on a panel as it scrolls. Mandatory falls back to proximity when a panel is taller than the window; snap is always off under reduced motion and on narrow screens.",
+        "options": [
+          {
+            "value": "proximity",
+            "label": "Proximity"
+          },
+          {
+            "value": "mandatory",
+            "label": "Mandatory"
+          },
+          {
+            "value": "off",
+            "label": "Off"
+          }
+        ],
+        "default": "proximity"
+      },
+      {
+        "type": "contentRef",
+        "id": "bestWork",
+        "label": "Best work",
+        "description": "The work panel 2 shows. Empty: the signature work, else the first featured work, else the first work listed.",
+        "kinds": ["works"],
+        "default": null
+      },
+      {
+        "type": "contentRef",
+        "id": "numbersSection",
+        "label": "Numbers",
+        "description": "The evidence section panel 3 shows. Empty: the first section that is mostly metrics, else the proof list's metrics.",
+        "kinds": ["evidence"],
+        "default": null
+      },
+      {
+        "type": "contentRef",
+        "id": "referencesSection",
+        "label": "References",
+        "description": "The evidence section panel 5 shows. Empty: the first section that is mostly testimonials, else publications, awards or press.",
+        "kinds": ["evidence"],
+        "default": null
+      },
+      {
+        "type": "enum",
+        "id": "introSource",
+        "label": "Opening line",
+        "description": "Where panel 1's display line comes from: the first sentence of the practice thesis, or the hero's tagline. Each falls back to the other, then to the identity's tagline.",
+        "options": [
+          {
+            "value": "thesis",
+            "label": "The thesis"
+          },
+          {
+            "value": "hero",
+            "label": "The hero's tagline"
+          }
+        ],
+        "default": "thesis"
+      },
+      {
+        "type": "enum",
+        "id": "heroAction",
+        "label": "Opening action",
+        "description": "Panel 1's one action: on to the next panel, or the hero's first call to action, in its own words. Every call to action the band doesn't carry is in Contents.",
+        "options": [
+          {
+            "value": "next",
+            "label": "The next panel"
+          },
+          {
+            "value": "cta",
+            "label": "The hero's call to action"
+          }
+        ],
+        "default": "next"
+      },
+      {
+        "type": "enum",
+        "id": "contactLabel",
+        "label": "Email action",
+        "description": "What the contact panel's action says when no call to action to the address has words of its own: Email and the name, or Email and the address.",
+        "options": [
+          {
+            "value": "email-name",
+            "label": "Email and the name"
+          },
+          {
+            "value": "email",
+            "label": "Email and the address"
+          }
+        ],
+        "default": "email-name"
+      }
+    ],
+    "migrations": []
+  },
+  "enhancements": [
+    {
+      "id": "pager",
+      "export": "./enhancements/pager",
+      "requires": []
+    }
+  ],
+  "keyBindings": [
+    {
+      "region": "panels",
+      "keys": ["PageDown", "PageUp", "ArrowDown", "ArrowUp"],
+      "action": "Moves to the next or previous panel while a panel heading has focus."
+    }
+  ],
+  "visitorControl": {
+    "placement": "footer"
+  },
+  "textDirection": ["ltr", "rtl"],
+  "provenance": {
+    "provisional": true,
+    "sources": [
+      {
+        "source": "The Singular concept (variants-10, Variant 9)",
+        "disposition": "reused-interaction",
+        "note": "The six panels, the action band, the dot rail and the monoscale record, rebuilt on the platform tokens with the thesis as panel 1's display line and the band on the opposite ground (SG-M1 to SG-M3)."
+      }
+    ]
+  }
+}

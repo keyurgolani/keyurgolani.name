@@ -1,0 +1,165 @@
+{
+  "id": "terra-field",
+  "name": "Terra Field",
+  "promise": "A calm field of colour holds the opening, one photograph anchors it, and every work follows one quiet template.",
+  "description": "An earthy, unhurried document composition. The masthead and hero sit on one accent field whose lower edge is a wide arc, with the hero's one proof set as a seal on the arc's lowest point. Below it an anchor band pairs one large photograph with two companion plates: the signature work and the next proof. Five fields follow, Work, Writing, Record, About and Contact, each opened on the page's axis with its own short index. Every work uses the same series template, every list is a ruled list on paper, and the page closes on a second field whose arc rises. Its colours come from the selected scheme: the field is the accent, never a private sage.",
+  "contract": "2.0",
+  "schemas": {
+    "portfolio": {
+      "min": 3,
+      "max": 3
+    },
+    "site": {
+      "min": 2,
+      "max": 2
+    }
+  },
+  "tokenContract": 1,
+  "compositionFamily": "monograph",
+  "motionIntent": "subtle",
+  "performanceTier": "light",
+  "budgets": {
+    "js": 1024,
+    "css": 9216,
+    "image": 61440,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 2048
+  },
+  "stills": [
+    {
+      "file": "./stills/1440.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "file": "./stills/720.webp",
+      "width": 720,
+      "height": 450
+    }
+  ],
+  "renderedKinds": [
+    "hero",
+    "lede",
+    "works",
+    "evidence",
+    "github",
+    "chronology",
+    "practice",
+    "focus",
+    "now",
+    "quote",
+    "fun-facts",
+    "contact",
+    "cta",
+    "custom"
+  ],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": {
+    "home": "bespoke",
+    "work": "bespoke",
+    "views": []
+  },
+  "controls": {
+    "version": 1,
+    "items": [
+      {
+        "type": "contentRef",
+        "id": "anchorWork",
+        "label": "Anchor photograph",
+        "description": "The work whose first image fills the anchor band. Empty picks the first photography or image-series work with an image, then the signature work's cover; with neither, the band closes up to its two plates.",
+        "kinds": ["works"],
+        "default": null
+      },
+      {
+        "type": "enum",
+        "id": "field",
+        "label": "Field",
+        "description": "How far the opening and closing fields stand out from the page. Accent sets them apart as the page's loudest ground; Quiet keeps them close to the paper, with less emphasis.",
+        "options": [
+          {
+            "value": "accent",
+            "label": "Accent"
+          },
+          {
+            "value": "quiet",
+            "label": "Quiet"
+          }
+        ],
+        "default": "accent"
+      },
+      {
+        "type": "enum",
+        "id": "heroLine",
+        "label": "Hero line",
+        "description": "What the display line says: the thesis's first sentence, the hero tagline, or the name. A choice the content can't fill falls to the next.",
+        "options": [
+          {
+            "value": "thesis",
+            "label": "Thesis"
+          },
+          {
+            "value": "tagline",
+            "label": "Tagline"
+          },
+          {
+            "value": "name",
+            "label": "Name"
+          }
+        ],
+        "default": "thesis"
+      },
+      {
+        "type": "boolean",
+        "id": "seal",
+        "label": "Proof seal",
+        "description": "Set the first proof item on the arc's lowest point. Off, or with no proof list, the arc carries nothing.",
+        "default": true
+      },
+      {
+        "type": "contentRefList",
+        "id": "companions",
+        "label": "Anchor companions",
+        "description": "Up to two records for the plates beside the photograph. Empty uses the signature work, then the proof list after the seal's item.",
+        "kinds": ["works", "evidence"],
+        "min": 0,
+        "max": 2,
+        "default": []
+      }
+    ],
+    "migrations": []
+  },
+  "enhancements": [
+    {
+      "id": "field",
+      "export": "./enhancements/field",
+      "requires": []
+    }
+  ],
+  "visitorControl": {
+    "placement": "footer"
+  },
+  "textDirection": ["ltr", "rtl"],
+  "recommendedAppearance": "terra-field",
+  "provenance": {
+    "provisional": true,
+    "sources": [
+      {
+        "source": "Variants report, Variant 5: Terra Field",
+        "disposition": "preserved",
+        "note": "The curved field hero, one proof seal, the 2fr 1fr 1fr anchor band, the one-template series for works, ruled lists, and the closing field."
+      },
+      {
+        "source": "The report's sage, clay and forest hexes and the Fraunces and Inter pairing",
+        "disposition": "folded-into-pack",
+        "note": "Colour is the botanical-sage scheme, type the field-serif pack, and materials the soft-organic language, through the terra-field recipe. The composition reads roles only."
+      },
+      {
+        "source": "The report's hard-coded hero line, kicker and closing line",
+        "disposition": "retired",
+        "note": "Each derives from the owner's content with a fallback (the heroLine control, identity, footerOutline)."
+      }
+    ]
+  }
+}

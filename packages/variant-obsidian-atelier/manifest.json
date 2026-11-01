@@ -1,0 +1,72 @@
+{
+  "id": "obsidian-atelier",
+  "name": "Obsidian Atelier",
+  "promise": "A private viewing: each work hangs alone on a wall with its label and catalogue number, and the rest of the collection on one salon wall.",
+  "description": "A gallery composition. The entrance is one wall with the signature work hung on it beside its wall label and catalogue number. The rooms that follow hang the signature and the featured works one to a room, each mounted for its medium: a screen on the wall, a folio in a vitrine. The rest of the works hang on one salon wall, a bay for each works section, writing among them as its own destination, and the practice, the record, and the ways to get in touch are galleries under their own signage. The plan of the exhibition is the footer and the Index, so every section is two actions from anywhere. Each room has plain previous and next links by catalogue number, and nothing needs motion, hover, or JavaScript to read or reach. Its colors are the selected color scheme's, never the composition's.",
+  "contract": "2.0",
+  "schemas": { "portfolio": { "min": 3, "max": 3 }, "site": { "min": 2, "max": 2 } },
+  "tokenContract": 1,
+  "compositionFamily": "gallery",
+  "motionIntent": "subtle",
+  "performanceTier": "light",
+  "budgets": {
+    "js": 2048,
+    "css": 9728,
+    "image": 28672,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "stills": [
+    { "file": "./stills/1440.webp", "width": 1440, "height": 900 },
+    { "file": "./stills/720.webp", "width": 720, "height": 450 }
+  ],
+  "renderedKinds": [
+    "hero",
+    "lede",
+    "now",
+    "works",
+    "evidence",
+    "chronology",
+    "practice",
+    "contact",
+    "custom",
+    "quote",
+    "focus",
+    "fun-facts",
+    "cta",
+    "github"
+  ],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": { "home": "bespoke", "work": "bespoke", "views": [] },
+  "controls": { "version": 1, "items": [], "migrations": [] },
+  "visitorControl": { "placement": "header" },
+  "textDirection": ["ltr", "rtl"],
+  "provenance": {
+    "provisional": true,
+    "sources": [
+      {
+        "source": "Page 93's photography-first rhythm and Page 98's editorial type hierarchy",
+        "disposition": "preserved",
+        "note": "Rooms for the signature and featured works, each beside its wall label and a narrow reading, rebuilt on the v3 records, the composition's own renderers for every core kind, and #19's primitives."
+      },
+      {
+        "source": "Page 3's case disclosure",
+        "disposition": "preserved",
+        "note": "Unfold the case: a closed native details holds each chapter's case below its premise and artifact."
+      },
+      {
+        "source": "The dark experiments' black and gold, and their fixed dark theme",
+        "disposition": "folded-into-pack",
+        "note": "Mineral dark and oxidized accents belong to the color schemes (#19, Codex [31]). The composition never forces dark."
+      },
+      {
+        "source": "Page 99's typewriter roles, hover depth, and magnetic actions",
+        "disposition": "retired",
+        "note": "No tilt, parallax, or chapter animation is needed to read or reach anything. The gallery lights take what's pointed at or focused out of the grey around it, and nothing on the page fades."
+      }
+    ]
+  },
+  "studio": { "signature": "Gallery rooms", "order": 3 }
+}

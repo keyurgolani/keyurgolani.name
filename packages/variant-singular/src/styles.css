@@ -1,0 +1,1977 @@
+/*
+ * Singular: one question per screen, one answer, one action. Composition
+ * only: a 12-column grid with the right margin kept for the rail, panels
+ * on grounds assigned by position (paper and ink alternating, the contact
+ * panel on the accent), the action band on the other ground at every
+ * panel's foot, and the record at one size after them. Every colour is a
+ * role or a color-mix of two, every size a type step, every space a space
+ * step, every radius and focus geometry the language's, every duration the
+ * motion tokens'. Every rule sits under [data-variant='singular'] and
+ * every property is logical. Placements are written for 48rem and up; a
+ * phone gets the one-column default.
+ */
+
+[data-variant='singular'] {
+  --layout-grid-columns: 12;
+  --layout-grid-gutter: var(--space-s);
+  --layout-grid-margin: var(--space-l-2xl);
+  --layout-motion-curve: cubic-bezier(0.22, 1, 0.36, 1);
+  --layout-motion-feedback: 200ms;
+  --layout-motion-scene: 700ms;
+  --layout-sg-bar: calc(var(--space-xl) + var(--space-3xs));
+  --layout-sticky-offset: calc(var(--layout-sg-bar) + var(--space-s));
+  --layout-sg-band: calc(var(--space-xl) + var(--space-3xs));
+  --layout-sg-hit: 2.75rem;
+  --layout-sg-hair: 1px;
+  --layout-sg-ring: 2px;
+  --layout-sg-dot: var(--space-2xs);
+  --layout-sg-figures: 55rem;
+  --layout-sg-lede: 34ch;
+  --layout-sg-stat: 12ch;
+  --layout-sg-line: 18ch;
+  --layout-sg-dim: 0.45;
+  --layout-sg-lift: 7%;
+  display: block;
+  background-color: var(--color-canvas);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+  font-variant-numeric: lining-nums;
+}
+
+/* ── Grounds: the alternation is the composition's; the colours are the scheme's. */
+
+[data-variant='singular'] [data-ground='canvas'] {
+  --layout-sg-ground: var(--color-canvas);
+  --layout-sg-ink: var(--color-text-primary);
+  --layout-sg-ink-2: var(--color-text-secondary);
+  --layout-sg-rule: color-mix(in oklab, var(--color-border-default) 64%, var(--color-canvas));
+  --layout-sg-link: var(--color-accent-text);
+  --layout-sg-focus: var(--color-focus);
+  --layout-sg-mark: var(--color-accent);
+}
+
+[data-variant='singular'] [data-ground='inverse'] {
+  --layout-sg-ground: var(--color-text-primary);
+  --layout-sg-ink: var(--color-text-inverse);
+  --layout-sg-ink-2: color-mix(in oklab, var(--color-text-inverse) 78%, var(--color-text-primary));
+  --layout-sg-rule: color-mix(in oklab, var(--color-text-inverse) 26%, var(--color-text-primary));
+  --layout-sg-link: var(--color-text-inverse);
+  /* The ring in the ground's own ink: the inverse focus colour measured 3.11:1 on dark's inverse ground (design review P1-5). */
+  --layout-sg-focus: var(--layout-sg-ink);
+  --layout-sg-mark: var(--color-text-inverse);
+}
+
+[data-variant='singular'] [data-ground='accent'] {
+  --layout-sg-ground: var(--color-accent);
+  --layout-sg-ink: var(--color-on-accent);
+  --layout-sg-ink-2: var(--color-on-accent);
+  --layout-sg-rule: color-mix(in oklab, var(--color-on-accent) 45%, var(--color-accent));
+  --layout-sg-link: var(--color-on-accent);
+  --layout-sg-focus: var(--color-on-accent);
+  --layout-sg-mark: var(--color-on-accent);
+}
+
+[data-variant='singular'] [data-ground] {
+  background-color: var(--layout-sg-ground);
+  color: var(--layout-sg-ink);
+}
+
+/* ── Base ─────────────────────────────────────────────────────────── */
+
+[data-variant='singular'] .sg,
+[data-variant='singular'] .sg *,
+[data-variant='singular'] .sg ::before,
+[data-variant='singular'] .sg ::after {
+  box-sizing: border-box;
+}
+
+/* No box is wider than its track because of what it holds: a long word or a URL wraps instead (X1). It weighs one class and comes first, so any rule below that sets a minimum wins. */
+[data-variant='singular'] .sg :where(*) {
+  min-inline-size: 0;
+}
+
+[data-variant='singular'] :is(h1, h2, h3, h4, h5, h6) {
+  margin: 0;
+  text-wrap: balance;
+}
+
+[data-variant='singular'] :is(p, li, dd, figcaption, blockquote) {
+  margin: 0;
+  text-wrap: pretty;
+}
+
+[data-variant='singular'] :is(ol, ul, dl, dd, figure, blockquote) {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='singular'] [data-type-role] {
+  max-inline-size: none;
+}
+
+[data-variant='singular'] a {
+  color: var(--layout-sg-link);
+  text-decoration-line: underline;
+  text-decoration-thickness: var(--layout-sg-hair);
+  text-underline-offset: 0.2em;
+}
+
+[data-variant='singular'] :focus-visible {
+  outline: var(--ui-focus-width) solid var(--layout-sg-focus);
+  outline-offset: var(--ui-focus-offset);
+}
+
+[data-variant='singular'] [data-sg-heading]:focus:not(:focus-visible) {
+  outline: none;
+}
+
+[data-variant='singular'] .sg-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+[data-variant='singular'] .sg-num {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+[data-variant='singular'] img {
+  display: block;
+  max-inline-size: 100%;
+}
+
+[data-variant='singular'] .sg-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: var(--layout-grid-gutter);
+  padding-inline: var(--layout-grid-margin);
+}
+
+[data-variant='singular'] .sg-arrow {
+  inline-size: var(--space-m);
+  block-size: var(--space-m);
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--ui-icon-stroke-width);
+}
+
+[data-variant='singular'] .sg-arrow[data-dir='out']:dir(rtl) {
+  transform: scaleX(-1);
+}
+
+/* ── The bar: the name, Contents and Email ─────────────────────────── */
+
+/*
+ * The host's skip link, once focused. In the flow at the page's top it was
+ * covered twice: the bar (positioned at z-index 3, opaque once the pager
+ * runs) painted over it, and from 48rem, where the page snaps, the 48 px it
+ * adds above panel 1 made the snap scroll it out of view. Pinned at the
+ * window's top corner, one above the chrome, it takes no room in the flow,
+ * so nothing re-snaps, and it shows over the bar.
+ */
+[data-variant='singular'] [data-ui-slot='skip-link']:focus {
+  position: fixed;
+  z-index: 4;
+  /* It sits outside every ground, so the link colour rule would give it the text colour on the accent: the pair is the accent's. */
+  color: var(--color-on-accent);
+  inset-block-start: 0;
+  inset-inline-start: 0;
+}
+
+[data-variant='singular'] .sg-bar {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  z-index: 3;
+  background-color: transparent;
+}
+
+[data-variant='singular'] .sg[data-sg-live] .sg-bar {
+  position: fixed;
+  background-color: var(--layout-sg-ground);
+}
+
+[data-variant='singular'] .sg-bar__in {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-block-size: var(--layout-sg-bar);
+}
+
+/* The nav keeps its own track while the docked name is out of the flow. */
+[data-variant='singular'] .sg-bar__in > .sg-bar__nav {
+  grid-column: -2;
+  grid-row: 1;
+}
+
+[data-variant='singular'] .sg .sg-bar__name {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--layout-sg-hit);
+  justify-self: start;
+  color: inherit;
+  text-decoration: none;
+  font-size: var(--type-step-0);
+}
+
+/* Docked, the name gives way to the h1 but stays in the tab order, hidden as a skip link is (clipped to a pixel, not transparent), so Tab reaches it and it shows whole, ring and all, while it has focus (quality on 2c708e3de: an opacity-hidden name left its ring unresolved). */
+[data-variant='singular']
+  .sg[data-sg-live]
+  .sg-bar[data-sg-name='docked']
+  .sg-bar__name:not(:focus) {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  min-block-size: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+[data-variant='singular'] .sg-bar__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-m);
+  font-size: var(--type-step-0);
+}
+
+[data-variant='singular'] .sg-bar__nav > a,
+[data-variant='singular'] .sg-bar__nav [data-ui-slot='action'] {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--layout-sg-hit);
+  min-inline-size: var(--layout-sg-hit);
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: inherit;
+  font: inherit;
+  text-decoration-line: underline;
+  text-decoration-thickness: var(--layout-sg-hair);
+  text-underline-offset: 0.3em;
+  cursor: pointer;
+}
+
+[data-variant='singular'] .sg-bar__nav [data-ui-slot='action.label'] {
+  font: inherit;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+/* ── The rail: a labelled dot per panel in the right margin ────────── */
+
+[data-variant='singular'] .sg-rail {
+  display: none;
+}
+
+[data-variant='singular'] .sg-rail__list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+[data-variant='singular'] .sg-rail__stop {
+  position: relative;
+  display: grid;
+  place-items: center;
+  inline-size: var(--layout-sg-hit);
+  block-size: var(--layout-sg-hit);
+  color: var(--layout-sg-ink);
+  text-decoration: none;
+}
+
+[data-variant='singular'] .sg-rail__mark {
+  inline-size: var(--layout-sg-dot);
+  block-size: var(--layout-sg-dot);
+  border: var(--layout-sg-ring) solid var(--layout-sg-ink-2);
+  border-radius: var(--ui-radius-badge);
+}
+
+[data-variant='singular'] .sg-rail__stop--record .sg-rail__mark {
+  inline-size: calc(var(--layout-sg-dot) * 1.6);
+  block-size: 0;
+  border-width: var(--layout-sg-ring) 0 0;
+  border-radius: 0;
+}
+
+[data-variant='singular'] .sg-rail__stop[aria-current] .sg-rail__mark {
+  block-size: calc(var(--layout-sg-dot) * 2.4);
+  border-color: var(--layout-sg-mark);
+  background-color: var(--layout-sg-mark);
+}
+
+[data-variant='singular'] .sg-rail__stop--record[aria-current] .sg-rail__mark {
+  block-size: 0;
+  inline-size: calc(var(--layout-sg-dot) * 2.4);
+}
+
+[data-variant='singular'] .sg-rail__label {
+  position: absolute;
+  inset-inline-end: 100%;
+  inset-block-start: 50%;
+  translate: 0 -50%;
+  padding: var(--space-3xs) var(--space-xs);
+  border-radius: var(--ui-radius-control);
+  background-color: var(--layout-sg-ink);
+  color: var(--layout-sg-ground);
+  font-size: var(--type-step-0);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+}
+
+[data-variant='singular'] .sg-rail__stop:is(:hover, :focus-visible) .sg-rail__label {
+  opacity: 1;
+}
+
+/* ── The phone's strip ─────────────────────────────────────────────── */
+
+[data-variant='singular'] .sg-strip {
+  display: none;
+}
+
+/* ── A panel: the answer, then the band ────────────────────────────── */
+
+/* A panel is sized to what it holds on a phone; from 48rem it is at least the window's height, so its band ends the view (brief §5.7). */
+[data-variant='singular'] .sg-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding-block-start: calc(var(--layout-sg-bar) + var(--space-l));
+  scroll-snap-align: start;
+}
+
+/* A panel and the record clear the bar with their own top padding, so a jump or a snap lands them at the window's top edge. */
+[data-variant='singular'] :is(.sg-panel, .sg-record) {
+  scroll-margin-block-start: 0;
+}
+
+[data-variant='singular'] .sg-panel__body {
+  flex: 1;
+  align-content: center;
+  row-gap: var(--space-l);
+  padding-block-end: var(--space-xl);
+}
+
+[data-variant='singular'] .sg-label {
+  font-size: var(--type-step-1);
+}
+
+/* A panel section's subtitle, when the owner wrote one: a quiet line under its label. */
+[data-variant='singular'] .sg-panel__sub {
+  max-inline-size: var(--layout-sg-lede);
+  font-size: var(--type-step-0);
+  color: var(--layout-sg-ink-2);
+}
+
+/* ── The action band: one full-width target on the other ground ───── */
+
+[data-variant='singular'] .sg-band {
+  position: relative;
+  flex: none;
+  border-block-end: var(--layout-sg-hair) solid var(--layout-sg-rule);
+}
+
+[data-variant='singular'] .sg-band__in {
+  align-items: center;
+  min-block-size: var(--layout-sg-band);
+  row-gap: var(--space-3xs);
+  padding-block: var(--space-xs);
+}
+
+[data-variant='singular'] .sg-band__count {
+  font-size: var(--type-step--1);
+  color: var(--layout-sg-ink-2);
+}
+
+[data-variant='singular'] .sg .sg-band__go {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--space-s);
+  min-block-size: var(--layout-sg-hit);
+  color: var(--layout-sg-ink);
+  text-decoration: none;
+}
+
+/* The whole band is the link's box: the counter sits inside the target, outside its name. */
+[data-variant='singular'] .sg-band__go::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+[data-variant='singular'] .sg-band:has(.sg-band__go:is(:hover, :focus-visible)) {
+  background-color: color-mix(
+    in oklab,
+    var(--layout-sg-ink) var(--layout-sg-lift),
+    var(--layout-sg-ground)
+  );
+}
+
+[data-variant='singular'] .sg-band__label {
+  font-size: var(--type-step-1);
+  text-decoration-line: underline;
+  text-decoration-thickness: var(--layout-sg-ring);
+  text-underline-offset: 0.25em;
+  text-decoration-color: color-mix(in oklab, var(--layout-sg-ink) 40%, transparent);
+}
+
+[data-variant='singular'] .sg-band__dest {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  font-size: var(--type-step-0);
+  color: var(--layout-sg-ink-2);
+}
+
+[data-variant='singular'] .sg-band__dest .sg-arrow {
+  color: var(--layout-sg-ink);
+}
+
+[data-variant='singular'] .sg-band[data-sg-band='finale'] .sg-band__in {
+  min-block-size: calc(var(--layout-sg-band) * 1.4);
+}
+
+[data-variant='singular'] .sg-band[data-sg-band='finale'] .sg-band__label {
+  font-size: var(--type-step-3);
+  font-weight: var(--type-headline-font-weight);
+  letter-spacing: var(--type-headline-letter-spacing);
+}
+
+[data-variant='singular'] .sg-band[data-sg-band='finale'] .sg-band__dest {
+  font-size: var(--type-step-1);
+}
+
+/* ── 1 Who: the name at title size, the thesis the one display line ── */
+
+[data-variant='singular'] .sg-who__h {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='singular'] .sg-who__name {
+  font-size: var(--type-step-1);
+}
+
+[data-variant='singular'] .sg-who__line {
+  font-size: var(--type-step-6);
+  max-inline-size: var(--layout-sg-line);
+}
+
+[data-variant='singular'] .sg-who__line[data-length='long'] {
+  font-size: var(--type-step-5);
+  max-inline-size: 24ch;
+}
+
+[data-variant='singular'] .sg-who__lede {
+  font-size: var(--type-step-1);
+  font-weight: var(--type-body-font-weight);
+  max-inline-size: var(--layout-sg-lede);
+}
+
+[data-variant='singular'] .sg-who__aside {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2xs);
+  font-size: var(--type-step-0);
+  color: var(--layout-sg-ink-2);
+}
+
+[data-variant='singular'] .sg-who__aside p:first-child {
+  color: var(--layout-sg-ink);
+}
+
+/* ── 2 Best work: the work alone, its cover the other half ────────── */
+
+[data-variant='singular'] .sg-best {
+  align-content: stretch;
+}
+
+[data-variant='singular'] .sg-best__text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-l);
+}
+
+[data-variant='singular'] .sg-best__title {
+  font-size: var(--type-step-5);
+}
+
+[data-variant='singular'] .sg-best__summary {
+  font-size: var(--type-step-1);
+  font-weight: var(--type-body-font-weight);
+  max-inline-size: var(--layout-sg-lede);
+}
+
+[data-variant='singular'] .sg-best__proof li {
+  padding-block: var(--space-xs);
+  border-block-start: var(--layout-sg-hair) solid var(--layout-sg-rule);
+  font-size: var(--type-step-1);
+  font-weight: var(--type-body-font-weight);
+}
+
+[data-variant='singular'] .sg-best__proof li:last-child {
+  border-block-end: var(--layout-sg-hair) solid var(--layout-sg-rule);
+}
+
+[data-variant='singular'] .sg-best__meta {
+  font-size: var(--type-step-0);
+  color: var(--layout-sg-ink-2);
+  max-inline-size: var(--layout-sg-lede);
+}
+
+[data-variant='singular'] .sg-best__media {
+  position: relative;
+  min-block-size: 0;
+  border-radius: var(--ui-radius-media);
+  overflow: hidden;
+}
+
+[data-variant='singular'] .sg-best__media :is(figure, picture) {
+  margin: 0;
+  block-size: 100%;
+}
+
+[data-variant='singular'] .sg-best__media img {
+  inline-size: 100%;
+  block-size: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+}
+
+[data-variant='singular'] .sg-best__media::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: var(--layout-sg-hair) solid color-mix(in oklab, var(--layout-sg-ink) 18%, transparent);
+  pointer-events: none;
+}
+
+/* ── 3 Numbers: a ledger inside 880 px, every row on one baseline ──── */
+
+[data-variant='singular'] .sg-nums {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: var(--space-m);
+  inline-size: 100%;
+  max-inline-size: var(--layout-sg-figures);
+}
+
+/* A row wraps rather than squeeze its words (P1, Sun): beside the figure the statement keeps --layout-sg-stat or its longest word, whichever is wider (a flex item's automatic minimum is its min-content, which break-word, unlike the root's anywhere, keeps whole; capped at the row, so only a word longer than the row breaks), else the figure takes its own line under it, at the row's end like the rest; a unit too long for that line goes under its numeral. The sample's rows stay on one line down to 320. */
+[data-variant='singular'] .sg-nums__row {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-l);
+  row-gap: var(--space-2xs);
+  align-items: last baseline;
+  padding-block: var(--space-xs);
+  border-block-start: var(--layout-sg-hair) solid var(--layout-sg-rule);
+}
+
+[data-variant='singular'] .sg-nums__row:last-child {
+  border-block-end: var(--layout-sg-hair) solid var(--layout-sg-rule);
+}
+
+[data-variant='singular'] .sg-nums__row dt {
+  flex: 1 0 var(--layout-sg-stat);
+  max-inline-size: min(100%, var(--layout-sg-lede));
+  font-size: var(--type-step-1);
+  font-weight: var(--type-body-font-weight);
+  overflow-wrap: break-word;
+}
+
+[data-variant='singular'] .sg-nums__more {
+  color: var(--layout-sg-ink-2);
+}
+
+[data-variant='singular'] .sg-nums__row dd {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 0 var(--space-2xs);
+  margin-inline-start: auto;
+}
+
+[data-variant='singular'] .sg-nums__row data {
+  font-size: var(--type-step-6);
+  line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+[data-variant='singular'] .sg-nums__unit {
+  font-size: var(--type-step-1);
+  overflow-wrap: break-word;
+}
+
+/* ── 4 More work: the row is the action ───────────────────────────── */
+
+[data-variant='singular'] .sg-more {
+  align-content: start;
+}
+
+[data-variant='singular'] .sg-more__row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: var(--space-2xs);
+  min-block-size: var(--layout-sg-hit);
+  padding-block: var(--space-s) var(--space-m);
+  border-block-start: var(--layout-sg-hair) solid var(--layout-sg-rule);
+}
+
+[data-variant='singular'] .sg-more__row:last-child {
+  border-block-end: var(--layout-sg-hair) solid var(--layout-sg-rule);
+}
+
+[data-variant='singular'] .sg-more__title {
+  font-size: var(--type-step-3);
+}
+
+[data-variant='singular'] .sg-more__title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+[data-variant='singular'] .sg-more__title a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+[data-variant='singular'] .sg-more__sum,
+[data-variant='singular'] .sg-more__meta {
+  font-size: var(--type-step-0);
+  color: var(--layout-sg-ink-2);
+}
+
+[data-variant='singular'] .sg-more__sum {
+  max-inline-size: var(--type-measure-body);
+}
+
+[data-variant='singular']
+  .sg-more__list:has(.sg-more__row:focus-within)
+  .sg-more__row:not(:focus-within) {
+  opacity: var(--layout-sg-dim);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-variant='singular'] .sg-more__list:has(.sg-more__row:hover) .sg-more__row:not(:hover) {
+    opacity: var(--layout-sg-dim);
+  }
+}
+
+/* ── 5 References: one voice large, the rest beside it ───────────── */
+
+[data-variant='singular'] .sg-refs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: var(--space-l);
+}
+
+[data-variant='singular'] .sg-refs__lead,
+[data-variant='singular'] .sg-refs__voice {
+  display: grid;
+  gap: var(--space-s);
+  align-content: start;
+}
+
+[data-variant='singular'] .sg-refs__lead .sg-refs__said {
+  font-size: var(--type-step-3);
+  max-inline-size: 36ch;
+}
+
+[data-variant='singular'] .sg-refs__voice .sg-refs__said {
+  font-size: var(--type-step-1);
+  font-weight: var(--type-body-font-weight);
+}
+
+[data-variant='singular'] .sg-refs__said:not(.sg-refs__said--title) p {
+  text-indent: -0.4em;
+}
+
+[data-variant='singular'] .sg-refs figcaption {
+  font-size: var(--type-step-0);
+  color: var(--layout-sg-ink-2);
+}
+
+[data-variant='singular'] .sg-refs figcaption b {
+  color: var(--layout-sg-ink);
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='singular'] .sg-refs__more {
+  display: grid;
+  row-gap: var(--space-m);
+  column-gap: var(--layout-grid-gutter);
+  padding-block-start: var(--space-m);
+  border-block-start: var(--layout-sg-hair) solid var(--layout-sg-rule);
+}
+
+/* ── 6 Contact: the ground turns to the accent ──────────────────── */
+
+[data-variant='singular'] .sg-contact__h {
+  font-size: var(--type-step-6);
+}
+
+[data-variant='singular'] .sg-contact__msg {
+  font-size: var(--type-step-3);
+  max-inline-size: 26ch;
+}
+
+[data-variant='singular'] .sg-contact__ctas {
+  display: grid;
+  gap: var(--space-m);
+  align-content: start;
+}
+
+[data-variant='singular'] .sg-contact__cta {
+  display: grid;
+  gap: var(--space-2xs);
+  font-size: var(--type-step-1);
+}
+
+[data-variant='singular'] .sg-contact__cta-h {
+  font-size: var(--type-step-1);
+}
+
+[data-variant='singular'] .sg-contact__cta .sg-rec__line,
+[data-variant='singular'] .sg-contact__cta .sg-rec__links {
+  font-size: var(--type-step-1);
+}
+
+[data-variant='singular'] .sg-contact__links,
+[data-variant='singular'] .sg-rec__links {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-l);
+  row-gap: var(--space-3xs);
+}
+
+[data-variant='singular'] .sg-contact__links {
+  font-size: var(--type-step-1);
+}
+
+[data-variant='singular'] .sg-contact__links a,
+[data-variant='singular'] .sg-rec__links a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--layout-sg-hit);
+}
+
+/* ── The record: everything else, at one size ──────────────────────── */
+
+[data-variant='singular'] .sg-record {
+  padding-block: calc(var(--layout-sg-bar) + var(--space-2xl)) var(--space-3xl);
+  font-size: var(--type-step-0);
+  line-height: var(--type-body-line-height);
+}
+
+[data-variant='singular'] .sg-record__head {
+  row-gap: var(--space-l);
+  padding-block-end: var(--space-2xl);
+}
+
+[data-variant='singular'] .sg-record__h {
+  font-size: var(--type-step-6);
+}
+
+[data-variant='singular'] .sg-index {
+  font-size: var(--type-step-1);
+  line-height: var(--type-title-line-height);
+  max-inline-size: 60ch;
+}
+
+[data-variant='singular'] .sg-index b {
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='singular'] .sg-index a {
+  color: var(--color-text-primary);
+  text-decoration-color: color-mix(in oklab, var(--color-text-primary) 32%, var(--color-canvas));
+}
+
+[data-variant='singular'] .sg-record__rows {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Each row's hairline runs between the margins, as the grid's own rule. */
+[data-variant='singular'] .sg-rec {
+  row-gap: var(--space-s);
+  padding-block: var(--space-m) var(--space-xl);
+  background-image: linear-gradient(var(--layout-sg-rule), var(--layout-sg-rule));
+  background-size: calc(100% - 2 * var(--layout-grid-margin)) var(--layout-sg-hair);
+  background-position: center top;
+  background-repeat: no-repeat;
+}
+
+[data-variant='singular'] .sg-rec__head {
+  display: grid;
+  gap: var(--space-3xs);
+  align-content: start;
+}
+
+[data-variant='singular'] .sg-rec__title {
+  font-size: inherit;
+  font-weight: var(--type-title-font-weight);
+  line-height: inherit;
+}
+
+[data-variant='singular'] .sg-rec__body {
+  display: grid;
+  row-gap: var(--space-s);
+  align-content: start;
+  min-inline-size: 0;
+}
+
+/* The ground's own second ink: on the record's paper it is text-secondary; on the accent, a nested call to action's subtitle takes on-accent (design review P1-6). */
+[data-variant='singular'] :is(.sg-rec__muted, .sg-rec__back) {
+  color: var(--layout-sg-ink-2);
+}
+
+[data-variant='singular'] .sg-rec__prose {
+  display: grid;
+  gap: var(--space-s);
+  max-inline-size: var(--type-measure-body);
+  font-size: inherit;
+}
+
+[data-variant='singular'] .sg-rec__prose :is(p, ul, ol) {
+  margin: 0;
+}
+
+[data-variant='singular'] .sg-rec__prose strong {
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='singular'] .sg-rec__line {
+  max-inline-size: var(--type-measure-body);
+}
+
+[data-variant='singular'] .sg-rec__lines {
+  display: grid;
+  gap: var(--space-3xs);
+  max-inline-size: var(--type-measure-body);
+}
+
+[data-variant='singular'] .sg-rec__list {
+  display: grid;
+  gap: var(--space-3xs);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='singular'] .sg-entries {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: var(--space-s);
+}
+
+[data-variant='singular'] .sg-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: var(--layout-grid-gutter);
+  row-gap: var(--space-3xs);
+}
+
+[data-variant='singular'] .sg-entry__main {
+  display: grid;
+  gap: var(--space-3xs);
+  max-inline-size: var(--type-measure-body);
+  min-inline-size: 0;
+}
+
+[data-variant='singular'] .sg-entry__title {
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='singular'] .sg-entry__title a {
+  color: var(--color-text-primary);
+}
+
+[data-variant='singular'] .sg-entry__meta {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+[data-variant='singular'] .sg-rec__quote {
+  display: grid;
+  gap: var(--space-2xs);
+  max-inline-size: var(--type-measure-body);
+}
+
+[data-variant='singular'] .sg-rec__quote .sg-rec__said {
+  font-size: var(--type-step-1);
+  font-weight: var(--type-quote-font-weight);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='singular'] .sg-rec__said p {
+  text-indent: -0.4em;
+}
+
+[data-variant='singular'] .sg-gallery {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-s);
+}
+
+[data-variant='singular'] .sg-gallery__frames {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--layout-grid-gutter);
+}
+
+[data-variant='singular'] .sg-gallery__frames li {
+  display: grid;
+  gap: var(--space-2xs);
+  align-content: start;
+}
+
+[data-variant='singular'] :is(.sg-gallery, .sg-album, .sg-rec__figure, .sg-gallery__frames) img {
+  inline-size: 100%;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  border-radius: var(--ui-radius-media);
+}
+
+[data-variant='singular'] :is(.sg-gallery, .sg-album, .sg-rec__figure, .sg-gallery__frames) figure {
+  margin: 0;
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+[data-variant='singular']
+  :is(.sg-gallery, .sg-album, .sg-rec__figure, .sg-gallery__frames)
+  figcaption,
+[data-variant='singular'] .sg-gallery__where {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='singular'] .sg-album {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-s);
+  align-items: start;
+}
+
+[data-variant='singular'] .sg-album__cover {
+  max-inline-size: 60%;
+}
+
+[data-variant='singular'] .sg-album img {
+  aspect-ratio: 1;
+}
+
+[data-variant='singular'] .sg-album__text {
+  display: grid;
+  gap: var(--space-xs);
+  min-inline-size: 0;
+}
+
+[data-variant='singular'] .sg-tracks li {
+  display: grid;
+  grid-template-columns: 2ch minmax(0, 1fr) auto;
+  gap: var(--space-xs);
+  padding-block: var(--space-3xs);
+  border-block-end: var(--layout-sg-hair) solid var(--layout-sg-rule);
+}
+
+[data-variant='singular'] :is(.sg-tracks__n, .sg-tracks__time) {
+  color: var(--color-text-secondary);
+}
+
+/* ── The colophon ──────────────────────────────────────────────────── */
+
+[data-variant='singular'] .sg-colophon {
+  padding-block: 0 var(--space-l);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='singular'] .sg-colophon__in {
+  row-gap: var(--space-s);
+  align-items: baseline;
+  padding-block-start: var(--space-m);
+  font-size: var(--type-step-0);
+  background-image: linear-gradient(var(--layout-sg-rule), var(--layout-sg-rule));
+  background-size: calc(100% - 2 * var(--layout-grid-margin)) var(--layout-sg-hair);
+  background-position: center top;
+  background-repeat: no-repeat;
+}
+
+[data-variant='singular'] .sg-colophon__name {
+  color: var(--color-text-primary);
+}
+
+[data-variant='singular'] .sg-colophon__where {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+[data-variant='singular'] .sg-colophon a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--layout-sg-hit);
+}
+
+/* ── Contents: the dialog ──────────────────────────────────────────── */
+
+[data-variant='singular'] [data-ui-slot='dialog'] {
+  inline-size: min(100% - 2 * var(--space-s), 64rem);
+  max-inline-size: none;
+}
+
+[data-variant='singular'] .sg-contents {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-l);
+}
+
+[data-variant='singular'] .sg-contents__short a {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-s);
+  min-block-size: var(--layout-sg-hit);
+  padding-block: var(--space-2xs);
+  border-block-start: var(--layout-sg-hair) solid
+    color-mix(in oklab, var(--color-border-default) 64%, var(--color-canvas));
+  color: var(--color-text-primary);
+  text-decoration: none;
+  font-size: var(--type-step-1);
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='singular'] .sg-contents__short a:hover {
+  color: var(--color-accent-text);
+}
+
+[data-variant='singular'] .sg-contents__n {
+  min-inline-size: 2.2em;
+  font-size: var(--type-step--1);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='singular'] .sg-contents__record .sg-index {
+  font-size: var(--type-step-0);
+}
+
+[data-variant='singular'] .sg-contents a {
+  color: var(--color-text-primary);
+}
+
+/* The hero's calls to action, in his words, under the short version: each a 44 px target. */
+[data-variant='singular'] .sg-contents__ways ul {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-m);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='singular'] .sg-contents__ways a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--layout-sg-hit);
+  font-size: var(--type-step-0);
+}
+
+/* ── Wider than a phone: the grid's twelve columns, the rail, the full panels ── */
+
+@media (min-width: 48rem) {
+  [data-variant='singular'] .sg-grid {
+    grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+  }
+
+  [data-variant='singular'] .sg-grid > * {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='singular'] .sg-bar__in > .sg-bar__name {
+    grid-column: 1 / span 6;
+  }
+
+  [data-variant='singular'] .sg-bar__in > .sg-bar__nav {
+    grid-column: 7 / -1;
+    justify-self: end;
+  }
+
+  [data-variant='singular'] .sg-rail {
+    position: fixed;
+    z-index: 3;
+    inset-block: 0;
+    inset-inline-end: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--layout-grid-margin);
+    pointer-events: none;
+    background: none;
+  }
+
+  [data-variant='singular'] .sg-rail__list {
+    pointer-events: auto;
+  }
+
+  /* Until the pager runs, a small paper plate, so the dots read over any ground. */
+  [data-variant='singular'] .sg:not([data-sg-live]) .sg-rail__list {
+    --layout-sg-ink: var(--color-text-primary);
+    --layout-sg-ink-2: var(--color-text-secondary);
+    --layout-sg-ground: var(--color-canvas);
+    --layout-sg-mark: var(--color-accent);
+    background-color: var(--color-canvas);
+    border: var(--layout-sg-hair) solid var(--color-border-default);
+    border-radius: var(--ui-radius-badge);
+  }
+
+  [data-variant='singular'] .sg-panel {
+    min-block-size: 100svh;
+  }
+
+  [data-variant='singular'] .sg-band__count {
+    grid-column: 1 / span 2;
+  }
+
+  [data-variant='singular'] .sg-band__in > .sg-band__go {
+    grid-column: 3 / -1;
+  }
+
+  [data-variant='singular'] .sg-panel--who > .sg-who__h {
+    grid-column: 1 / span 11;
+  }
+
+  [data-variant='singular'] .sg-panel--who > .sg-who__lede {
+    grid-column: 1 / span 7;
+  }
+
+  [data-variant='singular'] .sg-panel--who > .sg-who__aside {
+    grid-column: 9 / -1;
+    grid-row: 2;
+  }
+
+  [data-variant='singular'] .sg-best {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  [data-variant='singular'] .sg-best > .sg-best__text {
+    grid-column: 1 / span 6;
+  }
+
+  [data-variant='singular'] .sg-best--text > .sg-best__text {
+    grid-column: 1 / span 9;
+  }
+
+  [data-variant='singular'] .sg-best > .sg-best__media {
+    grid-column: 7 / -1;
+  }
+
+  [data-variant='singular'] .sg-more__row {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    column-gap: var(--layout-grid-gutter);
+  }
+
+  [data-variant='singular'] .sg-more__title {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  [data-variant='singular'] .sg-more__meta {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    justify-self: end;
+    text-align: end;
+  }
+
+  [data-variant='singular'] .sg-more__sum {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  [data-variant='singular'] .sg-refs__lead {
+    max-inline-size: 72rem;
+  }
+
+  [data-variant='singular'] .sg-refs__more {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  [data-variant='singular'] .sg-panel--contact > :is(.sg-contact__msg, .sg-contact__sub) {
+    grid-column: 1 / span 7;
+  }
+
+  [data-variant='singular'] .sg-panel--contact > .sg-contact__ctas {
+    grid-column: 9 / -1;
+    grid-row: 2 / span 2;
+  }
+
+  [data-variant='singular'] .sg-panel--contact > .sg-contact__links {
+    grid-column: 1 / span 8;
+  }
+
+  [data-variant='singular'] .sg-record__head > .sg-record__index {
+    grid-column: 1 / span 10;
+  }
+
+  [data-variant='singular'] .sg-rec > .sg-rec__head {
+    grid-column: 1 / span 3;
+  }
+
+  [data-variant='singular'] .sg-rec > .sg-rec__body {
+    grid-column: 4 / -1;
+  }
+
+  [data-variant='singular'] .sg-entry {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+
+  [data-variant='singular'] .sg-gallery__frames {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  [data-variant='singular'] .sg-album {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+    column-gap: var(--layout-grid-gutter);
+  }
+
+  [data-variant='singular'] .sg-album__cover {
+    max-inline-size: none;
+  }
+
+  [data-variant='singular'] .sg-colophon__in > .sg-colophon__name {
+    grid-column: 1 / span 3;
+  }
+
+  [data-variant='singular'] .sg-colophon__in > .sg-colophon__top {
+    grid-column: 4 / span 3;
+  }
+
+  [data-variant='singular'] .sg-colophon__in > .sg-colophon__where {
+    grid-column: 7 / span 3;
+  }
+
+  [data-variant='singular'] .sg-colophon__in > .sg-colophon__control {
+    grid-column: 10 / -1;
+    justify-self: end;
+  }
+
+  [data-variant='singular'] .sg-contents {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    column-gap: var(--space-xl);
+  }
+
+  [data-variant='singular'] .sg-contents > .sg-contents__ways {
+    grid-column: 1;
+  }
+
+  [data-variant='singular'] .sg-contents > .sg-contents__record {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
+
+/* ── A phone: one column, the strip for the rail, the band stacked ─── */
+
+@media (max-width: 47.99rem) {
+  /* The aside's facts at line height alone, so panel 1 stays one screen's answer with the hero's subtitle in it (distinct: the box guard against Horizontal Cinema). */
+  [data-variant='singular'] .sg-who__aside {
+    gap: 0;
+  }
+
+  [data-variant='singular'] {
+    --layout-sg-bar: calc(var(--space-xl) - var(--space-3xs));
+    --layout-sticky-offset: calc(var(--layout-sg-bar) + var(--space-s));
+  }
+
+  [data-variant='singular'] .sg-bar__nav > .sg-bar__email {
+    display: none;
+  }
+
+  [data-variant='singular'] .sg[data-sg-live] .sg-strip {
+    position: fixed;
+    z-index: 3;
+    inset-inline: 0;
+    inset-block-start: var(--layout-sg-bar);
+    display: grid;
+    grid-auto-flow: column;
+    gap: var(--space-3xs);
+    padding-inline: var(--layout-grid-margin);
+    padding-block-end: var(--space-3xs);
+    background-color: var(--layout-sg-ground);
+  }
+
+  [data-variant='singular'] .sg-strip__seg {
+    block-size: var(--layout-sg-ring);
+    background-color: var(--layout-sg-rule);
+  }
+
+  [data-variant='singular'] .sg-strip__seg[data-on] {
+    background-color: var(--layout-sg-mark);
+  }
+
+  /* A gap of the panel's own ground under its band, so each panel ends before the next begins: the band shares its ground with the panel below. */
+  [data-variant='singular'] .sg-panel {
+    padding-block: calc(var(--layout-sg-bar) + var(--space-xl)) var(--space-m);
+  }
+
+  [data-variant='singular'] .sg-panel__body {
+    align-content: start;
+    padding-block-end: var(--space-xl);
+  }
+
+  [data-variant='singular'] .sg-who__line,
+  [data-variant='singular'] .sg-who__line[data-length='long'] {
+    font-size: var(--type-step-5);
+    max-inline-size: none;
+  }
+
+  [data-variant='singular'] .sg-nums__row data {
+    font-size: var(--type-step-5);
+  }
+
+  [data-variant='singular'] .sg-best__media img {
+    aspect-ratio: 16 / 10;
+  }
+
+  /* SG-M3: the counter on its own line, the action full width at 44 px or more under it. */
+  [data-variant='singular'] .sg-band__in {
+    padding-block: var(--space-s);
+  }
+
+  [data-variant='singular'] .sg .sg-band__go {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'label arrow'
+      'dest arrow';
+    row-gap: var(--space-3xs);
+  }
+
+  [data-variant='singular'] .sg-band__label {
+    grid-area: label;
+  }
+
+  [data-variant='singular'] .sg-band__dest {
+    display: contents;
+  }
+
+  [data-variant='singular'] .sg-band__where {
+    grid-area: dest;
+    color: var(--layout-sg-ink-2);
+  }
+
+  [data-variant='singular'] .sg-band__dest .sg-arrow {
+    grid-area: arrow;
+  }
+
+  [data-variant='singular'] .sg-band[data-sg-band='finale'] .sg-band__label {
+    font-size: var(--type-step-2);
+  }
+
+  [data-variant='singular'] .sg-rec__head {
+    padding-block-end: var(--space-2xs);
+  }
+}
+
+/* ── Motion: only for visitors who allow it ───────────────────────── */
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='singular'] .sg[data-sg-live] :is(.sg-bar, .sg-rail__stop, .sg-strip) {
+    transition:
+      background-color var(--motion-feedback) var(--motion-curve),
+      color var(--motion-feedback) var(--motion-curve);
+  }
+
+  [data-variant='singular'] .sg-rail__mark {
+    transition:
+      block-size var(--motion-feedback) var(--motion-curve),
+      inline-size var(--motion-feedback) var(--motion-curve),
+      background-color var(--motion-feedback) var(--motion-curve);
+  }
+
+  [data-variant='singular'] .sg-rail__label {
+    transition: opacity var(--motion-feedback) var(--motion-curve);
+  }
+
+  [data-variant='singular'] .sg-band {
+    transition: background-color var(--motion-feedback) var(--motion-curve);
+  }
+
+  [data-variant='singular'] .sg-band .sg-arrow {
+    transition: translate var(--motion-feedback) var(--motion-curve);
+  }
+
+  [data-variant='singular']
+    .sg-band:has(.sg-band__go:is(:hover, :focus-visible))
+    .sg-arrow[data-dir='down'] {
+    translate: 0 var(--space-3xs);
+  }
+
+  [data-variant='singular']
+    .sg-band:has(.sg-band__go:is(:hover, :focus-visible))
+    .sg-arrow[data-dir='out'] {
+    translate: var(--space-3xs) 0;
+  }
+
+  [data-variant='singular'] .sg-more__row {
+    transition: opacity var(--motion-feedback) var(--motion-curve);
+  }
+
+  /* The reveals: a panel the pager marks as it enters, once. Statement 40 px, evidence 16 px, facts 8 px, the band a fade; each grade's delay a share of --motion-scene, so a page the platform stills (static, print: 0s) shows everything at once. Focus that enters a panel shows it as it is: the pager takes its mark away for good, so leaving never replays it (code review P1-2). */
+  [data-variant='singular'] .sg[data-sg-live] [data-sg-enter] [data-sg-rise] {
+    animation: singular-rise var(--motion-scene) var(--motion-curve) backwards;
+  }
+
+  [data-variant='singular'] .sg[data-sg-live] [data-sg-enter] [data-sg-rise='lead'] {
+    --layout-sg-rise: 40px;
+  }
+
+  [data-variant='singular'] .sg[data-sg-live] [data-sg-enter] [data-sg-rise='support'] {
+    --layout-sg-rise: 16px;
+    animation-delay: calc(var(--motion-scene) * 0.17);
+  }
+
+  [data-variant='singular'] .sg[data-sg-live] [data-sg-enter] [data-sg-rise='meta'] {
+    --layout-sg-rise: 8px;
+    animation-delay: calc(var(--motion-scene) * 0.31);
+  }
+
+  [data-variant='singular'] .sg[data-sg-live] [data-sg-enter] [data-sg-rise='act'] {
+    --layout-sg-rise: 0px;
+    animation-duration: calc(var(--motion-scene) * 0.6);
+    animation-delay: calc(var(--motion-scene) * 0.43);
+  }
+}
+
+@keyframes singular-rise {
+  from {
+    opacity: 0;
+    translate: 0 var(--layout-sg-rise, 8px);
+  }
+}
+
+/* ── Print: one plain document ─────────────────────────────────────── */
+
+@media print {
+  [data-variant='singular'] [data-ground] {
+    --layout-sg-ink: var(--color-text-primary);
+    --layout-sg-ink-2: var(--color-text-secondary);
+    --layout-sg-rule: var(--color-border-default);
+    --layout-sg-link: var(--color-text-primary);
+    background: none;
+    color: var(--color-text-primary);
+  }
+
+  [data-variant='singular'] .sg .sg-bar,
+  [data-variant='singular'] .sg[data-sg-live] .sg-bar {
+    position: static;
+  }
+
+  /* The rail is the panels' list on paper: a static block under the bar. */
+  [data-variant='singular'] .sg-rail,
+  [data-variant='singular'] .sg[data-sg-live] .sg-rail {
+    position: static;
+    display: block;
+    inline-size: auto;
+    padding-inline: var(--layout-grid-margin);
+  }
+
+  [data-variant='singular'] .sg-rail__list,
+  [data-variant='singular'] .sg:not([data-sg-live]) .sg-rail__list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--space-s);
+    border: 0;
+    background: none;
+  }
+
+  [data-variant='singular'] .sg-rail__stop {
+    inline-size: auto;
+    block-size: auto;
+  }
+
+  [data-variant='singular'] .sg-rail__mark {
+    display: none;
+  }
+
+  [data-variant='singular'] .sg-rail__label {
+    position: static;
+    translate: none;
+    padding: 0;
+    background: none;
+    color: var(--color-text-primary);
+    opacity: 1;
+  }
+
+  /* The live strip too: its phone rule outranks a plain one. */
+  [data-variant='singular'] :is(.sg-strip, .sg-colophon__control),
+  [data-variant='singular'] .sg[data-sg-live] .sg-strip {
+    display: none;
+  }
+
+  /* Each band prints as a plain line under its panel, its counter and its way on, so paper holds what the screen does (quality's print inventory on 2c708e3de). */
+  [data-variant='singular'] .sg-band {
+    border-block-start: var(--layout-sg-hair) solid currentColor;
+  }
+
+  [data-variant='singular'] .sg-band__in {
+    min-block-size: auto;
+    padding-block: var(--space-2xs);
+  }
+
+  [data-variant='singular'] .sg-band .sg-arrow {
+    display: none;
+  }
+
+  /* And the bar's name, docked or not. */
+  [data-variant='singular']
+    .sg[data-sg-live]
+    .sg-bar[data-sg-name='docked']
+    .sg-bar__name:not(:focus) {
+    position: static;
+    inline-size: auto;
+    block-size: auto;
+    overflow: visible;
+    clip-path: none;
+  }
+
+  [data-variant='singular'] .sg-panel {
+    min-block-size: auto;
+    padding-block: var(--space-l);
+    break-inside: avoid-page;
+  }
+}
+
+@media (forced-colors: active) {
+  /* One ground in forced colours: the roles are the system's pair there, so an ink ground would carry the page's own colour as text. Bands keep a rule instead. */
+  [data-variant='singular'] [data-ground] {
+    --layout-sg-ground: var(--color-canvas);
+    --layout-sg-ink: var(--color-text-primary);
+    --layout-sg-ink-2: var(--color-text-primary);
+    --layout-sg-link: var(--color-text-primary);
+    --layout-sg-mark: var(--color-text-primary);
+    --layout-sg-rule: var(--color-text-primary);
+  }
+
+  /* The focus ring, drawn here by Singular itself. The platform's ring (the utilities layer,
+     above this one, so its colour can't be set from here) reads --color-focus, which a surface
+     hook sets to on-accent or the inverse focus colour, and forced colours map those to the
+     Canvas the grounds take here: no ring (quality's forced-colors cell on 2c708e3de and
+     b8a2f8ef5). A border in the text's ink, the platform's width and offset off the control,
+     as Shell's bar draws it. Only while it has focus, so an overlay link keeps its reach. */
+  [data-variant='singular'] .sg :is(a[href], summary):focus-visible {
+    position: relative;
+  }
+
+  [data-variant='singular'] .sg :is(a[href], summary):focus-visible::before {
+    content: '';
+    position: absolute;
+    inset: calc((var(--ui-focus-width) + var(--ui-focus-offset)) * -1);
+    border: var(--ui-focus-width) solid var(--color-text-primary);
+    pointer-events: none;
+  }
+
+  [data-variant='singular'] .sg-rail__stop[aria-current] .sg-rail__mark {
+    background-color: currentColor;
+  }
+
+  [data-variant='singular'] .sg-band {
+    border-block-start: var(--layout-sg-hair) solid currentColor;
+  }
+}
+
+/* ── P2: the record's rows, closed (the home outline) ──────────────── */
+
+/* A closed row is its heading and one line saying what it holds; the summary covers the whole row, so the row is one target (68 px at 1440, 76 at 390: the lead's ruling, item 3). */
+[data-variant='singular'] .sg-rec:has(> .sg-fold) {
+  position: relative;
+  padding-block: var(--space-s);
+}
+
+[data-variant='singular'] .sg-fold {
+  min-inline-size: 0;
+}
+
+[data-variant='singular'] .sg-fold__sum {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  list-style: none;
+}
+
+/* What the row holds, on one line: a count, or the owner's first sentence clipped where the line ends. */
+[data-variant='singular'] .sg-fold__line {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-variant='singular'] .sg-fold__sum::-webkit-details-marker {
+  display: none;
+}
+
+/* Closed, the summary's reach is the row; open, only its own line, so the body's links stay theirs. */
+[data-variant='singular'] .sg-fold:not([open]) > .sg-fold__sum::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+/* The mark: a plus drawn from two hairlines, its upright folding away when open. */
+[data-variant='singular'] .sg-fold__mark {
+  position: relative;
+  flex: none;
+  margin-inline-start: auto;
+  inline-size: var(--space-s);
+  block-size: var(--space-s);
+  color: var(--color-text-primary);
+}
+
+[data-variant='singular'] .sg-fold__mark::before,
+[data-variant='singular'] .sg-fold__mark::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 50%;
+  block-size: var(--layout-sg-ring);
+  margin-block-start: calc(var(--layout-sg-ring) / -2);
+  background-color: currentColor;
+}
+
+[data-variant='singular'] .sg-fold__mark::after {
+  rotate: 90deg;
+}
+
+[data-variant='singular'] .sg-fold[open] .sg-fold__mark::after {
+  rotate: 0deg;
+}
+
+[data-variant='singular'] .sg-fold[open] > .sg-rec__body {
+  padding-block: var(--space-xs) var(--space-l);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-variant='singular'] .sg-rec:has(> .sg-fold:not([open])):hover .sg-fold__sum {
+    color: var(--color-text-primary);
+  }
+}
+
+/* On a phone a closed row is two short lines, the heading over what it holds; the whole row is still the one target. */
+@media (max-width: 47.99rem) {
+  [data-variant='singular'] .sg-rec:has(> .sg-fold) {
+    row-gap: 0;
+    padding-block: var(--space-2xs);
+  }
+
+  [data-variant='singular'] .sg-fold__sum {
+    line-height: var(--type-title-line-height);
+  }
+}
+
+/* With no script, a fragment that names a row shows its body: the row is the target. Only with no script: with it the pager opens the row, so closing it hides the body (code review P1-1). The closed summary's reach stops at its own line there, so a link in the shown body is its own. */
+@supports selector(::details-content) {
+  [data-variant='singular'] .sg:not([data-sg-live]) .sg-rec:target > .sg-fold::details-content {
+    content-visibility: visible;
+    display: contents;
+  }
+
+  [data-variant='singular']
+    .sg:not([data-sg-live])
+    .sg-rec:target
+    > .sg-fold:not([open])
+    > .sg-fold__sum::after {
+    content: none;
+  }
+
+  /* The disclosure is still closed there, so its plus would say the opposite: it goes (the lead's ruling, item 4). */
+  [data-variant='singular']
+    .sg:not([data-sg-live])
+    .sg-rec:target
+    > .sg-fold:not([open])
+    .sg-fold__mark {
+    visibility: hidden;
+  }
+}
+
+@media (min-width: 48rem) {
+  [data-variant='singular'] .sg-rec > .sg-fold {
+    grid-column: 4 / -1;
+  }
+
+  /* Panel 1's answer sits on its band, so no air is left over above the name (SG-S3). */
+  [data-variant='singular'] .sg-panel__body.sg-panel--who {
+    align-content: end;
+  }
+}
+
+@media print {
+  [data-variant='singular'] .sg-fold::details-content {
+    content-visibility: visible;
+    display: contents;
+  }
+
+  [data-variant='singular'] .sg-fold__sum {
+    display: none;
+  }
+}
+
+/* ── P2: the case page's stops ─────────────────────────────────────── */
+
+[data-variant='singular'] .sg-case-brief__h {
+  font-size: var(--type-step-6);
+}
+
+[data-variant='singular'] .sg-case-brief__sum {
+  font-size: var(--type-step-3);
+  max-inline-size: var(--layout-sg-lede);
+}
+
+[data-variant='singular'] .sg-facts {
+  display: grid;
+  align-content: start;
+  font-size: var(--type-step-0);
+}
+
+[data-variant='singular'] .sg-facts > div {
+  display: grid;
+  gap: var(--space-3xs);
+  padding-block: var(--space-xs);
+  border-block-start: var(--layout-sg-hair) solid var(--layout-sg-rule);
+}
+
+[data-variant='singular'] .sg-facts > div:last-child {
+  border-block-end: var(--layout-sg-hair) solid var(--layout-sg-rule);
+}
+
+[data-variant='singular'] .sg-facts dt {
+  color: var(--layout-sg-ink-2);
+}
+
+[data-variant='singular'] .sg-facts dd {
+  margin: 0;
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='singular'] .sg-case-prose {
+  display: grid;
+  gap: var(--space-s);
+  font-size: var(--type-step-0);
+  max-inline-size: var(--type-measure-body);
+}
+
+[data-variant='singular'] .sg-case-statement,
+[data-variant='singular'] .sg-choices {
+  row-gap: var(--space-l);
+  align-items: start;
+}
+
+[data-variant='singular'] .sg-case-statement__big {
+  font-size: var(--type-step-3);
+  max-inline-size: 34ch;
+}
+
+[data-variant='singular'] .sg-case-statement__side {
+  display: grid;
+  gap: var(--space-m);
+  padding-block-start: var(--space-m);
+  border-block-start: var(--layout-sg-hair) solid var(--layout-sg-rule);
+  font-size: var(--type-step-1);
+}
+
+[data-variant='singular'] .sg-case-statement__side > div {
+  display: grid;
+  gap: var(--space-2xs);
+  align-content: start;
+  max-inline-size: var(--layout-sg-lede);
+}
+
+[data-variant='singular'] :is(.sg-case-statement__side, .sg-choices__list) h3 {
+  font-size: var(--type-step-0);
+  color: var(--layout-sg-ink-2);
+}
+
+[data-variant='singular'] .sg-choices__role {
+  font-size: var(--type-step-1);
+  color: var(--layout-sg-ink-2);
+  max-inline-size: var(--type-measure-body);
+}
+
+[data-variant='singular'] .sg-choices__list {
+  display: grid;
+  gap: var(--space-l);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='singular'] .sg-choices__list li {
+  display: grid;
+  gap: var(--space-s);
+  align-content: start;
+  padding-block-start: var(--space-m);
+  border-block-start: var(--layout-sg-hair) solid var(--layout-sg-rule);
+}
+
+[data-variant='singular'] .sg-choices__list h3 {
+  display: grid;
+  gap: var(--space-2xs);
+  font-size: var(--type-step-3);
+  color: inherit;
+}
+
+[data-variant='singular'] .sg-choices__list h3 .sg-num {
+  font-size: var(--type-step-0);
+  color: var(--layout-sg-ink-2);
+}
+
+[data-variant='singular'] .sg-choices__list p {
+  max-inline-size: 46ch;
+}
+
+[data-variant='singular'] .sg-choices__alt {
+  color: var(--layout-sg-ink-2);
+}
+
+[data-variant='singular'] .sg-choices__alt b {
+  color: var(--layout-sg-ink);
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='singular'] .sg-hindsight {
+  font-size: var(--type-step-5);
+  max-inline-size: 28ch;
+}
+
+[data-variant='singular'] .sg-notes {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='singular'] .sg-notes__row {
+  display: grid;
+  gap: var(--space-3xs);
+  padding-block: var(--space-xs);
+}
+
+@media (min-width: 48rem) {
+  [data-variant='singular'] .sg-case-brief > .sg-case-brief__h {
+    grid-column: 1 / span 11;
+  }
+
+  [data-variant='singular'] .sg-case-brief > .sg-case-brief__sum {
+    grid-column: 1 / span 7;
+  }
+
+  [data-variant='singular'] .sg-case-brief > .sg-facts {
+    grid-column: 9 / -1;
+    grid-row: 2;
+  }
+
+  [data-variant='singular'] .sg-case-statement > .sg-case-statement__big {
+    grid-column: 1 / span 11;
+  }
+
+  [data-variant='singular'] .sg-case-statement__side {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  [data-variant='singular'] .sg-choices > .sg-choices__role {
+    grid-column: 1 / span 8;
+  }
+
+  [data-variant='singular'] .sg-choices__list {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  [data-variant='singular'] .sg-case-hindsight > .sg-hindsight {
+    grid-column: 1 / span 10;
+  }
+
+  [data-variant='singular'] .sg-notes__row {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+}
+
+/* The owner's prose in a case statement takes the statement's size: RichText sets the body role on its own root. */
+[data-variant='singular']
+  :is(.sg-case-statement__big, .sg-hindsight, .sg-choices__role)
+  [data-type-role] {
+  font-size: inherit;
+  line-height: var(--type-title-line-height);
+}
+
+/* And the statement's measure, not the body text's: the kit caps rich text at the body width (design review P1-1). */
+[data-variant='singular']
+  :is(.sg-case-statement__big, .sg-hindsight, .sg-choices__role)
+  :is(.pf-rich-text, p) {
+  max-inline-size: none;
+}
+
+/* The case title breaks between words, hyphenated in its language, and on a narrow phone takes a size its longest word fits (design review P1-2). */
+[data-variant='singular'] .sg-case-brief__h {
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+/* Below 24rem a tenth of the window: a ten-letter word at a bold display face is about 6em, so it fits the 248 px column at 320 (the review's P1-2 recheck: 12.5vw still split "Postmortem"). hyphens: auto stays for the browsers that carry the language's dictionary. */
+@media (max-width: 23.99rem) {
+  [data-variant='singular'] .sg-case-brief__h {
+    font-size: min(var(--type-step-6), 10vw);
+  }
+}
+
+/* An open prose row: the body starts with the line, so the line steps out of sight, kept for its name (design review P1-3). */
+[data-variant='singular'] .sg-fold[open] > .sg-fold__sum > .sg-fold__line--prose {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* A record row's subtitle or date at the fold line's size (design review P1-4). It wraps rather than clips: quality's reflow check fails text its own box cuts off (2c708e3de at 1024). */
+[data-variant='singular'] .sg-rec:has(> .sg-fold) .sg-rec__head .sg-rec__muted {
+  font-size: var(--type-body-font-size);
+  line-height: var(--type-title-line-height);
+}
+
+/* A work's other pictures, small, in a record entry and under the case page's work: as many to a row as fit. */
+[data-variant='singular'] .sg-gallery__frames.sg-gallery__frames--small {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 9rem), 1fr));
+  gap: var(--space-s);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='singular'] .sg-case-brief__more {
+  max-inline-size: var(--layout-sg-lede);
+}
+
+@media (min-width: 48rem) {
+  [data-variant='singular'] .sg-case-brief > .sg-case-brief__more {
+    grid-column: 1 / span 7;
+  }
+}

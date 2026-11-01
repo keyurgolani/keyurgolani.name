@@ -1,0 +1,42 @@
+{
+  "name": "@portfolio/variant-terra-field",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Terra Field: the field-and-arc document, its opening on one field whose lower edge is a wide arc, the hero proof a seal on its lowest point.",
+  "main": "./src/index.tsx",
+  "types": "./src/index.tsx",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.tsx",
+    "./manifest": "./manifest.json",
+    "./styles.css": "./src/styles.css",
+    "./enhancements/field": "./src/enhancements/field.tsx",
+    "./studio-thumbnail": "./src/studio-thumbnail.tsx",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test 'src/**/*.test.ts' 'src/**/*.test.tsx'"
+  },
+  "portfolio": {
+    "kind": "variant",
+    "manifest": "./manifest.json"
+  },
+  "dependencies": {
+    "@portfolio/kit": "workspace:*",
+    "@portfolio/schema": "workspace:*",
+    "@portfolio/variant-contract": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.7.2"
+  }
+}
