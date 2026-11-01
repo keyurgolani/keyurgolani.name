@@ -1,0 +1,20 @@
+# Ink and paper, the feed on, with the talks hidden for now.
+schemaVersion: 2
+appearance:
+  variant: missing-variant
+  designLanguage: platform-neutral
+  colorScheme: ink-and-paper
+  typography: modernist
+  displayMode: system
+visitorControls:
+  variant: locked
+  designLanguage: locked
+  colorScheme: selectable
+  typography: locked
+  displayMode: selectable
+motionPolicy: respect-os
+features:
+  feed: true
+sections:
+  talks:
+    hidden: true

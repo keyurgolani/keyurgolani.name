@@ -1,0 +1,35 @@
+# Contract fixture (#5, Slice 6; #10): the hidden-canary portfolio, in light mode, with its
+# drafts, its services, its thesis, its evidence and github drafts, and its contact section hidden.
+schemaVersion: 2
+appearance:
+  variant: missing-variant
+  designLanguage: platform-neutral
+  colorScheme: ink-and-paper
+  typography: humanist-ui
+  displayMode: light
+visitorControls:
+  variant: locked
+  designLanguage: locked
+  colorScheme: selectable
+  typography: locked
+  displayMode: selectable
+motionPolicy: respect-os
+features:
+  feed: true
+sections:
+  roles-draft:
+    hidden: true
+  skills-draft:
+    hidden: true
+  drafts:
+    hidden: true
+  services-draft:
+    hidden: true
+  thesis-draft:
+    hidden: true
+  evidence-draft:
+    hidden: true
+  github-draft:
+    hidden: true
+  contact:
+    hidden: true

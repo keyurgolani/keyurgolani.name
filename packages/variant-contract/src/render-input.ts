@@ -1,0 +1,246 @@
+// What a variant renders from (#5, Slice 3, item 4, shipped with the
+// contract): one JSON-serializable input, built the same way by the host, by
+// #7's preview frame, and by #9's render in the visitor's browser. So the
+// builder is pure and browser-safe: no Node module, no environment, no clock,
+// no network, and no Web Crypto, which plain-HTTP pages lack. The caller
+// passes the time.
+
+import {
+  canonicalize,
+  type DisplayMode,
+  type MotionPolicy,
+  type PublicPortfolio,
+  type PublicView,
+  type SiteFeatures,
+  type VisitorControls,
+} from '@portfolio/schema';
+import { contentIndex, materializeControls, storedControls, type ControlValues } from './controls';
+import type { VariantManifest, ViewDeclaration } from './manifest-schema';
+import { normalizeBasePath, type RouteTarget } from './routes';
+import { sha256 } from './sha256';
+import { CONTRACT_VERSION } from './version';
+
+/** One resolved appearance pack, as a variant may credit it: its registered id and its display name. */
+export interface RenderAppearancePack {
+  readonly id: string;
+  readonly name: string;
+}
+
+/**
+ * The appearance packs that render the page (contract 2.1): what the host's
+ * resolution decided, the visitor's choices and each axis's fallback
+ * applied, so a colophon credits what the visitor sees. Read-only, and the
+ * same on the server and in the visitor's browser, since both resolve it
+ * from the same site and registry.
+ */
+export interface RenderAppearance {
+  readonly scheme: RenderAppearancePack;
+  readonly language: RenderAppearancePack;
+  readonly typography: RenderAppearancePack;
+}
+
+export interface VariantRenderInput {
+  readonly contract: typeof CONTRACT_VERSION;
+  /** The rendering variant's id. */
+  readonly variant: string;
+  /** What the rendering variant's manifest declares that rendering reads, so a variant needn't import its manifest. */
+  readonly capabilities: {
+    /** The kinds the variant renders bespoke. Every other kind it doesn't skip renders shared. */
+    readonly renderedKinds: readonly string[];
+    /** The kinds the variant deliberately doesn't render. */
+    readonly unsupportedKinds: readonly string[];
+    /** Its views, for href(). */
+    readonly views: readonly ViewDeclaration[];
+    /** Its enhancements, for the kit's <Enhancement>. */
+    readonly enhancements: NonNullable<VariantManifest['enhancements']>;
+    /**
+     * False when the manifest sets kitLayout: false (K-5), whose stylesheet
+     * has no kit layout: renderSection then refuses to render a declared
+     * kind with the kit's own renderer, which would show its markup unstyled.
+     * Left out, the kit layout is there.
+     */
+    readonly kitLayout?: boolean;
+  };
+  /**
+   * Visible content only: no hidden section, no private record, nothing no
+   * visible section or curation list reaches, and no unregistered extension
+   * data. Every reference in it resolves.
+   */
+  readonly portfolio: PublicPortfolio;
+  /** How the site presents it. The appearance ids are #19's to resolve. */
+  readonly presentation: {
+    readonly displayMode: DisplayMode;
+    readonly motionPolicy: MotionPolicy;
+    readonly visitorControls: VisitorControls;
+    readonly features: SiteFeatures;
+  };
+  /** Every control's value, defaults filled in. */
+  readonly controls: ControlValues;
+  readonly route: RouteTarget;
+  /** Where the routes are mounted, for href(): '' for the site root. */
+  readonly basePath: string;
+  /**
+   * The query every internal link keeps, for href(): `/sample`'s `variant`,
+   * so a link from one view to another stays in the variant it names. Empty
+   * at the site root.
+   */
+  readonly query: Readonly<Record<string, string>>;
+  /** The deployment's canonical origin, such as https://jane.name. */
+  readonly origin: string;
+  /**
+   * Data from outside the documents, frozen at publish, by section id: each
+   * github section's snapshot, or why it has none (#10). Nothing fetches it
+   * at render time.
+   */
+  readonly derived: PublicView['derived'];
+  /**
+   * The media the visible content places, by asset id: each asset's authored
+   * fields, and its renditions or why it has none yet (#10). A placement
+   * names its asset here and may override its alt, focal point, and
+   * decorative flag.
+   */
+  readonly media: PublicView['media'];
+  /**
+   * The resolved color scheme, design language, and typography, each as its
+   * id and name (contract 2.1), for credits such as a colophon. Never read
+   * it to style: the tokens on the boundary do that. Null only where the
+   * caller resolves no appearance, such as a unit test's input.
+   */
+  readonly appearance: RenderAppearance | null;
+  readonly env: {
+    /** The request time, truncated to the UTC day, as an ISO string. */
+    readonly now: string;
+    /** A number fixed by the visible content, for decoration that must not change between renders. */
+    readonly seed: number;
+  };
+  readonly ids: {
+    /** What every id the variant renders starts with, so a host page and a frame can share a document. */
+    readonly prefix: string;
+    /** The id of the variant's one <main>, which the host's skip link targets. */
+    readonly main: string;
+  };
+}
+
+export interface RenderInputArgs {
+  /** The unit's published view, from resolvePortfolioView(). */
+  readonly view: PublicView;
+  /** The rendering variant's manifest. */
+  readonly manifest: VariantManifest;
+  readonly route: RouteTarget;
+  readonly basePath: string;
+  /** The query every internal link keeps, such as `/sample`'s `variant`. Defaults to none. */
+  readonly query?: Readonly<Record<string, string>>;
+  /** The deployment's canonical origin (#1's PORTFOLIO_ORIGIN on the server). */
+  readonly origin: string;
+  /** When the request arrived. */
+  readonly requestTime: Date | number | string;
+  /** Lowercase words ending in a hyphen, such as `pv-`, or '' for none. */
+  readonly idPrefix?: string;
+  /** The page's resolved appearance packs, as @portfolio/appearance's appearanceCredits() gives them. */
+  readonly appearance?: RenderAppearance;
+}
+
+const ID_PREFIX = /^(?:[a-z][a-z0-9-]*-)?$/;
+
+/** A frozen copy of `appearance`, its three packs' ids and names alone. It throws on anything else. */
+function renderAppearance(appearance: RenderAppearance): RenderAppearance {
+  const pack = (axis: keyof RenderAppearance): RenderAppearancePack => {
+    const value = appearance[axis] as Partial<RenderAppearancePack> | undefined;
+    if (
+      typeof value?.id !== 'string' ||
+      value.id === '' ||
+      typeof value.name !== 'string' ||
+      value.name === ''
+    ) {
+      throw new TypeError(
+        `The appearance's ${axis} is a pack's id and name, each a nonempty string.`,
+      );
+    }
+    return Object.freeze({ id: value.id, name: value.name });
+  };
+  return Object.freeze({
+    scheme: pack('scheme'),
+    language: pack('language'),
+    typography: pack('typography'),
+  });
+}
+
+/** Builds a variant's render input. It throws when an argument isn't what the type says. */
+export function buildRenderInput(args: RenderInputArgs): VariantRenderInput {
+  const { view, manifest, route } = args;
+  const origin = new URL(args.origin).origin;
+  if (origin !== args.origin) {
+    throw new TypeError('The origin is a scheme, host, and port alone, such as https://jane.name.');
+  }
+  const prefix = args.idPrefix ?? '';
+  if (!ID_PREFIX.test(prefix)) {
+    throw new TypeError('An id prefix is lowercase words ending in a hyphen, such as pv-.');
+  }
+  const time = new Date(args.requestTime);
+  if (Number.isNaN(time.getTime())) throw new TypeError("The request time isn't a valid time.");
+  const day = new Date(Date.UTC(time.getUTCFullYear(), time.getUTCMonth(), time.getUTCDate()));
+
+  const site = view.site;
+  const controls = materializeControls(
+    manifest,
+    storedControls(site, manifest.id),
+    contentIndex(view.portfolio, view.media),
+  );
+  return {
+    contract: CONTRACT_VERSION,
+    variant: manifest.id,
+    capabilities: {
+      renderedKinds: manifest.renderedKinds,
+      unsupportedKinds: manifest.unsupportedKinds,
+      views: manifest.routes.views,
+      enhancements: manifest.enhancements ?? [],
+      kitLayout: manifest.kitLayout !== false,
+    },
+    portfolio: view.portfolio,
+    presentation: {
+      displayMode: site.appearance.displayMode,
+      motionPolicy: site.motionPolicy,
+      visitorControls: site.visitorControls,
+      features: site.features,
+    },
+    controls,
+    route,
+    basePath: normalizeBasePath(args.basePath),
+    query: linkQuery(args.query),
+    origin,
+    derived: view.derived,
+    media: view.media,
+    appearance: args.appearance === undefined ? null : renderAppearance(args.appearance),
+    env: { now: day.toISOString(), seed: viewSeed(view) },
+    ids: { prefix, main: `${prefix}main` },
+  };
+}
+
+/**
+ * The query links keep, as a plain object in name order, so one request
+ * always builds the same input. It throws on an empty name or a value that
+ * isn't a string.
+ */
+function linkQuery(
+  query: Readonly<Record<string, string>> | undefined,
+): Readonly<Record<string, string>> {
+  const entries = Object.entries(query ?? {});
+  for (const [name, value] of entries) {
+    if (name === '' || typeof value !== 'string') {
+      throw new TypeError(
+        'A query is names with string values, such as { variant: "acme-ocean" }.',
+      );
+    }
+  }
+  return Object.fromEntries(entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+}
+
+/**
+ * The first 8 hex digits of the SHA-256 of the public view's canonical JSON,
+ * as an integer. The same visible content always gives the same seed, in
+ * every runtime, and an edit to a hidden section changes nothing.
+ */
+export function viewSeed(view: PublicView): number {
+  const digest = sha256(new TextEncoder().encode(canonicalize(view)));
+  return ((digest[0]! << 24) | (digest[1]! << 16) | (digest[2]! << 8) | digest[3]!) >>> 0;
+}

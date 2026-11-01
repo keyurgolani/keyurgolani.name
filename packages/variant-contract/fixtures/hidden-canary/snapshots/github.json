@@ -1,0 +1,97 @@
+{
+  "records": [
+    {
+      "adapter": "github",
+      "sectionId": "code",
+      "fetchedAt": "2026-01-04T09:00:00Z",
+      "data": {
+        "username": "robin-hidden",
+        "profileUrl": "https://github.test/robin-hidden",
+        "source": "rest",
+        "totalRepos": 4,
+        "totalStarsReceived": 6,
+        "starsGiven": null,
+        "contributionsLastYear": null,
+        "pinnedRepos": [
+          {
+            "name": "visible-tools",
+            "description": "Tools every visitor sees.",
+            "url": "https://github.test/robin-hidden/visible-tools",
+            "stars": 3,
+            "forks": 0,
+            "language": "TypeScript",
+            "languageColor": "#3178c6"
+          },
+          {
+            "name": "canary-hidden-excluded",
+            "description": "canary-hidden-excluded-description",
+            "url": "https://github.test/robin-hidden/canary-hidden-excluded",
+            "stars": 3,
+            "forks": 0,
+            "language": "TypeScript",
+            "languageColor": "#3178c6"
+          }
+        ],
+        "recentlyActive": [
+          {
+            "name": "canary-hidden-excluded",
+            "url": "https://github.test/robin-hidden/canary-hidden-excluded",
+            "description": null,
+            "language": "TypeScript",
+            "languageColor": "#3178c6",
+            "stars": 3,
+            "pushedAt": "2026-01-03T10:00:00Z",
+            "isFork": false
+          },
+          {
+            "name": "visible-tools",
+            "url": "https://github.test/robin-hidden/visible-tools",
+            "description": null,
+            "language": "TypeScript",
+            "languageColor": "#3178c6",
+            "stars": 3,
+            "pushedAt": "2026-01-03T10:00:00Z",
+            "isFork": false
+          }
+        ],
+        "contributionCalendar": [],
+        "languageBreakdown": [
+          {
+            "language": "canary-hidden-language",
+            "color": "#3178c6",
+            "bytes": 10,
+            "share": 1
+          }
+        ]
+      }
+    },
+    {
+      "adapter": "github",
+      "sectionId": "github-draft",
+      "fetchedAt": "2026-01-04T09:00:00Z",
+      "data": {
+        "username": "canary-hidden-github-user",
+        "profileUrl": "https://github.test/canary-hidden-github-user",
+        "source": "rest",
+        "totalRepos": 4,
+        "totalStarsReceived": 6,
+        "starsGiven": null,
+        "contributionsLastYear": null,
+        "pinnedRepos": [
+          {
+            "name": "canary-hidden-github-repo",
+            "description": "canary-hidden-github-description",
+            "url": "https://github.test/robin-hidden/canary-hidden-github-repo",
+            "stars": 3,
+            "forks": 0,
+            "language": "TypeScript",
+            "languageColor": "#3178c6"
+          }
+        ],
+        "recentlyActive": [],
+        "contributionCalendar": [],
+        "languageBreakdown": []
+      }
+    }
+  ]
+}
