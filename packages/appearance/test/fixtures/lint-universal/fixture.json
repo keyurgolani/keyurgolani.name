@@ -1,0 +1,13 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "A design language whose stylesheet styles every element below a part through a bare *, past the parts it owns.",
+  "patch": {
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "lint": "universal"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "kind": "color-scheme",
+  "base": "warm-parchment",
+  "description": "warm-parchment with a light accent-hover that black on-accent text reads on at 3.2:1.",
+  "patch": {
+    "light": {
+      "accent-hover": "#5c5c5c"
+    }
+  },
+  "expect": [
+    {
+      "pair": {
+        "set": "light",
+        "foreground": "on-accent",
+        "ground": "accent-hover"
+      }
+    }
+  ]
+}

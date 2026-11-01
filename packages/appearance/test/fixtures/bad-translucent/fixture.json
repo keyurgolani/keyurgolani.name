@@ -1,0 +1,20 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with 50% opaque surfaces, which fail their text over a black backdrop.",
+  "patch": {
+    "tokens": {
+      "surface-opacity": "50%",
+      "backdrop-blur": "12px"
+    }
+  },
+  "expect": [
+    {
+      "pair": {
+        "set": "light",
+        "foreground": "text-primary",
+        "ground": "surface-default"
+      }
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+[data-ui-slot='surface'] {
+  visibility: var(--ui-motion-exit);
+}

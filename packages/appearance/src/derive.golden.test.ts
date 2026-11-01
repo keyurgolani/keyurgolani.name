@@ -1,0 +1,215 @@
+// Goldens for the color derivations: warm-parchment's light and dark sets
+// from anchor-v1 and its light set from high-contrast-v1, byte for byte. A
+// reviewer's independent recompute matched the two anchor-v1 sets as Slice 1
+// froze them. Slice 2 changed them on purpose (the owner's lead), keeping
+// the prototype's distinct quieter text and accent states with the contrast
+// gates still winning. text-muted didn't move: it stays at its contrast
+// limit, #645c52 in light and #b6ac9b in dark. text-secondary moved toward
+// text to sit QUIET_TEXT_DELTA from it, from #645c52 to #5a5248 in light and
+// from #bab09e to #c2b8a5 in dark, and data-categorical-6 follows it.
+// accent-hover and accent-active mix 12% and 22% away from the black
+// on-accent: from #b5643b and #ad643f to #c1724b and #c8825f in light, and
+// from #f0a67c and #f1ae86 to #f2a981 and #f3b38f in dark. The high-contrast
+// set didn't change. Focus's target rose to 4.5:1 on the worst ground (lead
+// A, 11-01): light's moved from the accent, #b95f32 (3.16:1 on
+// surface-prominent), to #8e4d2b, its accent-text; dark's #f09d70 already
+// passed.
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { contrast, deltaE, mix } from './color';
+import { anchorV1, highContrastV1, QUIET_TEXT_DELTA } from './derive';
+import type { CoreColorTokens } from './derived-roles';
+import { DERIVED_ROLES } from './derived-roles';
+import type { ColorTokens } from './tokens';
+import { WARM_PARCHMENT } from './test-support/packs';
+import { anchorStops, assertStops, highContrastStops } from './test-support/stops';
+
+const LIGHT_ANCHORS = WARM_PARCHMENT.anchors!.light!;
+const DARK_ANCHORS = WARM_PARCHMENT.anchors!.dark!;
+
+const LIGHT_GOLDEN: CoreColorTokens = {
+  canvas: '#f6eddc',
+  'surface-subtle': '#f0e7d6',
+  'surface-default': '#eae1d0',
+  'surface-prominent': '#e2d9c9',
+  'surface-overlay': '#f2e9d8',
+  'text-primary': '#2b241c',
+  'text-secondary': '#5a5248',
+  'text-muted': '#645c52',
+  'text-inverse': '#f6eddc',
+  'border-subtle': '#ded5c5',
+  'border-default': '#c5bdae',
+  'border-strong': '#7e766a',
+  accent: '#b95f32',
+  'accent-hover': '#c1724b',
+  'accent-active': '#c8825f',
+  'accent-text': '#8e4d2b',
+  'on-accent': '#000000',
+  focus: '#8e4d2b',
+  selection: '#e1bda2',
+  positive: '#268551',
+  warning: '#9b5700',
+  danger: '#b53143',
+  information: '#5f7653',
+  'on-status': '#ffffff',
+  'data-categorical-1': '#b95f32',
+  'data-categorical-2': '#5f7653',
+  'data-categorical-3': '#268551',
+  'data-categorical-4': '#9b5700',
+  'data-categorical-5': '#b53143',
+  'data-categorical-6': '#5a5248',
+  'data-sequential-start': '#e5c5ac',
+  'data-sequential-middle': '#d39b79',
+  'data-sequential-end': '#c07046',
+  'signature-start': '#b95f32',
+  'signature-end': '#5f7653',
+  emphasis: '#b95f32',
+  scrim: '#000000',
+  'on-scrim': '#ffffff',
+  shadow: '#000000',
+};
+
+const DARK_GOLDEN: CoreColorTokens = {
+  canvas: '#251f19',
+  'surface-subtle': '#312b24',
+  'surface-default': '#3a332c',
+  'surface-prominent': '#463f37',
+  'surface-overlay': '#3e372f',
+  'text-primary': '#f4e8d2',
+  'text-secondary': '#c2b8a5',
+  'text-muted': '#b6ac9b',
+  'text-inverse': '#251f19',
+  'border-subtle': '#4a433a',
+  'border-default': '#635b51',
+  'border-strong': '#958c7e',
+  accent: '#f09d70',
+  'accent-hover': '#f2a981',
+  'accent-active': '#f3b38f',
+  'accent-text': '#f09d70',
+  'on-accent': '#000000',
+  focus: '#f09d70',
+  selection: '#6a4a37',
+  positive: '#78d39b',
+  warning: '#ffc264',
+  danger: '#ff8e9c',
+  information: '#9db38d',
+  'on-status': '#000000',
+  'data-categorical-1': '#f09d70',
+  'data-categorical-2': '#9db38d',
+  'data-categorical-3': '#78d39b',
+  'data-categorical-4': '#ffc264',
+  'data-categorical-5': '#ff8e9c',
+  'data-categorical-6': '#c2b8a5',
+  'data-sequential-start': '#5e4231',
+  'data-sequential-middle': '#9b684b',
+  'data-sequential-end': '#d88e66',
+  'signature-start': '#f09d70',
+  'signature-end': '#9db38d',
+  emphasis: '#f09d70',
+  scrim: '#000000',
+  'on-scrim': '#ffffff',
+  shadow: '#000000',
+};
+
+const HIGH_CONTRAST_LIGHT_GOLDEN: CoreColorTokens = {
+  canvas: '#ffffff',
+  'surface-subtle': '#f5f5f5',
+  'surface-default': '#ebebeb',
+  'surface-prominent': '#e0e0e0',
+  'surface-overlay': '#ffffff',
+  'text-primary': '#000000',
+  'text-secondary': '#000000',
+  'text-muted': '#000000',
+  'text-inverse': '#ffffff',
+  'border-subtle': '#000000',
+  'border-default': '#000000',
+  'border-strong': '#000000',
+  accent: '#66341c',
+  'accent-hover': '#5a2e19',
+  'accent-active': '#502916',
+  'accent-text': '#66341c',
+  'on-accent': '#ffffff',
+  focus: '#000000',
+  selection: '#cbbab2',
+  positive: '#175031',
+  warning: '#653900',
+  danger: '#7f222f',
+  information: '#394732',
+  'on-status': '#ffffff',
+  'data-categorical-1': '#66341c',
+  'data-categorical-2': '#394732',
+  'data-categorical-3': '#175031',
+  'data-categorical-4': '#653900',
+  'data-categorical-5': '#7f222f',
+  'data-categorical-6': '#000000',
+  'data-sequential-start': '#d4c6bf',
+  'data-sequential-middle': '#a6897b',
+  'data-sequential-end': '#784c37',
+  'signature-start': '#66341c',
+  'signature-end': '#394732',
+  emphasis: '#66341c',
+  scrim: '#000000',
+  'on-scrim': '#ffffff',
+  shadow: '#000000',
+};
+
+/** A set without the roles K-2 added, in order: what these goldens froze before K-2. */
+function contractV1(set: ColorTokens): CoreColorTokens {
+  const rest: Record<string, string> = { ...set };
+  for (const role of DERIVED_ROLES) delete rest[role];
+  return rest as CoreColorTokens;
+}
+
+test("anchor-v1 gives warm-parchment's light and dark sets byte for byte", () => {
+  assert.deepEqual(contractV1(anchorV1(LIGHT_ANCHORS, 'light')), LIGHT_GOLDEN);
+  assert.deepEqual(contractV1(anchorV1(DARK_ANCHORS, 'dark')), DARK_GOLDEN);
+});
+
+test("high-contrast-v1 gives warm-parchment's light set byte for byte", () => {
+  const sets = { light: anchorV1(LIGHT_ANCHORS, 'light'), dark: anchorV1(DARK_ANCHORS, 'dark') };
+  assert.deepEqual(contractV1(highContrastV1(sets, 'light')), HIGH_CONTRAST_LIGHT_GOLDEN);
+});
+
+test('the roles K-2 added come after every other role, which they leave as they were', () => {
+  const set = anchorV1(LIGHT_ANCHORS, 'light');
+  assert.deepEqual(Object.keys(set).slice(-3), [...DERIVED_ROLES]);
+  assert.deepEqual(Object.keys(contractV1(set)), Object.keys(LIGHT_GOLDEN));
+});
+
+test('every role the goldens move stopped at the first step past its limit plus 0.1', () => {
+  assertStops(LIGHT_GOLDEN, anchorStops(LIGHT_ANCHORS, 'light', LIGHT_GOLDEN), 'light');
+  assertStops(DARK_GOLDEN, anchorStops(DARK_ANCHORS, 'dark', DARK_GOLDEN), 'dark');
+  assertStops(
+    HIGH_CONTRAST_LIGHT_GOLDEN,
+    highContrastStops(LIGHT_GOLDEN, 'light', HIGH_CONTRAST_LIGHT_GOLDEN),
+    'high-contrast light',
+  );
+  // on-accent is black or white, whichever contrasts more with the accent.
+  for (const [golden, accent] of [
+    [LIGHT_GOLDEN, LIGHT_ANCHORS.accent],
+    [DARK_GOLDEN, DARK_ANCHORS.accent],
+  ] as const) {
+    const black = contrast('#000000', accent) >= contrast('#ffffff', accent);
+    assert.equal(golden['on-accent'], black ? '#000000' : '#ffffff');
+  }
+  // The roles that moved in light, so the checks above had something to hold.
+  const stops = anchorStops(LIGHT_ANCHORS, 'light', LIGHT_GOLDEN);
+  for (const role of ['text-muted', 'border-strong', 'accent-text', 'positive', 'focus'] as const) {
+    const stop = stops.find((item) => item.role === role)!;
+    assert.ok(stop.by !== 'exact', role);
+    assert.notEqual(LIGHT_GOLDEN[role], stop.start, role);
+  }
+  // text-secondary moved on to keep apart from text-muted, which stayed at
+  // its contrast limit, and the accent states sit at their 12% and 22% mixes
+  // away from the black on-accent.
+  assert.notEqual(
+    LIGHT_GOLDEN['text-secondary'],
+    mix(LIGHT_ANCHORS.text, LIGHT_ANCHORS.canvas, 28),
+  );
+  for (const golden of [LIGHT_GOLDEN, DARK_GOLDEN]) {
+    assert.ok(deltaE(golden['text-secondary'], golden['text-muted']) >= QUIET_TEXT_DELTA);
+  }
+  assert.equal(LIGHT_GOLDEN['accent-hover'], mix(LIGHT_ANCHORS.accent, '#ffffff', 12));
+  assert.equal(LIGHT_GOLDEN['accent-active'], mix(LIGHT_ANCHORS.accent, '#ffffff', 22));
+});

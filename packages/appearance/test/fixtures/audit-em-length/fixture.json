@@ -1,0 +1,19 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with padding in em, which a display part's font size stretches past the caps, in a token and in the stylesheet.",
+  "patch": {
+    "tokens": {
+      "space-surface-inline": "4em"
+    },
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "problem": "/tokens/space-surface-inline must be a length in px or rem"
+    },
+    {
+      "problem": "padding-inline: 4em uses 4em, which scales with the part's font size"
+    }
+  ]
+}

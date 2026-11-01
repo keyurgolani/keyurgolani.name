@@ -1,0 +1,19 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with motion tokens that carry fixed and hidden, which no motion recipe is.",
+  "patch": {
+    "tokens": {
+      "motion-enter": "fixed",
+      "motion-exit": "hidden"
+    }
+  },
+  "expect": [
+    {
+      "problem": "/tokens/motion-enter must be one of the platform's motion recipes"
+    },
+    {
+      "problem": "/tokens/motion-exit must be one of the platform's motion recipes"
+    }
+  ]
+}

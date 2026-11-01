@@ -1,0 +1,4 @@
+[data-ui-slot='toast'] {
+  position: absolute;
+  inset: 0;
+}

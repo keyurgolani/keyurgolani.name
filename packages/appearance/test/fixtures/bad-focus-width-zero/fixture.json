@@ -1,0 +1,15 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with a focus ring 0 wide, which draws nothing, so focus never shows.",
+  "patch": {
+    "tokens": {
+      "focus-width": "0"
+    }
+  },
+  "expect": [
+    {
+      "problem": "/tokens/focus-width must be a length in px or rem from 2px or 0.125rem"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "id": "fixture-research",
+  "name": "Fixture Research",
+  "kind": "color-scheme",
+  "tier": "research",
+  "source": {
+    "name": "Catppuccin",
+    "url": "https://github.com/catppuccin/catppuccin"
+  },
+  "license": "MIT",
+  "researchedAt": "2026-10-22",
+  "reason": "A test fixture for the Research tier: a reviewed palette that doesn't ship, so its id must never reach a registry, a bundle, or the image.",
+  "anchors": {
+    "light": {
+      "canvas": "#eff1f5",
+      "text": "#4c4f69",
+      "accent": "#8839ef",
+      "secondary": "#179299"
+    },
+    "dark": {
+      "canvas": "#1e1e2e",
+      "text": "#cdd6f4",
+      "accent": "#cba6f7",
+      "secondary": "#89dceb"
+    }
+  }
+}

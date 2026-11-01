@@ -1,0 +1,11 @@
+@layer accessibility {
+  [data-ui-slot='action'] {
+    border-radius: 0;
+  }
+}
+
+@scope (body) {
+  [data-ui-slot='action'] {
+    border-radius: 0;
+  }
+}

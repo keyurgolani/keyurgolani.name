@@ -1,0 +1,13 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with every surface dimmed by the disabled opacity, though none is disabled.",
+  "patch": {
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "problem": "opacity: var(--ui-state-disabled-opacity) dims a part the rule doesn't test as disabled or busy"
+    }
+  ]
+}

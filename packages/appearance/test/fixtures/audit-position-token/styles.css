@@ -1,0 +1,5 @@
+[data-ui-slot='toast'] {
+  position: var(--ui-motion-enter);
+  inset: 0;
+  z-index: 2147483647;
+}

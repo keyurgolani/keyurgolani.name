@@ -1,0 +1,12 @@
+/* Each declaration loads a file; none is a declared asset. */
+[data-ui-slot='surface'] {
+  background-image: URL(texture.png);
+}
+
+[data-ui-slot='card'] {
+  background-image: image-set('card.png' 1x, 'card@2x.png' 2x);
+}
+
+[data-ui-slot='media'] {
+  background-image: src('media.png');
+}

@@ -1,0 +1,13 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with a literal rotate, which reduced motion can't turn off.",
+  "patch": {
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "problem": "rotate: 8deg moves the part outside the tokens"
+    }
+  ]
+}

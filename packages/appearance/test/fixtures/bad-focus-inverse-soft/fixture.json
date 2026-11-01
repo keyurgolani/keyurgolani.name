@@ -1,0 +1,21 @@
+{
+  "kind": "color-scheme",
+  "base": "warm-parchment",
+  "description": "warm-parchment with an authored dark set whose focus-inverse, #8a7a6a, reads 3.41:1 on an inverse ground of text-primary: over the 3:1 non-text floor, under focus-inverse's own 3.5:1.",
+  "patch": {
+    "dark": {
+      "on-emphasis": "#000000",
+      "focus-inverse": "#8a7a6a",
+      "surface-lit": "#5b534a"
+    }
+  },
+  "expect": [
+    {
+      "pair": {
+        "set": "dark",
+        "foreground": "focus-inverse",
+        "ground": "text-primary"
+      }
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "A design language whose stylesheet breaks one rule: a selector that targets something other than a [data-ui-slot] part.",
+  "patch": {
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "problem": "uses a class"
+    }
+  ]
+}

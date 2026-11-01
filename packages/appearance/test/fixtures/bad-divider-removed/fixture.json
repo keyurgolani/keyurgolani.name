@@ -1,0 +1,15 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with its rules removed, a divider 0 wide, so a composition's sections and ruled grid lose their structure.",
+  "patch": {
+    "tokens": {
+      "border-divider": "0 solid"
+    }
+  },
+  "expect": [
+    {
+      "problem": "/tokens/border-divider must be a rule that draws"
+    }
+  ]
+}

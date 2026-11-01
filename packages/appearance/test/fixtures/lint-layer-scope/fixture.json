@@ -1,0 +1,13 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "A design language whose stylesheet opens a layer and a scope of its own, which would let it reorder the cascade or reach past its boundary. The compiler writes the pack's only layer and scope.",
+  "patch": {
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "lint": "layer-scope"
+    }
+  ]
+}

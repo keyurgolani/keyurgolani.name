@@ -1,0 +1,16 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with a part's maximum width and height set to 0, sizes that are the variant's.",
+  "patch": {
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "problem": "max-width: 0 sizes the part"
+    },
+    {
+      "problem": "max-height: 0 sizes the part"
+    }
+  ]
+}

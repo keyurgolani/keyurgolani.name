@@ -1,0 +1,4 @@
+[data-ui-slot='action']:hover {
+  transform: translateY(-12px) rotate(8deg);
+  transition: transform var(--ui-motion-slow);
+}

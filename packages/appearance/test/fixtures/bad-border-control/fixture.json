@@ -1,0 +1,19 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with controls drawn in border-subtle, under 3:1 on the canvas.",
+  "patch": {
+    "tokens": {
+      "border-control": "1px solid var(--color-border-subtle)"
+    }
+  },
+  "expect": [
+    {
+      "pair": {
+        "set": "light",
+        "foreground": "border-subtle",
+        "ground": "canvas"
+      }
+    }
+  ]
+}

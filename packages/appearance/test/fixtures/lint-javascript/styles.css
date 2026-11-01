@@ -1,0 +1,7 @@
+[data-ui-slot='surface'] {
+  background: \65 xpression(alert(1));
+}
+
+[data-ui-slot='card'] {
+  behavior: url(card.htc);
+}

@@ -1,0 +1,17 @@
+{
+  "kind": "color-scheme",
+  "base": "warm-parchment",
+  "description": "warm-parchment with an authored light set that gives all three roles K-2 added, its surface-lit surface-prominent itself, #e2d9c9, which isn't lit: text-primary still reads on it, so only the lit surface's order refuses it.",
+  "patch": {
+    "light": {
+      "on-emphasis": "#000000",
+      "focus-inverse": "#b95f32",
+      "surface-lit": "#e2d9c9"
+    }
+  },
+  "expect": [
+    {
+      "problem": "isn't lighter than surface-prominent"
+    }
+  ]
+}

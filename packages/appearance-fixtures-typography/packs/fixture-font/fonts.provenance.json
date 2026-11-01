@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "fonts": [
+    {
+      "file": "geist-latin.woff2",
+      "sha256": "1b5ebfb3a01a97343ac96873e6d59a8cb285c66012b6a1ac509cb2765e995ba8",
+      "source": {
+        "package": "next",
+        "version": "16.2.4",
+        "path": "dist/next-devtools/server/font/geist-latin.woff2"
+      },
+      "license": { "spdx": "OFL-1.1", "file": "OFL.txt" }
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with a media part that clips its contents, as the prototype's language layer did for rounded corners.",
+  "patch": {
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "problem": "overflow: hidden can clip the part's contents"
+    }
+  ]
+}

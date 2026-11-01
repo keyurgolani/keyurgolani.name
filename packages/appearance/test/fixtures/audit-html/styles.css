@@ -1,0 +1,3 @@
+html [data-ui-slot='surface'] {
+  border-radius: 0;
+}

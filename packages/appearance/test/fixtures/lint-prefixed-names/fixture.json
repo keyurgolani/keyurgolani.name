@@ -1,0 +1,13 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "A design language whose stylesheet names keyframes, a counter style, and a view transition without the pack's id, so they'd collide with every other boundary on the page.",
+  "patch": {
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "lint": "prefixed-names"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "kind": "color-scheme",
+  "base": "warm-parchment",
+  "description": "warm-parchment with a light text-muted equal to text-secondary, collapsing the two.",
+  "patch": {
+    "light": {
+      "text-muted": "#5f584e",
+      "text-secondary": "#5f584e"
+    }
+  },
+  "expect": [
+    {
+      "hierarchy": {
+        "first": "text-secondary",
+        "second": "text-muted"
+      }
+    }
+  ]
+}

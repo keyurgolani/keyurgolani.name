@@ -1,0 +1,13 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with a shadow spread 100vmax in the canvas color, which covers the page.",
+  "patch": {
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "problem": "box-shadow: 0 0 0 100vmax var(--color-canvas) uses 100vmax, which scales with the window"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with a part's padding a full window wide, which pushes its contents off the page.",
+  "patch": {
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "problem": "padding-inline-start: 100vw uses 100vw, which scales with the window"
+    }
+  ]
+}

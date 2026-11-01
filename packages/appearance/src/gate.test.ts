@@ -1,0 +1,592 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { contrast } from './color';
+import { anchorV1 } from './derive';
+import {
+  contrastReport,
+  GATE_TARGETS,
+  gateLanguage,
+  gateSet,
+  gateTypography,
+  isLargeText,
+  NEUTRAL_LANGUAGE,
+  SMALL_SIGNATURE,
+  MARK_MAX_PX,
+  textureLayers,
+  type GateLanguage,
+  type GatePair,
+} from './gate';
+import { schemeSets } from './sets';
+import type { LanguageTokens } from './tokens';
+import { HUMANIST_UI, PLATFORM_NEUTRAL, WARM_PARCHMENT } from './test-support/packs';
+
+// The computed gate (#19, Slice 2, items 2 and 8): the pairs, the targets,
+// compositing at surface-opacity over the worst backdrop, and the texture
+// raise, by the refined body.
+
+const SETS = schemeSets({
+  light: anchorV1(WARM_PARCHMENT.anchors!.light!, 'light'),
+  dark: anchorV1(WARM_PARCHMENT.anchors!.dark!, 'dark'),
+});
+
+function language(tokens: Partial<LanguageTokens> = {}): GateLanguage {
+  const read = gateLanguage({ ...PLATFORM_NEUTRAL.tokens, ...tokens });
+  assert.ok(read.ok, JSON.stringify(read.ok ? null : read.problems));
+  return read.language;
+}
+
+const find = (pairs: readonly GatePair[], foreground: string, ground: string) =>
+  pairs.find((pair) => pair.foreground === foreground && pair.ground === ground)!;
+
+// apps/web/scripts/appearance-targets.test.ts holds these to quality/thresholds.json.
+test('the targets are the refined body and #11 targets', () => {
+  assert.deepEqual(
+    { ...GATE_TARGETS },
+    {
+      text: 4.5,
+      largeText: 3,
+      nonText: 3,
+      highContrastText: 7,
+      highContrastLargeText: 4.5,
+      highContrastNonText: 4.5,
+      textureRaise: 1.1,
+      focusWidth: 2,
+      largeTextPt: 18,
+      largeBoldTextPt: 14,
+      largeBoldWeight: 700,
+    },
+  );
+});
+
+test('a caller can pass targets of its own, as check:appearance passes the thresholds file', () => {
+  const strict = { ...GATE_TARGETS, text: 21 };
+  const light = gateSet(SETS.light!, 'light', language(), SMALL_SIGNATURE, strict);
+  assert.equal(find(light, 'text-primary', 'canvas').target, 21);
+  assert.equal(find(light, 'text-primary', 'canvas').passes, false);
+  assert.equal(find(light, 'focus', 'canvas').target, GATE_TARGETS.nonText);
+  // Large text is the targets' too: 1.25rem (15pt) is large once 15pt is.
+  const role = { ...HUMANIST_UI.roles.body, 'font-size': '1.25rem', 'font-weight': 400 };
+  assert.equal(isLargeText(role), false);
+  assert.equal(isLargeText(role, { ...GATE_TARGETS, largeTextPt: 15 }), true);
+  const report = contrastReport(SETS, NEUTRAL_LANGUAGE, SMALL_SIGNATURE, strict);
+  assert.equal(report.passes, false);
+});
+
+test('the fallback trio passes every pair in every set it renders', () => {
+  const typography = gateTypography(HUMANIST_UI.roles);
+  assert.equal(typography.largeSignature, true);
+  for (const [name, set] of Object.entries(SETS)) {
+    const pairs = gateSet(set!, name as never, language(), typography);
+    assert.deepEqual(
+      pairs.filter((pair) => !pair.passes),
+      [],
+      name,
+    );
+    // 4 text roles on 5 grounds, 9 fills, 5 signature, focus and border-strong on 5, text-primary
+    // on surface-lit, focus-inverse on text-primary, and the lit surface's order (K-2), 6
+    // categorical, and focus-width.
+    assert.equal(pairs.length, 20 + 9 + 5 + 10 + 3 + 6 + 1);
+  }
+});
+
+test('the pairs and their targets, base and high-contrast', () => {
+  const light = gateSet(SETS.light!, 'light', language(), SMALL_SIGNATURE);
+  assert.equal(find(light, 'text-muted', 'surface-prominent').target, 4.5);
+  assert.equal(find(light, 'on-accent', 'accent-hover').target, 4.5);
+  assert.equal(find(light, 'on-status', 'information').target, 4.5);
+  assert.equal(find(light, 'on-scrim', 'scrim').target, 4.5);
+  assert.equal(find(light, 'focus', 'canvas').target, 3);
+  assert.equal(find(light, 'border-strong', 'surface-default').target, 3);
+  assert.equal(find(light, 'data-categorical-4', 'surface-default').target, 3);
+  assert.equal(find(light, 'signature-start to signature-end', 'canvas').target, 4.5);
+  assert.equal(find(light, 'focus-width', '').target, 2);
+  const high = gateSet(
+    SETS['high-contrast-dark']!,
+    'high-contrast-dark',
+    language(),
+    gateTypography(HUMANIST_UI.roles),
+  );
+  assert.equal(find(high, 'text-primary', 'canvas').target, 7);
+  assert.equal(find(high, 'on-accent', 'accent').target, 7);
+  assert.equal(find(high, 'focus', 'surface-subtle').target, 4.5);
+  // High contrast paints the signature fill solid text-primary, as large text here.
+  assert.equal(find(high, 'text-primary', 'canvas').kind, 'text');
+  const signature = high.find((pair) => pair.kind === 'large-text')!;
+  assert.equal(signature.foreground, 'text-primary');
+  assert.equal(signature.target, 4.5);
+});
+
+test('signature text needs 3:1 only when display and headline are both large text', () => {
+  const small = {
+    ...HUMANIST_UI.roles,
+    headline: { ...HUMANIST_UI.roles.headline, 'font-size': '1rem' },
+  };
+  assert.equal(gateTypography(small).largeSignature, false);
+  assert.equal(
+    isLargeText({ ...HUMANIST_UI.roles.body, 'font-size': '1.5rem', 'font-weight': 400 }),
+    true,
+  );
+  assert.equal(
+    isLargeText({ ...HUMANIST_UI.roles.body, 'font-size': '1.1667rem', 'font-weight': 700 }),
+    true,
+  );
+  assert.equal(
+    isLargeText({ ...HUMANIST_UI.roles.body, 'font-size': '1.1667rem', 'font-weight': 650 }),
+    false,
+  );
+  assert.equal(
+    isLargeText({ ...HUMANIST_UI.roles.body, 'font-size': '1.1rem', 'font-weight': 700 }),
+    false,
+  );
+  const large = gateSet(SETS.light!, 'light', language(), { largeSignature: true });
+  assert.equal(find(large, 'signature-start to signature-end', 'canvas').target, 3);
+  assert.equal(find(large, 'signature-start to signature-end', 'canvas').kind, 'large-text');
+});
+
+test('a translucent surface composites over the worst of canvas, black, and white', () => {
+  const pairs = gateSet(
+    SETS.light!,
+    'light',
+    language({ 'surface-opacity': '0.5' }),
+    SMALL_SIGNATURE,
+  );
+  const muted = find(pairs, 'text-primary', 'surface-default');
+  assert.equal(muted.backdrop, '#000000');
+  assert.equal(muted.passes, false);
+  // The canvas itself is opaque.
+  assert.equal(find(pairs, 'text-primary', 'canvas').backdrop, undefined);
+  // 100% and 1 composite nothing.
+  for (const opacity of ['100%', '1']) {
+    const opaque = gateSet(
+      SETS.light!,
+      'light',
+      language({ 'surface-opacity': opacity }),
+      SMALL_SIGNATURE,
+    );
+    assert.equal(find(opaque, 'text-primary', 'surface-default').backdrop, undefined);
+  }
+});
+
+test('a texture raises the targets on canvas and surfaces by 10%, and fills keep theirs', () => {
+  const pairs = gateSet(
+    SETS.light!,
+    'light',
+    language({
+      texture: 'radial-gradient(circle, var(--color-text-primary) 0 1px, transparent 1px)',
+    }),
+    { largeSignature: true },
+  );
+  assert.equal(find(pairs, 'text-muted', 'canvas').target, 4.95);
+  assert.equal(find(pairs, 'focus', 'surface-subtle').target, 3.3);
+  assert.equal(find(pairs, 'data-categorical-1', 'surface-default').target, 3.3);
+  assert.equal(find(pairs, 'signature-start to signature-end', 'canvas').target, 3.3);
+  assert.equal(find(pairs, 'on-accent', 'accent').target, 4.5);
+  assert.equal(find(pairs, 'on-status', 'warning').target, 4.5);
+  assert.equal(find(pairs, 'on-scrim', 'scrim').target, 4.5);
+  const high = gateSet(
+    SETS['high-contrast-light']!,
+    'high-contrast-light',
+    language({ texture: 'linear-gradient(var(--color-border-subtle) 1px, transparent 1px)' }),
+    SMALL_SIGNATURE,
+  );
+  assert.equal(find(high, 'text-primary', 'canvas').target, 7.7);
+  assert.equal(find(high, 'focus', 'canvas').target, 4.95);
+  assert.equal(find(high, 'on-accent', 'accent').target, 7);
+});
+
+/** A ratio rounded down to two places, as the gate reports one. */
+const floor = (value: number) => Math.floor(value * 100) / 100;
+const mix = (role: string, percent: number) =>
+  `color-mix(in srgb, var(--color-${role}) ${percent}%, transparent)`;
+const wash = (role: string, percent: number) =>
+  `linear-gradient(${mix(role, percent)}, ${mix(role, percent)})`;
+const GRAIN =
+  'radial-gradient(circle, color-mix(in srgb, var(--color-text-primary) 12%, transparent) 0 0.5px, transparent 0.75px)';
+const read = (texture: string) => {
+  const layers = textureLayers(texture);
+  assert.deepEqual(layers.problems, [], texture);
+  return { washes: layers.washes, marks: layers.marks };
+};
+
+test('a texture reads as washes and marks, failing closed (LANG-5c round 2)', () => {
+  // Material 3's tonal tint: one flat wash.
+  assert.deepEqual(read(wash('accent', 4)), { washes: [{ role: 'accent', percent: 4 }], marks: 0 });
+  // Fluent's acrylic: a sheen from the top edge, a wash, over the grain, a mark.
+  assert.deepEqual(read(`linear-gradient(${mix('canvas', 28)}, transparent 2.5rem), ${GRAIN}`), {
+    washes: [{ role: 'canvas', percent: 28 }],
+    marks: 1,
+  });
+  // The same wash however it's written: a direction, another color space, the share on the
+  // transparent side, no share at all (50%), a first stop at 0, case and spacing.
+  for (const [texture, percent] of [
+    [`linear-gradient(to bottom, ${mix('accent', 8)}, ${mix('accent', 8)})`, 8],
+    [`linear-gradient(180deg, ${mix('accent', 8)}, transparent)`, 8],
+    ['linear-gradient(color-mix(in oklab, var(--color-accent) 8%, transparent), transparent)', 8],
+    ['linear-gradient(color-mix(in srgb, var(--color-accent), transparent 92%), transparent)', 8],
+    ['linear-gradient(color-mix(in srgb, transparent 92%, var(--color-accent)), transparent)', 8],
+    ['linear-gradient(color-mix(in srgb, var(--color-accent), transparent), transparent)', 50],
+    [`linear-gradient(${mix('accent', 8)} 0%, transparent)`, 8],
+    [`linear-gradient(${mix('accent', 8)} 0, transparent 50%)`, 8],
+    ['LINEAR-GRADIENT( Color-Mix(in srgb,var(--color-accent)  8% ,transparent) , transparent )', 8],
+  ] as const) {
+    assert.deepEqual(read(texture), { washes: [{ role: 'accent', percent }], marks: 0 }, texture);
+  }
+  // The strongest stop is the wash: a faint top over an opaque foot is an opaque wash.
+  assert.deepEqual(read(`linear-gradient(${mix('accent', 4)}, var(--color-accent))`).washes, [
+    { role: 'accent', percent: 100 },
+  ]);
+  // A band and a vignette are washes: the held iridescent sweep lays two roles.
+  assert.deepEqual(
+    read(
+      `linear-gradient(120deg, ${mix('accent', 18)}, transparent 32%, ${mix('information', 16)} 68%, transparent)`,
+    ).washes,
+    [
+      { role: 'accent', percent: 18 },
+      { role: 'information', percent: 16 },
+    ],
+  );
+  assert.deepEqual(read(`radial-gradient(${mix('accent', 30)}, transparent)`).washes, [
+    { role: 'accent', percent: 30 },
+  ]);
+  // A circle sized in percent grows with the surface: a wash.
+  assert.deepEqual(
+    read(`radial-gradient(circle at 18% 22%, ${mix('accent', 18)} 0 8%, transparent 9%)`).washes,
+    [{ role: 'accent', percent: 18 }],
+  );
+  // Every mark the shipping packs draw, and a band out at the mark bound.
+  for (const mark of [
+    GRAIN,
+    'radial-gradient(circle at 8px 8px, var(--color-border-strong) 0 1px, transparent 1.5px)',
+    'linear-gradient(var(--color-border-subtle) 1px, transparent 1px), linear-gradient(90deg, var(--color-border-subtle) 1px, transparent 1px)',
+    `repeating-linear-gradient(0deg, transparent 0 3px, ${mix('border-subtle', 35)} 3px 4px)`,
+    `repeating-linear-gradient(135deg, transparent 0 5px, ${mix('border-subtle', 50)} 5px 6px)`,
+    `repeating-linear-gradient(90deg, ${mix('accent', 18)} 0 1px, transparent 1px 64px)`,
+    `linear-gradient(135deg, ${mix('accent', 12)} 0 20px, transparent 20px), radial-gradient(circle at 75% 100%, ${mix('information', 10)} 0 14px, transparent 15px)`,
+    `radial-gradient(circle at 25% 0, ${mix('accent', 20)} 0 14px, transparent 15px)`,
+    `linear-gradient(${mix('accent', 12)} 0 1.5rem, transparent 1.5rem)`,
+  ]) {
+    const layers = read(mark);
+    assert.deepEqual(layers.washes, [], mark);
+    assert.ok(layers.marks > 0, mark);
+  }
+  // Past the bound, a band is a wash.
+  assert.deepEqual(read(`linear-gradient(${mix('accent', 12)} 0 25px, transparent 25px)`).washes, [
+    { role: 'accent', percent: 12 },
+  ]);
+  assert.equal(MARK_MAX_PX, 24);
+  assert.deepEqual(textureLayers('none'), { washes: [], marks: 0, problems: [] });
+  // What the gate can't read fails the gate, never passing as a mark.
+  for (const unreadable of [
+    wash('no-such-role', 4),
+    'linear-gradient(red, transparent)',
+    // An unreadable stop between readable ones is no direction to skip.
+    'linear-gradient(var(--color-accent) 1px, red 1px, transparent 2px)',
+    'linear-gradient(currentcolor 1px, transparent 1px)',
+    'linear-gradient(color-mix(in srgb, var(--color-accent) 8%, var(--color-canvas)), transparent)',
+    'url(grain.png)',
+  ]) {
+    assert.equal(textureLayers(unreadable).problems.length, 1, unreadable);
+    const gate = gateLanguage({ ...PLATFORM_NEUTRAL.tokens, texture: unreadable });
+    assert.equal(gate.ok, false, unreadable);
+    assert.match(gate.ok ? '' : gate.problems.join('\n'), /can't tell a wash from a mark/);
+  }
+  assert.equal(language({ texture: wash('accent', 4) }).textured, false);
+  assert.deepEqual(language({ texture: wash('accent', 4) }).washes, [
+    { role: 'accent', percent: 4 },
+  ]);
+  // A texture with both: a mark raises, and the wash is still read.
+  const both = language({ texture: `${wash('accent', 4)}, ${GRAIN}` });
+  assert.equal(both.textured, true);
+  assert.deepEqual(both.washes, [{ role: 'accent', percent: 4 }]);
+});
+
+test('a wash is composited over each surface, never the canvas, and its pairs keep their plain targets; a mark beside it raises them, the wash still composited', () => {
+  const set = SETS.light!;
+  const washed = gateSet(set, 'light', language({ texture: wash('text-primary', 60) }), {
+    largeSignature: true,
+  });
+  const muted = find(washed, 'text-muted', 'surface-default');
+  assert.equal(muted.target, 4.5);
+  assert.equal(muted.passes, false);
+  assert.equal(muted.wash, 'the 60% text-primary wash');
+  assert.equal(muted.backdrop, undefined);
+  assert.ok(muted.ratio < floor(contrast(set['text-muted'], set['surface-default'])));
+  // The canvas takes no wash, and its pairs read as they did.
+  const canvas = find(washed, 'text-muted', 'canvas');
+  assert.equal(canvas.ratio, floor(contrast(set['text-muted'], set.canvas)));
+  assert.equal(canvas.wash, undefined);
+  // A wash with a mark: raised, and still composited.
+  const both = gateSet(
+    set,
+    'light',
+    language({ texture: `${wash('text-primary', 60)}, ${GRAIN}` }),
+    SMALL_SIGNATURE,
+  );
+  const bothMuted = find(both, 'text-muted', 'surface-default');
+  assert.equal(bothMuted.target, 4.95);
+  assert.equal(bothMuted.passes, false);
+  assert.equal(bothMuted.wash, 'the 60% text-primary wash');
+  // A wash that lifts contrast leaves the bare surface below it to be read: the worst stays bare.
+  const lifting = gateSet(set, 'light', language({ texture: wash('surface-default', 50) }), {
+    largeSignature: true,
+  });
+  const bare = find(lifting, 'text-muted', 'surface-prominent');
+  assert.equal(bare.ratio, floor(contrast(set['text-muted'], set['surface-prominent'])));
+  // On a translucent surface the wash lies over the composite, over each backdrop.
+  const glassy = gateSet(
+    set,
+    'light',
+    language({ 'surface-opacity': '72%', texture: wash('text-primary', 60) }),
+    { largeSignature: true },
+  );
+  const over = find(glassy, 'text-muted', 'surface-default');
+  assert.ok(over.backdrop !== undefined && over.wash === 'the 60% text-primary wash');
+  // A high-contrast set never paints the texture, so it isn't washed.
+  const high = gateSet(
+    SETS['high-contrast-light']!,
+    'high-contrast-light',
+    language({ texture: wash('text-primary', 60) }),
+    SMALL_SIGNATURE,
+  );
+  assert.ok(high.every((pair) => pair.wash === undefined));
+  // A faint wash passes where the surface alone does.
+  const faint = gateSet(set, 'light', language({ texture: wash('accent', 4) }), SMALL_SIGNATURE);
+  assert.ok(faint.some((pair) => pair.wash === 'the 4% accent wash'));
+  assert.ok(
+    faint
+      .filter((pair) => pair.kind === 'text' && pair.ground === 'surface-default')
+      .every((pair) => pair.target === 4.5),
+  );
+});
+
+test("what the gate reads from a language, and what it can't compute fails", () => {
+  assert.deepEqual(language(), {
+    surfaceOpacity: 1,
+    textured: false,
+    washes: [],
+    borderControl: 'border-strong',
+    focusWidth: 2,
+    focusOffset: 2,
+    signature: ['signature-start', 'signature-end'],
+  });
+  assert.equal(language({ 'focus-offset': '0px' }).focusOffset, 0);
+  assert.equal(language({ 'focus-offset': '-0.125rem' }).focusOffset, -2);
+  assert.equal(language({ 'surface-opacity': '72%' }).surfaceOpacity, 0.72);
+  assert.equal(language({ 'focus-width': '0.1875rem' }).focusWidth, 3);
+  assert.equal(language({ 'border-control': '0 solid' }).borderControl, null);
+  assert.equal(language({ 'border-control': '1px solid transparent' }).borderControl, null);
+  assert.equal(language({ 'border-control': '1px solid' }).borderControl, 'text-primary');
+  assert.deepEqual(language({ 'signature-fill': 'none' }).signature, []);
+  for (const [key, value, pattern] of [
+    ['surface-opacity', 'calc(1 - 0.2)', /surface-opacity must be a number/],
+    ['surface-opacity', '120%', /surface-opacity must be a number/],
+    ['focus-width', 'thin', /focus-width must be a length/],
+    ['focus-offset', 'auto', /focus-offset must be a length/],
+    [
+      'border-control',
+      '1px solid color-mix(in srgb, var(--color-accent) 50%, transparent)',
+      /one var\(--color-<role>\)/,
+    ],
+    [
+      'border-control',
+      '1px solid var(--color-accent) var(--color-focus)',
+      /one var\(--color-<role>\)/,
+    ],
+  ] as const) {
+    const read = gateLanguage({ ...PLATFORM_NEUTRAL.tokens, [key]: value });
+    assert.equal(read.ok, false, `${key}: ${value}`);
+    assert.match(read.ok ? '' : read.problems.join('\n'), pattern);
+  }
+});
+
+test('a focus ring under 2px fails, and a gradient fill is checked along its length', () => {
+  const thin = gateSet(SETS.light!, 'light', language({ 'focus-width': '1px' }), SMALL_SIGNATURE);
+  assert.equal(find(thin, 'focus-width', '').passes, false);
+  assert.equal(find(thin, 'focus-width', '').ratio, 1);
+  // A fill from text-primary to the canvas color fades out of contrast partway.
+  const fade = gateSet(
+    SETS.light!,
+    'light',
+    language({
+      'signature-fill': 'linear-gradient(90deg, var(--color-text-primary), var(--color-canvas))',
+    }),
+    SMALL_SIGNATURE,
+  );
+  assert.equal(find(fade, 'text-primary to canvas', 'canvas').passes, false);
+});
+
+test("a scheme's own report covers each set with the neutral language and is stable", () => {
+  // warm-parchment's signature colors read as large text only, so the strictest reading fails them, and only them.
+  const strict = contrastReport(SETS);
+  assert.equal(strict.passes, false);
+  assert.ok(
+    strict.pairs
+      .filter((pair) => !pair.passes)
+      .every((pair) => pair.foreground === 'signature-start to signature-end'),
+  );
+  const report = contrastReport(SETS, NEUTRAL_LANGUAGE, { largeSignature: true });
+  assert.equal(report.passes, true);
+  assert.deepEqual(contrastReport(SETS, NEUTRAL_LANGUAGE, { largeSignature: true }), report);
+  assert.deepEqual(
+    [...new Set(report.pairs.map((pair) => pair.set))],
+    ['dark', 'high-contrast-dark', 'high-contrast-light', 'light'],
+  );
+  assert.equal(NEUTRAL_LANGUAGE.borderControl, 'border-strong');
+  // A reported ratio rounds down, so it passes exactly when the reported number reaches its target.
+  for (const pair of [...report.pairs, ...strict.pairs]) {
+    assert.equal(pair.passes, pair.ratio >= pair.target, `${pair.foreground} on ${pair.ground}`);
+  }
+});
+
+test('a flush focus ring is held to 3:1 against each fill it touches; one offset outward reads on the ground (LANG-5c)', () => {
+  const insideOf = (pairs: readonly GatePair[]) =>
+    pairs.filter((pair) => pair.kind === 'focus-inside');
+  // The planted flush ring: offset 0, and focus the accent itself, so on the primary Action it reads 1:1.
+  const flushOnAccent = { ...SETS.light!, focus: SETS.light!.accent };
+  const flush = gateSet(
+    flushOnAccent,
+    'light',
+    language({ 'focus-offset': '0px' }),
+    SMALL_SIGNATURE,
+  );
+  assert.deepEqual(
+    insideOf(flush).map((pair) => pair.ground),
+    [
+      'accent',
+      'accent-hover',
+      'accent-active',
+      'surface-default',
+      'surface-subtle',
+      'surface-prominent',
+    ],
+  );
+  const onAccent = find(insideOf(flush), 'focus', 'accent');
+  assert.equal(onAccent.ratio, 1);
+  assert.equal(onAccent.target, 3);
+  assert.equal(onAccent.passes, false);
+  // The mutant: measured on the grounds alone, as before, the planted ring passes.
+  assert.ok(
+    flush
+      .filter((pair) => pair.kind !== 'focus-inside' && pair.foreground === 'focus')
+      .every((pair) => pair.passes),
+  );
+  // An inward ring touches the fill too.
+  const inward = gateSet(
+    flushOnAccent,
+    'light',
+    language({ 'focus-offset': '-2px' }),
+    SMALL_SIGNATURE,
+  );
+  assert.equal(find(insideOf(inward), 'focus', 'accent').passes, false);
+  // Offset 1px or more, the ground shows between ring and fill: the focus-on-ground pairs decide.
+  for (const offset of ['1px', '2px', '0.125rem']) {
+    const apart = gateSet(
+      flushOnAccent,
+      'light',
+      language({ 'focus-offset': offset }),
+      SMALL_SIGNATURE,
+    );
+    assert.deepEqual(insideOf(apart), [], offset);
+    assert.equal(find(apart, 'focus', 'canvas').passes, true, offset);
+  }
+  // High contrast holds a flush ring to the high-contrast non-text target.
+  const high = gateSet(
+    SETS['high-contrast-light']!,
+    'high-contrast-light',
+    language({ 'focus-offset': '0px' }),
+    SMALL_SIGNATURE,
+  );
+  assert.equal(find(insideOf(high), 'focus', 'surface-default').target, 4.5);
+  // The neutral language, a scheme's own report, rings 2px out: it adds no focus-inside pair.
+  assert.deepEqual(
+    insideOf(gateSet(flushOnAccent, 'light', NEUTRAL_LANGUAGE, SMALL_SIGNATURE)),
+    [],
+  );
+});
+
+test('a flush focus ring is measured in its own color against each fill: one scheme passes on some fills and fails on others, in high contrast too (LANG-5c review P1-1)', () => {
+  const insideOf = (pairs: readonly GatePair[]) =>
+    pairs.filter((pair) => pair.kind === 'focus-inside');
+  // Focus is not the accent here, so a gate that measures the accent, or returns one
+  // ratio for every fill, gets these wrong.
+  const fills = {
+    focus: '#000000',
+    accent: '#ffffff',
+    'accent-hover': '#ffffff',
+    'accent-active': '#ffffff',
+    'surface-default': '#111111',
+    'surface-subtle': '#666666',
+    'surface-prominent': '#ffffff',
+  } as const;
+  const expected = (fill: string) => Math.floor(contrast(fills.focus, fill) * 100) / 100;
+  const flush = language({ 'focus-offset': '0px' });
+
+  const light = insideOf(gateSet({ ...SETS.light!, ...fills }, 'light', flush, SMALL_SIGNATURE));
+  const onAccent = find(light, 'focus', 'accent');
+  assert.equal(onAccent.ratio, expected(fills.accent));
+  assert.ok(onAccent.ratio > 20);
+  assert.equal(onAccent.target, 3);
+  assert.equal(onAccent.passes, true);
+  const onDefault = find(light, 'focus', 'surface-default');
+  assert.equal(onDefault.ratio, expected(fills['surface-default']));
+  assert.ok(onDefault.ratio < 1.5);
+  assert.equal(onDefault.passes, false);
+  // #666666 on black is about 3.65:1, over the 3:1 target.
+  const onSubtle = find(light, 'focus', 'surface-subtle');
+  assert.equal(onSubtle.ratio, expected(fills['surface-subtle']));
+  assert.ok(onSubtle.ratio > 3 && onSubtle.ratio < 4.5);
+  assert.equal(onSubtle.passes, true);
+  assert.deepEqual(
+    light.filter((pair) => !pair.passes).map((pair) => pair.ground),
+    ['surface-default'],
+  );
+  // A ring that stands apart from every fill passes every focus-inside pair, each at its own ratio.
+  const apart = insideOf(
+    gateSet(
+      { ...SETS.light!, ...fills, 'surface-default': '#ffffff', 'surface-subtle': '#ffffff' },
+      'light',
+      flush,
+      SMALL_SIGNATURE,
+    ),
+  );
+  assert.equal(apart.length, 6);
+  for (const pair of apart) {
+    assert.equal(pair.passes, true, pair.ground);
+    assert.equal(pair.ratio, expected('#ffffff'), pair.ground);
+  }
+  // Focus planted as surface-default's own color: 1:1 there, and well apart on the accent.
+  const asSurface = insideOf(
+    gateSet(
+      { ...SETS.light!, ...fills, focus: fills['surface-default'] },
+      'light',
+      flush,
+      SMALL_SIGNATURE,
+    ),
+  );
+  assert.equal(find(asSurface, 'focus', 'surface-default').ratio, 1);
+  assert.equal(find(asSurface, 'focus', 'surface-default').passes, false);
+  assert.equal(find(asSurface, 'focus', 'accent').passes, true);
+  assert.ok(find(asSurface, 'focus', 'accent').ratio > 18);
+
+  // High contrast: the same ratios, held to 4.5:1, so the 3.65:1 fill now fails.
+  const high = insideOf(
+    gateSet(
+      { ...SETS['high-contrast-light']!, ...fills },
+      'high-contrast-light',
+      flush,
+      SMALL_SIGNATURE,
+    ),
+  );
+  const highSubtle = find(high, 'focus', 'surface-subtle');
+  assert.equal(highSubtle.ratio, expected(fills['surface-subtle']));
+  assert.equal(highSubtle.target, 4.5);
+  assert.equal(highSubtle.passes, false);
+  const highAccent = find(high, 'focus', 'accent');
+  assert.equal(highAccent.ratio, expected(fills.accent));
+  assert.equal(highAccent.target, 4.5);
+  assert.equal(highAccent.passes, true);
+  assert.deepEqual(
+    high.filter((pair) => !pair.passes).map((pair) => pair.ground),
+    ['surface-default', 'surface-subtle'],
+  );
+});

@@ -1,0 +1,13 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "A design language whose stylesheet fills every badge with the default surface, under the on-status text a status badge keeps, as Poster Press once did, at 1.0 to 2.0:1.",
+  "patch": {
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "lint": "on-fill"
+    }
+  ]
+}

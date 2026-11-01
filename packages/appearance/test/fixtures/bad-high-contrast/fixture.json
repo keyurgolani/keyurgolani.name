@@ -1,0 +1,21 @@
+{
+  "kind": "color-scheme",
+  "base": "warm-parchment",
+  "description": "warm-parchment with an authored dark high-contrast set whose text-primary is 5.3:1 on black, under the 7:1 high-contrast target.",
+  "patch": {
+    "highContrast": {
+      "dark": {
+        "text-primary": "#808080"
+      }
+    }
+  },
+  "expect": [
+    {
+      "pair": {
+        "set": "high-contrast-dark",
+        "foreground": "text-primary",
+        "ground": "canvas"
+      }
+    }
+  ]
+}

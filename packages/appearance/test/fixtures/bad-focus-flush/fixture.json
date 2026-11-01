@@ -1,0 +1,26 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with its focus ring flush on the part (offset 0), so on the primary Action's accent fill a scheme's accent-colored focus ring reads under 3:1 against the fill it touches.",
+  "patch": {
+    "tokens": {
+      "focus-offset": "0px"
+    }
+  },
+  "expect": [
+    {
+      "pair": {
+        "set": "light",
+        "foreground": "focus",
+        "ground": "accent"
+      }
+    },
+    {
+      "pair": {
+        "set": "dark",
+        "foreground": "focus",
+        "ground": "accent"
+      }
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with its rules set to none, which removes them, so a composition's sections and ruled grid lose their structure.",
+  "patch": {
+    "tokens": {
+      "border-divider": "none"
+    }
+  },
+  "expect": [
+    {
+      "problem": "/tokens/border-divider must be a rule that draws"
+    }
+  ]
+}

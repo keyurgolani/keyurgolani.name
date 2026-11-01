@@ -1,0 +1,9 @@
+/* Surfaces blur what's behind them; the compiler scopes this to fixture-translucent. */
+[data-ui-slot='surface'] {
+  backdrop-filter: blur(var(--ui-backdrop-blur));
+  -webkit-backdrop-filter: blur(var(--ui-backdrop-blur));
+}
+
+[data-ui-slot='surface']:focus-within {
+  border-color: var(--color-focus);
+}

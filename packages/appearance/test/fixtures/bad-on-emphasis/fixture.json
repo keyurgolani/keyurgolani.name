@@ -1,0 +1,21 @@
+{
+  "kind": "color-scheme",
+  "base": "warm-parchment",
+  "description": "warm-parchment with an authored light set that gives all three roles K-2 added, its on-emphasis white, 4.42:1 on the emphasis #b95f32, under the 4.5:1 text target.",
+  "patch": {
+    "light": {
+      "on-emphasis": "#ffffff",
+      "focus-inverse": "#b95f32",
+      "surface-lit": "#fbf6ee"
+    }
+  },
+  "expect": [
+    {
+      "pair": {
+        "set": "light",
+        "foreground": "on-emphasis",
+        "ground": "emphasis"
+      }
+    }
+  ]
+}

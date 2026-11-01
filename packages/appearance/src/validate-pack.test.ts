@@ -1,0 +1,698 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import {
+  ColorTokenSetSchema,
+  coreRoles,
+  DERIVED_ROLES_ALL_OR_NONE,
+  DERIVED_ROLES,
+  ResearchRecordSchema,
+  validatePackManifest,
+  type PackKind,
+} from './index';
+import {
+  ASSET,
+  DARK_ONLY,
+  HUMANIST_UI,
+  LIGHT_ONLY,
+  MULTILINGUAL,
+  PLATFORM_NEUTRAL,
+  SEED,
+  TRANSLUCENT,
+  WARM_PARCHMENT,
+} from './test-support/packs';
+import { anchorV2Adjustments } from './anchor-v2';
+import { anchorV1 } from './derive';
+
+const FIRST_PARTY = '@portfolio/appearance-schemes';
+const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+/** The codes and pointers of a manifest's records. */
+function records(input: unknown, kind: PackKind, packageName = FIRST_PARTY) {
+  const result = validatePackManifest(input, { kind, packageName });
+  return { ok: result.ok, found: result.diagnostics.map(({ code, pointer }) => [code, pointer]) };
+}
+
+test('the fallback and test packs validate', () => {
+  for (const manifest of [WARM_PARCHMENT, DARK_ONLY, LIGHT_ONLY, SEED, ASSET]) {
+    const result = validatePackManifest(clone(manifest), {
+      kind: 'color-scheme',
+      packageName: FIRST_PARTY,
+    });
+    assert.deepEqual(result.diagnostics, [], manifest.id);
+    assert.ok(result.ok);
+  }
+  for (const manifest of [PLATFORM_NEUTRAL, TRANSLUCENT]) {
+    assert.deepEqual(
+      records(clone(manifest), 'design-language'),
+      { ok: true, found: [] },
+      manifest.id,
+    );
+  }
+  for (const manifest of [HUMANIST_UI, MULTILINGUAL]) {
+    assert.deepEqual(records(clone(manifest), 'typography'), { ok: true, found: [] }, manifest.id);
+  }
+});
+
+test('a pack at token contract 0 is refused, and that is all it is told', () => {
+  for (const [manifest, kind] of [
+    [WARM_PARCHMENT, 'color-scheme'],
+    [PLATFORM_NEUTRAL, 'design-language'],
+    [HUMANIST_UI, 'typography'],
+  ] as const) {
+    const old = { ...clone(manifest), tokenContract: 0, colorSchemes: ['old'] };
+    const result = validatePackManifest(old, { kind, packageName: FIRST_PARTY });
+    assert.equal(result.ok, false);
+    assert.deepEqual(
+      result.diagnostics.map(({ code, pointer, expected, actual }) => [
+        code,
+        pointer,
+        expected,
+        actual,
+      ]),
+      [['manifest.token-contract-mismatch', '/tokenContract', '1', '0']],
+    );
+  }
+});
+
+/** A copy of `value` without `keys`. */
+function without(value: object, ...keys: string[]): Record<string, unknown> {
+  const copy: Record<string, unknown> = clone({ ...value });
+  for (const key of keys) delete copy[key];
+  return copy;
+}
+
+test('a token set is complete: each missing role is reported where it belongs', () => {
+  const tokens = anchorV1(WARM_PARCHMENT.anchors!.light!, 'light');
+  const scheme = {
+    ...without(WARM_PARCHMENT, 'anchors', 'derivation'),
+    light: without(tokens, 'accent-text', 'shadow'),
+    dark: tokens,
+  };
+  assert.deepEqual(records(scheme, 'color-scheme').found, [
+    ['manifest.missing', '/light/accent-text'],
+    ['manifest.missing', '/light/shadow'],
+  ]);
+
+  assert.deepEqual(
+    records(
+      { ...clone(PLATFORM_NEUTRAL), tokens: without(PLATFORM_NEUTRAL.tokens, 'texture') },
+      'design-language',
+    ).found,
+    [['manifest.missing', '/tokens/texture']],
+  );
+
+  const roles = {
+    ...without(HUMANIST_UI.roles, 'quote'),
+    body: without(HUMANIST_UI.roles.body, 'line-height'),
+  };
+  assert.deepEqual(records({ ...clone(HUMANIST_UI), roles }, 'typography').found, [
+    ['manifest.missing', '/roles/body/line-height'],
+    ['manifest.missing', '/roles/quote'],
+  ]);
+});
+
+test('an unknown key is reported, with the field it was probably meant to be', () => {
+  const result = validatePackManifest(
+    {
+      ...clone(WARM_PARCHMENT),
+      status: 'stable',
+      anchors: { ...WARM_PARCHMENT.anchors, dakr: WARM_PARCHMENT.anchors!.dark },
+    },
+    { kind: 'color-scheme', packageName: FIRST_PARTY },
+  );
+  assert.deepEqual(
+    result.diagnostics.map(({ code, pointer, expected }) => [code, pointer, expected]),
+    [
+      ['manifest.unknown-key', '/anchors/dakr', 'dark'],
+      ['manifest.unknown-key', '/status', undefined],
+    ],
+  );
+});
+
+test("a language's values are checked where they are", () => {
+  const tokens = {
+    ...PLATFORM_NEUTRAL.tokens,
+    'radius-card': 'url(x.png)',
+    'border-control': '1px solid #000',
+    'shadow-card': '0 2px 8px var(--ui-shadow)',
+  };
+  const result = validatePackManifest(
+    { ...clone(PLATFORM_NEUTRAL), tokens },
+    { kind: 'design-language', packageName: '@portfolio/x' },
+  );
+  assert.deepEqual(
+    result.diagnostics.map(({ code, pointer }) => [code, pointer]),
+    [
+      ['manifest.invalid', '/tokens/radius-card'],
+      ['manifest.invalid', '/tokens/border-control'],
+      ['manifest.invalid', '/tokens/shadow-card'],
+    ],
+  );
+  // Each record names the pack, its axis, and the field (#20).
+  assert.match(
+    result.diagnostics[0]!.message,
+    /^The design language platform-neutral in @portfolio\/x: \/tokens\/radius-card can't load anything/,
+  );
+});
+
+test('a scheme takes its colors one way', () => {
+  const tokens = anchorV1(WARM_PARCHMENT.anchors!.dark!, 'dark');
+  const bare = { ...clone(WARM_PARCHMENT) } as Record<string, unknown>;
+  delete bare.anchors;
+  delete bare.derivation;
+  delete bare.adjustments;
+  assert.deepEqual(records(bare, 'color-scheme').found, [['manifest.missing', '']]);
+  assert.deepEqual(records({ ...clone(WARM_PARCHMENT), dark: tokens }, 'color-scheme').found, [
+    ['manifest.invalid', ''],
+  ]);
+  assert.deepEqual(
+    records(
+      { ...clone(SEED), anchors: WARM_PARCHMENT.anchors, derivation: 'anchor-v1' },
+      'color-scheme',
+    ).found,
+    [['manifest.invalid', '']],
+  );
+  assert.deepEqual(records({ ...bare, anchors: WARM_PARCHMENT.anchors }, 'color-scheme').found, [
+    ['manifest.missing', '/derivation'],
+  ]);
+  assert.deepEqual(
+    records(
+      {
+        ...bare,
+        tier: 'extended',
+        dark: tokens,
+        derivation: 'anchor-v1',
+        modes: ['dark'],
+        lockedMode: 'dark',
+      },
+      'color-scheme',
+    ).found,
+    [['manifest.invalid', '/derivation']],
+  );
+  assert.deepEqual(
+    records({ ...bare, tier: 'extended', anchors: {}, derivation: 'anchor-v1' }, 'color-scheme')
+      .found,
+    [['manifest.missing', '/anchors']],
+  );
+  assert.deepEqual(
+    records({ ...clone(WARM_PARCHMENT), derivation: 'anchor-v3' }, 'color-scheme').found,
+    [['manifest.invalid', '/derivation']],
+  );
+});
+
+test('an anchor-v2 scheme records exactly the roles anchor-v2 moves, and no other scheme records any (#20 PR 2c)', () => {
+  assert.equal(WARM_PARCHMENT.derivation, 'anchor-v2');
+  assert.deepEqual(records(clone(WARM_PARCHMENT), 'color-scheme').found, []);
+  assert.deepEqual(WARM_PARCHMENT.adjustments, anchorV2Adjustments(WARM_PARCHMENT.anchors!));
+
+  const edited = clone(WARM_PARCHMENT);
+  const light = { ...edited.adjustments!.light! };
+  light['text-muted'] = [light['text-muted']![0], '#000000'];
+  const result = validatePackManifest(
+    { ...edited, adjustments: { ...edited.adjustments, light } },
+    { kind: 'color-scheme', packageName: '@portfolio/appearance-schemes' },
+  );
+  const record = result.diagnostics.find(
+    ({ pointer }) => pointer === '/adjustments/light/text-muted',
+  )!;
+  assert.equal(record.code, 'manifest.invalid');
+  assert.match(
+    record.message,
+    /records #[0-9a-f]{6} to #000000, and anchor-v2 gives #[0-9a-f]{6} to #5e564d/,
+  );
+
+  const unrecorded = { ...clone(WARM_PARCHMENT) } as Record<string, unknown>;
+  delete unrecorded.adjustments;
+  const missing = records(unrecorded, 'color-scheme').found;
+  assert.ok(missing.length > 0);
+  assert.ok(
+    missing.every(
+      ([code, pointer]) =>
+        code === 'manifest.invalid' && String(pointer).startsWith('/adjustments/'),
+    ),
+  );
+
+  const extra = clone(WARM_PARCHMENT);
+  const moved = { ...extra.adjustments!.dark!, canvas: ['#251f19', '#000000'] as [string, string] };
+  assert.deepEqual(
+    records({ ...extra, adjustments: { ...extra.adjustments, dark: moved } }, 'color-scheme').found,
+    [['manifest.invalid', '/adjustments/dark/canvas']],
+  );
+
+  assert.deepEqual(
+    records({ ...clone(WARM_PARCHMENT), derivation: 'anchor-v1' }, 'color-scheme').found,
+    [['manifest.invalid', '/adjustments']],
+  );
+});
+
+test("an anchor-v1 scheme with an emphasis or categorical anchor refuses: anchor-v1 ignores it; anchor-v2's are recorded and validate (S1)", () => {
+  const bare = without(clone(WARM_PARCHMENT), 'adjustments') as typeof WARM_PARCHMENT;
+  const anchors = {
+    light: { ...bare.anchors!.light!, emphasis: '#a8e063' },
+    dark: { ...bare.anchors!.dark!, categorical: ['#b4552d', '#54687a'] },
+  };
+  const v1 = validatePackManifest(
+    { ...bare, anchors, derivation: 'anchor-v1' },
+    { kind: 'color-scheme', packageName: FIRST_PARTY },
+  );
+  assert.deepEqual(
+    v1.diagnostics.map(({ code, pointer }) => [code, pointer]),
+    [
+      ['manifest.invalid', '/anchors/light/emphasis'],
+      ['manifest.invalid', '/anchors/dark/categorical'],
+    ],
+  );
+  // Each names its field and says what to do.
+  for (const each of v1.diagnostics) {
+    assert.match(
+      each.message,
+      /\/anchors\/(?:light|dark)\/(?:emphasis|categorical) is read by anchor-v2 only, and the scheme derives with anchor-v1, which ignores it\./,
+    );
+    assert.match(
+      each.remedy,
+      /^Set derivation: "anchor-v2" and record its adjustments, or remove /,
+    );
+  }
+  assert.ok(!v1.ok);
+  // Under anchor-v2 the same anchors validate, with the moves they make recorded.
+  assert.deepEqual(
+    records(
+      { ...bare, anchors, derivation: 'anchor-v2', adjustments: anchorV2Adjustments(anchors) },
+      'color-scheme',
+    ),
+    { ok: true, found: [] },
+  );
+  // A categorical anchor given twice refuses, at the repeat.
+  const twice = {
+    ...anchors,
+    dark: { ...anchors.dark, categorical: ['#b4552d', '#54687a', '#b4552d'] },
+  };
+  assert.deepEqual(
+    records(
+      { ...bare, anchors: twice, derivation: 'anchor-v2', adjustments: anchorV2Adjustments(twice) },
+      'color-scheme',
+    ).found,
+    [['manifest.duplicate', '/anchors/dark/categorical/2']],
+  );
+});
+
+test('a Research record carries the four anchors alone: emphasis and categorical are a derivation’s, and a record has none (S1)', () => {
+  const record = JSON.parse(
+    readFileSync(new URL('../../appearance-schemes/research/ayu.json', import.meta.url), 'utf8'),
+  );
+  assert.ok(ResearchRecordSchema.safeParse(record).success, 'the record as researched parses');
+  const mode = record.anchors.light ? 'light' : 'dark';
+  for (const extra of [{ emphasis: '#a8e063' }, { categorical: ['#b4552d'] }]) {
+    const extended = { ...record, anchors: { [mode]: { ...record.anchors[mode], ...extra } } };
+    assert.equal(ResearchRecordSchema.safeParse(extended).success, false, JSON.stringify(extra));
+  }
+});
+
+test('a translucency floor only raises the approved surface-opacity (#20 PR 2c)', () => {
+  const floored = (approved: string, shipped: string) =>
+    records(
+      {
+        ...clone(PLATFORM_NEUTRAL),
+        tokens: { ...PLATFORM_NEUTRAL.tokens, 'surface-opacity': shipped },
+        approvedSurfaceOpacity: approved,
+      },
+      'design-language',
+    ).found;
+  assert.deepEqual(floored('78%', '97%'), []);
+  assert.deepEqual(floored('78%', '100%'), []);
+  assert.deepEqual(floored('78%', '78%'), [['manifest.invalid', '/approvedSurfaceOpacity']]);
+  assert.deepEqual(floored('90%', '80%'), [['manifest.invalid', '/approvedSurfaceOpacity']]);
+  assert.deepEqual(floored('100%', '100%'), [['manifest.invalid', '/approvedSurfaceOpacity']]);
+});
+
+test('a stable scheme has both modes, and a high-contrast set needs its base mode', () => {
+  assert.deepEqual(records({ ...clone(DARK_ONLY), tier: 'stable' }, 'color-scheme').found, [
+    ['manifest.invalid', '/tier'],
+  ]);
+  // A base set's own roles, the derived three left out: as a high-contrast set, its surface-lit
+  // would be the base set's, not its canvas.
+  const set = coreRoles(anchorV1(DARK_ONLY.anchors!.dark!, 'dark'));
+  assert.deepEqual(
+    records({ ...clone(DARK_ONLY), highContrast: { dark: set } }, 'color-scheme').found,
+    [],
+  );
+  assert.deepEqual(
+    records({ ...clone(DARK_ONLY), highContrast: { light: set } }, 'color-scheme').found,
+    [['manifest.invalid', '/highContrast/light']],
+  );
+  assert.deepEqual(records({ ...clone(SEED), highContrast: { dark: set } }, 'color-scheme').found, [
+    ['manifest.invalid', '/highContrast'],
+  ]);
+  assert.deepEqual(records({ ...clone(SEED), tier: 'stable' }, 'color-scheme').found, []);
+  assert.deepEqual(
+    records({ ...clone(WARM_PARCHMENT), swatches: ['#ffffff', '#FFFFFF'] }, 'color-scheme').found,
+    [['manifest.invalid', '/swatches/1']],
+  );
+  assert.deepEqual(
+    records({ ...clone(WARM_PARCHMENT), swatches: ['#ffffff', '#ffffff'] }, 'color-scheme').found,
+    [['manifest.duplicate', '/swatches/1']],
+  );
+});
+
+test("a third party's pack ids carry its scope, and the fallbacks' ids are the platform's", () => {
+  const upstream = {
+    ...clone(WARM_PARCHMENT).provenance,
+    license: 'MIT',
+    copyright: 'Copyright (c) 2026 Acme',
+  };
+  assert.deepEqual(
+    records(
+      { ...clone(WARM_PARCHMENT), tier: 'extended', provenance: upstream },
+      'color-scheme',
+      '@acme/packs',
+    ).found,
+    [['manifest.id-reserved', '/id']],
+  );
+  assert.deepEqual(
+    records({ ...clone(DARK_ONLY), id: 'ocean' }, 'color-scheme', '@acme/packs').found,
+    [['manifest.id-prefix', '/id']],
+  );
+  assert.deepEqual(
+    records({ ...clone(DARK_ONLY), id: 'acme-ocean' }, 'color-scheme', '@acme/packs').found,
+    [],
+  );
+  const extended = { ...clone(HUMANIST_UI), tier: 'extended' };
+  assert.deepEqual(records(extended, 'typography', 'humanist-pack').found, [
+    ['manifest.id-reserved', '/id'],
+  ]);
+  assert.deepEqual(
+    records({ ...extended, id: 'plain-type' }, 'typography', 'humanist-pack').found,
+    [],
+  );
+});
+
+test("a third party's pack can't claim Stable or this repository's own license (#20)", () => {
+  const stable = { ...clone(DARK_ONLY), id: 'acme-ocean', tier: 'stable' };
+  // A single-mode scheme can't be stable either, so this is a dual-mode one.
+  const dual = { ...clone(WARM_PARCHMENT), id: 'acme-paper', tier: 'stable' };
+  dual.provenance = { ...dual.provenance, license: 'MIT', copyright: 'Copyright (c) 2026 Acme' };
+  assert.deepEqual(records(dual, 'color-scheme', '@acme/packs').found, [
+    ['manifest.invalid', '/tier'],
+  ]);
+  assert.deepEqual(
+    records(
+      { ...clone(WARM_PARCHMENT), id: 'acme-paper', tier: 'extended' },
+      'color-scheme',
+      '@acme/packs',
+    ).found,
+    [['manifest.invalid', '/provenance/license']],
+  );
+  // The same manifests under @portfolio/* are fine.
+  assert.deepEqual(records({ ...dual, id: 'paper' }, 'color-scheme').found, []);
+  assert.equal(records(stable, 'color-scheme', '@acme/packs').ok, false);
+});
+
+test('a pack under an upstream license gives its copyright line, which the notices print (#20)', () => {
+  const extended = { ...clone(WARM_PARCHMENT), id: 'acme-paper', tier: 'extended' };
+  for (const license of ['MIT', 'Apache-2.0', 'OFL-1.1']) {
+    const { copyright: _drop, ...without } = { ...extended.provenance, license, copyright: '' };
+    void _drop;
+    assert.deepEqual(
+      records({ ...extended, provenance: without }, 'color-scheme', '@acme/packs').found,
+      [['manifest.invalid', '/provenance/copyright']],
+      license,
+    );
+    // A credit isn't a copyright line.
+    assert.deepEqual(
+      records(
+        { ...extended, provenance: { ...without, copyright: 'Tailwind Labs, Inc.' } },
+        'color-scheme',
+        '@acme/packs',
+      ).found,
+      [['manifest.invalid', '/provenance/copyright']],
+      license,
+    );
+    for (const copyright of ['Copyright (c) 2021 Tailwind Labs, Inc.', '(c) 2021 Acme']) {
+      assert.deepEqual(
+        records(
+          { ...extended, provenance: { ...without, copyright } },
+          'color-scheme',
+          '@acme/packs',
+        ).found,
+        [],
+        copyright,
+      );
+    }
+  }
+  // A first-party pack needs none.
+  assert.deepEqual(records(clone(WARM_PARCHMENT), 'color-scheme').found, []);
+});
+
+test('the common fields hold plain text, a known tier, and a dated provenance', () => {
+  const manifest = {
+    ...clone(LIGHT_ONLY),
+    name: '<b>Pearl</b>',
+    tier: 'beta',
+    provenance: {
+      ...LIGHT_ONLY.provenance,
+      researchedAt: '2026-02-30',
+      source: { name: 'Upstream', url: 'http://example.test' },
+    },
+  };
+  assert.deepEqual(records(manifest, 'color-scheme').found, [
+    ['manifest.invalid', '/name'],
+    ['manifest.invalid', '/tier'],
+    ['manifest.invalid', '/provenance/source/url'],
+    ['manifest.invalid', '/provenance/researchedAt'],
+  ]);
+  assert.deepEqual(records('not a manifest', 'color-scheme').found, [['manifest.invalid', '']]);
+});
+
+test('no pack ships JavaScript: a language has no enhancements, and a pack package exports no script (#20)', () => {
+  const manifest = {
+    ...clone(PLATFORM_NEUTRAL),
+    id: 'acme-ripple',
+    tier: 'extended',
+    provenance: {
+      ...PLATFORM_NEUTRAL.provenance,
+      license: 'MIT',
+      copyright: 'Copyright (c) 2026 Acme',
+    },
+  };
+  assert.deepEqual(
+    records(
+      { ...manifest, enhancements: [{ id: 'ripple', export: './ripple', requires: [] }] },
+      'design-language',
+      '@acme/ripple',
+    ).found,
+    [['manifest.unknown-key', '/enhancements']],
+  );
+  for (const exports of [
+    './index.js',
+    { '.': './index.mjs' },
+    { './ripple': { import: './ripple.ts', default: './ripple.cjs' } },
+    { './frame': ['./frame.html'] },
+    { './icon': './icon.svg' },
+    // A target with no extension could resolve to script.
+    './index',
+    { '.': './dist/' },
+    { './packs/*': './packs/*' },
+    { '.': { import: './lib/main' } },
+  ]) {
+    const result = validatePackManifest(manifest, {
+      kind: 'design-language',
+      packageName: '@acme/ripple',
+      exports,
+    });
+    assert.deepEqual(
+      result.diagnostics.map(({ code, pointer }) => [code, pointer]),
+      [['manifest.invalid', '']],
+      JSON.stringify(exports),
+    );
+    assert.match(result.diagnostics[0]!.message, /no pack ships JavaScript/);
+  }
+  // A package that names an entry point is refused, whatever the entry is.
+  for (const entryPoints of [
+    { main: './index.js' },
+    { module: './index.mjs' },
+    { browser: './browser.js' },
+    { browser: { './a.js': false } },
+    { main: 'styles.css' },
+  ]) {
+    const result = validatePackManifest(manifest, {
+      kind: 'design-language',
+      packageName: '@acme/ripple',
+      entryPoints,
+    });
+    assert.deepEqual(
+      result.diagnostics.map(({ code, pointer }) => [code, pointer]),
+      [['manifest.invalid', '']],
+      JSON.stringify(entryPoints),
+    );
+    assert.match(result.diagnostics[0]!.message, /names an entry point.*no pack ships JavaScript/);
+  }
+  assert.equal(
+    validatePackManifest(manifest, {
+      kind: 'design-language',
+      packageName: '@acme/ripple',
+      entryPoints: { main: undefined, module: undefined, browser: undefined },
+    }).ok,
+    true,
+  );
+  // A scheme or a profile is held to it too, and a data export is fine.
+  assert.equal(
+    validatePackManifest(clone(DARK_ONLY), {
+      kind: 'color-scheme',
+      packageName: '@portfolio/x',
+      exports: { './dark.js': './dark.js' },
+    }).ok,
+    false,
+  );
+  assert.equal(
+    validatePackManifest(manifest, {
+      kind: 'design-language',
+      packageName: '@acme/ripple',
+      exports: { './package.json': './package.json' },
+    }).ok,
+    true,
+  );
+  for (const budget of ['js', 'enhancement'] as const) {
+    assert.deepEqual(
+      records(
+        { ...manifest, budgets: { ...manifest.budgets, [budget]: 1024 } },
+        'design-language',
+        '@acme/ripple',
+      ).found,
+      [['manifest.invalid', `/budgets/${budget}`]],
+    );
+  }
+  assert.deepEqual(
+    records({ ...clone(PLATFORM_NEUTRAL), stylesheet: '../styles.css' }, 'design-language').found,
+    [['manifest.invalid', '/stylesheet']],
+  );
+});
+
+test("a typography profile's roles, measures, scripts, and font files are checked", () => {
+  const roles = {
+    ...HUMANIST_UI.roles,
+    display: { ...HUMANIST_UI.roles.display, 'font-family': '"Inter"', 'font-size': '56px' },
+    body: { ...HUMANIST_UI.roles.body, 'font-weight': 1200, 'letter-spacing': '1px' },
+  };
+  const manifest = {
+    ...clone(HUMANIST_UI),
+    roles,
+    measures: { body: '68em', compact: '52ch' },
+    scripts: ['Latn', 'latn', 'Latn'],
+    fontAssets: [
+      {
+        family: 'Inter',
+        file: './fonts/inter.woff2',
+        weight: [100, 900],
+        style: 'normal',
+        unicodeRange: 'U+0000-00FF, U+0131',
+      },
+      {
+        family: 'Inter',
+        file: './fonts/inter.woff2',
+        weight: 400,
+        style: 'italic',
+        unicodeRange: 'U+0000-00FF',
+      },
+      {
+        family: 'Inter',
+        file: './fonts/inter.ttf',
+        weight: 400,
+        style: 'normal',
+        unicodeRange: 'U+0000-00FF',
+      },
+      // Every face declares its subset (#6, item 7).
+      { family: 'Inter', file: './fonts/inter-bold.woff2', weight: 700, style: 'normal' },
+    ],
+  };
+  assert.deepEqual(records(manifest, 'typography').found, [
+    ['manifest.invalid', '/roles/display/font-family'],
+    ['manifest.invalid', '/roles/display/font-size'],
+    ['manifest.invalid', '/roles/body/font-weight'],
+    ['manifest.invalid', '/roles/body/letter-spacing'],
+    ['manifest.invalid', '/measures/body'],
+    ['manifest.invalid', '/scripts/1'],
+    ['manifest.invalid', '/fontAssets/2/file'],
+    ['manifest.missing', '/fontAssets/3/unicodeRange'],
+  ]);
+  // Fonts of its own: the profile names their license, and its cost counts the one file.
+  const valid = {
+    ...manifest,
+    roles: HUMANIST_UI.roles,
+    measures: HUMANIST_UI.measures,
+    scripts: ['Latn', 'Latn'],
+    fontAssets: manifest.fontAssets.slice(0, 2),
+    provenance: { ...HUMANIST_UI.provenance, license: 'OFL-1.1', copyright: 'Copyright 2026 Acme' },
+    cost: { assets: 1, assetBytes: 20480 },
+  };
+  assert.deepEqual(records(valid, 'typography').found, [
+    ['manifest.duplicate', '/scripts/1'],
+    ['manifest.duplicate', '/fontAssets/1/file'],
+  ]);
+  // Kept at provided-by-operating-system with no file counted, it's told both.
+  assert.deepEqual(
+    records({ ...valid, provenance: HUMANIST_UI.provenance, cost: HUMANIST_UI.cost }, 'typography')
+      .found,
+    [
+      ['manifest.duplicate', '/scripts/1'],
+      ['manifest.duplicate', '/fontAssets/1/file'],
+      ['manifest.invalid', '/provenance/license'],
+      ['manifest.invalid', '/cost/assets'],
+    ],
+  );
+});
+
+test('an authored set gives all three of the roles K-2 added or none, and one or two is an issue on each one missing', () => {
+  const full = anchorV1(WARM_PARCHMENT.anchors!.light!, 'light');
+  const none = Object.fromEntries(
+    Object.entries(full).filter(([role]) => !(DERIVED_ROLES as readonly string[]).includes(role)),
+  );
+  assert.ok(ColorTokenSetSchema.safeParse(full).success);
+  assert.ok(ColorTokenSetSchema.safeParse(none).success);
+  const parsed = ColorTokenSetSchema.safeParse({ ...none, 'surface-lit': full['surface-lit'] });
+  assert.ok(!parsed.success);
+  assert.deepEqual(
+    parsed.error.issues.map(({ path, message }) => [path.join('/'), message]),
+    [
+      ['on-emphasis', DERIVED_ROLES_ALL_OR_NONE],
+      ['focus-inverse', DERIVED_ROLES_ALL_OR_NONE],
+    ],
+  );
+  assert.equal(
+    DERIVED_ROLES_ALL_OR_NONE,
+    "give all three of on-emphasis, focus-inverse and surface-lit, or none, and they're derived",
+  );
+  // In a manifest, the records point at each missing role.
+  const authored = (light: unknown) => {
+    const manifest = clone(WARM_PARCHMENT) as unknown as Record<string, unknown>;
+    delete manifest.anchors;
+    delete manifest.derivation;
+    delete manifest.adjustments;
+    return { ...manifest, light, dark: anchorV1(WARM_PARCHMENT.anchors!.dark!, 'dark') };
+  };
+  assert.equal(records(authored(full), 'color-scheme').ok, true);
+  assert.equal(records(authored(none), 'color-scheme').ok, true);
+  const two = records(
+    authored({ ...none, 'on-emphasis': '#000000', 'focus-inverse': '#5b5bd6' }),
+    'color-scheme',
+  );
+  assert.equal(two.ok, false);
+  assert.deepEqual(
+    two.found.map(([, pointer]) => pointer),
+    ['/light/surface-lit'],
+  );
+  // All three given, surface-lit must be lit (review L2): lighter than surface-prominent, and
+  // in a high-contrast set its canvas.
+  assert.deepEqual(
+    records(authored({ ...full, 'surface-lit': full['surface-prominent'] }), 'color-scheme').found,
+    [['manifest.invalid', '/light/surface-lit']],
+  );
+  const high = (lit: string) => ({
+    ...authored(full),
+    highContrast: { light: { ...full, 'surface-lit': lit } },
+  });
+  assert.deepEqual(records(high(full.canvas), 'color-scheme').found, []);
+  assert.deepEqual(records(high(full['surface-lit']), 'color-scheme').found, [
+    ['manifest.invalid', '/highContrast/light/surface-lit'],
+  ]);
+});

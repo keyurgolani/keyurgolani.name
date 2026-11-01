@@ -1,0 +1,19 @@
+{
+  "kind": "color-scheme",
+  "base": "warm-parchment",
+  "description": "warm-parchment with a pale light signature-end, so the signature fill falls under 3:1 on the canvas even as large text.",
+  "patch": {
+    "light": {
+      "signature-end": "#d9c9a8"
+    }
+  },
+  "expect": [
+    {
+      "pair": {
+        "set": "light",
+        "foreground": "signature-start to signature-end",
+        "ground": "canvas"
+      }
+    }
+  ]
+}

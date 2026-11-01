@@ -1,0 +1,13 @@
+@keyframes spin {
+  to {
+    border-radius: 0;
+  }
+}
+
+@counter-style stars {
+  system: cyclic;
+}
+
+[data-ui-slot='card'] {
+  view-transition-name: hero;
+}

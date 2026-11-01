@@ -1,0 +1,13 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with a focus outline 100000px wide, which paints over everything around the part.",
+  "patch": {
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "problem": "outline: 100000px solid var(--color-canvas) has 100000px, over the cap of 64px or 4rem"
+    }
+  ]
+}

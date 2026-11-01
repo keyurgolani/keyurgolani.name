@@ -1,0 +1,21 @@
+{
+  "kind": "color-scheme",
+  "base": "warm-parchment",
+  "description": "warm-parchment with an authored dark set that gives all three roles K-2 added, its focus-inverse the text color itself, 1:1 on an inverse ground of text-primary, under focus-inverse's 3.5:1 target.",
+  "patch": {
+    "dark": {
+      "on-emphasis": "#000000",
+      "focus-inverse": "#f4e8d2",
+      "surface-lit": "#5b534a"
+    }
+  },
+  "expect": [
+    {
+      "pair": {
+        "set": "dark",
+        "foreground": "focus-inverse",
+        "ground": "text-primary"
+      }
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "material-3-inspired's first tonal tint, 8% of the accent laid flat over every surface (LANG-5c round 2), on platform-neutral, which every registry holds. The old 10% texture raise passed it, but composited it puts text-muted under 4.5:1 on a tinted surface-prominent in warm-parchment dark (4.38:1), and 71 text pairs over the shipping schemes, so the gate composites each wash. M3 ships 4%.",
+  "patch": {
+    "tokens": {
+      "texture": "linear-gradient(color-mix(in srgb, var(--color-accent) 8%, transparent), color-mix(in srgb, var(--color-accent) 8%, transparent))"
+    }
+  },
+  "expect": [
+    {
+      "pair": {
+        "set": "dark",
+        "foreground": "text-muted",
+        "ground": "surface-prominent"
+      }
+    }
+  ]
+}
