@@ -1,0 +1,29 @@
+import { registerHostModules } from '@portfolio/kit/host-modules';
+import { EXTENSION_RENDERERS } from './generated/registry.renderers';
+import { SiteNavigationMenu } from './navigation-menu';
+import { SiteVisitorControl } from './visitor-control';
+
+// The package code the kit reaches on the server (#5, Slice 3): each content
+// extension's section renderers. Importing this module registers them;
+// experience-document.tsx does, before any variant renders, and so does
+// render parity's react-dom/server render (Slice 6).
+//
+// The enhancement loaders are host-modules-client.tsx's alone. <Enhancement>
+// renders nothing on the server, so it never loads one there, and a server
+// module that imported them would make each enhancement a client reference
+// of the page, whose chunk the page then names and loads at once instead of
+// once the page has hydrated (Slice 6, which test:external-variant checks).
+
+// The visitor's appearance control fills every variant's VisitorControlSlot
+// (#19, Slice 4): a client component, which renders nothing on a page whose
+// document boundary hands it no model (lib/visitor-control.tsx).
+//
+// The host's Menu fills every NavigationMenuSlot (stream A): #19's Dialog
+// with closeOnNavigate, a client component, so a composition that draws a
+// Menu stays a server module (lib/navigation-menu.tsx).
+
+registerHostModules({
+  extensionRenderers: EXTENSION_RENDERERS,
+  visitorControl: SiteVisitorControl,
+  navigationMenu: SiteNavigationMenu,
+});

@@ -1,0 +1,659 @@
+import { isContractFixtureName } from '@portfolio/variant-contract/fixture-names';
+import {
+  isReservedSegment,
+  matchPathView,
+  type ViewPattern,
+} from '@portfolio/variant-contract/segments';
+import { VARIANTS } from '../lib/generated/registry.meta';
+import { environmentValues } from '../lib/preview-environment';
+import { accessIn, PROFILES, type Access, type Capability, type Profile } from './capabilities';
+import { getDeploymentConfig, liveCaseStudies, servedReference } from './config-store';
+import { experiencePattern } from './experience';
+
+// The route table (#1, item 13): every page, route handler, and metadata
+// route in apps/web/src/app, each mapped to the capability it serves.
+// routes.test.ts fails on a route file without an entry. proxy.ts, the
+// route files, and the server-built navigation all decide from this table
+// and the capability matrix, never from a route's name. Which paths name
+// anything comes from the installed variants' manifests (#5, Slice 4),
+// never from the live site, so it holds whatever the site selects. The one
+// exception is /work/<slug> (#10b): a slug names a page only while the live
+// revision's public view routes it, which the composition root's reader
+// records in memory as it serves (config-store's liveCaseStudies()).
+
+export type RouteKind = 'page' | 'handler' | 'metadata';
+
+/** A request's path, as the route table reads it. */
+export interface RoutePath {
+  /** The decoded path segments, such as `['work', 'tide-tables']`. */
+  readonly segments: readonly string[];
+  readonly query: URLSearchParams;
+}
+
+/** What the route table reads from the variants this build registers: their ids and views. */
+export type Installed = readonly {
+  readonly manifest: {
+    readonly id: string;
+    readonly routes: { readonly views: readonly ViewPattern[] };
+  };
+}[];
+
+export interface RouteEntry {
+  /** The URL pattern as the app directory spells it, such as `/api/studio/[name]`. */
+  readonly pattern: string;
+  readonly kind: RouteKind;
+  /**
+   * The capability the route serves. `operations` is the Studio transport:
+   * every profile serves it, and its dispatcher checks each operation's own
+   * capability.
+   */
+  readonly capability: Capability | 'operations';
+  /** Set when the route serves fewer profiles than its capability allows. */
+  readonly profiles?: readonly Profile[];
+  /** A page the server-built navigation lists, under this label. */
+  readonly nav?: string;
+  /**
+   * A route visitors read the published site through. While the catalog
+   * can't serve (isServable() is false), proxy.ts answers it with a 503.
+   */
+  readonly visitor?: true;
+  /**
+   * The root catch-all where a variant's path views resolve (#5, Slice 4).
+   * It takes no path whose first segment the contract reserves, or another
+   * entry or a retired route starts with: no view may start with one.
+   */
+  readonly views?: true;
+  /**
+   * Whether a path the entry matches names anything this build can render
+   * or redirect, in some profile (#5, Slice 4). One that names nothing is
+   * missing in every profile, and proxy.ts answers it with the app's 404
+   * page. An entry without it names every path it matches.
+   */
+  readonly names?: (path: RoutePath, installed: Installed) => boolean;
+  /**
+   * A visitor page that renders in the experience segment of the
+   * composition it shows (#6, Slice 2), so it has no route file of its own:
+   * proxy.ts marks each GET or HEAD for it with that segment, which
+   * next.config.ts rewrites it to, and answers any other method with a 405.
+   */
+  readonly experience?: true;
+  /**
+   * A route with a file of its own that serves GET and HEAD alone, such as
+   * #10's renditions: proxy.ts answers any other method with the same 405,
+   * `Allow: GET, HEAD`, as an experience page's.
+   */
+  readonly readOnly?: true;
+  /**
+   * An experience segment's own route, a file registry generation writes,
+   * which only the rewrite of a request proxy.ts marks reaches (#6, Slice 2).
+   * listRoutes() leaves them out: a request for one's own path names nothing.
+   */
+  readonly internal?: true;
+  /**
+   * A route a preview grant authorizes, by what it serves (#7, Slice 2): a
+   * frame's `document`, a draft-only `asset`, or the `style` of a
+   * generated scheme its subject stored (#20). The grant in the path is
+   * the authority, never a cookie: proxy.ts admits a request only as that
+   * destination and for an active grant, answers everything else under the
+   * preview prefixes with one status document, and never sends a grant path
+   * to sign-in.
+   */
+  readonly grant?: 'document' | 'asset' | 'style';
+  /**
+   * The methods a route handler takes, when it's fewer than every method.
+   * proxy.ts answers any other with a 405 naming them, before Next does.
+   */
+  readonly methods?: readonly 'POST'[];
+  /**
+   * A fixture page whose route file registry generation writes only in a
+   * build with its capability's flag (#6, item 5), so a build without it
+   * ships none of its code (scripts/fixture-routes.ts). The entry is here in
+   * every build; without the flag its capability is in no profile, so the
+   * path answers as an unknown one does.
+   */
+  readonly fixtureRoute?: true;
+}
+
+// What visitors read the site through at its root, which the demo profile
+// doesn't serve: it shows the bundled sample under /sample instead.
+const SITE_PROFILES = ['owner', 'read-only'] as const;
+
+/** Whether an installed variant declares a path view at `segments` below `under`. */
+function declaresView(
+  installed: Installed,
+  under: 'home' | 'work',
+  segments: readonly string[],
+): boolean {
+  return installed.some(({ manifest }) =>
+    manifest.routes.views.some((view) => matchPathView(view, under, segments) !== null),
+  );
+}
+
+/**
+ * No slug: a preview frame renders no case study yet, so a work's path there
+ * is missing, as it was before #10b.
+ */
+const NO_SLUGS: ReadonlySet<string> = new Set();
+
+/**
+ * Whether `segments`, below the site root or /sample, name a page: home, a
+ * case study at `work/<slug>` and the views under it, or a view some
+ * installed variant declares, which renders, or redirects to its canonical
+ * route. A reserved first segment is never a view.
+ */
+function namesPage(
+  installed: Installed,
+  segments: readonly string[],
+  slugs: ReadonlySet<string> = liveCaseStudies(),
+): boolean {
+  const [first] = segments;
+  if (first === undefined) return true;
+  if (first === 'work') return namesWork(installed, segments.slice(1), slugs);
+  if (isReservedSegment(first)) return false;
+  return declaresView(installed, 'home', segments);
+}
+
+/**
+ * Whether `[slug, ...rest]`, below /work, names a page: a slug `slugs`
+ * holds, and either nothing below it or a view under `work` some installed
+ * variant declares. A private work's slug, an unknown one, and one whose
+ * work no visible section reaches are never in the live set, so each is
+ * missing, as any unknown path is.
+ */
+function namesWork(
+  installed: Installed,
+  [slug, ...rest]: readonly string[],
+  slugs: ReadonlySet<string>,
+) {
+  if (slug === undefined || !slugs.has(slug)) return false;
+  return rest.length === 0 || declaresView(installed, 'work', rest);
+}
+
+/**
+ * Whether `segments`, below /reference, name a page of the demo's
+ * read-only reference (#9): one its verified view routes, by namesPage()'s
+ * rules and its own case-study slugs, so a private work's slug and a
+ * reserved segment, `media` included, never do. A demo with no reference
+ * names none. Under another profile, which serves no reference, a path
+ * names what it would below /sample, by namesPage()'s rules, so it answers
+ * as a route that profile doesn't serve, as /sample does there, and a path
+ * that names nothing, such as the route file's own, is missing.
+ */
+function namesReference(installed: Installed, segments: readonly string[]): boolean {
+  const reference = servedReference();
+  if (reference) return namesPage(installed, segments, reference.caseStudies);
+  const profile = getDeploymentConfig()?.profile;
+  return profile !== undefined && profile !== 'demo' && namesPage(installed, segments);
+}
+
+/**
+ * Whether this build serves the preview's dev fixture route (#7, Slice 1,
+ * item 8): only under `next dev`. Next writes NODE_ENV into the code as it
+ * compiles it, so a production build never serves it, whatever environment
+ * its server starts with. Slice 4 moves the switch to the fixture flags.
+ */
+export const PREVIEW_DEV = process.env.NODE_ENV === 'development';
+
+const NO_PROFILES: readonly Profile[] = [];
+
+/**
+ * The dev fixture route, on or off: one of #5's contract fixtures, in a
+ * registered variant or the fallback composition, in the preview document,
+ * with the environment its query asks for. Off, it is absent in every
+ * profile, and proxy.ts answers it as a path no route matches, as it does a
+ * Studio page under a profile with none. A variant, fixture, or environment
+ * value that names nothing is missing either way.
+ */
+export function devPreviewRoute(on: boolean) {
+  return {
+    pattern: '/preview/dev/[variant]/[fixture]',
+    kind: 'page',
+    capability: 'catalog.read',
+    profiles: on ? PROFILES : NO_PROFILES,
+    names: ({ segments, query }: RoutePath, installed: Installed) =>
+      installed.some(({ manifest }) => manifest.id === segments[2]) &&
+      isContractFixtureName(segments[3] ?? '') &&
+      environmentValues(query) !== null,
+  } as const satisfies RouteEntry;
+}
+
+// A pattern may appear more than once, with a different capability for each
+// profile that serves it (such as a Studio page under owner and demo).
+const ROUTES = [
+  {
+    pattern: '/',
+    kind: 'page',
+    capability: 'catalog.read',
+    nav: 'Home',
+    visitor: true,
+    experience: true,
+  },
+  {
+    pattern: '/[...view]',
+    kind: 'page',
+    capability: 'catalog.read',
+    profiles: SITE_PROFILES,
+    visitor: true,
+    experience: true,
+    views: true,
+    names: ({ segments }, installed) => namesPage(installed, segments),
+  },
+  {
+    pattern: '/work/[slug]',
+    kind: 'page',
+    capability: 'catalog.read',
+    profiles: SITE_PROFILES,
+    visitor: true,
+    experience: true,
+    names: ({ segments }, installed) => namesPage(installed, segments),
+  },
+  {
+    pattern: '/work/[slug]/[...view]',
+    kind: 'page',
+    capability: 'catalog.read',
+    profiles: SITE_PROFILES,
+    visitor: true,
+    experience: true,
+    names: ({ segments }, installed) => namesPage(installed, segments),
+  },
+  {
+    pattern: '/sample/[[...path]]',
+    kind: 'page',
+    capability: 'sample.read',
+    visitor: true,
+    experience: true,
+    // A page below /sample. The query never makes it missing: a value the
+    // registry doesn't accept falls back on its axis, and the page answers
+    // a 307 to the canonical query (#9).
+    names: ({ segments }, installed) => namesPage(installed, segments.slice(1)),
+  },
+  // The demo's read-only reference (#9): its pages, in the composition its
+  // site selects, with /sample's query, and its renditions. Demo alone
+  // grants reference.read. A path below it names a page only once startup
+  // has verified a reference, and then by its own view's slugs; a demo
+  // without one has no page here, the 404 page. Under every other profile
+  // it names as it would there, so the profile's own answer is the plain
+  // 404 of a route it doesn't serve. /reference/media is the renditions'
+  // route, never a page: `media` is a reserved segment, which namesPage()
+  // refuses.
+  {
+    pattern: '/reference/[[...path]]',
+    kind: 'page',
+    capability: 'reference.read',
+    visitor: true,
+    experience: true,
+    names: ({ segments }, installed) => namesReference(installed, segments.slice(1)),
+  },
+  // GET /reference/media/<assetId>/<sha256>/<rendition>.<ext>: a rendition
+  // the reference's public view keeps, from memory, and a no-store 404 for
+  // anything else.
+  {
+    pattern: '/reference/media/[...path]',
+    kind: 'handler',
+    capability: 'reference.read',
+    readOnly: true,
+  },
+  // Studio (#2): the Owner Studio shell (#8), Demo Studio (#9) at the same
+  // path under demo, with no session, and sign-in. None reads the published
+  // site, so none is a visitor route.
+  { pattern: '/studio', kind: 'page', capability: 'studio.view' },
+  { pattern: '/studio', kind: 'page', capability: 'sandbox.view' },
+  { pattern: '/studio/sign-in', kind: 'page', capability: 'auth.session' },
+  // The owner's preview page (#7, Slice 4), on PreviewSurface. Demo's preview
+  // is #9's (Demo Studio), so under demo the path is as unknown as any.
+  { pattern: '/studio/preview', kind: 'page', capability: 'preview.grant' },
+  // Demo Studio's local preview frame (#7, Slice 6; #9): an empty shell that
+  // renders the document Studio sends it, in the browser, so it reads no
+  // published site, and no visitor data reaches the server. Its fixed
+  // segment outranks a grant's; demo alone serves it, and under owner it's
+  // the absent route a grant path no grant admits is, the status document.
+  { pattern: '/preview/local', kind: 'page', capability: 'sandbox.view' },
+  // The preview's dev fixture route (#7). It renders fixtures, never the
+  // published site, so it isn't a visitor route either.
+  devPreviewRoute(PREVIEW_DEV),
+  // Preview grants (#7, Slice 2): a frame's document, with the route inside
+  // it below the grant, as a variant's views sit below the site root, and
+  // the draft-only assets it loads, which #10 serves. Neither reads the
+  // published site. /preview/dev/<variant>/<fixture> is the dev route's, on
+  // or off: its fixed segment outranks the grant segment.
+  {
+    pattern: '/preview/[grant]/[[...route]]',
+    kind: 'page',
+    capability: 'preview.grant',
+    grant: 'document',
+    names: ({ segments }, installed) => namesPage(installed, segments.slice(2), NO_SLUGS),
+  },
+  {
+    pattern: '/preview-assets/[grant]/[...path]',
+    kind: 'handler',
+    capability: 'preview.grant',
+    grant: 'asset',
+  },
+  // A generated scheme's stylesheet the grant's subject stored (#20):
+  // /preview-assets/<grant>/_appearance/<schemeId>.<sha256-12>.css. The
+  // fixed segment outranks [...path], so the asset route never sees it, and
+  // it's the only grant path a style load gets past proxy.ts for.
+  {
+    pattern: '/preview-assets/[grant]/_appearance/[file]',
+    kind: 'handler',
+    capability: 'preview.grant',
+    grant: 'style',
+  },
+  { pattern: '/robots.txt', kind: 'metadata', capability: 'catalog.read', visitor: true },
+  { pattern: '/sitemap.xml', kind: 'metadata', capability: 'catalog.read', visitor: true },
+  // The site's share image, app/(site)/opengraph-image.tsx: Next gives a
+  // metadata route inside a route group a suffix hashed from the group.
+  {
+    pattern: '/opengraph-image-12o0cb',
+    kind: 'metadata',
+    capability: 'catalog.read',
+    visitor: true,
+  },
+  { pattern: '/feed.xml', kind: 'handler', capability: 'feed.read', visitor: true },
+  // A rendition of the live revision's media (#10, slice 2 item 5):
+  // /media/<assetId>/<sha256>/<rendition>.<ext>. Every profile serves it, for
+  // what its catalog serves, and anything the live view doesn't keep is 404.
+  {
+    pattern: '/media/[...path]',
+    kind: 'handler',
+    capability: 'catalog.read',
+    visitor: true,
+    readOnly: true,
+  },
+  // A live revision's generated scheme (#20, #19's Slice 4 route):
+  // /_portfolio/scheme/<schemeId>.<sha256-12>.css, compiled from its
+  // snapshots/schemes.json. Every profile serves it, for what its catalog
+  // serves, and any name the live revision's schemes don't compile to is 404.
+  {
+    pattern: '/_portfolio/scheme/[file]',
+    kind: 'handler',
+    capability: 'catalog.read',
+    visitor: true,
+    readOnly: true,
+  },
+  { pattern: '/api/health', kind: 'handler', capability: 'health.read' },
+  { pattern: '/api/ready', kind: 'handler', capability: 'ready.read' },
+  { pattern: '/api/studio/[name]', kind: 'handler', capability: 'operations' },
+  // A visitor's appearance preference (#19, Slice 4). It reads nothing of
+  // the published site, so it isn't a visitor route, and answers while the
+  // catalog can't serve too.
+  {
+    pattern: '/api/appearance',
+    kind: 'handler',
+    capability: 'appearance.preference',
+    methods: ['POST'],
+  },
+  // #19 Slice 3's fixture page, app/(fixtures)/%5Ffixtures/appearance, which
+  // Next serves at _fixtures: every primitive state, and plates of other
+  // selections, for tests/appearance. Its capability is in every profile of a
+  // build with APPEARANCE_FIXTURES=1 and in none of any other build.
+  { pattern: '/_fixtures/appearance', kind: 'page', capability: 'appearance.fixtures' },
+  // #6's catalog fixture (item 5): the catalog plates over each registered
+  // variant's stills, live through #7's PreviewSurface on request or a
+  // near-viewport prefetch, for the trace. A Studio page, the owner's with a
+  // session, in a build with BUDGET_FIXTURES; its file is generated there
+  // alone, app/(studio)/studio/%5Fcatalog-fixture/page.tsx.
+  {
+    pattern: '/studio/_catalog-fixture',
+    kind: 'page',
+    capability: 'catalog.fixtures',
+    fixtureRoute: true,
+  },
+] as const satisfies readonly RouteEntry[];
+
+/**
+ * Each registered variant's experience segment (#6, Slice 2), the fallback
+ * composition's included: the route file registry generation writes at
+ * app/(site)/%5Fexperience/<id>/[[...route]]/page.tsx, which every profile
+ * serves to a visitor page proxy.ts marks for it, through next.config.ts's
+ * rewrite, and to nothing else.
+ */
+const EXPERIENCE_ROUTES = VARIANTS.map(
+  ({ manifest }) =>
+    ({
+      pattern: experiencePattern(manifest.id),
+      kind: 'page',
+      capability: 'catalog.read',
+      internal: true,
+    }) as const satisfies RouteEntry,
+);
+
+export type RoutePattern =
+  (typeof ROUTES)[number]['pattern'] | ReturnType<typeof experiencePattern<string>>;
+
+/**
+ * The URL pattern for a route path Next reports, such as onRequestError's
+ * `routePath`: `/page`, `/sample/page`, or `/api/ready/route` (route handlers
+ * sometimes report `/api/ready` already). Route groups and parallel-route
+ * slots drop out, as they do from the URL.
+ */
+export function patternOfRoutePath(routePath: string): string {
+  const segments = routePath
+    // %5F names a folder that serves an underscore, as Next maps it.
+    .replace(/%5F/g, '_')
+    .split('/')
+    .filter((segment) => segment !== '' && !/^\(.*\)$/.test(segment) && !segment.startsWith('@'));
+  const last = segments.at(-1);
+  if (last === 'page' || last === 'route') segments.pop();
+  return `/${segments.join('/')}`;
+}
+
+/**
+ * Routes #1 removed in every profile. proxy.ts answers each with 404. Each
+ * matches exactly: `/variants`, never `/variants/*`, which is missing, so a
+ * file in public/variants/ or else the app's 404 page answers it. The v1
+ * screenshots that lived there retired with their variants (#5, #13), and
+ * the contract reserves each first segment, so no view can sit
+ * here. The old /preview/[slug] is no longer one: /preview belongs to #7's
+ * grant routes. Under owner, a path under it that no active grant admits
+ * gets the preview's status document, and under the other profiles it
+ * answers as a path no route matches.
+ */
+export const RETIRED_PATTERNS = [
+  '/admin',
+  '/variants',
+  '/api/portfolio',
+  '/api/variant',
+  '/api/customize',
+] as const;
+
+export function listRoutes(): readonly RouteEntry[] {
+  return ROUTES;
+}
+
+/** The experience segments' routes (#6, Slice 2), which only a request proxy.ts marks reaches. */
+export function listExperienceRoutes(): readonly RouteEntry[] {
+  return EXPERIENCE_ROUTES;
+}
+
+/** How `profile` grants `entry`: the access its capability has there, or absent. */
+export function routeAccess(profile: Profile, entry: RouteEntry): Access | 'absent' {
+  if (entry.profiles && !entry.profiles.includes(profile)) return 'absent';
+  if (entry.capability === 'operations') return 'public';
+  return accessIn(profile, entry.capability);
+}
+
+/** Whether `profile` serves the route `pattern` names, an experience segment's included. */
+export function serves(profile: Profile, pattern: RoutePattern): boolean {
+  return [...ROUTES, ...EXPERIENCE_ROUTES].some(
+    (entry) => entry.pattern === pattern && routeAccess(profile, entry) !== 'absent',
+  );
+}
+
+export type RouteDecision =
+  | { readonly status: 'served'; readonly entry: RouteEntry; readonly access: Access }
+  /**
+   * The table or the retired list has a route at the path, and the profile
+   * doesn't serve it. `unknown` marks a table route no profile of this build
+   * serves, such as a test fixture's page in a build without its flag
+   * (#19, Slice 3): proxy.ts answers it as a path no route matches.
+   */
+  | { readonly status: 'absent'; readonly unknown?: true }
+  /**
+   * A path no route renders in any profile of this build: a file in public/,
+   * or else the app's 404 page, answers it.
+   */
+  | { readonly status: 'missing' }
+  /** Not a route of ours: Next's build assets, or a path that doesn't decode. */
+  | { readonly status: 'unlisted' };
+
+export type ResolveRoute = (
+  profile: Profile,
+  pathname: string,
+  query?: URLSearchParams,
+) => RouteDecision;
+
+/**
+ * What `profile` does with a request for `pathname`, from a route table, a
+ * retired list, and the installed variants. Like Next, it picks the most
+ * specific matching pattern: static segments over dynamic ones, and dynamic
+ * over catch-all.
+ */
+export function routeResolver(
+  routes: readonly RouteEntry[],
+  retired: readonly string[],
+  installed: Installed = VARIANTS,
+): ResolveRoute {
+  const owned = ownedFirstSegments(routes, retired);
+  return (profile, pathname, query = new URLSearchParams()) => {
+    const segments = splitPath(pathname);
+    // A path that doesn't decode is no route of ours; Next answers it.
+    if (segments === null) return { status: 'unlisted' };
+    if (retired.some((pattern) => rank(pattern, segments) !== null)) return { status: 'absent' };
+    const first = segments[0] ?? '';
+    if (first === '_next') return { status: 'unlisted' };
+    let best: { score: number[]; entries: RouteEntry[] } | undefined;
+    for (const entry of routes) {
+      if (entry.views && (owned.has(first) || isReservedSegment(first))) continue;
+      const score = rank(entry.pattern, segments);
+      if (score === null) continue;
+      if (!best || compare(score, best.score) > 0) best = { score, entries: [entry] };
+      else if (compare(score, best.score) === 0) best.entries.push(entry);
+    }
+    if (!best) return { status: 'missing' };
+    const path = { segments, query };
+    if (best.entries.every((entry) => entry.names && !entry.names(path, installed))) {
+      return { status: 'missing' };
+    }
+    for (const entry of best.entries) {
+      const access = routeAccess(profile, entry);
+      if (access !== 'absent') return { status: 'served', entry, access };
+    }
+    const built = best.entries.some((entry) =>
+      PROFILES.some((other) => routeAccess(other, entry) !== 'absent'),
+    );
+    return built ? { status: 'absent' } : { status: 'absent', unknown: true };
+  };
+}
+
+/** What `profile` does with a request for `pathname`. proxy.ts asks this. */
+export const resolveRoute: ResolveRoute = routeResolver(ROUTES, RETIRED_PATTERNS);
+
+/**
+ * Whether `pathname`, which `pattern` matches once decoded, spells one of the
+ * pattern's fixed segments with percent-encoding, as `/%66eed.xml` spells
+ * `/feed.xml`. The table reads a path decoded, but Next matches a fixed
+ * segment as sent, so it never routes such a path to the entry: proxy.ts
+ * answers it as a path no route matches.
+ */
+export function encodesFixedSegment(pattern: string, pathname: string): boolean {
+  const sent = pathname.split('/').filter((segment) => segment !== '');
+  return pattern
+    .split('/')
+    .filter((part) => part !== '')
+    .some((part, index) => !part.startsWith('[') && sent[index] !== part);
+}
+
+/**
+ * Every route file's own path: each pattern the table lists, each experience
+ * segment's, and Next's /_not-found.
+ */
+const ROUTE_FILE_PATHS: ReadonlySet<string> = new Set([
+  ...ROUTES.map((entry) => entry.pattern),
+  ...EXPERIENCE_ROUTES.map((entry) => entry.pattern),
+  '/_not-found',
+]);
+
+/**
+ * Whether `pathname`, as sent or decoded whole, is a route file's own path:
+ * a pattern written out, as `/work/[slug]` or `/work/%5Bslug%5D` is, or a
+ * path whose slashes are encoded, as `/studio%2Fsign-in` decodes to
+ * `/studio/sign-in`. The table reads such a path segment by segment and
+ * finds it names nothing, but Next's file check finds the route file before
+ * the afterFiles rewrite runs. proxy.ts sends it through the beforeFiles
+ * rewrite.
+ */
+export function spellsRouteFile(pathname: string): boolean {
+  if (ROUTE_FILE_PATHS.has(pathname)) return true;
+  try {
+    return ROUTE_FILE_PATHS.has(decodeURIComponent(pathname));
+  } catch {
+    return false;
+  }
+}
+
+export { ROUTE_HEADER } from './route-header';
+
+/**
+ * Every static first segment of an entry other than the views catch-all,
+ * or of a retired route, and Next's `_next`. The catch-all leaves these
+ * alone, as it does every other segment the contract reserves.
+ * routes.test.ts checks that the contract reserves each, so no view is ever
+ * shadowed.
+ */
+export function ownedFirstSegments(
+  routes: readonly RouteEntry[] = ROUTES,
+  retired: readonly string[] = RETIRED_PATTERNS,
+): ReadonlySet<string> {
+  const owned = new Set(['_next']);
+  const patterns = [
+    ...routes.filter((entry) => !entry.views).map((entry) => entry.pattern),
+    ...retired,
+  ];
+  for (const pattern of patterns) {
+    const [first] = pattern.split('/').filter((part) => part !== '');
+    if (first !== undefined && !first.startsWith('[')) owned.add(first);
+  }
+  return owned;
+}
+
+/** A path's decoded segments, as the table reads them, or null for one that doesn't decode. */
+export function splitPath(pathname: string): string[] | null {
+  try {
+    return pathname
+      .split('/')
+      .filter((segment) => segment !== '')
+      .map((segment) => decodeURIComponent(segment));
+  } catch {
+    return null;
+  }
+}
+
+/** Per-segment specificity when `pattern` matches, or null: 3 static, 2 dynamic, 1 catch-all. */
+function rank(pattern: string, segments: readonly string[]): number[] | null {
+  const parts = pattern.split('/').filter((part) => part !== '');
+  const score: number[] = [];
+  for (let index = 0; index < parts.length; index++) {
+    const part = parts[index]!;
+    const optional = part.startsWith('[[...');
+    if (optional || part.startsWith('[...')) {
+      const rest = segments.length - index;
+      if (rest < (optional ? 0 : 1)) return null;
+      return [...score, 1];
+    }
+    const segment = segments[index];
+    if (segment === undefined) return null;
+    if (part.startsWith('[')) score.push(2);
+    else if (part === segment) score.push(3);
+    else return null;
+  }
+  return parts.length === segments.length ? score : null;
+}
+
+function compare(a: readonly number[], b: readonly number[]): number {
+  for (let index = 0; index < Math.max(a.length, b.length); index++) {
+    const difference = (a[index] ?? 0) - (b[index] ?? 0);
+    if (difference !== 0) return difference;
+  }
+  return 0;
+}

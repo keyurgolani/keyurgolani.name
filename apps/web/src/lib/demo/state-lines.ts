@@ -1,0 +1,73 @@
+import { AXES, optionNote, type AppearanceCatalog } from '../studio/appearance';
+import type { DemoSelection } from './url-state';
+import { MEMORY_ONLY_NOTICE } from './storage';
+
+// Demo Studio's state lines (#9, design note section 2): what the shell's
+// "Where things stand" shows under demo, in place of the owner's draft and
+// publish lines. Nothing here names a draft, a publish, or the live site,
+// since the demo has none of them. Framework-free, so a test drives it.
+
+/** The approved sandbox line (Codex [23]), with a full stop for its dash (the design director, ST-S9). */
+export const SANDBOX_LINE = 'Demo sandbox. Only you can see these changes.';
+
+export interface DemoStateLine {
+  readonly id: 'content' | 'appearance' | 'storage';
+  readonly label: string;
+  readonly text: string;
+  readonly tone: 'neutral' | 'attention';
+}
+
+/** The name the catalog gives `value` on its axis, or the value itself, with what renders in its place. */
+function named(catalog: AppearanceCatalog, axis: (typeof AXES)[number], value: string): string {
+  const note = optionNote(catalog, axis, value);
+  if (note.option) return note.option.name;
+  return note.fallback ? `${value}, shown as ${note.fallback}` : value;
+}
+
+/**
+ * What the Content line says: the neutral sample, or, while it shows, the
+ * read-only reference by the name its own portfolio gives (#9), with no
+ * hint that anything here could change that person's site.
+ */
+export function contentLine(reference?: { readonly name: string }): string {
+  return reference
+    ? `${reference.name}'s published portfolio, a read-only snapshot. Nothing here changes ${reference.name}'s site.`
+    : 'The neutral sample portfolio, read-only.';
+}
+
+/**
+ * The lines for `selection`, with `persistent` saying whether it outlasts
+ * the page, and `reference` the reference while it shows.
+ */
+export function demoStateLines(
+  catalog: AppearanceCatalog,
+  selection: DemoSelection,
+  persistent: boolean,
+  reference?: { readonly name: string },
+): readonly DemoStateLine[] {
+  const labels = new Map(catalog.axes.map(({ axis, label }) => [axis, label]));
+  return [
+    {
+      id: 'content',
+      label: 'Content',
+      text: contentLine(reference),
+      tone: 'neutral',
+    },
+    {
+      id: 'appearance',
+      label: 'Appearance',
+      text: AXES.map(
+        (axis) => `${labels.get(axis) ?? axis}: ${named(catalog, axis, selection[axis])}`,
+      ).join('; '),
+      tone: 'neutral',
+    },
+    persistent
+      ? {
+          id: 'storage',
+          label: 'This browser',
+          text: 'Your choices are kept in this browser, and nowhere else.',
+          tone: 'neutral',
+        }
+      : { id: 'storage', label: 'This browser', text: MEMORY_ONLY_NOTICE, tone: 'attention' },
+  ];
+}

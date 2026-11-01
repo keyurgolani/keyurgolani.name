@@ -1,0 +1,109 @@
+/* #19 (appearance axes) owns this layer order; its check requires every layered stylesheet to start with this line. */
+@layer reset, scheme, language, typography, variant-layout, utilities, accessibility;
+
+/* What every portfolio document loads (#7, Slice 1): the site's layout, the
+   preview's, and the 404 page a URL no route matches gets. Studio's layout
+   loads it too, under its own studio.css, which nothing else loads. Every rule
+   sits in the reset layer (#19, Slice 4), under the packs, the variant's
+   layout, and the accessibility layer. It sets no color, font, or theme: the
+   document boundary's packs do, from the platform stylesheet's :root:has()
+   rules, on the root as on the boundary, so the canvas never paints a color
+   the selection didn't pick. */
+
+@layer reset {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  a {
+    color: inherit;
+  }
+
+  img,
+  svg,
+  video {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* The host's focus ring (#11, 11-2), inside every page's document
+     boundary, the error and 404 pages' included, and never on Studio's
+     working UI, whose own focus styles win. The platform stylesheet's ring,
+     in the scheme's focus color, is over it in a later layer, and alone on
+     the 503, which loads only the packs. Studio's stylesheet rings its own
+     error pages. The boundary's skip link is the first stop. */
+  :where([data-variant]) :focus-visible,
+  [data-ui-slot='skip-link']:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+}
+
+/* The kit runtime's pause (#6, items 6 and 7): while an effect's runtime
+   isn't active, its root carries data-activity="paused", and the ambient
+   loops below it hold where they are. A loop reads the pause as its
+   animation-play-state, var(--motion-ambient-state), which the source
+   audit's motion-gate rule holds every loop to; the platform stylesheet sets
+   it inside a boundary too. A one-shot entrance never reads it, so it always
+   plays to its end: a pause that froze every animation held Cinema's title
+   card half open, its name unseen, in a Studio frame out of focus (OWN-1).
+   In the last layer, so a variant's layout can't start a loop again. */
+@layer accessibility {
+  [data-activity='paused'] {
+    --motion-ambient-state: paused;
+  }
+
+  /* The host's Menu in a NavigationMenuSlot (lib/navigation-menu.tsx): its
+     plain link to the composition's index by default, and its button only
+     once its own script has run and marked it, so the Menu is never a button
+     that does nothing. Not (scripting): no-JavaScript rows audit with script
+     on for axe, which a scripting query would flip. In the last layer, so a
+     composition's layout never shows both. */
+  [data-navigation-menu] > [data-ui-slot='action'] {
+    display: none;
+  }
+
+  [data-navigation-menu][data-navigation-menu-scripted] > [data-ui-slot='action'] {
+    display: inline-flex;
+  }
+
+  [data-navigation-menu][data-navigation-menu-scripted] > [data-navigation-menu-link] {
+    display: none;
+  }
+
+  /* On a touch screen, the Menu's button and its close button are 44 px
+     targets at least, as pinned chrome is (#11). */
+  @media (pointer: coarse) {
+    [data-navigation-menu] [data-ui-slot='action'] {
+      min-block-size: 44px;
+      min-inline-size: 44px;
+    }
+  }
+
+  /* The visitor's control, moved into the Menu, is the Menu's last row, its
+     own rule setting it off from the composition's links above it. */
+  [data-navigation-menu-control] {
+    margin-block-start: 0;
+  }
+
+  /* The Menu hangs from the top, not the middle, so a disclosure opening
+     inside it grows it downward: its title, its close button, and the row
+     just tapped stay where the visitor's finger is. */
+  [data-navigation-menu] > [data-ui-slot='dialog'] {
+    margin-block: var(--ui-space-surface-block) auto;
+  }
+}

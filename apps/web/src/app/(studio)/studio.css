@@ -1,0 +1,5788 @@
+/* Studio (#2): a quiet neutral canvas, strong status type, and thin rules.
+   No state shows by color alone: every one has its text. */
+
+/* Only Studio's layout loads this file, and no site or preview document
+   does. The sentinel is how tests tell (#7): a document that never loaded
+   it has no --studio-sentinel on its root. */
+:root {
+  --studio-sentinel: present;
+}
+
+.studio {
+  /* Zero chroma (the Studio mockup): the portfolio carries all the colour. */
+  --studio-canvas: #fafafa;
+  --studio-surface: #ffffff;
+  --studio-ink: #171717;
+  --studio-muted: #4f4f4f;
+  --studio-rule: #e3e3e3;
+  --studio-edge: #8a8a8a;
+  background: var(--studio-canvas);
+  color: var(--studio-ink);
+  min-height: 100vh;
+  /* One sans family on a fixed scale (the dossier's 3.6): 12px labels, 14px
+     values, 15px section heads. The preview carries the brand. */
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+@media (prefers-color-scheme: dark) {
+  .studio {
+    --studio-canvas: #161616;
+    --studio-surface: #1f1f1f;
+    --studio-ink: #ededed;
+    --studio-muted: #b5b5b5;
+    --studio-rule: #383838;
+    --studio-edge: #8f8f8f;
+  }
+}
+
+.studio-sign-in {
+  max-width: 26rem;
+  margin: 0 auto;
+  padding: clamp(3rem, 12vh, 7rem) 1.5rem 3rem;
+}
+
+.studio-sign-in__title {
+  margin: 0;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--studio-rule);
+  font-size: 1.25rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.studio-sign-in__lede {
+  margin: 1rem 0 1.5rem;
+  color: var(--studio-muted);
+}
+
+.studio-sign-in__form {
+  display: grid;
+  /* One column that never grows past the page: the password row's min-content
+     (the input's own width and the unwrapped toggle) would widen it to 387px at
+     320px (#11, WCAG 1.4.10). */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.studio-status {
+  margin: 1.25rem 0 1.5rem;
+  font-size: 1.5rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+.studio-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.studio-field {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.studio-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--studio-edge);
+  border-radius: 2px;
+  background: var(--studio-surface);
+  color: inherit;
+  font: inherit;
+}
+
+.studio-button {
+  justify-self: start;
+  padding: 0.625rem 1.125rem;
+  border: 1px solid var(--studio-ink);
+  border-radius: 2px;
+  background: var(--studio-ink);
+  color: var(--studio-canvas);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.studio-button--quiet {
+  background: transparent;
+  color: inherit;
+  border-color: var(--studio-edge);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.studio-button[aria-disabled='true'] {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.studio-input:focus-visible,
+.studio-button:focus-visible,
+.studio-alert:focus-visible {
+  outline: 2px solid var(--studio-ink);
+  outline-offset: 2px;
+}
+
+.studio-alert {
+  margin: 0;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--studio-edge);
+  background: var(--studio-surface);
+  font-weight: 600;
+}
+
+.studio-alert[hidden] {
+  display: none;
+}
+
+/* The seconds a rate limit has left, under its alert. Not announced. */
+.studio-countdown {
+  margin: 0;
+  color: var(--studio-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A Studio page with room for a preview (#7, Slice 4). */
+.studio-page {
+  max-width: 96rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 3rem;
+}
+
+/* /studio/preview: the controls, then the frame below them, never over it. */
+.studio-preview {
+  display: grid;
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+.studio-preview__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 1rem 1.25rem;
+}
+
+.studio-preview__field {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.studio-preview__note {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--studio-muted);
+  font-size: 0.875rem;
+}
+
+.studio-preview__field .studio-preview__note {
+  flex-basis: auto;
+}
+
+.studio-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* A checkbox and its label on one line, its note below. */
+.studio-preview__check {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 0.5rem;
+}
+
+.studio-preview__check .studio-preview__note {
+  grid-column: 1 / -1;
+}
+
+/* One frame, or two side by side to compare (#7, item 7), each with its appearance above it. */
+.studio-preview__frames {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.studio-preview__frames[data-compare] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.studio-preview__frame {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  min-inline-size: 0;
+}
+
+.studio-preview__appearance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem 1rem;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--studio-rule);
+  border-radius: 0.375rem;
+}
+
+.studio-preview__appearance legend {
+  padding: 0 0.25rem;
+}
+
+/* PreviewSurface: the frame at its layout width, scaled down to fit. */
+.preview-surface {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.preview-surface__stage {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--studio-rule);
+  background: var(--studio-surface);
+}
+
+/* Loading: a neutral background, with aria-busy on the stage. */
+.preview-surface__stage[data-phase='loading'] {
+  background: var(--studio-canvas);
+}
+
+.preview-surface__frame {
+  display: block;
+  border: 0;
+  transform-origin: 0 0;
+}
+
+/* Demo Studio's double-buffered stage (demo-frame.tsx): the document on screen stays at the
+   stage's start, under the next one, until that one has painted, then goes at once. */
+.demo-frame__leaving {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  pointer-events: none;
+}
+
+/* While the next document loads under it, past PENDING_MS: a quiet mark over the stage's top
+   corner, in the scale badge's vocabulary. Static, so it needs no reduced-motion rule. */
+.demo-frame__pending {
+  position: absolute;
+  inset-block-start: 0.75rem;
+  inset-inline-end: 0.75rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  padding: 0 0.625rem;
+  border-radius: var(--st-r-control, 6px);
+  background: var(--st-raise, #ffffff);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.14);
+  color: var(--st-ink-2, #404040);
+  font-size: var(--st-t-xs, 0.75rem);
+  font-weight: 600;
+  pointer-events: none;
+}
+
+/* Its status, beside the stage and outside its aria-busy: one pixel, whatever the stage's
+   children are sized to. */
+.studio-split__stage > .demo-frame__status,
+.demo-frame__status {
+  inline-size: 1px;
+}
+
+/* Demo Studio's frame at a phone's width (#9): a poster in the stage's
+   place until the visitor asks for the preview, which loads nothing. Its
+   gap leaves room for the button's focus ring. */
+.demo-frame__poster {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+  padding: 1.25rem;
+  border: 1px dashed var(--studio-edge);
+  background: var(--studio-canvas);
+}
+
+.demo-frame__poster p {
+  margin: 0;
+}
+
+.demo-frame__ask {
+  font-weight: 650;
+}
+
+.demo-frame__what {
+  color: var(--studio-muted);
+  overflow-wrap: anywhere;
+}
+
+/* The stage the poster gave way to, which takes the button's focus. */
+.preview-surface__stage[role='group']:focus-visible {
+  outline: 2px solid var(--studio-ink);
+  outline-offset: 2px;
+}
+
+.preview-surface__state,
+.preview-surface__link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.preview-surface__state p,
+.preview-surface__link p {
+  margin: 0;
+}
+
+.preview-surface__href {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+}
+
+/* Out of sight, as the skip link is until it has focus. */
+.preview-surface__skip:not(:focus),
+.preview-surface__after:not(:focus),
+.preview-surface__live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.preview-surface__skip:focus-visible,
+.preview-surface__after:focus-visible {
+  outline: 2px solid var(--studio-ink);
+  outline-offset: 2px;
+}
+
+/* #6's catalog plates: a still in each, until the scheduler makes it live. */
+.catalog-plates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 30rem), 1fr));
+  gap: 2rem;
+}
+
+.catalog-plate {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.catalog-plate__still {
+  inline-size: 100%;
+  block-size: auto;
+  border: 1px solid var(--studio-rule);
+}
+
+.catalog-plate__placeholder {
+  aspect-ratio: 16 / 10;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--studio-rule);
+  color: var(--studio-muted);
+}
+
+.catalog-plate__caption {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* The catalog fixture spaces its plates a few viewports apart, so the trace
+   can tell a plate within a viewport of the screen from one further off. */
+.catalog-fixture .catalog-plates {
+  grid-template-columns: minmax(0, 60rem);
+}
+
+.catalog-fixture .catalog-plate + .catalog-plate {
+  margin-block-start: 300vh;
+}
+
+/* The Owner Studio shell (#8, Slice 1): a header, the task navigation, and
+   the state model above the task, one column on a narrow screen and the
+   navigation beside the work from 64rem. A state line's tone is a rule on
+   its edge; its words say what it means. */
+.studio-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'header' 'nav' 'main';
+  max-width: 96rem;
+  margin: 0 auto;
+}
+
+@media (min-width: 64rem) {
+  .studio-shell {
+    grid-template-columns: 15rem minmax(0, 1fr);
+    grid-template-areas: 'header header' 'nav main';
+  }
+}
+
+.studio-shell__header {
+  grid-area: header;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--studio-rule);
+}
+
+.studio-shell__name {
+  margin: 0 auto 0 0;
+  font-size: 1.125rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.studio-shell__signed-in {
+  margin: 0;
+  color: var(--studio-muted);
+}
+
+.studio-shell__header .studio-alert {
+  flex-basis: 100%;
+}
+
+.studio-shell__nav {
+  grid-area: nav;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--studio-rule);
+}
+
+@media (min-width: 64rem) {
+  .studio-shell__nav {
+    border-bottom: 0;
+    border-right: 1px solid var(--studio-rule);
+  }
+}
+
+.studio-shell__nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 64rem) {
+  .studio-shell__nav ul {
+    flex-direction: column;
+  }
+}
+
+.studio-shell__task {
+  display: block;
+  min-height: 2.75rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 4px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.studio-shell__task:hover {
+  text-decoration: underline;
+}
+
+/* The current task: a quiet fill and a hairline all round, never a side stripe (C3). */
+.studio-shell__task[aria-current='page'] {
+  background: var(--studio-surface);
+  box-shadow: inset 0 0 0 1px var(--studio-rule);
+  font-weight: 650;
+}
+
+.studio-shell__task:focus-visible,
+.studio-shell__main:focus-visible,
+.studio-conflict:focus-visible,
+.studio-source__text:focus-visible {
+  outline: 2px solid var(--studio-ink);
+  outline-offset: 2px;
+}
+
+.studio-shell__main {
+  grid-area: main;
+  min-width: 0;
+  padding: 1.5rem;
+}
+
+.studio-state {
+  margin-bottom: 2rem;
+}
+
+.studio-state__heading,
+.studio-task__heading {
+  margin: 0 0 0.75rem;
+  font-size: 1.125rem;
+  font-weight: 650;
+}
+
+.studio-task__heading {
+  font-size: 0.9375rem;
+  letter-spacing: 0;
+}
+
+.studio-state__lines {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.studio-state__line {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--studio-rule);
+  border-radius: 6px;
+  background: var(--studio-surface);
+}
+
+/* Something to act on: an ink border all round, and its words say why. */
+.studio-state__line[data-tone='attention'] {
+  border-color: var(--studio-ink);
+  box-shadow: inset 0 0 0 1px var(--studio-ink);
+}
+
+.studio-state__line dt {
+  font-weight: 650;
+}
+
+.studio-state__line dd {
+  margin: 0;
+}
+
+.studio-state__waiting,
+.studio-state__notice {
+  margin: 0.75rem 0 0;
+}
+
+.studio-state__notice:empty {
+  display: none;
+}
+
+.studio-task__pending,
+.studio-task__empty p,
+.studio-source__lede,
+.studio-source__note,
+.studio-conflict__note,
+.studio-validation__fix {
+  color: var(--studio-muted);
+}
+
+.studio-task__empty {
+  display: grid;
+  gap: 1rem;
+}
+
+.studio-source {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.studio-source__lede {
+  margin: 0;
+}
+
+.studio-source__document {
+  display: grid;
+  gap: 0.375rem;
+}
+
+.studio-source__text {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 12rem;
+  padding: 0.75rem;
+  border: 1px solid var(--studio-edge);
+  border-radius: 2px;
+  background: var(--studio-surface);
+  color: inherit;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  resize: vertical;
+  tab-size: 2;
+}
+
+.studio-source__text[readonly] {
+  background: transparent;
+}
+
+.studio-source__actions,
+.studio-conflict__actions,
+.studio-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.studio-source__note,
+.studio-conflict__note {
+  margin: 0;
+}
+
+.studio-conflict {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.25rem;
+  border: 2px solid var(--studio-ink);
+  border-radius: 6px;
+  background: var(--studio-surface);
+}
+
+.studio-conflict h3 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.studio-conflict p {
+  margin: 0;
+}
+
+.studio-conflict__theirs summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.studio-validation__list {
+  display: grid;
+  gap: 1rem;
+  padding-left: 1.5rem;
+}
+
+.studio-validation__list p {
+  margin: 0;
+}
+
+.studio-dialog {
+  max-width: min(32rem, calc(100vw - 2rem));
+  padding: 1.25rem 1.5rem;
+  border: 1px solid var(--studio-ink);
+  background: var(--studio-surface);
+  color: var(--studio-ink);
+}
+
+.studio-dialog::backdrop {
+  background: rgb(0 0 0 / 0.4);
+}
+
+.studio-dialog h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.125rem;
+}
+
+/* The workspace's publish confirmation (round 4, P1-9; the mockup's studio-owner-publish):
+   a white card over the split, the replacement in a sentence, the changes in rows, the
+   checks in a line, Keep editing then Publish. */
+.studio-publish {
+  inline-size: min(28rem, calc(100vw - 2rem));
+  max-inline-size: none;
+  padding: 1.5rem;
+  border: 0;
+  border-radius: 10px;
+  background: var(--st-raise, #ffffff);
+  color: var(--st-ink, #171717);
+  box-shadow: 0 24px 60px -20px rgb(0 0 0 / 0.45);
+}
+
+.studio-publish h2 {
+  margin: 0 0 0.5rem;
+  font-size: var(--st-t-l, 1.125rem);
+  font-weight: 650;
+}
+
+.studio-publish__lede {
+  margin: 0 0 1rem;
+  color: var(--st-ink-2, #404040);
+  line-height: 1.5;
+}
+
+.studio-publish__rows {
+  margin: 0 0 1rem;
+  border-block: 1px solid var(--st-rule, #e5e5e5);
+}
+
+.studio-publish__row {
+  display: grid;
+  grid-template-columns: 9rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding-block: 0.625rem;
+}
+
+.studio-publish__row + .studio-publish__row {
+  border-top: 1px solid var(--st-rule, #e5e5e5);
+}
+
+.studio-publish__row dt {
+  color: var(--st-ink-2, #404040);
+  font-size: var(--st-t-s, 0.875rem);
+}
+
+.studio-publish__row dd {
+  margin: 0;
+  font-size: var(--st-t-s, 0.875rem);
+  font-weight: 600;
+}
+
+/* An unoffered value's id, under the words that name it. */
+.studio-publish__note {
+  display: block;
+  color: var(--st-ink-3);
+  font-size: var(--st-t-xs, 0.75rem);
+  font-weight: 400;
+}
+
+/* What the dialog knows of the live revision yet, while it reads it or once it can't. */
+.studio-publish__live {
+  margin: 0 0 0.5rem;
+  color: var(--st-ink-2);
+  font-size: var(--st-t-xs, 0.75rem);
+}
+
+.studio-publish__checks {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0 0 0.75rem;
+  font-size: var(--st-t-s, 0.875rem);
+  font-weight: 600;
+}
+
+.studio-publish__checks[data-tone='ok'] {
+  color: var(--st-ok, #166534);
+}
+
+.studio-publish__checks[data-tone='attention'] {
+  color: var(--st-attn, #9a3412);
+}
+
+.studio-publish__checks .studio-icon {
+  inline-size: 1rem;
+  block-size: 1rem;
+}
+
+.studio-publish__why,
+.studio-publish__progress {
+  margin: 0 0 0.75rem;
+  color: var(--st-ink-2, #404040);
+  font-size: var(--st-t-s, 0.875rem);
+}
+
+.studio-publish__progress:empty {
+  display: none;
+}
+
+.studio-publish__actions {
+  justify-content: flex-end;
+}
+
+/* Item focus (#8, Slice 4 item 6): the section a form item selected,
+   outlined over the frame, outside its document, for a moment. */
+.preview-surface__focus {
+  position: absolute;
+  box-sizing: border-box;
+  border: 3px solid var(--studio-ink);
+  outline: 2px solid var(--studio-canvas);
+  pointer-events: none;
+}
+
+/* Demo Studio's Content task (#9): the import, with its hint and its
+   report, then Export setup, each a column of its own. The gaps leave room
+   for a control's focus ring, 2px at a 2px offset, so the picker's ring
+   never lands on Export setup below it (WCAG 2.4.7 and 1.4.11). */
+.studio-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.5rem;
+}
+
+/* One column that never grows past its room, so the picker shrinks and
+   wraps at 320px and at 200% text (WCAG 1.4.10) rather than overflowing. */
+.studio-import,
+.studio-export {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.5rem;
+  justify-items: start;
+  min-width: 0;
+}
+
+.studio-import .studio-input {
+  box-sizing: border-box;
+  /* A file input's own width is its button and its file name, wider than
+     320px and than its room at 200% text: it takes its room's width instead. */
+  inline-size: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* The Appearance workspace (#8, Slice 5). */
+.studio-appearance {
+  display: grid;
+  gap: 2rem;
+}
+
+.studio-appearance__form {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.studio-appearance__axis {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--studio-rule);
+  background: var(--studio-surface);
+}
+
+.studio-appearance__axis legend {
+  padding: 0 0.25rem;
+  font-weight: 650;
+}
+
+.studio-appearance__axis .studio-input {
+  max-width: 28rem;
+}
+
+.studio-appearance__facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.25rem 1rem;
+  margin: 0;
+  color: var(--studio-muted);
+}
+
+.studio-appearance__facts dt {
+  font-weight: 600;
+}
+
+.studio-appearance__facts dd {
+  margin: 0;
+}
+
+.studio-appearance__fact {
+  margin: 0;
+  font-weight: 600;
+}
+
+.studio-appearance__control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+}
+
+.studio-appearance__radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+}
+
+.studio-appearance__findings h3,
+.studio-appearance__preview h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.125rem;
+}
+
+.studio-appearance__findings ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.studio-appearance__preview {
+  display: grid;
+  gap: 0.75rem;
+}
+
+/* Publish history (#8, Slice 6): publish, the revisions with their
+   changes, and what happened, newest first. */
+.studio-history {
+  display: grid;
+  gap: 2rem;
+  min-width: 0;
+}
+
+.studio-history h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.125rem;
+}
+
+.studio-history h4 {
+  margin: 1rem 0 0.5rem;
+  font-size: 1rem;
+}
+
+.studio-history__publish,
+.studio-history__revisions,
+.studio-history__events {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.studio-history__publish p,
+.studio-history__revision p {
+  margin: 0;
+}
+
+.studio-history__report:empty {
+  display: none;
+}
+
+.studio-history__report {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--studio-ink);
+  background: var(--studio-surface);
+  font-weight: 600;
+}
+
+/* A diagnostic code, or an id, is one word: at 200% text a long one is wider than
+   the page, so it breaks, and the list keeps to the page. */
+.studio-history__list {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  margin: 0;
+  padding-left: 1.5rem;
+  overflow-wrap: anywhere;
+}
+
+.studio-history__revision {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* At 200% text a revision's buttons, which name it, wrap rather than run past the page. */
+.studio-history__revision .studio-source__actions {
+  flex-wrap: wrap;
+}
+
+.studio-history__revision .studio-button {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.studio-history__incompatible {
+  font-weight: 600;
+}
+
+.studio-history__changes {
+  min-width: 0;
+}
+
+.studio-history__diff {
+  margin: 0 0 1rem;
+  min-width: 0;
+}
+
+.studio-history__diff figcaption {
+  font-weight: 600;
+}
+
+.studio-history__diff pre,
+.studio-history__table {
+  max-width: 100%;
+  max-height: 24rem;
+  overflow: auto;
+  margin: 0.25rem 0 0;
+  padding: 0.75rem;
+  border: 1px solid var(--studio-rule);
+  background: var(--studio-surface);
+}
+
+.studio-history__diff pre {
+  white-space: pre;
+  font-size: 0.875rem;
+}
+
+.studio-history__diff pre:focus-visible,
+.studio-history__table:focus-visible {
+  outline: 3px solid var(--studio-ink);
+  outline-offset: 2px;
+}
+
+.studio-history__table table {
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.studio-history__table th,
+.studio-history__table td {
+  padding: 0.25rem 0.75rem 0.25rem 0;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+/* Studio's own error and not-found pages, inside its layout (#7, #8). */
+.studio-chrome {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  margin: 0;
+  padding: 3rem clamp(1.5rem, 4vw, 4rem);
+  line-height: 1.6;
+}
+
+.studio-chrome h1 {
+  font-size: 2rem;
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.01em;
+}
+
+.studio-chrome p {
+  margin: 0 0 1rem;
+}
+
+.studio-chrome a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.studio-chrome__reference {
+  font-size: 0.875rem;
+  color: var(--studio-muted);
+}
+
+/* Their focus ring (#11, WCAG 2.4.7 and 1.4.11): Chromium's own is a 1px
+   orange ring on phones. */
+.studio-chrome :focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+/* The Appearance workspace (owner direction, 2026-10-25; studio-split.tsx,
+   pickers.tsx; the Studio mockup, studio-design.json): a viewing booth.
+   Studio's chrome has zero chroma and the stage is a neutral mid-grey, about
+   Munsell N7, so every scheme is judged against the same surround; the only
+   hue in the chrome is the focus ring. A 48px top bar, a 320px rail that
+   scrolls on its own, the frame and its bar matted on the stage, and a 40px
+   bottom bar, the bars subgrids of the rail line. One system sans on a fixed
+   scale (12, 13, 14, 15px, in rem so it follows the reader's text size), one
+   curve, 150ms for feedback and 200ms for overlays. */
+.studio-shell--workspace {
+  --st-bg: #fafafa;
+  --st-raise: #ffffff;
+  --st-sunk: #f0f0f0;
+  --st-hover: #f2f2f2;
+  /* The stage: the rail's second neutral a step darker (the design director's ST-S3);
+     a mid grey read as disabled and flattened light schemes. */
+  --st-stage: #e6e6e6;
+  --st-ink: #171717;
+  --st-ink-2: #4f4f4f;
+  --st-ink-3: #666666;
+  --st-on-ink: #ffffff;
+  --st-rule: #e3e3e3;
+  --st-edge: #d0d0d0;
+  --st-edge-strong: #8a8a8a;
+  --st-frame-line: rgb(0 0 0 / 0.16);
+  /* The one hue. The mockup's #1f45d6 measures 2.99:1 on the #a6a6a6 stage, so a step
+     darker keeps 3:1 there (3.6:1) and 8.4:1 on the rail. */
+  --st-focus: #1a3bb8;
+  --st-attn: #8a4500;
+  --st-attn-dot: #c46a00;
+  --st-ok: #1d6a3f;
+  --st-r-control: 6px;
+  --st-r-group: 8px;
+  --st-ease: cubic-bezier(0.2, 0, 0, 1);
+  --st-fast: 150ms;
+  --st-base: 200ms;
+  --st-t-xs: 0.75rem;
+  --st-t-s: 0.8125rem;
+  --st-t-m: 0.875rem;
+  --st-t-l: 0.9375rem;
+  --studio-accent: var(--st-focus);
+  --studio-rail-ground: var(--st-bg);
+  display: block;
+  max-width: none;
+  margin: 0;
+  background: var(--st-bg);
+  color: var(--st-ink);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: var(--st-t-m);
+  line-height: 1.43;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-color-scheme: dark) {
+  .studio-shell--workspace .studio-still {
+    filter: invert(0.9294);
+  }
+
+  .studio-shell--workspace {
+    --st-bg: #1b1b1b;
+    --st-raise: #262626;
+    --st-sunk: #222222;
+    --st-hover: #2c2c2c;
+    --st-stage: #262626;
+    --st-ink: #ededed;
+    --st-ink-2: #bdbdbd;
+    --st-ink-3: #a3a3a3;
+    --st-on-ink: #171717;
+    --st-rule: #333333;
+    --st-edge: #474747;
+    --st-edge-strong: #8a8a8a;
+    --st-frame-line: rgb(255 255 255 / 0.16);
+    --st-focus: #93abff;
+    --st-attn: #f0a35a;
+    --st-attn-dot: #f0a35a;
+    --st-ok: #6fcf97;
+  }
+}
+
+.studio-shell--workspace .studio-shell__main {
+  padding: 0;
+}
+
+.studio-shell--workspace .studio-task__heading,
+.studio-state--quiet,
+.studio-split__preview-name,
+.studio-split .studio-appearance__legend,
+.studio-split__scale-name,
+.studio-split__collapse-name,
+.studio-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.studio-shell--workspace .studio-state--quiet .studio-alert {
+  position: fixed;
+  inset: auto 1rem 3.5rem auto;
+  width: auto;
+  height: auto;
+  clip-path: none;
+  z-index: 6;
+}
+
+.studio-shell--workspace :focus-visible {
+  outline: 2px solid var(--st-focus);
+  outline-offset: 2px;
+}
+
+.studio-icon {
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+}
+
+/* ---------------------------------------------------------------- the grid */
+.studio-split {
+  --studio-top: 3rem;
+  --studio-bottom: 2.5rem;
+  display: grid;
+  grid-template-columns: var(--studio-rail, 20rem) minmax(0, 1fr);
+  grid-template-rows: minmax(var(--studio-top), auto) minmax(0, 1fr) minmax(
+      var(--studio-bottom),
+      auto
+    );
+  block-size: 100vh;
+  block-size: 100dvh;
+  overflow: hidden;
+  background: var(--st-bg);
+}
+
+.studio-split[data-rail='collapsed'] {
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+
+/* The workspace while its task loads (StudioSplitPending): the split's own box and top bar from
+   the first paint, and where the stage goes, on the stage's grey, the waiting line or the alert
+   that says it couldn't load. The rail's column stays the rail's ground, its edge drawn where
+   the rail's is, so the split that replaces it moves nothing and changes no colour but the
+   rail's content. */
+.studio-split__pending {
+  grid-column: 2;
+  grid-row: 2 / -1;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  min-height: 0;
+  margin-inline-start: -1px;
+  padding: 1rem 1.5rem;
+  border-inline-start: 1px solid var(--st-rule);
+  background: var(--st-stage);
+  color: var(--st-ink-2);
+  text-align: center;
+}
+
+.studio-split__pending .studio-state__waiting {
+  margin: 0;
+}
+
+.studio-split__pending .studio-alert {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  max-inline-size: 32rem;
+  color: var(--st-ink);
+}
+
+.studio-split__pending .studio-alert p {
+  margin: 0;
+}
+
+/* Without JavaScript the shell never loads: its notice, in the task's anchor above the split,
+   sits where the stage goes, over it, rather than above the top bar. */
+.studio-shell--workspace .studio-shell__anchors .studio-alert {
+  position: fixed;
+  inset: 4rem 1rem auto;
+  z-index: 6;
+  max-inline-size: 32rem;
+  margin-inline: auto;
+}
+
+.studio-split__top,
+.studio-split__bottom {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  min-width: 0;
+  background: var(--st-bg);
+}
+
+/* Over the stage, the rail and the sheet, so a ring on a control at the bar's edge, or a menu
+   it opens, draws whole. */
+.studio-split__top {
+  position: relative;
+  z-index: 7;
+  grid-row: 1;
+  border-bottom: 1px solid var(--st-rule);
+}
+
+.studio-split__bottom {
+  grid-row: 3;
+  border-top: 1px solid var(--st-rule);
+}
+
+.studio-split__top-rail,
+.studio-split__bottom-rail {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  padding-inline: 1rem;
+  border-right: 1px solid var(--st-rule);
+}
+
+.studio-split__top-stage,
+.studio-split__bottom-stage {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.5rem;
+  min-width: 0;
+  padding-inline: 1.5rem 1rem;
+}
+
+/* Room above and below a wrapped row for its rings; the bar's end takes a row of its own
+   rather than running back over the task links, with a gap between the rows, so a link's
+   ring keeps its bottom edge at 844x390 (P1-8). */
+.studio-split__top-stage {
+  flex-wrap: wrap;
+  align-self: stretch;
+  row-gap: 0.375rem;
+  padding-block: 0.25rem;
+}
+
+/* With nothing under the rail, the state line runs the bar's whole width. */
+.studio-split__bottom-rail:empty {
+  display: none;
+}
+
+.studio-split__bottom-rail:empty + .studio-split__bottom-stage {
+  grid-column: 1 / -1;
+  padding-inline: 1rem;
+}
+
+.studio-split__top-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.studio-split__top-phone {
+  display: none;
+}
+
+.studio-split__divider {
+  width: 1px;
+  height: 1.25rem;
+  margin-inline: 0.25rem;
+  background: var(--st-rule);
+}
+
+.studio-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.studio-mark__glyph {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+/* One line, never broken inside a word: where the bar has no room for it whole, as a phone at
+   200% text, it ends in an ellipsis, its whole name still the heading's (WCAG 1.4.4), and the
+   bar keeps its height, so nothing in it reaches the stage (P0-1). */
+.studio-mark__name {
+  min-width: 0;
+  margin: 0;
+  font-size: var(--st-t-l);
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.studio-mark__name:not(:has(> .studio-mark__home)) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Under 20em of width (320px at the default text size, 640px at 200%), the bar shows "Studio",
+   a whole word, never "P…"; the first word stays the heading's, for assistive technology. */
+@media (max-width: 19.99em) {
+  .studio-mark__first {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* Under 12.5em (a phone at 200% text: 390px is 12.2em), the bar is "Studio" and its two
+   tools: the mark's glyph goes, and its tag, as "Demo", is the heading's neighbour for
+   assistive technology alone, so the one word shows whole. */
+@media (max-width: 12.49em) {
+  .studio-mark .studio-mark__glyph {
+    display: none;
+  }
+
+  .studio-mark .studio-mark__tag {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* Demo Studio's name as its home link: the name as it reads, with a 32px target and an
+   underline only on hover. It clips its own text, so its focus ring draws whole. */
+.studio-mark__home {
+  display: block;
+  overflow: hidden;
+  min-block-size: 2rem;
+  border-radius: var(--st-r-control);
+  color: inherit;
+  line-height: 2rem;
+  text-decoration: none;
+  text-overflow: ellipsis;
+}
+
+.studio-mark__home:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.studio-mark__tag {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--st-sunk);
+  color: var(--st-ink-2);
+  font-size: var(--st-t-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* The site Owner Studio edits: quiet text, not a tag. */
+.studio-mark__tag--site {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding-inline: 0;
+  background: transparent;
+  color: var(--st-ink-3);
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.studio-split__collapse {
+  margin-left: auto;
+  width: auto;
+  gap: 4px;
+  padding-inline: 6px;
+  grid-auto-flow: column;
+}
+
+.studio-split__kbd {
+  padding: 0 4px;
+  border: 1px solid var(--st-edge);
+  border-radius: 4px;
+  color: var(--st-ink-3);
+  font: inherit;
+  font-size: var(--st-t-xs);
+  line-height: 1.25;
+}
+
+/* ---------------------------------------------------------------- buttons */
+.studio-iconbutton {
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--st-r-control);
+  background: transparent;
+  color: var(--st-ink-2);
+  cursor: pointer;
+  transition:
+    background-color var(--st-fast) var(--st-ease),
+    color var(--st-fast) var(--st-ease);
+}
+
+.studio-iconbutton:hover {
+  background: var(--st-hover);
+  color: var(--st-ink);
+}
+
+.studio-iconbutton:active {
+  transform: scale(0.94);
+}
+
+.studio-iconbutton:disabled {
+  opacity: 0.38;
+  background: transparent;
+  cursor: not-allowed;
+}
+
+.studio-iconbutton--bar {
+  width: 2rem;
+  height: 2rem;
+}
+
+.studio-iconbutton[aria-pressed='true'] {
+  background: var(--st-sunk);
+  color: var(--st-ink);
+}
+
+.studio-iconbutton--plate {
+  width: 2rem;
+  height: 2rem;
+  background: var(--st-raise);
+  color: var(--st-ink);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+}
+
+.studio-split__undo {
+  display: inline-flex;
+}
+
+.studio-barbutton,
+.studio-split__top-end .studio-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 2rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--st-edge);
+  border-radius: var(--st-r-control);
+  background: var(--st-raise);
+  color: var(--st-ink);
+  font: inherit;
+  font-size: var(--st-t-s);
+  font-weight: 550;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--st-fast) var(--st-ease),
+    border-color var(--st-fast) var(--st-ease),
+    transform var(--st-fast) var(--st-ease);
+}
+
+.studio-barbutton:hover,
+.studio-split__top-end .studio-button:hover {
+  border-color: #bdbdbd;
+  background: var(--st-hover);
+}
+
+.studio-barbutton:active {
+  transform: scale(0.97);
+}
+
+.studio-barbutton--primary {
+  border-color: var(--st-ink);
+  background: var(--st-ink);
+  color: var(--st-on-ink);
+}
+
+.studio-barbutton--primary:hover {
+  border-color: #2e2e2e;
+  background: #2e2e2e;
+}
+
+.studio-barbutton--quiet,
+.studio-split__top-end .studio-button--quiet {
+  border-color: transparent;
+  background: transparent;
+}
+
+/* A held control reads as held by its ink, not by opacity, which faded its focus ring
+   under 3:1 too. Publish held back is a quiet button in readable ink, with its reason
+   beside it (the design director's ST-S8). */
+.studio-barbutton[aria-disabled='true'],
+.studio-barbutton:disabled {
+  border-color: var(--st-rule);
+  background: var(--st-sunk);
+  color: var(--st-ink-3);
+  cursor: not-allowed;
+}
+
+.studio-barbutton--primary[aria-disabled='true'] {
+  border-color: var(--st-edge);
+  color: var(--st-ink-2);
+}
+
+/* In ink: the amber dot is Unsaved's alone, so a held Publish never reads as the same state. */
+.studio-split__reason {
+  color: var(--st-ink);
+  font-size: var(--st-t-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.studio-split__reason-short {
+  display: none;
+}
+
+/* Owner Studio's Compare takes room in the bar's end (OWN-2): there the bar says the reason in
+   its short form and leaves the unsaved dot to the bottom bar's Unsaved chip, as it does under
+   80rem, so the top bar stays one 48px row. */
+.studio-split__top-end:has(> .studio-compare-toggle) .studio-split__unsaved,
+.studio-split__top-end:has(> .studio-compare-toggle) .studio-split__reason-long {
+  display: none;
+}
+
+.studio-split__top-end:has(> .studio-compare-toggle) .studio-split__reason-short {
+  display: inline;
+}
+
+.studio-split__unsaved {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-right: 0.25rem;
+  color: var(--st-attn);
+  font-size: var(--st-t-s);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.studio-dot {
+  display: inline-block;
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--st-attn-dot);
+}
+
+/* ---------------------------------------------------------------- menus */
+.studio-menu {
+  position: relative;
+}
+
+.studio-menu__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2rem;
+  padding: 0 0.5rem 0 0.625rem;
+  border: 1px solid transparent;
+  border-radius: var(--st-r-control);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--st-t-s);
+  cursor: pointer;
+  transition: background-color var(--st-fast) var(--st-ease);
+}
+
+.studio-menu__button:hover,
+.studio-menu__button[aria-expanded='true'] {
+  background: var(--st-hover);
+}
+
+.studio-menu__chevron {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--st-ink-3);
+}
+
+.studio-more .studio-menu__button {
+  width: 2rem;
+  padding: 0;
+  justify-content: center;
+}
+
+.studio-more .studio-menu__chevron {
+  width: 1rem;
+  height: 1rem;
+  color: var(--st-ink-2);
+}
+
+.studio-source-menu__name {
+  font-weight: 600;
+}
+
+.studio-source-menu__kind {
+  color: var(--st-ink-3);
+}
+
+.studio-menu__panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 10;
+  min-width: 18rem;
+  max-width: min(28rem, calc(100vw - 2rem));
+  padding: 0.375rem;
+  border: 1px solid var(--st-edge);
+  border-radius: var(--st-r-group);
+  background: var(--st-raise);
+  box-shadow: 0 8px 24px -6px rgb(0 0 0 / 0.25);
+}
+
+.studio-menu__panel[hidden] {
+  display: none;
+}
+
+.studio-more .studio-menu__panel {
+  right: 0;
+  left: auto;
+  min-width: 14rem;
+}
+
+.studio-menu__group {
+  display: grid;
+  gap: 2px;
+  padding: 0.25rem 0;
+}
+
+.studio-menu__group + .studio-menu__group,
+.studio-menu__state {
+  border-top: 1px solid var(--st-rule);
+}
+
+.studio-menu__item {
+  display: flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0 0.625rem;
+  border: 0;
+  border-radius: var(--st-r-control);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--st-t-s);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.studio-menu__item:hover {
+  background: var(--st-hover);
+}
+
+.studio-menu__item[aria-pressed='true'],
+/* The Owner menu's wrapper, which only listens: its groups lay out as the menu's own. */
+.studio-menu__links {
+  display: contents;
+}
+
+/* The stage row's controls and Redo, in the phone's ⋯ menu only where they left the bars:
+   the device widths and the page on a short phone (under 37.5em tall, as 320x568), Redo under
+   22.5em wide (A P2-F). */
+.studio-menu__group--short,
+.studio-menu__group--narrow {
+  display: none;
+}
+
+.studio-menu__tools {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  padding: 0.25rem 0.625rem 0.375rem;
+}
+
+/* In the menu, the heading names them, so the page switch drops its caption to fit the menu. */
+.studio-menu__tools .studio-segmented__caption {
+  display: none;
+}
+
+.studio-menu__tools .studio-segmented {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+@media (max-width: 47.99rem) and (max-width: 1023.98px) and (max-height: 37.5em) {
+  .studio-split .studio-split__tools {
+    display: none;
+  }
+
+  .studio-menu__group--short {
+    display: grid;
+  }
+}
+
+@media (max-width: 22.4375em) {
+  .studio-split__top-phone .studio-split__undo > button + button {
+    display: none;
+  }
+
+  .studio-menu__group--narrow {
+    display: grid;
+  }
+}
+
+/* Wide, the composition picker holds Compare as its tile or link; the axis's own button under
+   the picker is the phone's. */
+@media (min-width: 48rem) and (min-height: 30rem),
+  (min-width: 48rem) and (min-height: 600px),
+  (min-width: 1024px) and (min-height: 30rem),
+  (min-width: 1024px) and (min-height: 600px) {
+  .studio-compare-phone {
+    display: none;
+  }
+}
+
+/* At 320 the sheet's six tabs keep one row: each gives up some of its padding. */
+@media (max-width: 22.4375em) {
+  .studio-split .studio-split__tab {
+    padding-inline: 0.3125rem;
+  }
+}
+
+/* A line in a menu that says something rather than doing it, as the phone's scale. */
+.studio-menu__note {
+  margin: 0;
+  padding: 0.375rem 0.75rem;
+  color: var(--st-ink-2);
+  font-size: var(--st-t-xs);
+}
+
+/* A menu group's heading: Show, Tasks. */
+.studio-menu__heading {
+  display: block;
+  padding: 0.375rem 0.625rem 0.125rem;
+  color: var(--st-ink-3);
+  font-size: var(--st-t-xs);
+  font-weight: 600;
+}
+
+.studio-menu__about > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.studio-menu__about > summary::-webkit-details-marker {
+  display: none;
+}
+
+.studio-menu__about > summary::after {
+  content: '';
+  margin-inline-start: auto;
+  inline-size: 0.4rem;
+  block-size: 0.4rem;
+  border-inline-end: 1.5px solid currentColor;
+  border-block-end: 1.5px solid currentColor;
+  rotate: 45deg;
+}
+
+.studio-menu__about[open] > summary::after {
+  rotate: 225deg;
+}
+
+.studio-menu__item[aria-current='page'] {
+  background: var(--st-sunk);
+  font-weight: 600;
+}
+
+.studio-menu__hint {
+  padding: 0 0.625rem 0.25rem;
+  color: var(--st-ink-3);
+  font-size: var(--st-t-xs);
+}
+
+.studio-menu__state {
+  padding-top: 0.375rem;
+}
+
+.studio-menu__state .studio-state__lines {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.25rem;
+}
+
+.studio-menu__state .studio-state__line {
+  padding: 0.25rem 0.625rem;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: var(--st-t-xs);
+}
+
+.studio-menu__state dd {
+  margin: 0;
+  color: var(--st-ink-2);
+}
+
+.studio-menu .studio-tasks {
+  flex-direction: column;
+  height: auto;
+}
+
+.studio-menu .studio-tasks__link {
+  min-height: 2rem;
+  padding: 0 0.625rem;
+  border-radius: var(--st-r-control);
+  box-shadow: none;
+}
+
+.studio-menu .studio-tasks__link[aria-current='page'] {
+  background: var(--st-sunk);
+  box-shadow: none;
+}
+
+/* The owner's task links: the current one with a 2px bar under it. */
+.studio-tasks {
+  display: flex;
+  flex-wrap: wrap;
+  align-self: stretch;
+  align-items: stretch;
+  gap: 0 2px;
+  min-width: 0;
+}
+
+.studio-tasks__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.25rem;
+  padding: 0 0.625rem;
+  border: 0;
+  color: var(--st-ink-2);
+  font-size: var(--st-t-s);
+  font-weight: 550;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: inset 0 -2px 0 transparent;
+  transition: color var(--st-fast) var(--st-ease);
+}
+
+.studio-tasks__link:hover {
+  color: var(--st-ink);
+}
+
+.studio-tasks__link[aria-current='page'] {
+  color: var(--st-ink);
+  box-shadow: inset 0 -2px 0 var(--st-ink);
+}
+
+/* A task link's ring rides just outside it, clear of the current page's underline inside;
+   the top bar sits over the stage, so its bottom edge draws whole. */
+.studio-shell--workspace .studio-tasks__link:focus-visible {
+  outline: 2px solid var(--st-focus);
+  outline-offset: 0;
+}
+
+/* A toggle in the bars, pressed: Compare while it's on. */
+.studio-barbutton[aria-pressed='true'] {
+  border-color: var(--st-ink);
+  background: var(--st-ink);
+  color: var(--st-on-ink);
+}
+
+/* ---------------------------------------------------------------- the rail */
+.studio-split__rail {
+  /* The containing block of what it hides from sight, so nothing in it reaches past its scroll. */
+  position: relative;
+  grid-column: 1;
+  grid-row: 2;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Its width, for the look bar and the axis heads at large text (below). */
+  container: studio-rail / inline-size;
+  border-right: 1px solid var(--st-rule);
+  background: var(--st-bg);
+  scrollbar-width: thin;
+  scrollbar-color: #c4c4c4 transparent;
+  /* A control scrolled into view clears the sticky head (studio-split.tsx measures it). */
+  scroll-padding-block: calc(var(--studio-head, 0px) + 0.5rem) 1rem;
+}
+
+/* 3px, since its edges cross the bars' and the separator's rules, which a dark rule (more
+   contrast, forced colors) leaves under 3:1 for the row it crosses. */
+.studio-shell--workspace .studio-split__rail:focus-visible {
+  z-index: 8;
+  outline-width: 3px;
+  outline-offset: 0;
+}
+
+.studio-split__rail[hidden] {
+  display: none;
+}
+
+.studio-split__resize {
+  position: relative;
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: end;
+  z-index: 3;
+  inline-size: 0.5rem;
+  margin-inline-end: -0.25rem;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.studio-split__resize::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(50% - 1px);
+  inline-size: 2px;
+  background: transparent;
+  transition: background-color var(--st-fast) var(--st-ease);
+}
+
+.studio-split__resize:hover::after,
+.studio-split__resize:focus-visible::after {
+  background: var(--st-focus);
+}
+
+.studio-split__resize:focus-visible {
+  outline: 2px solid var(--st-focus);
+  outline-offset: 0;
+}
+
+.studio-split__note {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--st-rule);
+  color: var(--st-ink-2);
+  font-size: var(--st-t-xs);
+  line-height: 1.42;
+}
+
+.studio-split__note p {
+  margin: 0;
+}
+
+/* Content in the split (round 4, P0-1): its fields fill the rail over the same stage,
+   Fields and Source a segmented pair at its top, and every field the rail's width. */
+.studio-split__content {
+  padding: 1rem;
+}
+
+.studio-split__content .studio-content {
+  gap: 1rem;
+}
+
+.studio-split__content .studio-content__modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  padding: 2px;
+  border: 1px solid var(--st-rule);
+  border-radius: 6px;
+}
+
+.studio-split__content .studio-content__mode {
+  min-block-size: 2.25rem;
+  border: 0;
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+.studio-split__content .studio-content__mode[aria-pressed='true'] {
+  background: var(--st-ink);
+  color: var(--st-on-ink);
+  box-shadow: none;
+}
+
+.studio-split__content .studio-content__checks,
+.studio-split__content .studio-fields__lede,
+.studio-split__content .studio-source__lede {
+  font-size: var(--st-t-xs);
+  line-height: 1.42;
+}
+
+.studio-split__content .studio-fields__group {
+  padding: 0.875rem;
+  background: none;
+}
+
+.studio-split__content :is(.studio-input, .studio-source__text, textarea) {
+  box-sizing: border-box;
+  inline-size: 100%;
+  max-inline-size: 100%;
+}
+
+/* Demo Studio's Content in the split (DEM-1): Export setup, the panel's main action, across
+   the rail, then a hairline, then the drop zone, whose button opens the one picker a drop
+   fills too. Every line wraps in its room, at 320px and at 200% text (WCAG 1.4.10). */
+.studio-split__content .studio-transfer {
+  gap: 0;
+}
+
+.studio-transfer .studio-export,
+.studio-transfer .studio-import {
+  justify-items: stretch;
+  gap: 0.625rem;
+}
+
+.studio-transfer .studio-export {
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--st-rule);
+}
+
+.studio-transfer .studio-import {
+  padding-top: 1.25rem;
+}
+
+.studio-export__hint,
+.studio-export__disclosure p,
+.studio-drop__hint {
+  margin: 0;
+  color: var(--st-ink-2);
+  font-size: var(--st-t-xs);
+  line-height: 1.42;
+  overflow-wrap: break-word;
+}
+
+.studio-export__disclosure {
+  display: grid;
+  gap: 0.25rem;
+}
+
+/* Its target is 44px at any width: Export setup is the surface's primary action. */
+.studio-barbutton.studio-export__action {
+  min-height: 2.75rem;
+  font-size: var(--st-t-m);
+  white-space: normal;
+}
+
+.studio-export__files {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--st-rule);
+  border-radius: var(--st-r-group);
+  background: var(--st-raise);
+  list-style: none;
+}
+
+.studio-export__files li + li {
+  border-top: 1px solid var(--st-rule);
+}
+
+.studio-export__file {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: calc(var(--st-r-group) - 1px);
+  color: var(--st-ink);
+  font-size: var(--st-t-s);
+  font-weight: 550;
+  text-decoration: underline;
+  text-decoration-color: var(--st-edge-strong);
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+  transition: background-color var(--st-fast) var(--st-ease);
+}
+
+.studio-export__file:hover {
+  background: var(--st-hover);
+  text-decoration-color: currentColor;
+}
+
+/* Inside the list's own edge, so a neighbour's row never covers the ring. */
+.studio-shell--workspace .studio-export__file:focus-visible {
+  outline-offset: -2px;
+}
+
+.studio-export__file .studio-icon {
+  color: var(--st-ink-2);
+}
+
+/* The drop zone: a dashed edge, the one place here a dashed line means "drop on me", and
+   solid in the focus blue while files are dragged over it. */
+.studio-drop {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 0.75rem;
+  row-gap: 0.375rem;
+  align-items: start;
+  padding: 1rem;
+  border: 1px dashed var(--st-edge-strong);
+  border-radius: var(--st-r-group);
+  background: var(--st-raise);
+  transition:
+    border-color var(--st-fast) var(--st-ease),
+    background-color var(--st-fast) var(--st-ease);
+}
+
+.studio-drop[data-over] {
+  border-style: solid;
+  border-color: var(--st-focus);
+  background: color-mix(in srgb, var(--st-focus) 7%, var(--st-raise));
+}
+
+.studio-drop[aria-busy='true'] {
+  border-style: solid;
+  border-color: var(--st-rule);
+}
+
+.studio-icon.studio-drop__icon {
+  grid-row: 1 / span 3;
+  box-sizing: content-box;
+  width: 1.125rem;
+  height: 1.125rem;
+  padding: 0.4375rem;
+  border-radius: var(--st-r-control);
+  background: var(--st-sunk);
+  color: var(--st-ink-2);
+}
+
+.studio-drop[data-over] .studio-drop__icon {
+  color: var(--st-focus);
+}
+
+.studio-drop__title {
+  color: var(--st-ink);
+  font-size: var(--st-t-m);
+  font-weight: 600;
+  line-height: 1.33;
+  cursor: pointer;
+}
+
+.studio-barbutton.studio-drop__choose {
+  justify-self: start;
+  min-height: 2.25rem;
+  margin-top: 0.25rem;
+  white-space: normal;
+}
+
+.studio-import__busy {
+  margin: 0;
+  color: var(--st-ink-2);
+  font-size: var(--st-t-xs);
+}
+
+.studio-transfer .studio-import__report {
+  display: grid;
+  gap: 0.5rem;
+  color: var(--st-ink-2);
+  font-size: var(--st-t-xs);
+  line-height: 1.42;
+  overflow-wrap: anywhere;
+}
+
+.studio-transfer .studio-import__report p {
+  margin: 0;
+}
+
+.studio-transfer .studio-import__report [role='status'] {
+  color: var(--st-ink);
+  font-size: var(--st-t-s);
+  font-weight: 550;
+}
+
+/* A refusal reads as one, in the attention ink, by its words first and its colour second. */
+.studio-transfer .studio-import__report[data-import='refused'] [role='status'] {
+  color: var(--st-attn);
+}
+
+.studio-import__findings,
+.studio-import__remote {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding-left: 1rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-drop,
+  .studio-export__file {
+    transition: none;
+  }
+}
+
+/* The current look (the design director's ST-M4): every axis on one screen, a row each,
+   its specimen, name, and previous and next; the row opens the axis below. */
+.studio-split__look {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: grid;
+  gap: 2px;
+  padding: 0.5rem 0.5rem 0.625rem;
+  border-bottom: 1px solid var(--st-rule);
+  background: var(--st-bg);
+}
+
+/* On a short screen, such as a phone on its side, the look bar scrolls with the rail: held at
+   the top it would take the rail's whole height and hide what focus moves to. */
+@media (max-height: 40rem) {
+  .studio-split__look {
+    position: static;
+  }
+}
+
+.studio-split__look-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+}
+
+/* The axis over its value, so the value's whole name fits beside the specimen. */
+.studio-split__look-open {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0.625rem;
+  min-height: 2.25rem;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: var(--st-r-control);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--st-t-s);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--st-fast) var(--st-ease);
+}
+
+.studio-split__look-open:hover {
+  background: var(--st-hover);
+}
+
+.studio-split__look-specimen {
+  grid-row: 1 / span 2;
+  display: grid;
+  overflow: hidden;
+  width: 2.5rem;
+  height: 1.5625rem;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px var(--st-frame-line);
+}
+
+.studio-split__look-specimen > * {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.studio-split__look-axis {
+  grid-column: 2;
+  overflow: hidden;
+  color: var(--st-ink-3);
+  font-size: var(--st-t-xs);
+  line-height: 1.2;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.studio-split__look-name {
+  grid-column: 2;
+  overflow: hidden;
+  font-weight: 550;
+  line-height: 1.25;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.studio-look__type {
+  display: grid;
+  place-items: center;
+  background: var(--st-raise);
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.studio-look__mode {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+}
+
+.studio-look__mode > span {
+  display: grid;
+  place-items: center;
+  font-size: var(--st-t-xs);
+  font-weight: 700;
+}
+
+/* A split chip in the look bar: the specimen's width, not the readout's 3.5rem, each half
+   20px, so a smaller "Aa" that fits whole (P2-4). */
+.studio-split__look-specimen .studio-chip {
+  width: 100%;
+  height: 100%;
+}
+/* A split chip in the look bar: each half 20px, so a smaller "Aa" that fits whole (P2-4). */
+.studio-split__look-specimen .studio-chip__aa {
+  font-size: 0.6875rem;
+  letter-spacing: -0.03em;
+}
+
+.studio-split__look-specimen .studio-chip__dots {
+  display: none;
+}
+
+.studio-split__look-specimen .studio-language__card {
+  top: 4px;
+  left: 4px;
+}
+
+/* Large text in a rail that stays its width: the look bar's names wrap in whole words over its
+   full row, which opens its axis; the look bar scrolls with the rail rather than hold most of it. */
+@container studio-rail (max-width: 16rem) {
+  .studio-split__look {
+    position: static;
+  }
+
+  .studio-split__look-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .studio-split__look-row > :not(.studio-split__look-open) {
+    display: none;
+  }
+
+  .studio-split__look-axis,
+  .studio-split__look-name {
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+}
+
+/* An axis's section: on a phone a tab's panel, wide an index row and the panel it opens. */
+.studio-split__section {
+  position: relative;
+  scroll-margin-top: 12rem;
+}
+
+.studio-split__section-top {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 2.75rem;
+  list-style: none;
+}
+
+.studio-split__section-top::-webkit-details-marker {
+  display: none;
+}
+
+.studio-split__section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--st-t-l);
+  font-weight: 600;
+  line-height: 1.33;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+}
+
+.studio-split__section-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.studio-split__look-short {
+  display: none;
+}
+
+.studio-split__fold:not([open]) > :not(summary) {
+  display: none;
+}
+
+.studio-split__fold-chevron {
+  /* Every row's chevron in the one last column, a row with no value line too (P2-1). */
+  grid-column: -2;
+  color: var(--st-ink-2);
+  transition: transform var(--st-fast) var(--st-ease);
+}
+
+/* An action's row, as Recipes: an icon where a value's picture is, and what it does where a
+   value's name is, so it reads as a thing to do, not an empty slot (P2-1). */
+.studio-split__look-action {
+  place-items: center;
+  color: var(--st-ink-2);
+}
+
+.studio-split__look-action .studio-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.studio-split__index .studio-split__look-name.studio-split__look-name--action {
+  color: var(--st-ink-2);
+  font-weight: 500;
+}
+
+/* The first run's head sits right under the chips, as every picker's first head does. */
+.studio-recipes__run:first-child > .studio-choices__head {
+  padding-top: 0.25rem;
+}
+
+.studio-split__fold[open] > summary .studio-split__fold-chevron {
+  transform: rotate(180deg);
+}
+
+/* Wide and phone (PHONE_STUDIO in studio-split.tsx says the same): wide is 48rem by 30rem, or
+   1024 by 600 CSS px, whichever the window reaches first. At the default text size the rem pair
+   decides (768 by 480); at 200% text a 1440x900 window is 45 by 28em, short of the rem pair,
+   and keeps the rail by the px pair (the round 5b mockup's text200-typography-1440), with the
+   rail 17.5rem (560px) and the preview the rest. Below both it's the sheet. */
+/* The index (the round 5b mockups, ruling Q5): the one list of axes, wide. Each row is its
+   axis's current look, a picture, the axis and its value, a chevron, and previous and next;
+   it opens its panel right under it, one at a time. The rows and the pinned Display mode never
+   scroll: the open panel's body is the one scroller, so nothing pinned covers a focused option
+   (WCAG 2.4.11). Below 42.5em of height the whole rail scrolls instead (further down). */
+@media (min-width: 48rem) and (min-height: 30rem),
+  (min-width: 48rem) and (min-height: 600px),
+  (min-width: 1024px) and (min-height: 30rem),
+  (min-width: 1024px) and (min-height: 600px) {
+  .studio-split__rail {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .studio-split__rail > * {
+    flex: none;
+  }
+
+  .studio-split__rail > .studio-split__index {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .studio-split__index > .studio-split__section {
+    flex: none;
+    border-bottom: 1px solid var(--st-rule);
+  }
+
+  .studio-split__index > .studio-split__section:has(> .studio-split__fold[open]) {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .studio-split__index .studio-split__fold[open] {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .studio-split__index .studio-split__fold[open]::details-content {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .studio-split__index .studio-split__section-top {
+    display: grid;
+    grid-template-columns: 2.75rem minmax(0, 1fr) 1rem;
+    column-gap: 0.625rem;
+    box-sizing: border-box;
+    min-height: 2.75rem;
+    padding: 4px calc(0.375rem + 2 * 1.75rem + 4px) 4px 0.5rem;
+    cursor: pointer;
+    transition: background-color var(--st-fast) var(--st-ease);
+  }
+
+  .studio-split__index .studio-split__section-top:hover {
+    background: var(--st-hover);
+  }
+
+  .studio-split__index .studio-split__fold[open] > .studio-split__section-top {
+    background: var(--st-sunk);
+  }
+
+  .studio-split__index .studio-split__section-top:focus-visible {
+    outline-offset: -2px;
+  }
+
+  .studio-split__index .studio-split__look-specimen {
+    grid-row: auto;
+    display: grid;
+    overflow: hidden;
+    width: 2.75rem;
+    height: 1.75rem;
+    border-radius: 3px;
+    background: var(--st-raise);
+    box-shadow: 0 0 0 1px var(--st-frame-line);
+  }
+
+  .studio-split__look-text {
+    display: grid;
+    min-width: 0;
+  }
+
+  /* The axis over its value: the label quiet, the value the row's word. */
+  .studio-split__index .studio-split__section-head {
+    gap: 6px;
+    color: var(--st-ink-2);
+    font-size: var(--st-t-xs);
+    font-weight: 400;
+    line-height: 1.25;
+    letter-spacing: 0;
+  }
+
+  .studio-split__index .studio-split__count {
+    color: var(--st-ink-3);
+  }
+
+  .studio-split__index .studio-split__look-axis {
+    grid-column: auto;
+    overflow: visible;
+    color: inherit;
+    font-size: inherit;
+    line-height: inherit;
+  }
+
+  .studio-split__index .studio-split__look-name {
+    grid-column: auto;
+    overflow: visible;
+    white-space: normal;
+    min-width: 0;
+    color: var(--st-ink);
+    font-size: var(--st-t-s);
+    font-weight: 600;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+
+  .studio-split__look-steps {
+    position: absolute;
+    top: 0;
+    right: 0.375rem;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 2.75rem;
+  }
+
+  /* The open panel: its line and its quiet tools, then its body, which scrolls. */
+  .studio-split__panel {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .studio-split__panel-head {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    padding: 0.375rem 0.5rem 0.125rem 1rem;
+  }
+
+  .studio-split__panel-head .studio-split__description {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    color: var(--st-ink-2);
+    font-size: var(--st-t-s);
+    line-height: 1.33;
+  }
+
+  .studio-split__panel-head .studio-split__section-tools {
+    display: flex;
+    flex: none;
+  }
+
+  /* The row has previous and next: the panel's tools keep Keep and Reset. */
+  .studio-split__panel-head .studio-axis__step {
+    display: none;
+  }
+
+  /* Positioned, so what it hides from sight (an option's visually hidden words, a visitor
+     switch's) stays in its scroll and never reaches past the rail's foot. */
+  .studio-split__fold-body {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0.5rem 1rem 1.25rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    /* A focused option clears a run's sticky head: its height and the ring's room. */
+    /* A focused option clears the picker's sticky top (studio-split.tsx measures what it
+       covers) and the sticky group head under it, with the ring's room. */
+    scroll-padding-top: calc(var(--studio-cover, 0px) + 3.25rem);
+    /* And one focused at its foot, as a visitor switch, stops with its ring above the edge. */
+    scroll-padding-bottom: 0.75rem;
+  }
+
+  /* A picker's top, its search, chips and switches, stays in sight as its options scroll
+     under it (the round 5b panel's top); a revealed option clears it. */
+  .studio-split__fold-body .studio-picker__top {
+    position: sticky;
+    top: -0.5rem;
+    z-index: 2;
+    margin: -0.5rem -1rem 0;
+    padding: 0.5rem 1rem 0.375rem;
+    background: var(--st-bg);
+  }
+
+  /* A group's head stays in sight over its options, under the picker's top, as the round 5b
+     panels draw it, so a scrolled panel always says which group it shows (P1-3). */
+  .studio-split__fold-body :is(.studio-choices__head, .studio-listhead) {
+    position: sticky;
+    top: var(--studio-cover, 0px);
+    z-index: 1;
+    background: var(--st-bg);
+    /* Its ground runs out to the panel's edges, past an edge-to-edge grid's, so no tile's edge
+       shows beside it when it sticks (P1-A). */
+    box-shadow:
+      -1rem 0 var(--st-bg),
+      1rem 0 var(--st-bg);
+  }
+
+  /* Its room above as padding, not margin, so its ground covers it when it sticks and no
+     sliver of a row shows between the picker's top and it. */
+  .studio-split__fold-body .studio-listhead {
+    margin-top: 0;
+    padding-top: 0.5rem;
+  }
+
+  /* Display mode, pinned at the rail's foot, open, under the index. */
+  .studio-split__pinned {
+    flex: none;
+    margin-top: auto;
+    padding: 0.5rem 0.75rem 0.625rem 1rem;
+    border-top: 1px solid var(--st-rule);
+    background: var(--st-bg);
+  }
+
+  .studio-split__pinned-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    margin: 0 -0.25rem 0.125rem 0;
+  }
+
+  .studio-split__pinned-top .studio-split__section-tools {
+    display: flex;
+  }
+
+  .studio-split__pinned-head {
+    display: flex;
+    gap: 6px;
+    margin: 0;
+    color: var(--st-ink-2);
+    font-size: var(--st-t-xs);
+    font-weight: 400;
+    line-height: 1.25;
+  }
+
+  .studio-split__pinned .studio-axis__hint {
+    margin-top: 0.375rem;
+  }
+
+  .studio-split__pinned .studio-info {
+    margin-top: 0.375rem;
+  }
+}
+
+/* A laptop's browser viewport (1440x900 hardware leaves about 760 to 790px): the index goes
+   compact, one 36px line an axis with a 28px picture, still pinned. The axis keeps its name, in
+   its short form in a column of its own, beside its value (A N-6), so no row reads only
+   "Editorial …"; previous and next move to the open panel's tools. */
+@media (min-width: 48rem) and (min-height: 30rem) and (max-height: 56.1875em),
+  (min-width: 48rem) and (min-height: 600px) and (max-height: 56.1875em),
+  (min-width: 1024px) and (min-height: 30rem) and (max-height: 56.1875em),
+  (min-width: 1024px) and (min-height: 600px) and (max-height: 56.1875em) {
+  .studio-split__index .studio-split__section-top {
+    grid-template-columns: 1.75rem 3.5rem minmax(0, 1fr) 1rem;
+    column-gap: 0.5rem;
+    min-height: 2.25rem;
+    padding-block: 2px;
+    padding-inline-end: 0.75rem;
+  }
+
+  .studio-split__index .studio-split__look-specimen {
+    width: 1.75rem;
+    height: 1.125rem;
+    border-radius: 2px;
+  }
+
+  .studio-split__index .studio-split__look-text {
+    display: contents;
+  }
+
+  .studio-split__index .studio-split__section-head {
+    grid-column: 2;
+  }
+
+  .studio-split__index .studio-split__look-name {
+    grid-column: 3;
+  }
+
+  .studio-split__index .studio-split__section-head {
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+
+  /* The long name stays the row's name for assistive technology; the short one is what shows. */
+  .studio-split__index .studio-split__look-axis {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .studio-split__index .studio-split__count {
+    display: none;
+  }
+
+  .studio-split__index .studio-split__look-short {
+    display: inline;
+  }
+
+  .studio-split__look-steps {
+    display: none;
+  }
+
+  .studio-split__panel-head .studio-axis__step {
+    display: inline-grid;
+  }
+
+  .studio-split__pinned {
+    padding-block: 0.375rem 0.5rem;
+  }
+
+  /* The foot is its head, its control and its About (P1-4): the mode's hint goes in the About,
+     so the open picker keeps the room, as Type's stills at 1280x720. */
+  .studio-split__pinned .studio-axis__hint {
+    display: none;
+  }
+
+  .studio-split__pinned .studio-info__lead {
+    display: block;
+  }
+
+  .studio-split__pinned .studio-info {
+    margin-top: 0.25rem;
+  }
+}
+
+/* Only below 42.5em of height (680px at the default text size) does the index unpin, so the
+   whole rail scrolls as one, its open panel at its full height. */
+@media (min-width: 48rem) and (min-height: 30rem) and (max-height: 42.4375em),
+  (min-width: 48rem) and (min-height: 600px) and (max-height: 42.4375em),
+  (min-width: 1024px) and (min-height: 30rem) and (max-height: 42.4375em),
+  (min-width: 1024px) and (min-height: 600px) and (max-height: 42.4375em) {
+  .studio-split__rail > .studio-split__index,
+  .studio-split__index > .studio-split__section:has(> .studio-split__fold[open]),
+  .studio-split__index .studio-split__fold[open],
+  .studio-split__index .studio-split__fold[open]::details-content,
+  .studio-split__panel {
+    flex: none;
+  }
+
+  .studio-split__fold-body {
+    overflow: visible;
+  }
+
+  .studio-split__fold-body .studio-picker__top,
+  .studio-split__fold-body :is(.studio-choices__head, .studio-listhead) {
+    position: static;
+  }
+
+  .studio-split__pinned {
+    margin-top: 0;
+  }
+}
+
+/* A rail too short to hold its rows, its foot and a useful panel (studio-split.tsx measures it)
+   scrolls as one, as below 42.5em, rather than squeeze the open panel to nothing. */
+@media (min-width: 48rem) and (min-height: 30rem),
+  (min-width: 48rem) and (min-height: 600px),
+  (min-width: 1024px) and (min-height: 30rem),
+  (min-width: 1024px) and (min-height: 600px) {
+  .studio-split__rail[data-fit='scroll'] > .studio-split__index,
+  .studio-split__rail[data-fit='scroll']
+    .studio-split__index
+    > .studio-split__section:has(> .studio-split__fold[open]),
+  .studio-split__rail[data-fit='scroll'] .studio-split__index .studio-split__fold[open],
+  .studio-split__rail[data-fit='scroll']
+    .studio-split__index
+    .studio-split__fold[open]::details-content,
+  .studio-split__rail[data-fit='scroll'] .studio-split__panel {
+    flex: none;
+  }
+
+  .studio-split__rail[data-fit='scroll'] .studio-split__fold-body {
+    overflow: visible;
+  }
+
+  .studio-split__rail[data-fit='scroll'] .studio-split__pinned {
+    margin-top: 0;
+  }
+
+  /* The picker's top and its group heads stay in sight only over a panel body that scrolls
+     on its own. */
+  .studio-split__rail[data-fit='scroll'] .studio-split__fold-body .studio-picker__top,
+  .studio-split__rail[data-fit='scroll']
+    .studio-split__fold-body
+    :is(.studio-choices__head, .studio-listhead) {
+    position: static;
+  }
+}
+
+.studio-split__count {
+  color: var(--st-ink-3);
+  font-size: var(--st-t-xs);
+  font-weight: 500;
+}
+
+.studio-split__marker {
+  color: var(--st-attn);
+  font-size: var(--st-t-xs);
+  font-weight: 600;
+}
+
+.studio-split__current {
+  display: none;
+}
+
+.studio-split__description {
+  margin: 0 0 0.75rem;
+  color: var(--st-ink-3);
+  font-size: var(--st-t-xs);
+  line-height: 1.33;
+}
+
+.studio-axis__tools {
+  display: flex;
+  margin-left: auto;
+}
+
+.studio-axis__hint {
+  margin: 0.625rem 0 0;
+  color: var(--st-ink-3);
+  font-size: var(--st-t-xs);
+  line-height: 1.33;
+}
+
+.studio-split .studio-appearance__axis {
+  display: block;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.studio-split__footer {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem 0.875rem;
+  border-top: 1px solid var(--st-rule);
+}
+
+.studio-split__footer .studio-label {
+  font-size: var(--st-t-xs);
+}
+
+.studio-split__footer .studio-input {
+  inline-size: 100%;
+  min-height: 2rem;
+  border: 1px solid var(--st-edge-strong);
+  border-radius: var(--st-r-control);
+  background: var(--st-raise);
+  color: inherit;
+  font: inherit;
+  font-size: var(--st-t-s);
+}
+
+.studio-split__sheet-foot {
+  display: none;
+}
+
+/* ---------------------------------------------------------------- the radio groups */
+.studio-choices {
+  min-inline-size: 0;
+}
+
+.studio-choice {
+  cursor: pointer;
+}
+
+/* The option's own radio fills its label, under the specimen the label draws, so its
+   focus ring rings the whole option and a pointer still lands on the specimen. */
+.studio-choice {
+  position: relative;
+  isolation: isolate;
+}
+
+.studio-choice__input {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  inline-size: 100%;
+  block-size: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  appearance: none;
+  pointer-events: none;
+}
+
+/* An option's focus ring sits 6px out (the mockup's focus vocabulary), clear of the
+   selection ring 2 to 4px out, where blue over ink changed nothing by 3:1. It's the radio's
+   own ring, so it says how far it reaches, and the focused option lifts over its neighbours. */
+.studio-shell--workspace .studio-choice__input:focus-visible {
+  outline: 2px solid var(--st-focus);
+  outline-offset: 6px;
+}
+
+.studio-choice:has(> .studio-choice__input:focus-visible) {
+  z-index: 1;
+}
+
+.studio-choice:has(> input:disabled) {
+  cursor: not-allowed;
+}
+
+.studio-choice__label {
+  font-size: var(--st-t-s);
+  font-weight: 550;
+  line-height: 1.23;
+}
+
+.studio-choice__sub {
+  color: var(--st-ink-3);
+  font-size: var(--st-t-xs);
+  line-height: 1.33;
+}
+
+.studio-tick {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: grid;
+  place-items: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 50%;
+  background: var(--st-ink);
+  color: var(--st-on-ink);
+  box-shadow: 0 0 0 1.5px var(--st-raise);
+}
+
+.studio-tick .studio-icon {
+  width: 0.75rem;
+  height: 0.75rem;
+  stroke-width: 2.5;
+}
+
+.studio-tick--row {
+  position: static;
+  box-shadow: none;
+}
+
+/* One segmented style everywhere: the selected segment an ink fill. */
+.studio-segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--st-edge);
+  border-radius: var(--st-r-group);
+  background: var(--st-raise);
+}
+
+.studio-segmented__caption {
+  padding: 0 6px 0 8px;
+  color: var(--st-ink-2);
+  font-size: var(--st-t-xs);
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.studio-segmented .studio-choice {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 1.625rem;
+  padding: 0 0.625rem;
+  border-radius: var(--st-r-control);
+  color: var(--st-ink-2);
+  font-size: var(--st-t-s);
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    background-color var(--st-fast) var(--st-ease),
+    color var(--st-fast) var(--st-ease);
+}
+
+.studio-segmented .studio-choice:hover {
+  background: var(--st-hover);
+  color: var(--st-ink);
+}
+
+.studio-segmented .studio-choice:has(> input:checked) {
+  background: var(--st-ink);
+  color: var(--st-on-ink);
+  font-weight: 600;
+}
+
+.studio-segmented .studio-choice:has(> input:disabled) {
+  opacity: 0.45;
+}
+
+/* Locked by the system, the choice it holds stays readable: ink-2 under white is over 4.5:1. */
+.studio-segmented .studio-choice:has(> input:disabled:checked) {
+  opacity: 1;
+  background: var(--st-ink-2);
+  color: var(--st-on-ink);
+}
+
+.studio-segmented .studio-icon {
+  width: 0.9375rem;
+  height: 0.9375rem;
+}
+
+.studio-segmented--block {
+  display: flex;
+  inline-size: 100%;
+}
+
+.studio-segmented--block .studio-choice {
+  flex: 1;
+  padding: 0 6px;
+}
+
+.studio-split__widths .studio-choice {
+  padding: 0 0.5625rem;
+}
+
+/* Compositions: a 2-column grid of 16:10 drawings, the name and signature under each. */
+/* Compositions (the round 5b mockups): a head, the ready ones as drawings two across, then the
+   ones in progress as rows; no grid ever leaves an empty cell. */
+.studio-picker--compositions {
+  display: block;
+}
+
+.studio-thumbs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.875rem 0.875rem;
+  /* The first row's rings clear the head above it (A P0-1). */
+  padding-top: 0.5rem;
+}
+
+.studio-compositions > .studio-choices__head {
+  padding-block: 0.25rem 0.375rem;
+}
+
+/* Wide, the ready drawings, Compare and what follows share one grid: the radio group is its
+   subgrid, so Compare, outside the group (its checked radio the one Tab stop), still fills the
+   odd cell the group leaves (A #8: no grid has an empty cell). */
+@media (min-width: 48rem) and (min-height: 30rem),
+  (min-width: 48rem) and (min-height: 600px),
+  (min-width: 1024px) and (min-height: 30rem),
+  (min-width: 1024px) and (min-height: 600px) {
+  .studio-compositions__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.875rem 0.875rem;
+    /* The first row's rings clear the head above it (A P0-1). */
+    padding-top: 0.5rem;
+  }
+
+  .studio-compositions__grid > .studio-picker--compositions {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-row: 1 / span var(--rows);
+    grid-template-columns: subgrid;
+    grid-template-rows: subgrid;
+  }
+
+  .studio-compositions__grid .studio-thumbs {
+    display: contents;
+  }
+
+  .studio-compositions__grid .studio-picker--compositions > .studio-pends {
+    grid-column: 1 / -1;
+    margin-top: 0;
+  }
+
+  .studio-compositions__grid > .studio-compare-tile {
+    grid-column: 2;
+    grid-row: var(--tile-row);
+  }
+
+  .studio-compositions__grid > .studio-compare-link,
+  .studio-compositions__grid > .studio-later {
+    grid-column: 1 / -1;
+    margin-top: 0;
+  }
+
+  .studio-compositions__grid > .studio-compare-link {
+    justify-self: start;
+  }
+}
+
+.studio-compare-tile {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.studio-compare-tile__mosaic {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  aspect-ratio: 16 / 10;
+  margin-bottom: 4px;
+  padding: 5px;
+  border-radius: var(--st-r-control);
+  background: var(--st-sunk);
+  box-shadow: inset 0 0 0 1px var(--st-edge);
+}
+
+.studio-compare-tile__mosaic > span {
+  overflow: hidden;
+  border-radius: 2px;
+}
+
+.studio-compare-tile:hover .studio-compare-tile__mosaic {
+  box-shadow:
+    inset 0 0 0 1px var(--st-edge),
+    0 0 0 2px var(--st-bg),
+    0 0 0 4px var(--st-edge-strong);
+}
+
+.studio-compare-link {
+  margin-top: 0.75rem;
+}
+
+/* The ones in progress: plain rows of name and state, on the sunk ground, never a drawing. */
+.studio-pends {
+  display: grid;
+  gap: 2px;
+  margin-top: 0.625rem;
+}
+
+.studio-pends .studio-pending {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4375rem 0.625rem;
+  border: 0;
+  cursor: not-allowed;
+}
+
+.studio-pends .studio-choice__label {
+  color: var(--st-ink-2);
+  font-size: var(--st-t-s);
+  font-weight: 600;
+}
+
+.studio-pends .studio-choice__sub--pending {
+  color: var(--st-ink-2);
+  font-size: var(--st-t-xs);
+  font-weight: 400;
+}
+
+/* A one-ready family's in-progress card fills the cell beside its drawing. */
+.studio-pend-card {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding: 0.5rem 0.625rem;
+  border-radius: var(--st-r-control);
+  background: var(--st-sunk);
+  box-shadow: inset 0 0 0 1px var(--st-rule);
+}
+
+.studio-pend-card__head {
+  margin-bottom: 4px;
+  color: var(--st-ink-2);
+  font-size: var(--st-t-xs);
+  line-height: 1.33;
+}
+
+.studio-pend-card .studio-pending {
+  padding: 2px 0;
+  border: 0;
+  background: none;
+}
+
+.studio-pend-card .studio-choice__label {
+  color: var(--st-ink-2);
+  font-size: var(--st-t-s);
+  font-weight: 600;
+}
+
+/* The card says "in progress" once, in its head; each name keeps it for assistive technology. */
+.studio-pend-card .studio-choice__sub--pending {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* All: everything in progress behind one disclosure, after the ready grid (A P1-1). */
+.studio-later {
+  margin-top: 0.875rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--st-rule);
+}
+
+.studio-later__summary {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0.5rem 0;
+  list-style: none;
+  cursor: pointer;
+}
+
+.studio-later__summary::-webkit-details-marker {
+  display: none;
+}
+
+.studio-later__summary .studio-group__why {
+  margin-left: auto;
+}
+
+.studio-later__chevron {
+  align-self: center;
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--st-ink-2);
+  transform: rotate(-90deg);
+  transition: transform var(--st-fast) var(--st-ease);
+}
+
+.studio-later[open] .studio-later__chevron {
+  transform: none;
+}
+
+.studio-later__name {
+  margin: 0.5rem 0 0;
+  color: var(--st-ink-2);
+  font-size: var(--st-t-xs);
+  font-weight: 600;
+}
+
+.studio-later__family .studio-pends {
+  margin-top: 0.25rem;
+}
+
+/* Less the 2px its row's ring room gives back (.studio-picker__top .studio-families). */
+.studio-compositions .studio-picker__top .studio-families {
+  margin-bottom: calc(0.5rem - 2px);
+}
+
+:is(.studio-picker--compositions, .studio-later) .studio-choice {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  border-radius: var(--st-r-group);
+}
+
+.studio-thumb__art {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 10;
+  margin-bottom: 4px;
+  border-radius: var(--st-r-control);
+  box-shadow: 0 0 0 1px var(--st-frame-line);
+  transition: box-shadow var(--st-fast) var(--st-ease);
+}
+
+.studio-thumb {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--st-r-control);
+}
+
+.studio-thumb__art:hover,
+.studio-picker--schemes .studio-chip:hover {
+  box-shadow:
+    0 0 0 2px var(--st-bg),
+    0 0 0 4px #9c9c9c;
+}
+
+.studio-thumb__art:active {
+  transform: scale(0.985);
+}
+
+/* A composition still in progress (A2): no drawing, so no plate. A compact card with a dashed
+   edge, its name and "In progress" in the idiom line's place, and no hover. The ones in
+   progress come last and start their own row, so none stands beside a drawing's full height. */
+.studio-pending {
+  position: relative;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  padding: 0.5rem 0.625rem;
+  border: 1px dashed var(--st-edge-strong);
+  border-radius: var(--st-r-control);
+  background: var(--st-sunk);
+}
+
+:is(.studio-picker--compositions, .studio-later) .studio-choice:has(> .studio-pending) {
+  align-content: stretch;
+}
+
+/* A checked one, as a draft that holds it shows, keeps a long name clear of the tick in its
+   corner: the tick's 1.125rem, its 5px inset, and a gap. */
+:is(.studio-picker--compositions, .studio-later)
+  .studio-choice:has(> input:checked)
+  .studio-pending {
+  padding-inline-end: 1.75rem;
+}
+
+.studio-choice__sub--pending {
+  color: var(--st-ink-2);
+  font-weight: 550;
+}
+
+.studio-picker--compositions .studio-choice:has(> input:checked) .studio-thumb__art,
+:is(.studio-picker--compositions, .studio-later)
+  .studio-choice:has(> input:checked)
+  .studio-pending,
+.studio-picker--schemes .studio-choice:has(> input:checked) .studio-chip {
+  box-shadow:
+    0 0 0 2px var(--st-bg),
+    0 0 0 4px var(--st-ink);
+}
+
+/* Schemes: the current one read out, a search, and split chips on their own grounds. */
+.studio-readout {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin: 0 -6px 2px;
+  padding: 6px;
+}
+
+.studio-readout__text {
+  display: grid;
+}
+
+.studio-readout__name {
+  font-size: var(--st-t-m);
+  font-weight: 600;
+  line-height: 1.29;
+}
+
+.studio-readout__meta {
+  color: var(--st-ink-3);
+  font-size: var(--st-t-xs);
+  line-height: 1.33;
+}
+
+/* Family chips over a picker: All, then each family with its count; the pressed one is an
+   ink fill, as a segmented control's selected segment is. */
+.studio-families {
+  display: flex;
+  gap: 6px;
+}
+
+/* A picker's chips keep one row, which scrolls across where it's wider than the panel, its
+   edges fading where it scrolls on, so the chips never take the options' room (P1-4, P2-13).
+   The scroller clips at its padding, so its padding holds a focused chip's whole ring (2px
+   out and 2px wide) and a pixel, the negative margin giving back what the extra padding takes;
+   it fades only at an end with more past it (FamilyChips marks which), and a chip that takes
+   focus scrolls clear of a fade, its ring with it (FamilyChips, since focus alone doesn't
+   scroll a chip already in the row's box). */
+.studio-picker__top .studio-families {
+  margin: -2px -1rem;
+  padding: 5px 1rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-padding-inline: 1.5rem 3.5rem;
+  scrollbar-width: none;
+}
+
+.studio-picker__top .studio-families[data-more='start'] {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 1rem);
+  mask-image: linear-gradient(to right, transparent, #000 1rem);
+}
+
+.studio-picker__top .studio-families[data-more='end'] {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent);
+}
+
+.studio-picker__top .studio-families[data-more='both'] {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 1rem,
+    #000 calc(100% - 3rem),
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 1rem,
+    #000 calc(100% - 3rem),
+    transparent
+  );
+}
+
+.studio-picker__top .studio-family {
+  flex: none;
+}
+
+.studio-family {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 1.75rem;
+  padding: 0 0.625rem;
+  border: 1px solid var(--st-edge);
+  border-radius: 999px;
+  background: var(--st-raise);
+  color: var(--st-ink-2);
+  font: inherit;
+  font-size: var(--st-t-xs);
+  font-weight: 550;
+  cursor: pointer;
+  transition:
+    background-color var(--st-fast) var(--st-ease),
+    color var(--st-fast) var(--st-ease);
+}
+
+.studio-family:hover {
+  color: var(--st-ink);
+}
+
+.studio-family[aria-pressed='true'] {
+  border-color: var(--st-ink);
+  background: var(--st-ink);
+  color: var(--st-on-ink);
+}
+
+.studio-family__count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+.studio-search {
+  position: relative;
+  display: block;
+  margin: 0.625rem 0 0.5rem;
+}
+
+.studio-search__icon {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5625rem;
+  color: var(--st-ink-3);
+}
+
+.studio-search__input {
+  inline-size: 100%;
+  min-height: 2rem;
+  padding: 0 0.625rem 0 1.9375rem;
+  border: 1px solid var(--st-edge-strong);
+  border-radius: var(--st-r-control);
+  background: var(--st-raise);
+  color: inherit;
+  font: inherit;
+  font-size: var(--st-t-s);
+}
+
+.studio-search__input::placeholder {
+  color: #6e6e6e;
+}
+
+.studio-search__input:focus-visible {
+  outline-offset: 0;
+}
+
+.studio-search__count {
+  position: absolute;
+  top: 0.4375rem;
+  right: 0.625rem;
+  color: var(--st-ink-3);
+  font-size: var(--st-t-xs);
+}
+
+/* Schemes (the round 5b mockups): runs by character, each a head over a grid of split chips
+   three across, each chip's name under it and the Accessible tag where it applies. */
+.studio-picker--schemes {
+  display: block;
+}
+
+.studio-scheme-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.625rem 0.5rem;
+  padding-top: 0.5rem;
+}
+
+.studio-picker--schemes .studio-choice {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  border-radius: var(--st-r-group);
+}
+
+.studio-scheme__art {
+  position: relative;
+  display: block;
+}
+
+.studio-picker--schemes .studio-tick {
+  top: -6px;
+  right: -6px;
+}
+
+.studio-scheme__name {
+  color: var(--st-ink-2);
+  font-size: var(--st-t-xs);
+  line-height: 1.25;
+}
+
+.studio-picker--schemes .studio-choice:has(> input:checked) .studio-scheme__name {
+  color: var(--st-ink);
+  font-weight: 600;
+}
+
+.studio-scheme__tag {
+  color: var(--st-ok);
+  font-size: var(--st-t-xs);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.studio-scheme-run + .studio-scheme-run {
+  margin-top: 0.25rem;
+}
+
+.studio-listhead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0;
+  color: var(--st-ink-2);
+  font-size: var(--st-t-xs);
+}
+
+.studio-listhead b {
+  color: var(--st-ink);
+  font-weight: 600;
+}
+
+.studio-schemes__generated {
+  margin-top: 0.75rem;
+}
+
+.studio-schemes__toggle {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0.375rem 0 0;
+}
+
+/* A small on/off, as Accessible only: the track's thumb at its end when on. */
+.studio-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 1.75rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: var(--st-t-s);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.studio-toggle__track {
+  position: relative;
+  width: 28px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--st-edge-strong);
+  transition: background-color var(--st-fast) var(--st-ease);
+}
+
+.studio-toggle__track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--st-bg);
+  transition: transform var(--st-fast) var(--st-ease);
+}
+
+.studio-toggle[aria-checked='true'] .studio-toggle__track {
+  background: var(--st-ink);
+}
+
+.studio-toggle[aria-checked='true'] .studio-toggle__track::after {
+  transform: translateX(12px);
+}
+
+/* A search that finds nothing says what to try, and how to go back. */
+.studio-empty {
+  padding: 0.75rem 0 0.25rem;
+}
+
+.studio-empty p {
+  margin: 0 0 4px;
+}
+
+.studio-empty__hint {
+  color: var(--st-ink-2);
+  font-size: var(--st-t-s);
+}
+
+.studio-chip {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  aspect-ratio: 88 / 54;
+  overflow: hidden;
+  border-radius: var(--st-r-control);
+  box-shadow: 0 0 0 1px var(--st-frame-line);
+  transition: box-shadow var(--st-fast) var(--st-ease);
+}
+
+.studio-chip__side {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 6px 7px;
+}
+
+.studio-chip__side--single {
+  grid-column: 1 / -1;
+}
+
+.studio-chip__aa {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+/* On its own line, between the Aa and the accent dots, so neither touches it (P2-3). */
+.studio-chip__only {
+  position: static;
+  font-size: var(--st-t-xs);
+  font-weight: 600;
+  line-height: 1.1;
+  opacity: 0.8;
+}
+
+.studio-chip__dots {
+  display: flex;
+  gap: 3px;
+}
+
+.studio-chip__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+}
+
+.studio-chip--ramp {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+/* A generated scheme with no colours of its own to show: a seed and the word, on Studio's
+   own surface, with a dashed edge that says it's made, not missing. */
+.studio-chip--generated {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px dashed var(--st-edge);
+  background: var(--st-raise);
+  color: var(--st-ink-2);
+}
+
+.studio-chip--generated .studio-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.studio-chip__generated {
+  font-size: var(--st-t-xs);
+  font-weight: 600;
+}
+
+.studio-chip--small {
+  flex: none;
+  width: 3.5rem;
+  height: 2.125rem;
+  aspect-ratio: auto;
+  border-radius: 5px;
+}
+
+.studio-chip--small .studio-chip__side {
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.studio-chip--small .studio-chip__aa {
+  font-size: var(--st-t-s);
+}
+
+.studio-chip--small .studio-chip__dots {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+}
+
+.studio-chip--small .studio-chip__dot {
+  width: 5px;
+  height: 5px;
+}
+
+/* Typography and design languages: rows, set in their own fonts and geometry. */
+.studio-picker--type,
+.studio-picker--languages {
+  display: grid;
+  gap: 2px;
+  margin: 0 -0.5rem;
+}
+
+.studio-picker--type .studio-choice,
+.studio-picker--languages .studio-choice {
+  position: relative;
+  display: grid;
+  align-items: center;
+  gap: 0.625rem;
+  border-radius: var(--st-r-group);
+  transition: background-color var(--st-fast) var(--st-ease);
+}
+
+/* A type row (the round 5b mockups): the "Aa" beside the name, the pack's weight and the tick,
+   and under them the sample line, which takes the row's width to its end, so the widest still
+   (a mono line at 195px) is whole at the narrowest rail (P-5, A P2-1). */
+.studio-picker--type .studio-choice {
+  grid-template-columns: 2.5rem minmax(0, 1fr) 1.25rem;
+  grid-template-areas:
+    'aa name tick'
+    'aa line line';
+  column-gap: 0.625rem;
+  row-gap: 1px;
+  min-height: 3rem;
+  padding: 6px 0.5rem;
+}
+
+.studio-picker--type .studio-type__aa {
+  grid-area: aa;
+}
+
+.studio-picker--type .studio-type__text {
+  display: contents;
+}
+
+.studio-picker--type .studio-type__head {
+  grid-area: name;
+}
+
+.studio-picker--type .studio-type__line {
+  grid-area: line;
+}
+
+.studio-picker--type .studio-tick--row {
+  grid-area: tick;
+  align-self: center;
+}
+
+.studio-picker--languages .studio-choice {
+  grid-template-columns: 4rem minmax(0, 1fr) 1.125rem;
+  min-height: 2.625rem;
+  padding: 4px 0.5rem 4px 6px;
+}
+
+.studio-picker--type .studio-choice:hover,
+.studio-picker--languages .studio-choice:hover {
+  background: var(--st-hover);
+}
+
+.studio-picker--type .studio-choice:has(> input:checked),
+.studio-picker--languages .studio-choice:has(> input:checked) {
+  background: var(--st-raise);
+  box-shadow: inset 0 0 0 2px var(--st-ink);
+}
+
+.studio-type__aa {
+  display: grid;
+  place-items: center;
+  min-height: 2.125rem;
+  color: var(--st-ink);
+  font-size: 1.625rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.studio-type__text {
+  display: grid;
+  min-width: 0;
+}
+
+/* The name, then what the pack's fonts weigh, at the line's end, on every row alike: a long
+   name wraps in its own column, never pushing the weight under it (P2-4). */
+.studio-type__head {
+  display: flex;
+  align-items: baseline;
+  gap: 0 0.5rem;
+  min-width: 0;
+}
+
+.studio-picker--type .studio-choice__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--st-t-s);
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: break-word;
+}
+
+.studio-type__meta--card {
+  display: none;
+}
+
+.studio-type__meta {
+  flex: none;
+  margin-left: auto;
+  color: var(--st-ink-2);
+  font-size: var(--st-t-xs);
+  line-height: 1.25;
+}
+
+/* The sample line: a still at its own rem size, never cropped (it may only shrink to a rail
+   narrower than its width); a system face's live line wraps rather than cut. */
+.studio-type__line {
+  display: block;
+  min-width: 0;
+  min-height: 1.125rem;
+  color: var(--st-ink);
+  font-size: var(--st-t-s);
+  line-height: 1.125rem;
+}
+
+/* A type still is an alpha mask in black: CSS paints it in Studio's ink, #171717 in light chrome
+   and #ededed in dark, so it matches the live text beside it and needs no second file. */
+.studio-still {
+  display: block;
+  max-width: 100%;
+  object-fit: contain;
+  object-position: left center;
+  filter: invert(0.0902);
+  user-select: none;
+}
+
+.studio-type__aa .studio-still {
+  max-width: none;
+}
+
+/* Forced colours keep an image as it is: the mask is black on light grounds and white on dark,
+   as the system's own text is. */
+@media (forced-colors: active) {
+  .studio-shell--workspace .studio-still {
+    filter: none;
+  }
+}
+
+@media (forced-colors: active) and (prefers-color-scheme: dark) {
+  .studio-shell--workspace .studio-still {
+    filter: invert(1);
+  }
+}
+
+/* A head over a grid that keeps the panel's edge, as compositions', schemes' and recipes', sits
+   on that edge too; the row pickers' groups run 0.5rem wider, so their heads keep the inset. */
+.studio-compositions > .studio-choices__head,
+.studio-scheme-run > .studio-choices__head,
+.studio-recipes__run > .studio-choices__head {
+  padding-inline: 0;
+}
+
+/* The picker's run heads, "Web fonts 8" and "On every device 7": plain text in the radio group. */
+.studio-choices__head {
+  display: grid;
+  gap: 1px;
+  padding: 0.75rem 0.5rem 0.375rem;
+}
+
+.studio-choices > .studio-choices__head:first-child {
+  padding-top: 0.25rem;
+}
+
+.studio-group__name {
+  font-size: var(--st-t-s);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.studio-group__count {
+  color: var(--st-ink-2);
+  font-weight: 500;
+}
+
+.studio-group__why {
+  color: var(--st-ink-2);
+  font-size: var(--st-t-xs);
+  line-height: 1.33;
+}
+
+.studio-types .studio-families {
+  margin-bottom: calc(0.75rem - 2px);
+}
+
+/* A name shows whole, on two lines where it needs them, never cut (P1-1). */
+.studio-picker--languages .studio-choice__label {
+  min-width: 0;
+  line-height: 1.25;
+  overflow-wrap: break-word;
+}
+
+.studio-languages__head {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 4px;
+  color: var(--st-ink-3);
+  font-size: var(--st-t-xs);
+}
+
+.studio-language {
+  position: relative;
+  display: block;
+  width: 4rem;
+  height: 2.5rem;
+  overflow: hidden;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px var(--st-frame-line);
+}
+
+.studio-language__card {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  box-sizing: border-box;
+  width: 2.625rem;
+  height: 2.5rem;
+  padding: 5px;
+}
+
+.studio-language__card i {
+  display: block;
+  width: 18px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.studio-language__card i + i {
+  width: 12px;
+}
+
+/* What a glass language's card lets show through. */
+.studio-language__behind {
+  position: absolute;
+  top: 3px;
+  left: 30px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+}
+
+.studio-language__button {
+  z-index: 1;
+}
+
+.studio-language__button {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  box-sizing: border-box;
+  width: 24px;
+  height: 12px;
+}
+
+/* Shown in the About only where the line it repeats is hidden (a short rail's pinned foot). */
+.studio-info__lead {
+  display: none;
+  margin: 0.375rem 0 0;
+  color: var(--st-ink-2);
+  font-size: var(--st-t-xs);
+  line-height: 1.33;
+}
+
+/* About: provenance and cost behind one disclosure, which prints open. */
+.studio-info,
+.studio-summary {
+  margin-top: 0.75rem;
+}
+
+.studio-info__summary,
+.studio-summary__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 1.75rem;
+  margin: 0 -6px;
+  padding: 0 6px;
+  border-radius: var(--st-r-control);
+  color: var(--st-ink-2);
+  font-size: var(--st-t-xs);
+  font-weight: 550;
+  list-style: none;
+  cursor: pointer;
+}
+
+.studio-info__summary::-webkit-details-marker,
+.studio-summary__head::-webkit-details-marker {
+  display: none;
+}
+
+.studio-info__summary:hover,
+.studio-summary__head:hover {
+  background: var(--st-hover);
+}
+
+.studio-info__summary .studio-icon,
+.studio-summary__head .studio-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--st-ink-3);
+}
+
+.studio-info__chevron {
+  margin-left: auto;
+  transition: transform var(--st-fast) var(--st-ease);
+}
+
+details[open] > summary .studio-info__chevron {
+  transform: rotate(180deg);
+}
+
+.studio-info .studio-appearance__facts {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0;
+  font-size: var(--st-t-xs);
+}
+
+.studio-info .studio-appearance__facts div {
+  display: grid;
+  grid-template-columns: 5.75rem 1fr;
+  gap: 0.5rem;
+}
+
+.studio-info .studio-appearance__facts dt {
+  color: var(--st-ink-3);
+  font-weight: 400;
+}
+
+.studio-info .studio-appearance__facts dd {
+  margin: 0;
+}
+
+.studio-summary .studio-appearance__findings {
+  margin-top: 6px;
+  font-size: var(--st-t-xs);
+}
+
+.studio-summary .studio-appearance__findings p,
+.studio-summary .studio-appearance__findings ul {
+  margin: 0;
+}
+
+@media print {
+  .studio-info,
+  .studio-summary {
+    display: block;
+  }
+}
+
+.studio-picker__fallback {
+  margin: 0.625rem 0 0;
+  color: var(--st-attn);
+  font-size: var(--st-t-xs);
+}
+
+/* The owner's visitor control: a switch. */
+.studio-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  inline-size: 100%;
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.625rem;
+  border: 0;
+  border-radius: var(--st-r-group);
+  background: var(--st-sunk);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.studio-switch__text {
+  display: grid;
+}
+
+.studio-switch__name {
+  font-size: var(--st-t-s);
+  font-weight: 600;
+}
+
+.studio-switch__state {
+  color: var(--st-ink-3);
+  font-size: var(--st-t-xs);
+}
+
+.studio-switch__track {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  border-radius: 10px;
+  background: #b9b9b9;
+  transition: background-color var(--st-fast) var(--st-ease);
+}
+
+.studio-switch__track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+  transition: transform var(--st-fast) var(--st-ease);
+}
+
+.studio-switch[aria-checked='true'] .studio-switch__track {
+  background: var(--st-ink);
+}
+
+.studio-switch[aria-checked='true'] .studio-switch__track::after {
+  transform: translateX(14px);
+}
+
+.studio-switch:focus-visible {
+  outline: 2px solid var(--st-focus);
+  outline-offset: 2px;
+}
+
+.studio-switch[aria-disabled='true'] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Recipes, wide (the round 5b mockups): family chips, then rows by the composition's family,
+   each a miniature with its type badge, the name, and what it sets on one line. */
+.studio-recipes__list {
+  display: grid;
+  gap: 2px;
+  margin: 0 -0.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.studio-recipes .studio-families {
+  margin-bottom: calc(0.25rem - 2px);
+}
+
+/* A phone keeps one row of cards that scrolls, two and a peek, then Surprise me. */
+@media (max-width: 47.99rem) and (max-width: 1023.98px),
+  (max-height: 29.99rem) and (max-height: 599.98px) {
+  .studio-recipes__strip {
+    display: flex;
+    gap: 0.5rem;
+    margin: 0 -1rem;
+    padding: 2px 1rem;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 1rem;
+    scrollbar-width: none;
+  }
+
+  .studio-recipes__run,
+  .studio-recipes__list {
+    display: contents;
+  }
+
+  .studio-recipes__run > .studio-choices__head,
+  .studio-recipes .studio-families {
+    display: none;
+  }
+
+  .studio-recipe {
+    flex: none;
+    width: 7.375rem;
+  }
+
+  .studio-recipe__aa {
+    display: none;
+  }
+
+  /* The phone's card has room for the scheme alone; its type stays in the button's name. */
+  .studio-recipe__type {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+.studio-recipe {
+  scroll-snap-align: start;
+}
+
+.studio-recipe__button {
+  display: grid;
+  gap: 4px;
+  position: relative;
+  inline-size: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--st-r-group);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.studio-recipe__button:active {
+  transform: scale(0.98);
+}
+
+.studio-recipe__art {
+  display: block;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-radius: var(--st-r-control);
+  box-shadow: 0 0 0 1px var(--st-frame-line);
+  transition: box-shadow var(--st-fast) var(--st-ease);
+}
+
+.studio-recipe__art:hover {
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.3),
+    0 2px 6px rgb(0 0 0 / 0.12);
+}
+
+.studio-recipe__name {
+  margin-top: 2px;
+  font-size: var(--st-t-s);
+  font-weight: 550;
+  line-height: 1.23;
+}
+
+.studio-recipe__meta {
+  color: var(--st-ink-3);
+  font-size: var(--st-t-xs);
+  line-height: 1.33;
+}
+
+.studio-recipe__text {
+  display: grid;
+  min-width: 0;
+}
+
+.studio-recipe__art {
+  position: relative;
+}
+
+.studio-recipe__aa {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.25rem;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px var(--st-frame-line);
+  font-size: 0.75rem;
+  font-weight: 650;
+  line-height: 1;
+}
+
+@media (min-width: 48rem) and (min-height: 30rem),
+  (min-width: 48rem) and (min-height: 600px),
+  (min-width: 1024px) and (min-height: 30rem),
+  (min-width: 1024px) and (min-height: 600px) {
+  .studio-recipe__button {
+    grid-template-columns: 4rem minmax(0, 1fr);
+    align-items: center;
+    gap: 0.625rem;
+    min-height: 3.25rem;
+    padding: 6px 0.5rem;
+    transition: background-color var(--st-fast) var(--st-ease);
+  }
+
+  .studio-recipe__button:hover {
+    background: var(--st-hover);
+  }
+
+  .studio-recipe__art {
+    width: 4rem;
+    height: 2.5rem;
+    aspect-ratio: auto;
+    border-radius: 4px;
+  }
+
+  .studio-recipe__name {
+    margin: 0;
+    font-weight: 600;
+  }
+
+  /* One line: the scheme, then the type where the rail has room for it (A P2-H). */
+  .studio-recipe__meta {
+    overflow: hidden;
+    color: var(--st-ink-2);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .studio-recipe__button:active {
+    transform: none;
+  }
+}
+
+.studio-surprise {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  inline-size: calc(100% + 0.75rem);
+  min-height: 2rem;
+  margin: 6px 0 0 -0.75rem;
+  padding: 0 0.75rem;
+  border: 0;
+  border-radius: var(--st-r-control);
+  background: transparent;
+  color: var(--st-ink);
+  font: inherit;
+  font-size: var(--st-t-s);
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.studio-surprise:hover {
+  background: var(--st-hover);
+}
+
+.studio-surprise__hint {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--st-ink-3);
+  font-size: var(--st-t-xs);
+  font-weight: 450;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ---------------------------------------------------------------- the stage: the viewing booth */
+.studio-split__preview {
+  /* The bar over the frame and its gap, which the frame's fit leaves room for. */
+  --studio-fit-reserve: 2.75rem;
+  position: relative;
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Centred while it fits; past that, from the top, so the bar over the frame never
+     rises under the top bar. */
+  justify-content: safe center;
+  min-width: 0;
+  min-height: 0;
+  padding: 1rem 1.5rem;
+  overflow: hidden;
+  background: var(--st-stage);
+}
+
+.studio-split[data-rail='collapsed'] .studio-split__preview {
+  grid-column: 1 / -1;
+}
+
+.studio-split__group {
+  container-type: inline-size;
+  display: grid;
+  gap: 0.75rem;
+  inline-size: max(var(--studio-frame-width, 100%), 34rem);
+  max-inline-size: 100%;
+}
+
+.studio-split__tools {
+  display: grid;
+  /* Each zone at least its content, so a segment is never clipped; narrower than that,
+     the bar wraps (below). */
+  grid-template-columns: minmax(max-content, 1fr) auto minmax(max-content, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2rem;
+}
+
+.studio-split__tools-start,
+.studio-split__tools-end {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* Under about 1200px of stage, the groups lose their captions, Page and Motion alike. */
+@container (max-width: 75rem) {
+  .studio-split__tools .studio-segmented__caption {
+    display: none;
+  }
+}
+
+@container (max-width: 43rem) {
+  .studio-split__tools {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .studio-split__tools-start,
+  .studio-split__tools-end {
+    flex-wrap: wrap;
+  }
+}
+
+.studio-split__tools-end {
+  justify-content: flex-end;
+}
+
+.studio-split__tools .studio-segmented,
+.studio-split__scale {
+  border-color: transparent;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+}
+
+.studio-split__scale {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0 0.5625rem;
+  border-radius: var(--st-r-control);
+  background: var(--st-raise);
+  font-size: var(--st-t-xs);
+  font-weight: 650;
+}
+
+.studio-split__stage {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  min-width: 0;
+}
+
+/* Over the frame's top edge, in the middle, never in the bar's place. */
+.studio-split__intent--over {
+  position: absolute;
+  z-index: 2;
+  inset-block-start: 0.5rem;
+  inset-inline-start: 50%;
+  translate: -50% 0;
+  pointer-events: none;
+  box-shadow: 0 4px 12px -4px rgb(0 0 0 / 0.35);
+}
+
+/* What the frame previews while a mouse points at an option: an ink plate over its corner. */
+.studio-split__intent {
+  margin: 0;
+  padding: 0.375rem 0.6875rem;
+  border-radius: var(--st-r-control);
+  background: var(--st-ink);
+  color: var(--st-on-ink);
+  font-size: var(--st-t-s);
+  line-height: 1.3;
+  text-align: center;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+}
+
+.studio-split__intent b {
+  font-weight: 600;
+}
+
+.studio-split__stage > *,
+.studio-split__stage .preview-surface {
+  inline-size: 100%;
+}
+
+.studio-split__stage .preview-surface {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+}
+
+.studio-split__stage .preview-surface__stage {
+  margin: 0 auto;
+  border: 0;
+  border-radius: 2px;
+  background: #ffffff;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.2),
+    0 1px 2px rgb(0 0 0 / 0.14),
+    0 8px 18px -6px rgb(0 0 0 / 0.24),
+    0 26px 50px -18px rgb(0 0 0 / 0.3);
+}
+
+.studio-split__stage .preview-surface__stage[data-phase='loading'] {
+  background: var(--st-sunk);
+}
+
+/* A state the frame can't show, or a link it tried, sits over the frame's top, so it's on
+   screen however tall the frame is and never under the sheet. */
+.studio-split__stage .preview-surface {
+  position: relative;
+}
+
+.studio-split__stage .preview-surface__state,
+.studio-split__stage .preview-surface__link {
+  position: absolute;
+  inset-block-start: 0.75rem;
+  inset-inline: 0.75rem;
+  z-index: 2;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.14);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--st-r-control);
+  background: var(--st-raise);
+  font-size: var(--st-t-s);
+}
+
+/* A blocked version with nothing kept leaves the frame empty, so its notice is the frame's one
+   content: centred in it, as Demo's poster is, not a strip over a blank page. A phone's frame
+   is short, and the notice stays over its top there. */
+@media (min-width: 48rem) and (min-height: 30rem),
+  (min-width: 48rem) and (min-height: 600px),
+  (min-width: 1024px) and (min-height: 30rem),
+  (min-width: 1024px) and (min-height: 600px) {
+  .studio-split__stage .preview-surface__state--alone {
+    inset-block-start: 50%;
+    inset-inline: 0;
+    flex-direction: column;
+    inline-size: fit-content;
+    max-inline-size: min(30rem, calc(100% - 1.5rem));
+    margin-inline: auto;
+    padding: 1.25rem 1.5rem;
+    border-radius: var(--st-r-group);
+    text-align: center;
+    translate: 0 -50%;
+  }
+}
+
+.studio-split__stage .demo-frame__poster {
+  justify-items: center;
+  padding: 1.5rem;
+  border: 0;
+  border-radius: var(--st-r-group);
+  background: var(--st-raise);
+  text-align: center;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.14);
+}
+
+/* A short window, as a phone on its side or 640x400 at 200% zoom: the poster is one row, its
+   ask beside its button, and what it shows is read only by assistive technology, so the
+   button stays inside the stage's room above the sheet. */
+@media (max-height: 29.99rem) {
+  .studio-split__stage .demo-frame__poster {
+    grid-auto-flow: column;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.625rem 1rem;
+    text-align: start;
+  }
+
+  .studio-split__stage .demo-frame__what {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* The frame has focus while its document does: preview-surface.tsx marks the stage from
+   the iframe's own focus and blur. */
+.studio-split__stage .preview-surface__stage[data-frame-focus] {
+  outline: 2px solid var(--st-focus);
+  outline-offset: 2px;
+}
+
+.studio-split__stage .preview-surface__frame:focus {
+  outline: none;
+}
+
+/* ---------------------------------------------------------------- compare
+   Studio's Compare, Demo's and Owner's (split/compare.tsx): its bar over the frames, then side by side,
+   the wipe, or the grid of stills, filling the stage's height. */
+.studio-split__preview:has(.studio-compare__room) {
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.studio-split__preview:has(.studio-compare__room) .studio-split__group {
+  flex: 1 1 auto;
+  grid-template-rows: auto minmax(0, 1fr);
+  inline-size: 100%;
+  min-height: 0;
+}
+
+.studio-split__preview:has(.studio-compare__room) .studio-split__stage {
+  min-height: 0;
+}
+
+.studio-compare__room {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  justify-self: stretch;
+  block-size: 100%;
+  min-height: 0;
+}
+
+.studio-compare__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--st-r-group);
+  background: var(--st-raise);
+  box-shadow: 0 0 0 1px var(--st-frame-line);
+}
+
+.studio-compare__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem 0.5rem;
+  margin: 0;
+  font-size: var(--st-t-s);
+}
+
+.studio-compare__chip {
+  padding: 2px 8px;
+  border: 1px solid var(--st-edge);
+  border-radius: 999px;
+  background: var(--st-sunk);
+  font-size: var(--st-t-xs);
+  font-weight: 550;
+}
+
+.studio-compare__rest {
+  color: var(--st-ink-3);
+  font-size: var(--st-t-xs);
+}
+
+.studio-compare__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.studio-compare__banner {
+  margin: 0;
+  padding: 0.5rem 0.625rem;
+  border-radius: var(--st-r-control);
+  background: var(--st-sunk);
+  font-size: var(--st-t-s);
+  font-weight: 550;
+}
+
+.studio-compare {
+  min-height: 0;
+}
+
+/* Side by side: two panes of one size, so both frames take one scale. */
+.studio-compare--side {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.studio-compare__pane {
+  --studio-fit-reserve: 2.25rem;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.5rem;
+  min-width: 0;
+  min-height: 0;
+}
+
+.studio-compare__pane[data-side='b'] .preview-surface__stage {
+  box-shadow:
+    0 0 0 2px var(--st-ink),
+    0 8px 18px -6px rgb(0 0 0 / 0.24);
+}
+
+.studio-compare__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 1.75rem;
+  font-size: var(--st-t-s);
+}
+
+.studio-compare__tag {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 1.375rem;
+  block-size: 1.375rem;
+  border-radius: 4px;
+  background: var(--st-ink);
+  color: var(--st-on-ink);
+  font-size: var(--st-t-xs);
+  font-weight: 700;
+}
+
+.studio-compare__what {
+  font-weight: 600;
+}
+
+.studio-compare__note {
+  color: var(--st-ink-3);
+  font-size: var(--st-t-xs);
+}
+
+.studio-compare__link,
+.studio-textbutton {
+  min-height: 1.75rem;
+  padding: 0 0.25rem;
+  border: 0;
+  background: transparent;
+  color: var(--st-ink);
+  font: inherit;
+  font-size: var(--st-t-s);
+  font-weight: 550;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.studio-textbutton {
+  justify-self: start;
+  margin-top: 0.5rem;
+}
+
+.studio-compare__frame {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  min-height: 0;
+}
+
+/* The wipe: A over B at the full scale, A left of the divider. */
+.studio-compare--wipe {
+  --studio-fit-reserve: 0px;
+  display: grid;
+  place-items: start center;
+}
+
+.studio-compare__stack {
+  position: relative;
+  display: grid;
+}
+
+.studio-compare__layer {
+  grid-area: 1 / 1;
+}
+
+.studio-compare__layer--a {
+  clip-path: inset(0 calc(100% - var(--wipe, 50%)) 0 0);
+}
+
+.studio-compare__divider {
+  position: absolute;
+  inset-block: 0;
+  left: var(--wipe, 50%);
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  inline-size: 2px;
+  margin-left: -1px;
+  background: var(--st-ink);
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.studio-compare__grip {
+  inline-size: 1.25rem;
+  block-size: 2.5rem;
+  border: 2px solid var(--st-on-ink);
+  border-radius: 999px;
+  background: var(--st-ink);
+}
+
+.studio-shell--workspace .studio-compare__divider:focus-visible {
+  outline: 2px solid var(--st-focus);
+  outline-offset: 3px;
+}
+
+.studio-compare__corner {
+  position: absolute;
+  inset-block-start: 0.5rem;
+  display: inline-grid;
+  place-items: center;
+  inline-size: 1.375rem;
+  block-size: 1.375rem;
+  border-radius: 4px;
+  background: var(--st-ink);
+  color: var(--st-on-ink);
+  font-size: var(--st-t-xs);
+  font-weight: 700;
+}
+
+.studio-compare__corner[data-side='a'] {
+  inset-inline-start: 0.5rem;
+}
+
+.studio-compare__corner[data-side='b'] {
+  inset-inline-end: 0.5rem;
+}
+
+/* The grid: stills, never frames. */
+/* The grid of four (the Studio mockup's studio-compare-grid): a 2x2 of plates that fills
+   the stage, each a head with its name, language and actions over its still, A's with its
+   letter. Compare's bar above says what every plate keeps of A. */
+.studio-compare--grid {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  min-height: 0;
+}
+
+.studio-compare__grid-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+/* Where the page is, quiet, beside the button that moves it on. */
+.studio-compare__pager {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.studio-compare__position {
+  color: var(--st-ink-3);
+  font-size: var(--st-t-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.studio-compare__plates {
+  /* A plate's head, one line tall, so the room under it is known (DEM-3). */
+  --studio-plate-head: 2.5rem;
+  container-type: size;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  place-items: center;
+  gap: 1rem;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Each plate is its frame's size (DEM-3): a 1440 by 900 page scaled to fit its cell, as wide as
+   the cell, or as the cell's height under the head allows at 16:10, so the frame meets the
+   plate's edges and no stage shows under it. */
+.studio-plate {
+  display: grid;
+  grid-template-rows: var(--studio-plate-head) auto;
+  inline-size: min(100%, calc((50cqb - 0.5rem - var(--studio-plate-head)) * 1.6));
+  min-height: 0;
+  /* Narrower than its cell, the pair keeps to the grid's gap rather than its cells' middles. */
+  justify-self: end;
+  overflow: hidden;
+  border-radius: var(--st-r-group);
+  background: var(--st-raise);
+  box-shadow: 0 0 0 1px var(--st-frame-line);
+}
+
+.studio-plate__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.375rem 0.75rem;
+  box-sizing: border-box;
+  block-size: var(--studio-plate-head);
+  min-width: 0;
+  padding: 0 0.5rem;
+  border-bottom: 1px solid var(--st-rule);
+}
+
+.studio-plate:nth-child(even) {
+  justify-self: start;
+}
+
+.studio-plate[data-pinned='true'] {
+  box-shadow: 0 0 0 2px var(--st-ink);
+}
+
+.studio-plate__still {
+  position: relative;
+  display: grid;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.studio-plate__still .studio-thumb {
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+/* The plate's room: its drawing, or its live frame contained in it, the frame's own shape. The
+   stage's reserve for the bar over its frame isn't the plate's: the frame fills the room. */
+.studio-plate__view {
+  --studio-fit-reserve: 0px;
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-items: start;
+  aspect-ratio: 1440 / 900;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.studio-plate__view > .studio-plate__still {
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+.studio-plate__type {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 650;
+}
+
+.studio-plate__name {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--st-t-s);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.studio-plate__note {
+  color: var(--st-ink-3);
+  font-size: var(--st-t-xs);
+}
+
+.studio-plate__actions {
+  display: flex;
+  flex: none;
+  gap: 0.375rem;
+}
+
+/* At a phone's width, one frame and an A or B toggle over it; the frame fills the rest. */
+.studio-compare--flip {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.5rem;
+  justify-items: center;
+  min-height: 0;
+}
+
+.studio-compare__flip-room {
+  --studio-fit-reserve: 0px;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  inline-size: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------- the bottom bar */
+.studio-split__sandbox {
+  margin: 0;
+  color: var(--st-ink-2);
+  font-size: var(--st-t-s);
+  white-space: nowrap;
+}
+
+.studio-split__status {
+  min-width: 0;
+  margin: 0 0 0 auto;
+  overflow: hidden;
+  color: var(--st-ink-2);
+  font-size: var(--st-t-s);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.studio-states {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.studio-states__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  padding: 0 0.875rem;
+  border-right: 1px solid var(--st-rule);
+  color: var(--st-ink-2);
+  font-size: var(--st-t-s);
+  white-space: nowrap;
+}
+
+.studio-states__item:first-child {
+  padding-left: 0;
+}
+
+.studio-states__label {
+  color: var(--st-ink);
+  font-weight: 650;
+}
+
+.studio-states__item[data-tone='attention'],
+.studio-states__item[data-tone='attention'] .studio-states__label {
+  color: var(--st-attn);
+}
+
+.studio-states__item[data-tone='ok'],
+.studio-states__item[data-tone='ok'] .studio-states__label {
+  color: var(--st-ok);
+}
+
+.studio-states__item a {
+  color: inherit;
+  font-weight: 600;
+  text-underline-offset: 2px;
+}
+
+.studio-states__item .studio-icon {
+  width: 0.9375rem;
+  height: 0.9375rem;
+}
+
+/* ---------------------------------------------------------------- 64 to 80rem: a tighter rail, compact bars */
+@media (max-width: 79.99rem) {
+  .studio-split {
+    grid-template-columns: min(var(--studio-rail, 20rem), 18.5rem) minmax(0, 1fr);
+  }
+
+  .studio-split__width-label,
+  .studio-split__top-end .studio-split__undo,
+  .studio-split__motion .studio-segmented__caption,
+  .studio-source-menu__kind,
+  .studio-split__unsaved,
+  .studio-states ~ .studio-split__status {
+    display: none;
+  }
+
+  .studio-split__top-stage {
+    padding-inline: 0.75rem 0.5rem;
+  }
+
+  .studio-split__preview {
+    padding: 1rem;
+  }
+
+  .studio-tasks__link {
+    padding: 0 0.25rem;
+  }
+
+  /* The bar's end in fewer pixels at 1024, so it shares the task links' row. */
+  .studio-split__reason-long {
+    display: none;
+  }
+
+  .studio-split__reason-short {
+    display: inline;
+  }
+
+  .studio-split__top-end {
+    gap: 0.375rem;
+  }
+
+  .studio-split__top-end .studio-button--quiet {
+    padding-inline: 0.5rem;
+  }
+
+  /* Owner Studio's Compare is its icon here, named Compare still, so the bar keeps one 48px
+     row (OWN-2). */
+  .studio-compare-toggle {
+    padding-inline: 0.5rem;
+  }
+
+  /* The top bar's Save draft reads Save here, named Save draft still. */
+  .studio-split__save-rest,
+  .studio-compare-toggle__text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* 48 to 64rem: the desktop grid with a 280px rail. */
+@media (max-width: 63.99rem) {
+  .studio-split {
+    grid-template-columns: min(var(--studio-rail, 20rem), 17.5rem) minmax(0, 1fr);
+  }
+
+  .studio-split__group {
+    inline-size: max(var(--studio-frame-width, 100%), 22rem);
+  }
+}
+
+/* ---------------------------------------------------------------- below 48rem: the preview on top, the pickers in a sheet */
+/* Below 48rem of width, or 30rem of height whatever the width, as a phone on its side
+   (round 5, P1-3): PHONE_STUDIO in studio-split.tsx says the same. */
+@media (max-width: 47.99rem) and (max-width: 1023.98px),
+  (max-height: 29.99rem) and (max-height: 599.98px) {
+  .studio-split {
+    --studio-top: 2.75rem;
+    /* What the sheet leaves above it is the stage's own grey. */
+    background: var(--st-stage);
+    grid-template-columns: minmax(0, 1fr);
+    /* The stage is what the sheet leaves: 55% at its rest, more as it drops, so no band
+       of grey sits under the frame at 25%. */
+    grid-template-rows:
+      var(--studio-top)
+      max(0px, calc((1 - var(--studio-sheet, 0.45)) * 100dvh - var(--studio-top)))
+      minmax(0, 1fr);
+    transition: grid-template-rows 500ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  .studio-split[data-dragging] {
+    transition: none;
+  }
+
+  .studio-split__top {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .studio-split__top-rail {
+    padding-inline: 0.75rem 0.375rem;
+    border-right: 0;
+  }
+
+  .studio-split__top-phone {
+    display: flex;
+    align-items: center;
+    padding-inline-end: 0.375rem;
+  }
+
+  .studio-split__bottom {
+    display: none;
+  }
+
+  /* No rail column: the waiting line has the whole of what the top bar leaves. */
+  .studio-split__pending {
+    grid-column: 1;
+    margin-inline-start: 0;
+    border-inline-start: 0;
+  }
+
+  .studio-split__preview {
+    --studio-fit-reserve: 2.5rem;
+    grid-column: 1;
+    grid-row: 2;
+    justify-content: flex-start;
+    padding: 0.5rem 0.75rem 0.625rem;
+  }
+
+  .studio-split__group {
+    gap: 0.5rem;
+    inline-size: 100%;
+  }
+
+  /* One 44px row: device icons, the scale, and the page, with no captions; Open full page
+     is in the top bar's menu. */
+  .studio-split__tools {
+    display: flex;
+    /* One row where it fits, as at 390; narrower, as at 320, the page switch takes a row
+       of its own rather than running past the edge. Each group stays whole. */
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    min-height: 2.75rem;
+  }
+
+  .studio-split__tools-start,
+  .studio-split__tools-end {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  .studio-split__tools-center:empty,
+  .studio-split__tools .studio-segmented__caption,
+  .studio-split__tools .studio-iconbutton--plate,
+  .studio-split__width-label {
+    display: none;
+  }
+
+  /* The scale is the menu's line (round 5, P1-1), so the stage is one 44px row: the device
+     icons, then Home, Work and Case study. */
+  .studio-split__motion,
+  .studio-split__tools .studio-split__scale {
+    display: none;
+  }
+
+  .studio-split__rail {
+    position: fixed;
+    inset-inline: 0;
+    inset-block-end: 0;
+    z-index: 5;
+    block-size: calc(var(--studio-sheet, 0.5) * 100dvh);
+    padding-bottom: env(safe-area-inset-bottom);
+    border-right: 0;
+    border-radius: 14px 14px 0 0;
+    box-shadow:
+      0 -1px 0 rgb(0 0 0 / 0.08),
+      0 -10px 30px -12px rgb(0 0 0 / 0.35);
+    transition: block-size 500ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  .studio-split[data-dragging] .studio-split__rail {
+    transition: none;
+  }
+
+  .studio-split__handle {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    display: grid;
+    place-items: center;
+    inline-size: 100%;
+    block-size: 1.375rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: var(--st-bg);
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .studio-split__handle::before {
+    content: '';
+    display: block;
+    inline-size: 2.5rem;
+    block-size: 0.25rem;
+    border-radius: 2px;
+    background: #c2c2c2;
+  }
+
+  .studio-split__handle:focus-visible {
+    outline-offset: -2px;
+  }
+
+  .studio-split__tabs {
+    position: sticky;
+    top: 1.375rem;
+    z-index: 3;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 0 0.5rem 0.5rem;
+    border-bottom: 1px solid var(--st-rule);
+    background: var(--st-bg);
+  }
+
+  .studio-split__tab {
+    flex: 1 1 auto;
+    min-height: 2rem;
+    padding: 0 0.5rem;
+    border: 0;
+    border-radius: var(--st-r-control);
+    background: transparent;
+    color: var(--st-ink-2);
+    font: inherit;
+    font-size: var(--st-t-s);
+    font-weight: 550;
+  }
+
+  .studio-split__tab[aria-selected='true'] {
+    background: var(--st-ink);
+    color: var(--st-on-ink);
+  }
+
+  .studio-split__section {
+    padding: 0.75rem 1rem 0.5rem;
+    border-bottom: 0;
+  }
+
+  /* The current value and the axis's tools; at large text, where the tools would squeeze the
+     value to a word, they take a row of their own under it. */
+  .studio-split__section-top {
+    position: static;
+    flex-wrap: wrap;
+    row-gap: 0.25rem;
+    margin: 0 -0.5rem 0.625rem 0;
+    padding: 0;
+  }
+
+  .studio-split__section-head,
+  .studio-split__description,
+  .studio-readout,
+  .studio-search,
+  .studio-languages__head,
+  .studio-axis__hint {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .studio-split__current {
+    display: grid;
+    flex: 1 1 7rem;
+    min-width: 0;
+  }
+
+  /* The value whole, in whole words on as many lines as it needs, never cut to a letter or
+     two: its tools wrap under it at large text. */
+  .studio-split__current-name {
+    font-size: var(--st-t-l);
+    font-weight: 600;
+    line-height: 1.25;
+    overflow-wrap: break-word;
+  }
+
+  .studio-split__current-sub {
+    color: var(--st-ink-3);
+    font-size: var(--st-t-xs);
+    overflow-wrap: break-word;
+  }
+
+  .studio-split .studio-iconbutton {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .studio-split__note {
+    display: none;
+  }
+
+  /* Each axis's options scroll across, not down. */
+  .studio-picker--compositions,
+  .studio-picker--schemes,
+  .studio-picker--type,
+  .studio-picker--languages {
+    grid-auto-flow: column;
+    grid-template-columns: none;
+    gap: 0.75rem;
+    margin: -4px -1rem 0;
+    padding: 10px 1rem 10px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 1rem;
+    scrollbar-width: none;
+  }
+
+  /* Compositions on a phone: one strip, the ready drawings first, then one card for everything
+     in progress; Compare is the link under the strip. */
+  .studio-picker--compositions {
+    display: flex;
+    align-items: flex-start;
+  }
+
+  /* A strip's edges fade where it scrolls on, so a card part in view reads as more to come, not
+     as a card cut off. */
+  .studio-picker--compositions,
+  .studio-picker--schemes,
+  .studio-picker--type,
+  .studio-picker--languages,
+  .studio-recipes__strip {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 1rem,
+      #000 calc(100% - 2rem),
+      transparent
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 1rem,
+      #000 calc(100% - 2rem),
+      transparent
+    );
+  }
+
+  /* While the phone's frame waits to be asked for (#11's TBT budget), its poster takes the
+     preview's whole room, so the room reads as the preview's, never as a blank band. */
+  .studio-split__group:has(.demo-frame__poster) {
+    flex: 1 1 auto;
+    grid-template-rows: auto minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .studio-split__stage:has(> * .demo-frame__poster),
+  .studio-split__stage:has(> .demo-frame__poster) {
+    align-items: stretch;
+    justify-items: stretch;
+  }
+
+  .studio-split__stage .demo-frame__poster {
+    align-content: center;
+    block-size: 100%;
+  }
+
+  .studio-compositions > .studio-choices__head,
+  .studio-compare-tile,
+  .studio-compositions .studio-compare-link {
+    display: none;
+  }
+
+  .studio-thumbs {
+    display: contents;
+  }
+
+  .studio-thumbs > .studio-choice,
+  .studio-thumbs > .studio-pend-card {
+    flex: none;
+    width: 8.5rem;
+  }
+
+  .studio-picker--compositions > .studio-pends {
+    display: flex;
+    flex: none;
+    gap: 0.75rem;
+    margin: 0;
+  }
+
+  .studio-picker--compositions > .studio-pends > .studio-choice {
+    width: 8.5rem;
+  }
+
+  /* In progress, under the strip: the line that opens its rows. */
+  .studio-later {
+    margin-top: 0.25rem;
+  }
+
+  /* Schemes on a phone: one strip of chips with their names; the runs' heads are the list's. */
+  .studio-picker--schemes {
+    display: flex;
+    align-items: flex-start;
+  }
+
+  .studio-scheme-run,
+  .studio-scheme-grid {
+    display: contents;
+  }
+
+  .studio-picker--schemes .studio-choices__head,
+  .studio-picker--schemes .studio-listhead,
+  .studio-schemes__generated {
+    display: none;
+  }
+
+  .studio-picker--schemes .studio-choice {
+    flex: none;
+    width: 5.5rem;
+  }
+
+  /* Two rows of cards, each name whole on up to two lines (the round 5b sheet-style-390). */
+  .studio-picker--languages {
+    grid-template-rows: repeat(2, auto);
+    grid-auto-columns: 13.5rem;
+  }
+
+  .studio-picker--languages > .studio-choices__head {
+    display: none;
+  }
+
+  /* Type on a phone (sheet-type-390): a strip of cards, the "Aa" over the name and what the
+     pack weighs, web fonts first; the run heads are the desktop list's, so the cards say it. */
+  .studio-picker--type {
+    grid-auto-columns: 8.25rem;
+    margin-inline: -1rem;
+  }
+
+  .studio-picker--type > .studio-choices__head {
+    display: none;
+  }
+
+  .studio-picker--type .studio-choice {
+    grid-template-columns: minmax(0, 1fr) 1.25rem;
+    grid-template-areas:
+      'aa tick'
+      'name name';
+    align-content: start;
+    row-gap: 4px;
+    padding: 8px;
+    background: var(--st-raise);
+    box-shadow: inset 0 0 0 1px var(--st-edge);
+  }
+
+  .studio-picker--type .studio-type__aa {
+    place-items: center start;
+  }
+
+  .studio-picker--type .studio-type__line {
+    display: none;
+  }
+
+  .studio-picker--type .studio-type__head {
+    display: grid;
+    justify-content: start;
+  }
+
+  .studio-picker--type .studio-tick--row {
+    align-self: start;
+  }
+
+  .studio-picker--type .studio-type__meta--card {
+    display: block;
+  }
+
+  .studio-choices .studio-choice {
+    scroll-snap-align: start;
+  }
+
+  .studio-surprise {
+    justify-content: center;
+    inline-size: 100%;
+    min-height: 2.5rem;
+    margin: 0.5rem 0 0;
+    border: 1px solid var(--st-edge);
+    background: var(--st-raise);
+  }
+
+  .studio-surprise__hint {
+    display: none;
+  }
+
+  .studio-split__footer {
+    padding: 0.75rem 1rem;
+  }
+
+  .studio-split__sheet-foot {
+    display: block;
+    padding: 0.625rem 1rem calc(0.625rem + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--st-rule);
+  }
+
+  .studio-split__sheet-foot .studio-split__sandbox {
+    font-size: var(--st-t-xs);
+    white-space: normal;
+  }
+
+  .studio-split__sheet-save {
+    display: grid;
+    gap: 6px;
+  }
+
+  .studio-split__sheet-save .studio-barbutton {
+    min-height: 2.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-split__fold-chevron,
+  .studio-info__chevron,
+  .studio-switch__track::after,
+  .studio-split__rail,
+  .studio-split {
+    transition: none;
+  }
+
+  .studio-barbutton {
+    transition:
+      background-color var(--st-fast) var(--st-ease),
+      border-color var(--st-fast) var(--st-ease);
+  }
+}
+
+/* More contrast: the quieter inks and edges darken to 7:1 and the edges to 3:1. */
+@media (prefers-contrast: more) {
+  .studio-shell--workspace {
+    --st-ink-2: #333333;
+    --st-ink-3: #3d3d3d;
+    --st-edge: #767676;
+    --st-rule: #8f8f8f;
+    --st-attn: #6b3500;
+    --st-ok: #124a2b;
+  }
+}
+
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+  .studio-shell--workspace {
+    --st-ink-2: #dedede;
+    --st-ink-3: #d4d4d4;
+    --st-edge: #9a9a9a;
+    --st-rule: #7a7a7a;
+    --st-attn: #ffc48f;
+    --st-ok: #9fe6bd;
+  }
+}
+
+@media (forced-colors: active) {
+  /* The pressed filter chip is its system's selection, so it differs from the rest (P2-f). */
+  .studio-family[aria-pressed='true'] {
+    border-color: Highlight;
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+
+  .studio-picker--compositions .studio-choice:has(> input:checked) .studio-thumb__art,
+  :is(.studio-picker--compositions, .studio-later)
+    .studio-choice:has(> input:checked)
+    .studio-pending,
+  .studio-picker--schemes .studio-choice:has(> input:checked) .studio-chip,
+  .studio-picker--type .studio-choice:has(> input:checked),
+  .studio-picker--languages .studio-choice:has(> input:checked),
+  .studio-segmented .studio-choice:has(> input:checked) {
+    outline: 3px solid Highlight;
+  }
+}
+
+/* A short phone (320x568): the sheet's head keeps its value to one line and the strip's
+   drawings are a size smaller, so its first row shows whole above the sheet's end (P2-d). */
+@media (max-width: 47.99rem) and (max-width: 1023.98px) and (max-height: 37.5em) {
+  .studio-split__current-sub {
+    display: none;
+  }
+
+  .studio-split__section-top {
+    margin-bottom: 0.25rem;
+  }
+
+  .studio-thumbs > .studio-choice,
+  .studio-thumbs > .studio-pend-card {
+    width: 7.25rem;
+  }
+}
+
+/* A phone on its side: the strip's drawings a size smaller, so one shows whole in the sheet
+   under its tabs (P1-B). */
+@media (max-height: 29.99rem) and (max-height: 599.98px) {
+  .studio-thumbs > .studio-choice,
+  .studio-thumbs > .studio-pend-card {
+    width: 7rem;
+  }
+}

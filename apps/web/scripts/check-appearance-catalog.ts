@@ -1,0 +1,484 @@
+// What `pnpm check:appearance` checks of the catalog's governance (#20),
+// beside #19's computed gate: the per-axis pack gates over every pack
+// registry generation compiled, the catalog lock and the third-party
+// notices, the Research records, and the packs registry generation left
+// out. Every finding names its pack and axis, and in CI each becomes a
+// failure record through ci/run.mjs (ci/lib/reports.mjs), with the token
+// role, display mode, and tuple where it has them.
+
+import { execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import {
+  AXIS_BY_KIND,
+  AXIS_NAMES,
+  type ExcludedPack,
+  type PackManifest,
+} from '@portfolio/appearance';
+import {
+  baseLockProblems,
+  catalogPacks,
+  fontProvenanceReport,
+  gatePack,
+  LOCK_FILE,
+  lockedPacks,
+  lockProblems,
+  NOTICES_FILE,
+  packPackages,
+  renderNotices,
+  researchRecords,
+  opaqueFailing,
+  responsiblePack,
+  type AppearanceCheck,
+  type BaseLock,
+  type NoticePack,
+} from '@portfolio/appearance/node';
+import type { RegistryResult } from '@portfolio/variant-contract/node';
+import { loadThresholds } from '../../../quality/thresholds';
+import { auditCatalog } from './catalog-audit';
+import { generatedEntries } from './catalog-generated';
+import { readHeld } from './catalog-held';
+import { REPO_ROOT } from './registry-options';
+
+/** A failure record's fields, less the gate and command ci/run.mjs gives it. */
+export interface CatalogRecord {
+  readonly schemaVersion: '1.1';
+  readonly test: string;
+  readonly pack?: string;
+  readonly axis?: string;
+  readonly tokenRole?: string;
+  readonly displayMode?: string;
+  readonly tuple?: string;
+  readonly rule?: string;
+  readonly asset?: string;
+  readonly expected?: string | number;
+  readonly actual?: string | number;
+}
+
+export interface CatalogFindings {
+  /** One line per finding, as the command prints them. */
+  readonly lines: readonly string[];
+  /** One failure record per finding, for CI. */
+  readonly records: readonly CatalogRecord[];
+  /** What it checked, for the summary line. */
+  readonly counts: {
+    readonly gated: number;
+    readonly locked: number;
+    readonly research: number;
+    /** Entries the branded-name audit read: shipping packs and Research records. */
+    readonly audited: number;
+    /** Generator schemes whose reference records it held current. */
+    readonly generated: number;
+    /** Typography packs whose fonts it held to their provenance records, and their font files. */
+    readonly fontPacks: number;
+    readonly fonts: number;
+  };
+}
+
+/**
+ * Writes each record into the failure records ci/run.mjs reads, one file
+ * apiece, when ci/run.mjs runs this check: it sets CI_GATE and CI_REPRO.
+ * Outside it, nothing is written. This is ci/lib/reports.mjs's
+ * writeFailureRecord() and currentGate(), which a build source can't import,
+ * since the fixture host's build copies no ci/ (tests/harness/fixture-host.mjs);
+ * check-appearance-catalog.test.ts holds the two to one format.
+ */
+export function writeCatalogRecords(
+  records: readonly CatalogRecord[],
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): string[] {
+  if (!env.CI_GATE) return [];
+  const dir = path.join(
+    path.resolve(env.CI_REPORTS_DIR ?? path.join(REPO_ROOT, 'reports')),
+    'failures',
+  );
+  fs.mkdirSync(dir, { recursive: true });
+  return records.map((record) => {
+    const fields: Record<string, unknown> = {
+      ...record,
+      gate: env.CI_GATE,
+      reproCommand: env.CI_REPRO ?? `pnpm ci:${env.CI_GATE}`,
+    };
+    const written = Object.fromEntries(
+      Object.entries(fields).filter(([, value]) => value !== undefined && value !== ''),
+    );
+    const file = path.join(dir, `${env.CI_GATE}-${Date.now()}-${randomUUID()}.json`);
+    fs.writeFileSync(file, `${JSON.stringify(written, null, 2)}\n`);
+    return file;
+  });
+}
+
+const read = (root: string, file: string): string | null => {
+  try {
+    return fs.readFileSync(path.join(root, file), 'utf8');
+  } catch {
+    return null;
+  }
+};
+
+/** The pack a contrast failure excludes (#20), which check.ts in @portfolio/appearance/node decides. */
+export { opaqueFailing, responsiblePack };
+
+/** The contrast failures' records, naming the pack each excludes, grouped so their count doesn't grow with the other axes. */
+export function contrastRecords(check: AppearanceCheck): CatalogRecord[] {
+  // One record per pack, axis, rule, role pair, set, and display mode: the
+  // same pair failing in every tuple a pack is in is one failure, so the
+  // records stay bounded however many packs the other axes register. Each
+  // carries its first tuple, its worst ratio, and how many tuples it fails.
+  const groups = new Map<
+    string,
+    { record: CatalogRecord; worst: number; tuples: number; label: string }
+  >();
+  const opaque = opaqueFailing(check.failures);
+  for (const failure of check.failures) {
+    const { axis, id } = responsiblePack(failure, opaque);
+    const { pair } = failure;
+    const label = `contrast: ${pair.foreground}${pair.ground ? ` on ${pair.ground}` : ''}${
+      pair.backdrop ? ` over ${pair.backdrop}` : ''
+    } in ${pair.set}`;
+    for (const mode of failure.modes) {
+      const key = [
+        id,
+        axis,
+        pair.kind,
+        pair.foreground,
+        pair.ground,
+        pair.backdrop ?? '',
+        pair.set,
+        mode,
+      ].join('\0');
+      const existing = groups.get(key);
+      if (existing) {
+        existing.tuples += 1;
+        existing.worst = Math.min(existing.worst, pair.ratio);
+        continue;
+      }
+      groups.set(key, {
+        label,
+        worst: pair.ratio,
+        tuples: 1,
+        record: {
+          schemaVersion: '1.1' as const,
+          test: label,
+          pack: id,
+          axis,
+          // A fill's roles read "signature-start to signature-end": the record names its first.
+          tokenRole: pair.foreground.split(' ')[0],
+          displayMode: mode,
+          tuple: `${failure.language}/${failure.scheme}/${failure.typography}/${mode}`,
+          rule: pair.kind,
+          expected: pair.target,
+          actual: pair.ratio,
+        },
+      });
+    }
+  }
+  return [...groups.values()].map(({ record, worst, tuples, label }) => ({
+    ...record,
+    test: `${label}, in ${tuples} tuple${tuples === 1 ? '' : 's'}, first ${record.tuple}`.slice(
+      0,
+      500,
+    ),
+    actual: worst,
+  }));
+}
+
+/** The hierarchy failures, each the scheme's. */
+export function hierarchyRecords(check: AppearanceCheck): CatalogRecord[] {
+  return check.hierarchy.map(({ scheme, set, first, second, distance }) => ({
+    schemaVersion: '1.1' as const,
+    test: `hierarchy: ${first} and ${second} in ${set}`,
+    pack: scheme,
+    axis: 'colorScheme',
+    tokenRole: first,
+    rule: 'hierarchy',
+    actual: distance,
+  }));
+}
+
+/** The pack problems #19's gate reads, each its pack's. */
+export function problemRecords(check: AppearanceCheck): CatalogRecord[] {
+  return check.problems.map(({ axis, id, message }) => ({
+    schemaVersion: '1.1' as const,
+    test: `pack: ${message}`.slice(0, 500),
+    pack: id,
+    axis,
+  }));
+}
+
+/**
+ * The lock at the change's base, which CATALOG_LOCK_BASE names as a git
+ * ref, or null when it names none. CI's static job sets HEAD^1: under a
+ * PR's merge commit, the base branch's tip, and on a push, the commit
+ * before. The text is null when the base has no lock yet. A ref git can't
+ * read fails, so a run asked to hold the lock to its base never quietly
+ * doesn't.
+ */
+export function baseLock(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+  root: string = REPO_ROOT,
+): BaseLock | null {
+  const ref = env.CATALOG_LOCK_BASE;
+  if (!ref) return null;
+  const git = (...args: string[]) =>
+    execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  try {
+    git('rev-parse', '--verify', '--quiet', `${ref}^{commit}`);
+  } catch {
+    throw new Error(
+      `CATALOG_LOCK_BASE is ${ref}, and git can't read it. Fetch it (CI's static job checks out with fetch-depth: 2), or unset it to check the lock against the packs alone.`,
+    );
+  }
+  let text: string | null;
+  try {
+    text = git('show', `${ref}:${LOCK_FILE}`);
+  } catch {
+    text = null;
+  }
+  return { ref, text };
+}
+
+/**
+ * What a run says of a base with no lock, such as a branch's first commit
+ * of one: nothing holds the lock to it, so the run says so instead of
+ * passing silently. Null when there's no base, or the base has a lock.
+ */
+export function baseLockNote(base: BaseLock | null): string | null {
+  return base && base.text === null
+    ? `${base.ref} has no catalog lock: the lock is held to the packs alone.`
+    : null;
+}
+
+/**
+ * The packs the third-party notices cover: every pack registry generation
+ * registered, from any package, less the fixtures a flag admitted, which no
+ * production build ships. The lock pins first-party packs alone, since
+ * pnpm-lock.yaml pins an installed one; the notices cover both.
+ */
+export function noticePacks(result: Pick<RegistryResult, 'packs'>): NoticePack[] {
+  return result.packs
+    .filter(({ fixture }) => !fixture)
+    .map((pack) => ({
+      id: pack.manifest.id,
+      axis: AXIS_BY_KIND[pack.kind],
+      packageName: pack.packageName,
+      manifest: pack.manifest as unknown as Record<string, unknown>,
+    }));
+}
+
+/**
+ * The catalog's governance checks over what registry generation read: its
+ * result, less the excluded packs, and the excluded ones; and the lock at
+ * the change's base, when there is one to hold the committed lock to.
+ */
+export function catalogFindings(
+  root: string,
+  result: RegistryResult,
+  excluded: readonly ExcludedPack[],
+  base: BaseLock | null = null,
+): CatalogFindings {
+  const lines: string[] = [];
+  const records: CatalogRecord[] = [];
+  const add = (
+    line: string,
+    record: Omit<CatalogRecord, 'schemaVersion' | 'test'> & { test?: string },
+  ) => {
+    lines.push(line);
+    records.push({ schemaVersion: '1.1', test: record.test ?? line.slice(0, 500), ...record });
+  };
+
+  // The per-axis pack gates, over every pack registry generation compiled,
+  // with quality/thresholds.json's reduced-motion limit.
+  const reducedMotionMs = loadThresholds().reducedMotion.transitionMs;
+  for (const pack of result.packs) {
+    const axis = AXIS_BY_KIND[pack.kind];
+    for (const failure of gatePack(
+      {
+        kind: pack.kind,
+        manifest: pack.manifest as PackManifest,
+        stylesheet: pack.stylesheet,
+        assets: pack.assets,
+      },
+      { reducedMotionMs },
+    )) {
+      add(`${AXIS_NAMES[axis]} ${failure.pack} (${failure.gate}): ${failure.message}`, {
+        test: `pack gate ${failure.gate}`,
+        pack: failure.pack,
+        axis,
+        rule: failure.gate,
+        ...(failure.role ? { tokenRole: failure.role } : {}),
+      });
+    }
+  }
+
+  // Two registered packs on one axis with one display name: a derived counterpart takes its own.
+  const names = new Map<string, string>();
+  for (const pack of result.packs) {
+    const manifest = pack.manifest as PackManifest;
+    const key = `${pack.kind}:${manifest.name.toLowerCase().replace(/\s+/g, ' ')}`;
+    const other = names.get(key);
+    if (other) {
+      add(
+        `${AXIS_NAMES[AXIS_BY_KIND[pack.kind]]} ${manifest.id} is named ${manifest.name}, as ${other} is: every pack on an axis, a derived counterpart included, takes a distinct name.`,
+        { pack: manifest.id, axis: AXIS_BY_KIND[pack.kind], rule: 'distinct-name' },
+      );
+    } else names.set(key, manifest.id);
+  }
+
+  // Every pack the platform ships must ship: a first-party pack excluded is a
+  // finding, but for an image-derived scheme waiting on the owner (#20 PR 3).
+  for (const pack of excluded) {
+    const axis = AXIS_BY_KIND[pack.kind];
+    if (pack.packageName.startsWith('@portfolio/') && pack.awaiting !== 'owner-acceptance') {
+      add(
+        `${AXIS_NAMES[axis]} ${pack.id} in ${pack.packageName} is excluded from the build: ${pack.reason}`,
+        {
+          pack: pack.id,
+          axis,
+          rule: 'excluded',
+        },
+      );
+    }
+  }
+
+  // The generated schemes' reference records, each current at its generator's version (#20 PR 3).
+  const packages = packPackages(root);
+  const generated = generatedEntries(root, packages);
+  for (const problem of generated.problems) {
+    add(problem.message, {
+      test: 'generated scheme reference record',
+      pack: problem.pack,
+      axis: 'colorScheme',
+      rule: 'generated',
+    });
+  }
+
+  // The lock, and the notices generated beside it.
+  const locked = lockedPacks(root);
+  for (const problem of lockProblems(read(root, LOCK_FILE), locked)) {
+    add(problem.message, {
+      test: 'catalog lock',
+      ...(problem.pack ? { pack: problem.pack } : {}),
+      ...(problem.axis ? { axis: problem.axis } : {}),
+      asset: LOCK_FILE,
+    });
+  }
+  // A lock edited along with its pack still holds to the base's: same version, same digest.
+  for (const problem of base ? baseLockProblems(base, locked) : []) {
+    add(problem.message, {
+      test: 'catalog lock against its base',
+      ...(problem.pack ? { pack: problem.pack } : {}),
+      ...(problem.axis ? { axis: problem.axis } : {}),
+      asset: LOCK_FILE,
+    });
+  }
+  if (read(root, NOTICES_FILE) !== renderNotices(noticePacks(result))) {
+    add(`${NOTICES_FILE} is stale. Run pnpm catalog:lock and commit it.`, {
+      test: 'third-party notices',
+      asset: NOTICES_FILE,
+    });
+  }
+
+  // The Research records: well formed, and never an id anything else has.
+  const fixturePackages = new Set(
+    packages.filter(({ fixture }) => fixture).map(({ name }) => name),
+  );
+  const research = researchRecords(root, packages);
+  const taken = new Map<string, string>([
+    ...result.variants.map(({ manifest }) => [manifest.id, 'a variant'] as const),
+    ...catalogPacks(root, packages).map(
+      ({ id, axis }) => [id, `a ${AXIS_NAMES[axis]} pack`] as const,
+    ),
+  ]);
+  const seen = new Set<string>();
+  for (const { file, record, problems } of research) {
+    for (const problem of problems) add(problem, { test: 'research record', asset: file });
+    if (!record) continue;
+    const owner = taken.get(record.id);
+    if (owner || seen.has(record.id)) {
+      add(
+        `${file} is the Research record ${record.id}, an id ${owner ?? 'another research record'} has: an id names one thing.`,
+        { test: 'research record', pack: record.id, asset: file },
+      );
+    }
+    seen.add(record.id);
+  }
+
+  // The retired packs (LANG-1): registry generation holds each alias to a
+  // survivor it registers; here, no alias may also be a held pack's id or a
+  // Research record's, since an id names one thing.
+  const heldIds = new Set(readHeld(root, packages).map(({ id }) => id));
+  for (const alias of result.aliases) {
+    const owner = heldIds.has(alias.id)
+      ? 'a held pack'
+      : seen.has(alias.id)
+        ? 'a Research record'
+        : null;
+    if (owner) {
+      add(
+        `${alias.packageName} retires ${alias.id} as an alias of ${alias.aliasOf}, and ${alias.id} is ${owner}'s id too: an id names one thing.`,
+        { test: 'retired pack', pack: alias.id },
+      );
+    }
+  }
+
+  // The branded-name audit, over every shipping and held pack and every Research record.
+  const audit = auditCatalog({
+    packs: [
+      ...result.packs
+        .filter((pack) => !pack.fixture)
+        .map((pack) => ({
+          kind: pack.kind,
+          manifest: pack.manifest as PackManifest,
+          // A language's compiled stylesheet, which the typeface rule reads too.
+          ...(pack.kind === 'design-language' && pack.stylesheet
+            ? { stylesheetText: new TextDecoder().decode(pack.stylesheet.bytes) }
+            : {}),
+        })),
+      ...readHeld(root, packages)
+        .filter((pack) => !fixturePackages.has(pack.packageName))
+        .flatMap((pack) => (pack.manifest ? [{ kind: pack.kind, manifest: pack.manifest }] : [])),
+    ],
+    research: research.flatMap(({ record, packageName }) =>
+      record && !fixturePackages.has(packageName) ? [record] : [],
+    ),
+  });
+  for (const finding of audit.findings) {
+    add(finding.message, {
+      test: `branded-name audit ${finding.rule}`,
+      pack: finding.pack,
+      axis: finding.axis,
+      rule: finding.rule,
+    });
+  }
+
+  // Each font a typography pack ships, fixture packs' included, against its
+  // fonts.provenance.json: listed, the bytes its digest names, its license there.
+  const fonts = fontProvenanceReport(root);
+  for (const pack of fonts) {
+    for (const problem of pack.problems) {
+      add(`typography ${pack.pack} (font provenance): ${problem.message} ${problem.remedy}`, {
+        test: 'font provenance',
+        pack: pack.pack,
+        axis: 'typography',
+        rule: 'font-provenance',
+        asset: `${pack.dir}/${problem.file}`,
+      });
+    }
+  }
+
+  return {
+    lines,
+    records,
+    counts: {
+      gated: result.packs.length,
+      locked: locked.length,
+      research: research.length,
+      audited: audit.entries.length,
+      generated: generated.entries.length,
+      fontPacks: fonts.length,
+      fonts: fonts.reduce((sum, pack) => sum + pack.fonts, 0),
+    },
+  };
+}

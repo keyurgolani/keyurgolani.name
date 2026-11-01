@@ -1,0 +1,457 @@
+{
+  "version": 1,
+  "generator": "pnpm stills:type (tests/stills/type-stills.ts)",
+  "dpr": 2,
+  "stills": [
+    {
+      "pack": "book-serif",
+      "role": "aa",
+      "file": "book-serif.aa.png",
+      "text": "Aa",
+      "width": 37,
+      "height": 34,
+      "pixelWidth": 74,
+      "pixelHeight": 68,
+      "bytes": 1000,
+      "sha256": "2196210892c58c1fdb3d39e22cfcf7c116086fcc56314c24f0b628af01864eae",
+      "face": {
+        "role": "display",
+        "family": "Fraunces",
+        "weight": 600,
+        "style": "normal",
+        "tracking": "-0.02em"
+      },
+      "sources": [
+        {
+          "file": "packages/appearance-typography/packs/book-serif/fonts/fraunces-latin-600-normal.woff2",
+          "sha256": "3a1de7711d147bad4422825045f87597fd77cca72e7c96d3b0a81735d00dda82"
+        }
+      ]
+    },
+    {
+      "pack": "book-serif",
+      "role": "line",
+      "file": "book-serif.line.png",
+      "text": "I make failure legible.",
+      "width": 122,
+      "height": 18,
+      "pixelWidth": 244,
+      "pixelHeight": 36,
+      "bytes": 2439,
+      "sha256": "ee522737ec9802eded896d4a3fc27cc889b14d8dc7cb5724a5f3c5a6ac4d13bc",
+      "face": {
+        "role": "body",
+        "family": "Newsreader",
+        "weight": 400,
+        "style": "normal",
+        "tracking": "0em"
+      },
+      "sources": [
+        {
+          "file": "packages/appearance-typography/packs/book-serif/fonts/newsreader-latin-400-normal.woff2",
+          "sha256": "e66067814f1c672d33a457e4f4d102c818b481420e2234cf685ebdbf2f443904"
+        }
+      ]
+    },
+    {
+      "pack": "console-mono",
+      "role": "aa",
+      "file": "console-mono.aa.png",
+      "text": "Aa",
+      "width": 34,
+      "height": 34,
+      "pixelWidth": 68,
+      "pixelHeight": 68,
+      "bytes": 923,
+      "sha256": "f50689c6d2ee1646d9971dca13d94a512d456ed7a421058491a33f7c0233b8c0",
+      "face": {
+        "role": "display",
+        "family": "JetBrains Mono",
+        "weight": 700,
+        "style": "normal",
+        "tracking": "-0.03em"
+      },
+      "sources": [
+        {
+          "file": "packages/appearance-typography/packs/console-mono/fonts/jetbrains-mono-latin-wght-normal.woff2",
+          "sha256": "18be452724bfdc236c074ca94a249a7f41a86752c7d04ab258ce9ed5651f6a7e"
+        }
+      ]
+    },
+    {
+      "pack": "console-mono",
+      "role": "line",
+      "file": "console-mono.line.png",
+      "text": "I make failure legible.",
+      "width": 190,
+      "height": 18,
+      "pixelWidth": 380,
+      "pixelHeight": 36,
+      "bytes": 2618,
+      "sha256": "0cbd127f6c64bdac33f89c6d7962d3b8faa7115e42d3c48274c548139f0923db",
+      "face": {
+        "role": "label",
+        "family": "JetBrains Mono",
+        "weight": 600,
+        "style": "normal",
+        "tracking": "0.02em"
+      },
+      "sources": [
+        {
+          "file": "packages/appearance-typography/packs/console-mono/fonts/jetbrains-mono-latin-wght-normal.woff2",
+          "sha256": "18be452724bfdc236c074ca94a249a7f41a86752c7d04ab258ce9ed5651f6a7e"
+        }
+      ]
+    },
+    {
+      "pack": "drafting-grotesk",
+      "role": "aa",
+      "file": "drafting-grotesk.aa.png",
+      "text": "Aa",
+      "width": 35,
+      "height": 34,
+      "pixelWidth": 70,
+      "pixelHeight": 68,
+      "bytes": 935,
+      "sha256": "aaecf84652eb1196137ad5b48031b1ec15164f12c77d203375ba153de8f32bd6",
+      "face": {
+        "role": "display",
+        "family": "Space Grotesk",
+        "weight": 700,
+        "style": "normal",
+        "tracking": "-0.025em"
+      },
+      "sources": [
+        {
+          "file": "packages/appearance-typography/packs/drafting-grotesk/fonts/space-grotesk-latin-wght-normal.woff2",
+          "sha256": "0640890476fc1198ab4de571fb658de443c4d85b66466ec09534a8737ab1ce9d"
+        }
+      ]
+    },
+    {
+      "pack": "drafting-grotesk",
+      "role": "line",
+      "file": "drafting-grotesk.line.png",
+      "text": "I make failure legible.",
+      "width": 196,
+      "height": 18,
+      "pixelWidth": 392,
+      "pixelHeight": 36,
+      "bytes": 2778,
+      "sha256": "0377739245cc8fb399a2eae4557602a80836f12ad8fc6025f079452e2506eeca",
+      "face": {
+        "role": "label",
+        "family": "IBM Plex Mono",
+        "weight": 500,
+        "style": "normal",
+        "tracking": "0.04em"
+      },
+      "sources": [
+        {
+          "file": "packages/appearance-typography/packs/drafting-grotesk/fonts/ibmplexmono-medium-latin1.woff2",
+          "sha256": "41201b658a328b9d00368215c2f1102770f80b15952ab82631e4006255e6365d"
+        }
+      ]
+    },
+    {
+      "pack": "field-serif",
+      "role": "aa",
+      "file": "field-serif.aa.png",
+      "text": "Aa",
+      "width": 35,
+      "height": 34,
+      "pixelWidth": 70,
+      "pixelHeight": 68,
+      "bytes": 1063,
+      "sha256": "668c7a60f6ea263bd5de1bd49d5e841c3be4e7cc433af6bee8a01207076169bc",
+      "face": {
+        "role": "quote",
+        "family": "Fraunces Italic",
+        "weight": 400,
+        "style": "normal",
+        "tracking": "-0.005em"
+      },
+      "sources": [
+        {
+          "file": "packages/appearance-typography/packs/field-serif/fonts/fraunces-latin-400-italic.woff2",
+          "sha256": "475b154af19c6b4ef371db22078b5044a078ce2467e11ef22a7b87f77837caf3"
+        }
+      ]
+    },
+    {
+      "pack": "field-serif",
+      "role": "line",
+      "file": "field-serif.line.png",
+      "text": "I make failure legible.",
+      "width": 134,
+      "height": 18,
+      "pixelWidth": 268,
+      "pixelHeight": 36,
+      "bytes": 2749,
+      "sha256": "bf015f15c1e7be278e64cd8af4b6017b62e72fd8d32ae5e5fea36adc59a7457e",
+      "face": {
+        "role": "display",
+        "family": "Fraunces",
+        "weight": 600,
+        "style": "normal",
+        "tracking": "-0.02em"
+      },
+      "sources": [
+        {
+          "file": "packages/appearance-typography/packs/field-serif/fonts/fraunces-latin-600-normal.woff2",
+          "sha256": "3a1de7711d147bad4422825045f87597fd77cca72e7c96d3b0a81735d00dda82"
+        }
+      ]
+    },
+    {
+      "pack": "paste-up",
+      "role": "aa",
+      "file": "paste-up.aa.png",
+      "text": "Aa",
+      "width": 42,
+      "height": 34,
+      "pixelWidth": 84,
+      "pixelHeight": 68,
+      "bytes": 954,
+      "sha256": "f10f6474f1ffd0423f41de9a289c990f10ef635993396b18f817bfa7a017c760",
+      "face": {
+        "role": "display",
+        "family": "Archivo",
+        "weight": 900,
+        "style": "normal",
+        "tracking": "-0.01em"
+      },
+      "sources": [
+        {
+          "file": "packages/appearance-typography/packs/paste-up/fonts/archivo-latin-wght-normal.woff2",
+          "sha256": "8f704806dbedeaaeca334b11ec348bc3ac3a439d6431544b3afb54f534ee4967"
+        }
+      ]
+    },
+    {
+      "pack": "paste-up",
+      "role": "line",
+      "file": "paste-up.line.png",
+      "text": "I make failure legible.",
+      "width": 135,
+      "height": 18,
+      "pixelWidth": 270,
+      "pixelHeight": 36,
+      "bytes": 2345,
+      "sha256": "d472adbcb5d8d27b331a0fa29e125c1b82312f48a296219473b4446d34b4d580",
+      "face": {
+        "role": "body",
+        "family": "Space Grotesk",
+        "weight": 400,
+        "style": "normal",
+        "tracking": "0em"
+      },
+      "sources": [
+        {
+          "file": "packages/appearance-typography/packs/paste-up/fonts/space-grotesk-latin-wght-normal.woff2",
+          "sha256": "0640890476fc1198ab4de571fb658de443c4d85b66466ec09534a8737ab1ce9d"
+        }
+      ]
+    },
+    {
+      "pack": "screen-grotesque",
+      "role": "aa",
+      "file": "screen-grotesque.aa.png",
+      "text": "Aa",
+      "width": 38,
+      "height": 34,
+      "pixelWidth": 76,
+      "pixelHeight": 68,
+      "bytes": 909,
+      "sha256": "481592d00c3b69ffc6ff33da25d19d965fd3ad55c9c3619fd8bee0abaa5caf32",
+      "face": {
+        "role": "display",
+        "family": "Inter",
+        "weight": 800,
+        "style": "normal",
+        "tracking": "-0.015em"
+      },
+      "sources": [
+        {
+          "file": "packages/appearance-typography/packs/screen-grotesque/fonts/inter-latin-opsz-normal.woff2",
+          "sha256": "2c295d99e26dcf357d4d01bcf270fd6924b600c9a13dd8c363ef114f4c6976fa"
+        }
+      ]
+    },
+    {
+      "pack": "screen-grotesque",
+      "role": "line",
+      "file": "screen-grotesque.line.png",
+      "text": "I make failure legible.",
+      "width": 134,
+      "height": 18,
+      "pixelWidth": 268,
+      "pixelHeight": 36,
+      "bytes": 2387,
+      "sha256": "01ac4cab60f228c982512460d3ef56ebcce3986a3aa0fc6f590c84f7122e34f6",
+      "face": {
+        "role": "body",
+        "family": "Inter",
+        "weight": 400,
+        "style": "normal",
+        "tracking": "0em"
+      },
+      "sources": [
+        {
+          "file": "packages/appearance-typography/packs/screen-grotesque/fonts/inter-latin-opsz-normal.woff2",
+          "sha256": "2c295d99e26dcf357d4d01bcf270fd6924b600c9a13dd8c363ef114f4c6976fa"
+        }
+      ]
+    },
+    {
+      "pack": "shell-mono",
+      "role": "aa",
+      "file": "shell-mono.aa.png",
+      "text": "Aa",
+      "width": 35,
+      "height": 34,
+      "pixelWidth": 70,
+      "pixelHeight": 68,
+      "bytes": 926,
+      "sha256": "8c9f4f7ec69ae87e74a9d58e4d38245b2c10615f927b559e476e06321b37f828",
+      "face": {
+        "role": "display",
+        "family": "JetBrains Mono",
+        "weight": 700,
+        "style": "normal",
+        "tracking": "-0.02em"
+      },
+      "sources": [
+        {
+          "file": "packages/appearance-typography/packs/shell-mono/fonts/jetbrains-mono-latin-wght-normal.woff2",
+          "sha256": "18be452724bfdc236c074ca94a249a7f41a86752c7d04ab258ce9ed5651f6a7e"
+        }
+      ]
+    },
+    {
+      "pack": "shell-mono",
+      "role": "line",
+      "file": "shell-mono.line.png",
+      "text": "I make failure legible.",
+      "width": 184,
+      "height": 18,
+      "pixelWidth": 368,
+      "pixelHeight": 36,
+      "bytes": 2606,
+      "sha256": "20e2135f885dcbeabe544fe95dffc60b42276e80607221a15dfd7bf4217182ef",
+      "face": {
+        "role": "body",
+        "family": "JetBrains Mono",
+        "weight": 400,
+        "style": "normal",
+        "tracking": "0em"
+      },
+      "sources": [
+        {
+          "file": "packages/appearance-typography/packs/shell-mono/fonts/jetbrains-mono-latin-wght-normal.woff2",
+          "sha256": "18be452724bfdc236c074ca94a249a7f41a86752c7d04ab258ce9ed5651f6a7e"
+        }
+      ]
+    },
+    {
+      "pack": "swiss-grotesque",
+      "role": "aa",
+      "file": "swiss-grotesque.aa.png",
+      "text": "Aa",
+      "width": 41,
+      "height": 34,
+      "pixelWidth": 82,
+      "pixelHeight": 68,
+      "bytes": 952,
+      "sha256": "c1b1cf2cd13445603c3a41d8c47326440ede5cb74b5af6163eb27c46793a453b",
+      "face": {
+        "role": "display",
+        "family": "Archivo",
+        "weight": 900,
+        "style": "normal",
+        "tracking": "-0.03em"
+      },
+      "sources": [
+        {
+          "file": "packages/appearance-typography/packs/swiss-grotesque/fonts/archivo-latin-wght-normal.woff2",
+          "sha256": "8f704806dbedeaaeca334b11ec348bc3ac3a439d6431544b3afb54f534ee4967"
+        }
+      ]
+    },
+    {
+      "pack": "swiss-grotesque",
+      "role": "line",
+      "file": "swiss-grotesque.line.png",
+      "text": "I make failure legible.",
+      "width": 124,
+      "height": 18,
+      "pixelWidth": 248,
+      "pixelHeight": 36,
+      "bytes": 2400,
+      "sha256": "7a73875b7d401cff46eb48b40c9569f72d945c02a60786203555af90c52c21a7",
+      "face": {
+        "role": "body",
+        "family": "Archivo",
+        "weight": 400,
+        "style": "normal",
+        "tracking": "0em"
+      },
+      "sources": [
+        {
+          "file": "packages/appearance-typography/packs/swiss-grotesque/fonts/archivo-latin-wght-normal.woff2",
+          "sha256": "8f704806dbedeaaeca334b11ec348bc3ac3a439d6431544b3afb54f534ee4967"
+        }
+      ]
+    },
+    {
+      "pack": "technical-sans-mono",
+      "role": "aa",
+      "file": "technical-sans-mono.aa.png",
+      "text": "Aa",
+      "width": 35,
+      "height": 34,
+      "pixelWidth": 70,
+      "pixelHeight": 68,
+      "bytes": 955,
+      "sha256": "d294e4840fa5bb793b11ceca9f012050a5e4a9e58a9df901bd31f199f748f01d",
+      "face": {
+        "role": "display",
+        "family": "IBM Plex Mono",
+        "weight": 600,
+        "style": "normal",
+        "tracking": "-0.02em"
+      },
+      "sources": [
+        {
+          "file": "packages/appearance-typography/packs/technical-sans-mono/fonts/ibmplexmono-semibold-latin1.woff2",
+          "sha256": "b7acd05041ab65f3b7039e218ddd893065e11a07e85ea85019473152a51b6b7d"
+        }
+      ]
+    },
+    {
+      "pack": "technical-sans-mono",
+      "role": "line",
+      "file": "technical-sans-mono.line.png",
+      "text": "I make failure legible.",
+      "width": 184,
+      "height": 18,
+      "pixelWidth": 368,
+      "pixelHeight": 36,
+      "bytes": 2718,
+      "sha256": "b8c205fe6c3d7c817020b6c8f83ffa00269808b051b40a587e535f836203942c",
+      "face": {
+        "role": "title",
+        "family": "IBM Plex Mono",
+        "weight": 600,
+        "style": "normal",
+        "tracking": "0em"
+      },
+      "sources": [
+        {
+          "file": "packages/appearance-typography/packs/technical-sans-mono/fonts/ibmplexmono-semibold-latin1.woff2",
+          "sha256": "b7acd05041ab65f3b7039e218ddd893065e11a07e85ea85019473152a51b6b7d"
+        }
+      ]
+    }
+  ]
+}

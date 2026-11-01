@@ -1,0 +1,95 @@
+// Studio's task navigation (#8, Slice 1): the owner's seven tasks, in the
+// order the shell lists them, each with the capability it needs from the
+// page's policy. This pull request builds the content task's expert source
+// mode and the validation summary. The rest show an empty state that says
+// which of #8's pull requests brings them, until it does. #9's Demo Studio
+// lists its own two, behind sandbox.view: Appearance, whose preview sits
+// beside its controls (owner direction, 2026-10-25), and Content, where a
+// visitor imports and exports a pair of documents.
+
+export type TaskId =
+  'content' | 'case-studies' | 'media' | 'appearance' | 'site' | 'validation' | 'history';
+
+export interface StudioTask {
+  readonly id: TaskId;
+  readonly label: string;
+  /** What the workspace's top bar shows, when it's shorter than the label: "History". */
+  readonly short?: string;
+  /** The capability the task needs: the shell lists a task only when the policy allows it. */
+  readonly capability: string;
+  /** What the task shows until it's built, or null once it is. */
+  readonly pending: string | null;
+}
+
+export const STUDIO_TASKS: readonly StudioTask[] = Object.freeze([
+  { id: 'content', label: 'Content', capability: 'draft.read', pending: null },
+  {
+    id: 'case-studies',
+    label: 'Case studies and artifacts',
+    short: 'Case studies',
+    capability: 'draft.read',
+    pending:
+      'Structured editing for case studies and artifacts arrives with the next Studio release. Until then, edit them in the content source.',
+  },
+  {
+    id: 'media',
+    label: 'Media',
+    capability: 'asset.write',
+    pending:
+      'The media library arrives with a later Studio release. Until then, edit the media document in the content source.',
+  },
+  {
+    id: 'appearance',
+    label: 'Appearance',
+    capability: 'draft.write',
+    pending: null,
+  },
+  {
+    id: 'site',
+    label: 'Site behavior',
+    short: 'Site',
+    capability: 'draft.write',
+    pending:
+      'Structured site settings arrive with the next Studio release. Until then, edit the site document in the content source.',
+  },
+  { id: 'validation', label: 'Validation', capability: 'draft.read', pending: null },
+  {
+    id: 'history',
+    label: 'Publish history',
+    short: 'History',
+    capability: 'history.read',
+    pending: null,
+  },
+]);
+
+/** Demo Studio's tasks (#9): the appearance with its preview beside it, and the content's import and export. */
+export const DEMO_TASKS: readonly StudioTask[] = Object.freeze([
+  { id: 'appearance', label: 'Appearance', capability: 'sandbox.view', pending: null },
+  { id: 'content', label: 'Content', capability: 'sandbox.view', pending: null },
+]);
+
+/** The tasks `allowed` grants, in the order the profile's Studio lists them. */
+export function tasksFor(
+  allowed: readonly string[],
+  profile: 'owner' | 'demo' | 'read-only' = 'owner',
+): readonly StudioTask[] {
+  const tasks = profile === 'demo' ? DEMO_TASKS : STUDIO_TASKS;
+  return tasks.filter((task) => allowed.includes(task.capability));
+}
+
+/** Where this tab keeps the last task the owner opened, so a reload or a new visit lands there. */
+export const LAST_TASK_KEY = 'studio.task';
+
+/**
+ * The task Owner Studio opens on (OWN-3): the one the URL names, else the
+ * last one this tab used, else Appearance, the look over the preview, and
+ * never a rail of findings. A task the policy doesn't list falls through.
+ */
+export function landingTask(
+  tasks: readonly StudioTask[],
+  named: string,
+  kept: string | null,
+): TaskId {
+  const listed = (id: string | null) => tasks.find((task) => task.id === id)?.id;
+  return listed(named) ?? listed(kept) ?? listed('appearance') ?? tasks[0]?.id ?? 'content';
+}

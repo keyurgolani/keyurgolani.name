@@ -1,0 +1,50 @@
+@layer reset, scheme, language, typography, variant-layout, utilities, accessibility;
+
+/*
+ * Where the appearance fixtures' scenes sit (#19, Slice 3), in the layer a
+ * variant's layout takes, and nothing more: every color, font, material,
+ * and control is what the boundaries' stylesheets render, so the page shows
+ * the packs and the primitives as they are.
+ */
+@layer variant-layout {
+  .fixtures-page,
+  .fixtures-section,
+  .fixtures-stack,
+  .fixtures-plate {
+    display: grid;
+    align-content: start;
+    gap: var(--ui-space-surface-block);
+  }
+
+  .fixtures-page {
+    padding-block: var(--ui-space-surface-block);
+    padding-inline: var(--ui-space-surface-inline);
+  }
+
+  .fixtures-section > h2,
+  .fixtures-plate > figcaption {
+    margin: 0;
+  }
+
+  .fixtures-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--ui-space-control-inline);
+  }
+
+  .fixtures-grid,
+  .fixtures-plates {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+    gap: var(--ui-space-surface-block);
+  }
+
+  .fixtures-plates {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 28rem), 1fr));
+  }
+
+  .fixtures-plate {
+    margin: 0;
+  }
+}

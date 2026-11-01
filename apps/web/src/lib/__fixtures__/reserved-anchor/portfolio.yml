@@ -1,0 +1,44 @@
+# The outline sweep's own pair (stream E): a section, a work, and a piece of
+# evidence whose ids are Horizontal Cinema's chapter anchors, and a section in
+# a language that runs the other way. Not a contract fixture: those each have
+# screenshot baselines in tests/variants, which only CI's pinned image makes.
+schemaVersion: 3
+locale: en
+direction: ltr
+identity:
+  name: Rowan Vale
+  tagline: Maker of small tools
+works:
+  - id: chapter-craft
+    slug: chapter-craft
+    title: A work named for a chapter
+    medium: software
+    caseStudy:
+      challenge: Keep its own page when its id is a chapter's.
+evidence:
+  - id: chapter-index
+    type: metric
+    title: An index of its own
+sections:
+  - kind: hero
+    id: top
+    tagline: A page whose ids are a composition's own.
+  - kind: lede
+    id: chapter-journey
+    title: Chapter Journey
+    body: Its words read in place, with no anchor of its own in Horizontal Cinema.
+  - kind: lede
+    id: arabic
+    title: بالعربية
+    lang: ar
+    body: قسم واحد بالعربية.
+  - kind: evidence
+    id: proof
+    title: Proof
+    items:
+      - chapter-index
+  - kind: works
+    id: projects
+    title: Projects
+    items:
+      - chapter-craft
