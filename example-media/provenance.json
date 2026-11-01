@@ -1,0 +1,97 @@
+{
+  "about": "The bundled example images, each drawn by example-media/generate.mjs from code alone: no photograph, font, or third-party file. They are the project's own work, under the repository's MIT license. Nothing was fetched or downloaded.",
+  "generator": "example-media/generate.mjs",
+  "license": "MIT",
+  "images": [
+    {
+      "file": "anamika/portrait.png",
+      "width": 480,
+      "height": 480,
+      "bytes": 7819,
+      "shows": "An abstract portrait: a dark head-and-shoulders silhouette on a warm amber gradient.",
+      "pixelsSha256": "272d1e2ef752b937ee97448d512f7e088194616cd5052363c4ea1352b394c702",
+      "fileSha256": "e90aa31595971d134b8f38c7923f6b489c8340e0817d4c94a3fcd2491b98239c"
+    },
+    {
+      "file": "og/anamika.png",
+      "width": 1200,
+      "height": 630,
+      "bytes": 21226,
+      "shows": "Three overlapping translucent discs, amber, teal, and plum, on a cream ground.",
+      "pixelsSha256": "9aaf86dd055d7b751f72ee33b85539db950a6073a46a34b87f0d2b4a298cf550",
+      "fileSha256": "0a6c7407b3c40b44bf25212c629283d47f5524754f170375d76cdb4bb1b07a67"
+    },
+    {
+      "file": "work/postmortem-template-kit.png",
+      "width": 960,
+      "height": 600,
+      "bytes": 5774,
+      "shows": "Five paper cards fanned in a stack, each ruled with grey lines, on a slate background.",
+      "pixelsSha256": "c8095fe89a77946da715064854995ffb1eb89d5505863eba6ee1fadc6d0ecf23",
+      "fileSha256": "998ca938ca8f13214de82c6a78aa429f31f060e68e2af28c0899de565063b3d3"
+    },
+    {
+      "file": "work/small-traces.png",
+      "width": 960,
+      "height": 600,
+      "bytes": 4059,
+      "shows": "A flame graph: stacked horizontal bars in warm oranges and reds over a near-black ground.",
+      "pixelsSha256": "682714126ccc0f4b99e8254e37492527bfade9db6f4f96df25658ef8a8b739a3",
+      "fileSha256": "dfc309231b4d5b4872bfa28b162b768548de3675472a37de53211a8c740e5039"
+    },
+    {
+      "file": "gallery/looking-1.png",
+      "width": 960,
+      "height": 640,
+      "bytes": 15311,
+      "shows": "A dusk landscape: a low orange sun over three layered blue hills under a violet sky.",
+      "pixelsSha256": "14f6e8cd3c7021dc5e1f0496b7871619637a3521c5dc5ec40f7d026f1d8d68b7",
+      "fileSha256": "bb6f13f2c563c99c596cc64cde1783a3c32fe03c0e37f18721bb1e5ad8f0050d"
+    },
+    {
+      "file": "gallery/looking-2.png",
+      "width": 960,
+      "height": 640,
+      "bytes": 15330,
+      "shows": "A pale morning landscape: a white sun high over soft green hills under a misty blue sky.",
+      "pixelsSha256": "1444a3550cc959e4b2e8e188ab15f12108b65539abf277325008ea1010705d26",
+      "fileSha256": "7c301ac1c65ec179a234d159f17acc3e3488381557dd9dac34383c674896bdd9"
+    },
+    {
+      "file": "gallery/looking-3.png",
+      "width": 960,
+      "height": 640,
+      "bytes": 11562,
+      "shows": "A night landscape: a pale moon over black hills under a deep blue sky.",
+      "pixelsSha256": "5d76ece37509b42b03aa1d622a0ecc3780a4b453b5acd744a9ec289d2ba2f339",
+      "fileSha256": "9bc89772269e239af976014c6d518713acafe1683cdc67e94f27de66121f6b18"
+    },
+    {
+      "file": "music/field-recordings.png",
+      "width": 600,
+      "height": 600,
+      "bytes": 98408,
+      "shows": "An album cover: concentric rings in teal and sand, like a record seen from above.",
+      "pixelsSha256": "2e675269c14e8c993cdd1b5b19f8f5f22d538c920b9b07bd4cefccbc510f6b95",
+      "fileSha256": "8585a337d6953f329b12f61809d962d7d45de88156d00e3859bad65c36d5e10b"
+    },
+    {
+      "file": "people/mira-anand.png",
+      "width": 160,
+      "height": 160,
+      "bytes": 2276,
+      "shows": "A small abstract avatar: a teal disc on a sand ground.",
+      "pixelsSha256": "42bebc5d4c994493aa782b5ec721f943c4c66695b821046c7073e8f014543caa",
+      "fileSha256": "c99c6ebd4c61d96c324a9534869aac7176e801968ce666ebb09b75176b6f4c55"
+    },
+    {
+      "file": "logos/solstice.png",
+      "width": 160,
+      "height": 160,
+      "bytes": 1200,
+      "shows": "A small logo mark: a half sun over a line, in amber on white.",
+      "pixelsSha256": "d25c0fc4052f0c8ff991b311c1886c0542e10f55c20980cfcef1feeff0379cd7",
+      "fileSha256": "86f06451605cc11558510b329d3040ab9eb4dd2441252124aff25e061fbf0466"
+    }
+  ]
+}
