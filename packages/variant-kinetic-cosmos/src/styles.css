@@ -1,0 +1,4337 @@
+/*
+ * Kinetic Cosmos (redesign, stream E): the portfolio as an orrery.
+ *
+ * Composition only. Space comes from the platform's --space-* scale, sizes
+ * from its --type-step-* scale and the typography roles, color from the
+ * scheme's --color-* roles, and borders, radii, shadows, and focus from the
+ * design language's --ui-* tokens. Timing reads the platform's --motion-*,
+ * worked out from this composition's slots in the root rule. Every rule is
+ * under [data-variant='kinetic-cosmos'] and every property is logical, so a
+ * right-to-left page reads the same.
+ *
+ * The one signature is the orrery on the opening stage, and its core in the
+ * design language's signature fill. The stages are the scheme's inverse
+ * pair: the text color as the ground, the inverse text on it.
+ */
+
+[data-variant='kinetic-cosmos'] {
+  --layout-grid-columns: 12;
+  --layout-grid-gutter: var(--space-s);
+  --layout-grid-margin: var(--space-s-l);
+  --layout-motion-curve: cubic-bezier(0.16, 1, 0.3, 1);
+  --layout-motion-feedback: 200ms;
+  --layout-motion-scene: 800ms;
+  --layout-motion-ambient: 60s;
+
+  display: block;
+  overflow-wrap: break-word;
+  color: var(--color-text-primary);
+  background-color: var(--color-canvas);
+}
+
+/* The stages' ground and ink: the scheme's inverse pair, and a quieter ink and a hairline mixed from it. */
+[data-variant='kinetic-cosmos']
+  :is(.kc-masthead, .kc-opening, .kc-closing, .kc-index, .kc-ring__opener, .kc-talk-dialog) {
+  --layout-ink: var(--color-text-inverse);
+  --layout-ink-quiet: color-mix(in oklab, var(--color-text-inverse) 76%, var(--color-text-primary));
+  --layout-ink-line: color-mix(in oklab, var(--color-text-inverse) 26%, var(--color-text-primary));
+  --layout-ink-faint: color-mix(in oklab, var(--color-text-inverse) 48%, var(--color-text-primary));
+
+  color: var(--layout-ink);
+  background-color: var(--color-text-primary);
+}
+
+/* The inset frame around the stages, and the padding that puts their content on the page grid. */
+[data-variant='kinetic-cosmos'] :is(.kc-masthead, .kc-opening, .kc-closing) {
+  --layout-frame: var(--space-2xs);
+  --layout-stage-pad: max(
+    var(--space-xs),
+    (100% - 2 * var(--layout-frame) - var(--layout-width-page)) / 2
+  );
+
+  margin-inline: var(--layout-frame);
+  padding-inline: var(--layout-stage-pad);
+}
+
+@media (min-width: 64rem) {
+  [data-variant='kinetic-cosmos'] :is(.kc-masthead, .kc-opening, .kc-closing) {
+    --layout-frame: var(--space-s);
+    --layout-stage-pad: max(
+      var(--layout-grid-margin) - var(--layout-frame),
+      (100% - 2 * var(--layout-frame) - var(--layout-width-page)) / 2
+    );
+  }
+}
+
+/* Content on the page's measure, outside the stages. */
+[data-variant='kinetic-cosmos'] :is(.kc-ring__head, .kc-ring__body, .kc-colophon) {
+  inline-size: min(100% - 2 * var(--layout-grid-margin), var(--layout-width-page));
+  margin-inline: auto;
+}
+
+/* ---- Shared pieces --------------------------------------------------- */
+
+[data-variant='kinetic-cosmos'] :is(ul, ol)[role='list'],
+[data-variant='kinetic-cosmos'] :is(.kc-tracks, .kc-ruled) {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='kinetic-cosmos'] :is(h1, h2, h3, h4, h5, h6) {
+  margin: 0;
+  text-wrap: balance;
+}
+
+[data-variant='kinetic-cosmos'] :is(p, dl, dd, figure, blockquote) {
+  margin: 0;
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-prose, .kc-summary, .kc-about, .kc-now) p {
+  margin: 0;
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-prose, .kc-summary, .kc-about) {
+  display: grid;
+  gap: var(--space-s);
+  max-inline-size: var(--layout-width-text);
+  text-wrap: pretty;
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-summary, .kc-prose) {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-lede {
+  max-inline-size: 34ch;
+  font-size: var(--type-step-1);
+  line-height: var(--type-title-line-height);
+  text-wrap: pretty;
+}
+
+/* The host's slots (the skip link) keep their own colours. */
+[data-variant='kinetic-cosmos'] a:where(:not([data-ui-slot])) {
+  color: inherit;
+  text-decoration-thickness: from-font;
+  text-underline-offset: 0.2em;
+  transition: color var(--motion-feedback) var(--motion-curve);
+}
+
+[data-variant='kinetic-cosmos'] :where(.kc-ring__body, .kc-colophon) a:where(:not(.kc-button)) {
+  color: var(--color-accent-text);
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-ring, .kc-colophon) :is(h3, h4, h5) a {
+  color: inherit;
+  text-decoration: none;
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-ring, .kc-colophon) :is(h3, h4, h5) a:hover {
+  text-decoration: underline;
+}
+
+/* The focus ring is the platform's, in a later layer than this sheet: an ink stage is K-2's
+   inverse surface in the markup, so its ring is the scheme's focus-inverse, not its focus. */
+
+[data-variant='kinetic-cosmos'] .kc-button {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--ui-control-height);
+  padding-block: var(--ui-space-control-block);
+  padding-inline: var(--ui-space-control-inline);
+  font-family: var(--type-label-font-family);
+  font-size: var(--type-body-font-size);
+  font-weight: var(--type-title-font-weight);
+  text-decoration: none;
+  border-radius: var(--ui-radius-control);
+  transition:
+    background-color var(--motion-feedback) var(--motion-curve),
+    color var(--motion-feedback) var(--motion-curve);
+}
+
+[data-variant='kinetic-cosmos'] .kc-button--bright {
+  color: var(--color-text-primary);
+  background-color: var(--color-text-inverse);
+}
+
+[data-variant='kinetic-cosmos'] .kc-button--bright:hover {
+  background-color: var(--layout-ink-quiet);
+}
+
+[data-variant='kinetic-cosmos'] .kc-button--solid {
+  color: var(--color-text-inverse);
+  background-color: var(--color-text-primary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-button--solid:hover {
+  background-color: var(--color-text-secondary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-link-action {
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='kinetic-cosmos'] .kc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs) var(--space-l);
+  margin-block-start: var(--space-m);
+}
+
+[data-variant='kinetic-cosmos'] .kc-actions:empty {
+  display: none;
+}
+
+[data-variant='kinetic-cosmos'] .kc-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs) var(--space-m);
+}
+
+[data-variant='kinetic-cosmos'] .kc-caption {
+  color: var(--color-text-secondary);
+}
+
+/* A labelled fact list with ruled rows. */
+[data-variant='kinetic-cosmos'] .kc-facts {
+  display: grid;
+  margin-block-start: var(--space-m);
+}
+
+[data-variant='kinetic-cosmos'] .kc-facts__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: var(--space-s);
+  align-items: baseline;
+  padding-block: var(--space-xs);
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='kinetic-cosmos'] .kc-facts__row:last-child {
+  border-block-end: var(--ui-border-divider);
+}
+
+[data-variant='kinetic-cosmos'] .kc-facts dt {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-facts--small .kc-facts__row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+  padding-block: var(--space-3xs);
+  border: 0;
+}
+
+[data-variant='kinetic-cosmos'] .kc-facts--small .kc-facts__row:last-child {
+  border: 0;
+}
+
+/* Short items, ruled, each on its body dot. */
+[data-variant='kinetic-cosmos'] .kc-ruled {
+  display: grid;
+  margin-block-start: var(--space-s);
+}
+
+[data-variant='kinetic-cosmos'] .kc-ruled > li {
+  display: grid;
+  grid-template-columns: var(--space-s) minmax(0, 1fr);
+  align-items: baseline;
+  padding-block: var(--space-3xs);
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-ruled--focus, .kc-ruled--facts) > li {
+  grid-template-columns: minmax(0, 1fr);
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-ruled--focus, .kc-ruled--facts) > li::before {
+  display: none;
+}
+
+[data-variant='kinetic-cosmos'] .kc-ruled > li::before {
+  content: '';
+  inline-size: var(--space-3xs);
+  aspect-ratio: 1;
+  background-color: currentcolor;
+  clip-path: circle(50%);
+  translate: 0 -0.2em;
+}
+
+[data-variant='kinetic-cosmos'] .kc-ruled--facts {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--space-3xl) * 3)), 1fr));
+  column-gap: var(--layout-grid-gutter);
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-ruled--facts, .kc-ruled--focus) > li {
+  font-size: var(--type-step-1);
+  line-height: var(--type-title-line-height);
+  padding-block: var(--space-s);
+}
+
+[data-variant='kinetic-cosmos'] .kc-ruled--focus > li {
+  font-size: var(--type-step-0);
+}
+
+/* ---- The masthead: the stage's top row ------------------------------ */
+
+[data-variant='kinetic-cosmos'] .kc-masthead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-s) var(--layout-grid-gutter);
+  align-items: start;
+  margin-block-start: var(--layout-frame);
+  padding-block: var(--space-m) var(--space-xs);
+  border-start-start-radius: var(--ui-radius-overlay);
+  border-start-end-radius: var(--ui-radius-overlay);
+}
+
+[data-variant='kinetic-cosmos'] .kc-wordmark {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--space-xs);
+  align-items: center;
+}
+
+/* A grid of its own on the wordmark's tracks: display: contents would take the link out of the tab order. */
+[data-variant='kinetic-cosmos'] .kc-wordmark__link {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-row: 1 / span 2;
+  grid-template-columns: subgrid;
+  grid-template-rows: subgrid;
+  align-items: center;
+  color: inherit;
+  text-decoration: none;
+}
+
+[data-variant='kinetic-cosmos'] .kc-wordmark__name {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+[data-variant='kinetic-cosmos'] .kc-wordmark__role {
+  grid-row: 2;
+}
+
+[data-variant='kinetic-cosmos'] .kc-wordmark__mark {
+  grid-row: span 2;
+  inline-size: var(--space-l);
+  aspect-ratio: 1;
+  background: radial-gradient(
+    circle,
+    var(--layout-ink) 0 18%,
+    transparent 19% 46%,
+    var(--layout-ink-faint) 47% 50%,
+    transparent 51%
+  );
+}
+
+[data-variant='kinetic-cosmos'] .kc-wordmark__name {
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-step-0);
+  font-weight: var(--type-title-font-weight);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='kinetic-cosmos'] .kc-wordmark__role {
+  grid-column: 2;
+  color: var(--layout-ink-quiet);
+  font-size: var(--type-label-font-size);
+}
+
+[data-variant='kinetic-cosmos'] .kc-masthead__controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+[data-variant='kinetic-cosmos'] .kc-index-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  min-block-size: var(--ui-control-height);
+  padding-inline: var(--ui-space-control-inline);
+  color: inherit;
+  font: inherit;
+  font-weight: var(--type-title-font-weight);
+  background-color: transparent;
+  border: var(--ui-border-control);
+  border-color: var(--layout-ink-line);
+  border-radius: var(--ui-radius-control);
+  cursor: pointer;
+  transition: border-color var(--motion-feedback) var(--motion-curve);
+}
+
+[data-variant='kinetic-cosmos'] .kc-index-trigger:hover {
+  border-color: var(--layout-ink-quiet);
+}
+
+[data-variant='kinetic-cosmos'] .kc-index-trigger__mark {
+  inline-size: var(--space-s);
+  aspect-ratio: 1;
+  background: radial-gradient(
+    circle,
+    var(--layout-ink) 0 22%,
+    transparent 23% 60%,
+    var(--layout-ink-faint) 61% 70%,
+    transparent 71%
+  );
+}
+
+@media (min-width: 64rem) {
+  [data-variant='kinetic-cosmos'] .kc-masthead {
+    padding-block: var(--space-m) 0;
+  }
+}
+
+/* At 320 the name keeps one line: the role, which the legend's caption and the band say again, steps out. */
+@media (max-width: 22.49rem) {
+  [data-variant='kinetic-cosmos'] .kc-wordmark__role {
+    display: none;
+  }
+}
+
+/* ---- The opening stage --------------------------------------------- */
+
+[data-variant='kinetic-cosmos'] .kc-main:focus {
+  outline: none;
+}
+
+[data-variant='kinetic-cosmos'] .kc-opening {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  padding-block: 0 var(--space-xs);
+  border-end-start-radius: var(--ui-radius-overlay);
+  border-end-end-radius: var(--ui-radius-overlay);
+  isolation: isolate;
+  overflow: clip;
+}
+
+[data-variant='kinetic-cosmos'] .kc-opening__part {
+  display: contents;
+}
+
+/* The map: the orrery, and the system's plates over it. */
+[data-variant='kinetic-cosmos'] .kc-map {
+  position: relative;
+  grid-column: 1 / -1;
+}
+
+[data-variant='kinetic-cosmos'] .kc-map__clip {
+  position: relative;
+  aspect-ratio: 820 / 380;
+  margin-inline: calc(-1 * var(--layout-stage-pad));
+  overflow: clip;
+}
+
+[data-variant='kinetic-cosmos'] .kc-map__frame {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: -57.32%;
+  inline-size: 158.05%;
+  aspect-ratio: 1296 / 380;
+  pointer-events: none;
+}
+
+[data-variant='kinetic-cosmos'] .kc-map:dir(rtl) .kc-map__frame {
+  scale: -1 1;
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-orrery, .kc-sky) {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  overflow: visible;
+}
+
+/* The far stars: a still, masked window, and inside it two tiles of stars that drift by one tile and loop. */
+[data-variant='kinetic-cosmos'] .kc-sky {
+  fill: var(--layout-ink-faint);
+  mask-image: radial-gradient(ellipse 120% 70% at 68% 48%, currentcolor 20%, transparent 78%);
+}
+
+[data-variant='kinetic-cosmos'] .kc-sky__drift {
+  display: block;
+  inline-size: 200%;
+  block-size: 100%;
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-sky__stars, .kc-spin__bodies) {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  overflow: visible;
+}
+
+[data-variant='kinetic-cosmos'] .kc-orrery__stars {
+  fill: var(--layout-ink-faint);
+}
+
+[data-variant='kinetic-cosmos'] .kc-orrery__orbit {
+  fill: none;
+  stroke: var(--layout-ink-faint);
+  stroke-width: 1.1;
+}
+
+[data-variant='kinetic-cosmos'] .kc-orrery__halo-orbit {
+  fill: none;
+  stroke: var(--layout-ink-line);
+  stroke-width: 1.4;
+  stroke-dasharray: 1.5 5;
+}
+
+[data-variant='kinetic-cosmos'] .kc-orrery__corona {
+  fill: none;
+  stroke: var(--layout-ink-line);
+  stroke-width: 1;
+}
+
+[data-variant='kinetic-cosmos'] .kc-orrery__trail {
+  fill: none;
+  stroke: var(--layout-ink-quiet);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+[data-variant='kinetic-cosmos'] .kc-orrery__leader {
+  fill: none;
+  stroke: var(--layout-ink-faint);
+  stroke-width: 1;
+  transition: stroke var(--motion-feedback) var(--motion-curve);
+}
+
+[data-variant='kinetic-cosmos'] .kc-orrery__terminal,
+[data-variant='kinetic-cosmos'] .kc-orrery__body {
+  fill: var(--layout-ink);
+}
+
+[data-variant='kinetic-cosmos'] .kc-orrery__ring {
+  fill: var(--color-text-primary);
+  stroke: var(--layout-ink-faint);
+  stroke-width: 1;
+  transition: stroke var(--motion-feedback) var(--motion-curve);
+}
+
+/* The core: the design language's signature fill, the stage's one luminous thing. */
+[data-variant='kinetic-cosmos'] .kc-core {
+  position: absolute;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  background: var(--ui-signature-fill);
+  clip-path: circle(50%);
+}
+
+/* The spin planes: square, flattened and tilted to the orbits' plane, each turning on the compositor. */
+[data-variant='kinetic-cosmos'] .kc-plane {
+  position: absolute;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  transform: rotate(var(--layout-tilt)) scale(1, var(--layout-flatten));
+}
+
+[data-variant='kinetic-cosmos'] .kc-spin {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+[data-variant='kinetic-cosmos'] .kc-body {
+  fill: var(--layout-ink-quiet);
+}
+
+/* The legend's caption, the hero's tagline: above the plates from 48rem; a phone sets it in the band instead. */
+[data-variant='kinetic-cosmos'] .kc-plates__caption {
+  display: none;
+  max-inline-size: 36ch;
+  color: var(--layout-ink-quiet);
+  font-size: var(--type-step--1);
+  text-wrap: pretty;
+}
+
+[data-variant='kinetic-cosmos'] .kc-band__tagline {
+  grid-column: 1 / -1;
+  padding-block: var(--space-3xs);
+  color: var(--layout-ink-quiet);
+  text-wrap: pretty;
+}
+
+/* 48 to 64rem the caption sits over the plates' grid; 64 to 80rem the map has no room above its plates, so the band keeps it. */
+@media (min-width: 48rem) and (max-width: 63.99rem), (min-width: 80rem) {
+  [data-variant='kinetic-cosmos'] .kc-plates__caption {
+    display: block;
+    padding-block-start: var(--space-s);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-band__tagline {
+    display: none;
+  }
+}
+
+/* The plates: real links, one a ring. On a small screen a two-by-two grid under the orrery. */
+[data-variant='kinetic-cosmos'] .kc-plates__list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-s) var(--layout-grid-gutter);
+  padding-block: var(--space-s) var(--space-l);
+}
+
+[data-variant='kinetic-cosmos'] .kc-plate__link {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--space-xs);
+  align-items: center;
+  padding-block: var(--space-3xs);
+  text-decoration: none;
+  transition: color var(--motion-feedback) var(--motion-curve);
+}
+
+[data-variant='kinetic-cosmos'] .kc-plate__mark {
+  inline-size: var(--space-m);
+  aspect-ratio: 1;
+  background: radial-gradient(
+    circle,
+    var(--layout-ink) 0 16%,
+    transparent 17% 58%,
+    var(--layout-ink-quiet) 59% 66%,
+    transparent 67%
+  );
+}
+
+[data-variant='kinetic-cosmos'] .kc-plate__name {
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-step-0);
+  font-weight: var(--type-title-font-weight);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='kinetic-cosmos'] .kc-plate__summary {
+  grid-column: 2;
+  color: var(--layout-ink-quiet);
+  font-size: var(--type-label-font-size);
+  line-height: var(--type-label-line-height);
+}
+
+/* Hover or focus one plate: the others dim, and its ring's leader and body light. */
+@media (hover: hover) and (pointer: fine) {
+  [data-variant='kinetic-cosmos']
+    .kc-plates__list:has(.kc-plate__link:hover)
+    .kc-plate__link:not(:hover) {
+    color: var(--layout-ink-faint);
+  }
+}
+
+[data-variant='kinetic-cosmos']
+  .kc-plates__list:has(.kc-plate__link:focus-visible)
+  .kc-plate__link:not(:focus-visible) {
+  color: var(--layout-ink-faint);
+}
+
+[data-variant='kinetic-cosmos']
+  .kc-opening:has(.kc-plate[data-ring='0'] .kc-plate__link:is(:hover, :focus-visible))
+  .kc-orrery__anchor[data-ring='0'],
+[data-variant='kinetic-cosmos']
+  .kc-opening:has(.kc-plate[data-ring='1'] .kc-plate__link:is(:hover, :focus-visible))
+  .kc-orrery__anchor[data-ring='1'],
+[data-variant='kinetic-cosmos']
+  .kc-opening:has(.kc-plate[data-ring='2'] .kc-plate__link:is(:hover, :focus-visible))
+  .kc-orrery__anchor[data-ring='2'],
+[data-variant='kinetic-cosmos']
+  .kc-opening:has(.kc-plate[data-ring='3'] .kc-plate__link:is(:hover, :focus-visible))
+  .kc-orrery__anchor[data-ring='3'] {
+  --layout-lit: var(--layout-ink);
+}
+
+[data-variant='kinetic-cosmos'] .kc-orrery__anchor .kc-orrery__leader {
+  stroke: var(--layout-lit, var(--layout-ink-faint));
+}
+
+[data-variant='kinetic-cosmos'] .kc-orrery__anchor .kc-orrery__ring {
+  stroke: var(--layout-lit, var(--layout-ink-faint));
+}
+
+/*
+ * The signature work's plate, on its body on the innermost ring, at every
+ * width. Its place is the body's, as fractions of the map (--layout-x and
+ * --layout-y), carried through the crop the frame takes at each width: below
+ * 64rem the frame is 158.05% of the clip, which is the map's width plus the
+ * stage's padding each side, starts 57.32% to its left, and is 380/820 as
+ * tall as wide; from 64rem it's the map, 380/1296 as tall. Below 80rem it
+ * hangs to the body's left, clear of the core; from 80rem above it.
+ */
+[data-variant='kinetic-cosmos'] .kc-map {
+  container-type: inline-size;
+}
+
+[data-variant='kinetic-cosmos'] .kc-signature-label {
+  --layout-clip: calc(100cqi + 2 * var(--layout-stage-pad));
+
+  position: absolute;
+  inset-inline-start: calc(
+    var(--layout-clip) * (1.5805 * var(--layout-x) - 0.5732) - var(--layout-stage-pad)
+  );
+  inset-block-start: calc(var(--layout-clip) * 0.4634 * var(--layout-y));
+  max-inline-size: 10em;
+  translate: calc(-100% - var(--space-xs)) -50%;
+  padding-block: var(--space-3xs);
+  padding-inline: var(--space-xs);
+  color: var(--layout-ink);
+  font-size: var(--type-label-font-size);
+  font-weight: var(--type-label-font-weight);
+  line-height: var(--type-label-line-height);
+  text-align: end;
+  text-decoration: none;
+  background-color: var(--color-text-primary);
+  border: var(--ui-border-control);
+  border-color: var(--layout-ink-line);
+  border-radius: var(--ui-radius-control);
+}
+
+[data-variant='kinetic-cosmos'] .kc-signature-label:hover {
+  border-color: var(--layout-ink-quiet);
+}
+
+@media (min-width: 64rem) {
+  [data-variant='kinetic-cosmos'] .kc-signature-label {
+    inset-inline-start: calc(100cqi * var(--layout-x));
+    inset-block-start: calc(100cqi * 0.2932 * var(--layout-y));
+  }
+}
+
+/* On a phone the body sits near the crop's left edge, so the plate hangs under it, clear of the core above. */
+@media (max-width: 47.99rem) {
+  [data-variant='kinetic-cosmos'] .kc-signature-label {
+    translate: -30% var(--space-xs);
+    text-align: start;
+  }
+}
+
+@media (min-width: 80rem) {
+  [data-variant='kinetic-cosmos'] .kc-signature-label {
+    max-inline-size: none;
+    translate: -50% calc(-100% - var(--space-s));
+    white-space: nowrap;
+  }
+}
+
+/*
+ * 64 to 80rem the plates' rows are too close for a summary on two lines, so
+ * each plate takes the width its words need on one line, on the stage's
+ * ground, and its leader comes out from under its right edge.
+ */
+@media (min-width: 64rem) and (max-width: 79.99rem) {
+  [data-variant='kinetic-cosmos'] .kc-plate {
+    inline-size: max-content;
+    max-inline-size: 34%;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-plate__link {
+    padding-inline-end: var(--space-xs);
+    white-space: nowrap;
+    background-color: var(--color-text-primary);
+  }
+}
+
+/* The headline: the thesis at display size, its last word stepped in. */
+[data-variant='kinetic-cosmos'] .kc-thesis {
+  grid-column: 1 / -1;
+  margin-block-start: var(--space-s);
+  font-family: var(--type-display-font-family);
+  font-size: var(--type-step-6);
+  font-weight: var(--type-display-font-weight);
+  line-height: 1;
+  letter-spacing: var(--type-display-letter-spacing);
+  font-variation-settings: var(--type-display-font-variation-settings);
+  overflow-wrap: anywhere;
+}
+
+[data-variant='kinetic-cosmos'] .kc-thesis__line {
+  display: block;
+}
+
+[data-variant='kinetic-cosmos'] .kc-thesis__line--stepped {
+  margin-inline-start: 25%;
+}
+
+[data-variant='kinetic-cosmos'] .kc-thesis__line[data-length='long'] {
+  font-size: var(--type-step-4);
+  line-height: var(--type-headline-line-height);
+}
+
+[data-variant='kinetic-cosmos'] .kc-standfirst {
+  grid-column: 1 / -1;
+  margin-block-start: var(--space-m);
+  max-inline-size: 40ch;
+  color: var(--layout-ink);
+  font-size: var(--type-step-0);
+  line-height: var(--type-body-line-height);
+  text-wrap: pretty;
+}
+
+[data-variant='kinetic-cosmos'] .kc-standfirst p {
+  margin: 0;
+}
+
+/* Under the opening: the list reset above outranks a lone class, so the space above the actions is named on the stage. */
+[data-variant='kinetic-cosmos'] .kc-opening .kc-opening__actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-s) var(--space-l);
+  margin-block-start: var(--space-l);
+}
+
+/* The band: a hairline with registration marks on the column lines, then what's true now and the pause. */
+[data-variant='kinetic-cosmos'] .kc-band {
+  position: relative;
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  margin-block: var(--space-xl) var(--space-s);
+  border-block-start: var(--ui-border-divider);
+  border-color: var(--layout-ink-line);
+}
+
+[data-variant='kinetic-cosmos'] .kc-band__mark {
+  inline-size: var(--space-xs);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  background:
+    linear-gradient(var(--layout-ink-faint), var(--layout-ink-faint)) center /
+      calc(var(--space-3xs) / 4) 100% no-repeat,
+    linear-gradient(var(--layout-ink-faint), var(--layout-ink-faint)) center / 100%
+      calc(var(--space-3xs) / 4) no-repeat;
+}
+
+[data-variant='kinetic-cosmos'] .kc-band__mark:last-child {
+  translate: 50% -50%;
+}
+
+[data-variant='kinetic-cosmos'] .kc-band__mark:nth-child(2),
+[data-variant='kinetic-cosmos'] .kc-band__mark:nth-child(4) {
+  display: none;
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-band__now, .kc-band__where) {
+  grid-column: 1 / -1;
+  padding-block: var(--space-3xs);
+}
+
+[data-variant='kinetic-cosmos'] .kc-band__where {
+  color: var(--layout-ink-quiet);
+}
+
+[data-variant='kinetic-cosmos'] .kc-pause {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin-block-start: var(--space-xs);
+}
+
+[data-variant='kinetic-cosmos'] .kc-pause__control {
+  display: inline-flex;
+  flex-wrap: wrap;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: var(--space-xs) var(--space-s);
+}
+
+/* The pause: an outlined control with its glyph, not a second primary; pressed, it fills, its glyph and its word still Pause (P3). */
+[data-variant='kinetic-cosmos'] .kc-pause__control [data-ui-slot='action'] {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  min-block-size: var(--ui-control-height);
+  color: var(--layout-ink);
+  background-color: transparent;
+  border: var(--ui-border-control);
+  border-color: var(--layout-ink-line);
+}
+
+[data-variant='kinetic-cosmos'] .kc-pause__control [data-ui-slot='action']::before {
+  content: '';
+  inline-size: var(--space-2xs);
+  aspect-ratio: 3 / 4;
+  background: linear-gradient(to right, currentcolor 0 35%, transparent 35% 65%, currentcolor 65%);
+}
+
+[data-variant='kinetic-cosmos'] .kc-pause__control [data-ui-slot='action'][aria-pressed='true'] {
+  background-color: var(--layout-ink-line);
+}
+
+/*
+ * Held still, there's nothing to pause, so the control goes and "Held still"
+ * stays (KC-S8). These come after the outlined control and name its slot, so
+ * they outrank its display (design re-review r2).
+ */
+@media (prefers-reduced-motion: reduce) {
+  [data-variant='kinetic-cosmos'] .kc-pause__control :is(button, [data-ui-slot='action']) {
+    display: none;
+  }
+}
+
+[data-variant='kinetic-cosmos']:is([data-motion='reduced'], [data-motion='static'])
+  .kc-pause__control
+  :is(button, [data-ui-slot='action']) {
+  display: none;
+}
+
+/* With no script nothing turns, so there's nothing to pause, and no status to give. */
+@media (scripting: none) {
+  [data-variant='kinetic-cosmos'] .kc-pause {
+    display: none;
+  }
+}
+
+[data-variant='kinetic-cosmos'] .kc-pause__control [role='status'] {
+  color: var(--layout-ink-quiet);
+  font-size: var(--type-label-font-size);
+}
+
+@media (max-width: 63.99rem) {
+  [data-variant='kinetic-cosmos'] :is(.kc-orrery__leader, .kc-orrery__terminal) {
+    display: none;
+  }
+}
+
+@media (min-width: 48rem) {
+  [data-variant='kinetic-cosmos'] .kc-opening {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-band__mark:nth-child(2),
+  [data-variant='kinetic-cosmos'] .kc-band__mark:nth-child(4) {
+    display: block;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-band__now {
+    grid-column: 1 / span 7;
+    grid-row: 6;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-band__where {
+    grid-column: 8 / span 2;
+    grid-row: 6;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-pause {
+    grid-column: 10 / -1;
+    grid-row: 6;
+    justify-self: end;
+    align-self: center;
+    margin-block-start: 0;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-band {
+    grid-row: 5;
+  }
+}
+
+@media (min-width: 64rem) {
+  [data-variant='kinetic-cosmos'] .kc-map__clip {
+    aspect-ratio: 1296 / 380;
+    margin-inline: 0;
+    overflow: visible;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-map__frame {
+    inset: 0;
+    inline-size: 100%;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-plates {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-plates__list {
+    display: block;
+    padding: 0;
+  }
+
+  /* Two lines across the top left, clear of the first plate below and the halo's upper arc beside it. */
+  [data-variant='kinetic-cosmos'] .kc-plates__caption {
+    position: absolute;
+    inset-block-start: var(--space-xs);
+    inset-inline-start: 0;
+    inline-size: 38%;
+    max-inline-size: 62ch;
+    padding: 0;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-plate {
+    position: absolute;
+    inset-inline-start: 0;
+    inset-block-start: calc(var(--layout-row) * 1%);
+    inline-size: 20%;
+    translate: 0 -50%;
+    pointer-events: auto;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-plate__link {
+    padding-block: 0;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-thesis {
+    grid-column: 1 / span 8;
+    grid-row: 2 / span 2;
+    align-self: end;
+    margin-block-start: 0;
+    font-size: var(--type-step-7);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-thesis__line--stepped {
+    margin-inline-start: calc((100% + var(--layout-grid-gutter)) * 3 / 8);
+  }
+
+  /* The standfirst sits straight under the map's empty lower right, so the band keeps its place above the fold's edge. */
+  [data-variant='kinetic-cosmos'] .kc-standfirst {
+    grid-column: 9 / -1;
+    grid-row: 2;
+    align-self: end;
+    margin-block-start: 0;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-opening .kc-opening__actions {
+    grid-column: 9 / -1;
+    grid-row: 3;
+    align-self: end;
+    margin-block-start: var(--space-m);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-band {
+    grid-row: 4;
+    margin-block: var(--space-l) var(--space-xs);
+  }
+
+  [data-variant='kinetic-cosmos'] :is(.kc-band__now, .kc-band__where, .kc-pause) {
+    grid-row: 5;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-band__now {
+    grid-column: 1 / span 6;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-band__where {
+    grid-column: 7 / span 3;
+  }
+}
+
+/* ---- The rings ------------------------------------------------------- */
+
+[data-variant='kinetic-cosmos'] .kc-orbitals {
+  display: grid;
+  overflow-x: clip;
+  padding-block-end: var(--space-s);
+}
+
+[data-variant='kinetic-cosmos'] .kc-ring {
+  padding-block-start: var(--space-xl-3xl);
+  scroll-margin-block-start: var(--space-s);
+}
+
+[data-variant='kinetic-cosmos'] .kc-ring:first-child {
+  padding-block-start: var(--space-xl);
+}
+
+/* The orbit line: a full-bleed arc, flatter for each ring further out, its sections' links riding it. */
+[data-variant='kinetic-cosmos'] .kc-arc {
+  position: relative;
+  block-size: var(--space-2xl);
+  margin-block-end: var(--space-m);
+}
+
+[data-variant='kinetic-cosmos'] .kc-arc[data-ring='0'] {
+  block-size: calc(var(--space-2xl) * 1.25);
+}
+
+[data-variant='kinetic-cosmos'] .kc-arc[data-ring='2'] {
+  block-size: calc(var(--space-xl) * 0.9);
+}
+
+[data-variant='kinetic-cosmos'] .kc-arc[data-ring='3'] {
+  block-size: var(--space-l);
+}
+
+[data-variant='kinetic-cosmos'] .kc-arc__line {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  overflow: visible;
+}
+
+[data-variant='kinetic-cosmos'] .kc-arc__line:dir(rtl) {
+  scale: -1 1;
+}
+
+[data-variant='kinetic-cosmos'] .kc-arc__line path {
+  fill: none;
+  stroke: var(--color-border-default);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+[data-variant='kinetic-cosmos'] .kc-arc__trail {
+  position: absolute;
+  inset-block-start: 81%;
+  inset-inline-start: 0;
+  inline-size: 5%;
+  block-size: var(--space-3xs);
+  translate: 0 -50%;
+  background: linear-gradient(to right, transparent, var(--color-text-secondary));
+  clip-path: polygon(0 45%, 100% 0, 100% 100%, 0 55%);
+}
+
+[data-variant='kinetic-cosmos'] .kc-arc__trail:dir(rtl) {
+  scale: -1 1;
+}
+
+[data-variant='kinetic-cosmos'] .kc-arc__body {
+  position: absolute;
+  inset-block-start: 81%;
+  inset-inline-start: 5%;
+  inline-size: var(--space-m);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  background: radial-gradient(
+    circle,
+    var(--color-text-primary) 0 30%,
+    var(--color-canvas) 31% 52%,
+    var(--color-border-default) 53% 58%,
+    transparent 59%
+  );
+}
+
+[data-variant='kinetic-cosmos'] .kc-arc__index ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-m);
+  padding-inline: var(--layout-grid-margin);
+  padding-block-start: calc(var(--space-2xl) + var(--space-xs));
+}
+
+[data-variant='kinetic-cosmos'] .kc-arc__stop a {
+  font-family: var(--type-label-font-family);
+  font-size: var(--type-label-font-size);
+  font-weight: var(--type-label-font-weight);
+  letter-spacing: 0.01em;
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+[data-variant='kinetic-cosmos'] .kc-arc__stop a:hover {
+  text-decoration: underline;
+}
+
+@media (min-width: 64rem) {
+  [data-variant='kinetic-cosmos'] .kc-arc__index ol {
+    display: block;
+    padding: 0;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-arc__stop {
+    position: absolute;
+    inset-inline-start: calc(var(--layout-at) * 100%);
+    inset-block-start: calc((1 - var(--layout-rise)) * 100%);
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: center;
+    gap: var(--space-3xs);
+    translate: -50% calc(-100% + var(--space-3xs));
+    white-space: nowrap;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-arc__stop[data-tier='1'] {
+    flex-direction: column;
+    translate: -50% calc(-1 * var(--space-3xs));
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-arc__stop::before {
+    content: '';
+    inline-size: var(--space-2xs);
+    aspect-ratio: 1;
+    background: radial-gradient(
+      circle,
+      var(--color-canvas) 0 38%,
+      var(--color-text-primary) 40% 68%,
+      transparent 70%
+    );
+  }
+}
+
+/* Below 64rem the arc is a low line over the opener (KIN-4): the ring keeps its device, not its height. */
+@media (max-width: 63.99rem) {
+  [data-variant='kinetic-cosmos'] .kc-arc[data-ring] {
+    block-size: auto;
+    min-block-size: var(--space-m);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-arc :is(.kc-arc__line, .kc-arc__trail, .kc-arc__body) {
+    block-size: var(--space-m);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-arc :is(.kc-arc__trail, .kc-arc__body) {
+    inset-block-start: calc(var(--space-m) * 0.81);
+    block-size: auto;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-arc__trail {
+    block-size: var(--space-3xs);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-arc__index ol {
+    padding-block-start: var(--space-xl);
+  }
+}
+
+[data-variant='kinetic-cosmos'] .kc-ring__head {
+  display: grid;
+  gap: var(--space-s) var(--layout-grid-gutter);
+  margin-block-end: var(--space-xl);
+}
+
+[data-variant='kinetic-cosmos'] .kc-ring__title {
+  font-family: var(--type-display-font-family);
+  font-size: var(--type-step-5);
+  font-weight: var(--type-display-font-weight);
+  line-height: var(--type-display-line-height);
+  letter-spacing: var(--type-display-letter-spacing);
+}
+
+[data-variant='kinetic-cosmos'] .kc-ring__intro {
+  max-inline-size: 48ch;
+  color: var(--color-text-secondary);
+  text-wrap: pretty;
+}
+
+[data-variant='kinetic-cosmos'] .kc-ring__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2xl) var(--layout-grid-gutter);
+}
+
+@media (min-width: 64rem) {
+  [data-variant='kinetic-cosmos'] .kc-ring__head {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    align-items: end;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-ring__title {
+    grid-column: 1 / span 7;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-ring__intro {
+    grid-column: 9 / -1;
+    align-self: start;
+    padding-block-start: var(--space-xs);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-ring__body {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-section {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-section[data-span='half'] {
+    grid-column: span 6;
+  }
+}
+
+/* The orbit rule: a body on the line, the title, a hairline to the edge, and the count. */
+[data-variant='kinetic-cosmos'] .kc-rule {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-block-end: var(--space-m);
+}
+
+/* A section that folds on a phone: its orbit rule is the disclosure's summary, with a mark that turns. */
+[data-variant='kinetic-cosmos'] .kc-fold__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-block-end: var(--space-m);
+  list-style: none;
+  cursor: pointer;
+}
+
+[data-variant='kinetic-cosmos'] .kc-fold__summary::-webkit-details-marker {
+  display: none;
+}
+
+[data-variant='kinetic-cosmos'] .kc-fold__summary::after {
+  content: '';
+  flex: none;
+  inline-size: var(--space-xs);
+  aspect-ratio: 1;
+  background-color: var(--color-text-secondary);
+  clip-path: polygon(50% 72%, 0 22%, 100% 22%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='kinetic-cosmos'] .kc-fold__summary::after {
+    transition: rotate var(--motion-feedback) var(--motion-curve);
+  }
+}
+
+[data-variant='kinetic-cosmos'] .kc-fold:not([open]) > .kc-fold__summary::after {
+  rotate: -90deg;
+}
+
+/* Closed, a row runs on a control's pitch, one line a tap target tall (P2). */
+[data-variant='kinetic-cosmos'] .kc-fold:not([open]) > .kc-fold__summary {
+  min-block-size: var(--ui-control-height);
+  margin-block-end: 0;
+}
+
+/* A part that folds inside a section: a small labelled toggle on a phone, and nothing at all from 48rem, where it stays open. */
+[data-variant='kinetic-cosmos'] .kc-fold--inline > .kc-fold__summary {
+  inline-size: fit-content;
+  min-block-size: var(--ui-control-height);
+  margin-block-end: var(--space-2xs);
+  color: var(--color-accent-text);
+  font-size: var(--type-label-font-size);
+  font-weight: var(--type-label-font-weight);
+}
+
+@media (min-width: 48rem) {
+  [data-variant='kinetic-cosmos'] .kc-fold--inline > .kc-fold__summary {
+    display: none;
+  }
+}
+
+[data-variant='kinetic-cosmos'] .kc-rule__body {
+  flex: none;
+  inline-size: var(--space-2xs);
+  aspect-ratio: 1;
+  background-color: var(--color-text-primary);
+  clip-path: circle(50%);
+}
+
+[data-variant='kinetic-cosmos'] .kc-rule__title {
+  flex: none;
+  max-inline-size: 70%;
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-step--1);
+  font-weight: var(--type-title-font-weight);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='kinetic-cosmos'] .kc-rule__line {
+  flex: 1;
+  min-inline-size: var(--space-m);
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='kinetic-cosmos'] .kc-rule__note {
+  flex: none;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-section__subtitle {
+  max-inline-size: 45ch;
+  margin-block: calc(-1 * var(--space-2xs)) var(--space-l);
+  color: var(--color-text-secondary);
+  text-wrap: pretty;
+}
+
+/* ---- Works ----------------------------------------------------------- */
+
+[data-variant='kinetic-cosmos'] .kc-works {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2xl) var(--layout-grid-gutter);
+  align-items: start;
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-work__title, .kc-series__title) {
+  font-family: var(--type-headline-font-family);
+  font-size: var(--type-step-3);
+  font-weight: var(--type-headline-font-weight);
+  line-height: var(--type-headline-line-height);
+  letter-spacing: var(--type-headline-letter-spacing);
+}
+
+[data-variant='kinetic-cosmos'] .kc-work__text {
+  display: grid;
+  align-content: start;
+  gap: var(--space-s);
+}
+
+[data-variant='kinetic-cosmos'] .kc-work__label {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-cover,
+[data-variant='kinetic-cosmos'] .kc-hang__image {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: var(--ui-radius-media);
+}
+
+[data-variant='kinetic-cosmos'] .kc-work__media {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+[data-variant='kinetic-cosmos'] .kc-work__media .kc-caption {
+  font-size: var(--type-label-font-size);
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-avatar, .kc-logo) {
+  display: block;
+  inline-size: var(--space-xl);
+  block-size: auto;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+[data-variant='kinetic-cosmos'] .kc-avatar {
+  clip-path: circle(50%);
+}
+
+[data-variant='kinetic-cosmos'] .kc-quote__caption {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+}
+
+/* The signature: the cover in its orbit, and its moons on the front arc. */
+[data-variant='kinetic-cosmos'] .kc-signature__system {
+  position: relative;
+  display: grid;
+}
+
+[data-variant='kinetic-cosmos'] .kc-signature__system .kc-cover {
+  position: relative;
+  z-index: 1;
+}
+
+[data-variant='kinetic-cosmos'] .kc-signature__core {
+  aspect-ratio: 16 / 10;
+  background: var(--ui-signature-fill);
+  border-radius: var(--ui-radius-media);
+}
+
+[data-variant='kinetic-cosmos'] .kc-moons {
+  position: relative;
+  z-index: 2;
+  margin-inline: calc(-1 * var(--space-s));
+}
+
+[data-variant='kinetic-cosmos'] .kc-moons__arc {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  inline-size: 100%;
+  block-size: var(--space-xl);
+  overflow: visible;
+}
+
+[data-variant='kinetic-cosmos'] .kc-moons__arc path {
+  fill: none;
+  stroke: var(--color-border-strong);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+[data-variant='kinetic-cosmos'] .kc-moons__list {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: var(--space-s);
+  padding-inline: var(--space-s);
+}
+
+[data-variant='kinetic-cosmos'] .kc-moon {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  padding-block-start: calc(var(--layout-dip) * var(--space-xl));
+  text-align: center;
+}
+
+[data-variant='kinetic-cosmos'] .kc-moon__body {
+  display: grid;
+  justify-items: center;
+  inline-size: var(--space-s);
+  translate: 0 calc(-0.5 * var(--space-s));
+}
+
+[data-variant='kinetic-cosmos'] .kc-moon__body::before {
+  content: '';
+  inline-size: 100%;
+  aspect-ratio: 1;
+  background: radial-gradient(
+    circle,
+    var(--color-text-primary) 0 30%,
+    var(--color-canvas) 32% 56%,
+    var(--color-border-strong) 58% 64%,
+    transparent 66%
+  );
+}
+
+[data-variant='kinetic-cosmos'] .kc-moon__body::after {
+  content: '';
+  inline-size: calc(var(--space-3xs) / 4);
+  block-size: calc((1 - var(--layout-dip)) * var(--space-xl) + var(--space-xs));
+  background-color: var(--color-border-strong);
+}
+
+[data-variant='kinetic-cosmos'] .kc-moon__plate {
+  max-inline-size: 24ch;
+  font-size: var(--type-label-font-size);
+  font-weight: var(--type-label-font-weight);
+  line-height: var(--type-label-line-height);
+  text-wrap: balance;
+}
+
+@media (min-width: 48rem) {
+  [data-variant='kinetic-cosmos'] .kc-moon__plate {
+    font-size: var(--type-body-font-size);
+  }
+}
+
+@media (min-width: 64rem) {
+  [data-variant='kinetic-cosmos'] .kc-works {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-work {
+    grid-column: span 6;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-work--signature {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: subgrid;
+    align-items: start;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-signature__system {
+    grid-column: 1 / span 7;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-work--signature .kc-work__text {
+    grid-column: 9 / -1;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-work--plate .kc-work__media {
+    inline-size: calc(100% * 5 / 6);
+  }
+}
+
+[data-variant='kinetic-cosmos'] .kc-work--plate {
+  display: grid;
+  gap: var(--space-m);
+}
+
+[data-variant='kinetic-cosmos'] .kc-excerpt {
+  margin: 0;
+  max-inline-size: var(--layout-width-text);
+  font-style: italic;
+}
+
+[data-variant='kinetic-cosmos'] .kc-excerpt p {
+  margin: 0;
+}
+
+/* Writing as display rows, each a body strung on one vertical orbit; hovering one dims the others. */
+[data-variant='kinetic-cosmos'] .kc-rows {
+  position: relative;
+  display: grid;
+  gap: var(--space-l);
+}
+
+[data-variant='kinetic-cosmos'] .kc-rows::before {
+  content: '';
+  position: absolute;
+  inset-block: var(--space-s);
+  inset-inline-start: calc(var(--space-l) / 2);
+  border-inline-start: var(--ui-border-divider);
+}
+
+[data-variant='kinetic-cosmos'] .kc-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--space-l) minmax(0, 1fr);
+  column-gap: var(--space-s);
+  transition: color var(--motion-feedback) var(--motion-curve);
+}
+
+[data-variant='kinetic-cosmos'] .kc-row__body {
+  justify-self: center;
+  inline-size: var(--space-s);
+  aspect-ratio: 1;
+  margin-block-start: calc(var(--space-xs) + var(--space-3xs));
+  background: radial-gradient(
+    circle,
+    var(--color-text-primary) 0 34%,
+    var(--color-canvas) 36% 56%,
+    var(--color-border-strong) 58% 66%,
+    transparent 68%
+  );
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-row__main, .kc-row__words) {
+  display: grid;
+  gap: var(--space-2xs) var(--layout-grid-gutter);
+  max-inline-size: calc(var(--layout-width-text) + var(--space-3xl) * 2);
+}
+
+[data-variant='kinetic-cosmos'] .kc-row__title {
+  font-family: var(--type-headline-font-family);
+  font-size: var(--type-step-3);
+  font-weight: var(--type-headline-font-weight);
+  line-height: var(--type-headline-line-height);
+  letter-spacing: var(--type-headline-letter-spacing);
+}
+
+/* The facts keep the step under them the standfirst had when it followed them in one part. */
+[data-variant='kinetic-cosmos'] .kc-row__facts {
+  margin-block-end: var(--space-xs);
+  color: var(--color-text-secondary);
+}
+
+/* From 64rem a row hangs its title and facts on seven columns, its words on the five after (KIN-6). */
+@media (min-width: 64rem) {
+  [data-variant='kinetic-cosmos'] .kc-row__main {
+    grid-template: auto auto 1fr / 7fr 5fr;
+    max-inline-size: none;
+  }
+
+  /* The words span the title's row, the facts', and a last row that takes what they run past them. */
+  [data-variant='kinetic-cosmos'] .kc-row__words {
+    grid-area: 1 / 2 / 4;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-variant='kinetic-cosmos'] .kc-rows:has(.kc-row:hover) .kc-row:not(:hover) {
+    color: var(--color-text-muted);
+  }
+}
+
+[data-variant='kinetic-cosmos'] .kc-rows:has(a:focus-visible) .kc-row:not(:focus-within) {
+  color: var(--color-text-muted);
+}
+
+/* Episodes: columns, each with a bar its length. */
+[data-variant='kinetic-cosmos'] .kc-episodes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--space-3xl) * 2.25)), 1fr));
+  gap: var(--space-xl) var(--layout-grid-gutter);
+}
+
+[data-variant='kinetic-cosmos'] .kc-episode {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+/* The links sit on one line across a row of episodes, whatever each one's length. */
+[data-variant='kinetic-cosmos'] .kc-episode > .kc-actions {
+  margin-block-start: auto;
+  padding-block-start: var(--space-m);
+}
+
+[data-variant='kinetic-cosmos'] .kc-episode__head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-s);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-episode__bar {
+  display: block;
+  block-size: var(--space-2xs);
+  background-color: var(--color-surface-prominent);
+  clip-path: inset(0 round var(--ui-radius-badge));
+}
+
+[data-variant='kinetic-cosmos'] .kc-episode__fill {
+  display: block;
+  block-size: 100%;
+  background-color: var(--color-text-primary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-episode__title {
+  margin-block-start: var(--space-2xs);
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-step-1);
+  font-weight: var(--type-title-font-weight);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='kinetic-cosmos'] .kc-episode__meta {
+  color: var(--color-text-secondary);
+}
+
+/* A photo series: a hang, the first picture wider. */
+[data-variant='kinetic-cosmos'] .kc-series {
+  display: grid;
+  gap: var(--space-s);
+}
+
+/* On a phone the first picture is full width and the rest hang two to a row (KC-S6). */
+[data-variant='kinetic-cosmos'] .kc-hang {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-m) var(--layout-grid-gutter);
+  margin-block-start: var(--space-s);
+}
+
+[data-variant='kinetic-cosmos'] .kc-hang > :first-child {
+  grid-column: 1 / -1;
+}
+
+[data-variant='kinetic-cosmos'] .kc-hang figcaption {
+  display: grid;
+  gap: var(--space-3xs);
+  margin-block-start: var(--space-xs);
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-caption__details, figcaption small) {
+  color: var(--color-text-secondary);
+  font-weight: var(--type-body-font-weight);
+  font-size: var(--type-label-font-size);
+}
+
+/* An episode on a phone: its title, date, length and link, the description left to the wide screen (KC-S6). */
+@media (max-width: 47.99rem) {
+  [data-variant='kinetic-cosmos'] .kc-episode :is(.kc-summary, .kc-prose) {
+    display: none;
+  }
+}
+
+@media (min-width: 48rem) {
+  [data-variant='kinetic-cosmos'] .kc-hang > :first-child {
+    grid-column: auto;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-hang[data-count='2'] {
+    grid-template-columns: 2fr 1fr;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-hang[data-count='3'] {
+    grid-template-columns: 2fr 1fr 1fr;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-hang[data-count='4'] {
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-hang__item:not(:first-child) .kc-hang__image {
+    aspect-ratio: 4 / 5;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-hang__item:first-child .kc-hang__image {
+    aspect-ratio: 5 / 4;
+  }
+}
+
+/* A release: the sleeve beside the tracklist. */
+[data-variant='kinetic-cosmos'] .kc-release {
+  display: grid;
+  gap: var(--space-l) var(--layout-grid-gutter);
+}
+
+[data-variant='kinetic-cosmos'] .kc-release__sleeve .kc-cover {
+  aspect-ratio: 1;
+}
+
+[data-variant='kinetic-cosmos'] .kc-release__text {
+  display: grid;
+  align-content: start;
+  gap: var(--space-s);
+}
+
+[data-variant='kinetic-cosmos'] .kc-tracks {
+  display: grid;
+  margin-block-start: var(--space-xs);
+  border-block-end: var(--ui-border-divider);
+}
+
+[data-variant='kinetic-cosmos'] .kc-track {
+  display: grid;
+  grid-template-columns: var(--space-xl) minmax(0, 1fr) auto;
+  align-items: baseline;
+  padding-block: var(--space-xs);
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-track__number, .kc-track__length) {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+@media (min-width: 64rem) {
+  [data-variant='kinetic-cosmos'] .kc-release {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-release__sleeve {
+    grid-column: 1 / span 5;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-release__text {
+    grid-column: 7 / -1;
+    max-inline-size: var(--layout-width-text);
+  }
+}
+
+/* ---- Evidence -------------------------------------------------------- */
+
+[data-variant='kinetic-cosmos'] .kc-evidence {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-l) var(--layout-grid-gutter);
+}
+
+/* Figures as planets: the number on its body, a short leader, and its plate. */
+/* A set of figures: bodies sized by magnitude, two or three to a row, each over its plate. */
+[data-variant='kinetic-cosmos'] .kc-planets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--space-3xl) * 1.5)), 1fr));
+  gap: var(--space-l) var(--layout-grid-gutter);
+  align-items: start;
+}
+
+[data-variant='kinetic-cosmos'] .kc-planets--row {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--space-3xl) * 2.6)), 1fr));
+  margin-block-end: var(--space-l);
+}
+
+[data-variant='kinetic-cosmos'] .kc-planet {
+  display: grid;
+  grid-template-rows: var(--space-3xl) auto;
+  gap: var(--space-xs);
+  justify-items: center;
+  text-align: center;
+}
+
+[data-variant='kinetic-cosmos'] .kc-planets--row .kc-planet {
+  grid-template-columns: var(--space-3xl) var(--space-m) minmax(0, 1fr);
+  grid-template-rows: auto;
+  gap: 0;
+  align-items: center;
+  justify-items: stretch;
+  text-align: start;
+}
+
+[data-variant='kinetic-cosmos'] .kc-planets--row .kc-planet::before {
+  content: '';
+  grid-column: 2;
+  grid-row: 1;
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='kinetic-cosmos'] .kc-planet__body {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+  justify-self: center;
+  inline-size: calc(var(--space-3xl) * var(--layout-size));
+  display: grid;
+  place-content: center;
+  aspect-ratio: 1;
+  text-align: center;
+  background: radial-gradient(
+    closest-side,
+    var(--color-surface-subtle) 0 80%,
+    var(--color-border-strong) 81% 82.5%,
+    transparent 83.5% 95%,
+    var(--color-border-default) 96% 97.5%,
+    transparent 98.5%
+  );
+}
+
+[data-variant='kinetic-cosmos'] .kc-planet__value {
+  font-family: var(--type-headline-font-family);
+  font-size: var(--type-step-2);
+  font-weight: var(--type-headline-font-weight);
+  line-height: 1;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+[data-variant='kinetic-cosmos'] .kc-planet__unit {
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-font-size);
+}
+
+[data-variant='kinetic-cosmos'] .kc-planet__plate {
+  grid-row: 2;
+  display: grid;
+  gap: var(--space-3xs);
+  color: var(--color-text-secondary);
+  text-wrap: pretty;
+}
+
+[data-variant='kinetic-cosmos'] .kc-planets--row .kc-planet__plate {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+[data-variant='kinetic-cosmos'] .kc-planet__title {
+  color: var(--color-text-primary);
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='kinetic-cosmos'] .kc-planet__source {
+  color: var(--color-text-secondary);
+}
+
+/* Quotations: the lead one large, the others beside and below it. */
+[data-variant='kinetic-cosmos'] .kc-quote__figure {
+  display: grid;
+  gap: var(--space-s);
+}
+
+/* Its margins are the shared reset's, the p's and the blockquote's both. */
+[data-variant='kinetic-cosmos'] .kc-quote blockquote {
+  font-family: var(--type-quote-font-family);
+  font-size: var(--type-step-1);
+  line-height: var(--type-quote-line-height);
+  text-wrap: pretty;
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-quote, .kc-pull) blockquote p:first-of-type::before {
+  content: open-quote;
+  margin-inline-start: -0.45em;
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-quote, .kc-pull) blockquote p:last-of-type::after {
+  content: close-quote;
+}
+
+[data-variant='kinetic-cosmos'] .kc-quote[data-lead] blockquote {
+  font-family: var(--type-headline-font-family);
+  font-size: var(--type-step-3);
+  font-weight: var(--type-headline-font-weight);
+  line-height: var(--type-headline-line-height);
+  letter-spacing: var(--type-headline-letter-spacing);
+}
+
+[data-variant='kinetic-cosmos'] .kc-evidence[data-shape='press'] .kc-quote[data-lead] blockquote {
+  font-family: var(--type-quote-font-family);
+  font-size: var(--type-step-1);
+  font-weight: var(--type-quote-font-weight);
+  line-height: var(--type-quote-line-height);
+  letter-spacing: normal;
+}
+
+[data-variant='kinetic-cosmos'] .kc-quote__caption {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-quote__caption strong {
+  color: var(--color-text-primary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-quote__as-of {
+  margin-block-start: var(--space-2xs);
+  color: var(--color-text-secondary);
+}
+
+@media (min-width: 64rem) {
+  [data-variant='kinetic-cosmos']
+    .kc-evidence:is([data-shape='testimonial'], [data-shape='press'], [data-shape='talk']) {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+
+  [data-variant='kinetic-cosmos']
+    .kc-evidence:is([data-shape='testimonial'], [data-shape='press'])
+    > li {
+    grid-column: span 6;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-evidence[data-shape='testimonial'] > li:first-child {
+    grid-column: 1 / span 6;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-evidence[data-shape='testimonial'] > li:nth-child(2) {
+    grid-column: 9 / -1;
+    align-self: start;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-evidence[data-shape='testimonial'] > li:nth-child(3) {
+    grid-column: 3 / span 6;
+    padding-block-start: var(--space-l);
+    border-block-start: var(--ui-border-divider);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-evidence[data-shape='press'] > li:first-child {
+    grid-column: 1 / span 7;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-evidence[data-shape='press'] > li:nth-child(2) {
+    grid-column: 9 / -1;
+  }
+}
+
+/* Talks as objects: the first wide, the foot pinned. */
+[data-variant='kinetic-cosmos'] .kc-object {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+  padding: var(--space-l);
+  background-color: var(--color-surface-subtle);
+  border-radius: var(--ui-radius-card);
+}
+
+[data-variant='kinetic-cosmos'] .kc-object__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: var(--space-s);
+}
+
+[data-variant='kinetic-cosmos'] .kc-object__venue {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-object__mark {
+  flex: none;
+  inline-size: var(--space-l);
+  aspect-ratio: 1;
+  background: radial-gradient(
+    circle,
+    var(--color-text-primary) 0 18%,
+    transparent 20% 60%,
+    var(--color-border-strong) 62% 66%,
+    transparent 68%
+  );
+}
+
+[data-variant='kinetic-cosmos'] .kc-object__title {
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-step-1);
+  font-weight: var(--type-title-font-weight);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='kinetic-cosmos'] .kc-object[data-lead] .kc-object__title {
+  font-family: var(--type-headline-font-family);
+  font-size: var(--type-step-3);
+  font-weight: var(--type-headline-font-weight);
+  line-height: var(--type-headline-line-height);
+  max-inline-size: 18ch;
+}
+
+[data-variant='kinetic-cosmos'] .kc-object__foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-xs) var(--space-s);
+  margin-block-start: auto;
+  padding-block-start: var(--space-s);
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='kinetic-cosmos'] .kc-object__foot .kc-actions {
+  margin: 0;
+}
+
+@media (min-width: 64rem) {
+  [data-variant='kinetic-cosmos'] .kc-evidence[data-shape='talk'] > li {
+    grid-column: span 3;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-evidence[data-shape='talk'] > li:first-child {
+    grid-column: span 6;
+  }
+
+  [data-variant='kinetic-cosmos']
+    .kc-evidence[data-shape='talk'][data-count='2']
+    > li:not(:first-child) {
+    grid-column: span 6;
+  }
+}
+
+/* Citations and records under a hanging year. */
+[data-variant='kinetic-cosmos']
+  .kc-evidence:is([data-shape='publication'], [data-shape='award'], [data-shape='patent']) {
+  gap: 0;
+  border-block-end: var(--ui-border-divider);
+}
+
+[data-variant='kinetic-cosmos'] .kc-record {
+  display: grid;
+  grid-template-columns: minmax(4ch, auto) minmax(0, 1fr);
+  gap: var(--space-2xs) var(--space-m);
+  padding-block: var(--space-m);
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='kinetic-cosmos'] .kc-record__year {
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-step-1);
+  font-weight: var(--type-title-font-weight);
+  line-height: var(--type-title-line-height);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+[data-variant='kinetic-cosmos'] .kc-record__main {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+[data-variant='kinetic-cosmos'] .kc-record__side {
+  grid-column: 2;
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2xs);
+}
+
+[data-variant='kinetic-cosmos'] .kc-record__side:empty {
+  display: none;
+}
+
+[data-variant='kinetic-cosmos'] .kc-record__title {
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-step-1);
+  font-weight: var(--type-title-font-weight);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='kinetic-cosmos'] .kc-record__meta {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-record__awards li {
+  padding-inline: var(--space-xs);
+  border: var(--ui-border-control);
+  border-radius: var(--ui-radius-badge);
+}
+
+[data-variant='kinetic-cosmos'] .kc-abstract {
+  margin-block-start: var(--space-2xs);
+}
+
+[data-variant='kinetic-cosmos'] .kc-abstract summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  inline-size: fit-content;
+  color: var(--color-accent-text);
+  font-family: var(--type-label-font-family);
+  font-size: var(--type-label-font-size);
+  font-weight: var(--type-label-font-weight);
+  cursor: pointer;
+}
+
+/* The abstract's marker: a small triangle that points down once it's open. */
+[data-variant='kinetic-cosmos'] .kc-abstract summary::-webkit-details-marker {
+  display: none;
+}
+
+[data-variant='kinetic-cosmos'] .kc-abstract summary::before {
+  content: '';
+  inline-size: var(--space-2xs);
+  aspect-ratio: 1;
+  background-color: currentcolor;
+  clip-path: polygon(20% 0, 100% 50%, 20% 100%);
+}
+
+[data-variant='kinetic-cosmos'] .kc-abstract[open] summary::before {
+  rotate: 90deg;
+}
+
+@media (min-width: 64rem) {
+  [data-variant='kinetic-cosmos'] .kc-evidence[data-shape='publication'] .kc-record {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-evidence[data-shape='publication'] .kc-record__year {
+    grid-column: 1 / span 2;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-evidence[data-shape='publication'] .kc-record__main {
+    grid-column: 3 / span 7;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-evidence[data-shape='publication'] .kc-record__side {
+    grid-column: 10 / -1;
+    justify-items: end;
+    text-align: end;
+  }
+}
+
+/* Work kept elsewhere: bodies with their own figures. */
+[data-variant='kinetic-cosmos'] .kc-evidence[data-shape='external-work'] {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--space-3xl) * 3.2)), 1fr));
+}
+
+[data-variant='kinetic-cosmos'] .kc-elsewhere {
+  display: grid;
+  align-content: start;
+  gap: var(--space-s);
+  padding-block-start: var(--space-m);
+  border-block-start: var(--ui-border-divider);
+  border-block-start-width: calc(var(--space-3xs) / 2);
+  border-color: var(--color-text-primary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-elsewhere__title {
+  font-family: var(--type-headline-font-family);
+  font-size: var(--type-step-3);
+  font-weight: var(--type-headline-font-weight);
+  line-height: var(--type-headline-line-height);
+}
+
+[data-variant='kinetic-cosmos'] .kc-elsewhere__figures {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-elsewhere__figures strong {
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* ---- Chronology: lanes beside one ordered list ----------------------- */
+
+[data-variant='kinetic-cosmos'] .kc-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs) var(--space-l);
+  margin-block-end: var(--space-m);
+  text-transform: capitalize;
+}
+
+[data-variant='kinetic-cosmos'] .kc-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+}
+
+[data-variant='kinetic-cosmos'] .kc-legend li::before {
+  content: '';
+  inline-size: var(--space-m);
+  block-size: calc(var(--space-3xs) / 2);
+  background-color: var(--layout-lane-color, var(--color-data-categorical-1));
+}
+
+[data-variant='kinetic-cosmos']
+  :is(.kc-legend li, .kc-rails__rail, .kc-rails__node, .kc-rails__fork)[data-lane='1'] {
+  --layout-lane-color: var(--color-data-categorical-2);
+}
+
+[data-variant='kinetic-cosmos']
+  :is(.kc-legend li, .kc-rails__rail, .kc-rails__node, .kc-rails__fork)[data-lane='2'] {
+  --layout-lane-color: var(--color-data-categorical-3);
+}
+
+[data-variant='kinetic-cosmos']
+  :is(.kc-legend li, .kc-rails__rail, .kc-rails__node, .kc-rails__fork)[data-lane='3'] {
+  --layout-lane-color: var(--color-data-categorical-4);
+}
+
+/* One thread has no legend, so its rail takes the ink: a lane's colour only means something beside another. */
+[data-variant='kinetic-cosmos'] .kc-chronology[data-lanes='1'] {
+  --layout-lane-color: var(--color-text-primary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-entries {
+  border-block-start: var(--ui-border-divider);
+  border-color: var(--color-text-primary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-entry {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--space-2xl) minmax(0, 1fr);
+  gap: var(--space-2xs) var(--layout-grid-gutter);
+  padding-block: var(--space-l);
+}
+
+[data-variant='kinetic-cosmos'] .kc-entry:not(:first-child) {
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='kinetic-cosmos'] .kc-rails {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: var(--space-2xl);
+}
+
+[data-variant='kinetic-cosmos'] .kc-rails__rail {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(var(--space-s) + var(--layout-lane) * var(--space-s));
+  inline-size: calc(var(--space-3xs) / 2);
+  background-color: var(--layout-lane-color, var(--color-data-categorical-1));
+}
+
+[data-variant='kinetic-cosmos'] .kc-rails__node {
+  position: absolute;
+  inset-block-start: calc(var(--space-l) + var(--space-3xs));
+  inset-inline-start: calc(
+    var(--space-s) + var(--layout-lane) * var(--space-s) + var(--space-3xs) / 4
+  );
+  inline-size: var(--space-xs);
+  aspect-ratio: 1;
+  translate: -50% 0;
+  background: radial-gradient(
+    circle,
+    var(--color-canvas) 0 38%,
+    var(--layout-lane-color, var(--color-data-categorical-1)) 40%
+  );
+  clip-path: circle(50%);
+}
+
+[data-variant='kinetic-cosmos'] .kc-rails__node[data-open] {
+  background: var(--layout-lane-color, var(--color-data-categorical-1));
+}
+
+/*
+ * A branch, newest first: from its entry's node its rail runs down the row
+ * and curves into the lane it came from, as a version history draws it.
+ */
+[data-variant='kinetic-cosmos'] .kc-rails__fork {
+  position: absolute;
+  inset-block: calc(var(--space-l) + var(--space-xs)) 0;
+  inset-inline-start: calc(var(--space-s) + var(--layout-lane) * var(--space-s));
+  inline-size: calc(var(--layout-span) * var(--space-s) + var(--space-3xs) / 2);
+  border-color: var(--layout-lane-color, var(--color-data-categorical-1));
+  border-style: solid;
+  border-width: 0;
+  border-block-end-width: calc(var(--space-3xs) / 2);
+}
+
+[data-variant='kinetic-cosmos'] .kc-rails__fork[data-direction='out'] {
+  border-inline-end-width: calc(var(--space-3xs) / 2);
+  border-end-end-radius: var(--ui-radius-card);
+}
+
+[data-variant='kinetic-cosmos'] .kc-rails__fork[data-direction='in'] {
+  border-inline-start-width: calc(var(--space-3xs) / 2);
+  border-end-start-radius: var(--ui-radius-card);
+}
+
+/* The playhead: today, on the rule the newest entries hang from. */
+[data-variant='kinetic-cosmos'] .kc-playhead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='kinetic-cosmos'] .kc-playhead::before,
+[data-variant='kinetic-cosmos'] .kc-playhead::after {
+  content: '';
+  border-block-start: var(--ui-border-divider);
+  border-color: var(--color-text-primary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-playhead::before {
+  inline-size: var(--space-2xl);
+}
+
+[data-variant='kinetic-cosmos'] .kc-playhead::after {
+  flex: 1;
+}
+
+[data-variant='kinetic-cosmos'] .kc-chronology:has(.kc-playhead) .kc-entries {
+  border-block-start: 0;
+}
+
+[data-variant='kinetic-cosmos'] .kc-entry > :where(:not(.kc-rails)) {
+  grid-column: 2;
+}
+
+[data-variant='kinetic-cosmos'] .kc-entry__period {
+  font-weight: var(--type-title-font-weight);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+[data-variant='kinetic-cosmos'] .kc-entry__thread {
+  color: var(--color-text-secondary);
+  text-transform: capitalize;
+}
+
+[data-variant='kinetic-cosmos'] .kc-entry__main {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+[data-variant='kinetic-cosmos'] .kc-entry__title {
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-step-1);
+  font-weight: var(--type-title-font-weight);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='kinetic-cosmos'] .kc-entry__where {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-entry__main .kc-ruled {
+  max-inline-size: var(--layout-width-text);
+}
+
+[data-variant='kinetic-cosmos'] .kc-entry__aside {
+  display: grid;
+  align-content: start;
+  gap: var(--space-s);
+}
+
+[data-variant='kinetic-cosmos'] .kc-entry__aside-group {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+[data-variant='kinetic-cosmos'] .kc-entry__skills {
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-font-size);
+}
+
+[data-variant='kinetic-cosmos'] .kc-entry__produced {
+  display: grid;
+  gap: var(--space-3xs);
+  font-size: var(--type-label-font-size);
+}
+
+@media (min-width: 64rem) {
+  [data-variant='kinetic-cosmos'] .kc-entry {
+    grid-template-columns: var(--space-3xl) repeat(11, minmax(0, 1fr));
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-rails {
+    inline-size: var(--space-3xl);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-rails__rail {
+    inset-inline-start: calc(var(--space-l) + var(--layout-lane) * var(--space-l));
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-rails__node {
+    inset-inline-start: calc(
+      var(--space-l) + var(--layout-lane) * var(--space-l) + var(--space-3xs) / 4
+    );
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-rails__fork {
+    inset-inline-start: calc(var(--space-l) + var(--layout-lane) * var(--space-l));
+    inline-size: calc(var(--layout-span) * var(--space-l) + var(--space-3xs) / 2);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-playhead::before {
+    inline-size: calc(var(--space-3xl) + var(--layout-grid-gutter));
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-entry__when {
+    grid-column: 2 / span 2;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-entry__main {
+    grid-column: 4 / span 5;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-entry__aside {
+    grid-column: 10 / -1;
+  }
+}
+
+/* ---- Practice -------------------------------------------------------- */
+
+[data-variant='kinetic-cosmos'] .kc-groups {
+  display: grid;
+  border-block-end: var(--ui-border-divider);
+}
+
+[data-variant='kinetic-cosmos'] .kc-group {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 5fr);
+  gap: var(--space-2xs) var(--space-m);
+  padding-block: var(--space-s);
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='kinetic-cosmos'] .kc-group__title {
+  font-family: var(--type-label-font-family);
+  font-size: var(--type-step-0);
+  font-weight: var(--type-label-font-weight);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='kinetic-cosmos'] .kc-group__description {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-group__items {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-offers {
+  display: grid;
+  align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--space-3xl) * 3)), 1fr));
+  gap: var(--space-xl) var(--layout-grid-gutter);
+}
+
+/* An offer is a body with a trail running down its terms to the way to take it up, not a card. */
+[data-variant='kinetic-cosmos'] .kc-offer {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: var(--space-xs);
+  padding-inline-start: calc(var(--space-l) + var(--space-s));
+}
+
+[data-variant='kinetic-cosmos'] .kc-offer__body {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: var(--space-l);
+}
+
+[data-variant='kinetic-cosmos'] .kc-offer__body::before {
+  content: '';
+  display: block;
+  inline-size: 100%;
+  aspect-ratio: 1;
+  background: radial-gradient(
+    circle,
+    var(--color-text-primary) 0 22%,
+    transparent 24% 56%,
+    var(--color-border-strong) 58% 63%,
+    transparent 65%
+  );
+}
+
+[data-variant='kinetic-cosmos'] .kc-offer__body::after {
+  content: '';
+  position: absolute;
+  inset-block: calc(var(--space-l) + var(--space-3xs)) var(--space-s);
+  inset-inline-start: 50%;
+  border-inline-start: var(--ui-border-divider);
+}
+
+[data-variant='kinetic-cosmos'] .kc-offer__action {
+  justify-self: start;
+  margin-block-start: var(--space-xs);
+}
+
+/* What an offer includes opens from its terms' start, not stretched and centred across the column. */
+[data-variant='kinetic-cosmos'] .kc-offer .kc-object__more {
+  justify-self: start;
+  text-align: start;
+}
+
+[data-variant='kinetic-cosmos'] .kc-offer__title {
+  padding-block-start: var(--space-3xs);
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-step-1);
+  font-weight: var(--type-title-font-weight);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='kinetic-cosmos'] .kc-offer__terms {
+  color: var(--color-text-secondary);
+}
+
+/* ---- Narrative ------------------------------------------------------- */
+
+[data-variant='kinetic-cosmos'] .kc-about__lede {
+  max-inline-size: 34ch;
+  font-size: var(--type-step-1);
+  line-height: var(--type-title-line-height);
+  text-wrap: pretty;
+}
+
+[data-variant='kinetic-cosmos'] .kc-about__lede p {
+  margin: 0;
+}
+
+[data-variant='kinetic-cosmos'] .kc-now {
+  max-inline-size: 46ch;
+  font-size: var(--type-step-1);
+  line-height: var(--type-title-line-height);
+  text-wrap: pretty;
+}
+
+[data-variant='kinetic-cosmos'] .kc-now p {
+  margin: 0;
+}
+
+[data-variant='kinetic-cosmos'] .kc-pull {
+  display: grid;
+  gap: var(--space-s);
+  max-inline-size: 62ch;
+  margin-inline: auto;
+  padding-block: var(--space-l);
+}
+
+[data-variant='kinetic-cosmos'] .kc-pull blockquote {
+  margin: 0;
+  font-family: var(--type-headline-font-family);
+  font-size: var(--type-step-3);
+  font-weight: var(--type-headline-font-weight);
+  line-height: var(--type-headline-line-height);
+  letter-spacing: var(--type-headline-letter-spacing);
+  text-wrap: balance;
+}
+
+[data-variant='kinetic-cosmos'] .kc-pull blockquote p {
+  margin: 0;
+}
+
+[data-variant='kinetic-cosmos'] .kc-pull__caption {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-custom {
+  display: grid;
+  gap: var(--space-xl);
+}
+
+[data-variant='kinetic-cosmos'] .kc-custom__item {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='kinetic-cosmos'] .kc-custom__title {
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-step-1);
+  font-weight: var(--type-title-font-weight);
+}
+
+/* ---- GitHub: the contribution sky ------------------------------------ */
+
+[data-variant='kinetic-cosmos'] .kc-github {
+  display: grid;
+  gap: var(--space-l);
+}
+
+[data-variant='kinetic-cosmos'] .kc-moons--repos .kc-moon__plate {
+  display: grid;
+  gap: var(--space-3xs);
+  max-inline-size: none;
+}
+
+/*
+ * On a touch screen, the small standalone links get a target of the
+ * control height, at least 24 px and aiming at 44, without moving a thing.
+ */
+@media (pointer: coarse) {
+  [data-variant='kinetic-cosmos']
+    :is(
+      .kc-arc__stop a,
+      .kc-link-action,
+      .kc-links a,
+      .kc-actions a,
+      .kc-github__profile a,
+      .kc-entry__produced a
+    ) {
+    position: relative;
+  }
+
+  [data-variant='kinetic-cosmos']
+    :is(
+      .kc-arc__stop a,
+      .kc-link-action,
+      .kc-links a,
+      .kc-actions a,
+      .kc-github__profile a,
+      .kc-entry__produced a
+    )::after {
+    content: '';
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
+    inline-size: max(100%, var(--ui-control-height));
+    block-size: max(100%, var(--ui-control-height));
+    translate: -50% -50%;
+  }
+}
+
+[data-variant='kinetic-cosmos'] .kc-repo__name {
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-step-1);
+  font-weight: var(--type-title-font-weight);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-repo__description, .kc-repo__facts) {
+  color: var(--color-text-secondary);
+  font-weight: var(--type-body-font-weight);
+}
+
+/* On a phone the repositories stack, each body beside its plate: three plates side by side would leave each a few words wide. */
+@media (max-width: 47.99rem) {
+  [data-variant='kinetic-cosmos'] .kc-moons--repos {
+    margin-inline: 0;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-moons--repos .kc-moons__arc {
+    display: none;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-moons--repos .kc-moons__list {
+    grid-auto-flow: row;
+    gap: var(--space-m);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-moons--repos .kc-moon {
+    grid-template-columns: var(--space-s) minmax(0, 1fr);
+    column-gap: var(--space-s);
+    align-items: start;
+    justify-items: start;
+    padding-block-start: 0;
+    text-align: start;
+  }
+
+  /* A body the size of its column, not stretched to its plate's height. */
+  [data-variant='kinetic-cosmos'] .kc-moons--repos .kc-moon__body {
+    display: block;
+    inline-size: var(--space-s);
+    block-size: var(--space-s);
+    translate: 0 calc(0.5 * var(--space-3xs));
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-moons--repos .kc-moon__body::before {
+    display: block;
+    inline-size: var(--space-s);
+    block-size: var(--space-s);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-moons--repos .kc-moon__body::after {
+    display: none;
+  }
+}
+
+[data-variant='kinetic-cosmos'] .kc-github__as-of {
+  margin-inline-start: var(--space-s);
+  color: var(--color-text-secondary);
+}
+
+/* ---- The closing stage ----------------------------------------------- */
+
+[data-variant='kinetic-cosmos'] .kc-closing {
+  display: grid;
+  gap: var(--space-xl);
+  margin-block-start: var(--space-xl-3xl);
+  padding-block: var(--space-2xl);
+  border-radius: var(--ui-radius-overlay);
+}
+
+[data-variant='kinetic-cosmos'] .kc-closing a:where(:not(.kc-button)) {
+  color: inherit;
+}
+
+[data-variant='kinetic-cosmos'] .kc-contact {
+  display: grid;
+  gap: var(--space-xl) var(--layout-grid-gutter);
+}
+
+[data-variant='kinetic-cosmos'] .kc-contact__words {
+  display: grid;
+  align-content: start;
+  gap: var(--space-m);
+}
+
+[data-variant='kinetic-cosmos'] .kc-contact__title {
+  font-family: var(--type-display-font-family);
+  font-size: var(--type-step-5);
+  font-weight: var(--type-display-font-weight);
+  line-height: var(--type-display-line-height);
+  letter-spacing: var(--type-display-letter-spacing);
+}
+
+[data-variant='kinetic-cosmos'] .kc-contact__message {
+  max-inline-size: 42ch;
+  color: var(--layout-ink-quiet);
+  font-size: var(--type-step-1);
+  line-height: var(--type-title-line-height);
+  text-wrap: pretty;
+}
+
+[data-variant='kinetic-cosmos'] .kc-contact__email {
+  font-family: var(--type-headline-font-family);
+  font-size: var(--type-step-3);
+  font-weight: var(--type-title-font-weight);
+  line-height: var(--type-headline-line-height);
+  overflow-wrap: anywhere;
+}
+
+[data-variant='kinetic-cosmos'] .kc-ways {
+  position: relative;
+  display: grid;
+  align-items: center;
+  gap: var(--space-m);
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-ways__orbits, .kc-ways__core) {
+  display: none;
+}
+
+@media (min-width: 48rem) {
+  [data-variant='kinetic-cosmos'] .kc-ways {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  }
+
+  [data-variant='kinetic-cosmos'] :is(.kc-ways__orbits, .kc-ways__core) {
+    display: block;
+  }
+}
+
+[data-variant='kinetic-cosmos'] .kc-ways__orbits {
+  inline-size: 100%;
+  block-size: auto;
+}
+
+[data-variant='kinetic-cosmos'] .kc-ways__orbits circle {
+  fill: none;
+  stroke: var(--layout-ink-faint);
+  stroke-width: 1;
+}
+
+[data-variant='kinetic-cosmos'] .kc-ways__orbits .kc-ways__halo {
+  stroke: var(--layout-ink-line);
+  stroke-dasharray: 1.5 5;
+}
+
+[data-variant='kinetic-cosmos'] .kc-ways__core {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: calc(100% * 2 / 10 - var(--space-m) * 2 / 5);
+  inline-size: calc((100% - var(--space-m)) * 2 / 5 * 0.2);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  background: var(--ui-signature-fill);
+  clip-path: circle(50%);
+}
+
+[data-variant='kinetic-cosmos'] .kc-ways__list {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='kinetic-cosmos'] .kc-way {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-s);
+}
+
+[data-variant='kinetic-cosmos'] .kc-way__body {
+  inline-size: var(--space-m);
+  aspect-ratio: 1;
+  background: radial-gradient(
+    circle,
+    var(--layout-ink) 0 30%,
+    transparent 32% 58%,
+    var(--layout-ink-faint) 60% 66%,
+    transparent 68%
+  );
+}
+
+[data-variant='kinetic-cosmos'] .kc-way__link {
+  display: grid;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+[data-variant='kinetic-cosmos'] .kc-way__name {
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='kinetic-cosmos'] .kc-way__link:hover .kc-way__name {
+  text-decoration: underline;
+}
+
+[data-variant='kinetic-cosmos'] .kc-way__address {
+  color: var(--layout-ink-quiet);
+}
+
+[data-variant='kinetic-cosmos'] .kc-cta {
+  display: grid;
+  gap: var(--space-s);
+  max-inline-size: 46ch;
+  padding-block-start: var(--space-l);
+  border-block-start: var(--ui-border-divider);
+  border-color: var(--layout-ink-line);
+}
+
+[data-variant='kinetic-cosmos'] .kc-cta__title {
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-step-1);
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='kinetic-cosmos'] .kc-cta__words {
+  color: var(--layout-ink-quiet);
+}
+
+[data-variant='kinetic-cosmos'] .kc-cta__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-s) var(--space-l);
+  margin-block-start: var(--space-xs);
+}
+
+@media (min-width: 64rem) {
+  [data-variant='kinetic-cosmos'] .kc-closing {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    column-gap: var(--layout-grid-gutter);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-closing__part {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-closing__part[data-part='cta'] {
+    grid-column: 1 / span 6;
+    margin-block-start: calc(-1 * var(--space-l));
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-contact {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-contact__words {
+    grid-column: 1 / span 6;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-ways {
+    grid-column: 8 / -1;
+  }
+}
+
+/*
+ * The ways out wired to the system beside them (P2): each body on a leader
+ * back toward the orbits, ending on a terminal, the leaders' ends tracing the
+ * outer orbit's curve, so the closing mirrors the opening's legend.
+ */
+@media (min-width: 48rem) {
+  [data-variant='kinetic-cosmos'] .kc-way {
+    --layout-at: calc((var(--layout-index) + 0.5) / var(--layout-count));
+    --layout-dip: calc(4 * var(--layout-at) * (1 - var(--layout-at)));
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-way__body {
+    position: relative;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-way__body::before,
+  [data-variant='kinetic-cosmos'] .kc-way__body::after {
+    content: '';
+    position: absolute;
+    inset-block-start: 50%;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-way__body::before {
+    inset-inline-end: 100%;
+    inline-size: calc(var(--space-m) + (1 - var(--layout-dip)) * var(--space-2xl));
+    border-block-start: var(--ui-border-divider);
+    border-color: var(--layout-ink-line);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-way__body::after {
+    inset-inline-end: calc(100% + var(--space-m) + (1 - var(--layout-dip)) * var(--space-2xl));
+    inline-size: var(--space-3xs);
+    aspect-ratio: 1;
+    translate: 50% -50%;
+    background-color: var(--layout-ink-faint);
+    border-radius: var(--ui-radius-badge);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-way__body:dir(rtl)::after {
+    translate: -50% -50%;
+  }
+
+  [data-variant='kinetic-cosmos']
+    .kc-way:has(.kc-way__link:is(:hover, :focus-visible))
+    .kc-way__body::before {
+    border-color: var(--layout-ink-quiet);
+  }
+}
+
+/* ---- The dock -------------------------------------------------------- */
+
+/*
+ * A docked band, not a floating pill: the page's width at the window's foot,
+ * on the canvas, a hairline above it, so the text ends at a chrome edge. While
+ * it shows, the island gives the document a scroll padding of its height, so
+ * focus and anchors land above it (WCAG 2.4.11, technique C43).
+ */
+[data-variant='kinetic-cosmos'] .kc-dock {
+  --layout-ink: var(--color-text-primary);
+  --layout-ink-quiet: var(--color-text-secondary);
+  --layout-ink-line: var(--color-border-default);
+  --layout-ink-faint: var(--color-border-strong);
+
+  position: sticky;
+  inset-block-end: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  margin-block-start: var(--space-xl);
+  padding-block: var(--space-3xs);
+  padding-inline: max(var(--layout-grid-margin), (100% - var(--layout-width-page)) / 2);
+  color: var(--layout-ink);
+  background-color: var(--color-canvas);
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='kinetic-cosmos'] .kc-dock .kc-index-trigger--dock {
+  margin-inline-start: auto;
+}
+
+/* While the opening stage is in view the dock steps aside, out of view and out of the tab order. */
+[data-variant='kinetic-cosmos'] .kc-dock[hidden] {
+  display: none;
+}
+
+[data-variant='kinetic-cosmos'] .kc-dock__where {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  padding-inline: var(--space-2xs) var(--space-xs);
+}
+
+[data-variant='kinetic-cosmos'] .kc-dock__where[data-shown] {
+  border-inline-end: var(--ui-border-divider);
+  border-color: var(--layout-ink-line);
+}
+
+[data-variant='kinetic-cosmos'] .kc-dock__marker {
+  position: relative;
+  inline-size: var(--space-l);
+  aspect-ratio: 1;
+  background: radial-gradient(
+    circle,
+    transparent 0 34%,
+    var(--layout-ink-faint) 36% 38%,
+    transparent 40% 56%,
+    var(--layout-ink-faint) 58% 60%,
+    transparent 62% 78%,
+    var(--layout-ink-faint) 80% 82%,
+    transparent 84%
+  );
+}
+
+[data-variant='kinetic-cosmos'] .kc-dock__marker-core {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  inline-size: 28%;
+  aspect-ratio: 1;
+  background-color: var(--layout-ink);
+  clip-path: circle(50%);
+}
+
+[data-variant='kinetic-cosmos'] .kc-dock__here {
+  display: grid;
+  line-height: var(--type-label-line-height);
+}
+
+[data-variant='kinetic-cosmos'] .kc-dock__name {
+  font-size: var(--type-label-font-size);
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='kinetic-cosmos'] .kc-dock__count {
+  color: var(--layout-ink-quiet);
+  font-size: var(--type-label-font-size);
+}
+
+[data-variant='kinetic-cosmos'] .kc-dock__stops {
+  display: none;
+  align-items: center;
+}
+
+[data-variant='kinetic-cosmos'] .kc-dock__stop {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  min-block-size: var(--ui-control-height);
+  padding-inline: var(--space-s);
+  font-weight: var(--type-title-font-weight);
+  text-decoration: none;
+  border-radius: var(--ui-radius-control);
+  transition: background-color var(--motion-feedback) var(--motion-curve);
+}
+
+[data-variant='kinetic-cosmos'] .kc-dock__stop:hover {
+  background-color: var(--layout-ink-line);
+}
+
+[data-variant='kinetic-cosmos'] .kc-dock__stop[aria-current='location'] {
+  background-color: var(--layout-ink-line);
+}
+
+[data-variant='kinetic-cosmos'] .kc-dock__stop[aria-current='location']::before {
+  content: '';
+  inline-size: var(--space-3xs);
+  aspect-ratio: 1;
+  background-color: var(--color-accent);
+  clip-path: circle(50%);
+}
+
+[data-variant='kinetic-cosmos'] .kc-index-trigger--dock {
+  border-color: transparent;
+}
+
+@media (min-width: 64rem) {
+  [data-variant='kinetic-cosmos'] .kc-dock__stops {
+    display: flex;
+  }
+}
+
+/* ---- The colophon ---------------------------------------------------- */
+
+[data-variant='kinetic-cosmos'] .kc-colophon {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-s) var(--layout-grid-gutter);
+  padding-block: var(--space-m) var(--space-xl);
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-font-size);
+}
+
+[data-variant='kinetic-cosmos'] .kc-colophon__name {
+  color: var(--color-text-primary);
+  font-weight: var(--type-label-font-weight);
+}
+
+@media (min-width: 64rem) {
+  [data-variant='kinetic-cosmos'] .kc-colophon {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-colophon__top {
+    text-align: end;
+  }
+}
+
+/* ---- The system index ------------------------------------------------ */
+
+[data-variant='kinetic-cosmos'] .kc-index {
+  inline-size: min(
+    100% - 2 * var(--space-s),
+    var(--layout-width-page) + 2 * var(--layout-grid-margin)
+  );
+  max-inline-size: none;
+  max-block-size: calc(100% - 2 * var(--space-s));
+  margin: auto;
+  padding: var(--space-xl) var(--layout-grid-margin);
+  /* A hairline in the stage's ink, so its edge doesn't vanish against the stage (P2). */
+  border: var(--ui-border-card);
+  border-color: var(--layout-ink-line);
+  border-radius: var(--ui-radius-overlay);
+  box-shadow: var(--ui-shadow-overlay);
+}
+
+/* The page stays in view behind it, dimmed, as the mockup has it. */
+[data-variant='kinetic-cosmos'] .kc-index::backdrop {
+  background-color: color-mix(in oklab, var(--color-text-primary) 55%, transparent);
+}
+
+[data-variant='kinetic-cosmos'] .kc-index__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-xs) var(--layout-grid-gutter);
+  align-items: center;
+}
+
+[data-variant='kinetic-cosmos'] .kc-index__title {
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-step-1);
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='kinetic-cosmos'] .kc-index__lede {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  color: var(--layout-ink-quiet);
+}
+
+[data-variant='kinetic-cosmos'] .kc-index__close {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-block-size: var(--ui-control-height);
+  padding-inline: var(--ui-space-control-inline);
+  color: inherit;
+  font: inherit;
+  font-weight: var(--type-title-font-weight);
+  background-color: transparent;
+  border: var(--ui-border-control);
+  border-color: var(--layout-ink-line);
+  border-radius: var(--ui-radius-control);
+  cursor: pointer;
+}
+
+[data-variant='kinetic-cosmos'] .kc-index__key {
+  color: var(--layout-ink-quiet);
+  font-family: inherit;
+  font-size: var(--type-label-font-size);
+}
+
+/* The system as an orrery: the rings, a body for each section, their names at the rings' left ends. */
+[data-variant='kinetic-cosmos'] .kc-index__system {
+  position: relative;
+  aspect-ratio: 1300 / 200;
+  margin-block: var(--space-l);
+}
+
+[data-variant='kinetic-cosmos'] .kc-index__orrery {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  overflow: visible;
+}
+
+[data-variant='kinetic-cosmos'] .kc-index__orbit {
+  fill: none;
+  stroke: var(--layout-ink-faint);
+  stroke-width: 1;
+}
+
+[data-variant='kinetic-cosmos'] .kc-index__body {
+  fill: var(--layout-ink-quiet);
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-index__core, .kc-index__ring-name, .kc-index__focus) {
+  position: absolute;
+  translate: -50% -50%;
+}
+
+[data-variant='kinetic-cosmos'] .kc-index__core {
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  inline-size: 3.4%;
+  aspect-ratio: 1;
+  background: var(--ui-signature-fill);
+  clip-path: circle(50%);
+}
+
+[data-variant='kinetic-cosmos'] .kc-index__ring-name {
+  inset-inline-start: calc(var(--layout-x) * 100%);
+  inset-block-start: calc(var(--layout-y) * 100%);
+  translate: -100% -50%;
+  color: var(--layout-ink-quiet);
+  font-size: var(--type-label-font-size);
+  font-weight: var(--type-label-font-weight);
+  white-space: nowrap;
+}
+
+/* The body of the section in focus or under the pointer gets a ring, moved there by the link. */
+[data-variant='kinetic-cosmos'] .kc-index__focus {
+  display: none;
+  inset-inline-start: calc(var(--layout-focus-x) * 100%);
+  inset-block-start: calc(var(--layout-focus-y) * 100%);
+  inline-size: var(--space-m);
+  aspect-ratio: 1;
+  background: radial-gradient(
+    circle,
+    var(--layout-ink) 0 30%,
+    transparent 32% 58%,
+    var(--layout-ink) 60% 68%,
+    transparent 70%
+  );
+}
+
+[data-variant='kinetic-cosmos'] .kc-index[data-focus] .kc-index__focus {
+  display: block;
+}
+
+@media (max-width: 47.99rem) {
+  [data-variant='kinetic-cosmos'] .kc-index__ring-name {
+    display: none;
+  }
+}
+
+[data-variant='kinetic-cosmos'] .kc-index__groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--space-3xl) * 1.6)), 1fr));
+  gap: var(--space-l) var(--layout-grid-gutter);
+}
+
+[data-variant='kinetic-cosmos'] .kc-index__ring {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding-block-end: var(--space-s);
+  margin-block-end: var(--space-xs);
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-step-1);
+  font-weight: var(--type-title-font-weight);
+  border-block-end: var(--ui-border-divider);
+  border-color: var(--layout-ink-line);
+}
+
+[data-variant='kinetic-cosmos'] .kc-index__ring-mark {
+  inline-size: var(--space-s);
+  aspect-ratio: 1;
+  background: radial-gradient(
+    circle,
+    var(--layout-ink) 0 22%,
+    transparent 24% 60%,
+    var(--layout-ink-faint) 62% 70%,
+    transparent 72%
+  );
+}
+
+[data-variant='kinetic-cosmos'] .kc-index__entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-xs);
+}
+
+[data-variant='kinetic-cosmos'] .kc-index__link {
+  display: block;
+  padding-block: var(--space-3xs);
+  text-decoration: none;
+}
+
+[data-variant='kinetic-cosmos'] .kc-index__link:hover {
+  text-decoration: underline;
+}
+
+[data-variant='kinetic-cosmos'] .kc-index__count {
+  color: var(--layout-ink-quiet);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+[data-variant='kinetic-cosmos'] .kc-index__foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-xs) var(--space-l);
+  margin-block-start: var(--space-xl);
+  padding-block-start: var(--space-s);
+  color: var(--layout-ink-quiet);
+  font-size: var(--type-label-font-size);
+  border-block-start: var(--ui-border-divider);
+  border-color: var(--layout-ink-line);
+}
+
+[data-variant='kinetic-cosmos'] .kc-index__readout {
+  color: var(--layout-ink);
+}
+
+/* ---- Motion: the orbits turn and the far stars drift, only while the runtime runs ---- */
+
+/*
+ * The loops key on data-kit-runtime, which only the kit's runtime sets on the
+ * stage's root, active or paused, and drops under static (motion-gate, K-4),
+ * and each also reads the ambient state, which the platform pauses under
+ * reduced motion, a static page, print, and a runtime that isn't active.
+ * Every loop's cycle is the one ambient slot (K-4 b, R4-L2), never a
+ * multiplied token: the inner plane turns twice a cycle and the outer once,
+ * so the inner runs twice as fast, and the far stars sway a quarter tile
+ * there and back, so they drift as slowly as before with no seam.
+ */
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='kinetic-cosmos']:not([data-motion='reduced'], [data-motion='static'])
+    .kc-opening[data-kit-runtime]
+    .kc-plane--inner
+    .kc-spin {
+    will-change: transform;
+    animation: kinetic-cosmos-spin-inner var(--motion-ambient) linear infinite;
+    animation-play-state: var(--motion-ambient-state);
+  }
+
+  [data-variant='kinetic-cosmos']:not([data-motion='reduced'], [data-motion='static'])
+    .kc-opening[data-kit-runtime]
+    .kc-plane--outer
+    .kc-spin {
+    will-change: transform;
+    animation: kinetic-cosmos-spin var(--motion-ambient) linear infinite;
+    animation-play-state: var(--motion-ambient-state);
+  }
+
+  [data-variant='kinetic-cosmos']:not([data-motion='reduced'], [data-motion='static'])
+    .kc-opening[data-kit-runtime]
+    .kc-sky__drift {
+    will-change: transform;
+    animation: kinetic-cosmos-drift var(--motion-ambient) ease-in-out infinite alternate;
+    animation-play-state: var(--motion-ambient-state);
+  }
+
+  /* Hovering the orrery, or focus on a plate, holds the orbits where they are. */
+  [data-variant='kinetic-cosmos']
+    .kc-opening[data-kit-runtime]:has(.kc-map:hover, .kc-plates:focus-within)
+    :is(.kc-spin, .kc-sky__drift) {
+    animation-play-state: paused;
+  }
+}
+
+@keyframes kinetic-cosmos-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@keyframes kinetic-cosmos-spin-inner {
+  to {
+    transform: rotate(2turn);
+  }
+}
+
+@keyframes kinetic-cosmos-drift {
+  to {
+    transform: translateX(-12.5%);
+  }
+}
+
+/* ---- Forced colors and print ----------------------------------------- */
+
+@media (forced-colors: active) {
+  [data-variant='kinetic-cosmos'] :is(.kc-sky, .kc-orrery__stars, .kc-core, .kc-ways__core) {
+    display: none;
+  }
+
+  [data-variant='kinetic-cosmos']
+    :is(.kc-masthead, .kc-opening, .kc-closing, .kc-dock, .kc-object) {
+    border: var(--ui-border-card);
+  }
+}
+
+/* The Index's foot, readout and all, held in view at the dialog's foot (P2). */
+[data-variant='kinetic-cosmos'] .kc-index .kc-index__foot {
+  position: sticky;
+  inset-block-end: calc(-1 * var(--space-xl));
+  padding-block-end: var(--space-xl);
+  background-color: var(--color-text-primary);
+}
+
+/* ---- The ring openers' band (P2, the below-the-fold convergence) ---- */
+
+/* Each ring opens on the stage's ink pair, inset by the stage's frame, carrying its arc and its title. */
+[data-variant='kinetic-cosmos'] .kc-ring__opener {
+  margin-inline: var(--space-2xs);
+  margin-block-end: var(--space-xl);
+  padding-block: var(--space-l);
+  border-radius: var(--ui-radius-overlay);
+}
+
+@media (min-width: 64rem) {
+  [data-variant='kinetic-cosmos'] .kc-ring__opener {
+    margin-inline: var(--space-s);
+  }
+}
+
+[data-variant='kinetic-cosmos'] .kc-ring__opener .kc-ring__head {
+  margin-block-end: 0;
+}
+
+[data-variant='kinetic-cosmos'] .kc-ring__opener .kc-ring__intro {
+  color: var(--layout-ink-quiet);
+}
+
+[data-variant='kinetic-cosmos'] .kc-ring__opener .kc-arc__line path {
+  stroke: var(--layout-ink-line);
+}
+
+[data-variant='kinetic-cosmos'] .kc-ring__opener .kc-arc__trail {
+  background: linear-gradient(to right, transparent, var(--layout-ink-quiet));
+}
+
+[data-variant='kinetic-cosmos'] .kc-ring__opener .kc-arc__body {
+  background: radial-gradient(
+    circle,
+    var(--layout-ink) 0 30%,
+    var(--color-text-primary) 31% 52%,
+    var(--layout-ink-line) 53% 58%,
+    transparent 59%
+  );
+}
+
+[data-variant='kinetic-cosmos'] .kc-ring__opener .kc-arc__stop a {
+  color: var(--layout-ink);
+}
+
+@media (min-width: 64rem) {
+  [data-variant='kinetic-cosmos'] .kc-ring__opener .kc-arc__stop::before {
+    background: radial-gradient(
+      circle,
+      var(--color-text-primary) 0 38%,
+      var(--layout-ink) 40% 68%,
+      transparent 70%
+    );
+  }
+}
+
+/* ---- The home outline's length (P2) ---------------------------------- */
+
+/* A part folded at every width, the earlier roles or the rest of the words of others, keeps its toggle. */
+[data-variant='kinetic-cosmos'] .kc-fold--earlier > .kc-fold__summary {
+  display: flex;
+}
+
+/*
+ * Consecutive closed rows sit close, not a section's gap apart: every one in a
+ * single column, and from 64rem only a full row, so the two halves of a row
+ * stay level.
+ */
+@media (max-width: 63.99rem) {
+  [data-variant='kinetic-cosmos']
+    .kc-section:has(> .kc-fold:not(.kc-fold--inline, [open]))
+    + .kc-section:has(> .kc-fold:not(.kc-fold--inline, [open])) {
+    margin-block-start: calc(var(--space-2xs) - var(--space-2xl));
+  }
+}
+
+@media (min-width: 64rem) {
+  [data-variant='kinetic-cosmos']
+    .kc-section:has(> .kc-fold:not(.kc-fold--inline, [open]))
+    + .kc-section[data-span='full']:has(> .kc-fold:not(.kc-fold--inline, [open])) {
+    margin-block-start: calc(var(--space-2xs) - var(--space-2xl));
+  }
+}
+
+@media (max-width: 47.99rem) {
+  /* A phone's ring opens on its arc alone: the dock and the Index carry its section links. */
+  [data-variant='kinetic-cosmos'] .kc-ring .kc-arc__index {
+    display: none;
+  }
+
+  /* The repositories' figures three-up, each body over its plate, as At a glance sets them. */
+  [data-variant='kinetic-cosmos'] .kc-planets--row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-s);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-planets--row .kc-planet {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: var(--space-3xl) auto;
+    gap: var(--space-xs);
+    justify-items: center;
+    text-align: center;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-planets--row .kc-planet::before {
+    display: none;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-planets--row .kc-planet__plate {
+    grid-column: 1;
+    grid-row: 2;
+  }
+}
+
+/* Four figures sit two by two, so none is stranded on a row of its own (should-fix 3). */
+[data-variant='kinetic-cosmos'] .kc-planets:not(.kc-planets--row):has(> :nth-child(4):last-child) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* ---- A talk's dialog (P2) --------------------------------------------- */
+
+/* Read by assistive technology, not drawn: a button's full name. */
+[data-variant='kinetic-cosmos'] .kc-sr {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+[data-variant='kinetic-cosmos'] .kc-object__more {
+  padding: 0;
+  color: var(--color-accent-text);
+  font: inherit;
+  font-weight: var(--type-label-font-weight);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+/* The talk's abstract and links, on the stage's ink pair, a reading measure wide. */
+[data-variant='kinetic-cosmos'] .kc-talk-dialog {
+  inline-size: min(100% - 2 * var(--space-s), 40rem);
+  max-block-size: calc(100% - 2 * var(--space-s));
+  margin: auto;
+  padding: var(--space-l);
+  border: var(--ui-border-card);
+  border-color: var(--layout-ink-line);
+  border-radius: var(--ui-radius-overlay);
+  box-shadow: var(--ui-shadow-overlay);
+}
+
+[data-variant='kinetic-cosmos'] .kc-talk-dialog[open] {
+  display: grid;
+  gap: var(--space-m);
+}
+
+[data-variant='kinetic-cosmos'] .kc-talk-dialog::backdrop {
+  background-color: color-mix(in oklab, var(--color-text-primary) 55%, transparent);
+}
+
+[data-variant='kinetic-cosmos'] .kc-talk-dialog__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: var(--space-s);
+}
+
+[data-variant='kinetic-cosmos'] .kc-talk-dialog__title {
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-step-1);
+  font-weight: var(--type-title-font-weight);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='kinetic-cosmos'] .kc-talk-dialog :is(.kc-prose, a) {
+  color: inherit;
+}
+
+/* ---- The case's last stops, on one orbit (design review P2, M2) ---- */
+
+[data-variant='kinetic-cosmos'] .kc-case-orbit {
+  position: relative;
+  display: grid;
+  inline-size: min(100% - 2 * var(--layout-grid-margin), var(--layout-width-page));
+  margin-inline: auto;
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-orbit__arc,
+[data-variant='kinetic-cosmos'] .kc-case-body--hung > .kc-moon__body {
+  display: none;
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-body.kc-case-body--hung {
+  inline-size: auto;
+  margin-inline: 0;
+}
+
+@media (min-width: 64rem) {
+  [data-variant='kinetic-cosmos'] .kc-case-orbit {
+    grid-template-columns: repeat(var(--layout-count), minmax(0, 1fr));
+    column-gap: var(--layout-grid-gutter);
+    padding-block-start: var(--space-xl-3xl);
+  }
+
+  /* The arc the bodies hang from, as the signature's moons hang from theirs. */
+  [data-variant='kinetic-cosmos'] .kc-case-orbit__arc {
+    position: absolute;
+    inset-block-start: var(--space-xl-3xl);
+    inset-inline: 0;
+    display: block;
+    inline-size: 100%;
+    block-size: var(--space-xl);
+    overflow: visible;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-case-orbit__arc path {
+    fill: none;
+    stroke: var(--color-border-strong);
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-case-body.kc-case-body--hung {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    padding-block-start: calc(var(--layout-dip) * var(--space-xl));
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-case-body--hung > .kc-moon__body {
+    display: grid;
+    justify-self: center;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-case-body--hung .kc-case-body__label .kc-rule__body {
+    display: none;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-case-body--hung[data-stop='reflection'] .kc-prose {
+    font-size: var(--type-step-2);
+  }
+}
+
+/* ---- The phone home's chrome, trimmed (design review P2, M3) ---- */
+
+@media (max-width: 47.99rem) {
+  [data-variant='kinetic-cosmos'] .kc-ring {
+    padding-block-start: var(--space-xl);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-ring__opener {
+    margin-block-end: var(--space-l);
+    padding-block: var(--space-xs) var(--space-s);
+  }
+
+  /* A phone's opener collapses to a band (KIN-4): the title a step down, the ring's summary at the label size. */
+  [data-variant='kinetic-cosmos'] .kc-ring__title {
+    font-size: var(--type-step-3);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-ring__intro {
+    font-size: var(--type-label-font-size);
+  }
+
+  /*
+   * The stage draws in, so Contact's plate costs the hero's action no fold
+   * (S-A): the plates' rows by a 2xs, under the thesis's s; the standfirst
+   * at an s under the thesis, and the actions at an m under it.
+   */
+  [data-variant='kinetic-cosmos'] .kc-plates__list {
+    row-gap: var(--space-2xs);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-standfirst {
+    margin-block-start: var(--space-s);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-opening .kc-opening__actions {
+    margin-block-start: var(--space-m);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-ring__body {
+    row-gap: var(--space-xl);
+  }
+
+  [data-variant='kinetic-cosmos']
+    .kc-section:has(> .kc-fold:not(.kc-fold--inline, [open]))
+    + .kc-section:has(> .kc-fold:not(.kc-fold--inline, [open])) {
+    margin-block-start: calc(var(--space-2xs) - var(--space-xl));
+  }
+
+  /*
+   * A set of figures on one row, in smaller bodies; but four, such as At a glance, stay two
+   * by two (the rule above outranks this one), so no caption wraps in a quarter of a phone
+   * (KIN-3).
+   */
+  [data-variant='kinetic-cosmos'] .kc-planets:not(.kc-planets--row) {
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    gap: var(--space-m) var(--space-xs);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-planets:not(.kc-planets--row) .kc-planet {
+    grid-template-rows: var(--space-2xl) auto;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-planets:not(.kc-planets--row) .kc-planet__body {
+    inline-size: calc(var(--space-2xl) * var(--layout-size));
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-planets:not(.kc-planets--row) .kc-planet__value {
+    font-size: var(--type-step-0);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-planets:not(.kc-planets--row) .kc-planet__plate {
+    font-size: var(--type-label-font-size);
+  }
+}
+
+/*
+ * With no script, and in print, a dialog's content reads in its talk or
+ * offer, as the object would show it, in the page's ink (M1: a printed page
+ * holds the whole record).
+ */
+@media (scripting: none), print {
+  [data-variant='kinetic-cosmos'] .kc-talk-dialog {
+    --layout-ink: var(--color-text-primary);
+    --layout-ink-quiet: var(--color-text-secondary);
+    --layout-ink-line: var(--color-border-default);
+    --layout-ink-faint: var(--color-border-strong);
+
+    display: grid;
+    gap: var(--space-s);
+    position: static;
+    inline-size: auto;
+    margin: 0;
+    padding: 0;
+    color: inherit;
+    background: none;
+    border: 0;
+    box-shadow: none;
+  }
+
+  [data-variant='kinetic-cosmos'] :is(.kc-talk-dialog__head, .kc-object__more) {
+    display: none;
+  }
+}
+
+/* ---- A work's own page ---------------------------------------------- */
+
+/* The case stage: the way back, the title and the work's words, its signature body, and the band. */
+[data-variant='kinetic-cosmos'] .kc-case-stage {
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: var(--space-l);
+  align-items: center;
+  padding-block: var(--space-s) var(--space-xs);
+}
+
+[data-variant='kinetic-cosmos'] .kc-crumbs {
+  color: var(--layout-ink-quiet);
+  font-size: var(--type-label-font-size);
+}
+
+[data-variant='kinetic-cosmos'] .kc-crumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-xs);
+}
+
+[data-variant='kinetic-cosmos'] .kc-crumbs li + li::before {
+  content: '/';
+  margin-inline-end: var(--space-xs);
+  color: var(--layout-ink-faint);
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-case-stage__kicker, .kc-case-label) {
+  font-family: var(--type-label-font-family);
+  font-size: var(--type-label-font-size);
+  font-weight: var(--type-label-font-weight);
+  letter-spacing: var(--type-label-letter-spacing);
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-stage__kicker {
+  color: var(--layout-ink-quiet);
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-stage__title {
+  margin-block-start: var(--space-s);
+  font-family: var(--type-display-font-family);
+  font-size: var(--type-step-5);
+  font-weight: var(--type-display-font-weight);
+  line-height: 1;
+  letter-spacing: var(--type-display-letter-spacing);
+  font-variation-settings: var(--type-display-font-variation-settings);
+  overflow-wrap: anywhere;
+  /* Every line after the first steps in, as the home thesis's last word does: a hanging indent by one length. */
+  --layout-step: var(--space-l);
+
+  padding-inline-start: var(--layout-step);
+  text-indent: calc(-1 * var(--layout-step));
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-stage .kc-lede {
+  margin-block-start: var(--space-m);
+  color: var(--layout-ink-quiet);
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-stage .kc-actions {
+  margin-block-start: var(--space-l);
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-stage .kc-band {
+  grid-row: auto;
+  margin-block: var(--space-s) 0;
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-case-stage__back, .kc-case-stage__place) {
+  font-size: var(--type-label-font-size);
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-stage__place {
+  color: var(--layout-ink-quiet);
+}
+
+/* The signature body on the stage's ground: its arc and moons in the stage's ink. */
+[data-variant='kinetic-cosmos'] .kc-case-stage .kc-moons__arc path {
+  stroke: var(--layout-ink-line);
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-stage .kc-moon__body::before {
+  background: radial-gradient(
+    circle,
+    var(--layout-ink) 0 30%,
+    var(--color-text-primary) 32% 56%,
+    var(--layout-ink-faint) 58% 64%,
+    transparent 66%
+  );
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-stage .kc-moon__body::after {
+  background-color: var(--layout-ink-line);
+}
+
+/* On the stage the moons keep inside its padding, their plates wrapping in their own columns. */
+[data-variant='kinetic-cosmos'] .kc-case-stage .kc-moons {
+  margin-inline: 0;
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-stage .kc-moons__list {
+  padding-inline: 0;
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-stage .kc-moon__plate {
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+
+@media (min-width: 48rem) {
+  [data-variant='kinetic-cosmos'] .kc-case-stage__title {
+    --layout-step: var(--space-3xl);
+  }
+}
+
+/* Below the stage: each block on the page's measure. */
+[data-variant='kinetic-cosmos']
+  :is(.kc-case-intro, .kc-case-figures, .kc-case-back, .kc-case-next) {
+  display: grid;
+  gap: var(--space-l) var(--layout-grid-gutter);
+  inline-size: min(100% - 2 * var(--layout-grid-margin), var(--layout-width-page));
+  margin-inline: auto;
+  padding-block-start: var(--space-xl-3xl);
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-intro__prose {
+  display: grid;
+  gap: var(--space-s);
+  max-inline-size: var(--layout-width-text);
+  font-size: var(--type-step-1);
+  line-height: var(--type-title-line-height);
+  text-wrap: pretty;
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-intro__prose p {
+  margin: 0;
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-facts__list {
+  margin-block-start: 0;
+}
+
+/* The label's rule is the list's first. */
+[data-variant='kinetic-cosmos'] .kc-case-facts__list .kc-facts__row:first-child {
+  border-block-start: 0;
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-facts__list .kc-prose {
+  color: inherit;
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-facts__list .kc-facts__row {
+  scroll-margin-block-start: var(--space-s);
+}
+
+/* A label over a rule, with its count at the end. */
+[data-variant='kinetic-cosmos'] .kc-case-label {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-s);
+  padding-block-end: var(--space-xs);
+  border-block-end: var(--ui-border-divider);
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-label h2 {
+  font: inherit;
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-label__count {
+  color: var(--color-text-secondary);
+}
+
+/* The case's stops, riding an orbit arc after the facts, as a ring's chapter opens. */
+[data-variant='kinetic-cosmos'] .kc-case .kc-flight {
+  margin-block-start: var(--space-xl-3xl);
+}
+
+/* The rest of the case: bodies of their own, each on the page's measure, under its small label. */
+[data-variant='kinetic-cosmos'] .kc-case-body {
+  display: grid;
+  gap: var(--space-s);
+  inline-size: min(100% - 2 * var(--layout-grid-margin), var(--layout-width-page));
+  margin-inline: auto;
+  padding-block-start: var(--space-xl-3xl);
+  scroll-margin-block-start: var(--space-s);
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-body__label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--color-text-secondary);
+  font-family: var(--type-label-font-family);
+  font-size: var(--type-label-font-size);
+  font-weight: var(--type-label-font-weight);
+  letter-spacing: var(--type-label-letter-spacing);
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-body__content {
+  display: grid;
+  gap: var(--space-m);
+}
+
+/* What the readings said, and where it landed: statements at a step up, in the text's own ink. */
+[data-variant='kinetic-cosmos']
+  .kc-case-body:is([data-stop='evidence'], [data-stop='outcomes'])
+  .kc-case-body__content
+  > .kc-prose {
+  max-inline-size: 40ch;
+  color: var(--color-text-primary);
+  font-size: var(--type-step-1);
+  line-height: var(--type-title-line-height);
+}
+
+/* The look back: the case's last word, at a display step. */
+[data-variant='kinetic-cosmos'] .kc-case-body[data-stop='reflection'] .kc-prose {
+  max-inline-size: 32ch;
+  color: var(--color-text-primary);
+  font-family: var(--type-display-font-family);
+  font-size: var(--type-step-3);
+  font-weight: var(--type-display-font-weight);
+  line-height: var(--type-headline-line-height);
+  letter-spacing: var(--type-display-letter-spacing);
+}
+
+/* The decisions, as a table: each one, why, and what it was chosen over. */
+[data-variant='kinetic-cosmos'] .kc-decisions {
+  inline-size: 100%;
+  border-collapse: collapse;
+  text-align: start;
+}
+
+[data-variant='kinetic-cosmos'] .kc-decisions :is(th, td) {
+  padding-block: var(--space-s);
+  padding-inline-end: var(--space-s);
+  text-align: start;
+  vertical-align: top;
+  border-block-end: var(--ui-border-divider);
+}
+
+[data-variant='kinetic-cosmos'] .kc-decisions thead th {
+  padding-block: 0 var(--space-xs);
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-font-size);
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='kinetic-cosmos'] .kc-decision {
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-step-1);
+  font-weight: var(--type-title-font-weight);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='kinetic-cosmos'] .kc-decisions :is(.kc-decision, .kc-prose) p {
+  margin: 0;
+}
+
+[data-variant='kinetic-cosmos'] .kc-decisions__none {
+  color: var(--color-text-secondary);
+}
+
+/* The readings: what each figure measures, ruled out to its number. */
+[data-variant='kinetic-cosmos'] .kc-readings {
+  display: grid;
+  margin-block-start: var(--space-m);
+}
+
+[data-variant='kinetic-cosmos'] .kc-reading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-s);
+  padding-block: var(--space-xs);
+  border-block-end: var(--ui-border-divider);
+}
+
+[data-variant='kinetic-cosmos'] .kc-reading__what {
+  flex: 1;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-reading__value {
+  font-weight: var(--type-title-font-weight);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-variant='kinetic-cosmos'] .kc-reading__unit {
+  margin-inline-start: var(--space-3xs);
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-figure {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-figure .kc-media {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-figure__number {
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-font-size);
+  font-weight: var(--type-label-font-weight);
+}
+
+/* The back matter: what else orbits the work. */
+[data-variant='kinetic-cosmos'] .kc-case-records {
+  display: grid;
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-record {
+  display: grid;
+  grid-template-columns: var(--space-2xl) minmax(0, 1fr);
+  gap: var(--space-s);
+  padding-block: var(--space-s);
+  border-block-end: var(--ui-border-divider);
+}
+
+[data-variant='kinetic-cosmos'] :is(.kc-case-record__year, .kc-case-record__title) {
+  font-family: var(--type-title-font-family);
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-record__year {
+  font-variant-numeric: tabular-nums;
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-record__source {
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-font-size);
+}
+
+/* The next body, across a heavy rule, and the way back to the system. */
+[data-variant='kinetic-cosmos'] .kc-case-next {
+  align-items: start;
+  margin-block-start: var(--space-xl);
+  border-block-start: var(--ui-border-divider);
+  border-color: var(--color-text-primary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-next .kc-case-label {
+  border: 0;
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-next__title {
+  font-family: var(--type-display-font-family);
+  font-size: var(--type-step-5);
+  font-weight: var(--type-display-font-weight);
+  line-height: 1;
+  letter-spacing: var(--type-display-letter-spacing);
+}
+
+[data-variant='kinetic-cosmos'] .kc-case-next__title a {
+  text-decoration-thickness: var(--ui-focus-width);
+}
+
+[data-variant='kinetic-cosmos'] .kc-case__orbitals a:where(:not(.kc-button, .kc-dock__stop)) {
+  color: var(--color-accent-text);
+}
+
+[data-variant='kinetic-cosmos'] .kc-case__orbitals :is(.kc-arc__stop, .kc-case-next__title) a {
+  color: inherit;
+}
+
+@media (min-width: 64rem) {
+  [data-variant='kinetic-cosmos'] .kc-case-stage {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    column-gap: var(--layout-grid-gutter);
+    min-block-size: calc(100svh - 2 * var(--layout-frame) - var(--space-3xl));
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-case-stage > :is(.kc-crumbs, .kc-band) {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-case-stage__text,
+  [data-variant='kinetic-cosmos'] .kc-case-stage__back {
+    grid-column: 1 / span 6;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-case-stage .kc-signature__system {
+    grid-column: 7 / -1;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-case-stage__place {
+    grid-column: 7 / -1;
+    justify-self: end;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-case-stage__title {
+    font-size: var(--type-step-6);
+  }
+
+  [data-variant='kinetic-cosmos']
+    :is(.kc-case-intro, .kc-case-figures, .kc-case-back, .kc-case-next) {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-case-intro__words {
+    grid-column: 1 / span 7;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-case-facts {
+    grid-column: 9 / -1;
+  }
+
+  /* Each body starts at its own column, as bodies on an orbit sit at their own angles. */
+  [data-variant='kinetic-cosmos'] .kc-case-body {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    column-gap: var(--layout-grid-gutter);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-case-body > * {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='kinetic-cosmos'] :is(.kc-case-figures, .kc-case-back) > * {
+    grid-column: 4 / -1;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-case-next > :not(.kc-case-next__cover) {
+    grid-column: 1 / span 7;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-case-next__cover {
+    grid-column: 9 / -1;
+    grid-row: 1 / span 4;
+  }
+}
+
+/* A phone's decisions table: each decision a block of its own, its why and what it was chosen over under it. */
+@media (max-width: 47.99rem) {
+  [data-variant='kinetic-cosmos'] .kc-decisions :is(thead) {
+    display: none;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-decisions :is(tbody, tr, th, td) {
+    display: block;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-decisions tr {
+    padding-block: var(--space-s);
+    border-block-end: var(--ui-border-divider);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-decisions :is(th, td) {
+    padding: 0;
+    border: 0;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-decisions td {
+    margin-block-start: var(--space-xs);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-decisions td::before {
+    content: attr(data-label);
+    display: block;
+    color: var(--color-text-secondary);
+    font-size: var(--type-label-font-size);
+    font-weight: var(--type-label-font-weight);
+  }
+}
+
+/*
+ * With no script: a link to a section in a closed fold shows its content, as
+ * the island would open it, and focus and anchors stop clear of the dock,
+ * as the island's scroll padding does.
+ */
+@media (scripting: none) {
+  [data-variant='kinetic-cosmos'] :target > details.kc-fold > :not(summary) {
+    display: block;
+  }
+
+  [data-variant='kinetic-cosmos'] :target > details.kc-fold::details-content {
+    content-visibility: visible;
+    block-size: auto;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-orbitals :is(a, button, summary, [id]) {
+    scroll-margin-block-end: calc(var(--ui-control-height) + var(--space-s));
+  }
+}
+
+@media print {
+  [data-variant='kinetic-cosmos'] :is(.kc-dock, .kc-index, .kc-pause, .kc-band) {
+    display: none;
+  }
+
+  /*
+   * Print drops the decoration and keeps the navigation: the orrery and the orbit lines go,
+   * and the System's plates and each arc's stops stay, set as plain lists in the flow.
+   */
+  [data-variant='kinetic-cosmos'] :is(.kc-map__clip, .kc-signature-label),
+  [data-variant='kinetic-cosmos'] .kc-arc :is(.kc-arc__line, .kc-arc__trail, .kc-arc__body) {
+    display: none;
+  }
+
+  [data-variant='kinetic-cosmos'] :is(.kc-plates, .kc-plate, .kc-plates__caption) {
+    position: static;
+    inline-size: auto;
+    max-inline-size: none;
+    translate: none;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-plates__list {
+    display: grid;
+    padding-block: var(--space-s) var(--space-l);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-plate__link {
+    white-space: normal;
+    background-color: transparent;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-arc[data-ring] {
+    block-size: auto;
+    min-block-size: 0;
+  }
+
+  /* On the ring head's own measure, so the stops line up with the title under them. */
+  [data-variant='kinetic-cosmos'] .kc-arc__index ol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3xs) var(--space-m);
+    inline-size: min(100% - 2 * var(--layout-grid-margin), var(--layout-width-page));
+    margin-inline: auto;
+    padding: 0;
+  }
+
+  /* At a tier's own weight, which sets its own translate. */
+  [data-variant='kinetic-cosmos'] :is(.kc-arc__stop, .kc-arc__stop[data-tier]) {
+    position: static;
+    translate: none;
+    white-space: normal;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-arc__stop::before {
+    content: none;
+  }
+
+  /* A printed page holds the whole record, the closed folds' content too (N4). */
+  [data-variant='kinetic-cosmos'] details.kc-fold > :not(summary) {
+    display: block;
+  }
+
+  [data-variant='kinetic-cosmos'] details.kc-fold::details-content {
+    content-visibility: visible;
+    block-size: auto;
+  }
+
+  [data-variant='kinetic-cosmos']
+    :is(.kc-masthead, .kc-opening, .kc-closing, .kc-index, .kc-ring__opener) {
+    --layout-ink: var(--color-text-primary);
+    --layout-ink-quiet: var(--color-text-secondary);
+    --layout-ink-line: var(--color-border-default);
+    --layout-ink-faint: var(--color-border-strong);
+
+    color: var(--color-text-primary);
+    background-color: transparent;
+  }
+}

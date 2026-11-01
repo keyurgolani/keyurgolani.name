@@ -1,0 +1,138 @@
+{
+  "id": "flux",
+  "name": "Flux",
+  "promise": "Motion-first liquid: saturated inks pour off the edges of a full-bleed field behind the thesis, and the work sits in a liquid drop.",
+  "description": "A tab bar with no container sits inline at the top left, one liquid drop marking the current destination, and docks to the bottom on phones only. Behind a two-line headline, the greeting with the name and then the thesis's key phrase in the accent-to-secondary gradient, two saturated inks pour off the field's edges and merge through one goo filter, parted round every line of text. The signature work sits whole in a liquid drop held by a third ink's pool. Each destination below is a sheet whose tab melts out of its top edge. Under reduced motion, after Pause, or without script, the field is one designed still drawn from the composition's own geometry.",
+  "contract": "2.1",
+  "schemas": {
+    "portfolio": {
+      "min": 3,
+      "max": 3
+    },
+    "site": {
+      "min": 2,
+      "max": 2
+    }
+  },
+  "tokenContract": 1,
+  "compositionFamily": "kinetic",
+  "motionIntent": "kinetic",
+  "performanceTier": "medium",
+  "budgets": {
+    "js": 8192,
+    "css": 13312,
+    "image": 61440,
+    "font": 0,
+    "animation": 2,
+    "enhancement": 16384
+  },
+  "stills": [
+    {
+      "file": "./stills/1440.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "file": "./stills/720.webp",
+      "width": 720,
+      "height": 450
+    }
+  ],
+  "renderedKinds": [
+    "hero",
+    "lede",
+    "now",
+    "works",
+    "evidence",
+    "chronology",
+    "practice",
+    "contact",
+    "custom",
+    "quote",
+    "focus",
+    "fun-facts",
+    "cta",
+    "github"
+  ],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": {
+    "home": "bespoke",
+    "work": "bespoke",
+    "views": []
+  },
+  "controls": {
+    "version": 1,
+    "items": [
+      {
+        "type": "enum",
+        "id": "blobs",
+        "label": "Field inks",
+        "description": "How many saturated inks pour through the opening's field: three, two, or none, which leaves the field to the page's own ground and keeps the work's drop.",
+        "options": [
+          {
+            "value": "3",
+            "label": "Three"
+          },
+          {
+            "value": "2",
+            "label": "Two"
+          },
+          {
+            "value": "off",
+            "label": "None"
+          }
+        ],
+        "default": "3"
+      },
+      {
+        "type": "boolean",
+        "id": "wipe",
+        "label": "Page wipe",
+        "description": "Between home and a work's own page, an ink pours up over the page and drains off the top to show the next one. Off, the pages crossfade. Under reduced motion they always crossfade, and with motion paused they cut.",
+        "default": true
+      }
+    ],
+    "migrations": []
+  },
+  "transitions": {
+    "crossDocument": true,
+    "names": ["flux-wipe"]
+  },
+  "visitorControl": {
+    "placement": "header"
+  },
+  "textDirection": ["ltr", "rtl"],
+  "provenance": {
+    "provisional": true,
+    "sources": [
+      {
+        "source": "Variants report, Flux (Variant 4)",
+        "disposition": "preserved",
+        "note": "The full-bleed liquid field whose inks merge through a goo filter, the melting tab bar docked to the bottom on phones only, the two-line headline with its gradient key phrase, and the work in a liquid drop."
+      },
+      {
+        "source": "The Flux concept (variants-10, P-0 round 3)",
+        "disposition": "reused-interaction",
+        "note": "The field's framing geometry, the drop and its pool, the sheet tabs and the tab bar's single drop, rebuilt on the platform tokens, with the first paint drawn from the composition's own geometry alone."
+      },
+      {
+        "source": "The report's lava-lamp colours and its Inter setting",
+        "disposition": "folded-into-pack",
+        "note": "Colour and type come from the appearance axes; the composition reads roles only, and the inks are the scheme's signature and emphasis roles."
+      },
+      {
+        "source": "The report's runaway Copy email button and its Home, Work, About and Photos tabs",
+        "disposition": "retired",
+        "note": "Copy email is an ordinary button beside the mailto link, and the tabs are the five canonical destinations plus Index."
+      }
+    ]
+  },
+  "enhancements": [
+    {
+      "id": "tabs",
+      "export": "./enhancements/tabs",
+      "requires": []
+    }
+  ]
+}

@@ -1,0 +1,3474 @@
+/*
+ * Horizontal Cinema (redesign): a letterboxed film strip. Composition only:
+ * where the top line, the stage, the scenes, their bars, the scrubber, and
+ * the credits sit, on the shared space scale and one 12-column module. The
+ * matte is the scheme's --color-scrim with --color-on-scrim on it, so it
+ * reads as cinema black in light and in dark; every other color, face,
+ * radius, border, shadow, and duration is a token of the selected packs or
+ * the platform. Every rule sits under [data-variant='horizontal-cinema'] and
+ * every property is logical, so a right-to-left page runs the strip the
+ * other way.
+ *
+ * One DOM, two layouts, which the stylesheet alone picks: the scenes top to
+ * bottom, the default and the List view, and on a wide, tall screen with a
+ * fine pointer one native horizontal scroller of framed scenes, each a
+ * multiple of the module wide so every frame fits the stage.
+ */
+
+/* ── The geometry, declared once ──────────────────────────────────────── */
+
+[data-variant='horizontal-cinema'] {
+  --layout-inset: var(--space-2xs);
+  --layout-pad: var(--space-l);
+  --layout-pad-block: var(--space-m);
+  --layout-gutter: var(--space-s);
+  --layout-chrome: calc(var(--space-s) * 2.4);
+  --layout-scrub: calc(var(--space-s) * 3.6);
+  --layout-bar: calc(var(--space-s) * 1.8);
+  --layout-peek: var(--space-2xl);
+  /* The matte: the scheme's scrim, a breath toward the canvas, so it's the film's black, not the screen's. */
+  --layout-matte: color-mix(in oklab, var(--color-scrim) 92%, var(--color-canvas));
+  --layout-grid-columns: 12;
+  --layout-grid-gutter: var(--space-s);
+  --layout-grid-margin: calc(var(--space-2xs) + var(--space-l));
+  /* The house curve and its two bands (M3): what the composition's moves read through --motion-*. */
+  --layout-motion-curve: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --layout-motion-feedback: 200ms;
+  --layout-motion-scene: 900ms;
+  display: block;
+  min-block-size: 100svh;
+  background-color: var(--color-canvas);
+  color: var(--color-text-primary);
+  overflow-wrap: break-word;
+}
+
+[data-variant='horizontal-cinema'] :is(h1, h2, h3, h4) {
+  text-wrap: balance;
+}
+
+[data-variant='horizontal-cinema'] :is(p, li, dd, blockquote) {
+  text-wrap: pretty;
+}
+
+/* Words for assistive technology alone. */
+[data-variant='horizontal-cinema'] .hc-visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+[data-variant='horizontal-cinema'] .hc-skip {
+  position: absolute;
+  inset-block-start: var(--space-2xs);
+  inset-inline-start: var(--layout-grid-margin);
+  z-index: 3;
+  padding-block: var(--space-2xs);
+  padding-inline: var(--space-s);
+  border-radius: var(--ui-radius-control);
+  background-color: var(--layout-matte);
+  color: var(--color-on-scrim);
+  transform: translateY(-200%);
+}
+
+[data-variant='horizontal-cinema'] .hc-skip:focus-visible {
+  transform: none;
+}
+
+/* ── The top line: the name, the view, one destination ─────────────────── */
+
+[data-variant='horizontal-cinema'] .hc-chrome {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs) var(--space-l);
+  min-block-size: var(--layout-chrome);
+  padding-inline: var(--layout-grid-margin);
+  /* The top line is a band of the matte, so the mattes and the scrubber are the page's only bands. */
+  background-color: var(--layout-matte);
+  color: var(--color-on-scrim);
+}
+
+[data-variant='horizontal-cinema'] .hc-chrome :focus-visible {
+  outline-color: var(--color-on-scrim);
+}
+
+[data-variant='horizontal-cinema'] .hc-chrome__name {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-xs);
+  margin-inline-end: auto;
+  color: var(--color-on-scrim);
+  text-decoration: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-chrome__title {
+  font-weight: 700;
+}
+
+[data-variant='horizontal-cinema'] .hc-chrome__running {
+  color: color-mix(in oklab, var(--color-on-scrim) 72%, var(--layout-matte));
+}
+
+[data-variant='horizontal-cinema'] .hc-chrome__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs) var(--space-l);
+}
+
+[data-variant='horizontal-cinema'] .hc-chrome__views {
+  gap: var(--space-3xs);
+  padding: var(--space-3xs);
+  border-radius: var(--ui-radius-control);
+  background-color: color-mix(in oklab, var(--color-on-scrim) 12%, var(--layout-matte));
+}
+
+[data-variant='horizontal-cinema'] .hc-chrome__views a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 2rem;
+  padding-inline: var(--space-xs);
+  border-radius: var(--ui-radius-control);
+  color: color-mix(in oklab, var(--color-on-scrim) 72%, var(--layout-matte));
+  text-decoration: none;
+}
+
+/* The view being read is the inverse of the band: the matte's ink as its ground. */
+[data-variant='horizontal-cinema'] .hc-chrome__views a[aria-current] {
+  background-color: var(--color-on-scrim);
+  color: var(--layout-matte);
+}
+
+/* An empty visitor control takes no room, so the top line ends on the page's last column line. */
+[data-variant='horizontal-cinema'] .hc-chrome > [data-visitor-control-slot]:empty {
+  display: none;
+}
+
+/* Strip | List only where the strip can show; elsewhere List lives in the chapter sheet. */
+[data-variant='horizontal-cinema'] .hc-chrome__views {
+  display: none;
+}
+
+@media (min-width: 64rem) and (min-height: 44rem) and (hover: hover) and (pointer: fine) {
+  [data-variant='horizontal-cinema'] .hc-chrome__views {
+    display: inline-flex;
+  }
+}
+
+[data-variant='horizontal-cinema'] .hc:has(.hc-shell[data-fit='over']) .hc-chrome__views {
+  display: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-chrome__contact {
+  color: var(--color-on-scrim);
+  font-weight: 650;
+  text-underline-offset: 0.2em;
+}
+
+/* ── The stage and its scenes ──────────────────────────────────────────── */
+
+[data-variant='horizontal-cinema'] .hc-shell {
+  container-type: inline-size;
+}
+
+[data-variant='horizontal-cinema'] .hc-stage {
+  position: relative;
+  background-color: var(--color-surface-default);
+}
+
+[data-variant='horizontal-cinema'] .hc-stage:focus-visible {
+  outline-offset: calc(var(--ui-focus-width) * -1);
+}
+
+[data-variant='horizontal-cinema'] .hc-track {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  padding: var(--layout-inset);
+}
+
+[data-variant='horizontal-cinema'] .hc-scene {
+  --layout-cols: 12;
+  /*
+   * Where a scene's words arrive from: the strip's inline end. Only left to
+   * right: a right-to-left strip's view timeline reads its scenes as not yet
+   * entered at rest, so it would hold the peek at the arrival's first frame.
+   */
+  --layout-arrive: var(--space-l);
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: clip;
+  border-radius: var(--ui-radius-media);
+  background-color: var(--color-canvas);
+}
+
+/* Top to bottom the chapter control sticks to the top edge, so whatever a link lands on clears it. */
+[data-variant='horizontal-cinema'] .hc-shell :is(.hc-scene, [id]) {
+  scroll-margin-block-start: calc(var(--layout-chrome) + var(--space-2xs));
+}
+
+[data-variant='horizontal-cinema'] .hc-scene[data-w='8'] {
+  --layout-cols: 8;
+}
+
+[data-variant='horizontal-cinema'] .hc-scene[data-w='6'] {
+  --layout-cols: 6;
+}
+
+[data-variant='horizontal-cinema'] .hc-scene[data-w='4'] {
+  --layout-cols: 4;
+}
+
+[data-variant='horizontal-cinema'] .hc-scene:focus-visible {
+  outline-offset: calc(var(--ui-focus-width) * -1);
+}
+
+/* The bars: the scene's chapter, title, and counter above; its credit and the next scene below. */
+[data-variant='horizontal-cinema'] .hc-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-s);
+  min-block-size: var(--layout-bar);
+  padding-inline: var(--layout-pad);
+  background-color: var(--layout-matte);
+  color: color-mix(in oklab, var(--color-on-scrim) 72%, var(--layout-matte));
+}
+
+[data-variant='horizontal-cinema'] .hc-bar__lead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  min-inline-size: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-bar__numeral {
+  color: var(--color-on-scrim);
+  font-weight: 700;
+}
+
+[data-variant='horizontal-cinema'] .hc-bar__title {
+  margin-inline-start: var(--space-s);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-variant='horizontal-cinema'] .hc-bar__counter {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Inline, not a flex box, so the space between its English words and a title in another language stays. */
+[data-variant='horizontal-cinema'] .hc-bar__next {
+  flex: none;
+  display: inline-block;
+  line-height: 1.5rem;
+  color: var(--color-on-scrim);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-bar__next:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+}
+
+[data-variant='horizontal-cinema'] :is(.hc-bar, [data-matte]) :focus-visible {
+  outline-color: var(--color-on-scrim);
+}
+
+/* The picture: the scene's content on the module. */
+[data-variant='horizontal-cinema'] .hc-pic {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-cols), minmax(0, 1fr));
+  align-content: start;
+  gap: var(--space-l) var(--layout-gutter);
+  min-block-size: 0;
+  padding-block: var(--layout-pad-block);
+  padding-inline: var(--layout-pad);
+}
+
+[data-variant='horizontal-cinema'] .hc-pic > * {
+  grid-column: 1 / -1;
+  min-inline-size: 0;
+}
+
+/* Two or three sections that share a scene sit side by side on its columns. */
+[data-variant='horizontal-cinema'] .hc-pic:has(> .hc-section + .hc-section) > .hc-section {
+  grid-column: span 6;
+}
+
+[data-variant='horizontal-cinema']
+  .hc-scene[data-w='8']
+  .hc-pic:has(> .hc-section + .hc-section)
+  > .hc-section {
+  grid-column: span 4;
+}
+
+/* A scene of words that doesn't fill its picture sits in its middle, bounded by both bars, never parked at the top. */
+[data-variant='horizontal-cinema']
+  .hc-scene:is([data-kind='sections'], [data-kind='reel'])
+  .hc-pic {
+  align-content: center;
+}
+
+[data-variant='horizontal-cinema'] .hc-rules {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-rules > li {
+  padding-block: var(--space-xs);
+  border-block-start: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='horizontal-cinema'] .hc-rules > li:last-child {
+  border-block-end: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='horizontal-cinema'] .hc-still :is(img, picture) {
+  display: block;
+  inline-size: 100%;
+}
+
+/* ── Scene 1: the title card, a scope letterbox ────────────────────────── */
+
+[data-variant='horizontal-cinema'] .hc-scene[data-kind='title'] {
+  background-color: var(--layout-matte);
+  color: var(--color-on-scrim);
+}
+
+[data-variant='horizontal-cinema'] .hc-scene[data-kind='title'] .hc-pic {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-scene[data-kind='title'] .hc-section {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-l);
+  min-block-size: 0;
+}
+
+/*
+ * The picture, under a band of the matte as the letterbox's top: the name at
+ * its middle, its four credits on the name block's own corners, a step above
+ * and below it, so the name never floats in an empty field.
+ */
+[data-variant='horizontal-cinema'] .hc-card {
+  container-type: inline-size;
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto auto auto minmax(0, 1fr);
+  row-gap: var(--space-s);
+  margin-block-start: var(--space-xl);
+  /* Top to bottom it has no stage to fill, so it takes most of a screen. */
+  min-block-size: min(36rem, 80svh);
+  padding-block: var(--space-s);
+  padding-inline: var(--layout-pad);
+  background-color: var(--color-canvas);
+  color: var(--color-text-primary);
+}
+
+[data-variant='horizontal-cinema'] .hc-card > .hc-card__credits {
+  grid-row: 2;
+}
+
+[data-variant='horizontal-cinema'] .hc-card__credits {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-s);
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+/*
+ * The dossier's one display exception (T3): the name fills the picture's
+ * measure on one line. The size is tuned to the shared faces; once the faces
+ * load, the controller scales it down by --layout-card-fit wherever the
+ * selected face sets it wider than the card, so it never clips.
+ */
+[data-variant='horizontal-cinema'] .hc-card__name {
+  grid-row: 3;
+  min-inline-size: 0;
+  margin: 0;
+  margin-inline-start: -0.04em;
+  font-family: var(--type-display-font-family);
+  font-size: calc(16.6cqi * var(--layout-card-fit, 1));
+  font-weight: var(--type-display-font-weight);
+  line-height: 0.85;
+  letter-spacing: -0.035em;
+  white-space: nowrap;
+}
+
+[data-variant='horizontal-cinema'] .hc-card__foot {
+  grid-row: 4;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: last baseline;
+  gap: var(--space-s);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] .hc-card__foot > span:last-child {
+  text-align: end;
+}
+
+[data-variant='horizontal-cinema'] .hc-card__actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-card__subtitles {
+  display: grid;
+  gap: var(--space-2xs);
+  justify-items: center;
+  padding-inline: var(--layout-pad);
+  text-align: center;
+}
+
+[data-variant='horizontal-cinema'] .hc-card__tagline {
+  max-inline-size: 58ch;
+  margin: 0;
+  color: var(--color-on-scrim);
+}
+
+[data-variant='horizontal-cinema'] .hc-card__subtagline {
+  max-inline-size: 72ch;
+  margin: 0;
+  color: color-mix(in oklab, var(--color-on-scrim) 72%, var(--layout-matte));
+}
+
+[data-variant='horizontal-cinema'] .hc-scene[data-kind='title'] .hc-bar--bottom {
+  align-items: baseline;
+  padding-block: var(--space-l) var(--space-xs);
+  background-color: transparent;
+}
+
+/* ── Scene 2: the signature work ───────────────────────────────────────── */
+
+[data-variant='horizontal-cinema'] .hc-lead {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-template-areas:
+    'still still still still still still still . words words words words'
+    'press press press press press press press . words words words words';
+  grid-template-rows: auto 1fr;
+  row-gap: var(--space-l);
+  align-items: start;
+}
+
+[data-variant='horizontal-cinema'] .hc-lead[data-media='none'] {
+  grid-template-areas:
+    'press press press press press press press . words words words words'
+    'press press press press press press press . words words words words';
+}
+
+[data-variant='horizontal-cinema'] .hc-lead__still {
+  grid-area: still;
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-lead__still :is(figure, picture) {
+  display: block;
+  margin: 0;
+}
+
+/* The signature work's still in the film's own scope crop, 2.39:1, so the shared cover isn't staged flat. */
+[data-variant='horizontal-cinema'] .hc-lead__still img {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  object-fit: cover;
+}
+
+[data-variant='horizontal-cinema'] .hc-lead__still :is(img, .pf-media-box) {
+  aspect-ratio: 2.39 / 1;
+}
+
+[data-variant='horizontal-cinema'] .hc-lead__still figcaption {
+  padding-block-start: var(--space-2xs);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] .hc-lead__press {
+  grid-area: press;
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-lead__press p {
+  margin: 0;
+  max-inline-size: 36ch;
+}
+
+[data-variant='horizontal-cinema'] .hc-lead__press footer {
+  margin-block-start: var(--space-xs);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] .hc-lead__words {
+  grid-area: words;
+  display: grid;
+  gap: var(--space-s);
+  align-content: start;
+}
+
+[data-variant='horizontal-cinema'] .hc-lead__medium {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] .hc-lead__title {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-lead__summary {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-lead__study {
+  color: var(--color-accent-text);
+  text-underline-offset: 0.2em;
+}
+
+[data-variant='horizontal-cinema'] .hc-lead__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs) var(--space-s);
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-lead__role {
+  color: var(--color-text-secondary);
+}
+
+/* A still's caption: its words at the start, its year at the end. */
+[data-variant='horizontal-cinema'] .hc-cap {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-s);
+}
+
+/* The caption runs the still's full width, so the year sits at its end edge; the words keep the label measure. */
+[data-variant='horizontal-cinema'] .hc-still figcaption:has(> .hc-cap) {
+  max-inline-size: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-cap__words {
+  max-inline-size: 55ch;
+}
+
+[data-variant='horizontal-cinema'] .hc-cap > :not(.hc-cap__words) {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-variant='horizontal-cinema'] .hc-cap strong {
+  color: var(--color-text-primary);
+  font-weight: 650;
+}
+
+[data-variant='horizontal-cinema'] .hc-still figcaption {
+  padding-block-start: var(--space-2xs);
+  color: var(--color-text-secondary);
+  font-size: var(--type-caption-font-size);
+  line-height: var(--type-caption-line-height);
+}
+
+[data-variant='horizontal-cinema'] .hc-lead__press cite {
+  font-style: italic;
+}
+
+/* ── Reels: works and chronology, a frame whose parts are scenes ───────── */
+
+/* The reel's frame holds its parts, which sit in the strip as scenes of their own. */
+[data-variant='horizontal-cinema'] .hc-section[data-reel] {
+  display: contents;
+}
+
+/* In the full record a chronology has no scenes to stand in for its frame, so the frame is a box again. */
+[data-variant='horizontal-cinema'] .hc-record .hc-section[data-reel] {
+  display: grid;
+  gap: var(--space-m);
+}
+
+[data-variant='horizontal-cinema'] .hc-reel__head {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+[data-variant='horizontal-cinema'] .hc-reel__title,
+[data-variant='horizontal-cinema'] .hc-reel__head :is(h2, h3, h4),
+[data-variant='horizontal-cinema'] .hc-reel :is(h3, h4, h5, h6) {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+[data-variant='horizontal-cinema'] .hc-reel__subtitle {
+  max-inline-size: 60ch;
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] .hc-reel {
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: start;
+  gap: var(--space-l) var(--layout-gutter);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-reel > li {
+  grid-column: 1 / -1;
+  min-inline-size: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-work__words {
+  display: grid;
+  gap: var(--space-xs);
+  align-content: start;
+}
+
+[data-variant='horizontal-cinema'] :is(.hc-work__facts, .hc-entry__when) {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] :is(.hc-work__title, .hc-entry__title) a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+[data-variant='horizontal-cinema'] :is(.hc-work__summary, .hc-work__body, .hc-entry__body) p {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] :is(.hc-work__summary, .hc-work__body, .hc-entry__body) {
+  display: grid;
+  gap: var(--space-2xs);
+  max-inline-size: 62ch;
+}
+
+[data-variant='horizontal-cinema'] .hc-work__summary {
+  font-size: var(--type-title-font-size);
+  line-height: var(--type-title-line-height);
+}
+
+/* A work's description reads at the body size at every width, never as fine print. */
+[data-variant='horizontal-cinema'] .hc-work__body {
+  font-size: var(--type-body-font-size);
+  line-height: var(--type-body-line-height);
+}
+
+[data-variant='horizontal-cinema'] .hc-entry__body {
+  font-size: var(--type-body-font-size);
+  line-height: var(--type-body-line-height);
+}
+
+[data-variant='horizontal-cinema'] .hc-work__excerpt {
+  margin: 0;
+  max-inline-size: 36ch;
+}
+
+[data-variant='horizontal-cinema'] .hc-work__excerpt p {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-work__excerpt p::before {
+  content: '\201C';
+}
+
+[data-variant='horizontal-cinema'] .hc-work__excerpt p::after {
+  content: '\201D';
+}
+
+[data-variant='horizontal-cinema'] .hc-work__links {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+[data-variant='horizontal-cinema'] .hc-work__links p {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-work__by {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] .hc-work__go {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-s);
+}
+
+[data-variant='horizontal-cinema'] :is(.hc-work__go, .hc-work__note, .hc-entry__works) a {
+  color: var(--color-accent-text);
+  text-underline-offset: 0.2em;
+}
+
+[data-variant='horizontal-cinema'] .hc-work__note {
+  margin: 0;
+  padding-block-start: var(--space-xs);
+  border-block-start: 1px solid var(--color-border-subtle);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] .hc-work__still {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-work__still :is(figure, picture) {
+  display: block;
+  margin: 0;
+}
+
+/* A picture still on its way takes the same frame as the picture, so the scene fits either way. */
+[data-variant='horizontal-cinema'] .hc-work__still img {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  object-fit: cover;
+}
+
+[data-variant='horizontal-cinema'] .hc-work__still :is(img, .pf-media-box) {
+  aspect-ratio: 4 / 3;
+}
+
+/* A feature: its words in four columns, its still in five, the rest of the part in the last three. */
+[data-variant='horizontal-cinema'] .hc-reel[data-layout='feature'] {
+  grid-auto-flow: row dense;
+}
+
+[data-variant='horizontal-cinema'] .hc-reel[data-layout='feature'] > [data-role='feature'] {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / span 9;
+  grid-row: 1 / span 4;
+  align-items: start;
+}
+
+[data-variant='horizontal-cinema'] [data-role='feature'] > .hc-work__words {
+  grid-column: 1 / span 4;
+}
+
+[data-variant='horizontal-cinema'] [data-role='feature'] > .hc-work__still {
+  grid-column: 5 / span 5;
+}
+
+[data-variant='horizontal-cinema'] .hc-reel[data-layout='feature'] > :not([data-role='feature']) {
+  grid-column: 10 / span 3;
+}
+
+[data-variant='horizontal-cinema']
+  .hc-reel[data-layout='feature']:not(:has(> :not([data-role='feature'])))
+  > [data-role='feature'] {
+  grid-column: 1 / -1;
+}
+
+[data-variant='horizontal-cinema']
+  .hc-reel[data-layout='feature']:not(:has(> :not([data-role='feature'])))
+  [data-role='feature']
+  > .hc-work__still {
+  grid-column: 6 / -1;
+}
+
+/* Works of words alone: side by side, three to a full frame. */
+[data-variant='horizontal-cinema'] .hc-reel[data-layout='entries'] > li {
+  grid-column: span 4;
+}
+
+[data-variant='horizontal-cinema'] .hc-reel[data-layout='entries'][data-count='1'] > li,
+[data-variant='horizontal-cinema'] .hc-reel[data-layout='entries'] > [data-role='note'] {
+  grid-column: 1 / -1;
+}
+
+/* A release: the cover in four columns, its words and tracklist beside it. */
+[data-variant='horizontal-cinema'] .hc-reel [data-role='release'] {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-template-rows: auto 1fr;
+  row-gap: var(--space-m);
+}
+
+[data-variant='horizontal-cinema'] [data-role='release'] > .hc-work__still {
+  grid-column: 1 / span 4;
+  grid-row: 1 / span 2;
+}
+
+[data-variant='horizontal-cinema'] [data-role='release'] > .hc-work__still :is(img, .pf-media-box) {
+  aspect-ratio: 1;
+}
+
+[data-variant='horizontal-cinema'] [data-role='release'] > :not(.hc-work__still) {
+  grid-column: 5 / -1;
+}
+
+[data-variant='horizontal-cinema'] .hc-tracks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: track;
+}
+
+[data-variant='horizontal-cinema'] .hc-tracks li {
+  display: grid;
+  grid-template-columns: 2ch minmax(0, 1fr) auto;
+  gap: var(--space-xs);
+  padding-block: var(--space-3xs);
+  border-block-start: 1px solid var(--color-border-subtle);
+  counter-increment: track;
+}
+
+[data-variant='horizontal-cinema'] .hc-tracks li::before {
+  content: counter(track);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-variant='horizontal-cinema'] .hc-tracks__length {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A series: its words over its pictures, three across. */
+[data-variant='horizontal-cinema'] .hc-reel [data-role='gallery'] {
+  display: grid;
+  grid-template-columns: subgrid;
+  row-gap: var(--space-m);
+}
+
+[data-variant='horizontal-cinema'] [data-role='gallery'] > .hc-work__words {
+  grid-column: 1 / span 7;
+}
+
+[data-variant='horizontal-cinema'] .hc-work__gallery {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-work__gallery > li {
+  grid-column: span 4;
+}
+
+/* A chronology: its entries side by side, each as wide as its words need. */
+[data-variant='horizontal-cinema'] .hc-timeline {
+  grid-template-columns: repeat(var(--layout-slots, 1), minmax(0, 1fr));
+}
+
+[data-variant='horizontal-cinema'] .hc-reel.hc-timeline > li {
+  grid-column: span var(--layout-span, 1);
+}
+
+[data-variant='horizontal-cinema'] .hc-entry {
+  display: grid;
+  gap: var(--space-2xs);
+  align-content: start;
+  padding-block-start: var(--space-xs);
+  border-block-start: 1px solid var(--color-border-strong);
+}
+
+[data-variant='horizontal-cinema'] .hc-entry__org,
+[data-variant='horizontal-cinema'] .hc-entry__skills {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] .hc-entry__works {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-entry__notes > li {
+  padding-block: var(--space-3xs);
+}
+
+/* ── Evidence: the record as the credits would set it ──────────────────── */
+
+[data-variant='horizontal-cinema'] .hc-section[data-family='evidence'] {
+  display: grid;
+  gap: var(--space-m);
+  align-content: start;
+}
+
+/* Figures: what each measures, its value beside it at title size. */
+/* One value column for every row, so the figures share an end edge however wide each value is. */
+[data-variant='horizontal-cinema'] .hc-figures {
+  display: grid;
+  grid-template-columns: minmax(8ch, max-content) minmax(0, 1fr);
+  column-gap: var(--layout-gutter);
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-figures > div {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  padding-block: var(--space-xs);
+  border-block-start: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='horizontal-cinema'] .hc-figures dt {
+  grid-row: 1;
+  grid-column: 2;
+  max-inline-size: 55ch;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] .hc-figures dd {
+  grid-row: 1;
+  grid-column: 1;
+  margin: 0;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+/* Words from people: quotes, at most a 45ch measure, with who said them. */
+[data-variant='horizontal-cinema'] .hc-quotes {
+  display: grid;
+  gap: var(--space-l);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-quotes blockquote {
+  max-inline-size: 45ch;
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-quotes blockquote p {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-quotes blockquote p:first-of-type {
+  text-indent: -0.4em;
+}
+
+[data-variant='horizontal-cinema'] .hc-quotes blockquote p:first-of-type::before {
+  content: '\201C';
+}
+
+[data-variant='horizontal-cinema'] .hc-quotes blockquote p:last-of-type::after {
+  content: '\201D';
+}
+
+[data-variant='horizontal-cinema'] .hc-quotes__who {
+  margin-block: var(--space-2xs) 0;
+  margin-inline: 0;
+  color: var(--color-text-secondary);
+}
+
+/* Records: when, then what and where, one ruled row each. */
+[data-variant='horizontal-cinema'] .hc-records {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-records > li {
+  display: grid;
+  grid-template-columns: 11ch minmax(0, 1fr);
+  gap: var(--layout-gutter);
+  align-items: baseline;
+  padding-block: var(--space-xs);
+  border-block-start: 1px solid var(--color-border-subtle);
+}
+
+/* A record with no date takes the row. */
+[data-variant='horizontal-cinema'] .hc-records > li > .hc-records__what:only-child {
+  grid-column: 1 / -1;
+}
+
+[data-variant='horizontal-cinema'] .hc-records__when {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-variant='horizontal-cinema'] .hc-records__what {
+  display: grid;
+  gap: var(--space-3xs);
+  max-inline-size: 60ch;
+}
+
+[data-variant='horizontal-cinema'] .hc-records__title {
+  margin: 0;
+  font-size: inherit;
+  font-weight: 650;
+}
+
+[data-variant='horizontal-cinema'] .hc-records__title a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+[data-variant='horizontal-cinema'] :is(.hc-records__where, .hc-records__words) {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] .hc-records__words p {
+  margin: 0;
+}
+
+/* ── The practice: the thesis as the scene's one line, the rest as named rows ── */
+
+[data-variant='horizontal-cinema'] .hc-section[data-family='practice'] {
+  display: grid;
+  gap: var(--space-m);
+  align-content: start;
+}
+
+[data-variant='horizontal-cinema'] .hc-practice__thesis {
+  max-inline-size: 16ch;
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+}
+
+[data-variant='horizontal-cinema'] :is(.hc-practice__thesis, .hc-practice__rest) p {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-practice__rest {
+  display: grid;
+  gap: var(--space-xs);
+  max-inline-size: 60ch;
+}
+
+[data-variant='horizontal-cinema'] .hc-practice {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-practice__row {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) minmax(0, 3fr);
+  gap: var(--layout-gutter);
+  align-items: baseline;
+  padding-block: var(--space-xs);
+  border-block-start: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='horizontal-cinema'] .hc-practice__name {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: inherit;
+}
+
+[data-variant='horizontal-cinema'] .hc-practice__held:only-child {
+  grid-column: 1 / -1;
+}
+
+[data-variant='horizontal-cinema'] .hc-practice__held {
+  display: grid;
+  gap: var(--space-3xs);
+  max-inline-size: 60ch;
+}
+
+[data-variant='horizontal-cinema'] .hc-practice__held p {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] :is(.hc-practice__description, .hc-practice__pricing) {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] .hc-practice__services {
+  display: grid;
+  gap: var(--space-s);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-practice__service {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-practice__service a {
+  color: inherit;
+  text-underline-offset: 0.18em;
+}
+
+/* ── Sections of words: one dominant line, the rest at a reading measure ── */
+
+[data-variant='horizontal-cinema']
+  .hc-section:is(
+    [data-family='lede'],
+    [data-family='now'],
+    [data-family='quote'],
+    [data-family='focus'],
+    [data-family='fun-facts'],
+    [data-family='contact'],
+    [data-family='cta'],
+    [data-family='github'],
+    [data-family='custom']
+  ) {
+  display: grid;
+  gap: var(--space-m);
+  align-content: start;
+}
+
+[data-variant='horizontal-cinema'] .hc-prose {
+  display: grid;
+  gap: var(--space-s);
+  max-inline-size: 65ch;
+}
+
+[data-variant='horizontal-cinema'] .hc-prose p {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-words__lead {
+  max-inline-size: 45ch;
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-words__lead p {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] :is(.hc-words__as-of, .hc-words__profile) {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] .hc-words__profile a {
+  color: var(--color-accent-text);
+  text-underline-offset: 0.2em;
+}
+
+[data-variant='horizontal-cinema'] .hc-words__quote {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-words__quote blockquote {
+  max-inline-size: 30ch;
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-words__quote blockquote p {
+  margin: 0;
+  text-indent: -0.4em;
+}
+
+[data-variant='horizontal-cinema'] .hc-words__quote blockquote p::before {
+  content: '\201C';
+}
+
+[data-variant='horizontal-cinema'] .hc-words__quote blockquote p::after {
+  content: '\201D';
+}
+
+[data-variant='horizontal-cinema'] .hc-words__quote figcaption {
+  margin-block-start: var(--space-xs);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] [data-matte] .hc-words__quote figcaption {
+  color: color-mix(in oklab, var(--color-on-scrim) 72%, var(--layout-matte));
+}
+
+[data-variant='horizontal-cinema'] .hc-words__quote :is(a, cite a) {
+  color: inherit;
+  text-underline-offset: 0.2em;
+}
+
+[data-variant='horizontal-cinema'] .hc-words__rows {
+  max-inline-size: 45ch;
+}
+
+[data-variant='horizontal-cinema'] .hc-words__ways {
+  display: grid;
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-words__ways > div {
+  display: grid;
+  grid-template-columns: minmax(7rem, 1fr) minmax(0, 3fr);
+  gap: var(--layout-gutter);
+  align-items: baseline;
+  padding-block: var(--space-xs);
+  border-block-start: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='horizontal-cinema'] .hc-words__ways dt {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] .hc-words__ways dd {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-words__ways a {
+  color: var(--color-accent-text);
+  overflow-wrap: normal;
+  text-underline-offset: 0.2em;
+}
+
+[data-variant='horizontal-cinema'] .hc-words__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-words__actions {
+  align-items: center;
+}
+
+[data-variant='horizontal-cinema'] .hc-words__more {
+  color: var(--color-accent-text);
+  text-underline-offset: 0.2em;
+}
+
+[data-variant='horizontal-cinema'] [data-closing] .hc-words__more {
+  color: var(--color-on-scrim);
+}
+
+[data-variant='horizontal-cinema'] .hc-words__items {
+  display: grid;
+  gap: var(--space-l);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-words__items > li {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+/* In a frame of eight columns or more, an item's picture sits beside its words, so the frame fits the stage. */
+[data-variant='horizontal-cinema']
+  .hc-scene:is([data-w='8'], [data-w='12'])
+  .hc-words__items
+  > li:has(> .hc-work__still) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  column-gap: var(--layout-gutter);
+}
+
+[data-variant='horizontal-cinema']
+  .hc-scene:is([data-w='8'], [data-w='12'])
+  .hc-words__items
+  > li:has(> .hc-work__still)
+  > * {
+  grid-column: 1;
+}
+
+[data-variant='horizontal-cinema']
+  .hc-scene:is([data-w='8'], [data-w='12'])
+  .hc-words__items
+  > li
+  > .hc-work__still {
+  grid-column: 2;
+  grid-row: 1 / span 8;
+}
+
+/* ── The Origins timeline: a figure of every dated entry on its thread ──── */
+
+/*
+ * As tall as its lanes, its caption right under the plot (HOR-3): the
+ * figure sits in its frame's middle, like any scene that doesn't fill it.
+ */
+[data-variant='horizontal-cinema'] .hc-timeline-figure {
+  --layout-thread: 7rem;
+  /* A bar's least height: two lines of its label, the title and the years. */
+  --layout-lane: 3rem;
+  display: grid;
+  gap: var(--space-m);
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-timeline-figure__plot {
+  position: relative;
+  display: grid;
+  padding-block: var(--space-l);
+}
+
+/* With no line for now to label under the lanes, the caption follows the last lane closely. */
+[data-variant='horizontal-cinema'] .hc-timeline-figure__plot:not(:has(.hc-timeline-figure__now)) {
+  padding-block-end: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-timeline-figure__axis {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: calc(var(--layout-thread) + var(--layout-gutter)) 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] .hc-timeline-figure__axis li {
+  position: absolute;
+  inset-inline-start: calc(var(--layout-at) * 100%);
+  font-variant-numeric: tabular-nums;
+  transform: translateX(-50%);
+}
+
+[data-variant='horizontal-cinema'] .hc-timeline-figure__axis li:first-child {
+  transform: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-timeline-figure__now {
+  position: absolute;
+  inset-block: var(--space-l) 0;
+  display: flex;
+  align-items: end;
+  inset-inline-start: calc(
+    var(--layout-thread) + var(--layout-gutter) +
+      (100% - var(--layout-thread) - var(--layout-gutter)) * var(--layout-at)
+  );
+  padding-inline-start: var(--space-3xs);
+  border-inline-start: 1px solid var(--color-accent);
+  color: var(--color-accent-text);
+  pointer-events: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-scene[data-kind='timeline'] .hc-pic {
+  align-content: center;
+}
+
+/*
+ * Past a phone the disclosure takes no box, but its content slot still
+ * does: a grid, so the timeline's picture fills the frame's row and its
+ * figure can sit in the middle rather than parked at the top.
+ */
+@media (min-width: 48rem) {
+  [data-variant='horizontal-cinema'] .hc-scene[data-kind='timeline'] .hc-fold::details-content {
+    display: grid;
+    grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  }
+}
+
+/* Each thread as tall as its bars; a rule closes the last one, so the plot ends where its lanes do. */
+[data-variant='horizontal-cinema'] .hc-timeline-figure__threads {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-block-end: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='horizontal-cinema'] .hc-timeline-figure__threads > li {
+  display: grid;
+  grid-template-columns: var(--layout-thread) minmax(0, 1fr);
+  gap: var(--layout-gutter);
+  align-items: start;
+  padding-block: var(--space-2xs);
+  border-block-start: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='horizontal-cinema'] .hc-timeline-figure__thread {
+  color: var(--color-text-secondary);
+}
+
+/*
+ * A thread's rows are grid rows, so a label that wraps makes its row
+ * taller, never clipped: each bar sits on its row, from its start, as wide
+ * as its years.
+ */
+[data-variant='horizontal-cinema'] .hc-timeline-figure__bars {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: var(--space-3xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A hair of air at each bar's end, so entries that meet don't share a border. */
+[data-variant='horizontal-cinema'] .hc-timeline-figure__bars > li {
+  container-type: inline-size;
+  display: grid;
+  grid-row: var(--layout-row);
+  grid-column: 1;
+  inline-size: max(calc(var(--layout-size) * 100%), var(--space-s));
+  margin-inline-start: calc(var(--layout-from) * 100%);
+  padding-inline-end: var(--space-3xs);
+}
+
+[data-variant='horizontal-cinema'] .hc-timeline-figure__label {
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * A bar too short to hold its words sets them beside it, in the room its
+ * row keeps for them (--layout-room bar widths; the bar is the container,
+ * so 100cqi is its width). Which bars are short is the figure's call
+ * (data-short), from the same share of the plot its rows reserve. The link
+ * widens over that room and keeps its words in flow, so a label that wraps
+ * makes its row taller; the bar itself is drawn behind, at its own width.
+ * The doubled class outranks an ongoing entry's colors, which move to the
+ * drawn bar. A phone lists the entries with no plot, so only past it.
+ */
+@media (min-width: 48rem) {
+  [data-variant='horizontal-cinema']
+    .hc-timeline-figure__bars.hc-timeline-figure__bars
+    > li[data-short]
+    :is(a, span[data-type-role]) {
+    position: relative;
+    inline-size: calc((var(--layout-room, 1) + 1) * 100cqi);
+    padding-block: 0;
+    padding-inline: calc(100cqi + var(--space-2xs)) 0;
+    border-color: transparent;
+    background-color: transparent;
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc-timeline-figure__bars
+    > li[data-short]
+    :is(a, span[data-type-role])::before {
+    position: absolute;
+    inset-block: -1px;
+    inset-inline-start: -1px;
+    inline-size: 100cqi;
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--ui-radius-control);
+    background-color: var(--color-surface-default);
+    content: '';
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc-timeline-figure__bars
+    > li[data-short][data-open]
+    :is(a, span[data-type-role])::before {
+    border-color: var(--color-accent);
+    background-color: color-mix(in oklab, var(--color-accent) 14%, var(--color-canvas));
+  }
+
+  /* Near the plot's end the words sit before the bar, so they never cross into what comes after. */
+  [data-variant='horizontal-cinema']
+    .hc-timeline-figure__bars.hc-timeline-figure__bars
+    > li[data-label-before]
+    :is(a, span[data-type-role]) {
+    margin-inline-start: calc(var(--layout-room, 1) * -100cqi);
+    padding-inline: 0 calc(100cqi + var(--space-2xs));
+    text-align: end;
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc-timeline-figure__bars
+    > li[data-label-before]
+    :is(a, span[data-type-role])::before {
+    inset-inline: auto -1px;
+  }
+}
+
+/*
+ * Entries that start after the chapter's years stand apart past the plot's
+ * end, on their threads, under their own label: shown, but off the axis.
+ */
+[data-variant='horizontal-cinema'] .hc-timeline-figure[data-later] {
+  --layout-later: 14rem;
+}
+
+[data-variant='horizontal-cinema'] .hc-timeline-figure[data-later] .hc-timeline-figure__axis {
+  inset-inline-end: calc(var(--layout-later) + var(--layout-gutter));
+}
+
+[data-variant='horizontal-cinema'] .hc-timeline-figure[data-later] .hc-timeline-figure__bars {
+  grid-template-columns: minmax(0, 1fr) var(--layout-later);
+  column-gap: var(--layout-gutter);
+}
+
+[data-variant='horizontal-cinema'] .hc-timeline-figure__bars > li[data-later] {
+  grid-column: 2;
+  inline-size: auto;
+  margin-inline-start: 0;
+  padding-inline-end: 0;
+}
+
+/* Past the chapter's end an ongoing entry keeps the plain ground: the chapter's own years carry the weight. */
+[data-variant='horizontal-cinema']
+  .hc-timeline-figure__bars
+  > li[data-later]
+  :is(a, span[data-type-role]) {
+  border-color: var(--color-border-strong);
+  background-color: var(--color-surface-default);
+}
+
+/* Its label tops a dashed rule in the gutter, where the chapter's years stop. */
+[data-variant='horizontal-cinema'] .hc-timeline-figure__later {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  inline-size: calc(var(--layout-later) + var(--layout-gutter) / 2);
+  padding-inline-start: calc(var(--layout-gutter) / 2);
+  border-inline-start: 1px dashed var(--color-border-strong);
+  color: var(--color-text-secondary);
+  pointer-events: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-timeline-figure__bars :is(a, span[data-type-role]) {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-block-size: var(--layout-lane);
+  padding-block: var(--space-3xs);
+  padding-inline: var(--space-2xs);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--ui-radius-control);
+  background-color: var(--color-surface-default);
+  color: var(--color-text-primary);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * An entry that runs on past the chapter's years leaves the plot open at
+ * its edge, an ongoing one too (hence the doubled attribute); a phone has
+ * no plot.
+ */
+@media (min-width: 48rem) {
+  [data-variant='horizontal-cinema']
+    .hc-timeline-figure__bars
+    [data-runs-on][data-runs-on]
+    :is(a, span[data-type-role]) {
+    border-inline-end-color: transparent;
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+  }
+}
+
+[data-variant='horizontal-cinema']
+  .hc-timeline-figure__bars
+  [data-open]
+  :is(a, span[data-type-role]) {
+  border-color: var(--color-accent);
+  background-color: color-mix(in oklab, var(--color-accent) 14%, var(--color-canvas));
+}
+
+[data-variant='horizontal-cinema'] .hc-timeline-figure__bars a:hover .hc-timeline-figure__title {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+[data-variant='horizontal-cinema'] .hc-timeline-figure__years {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-variant='horizontal-cinema'] .hc-timeline-figure__caption {
+  max-inline-size: 60ch;
+  color: var(--color-text-secondary);
+}
+
+/* ── Chapter openings: intertitles on the matte ────────────────────────── */
+
+[data-variant='horizontal-cinema'] .hc-scene[data-kind='intertitle'] {
+  background-color: var(--layout-matte);
+  color: var(--color-on-scrim);
+}
+
+[data-variant='horizontal-cinema'] .hc-scene[data-kind='intertitle'] .hc-pic {
+  grid-template-rows: auto auto 1fr auto;
+  gap: var(--space-s);
+  padding-block-end: var(--space-l);
+}
+
+[data-variant='horizontal-cinema'] .hc-intertitle__title {
+  margin-block: var(--space-m) 0;
+  margin-inline: 0;
+  font-size: var(--type-step-7);
+  line-height: 0.95;
+  letter-spacing: -0.035em;
+}
+
+/* Each chapter's span of years, set large, so no two intertitles are the same card. */
+[data-variant='horizontal-cinema'] .hc-intertitle__years {
+  margin: 0;
+  color: color-mix(in oklab, var(--color-on-scrim) 72%, var(--layout-matte));
+  font-size: var(--type-step-5);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-variant='horizontal-cinema'] .hc-intertitle__epigraph {
+  align-self: center;
+  font-size: var(--type-title-font-size);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='horizontal-cinema'] .hc-intertitle__epigraph blockquote {
+  padding: 0;
+  border: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-intertitle__epigraph blockquote p::before {
+  content: '\201C';
+}
+
+[data-variant='horizontal-cinema'] .hc-intertitle__epigraph blockquote p::after {
+  content: '\201D';
+}
+
+[data-variant='horizontal-cinema'] .hc-intertitle__epigraph :is(footer, figcaption, cite) {
+  margin-block-start: var(--space-xs);
+  color: color-mix(in oklab, var(--color-on-scrim) 72%, var(--layout-matte));
+  font-size: var(--type-label-font-size);
+  line-height: var(--type-label-line-height);
+}
+
+[data-variant='horizontal-cinema'] .hc-intertitle__epigraph :is(p, blockquote, figure) {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-intertitle__epigraph a {
+  color: var(--color-on-scrim);
+}
+
+[data-variant='horizontal-cinema'] .hc-intertitle__contents {
+  align-self: end;
+}
+
+[data-variant='horizontal-cinema'] .hc-intertitle__contents > p {
+  margin: 0;
+  padding-block-end: var(--space-2xs);
+  color: color-mix(in oklab, var(--color-on-scrim) 72%, var(--layout-matte));
+}
+
+[data-variant='horizontal-cinema'] .hc-intertitle__contents ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-intertitle__contents li {
+  border-block-start: 1px solid color-mix(in oklab, var(--color-on-scrim) 24%, var(--layout-matte));
+}
+
+[data-variant='horizontal-cinema'] .hc-intertitle__contents li:last-child {
+  border-block-end: 1px solid color-mix(in oklab, var(--color-on-scrim) 24%, var(--layout-matte));
+}
+
+/* The widest card's contents: two columns, down the first and then the second, under one rule. */
+[data-variant='horizontal-cinema'] .hc-intertitle__contents ol[data-columns='2'] {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(var(--layout-rows), auto);
+  column-gap: var(--layout-gutter);
+  border-block-start: 1px solid color-mix(in oklab, var(--color-on-scrim) 24%, var(--layout-matte));
+}
+
+[data-variant='horizontal-cinema'] .hc-intertitle__contents ol[data-columns='2'] > li {
+  border-block-start: 0;
+  border-block-end: 1px solid color-mix(in oklab, var(--color-on-scrim) 24%, var(--layout-matte));
+}
+
+[data-variant='horizontal-cinema'] .hc-intertitle__entry {
+  font-size: var(--type-title-font-size);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='horizontal-cinema'] .hc-intertitle__contents a {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: var(--space-s);
+  padding-block: var(--space-2xs);
+  color: var(--color-on-scrim);
+  text-decoration: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-intertitle__contents a:hover .hc-intertitle__entry {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+[data-variant='horizontal-cinema'] .hc-intertitle__number {
+  color: color-mix(in oklab, var(--color-on-scrim) 72%, var(--layout-matte));
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The four chapter cards are one family (S8). Every cut keeps the same
+ * roles and the same rules: the chapter's numeral in the bar, its name over
+ * its years, and its contents at the foot under one hairline. Only the
+ * frame's composition changes: Origins sets the name at the top with its
+ * epigraph below, Journey at the middle, Craft as a lower third just above
+ * its contents, and Epilogue as an end slate, centred.
+ */
+[data-variant='horizontal-cinema']
+  .hc-scene[data-kind='intertitle']:is(
+    [data-chapter='journey'],
+    [data-chapter='craft'],
+    [data-chapter='epilogue']
+  )
+  .hc-intertitle__title {
+  grid-row: 2;
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema']
+  .hc-scene[data-kind='intertitle']:is(
+    [data-chapter='journey'],
+    [data-chapter='craft'],
+    [data-chapter='epilogue']
+  )
+  .hc-intertitle__years {
+  grid-row: 3;
+}
+
+[data-variant='horizontal-cinema']
+  .hc-scene[data-kind='intertitle']:is([data-chapter='journey'], [data-chapter='epilogue'])
+  .hc-pic {
+  grid-template-rows: 1fr auto auto 1fr auto;
+}
+
+[data-variant='horizontal-cinema']
+  .hc-scene[data-kind='intertitle']:is([data-chapter='journey'], [data-chapter='epilogue'])
+  .hc-intertitle__contents {
+  grid-row: 5;
+}
+
+[data-variant='horizontal-cinema'] .hc-scene[data-kind='intertitle'][data-chapter='craft'] .hc-pic {
+  grid-template-rows: 1fr auto auto auto;
+}
+
+[data-variant='horizontal-cinema']
+  .hc-scene[data-kind='intertitle'][data-chapter='craft']
+  .hc-intertitle__contents {
+  grid-row: 4;
+  margin-block-start: var(--space-s);
+}
+
+[data-variant='horizontal-cinema']
+  .hc-scene[data-kind='intertitle'][data-chapter='epilogue']
+  .hc-pic {
+  grid-template-rows: 1fr auto auto 2fr auto;
+}
+
+/* A scene that folds on a phone: anywhere wider the disclosure takes no box, so the picture sits in the scene's grid as any other. */
+[data-variant='horizontal-cinema'] .hc-fold {
+  display: contents;
+}
+
+[data-variant='horizontal-cinema'] .hc-fold__summary {
+  display: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-fold__summary::-webkit-details-marker {
+  display: none;
+}
+
+@media (max-width: 47.99rem) {
+  [data-variant='horizontal-cinema'] .hc-fold {
+    display: block;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-fold__summary {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2xs) var(--space-s);
+    min-block-size: 2.75rem;
+    padding-block: var(--space-s);
+    padding-inline: var(--layout-pad);
+    cursor: pointer;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-fold__credit {
+    color: var(--color-text-secondary);
+  }
+
+  [data-variant='horizontal-cinema'] .hc-fold[open] > .hc-fold__summary {
+    border-block-end: 1px solid var(--color-border-subtle);
+  }
+
+  /* Its state in words and a turning chevron, never colour alone (C10). */
+  [data-variant='horizontal-cinema'] .hc-fold__state {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-3xs);
+    margin-inline-start: auto;
+    color: var(--color-accent-text);
+  }
+
+  [data-variant='horizontal-cinema'] .hc-fold__state svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-fold[open] .hc-fold__state svg {
+    transform: rotate(180deg);
+  }
+
+  [data-variant='horizontal-cinema'] .hc-fold:not([open]) .hc-fold__hide,
+  [data-variant='horizontal-cinema'] .hc-fold[open] .hc-fold__show {
+    display: none;
+  }
+}
+
+/* The closing slate: the call to action alone on the matte, as the title card opens the film. */
+[data-variant='horizontal-cinema'] .hc-scene[data-closing] {
+  background-color: var(--layout-matte);
+  color: var(--color-on-scrim);
+}
+
+[data-variant='horizontal-cinema'] .hc-scene[data-closing] .hc-reel__subtitle,
+[data-variant='horizontal-cinema'] .hc-scene[data-closing] .hc-words__lead,
+[data-variant='horizontal-cinema'] [data-matte] .hc-reel__subtitle {
+  color: color-mix(in oklab, var(--color-on-scrim) 72%, var(--layout-matte));
+}
+
+/* A quote set as the epigraph reads in the matte's colors, whatever the shared renderer gives it. */
+[data-variant='horizontal-cinema'] [data-matte] .hc-section {
+  color: var(--color-on-scrim);
+}
+
+/* ── The scrubber: the strip in miniature ──────────────────────────────── */
+
+[data-variant='horizontal-cinema'] .hc-scrub {
+  display: none;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-xl);
+  min-block-size: var(--layout-scrub);
+  padding-inline: var(--layout-grid-margin);
+  border-block-start: 1px solid var(--color-border-subtle);
+  background-color: var(--color-canvas);
+}
+
+[data-variant='horizontal-cinema'] .hc-scrub:not([data-live]) {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+[data-variant='horizontal-cinema'] .hc-scrub__transport {
+  display: flex;
+  gap: var(--space-2xs);
+}
+
+[data-variant='horizontal-cinema'] .hc-scrub__transport svg {
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+}
+
+[data-variant='horizontal-cinema'] .hc-minimap {
+  position: relative;
+}
+
+[data-variant='horizontal-cinema'] .hc-minimap ol {
+  display: flex;
+  align-items: end;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-minimap__chapter {
+  flex: var(--layout-units) 1 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-minimap__chapter {
+  position: relative;
+}
+
+[data-variant='horizontal-cinema'] .hc-minimap__chapter a {
+  display: grid;
+  align-content: end;
+  gap: var(--space-3xs);
+  /* The target is the whole chapter, label to blocks, at least 44 px tall (X5). */
+  min-block-size: 2.75rem;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-minimap__chapter a[aria-current] {
+  color: var(--color-text-primary);
+}
+
+[data-variant='horizontal-cinema'] .hc-minimap__label {
+  display: flex;
+  gap: var(--space-2xs);
+  white-space: nowrap;
+}
+
+[data-variant='horizontal-cinema'] .hc-minimap__chapter a[aria-current] .hc-minimap__label {
+  font-weight: 650;
+}
+
+[data-variant='horizontal-cinema'] .hc-minimap__years {
+  font-variant-numeric: tabular-nums;
+}
+
+[data-variant='horizontal-cinema'] .hc-minimap__blocks {
+  display: flex;
+  gap: var(--space-3xs);
+  block-size: 1rem;
+}
+
+[data-variant='horizontal-cinema'] .hc-minimap__blocks i {
+  flex: var(--layout-units) 1 0;
+  border: 1px solid var(--color-border-strong);
+  background-color: var(--color-canvas);
+}
+
+[data-variant='horizontal-cinema'] .hc-minimap__blocks i[data-matte] {
+  border-color: var(--color-text-primary);
+  background-color: var(--color-text-primary);
+}
+
+[data-variant='horizontal-cinema'] .hc-minimap__blocks i[data-now] {
+  border-color: var(--color-accent);
+  background-color: var(--color-accent);
+}
+
+/* What's on screen: a bar under the blocks it spans, so it never reads as a focus ring. */
+[data-variant='horizontal-cinema'] .hc-minimap__window {
+  position: absolute;
+  inset-block-end: calc(var(--space-3xs) * -2);
+  inset-inline-start: var(--layout-window-start, 0);
+  inline-size: var(--layout-window-size, 0);
+  block-size: 3px;
+  background-color: var(--color-text-primary);
+  pointer-events: none;
+}
+
+/* What a chapter holds, named above it while the pointer or focus is on it. */
+[data-variant='horizontal-cinema'] .hc-minimap__contents {
+  position: absolute;
+  inset-block-end: calc(100% + var(--space-xs));
+  inset-inline-start: 0;
+  inline-size: max-content;
+  max-inline-size: 40ch;
+  padding-block: var(--space-2xs);
+  padding-inline: var(--space-xs);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--ui-radius-control);
+  background-color: var(--color-canvas);
+  color: var(--color-text-primary);
+  white-space: normal;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-minimap__chapter:last-child .hc-minimap__contents {
+  inset-inline: auto 0;
+}
+
+[data-variant='horizontal-cinema']
+  .hc-minimap__chapter
+  a:is(:hover, :focus-visible)
+  .hc-minimap__contents {
+  opacity: 1;
+  visibility: visible;
+}
+
+[data-variant='horizontal-cinema'] .hc-minimap__chapter a:focus-visible {
+  outline-offset: var(--space-3xs);
+}
+
+[data-variant='horizontal-cinema'] .hc-scrub__end {
+  display: flex;
+  align-items: center;
+  gap: var(--space-m);
+}
+
+/* The status keeps one width, wrapping to a second line for a long title, so the minimap never moves as it changes. */
+[data-variant='horizontal-cinema'] .hc-scrub__status {
+  flex: none;
+  inline-size: 30ch;
+  margin: 0;
+  color: var(--color-text-secondary);
+  text-align: end;
+  text-wrap: balance;
+}
+
+[data-variant='horizontal-cinema'] .hc-scrub__credits {
+  color: var(--color-accent-text);
+  font-weight: 650;
+  white-space: nowrap;
+  text-underline-offset: 0.2em;
+}
+
+/* Hovering one chapter of the minimap quiets the others. */
+@media (hover: hover) and (pointer: fine) {
+  [data-variant='horizontal-cinema'] .hc-minimap:hover .hc-minimap__chapter:not(:hover) {
+    opacity: 0.45;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-minimap__chapter {
+    transition: opacity var(--motion-feedback) var(--motion-curve);
+  }
+}
+
+/* ── The chapter control: top to bottom, on the top edge ───────────────── */
+
+[data-variant='horizontal-cinema'] .hc-jump {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-s);
+  min-block-size: var(--layout-chrome);
+  padding-inline: var(--layout-grid-margin);
+  border-block-end: 1px solid var(--color-border-subtle);
+  background-color: var(--color-canvas);
+}
+
+[data-variant='horizontal-cinema'] .hc-jump__button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  min-block-size: 2.75rem;
+  padding-inline: var(--space-s) var(--space-xs);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--ui-radius-control);
+  background-color: var(--color-canvas);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+[data-variant='horizontal-cinema'] .hc-jump__numeral {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] .hc-jump__sheet {
+  inset-block: var(--layout-chrome) auto;
+  inset-inline: var(--layout-grid-margin);
+  inline-size: auto;
+  max-inline-size: 28rem;
+  margin: 0;
+  padding: var(--space-xs);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--ui-radius-control);
+  background-color: var(--color-canvas);
+  color: var(--color-text-primary);
+  box-shadow: var(--ui-shadow-card);
+  /* Every scene is in it, so it scrolls on a short screen rather than running off it. */
+  max-block-size: calc(100svh - var(--layout-chrome) - var(--space-s));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+[data-variant='horizontal-cinema'] .hc-jump__sheet ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-jump__sheet ol a {
+  display: grid;
+  grid-template-columns: 2.5ch minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--space-xs);
+  min-block-size: 2.75rem;
+  padding: var(--space-xs);
+  border-radius: var(--ui-radius-control);
+  color: inherit;
+  text-decoration: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-jump__sheet ol a[aria-current] {
+  background-color: var(--color-surface-default);
+}
+
+[data-variant='horizontal-cinema'] .hc-jump__sheet ol a:hover > span:nth-child(2) {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+/* A chapter's scenes under its name, each its own link, set in from the numeral's column. */
+[data-variant='horizontal-cinema'] .hc-jump__scenes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-s);
+  margin: 0;
+  padding-block: 0 var(--space-2xs);
+  padding-inline: calc(2.5ch + var(--space-xs) * 2) var(--space-xs);
+  list-style: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-jump__sheet .hc-jump__scenes a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 2.75rem;
+  padding: 0;
+  color: var(--color-accent-text);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+[data-variant='horizontal-cinema'] .hc-jump__more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-l);
+  margin-block: var(--space-2xs) 0;
+  margin-inline: 0;
+  padding-inline: var(--space-xs);
+  border-block-start: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='horizontal-cinema'] .hc-jump__list {
+  display: flex;
+  align-items: center;
+  min-block-size: 2.75rem;
+  color: var(--color-accent-text);
+  text-underline-offset: 0.2em;
+}
+
+[data-variant='horizontal-cinema'] .hc-jump__years {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── The credits roll ──────────────────────────────────────────────────── */
+
+[data-variant='horizontal-cinema'] .hc-credits {
+  padding-block: var(--space-3xl) var(--space-2xl);
+  padding-inline: var(--layout-grid-margin);
+  background-color: var(--layout-matte);
+  color: var(--color-on-scrim);
+}
+
+[data-variant='horizontal-cinema'] .hc-credits a {
+  color: var(--color-on-scrim);
+  text-underline-offset: 0.2em;
+}
+
+/* The roll on the page's grid lines: the name, then three columns of credits written as sentences. */
+[data-variant='horizontal-cinema'] .hc-credits > * {
+  inline-size: min(100%, 90rem);
+  margin-inline: auto;
+}
+
+[data-variant='horizontal-cinema'] .hc-credits__head {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+[data-variant='horizontal-cinema'] .hc-credits__head p {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-credits__tagline {
+  color: color-mix(in oklab, var(--color-on-scrim) 72%, var(--layout-matte));
+}
+
+[data-variant='horizontal-cinema'] .hc-credits__roll {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: var(--space-l) var(--layout-gutter);
+  align-items: start;
+  margin-block-start: var(--space-xl);
+}
+
+[data-variant='horizontal-cinema'] .hc-credits__credit {
+  display: grid;
+  gap: var(--space-2xs);
+  padding-block-start: var(--space-xs);
+  border-block-start: 1px solid color-mix(in oklab, var(--color-on-scrim) 24%, var(--layout-matte));
+}
+
+/* A phone's own Contact credit, the ways the film's scene doesn't list; wider, the full one reads. */
+[data-variant='horizontal-cinema'] .hc-credits__credit[data-phone-only] {
+  display: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-credits__credit p {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-credits__label {
+  color: color-mix(in oklab, var(--color-on-scrim) 72%, var(--layout-matte));
+}
+
+[data-variant='horizontal-cinema'] .hc-credits__sentence {
+  max-inline-size: 45ch;
+}
+
+[data-variant='horizontal-cinema'] .hc-credits__end {
+  margin-block-start: var(--space-xl);
+  padding-block-start: var(--space-m);
+  border-block-start: 1px solid color-mix(in oklab, var(--color-on-scrim) 24%, var(--layout-matte));
+  color: color-mix(in oklab, var(--color-on-scrim) 72%, var(--layout-matte));
+}
+
+[data-variant='horizontal-cinema'] .hc-credits__end p {
+  margin: 0;
+}
+
+/* ── The case study: a storyboard, top to bottom ───────────────────────── */
+
+[data-variant='horizontal-cinema'] .hc-board__main {
+  display: grid;
+  gap: var(--space-xl);
+  padding-block: var(--layout-inset) 0;
+  padding-inline: var(--layout-inset);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__film {
+  display: grid;
+  gap: var(--space-xl);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__scene {
+  inline-size: min(100%, 90rem);
+  margin-inline: auto;
+  scroll-margin-block-start: var(--space-s);
+}
+
+/*
+ * A scene's ground (HOR-2): the takes and the final cut are slabs on the
+ * matte; every other scene is a frame on the canvas, only its top bar
+ * black. Its ink follows the ground it sits on.
+ */
+[data-variant='horizontal-cinema'] :is(.hc-board__scene, .hc-board__frame) {
+  --layout-ground: var(--color-surface-subtle);
+  --layout-ink: var(--color-text-primary);
+  --layout-ink-quiet: var(--color-text-secondary);
+  --layout-rule: var(--color-border-subtle);
+  /* A figure's marks: a chart's weight on the canvas, not a slab's. */
+  --layout-fill: color-mix(in oklab, var(--layout-ink) 52%, var(--layout-ground));
+}
+
+[data-variant='horizontal-cinema'] .hc-board [data-matte] {
+  --layout-ground: var(--layout-matte);
+  --layout-ink: var(--color-on-scrim);
+  --layout-ink-quiet: color-mix(in oklab, var(--color-on-scrim) 72%, var(--layout-matte));
+  --layout-rule: color-mix(in oklab, var(--color-on-scrim) 24%, var(--layout-matte));
+  --layout-fill: color-mix(in oklab, var(--color-on-scrim) 64%, var(--layout-matte));
+}
+
+[data-variant='horizontal-cinema'] .hc-board__scene[data-matte] {
+  background-color: var(--layout-matte);
+  color: var(--color-on-scrim);
+}
+
+/* A frame on the canvas: its own ground, a hairline under its black bar so its edge reads to the bottom. */
+[data-variant='horizontal-cinema']
+  :is(
+    .hc-board__scene:is([data-layout='slab'], [data-layout='take']),
+    .hc-board__scene[data-layout='split'] > .hc-board__frame
+  ):not([data-matte]) {
+  border: 1px solid var(--color-border-default);
+  border-block-start: 0;
+  background-color: var(--layout-ground);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__scene[data-matte] a {
+  color: var(--color-on-scrim);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__slate {
+  grid-template-areas:
+    'titles titles titles titles titles titles still still still still still still'
+    'facts facts facts facts facts facts facts facts facts facts facts facts';
+  row-gap: var(--space-l);
+  padding-block: var(--space-l);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__slate > .hc-board__titles {
+  grid-area: titles;
+  display: grid;
+  gap: var(--space-s);
+  align-content: start;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__slate > .hc-board__still {
+  grid-area: still;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__slate > .hc-board__facts {
+  grid-area: facts;
+}
+
+[data-variant='horizontal-cinema'] :is(.hc-board__medium, .hc-board__title, .hc-board__summary) {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__medium {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__summary {
+  max-inline-size: 45ch;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__still :is(figure, picture) {
+  display: block;
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__still img {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+}
+
+/* The slate's fact sheet: one ruled row of facts, each its own column. */
+[data-variant='horizontal-cinema'] .hc-board__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: var(--space-m) var(--layout-gutter);
+  align-items: start;
+  margin: 0;
+  padding-block-start: var(--space-s);
+  border-block-start: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__facts dt {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__facts dd {
+  margin-block: var(--space-3xs) 0;
+  margin-inline: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__facts :is(p, dd > *) {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-s);
+}
+
+/* A scene: its label, its first sentence large across eight columns, the rest at a reading measure. */
+[data-variant='horizontal-cinema'] .hc-board__pic {
+  row-gap: var(--space-m);
+  padding-block: var(--space-xl) var(--space-2xl);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__label {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] [data-matte] .hc-board__label {
+  color: color-mix(in oklab, var(--color-on-scrim) 72%, var(--layout-matte));
+}
+
+[data-variant='horizontal-cinema'] .hc-board__pic > .hc-board__lead {
+  grid-column: 1 / span 10;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__lead p {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema']
+  .hc-board__pic
+  > :is(.hc-board__body, .hc-board__why, .hc-board__citations) {
+  grid-column: 1 / span 7;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__body {
+  display: grid;
+  gap: var(--space-s);
+  max-inline-size: 65ch;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__body p {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__why {
+  display: grid;
+  gap: var(--space-s);
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__why > div {
+  display: grid;
+  grid-template-columns: 8rem minmax(0, 1fr);
+  gap: var(--layout-gutter);
+  padding-block-start: var(--space-xs);
+  border-block-start: 1px solid var(--layout-rule);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__why dt {
+  color: var(--layout-ink-quiet);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__why :is(dd, p) {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__citations {
+  display: grid;
+  gap: var(--space-m);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__cited blockquote {
+  margin-block: 0 var(--space-2xs);
+  margin-inline: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__cited blockquote p {
+  margin: 0;
+  max-inline-size: 45ch;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__cited blockquote p::before {
+  content: '\201C';
+}
+
+[data-variant='horizontal-cinema'] .hc-board__cited blockquote p::after {
+  content: '\201D';
+}
+
+[data-variant='horizontal-cinema'] .hc-board__cited > p {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+/*
+ * A split scene, on the module: its frame, the figure its words hold or the
+ * award it won, on seven columns; its heading and words on five, so no scene
+ * leaves half its width empty.
+ */
+[data-variant='horizontal-cinema'] .hc-board__scene[data-layout='split'] {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--layout-gutter);
+  align-items: start;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__scene[data-layout='split'] > .hc-board__frame {
+  grid-column: 1 / span 7;
+  background-color: var(--layout-ground);
+  color: var(--layout-ink);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__scene[data-layout='split'] > .hc-board__text {
+  display: grid;
+  grid-column: 8 / -1;
+  gap: var(--space-s);
+  align-content: start;
+  padding-block-start: var(--space-2xs);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__heading {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__picture {
+  padding-block: var(--layout-pad-block);
+  padding-inline: var(--layout-pad);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__figure {
+  display: grid;
+  gap: var(--space-m);
+  margin: 0;
+  color: var(--layout-ink);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__squares {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__squares > li {
+  inline-size: var(--space-l);
+  aspect-ratio: 1;
+  border-radius: var(--ui-radius-control);
+  background-color: var(--layout-fill);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__tally {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs) var(--space-l);
+  align-items: baseline;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__tally strong {
+  font-variant-numeric: tabular-nums;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__change dl {
+  display: grid;
+  gap: var(--space-s);
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__bar dt {
+  color: var(--layout-ink-quiet);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__bar dd {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-block: var(--space-3xs) 0;
+  margin-inline: 0;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The longer bar leaves room beside it for its number and unit, at any width. */
+[data-variant='horizontal-cinema'] .hc-board__fill {
+  flex: none;
+  inline-size: calc(var(--layout-share) * min(75%, 100% - var(--space-3xl) - var(--space-2xl)));
+  block-size: var(--space-l);
+  background-color: var(--layout-fill);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__bar[data-after] .hc-board__fill {
+  background-color: var(--color-accent);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__change figcaption {
+  color: var(--layout-ink-quiet);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__plate p {
+  margin: 0;
+  max-inline-size: 45ch;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__plate-title {
+  font-size: var(--type-step-6);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+/* A slab: as tall as its words, its line at the title card's size across the frame. */
+[data-variant='horizontal-cinema']
+  .hc-board__scene:is([data-layout='slab'], [data-layout='take'])
+  .hc-board__pic {
+  padding-block: var(--space-xl);
+}
+
+[data-variant='horizontal-cinema']
+  .hc-board__scene[data-layout='slab']
+  .hc-board__pic
+  > .hc-board__lead {
+  grid-column: 1 / -1;
+  max-inline-size: 28ch;
+  font-size: var(--type-step-6);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+/* The shared measure is a body measure, computed at the root; the slab's line keeps its own, at its own size. */
+[data-variant='horizontal-cinema']
+  .hc-board__scene[data-layout='slab']
+  .hc-board__lead
+  :is(.pf-rich-text, p) {
+  max-inline-size: none;
+}
+
+[data-variant='horizontal-cinema']
+  .hc-board__scene[data-layout='slab']
+  .hc-board__pic
+  > :is(.hc-board__body, .hc-board__citations) {
+  grid-column: 1 / span 8;
+}
+
+/* The takes: one row, side by side, each its own slab. */
+[data-variant='horizontal-cinema'] .hc-board__takes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+  gap: var(--layout-gutter);
+  align-items: start;
+  inline-size: min(100%, 90rem);
+  margin-inline: auto;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__scene[data-layout='take'] .hc-board__pic > * {
+  grid-column: 1 / -1;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__scene[data-layout='take'] .hc-board__lead {
+  font-size: var(--type-step-4);
+  line-height: 1.1;
+}
+
+@media (max-width: 47.99rem) {
+  [data-variant='horizontal-cinema'] .hc-board__scene[data-layout='split'] {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--space-m);
+  }
+
+  [data-variant='horizontal-cinema'] .hc-board__scene[data-layout='split'] > * {
+    grid-column: 1 / -1;
+  }
+}
+
+/* The end: the next case study at headline size, then the way back to the film. */
+[data-variant='horizontal-cinema'] .hc-board__end {
+  display: grid;
+  gap: var(--space-m);
+  inline-size: min(100%, 90rem);
+  margin-inline: auto;
+  padding-block: var(--space-xl) var(--space-2xl);
+  padding-inline: var(--layout-pad);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__end p {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__next {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__next > span {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__main {
+  padding-block-end: var(--layout-chrome);
+}
+
+[data-variant='horizontal-cinema'] :is(.hc-board__next, .hc-board__back) a {
+  color: var(--color-text-primary);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+/* The storyboard's minimap, on the bottom edge. */
+[data-variant='horizontal-cinema'] .hc-board__map {
+  position: sticky;
+  inset-block-end: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-l);
+  min-block-size: var(--layout-chrome);
+  margin-inline: calc(var(--layout-inset) * -1);
+  padding-inline: var(--layout-grid-margin);
+  border-block-start: 1px solid var(--color-border-subtle);
+  background-color: var(--color-canvas);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__map ol {
+  display: flex;
+  flex: 1;
+  gap: var(--space-3xs);
+  max-inline-size: 40rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__map li {
+  flex: 1;
+}
+
+[data-variant='horizontal-cinema'] .hc-board__map a {
+  display: block;
+  position: relative;
+  block-size: 1rem;
+  border: 1px solid var(--color-border-strong);
+  background-color: var(--color-canvas);
+}
+
+/* Each block's target reaches 44 px tall (X5). */
+[data-variant='horizontal-cinema'] .hc-board__map a::after {
+  position: absolute;
+  inset-block: calc((2.75rem - 1rem) / -2);
+  inset-inline: 0;
+  content: '';
+}
+
+[data-variant='horizontal-cinema'] .hc-board__map a[data-matte] {
+  border-color: var(--color-text-primary);
+  background-color: var(--color-text-primary);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__map a[aria-current] {
+  border-color: var(--color-accent);
+  background-color: var(--color-accent);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__map a:focus-visible {
+  outline-offset: var(--space-3xs);
+}
+
+[data-variant='horizontal-cinema'] .hc-board__where {
+  margin: 0;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+[data-variant='horizontal-cinema'] .hc-credits__back {
+  margin: 0;
+  text-align: center;
+}
+
+@media (max-width: 47.99rem) {
+  [data-variant='horizontal-cinema'] .hc-board__slate,
+  [data-variant='horizontal-cinema'] .hc-board__pic {
+    display: flex;
+    flex-direction: column;
+    padding-block: var(--space-l);
+  }
+
+  [data-variant='horizontal-cinema'] .hc-board__why > div {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── The strip: wide, tall, a fine pointer, and not the List view ──────── */
+
+@media (min-width: 64rem) and (min-height: 44rem) and (hover: hover) and (pointer: fine) {
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-stage {
+    block-size: calc(100svh - var(--layout-chrome) - var(--layout-scrub));
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: var(--layout-inset);
+    scrollbar-width: none;
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-track {
+    flex-direction: row;
+    block-size: 100%;
+    inline-size: max-content;
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-scene {
+    --layout-col: min(
+      calc(
+        (
+            100cqi - 2 * var(--layout-inset) - var(--layout-peek) - 2 * var(--layout-pad) - 11 *
+              var(--layout-gutter)
+          ) /
+          12
+      ),
+      6rem
+    );
+    flex: none;
+    inline-size: calc(
+      var(--layout-cols) * var(--layout-col) + (var(--layout-cols) - 1) * var(--layout-gutter) + 2 *
+        var(--layout-pad)
+    );
+    block-size: 100%;
+    scroll-snap-align: start;
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-scrub {
+    display: grid;
+  }
+
+  /* On the strip the top line is one line of the module's height, whatever the visitor control holds, so the stage and the scrubber keep the fold. */
+  [data-variant='horizontal-cinema'] .hc[data-view='strip'] .hc-chrome {
+    flex-wrap: nowrap;
+    block-size: var(--layout-chrome);
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-chrome
+    > [data-visitor-control-slot] {
+    display: flex;
+    align-items: center;
+    max-block-size: var(--layout-chrome);
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-card {
+    min-block-size: 0;
+  }
+
+  /* The next frame peeks in from the end and fades, so its words promise more without being cut mid-word. */
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-stage {
+    mask-image: linear-gradient(
+      to right,
+      var(--color-text-primary) calc(100% - var(--space-xl)),
+      transparent
+    );
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-stage:dir(rtl) {
+    mask-image: linear-gradient(
+      to left,
+      var(--color-text-primary) calc(100% - var(--space-xl)),
+      transparent
+    );
+  }
+
+  /* At the strip's end nothing peeks in, so nothing fades. */
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-stage[data-end] {
+    mask-image: none;
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-jump {
+    display: none;
+  }
+}
+
+/*
+ * The strip on a laptop's short window (HOR-1): 768 to 896 px tall, where a
+ * 1440 by 800 or 1366 by 768 browser leaves the stage 120 to 200 px less
+ * than at 900. Every scene keeps its words; the bars, the top line, the
+ * scrubber, and the scenes' own padding and gaps step down, and a scene of
+ * two sections side by side, Practice and About among them, runs 10 columns
+ * wide for 8, so its longer column wraps to fewer lines. So every picture
+ * still fits its frame, and the fit check keeps the strip.
+ */
+@media (min-width: 64rem) and (min-height: 44rem) and (max-height: 56rem) and (hover: hover) and (pointer: fine) {
+  [data-variant='horizontal-cinema'] .hc[data-view='strip'] {
+    --layout-chrome: calc(var(--space-s) * 2);
+    --layout-scrub: calc(var(--space-s) * 3);
+    --layout-bar: calc(var(--space-s) * 1.4);
+    --layout-pad-block: var(--space-2xs);
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-pic {
+    row-gap: var(--space-xs);
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    :is(.hc-section[data-family], .hc-prose) {
+    gap: var(--space-2xs);
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-lead {
+    row-gap: var(--space-s);
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-lead__words {
+    gap: var(--space-xs);
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-reel {
+    row-gap: var(--space-m);
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-scene[data-kind='intertitle']
+    .hc-pic {
+    padding-block-end: var(--space-xs);
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-intertitle__title {
+    margin-block-start: 0;
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-scene[data-kind='sections'][data-w='8']:has(.hc-section + .hc-section) {
+    --layout-cols: 10;
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-scene[data-kind='sections'][data-w='8']
+    .hc-pic
+    > :is(.hc-section + .hc-section, .hc-section:has(+ .hc-section)) {
+    grid-column: span 5;
+  }
+}
+
+/*
+ * The pin, which the controller turns on while the strip shows: the shell
+ * is as tall as the strip is long, and its frame sticks under the top line,
+ * so the page's own scroll travels the strip and then goes on to the
+ * credits. The controller sets the length; with no script there's no pin
+ * and the strip is the stage's own scroller.
+ */
+[data-variant='horizontal-cinema'] .hc-shell[data-pin] {
+  block-size: var(--layout-pin-length);
+}
+
+[data-variant='horizontal-cinema'] .hc-shell[data-pin] .hc-frame {
+  position: sticky;
+  inset-block-start: var(--layout-chrome);
+}
+
+[data-variant='horizontal-cinema'] .hc:has(.hc-shell[data-pin]) .hc-chrome {
+  position: sticky;
+  inset-block-start: 0;
+}
+
+/* While it travels in step with the page, the page's position is the strip's, so the stage keeps no snap of its own. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='horizontal-cinema'] .hc-shell[data-pin] .hc-stage {
+    scroll-snap-type: none;
+    scroll-behavior: auto;
+  }
+}
+
+/* Scene arrivals are scroll-linked, so a frame at rest is always in its final state. */
+@media (min-width: 64rem) and (min-height: 44rem) and (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    [data-variant='horizontal-cinema']
+      .hc[data-view='strip']
+      .hc-shell:not([data-fit='over'])
+      .hc-scene:not([data-kind='title'], :dir(rtl))
+      .hc-pic
+      > * {
+      animation: horizontal-cinema-arrive linear both;
+      animation-timeline: view(inline);
+      animation-range: entry 0% entry 38%;
+    }
+  }
+
+  [data-variant='horizontal-cinema'] .hc-stage {
+    scroll-behavior: smooth;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-minimap__window {
+    transition:
+      inset-inline-start var(--motion-feedback) var(--motion-curve)
+        calc(var(--motion-feedback) * 0.5),
+      inline-size var(--motion-feedback) var(--motion-curve) calc(var(--motion-feedback) * 0.5);
+  }
+}
+
+/*
+ * The one orchestrated moment: the title card's picture opens from a slit, then the name fades up.
+ * On screen only: on paper neither runs, so the picture prints whole and the name at full opacity.
+ * Without a script the fade still plays, as CSS, from the first paint, so it never flashes.
+ */
+@media screen and (prefers-reduced-motion: no-preference) {
+  [data-variant='horizontal-cinema']:not([data-motion='reduced'], [data-motion='static']) .hc-card {
+    animation: horizontal-cinema-open var(--motion-scene) var(--motion-curve) backwards;
+  }
+
+  [data-variant='horizontal-cinema']:not([data-motion='reduced'], [data-motion='static'])
+    .hc-card__name {
+    animation: horizontal-cinema-fade var(--motion-scene) var(--motion-curve) backwards;
+    animation-delay: calc(var(--motion-scene) * 0.4);
+  }
+}
+
+@keyframes horizontal-cinema-arrive {
+  from {
+    opacity: 0.4;
+    transform: translateX(var(--layout-arrive));
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes horizontal-cinema-open {
+  from {
+    clip-path: inset(49% 0 49% 0);
+  }
+
+  to {
+    clip-path: inset(0);
+  }
+}
+
+@keyframes horizontal-cinema-fade {
+  from {
+    opacity: 0;
+    transform: translateY(0.12em);
+  }
+}
+
+/* ── The List view and narrow screens: the same scenes top to bottom ───── */
+
+/* The List view needs no word on how to step through the strip. */
+[data-variant='horizontal-cinema'] .hc[data-view='list'] .hc-bar__note {
+  display: none;
+}
+
+@media (max-width: 47.99rem) {
+  [data-variant='horizontal-cinema'] {
+    --layout-pad: var(--space-s);
+    --layout-grid-margin: var(--space-s);
+  }
+
+  [data-variant='horizontal-cinema'] .hc-chrome__running,
+  [data-variant='horizontal-cinema'] .hc-chrome__nav,
+  [data-variant='horizontal-cinema'] .hc-bar__title,
+  [data-variant='horizontal-cinema'] .hc-bar__credit,
+  [data-variant='horizontal-cinema'] .hc-bar__note {
+    display: none;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-pic {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-l);
+  }
+
+  [data-variant='horizontal-cinema'] .hc-bar--bottom {
+    justify-content: end;
+  }
+
+  /* One column in reading order: the credit, the start action, the role (X3). */
+  [data-variant='horizontal-cinema'] .hc-card__foot {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='horizontal-cinema'] .hc-card__foot .hc-card__actions {
+    margin-block: var(--space-2xs);
+  }
+
+  [data-variant='horizontal-cinema'] .hc-card__foot > span:last-child {
+    text-align: start;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-card__name {
+    font-size: calc(25cqi * var(--layout-card-fit, 1));
+    line-height: 0.9;
+    white-space: normal;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-card__actions {
+    flex-wrap: wrap;
+    justify-content: start;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-card__actions :is(a, button) {
+    min-block-size: 2.75rem;
+  }
+
+  /* With no bottom bar on a phone, the tagline's band keeps its own space under it (HOR-4). */
+  [data-variant='horizontal-cinema'] .hc-card__subtitles {
+    justify-items: start;
+    padding-block-end: var(--space-l);
+    text-align: start;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-lead {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-l);
+  }
+
+  [data-variant='horizontal-cinema'] .hc-scene[data-kind='intertitle'] .hc-pic {
+    flex-flow: row wrap;
+    align-items: baseline;
+    gap: var(--space-3xs) var(--space-s);
+    padding-block: var(--space-s) var(--space-m);
+  }
+
+  [data-variant='horizontal-cinema'] .hc-scene[data-kind='intertitle'] .hc-pic > * {
+    align-self: baseline;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-intertitle__title {
+    margin: 0;
+    font-size: var(--type-step-5);
+  }
+
+  [data-variant='horizontal-cinema'] .hc-intertitle__years {
+    font-size: var(--type-step-3);
+  }
+
+  [data-variant='horizontal-cinema'] .hc-intertitle__epigraph {
+    flex-basis: 100%;
+    margin-block-start: var(--space-s);
+  }
+
+  [data-variant='horizontal-cinema'] .hc-intertitle__contents {
+    display: none;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-credits {
+    padding-block: var(--space-xl);
+    padding-inline: var(--space-s);
+  }
+
+  /* A phone's length is the portfolio's: the title card as tall as what it says, under a slimmer band. */
+  [data-variant='horizontal-cinema'] .hc-card {
+    min-block-size: 0;
+    margin-block-start: var(--space-m);
+    padding-block: var(--space-m);
+  }
+}
+
+/* ── High contrast and print ───────────────────────────────────────────── */
+
+[data-variant='horizontal-cinema']:is([data-display-mode='high-contrast'], [data-contrast='more'])
+  .hc-scene {
+  border: 1px solid var(--color-border-default);
+}
+
+/*
+ * A phone reads every scene in one column. The picture is a flex column
+ * there, so the reels' subgrids have no columns to borrow: every record and
+ * its parts span the one column, in reading order, and the timeline reads
+ * as a list of its entries under each thread, with no plot.
+ */
+@media (max-width: 47.99rem) {
+  [data-variant='horizontal-cinema']
+    .hc-scene
+    :is(.hc-reel, .hc-work__gallery, .hc-reel[data-layout][data-layout] [data-role]) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc-scene
+    :is(.hc-reel, .hc-work__gallery, .hc-reel[data-layout][data-layout] [data-role])
+    > * {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
+  /* On a phone's narrow padding the epigraph's opening mark sits inside the card, not hung past it. */
+  [data-variant='horizontal-cinema'] .hc-intertitle__epigraph blockquote p {
+    text-indent: 0;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-intertitle__contents ol[data-columns='2'] {
+    display: block;
+  }
+
+  [data-variant='horizontal-cinema']
+    :is(.hc-timeline-figure__axis, .hc-timeline-figure__now, .hc-timeline-figure__later) {
+    display: none;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-timeline-figure__plot {
+    padding-block: 0;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-timeline-figure__threads > li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2xs);
+    padding-block: var(--space-xs);
+  }
+
+  [data-variant='horizontal-cinema'] .hc-timeline-figure__bars {
+    display: grid;
+    gap: var(--space-2xs);
+    block-size: auto;
+  }
+
+  /* The list under each thread, later entries in their turn: one column, no plot. */
+  [data-variant='horizontal-cinema'] .hc-timeline-figure .hc-timeline-figure__bars > li {
+    grid-row: auto;
+    grid-column: 1;
+    inline-size: auto;
+    margin-inline-start: 0;
+    padding-inline-end: 0;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-timeline-figure[data-later] .hc-timeline-figure__bars {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='horizontal-cinema'] .hc-timeline-figure__bars :is(a, span[data-type-role]) {
+    min-block-size: 0;
+    padding-block: var(--space-2xs);
+  }
+}
+
+/*
+ * A phone's length is the portfolio's, not the composition's: each scene
+ * keeps one slim bar, its place in the film, and drops the bottom bar,
+ * whose next link is the scene right below; the credits don't list again
+ * the ways in touch the Get in touch scene holds, and their index of every
+ * scene, which the chapter sheet already holds, folds.
+ */
+@media (max-width: 47.99rem) {
+  [data-variant='horizontal-cinema'] {
+    --layout-bar: calc(var(--space-s) * 1.4);
+  }
+
+  [data-variant='horizontal-cinema'] .hc-shell .hc-bar--bottom {
+    display: none;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-shell .hc-pic {
+    padding-block: var(--space-s);
+  }
+
+  [data-variant='horizontal-cinema'] .hc-credits__credit[data-in-film] {
+    display: none;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-credits__credit[data-phone-only] {
+    display: grid;
+  }
+}
+
+/*
+ * The full record, after the film: one closed disclosure a section, each a
+ * ruled row naming the section and what it holds, opening in place onto the
+ * section's own frame. The page's column, on the strip's margins.
+ */
+[data-variant='horizontal-cinema'] .hc-record {
+  display: grid;
+  gap: var(--space-m);
+  inline-size: min(100%, 90rem);
+  margin-inline: auto;
+  padding-block: var(--space-2xl) var(--space-xl);
+  padding-inline: var(--layout-grid-margin);
+}
+
+[data-variant='horizontal-cinema'] .hc-record__title {
+  margin: 0;
+}
+
+[data-variant='horizontal-cinema'] .hc-record__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-block-end: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='horizontal-cinema'] .hc-record__list > li {
+  border-block-start: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='horizontal-cinema'] .hc-record__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2xs) var(--space-s);
+  min-block-size: 2.75rem;
+  padding-block: var(--space-s);
+  list-style: none;
+  cursor: pointer;
+}
+
+[data-variant='horizontal-cinema'] .hc-record__summary::-webkit-details-marker {
+  display: none;
+}
+
+[data-variant='horizontal-cinema'] .hc-record__credit {
+  color: var(--color-text-secondary);
+}
+
+/* Its state in words and a turning chevron, at every width, never colour alone (C10). */
+[data-variant='horizontal-cinema'] .hc-record .hc-fold__state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3xs);
+  margin-inline-start: auto;
+  color: var(--color-accent-text);
+}
+
+[data-variant='horizontal-cinema'] .hc-record .hc-fold__state svg {
+  inline-size: 1rem;
+  block-size: 1rem;
+}
+
+[data-variant='horizontal-cinema'] .hc-record__item[open] .hc-fold__state svg {
+  transform: rotate(180deg);
+}
+
+[data-variant='horizontal-cinema'] .hc-record__item:not([open]) .hc-fold__hide,
+[data-variant='horizontal-cinema'] .hc-record__item[open] .hc-fold__show {
+  display: none;
+}
+
+/* Open, the section's own frame names it, so the row keeps only what it holds and the way to close it. */
+[data-variant='horizontal-cinema'] .hc-record__item[open] .hc-record__name {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+[data-variant='horizontal-cinema'] .hc-record__body {
+  padding-block: 0 var(--space-l);
+}
+
+/* A chronology in the record: its entries side by side, as many as the column fits. */
+[data-variant='horizontal-cinema'] .hc-record .hc-record__entries {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  gap: var(--space-l) var(--layout-gutter);
+}
+
+[data-variant='horizontal-cinema'] .hc-record .hc-record__entries > li {
+  grid-column: auto;
+}
+
+/* Works in the record: each in its own column, its still over its words; a series takes the row. */
+[data-variant='horizontal-cinema'] .hc-record .hc-record__entries > [data-role] {
+  display: grid;
+  grid-template-rows: none;
+  grid-template-columns: minmax(0, 1fr);
+  grid-row: auto;
+  align-content: start;
+  gap: var(--space-s);
+}
+
+[data-variant='horizontal-cinema'] .hc-record .hc-record__entries > [data-role] > * {
+  grid-column: 1 / -1;
+  grid-row: auto;
+}
+
+[data-variant='horizontal-cinema'] .hc-record .hc-record__entries > [data-role='gallery'] {
+  grid-column: 1 / -1;
+}
+
+[data-variant='horizontal-cinema'] .hc-record .hc-record__entries .hc-work__gallery {
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(min(100%, var(--space-3xl) * 2 + var(--space-l)), 1fr)
+  );
+  gap: var(--layout-gutter);
+}
+
+[data-variant='horizontal-cinema'] .hc-record .hc-record__entries .hc-work__gallery > li {
+  grid-column: auto;
+}
+
+[data-variant='horizontal-cinema']
+  .hc-record__item:focus-within
+  > .hc-record__summary:focus-visible {
+  outline-offset: var(--space-3xs);
+}
+
+/*
+ * On a phone the record's rows are at least the touch target's height, with room above and
+ * under a two-line row and between its lines (HOR-5); the list starts where the scenes'
+ * words do, the track's inset and a scene's padding in.
+ */
+@media (max-width: 47.99rem) {
+  [data-variant='horizontal-cinema'] .hc-record {
+    padding-block: var(--space-xl) var(--space-l);
+    padding-inline: calc(var(--layout-inset) + var(--layout-pad));
+  }
+
+  /* Its toggle stays on the title's first line however long the title; what it holds wraps under. */
+  [data-variant='horizontal-cinema'] .hc-record__summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-content: center;
+    gap: var(--space-3xs) var(--space-s);
+    padding-block: var(--space-xs);
+  }
+
+  [data-variant='horizontal-cinema'] :is(.hc-record__name, .hc-record__credit) {
+    grid-column: 1;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-record .hc-fold__state {
+    grid-row: 1;
+    grid-column: 2;
+    margin-inline-start: 0;
+  }
+}
+
+@media print {
+  [data-variant='horizontal-cinema'] .hc-scrub,
+  [data-variant='horizontal-cinema'] .hc-skip,
+  [data-variant='horizontal-cinema'] .hc-fold__state {
+    display: none;
+  }
+
+  /* Every disclosure prints open, with or without the script that opens them before printing. */
+  [data-variant='horizontal-cinema'] details::details-content {
+    content-visibility: visible;
+    display: contents;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-scene {
+    break-inside: avoid;
+  }
+
+  /* What sticks on screen is static on paper, at its sticky rule's own weight, so nothing is held
+     over every page: the pinned strip's top line and frame, the chapter control, the minimap. */
+  [data-variant='horizontal-cinema'] .hc-shell[data-pin] .hc-frame,
+  [data-variant='horizontal-cinema'] .hc:has(.hc-shell[data-pin]) .hc-chrome,
+  [data-variant='horizontal-cinema'] .hc-jump,
+  [data-variant='horizontal-cinema'] .hc-board__map {
+    position: static;
+  }
+}

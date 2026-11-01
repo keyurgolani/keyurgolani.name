@@ -1,0 +1,112 @@
+{
+  "id": "kinetic-cosmos",
+  "name": "Kinetic Cosmos",
+  "promise": "The portfolio as an orrery: four rings of real links around one luminous core, and every chapter opening on its own orbit.",
+  "description": "A controlled expressive composition. One inset stage opens the page: the thesis as the headline, and the system of four rings, Work, Writing, Record, and Personal, drawn as an orrery whose plates are real links wired to their bodies by leaders, turning slowly while in view, with a visible pause. Each ring follows as a chapter that opens on its own orbit line carrying its section links; each section opens on an orbit rule; a closing stage mirrors the opening with the ways out; a dock says which ring you are in; and an index lists every section on its ring. The motion, on the kit runtime, only adds to a still composition that is complete without it.",
+  "contract": "2.0",
+  "schemas": {
+    "portfolio": {
+      "min": 3,
+      "max": 3
+    },
+    "site": {
+      "min": 2,
+      "max": 2
+    }
+  },
+  "tokenContract": 1,
+  "compositionFamily": "kinetic",
+  "motionIntent": "kinetic",
+  "performanceTier": "medium",
+  "budgets": {
+    "js": 8192,
+    "css": 14336,
+    "image": 57344,
+    "font": 0,
+    "animation": 3,
+    "enhancement": 0
+  },
+  "stills": [
+    {
+      "file": "./stills/1440.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "file": "./stills/720.webp",
+      "width": 720,
+      "height": 450
+    }
+  ],
+  "renderedKinds": [
+    "hero",
+    "lede",
+    "now",
+    "works",
+    "evidence",
+    "chronology",
+    "practice",
+    "contact",
+    "custom",
+    "quote",
+    "focus",
+    "fun-facts",
+    "cta",
+    "github"
+  ],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": {
+    "home": "shared",
+    "work": "bespoke",
+    "views": []
+  },
+  "controls": {
+    "version": 1,
+    "items": [],
+    "migrations": []
+  },
+  "visitorControl": {
+    "placement": "header"
+  },
+  "textDirection": ["ltr", "rtl"],
+  "provenance": {
+    "provisional": true,
+    "sources": [
+      {
+        "source": "Kinetic Cosmos v1, page-zero's re-imagining",
+        "disposition": "preserved",
+        "note": "The orbital opening and the forking timeline, rebuilt as the redesign's orrery: the system of rings as the navigator, its plates real links, on the v3 records."
+      },
+      {
+        "source": "Kinetic Cosmos v1's three color schemes, two type presets, and theme toggle",
+        "disposition": "retired",
+        "note": "Color, type, and display mode belong to the appearance axes (#19), not to a composition."
+      },
+      {
+        "source": "Kinetic Cosmos v1's glass and gradient on every surface, and its gradient section titles",
+        "disposition": "retired",
+        "note": "One signature, the design language's signature fill, on the orrery's core alone."
+      },
+      {
+        "source": "Kinetic Cosmos v1's keyword lane classifier and pixel-positioned SVG timeline",
+        "disposition": "retired",
+        "note": "Lanes come from the authored thread and branchesFrom, through the kit's threadLanes, beside one ordered list."
+      },
+      {
+        "source": "Kinetic Cosmos v1's falling-glyph canvas, orbit drag, chrome recession, and section-link bar",
+        "disposition": "retired",
+        "note": "Replaced by the orrery's bounded turn and star drift on #6's runtime, a dock, and the system index, so no bar lists every section."
+      },
+      {
+        "source": "Kinetic Cosmos v1's pause control",
+        "disposition": "reused-interaction",
+        "note": "#6's MotionControl, on the opening stage's band beside the orbits it stops."
+      }
+    ]
+  },
+  "studio": {
+    "signature": "Orbit navigator",
+    "order": 2
+  }
+}

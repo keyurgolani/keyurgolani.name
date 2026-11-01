@@ -1,0 +1,3569 @@
+/*
+ * Flux: motion-first liquid on a full-bleed field. Composition only. It owns
+ * the field's geometry (the inks' circles per mode, the goo, the drop and
+ * its pool), the tab bar and its drop, the sheets and their melting tabs,
+ * and the choreography: two drifting lobes on the ambient slot, the drop's
+ * stretch and snap on the feedback slot, and the strip and the progress dot
+ * on the scroll. Every colour is a role or an opaque mix of two (the inks are
+ * signature-start, signature-end and emphasis), every size a step, every
+ * space a step, every duration a motion token. Surfaces are opaque roles:
+ * the glass floor holds because nothing here is translucent (N10). Logical
+ * properties throughout; the field's drawings mirror in a right-to-left page.
+ */
+
+[data-variant='flux'] {
+  --layout-grid-columns: 12;
+  --layout-grid-gutter: var(--space-s-l);
+  --layout-grid-margin: var(--space-l-2xl);
+  --layout-width-page: 90rem;
+  --layout-motion-curve: var(--ui-motion-easing);
+  --layout-motion-feedback: 220ms;
+  --layout-motion-scene: 640ms;
+  --layout-motion-ambient: 26s;
+  /* One field unit: 1vw from 64rem, and the larger of 1vmin and 0.6vmax below (the spec's units). */
+  --layout-fx-u: max(1vmin, 0.6vmax);
+  --layout-bar: calc(var(--ui-control-height) + 2 * var(--space-xs));
+  --layout-sticky-offset: calc(var(--layout-bar) + var(--space-s));
+  --layout-round: 50%;
+  --layout-line-hair: 1px solid
+    color-mix(in oklab, var(--color-border-default) 55%, var(--color-surface-default));
+  --layout-line-lip-a: 6px solid var(--color-signature-start);
+  --layout-line-lip-b: 6px solid var(--color-signature-end);
+  --layout-line-lip-c: 6px solid var(--color-emphasis);
+  /* The bar's own: the drop's ink, which the open Appearance pours into its panel. */
+  --layout-line-lip-drop: 6px solid var(--color-text-primary);
+  --layout-fx-ink: var(--color-signature-start);
+  --layout-fx-lip: var(--layout-line-lip-a);
+  /* Each full-bleed band's inline padding: the margin, or more, so content caps at the page width (G10). */
+  --layout-fx-edge: max(
+    var(--layout-grid-margin),
+    (100% - var(--layout-width-page)) / 2 + var(--layout-grid-margin)
+  );
+  /* The drop and the frames: organic outlines as polygons, generated once (no url, no radius). */
+  --layout-fx-drop: polygon(
+    99.6% 50.6%,
+    99.9% 55.7%,
+    100% 61%,
+    99.7% 66.3%,
+    99% 71.8%,
+    97.7% 77.2%,
+    95.7% 82.6%,
+    92.8% 87.4%,
+    88.9% 91.5%,
+    84.2% 94.5%,
+    78.9% 96.5%,
+    73.6% 97.7%,
+    68.4% 98.6%,
+    63.3% 99.2%,
+    58.4% 99.6%,
+    53.7% 99.9%,
+    48.9% 100%,
+    44.2% 99.9%,
+    39.3% 99.7%,
+    34.4% 99.3%,
+    29.4% 98.7%,
+    24.2% 97.9%,
+    18.9% 96.5%,
+    13.8% 94.3%,
+    9.3% 91%,
+    5.9% 86.6%,
+    3.6% 81.5%,
+    2.3% 76%,
+    1.7% 70.6%,
+    1.4% 65.3%,
+    1.4% 60.3%,
+    1.4% 55.4%,
+    1.4% 50.6%,
+    1.3% 45.8%,
+    1% 40.8%,
+    0.5% 35.6%,
+    0.1% 29.9%,
+    0% 23.9%,
+    0.6% 17.6%,
+    2.3% 11.5%,
+    5.6% 6.4%,
+    10.4% 2.7%,
+    16.3% 0.7%,
+    22.5% 0%,
+    28.5% 0.3%,
+    34.2% 1%,
+    39.4% 2%,
+    44.3% 2.8%,
+    48.9% 3.5%,
+    53.4% 4%,
+    57.9% 4.2%,
+    62.6% 4.3%,
+    67.6% 4.4%,
+    72.9% 4.8%,
+    78.2% 5.7%,
+    83.4% 7.6%,
+    88% 10.7%,
+    91.5% 14.9%,
+    93.9% 19.9%,
+    95.5% 25.1%,
+    96.6% 30.4%,
+    97.5% 35.5%,
+    98.3% 40.5%,
+    99% 45.5%
+  );
+  --layout-fx-pebble: polygon(
+    99.8% 51.1%,
+    100% 56.5%,
+    99.7% 61.9%,
+    98.7% 67.2%,
+    97.1% 72.4%,
+    94.8% 77.3%,
+    91.8% 81.7%,
+    88.2% 85.5%,
+    84.3% 88.7%,
+    80% 91.3%,
+    75.6% 93.3%,
+    71.1% 94.8%,
+    66.7% 96%,
+    62.3% 96.9%,
+    58.1% 97.6%,
+    53.8% 98.3%,
+    49.5% 98.9%,
+    45.1% 99.5%,
+    40.5% 99.9%,
+    35.8% 100%,
+    30.9% 99.6%,
+    26% 98.7%,
+    21.1% 97%,
+    16.5% 94.6%,
+    12.3% 91.4%,
+    8.6% 87.5%,
+    5.5% 82.9%,
+    3.1% 77.9%,
+    1.5% 72.6%,
+    0.4% 67.2%,
+    0% 61.7%,
+    0% 56.4%,
+    0.5% 51.1%,
+    1.1% 45.9%,
+    2.1% 40.9%,
+    3.4% 35.9%,
+    5.1% 31.2%,
+    7.2% 26.6%,
+    9.7% 22.3%,
+    12.5% 18.2%,
+    15.7% 14.5%,
+    19.3% 11.2%,
+    23.1% 8.3%,
+    27.1% 5.8%,
+    31.4% 3.8%,
+    35.8% 2.2%,
+    40.3% 1.1%,
+    44.9% 0.4%,
+    49.5% 0%,
+    54.2% 0%,
+    58.8% 0.4%,
+    63.5% 1.2%,
+    68.1% 2.6%,
+    72.5% 4.5%,
+    76.8% 6.9%,
+    80.8% 9.9%,
+    84.4% 13.3%,
+    87.7% 17.1%,
+    90.7% 21.3%,
+    93.2% 25.8%,
+    95.4% 30.5%,
+    97.1% 35.5%,
+    98.4% 40.6%,
+    99.3% 45.8%
+  );
+  --layout-fx-seed: polygon(
+    100% 48.3%,
+    99.5% 53.8%,
+    98.3% 59.2%,
+    96.5% 64.3%,
+    94.2% 69.1%,
+    91.7% 73.6%,
+    88.9% 77.9%,
+    85.9% 82%,
+    82.7% 85.8%,
+    79.3% 89.4%,
+    75.6% 92.7%,
+    71.6% 95.4%,
+    67.3% 97.6%,
+    62.8% 99.1%,
+    58.1% 99.9%,
+    53.5% 100%,
+    48.9% 99.6%,
+    44.4% 98.9%,
+    40% 97.9%,
+    35.7% 96.6%,
+    31.4% 95.1%,
+    27.2% 93.3%,
+    23.1% 91%,
+    19.2% 88.3%,
+    15.7% 85.1%,
+    12.5% 81.4%,
+    9.8% 77.3%,
+    7.6% 72.8%,
+    5.9% 68%,
+    4.5% 63.2%,
+    3.4% 58.3%,
+    2.5% 53.4%,
+    1.6% 48.3%,
+    0.7% 43%,
+    0.1% 37.5%,
+    0% 31.8%,
+    0.5% 26.1%,
+    1.9% 20.5%,
+    4.3% 15.3%,
+    7.5% 10.7%,
+    11.6% 6.9%,
+    16.1% 4.1%,
+    21% 2.1%,
+    26% 0.9%,
+    30.9% 0.3%,
+    35.7% 0%,
+    40.2% 0%,
+    44.6% 0.1%,
+    48.9% 0.3%,
+    53.1% 0.5%,
+    57.4% 1%,
+    61.6% 1.7%,
+    65.8% 2.9%,
+    70% 4.6%,
+    74% 6.6%,
+    77.9% 9.1%,
+    81.7% 11.9%,
+    85.4% 15.1%,
+    88.8% 18.7%,
+    92.1% 22.7%,
+    94.9% 27.2%,
+    97.3% 32%,
+    98.9% 37.3%,
+    99.8% 42.7%
+  );
+  display: block;
+  color: var(--color-text-primary);
+  font-variant-numeric: lining-nums;
+}
+
+/* How far below the opening's foot its inks reach: the amber's lowest circle and the pool's hang. */
+@media (min-width: 40rem) {
+  [data-variant='flux'] {
+    --layout-fx-tail: calc(16 * var(--layout-fx-u));
+  }
+}
+
+@media (min-width: 64rem) {
+  [data-variant='flux'] {
+    --layout-fx-u: 1vw;
+  }
+}
+
+[data-variant='flux'] :where(h1, h2, h3, h4, p, ul, ol, dl, dd, figure, blockquote) {
+  margin: 0;
+}
+
+[data-variant='flux'] :where(ul, ol) {
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='flux'] :where(img) {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+}
+
+[data-variant='flux'] :where(h1, h2, h3, h4) {
+  text-wrap: balance;
+}
+
+[data-variant='flux'] :where(p, li, dd, blockquote) {
+  text-wrap: pretty;
+}
+
+[data-variant='flux'] :where(a) {
+  color: inherit;
+  text-decoration-thickness: from-font;
+  text-underline-offset: 0.18em;
+}
+
+[data-variant='flux'] .fx-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* A word longer than its line breaks anywhere (a URL, a name, a coined word), so no flex item's
+   min-content carries a whole unbroken word past the edge, where the page's clip would hide it. */
+[data-variant='flux'] .fx {
+  position: relative;
+  isolation: isolate;
+  overflow-x: clip;
+  overflow-wrap: anywhere;
+}
+
+[data-variant='flux'] .fx-num {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+[data-variant='flux'] .fx-defs {
+  position: absolute;
+  inline-size: 0;
+  block-size: 0;
+  overflow: hidden;
+}
+
+[data-variant='flux'] [data-fx-ink='b'] {
+  --layout-fx-ink: var(--color-signature-end);
+  --layout-fx-lip: var(--layout-line-lip-b);
+}
+
+[data-variant='flux'] [data-fx-ink='c'] {
+  --layout-fx-ink: var(--color-emphasis);
+  --layout-fx-lip: var(--layout-line-lip-c);
+}
+
+/* ── actions ── */
+
+[data-variant='flux'] .fx-btn {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--ui-control-height);
+  padding-inline: var(--space-l);
+  border: var(--ui-border-control) var(--color-text-primary);
+  border-radius: var(--ui-radius-badge);
+  color: var(--color-text-inverse);
+  background-color: var(--color-text-primary);
+  text-decoration: none;
+  transition: transform var(--motion-feedback) var(--motion-curve);
+}
+
+[data-variant='flux'] .fx-btn:hover {
+  transform: var(--ui-state-hover-transform);
+}
+
+[data-variant='flux'] .fx-btn--quiet {
+  border: var(--layout-line-hair);
+  border-color: var(--color-border-default);
+  color: var(--color-text-primary);
+  background-color: transparent;
+  cursor: pointer;
+}
+
+[data-variant='flux'] .fx-btn[hidden] {
+  display: none;
+}
+
+[data-variant='flux'] .fx-link {
+  text-decoration: underline;
+}
+
+/* ── the tab bar ── */
+
+[data-variant='flux'] .fx-bar {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 3;
+}
+
+/* The strip: the bar has no container, so it fills in only once the page has scrolled. */
+[data-variant='flux'] .fx-bar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-color: var(--color-canvas);
+  border-end-start-radius: var(--ui-radius-overlay);
+  border-end-end-radius: var(--ui-radius-overlay);
+}
+
+/* Under reduced motion or a still page the strip is simply there; the phone dock always has it. */
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) and (min-width: 40rem) {
+    [data-variant='flux']:not([data-motion='reduced'], [data-motion='static']) .fx-bar::before {
+      transform: translateY(-101%);
+      animation: flux-strip linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 var(--space-3xl);
+    }
+  }
+}
+
+@keyframes flux-strip {
+  to {
+    transform: none;
+  }
+}
+
+/* The page's first pixel: the tabs enhancement marks the page scrolled once it leaves the view. */
+[data-variant='flux'] .fx-top {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  inline-size: 1px;
+  block-size: 1px;
+  pointer-events: none;
+}
+
+@media (min-width: 40rem) {
+  /* Where the strip crosses the pink, over the bar's end half, its foot curves up to the end edge:
+     a meniscus, never a ruled edge across the ink (FX-M10). */
+  [data-variant='flux'] .fx-bar::before {
+    border-end-end-radius: var(--layout-round);
+  }
+
+  /* Live, the strip shows only once the page has scrolled, so a still first view has none (MF1b);
+     with no script it stays as it was, the tabs' only ground once the page moves under them. */
+  [data-variant='flux'] .fx[data-fx-live]:not([data-fx-scrolled]) .fx-bar::before {
+    visibility: hidden;
+  }
+}
+
+[data-variant='flux'] .fx-bar__in {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-xl);
+  /* Where the bar wraps, its rows no nearer than a focus ring reaches, as the tools sit. */
+  row-gap: max(var(--space-2xs), calc(var(--ui-focus-offset) + var(--ui-focus-width)));
+  min-block-size: var(--layout-bar);
+  padding-block: var(--space-xs);
+  padding-inline: calc(var(--layout-fx-edge) - var(--space-s));
+}
+
+[data-variant='flux'] .fx-bar__nav {
+  position: relative;
+  min-inline-size: 0;
+}
+
+[data-variant='flux'] .fx-tabs {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  /* As the tools: a tab's filled neighbour (the place, with no script) never lies over its ring. */
+  gap: max(var(--space-3xs), calc(var(--ui-focus-offset) + var(--ui-focus-width)));
+}
+
+[data-variant='flux'] .fx-tab {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--ui-control-height);
+  padding-inline: var(--space-s);
+  border-radius: var(--ui-radius-badge);
+  color: var(--color-text-primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+[data-variant='flux'] a.fx-tab:hover .fx-tab__word {
+  text-decoration: underline;
+}
+
+[data-variant='flux'] .fx-tab--name {
+  font-weight: var(--type-title-font-weight);
+}
+
+/* With no script, the drop is the name's own fill: the opening is the place being read. */
+[data-variant='flux'] .fx:not([data-fx-live]) .fx-tabs .fx-tab--name {
+  color: var(--color-text-inverse);
+  background-color: var(--color-text-primary);
+}
+
+/* Live, the drop is one fill under the row, clipped to the tab being read; the words it lies under
+   (the place, and on a stretch the tabs it spans) turn to the inverse ink, each painting itself,
+   at once: a word's colour never runs behind the drop's, so it's never the drop's own over it. */
+[data-variant='flux'] .fx-bar__drop {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
+  background-color: var(--color-text-primary);
+  clip-path: inset(0 var(--layout-fx-r, 100%) 0 var(--layout-fx-l, 0) round var(--ui-radius-badge));
+}
+
+[data-variant='flux'] .fx-bar__drop[data-fx-on] {
+  visibility: visible;
+}
+
+[data-variant='flux'] .fx[data-fx-live] .fx-tabs .fx-tab[data-fx-under] {
+  color: var(--color-text-inverse);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='flux']:not([data-motion='reduced'], [data-motion='static'])
+    .fx-bar__drop[data-fx-move='stretch'] {
+    transition: clip-path var(--motion-feedback) var(--motion-curve);
+  }
+
+  [data-variant='flux']:not([data-motion='reduced'], [data-motion='static'])
+    .fx-bar__drop[data-fx-move='snap'] {
+    transition: clip-path calc(var(--motion-feedback) * 1.5) var(--motion-curve);
+  }
+}
+
+/* The tools keep a canvas ground, so where the liquid reaches the bar their words never sit on it. */
+[data-variant='flux'] .fx-bar__tools {
+  display: flex;
+  align-items: center;
+  /* Never closer than a focus ring reaches, so no tool's box lies over its neighbour's ring. */
+  gap: max(var(--space-2xs), calc(var(--ui-focus-offset) + var(--ui-focus-width)));
+  border-radius: var(--ui-radius-badge);
+  background-color: var(--color-canvas);
+}
+
+/* The visitor's Appearance in the bar: one more tool, unruled, its chevron saying it opens (on a
+   phone its mark alone, below). Open, it takes the bar's drop, as the place being read does, and
+   its panel hangs from it on the page's own ground: the Index rows' vocabulary, a lip of the
+   drop's ink along the edge that meets the tool, and a drip off the tool pouring into it, never
+   a floating card. From 40rem it hangs under its own tool, end edge on the tool's (flipped to its
+   start where that would run past the bar), where the browser anchors; elsewhere, and on a phone,
+   from the bar's end, over the dock there. With script, Escape, a press outside it and focus
+   leaving it close it (the tabs enhancement), so nothing it covers takes focus unseen. */
+[data-variant='flux'] .fx-bar__in {
+  position: relative;
+}
+
+[data-variant='flux'] .fx-bar__appearance [data-ui-slot='disclosure'] {
+  padding-block: 0;
+  border-block: none;
+}
+
+[data-variant='flux'] .fx-bar__appearance [data-ui-slot='disclosure.summary'] {
+  padding-inline: var(--space-s);
+  border-radius: var(--ui-radius-badge);
+  white-space: nowrap;
+}
+
+[data-variant='flux'] .fx-bar__appearance [open] > [data-ui-slot='disclosure.summary'] {
+  position: relative;
+  color: var(--color-text-inverse);
+  background-color: var(--color-text-primary);
+}
+
+[data-variant='flux'] .fx-bar__appearance [data-ui-slot='disclosure.content'] {
+  position: absolute;
+  inset-block-start: calc(100% + var(--space-xs));
+  inset-inline-end: var(--space-s);
+  z-index: 2;
+  inline-size: min(20rem, calc(100% - 2 * var(--space-s)));
+  /* The window less the bar's own height, however many rows it takes. */
+  max-block-size: calc(100dvh - 100% - var(--space-xs) - var(--space-m));
+  overflow-y: auto;
+  padding: var(--space-m);
+  border: var(--layout-line-hair);
+  border-block-start: var(--layout-line-lip-drop);
+  border-radius: 0 0 var(--ui-radius-overlay) var(--ui-radius-overlay);
+  background-color: var(--color-surface-default);
+  white-space: normal;
+}
+
+/* The drip: off the open tool's foot, across the gap, into the panel's lip (on a phone, from its
+   top, up to the panel's foot). */
+[data-variant='flux'] .fx-bar__appearance [open] > [data-ui-slot='disclosure.summary']::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 100%;
+  inset-inline-start: 50%;
+  inline-size: var(--space-xs);
+  block-size: calc(var(--space-xs) + 3px);
+  translate: -50% 0;
+  border-radius: 0 0 var(--layout-round) var(--layout-round);
+  background-color: var(--color-text-primary);
+  pointer-events: none;
+}
+
+@supports (anchor-name: --a) {
+  @media (min-width: 40rem) {
+    [data-variant='flux'] .fx-bar__appearance [data-ui-slot='disclosure.summary'] {
+      anchor-name: --fx-appearance;
+    }
+
+    /* Fixed, so the window is what it must fit (the bar is only its own height): as tall as its
+       form, short of the window's foot. A block fit-content is the form's own height however
+       short the window, so the cap is the room between the insets (stretch), and the panel
+       scrolls inside it: at 640x360 (a 1280x720 laptop at 200%) its foot ran 100px past the
+       window, out of reach, and no fallback fit, so flip-inline never ran either. */
+    [data-variant='flux'] .fx-bar__appearance [data-ui-slot='disclosure.content'] {
+      position: fixed;
+      position-anchor: --fx-appearance;
+      inset-block: calc(anchor(end) + var(--space-xs)) var(--space-m);
+      inset-inline: auto anchor(end);
+      block-size: fit-content;
+      max-block-size: -webkit-fill-available;
+      max-block-size: stretch;
+      position-try-fallbacks: flip-inline;
+    }
+  }
+}
+
+/* On a phone the panel rises over the dock, so its lip is on its foot. */
+@media (max-width: 39.99rem) {
+  [data-variant='flux'] .fx-bar__appearance [data-ui-slot='disclosure.content'] {
+    inset-block: auto calc(100% + var(--space-xs));
+    border-block-start: var(--layout-line-hair);
+    border-block-end: var(--layout-line-lip-drop);
+    border-radius: var(--ui-radius-overlay) var(--ui-radius-overlay) 0 0;
+  }
+
+  [data-variant='flux'] .fx-bar__appearance [open] > [data-ui-slot='disclosure.summary']::before {
+    inset-block: auto 100%;
+    block-size: calc(2 * var(--space-xs) + 3px);
+    border-radius: var(--layout-round) var(--layout-round) 0 0;
+  }
+
+  /* The dock's Appearance is its mark alone, as Index is beside a destination: the summary's word
+     stays its name, at no size, and its mark, where its chevron was, is the field's two grounds,
+     half inked. */
+  [data-variant='flux'] .fx-bar__appearance [data-ui-slot='disclosure.summary'] {
+    gap: 0;
+    padding-inline: var(--space-xs);
+    font-size: 0;
+  }
+
+  [data-variant='flux'] .fx-bar__appearance [data-ui-slot='disclosure.summary']::after {
+    inline-size: var(--space-s);
+    block-size: var(--space-s);
+    margin: 0;
+    border: 0.125rem solid currentColor;
+    border-radius: var(--layout-round);
+    background-image: linear-gradient(90deg, currentColor 50%, transparent 50%);
+    rotate: none;
+    translate: none;
+  }
+}
+
+[data-variant='flux'] .fx-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  min-block-size: var(--ui-control-height);
+  padding-inline: var(--space-s);
+  border: 0;
+  border-radius: var(--ui-radius-badge);
+  color: var(--color-text-primary);
+  background-color: transparent;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+[data-variant='flux'] .fx-tool[hidden],
+[data-variant='flux'] .fx[data-fx-index] .fx-tool--plain {
+  display: none;
+}
+
+/* Index's mark: four drops in a square. */
+[data-variant='flux'] .fx-tool__mark {
+  inline-size: var(--space-s);
+  block-size: var(--space-s);
+  background-image:
+    radial-gradient(circle, currentColor 28%, transparent 30%),
+    radial-gradient(circle, currentColor 28%, transparent 30%),
+    radial-gradient(circle, currentColor 28%, transparent 30%),
+    radial-gradient(circle, currentColor 28%, transparent 30%);
+  background-size: 50% 50%;
+  background-position:
+    0 0,
+    100% 0,
+    0 100%,
+    100% 100%;
+  background-repeat: no-repeat;
+}
+
+/* Pressed, Pause fills as the bar's drop does: a change of shape and ground, not of hue alone. */
+[data-variant='flux'] .fx-pause button[aria-pressed='true'] {
+  color: var(--color-text-inverse);
+  background-color: var(--color-text-primary);
+  border-color: var(--color-text-primary);
+}
+
+[data-variant='flux'] .fx-pause [role='status'] {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ── the opening ── */
+
+[data-variant='flux'] .fx-opening-frame {
+  position: relative;
+  margin-block-start: calc(-1 * var(--layout-bar));
+}
+
+[data-variant='flux'] .fx-opening {
+  position: relative;
+  isolation: isolate;
+  /* The sides only: an ink that reaches past the foot closes on its own curve below it, never on a
+     ruled edge (MF1a); the band after the opening leaves room for it (--layout-fx-tail). */
+  overflow-x: clip;
+  display: grid;
+  grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+  grid-template-rows: auto auto auto 1fr auto;
+  column-gap: var(--layout-grid-gutter);
+  min-block-size: 100svh;
+  padding-block: calc(var(--layout-bar) + var(--space-2xl)) var(--space-l);
+  padding-inline: var(--layout-fx-edge);
+}
+
+[data-variant='flux'] .fx-opening__words {
+  display: contents;
+}
+
+[data-variant='flux'] .fx-h1 {
+  grid-column: 1 / span 9;
+  grid-row: 1;
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+[data-variant='flux'] .fx-h1__hello {
+  display: block;
+  font-size: var(--type-step-5);
+  line-height: 1.08;
+}
+
+/* The key phrase outsizes the greeting, a step down for each longer length (P-0). */
+[data-variant='flux'] .fx-h1__key {
+  display: block;
+  padding-block-end: 0.08em;
+  font-size: var(--type-step-7);
+  line-height: 1.02;
+  color: var(--color-text-primary);
+}
+
+[data-variant='flux'] .fx-h1__key[data-length='medium'] {
+  font-size: var(--type-step-6);
+}
+
+/* The key phrase pours from the accent to the secondary along the shorter hue, word by word, each
+   stop lifted toward the text (FX-M6): every word a solid colour, so its contrast is its own. */
+[data-variant='flux'] .fx-h1__word {
+  color: color-mix(
+    in oklch shorter hue,
+    color-mix(in oklab, var(--color-signature-start) 84%, var(--color-text-primary))
+      calc((1 - var(--layout-fx-at, 0)) * 100%),
+    color-mix(in oklab, var(--color-signature-end) 84%, var(--color-text-primary))
+  );
+}
+
+@media (prefers-contrast: more) {
+  [data-variant='flux'] .fx-h1__word {
+    color: var(--color-text-primary);
+  }
+}
+
+[data-variant='flux'] .fx-h1__key[data-length='long'] {
+  font-size: var(--type-step-5);
+}
+
+[data-variant='flux'] .fx-lede {
+  grid-column: 1 / span 5;
+  grid-row: 2;
+  margin-block-start: var(--space-xl);
+  max-inline-size: 30ch;
+  color: var(--color-text-secondary);
+  font-weight: var(--type-body-font-weight);
+}
+
+[data-variant='flux'] .fx-cta {
+  grid-column: 1 / span 5;
+  grid-row: 3;
+  margin-block-start: var(--space-l);
+}
+
+[data-variant='flux'] .fx-proof {
+  grid-column: 1 / span 4;
+  grid-row: 5;
+  align-self: end;
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-l);
+  row-gap: var(--space-3xs);
+  margin-block-start: var(--space-xl);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='flux'] .fx-opening__label {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-s);
+  grid-column: 1 / span 4;
+  grid-row: 4;
+  align-self: end;
+  margin-block-start: var(--space-xl);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='flux'] .fx-proof strong {
+  color: var(--color-text-primary);
+}
+
+/* The field: behind everything in the opening, clipped to it, the inks' drawings at its edges. */
+[data-variant='flux'] .fx-field {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow-x: clip;
+  pointer-events: none;
+}
+
+[data-variant='flux'] .fx-ink {
+  position: absolute;
+  display: none;
+  inline-size: calc(var(--layout-fx-w) * var(--layout-fx-u));
+  block-size: calc(var(--layout-fx-h) * var(--layout-fx-u));
+  overflow: visible;
+}
+
+[data-variant='flux'] .fx-ink[data-side='right'] {
+  inset-inline-end: calc(var(--layout-fx-side) * var(--layout-fx-u));
+}
+
+[data-variant='flux'] .fx-ink[data-side='left'] {
+  inset-inline-start: calc(var(--layout-fx-side) * var(--layout-fx-u));
+}
+
+[data-variant='flux'] .fx-ink[data-origin='top'] {
+  inset-block-start: calc(var(--layout-fx-origin) * var(--layout-fx-u));
+}
+
+[data-variant='flux'] .fx-ink[data-origin='foot'] {
+  inset-block-end: calc(var(--layout-fx-origin) * var(--layout-fx-u));
+}
+
+[data-variant='flux'] .fx:dir(rtl) .fx-ink {
+  transform: scaleX(-1);
+}
+
+[data-variant='flux'] .fx-ink--a {
+  fill: var(--color-signature-start);
+}
+
+[data-variant='flux'] .fx-ink--b {
+  fill: var(--color-signature-end);
+}
+
+[data-variant='flux'] .fx-ink[data-mode='p'] {
+  display: block;
+}
+
+@media (min-width: 40rem) {
+  [data-variant='flux'] .fx-ink[data-mode='p'] {
+    display: none;
+  }
+
+  [data-variant='flux'] .fx-ink[data-mode='t'] {
+    display: block;
+  }
+}
+
+/* From 64rem the narrow-wide pose keeps the pink clear of the bar's tools (SF7); from 80rem the wide one. */
+@media (min-width: 64rem) {
+  [data-variant='flux'] .fx-ink[data-mode='t'] {
+    display: none;
+  }
+
+  [data-variant='flux'] .fx-ink[data-mode='m'] {
+    display: block;
+  }
+}
+
+@media (min-width: 80rem) {
+  [data-variant='flux'] .fx-ink[data-mode='m'] {
+    display: none;
+  }
+
+  [data-variant='flux'] .fx-ink[data-mode='w'] {
+    display: block;
+  }
+}
+
+/* The drift: one lobe per ink, by transform alone, from where it's drawn and back (FX-M19). */
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='flux']:not([data-motion='reduced'], [data-motion='static'])
+    .fx-field[data-kit-runtime]
+    .fx-ink--a
+    .fx-ink__lobe {
+    animation: flux-drift-a var(--motion-ambient) ease-in-out infinite alternate;
+    animation-play-state: var(--motion-ambient-state);
+  }
+
+  [data-variant='flux']:not([data-motion='reduced'], [data-motion='static'])
+    .fx-field[data-kit-runtime]
+    .fx-ink--b
+    .fx-ink__lobe {
+    animation: flux-drift-b var(--motion-ambient) ease-in-out infinite alternate;
+    animation-play-state: var(--motion-ambient-state);
+  }
+  /* The drift's ease in 64 steps a keyframe, four to six a second over its 26 s: the lobe moves a
+     pixel a step at most, so it reads as smooth, and the goo repaints a few times a second, not
+     sixty (the idle budget). A browser without linear() keeps the ease-in-out above. */
+  [data-variant='flux']:not([data-motion='reduced'], [data-motion='static'])
+    .fx-field[data-kit-runtime]
+    :is(.fx-ink--a, .fx-ink--b)
+    .fx-ink__lobe {
+    animation-timing-function: linear(
+      0 0%,
+      0 1.562%,
+      0.001 1.562%,
+      0.001 3.125%,
+      0.0029 3.125%,
+      0.0029 4.688%,
+      0.0058 4.688%,
+      0.0058 6.25%,
+      0.0096 6.25%,
+      0.0096 7.812%,
+      0.0145 7.812%,
+      0.0145 9.375%,
+      0.0204 9.375%,
+      0.0204 10.938%,
+      0.0273 10.938%,
+      0.0273 12.5%,
+      0.0352 12.5%,
+      0.0352 14.062%,
+      0.0442 14.062%,
+      0.0442 15.625%,
+      0.0543 15.625%,
+      0.0543 17.188%,
+      0.0655 17.188%,
+      0.0655 18.75%,
+      0.0778 18.75%,
+      0.0778 20.312%,
+      0.0911 20.312%,
+      0.0911 21.875%,
+      0.1055 21.875%,
+      0.1055 23.438%,
+      0.121 23.438%,
+      0.121 25%,
+      0.1376 25%,
+      0.1376 26.562%,
+      0.1552 26.562%,
+      0.1552 28.125%,
+      0.1738 28.125%,
+      0.1738 29.688%,
+      0.1934 29.688%,
+      0.1934 31.25%,
+      0.2139 31.25%,
+      0.2139 32.812%,
+      0.2354 32.812%,
+      0.2354 34.375%,
+      0.2578 34.375%,
+      0.2578 35.938%,
+      0.2809 35.938%,
+      0.2809 37.5%,
+      0.3048 37.5%,
+      0.3048 39.062%,
+      0.3294 39.062%,
+      0.3294 40.625%,
+      0.3546 40.625%,
+      0.3546 42.188%,
+      0.3803 42.188%,
+      0.3803 43.75%,
+      0.4064 43.75%,
+      0.4064 45.312%,
+      0.4329 45.312%,
+      0.4329 46.875%,
+      0.4596 46.875%,
+      0.4596 48.438%,
+      0.4865 48.438%,
+      0.4865 50%,
+      0.5135 50%,
+      0.5135 51.562%,
+      0.5404 51.562%,
+      0.5404 53.125%,
+      0.5671 53.125%,
+      0.5671 54.688%,
+      0.5936 54.688%,
+      0.5936 56.25%,
+      0.6197 56.25%,
+      0.6197 57.812%,
+      0.6454 57.812%,
+      0.6454 59.375%,
+      0.6706 59.375%,
+      0.6706 60.938%,
+      0.6952 60.938%,
+      0.6952 62.5%,
+      0.7191 62.5%,
+      0.7191 64.062%,
+      0.7422 64.062%,
+      0.7422 65.625%,
+      0.7646 65.625%,
+      0.7646 67.188%,
+      0.7861 67.188%,
+      0.7861 68.75%,
+      0.8066 68.75%,
+      0.8066 70.312%,
+      0.8262 70.312%,
+      0.8262 71.875%,
+      0.8448 71.875%,
+      0.8448 73.438%,
+      0.8624 73.438%,
+      0.8624 75%,
+      0.879 75%,
+      0.879 76.562%,
+      0.8945 76.562%,
+      0.8945 78.125%,
+      0.9089 78.125%,
+      0.9089 79.688%,
+      0.9222 79.688%,
+      0.9222 81.25%,
+      0.9345 81.25%,
+      0.9345 82.812%,
+      0.9457 82.812%,
+      0.9457 84.375%,
+      0.9558 84.375%,
+      0.9558 85.938%,
+      0.9648 85.938%,
+      0.9648 87.5%,
+      0.9727 87.5%,
+      0.9727 89.062%,
+      0.9796 89.062%,
+      0.9796 90.625%,
+      0.9855 90.625%,
+      0.9855 92.188%,
+      0.9904 92.188%,
+      0.9904 93.75%,
+      0.9942 93.75%,
+      0.9942 95.312%,
+      0.9971 95.312%,
+      0.9971 96.875%,
+      0.999 96.875%,
+      0.999 98.438%,
+      1 98.438%,
+      1 100%
+    );
+  }
+}
+
+@keyframes flux-drift-a {
+  0% {
+    transform: none;
+  }
+
+  40% {
+    transform: translate(calc(var(--layout-fx-dx) * 0.7px), calc(var(--layout-fx-dy) * 0.3px));
+  }
+
+  100% {
+    transform: translate(calc(var(--layout-fx-dx) * 1px), calc(var(--layout-fx-dy) * 1px));
+  }
+}
+
+@keyframes flux-drift-b {
+  0% {
+    transform: none;
+  }
+
+  55% {
+    transform: translate(calc(var(--layout-fx-dx) * 0.2px), calc(var(--layout-fx-dy) * 0.8px));
+  }
+
+  100% {
+    transform: translate(calc(var(--layout-fx-dx) * 1px), calc(var(--layout-fx-dy) * 1px));
+  }
+}
+
+/* ── the plate: the signature work whole in its drop, on the pool ── */
+
+[data-variant='flux'] .fx-plate {
+  grid-column: 7 / span 5;
+  grid-row: 2 / span 4;
+  align-self: end;
+  display: grid;
+  grid-template-areas:
+    'caption'
+    'stage';
+  row-gap: var(--space-l);
+  margin-block-start: var(--space-2xl);
+}
+
+[data-variant='flux'] .fx-plate__caption {
+  grid-area: caption;
+  display: grid;
+  gap: var(--space-2xs);
+  max-inline-size: 34ch;
+}
+
+[data-variant='flux'] .fx-plate__kicker {
+  color: var(--color-text-secondary);
+}
+
+/* A case page's drop: what the owner wrote about its picture, under the stage. */
+[data-variant='flux'] .fx-plate__note {
+  display: grid;
+  gap: var(--space-3xs);
+  max-inline-size: 34ch;
+  color: var(--color-text-secondary);
+  font-family: var(--type-caption-font-family);
+  font-size: var(--type-caption-font-size);
+  font-weight: var(--type-caption-font-weight);
+  line-height: var(--type-caption-line-height);
+}
+
+[data-variant='flux'] .fx-plate__note :is(.pf-caption, .pf-meta) {
+  margin: 0;
+}
+
+[data-variant='flux'] .fx-plate__note .pf-caption {
+  color: var(--color-text-primary);
+}
+
+[data-variant='flux'] .fx-plate__title a {
+  text-decoration: none;
+}
+
+[data-variant='flux'] .fx-plate__title a:hover {
+  text-decoration: underline;
+}
+
+[data-variant='flux'] .fx-plate__sum {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='flux'] .fx-plate__stage {
+  grid-area: stage;
+  position: relative;
+  aspect-ratio: 5 / 3;
+  margin-block-end: var(--space-s);
+}
+
+[data-variant='flux'] .fx-drop {
+  position: relative;
+  block-size: 100%;
+  overflow: hidden;
+  background-color: var(--color-surface-prominent);
+  clip-path: var(--layout-fx-drop);
+}
+
+[data-variant='flux'] .fx-drop__img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+/* Contained covers sit whole in the drop's safe area, its central 66% by 76% (FX-M11). */
+[data-variant='flux'] .fx-plate[data-cover='contain'] .fx-drop__img {
+  position: absolute;
+  inset-block: 12%;
+  inset-inline: 17%;
+  inline-size: 66%;
+  block-size: 76%;
+  object-fit: contain;
+}
+
+[data-variant='flux'] .fx-drop .pf-credit {
+  position: absolute;
+  inset-block-end: 14%;
+  inset-inline-end: 18%;
+}
+
+[data-variant='flux'] .fx-drop__type {
+  position: absolute;
+  inset-block: 12%;
+  inset-inline: 17%;
+  display: grid;
+  align-content: center;
+  overflow-wrap: anywhere;
+}
+
+/* The drawing is 1.4 stages wide, so its meniscus climbs the drop's own walls: the reset's
+   max-width on every svg would hold it to the stage and slide the lip off the drop. */
+[data-variant='flux'] .fx-pool {
+  position: absolute;
+  inset-block-start: 83.3%;
+  inset-inline-start: -20%;
+  inline-size: 140%;
+  max-inline-size: none;
+  overflow: visible;
+  fill: var(--color-emphasis);
+  pointer-events: none;
+}
+
+[data-variant='flux'] .fx-plate--bare {
+  position: relative;
+  aspect-ratio: 140 / 48;
+}
+
+[data-variant='flux'] .fx-plate--bare .fx-pool {
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  inline-size: 100%;
+}
+
+/* ── the thesis, after its first sentence ── */
+
+[data-variant='flux'] .fx-thesis {
+  padding-block: max(var(--space-3xl), var(--layout-fx-tail, 0px)) var(--space-xl);
+  padding-inline: var(--layout-fx-edge);
+}
+
+/* With no thesis, the first sheet clears the inks' tail the same way. */
+[data-variant='flux'] .fx-opening-frame + .fx-sheet {
+  margin-block-start: max(
+    calc(var(--type-step-7) + var(--space-3xl)),
+    calc(var(--layout-fx-tail, 0px) + var(--type-step-7) + var(--space-s))
+  );
+}
+
+[data-variant='flux'] :is(.fx-thesis__now, .fx-thesis__sub) {
+  max-inline-size: 48ch;
+  margin-block-start: var(--space-l);
+  margin-inline-start: calc((100% + var(--layout-grid-gutter)) / 12);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='flux'] .fx-lede__now {
+  display: block;
+  margin-block-start: var(--space-s);
+  font-size: var(--type-step-0);
+}
+
+[data-variant='flux'] .fx-thesis__words {
+  max-inline-size: 36ch;
+  margin-inline-start: calc((100% + var(--layout-grid-gutter)) / 12);
+}
+
+[data-variant='flux'] .fx-thesis__words p {
+  font-size: var(--type-step-3);
+  font-weight: var(--type-body-font-weight);
+  line-height: 1.3;
+}
+
+/* ── sheets: each destination one surface, its tab melting out of its top edge ── */
+
+[data-variant='flux'] .fx-main {
+  display: block;
+}
+
+[data-variant='flux'] .fx-sheet {
+  position: relative;
+  /* Its tab measures the sheet's width (cqi) to place itself and to size its word. */
+  container-type: inline-size;
+  margin-block-start: calc(var(--type-step-7) + var(--space-3xl));
+  padding-block: var(--space-2xl) var(--space-3xl);
+  padding-inline: var(--layout-fx-edge);
+  background-color: var(--color-surface-default);
+  border-start-start-radius: var(--ui-radius-overlay);
+  border-start-end-radius: var(--ui-radius-overlay);
+  /* A jump lands with the whole tab clear of the bar. */
+  scroll-margin-block-start: calc(
+    var(--type-step-7) + var(--space-s) + var(--layout-sticky-offset) + var(--space-m)
+  );
+}
+
+[data-variant='flux'] .fx-sheet--plain {
+  margin-block-start: 0;
+  border-radius: 0;
+}
+
+/* The tab stands on the sheet's top edge; the tabs step across the page in reading order.
+   A word too long for its place gives way in order (design review, delta 3): first the tab slides
+   from its step toward the start, then its padding runs out into the margins until the word itself
+   spans the page's text edges, then the word shrinks, never under step 3, and only then does it
+   balance onto a second line. 100cqi is the sheet's content width, between its edges: in translate
+   a percentage is the tab's own width, and in font-size the parent's size. */
+[data-variant='flux'] .fx-sheet__tab {
+  /* How far a tab's padding may run past the text edges: its start padding, so the word lands on
+     the edge, and never closer to the window than the smallest space. */
+  --layout-fx-tab-out: min(var(--space-l), var(--layout-grid-margin) - var(--space-3xs));
+  position: absolute;
+  inset-block-end: calc(100% - 1px);
+  inset-inline-start: var(--layout-fx-edge);
+  translate: clamp(
+      -1 * var(--layout-fx-tab-out),
+      var(--layout-fx-step) * (100cqi - 100%),
+      100cqi + var(--layout-fx-tab-out) - 100%
+    )
+    0;
+  box-sizing: border-box;
+  inline-size: max-content;
+  max-inline-size: calc(100cqi + 2 * var(--layout-fx-tab-out));
+  padding-block: var(--space-s) 0;
+  padding-inline: var(--space-l) calc(var(--space-l) + var(--space-s));
+  /* The size at which the word fills the most room its tab can have (the word's width in em is
+     --layout-fx-ems, from the model), never under step 3: the word takes its step, or this. */
+  --layout-fx-word-fit: max(
+    var(--type-step-3),
+    (100cqi + 2 * var(--layout-fx-tab-out) - 2 * var(--space-l) - var(--space-s)) /
+      var(--layout-fx-ems, 1)
+  );
+  background-color: var(--color-surface-default);
+  border-block-start: var(--layout-fx-lip);
+  border-start-start-radius: var(--ui-radius-overlay);
+  border-start-end-radius: var(--ui-radius-overlay);
+}
+
+[data-variant='flux'] .fx:dir(rtl) .fx-sheet__tab {
+  translate: calc(
+      -1 *
+        clamp(
+          -1 * var(--layout-fx-tab-out),
+          var(--layout-fx-step) * (100cqi - 100%),
+          100cqi + var(--layout-fx-tab-out) - 100%
+        )
+    )
+    0;
+}
+
+/* The feet melt into the sheet: a concave fillet each side, the sheet's own surface. */
+[data-variant='flux'] .fx-sheet__tab::before,
+[data-variant='flux'] .fx-sheet__tab::after {
+  content: '';
+  position: absolute;
+  inset-block-end: 0;
+  inline-size: var(--space-m);
+  block-size: var(--space-m);
+  background-color: var(--color-surface-default);
+}
+
+[data-variant='flux'] .fx-sheet__tab::before {
+  inset-inline-end: 100%;
+  mask-image: radial-gradient(circle at 0 0, transparent 70%, black 71%);
+}
+
+[data-variant='flux'] .fx-sheet__tab::after {
+  inset-inline-start: 100%;
+  mask-image: radial-gradient(circle at 100% 0, transparent 70%, black 71%);
+}
+
+[data-variant='flux'] .fx-sheet__word {
+  font-size: min(var(--type-step-7), var(--layout-fx-word-fit));
+  line-height: 1;
+  text-wrap: balance;
+}
+
+/* The lip's one teardrop, off the tab's end shoulder, clear of the word (FX-M16). */
+[data-variant='flux'] .fx-sheet__drip {
+  position: absolute;
+  inset-block-start: calc(-1 * var(--space-3xs));
+  inset-inline-end: var(--space-2xs);
+  inline-size: var(--space-s);
+  block-size: calc(var(--space-s) * 1.4);
+  background-color: var(--layout-fx-ink);
+  border-radius: var(--layout-round);
+}
+
+/* Three spacings in a sheet (should-fix 2): 2xl between parts of a kind, more where the kind
+   turns, and the folds run together. */
+[data-variant='flux'] .fx-sheet__body {
+  display: grid;
+  gap: var(--space-2xl);
+  max-inline-size: var(--layout-width-page);
+}
+
+[data-variant='flux'] .fx-sheet__body > [data-fx-turn] {
+  margin-block-start: var(--space-xl);
+}
+
+/* ── sections: parts of their sheet, no box of their own ── */
+
+[data-variant='flux'] .fx-sec {
+  display: grid;
+  gap: var(--space-l);
+}
+
+/* A section whose heading is for assistive technology alone (it says its tab's word again) keeps
+   no room for it: its body starts at the sheet's top. */
+[data-variant='flux'] .fx-sec:has(> .fx-sec__head > .fx-hidden:only-child) {
+  gap: 0;
+}
+
+[data-variant='flux'] .fx-sec__head {
+  display: grid;
+  gap: var(--space-2xs);
+  max-inline-size: 60ch;
+}
+
+[data-variant='flux'] .fx-sec__title {
+  font-size: var(--type-step-3);
+  text-wrap: balance;
+}
+
+/* A short word inside an opening bracket stays with the next ("Listening (a small / experiment)"). */
+[data-variant='flux'] .fx-bound {
+  white-space: nowrap;
+}
+
+/* The folded record: one compact run of rows, each a title and its mark. */
+[data-variant='flux'] .fx-sec--fold .fx-sec__title {
+  font-size: var(--type-step-2);
+}
+
+[data-variant='flux'] .fx-sheet__body > .fx-sec--fold + .fx-sec--fold {
+  margin-block-start: calc(-1 * var(--space-2xl));
+}
+
+[data-variant='flux'] .fx-sec--fold {
+  gap: 0;
+}
+
+[data-variant='flux'] .fx-sec__sub {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='flux'] .fx-prose {
+  display: grid;
+  gap: var(--space-s);
+  max-inline-size: var(--type-measure-body);
+  color: var(--color-text-secondary);
+}
+
+/* The full record folds: a native disclosure, open from a fragment, open on paper. */
+[data-variant='flux'] .fx-fold__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  padding-block: var(--space-s);
+  border-block-start: var(--layout-line-hair);
+  cursor: pointer;
+  list-style: none;
+}
+
+[data-variant='flux'] .fx-fold__summary::-webkit-details-marker {
+  display: none;
+}
+
+[data-variant='flux'] .fx-fold__summary:hover .fx-sec__title {
+  text-decoration: underline;
+}
+
+[data-variant='flux'] .fx-fold__count {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='flux'] .fx-fold__summary::after {
+  content: '';
+  flex: none;
+  inline-size: var(--space-xs);
+  block-size: var(--space-xs);
+  margin-inline-start: auto;
+  background-color: var(--layout-fx-ink);
+  border-radius: var(--layout-round);
+}
+
+[data-variant='flux'] .fx-fold[open] > .fx-fold__summary::after {
+  inline-size: var(--space-l);
+  border-radius: var(--ui-radius-badge);
+}
+
+[data-variant='flux'] .fx-fold__body {
+  display: grid;
+  gap: var(--space-l);
+  padding-block: var(--space-m) var(--space-l);
+}
+
+/* With no script, a fold a fragment lands in (or on) reads open; the enhancement opens it instead,
+   and marks the page (data-fx-folds) once it does. Scoped to that mark's absence, not to
+   (scripting): no-JavaScript rows audit with script on for axe, which a scripting query would
+   flip, and an enhancement that fails before it marks the page leaves these on (as the
+   platform's experience-base.css does). */
+[data-variant='flux']
+  .fx:not([data-fx-folds])
+  :is(:target > details.fx-fold, details.fx-fold:has(:target))
+  > :not(summary) {
+  display: grid;
+}
+
+[data-variant='flux']
+  .fx:not([data-fx-folds])
+  :is(:target > details.fx-fold, details.fx-fold:has(:target))::details-content {
+  content-visibility: visible;
+  block-size: auto;
+}
+
+/* ── items ── */
+
+[data-variant='flux'] .fx-item__kicker {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='flux'] .fx-item__title a {
+  text-decoration: none;
+}
+
+[data-variant='flux'] .fx-item__title a:hover {
+  text-decoration: underline;
+}
+
+/* Works: cards with the media poured into a drop that keeps an ink lip at its foot. */
+[data-variant='flux'] .fx-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+  gap: var(--space-2xl) var(--layout-grid-gutter);
+}
+
+[data-variant='flux'] .fx-card {
+  max-inline-size: 64rem;
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  align-items: start;
+  gap: var(--space-l);
+  padding-block-start: var(--space-l);
+  border-block-start: var(--layout-line-hair);
+}
+
+[data-variant='flux'] .fx-card--text {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-variant='flux'] .fx-card__drop {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background-color: var(--layout-fx-ink);
+  clip-path: var(--layout-fx-pebble);
+}
+
+[data-variant='flux'] .fx-card__img {
+  inline-size: 100%;
+  block-size: 92%;
+  object-fit: cover;
+}
+
+[data-variant='flux'] .fx-card__words {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+[data-variant='flux'] .fx-card__sum {
+  max-inline-size: 48ch;
+}
+
+[data-variant='flux'] .fx-card__tools {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='flux'] .fx-card__facts {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-m);
+  row-gap: var(--space-3xs);
+  color: var(--color-text-secondary);
+}
+
+/* Rows: titled entries with hairlines between. */
+[data-variant='flux'] .fx-rows {
+  display: grid;
+  max-inline-size: 60rem;
+}
+
+[data-variant='flux'] .fx-row {
+  display: grid;
+  gap: var(--space-3xs);
+  padding-block: var(--space-m);
+  border-block-start: var(--layout-line-hair);
+}
+
+[data-variant='flux'] .fx-row__sum {
+  max-inline-size: var(--type-measure-body);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='flux'] .fx-row__foot {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-m);
+  color: var(--color-text-secondary);
+}
+
+/* A listen's or a read's length beside its minutes: a short tube, filled with the sheet's ink to
+   its share of the run's longest (FX-S36: the liquid below the fold). For the eye alone. */
+[data-variant='flux'] .fx-len {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+[data-variant='flux'] .fx-len__tube {
+  inline-size: var(--space-3xl);
+  block-size: var(--space-2xs);
+  border-radius: var(--ui-radius-badge);
+  background-image: linear-gradient(
+    to right,
+    var(--layout-fx-ink) calc(var(--layout-fx-len, 0) * 100%),
+    color-mix(in oklab, var(--color-text-secondary) 28%, transparent) 0
+  );
+}
+
+[data-variant='flux'] .fx:dir(rtl) .fx-len__tube {
+  background-image: linear-gradient(
+    to left,
+    var(--layout-fx-ink) calc(var(--layout-fx-len, 0) * 100%),
+    color-mix(in oklab, var(--color-text-secondary) 28%, transparent) 0
+  );
+}
+
+[data-variant='flux'] .fx-row__aside {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2xs);
+}
+
+[data-variant='flux'] .fx-row__excerpt {
+  max-inline-size: var(--type-measure-body);
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+[data-variant='flux'] .fx-row__mark {
+  color: var(--color-text-primary);
+}
+
+[data-variant='flux'] .fx-row__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-l);
+}
+
+/* Drops: a run of short points, each on the sheet's ink. */
+[data-variant='flux'] .fx-drops {
+  display: grid;
+  gap: var(--space-3xs);
+  max-inline-size: var(--type-measure-body);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='flux'] .fx-drops li {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+[data-variant='flux'] .fx-drops li::before {
+  content: '';
+  flex: none;
+  inline-size: var(--space-2xs);
+  block-size: var(--space-2xs);
+  margin-block-start: 0.6em;
+  border-radius: var(--layout-round);
+  background-color: var(--layout-fx-ink);
+}
+
+/* A release's tracks: each title, its length at the end edge. */
+[data-variant='flux'] .fx-tracks {
+  display: grid;
+  max-inline-size: 28rem;
+  counter-reset: fx-track;
+}
+
+[data-variant='flux'] .fx-tracks li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-m);
+  padding-block: var(--space-3xs);
+  border-block-end: var(--layout-line-hair);
+}
+
+[data-variant='flux'] .fx-tracks li > :last-child {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='flux'] .fx-plate__meta {
+  color: var(--color-text-secondary);
+}
+
+/* The gallery: each picture in a blob-masked frame. */
+[data-variant='flux'] .fx-gallery {
+  display: grid;
+  gap: var(--space-l);
+}
+
+[data-variant='flux'] .fx-gallery__words {
+  display: grid;
+  gap: var(--space-2xs);
+  max-inline-size: 60ch;
+}
+
+[data-variant='flux'] .fx-gallery__frames {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: var(--layout-grid-gutter);
+}
+
+/* The blob holds the picture (or its box); what the author wrote about it reads under it. */
+[data-variant='flux'] .fx-frame {
+  --layout-fx-frame: 4 / 5;
+  --layout-fx-clip: var(--layout-fx-seed);
+}
+
+[data-variant='flux'] .fx-frame[data-shape='1'] {
+  --layout-fx-clip: var(--layout-fx-pebble);
+}
+
+[data-variant='flux'] .fx-frame[data-shape='2'] {
+  --layout-fx-clip: var(--layout-fx-drop);
+}
+
+[data-variant='flux'] .fx-frame figure {
+  display: grid;
+  gap: var(--space-2xs);
+  align-content: start;
+}
+
+[data-variant='flux'] .fx-frame figure > :first-child {
+  display: block;
+  inline-size: 100%;
+  aspect-ratio: var(--layout-fx-frame);
+  overflow: hidden;
+  background-color: var(--color-surface-prominent);
+  clip-path: var(--layout-fx-clip);
+}
+
+[data-variant='flux'] .fx-frame figure > picture img,
+[data-variant='flux'] .fx-frame figure > img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+[data-variant='flux'] .fx-frame figure > .pf-media-box {
+  display: grid;
+  place-items: center;
+  padding: var(--space-s);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+[data-variant='flux'] .fx-frame figcaption {
+  display: grid;
+  gap: var(--space-3xs);
+  color: var(--color-text-secondary);
+  font-family: var(--type-caption-font-family);
+  font-size: var(--type-caption-font-size);
+  font-weight: var(--type-caption-font-weight);
+  line-height: var(--type-caption-line-height);
+}
+
+[data-variant='flux'] .fx-frame figcaption :is(.pf-caption, .pf-meta) {
+  margin: 0;
+}
+
+[data-variant='flux'] .fx-frame figcaption .pf-caption {
+  color: var(--color-text-primary);
+}
+
+/* At a glance: a line of figures at title size, and the gloss of what each says more. */
+[data-variant='flux'] .fx-glance {
+  display: grid;
+  gap: var(--space-l);
+}
+
+[data-variant='flux'] .fx-glance__line {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-xl);
+  row-gap: var(--space-xs);
+}
+
+[data-variant='flux'] .fx-glance__line strong {
+  color: var(--layout-fx-ink);
+}
+
+[data-variant='flux'] .fx-glance__gloss {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: var(--space-m) var(--layout-grid-gutter);
+  max-inline-size: 60rem;
+}
+
+[data-variant='flux'] .fx-glance__gloss dd {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='flux'] .fx-glance__source {
+  display: block;
+  margin-block-start: var(--space-3xs);
+}
+
+/* The voices: the first set large, the rest beside it. */
+[data-variant='flux'] .fx-voices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: var(--space-xl) var(--layout-grid-gutter);
+}
+
+[data-variant='flux'] .fx-voice figure {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='flux'] .fx-voice__words {
+  margin: 0;
+}
+
+[data-variant='flux'] .fx-voice__about {
+  max-inline-size: var(--type-measure-body);
+  color: var(--color-text-secondary);
+}
+
+/* Prose of three lines or more reads at the body's weight, whatever its size (FX-S45). */
+[data-variant='flux'] :is(.fx-voice__words, .fx-about__lead, .fx-quote__words) {
+  font-weight: var(--type-body-font-weight);
+}
+
+[data-variant='flux'] .fx-voice__who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+}
+
+[data-variant='flux'] .fx-voice__who > span:last-child {
+  display: grid;
+}
+
+[data-variant='flux'] .fx-voice__name {
+  color: var(--color-text-primary);
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='flux'] .fx-voice__role {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='flux'] .fx-voice__face {
+  flex: none;
+  inline-size: var(--space-2xl);
+  block-size: var(--space-2xl);
+  overflow: hidden;
+  border-radius: var(--layout-round);
+}
+
+[data-variant='flux'] .fx-voice__face img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+/* The progress line: one tube, filled with the sheet's ink, a dot riding it as the page scrolls. */
+[data-variant='flux'] .fx-progress {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--space-l) minmax(0, 1fr);
+  column-gap: var(--space-m);
+  max-inline-size: 64rem;
+}
+
+[data-variant='flux'] .fx-progress__tube {
+  position: relative;
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: center;
+  inline-size: var(--space-2xs);
+  border-radius: var(--ui-radius-badge);
+  background-color: color-mix(
+    in oklab,
+    var(--color-border-default) 50%,
+    var(--color-surface-default)
+  );
+}
+
+[data-variant='flux'] .fx-progress__ink {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  block-size: 38%;
+  border-radius: var(--ui-radius-badge);
+  background-color: var(--layout-fx-ink);
+}
+
+[data-variant='flux'] .fx-progress__dot {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 50%;
+  inline-size: var(--space-s);
+  block-size: var(--space-s);
+  translate: -50% 0;
+  border-radius: var(--layout-round);
+  background-color: var(--layout-fx-ink);
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-variant='flux']:not([data-motion='reduced'], [data-motion='static']) .fx-progress__dot {
+      animation: flux-ride linear both;
+      animation-timeline: view();
+      animation-range: entry 50% exit 50%;
+    }
+  }
+}
+
+@keyframes flux-ride {
+  to {
+    inset-block-start: calc(100% - var(--space-s));
+  }
+}
+
+[data-variant='flux'] .fx-progress__steps {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  gap: var(--space-xl);
+}
+
+[data-variant='flux'] .fx-step {
+  display: grid;
+  grid-template-columns: minmax(7rem, 2fr) minmax(0, 7fr);
+  gap: var(--space-l);
+}
+
+[data-variant='flux'] .fx-step__when {
+  color: var(--color-text-secondary);
+  padding-block-start: var(--space-3xs);
+}
+
+[data-variant='flux'] .fx-step__words {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+[data-variant='flux'] .fx-step__where,
+[data-variant='flux'] .fx-step__about,
+[data-variant='flux'] .fx-step__points {
+  color: var(--color-text-secondary);
+  max-inline-size: var(--type-measure-body);
+}
+
+[data-variant='flux'] .fx-step__points {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+[data-variant='flux'] .fx-step__skills,
+[data-variant='flux'] .fx-row__cite {
+  color: var(--color-text-secondary);
+  max-inline-size: var(--type-measure-body);
+}
+
+/* About: the lede's first sentence large, the portrait in a drop beside it. */
+[data-variant='flux'] .fx-about {
+  display: grid;
+  gap: var(--space-xl) var(--layout-grid-gutter);
+}
+
+[data-variant='flux'] .fx-about--portrait {
+  grid-template-columns: minmax(0, 4fr) minmax(0, 7fr);
+  align-items: start;
+}
+
+[data-variant='flux'] .fx-about__drop {
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  background-color: var(--layout-fx-ink);
+  clip-path: var(--layout-fx-seed);
+}
+
+[data-variant='flux'] .fx-about__img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+[data-variant='flux'] .fx-about__words {
+  display: grid;
+  gap: var(--space-l);
+}
+
+[data-variant='flux'] .fx-about__lead {
+  max-inline-size: 34ch;
+}
+
+[data-variant='flux'] .fx-note {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='flux'] .fx-note__when {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='flux'] .fx-run {
+  display: grid;
+  gap: var(--space-xs);
+  max-inline-size: var(--type-measure-body);
+}
+
+[data-variant='flux'] .fx-run li {
+  display: flex;
+  gap: var(--space-s);
+}
+
+[data-variant='flux'] .fx-run li::before {
+  content: '';
+  flex: none;
+  inline-size: var(--space-xs);
+  block-size: var(--space-xs);
+  margin-block-start: 0.55em;
+  border-radius: var(--layout-round);
+  background-color: var(--layout-fx-ink);
+}
+
+[data-variant='flux'] .fx-quote {
+  display: grid;
+  gap: var(--space-s);
+  max-inline-size: 40ch;
+}
+
+[data-variant='flux'] .fx-quote__words {
+  margin: 0;
+}
+
+[data-variant='flux'] .fx-quote__who {
+  color: var(--color-text-secondary);
+}
+
+/* Chips: skills and tools. */
+[data-variant='flux'] .fx-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: var(--space-l) var(--layout-grid-gutter);
+}
+
+[data-variant='flux'] .fx-group {
+  display: grid;
+  gap: var(--space-xs);
+  align-content: start;
+}
+
+[data-variant='flux'] .fx-group__name {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='flux'] .fx-group__about {
+  max-inline-size: var(--type-measure-body);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='flux'] .fx-services {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='flux'] .fx-services + .fx-services {
+  margin-block-start: var(--space-l);
+}
+
+[data-variant='flux'] .fx-services__head {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+[data-variant='flux'] .fx-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+}
+
+[data-variant='flux'] .fx-chip {
+  padding-block: var(--space-3xs);
+  padding-inline: var(--space-s);
+  border-radius: var(--ui-radius-badge);
+  background-color: var(--color-surface-prominent);
+}
+
+[data-variant='flux'] .fx-github {
+  display: grid;
+  gap: var(--space-m);
+}
+
+/* ── the close ── */
+
+[data-variant='flux'] .fx-close {
+  display: grid;
+  gap: var(--space-l);
+}
+
+[data-variant='flux'] .fx-close__mail {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='flux'] .fx-close__address {
+  font-size: var(--type-step-6);
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+/* From 40rem the address breaks only where it may, after its @, never at a dot; a phone keeps anywhere. */
+@media (min-width: 40rem) {
+  [data-variant='flux'] :is(.fx-close__address, .fx-foot__mail) {
+    overflow-wrap: normal;
+    word-break: keep-all;
+  }
+}
+
+/* An inline link over its lines: its focus ring runs round each line and meets across the leading,
+   as a browser draws it. As one box (inline-block) it would take the column's whole width once the
+   address wraps, a ring round empty space past its last letter (tried, quality-pr review). */
+[data-variant='flux'] .fx-close__address a {
+  text-decoration-color: var(--layout-fx-ink);
+  text-decoration-thickness: 0.08em;
+}
+
+[data-variant='flux'] .fx-close__copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-s);
+}
+
+[data-variant='flux'] .fx-close__status {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='flux'] .fx-close__note {
+  max-inline-size: var(--type-measure-body);
+}
+
+[data-variant='flux'] .fx-close__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-l);
+}
+
+[data-variant='flux'] .fx-offer {
+  display: grid;
+  gap: var(--space-s);
+  padding-block-start: var(--space-l);
+  border-block-start: var(--layout-line-hair);
+}
+
+[data-variant='flux'] .fx-offer__body {
+  display: grid;
+  gap: var(--space-m);
+}
+
+[data-variant='flux'] .fx-offer__text {
+  max-inline-size: var(--type-measure-body);
+}
+
+[data-variant='flux'] .fx-offer__acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-l);
+}
+
+/* ── the footer and the Index ── */
+
+/* The close: the name at display size on the page's own ground, and the first two inks pouring
+   in again from the end corner, as they left the opening (should-fix 11). They sit behind the
+   words and clear of them: the words keep the start columns. */
+[data-variant='flux'] .fx-foot {
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+  display: grid;
+  gap: var(--space-xs);
+  padding-block: var(--space-3xl);
+  padding-inline: var(--layout-fx-edge);
+}
+
+[data-variant='flux'] .fx-foot::before,
+[data-variant='flux'] .fx-foot::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+}
+
+[data-variant='flux'] .fx-foot::before {
+  inset-inline-end: -6%;
+  inset-block-end: -38%;
+  inline-size: min(38rem, 42%);
+  aspect-ratio: 5 / 3;
+  background-color: var(--color-signature-start);
+  clip-path: var(--layout-fx-drop);
+}
+
+[data-variant='flux'] .fx-foot::after {
+  inset-inline-end: -4%;
+  inset-block-end: -18%;
+  inline-size: min(16rem, 18%);
+  aspect-ratio: 1;
+  background-color: var(--color-signature-end);
+  clip-path: var(--layout-fx-pebble);
+}
+
+[data-variant='flux'] .fx-foot__name {
+  font-size: var(--type-step-6);
+  line-height: 1.04;
+}
+
+[data-variant='flux'] .fx-foot__name a {
+  text-decoration: none;
+}
+
+[data-variant='flux'] .fx-foot__name a:hover {
+  text-decoration: underline;
+}
+
+[data-variant='flux'] .fx-foot > * {
+  max-inline-size: 58%;
+}
+
+[data-variant='flux'] .fx-foot__line,
+[data-variant='flux'] .fx-foot__who,
+[data-variant='flux'] .fx-foot__meta {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='flux'] .fx-foot .fx-close__links {
+  margin-block: var(--space-2xs) var(--space-s);
+}
+
+[data-variant='flux'] .fx-foot__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-l);
+}
+
+[data-variant='flux'] .fx-index {
+  display: grid;
+  gap: var(--space-l);
+  padding-block: var(--space-2xl);
+  padding-inline: var(--layout-grid-margin);
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-default);
+}
+
+/* Live, the Index leaves the flow: closed it's gone, open it's the dialog in the top layer. */
+[data-variant='flux'] .fx[data-fx-index] .fx-index:not(:popover-open) {
+  display: none;
+}
+
+[data-variant='flux'] .fx-index:popover-open {
+  position: fixed;
+  inset: var(--space-s);
+  margin-block: 0;
+  margin-inline: auto;
+  max-inline-size: 48rem;
+  max-block-size: calc(100% - 2 * var(--space-s));
+  overflow: auto;
+  border: var(--ui-border-card) var(--color-border-subtle);
+  border-radius: var(--ui-radius-overlay);
+  box-shadow: var(--ui-shadow-overlay);
+  background-color: var(--color-surface-overlay);
+}
+
+/* Only the open dialog holds its head while its list scrolls; the contents list and paper don't. */
+[data-variant='flux'] .fx-index:popover-open .fx-index__head {
+  position: sticky;
+  inset-block-start: calc(-1 * var(--space-2xl));
+}
+
+[data-variant='flux'] .fx-index::backdrop {
+  background-color: var(--color-scrim);
+}
+
+[data-variant='flux'] .fx-index__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-m);
+  background-color: inherit;
+}
+
+[data-variant='flux'] .fx-index__close[hidden] {
+  display: none;
+}
+
+[data-variant='flux'] .fx-index__close {
+  min-block-size: var(--ui-control-height);
+  padding-inline: var(--space-m);
+  /* A control's edge on any language's overlay: the text's own colour, part way. */
+  border: 1px solid color-mix(in oklab, var(--color-text-primary) 50%, var(--color-surface-overlay));
+  border-radius: var(--ui-radius-badge);
+  color: var(--color-text-primary);
+  background-color: transparent;
+  cursor: pointer;
+}
+
+[data-variant='flux'] .fx-index__rows {
+  display: grid;
+  gap: var(--space-m);
+}
+
+[data-variant='flux'] .fx-index__row {
+  display: grid;
+  gap: var(--space-2xs);
+  padding-block-start: var(--space-s);
+  border-block-start: var(--layout-fx-lip);
+}
+
+[data-variant='flux'] .fx-index__row:first-child {
+  border-block-start: var(--layout-line-hair);
+}
+
+/* Each sheet's row hangs its lip's drip off the end shoulder, as its tab does. */
+[data-variant='flux'] .fx-index__row {
+  position: relative;
+}
+
+[data-variant='flux'] .fx-index__row:not(:first-child)::after {
+  content: '';
+  position: absolute;
+  inset-block-start: calc(-1 * var(--space-3xs));
+  inset-inline-end: 0;
+  inline-size: var(--space-xs);
+  block-size: calc(var(--space-xs) * 1.4);
+  background-color: var(--layout-fx-ink);
+  border-radius: var(--layout-round);
+}
+
+/* Opening, the dialog comes up by opacity alone, at the fast step, at full motion only (C10, M5). */
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='flux'][data-motion='full'] .fx-index:popover-open {
+    animation: flux-index-in var(--ui-motion-fast) var(--ui-motion-easing) both;
+  }
+}
+
+@keyframes flux-index-in {
+  from {
+    opacity: 0;
+  }
+}
+
+[data-variant='flux'] .fx-index__dest {
+  text-decoration: none;
+}
+
+[data-variant='flux'] .fx-index__sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-m);
+  color: var(--color-text-secondary);
+}
+
+/* ── wide screens: below the opening, every part on the 12-column grid, never a parked column (MF2) ── */
+
+@media (min-width: 64rem) {
+  /* The thesis on two tracks: its rest continues the h1 across columns 1 to 8, at the h1's own
+     measure rather than the body's, and the now line and the subtitle sit beside it on 10 to 12. */
+  [data-variant='flux'] .fx-thesis {
+    display: grid;
+    grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+    column-gap: var(--layout-grid-gutter);
+    align-items: end;
+  }
+
+  [data-variant='flux'] .fx-thesis__words {
+    grid-column: 1 / span 8;
+    grid-row: 1 / span 2;
+    max-inline-size: none;
+    margin-inline-start: 0;
+  }
+
+  [data-variant='flux'] .fx-thesis__words p {
+    max-inline-size: none;
+    font-size: var(--type-step-4);
+    font-weight: var(--type-title-font-weight);
+    line-height: 1.2;
+    text-wrap: balance;
+  }
+
+  [data-variant='flux'] :is(.fx-thesis__now, .fx-thesis__sub) {
+    grid-column: 10 / span 3;
+    margin-block-start: 0;
+    margin-inline-start: 0;
+  }
+
+  [data-variant='flux'] .fx-thesis__sub {
+    grid-row: 1;
+  }
+
+  [data-variant='flux'] .fx-thesis__now {
+    grid-row: 2;
+  }
+
+  /* A sheet's parts sit on the grid, the whole width each unless they pair. */
+  [data-variant='flux'] .fx-sheet__body {
+    grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+    column-gap: var(--layout-grid-gutter);
+  }
+
+  [data-variant='flux'] .fx-sheet__body > * {
+    grid-column: 1 / -1;
+  }
+
+  /* The short About parts pair: Now beside the focus (6 + 6), the facts beside the quote (7 + 5). */
+  [data-variant='flux'] .fx-sheet__body > .fx-sec--now:has(+ .fx-sec--focus) {
+    grid-column: 1 / span 6;
+  }
+
+  [data-variant='flux'] .fx-sheet__body > .fx-sec--now + .fx-sec--focus {
+    grid-column: 7 / span 6;
+  }
+
+  [data-variant='flux'] .fx-sheet__body > .fx-sec--fun-facts:has(+ .fx-sec--quote) {
+    grid-column: 1 / span 7;
+  }
+
+  [data-variant='flux'] .fx-sheet__body > .fx-sec--fun-facts + .fx-sec--quote {
+    grid-column: 8 / span 5;
+  }
+
+  /* The close: the offer beside the email, on columns 8 to 12. */
+  [data-variant='flux'] .fx-sheet__body > .fx-sec--contact:has(+ .fx-offer) {
+    grid-column: 1 / span 7;
+  }
+
+  [data-variant='flux'] .fx-sheet__body > .fx-sec--contact + .fx-offer {
+    grid-column: 8 / span 5;
+    align-self: start;
+  }
+
+  /* Rows run the sheet's width, so every rule in a sheet is one length; a row's aside (the
+     excerpt, the tracks, the place and date, the terms) takes columns 9 to 12. */
+  [data-variant='flux'] :is(.fx-rows, .fx-glance__gloss) {
+    max-inline-size: none;
+  }
+
+  [data-variant='flux'] .fx-row:has(> .fx-row__aside) {
+    grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+    column-gap: var(--layout-grid-gutter);
+    align-items: start;
+  }
+
+  [data-variant='flux'] .fx-row:has(> .fx-row__aside) > * {
+    grid-column: 1 / span 7;
+  }
+
+  [data-variant='flux'] .fx-row:has(> .fx-row__aside) > .fx-row__aside {
+    grid-column: 9 / span 4;
+    grid-row: 1 / span 4;
+  }
+}
+
+/* ── tablets: the headline capped at ten columns, the pink down the right channel ── */
+
+@media (max-width: 63.99rem) {
+  [data-variant='flux'] .fx-h1 {
+    grid-column: 1 / span 10;
+  }
+
+  [data-variant='flux'] .fx-h1__hello {
+    font-size: var(--type-step-4);
+  }
+
+  [data-variant='flux'] .fx-lede {
+    grid-column: 1 / span 9;
+  }
+
+  [data-variant='flux'] .fx-cta {
+    grid-column: 1 / span 9;
+  }
+
+  [data-variant='flux'] .fx-plate {
+    grid-column: 6 / span 7;
+    grid-row: 4 / span 2;
+  }
+
+  [data-variant='flux'] .fx-proof {
+    grid-column: 1 / span 4;
+    flex-direction: column;
+  }
+
+  [data-variant='flux'] .fx-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='flux'] .fx-card__drop {
+    max-inline-size: 22rem;
+  }
+
+  [data-variant='flux'] .fx-about--portrait {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='flux'] .fx-about__drop {
+    max-inline-size: 20rem;
+  }
+}
+
+/* ── phones: one column, the bar docked at the foot ── */
+
+@media (max-width: 39.99rem) {
+  [data-variant='flux'] .fx-bar {
+    position: fixed;
+    inset-block: auto 0;
+    inset-inline: 0;
+  }
+
+  [data-variant='flux'] .fx-bar::before {
+    background-color: var(--color-surface-default);
+    border-radius: var(--ui-radius-overlay) var(--ui-radius-overlay) 0 0;
+    border-block-start: var(--layout-line-hair);
+  }
+
+  [data-variant='flux'] .fx-bar__in {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    column-gap: max(var(--space-2xs), calc(var(--ui-focus-offset) + var(--ui-focus-width)));
+    padding-inline: var(--space-s);
+  }
+
+  [data-variant='flux'] .fx-tabs {
+    flex-wrap: nowrap;
+  }
+
+  [data-variant='flux'] .fx-tabs__dest:not([data-current]) {
+    display: none;
+  }
+
+  [data-variant='flux'] .fx-tab {
+    padding-inline: var(--space-xs);
+  }
+
+  [data-variant='flux'] .fx-tab__word {
+    max-inline-size: 14ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* The dock's row: the tools keep their size, and the nav takes the rest. In it the destination
+     being read keeps its own (its word up to 14ch) and the name takes what's left: it gives way
+     first, to an ellipsis, and once fewer than about five of its letters would show it goes
+     whole (its li a query container), so the dock never shows a cut-down name that reads as
+     someone else's, and the destination never shrinks onto the tools (B1, M1). */
+  /* Never narrower than the destination, so the drop (the nav's width) never cuts its pill flat. */
+  [data-variant='flux'] .fx-bar__nav {
+    flex: 1 1 0;
+    min-inline-size: min-content;
+  }
+
+  [data-variant='flux'] .fx-tabs__name {
+    flex: 1 1 0;
+    min-inline-size: 0;
+    container: fx-name / inline-size;
+  }
+
+  [data-variant='flux'] .fx-tabs__dest {
+    flex: none;
+  }
+
+  [data-variant='flux'] .fx-tab--name {
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  [data-variant='flux'] .fx-tab--name .fx-tab__word {
+    min-inline-size: 0;
+  }
+
+  @container fx-name (inline-size < 5rem) {
+    [data-variant='flux'] .fx-tab--name {
+      display: none;
+    }
+  }
+
+  /* The dock's tools sit as close as a focus ring reaches and no closer: each one is painted after
+     the one before, so a box nearer than that lies over its neighbour's ring (quality-pr, 390:
+     Pause over Index's). */
+  [data-variant='flux'] .fx-bar__tools {
+    gap: calc(var(--ui-focus-offset) + var(--ui-focus-width));
+    background-color: transparent;
+  }
+
+  [data-variant='flux'] .fx-tool {
+    padding-inline: var(--space-xs);
+  }
+
+  [data-variant='flux'] .fx-main,
+  [data-variant='flux'] .fx-foot {
+    scroll-padding-block-end: var(--layout-bar);
+  }
+
+  [data-variant='flux'] .fx-foot {
+    padding-block-end: calc(var(--layout-bar) + var(--space-2xl));
+  }
+
+  [data-variant='flux'] :is(a, button, summary) {
+    scroll-margin-block-end: calc(var(--layout-bar) + var(--space-s));
+  }
+
+  [data-variant='flux'] .fx-opening-frame {
+    margin-block-start: 0;
+  }
+
+  [data-variant='flux'] .fx-opening {
+    display: flex;
+    flex-direction: column;
+    min-block-size: auto;
+    padding-block: var(--space-2xl) var(--space-xl);
+  }
+
+  [data-variant='flux'] .fx-h1,
+  [data-variant='flux'] .fx-lede {
+    max-inline-size: 85%;
+  }
+
+  [data-variant='flux'] .fx-h1__hello {
+    font-size: var(--type-step-2);
+  }
+
+  [data-variant='flux'] .fx-h1__key {
+    font-size: var(--type-step-6);
+  }
+
+  [data-variant='flux'] .fx-h1__key[data-length='medium'] {
+    font-size: var(--type-step-5);
+  }
+
+  [data-variant='flux'] .fx-h1__key[data-length='long'] {
+    font-size: var(--type-step-4);
+  }
+
+  [data-variant='flux'] .fx-lede {
+    margin-block-start: var(--space-l);
+    font-size: var(--type-step-0);
+  }
+
+  /* The plate hangs two columns in, off the words' edge: the work steps into the channel the inks
+     pour down, its pool's tongue reaches back to the words' edge and its tail pours off the right
+     one, and its caption keeps the plate's own edge. */
+  [data-variant='flux'] .fx-plate {
+    grid-template-areas:
+      'stage'
+      'caption';
+    row-gap: var(--space-s);
+    margin-block-start: var(--space-xl);
+    margin-inline-start: calc((100% + var(--layout-grid-gutter)) / 6);
+  }
+
+  /* The drop the phone's one large shape, rounder than the wide one. */
+  [data-variant='flux'] .fx-plate__stage {
+    aspect-ratio: 5 / 4;
+    margin-block-end: 0;
+  }
+
+  /* A cropped cover fills the rounder drop, with its focal point at the drop's centre rather than
+     aligned to it: the kit's alignment pushes a subject right of centre against the wall once a
+     landscape picture loses about a fifth of its width to the 5:4 drop. Centring it keeps the
+     subject inside the drop's safe area (FX-M11, MF3); 0.39 and 0.22 are half the drop's share of a
+     1.6 picture's width and the rest. A contained cover keeps its safe-area box, as on wide screens. */
+  [data-variant='flux'] .fx-plate[data-cover='crop'] .fx-drop__img {
+    object-position: clamp(0%, calc((var(--focal-x, 0.5) - 0.39) / 0.22 * 100%), 100%) 50%;
+  }
+
+  /* One left edge per reading run: the thesis keeps the words' edge on a phone. */
+  [data-variant='flux'] :is(.fx-thesis__words, .fx-thesis__now, .fx-thesis__sub) {
+    margin-inline-start: 0;
+  }
+
+  /* The caption one step under the pool, which hangs 0.35 of the stage's width below its foot. */
+  [data-variant='flux'] [data-fx-inks='3'] .fx-plate__stage {
+    margin-block-end: 35%;
+  }
+
+  [data-variant='flux'] :is(.fx-plate, .fx-proof, .fx-opening__label) {
+    align-self: stretch;
+  }
+
+  /* A column here: a grid would size its rows before the stage's percentage margin resolves. */
+  [data-variant='flux'] .fx-plate {
+    display: flex;
+    flex-direction: column;
+  }
+
+  [data-variant='flux'] .fx-proof {
+    flex-direction: column;
+    max-inline-size: 75%;
+  }
+
+  [data-variant='flux'] .fx-sheet__word {
+    font-size: min(var(--type-step-6), var(--layout-fx-word-fit));
+  }
+
+  [data-variant='flux'] .fx-sheet {
+    margin-block-start: calc(var(--type-step-6) + var(--space-xl));
+  }
+
+  [data-variant='flux'] .fx-step {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2xs);
+  }
+
+  [data-variant='flux'] .fx-close__address {
+    font-size: var(--type-step-4);
+  }
+}
+
+/* Index is its mark alone where the bar is tight: on tablets (FX-S35) and the narrowest phones (FX-S51). */
+@media (min-width: 40rem) and (max-width: 51.99rem), (max-width: 22.49rem) {
+  [data-variant='flux'] .fx-bar__word {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* The narrowest dock: Pause keeps its one word. */
+@media (max-width: 22.49rem) {
+  [data-variant='flux'] .fx-pause :is(button, label) {
+    white-space: nowrap;
+  }
+}
+
+/* On tablets the tabs sit closer, so the tools stay on the bar's one row (FX-S35). */
+@media (min-width: 40rem) and (max-width: 51.99rem) {
+  [data-variant='flux'] .fx-bar__in {
+    column-gap: var(--space-s);
+  }
+
+  [data-variant='flux'] .fx-tab {
+    padding-inline: var(--space-xs);
+  }
+}
+
+/* ── short screens and tablets: the first view keeps its proof (F4; FX-S37, should-fixes 8, 9) ── */
+
+/* A short laptop (1280x800, 1366x768, 1024x768): the headline a step down, the plate's stage
+   wider than tall, the spacings a step tighter, so the work and the proof line are in view. */
+@media (min-width: 64rem) and (max-height: 54.99rem) {
+  [data-variant='flux'] .fx-opening {
+    padding-block-start: calc(var(--layout-bar) + var(--space-l));
+  }
+
+  [data-variant='flux'] .fx-h1__hello {
+    font-size: var(--type-step-4);
+  }
+
+  [data-variant='flux'] .fx-h1__key {
+    font-size: var(--type-step-6);
+  }
+
+  [data-variant='flux'] .fx-lede {
+    margin-block-start: var(--space-l);
+  }
+
+  [data-variant='flux'] .fx-plate {
+    margin-block-start: var(--space-l);
+    row-gap: var(--space-s);
+  }
+
+  [data-variant='flux'] .fx-plate__stage {
+    aspect-ratio: 2 / 1;
+  }
+
+  [data-variant='flux'] .fx-proof {
+    margin-block-start: var(--space-l);
+  }
+}
+
+/* Tablets: the proof line beside the plate's caption, not at the foot under it. */
+@media (min-width: 40rem) and (max-width: 63.99rem) {
+  [data-variant='flux'] .fx-proof {
+    grid-row: 4;
+    align-self: start;
+    margin-block-start: var(--space-2xl);
+  }
+}
+
+/* ── the tilt: a work's picture leans toward a fine pointer (brief §5.10), 3 degrees at most ──
+   Only for a hover-capable fine pointer, at full motion, under no-preference; the words never
+   move, only the pebble that holds the picture. Focus doesn't tilt it: the ring is the cue. */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  [data-variant='flux'][data-motion='full'] .fx-card__drop {
+    transition: transform var(--motion-feedback) var(--ui-motion-easing);
+  }
+
+  [data-variant='flux'][data-motion='full'] .fx-card:hover .fx-card__drop {
+    transform: perspective(60rem) rotateX(2deg) rotateY(-3deg) scale(1.02);
+  }
+}
+
+/* ── the chips' goo (brief §5.10, S5): a hovered skill swells, and its neighbours lean in ──
+   A fine pointer at full motion only. The chip's ground takes a little of its sheet's ink and
+   grows; the chips either side lean toward it until the gaps all but close, as drops drawn
+   together. No filter: the words never blur, and their contrast holds. */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  [data-variant='flux'][data-motion='full'] .fx-chip {
+    transition:
+      background-color var(--motion-feedback) var(--ui-motion-easing),
+      scale var(--motion-feedback) var(--ui-motion-easing),
+      translate var(--motion-feedback) var(--ui-motion-easing);
+  }
+
+  [data-variant='flux'][data-motion='full'] .fx-chip:hover {
+    scale: 1.06;
+    background-color: color-mix(in oklab, var(--layout-fx-ink) 24%, var(--color-surface-prominent));
+  }
+
+  [data-variant='flux'][data-motion='full'] .fx-chip:has(+ .fx-chip:hover) {
+    translate: calc(var(--space-2xs) / 2) 0;
+    background-color: color-mix(in oklab, var(--layout-fx-ink) 10%, var(--color-surface-prominent));
+  }
+
+  [data-variant='flux'][data-motion='full'] .fx-chip:hover + .fx-chip {
+    translate: calc(var(--space-2xs) / -2) 0;
+    background-color: color-mix(in oklab, var(--layout-fx-ink) 10%, var(--color-surface-prominent));
+  }
+
+  [data-variant='flux'][data-motion='full'] .fx:dir(rtl) .fx-chip:has(+ .fx-chip:hover) {
+    translate: calc(var(--space-2xs) / -2) 0;
+  }
+
+  [data-variant='flux'][data-motion='full'] .fx:dir(rtl) .fx-chip:hover + .fx-chip {
+    translate: calc(var(--space-2xs) / 2) 0;
+  }
+}
+
+/* ── a work's own page: home's opening and sheets, the case on one sheet ── */
+
+/* The destination the page belongs to is the place being read, with no script too. */
+[data-variant='flux'] .fx[data-fx-here]:not([data-fx-live]) .fx-tabs .fx-tab--name {
+  color: var(--color-text-primary);
+  background-color: transparent;
+}
+
+[data-variant='flux'] .fx:not([data-fx-live]) .fx-tabs__dest[data-current] .fx-tab {
+  color: var(--color-text-inverse);
+  background-color: var(--color-text-primary);
+}
+
+[data-variant='flux'] .fx-case__head {
+  /* The title measures its own column (cqi), to keep its widest word whole. */
+  container-type: inline-size;
+  grid-column: 1 / span 7;
+  grid-row: 1;
+  display: grid;
+  gap: var(--space-m);
+}
+
+[data-variant='flux'] .fx-case__crumb {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-xs);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='flux'] .fx-case__crumb a {
+  color: var(--color-text-primary);
+}
+
+/* A step down for each longer length, as the key phrase, and never so large its widest word
+   (--layout-fx-ems, from the model) breaks: then never under step 3. */
+[data-variant='flux'] .fx-case__title {
+  --layout-fx-title-step: var(--type-step-7);
+  font-size: min(
+    var(--layout-fx-title-step),
+    max(var(--type-step-3), 100cqi / var(--layout-fx-ems, 1))
+  );
+  line-height: 1.02;
+  text-wrap: balance;
+}
+
+[data-variant='flux'] .fx-case__title[data-length='medium'] {
+  --layout-fx-title-step: var(--type-step-6);
+}
+
+[data-variant='flux'] .fx-case__title[data-length='long'] {
+  --layout-fx-title-step: var(--type-step-5);
+}
+
+[data-variant='flux'] .fx-case__soft {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='flux'] .fx-case__sheet .fx-sheet__body {
+  gap: var(--space-2xl);
+}
+
+[data-variant='flux'] :is(.fx-case__decide, .fx-case__story, .fx-case__reflect, .fx-case__record) {
+  margin-block-start: var(--space-xl);
+}
+
+[data-variant='flux'] .fx-case__open {
+  display: grid;
+  gap: var(--space-2xl);
+}
+
+[data-variant='flux'] .fx-case__intro {
+  display: grid;
+  gap: var(--space-l);
+  max-inline-size: 30em;
+}
+
+/* The work's own words: the first paragraph leads at title size, the rest read as body. */
+[data-variant='flux'] .fx-case__intro .pf-rich-text {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='flux'] .fx-case__intro .pf-rich-text > p + p {
+  font-size: var(--type-step-0);
+  font-weight: var(--type-body-font-weight);
+  color: var(--color-text-secondary);
+}
+
+/* The fact sheet: ruled pairs, the term in the caption role. */
+[data-variant='flux'] .fx-case__facts {
+  display: grid;
+  align-content: start;
+}
+
+[data-variant='flux'] .fx-case__facts > div {
+  display: grid;
+  grid-template-columns: minmax(6rem, 2fr) 5fr;
+  column-gap: var(--space-m);
+  padding-block: var(--space-xs);
+  border-block-start: var(--layout-line-hair);
+}
+
+[data-variant='flux'] .fx-case__facts > div:last-child {
+  border-block-end: var(--layout-line-hair);
+}
+
+[data-variant='flux'] .fx-case__facts dt {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='flux'] .fx-case__pictures .fx-frame {
+  --layout-fx-frame: 8 / 5;
+}
+
+/* The decisions: each stands on its own lip, in the inks in turn, its drip off the end shoulder. */
+[data-variant='flux'] .fx-case__decide {
+  display: grid;
+  gap: var(--space-xl);
+}
+
+[data-variant='flux'] .fx-case__decisions {
+  display: grid;
+  gap: var(--space-2xl);
+}
+
+[data-variant='flux'] .fx-decision {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: var(--space-s);
+  max-inline-size: 44ch;
+  padding-block-start: var(--space-l);
+  border-block-start: var(--layout-line-lip-a);
+  border-start-start-radius: var(--ui-radius-overlay);
+  border-start-end-radius: var(--ui-radius-overlay);
+  --layout-fx-ink: var(--color-signature-start);
+}
+
+[data-variant='flux'] .fx-decision:nth-child(3n + 2) {
+  border-block-start: var(--layout-line-lip-b);
+  --layout-fx-ink: var(--color-signature-end);
+}
+
+[data-variant='flux'] .fx-decision:nth-child(3n) {
+  border-block-start: var(--layout-line-lip-c);
+  --layout-fx-ink: var(--color-emphasis);
+}
+
+[data-variant='flux'] .fx-decision__drip {
+  position: absolute;
+  inset-block-start: calc(-1 * var(--space-3xs));
+  inset-inline-end: var(--space-2xs);
+  inline-size: var(--space-s);
+  block-size: calc(var(--space-s) * 1.4);
+  background-color: var(--layout-fx-ink);
+  border-radius: var(--layout-round);
+}
+
+[data-variant='flux'] .fx-decision__title {
+  font-size: var(--type-step-3);
+  padding-inline-end: var(--space-l);
+  text-wrap: balance;
+}
+
+/* The account: two runs, each part its head over its words. */
+[data-variant='flux'] .fx-case__story {
+  display: grid;
+  gap: var(--space-xl);
+}
+
+[data-variant='flux'] .fx-case__run {
+  display: grid;
+  align-content: start;
+  gap: var(--space-xl);
+}
+
+[data-variant='flux'] .fx-case__part {
+  display: grid;
+  gap: var(--space-2xs);
+  max-inline-size: 60ch;
+}
+
+[data-variant='flux'] .fx-case__runin {
+  font-size: var(--type-step-1);
+}
+
+/* A part's words sit right under its head: the grid's gap is the only space between them. */
+[data-variant='flux'] :is(.fx-case__part, .fx-case__reflect, .fx-case__intro) > * {
+  margin-block: 0;
+}
+
+[data-variant='flux'] .fx-case__more {
+  display: grid;
+  gap: var(--space-3xs);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='flux'] .fx-case__reflect {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='flux'] .fx-case__reflect .fx-case__runin {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='flux'] .fx-case__reflection {
+  max-inline-size: 22em;
+  font-size: var(--type-step-4);
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+[data-variant='flux'] .fx-case__record {
+  display: grid;
+  gap: var(--space-l);
+}
+
+/* The way on: the next case study at display size, its picture in a pebble; or the way back. */
+[data-variant='flux'] .fx-case__next {
+  display: grid;
+  gap: var(--space-m);
+}
+
+[data-variant='flux'] .fx-case__next-title {
+  font-size: var(--type-step-6);
+  line-height: 1.04;
+  text-wrap: balance;
+}
+
+[data-variant='flux'] :is(.fx-case__next-title, .fx-case__back) a {
+  text-decoration: none;
+}
+
+[data-variant='flux'] :is(.fx-case__next-title, .fx-case__back) a:hover {
+  text-decoration: underline;
+}
+
+[data-variant='flux'] .fx-case__next-frame {
+  --layout-fx-frame: 8 / 5;
+  max-inline-size: 22rem;
+}
+
+[data-variant='flux'] .fx-case__back--only a {
+  font-size: var(--type-step-6);
+  line-height: 1.04;
+}
+
+@media (min-width: 64rem) {
+  /* The cover's drop beside the title, with no caption of its own: the title is the work's name. */
+  [data-variant='flux'] .fx-plate--case {
+    grid-column: 8 / span 5;
+    grid-row: 1 / span 4;
+    align-self: center;
+    margin-block-start: 0;
+  }
+
+  [data-variant='flux'] :is(.fx-case__open, .fx-case__story, .fx-case__next) {
+    grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+    column-gap: var(--layout-grid-gutter);
+  }
+
+  [data-variant='flux'] .fx-case__intro {
+    grid-column: 1 / span 7;
+  }
+
+  [data-variant='flux'] .fx-case__facts {
+    grid-column: 9 / span 4;
+  }
+
+  /* Two decisions a row, the second hanging lower: one cascade, never a row of equal cards. */
+  [data-variant='flux'] .fx-case__decisions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--layout-grid-gutter);
+  }
+
+  [data-variant='flux'] .fx-decision:nth-child(even) {
+    margin-block-start: var(--space-3xl);
+  }
+
+  [data-variant='flux'] .fx-case__run {
+    grid-column: span 6;
+  }
+
+  [data-variant='flux'] .fx-case__next > * {
+    grid-column: 1 / span 7;
+  }
+
+  [data-variant='flux'] .fx-case__next > .fx-case__next-frame {
+    grid-column: 9 / span 4;
+    grid-row: 1 / span 2;
+    align-self: center;
+  }
+}
+
+@media (max-width: 39.99rem) {
+  [data-variant='flux'] .fx-case__head {
+    max-inline-size: 85%;
+    gap: var(--space-s);
+  }
+
+  [data-variant='flux'] .fx-case__title {
+    --layout-fx-title-step: var(--type-step-6);
+  }
+
+  [data-variant='flux'] .fx-case__title[data-length='medium'] {
+    --layout-fx-title-step: var(--type-step-5);
+  }
+
+  [data-variant='flux'] .fx-case__title[data-length='long'] {
+    --layout-fx-title-step: var(--type-step-4);
+  }
+
+  [data-variant='flux'] :is(.fx-case__next-title, .fx-case__back--only a) {
+    font-size: var(--type-step-5);
+  }
+
+  [data-variant='flux'] .fx-case__reflection {
+    font-size: var(--type-step-3);
+  }
+
+  [data-variant='flux'] .fx-case__intro .pf-rich-text > p:first-child {
+    font-size: var(--type-step-1);
+  }
+}
+
+/* ── a run's rest, folded on a phone (design gate item 7) ──
+   The server renders it closed and the tabs enhancement opens it from 40rem, where its summary
+   hides and the run reads whole, as one list. */
+[data-variant='flux'] .fx-run-more {
+  display: grid;
+}
+
+[data-variant='flux'] .fx-more {
+  margin-block-start: var(--space-s);
+}
+
+/* Phones and tablets set a gallery two up, an odd count led by one frame across, landscape, so no
+   picture is left alone beside half a row of nothing (SF-P2-4 at 768). */
+@media (max-width: 63.99rem) {
+  [data-variant='flux'] .fx-gallery__frames {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  [data-variant='flux']
+    .fx-gallery__frames:is([data-count='1'], [data-count='3'], [data-count='5'])
+    > .fx-frame:first-child {
+    grid-column: 1 / -1;
+    --layout-fx-frame: 8 / 5;
+  }
+}
+
+/* Open on wide screens (the tabs enhancement, from 64rem), a run's rest reads as the run's own, its
+   summary gone; on phones and tablets it stays a fold, its summary there to close it again. */
+@media (min-width: 64rem) {
+  [data-variant='flux'] .fx-more[open] {
+    margin-block-start: 0;
+  }
+
+  [data-variant='flux'] .fx-more[open] > .fx-fold__summary {
+    display: none;
+  }
+
+  [data-variant='flux'] .fx-more[open] > .fx-fold__body {
+    padding-block: 0;
+  }
+}
+
+@media (min-width: 40rem) {
+  /* Voices: the rest under the lead on tablets, as the run's own grid wraps them there. */
+  [data-variant='flux'] .fx-run-more:has(> .fx-voices) {
+    gap: var(--space-xl);
+  }
+}
+
+/* Wide, the lead voice and the rest side by side, as the run's three columns were. */
+@media (min-width: 64rem) {
+  [data-variant='flux'] .fx-run-more:has(> .fx-voices) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    column-gap: var(--layout-grid-gutter);
+    align-items: start;
+  }
+}
+
+/* ── the phone's length (design gate item 7): the composition's spacing, not the owner's words ── */
+
+/* Experience's earlier roles: a fold of their own under the current role, as the record's are. */
+[data-variant='flux'] .fx-fold--earlier {
+  margin-block-start: var(--space-m);
+}
+
+[data-variant='flux'] .fx-fold__word {
+  font-size: var(--type-step-1);
+}
+
+@media (max-width: 39.99rem) {
+  /* The dock's tools keep their words whole beside a long destination, and with one beside the
+     name, Index is its mark alone (its name stays its label), as on the narrowest phones. */
+  [data-variant='flux'] .fx-bar__tools :is(a, button, label, span) {
+    white-space: nowrap;
+  }
+
+  [data-variant='flux'] .fx-bar__in:has(.fx-tabs__dest[data-current]) .fx-bar__word {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  /* Three spacings, not one: xl between a sheet's parts, l more where the kind turns, the folds
+     run together; a sheet's own top and foot a step tighter than on wide screens. */
+  [data-variant='flux'] .fx-sheet__body {
+    gap: var(--space-xl);
+  }
+
+  [data-variant='flux'] .fx-sheet__body > .fx-sec--fold + .fx-sec--fold {
+    margin-block-start: calc(-1 * var(--space-xl));
+  }
+
+  [data-variant='flux'] .fx-sheet__body > [data-fx-turn] {
+    margin-block-start: var(--space-l);
+  }
+
+  [data-variant='flux'] .fx-sheet {
+    padding-block: var(--space-l) var(--space-xl);
+  }
+
+  [data-variant='flux'] .fx-sec {
+    gap: var(--space-m);
+  }
+
+  /* A fold's row a step tighter: one line each, the record's run of them close together. */
+  [data-variant='flux'] .fx-fold__summary {
+    padding-block: var(--space-2xs);
+  }
+
+  [data-variant='flux'] .fx-foot {
+    padding-block-start: var(--space-2xl);
+  }
+
+  /* The close's words take the width; its inks pour in under them, into the dock's room. */
+  [data-variant='flux'] .fx-foot > * {
+    max-inline-size: none;
+  }
+
+  [data-variant='flux'] .fx-foot::before {
+    inset-block-end: -6%;
+    inline-size: 62%;
+  }
+
+  [data-variant='flux'] .fx-foot::after {
+    inset-block-end: 4%;
+    inline-size: 26%;
+  }
+
+  /* Galleries two up (with tablets, above), closer on a phone. */
+  [data-variant='flux'] .fx-gallery__frames {
+    gap: var(--space-s);
+  }
+
+  /* A work's card holds its picture in a wider pebble: the page's width, near half as tall. */
+  [data-variant='flux'] .fx-card__drop {
+    aspect-ratio: 8 / 5;
+  }
+
+  /* The thesis close under the opening's proof (the inks have no tail to clear on a phone), its
+     rest a step down from the h1's own. */
+  [data-variant='flux'] .fx-thesis {
+    padding-block-start: var(--space-xl);
+  }
+
+  [data-variant='flux'] .fx-thesis__words p {
+    font-size: var(--type-step-2);
+  }
+
+  /* The plate's title alone on its top edge, on the same side as on wide screens (design review,
+     delta 1); its kicker and what it is under the drop. */
+  [data-variant='flux'] .fx-plate:not(.fx-plate--case) .fx-plate__caption {
+    display: contents;
+  }
+
+  /* Clear of the inks down the right channel: it balances onto two lines before it reaches them. */
+  [data-variant='flux'] .fx-plate:not(.fx-plate--case) .fx-plate__title {
+    order: -1;
+    padding-inline-end: var(--space-xl);
+    text-wrap: balance;
+  }
+
+  [data-variant='flux'] .fx-plate:not(.fx-plate--case) .fx-plate__title {
+    margin-block-end: var(--space-s);
+  }
+
+  [data-variant='flux'] .fx-plate:not(.fx-plate--case) .fx-plate__caption > * {
+    max-inline-size: 34ch;
+  }
+
+  /* The words from collaborators: the first at step 2, the rest at step 1. */
+  [data-variant='flux'] .fx-voice:not(.fx-voice--lead) .fx-voice__words {
+    font-size: var(--type-step-1);
+  }
+
+  [data-variant='flux'] .fx-voice--lead .fx-voice__words {
+    font-size: var(--type-step-2);
+  }
+
+  /* About: the portrait under half the width on the end edge, the lede a step down. */
+  [data-variant='flux'] .fx-about__drop {
+    inline-size: 46%;
+    justify-self: end;
+  }
+
+  [data-variant='flux'] .fx-about__lead {
+    font-size: var(--type-step-2);
+  }
+}
+
+/* ── the wipe: home and a work's own page pour into each other (FX-M5, K-4 (a); SF-P2-1) ──
+   The host opts the two pages into cross-document view transitions and crossfades their roots
+   at --ui-motion-fast, from the transition's start. So that the two pages never show at once,
+   the first ink pours up over the page being left before it goes: following a link to the other
+   page, the tabs enhancement marks the page (data-fx-wipe) and the curtain (flux-wipe, an empty
+   layer over the window on both pages) pours to the cover, then the page goes. The transition's
+   old curtain is then the ink, and holds whole over the crossfade; the new one pours the same ink
+   to the cover under it (which, come any other way, such as from the history, is the whole pour,
+   as before), turns to the second ink and drains off the top edge, each front a meniscus. The
+   paint lives in the animations alone, so where the host stills them (reduced motion, from the
+   device or the site: an opacity crossfade; paused: a cut) nothing of it shows. The
+   pseudo-elements hang from <html>, so they read the scheme's and the language's tokens there. */
+[data-variant='flux'] .fx-wipe {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  view-transition-name: flux-wipe;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* The new curtain carries the pour, over the old one; neither adds its light to the other's. */
+  ::view-transition-new(flux-wipe) {
+    mix-blend-mode: normal;
+    animation: flux-wipe-pour calc(var(--ui-motion-slow) * 1.6) var(--ui-motion-easing) both;
+  }
+
+  ::view-transition-old(flux-wipe) {
+    mix-blend-mode: normal;
+    animation: flux-wipe-hold max(var(--ui-motion-fast), calc(var(--ui-motion-slow) * 0.448))
+      step-end both;
+  }
+
+  /* The first ink pours up over the page being left, to the cover, over everything on it, in
+     the feedback slot at most (220ms, under the lead's cap, POUR_CAP_MS), whatever the
+     language's slow step. */
+  [data-variant='flux'][data-motion='full'] .fx[data-fx-wipe='pour'] .fx-wipe {
+    z-index: 5;
+    background-color: var(--color-signature-start);
+    animation: flux-wipe-rise min(calc(var(--ui-motion-slow) * 0.448), var(--motion-feedback))
+      var(--ui-motion-easing) both;
+  }
+
+  /* A slow answer: after a moment the ink says where it's going (R2), in the canvas's colour,
+     the pair the key phrase's words already hold. */
+  [data-variant='flux'][data-motion='full'] .fx[data-fx-wipe='pour'] .fx-wipe[data-fx-to]::after {
+    content: attr(data-fx-to);
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: var(--layout-grid-margin);
+    color: var(--color-canvas);
+    font-size: var(--type-step-5);
+    text-align: center;
+    animation: flux-wipe-name var(--ui-motion-standard) var(--ui-motion-easing) both;
+  }
+}
+
+@keyframes flux-wipe-name {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes flux-wipe-hold {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes flux-wipe-rise {
+  from {
+    clip-path: ellipse(140% 0% at 50% 100%);
+  }
+
+  to {
+    clip-path: ellipse(140% 140% at 50% 100%);
+  }
+}
+
+@keyframes flux-wipe-pour {
+  0% {
+    background-color: var(--color-signature-start);
+    clip-path: ellipse(140% 0% at 50% 100%);
+  }
+
+  /* Covered by the time the host's root crossfade (--ui-motion-fast) is done: the pages change
+     under the ink, never in view. */
+  28% {
+    background-color: var(--color-signature-start);
+    clip-path: ellipse(140% 140% at 50% 100%);
+  }
+
+  40% {
+    background-color: var(--color-signature-end);
+    clip-path: ellipse(140% 140% at 50% 0%);
+  }
+
+  100% {
+    background-color: var(--color-signature-end);
+    clip-path: ellipse(140% 0% at 50% 0%);
+  }
+}
+
+/* ── forced colours: the liquid goes, every edge stays ── */
+
+@media (forced-colors: active) {
+  [data-variant='flux'] .fx-field,
+  [data-variant='flux'] .fx-pool,
+  [data-variant='flux'] .fx-bar__drop {
+    display: none;
+  }
+
+  [data-variant='flux'] .fx-h1__word {
+    color: var(--color-text-primary);
+  }
+
+  [data-variant='flux'] .fx-tab[aria-current],
+  [data-variant='flux'] .fx:not([data-fx-live]) .fx-tabs .fx-tab--name {
+    outline: 2px solid currentColor;
+  }
+
+  [data-variant='flux'] .fx-sheet__tab,
+  [data-variant='flux'] .fx-sheet {
+    border: 1px solid currentColor;
+  }
+}
+
+/* ── print: the page as it reads, the liquid dropped ── */
+
+@media print {
+  [data-variant='flux'] .fx-field,
+  [data-variant='flux'] .fx-pool,
+  [data-variant='flux'] .fx-bar__drop,
+  [data-variant='flux'] .fx-bar::before,
+  [data-variant='flux'] .fx-bar__tools > :not(.fx-tool--plain) {
+    display: none;
+  }
+
+  /* Of the bar's tools only the Index's plain link prints, live or not: a word that points at the
+     contents list just below it. Its live button, Pause and Appearance stay off the paper. */
+  [data-variant='flux'] .fx[data-fx-index] .fx-tool--plain {
+    display: inline-flex;
+  }
+
+  [data-variant='flux'] .fx-bar {
+    position: static;
+  }
+
+  [data-variant='flux'] [data-fx-copy] {
+    display: none;
+  }
+
+  [data-variant='flux'] .fx-tabs .fx-tabs__dest {
+    display: list-item;
+  }
+
+  /* Paper has no drop and prints no fill: every word in the bar is ink on the page, the place
+     being read (live, under the drop; with no script, the name's or the destination's fill) too. */
+  [data-variant='flux'] .fx-tabs .fx-tab,
+  [data-variant='flux'] .fx[data-fx-live] .fx-tabs .fx-tab[data-fx-under],
+  [data-variant='flux'] .fx:not([data-fx-live]) .fx-tabs .fx-tab--name,
+  [data-variant='flux'] .fx:not([data-fx-live]) .fx-tabs__dest[data-current] .fx-tab {
+    color: var(--color-text-primary);
+    background-color: transparent;
+  }
+
+  /* On a narrow sheet the bar's words wrap, so every destination is on the paper. */
+  [data-variant='flux'] :is(.fx-bar__in, .fx-tabs) {
+    flex-wrap: wrap;
+  }
+
+  [data-variant='flux'] .fx-wipe {
+    display: none;
+  }
+
+  /* The Index prints as the page's contents list, near the top (after the bar, before the page),
+     live or not, with none of the dialog's chrome: no close, no backdrop. The bar's opener stays
+     with the tools, off the paper. Its links print as their words, as every link here does. */
+  [data-variant='flux'] .fx {
+    display: flex;
+    flex-direction: column;
+  }
+
+  [data-variant='flux'] .fx-bar {
+    order: -2;
+  }
+
+  /* Live, the Index is a popover, and the browser's own popover box (fixed, centred, its own size
+     and border) holds even shut: on paper it's in the flow, the page's width, with no box. */
+  [data-variant='flux'] .fx-index,
+  [data-variant='flux'] .fx[data-fx-index] .fx-index:not(:popover-open) {
+    order: -1;
+    display: grid;
+    position: static;
+    inset: auto;
+    margin: 0;
+    inline-size: auto;
+    block-size: auto;
+    max-inline-size: none;
+    max-block-size: none;
+    overflow: visible;
+    border: 0;
+  }
+
+  [data-variant='flux'] .fx-index__close,
+  [data-variant='flux'] .fx-index::backdrop {
+    display: none;
+  }
+
+  [data-variant='flux'] .fx-foot::before,
+  [data-variant='flux'] .fx-foot::after {
+    display: none;
+  }
+
+  [data-variant='flux'] .fx-opening-frame {
+    margin-block-start: 0;
+  }
+
+  [data-variant='flux'] .fx-opening {
+    min-block-size: auto;
+  }
+
+  [data-variant='flux'] .fx-h1__word {
+    color: var(--color-text-primary);
+  }
+
+  [data-variant='flux'] details.fx-fold > :not(summary) {
+    display: grid;
+  }
+
+  [data-variant='flux'] details.fx-fold::details-content {
+    content-visibility: visible;
+    block-size: auto;
+  }
+}

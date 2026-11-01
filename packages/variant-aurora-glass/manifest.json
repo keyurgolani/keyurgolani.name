@@ -1,0 +1,135 @@
+{
+  "id": "aurora-glass",
+  "name": "Aurora Glass",
+  "promise": "Frosted panes over one living sky, the portfolio read through glass.",
+  "description": "A centred capsule over a sky built from the scheme's own colours: the thesis in the identity pane with the signature work's sheet shingled across it, two glass beads in the open sky, and every destination a lite pane split by mullion gaps that show the sky, closing on the owner's horizon. Reading panes are near-opaque; only the capsule, the identity pane and its stat tiles blur.",
+  "contract": "2.1",
+  "schemas": {
+    "portfolio": {
+      "min": 3,
+      "max": 3
+    },
+    "site": {
+      "min": 2,
+      "max": 2
+    }
+  },
+  "tokenContract": 1,
+  "compositionFamily": "custom",
+  "motionIntent": "adaptive",
+  "performanceTier": "medium",
+  "budgets": {
+    "js": 1024,
+    "css": 12288,
+    "image": 61440,
+    "font": 0,
+    "animation": 2,
+    "enhancement": 4096
+  },
+  "renderedKinds": [
+    "hero",
+    "lede",
+    "now",
+    "works",
+    "evidence",
+    "chronology",
+    "practice",
+    "contact",
+    "custom",
+    "quote",
+    "focus",
+    "fun-facts",
+    "cta",
+    "github"
+  ],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": {
+    "home": "bespoke",
+    "work": "bespoke",
+    "views": []
+  },
+  "controls": {
+    "version": 1,
+    "items": [
+      {
+        "type": "enum",
+        "id": "backdrop",
+        "label": "Backdrop",
+        "description": "Whether the page lays the owner's own landscape photograph under the sky when no sky photograph is chosen. Automatic takes the first landscape photograph in the first photography section; None leaves it out.",
+        "options": [
+          {
+            "value": "auto",
+            "label": "Automatic"
+          },
+          {
+            "value": "field",
+            "label": "None"
+          }
+        ],
+        "default": "auto"
+      },
+      {
+        "type": "contentRef",
+        "id": "backdropMedia",
+        "label": "Sky photograph",
+        "description": "A photograph of your own for the sky, from the media your visible sections show. When it is unset, or the photograph is gone, the Backdrop choice decides.",
+        "kinds": ["media"],
+        "default": null
+      },
+      {
+        "type": "boolean",
+        "id": "drift",
+        "label": "Sky drift",
+        "description": "Lets the sky's curtains drift slowly while the opening is in view. It never runs under reduced motion, on touch screens, or on narrow screens.",
+        "default": true
+      },
+      {
+        "type": "boolean",
+        "id": "lens",
+        "label": "Lens",
+        "description": "Shows the Lens beside the opening's headline.",
+        "default": true
+      },
+      {
+        "type": "enum",
+        "id": "proof",
+        "label": "Proof tiles",
+        "description": "Whether the opening shows up to three tiles from the proof strip.",
+        "options": [
+          {
+            "value": "auto",
+            "label": "From the proof strip"
+          },
+          {
+            "value": "off",
+            "label": "None"
+          }
+        ],
+        "default": "auto"
+      }
+    ],
+    "migrations": []
+  },
+  "enhancements": [
+    {
+      "id": "sky",
+      "export": "./enhancements/sky",
+      "requires": []
+    }
+  ],
+  "visitorControl": {
+    "placement": "header"
+  },
+  "textDirection": ["ltr", "rtl"],
+  "provenance": {
+    "provisional": true,
+    "sources": [
+      {
+        "source": "The Aurora Glass concept (variants-10, Variant 1)",
+        "disposition": "reused-interaction",
+        "note": "The sky, the capsule, the shingled identity pane and sheet, the Lens and the lite panes, rebuilt on the platform tokens with the panes at the language's own surface."
+      }
+    ]
+  }
+}

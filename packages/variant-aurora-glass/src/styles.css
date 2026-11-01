@@ -1,0 +1,3171 @@
+/*
+ * Aurora Glass: frosted panes over one living sky. Composition only. It owns
+ * the sky's structure (layers, masks, the horizon), the vocabulary (pane,
+ * sheet, capsule, bead, lites, shingle) and its geometry, which surfaces may
+ * blur (the capsule and the identity pane, AG-M6), and the choreography.
+ * The frost is the design language's own pane surface, a surface role at
+ * --ui-surface-opacity over --ui-surface-material, never a fill painted
+ * translucent here (the glass ruling): the language's floor holds, reduced
+ * transparency makes it opaque, and an opaque language makes it plain.
+ * Every colour is a role or an opaque mix of two, every size a step, every
+ * space a step, every duration a motion token. The sky's layers are
+ * opaque roles shaped by masks. Logical properties throughout.
+ */
+
+[data-variant='aurora-glass'] {
+  --layout-grid-columns: 12;
+  --layout-grid-gutter: var(--space-m);
+  --layout-grid-margin: var(--space-s-l);
+  --layout-width-page: 80rem;
+  --layout-motion-curve: var(--ui-motion-easing);
+  --layout-motion-feedback: 200ms;
+  --layout-motion-scene: 720ms;
+  --layout-motion-ambient: 36s;
+  /*
+   * The capsule's padding: room for any language's focus ring (its offset
+   * and width) and a ring's width of surface band past it, so a focused
+   * item's ring and band stay inside the capsule's padding box (polish 5,
+   * the code review's item 1). Never less than the old 3xs.
+   */
+  --layout-capsule-pad: max(var(--space-3xs), var(--ui-focus-offset) + 2 * var(--ui-focus-width));
+  /*
+   * The capsule's items stand at the language's control height, never under a 2.75rem
+   * target, and the capsule is sized by them, so a focused item's ring and band end
+   * inside its padding box, never over its border and shadow (E's focus re-score).
+   */
+  --layout-capsule-item: max(var(--ui-control-height), 2.75rem);
+  --layout-chrome: calc(var(--layout-capsule-item) + 2 * var(--layout-capsule-pad));
+  /* The chronology rail's bead and line, which the branch to an off-rail bead centres on. */
+  --layout-bead: 1rem;
+  --layout-rail-line: 2px;
+  --layout-sticky-offset: calc(var(--layout-chrome) + var(--space-s) + var(--space-s));
+  --layout-page: min(100% - 2 * var(--layout-grid-margin), var(--layout-width-page));
+  --layout-mullion: var(--space-3xs);
+  --layout-inset: var(--space-l);
+  --layout-surface:
+    linear-gradient(
+      color-mix(in srgb, var(--color-surface-default) var(--ui-surface-opacity), transparent),
+      color-mix(in srgb, var(--color-surface-default) var(--ui-surface-opacity), transparent)
+    ),
+    var(--ui-surface-material);
+  --layout-line-hair: 1px solid
+    color-mix(in oklab, var(--color-border-default) 60%, var(--color-surface-default));
+  /*
+   * The sky's stops (F8, the design review's dark sky): the scheme's roles as
+   * they are on a light set; on a dark set each is taken most of the way to
+   * the canvas, so the night sky reads darker than the day's, never lighter.
+   * light-dark() follows the color-scheme the platform sets for the set.
+   */
+  --layout-sky-start: light-dark(
+    var(--color-data-sequential-start),
+    color-mix(in oklab, var(--color-data-sequential-start) 34%, var(--color-canvas))
+  );
+  --layout-sky-middle: light-dark(
+    var(--color-data-sequential-middle),
+    color-mix(in oklab, var(--color-data-sequential-middle) 30%, var(--color-canvas))
+  );
+  --layout-sky-end: light-dark(
+    var(--color-data-sequential-end),
+    color-mix(in oklab, var(--color-data-sequential-end) 40%, var(--color-canvas))
+  );
+  --layout-sky-crest: light-dark(
+    var(--color-emphasis),
+    color-mix(in oklab, var(--color-emphasis) 44%, var(--color-canvas))
+  );
+  --layout-sky-ground: light-dark(var(--color-text-primary), var(--color-canvas));
+  /* The curtains' and glows' signature light: as it is by day; at night about half-way to the canvas,
+     so the aurora still shows but never outshines the day's sky (the round's dark brightness). */
+  --layout-sky-light-start: light-dark(
+    var(--color-signature-start),
+    color-mix(in oklab, var(--color-signature-start) 46%, var(--color-canvas))
+  );
+  --layout-sky-light-end: light-dark(
+    var(--color-signature-end),
+    color-mix(in oklab, var(--color-signature-end) 40%, var(--color-canvas))
+  );
+  /*
+   * The photograph's dimming (the approval's item 5): a layer over it, multiplied in. On a light set
+   * it's the scheme's lightest surface, so the photograph shows as it is; on a dark set it's most of
+   * the way to the canvas, so the photograph dims with the night sky. Opaque roles only.
+   */
+  --layout-photo-dim: light-dark(
+    var(--color-surface-prominent),
+    color-mix(in oklab, var(--color-canvas) 40%, var(--color-text-secondary))
+  );
+  display: block;
+  font-variant-numeric: lining-nums;
+}
+
+[data-variant='aurora-glass'] :where(h1, h2, h3, h4, p, ul, ol, dl, dd, figure, blockquote) {
+  margin: 0;
+}
+
+[data-variant='aurora-glass'] :where(ul, ol) {
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='aurora-glass'] :where(img) {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+}
+
+[data-variant='aurora-glass'] :where(h1, h2, h3, h4) {
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+
+[data-variant='aurora-glass'] :where(p, li, dd, blockquote) {
+  text-wrap: pretty;
+  overflow-wrap: break-word;
+}
+
+[data-variant='aurora-glass'] .ag-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+[data-variant='aurora-glass'] .ag {
+  position: relative;
+  isolation: isolate;
+  overflow-x: clip;
+}
+
+[data-variant='aurora-glass'] .ag-num {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+[data-variant='aurora-glass'] div.pf-rich-text {
+  display: grid;
+  gap: var(--space-xs);
+  max-inline-size: var(--type-measure-body);
+}
+
+/* ── the vocabulary: pane (frost), sheet (solid), lite (a pane's cell) ── */
+
+[data-variant='aurora-glass'] :is(.ag-pane, .ag-lite) {
+  color: var(--color-text-primary);
+  background-color: transparent;
+  background-image: var(--layout-surface);
+}
+
+[data-variant='aurora-glass'] .ag-pane {
+  border: var(--ui-border-card) var(--color-border-subtle);
+  border-radius: var(--ui-radius-overlay);
+  box-shadow: var(--ui-shadow-card);
+}
+
+[data-variant='aurora-glass'] .ag-frost {
+  -webkit-backdrop-filter: blur(var(--ui-backdrop-blur));
+  backdrop-filter: blur(var(--ui-backdrop-blur));
+}
+
+[data-variant='aurora-glass'] .ag-sheet {
+  position: relative;
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-prominent);
+  border: var(--ui-border-card) var(--color-border-subtle);
+  border-radius: var(--ui-radius-card);
+  box-shadow: var(--ui-shadow-raised);
+  overflow: clip;
+}
+
+/* A lite is a cell of its band's pane: square inside, the band clips the outer corners. */
+[data-variant='aurora-glass'] .ag-lite {
+  border: var(--ui-border-card) transparent;
+  border-radius: 0;
+}
+
+[data-variant='aurora-glass'] .ag-stretch::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+[data-variant='aurora-glass'] .ag-stretch:focus-visible {
+  outline: none;
+}
+
+[data-variant='aurora-glass'] .ag-stretch:focus-visible::after {
+  outline: var(--ui-focus-width) var(--ui-focus-style) var(--color-focus);
+  outline-offset: calc(-1 * var(--ui-focus-width) - var(--ui-focus-offset));
+  border-radius: inherit;
+}
+
+[data-variant='aurora-glass'] .ag-pip {
+  display: inline-block;
+  flex: none;
+  inline-size: 0.5em;
+  block-size: 0.5em;
+  border-radius: var(--ui-radius-badge);
+  background-color: var(--color-accent);
+}
+
+[data-variant='aurora-glass'] .ag-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  min-block-size: var(--ui-control-height);
+  padding-inline: var(--space-m);
+  border-radius: var(--ui-radius-badge);
+  background-color: var(--color-accent);
+  color: var(--color-on-accent);
+  text-decoration: none;
+  box-shadow: var(--ui-shadow-card);
+  transition-property: background-color, transform;
+  transition-duration: var(--motion-feedback);
+  transition-timing-function: var(--motion-curve);
+}
+
+[data-variant='aurora-glass'] .ag-btn:hover {
+  background-color: var(--color-accent-hover);
+}
+
+/* The lifts move things, so they wait for no-preference and the page's motion. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='aurora-glass']:not([data-motion='reduced'], [data-motion='static']) .ag-btn:hover {
+    transform: var(--ui-state-hover-transform);
+  }
+
+  [data-variant='aurora-glass']:not([data-motion='reduced'], [data-motion='static'])
+    .ag-btn:active {
+    transform: var(--ui-state-active-transform);
+  }
+}
+
+[data-variant='aurora-glass'] .ag-link {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 2.75rem;
+  color: var(--color-accent-text);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+[data-variant='aurora-glass']
+  :is(.ag-sec, .ag-call, .ag-offer, .ag-foot)
+  a:not(.ag-btn, .ag-link, .ag-stretch) {
+  color: var(--color-accent-text);
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 1px;
+}
+
+[data-variant='aurora-glass'] .ag-out {
+  color: var(--color-text-secondary);
+}
+
+/* ── the sky ── */
+
+[data-variant='aurora-glass'] .ag-sky {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background-color: var(--layout-sky-middle);
+}
+
+[data-variant='aurora-glass'] :is(.ag-sky__base, .ag-sky__curtains) {
+  position: absolute;
+  inset: 0;
+}
+
+[data-variant='aurora-glass'] .ag-sky__base {
+  background-image: linear-gradient(
+    160deg,
+    var(--layout-sky-start) 0%,
+    var(--layout-sky-middle) 34%,
+    var(--layout-sky-end) 72%,
+    var(--layout-sky-crest) 100%
+  );
+}
+
+/* Two glows over the base: opaque role colours, shaped by a mask alone. */
+[data-variant='aurora-glass'] .ag-sky__base::before,
+[data-variant='aurora-glass'] .ag-sky__base::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+[data-variant='aurora-glass'] .ag-sky__base::before {
+  background-color: color-mix(in oklab, var(--layout-sky-light-end) 70%, var(--layout-sky-middle));
+  -webkit-mask-image: radial-gradient(60% 50% at 88% 6%, black, transparent 72%);
+  mask-image: radial-gradient(60% 50% at 88% 6%, black, transparent 72%);
+}
+
+[data-variant='aurora-glass'] .ag-sky__base::after {
+  background-color: var(--layout-sky-crest);
+  -webkit-mask-image: radial-gradient(55% 45% at 6% 0%, black, transparent 74%);
+  mask-image: radial-gradient(55% 45% at 6% 0%, black, transparent 74%);
+}
+
+[data-variant='aurora-glass'] .ag-sky__photo {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  inline-size: 100%;
+  max-inline-size: none;
+  block-size: 70%;
+  object-fit: cover;
+  object-position: 50% 80%;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, currentColor 55%);
+  mask-image: linear-gradient(to bottom, transparent, currentColor 55%);
+}
+
+/* The dimming layer, the photograph's box and mask, multiplied over it (sky.tsx). */
+[data-variant='aurora-glass'] .ag-sky__dim {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  block-size: 70%;
+  background-color: var(--layout-photo-dim);
+  mix-blend-mode: multiply;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, currentColor 55%);
+  mask-image: linear-gradient(to bottom, transparent, currentColor 55%);
+}
+
+[data-variant='aurora-glass'] .ag-sky__curtains {
+  inset-inline: -12%;
+}
+
+[data-variant='aurora-glass'] .ag-curtain {
+  position: absolute;
+  inset-block: -18% 22%;
+  inline-size: 30%;
+  transform: skewX(-16deg);
+}
+
+/* A curtain is soft folds of one opaque colour, a signature colour mixed into the sky's middle, shaped by masks. */
+[data-variant='aurora-glass'] .ag-curtain::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-color: color-mix(
+    in oklab,
+    var(--layout-sky-light-start) 42%,
+    var(--layout-sky-middle)
+  );
+  /* A radial glow, not a band, over wide soft folds: no hard stripe (the design review's curtains). */
+  -webkit-mask-image:
+    radial-gradient(70% 46% at 50% 36%, black, transparent 100%),
+    repeating-linear-gradient(90deg, transparent 0, black 3.5rem, transparent 8rem);
+  mask-image:
+    radial-gradient(70% 46% at 50% 36%, black, transparent 100%),
+    repeating-linear-gradient(90deg, transparent 0, black 3.5rem, transparent 8rem);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+
+[data-variant='aurora-glass'] .ag-curtain--a {
+  inset-inline-start: 4%;
+}
+
+[data-variant='aurora-glass'] .ag-curtain--b {
+  inset-inline-start: 38%;
+  inline-size: 26%;
+}
+
+[data-variant='aurora-glass'] .ag-curtain--b::before {
+  background-color: color-mix(in oklab, var(--layout-sky-crest) 50%, var(--layout-sky-middle));
+}
+
+[data-variant='aurora-glass'] .ag-curtain--c {
+  inset-inline-start: 66%;
+  inline-size: 34%;
+}
+
+[data-variant='aurora-glass'] .ag-curtain--c::before {
+  background-color: color-mix(in oklab, var(--layout-sky-light-end) 55%, var(--layout-sky-middle));
+}
+
+[data-variant='aurora-glass'] .ag-sky__hills {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  inline-size: 100%;
+  block-size: 30%;
+}
+
+[data-variant='aurora-glass'] .ag-sky__hill--far {
+  fill: var(--layout-sky-end);
+}
+
+[data-variant='aurora-glass'] .ag-sky__hill--near {
+  fill: color-mix(in oklab, var(--layout-sky-end) 72%, var(--layout-sky-ground));
+}
+
+/* The drift: one layer, only once the enhancement starts it, and only while the ambient state runs. */
+[data-variant='aurora-glass'] .ag[data-ag-sky] .ag-sky[data-ag-drift='on'] .ag-sky__curtains {
+  animation: aurora-glass-drift var(--motion-ambient) var(--motion-curve) infinite alternate;
+  animation-play-state: var(--motion-ambient-state);
+}
+
+[data-variant='aurora-glass'] .ag[data-ag-sky='paused'] .ag-sky[data-ag-drift] .ag-sky__curtains {
+  animation-play-state: paused;
+}
+
+@keyframes aurora-glass-drift {
+  to {
+    transform: translateX(8%);
+  }
+}
+
+/* ── chrome: the capsule, centred, and the ornament on the page's end line ── */
+
+[data-variant='aurora-glass'] .ag-chrome {
+  /* Its own width, in its text's em, folds the capsule at enlarged text as a narrow screen does. */
+  container: ag-chrome / inline-size;
+  position: fixed;
+  z-index: 10;
+  inset-block-start: var(--space-s);
+  inset-inline: 0;
+  inline-size: var(--layout-page);
+  margin-inline: auto;
+  display: grid;
+  /* Centred while it fits; when it doesn't, the capsule gives way, never the ornament. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(max-content, 1fr);
+  align-items: center;
+  column-gap: var(--space-xs);
+  pointer-events: none;
+}
+
+[data-variant='aurora-glass'] .ag-capsule {
+  grid-column: 2;
+  min-inline-size: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3xs);
+  min-block-size: var(--layout-chrome);
+  padding: var(--layout-capsule-pad);
+  padding-inline-start: var(--space-m);
+  border: var(--ui-border-card) var(--color-border-subtle);
+  border-radius: var(--ui-radius-badge);
+  background-image: var(--layout-surface);
+  box-shadow: var(--ui-shadow-raised);
+  pointer-events: auto;
+}
+
+/* A long name ellipsizes at every width, so the destinations and the call keep their room. */
+[data-variant='aurora-glass'] .ag-capsule__name {
+  min-inline-size: 0;
+  margin-inline-end: var(--space-s);
+  overflow: hidden;
+  font-size: var(--type-step-0);
+  color: var(--color-text-primary);
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-variant='aurora-glass'] .ag-capsule__dest {
+  display: flex;
+  gap: var(--space-3xs);
+}
+
+[data-variant='aurora-glass']
+  :is(.ag-capsule__dest a, .ag-capsule__index, .ag-capsule__cta, .ag-orn) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  min-block-size: var(--layout-capsule-item);
+  padding-inline: var(--space-s);
+  border: 0;
+  border-radius: var(--ui-radius-badge);
+  background-color: transparent;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition-property: background-color, color;
+  transition-duration: var(--motion-feedback);
+  transition-timing-function: var(--motion-curve);
+}
+
+[data-variant='aurora-glass'] :is(.ag-capsule__dest a, .ag-capsule__index, .ag-orn--capsule):hover {
+  background-color: var(--color-surface-prominent);
+  color: var(--color-text-primary);
+}
+
+[data-variant='aurora-glass'] .ag-capsule__dest a[aria-current] {
+  background-color: var(--color-surface-prominent);
+  color: var(--color-text-primary);
+  box-shadow: var(--ui-shadow-card);
+}
+
+[data-variant='aurora-glass'] .ag-capsule .ag-capsule__cta {
+  margin-inline-start: var(--space-3xs);
+  background-color: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+[data-variant='aurora-glass'] .ag-capsule .ag-capsule__cta:hover {
+  background-color: var(--color-accent-hover);
+}
+
+[data-variant='aurora-glass'] .ag-capsule__cta[aria-current] {
+  box-shadow: var(--ui-shadow-card);
+}
+
+/* The Index's mark: four beads, drawn as one dot and its shadows in the text colour. */
+[data-variant='aurora-glass'] :is(.ag-capsule__mark, .ag-orn__mark) {
+  inline-size: 0.875rem;
+  block-size: 0.875rem;
+  flex: none;
+  border-radius: var(--ui-radius-badge);
+  border: 2px solid currentColor;
+}
+
+[data-variant='aurora-glass'] .ag-orn__mark {
+  border-block: 0;
+  border-radius: 0;
+  inline-size: 0.625rem;
+}
+
+[data-variant='aurora-glass'] .ag-narrow {
+  display: none;
+}
+
+[data-variant='aurora-glass'] .ag-ornament {
+  grid-column: 3;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  pointer-events: auto;
+}
+
+[data-variant='aurora-glass'] .ag-ornament .ag-orn {
+  border: var(--ui-border-card) var(--color-border-subtle);
+  background-image: var(--layout-surface);
+  color: var(--color-text-primary);
+  box-shadow: var(--ui-shadow-card);
+}
+
+/* Pressed, in either place: filled, and its mark turns from the two bars of pause to the triangle of play. */
+[data-variant='aurora-glass']
+  :is(.ag-ornament .ag-orn, .ag-capsule .ag-orn--capsule)[aria-pressed='true'] {
+  background-image: none;
+  background-color: var(--color-text-primary);
+  color: var(--color-text-inverse);
+}
+
+[data-variant='aurora-glass'] .ag-orn[aria-pressed='true'] .ag-orn__mark {
+  border: 0;
+  background-color: currentColor;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+[data-variant='aurora-glass'] .ag-orn[hidden] {
+  display: none;
+}
+
+/* Still (aria-disabled): the sky would move, and the visitor's setting or pointer holds it; it says so, and takes no press. */
+[data-variant='aurora-glass'] .ag-orn[aria-disabled='true'] {
+  color: var(--color-text-secondary);
+  cursor: default;
+}
+
+/*
+ * Its note, the reason it holds: plain text right after it, its description, in the secondary
+ * text. In the ornament it sits on its own opaque pill over the sky, clear of Pause's halo; in
+ * the capsule it shows only where the capsule's Pause does (below 75rem), clear of its focus band.
+ */
+[data-variant='aurora-glass'] .ag-orn__held {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--layout-capsule-item);
+  color: var(--color-text-secondary);
+  font-style: italic;
+  white-space: nowrap;
+}
+
+[data-variant='aurora-glass'] .ag-ornament .ag-orn__held {
+  margin-inline-start: calc(var(--ui-focus-offset) + 3 * var(--ui-focus-width));
+  padding-inline: var(--space-s);
+  border: var(--ui-border-card) var(--color-border-subtle);
+  border-radius: var(--ui-radius-badge);
+  background-color: var(--color-surface-default);
+}
+
+/* Its end padding is the capsule items' own, so "held" doesn't sit on the capsule's end (D, 1024). */
+[data-variant='aurora-glass'] .ag-capsule .ag-orn__held {
+  display: none;
+  margin-inline-start: var(--layout-capsule-pad);
+  padding-inline-end: var(--space-s);
+}
+
+[data-variant='aurora-glass'] .ag-orn__held[hidden] {
+  display: none;
+}
+
+/*
+ * Pause, in either place, can have sky beside it, and no ring colour clears
+ * 3:1 on every sky frame (lime on lavender was 1.7:1). The ring itself is
+ * the platform's (utilities layer: colour, width and offset, which no
+ * variant may undo), so Pause lays a surface halo under it instead: one
+ * opaque band from the pill's edge to a ring's width past the ring, so the
+ * gap and the ring's outer side are surface too, and the ring reads against
+ * surface on both sides whatever the sky does behind (C2). In the capsule
+ * the band runs past the capsule's own edge when Pause is its last item.
+ */
+/* Positioned, not isolated: the halo goes behind the pill, into the chrome's or the capsule's stacking context. */
+[data-variant='aurora-glass'] :is(.ag-ornament .ag-orn, .ag-capsule .ag-orn--capsule) {
+  position: relative;
+}
+
+/*
+ * The ornament's halo is always there, so focus changes only the ring
+ * against surface, never sky against surface (the 1440 focus cell: the
+ * halo that came with focus left the ring 0 strong pixels against the sky
+ * it replaced). Its border shows the focus colour only while focused.
+ */
+[data-variant='aurora-glass'] .ag-ornament .ag-orn::before {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--ui-focus-offset) - 3 * var(--ui-focus-width));
+  z-index: -1;
+  border: var(--ui-focus-width) var(--ui-focus-style) transparent;
+  border-radius: var(--ui-radius-badge);
+  background-color: var(--color-surface-default);
+}
+
+[data-variant='aurora-glass'] .ag-ornament .ag-orn:focus-visible::before {
+  border-color: var(--color-focus);
+}
+
+/*
+ * In the capsule, Pause and the Index (Menu on a phone) keep the capsule
+ * items' height, and the capsule's padding (--layout-capsule-pad) is the
+ * ring's offset and width plus a ring's width more. So the band, inset by
+ * that padding on every side, ends on the capsule's padding box, never on
+ * its border, with the ring inside it, whatever the language's ring.
+ */
+[data-variant='aurora-glass'] .ag-capsule :is(.ag-orn--capsule, .ag-capsule__index) {
+  position: relative;
+}
+
+/* Focused, the item and its band paint over their neighbours, so under a thick ring the call's fill never covers the band's edge (polish carry-over). */
+[data-variant='aurora-glass'] .ag-capsule :is(.ag-orn--capsule, .ag-capsule__index):focus-visible {
+  z-index: 1;
+}
+
+[data-variant='aurora-glass']
+  .ag-capsule
+  :is(.ag-orn--capsule, .ag-capsule__index):focus-visible::before {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--layout-capsule-pad));
+  z-index: -1;
+  /* Its edge is a second ring in the focus colour, round the pill: a pill's ring is mostly
+     antialiased curve, and the two together clear the focus perimeter (the quality cells). */
+  border: var(--ui-focus-width) var(--ui-focus-style) var(--color-focus);
+  border-radius: var(--ui-radius-badge);
+  background-color: var(--color-surface-default);
+}
+
+/* Pause is the ornament's above 75rem and the capsule's last item below it (ornament.tsx). */
+[data-variant='aurora-glass'] .ag-capsule .ag-orn--capsule {
+  display: none;
+}
+
+@media (max-width: 75rem) {
+  [data-variant='aurora-glass'] .ag-capsule .ag-orn--capsule:not([hidden]) {
+    display: inline-flex;
+  }
+
+  [data-variant='aurora-glass'] .ag-ornament .ag-orn {
+    display: none;
+  }
+
+  /* Its still note goes where it goes. */
+  [data-variant='aurora-glass'] .ag-capsule .ag-orn__held:not([hidden]) {
+    display: inline-flex;
+  }
+
+  [data-variant='aurora-glass'] .ag-ornament .ag-orn__held {
+    display: none;
+  }
+
+  /*
+   * With Pause in the capsule, an ornament with no visitor control holds
+   * nothing: it goes, and with it its column and the gap before it, so the
+   * capsule runs to the page's end line (G1). With a visitor control the
+   * ornament stays, beside the capsule.
+   */
+  [data-variant='aurora-glass']
+    .ag-chrome:not(:has(.ag-ornament [data-visitor-control-slot]:not(:empty))) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='aurora-glass'] .ag-ornament:not(:has([data-visitor-control-slot]:not(:empty))) {
+    display: none;
+  }
+}
+
+/* Below 64rem the capsule's Pause is its mark alone; its name stays for assistive technology. At 64rem its word still shows. */
+@media (max-width: 63.99rem) {
+  [data-variant='aurora-glass'] .ag-capsule .ag-orn--capsule .ag-orn__word {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/*
+ * The skip link, focused, is the language's accent pill in the flow at the
+ * top (appearance primitives), before .ag. In the flow it's unpositioned,
+ * and .ag is a positioned, isolated stacking context after it, painted at
+ * z-index auto in the same parent context, so .ag with its fixed
+ * full-window sky painted over the link and only sky showed (C1). The
+ * link, positioned at z-index 1, paints above every z-index auto layer of
+ * that context, .ag among them; the chrome's own z-index stays inside
+ * .ag's isolated context and never competes with it. 1 is the least that
+ * works.
+ */
+[data-variant='aurora-glass'] [data-ui-slot='skip-link']:focus {
+  position: relative;
+  z-index: 1;
+  box-shadow: var(--ui-shadow-raised);
+}
+
+/*
+ * The visitor's control (the host's) sits on the capsule's own surface, never on the sky: its
+ * words and its focus ring read against surface (the quality cells' text and focus contrast on
+ * #appearance). The padding is the capsule's, room for any language's ring and a band past it.
+ */
+[data-variant='aurora-glass'] .ag-ornament > [data-visitor-control-slot]:not(:empty) {
+  padding: var(--layout-capsule-pad);
+  border: var(--ui-border-card) var(--color-border-subtle);
+  border-radius: var(--ui-radius-badge);
+  background-image: var(--layout-surface);
+  color: var(--color-text-primary);
+  box-shadow: var(--ui-shadow-card);
+}
+
+/*
+ * A focused pill takes the control radius (the quality cells' focus perimeter): the platform's ring
+ * follows its control's corners, and round a full pill most of a 2px ring is antialiased curve,
+ * under 3:1 at the edge. The ring itself stays the platform's.
+ */
+[data-variant='aurora-glass']
+  :is(
+    .ag-capsule a,
+    .ag-band__nav a,
+    .ag-btn,
+    .ag-ornament [data-visitor-control-slot] summary
+  ):focus-visible {
+  border-radius: var(--ui-radius-control);
+}
+
+/* With no visitor control the empty slot takes no gap, so the ornament ends on the page's end line. */
+[data-variant='aurora-glass'] .ag-ornament > [data-visitor-control-slot]:empty {
+  display: none;
+}
+
+/* ── the opening: the identity pane shingled under the signature sheet ── */
+
+[data-variant='aurora-glass'] .ag-opening-frame {
+  padding-block-start: calc(var(--layout-sticky-offset) + var(--space-2xs));
+}
+
+[data-variant='aurora-glass'] .ag-opening {
+  position: relative;
+  inline-size: var(--layout-page);
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  grid-template-rows: auto auto auto;
+}
+
+[data-variant='aurora-glass'] .ag-id {
+  position: relative;
+  z-index: 1;
+  grid-column: 1 / 10;
+  grid-row: 1 / 4;
+  display: grid;
+  grid-template-rows: subgrid;
+  padding: var(--space-m) var(--space-xl) 0;
+}
+
+[data-variant='aurora-glass'] .ag-opening[data-sheet='no'] .ag-id {
+  grid-column: 1 / -1;
+}
+
+/* The pane's last two of nine columns are a declared track: the Lens beside the h1, then the sheet. */
+[data-variant='aurora-glass'] .ag-id__top {
+  display: grid;
+  align-content: start;
+  gap: var(--space-s);
+  padding-inline-end: calc(200% / 9);
+}
+
+[data-variant='aurora-glass'] .ag-id__meta {
+  margin-inline-end: calc(-200% / 7);
+}
+
+[data-variant='aurora-glass'] .ag-id__meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2xs) var(--space-m);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-id__where {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-s);
+}
+
+[data-variant='aurora-glass'] .ag-id__head {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+[data-variant='aurora-glass'] .ag-id__greet {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-id__h1 {
+  display: grid;
+  gap: var(--space-3xs);
+  margin: 0;
+}
+
+[data-variant='aurora-glass'] .ag-id__name {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-id__line {
+  font-size: var(--type-step-7);
+  text-wrap: balance;
+}
+
+[data-variant='aurora-glass'] .ag-id__line[data-length='medium'] {
+  font-size: var(--type-step-6);
+}
+
+[data-variant='aurora-glass'] .ag-id__line[data-length='long'] {
+  font-size: var(--type-step-4);
+}
+
+[data-variant='aurora-glass'] .ag-id__body {
+  display: grid;
+  align-content: start;
+  gap: var(--space-xs);
+  padding-block: var(--space-2xs) var(--space-s);
+  /* The pane's last two of nine columns are the sheet's: its body stops short of them. */
+  padding-inline-end: calc(200% / 9);
+}
+
+[data-variant='aurora-glass'] .ag-opening[data-sheet='no'] .ag-id__body {
+  padding-inline-end: 0;
+}
+
+[data-variant='aurora-glass'] .ag-standfirst__text {
+  color: var(--color-text-secondary);
+  max-inline-size: 62ch;
+}
+
+[data-variant='aurora-glass'] .ag-id__lede {
+  max-inline-size: 56ch;
+}
+
+[data-variant='aurora-glass'] .ag-id__status {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-id__status > .pf-rich-text {
+  flex: 1;
+}
+
+[data-variant='aurora-glass'] .ag-id__acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs) var(--space-m);
+  margin-block-start: var(--space-xs);
+}
+
+[data-variant='aurora-glass'] .ag-sig {
+  z-index: 2;
+  grid-column: 8 / 13;
+  grid-row: 1 / 4;
+  align-self: end;
+  /* Its top at the concept's height (about y 330 at 1440), over the Lens' lower edge; its two columns still cross the pane's end edge (AG-M4, N12). */
+  margin-block-end: calc(var(--space-l) * 1.25);
+  transition: transform var(--motion-feedback) var(--motion-curve);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='aurora-glass']:not([data-motion='reduced'], [data-motion='static']) .ag-sig:hover,
+  [data-variant='aurora-glass']:not([data-motion='reduced'], [data-motion='static'])
+    .ag-sig:focus-within {
+    transform: var(--ui-state-hover-transform);
+  }
+}
+
+[data-variant='aurora-glass'] :is(.ag-sig__media, .ag-work__media) {
+  aspect-ratio: 16 / 9;
+  overflow: clip;
+  border-block-end: var(--layout-line-hair);
+}
+
+[data-variant='aurora-glass'] :is(.ag-sig__img, .ag-work__img) {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+[data-variant='aurora-glass'] .ag-sig__body {
+  display: grid;
+  gap: var(--space-2xs);
+  padding: var(--space-m) var(--space-l) var(--space-l);
+}
+
+[data-variant='aurora-glass'] :is(.ag-sig__kicker, .ag-sig__sum) {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-sig__title a {
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+[data-variant='aurora-glass'] .ag-sig__cue {
+  color: var(--color-accent-text);
+}
+
+[data-variant='aurora-glass'] .ag-tiles {
+  position: relative;
+  z-index: 1;
+  grid-column: 1 / 8;
+  grid-row: 3;
+  align-self: end;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-xs);
+  margin-inline: var(--space-xl) 0;
+  margin-block-end: var(--space-m);
+  padding-block-start: var(--space-xs);
+  border-block-start: var(--layout-line-hair);
+}
+
+/* The value over its label, set to the tile's foot, so every label in the row sits on one baseline. */
+[data-variant='aurora-glass'] .ag-tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: end;
+  align-items: start;
+  padding: var(--space-2xs) var(--space-s);
+  border-radius: var(--ui-radius-card);
+  box-shadow: var(--ui-shadow-inset);
+}
+
+[data-variant='aurora-glass'] .ag-tile__value {
+  font-size: var(--type-step-2);
+  color: var(--color-accent-text);
+}
+
+[data-variant='aurora-glass'] .ag-tile__label {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-lens {
+  z-index: 2;
+  grid-column: 8 / 12;
+  grid-row: 1;
+  align-self: center;
+  justify-self: start;
+  inline-size: min(100%, 22rem);
+  pointer-events: none;
+}
+
+[data-variant='aurora-glass'] .ag-opening[data-sheet='no'] .ag-lens {
+  z-index: 2;
+  grid-column: 10 / 13;
+  align-self: start;
+  justify-self: end;
+  inline-size: min(100%, 12rem);
+}
+
+[data-variant='aurora-glass'] .ag-lens__svg {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  overflow: visible;
+}
+
+[data-variant='aurora-glass'] .ag-lens__a0 {
+  stop-color: color-mix(
+    in oklab,
+    var(--color-surface-prominent) 90%,
+    var(--color-data-sequential-start)
+  );
+}
+
+[data-variant='aurora-glass'] .ag-lens__a1 {
+  stop-color: color-mix(
+    in oklab,
+    var(--color-surface-prominent) 66%,
+    var(--color-data-sequential-middle)
+  );
+}
+
+[data-variant='aurora-glass'] .ag-lens__a2 {
+  stop-color: color-mix(
+    in oklab,
+    var(--color-surface-prominent) 38%,
+    var(--color-data-sequential-end)
+  );
+}
+
+[data-variant='aurora-glass'] :is(.ag-lens__a3, .ag-lens__b3) {
+  stop-color: var(--color-surface-prominent);
+}
+
+[data-variant='aurora-glass'] .ag-lens__b0 {
+  stop-color: color-mix(in oklab, var(--color-surface-prominent) 90%, var(--color-signature-end));
+}
+
+[data-variant='aurora-glass'] .ag-lens__b1 {
+  stop-color: color-mix(in oklab, var(--color-surface-prominent) 62%, var(--color-signature-end));
+}
+
+[data-variant='aurora-glass'] .ag-lens__b2 {
+  stop-color: color-mix(in oklab, var(--color-surface-prominent) 36%, var(--color-emphasis));
+}
+
+[data-variant='aurora-glass'] .ag-lens__shine0 {
+  stop-color: var(--color-surface-prominent);
+}
+
+[data-variant='aurora-glass'] .ag-lens__shine1 {
+  stop-color: color-mix(
+    in oklab,
+    var(--color-surface-prominent) 70%,
+    var(--color-data-sequential-start)
+  );
+}
+
+[data-variant='aurora-glass'] .ag-lens__rim {
+  fill: none;
+  stroke: var(--color-surface-prominent);
+  stroke-width: 1.5;
+}
+
+[data-variant='aurora-glass'] .ag[data-ag-sky] .ag-lens__bead--b {
+  animation: aurora-glass-breathe calc(var(--motion-ambient) / 3) var(--motion-curve) infinite;
+  animation-play-state: var(--motion-ambient-state);
+}
+
+[data-variant='aurora-glass'] .ag[data-ag-sky='paused'] .ag-lens .ag-lens__bead--b {
+  animation-play-state: paused;
+}
+
+@keyframes aurora-glass-breathe {
+  50% {
+    transform: translateX(44px);
+  }
+}
+
+/* The first view's type regime (T1, contrast): four sizes. Display for the thesis, step 1 for
+   the titles and the figures, the body role for reading, and the label role for every label, meta
+   and control. */
+[data-variant='aurora-glass'] :is(.ag-id__name, .ag-sig__title, .ag-tile__value) {
+  font-size: var(--type-step-1);
+}
+
+[data-variant='aurora-glass'] .ag-sig__kicker {
+  font-size: var(--type-label-font-size);
+}
+
+[data-variant='aurora-glass'] .ag-capsule .ag-capsule__name,
+[data-variant='aurora-glass']
+  :is(.ag-id__lede, .ag-standfirst__text, .ag-id__status, .ag-sig__sum) {
+  font-size: var(--type-body-font-size);
+}
+
+/* The load: the pane rises 40 px, the sheet follows about 140 ms later, the tiles 12 px about 60 ms apart. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='aurora-glass']:not([data-motion='reduced'], [data-motion='static']) .ag-id {
+    animation: aurora-glass-rise var(--motion-scene) var(--motion-curve) backwards;
+  }
+
+  [data-variant='aurora-glass']:not([data-motion='reduced'], [data-motion='static']) .ag-sig {
+    animation: aurora-glass-rise var(--motion-scene) var(--motion-curve)
+      calc(var(--motion-scene) * 0.2) backwards;
+  }
+
+  [data-variant='aurora-glass']:not([data-motion='reduced'], [data-motion='static']) .ag-tile {
+    animation: aurora-glass-rise-sm var(--motion-scene) var(--motion-curve)
+      calc(var(--motion-scene) * 0.36) backwards;
+  }
+
+  [data-variant='aurora-glass']:not([data-motion='reduced'], [data-motion='static'])
+    .ag-tile:nth-child(2) {
+    animation-delay: calc(var(--motion-scene) * 0.44);
+  }
+
+  [data-variant='aurora-glass']:not([data-motion='reduced'], [data-motion='static'])
+    .ag-tile:nth-child(3) {
+    animation-delay: calc(var(--motion-scene) * 0.52);
+  }
+}
+
+@keyframes aurora-glass-rise {
+  from {
+    transform: translateY(40px);
+  }
+}
+
+@keyframes aurora-glass-rise-sm {
+  from {
+    transform: translateY(12px);
+  }
+}
+
+/* ── bands: one pane per destination, split by mullions that show the sky ── */
+
+[data-variant='aurora-glass'] .ag-main {
+  display: grid;
+  gap: var(--rhythm-section);
+  padding-block-end: var(--rhythm-section);
+}
+
+[data-variant='aurora-glass'] .ag-main:focus {
+  outline: none;
+}
+
+[data-variant='aurora-glass'] :is(.ag-band, .ag-foot) {
+  inline-size: var(--layout-page);
+  margin-inline: auto;
+}
+
+[data-variant='aurora-glass'] .ag-opening-frame + .ag-band {
+  margin-block-start: var(--rhythm-group);
+}
+
+[data-variant='aurora-glass'] .ag-band__pane {
+  display: grid;
+  gap: var(--layout-mullion);
+  border-radius: var(--ui-radius-overlay);
+  overflow: clip;
+  box-shadow: var(--ui-shadow-card);
+}
+
+[data-variant='aurora-glass'] :is(.ag-band__head, .ag-sec) {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  row-gap: var(--space-s);
+  padding: var(--space-l) var(--layout-inset);
+}
+
+[data-variant='aurora-glass'] .ag-band__head {
+  align-items: center;
+  padding-block: var(--space-m);
+}
+
+[data-variant='aurora-glass'] .ag-band__title {
+  grid-column: 1 / 4;
+}
+
+[data-variant='aurora-glass'] .ag-band__nav {
+  grid-column: 4 / -1;
+}
+
+[data-variant='aurora-glass'] .ag-band__nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-2xs);
+}
+
+[data-variant='aurora-glass'] .ag-band__nav a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 2.75rem;
+  padding-inline: var(--space-s);
+  border-radius: var(--ui-radius-badge);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  transition: background-color var(--motion-feedback) var(--motion-curve);
+}
+
+[data-variant='aurora-glass'] .ag-band__nav a:hover {
+  background-color: var(--color-surface-prominent);
+  color: var(--color-text-primary);
+}
+
+[data-variant='aurora-glass'] .ag-sec {
+  position: relative;
+}
+
+[data-variant='aurora-glass'] .ag-sec__head {
+  grid-column: 1 / 4;
+  display: grid;
+  align-content: start;
+  gap: var(--space-2xs);
+}
+
+[data-variant='aurora-glass'] .ag-sec__sub {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-sec__body {
+  grid-column: 4 / -1;
+  display: grid;
+  align-content: start;
+  gap: var(--space-m);
+  min-inline-size: 0;
+}
+
+/* A spread: the lede's lite beside a column of the short lites that follow it, the sky between. */
+[data-variant='aurora-glass'] .ag-spread {
+  display: grid;
+  grid-template-columns: minmax(0, 8fr) minmax(0, 4fr);
+  gap: var(--layout-mullion);
+  align-items: start;
+}
+
+[data-variant='aurora-glass'] .ag-spread__side {
+  display: grid;
+  gap: var(--layout-mullion);
+}
+
+[data-variant='aurora-glass'] .ag-spread__side .ag-sec {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-variant='aurora-glass'] .ag-spread .ag-sec__head,
+[data-variant='aurora-glass'] .ag-spread .ag-sec__body {
+  grid-column: 1 / -1;
+}
+
+[data-variant='aurora-glass'] .ag-spread__main .ag-sec {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* A split lite: its head is a lite, its body brings its own lites or sheets into the mullions. */
+[data-variant='aurora-glass'] .ag-sec--split {
+  background-image: none;
+  padding: 0;
+  row-gap: var(--layout-mullion);
+  column-gap: var(--layout-mullion);
+}
+
+[data-variant='aurora-glass'] .ag-sec--split > .ag-sec__head {
+  grid-column: 1 / -1;
+  padding: var(--space-m) var(--layout-inset);
+  background-image: var(--layout-surface);
+}
+
+[data-variant='aurora-glass'] .ag-sec--split > .ag-sec__body {
+  grid-column: 1 / -1;
+  gap: var(--layout-mullion);
+}
+
+[data-variant='aurora-glass'] .ag-lites {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--layout-mullion);
+}
+
+/*
+ * Each figure lite takes two of the row's tracks through subgrid, its value
+ * and its words, so every statement in a row of lites starts on one line;
+ * its note follows its own statement inside the words, so a long statement
+ * in one lite leaves no gap under a short one's note.
+ */
+[data-variant='aurora-glass'] .ag-figures .ag-lite {
+  grid-row: span 2;
+  display: grid;
+  grid-template-rows: subgrid;
+  align-items: start;
+  row-gap: var(--space-2xs);
+  padding: var(--space-l) var(--layout-inset);
+}
+
+[data-variant='aurora-glass'] .ag-figures .ag-figure__value {
+  grid-row: 1;
+  align-self: end;
+}
+
+[data-variant='aurora-glass'] .ag-figures .ag-figure__words {
+  grid-row: 2;
+  display: grid;
+  align-content: start;
+  gap: var(--space-2xs);
+}
+
+[data-variant='aurora-glass'] .ag-figure__value {
+  font-size: var(--type-step-5);
+  line-height: 1;
+}
+
+[data-variant='aurora-glass'] .ag-figure__note {
+  color: var(--color-text-secondary);
+}
+
+/* ── rows: the one structure inside every reading lite ── */
+
+[data-variant='aurora-glass'] .ag-rows {
+  display: grid;
+}
+
+[data-variant='aurora-glass'] .ag-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--space-m);
+  row-gap: var(--space-3xs);
+  padding-block: var(--space-s);
+  border-block-start: var(--layout-line-hair);
+}
+
+[data-variant='aurora-glass'] .ag-row:first-child {
+  border-block-start: 0;
+  padding-block-start: 0;
+}
+
+[data-variant='aurora-glass'] .ag-row > * {
+  grid-column: 1;
+}
+
+[data-variant='aurora-glass'] .ag-row__date {
+  grid-column: 2;
+  grid-row: 1;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+[data-variant='aurora-glass'] .ag-sec .ag-row__title a {
+  color: var(--color-text-primary);
+}
+
+[data-variant='aurora-glass']
+  :is(.ag-row__sum, .ag-row__where, .ag-row__foot, .ag-stop__where, .ag-stop__when) {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass']
+  :is(.ag-row__where, .ag-row__foot, .ag-id__where, .ag-work__meta, .ag-stop__where) {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-s);
+}
+
+[data-variant='aurora-glass'] .ag-row__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs);
+}
+
+[data-variant='aurora-glass'] .ag-chip {
+  padding: var(--space-3xs) var(--space-xs);
+  border-radius: var(--ui-radius-badge);
+  background-color: color-mix(in oklab, var(--color-accent) 14%, var(--color-surface-prominent));
+  color: var(--color-text-primary);
+}
+
+[data-variant='aurora-glass'] .ag-essay--lead {
+  padding-block-end: var(--space-m);
+}
+
+[data-variant='aurora-glass'] .ag-essay__pull {
+  font-size: var(--type-step-3);
+  max-inline-size: 28ch;
+  margin-block-end: var(--space-s);
+}
+
+[data-variant='aurora-glass'] .ag-episode {
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+}
+
+[data-variant='aurora-glass'] .ag-episode > * {
+  grid-column: 2;
+}
+
+[data-variant='aurora-glass'] .ag-episode__no {
+  grid-column: 1;
+  grid-row: 1;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-backref a {
+  color: var(--color-accent-text);
+}
+
+/* ── works: sheets laid on the lite ── */
+
+[data-variant='aurora-glass'] .ag-works {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: var(--space-s);
+  align-items: start;
+}
+
+[data-variant='aurora-glass'] .ag-work {
+  display: grid;
+  transition: transform var(--motion-feedback) var(--motion-curve);
+}
+
+/* The hover reads by eye as well as by its 2px lift: the sheet's shadow deepens to the overlay's (the confirmation design check's hover note). Not motion, so not gated. */
+[data-variant='aurora-glass'] :is(.ag-work, .ag-sig):is(:hover, :focus-within) {
+  box-shadow: var(--ui-shadow-overlay);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='aurora-glass']:not([data-motion='reduced'], [data-motion='static']) .ag-work:hover,
+  [data-variant='aurora-glass']:not([data-motion='reduced'], [data-motion='static'])
+    .ag-work:focus-within {
+    transform: var(--ui-state-hover-transform);
+  }
+}
+
+[data-variant='aurora-glass'] .ag-work--lead {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+}
+
+[data-variant='aurora-glass'] .ag-work--lead.ag-work--text {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-variant='aurora-glass'] .ag-work--lead .ag-work__media {
+  aspect-ratio: 4 / 3;
+  border-block-end: 0;
+  border-inline-end: var(--layout-line-hair);
+}
+
+[data-variant='aurora-glass'] .ag-work__body {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2xs);
+  padding: var(--space-m);
+}
+
+[data-variant='aurora-glass'] .ag-work--lead .ag-work__body {
+  padding: var(--space-l);
+  gap: var(--space-xs);
+}
+
+[data-variant='aurora-glass'] .ag-sec .ag-work__title a {
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+[data-variant='aurora-glass'] :is(.ag-work__meta, .ag-work__sum) {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-work__proof {
+  display: grid;
+  gap: var(--space-3xs);
+  padding-block-start: var(--space-xs);
+  border-block-start: var(--layout-line-hair);
+}
+
+[data-variant='aurora-glass'] .ag-archive summary {
+  min-block-size: 2.75rem;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+/* ── Looking: the band's one full-width photograph, then two frames and a strip ── */
+
+[data-variant='aurora-glass'] .ag-sec--wide .ag-sec__body {
+  grid-column: 1 / -1;
+}
+
+[data-variant='aurora-glass'] .ag-looking {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+[data-variant='aurora-glass'] .ag-looking__note {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+[data-variant='aurora-glass'] .ag-looking__lead .ag-looking__img {
+  inline-size: 100%;
+  aspect-ratio: 21 / 9;
+  object-fit: cover;
+  border-radius: var(--ui-radius-media);
+}
+
+[data-variant='aurora-glass'] .ag-looking__frames {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-xs);
+}
+
+[data-variant='aurora-glass'] .ag-looking__strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: var(--space-xs);
+}
+
+[data-variant='aurora-glass'] :is(.ag-looking__frames, .ag-looking__strip) .ag-looking__img {
+  inline-size: 100%;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  border-radius: var(--ui-radius-media);
+}
+
+[data-variant='aurora-glass'] .ag-looking figcaption {
+  margin-block-start: var(--space-3xs);
+  color: var(--color-text-secondary);
+}
+
+/* ── the sleeve ── */
+
+[data-variant='aurora-glass'] .ag-sleeve {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: var(--space-l);
+  align-items: start;
+}
+
+[data-variant='aurora-glass'] .ag-sleeve--text {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-variant='aurora-glass'] .ag-sleeve__img {
+  inline-size: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+[data-variant='aurora-glass'] .ag-sleeve__body {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+[data-variant='aurora-glass'] .ag-tracks {
+  counter-reset: track;
+  border-block-start: var(--layout-line-hair);
+}
+
+[data-variant='aurora-glass'] .ag-tracks__row {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  gap: var(--space-xs);
+  padding-block: var(--space-2xs);
+  border-block-end: var(--layout-line-hair);
+  counter-increment: track;
+}
+
+[data-variant='aurora-glass'] .ag-tracks__row::before {
+  content: counter(track);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── the cascade: quotes shingled down the lite ── */
+
+[data-variant='aurora-glass'] .ag-cascade {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+}
+
+[data-variant='aurora-glass'] .ag-say {
+  grid-column: 1 / 11;
+  padding: var(--space-l);
+}
+
+[data-variant='aurora-glass'] .ag-say:nth-child(even) {
+  grid-column: 3 / -1;
+}
+
+[data-variant='aurora-glass'] .ag-say + .ag-say {
+  margin-block-start: calc(-1 * var(--space-s));
+}
+
+[data-variant='aurora-glass'] .ag-say__figure {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='aurora-glass'] .ag-say__quote {
+  max-inline-size: 52ch;
+}
+
+[data-variant='aurora-glass'] .ag-say__who {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-xs);
+}
+
+[data-variant='aurora-glass'] .ag-say__role {
+  color: var(--color-text-secondary);
+}
+
+/* ── portals, the rail, the rays, the groups ── */
+
+[data-variant='aurora-glass'] .ag-portals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: var(--layout-mullion);
+}
+
+[data-variant='aurora-glass'] .ag-portal {
+  display: grid;
+  align-content: start;
+  gap: var(--space-xs);
+  padding: var(--space-l) var(--layout-inset);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+[data-variant='aurora-glass'] .ag-portal__title a {
+  color: var(--color-text-primary);
+}
+
+[data-variant='aurora-glass'] .ag-portal__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-m);
+}
+
+[data-variant='aurora-glass'] .ag-portal__facts dd {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-rail {
+  position: relative;
+  display: grid;
+  gap: var(--space-m);
+  padding-inline-start: var(--space-l);
+}
+
+[data-variant='aurora-glass'] .ag-rail::before {
+  content: '';
+  position: absolute;
+  inset-block: var(--space-2xs);
+  inset-inline-start: var(--space-2xs);
+  border-inline-start: var(--layout-rail-line) solid
+    color-mix(in oklab, var(--color-border-default) 70%, var(--color-surface-default));
+}
+
+[data-variant='aurora-glass'] .ag-stop {
+  position: relative;
+}
+
+/*
+ * A stop off the main thread sits one step in, the third lane folded into
+ * the second's offset (the concept's glass rail has one branch), and a
+ * short branch joins its bead to the rail, so no bead floats on its own.
+ */
+[data-variant='aurora-glass'] .ag-stop:is([data-lane='1'], [data-lane='2']) {
+  margin-inline-start: var(--space-m);
+}
+
+[data-variant='aurora-glass'] .ag-stop:is([data-lane='1'], [data-lane='2'])::before {
+  content: '';
+  position: absolute;
+  inset-block-start: calc(var(--space-3xs) + var(--layout-bead) / 2 - var(--layout-rail-line) / 2);
+  inset-inline-start: calc(var(--space-2xs) - var(--space-l) - var(--space-m));
+  inline-size: calc(var(--space-m) - var(--space-2xs));
+  border-block-start: var(--layout-rail-line) solid
+    color-mix(in oklab, var(--color-border-default) 70%, var(--color-surface-default));
+}
+
+[data-variant='aurora-glass'] .ag-stop__bead {
+  position: absolute;
+  inset-block-start: var(--space-3xs);
+  inset-inline-start: calc(-1 * var(--space-l));
+  inline-size: var(--layout-bead);
+  block-size: var(--layout-bead);
+  border-radius: var(--ui-radius-badge);
+  border: 2px solid var(--color-accent);
+  background-color: var(--color-accent);
+}
+
+[data-variant='aurora-glass'] .ag-stop[data-bead='study'] .ag-stop__bead {
+  background-color: var(--color-surface-prominent);
+}
+
+[data-variant='aurora-glass'] .ag-stop[data-bead='other'] .ag-stop__bead {
+  border-color: var(--color-text-secondary);
+  background-color: var(--color-surface-prominent);
+}
+
+/*
+ * A stop spans its row as the record's rows do: its words in the first
+ * track, its dates at the row's end on the title's line, so no track is
+ * left empty beside a short entry (G2).
+ */
+[data-variant='aurora-glass'] .ag-stop__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--space-m);
+  row-gap: var(--space-3xs);
+}
+
+[data-variant='aurora-glass'] .ag-stop__body > * {
+  grid-column: 1;
+}
+
+[data-variant='aurora-glass'] .ag-stop__body > .ag-stop__when {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  justify-self: end;
+  text-align: end;
+}
+
+[data-variant='aurora-glass'] .ag-stop__fork {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-stop__points {
+  display: grid;
+  gap: var(--space-3xs);
+  padding-inline-start: var(--space-s);
+  list-style: disc;
+}
+
+[data-variant='aurora-glass'] .ag-gh__totals {
+  max-inline-size: 40ch;
+}
+
+[data-variant='aurora-glass'] .ag-rays {
+  display: block;
+  inline-size: 100%;
+  block-size: 4rem;
+}
+
+[data-variant='aurora-glass'] .ag-ray {
+  fill: var(--color-accent);
+}
+
+[data-variant='aurora-glass'] .ag-ray--none {
+  fill: var(--color-border-default);
+}
+
+[data-variant='aurora-glass'] .ag-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: var(--space-m) var(--layout-grid-gutter);
+}
+
+[data-variant='aurora-glass'] .ag-group {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3xs);
+  padding-block-start: var(--space-xs);
+  border-block-start: var(--layout-line-hair);
+}
+
+[data-variant='aurora-glass'] .ag-group dd {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-list {
+  display: grid;
+}
+
+[data-variant='aurora-glass'] .ag-list li {
+  padding-block: var(--space-2xs);
+  border-block-start: var(--layout-line-hair);
+}
+
+[data-variant='aurora-glass'] .ag-list li:first-child {
+  border-block-start: 0;
+}
+
+[data-variant='aurora-glass'] .ag-quote {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='aurora-glass'] .ag-quote__text {
+  max-inline-size: 30ch;
+}
+
+[data-variant='aurora-glass'] .ag-quote__who {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-xs);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-prose {
+  max-inline-size: var(--type-measure-body);
+}
+
+/* ── the horizon: the contact pane over the owner's own landscape, the call as its sheet ── */
+
+[data-variant='aurora-glass'] .ag-horizon {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  padding-block: var(--rhythm-group);
+}
+
+[data-variant='aurora-glass'] .ag-horizon__photo {
+  position: absolute;
+  inset-block: 0;
+  inset-inline: 0;
+  z-index: -1;
+  overflow: clip;
+  border-radius: var(--ui-radius-overlay);
+}
+
+/* The same dimming over the horizon's photograph. */
+[data-variant='aurora-glass'] .ag-horizon__photo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-color: var(--layout-photo-dim);
+  mix-blend-mode: multiply;
+}
+
+[data-variant='aurora-glass'] .ag-horizon__img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+  object-position: 50% 80%;
+}
+
+[data-variant='aurora-glass'] .ag-horizon__panes {
+  grid-column: 2 / 12;
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  align-items: end;
+}
+
+[data-variant='aurora-glass'] .ag-call {
+  grid-column: 1 / 8;
+  display: grid;
+  gap: var(--space-m);
+  padding: var(--space-xl);
+  border: var(--ui-border-card) var(--color-border-subtle);
+  border-radius: var(--ui-radius-overlay);
+  background-image: var(--layout-surface);
+  box-shadow: var(--ui-shadow-card);
+}
+
+[data-variant='aurora-glass'] :is(.ag-call, .ag-offer) .ag-sec__head,
+[data-variant='aurora-glass'] :is(.ag-call, .ag-offer) .ag-sec__body {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='aurora-glass'] .ag-call__mail {
+  font-size: var(--type-step-4);
+}
+
+/* Each part whole; only the word break after the @ wraps, and a part longer than the line still wraps at its end. */
+[data-variant='aurora-glass'] .ag-call__part {
+  display: inline-block;
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
+}
+
+[data-variant='aurora-glass'] .ag-call__mail a {
+  color: var(--color-text-primary);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.12em;
+}
+
+[data-variant='aurora-glass'] .ag-call__note {
+  max-inline-size: 45ch;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-call__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+}
+
+[data-variant='aurora-glass'] .ag-call__link {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 2.75rem;
+  padding-inline: var(--space-s);
+  border: var(--ui-border-control) var(--color-border-default);
+  border-radius: var(--ui-radius-badge);
+  text-decoration: none;
+}
+
+[data-variant='aurora-glass'] .ag-offer {
+  z-index: 1;
+  grid-column: 7 / -1;
+  display: grid;
+  gap: var(--space-s);
+  margin-block-end: calc(-1 * var(--space-l));
+  padding: var(--space-l);
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-prominent);
+  border: var(--ui-border-card) var(--color-border-subtle);
+  border-radius: var(--ui-radius-card);
+  box-shadow: var(--ui-shadow-raised);
+}
+
+[data-variant='aurora-glass'] .ag-call + .ag-offer {
+  grid-row: 1;
+}
+
+[data-variant='aurora-glass'] .ag-offer__acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs) var(--space-m);
+}
+
+[data-variant='aurora-glass'] .ag-foot {
+  padding-block-end: var(--space-xl);
+}
+
+[data-variant='aurora-glass'] .ag-foot__pane {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  row-gap: var(--space-xs);
+  padding: var(--space-m) var(--layout-inset);
+  border-radius: var(--ui-radius-card);
+}
+
+[data-variant='aurora-glass'] .ag-foot__name {
+  grid-column: 1 / 4;
+}
+
+[data-variant='aurora-glass'] .ag-foot__name a {
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+[data-variant='aurora-glass'] .ag-foot__credit {
+  grid-column: 4 / 10;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-foot__meta {
+  grid-column: 10 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  gap: var(--space-2xs) var(--space-m);
+  color: var(--color-text-secondary);
+}
+
+/* ── the Index: a native dialog in the top layer ── */
+
+[data-variant='aurora-glass'] .ag-index {
+  inset-block: var(--space-xl) auto;
+  inset-inline: 0;
+  margin-inline: auto;
+  inline-size: min(100% - 2 * var(--layout-grid-margin), 46rem);
+  max-block-size: calc(100dvh - 2 * var(--space-xl));
+  overflow: auto;
+  padding: var(--space-l);
+  transform-origin: 50% 0;
+}
+
+/*
+ * Until the enhancement marks the page live, the Index is a plain link and
+ * the dialog a contents list in the flow after main, never left open over
+ * the page (index-dialog.tsx).
+ */
+[data-variant='aurora-glass'] .ag:not([data-ag-live]) .ag-capsule__index--live,
+[data-variant='aurora-glass'] .ag[data-ag-live] .ag-capsule__index--plain {
+  display: none;
+}
+
+[data-variant='aurora-glass'] .ag:not([data-ag-live]) .ag-index {
+  display: block;
+  position: static;
+  inset: auto;
+  max-block-size: none;
+  overflow: visible;
+  margin-block: var(--space-xl);
+  color: inherit;
+}
+
+[data-variant='aurora-glass'] .ag:not([data-ag-live]) .ag-index__close {
+  display: none;
+}
+
+/* It fades in; with no-preference and the page's motion on, it drops in from 0.97 too. */
+[data-variant='aurora-glass'] .ag-index:popover-open {
+  display: block;
+  animation: aurora-glass-fade var(--motion-feedback) var(--motion-curve);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='aurora-glass']:not([data-motion='reduced'], [data-motion='static'])
+    .ag-index:popover-open {
+    animation-name: aurora-glass-drop;
+  }
+}
+
+[data-variant='aurora-glass'] .ag-index::backdrop {
+  background-color: color-mix(in srgb, var(--color-scrim) 62%, transparent);
+}
+
+@keyframes aurora-glass-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes aurora-glass-drop {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+[data-variant='aurora-glass'] .ag-index__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-m);
+  margin-block-end: var(--space-m);
+}
+
+[data-variant='aurora-glass'] .ag-index__close {
+  min-block-size: 2.75rem;
+  padding-inline: var(--space-s);
+  border: var(--ui-border-control) var(--color-border-default);
+  border-radius: var(--ui-radius-badge);
+  background-color: var(--color-surface-prominent);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+[data-variant='aurora-glass'] .ag-index__rows {
+  display: grid;
+}
+
+[data-variant='aurora-glass'] .ag-index__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3xs) var(--space-m);
+  padding-block: var(--space-s);
+  border-block-start: var(--layout-line-hair);
+}
+
+[data-variant='aurora-glass'] .ag-index__row:first-child {
+  border-block-start: 0;
+}
+
+[data-variant='aurora-glass'] .ag-index__dest {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 2.75rem;
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+[data-variant='aurora-glass'] .ag-index__count {
+  color: var(--color-text-secondary);
+  align-self: center;
+}
+
+[data-variant='aurora-glass'] .ag-index__sections {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-m);
+}
+
+[data-variant='aurora-glass'] .ag-index__sections li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-3xs);
+}
+
+[data-variant='aurora-glass'] .ag-index__sections a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 1.75rem;
+  color: var(--color-accent-text);
+}
+
+[data-variant='aurora-glass'] .ag-index__sections .ag-num {
+  color: var(--color-text-secondary);
+}
+
+/* ── the full record's folds (design gate item 8): one more lite each, a row of content closed ── */
+
+[data-variant='aurora-glass'] .ag-fold {
+  display: block;
+}
+
+[data-variant='aurora-glass'] .ag-fold__summary {
+  display: grid;
+  /* One layout at every width (the approval's item 6): the bead, the heading and the count on one
+     line, the first item under the heading; the count holds its place open or closed (item 10). */
+  grid-template-columns: var(--layout-bead) minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: var(--layout-grid-gutter);
+  row-gap: var(--space-3xs);
+  padding: var(--space-m) var(--layout-inset);
+  list-style: none;
+  cursor: pointer;
+}
+
+[data-variant='aurora-glass'] .ag-fold__summary::-webkit-details-marker {
+  display: none;
+}
+
+/*
+ * The summary's ring is drawn inside it, as the stretch links draw theirs (an inset ring on a
+ * pseudo-element over the lite's own surface), so it never lands in the mullion where the sky
+ * shows (the quality cells' focus contrast on the folds).
+ */
+[data-variant='aurora-glass'] .ag-fold__summary {
+  position: relative;
+}
+
+[data-variant='aurora-glass'] .ag-fold__summary:focus-visible {
+  outline: none;
+}
+
+[data-variant='aurora-glass'] .ag-fold__summary:focus-visible::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  outline: var(--ui-focus-width) var(--ui-focus-style) var(--color-focus);
+  outline-offset: calc(-1 * var(--ui-focus-width) - var(--ui-focus-offset));
+  pointer-events: none;
+}
+
+/* Hollow while closed, filled while open: the rail's study and work beads. */
+[data-variant='aurora-glass'] .ag-fold__bead {
+  align-self: center;
+  inline-size: var(--layout-bead);
+  block-size: var(--layout-bead);
+  border-radius: var(--ui-radius-badge);
+  border: 2px solid var(--color-accent);
+  background-color: var(--color-surface-prominent);
+  transition: background-color var(--motion-feedback) var(--motion-curve);
+}
+
+[data-variant='aurora-glass'] .ag-fold[open] > .ag-fold__summary .ag-fold__bead,
+[data-variant='aurora-glass'] .ag-fold__summary:hover .ag-fold__bead {
+  background-color: var(--color-accent);
+}
+
+[data-variant='aurora-glass'] .ag-fold__first {
+  grid-column: 2 / -1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-fold__count {
+  justify-self: end;
+  max-inline-size: 16ch;
+  color: var(--color-text-secondary);
+  text-align: end;
+}
+
+[data-variant='aurora-glass'] .ag-fold[open] > .ag-fold__summary .ag-fold__first {
+  display: none;
+}
+
+/* A fragment that lands on a folded section with no script stops short of it by the summary's height, so the summary shows. */
+[data-variant='aurora-glass'] .ag-fold {
+  scroll-margin-block-start: var(--layout-sticky-offset);
+}
+
+[data-variant='aurora-glass'] .ag-fold > [id] {
+  scroll-margin-block-start: calc(var(--layout-sticky-offset) + 2 * var(--space-m) + 3lh);
+}
+
+/* A record inside a folded section lands on itself, clear of the capsule (low 3). */
+[data-variant='aurora-glass'] .ag-fold > [id] [id] {
+  scroll-margin-block-start: var(--layout-sticky-offset);
+}
+
+/* Inside, the section's own frame: the summary is its head, so its own heading steps aside. */
+[data-variant='aurora-glass'] .ag-fold > .ag-sec {
+  grid-template-columns: minmax(0, 1fr);
+  padding-block-start: 0;
+  row-gap: 0;
+  background-image: none;
+}
+
+[data-variant='aurora-glass'] .ag-fold > .ag-sec > .ag-sec__head > .ag-sec__title {
+  display: none;
+}
+
+[data-variant='aurora-glass'] .ag-fold > .ag-sec > :is(.ag-sec__head, .ag-sec__body) {
+  grid-column: 1;
+  padding-inline-start: calc(var(--layout-bead) + var(--layout-grid-gutter));
+}
+
+[data-variant='aurora-glass'] .ag-fold > .ag-sec--split > .ag-sec__head {
+  display: none;
+}
+
+/* A fragment's landing: the fold that holds the target says so with its bead and an accent rule. */
+[data-variant='aurora-glass'] .ag-fold:has(:target) > .ag-fold__summary {
+  background-image: linear-gradient(var(--color-accent), var(--color-accent));
+  background-repeat: no-repeat;
+  background-position: bottom;
+  background-size: 100% var(--ui-focus-width);
+}
+
+[data-variant='aurora-glass'] .ag-fold:has(:target) > .ag-fold__summary .ag-fold__bead {
+  background-color: var(--color-accent);
+}
+
+/* With no script, an engine that doesn't open a fold for its fragment still shows the target. */
+@supports selector(::details-content) {
+  [data-variant='aurora-glass'] .ag-fold:has(:target)::details-content {
+    content-visibility: visible;
+    display: block;
+  }
+}
+
+@media (max-width: 64rem) {
+  [data-variant='aurora-glass'] .ag-fold__summary {
+    padding-inline: var(--space-m);
+  }
+
+  [data-variant='aurora-glass'] .ag-fold > .ag-sec > :is(.ag-sec__head, .ag-sec__body) {
+    padding-inline-start: 0;
+  }
+}
+
+/* ── the case study: the home's shingle and lites, for one work ── */
+
+[data-variant='aurora-glass'] .ag-crumb ol {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-2xs);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-crumb li + li::before {
+  content: '/' / '';
+  margin-inline-end: var(--space-2xs);
+}
+
+[data-variant='aurora-glass'] .ag-crumb a {
+  color: var(--color-text-primary);
+  text-underline-offset: 0.2em;
+}
+
+[data-variant='aurora-glass'] .ag-case .ag-id__top {
+  gap: var(--space-l);
+  padding-block-start: var(--space-s);
+}
+
+[data-variant='aurora-glass'] .ag-case .ag-id__line {
+  font-size: var(--type-step-6);
+}
+
+[data-variant='aurora-glass'] .ag-case__sum {
+  max-inline-size: 34ch;
+  color: var(--color-text-secondary);
+}
+
+/* The fact sheet (S4) in the pane's foot, where the home has its tiles: terms over values, on the pane's columns. */
+/* In source order after the cover's sheet; wide, the grid lays it in the pane's foot, as the home lays its tiles. */
+[data-variant='aurora-glass'] .ag-facts {
+  position: relative;
+  z-index: 1;
+  grid-column: 1 / 8;
+  grid-row: 3;
+  align-self: end;
+  margin-inline: var(--space-xl) 0;
+  margin-block-end: var(--space-m);
+  padding-block-start: var(--space-s);
+  border-block-start: var(--layout-line-hair);
+}
+
+[data-variant='aurora-glass'] .ag-facts__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: var(--space-s) var(--layout-grid-gutter);
+}
+
+[data-variant='aurora-glass'] .ag-facts__row {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3xs);
+}
+
+[data-variant='aurora-glass'] .ag-facts dt {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-case__cover .ag-sig__body {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-s);
+  padding-block: var(--space-s);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-case__cover .ag-sig__kicker {
+  color: var(--color-text-primary);
+}
+
+[data-variant='aurora-glass'] .ag-case__band {
+  margin-block-start: var(--rhythm-group);
+}
+
+[data-variant='aurora-glass'] .ag-case__reach {
+  display: grid;
+  gap: var(--space-2xs);
+  padding-block-start: var(--space-s);
+  border-block-start: var(--layout-line-hair);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-case__reach li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+}
+
+[data-variant='aurora-glass'] .ag-case__gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: var(--space-m);
+}
+
+[data-variant='aurora-glass'] .ag-case__img {
+  inline-size: 100%;
+}
+
+[data-variant='aurora-glass'] .ag-case__before .ag-sec__body {
+  grid-template-columns: minmax(0, 5fr) minmax(0, 3fr);
+  column-gap: var(--layout-grid-gutter);
+  align-items: end;
+}
+
+[data-variant='aurora-glass'] .ag-case__lead .pf-rich-text {
+  font-size: var(--type-step-2);
+  max-inline-size: 30ch;
+}
+
+[data-variant='aurora-glass'] .ag-case__aside {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-case__limit {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2xs);
+  padding: var(--space-l) var(--layout-inset);
+}
+
+[data-variant='aurora-glass'] .ag-case__limit h3 {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-choice {
+  padding-block: var(--space-m);
+}
+
+[data-variant='aurora-glass'] .ag-choice__why {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-choice__instead {
+  padding-block-start: var(--space-2xs);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-choice__label {
+  color: var(--color-text-primary);
+}
+
+/* What changed: the outcome's lite, with the press quote's sheet laid across its end edge into the sky. */
+[data-variant='aurora-glass'] .ag-case__shingle {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+}
+
+[data-variant='aurora-glass'] .ag-case__outcome {
+  grid-column: 1 / 9;
+  grid-row: 1;
+  display: grid;
+  align-content: start;
+  gap: var(--space-m);
+  padding: var(--space-l) var(--layout-inset);
+}
+
+[data-variant='aurora-glass'] .ag-case__shingle[data-press='yes'] .ag-case__outcome {
+  padding-inline-end: calc(100% / 8 + var(--layout-inset));
+}
+
+[data-variant='aurora-glass'] .ag-case__shingle[data-press='no'] .ag-case__outcome {
+  grid-column: 1 / -1;
+}
+
+[data-variant='aurora-glass'] .ag-case__press {
+  z-index: 1;
+  grid-column: 8 / 13;
+  grid-row: 1;
+  align-self: end;
+  display: grid;
+  gap: var(--space-s);
+  margin-block-end: var(--space-l);
+  padding: var(--space-l);
+}
+
+[data-variant='aurora-glass'] .ag-case__press blockquote {
+  font-size: var(--type-step-1);
+}
+
+[data-variant='aurora-glass'] .ag-case__press-by {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-xs);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-case__awards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+}
+
+[data-variant='aurora-glass'] .ag-case__awards .ag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  padding-inline-start: var(--space-3xs);
+}
+
+[data-variant='aurora-glass'] .ag-case__year {
+  padding: 0 var(--space-xs);
+  border-radius: var(--ui-radius-badge);
+  background-color: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+[data-variant='aurora-glass'] .ag-case__back .pf-rich-text {
+  font-size: var(--type-step-3);
+  max-inline-size: 28ch;
+}
+
+[data-variant='aurora-glass'] .ag-case__next {
+  inline-size: var(--layout-page);
+  margin-inline: auto;
+}
+
+[data-variant='aurora-glass'] .ag-case__next-row {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  align-items: end;
+}
+
+[data-variant='aurora-glass'] .ag-case__next-sheet {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+[data-variant='aurora-glass'] .ag-case__next-sheet .ag-sig__media {
+  aspect-ratio: auto;
+  border-block-end: 0;
+  border-inline-end: var(--layout-line-hair);
+}
+
+[data-variant='aurora-glass'] .ag-case__next-sheet .ag-sig__body {
+  align-content: center;
+}
+
+[data-variant='aurora-glass'] .ag-case__next-title a {
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+[data-variant='aurora-glass'] .ag-case__next {
+  margin-block-start: var(--rhythm-group);
+}
+
+[data-variant='aurora-glass'] .ag-case__next-row {
+  row-gap: var(--layout-mullion);
+}
+
+[data-variant='aurora-glass'] .ag-case__more {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+}
+
+[data-variant='aurora-glass'] .ag-case__all {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2xs);
+  padding: var(--space-l) var(--layout-inset);
+}
+
+[data-variant='aurora-glass'] .ag-case__all:only-child {
+  grid-column: 1 / -1;
+}
+
+[data-variant='aurora-glass'] .ag-case__others {
+  padding: var(--space-l) var(--layout-inset);
+}
+
+[data-variant='aurora-glass'] .ag-case__all-where {
+  color: var(--color-text-secondary);
+}
+
+/* Narrower, it follows the cover as a pane of its own, never words on the sky (the approval's item 1). */
+@media (max-width: 64rem) {
+  [data-variant='aurora-glass'] .ag-facts {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    margin: var(--layout-mullion) 0 0;
+    padding: var(--space-l);
+    border: var(--ui-border-card) var(--color-border-subtle);
+    border-radius: var(--ui-radius-overlay);
+    background-image: var(--layout-surface);
+    box-shadow: var(--ui-shadow-card);
+  }
+}
+
+/* ── the owner's further words on a row or a sheet (the content sweep): links by label, places, groups ── */
+
+[data-variant='aurora-glass'] .ag-row__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-s);
+}
+
+[data-variant='aurora-glass'] .ag-row__links a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 1.5rem;
+  color: var(--color-accent-text);
+}
+
+/* Over a sheet's stretched title link (.ag-stretch::after, z-index 1), so each takes its own click. */
+[data-variant='aurora-glass'] :is(.ag-sig__links, .ag-sig__tracks, .ag-more) {
+  position: relative;
+  z-index: 2;
+}
+
+/* A row's longer text, closed under its label (blocker 2), marked as a fold is: the folds' ring
+   bead, smaller, filled when open, so it reads as a disclosure, not a link (the design review's 3). */
+[data-variant='aurora-glass'] .ag-more__summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  min-block-size: 1.5rem;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  list-style: none;
+}
+
+[data-variant='aurora-glass'] .ag-more__summary::-webkit-details-marker {
+  display: none;
+}
+
+[data-variant='aurora-glass'] .ag-more__summary::before {
+  content: '';
+  flex: none;
+  inline-size: calc(var(--layout-bead) * 0.75);
+  block-size: calc(var(--layout-bead) * 0.75);
+  border: 2px solid var(--color-accent);
+  border-radius: var(--ui-radius-badge);
+  background-color: var(--color-surface-prominent);
+  transition: background-color var(--motion-feedback) var(--motion-curve);
+}
+
+[data-variant='aurora-glass'] .ag-more[open] > .ag-more__summary::before,
+[data-variant='aurora-glass'] .ag-more__summary:hover::before {
+  background-color: var(--color-accent);
+}
+
+[data-variant='aurora-glass'] .ag-more__body {
+  padding-block-start: var(--space-2xs);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-standfirst__sub {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass']
+  :is(.ag-work__tools, .ag-sig__meta, .ag-looking__where, .ag-group__note, .ag-offers__group) {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='aurora-glass'] .ag-sig__meta {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-s);
+}
+
+[data-variant='aurora-glass'] .ag-looking__where {
+  padding-block-start: var(--space-3xs);
+}
+
+[data-variant='aurora-glass'] .ag-offers__group {
+  border-block-start: 0;
+  padding-block-end: 0;
+}
+
+/* ── narrower screens ── */
+
+@media (max-width: 75rem) {
+  /*
+   * Too narrow to centre the capsule beside the ornament (at 1024 Pause
+   * met the call): the capsule takes the row's start and its full width,
+   * Pause follows it directly, the destinations, the Index and the call keep
+   * their size at its end, and the name has what's left, ellipsized when long.
+   */
+  [data-variant='aurora-glass'] .ag-chrome {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  [data-variant='aurora-glass'] .ag-capsule {
+    grid-column: 1;
+  }
+
+  [data-variant='aurora-glass'] .ag-ornament {
+    grid-column: 2;
+  }
+
+  [data-variant='aurora-glass'] .ag-capsule > * {
+    flex: none;
+  }
+
+  [data-variant='aurora-glass'] .ag-capsule > .ag-capsule__name {
+    flex: 0 1 auto;
+    margin-inline-end: auto;
+  }
+
+  /*
+   * A long Contact title gives way too, after the name has: it shrinks and
+   * ellipsizes, its accessible name whole, so the destinations, the Index
+   * and Pause keep their place in the capsule (the delta review's low 6).
+   */
+  [data-variant='aurora-glass'] .ag-capsule > .ag-capsule__cta {
+    flex: 0 1 auto;
+    min-inline-size: 0;
+  }
+
+  [data-variant='aurora-glass'] .ag-capsule__cta-text {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+@media (max-width: 64rem) {
+  [data-variant='aurora-glass'] .ag-opening {
+    grid-template-rows: none;
+  }
+
+  [data-variant='aurora-glass'] .ag-id {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    display: grid;
+    grid-template-rows: none;
+    gap: var(--space-m);
+    padding: var(--space-l);
+    padding-block-end: var(--rhythm-group);
+  }
+
+  [data-variant='aurora-glass'] .ag-id__body {
+    padding: 0;
+  }
+
+  [data-variant='aurora-glass'] .ag-sig {
+    grid-column: 2 / -1;
+    grid-row: auto;
+    margin-block: calc(-1 * var(--rhythm-group) + var(--space-s)) 0;
+  }
+
+  [data-variant='aurora-glass'] .ag-tiles {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    margin: var(--space-s) 0 0;
+    padding: 0;
+    border: 0;
+  }
+
+  [data-variant='aurora-glass'] .ag-lens {
+    display: none;
+  }
+
+  [data-variant='aurora-glass'] :is(.ag-id__top, .ag-id__meta) {
+    padding-inline-end: 0;
+    margin-inline-end: 0;
+  }
+
+  /* Not a split lite: its lites run to the pane's edges, like every other lite (the At a glance inset). */
+  [data-variant='aurora-glass'] :is(.ag-band__head, .ag-sec:not(.ag-sec--split)) {
+    padding-inline: var(--space-m);
+  }
+
+  [data-variant='aurora-glass'] :is(.ag-band__title, .ag-band__nav, .ag-sec__head, .ag-sec__body) {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='aurora-glass'] .ag-spread {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='aurora-glass'] .ag-horizon__panes {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr);
+    padding-inline: var(--space-s);
+  }
+
+  [data-variant='aurora-glass'] :is(.ag-call, .ag-offer, .ag-call + .ag-offer) {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  [data-variant='aurora-glass'] .ag-offer {
+    margin: calc(-1 * var(--space-m)) var(--space-s) 0;
+  }
+
+  [data-variant='aurora-glass'] :is(.ag-foot__name, .ag-foot__credit, .ag-foot__meta) {
+    grid-column: 1 / -1;
+    justify-content: start;
+  }
+}
+
+/*
+ * From 56 to 64rem the stacked pane leaves its end column open beside the standfirst and the lede:
+ * the Lens hangs there, on the frost, at a third of its wide size (the design review's S1 item:
+ * the Lens at 1024). Narrower, the reading measure reaches that column, and it goes.
+ */
+@media (min-width: 56.01rem) and (max-width: 64rem) {
+  [data-variant='aurora-glass'] .ag-opening[data-lens='yes'] .ag-lens {
+    display: block;
+    position: absolute;
+    z-index: 2;
+    inset-inline-end: calc(var(--space-l) + var(--space-m));
+    /* Level with the standfirst, under the display line, clear of the sheet below the pane. */
+    inset-block-start: 16rem;
+    inline-size: 12rem;
+  }
+}
+
+/*
+ * Below 56rem the destinations, the Index, the call, Pause and the visitor's
+ * control don't fit on one row beside a name: the destinations fold into the
+ * Index, as on a phone, and the name keeps what's left. On screen only: a
+ * sheet of paper under 56rem keeps them as the page's head (low 7).
+ */
+@media screen and (max-width: 56rem) {
+  [data-variant='aurora-glass'] .ag-capsule .ag-capsule__dest {
+    display: none;
+  }
+}
+
+@media (max-width: 48rem) {
+  /*
+   * Every twelve-track grid (the opening, the bands' sections, the horizon,
+   * the footer) has eleven gutters. At --space-m, about 27px at 320, they
+   * came to 297px against the 284px page a 320px window leaves, so the
+   * tracks, minmax(0, 1fr) already, had nothing left and the grid ran 13px
+   * past the page's end (the pane, 317px from x 18). On a phone
+   * almost everything spans every track anyway; the gutter steps down.
+   */
+  [data-variant='aurora-glass'] {
+    --layout-grid-gutter: var(--space-xs);
+  }
+
+  [data-variant='aurora-glass'] .ag-stop__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='aurora-glass'] .ag-stop__body > .ag-stop__when {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+    text-align: start;
+  }
+
+  [data-variant='aurora-glass'] .ag-chrome {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  [data-variant='aurora-glass'] .ag-capsule {
+    grid-column: 1;
+    justify-content: space-between;
+  }
+
+  [data-variant='aurora-glass'] .ag-ornament {
+    grid-column: 2;
+  }
+
+  [data-variant='aurora-glass'] .ag-capsule .ag-narrow {
+    display: inline;
+  }
+
+  [data-variant='aurora-glass'] .ag-id {
+    padding: var(--space-m);
+    padding-block-end: var(--rhythm-group);
+  }
+
+  /* The action sits a ring's reach higher in a foot that much deeper: its focus ring clears the sheet, which stays put (the 390 quality cell). */
+  [data-variant='aurora-glass'] .ag-opening[data-sheet='yes'] .ag-id {
+    padding-block-end: calc(
+      var(--rhythm-group) + var(--ui-focus-offset) + 2 * var(--ui-focus-width)
+    );
+  }
+
+  [data-variant='aurora-glass'] .ag-opening[data-sheet='yes'] .ag-id__acts {
+    margin-block-start: calc(
+      var(--space-xs) - (var(--ui-focus-offset) + 2 * var(--ui-focus-width))
+    );
+  }
+
+  [data-variant='aurora-glass'] .ag-id__meta {
+    justify-content: start;
+  }
+
+  [data-variant='aurora-glass'] .ag-id__line,
+  [data-variant='aurora-glass'] .ag-id__line[data-length='medium'] {
+    font-size: var(--type-step-5);
+  }
+
+  /* On a phone the signature sheet hangs from the pane's foot at the end side, off the pane's column, lapping its empty foot only. */
+  [data-variant='aurora-glass'] .ag-sig {
+    grid-column: 2 / -1;
+    /* It laps the pane's empty foot alone, never the action above it (the delta check). */
+    margin-block-start: calc(-1 * var(--rhythm-group));
+  }
+
+  [data-variant='aurora-glass'] .ag-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  [data-variant='aurora-glass'] .ag-tile:first-child:nth-last-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='aurora-glass'] .ag-work--lead,
+  [data-variant='aurora-glass'] .ag-sleeve {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='aurora-glass'] .ag-work--lead .ag-work__media {
+    border-inline-end: 0;
+    border-block-end: var(--layout-line-hair);
+  }
+
+  [data-variant='aurora-glass'] .ag-say,
+  [data-variant='aurora-glass'] .ag-say:nth-child(even) {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='aurora-glass'] .ag-looking__lead .ag-looking__img {
+    aspect-ratio: 4 / 3;
+  }
+
+  [data-variant='aurora-glass'] .ag-index {
+    inset-block-start: var(--space-s);
+    max-block-size: calc(100dvh - 2 * var(--space-s));
+    padding: var(--space-m);
+  }
+
+  /* A row's date leaves its column for a caption line under the title, so the title has the width (the design review's 390 dates). */
+  [data-variant='aurora-glass'] .ag-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='aurora-glass'] .ag-row__date {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  /* At a glance two by two (the approval's item 3). */
+  [data-variant='aurora-glass'] .ag-figures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  [data-variant='aurora-glass'] .ag-figures .ag-lite {
+    padding: var(--space-m);
+  }
+
+  [data-variant='aurora-glass'] .ag-figure__value {
+    font-size: var(--type-step-4);
+  }
+
+  /* The email steps down a size on a phone, so a usual address fits whole or breaks after its @ (item 7). */
+  [data-variant='aurora-glass'] .ag-call__mail {
+    font-size: var(--type-step-2);
+  }
+
+  /* The case study on a phone. */
+  [data-variant='aurora-glass'] .ag-case__more {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Never past a tenth of the window, so a long word of the title fits whole at 320 (the design review's 1). */
+  [data-variant='aurora-glass'] .ag-case .ag-id__line {
+    font-size: min(var(--type-step-5), 10vw);
+  }
+
+  [data-variant='aurora-glass'] .ag-facts__list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  [data-variant='aurora-glass'] .ag-case__before .ag-sec__body,
+  [data-variant='aurora-glass'] .ag-case__next-sheet {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='aurora-glass'] .ag-case__next-sheet .ag-sig__media {
+    aspect-ratio: 16 / 9;
+    border-inline-end: 0;
+    border-block-end: var(--layout-line-hair);
+  }
+
+  [data-variant='aurora-glass']
+    :is(
+      .ag-case__outcome,
+      .ag-case__press,
+      .ag-case__next-sheet,
+      .ag-case__all,
+      .ag-case__all:only-child
+    ) {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
+  [data-variant='aurora-glass'] .ag-case__shingle[data-press='yes'] .ag-case__outcome {
+    padding-inline-end: var(--space-m);
+    padding-block-end: var(--rhythm-group);
+  }
+
+  /* The press quote runs the band's full width, laid over the outcome's foot (the approval's item 8). */
+  [data-variant='aurora-glass'] .ag-case__press {
+    margin-block: calc(-1 * var(--rhythm-group) + var(--space-s)) 0;
+    margin-inline: 0;
+  }
+}
+
+/* The phone's cuts are the screen's alone: a sheet of paper that narrow prints them (the print inventory). */
+@media screen and (max-width: 48rem) {
+  /*
+   * No band sub-nav on a phone (item 4 allows dropping it): one scrolling
+   * line clipped its own focus rings, and the band's sections follow one
+   * another anyway. The Index still reaches every section.
+   */
+  [data-variant='aurora-glass'] .ag-band__nav {
+    display: none;
+  }
+
+  [data-variant='aurora-glass'] .ag-capsule :is(.ag-capsule__dest, .ag-capsule__cta, .ag-wide) {
+    display: none;
+  }
+}
+
+/*
+ * The capsule at enlarged text (the root-text check): the media queries read the initial text
+ * size, so the chrome's own width, in its text's em, folds the destinations into the Index under
+ * 52em and the capsule to the phone's under 44em, about the chrome's width at the 56rem and 48rem
+ * screens, so at the initial size the media queries still decide. On screen only: paper keeps its
+ * destinations.
+ */
+@media screen {
+  @container ag-chrome (max-width: 52em) {
+    [data-variant='aurora-glass'] .ag-capsule .ag-capsule__dest {
+      display: none;
+    }
+  }
+
+  @container ag-chrome (max-width: 44em) {
+    [data-variant='aurora-glass'] .ag-capsule :is(.ag-capsule__cta, .ag-wide) {
+      display: none;
+    }
+
+    [data-variant='aurora-glass'] .ag-capsule .ag-narrow {
+      display: inline;
+    }
+  }
+}
+
+/*
+ * At 320 nothing clips its own words (the reflow check): the capsule's name and a fold's first
+ * line wrap, and the name steps down a size so the Menu's word keeps its place.
+ */
+@media (max-width: 20rem) {
+  [data-variant='aurora-glass'] :is(.ag-capsule__name, .ag-fold__first) {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+
+  /* The name steps down a size, so the Menu's word keeps its place beside it (one name, "Menu"). */
+  [data-variant='aurora-glass'] .ag-capsule__name {
+    font-size: var(--type-step--1);
+  }
+}
+
+@media (forced-colors: active) {
+  [data-variant='aurora-glass'] :is(.ag-capsule, .ag-orn, .ag-tile, .ag-sheet) {
+    border-color: currentColor;
+  }
+
+  /*
+   * Forced colors drop a background image, and a frosted surface's surface is one: it went
+   * transparent over the sky's photograph, every ring with it (the forced-colors cells). The sky
+   * and the horizon's photograph go, and every frosted surface takes the canvas (Canvas there).
+   */
+  [data-variant='aurora-glass'] :is(.ag-sky, .ag-horizon__photo) {
+    display: none;
+  }
+
+  [data-variant='aurora-glass']
+    :is(
+      .ag-pane,
+      .ag-lite,
+      .ag-capsule,
+      .ag-orn,
+      .ag-call,
+      .ag-facts,
+      .ag-sec--split > .ag-sec__head,
+      .ag-ornament > [data-visitor-control-slot]
+    ) {
+    background-color: var(--color-canvas);
+  }
+
+  /* An accent action is the canvas, the text's colour and an outline of it: a system fill under its own text's backplate hid its words. */
+  [data-variant='aurora-glass'] :is(.ag-btn, .ag-capsule .ag-capsule__cta) {
+    border: 1px solid currentColor;
+    background-color: var(--color-canvas);
+    color: var(--color-text-primary);
+  }
+
+  /* A focused capsule item paints over its neighbours, so their fills never cut its ring. */
+  [data-variant='aurora-glass'] .ag-capsule a:focus-visible {
+    position: relative;
+    z-index: 1;
+  }
+}
+
+@media print {
+  [data-variant='aurora-glass'] :is(.ag-sky, .ag-lens, .ag-ornament, .ag-horizon__photo) {
+    display: none;
+  }
+
+  /* On paper the capsule is the page's head: the name and its destinations as one plain line in
+     the flow, with the sky gone from behind it, and without the controls a sheet can't press. */
+  [data-variant='aurora-glass'] .ag-chrome {
+    position: static;
+    display: block;
+    inline-size: auto;
+    margin-block-end: var(--space-s);
+  }
+
+  /* Every capsule control a sheet can't press, Pause too: its own below-75rem rule outweighs a plain one. */
+  [data-variant='aurora-glass'] .ag .ag-capsule :is(button, .ag-orn--capsule:not([hidden])) {
+    display: none;
+  }
+
+  /* And a still Pause's note goes with it. */
+  [data-variant='aurora-glass'] .ag .ag-capsule .ag-orn__held:not([hidden]) {
+    display: none;
+  }
+
+  /* Its plain link to the Index prints, as the Index does: on paper it's the contents' entry. */
+  [data-variant='aurora-glass'] .ag .ag-capsule .ag-capsule__index--plain {
+    display: inline-flex;
+  }
+
+  /* A narrow sheet wraps the head rather than run it off the paper (the 390 print cell), and the
+     link takes its paper word, Index, as the contents it leads to; Menu is the phone's button. */
+  [data-variant='aurora-glass'] :is(.ag-capsule, .ag-capsule__dest) {
+    flex-wrap: wrap;
+  }
+
+  [data-variant='aurora-glass'] .ag-capsule .ag-narrow {
+    display: none;
+  }
+
+  [data-variant='aurora-glass'] .ag-capsule .ag-wide {
+    display: inline;
+  }
+
+  [data-variant='aurora-glass'] .ag-opening-frame {
+    padding-block-start: 0;
+  }
+
+  /* The Index prints in the flow as the page's contents, every section title with it, open or not. */
+  [data-variant='aurora-glass'] .ag-index {
+    display: block;
+    position: static;
+    inset: auto;
+    inline-size: auto;
+    max-block-size: none;
+    overflow: visible;
+    margin: var(--space-l) 0 0;
+    transform: none;
+    animation: none;
+  }
+
+  [data-variant='aurora-glass'] .ag-index__close {
+    display: none;
+  }
+
+  [data-variant='aurora-glass']
+    :is(
+      .ag-pane,
+      .ag-lite,
+      .ag-sheet,
+      .ag-call,
+      .ag-offer,
+      .ag-band__pane,
+      .ag-capsule,
+      .ag-btn,
+      .ag-orn
+    ) {
+    box-shadow: none;
+    background-image: none;
+  }
+
+  /* Every fold prints open, where ::details-content exists; the enhancement's beforeprint opens them elsewhere. */
+  @supports selector(::details-content) {
+    [data-variant='aurora-glass'] :is(.ag-fold, .ag-more)::details-content {
+      content-visibility: visible;
+      display: block;
+    }
+
+    /* Only where the text prints open: elsewhere, with no script, the summary is what prints. */
+    [data-variant='aurora-glass'] .ag-more__summary {
+      display: none;
+    }
+  }
+
+  [data-variant='aurora-glass'] .ag-fold__first {
+    visibility: hidden;
+  }
+}
