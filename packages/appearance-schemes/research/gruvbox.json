@@ -1,0 +1,27 @@
+{
+  "id": "gruvbox",
+  "name": "Gruvbox",
+  "kind": "color-scheme",
+  "tier": "research",
+  "source": {
+    "name": "Gruvbox",
+    "url": "https://github.com/morhetz/gruvbox"
+  },
+  "license": "unverified",
+  "researchedAt": "2026-10-17",
+  "reason": "Its upstream license isn't verified, so it doesn't ship. Promoting it is its own owner-approved PR with a source URL, an SPDX license, attribution, a pinned upstream version, and a naming decision.",
+  "anchors": {
+    "light": {
+      "canvas": "#fbf1c7",
+      "text": "#3c3836",
+      "accent": "#b57614",
+      "secondary": "#427b58"
+    },
+    "dark": {
+      "canvas": "#282828",
+      "text": "#ebdbb2",
+      "accent": "#fabd2f",
+      "secondary": "#83a598"
+    }
+  }
+}

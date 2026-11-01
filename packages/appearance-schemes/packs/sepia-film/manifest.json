@@ -1,0 +1,80 @@
+{
+  "id": "sepia-film",
+  "name": "Sepia Film",
+  "description": "Sepia film stock: warm browns with a rust accent and an olive secondary.",
+  "version": "1.1.2",
+  "tokenContract": 1,
+  "tier": "stable",
+  "family": "earthy",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v2 from the reviewed prototype's sepia-film anchors. LANG-5e deepens the dark stock to #25170b, apart from warm-parchment's dark; the light anchors stay as approved. adjustments lists the 14 roles it moves from anchor-v1."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [],
+  "derivation": "anchor-v2",
+  "anchors": {
+    "light": {
+      "canvas": "#f4e2c5",
+      "text": "#30251b",
+      "accent": "#9a4f32",
+      "secondary": "#6e7658"
+    },
+    "dark": {
+      "canvas": "#25170b",
+      "text": "#f0d8b6",
+      "accent": "#cb7654",
+      "secondary": "#a0a77d"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#584b3d", "#534639"],
+      "text-muted": ["#625547", "#5d5043"],
+      "border-strong": ["#7e705e", "#786a59"],
+      "accent-text": ["#87472e", "#7d432c"],
+      "data-categorical-3": ["#268551", "#1e7f4b"],
+      "data-categorical-6": ["#584b3d", "#534639"],
+      "signature-end": ["#6e7658", "#697053"]
+    },
+    "dark": {
+      "text-secondary": ["#c2ad90", "#c9b496"],
+      "text-muted": ["#b6a185", "#bda88b"],
+      "border-strong": ["#958269", "#9c896f"],
+      "accent-text": ["#d79573", "#db9e7c"],
+      "data-categorical-6": ["#c2ad90", "#c9b496"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#6c3723", "#633320"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#db9f87", "#dea791"]
+    }
+  },
+  "swatches": ["#f4e2c5", "#30251b", "#9a4f32", "#6e7658"]
+}

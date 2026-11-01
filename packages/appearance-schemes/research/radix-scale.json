@@ -1,0 +1,27 @@
+{
+  "id": "radix-scale",
+  "name": "Radix Scale",
+  "kind": "color-scheme",
+  "tier": "research",
+  "source": {
+    "name": "Radix Scale",
+    "url": "https://www.radix-ui.com/colors"
+  },
+  "license": "unverified",
+  "researchedAt": "2026-10-17",
+  "reason": "Its upstream license isn't verified, so it doesn't ship. Promoting it is its own owner-approved PR with a source URL, an SPDX license, attribution, a pinned upstream version, and a naming decision.",
+  "anchors": {
+    "light": {
+      "canvas": "#fdfcff",
+      "text": "#211f26",
+      "accent": "#6e56cf",
+      "secondary": "#12a594"
+    },
+    "dark": {
+      "canvas": "#17151f",
+      "text": "#eeeadd",
+      "accent": "#9e8cfc",
+      "secondary": "#4ccbb5"
+    }
+  }
+}

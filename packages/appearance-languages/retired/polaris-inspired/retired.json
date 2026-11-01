@@ -1,0 +1,11 @@
+{
+  "retiredVersion": 1,
+  "id": "polaris-inspired",
+  "kind": "design-language",
+  "aliasOf": "spectrum-2-inspired",
+  "reason": "Its tokens were spectrum-2-inspired's but one, 40 of 41: icon-stroke-width 1.75 against 1.5. Neither ships a stylesheet (LANG-1).",
+  "change": "at the merge, its icon strokes became slightly thinner",
+  "survivorVersion": "1.0.2",
+  "survivorDigest": "sha256-4fb76ae9131c0b07be1a3e3ba187f8b639445e9aaa47d58e397133dc6126b777",
+  "retiredAt": "2026-10-28"
+}

@@ -1,0 +1,11 @@
+{
+  "retiredVersion": 1,
+  "id": "literary-reading",
+  "kind": "typography",
+  "aliasOf": "editorial-serif",
+  "reason": "LANG-4 found it editorial-serif's twin: every role's size, weight, line height and letter spacing and both measures the same, only its faces differing, Charter for Iowan Old Style and Trebuchet MS labels for Avenir Next (LANG-5a, the owner's call).",
+  "change": "at the merge, its serif became an old-style face (Iowan Old Style on Apple devices) and its labels a neutral sans",
+  "survivorVersion": "1.0.0",
+  "survivorDigest": "sha256-511d0efadd40cb4587f4a26e9e91240318a8c3f978d96b631ca96d79c81b7690",
+  "retiredAt": "2026-10-29"
+}

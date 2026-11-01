@@ -1,0 +1,27 @@
+{
+  "id": "catppuccin",
+  "name": "Catppuccin",
+  "kind": "color-scheme",
+  "tier": "research",
+  "source": {
+    "name": "Catppuccin",
+    "url": "https://github.com/catppuccin/catppuccin"
+  },
+  "license": "unverified",
+  "researchedAt": "2026-10-17",
+  "reason": "Its upstream license isn't verified, so it doesn't ship. Promoting it is its own owner-approved PR with a source URL, an SPDX license, attribution, a pinned upstream version, and a naming decision.",
+  "anchors": {
+    "light": {
+      "canvas": "#eff1f5",
+      "text": "#4c4f69",
+      "accent": "#8839ef",
+      "secondary": "#179299"
+    },
+    "dark": {
+      "canvas": "#1e1e2e",
+      "text": "#cdd6f4",
+      "accent": "#cba6f7",
+      "secondary": "#89dceb"
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "id": "solarized",
+  "name": "Solarized",
+  "kind": "color-scheme",
+  "tier": "research",
+  "source": {
+    "name": "Solarized",
+    "url": "https://github.com/altercation/solarized"
+  },
+  "license": "unverified",
+  "researchedAt": "2026-10-17",
+  "reason": "Its upstream license isn't verified, so it doesn't ship. Promoting it is its own owner-approved PR with a source URL, an SPDX license, attribution, a pinned upstream version, and a naming decision.",
+  "anchors": {
+    "light": {
+      "canvas": "#fdf6e3",
+      "text": "#657b83",
+      "accent": "#268bd2",
+      "secondary": "#2aa198"
+    },
+    "dark": {
+      "canvas": "#002b36",
+      "text": "#839496",
+      "accent": "#268bd2",
+      "secondary": "#2aa198"
+    }
+  }
+}

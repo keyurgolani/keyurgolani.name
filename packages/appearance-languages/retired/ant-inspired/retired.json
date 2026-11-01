@@ -1,0 +1,11 @@
+{
+  "retiredVersion": 1,
+  "id": "ant-inspired",
+  "kind": "design-language",
+  "aliasOf": "primer-inspired",
+  "reason": "Its tokens were primer-inspired's, 41 of 41, and neither ships a stylesheet (LANG-1).",
+  "change": null,
+  "survivorVersion": "1.0.2",
+  "survivorDigest": "sha256-e25719b49c11b0cf76aafdb794e802cd19d3c894f6061b82cca2cce3e938a9da",
+  "retiredAt": "2026-10-28"
+}

@@ -1,0 +1,40 @@
+/*
+ * Material 3: the primitives' parts only. The default Action is a filled
+ * tonal button, a secondary-container fill with no outline; Field and Select
+ * are filled text fields, a surface-subtle fill with a 4px top corner and
+ * one indicator line along the bottom in the language's control border.
+ * A pressed tonal button keeps the primitives' inset accent ring, so its
+ * state never rests on color alone, though its border stays transparent.
+ */
+[data-ui-slot='action'][data-emphasis='secondary'] {
+  background-color: var(--color-surface-prominent);
+  border-color: transparent;
+}
+
+[data-ui-slot='field.control'],
+[data-ui-slot='select.control'] {
+  border-width: 0 0 1px;
+  border-radius: 4px 4px 0 0;
+}
+
+/* An invalid field's indicator takes the language's validation weight, as the primitives' border does. */
+[data-ui-slot='field.control'][aria-invalid='true'],
+[data-ui-slot='select.control'][aria-invalid='true'] {
+  border-width: 0 0 var(--ui-state-validation-emphasis);
+}
+
+/*
+ * Material's state layer: hover lays 8% of the text color over the tonal
+ * fill. Not on a pressed one, whose accent-text label the layer would take
+ * under 4.5:1 in dark; Material gives a selected state a layer of its own.
+ */
+[data-ui-slot='action'][data-emphasis='secondary']:hover:not(
+    :disabled,
+    [aria-disabled='true'],
+    [aria-pressed='true']
+  ) {
+  background-image: linear-gradient(
+    color-mix(in srgb, var(--color-text-primary) 8%, transparent),
+    color-mix(in srgb, var(--color-text-primary) 8%, transparent)
+  );
+}

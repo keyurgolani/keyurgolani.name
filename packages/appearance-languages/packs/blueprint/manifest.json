@@ -1,0 +1,91 @@
+{
+  "id": "blueprint",
+  "name": "Blueprint",
+  "description": "A drafting sheet: square corners, rules and card outlines drawn as dashed accent linework, solid control outlines, measured density, a dashed focus ring, linear motion that never nudges, and hairline icons.",
+  "version": "1.1.4",
+  "tokenContract": 1,
+  "tier": "extended",
+  "family": "expressive",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "The reviewed prototype's blueprint recipe, with its --appearance-* references read as --color-*, and the contract's signature-fill and emphasis-glow at the fallback language's values."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "focus-ring", "stylesheet-lint"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "Under reduced transparency, without backdrop-filter, in forced colors, and in print, surfaces render opaque and the backdrop blur is 0.",
+    "Under reduced motion, transforms and emphasis stop and entrances and exits fade; a paused boundary and print are instant.",
+    "In forced colors, the material is a solid surface, and shadows and texture drop."
+  ],
+  "caveats": [
+    "Translucent surfaces with a backdrop blur cost paint time on slower devices, and read less clearly over busy content.",
+    "A decorative gradient texture sits behind surfaces.",
+    "Its dashed focus ring is 4px, not the prototype's 3px: at 3px, the dashes' gaps leave the ring short of the area a 2px ring covers at 3:1.",
+    "Ships opaque: its approved 92% translucent surfaces fall under the contrast targets with its texture over a black or white backdrop, so its surfaces are 100% opaque, and only a dialog's backdrop is blurred. This supersedes the translucency caveats above."
+  ],
+  "tokens": {
+    "surface-material": "linear-gradient(color-mix(in srgb, var(--color-surface-default) 92%, transparent), color-mix(in srgb, var(--color-surface-default) 92%, transparent))",
+    "radius-control": "0",
+    "radius-card": "0",
+    "radius-overlay": "0",
+    "radius-media": "0",
+    "radius-badge": "0",
+    "border-control": "1px solid var(--color-border-strong)",
+    "border-card": "1px dashed var(--color-accent)",
+    "border-divider": "2px dashed var(--color-accent)",
+    "shadow-card": "none",
+    "shadow-overlay": "0 10px 28px color-mix(in srgb, var(--color-shadow) 16%, transparent)",
+    "shadow-raised": "none",
+    "shadow-inset": "none",
+    "surface-opacity": "100%",
+    "backdrop-blur": "8px",
+    "control-height": "2.5rem",
+    "space-control-inline": "0.875rem",
+    "space-control-block": "0.625rem",
+    "space-surface-inline": "1.25rem",
+    "space-surface-block": "1.25rem",
+    "focus-width": "4px",
+    "focus-offset": "3px",
+    "focus-style": "dashed",
+    "state-hover-transform": "none",
+    "state-active-transform": "none",
+    "state-selected-emphasis": "2px",
+    "state-disabled-opacity": "0.45",
+    "state-loading-opacity": "0.65",
+    "state-validation-emphasis": "2px",
+    "icon-stroke-width": "1",
+    "icon-fill": "none",
+    "motion-fast": "120ms",
+    "motion-standard": "200ms",
+    "motion-slow": "320ms",
+    "motion-easing": "linear",
+    "motion-enter": "fade",
+    "motion-exit": "fade",
+    "motion-emphasis": "none",
+    "texture": "linear-gradient(var(--color-border-subtle) 1px, transparent 1px), linear-gradient(90deg, var(--color-border-subtle) 1px, transparent 1px)",
+    "signature-fill": "linear-gradient(90deg, var(--color-signature-start), var(--color-signature-end))",
+    "emphasis-glow": "none"
+  },
+  "approvedSurfaceOpacity": "92%"
+}

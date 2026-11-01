@@ -1,0 +1,65 @@
+{
+  "id": "liquid-dusk",
+  "name": "Liquid Dusk",
+  "description": "Hot pink and amber over a deep indigo night, with a cobalt third hue for decorative fields. Dark only.",
+  "version": "1.0.1",
+  "tokenContract": 1,
+  "tier": "extended",
+  "family": "vivid",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-25",
+    "maintainer": "keyurgolani",
+    "derivation": "Anchored from the flux direction in the owner's ten-variant report (2026-10-25), derived by anchor-v2, with an emphasis anchor for the decorative third hue (S1)."
+  },
+  "modes": ["dark"],
+  "lockedMode": "dark",
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "It has one base mode, dark, and locks every display mode to it: an indigo night has no daylight. High contrast is derived by high-contrast-v2, and print renders the high-contrast light set."
+  ],
+  "caveats": [],
+  "anchors": {
+    "dark": {
+      "canvas": "#0f0c29",
+      "text": "#ffffff",
+      "accent": "#ff5e8a",
+      "secondary": "#ffb347",
+      "emphasis": "#4e7cff"
+    }
+  },
+  "adjustments": {
+    "dark": {
+      "border-strong": ["#828190", "#8a8997"],
+      "accent-text": ["#ff7198", "#ff7fa2"],
+      "emphasis": ["#ff5e8a", "#4e7cff"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#732a3e", "#6e283c"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#ff86a7", "#ff92b0"]
+    }
+  },
+  "derivation": "anchor-v2",
+  "swatches": ["#ff5e8a", "#ffb347"]
+}

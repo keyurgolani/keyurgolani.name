@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "fonts": [
+    {
+      "file": "fonts/fraunces-latin-600-normal.woff2",
+      "sha256": "3a1de7711d147bad4422825045f87597fd77cca72e7c96d3b0a81735d00dda82",
+      "source": {
+        "package": "@fontsource/fraunces",
+        "version": "5.3.0",
+        "path": "files/fraunces-latin-600-normal.woff2"
+      },
+      "license": {
+        "spdx": "OFL-1.1",
+        "file": "fonts/LICENSE-fontsource-fraunces.txt"
+      },
+      "latin": true
+    },
+    {
+      "file": "fonts/fraunces-latin-ext-600-normal.woff2",
+      "sha256": "69e09c7910e64d829e051f023af4c38a2e74b61d9e9439502f56edd7154b117c",
+      "source": {
+        "package": "@fontsource/fraunces",
+        "version": "5.3.0",
+        "path": "files/fraunces-latin-ext-600-normal.woff2"
+      },
+      "license": {
+        "spdx": "OFL-1.1",
+        "file": "fonts/LICENSE-fontsource-fraunces.txt"
+      },
+      "latin": false,
+      "optional": true
+    },
+    {
+      "file": "fonts/newsreader-latin-400-italic.woff2",
+      "sha256": "fa9b900403949d9a723106752a5c8ad2797012a0c9057427b1da2db72d552148",
+      "source": {
+        "package": "@fontsource/newsreader",
+        "version": "5.3.0",
+        "path": "files/newsreader-latin-400-italic.woff2"
+      },
+      "license": {
+        "spdx": "OFL-1.1",
+        "file": "fonts/LICENSE-fontsource-newsreader.txt"
+      },
+      "latin": true
+    },
+    {
+      "file": "fonts/newsreader-latin-400-normal.woff2",
+      "sha256": "e66067814f1c672d33a457e4f4d102c818b481420e2234cf685ebdbf2f443904",
+      "source": {
+        "package": "@fontsource/newsreader",
+        "version": "5.3.0",
+        "path": "files/newsreader-latin-400-normal.woff2"
+      },
+      "license": {
+        "spdx": "OFL-1.1",
+        "file": "fonts/LICENSE-fontsource-newsreader.txt"
+      },
+      "latin": true
+    },
+    {
+      "file": "fonts/newsreader-latin-600-normal.woff2",
+      "sha256": "05c91a26d19a61eafe7ce8e0b77eff3fd279ce994dc89f432f4cd06784935e84",
+      "source": {
+        "package": "@fontsource/newsreader",
+        "version": "5.3.0",
+        "path": "files/newsreader-latin-600-normal.woff2"
+      },
+      "license": {
+        "spdx": "OFL-1.1",
+        "file": "fonts/LICENSE-fontsource-newsreader.txt"
+      },
+      "latin": true,
+      "optional": true
+    },
+    {
+      "file": "fonts/newsreader-latin-ext-400-italic.woff2",
+      "sha256": "b775f4faa4ffd1bbb36db8c9504c95af98d82e37209f3a6253915c7cae919d6a",
+      "source": {
+        "package": "@fontsource/newsreader",
+        "version": "5.3.0",
+        "path": "files/newsreader-latin-ext-400-italic.woff2"
+      },
+      "license": {
+        "spdx": "OFL-1.1",
+        "file": "fonts/LICENSE-fontsource-newsreader.txt"
+      },
+      "latin": false,
+      "optional": true
+    },
+    {
+      "file": "fonts/newsreader-latin-ext-400-normal.woff2",
+      "sha256": "9d9350535facb67450976945ae249ab8ade73e4909deb3deaa756caa5e7dbb59",
+      "source": {
+        "package": "@fontsource/newsreader",
+        "version": "5.3.0",
+        "path": "files/newsreader-latin-ext-400-normal.woff2"
+      },
+      "license": {
+        "spdx": "OFL-1.1",
+        "file": "fonts/LICENSE-fontsource-newsreader.txt"
+      },
+      "latin": false,
+      "optional": true
+    },
+    {
+      "file": "fonts/newsreader-latin-ext-600-normal.woff2",
+      "sha256": "8ed127d0474a8dcfcadbf7b7b010739c27b66be954c7475237552826926fb394",
+      "source": {
+        "package": "@fontsource/newsreader",
+        "version": "5.3.0",
+        "path": "files/newsreader-latin-ext-600-normal.woff2"
+      },
+      "license": {
+        "spdx": "OFL-1.1",
+        "file": "fonts/LICENSE-fontsource-newsreader.txt"
+      },
+      "latin": false,
+      "optional": true
+    }
+  ]
+}

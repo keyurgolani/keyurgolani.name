@@ -1,0 +1,21 @@
+{
+  "id": "cobalt",
+  "name": "Cobalt",
+  "kind": "color-scheme",
+  "tier": "research",
+  "source": {
+    "name": "Cobalt",
+    "url": null
+  },
+  "license": "unverified",
+  "researchedAt": "2026-10-17",
+  "reason": "Its upstream license isn't verified, so it doesn't ship. Promoting it is its own owner-approved PR with a source URL, an SPDX license, attribution, a pinned upstream version, and a naming decision.",
+  "anchors": {
+    "dark": {
+      "canvas": "#002240",
+      "text": "#ffffff",
+      "accent": "#ffc600",
+      "secondary": "#0088ff"
+    }
+  }
+}

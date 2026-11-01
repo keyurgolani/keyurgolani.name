@@ -1,0 +1,90 @@
+{
+  "id": "industrial",
+  "name": "Industrial",
+  "description": "Plant floor: 2px machined corners, 2px outlines in the strong border color, rules dashed like marked floor lanes, plates with a lit top edge and a shadowed bottom lip, chunky 44px controls, heavy ease-in motion with a press that sinks, brushed-metal surfaces, and a grid texture on the shared surfaces.",
+  "version": "1.1.5",
+  "tokenContract": 1,
+  "tier": "extended",
+  "family": "raw",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "The reviewed prototype's industrial recipe, with its --appearance-* references read as --color-*, and the contract's signature-fill and emphasis-glow at the fallback language's values."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "focus-ring", "stylesheet-lint"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "Under reduced transparency, without backdrop-filter, in forced colors, and in print, surfaces render opaque and the backdrop blur is 0.",
+    "Under reduced motion, transforms and emphasis stop and entrances and exits fade; a paused boundary and print are instant.",
+    "In forced colors, the material is a solid surface, and shadows and texture drop."
+  ],
+  "caveats": [
+    "Translucent surfaces with a backdrop blur cost paint time on slower devices, and read less clearly over busy content.",
+    "A decorative gradient texture sits behind surfaces.",
+    "Ships opaque: its approved 96% translucent surfaces fall under the contrast targets with its texture over a black or white backdrop, so its surfaces are 100% opaque, and only a dialog's backdrop is blurred. This supersedes the translucency caveats above."
+  ],
+  "tokens": {
+    "surface-material": "linear-gradient(135deg, var(--color-surface-subtle), var(--color-surface-prominent) 45%, var(--color-surface-default) 55%, var(--color-surface-subtle))",
+    "radius-control": "2px",
+    "radius-card": "2px",
+    "radius-overlay": "4px",
+    "radius-media": "2px",
+    "radius-badge": "2px",
+    "border-control": "2px solid var(--color-border-strong)",
+    "border-card": "2px solid var(--color-border-strong)",
+    "border-divider": "2px dashed var(--color-border-strong)",
+    "shadow-card": "inset 0 1px 0 color-mix(in srgb, var(--color-canvas) 50%, transparent), inset 0 -3px 0 color-mix(in srgb, var(--color-text-primary) 20%, transparent)",
+    "shadow-overlay": "0 10px 28px color-mix(in srgb, var(--color-text-primary) 16%, transparent)",
+    "shadow-raised": "inset 0 1px 0 color-mix(in srgb, var(--color-canvas) 50%, transparent), inset 0 -3px 0 color-mix(in srgb, var(--color-text-primary) 20%, transparent), 0 2px 0 color-mix(in srgb, var(--color-text-primary) 30%, transparent)",
+    "shadow-inset": "inset 2px 2px 5px color-mix(in srgb, var(--color-text-primary) 16%, transparent)",
+    "surface-opacity": "100%",
+    "backdrop-blur": "4px",
+    "control-height": "2.75rem",
+    "space-control-inline": "0.875rem",
+    "space-control-block": "0.5rem",
+    "space-surface-inline": "0.75rem",
+    "space-surface-block": "0.625rem",
+    "focus-width": "3px",
+    "focus-offset": "3px",
+    "focus-style": "solid",
+    "state-hover-transform": "none",
+    "state-active-transform": "translateY(2px)",
+    "state-selected-emphasis": "2px",
+    "state-disabled-opacity": "0.45",
+    "state-loading-opacity": "0.65",
+    "state-validation-emphasis": "2px",
+    "icon-stroke-width": "2",
+    "icon-fill": "none",
+    "motion-fast": "120ms",
+    "motion-standard": "200ms",
+    "motion-slow": "280ms",
+    "motion-easing": "cubic-bezier(0.4, 0, 1, 1)",
+    "motion-enter": "fade-rise",
+    "motion-exit": "fade",
+    "motion-emphasis": "none",
+    "texture": "linear-gradient(var(--color-border-subtle) 1px, transparent 1px), linear-gradient(90deg, var(--color-border-subtle) 1px, transparent 1px)",
+    "signature-fill": "linear-gradient(90deg, var(--color-signature-start), var(--color-signature-end))",
+    "emphasis-glow": "none"
+  },
+  "approvedSurfaceOpacity": "96%"
+}

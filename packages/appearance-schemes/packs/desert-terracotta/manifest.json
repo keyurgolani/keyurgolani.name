@@ -1,0 +1,81 @@
+{
+  "id": "desert-terracotta",
+  "name": "Desert Terracotta",
+  "description": "Sun-baked terracotta and ochre on a rosy clay ground.",
+  "version": "1.1.2",
+  "tokenContract": 1,
+  "tier": "stable",
+  "family": "earthy",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v2 from the reviewed prototype's desert-terracotta anchors, its clay rosier in both modes by LANG-5b, apart from warm-parchment. It puts the light secondary #977842 back to #a68547, undoing PR 2a's nudges. adjustments lists the 15 roles it moves from anchor-v1."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [],
+  "derivation": "anchor-v2",
+  "anchors": {
+    "light": {
+      "canvas": "#f8e5d9",
+      "text": "#3c2820",
+      "accent": "#b55436",
+      "secondary": "#a68547"
+    },
+    "dark": {
+      "canvas": "#2f1b16",
+      "text": "#f9e5d0",
+      "accent": "#e47c58",
+      "secondary": "#d1b16c"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#604c43", "#5b473e"],
+      "text-muted": ["#6a564d", "#655149"],
+      "border-strong": ["#847067", "#7e6a61"],
+      "accent-text": ["#8e462f", "#84422d"],
+      "data-categorical-2": ["#957641", "#8d6d2e"],
+      "data-categorical-6": ["#604c43", "#5b473e"],
+      "signature-start": ["#b55436", "#b35336"],
+      "signature-end": ["#a68547", "#886b3c"]
+    },
+    "dark": {
+      "text-secondary": ["#cab6a5", "#d1bdab"],
+      "text-muted": ["#beaa9a", "#c5b1a0"],
+      "border-strong": ["#9d897b", "#a49082"],
+      "accent-text": ["#ea997a", "#eca486"],
+      "data-categorical-6": ["#cab6a5", "#d1bdab"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#6d3220", "#662f1e"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#e99679", "#eba186"]
+    }
+  },
+  "swatches": ["#f8e5d9", "#3c2820", "#b55436", "#a68547"]
+}

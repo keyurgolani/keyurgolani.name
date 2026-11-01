@@ -1,0 +1,11 @@
+{
+  "retiredVersion": 1,
+  "id": "atlassian-inspired",
+  "kind": "design-language",
+  "aliasOf": "utility-dense",
+  "reason": "Its tokens were utility-dense's, 41 of 41, and neither ships a stylesheet; it filed under product-systems, utility-dense under quiet (LANG-1, the owner's call).",
+  "change": null,
+  "survivorVersion": "1.0.2",
+  "survivorDigest": "sha256-6b080265bbdb67e5ae8179d0d8387366b19cd04382387bee4e1345f9bdc539e5",
+  "retiredAt": "2026-10-28"
+}

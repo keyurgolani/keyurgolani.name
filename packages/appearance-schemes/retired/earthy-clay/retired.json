@@ -1,0 +1,11 @@
+{
+  "retiredVersion": 1,
+  "id": "earthy-clay",
+  "kind": "color-scheme",
+  "aliasOf": "desert-terracotta",
+  "reason": "LANG-4 scored it beside desert-terracotta, the middle of the warm cluster: the same warm light surfaces, a mean ΔE00 of 3.19 (LANG-5a, the owner's call).",
+  "change": "at the merge, its olive second color became ochre, and its clay accent a brighter terracotta",
+  "survivorVersion": "1.1.1",
+  "survivorDigest": "sha256-0bb2aae6e962c3d79996f735335720c88690c5010d8f106c67bf8f4389840fdd",
+  "retiredAt": "2026-10-29"
+}

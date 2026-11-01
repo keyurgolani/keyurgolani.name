@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "fonts": [
+    {
+      "file": "fonts/archivo-latin-ext-wght-normal.woff2",
+      "sha256": "ff4f17d21930e36d6d93baba663e624cb767afc3feebf7adaebd82242638de05",
+      "source": {
+        "package": "@fontsource-variable/archivo",
+        "version": "5.3.0",
+        "path": "files/archivo-latin-ext-wght-normal.woff2"
+      },
+      "license": {
+        "spdx": "OFL-1.1",
+        "file": "fonts/LICENSE-fontsource-variable-archivo.txt"
+      },
+      "latin": false,
+      "optional": true
+    },
+    {
+      "file": "fonts/archivo-latin-wght-normal.woff2",
+      "sha256": "8f704806dbedeaaeca334b11ec348bc3ac3a439d6431544b3afb54f534ee4967",
+      "source": {
+        "package": "@fontsource-variable/archivo",
+        "version": "5.3.0",
+        "path": "files/archivo-latin-wght-normal.woff2"
+      },
+      "license": {
+        "spdx": "OFL-1.1",
+        "file": "fonts/LICENSE-fontsource-variable-archivo.txt"
+      },
+      "latin": true
+    },
+    {
+      "file": "fonts/ibmplexmono-medium-latin1.woff2",
+      "sha256": "41201b658a328b9d00368215c2f1102770f80b15952ab82631e4006255e6365d",
+      "source": {
+        "package": "@ibm/plex-mono",
+        "version": "2.5.0",
+        "path": "fonts/split/woff2/IBMPlexMono-Medium-Latin1.woff2"
+      },
+      "license": {
+        "spdx": "OFL-1.1",
+        "file": "fonts/LICENSE-ibm-plex-mono.txt"
+      },
+      "latin": true
+    },
+    {
+      "file": "fonts/newsreader-latin-400-italic.woff2",
+      "sha256": "fa9b900403949d9a723106752a5c8ad2797012a0c9057427b1da2db72d552148",
+      "source": {
+        "package": "@fontsource/newsreader",
+        "version": "5.3.0",
+        "path": "files/newsreader-latin-400-italic.woff2"
+      },
+      "license": {
+        "spdx": "OFL-1.1",
+        "file": "fonts/LICENSE-fontsource-newsreader.txt"
+      },
+      "latin": true
+    }
+  ]
+}

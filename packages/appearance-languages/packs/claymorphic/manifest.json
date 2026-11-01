@@ -1,0 +1,88 @@
+{
+  "id": "claymorphic",
+  "name": "Claymorphic",
+  "description": "Soft clay: pill controls and deep, puffy corners, borderless cards modelled by a soft drop shadow with a lit top edge and a shaded underside, soft thick rules in a tinted accent, chunky padding, a ring that floats clear of the pill, and squishy motion that overshoots.",
+  "version": "1.0.5",
+  "tokenContract": 1,
+  "tier": "experimental",
+  "family": "expressive",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "The reviewed prototype's clay recipe, with its --appearance-* references read as --color-*, and the contract's signature-fill and emphasis-glow at the fallback language's values."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "focus-ring", "stylesheet-lint"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "Under reduced transparency, without backdrop-filter, in forced colors, and in print, surfaces render opaque and the backdrop blur is 0.",
+    "Under reduced motion, transforms and emphasis stop and entrances and exits fade; a paused boundary and print are instant.",
+    "In forced colors, the material is a solid surface, and shadows and texture drop."
+  ],
+  "caveats": [
+    "Expressive state motion: hovers swell and presses squash more than in a quiet language.",
+    "Its enter motion, spring-in, and emphasis motion, bounce-once, have no keyframes in the platform yet, so they don't animate."
+  ],
+  "tokens": {
+    "surface-material": "linear-gradient(160deg, var(--color-surface-prominent), var(--color-surface-default))",
+    "radius-control": "1.5rem",
+    "radius-card": "32px",
+    "radius-overlay": "36px",
+    "radius-media": "28px",
+    "radius-badge": "999px",
+    "border-control": "1px solid var(--color-border-strong)",
+    "border-card": "0 solid",
+    "border-divider": "4px solid color-mix(in srgb, var(--color-accent) 30%, transparent)",
+    "shadow-card": "0 12px 24px -6px color-mix(in srgb, var(--color-text-primary) 22%, transparent), inset 0 -6px 10px color-mix(in srgb, var(--color-text-primary) 10%, transparent), inset 0 6px 10px color-mix(in srgb, var(--color-canvas) 60%, transparent)",
+    "shadow-overlay": "0 18px 36px -8px color-mix(in srgb, var(--color-text-primary) 26%, transparent), inset 0 -6px 10px color-mix(in srgb, var(--color-text-primary) 10%, transparent), inset 0 6px 10px color-mix(in srgb, var(--color-canvas) 60%, transparent)",
+    "shadow-raised": "0 12px 24px -6px color-mix(in srgb, var(--color-text-primary) 22%, transparent), inset 0 -6px 10px color-mix(in srgb, var(--color-text-primary) 10%, transparent), inset 0 6px 10px color-mix(in srgb, var(--color-canvas) 60%, transparent)",
+    "shadow-inset": "inset 4px 4px 8px color-mix(in srgb, var(--color-text-primary) 16%, transparent), inset -4px -4px 8px color-mix(in srgb, var(--color-canvas) 70%, transparent)",
+    "surface-opacity": "100%",
+    "backdrop-blur": "0px",
+    "control-height": "3rem",
+    "space-control-inline": "1.5rem",
+    "space-control-block": "0.875rem",
+    "space-surface-inline": "1.75rem",
+    "space-surface-block": "1.5rem",
+    "focus-width": "3px",
+    "focus-offset": "4px",
+    "focus-style": "solid",
+    "state-hover-transform": "scale(1.03)",
+    "state-active-transform": "scale(0.94)",
+    "state-selected-emphasis": "3px",
+    "state-disabled-opacity": "0.45",
+    "state-loading-opacity": "0.65",
+    "state-validation-emphasis": "3px",
+    "icon-stroke-width": "1.5",
+    "icon-fill": "currentColor",
+    "motion-fast": "180ms",
+    "motion-standard": "360ms",
+    "motion-slow": "540ms",
+    "motion-easing": "cubic-bezier(0.34, 1.56, 0.64, 1)",
+    "motion-enter": "spring-in",
+    "motion-exit": "fade",
+    "motion-emphasis": "bounce-once",
+    "texture": "none",
+    "signature-fill": "linear-gradient(90deg, var(--color-signature-start), var(--color-signature-end))",
+    "emphasis-glow": "none"
+  }
+}

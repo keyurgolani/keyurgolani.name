@@ -1,0 +1,15 @@
+/*
+ * Letterpress: the primitives' parts only. A press is an impression: the
+ * action debosses into the page with the inset shadow, which isn't a
+ * transform, so it stays under reduced motion. The busy indicator is a
+ * round ring whatever the badge radius, so a still one reads as progress,
+ * not as an empty checkbox; it breathes with the language's emphasis
+ * motion, which reduced motion, a paused boundary, and print stop.
+ */
+[data-ui-slot='action']:active:not(:disabled, [aria-disabled='true']) {
+  box-shadow: var(--ui-shadow-inset);
+}
+
+[data-ui-slot='action.spinner'] {
+  border-radius: 999px;
+}

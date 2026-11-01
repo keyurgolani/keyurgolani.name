@@ -1,0 +1,88 @@
+{
+  "id": "material-expressive-inspired",
+  "name": "Material Expressive Inspired",
+  "description": "An independent interpretation of Material Design's public expressive principles: a bold shape scale, with 16px square-shouldered controls, 48px containers, arched media and 12px chips, containment in tone with heavier outlines, level 2 elevation under cards and level 4 under overlays, 56px controls with roomy padding, heavy icons, a 3px ring, and spatial springs that overshoot and squash on press. It ships no official component, token file, icon, or font.",
+  "version": "1.1.3",
+  "tokenContract": 1,
+  "tier": "extended",
+  "family": "product-systems",
+  "provenance": {
+    "source": {
+      "name": "Material Design",
+      "url": "https://m3.material.io/"
+    },
+    "license": "independent-inspired-interpretation",
+    "attribution": "Keyur Golani, after Material Design's public principles. Not affiliated with or endorsed by Google.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "The reviewed prototype's organic-material recipe, with its --appearance-* references read as --color-*, and the contract's signature-fill and emphasis-glow at the fallback language's values."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "focus-ring", "stylesheet-lint"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "Under reduced transparency, without backdrop-filter, in forced colors, and in print, surfaces render opaque and the backdrop blur is 0.",
+    "Under reduced motion, transforms and emphasis stop and entrances and exits fade; a paused boundary and print are instant."
+  ],
+  "caveats": [
+    "Expressive state motion: presses squash more than in a quiet language.",
+    "Its focus ring is 3px, not the prototype's 2px: at 2px, its rounded corners leave the ring short of the area a 2px ring covers at 3:1.",
+    "Its enter motion, spring-in, and emphasis motion, bounce-once, have no keyframes in the platform yet, so they don't animate."
+  ],
+  "tokens": {
+    "surface-material": "linear-gradient(var(--color-surface-default), var(--color-surface-default))",
+    "radius-control": "1.75rem",
+    "radius-card": "48px",
+    "radius-overlay": "32px",
+    "radius-media": "48px 48px 16px 16px",
+    "radius-badge": "12px",
+    "border-control": "2px solid var(--color-border-strong)",
+    "border-card": "0 solid",
+    "border-divider": "2px solid var(--color-border-default)",
+    "shadow-card": "0 1px 2px color-mix(in srgb, var(--color-text-primary) 30%, transparent), 0 2px 6px 2px color-mix(in srgb, var(--color-text-primary) 15%, transparent)",
+    "shadow-overlay": "0 2px 3px color-mix(in srgb, var(--color-text-primary) 30%, transparent), 0 6px 10px 4px color-mix(in srgb, var(--color-text-primary) 15%, transparent)",
+    "shadow-raised": "0 2px 3px color-mix(in srgb, var(--color-text-primary) 30%, transparent), 0 6px 10px 4px color-mix(in srgb, var(--color-text-primary) 15%, transparent)",
+    "shadow-inset": "none",
+    "surface-opacity": "100%",
+    "backdrop-blur": "0px",
+    "control-height": "3.5rem",
+    "space-control-inline": "1.5rem",
+    "space-control-block": "1rem",
+    "space-surface-inline": "1.5rem",
+    "space-surface-block": "1.5rem",
+    "focus-width": "3px",
+    "focus-offset": "2px",
+    "focus-style": "solid",
+    "state-hover-transform": "none",
+    "state-active-transform": "scale(0.95)",
+    "state-selected-emphasis": "3px",
+    "state-disabled-opacity": "0.45",
+    "state-loading-opacity": "0.65",
+    "state-validation-emphasis": "3px",
+    "icon-stroke-width": "2.5",
+    "icon-fill": "currentColor",
+    "motion-fast": "200ms",
+    "motion-standard": "350ms",
+    "motion-slow": "500ms",
+    "motion-easing": "cubic-bezier(0.42, 1.67, 0.21, 0.9)",
+    "motion-enter": "spring-in",
+    "motion-exit": "fade",
+    "motion-emphasis": "bounce-once",
+    "texture": "none",
+    "signature-fill": "linear-gradient(90deg, var(--color-signature-start), var(--color-signature-end))",
+    "emphasis-glow": "none"
+  }
+}

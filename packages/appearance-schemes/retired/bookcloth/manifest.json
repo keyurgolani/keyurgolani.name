@@ -1,0 +1,97 @@
+{
+  "id": "bookcloth",
+  "name": "Bookcloth",
+  "description": "Book paper and ink with rust and slate, and five muted cloth colors (rust, slate, plum, ochre, sage) as the categorical set; night reading in dark.",
+  "version": "1.0.1",
+  "tokenContract": 1,
+  "tier": "extended",
+  "family": "earthy",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-25",
+    "maintainer": "keyurgolani",
+    "derivation": "Anchored from the chapters direction in the owner's ten-variant report (2026-10-25), derived by anchor-v2, with categorical anchors for its five chapter cloths (S1)."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "Every display mode renders: a missing base mode locks to the native one, and high contrast is derived by high-contrast-v2."
+  ],
+  "caveats": [],
+  "anchors": {
+    "light": {
+      "canvas": "#f9f7f2",
+      "text": "#1c1a17",
+      "accent": "#9b4a26",
+      "secondary": "#4f6475",
+      "categorical": ["#b4552d", "#54687a", "#6d597a", "#b0892f", "#7a8b6f"]
+    },
+    "dark": {
+      "canvas": "#1a1815",
+      "text": "#eee8dd",
+      "accent": "#e0916a",
+      "secondary": "#a3b6c6",
+      "categorical": ["#e0916a", "#a3b6c6", "#c4a7d3", "#d9b45a", "#a9bb9c"]
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#595753", "#54524e"],
+      "text-muted": ["#64625e", "#5e5c58"],
+      "border-strong": ["#7e7c78", "#787672"],
+      "accent-text": ["#9b4a26", "#934725"],
+      "data-categorical-1": ["#9b4a26", "#b4552d"],
+      "data-categorical-2": ["#4f6475", "#54687a"],
+      "data-categorical-3": ["#268551", "#6d597a"],
+      "data-categorical-4": ["#9b5700", "#9d7715"],
+      "data-categorical-5": ["#b53143", "#6e7f63"],
+      "data-categorical-6": ["#595753", "#54524e"]
+    },
+    "dark": {
+      "text-secondary": ["#b5b0a7", "#bdb8af"],
+      "text-muted": ["#a9a49c", "#b1aca4"],
+      "border-strong": ["#89857d", "#918d85"],
+      "accent-text": ["#e0916a", "#e29d7a"],
+      "data-categorical-3": ["#78d39b", "#c4a7d3"],
+      "data-categorical-4": ["#ffc264", "#d9b45a"],
+      "data-categorical-5": ["#ff8e9c", "#a9bb9c"],
+      "data-categorical-6": ["#b5b0a7", "#bdb8af"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#6d341b", "#663119"],
+      "data-categorical-1": ["#6d341b", "#a04319"],
+      "data-categorical-2": ["#374652", "#4e6274"],
+      "data-categorical-3": ["#175031", "#6d597a"],
+      "data-categorical-4": ["#653900", "#7b5b00"],
+      "data-categorical-5": ["#7f222f", "#526248"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#e39c79", "#e5a484"],
+      "data-categorical-1": ["#e39c79", "#e0916a"],
+      "data-categorical-3": ["#78d39b", "#c4a7d3"],
+      "data-categorical-4": ["#ffc264", "#d9b45a"],
+      "data-categorical-5": ["#ff8e9c", "#a9bb9c"]
+    }
+  },
+  "derivation": "anchor-v2",
+  "swatches": ["#9b4a26", "#4f6475"]
+}

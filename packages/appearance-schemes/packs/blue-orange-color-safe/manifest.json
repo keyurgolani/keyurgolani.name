@@ -1,0 +1,80 @@
+{
+  "id": "blue-orange-color-safe",
+  "name": "Blue Orange Color Safe",
+  "description": "A blue and orange pair that stays distinct under the common color-vision deficiencies.",
+  "version": "1.1.3",
+  "tokenContract": 1,
+  "tier": "stable",
+  "family": "accessible",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v2 from the reviewed prototype's blue-orange-color-safe anchors. It puts the light secondary #cc680a back to #d46b08. LANG-5b's fix round warms the light ink and deepens the dark canvas to navy, apart from cool-color-safe. adjustments lists the 14 roles it moves from anchor-v1."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [],
+  "derivation": "anchor-v2",
+  "anchors": {
+    "light": {
+      "canvas": "#fffaf2",
+      "text": "#2b2118",
+      "accent": "#0067b9",
+      "secondary": "#d46b08"
+    },
+    "dark": {
+      "canvas": "#101c38",
+      "text": "#fff2dc",
+      "accent": "#5eb3ff",
+      "secondary": "#ffad5c"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#615950", "#5b5249"],
+      "text-muted": ["#6c645b", "#665d54"],
+      "border-strong": ["#867f76", "#7f776e"],
+      "accent-text": ["#0067b9", "#0460a9"],
+      "data-categorical-2": ["#d46b08", "#c36100"],
+      "data-categorical-6": ["#615950", "#5b5249"],
+      "signature-end": ["#d46b08", "#bc610a"]
+    },
+    "dark": {
+      "text-secondary": ["#bcb6ae", "#c5beb4"],
+      "text-muted": ["#aea9a4", "#b8b2ab"],
+      "border-strong": ["#8d8c8e", "#949293"],
+      "accent-text": ["#5eb3ff", "#6eb9fc"],
+      "data-categorical-6": ["#bcb6ae", "#c5beb4"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#004378", "#004073"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#5eb3ff", "#6bb9ff"]
+    }
+  },
+  "swatches": ["#fffaf2", "#2b2118", "#0067b9", "#d46b08"]
+}

@@ -1,0 +1,74 @@
+{
+  "id": "ultramarine-ink",
+  "name": "Ultramarine Ink",
+  "description": "Warm paper and near-black ink with one deep ultramarine accent and a teal second color; in dark, a blue-black ink.",
+  "version": "1.0.3",
+  "tokenContract": 1,
+  "tier": "extended",
+  "family": "neutral",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-25",
+    "maintainer": "keyurgolani",
+    "derivation": "Anchored from the singular direction in the owner's ten-variant report (2026-10-25), by anchor-v2. LANG-5b warms the light paper and deepens its accent to a pigment ultramarine; LANG-5e takes the dark page off graphite's near-black to a blue-black ink, #06111b."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "Every display mode renders: a missing base mode locks to the native one, and high contrast is derived by high-contrast-v2."
+  ],
+  "caveats": [],
+  "anchors": {
+    "light": {
+      "canvas": "#f6f4ec",
+      "text": "#1d1d26",
+      "accent": "#3427c8",
+      "secondary": "#0d7068"
+    },
+    "dark": {
+      "canvas": "#06111b",
+      "text": "#f2f1ec",
+      "accent": "#8f9bff",
+      "secondary": "#5cc8bc"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#56555a", "#504f55"],
+      "text-muted": ["#616165", "#5a5a5f"],
+      "border-strong": ["#7d7c7e", "#757477"],
+      "data-categorical-6": ["#56555a", "#504f55"]
+    },
+    "dark": {
+      "border-strong": ["#7c8283", "#838989"],
+      "accent-text": ["#8f9bff", "#939efe"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#3427c8", "#2f23b4"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#9aa5ff", "#a4aeff"]
+    }
+  },
+  "derivation": "anchor-v2",
+  "swatches": ["#3427c8", "#0d7068"]
+}

@@ -1,0 +1,79 @@
+{
+  "id": "neutral-slate",
+  "name": "Neutral Slate",
+  "description": "Cool slate neutrals with a clear blue accent and a grey-blue secondary.",
+  "version": "1.1.3",
+  "tokenContract": 1,
+  "tier": "stable",
+  "family": "neutral",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v2 from the reviewed prototype's neutral-slate anchors. LANG-5b's fix round deepens both modes to a true slate with a deeper blue accent, apart from cool-color-safe, and LANG-5e lifts the dark charcoal to #242a34, further apart. adjustments lists the 13 roles it moves from anchor-v1."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [],
+  "derivation": "anchor-v2",
+  "anchors": {
+    "light": {
+      "canvas": "#e3e7ec",
+      "text": "#28313d",
+      "accent": "#3558c8",
+      "secondary": "#64748b"
+    },
+    "dark": {
+      "canvas": "#242a34",
+      "text": "#dae1e9",
+      "accent": "#7c9cf5",
+      "secondary": "#94a3b8"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#49515b", "#434b56"],
+      "text-muted": ["#535b65", "#4d555f"],
+      "border-strong": ["#6d757e", "#677079"],
+      "accent-text": ["#3353b7", "#314ea6"],
+      "data-categorical-6": ["#49515b", "#434b56"],
+      "signature-end": ["#64748b", "#607086"]
+    },
+    "dark": {
+      "text-secondary": ["#bcc3cb", "#c5ccd4"],
+      "text-muted": ["#b0b7bf", "#b9c0c8"],
+      "border-strong": ["#9097a0", "#969da6"],
+      "accent-text": ["#9eb5f1", "#abbfef"],
+      "data-categorical-6": ["#bcc3cb", "#c5ccd4"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#253e8c", "#233a84"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#90abf7", "#99b2f8"]
+    }
+  },
+  "swatches": ["#e3e7ec", "#28313d", "#3558c8", "#64748b"]
+}

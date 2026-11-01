@@ -1,0 +1,85 @@
+{
+  "id": "poster-press",
+  "name": "Poster Press",
+  "description": "Square blocks printed solid with no frame over a hard offset, rules as a heavy 5px ink bar, heavy ink controls, pill badges only, no texture, and a short press.",
+  "version": "1.0.4",
+  "tokenContract": 1,
+  "tier": "extended",
+  "family": "raw",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-25",
+    "maintainer": "keyurgolani",
+    "derivation": "The Raw Grid lane's poster-press, from the raw-grid direction in the owner's ten-variant report (2026-10-25), with its hard shadows drawn in border-strong, not the shadow role, which is black in every scheme, so they stay visible on dark ones."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "focus-ring", "stylesheet-lint"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 4096,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "Under reduced motion, transforms stop, so a press only steps its shadow, and entrances and exits fade at 120ms; a paused boundary and print are instant.",
+    "In forced colors, borders draw in the system colors and shadows drop."
+  ],
+  "caveats": [],
+  "tokens": {
+    "surface-material": "linear-gradient(var(--color-surface-default), var(--color-surface-default))",
+    "surface-opacity": "100%",
+    "radius-control": "0",
+    "radius-card": "0",
+    "radius-overlay": "0",
+    "radius-media": "0",
+    "radius-badge": "999px",
+    "border-control": "3px solid var(--color-border-strong)",
+    "border-card": "0 solid",
+    "border-divider": "5px solid var(--color-text-primary)",
+    "shadow-card": "8px 8px 0 var(--color-shadow)",
+    "shadow-overlay": "12px 12px 0 var(--color-shadow)",
+    "shadow-raised": "4px 4px 0 var(--color-shadow)",
+    "shadow-inset": "none",
+    "backdrop-blur": "0px",
+    "control-height": "3rem",
+    "space-control-inline": "1.25rem",
+    "space-control-block": "0.75rem",
+    "space-surface-inline": "1.25rem",
+    "space-surface-block": "1.25rem",
+    "focus-width": "3px",
+    "focus-offset": "3px",
+    "focus-style": "solid",
+    "state-hover-transform": "none",
+    "state-active-transform": "translate(4px, 4px)",
+    "state-selected-emphasis": "3px",
+    "state-disabled-opacity": "0.45",
+    "state-loading-opacity": "0.65",
+    "state-validation-emphasis": "3px",
+    "icon-stroke-width": "2.5",
+    "icon-fill": "none",
+    "motion-fast": "120ms",
+    "motion-standard": "150ms",
+    "motion-slow": "200ms",
+    "motion-easing": "cubic-bezier(0.25, 0, 0, 1)",
+    "motion-enter": "none",
+    "motion-exit": "none",
+    "motion-emphasis": "none",
+    "texture": "none",
+    "signature-fill": "linear-gradient(90deg, var(--color-signature-start), var(--color-signature-end))",
+    "emphasis-glow": "none"
+  },
+  "stylesheet": "./styles.css"
+}

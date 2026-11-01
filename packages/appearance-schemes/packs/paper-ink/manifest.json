@@ -1,0 +1,100 @@
+{
+  "id": "paper-ink",
+  "name": "Paper Ink",
+  "description": "One dove-grey paper, a grey tinted toward violet, under two lights: blue-black ink and a claret rubric by day, the same grey dimmed at night with its own pale ink and a lit claret, a teal secondary, and five muted cloth colors (brick, slate, plum, ochre, sage) as the categorical set.",
+  "version": "1.1.6",
+  "tokenContract": 1,
+  "tier": "stable",
+  "family": "neutral",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v2 from the reviewed prototype's paper-ink anchors, with bookcloth's cloths as categorical anchors (LANG-5a); LANG-5d makes both modes one violet-grey stock with a claret rubric, a brick and a tealer slate. adjustments lists the 32 roles it moves from anchor-v1."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "High contrast renders the sets high-contrast-v2 derives from each base set, and print renders the light set."
+  ],
+  "caveats": [],
+  "derivation": "anchor-v2",
+  "anchors": {
+    "light": {
+      "canvas": "#dedce7",
+      "text": "#151d33",
+      "accent": "#87133b",
+      "secondary": "#315b62",
+      "categorical": ["#965630", "#3e6980", "#6d597a", "#b0892f", "#7a8b6f"]
+    },
+    "dark": {
+      "canvas": "#1f1c27",
+      "text": "#efedf5",
+      "accent": "#c8536c",
+      "secondary": "#7fb0b7",
+      "categorical": ["#cf9771", "#6baed1", "#c4a7d3", "#d9b45a", "#a9bb9c"]
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#43485c", "#3d4357"],
+      "text-muted": ["#4d5366", "#474e61"],
+      "border-strong": ["#676b7c", "#626678"],
+      "data-categorical-1": ["#87133b", "#965630"],
+      "data-categorical-2": ["#315b62", "#3e6980"],
+      "data-categorical-3": ["#268551", "#6d597a"],
+      "data-categorical-4": ["#9b5700", "#896600"],
+      "data-categorical-5": ["#b53143", "#5d6d53"],
+      "data-categorical-6": ["#43485c", "#3d4357"]
+    },
+    "dark": {
+      "text-secondary": ["#b8b6be", "#c0bec6"],
+      "text-muted": ["#acaab3", "#b4b2bb"],
+      "border-strong": ["#8e8b95", "#94919b"],
+      "accent-text": ["#da9aab", "#dda4b4"],
+      "data-categorical-1": ["#ca5971", "#cf9771"],
+      "data-categorical-2": ["#7fb0b7", "#6baed1"],
+      "data-categorical-3": ["#78d39b", "#c4a7d3"],
+      "data-categorical-4": ["#ffc264", "#d9b45a"],
+      "data-categorical-5": ["#ff8e9c", "#a9bb9c"],
+      "data-categorical-6": ["#b8b6be", "#c0bec6"],
+      "signature-start": ["#c8536c", "#d1788d"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#87133b", "#7c1136"],
+      "data-categorical-1": ["#87133b", "#90502a"],
+      "data-categorical-2": ["#27494e", "#3e6980"],
+      "data-categorical-3": ["#175031", "#6d597a"],
+      "data-categorical-4": ["#653900", "#7b5b00"],
+      "data-categorical-5": ["#7f222f", "#526248"]
+    },
+    "high-contrast-dark": {
+      "accent-text": ["#de98a7", "#e1a2b0"],
+      "data-categorical-1": ["#de98a7", "#cf9771"],
+      "data-categorical-2": ["#85b4bb", "#6baed1"],
+      "data-categorical-3": ["#78d39b", "#c4a7d3"],
+      "data-categorical-4": ["#ffc264", "#d9b45a"],
+      "data-categorical-5": ["#ff8e9c", "#a9bb9c"]
+    }
+  },
+  "swatches": ["#dedce7", "#151d33", "#87133b", "#315b62"]
+}

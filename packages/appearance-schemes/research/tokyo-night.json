@@ -1,0 +1,27 @@
+{
+  "id": "tokyo-night",
+  "name": "Tokyo Night",
+  "kind": "color-scheme",
+  "tier": "research",
+  "source": {
+    "name": "Tokyo Night",
+    "url": "https://github.com/folke/tokyonight.nvim"
+  },
+  "license": "unverified",
+  "researchedAt": "2026-10-17",
+  "reason": "Its upstream license isn't verified, so it doesn't ship. Promoting it is its own owner-approved PR with a source URL, an SPDX license, attribution, a pinned upstream version, and a naming decision.",
+  "anchors": {
+    "light": {
+      "canvas": "#e1e2e7",
+      "text": "#3760bf",
+      "accent": "#2e7de9",
+      "secondary": "#9854f1"
+    },
+    "dark": {
+      "canvas": "#1a1b26",
+      "text": "#c0caf5",
+      "accent": "#7aa2f7",
+      "secondary": "#bb9af7"
+    }
+  }
+}

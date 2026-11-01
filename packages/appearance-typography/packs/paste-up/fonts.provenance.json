@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "fonts": [
+    {
+      "file": "fonts/archivo-latin-ext-wght-normal.woff2",
+      "sha256": "ff4f17d21930e36d6d93baba663e624cb767afc3feebf7adaebd82242638de05",
+      "source": {
+        "package": "@fontsource-variable/archivo",
+        "version": "5.3.0",
+        "path": "files/archivo-latin-ext-wght-normal.woff2"
+      },
+      "license": {
+        "spdx": "OFL-1.1",
+        "file": "fonts/LICENSE-fontsource-variable-archivo.txt"
+      },
+      "latin": false,
+      "optional": true
+    },
+    {
+      "file": "fonts/archivo-latin-wght-normal.woff2",
+      "sha256": "8f704806dbedeaaeca334b11ec348bc3ac3a439d6431544b3afb54f534ee4967",
+      "source": {
+        "package": "@fontsource-variable/archivo",
+        "version": "5.3.0",
+        "path": "files/archivo-latin-wght-normal.woff2"
+      },
+      "license": {
+        "spdx": "OFL-1.1",
+        "file": "fonts/LICENSE-fontsource-variable-archivo.txt"
+      },
+      "latin": true
+    },
+    {
+      "file": "fonts/ibmplexmono-medium-latin1.woff2",
+      "sha256": "41201b658a328b9d00368215c2f1102770f80b15952ab82631e4006255e6365d",
+      "source": {
+        "package": "@ibm/plex-mono",
+        "version": "2.5.0",
+        "path": "fonts/split/woff2/IBMPlexMono-Medium-Latin1.woff2"
+      },
+      "license": {
+        "spdx": "OFL-1.1",
+        "file": "fonts/LICENSE-ibm-plex-mono.txt"
+      },
+      "latin": true
+    },
+    {
+      "file": "fonts/space-grotesk-latin-ext-wght-normal.woff2",
+      "sha256": "952dddb45d2f96f71cbf3b7f510b24379afc3c89ea02fcf89d377b45d62c0166",
+      "source": {
+        "package": "@fontsource-variable/space-grotesk",
+        "version": "5.3.0",
+        "path": "files/space-grotesk-latin-ext-wght-normal.woff2"
+      },
+      "license": {
+        "spdx": "OFL-1.1",
+        "file": "fonts/LICENSE-fontsource-variable-space-grotesk.txt"
+      },
+      "latin": false,
+      "optional": true
+    },
+    {
+      "file": "fonts/space-grotesk-latin-wght-normal.woff2",
+      "sha256": "0640890476fc1198ab4de571fb658de443c4d85b66466ec09534a8737ab1ce9d",
+      "source": {
+        "package": "@fontsource-variable/space-grotesk",
+        "version": "5.3.0",
+        "path": "files/space-grotesk-latin-wght-normal.woff2"
+      },
+      "license": {
+        "spdx": "OFL-1.1",
+        "file": "fonts/LICENSE-fontsource-variable-space-grotesk.txt"
+      },
+      "latin": true
+    }
+  ],
+  "dropped": [
+    {
+      "package": "@fontsource-variable/archivo",
+      "version": "5.3.0",
+      "path": "files/archivo-latin-wdth-normal.woff2",
+      "bytes": 90104
+    }
+  ]
+}

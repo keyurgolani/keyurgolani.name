@@ -1,0 +1,80 @@
+{
+  "id": "drafting-blue",
+  "name": "Drafting Blue",
+  "description": "A blueprint in dark: white linework on Prussian blue with cyan annotations and amber measured values; a pale blue whiteprint with cyan-blue linework in light.",
+  "version": "1.0.2",
+  "tokenContract": 1,
+  "tier": "extended",
+  "family": "vivid",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-25",
+    "maintainer": "keyurgolani",
+    "derivation": "Anchored from the schematic direction in the owner's ten-variant report (2026-10-25), derived by anchor-v2, with an emphasis anchor for the decorative third hue (S1). The LANG-5b fix round tints the light whiteprint a deeper pale blue and its accent cyan, apart from cool-color-safe."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "Every display mode renders: a missing base mode locks to the native one, and high contrast is derived by high-contrast-v2."
+  ],
+  "caveats": [],
+  "anchors": {
+    "light": {
+      "canvas": "#dde8f4",
+      "text": "#0b2b52",
+      "accent": "#00739a",
+      "secondary": "#9a5a00",
+      "emphasis": "#3a6db5"
+    },
+    "dark": {
+      "canvas": "#0b2b52",
+      "text": "#eaf2ff",
+      "accent": "#59d7ff",
+      "secondary": "#ffc857",
+      "emphasis": "#9fc2ff"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#345071", "#304c6e"],
+      "text-muted": ["#405b7b", "#3b5677"],
+      "border-strong": ["#5e7692", "#57708d"],
+      "accent-text": ["#036087", "#045a81"],
+      "data-categorical-4": ["#9b5700", "#935200"],
+      "data-categorical-6": ["#345071", "#304c6e"],
+      "emphasis": ["#00739a", "#3a6db5"]
+    },
+    "dark": {
+      "text-secondary": ["#bbc7db", "#c5d0e3"],
+      "text-muted": ["#adbcd0", "#b7c5d8"],
+      "border-strong": ["#899bb3", "#91a2b9"],
+      "data-categorical-6": ["#bbc7db", "#c5d0e3"],
+      "emphasis": ["#59d7ff", "#9fc2ff"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#004b64", "#00455c"],
+      "data-categorical-4": ["#653900", "#5e3400"]
+    }
+  },
+  "derivation": "anchor-v2",
+  "swatches": ["#00739a", "#9a5a00"]
+}

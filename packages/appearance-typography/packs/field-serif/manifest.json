@@ -1,0 +1,178 @@
+{
+  "id": "field-serif",
+  "name": "Field Serif",
+  "description": "Fraunces for display and headings, and its italic for quotes and captions, over Inter for text and interface.",
+  "version": "1.0.0",
+  "tokenContract": 1,
+  "tier": "extended",
+  "provenance": {
+    "source": {
+      "name": "Fontsource",
+      "url": "https://fontsource.org"
+    },
+    "license": "OFL-1.1",
+    "attribution": "Fraunces and Inter, by their project authors, self-hosted from their pinned npm packages for the keyurgolani.name portfolio platform.",
+    "copyright": "Copyright 2020 The Fraunces Project Authors (github.com/undercasetype/Fraunces); Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)",
+    "researchedAt": "2026-10-26",
+    "maintainer": "The upstream projects, at the versions fonts.provenance.json pins",
+    "derivation": "Role metrics by the platform for the terra-field direction (packs-plan §3.2); font files copied unmodified from @fontsource/fraunces 5.3.0 and @fontsource-variable/inter 5.3.0, never subset or renamed inside."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "text-size"]
+  },
+  "cost": {
+    "assets": 6,
+    "assetBytes": 212552
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 102400,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "Each shipped family is followed by metric-matched fallback faces over local system fonts (size-adjust and ascent, descent, and line-gap overrides), then a system stack and a generic family.",
+    "There's a fallback face at each weight the roles set, over the system bold for a heading, and Fraunces Italic falls back to the system italic that fits it.",
+    "Glyphs outside every shipped face's unicode-range render in the declared system stack, so text never goes missing."
+  ],
+  "caveats": [
+    "Fraunces ships at its default SOFT 0 and WONK 0, since the full-axis file is over the ceiling on its own, in two faces: 600 upright and 400 italic.",
+    "Captions and quotes set in \"Fraunces Italic\", the 400 italic under its own family name, so they render italic under every composition and never take the headings' 600.",
+    "Inter ships upright only, at its wght axis without optical size, so em in running text renders as a slanted Inter.",
+    "The latin-ext subsets, 123,348 B together, load only on a page whose text needs them, such as ő or ł; a Latin page loads 89,204 B. Other scripts render in the declared system stack."
+  ],
+  "roles": {
+    "display": {
+      "font-family": "\"Fraunces\", Palatino, \"Palatino Linotype\", Georgia, serif",
+      "font-size": "3.5rem",
+      "font-weight": 600,
+      "line-height": 1.08,
+      "letter-spacing": "-0.02em",
+      "font-variation-settings": "normal"
+    },
+    "headline": {
+      "font-family": "\"Fraunces\", Palatino, \"Palatino Linotype\", Georgia, serif",
+      "font-size": "2.25rem",
+      "font-weight": 600,
+      "line-height": 1.12,
+      "letter-spacing": "-0.015em",
+      "font-variation-settings": "normal"
+    },
+    "title": {
+      "font-family": "\"Fraunces\", Palatino, \"Palatino Linotype\", Georgia, serif",
+      "font-size": "1.375rem",
+      "font-weight": 600,
+      "line-height": 1.25,
+      "letter-spacing": "-0.005em",
+      "font-variation-settings": "normal"
+    },
+    "body": {
+      "font-family": "\"Inter\", \"Helvetica Neue\", Arial, sans-serif",
+      "font-size": "1rem",
+      "font-weight": 400,
+      "line-height": 1.65,
+      "letter-spacing": "0em",
+      "font-variation-settings": "normal"
+    },
+    "body-compact": {
+      "font-family": "\"Inter\", \"Helvetica Neue\", Arial, sans-serif",
+      "font-size": "0.875rem",
+      "font-weight": 400,
+      "line-height": 1.5,
+      "letter-spacing": "0em",
+      "font-variation-settings": "normal"
+    },
+    "label": {
+      "font-family": "\"Inter\", \"Helvetica Neue\", Arial, sans-serif",
+      "font-size": "0.8125rem",
+      "font-weight": 600,
+      "line-height": 1.3,
+      "letter-spacing": "0.01em",
+      "font-variation-settings": "normal"
+    },
+    "caption": {
+      "font-family": "\"Fraunces Italic\", Palatino, \"Palatino Linotype\", Georgia, serif",
+      "font-size": "0.75rem",
+      "font-weight": 400,
+      "line-height": 1.4,
+      "letter-spacing": "0em",
+      "font-variation-settings": "normal"
+    },
+    "quote": {
+      "font-family": "\"Fraunces Italic\", Palatino, \"Palatino Linotype\", Georgia, serif",
+      "font-size": "1.5rem",
+      "font-weight": 400,
+      "line-height": 1.4,
+      "letter-spacing": "-0.005em",
+      "font-variation-settings": "normal"
+    },
+    "code": {
+      "font-family": "\"SFMono-Regular\", Menlo, Consolas, \"Liberation Mono\", monospace",
+      "font-size": "0.875rem",
+      "font-weight": 400,
+      "line-height": 1.55,
+      "letter-spacing": "0em",
+      "font-variation-settings": "normal"
+    },
+    "numeric": {
+      "font-family": "\"Inter\", \"Helvetica Neue\", Arial, sans-serif",
+      "font-size": "0.875rem",
+      "font-weight": 600,
+      "line-height": 1.2,
+      "letter-spacing": "0em",
+      "font-variation-settings": "normal"
+    }
+  },
+  "measures": {
+    "body": "68ch",
+    "compact": "52ch"
+  },
+  "scripts": ["Latn"],
+  "fontAssets": [
+    {
+      "family": "Fraunces",
+      "file": "./fonts/fraunces-latin-600-normal.woff2",
+      "weight": 600,
+      "style": "normal",
+      "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+    },
+    {
+      "family": "Fraunces",
+      "file": "./fonts/fraunces-latin-ext-600-normal.woff2",
+      "weight": 600,
+      "style": "normal",
+      "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+    },
+    {
+      "family": "Fraunces Italic",
+      "file": "./fonts/fraunces-latin-400-italic.woff2",
+      "weight": 400,
+      "style": "italic",
+      "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+    },
+    {
+      "family": "Fraunces Italic",
+      "file": "./fonts/fraunces-latin-ext-400-italic.woff2",
+      "weight": 400,
+      "style": "italic",
+      "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+    },
+    {
+      "family": "Inter",
+      "file": "./fonts/inter-latin-wght-normal.woff2",
+      "weight": [100, 900],
+      "style": "normal",
+      "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+    },
+    {
+      "family": "Inter",
+      "file": "./fonts/inter-latin-ext-wght-normal.woff2",
+      "weight": [100, 900],
+      "style": "normal",
+      "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+    }
+  ]
+}

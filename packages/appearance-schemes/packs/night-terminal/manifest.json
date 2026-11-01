@@ -1,0 +1,80 @@
+{
+  "id": "night-terminal",
+  "name": "Night Terminal",
+  "description": "A phosphor terminal: green prompt light on a green-black glass, with amber and cyan for marks; a grey glass terminal in light.",
+  "version": "1.0.5",
+  "tokenContract": 1,
+  "tier": "extended",
+  "family": "neutral",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform",
+      "url": "https://github.com/keyurgolani/keyurgolani.name"
+    },
+    "license": "first-party",
+    "attribution": "Keyur Golani, for the keyurgolani.name portfolio platform.",
+    "researchedAt": "2026-10-25",
+    "maintainer": "keyurgolani",
+    "derivation": "The owner's shell direction (2026-10-25 report); LANG-5b gives it a phosphor green accent and an amber secondary, and its fix rounds a grey glass in light and a green-black phosphor glass in dark, apart from control-room. anchor-v2, with an emphasis anchor; adjustments lists its 14 moves."
+  },
+  "modes": ["light", "dark"],
+  "accessibility": {
+    "checks": ["contrast", "hierarchy"]
+  },
+  "cost": {
+    "assets": 0,
+    "assetBytes": 0
+  },
+  "budgets": {
+    "js": 0,
+    "css": 3072,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "fallbacks": [
+    "Every display mode renders: a missing base mode locks to the native one, and high contrast is derived by high-contrast-v2."
+  ],
+  "caveats": [],
+  "anchors": {
+    "light": {
+      "canvas": "#d8dfe0",
+      "text": "#07120f",
+      "accent": "#0a7d3c",
+      "secondary": "#8a5a00",
+      "emphasis": "#0b6e7a"
+    },
+    "dark": {
+      "canvas": "#082518",
+      "text": "#d3f2dc",
+      "accent": "#3ddc84",
+      "secondary": "#e2b04a",
+      "emphasis": "#5fd3e6"
+    }
+  },
+  "adjustments": {
+    "light": {
+      "text-secondary": ["#414a49", "#3c4644"],
+      "text-muted": ["#4b5553", "#46504e"],
+      "border-strong": ["#666f6e", "#606968"],
+      "accent-text": ["#096130", "#09592d"],
+      "data-categorical-3": ["#268551", "#147946"],
+      "data-categorical-6": ["#414a49", "#3c4644"],
+      "signature-start": ["#0a7d3c", "#0a7739"],
+      "emphasis": ["#0a7d3c", "#0b6e7a"]
+    },
+    "dark": {
+      "text-secondary": ["#a1c0ac", "#aac9b5"],
+      "text-muted": ["#96b4a1", "#9fbda9"],
+      "border-strong": ["#769482", "#7d9c89"],
+      "data-categorical-6": ["#a1c0ac", "#aac9b5"],
+      "emphasis": ["#3ddc84", "#5fd3e6"]
+    },
+    "high-contrast-light": {
+      "accent-text": ["#075127", "#064923"]
+    }
+  },
+  "derivation": "anchor-v2",
+  "swatches": ["#3ddc84", "#e2b04a"]
+}

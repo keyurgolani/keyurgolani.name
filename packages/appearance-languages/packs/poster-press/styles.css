@@ -1,0 +1,58 @@
+/*
+ * Poster Press: the primitives' parts only. An action stands on a hard 4px
+ * shadow. Hover lowers it to 2px without moving the action, so the pointer
+ * never slips off its edge; a press drops the shadow and moves the action
+ * by its offset, so its far edge holds still and it reads as pushed into
+ * the page. Under reduced motion the platform sets the press transform to
+ * none, so only the shadow steps, 4 to 2 to 0. Quiet actions have no
+ * shadow to press into, so they hold still.
+ *
+ * Elevation runs subtle 0, default 8, prominent 10, overlay 12, so a
+ * prominent surface stands above a default one; the raised shadow stays
+ * the action's 4px press depth. Data bars are square, as every part but a
+ * badge is; the spinner keeps the badge radius, since a busy ring is a
+ * ring. Badges take the ink border; only the neutral badge takes the paper
+ * fill, since a status badge's text is on-status, which reads on its
+ * status fill alone.
+ */
+[data-ui-slot='action'] {
+  box-shadow: var(--ui-shadow-raised);
+  transition-property: background-color, border-color, color, transform, opacity, box-shadow;
+}
+
+[data-ui-slot='action'][data-emphasis='quiet'] {
+  box-shadow: none;
+}
+
+[data-ui-slot='action'][data-emphasis='quiet']:hover,
+[data-ui-slot='action'][data-emphasis='quiet']:active {
+  transform: none;
+}
+
+[data-ui-slot='action']:hover:not(:disabled, [aria-disabled='true'], [data-emphasis='quiet']) {
+  box-shadow: 2px 2px 0 var(--color-border-strong);
+}
+
+[data-ui-slot='action']:active:not(:disabled, [aria-disabled='true'], [data-emphasis='quiet']) {
+  box-shadow: none;
+}
+
+[data-ui-slot='action'][data-emphasis='primary'] {
+  border-color: var(--color-border-strong);
+}
+
+[data-ui-slot='surface'][data-emphasis='prominent'] {
+  box-shadow: 10px 10px 0 var(--color-border-strong);
+}
+
+[data-ui-slot='data-display.bar'] {
+  border-radius: var(--ui-radius-card);
+}
+
+[data-ui-slot='badge'] {
+  border-color: var(--color-border-strong);
+}
+
+[data-ui-slot='badge'][data-status='neutral'] {
+  background-color: var(--color-surface-default);
+}

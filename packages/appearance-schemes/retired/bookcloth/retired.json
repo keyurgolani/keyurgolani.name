@@ -1,0 +1,11 @@
+{
+  "retiredVersion": 1,
+  "id": "bookcloth",
+  "kind": "color-scheme",
+  "aliasOf": "paper-ink",
+  "reason": "LANG-4 scored it paper-ink's near twin: a mean ΔE00 of 1.80 over the canvas, text, accent and surfaces in both modes, 11 of 14 roles under 2. Its five cloths went into paper-ink as its categorical anchors (LANG-5a, the owner's and the orchestrator's call).",
+  "change": "bookcloth now resolves to paper-ink's dove-grey stock; its cloth inks survive in paper-ink's categorical set",
+  "survivorVersion": "1.1.2",
+  "survivorDigest": "sha256-e9d16953dade6c10c61899c7904b6f2a1d5a9d04e537d6f92e7e4d46a989179d",
+  "retiredAt": "2026-10-29"
+}

@@ -1,0 +1,11 @@
+{
+  "retiredVersion": 1,
+  "id": "zinc",
+  "kind": "color-scheme",
+  "aliasOf": "graphite",
+  "reason": "LANG-4 scored it beside graphite, the reviewed prototype's: two near-monochrome grays with gray accents, a mean ΔE00 of 2.49, 8 of 14 roles under 2 (LANG-5a, the owner's call).",
+  "change": "at the merge, its violet second color became copper brown, and its dark mode a slightly lighter charcoal",
+  "survivorVersion": "1.1.1",
+  "survivorDigest": "sha256-42920bca149806de9cc9260cf82b1018cd3f06a747d078a06ce9fc94fc71874c",
+  "retiredAt": "2026-10-29"
+}
