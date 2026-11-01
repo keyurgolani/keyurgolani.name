@@ -1,0 +1,2550 @@
+/*
+ * Shell: the portfolio as one open terminal session (variants-10 brief
+ * §5.6). Composition only: the session layout, the cell and row grid, the
+ * prompt and command lines, every listing form, the pane, the status line
+ * and the landing sweep. Colour, type and material are the packs': every
+ * colour is a role, every face a type role, every radius a --ui-* token.
+ *
+ * The grid: a cell is 1ch of the code face, a row one line of it at the
+ * body size. Machine lines (prompts, listings, key and value blocks, the
+ * pane and the status line) set the code role's family at the body role's
+ * size (K-5); prose output takes the body role, so under another pack the
+ * prose reads in its face and the session still reads as a shell (SH-S5).
+ */
+
+[data-variant='shell'] {
+  --layout-cell: 1ch;
+  --layout-row: calc(var(--type-body-font-size) * var(--type-code-line-height));
+  /* A control's least height: a row, and never under the 24 px target (WCAG 2.5.8). */
+  --layout-target: max(24px, var(--layout-row));
+  /* The status line's height: its controls' target, room for a ring above and below it, and
+     the device's bottom inset. The bar is exactly this, and everything that clears the bar,
+     the docked index's height included, reads it. */
+  --layout-bar: calc(
+    var(--layout-target) + 2 * (var(--ui-focus-width) + var(--ui-focus-offset)) +
+      env(safe-area-inset-bottom)
+  );
+  --layout-pane: calc(var(--layout-cell) * 46);
+  --layout-session: calc(var(--layout-cell) * 170);
+  --layout-prose: min(var(--type-measure-body), calc(var(--layout-cell) * 66));
+  --layout-gutter: calc(var(--layout-cell) * 3);
+  /* The log's lane count and a lane rule's column, which each log and rule sets for itself. */
+  --layout-lanes: 1;
+  --layout-col: 0;
+  --layout-motion-curve: var(--ui-motion-easing);
+  --layout-motion-feedback: 200ms;
+  --layout-motion-scene: 600ms;
+  /* Syntax colours, from roles only, pulled toward the text so they read as text in any scheme. */
+  --layout-ps1: color-mix(in oklab, var(--color-data-categorical-2) 72%, var(--color-text-primary));
+  --layout-dir: var(--color-accent-text);
+  --layout-fig: color-mix(in oklab, var(--color-emphasis) 72%, var(--color-text-primary));
+  --layout-rule: color-mix(in oklab, var(--color-border-default) 72%, var(--color-canvas));
+
+  display: block;
+  min-block-size: 100dvh;
+  color: var(--color-text-primary);
+  font-family: var(--type-code-font-family);
+  font-size: var(--type-body-font-size);
+  font-weight: var(--type-code-font-weight);
+  line-height: var(--type-code-line-height);
+  letter-spacing: var(--type-code-letter-spacing);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: break-word;
+}
+
+/* ── Resets inside the session ── */
+
+[data-variant='shell'] :where(p, ul, ol, dl, dd, figure, blockquote, h1, h2, h3, pre, table) {
+  margin: 0;
+  padding: 0;
+}
+
+[data-variant='shell'] :where(ul, ol) {
+  list-style: none;
+}
+
+[data-variant='shell'] :where(h1, h2, h3) {
+  font: inherit;
+}
+
+[data-variant='shell'] :where(img) {
+  display: block;
+  max-inline-size: 100%;
+}
+
+/* Fixed chrome on the block end: whatever takes focus or is jumped to clears it, a fold's
+   summary too (WCAG 2.4.11: without the script, the browser's own focus scroll keeps it clear). */
+[data-variant='shell'] :is(a, button, input, summary, [tabindex], .sh-block) {
+  scroll-margin-block: var(--layout-row) calc(var(--layout-bar) + var(--layout-row));
+}
+
+/* The ring: the platform's width and offset on every stop, its colour the host's, so it fills
+   exactly the room each control keeps round it (the status line's ring band, the index's row
+   gap), and a language's wider ring shows at its width, in forced colours too. */
+[data-variant='shell'] :focus-visible {
+  outline-width: var(--ui-focus-width);
+  outline-offset: var(--ui-focus-offset);
+}
+
+/* ── Links: dotted, firming on hover ── */
+
+[data-variant='shell'] a:not([data-ui-slot]) {
+  color: inherit;
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+[data-variant='shell'] a:not([data-ui-slot]):hover {
+  text-decoration-style: solid;
+}
+
+[data-variant='shell'] .sh-ext::after {
+  content: '\00a0\2197';
+  color: var(--color-text-secondary);
+}
+
+[data-variant='shell'] .sh-sr {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+[data-variant='shell'] .sh-dim {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='shell'] .sh-faint {
+  color: var(--color-text-muted);
+}
+
+[data-variant='shell'] .sh-fig {
+  color: var(--layout-fig);
+  font-weight: 700;
+}
+
+[data-variant='shell'] .sh-dir {
+  color: var(--layout-dir);
+  font-weight: 700;
+}
+
+/* ── The session: the transcript, the index pane, the end ── */
+
+[data-variant='shell'] .sh-session {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  padding-block-end: var(--layout-bar);
+}
+
+[data-variant='shell'] .sh-main {
+  min-inline-size: 0;
+  padding-block: var(--layout-row) 0;
+  padding-inline: var(--layout-gutter);
+  container: transcript / inline-size;
+}
+
+[data-variant='shell'] .sh-main:focus {
+  outline: none;
+}
+
+/* ── A block: the title as a comment, the command, the output ── */
+
+[data-variant='shell'] .sh-block {
+  margin-block-start: var(--layout-row);
+}
+
+[data-variant='shell'] .sh-block[data-gap='2'] {
+  margin-block-start: calc(var(--layout-row) * 2);
+}
+
+[data-variant='shell'] .sh-block[data-gap='0'] {
+  margin-block-start: 0;
+}
+
+/* A folded section (gate item 8): its comment, its command with the fold's [+], and the first
+   line of what it prints, one row each, the output a press away. */
+[data-variant='shell'] .sh-foldblock {
+  margin-block-start: var(--layout-row);
+}
+
+[data-variant='shell'] .sh-foldblock[data-gap='2'] {
+  margin-block-start: calc(var(--layout-row) * 2);
+}
+
+[data-variant='shell'] .sh-foldblock[data-gap='0'] {
+  margin-block-start: 0;
+}
+
+[data-variant='shell'] .sh-fold__sum {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  list-style: none;
+  cursor: pointer;
+}
+
+[data-variant='shell'] .sh-fold__sum::-webkit-details-marker {
+  display: none;
+}
+
+[data-variant='shell'] .sh-fold__cmt {
+  font-weight: 700;
+}
+
+[data-variant='shell'] .sh-fold__cmd::before {
+  content: '[+] ' / '';
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+
+[data-variant='shell'] .sh-fold[open] .sh-fold__cmd::before {
+  content: '[-] ' / '';
+}
+
+[data-variant='shell'] .sh-fold__meta {
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-variant='shell'] .sh-fold[open] .sh-fold__meta {
+  display: none;
+}
+
+[data-variant='shell'] .sh-fold__sum:hover .sh-fold__cmd .sh-cmd__verb {
+  text-decoration: underline;
+}
+
+[data-variant='shell'] .sh-fold > .sh-block {
+  margin-block-start: 0;
+}
+
+[data-variant='shell'] .sh-cmt {
+  font-weight: 700;
+  text-wrap: balance;
+}
+
+[data-variant='shell'] .sh-cmt__hash {
+  color: var(--layout-ps1);
+  font-weight: 400;
+}
+
+[data-variant='shell'] .sh-sub {
+  max-inline-size: var(--layout-prose);
+  padding-inline-start: calc(var(--layout-cell) * 2);
+  text-indent: calc(var(--layout-cell) * -2);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='shell'] .sh-cd {
+  margin-block-end: var(--layout-row);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='shell'] .sh-cmd {
+  position: relative;
+  isolation: isolate;
+  overflow-wrap: anywhere;
+  /* A terminal wraps a command at the column, not at its hyphens. */
+  word-break: break-all;
+}
+
+[data-variant='shell'] .sh-ps1 {
+  color: var(--layout-ps1);
+}
+
+[data-variant='shell'] .sh-ps1__who {
+  font-weight: 700;
+}
+
+[data-variant='shell'] .sh-ps1__cwd {
+  color: var(--layout-dir);
+  font-weight: 700;
+}
+
+[data-variant='shell'] .sh-cmd__flag {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='shell'] .sh-out > * + * {
+  margin-block-start: var(--layout-row);
+}
+
+[data-variant='shell'] .sh-out > .sh-total + * {
+  margin-block-start: 0;
+}
+
+[data-variant='shell'] .sh-total {
+  color: var(--color-text-secondary);
+}
+
+/* The landed line: a jump paints the command with the selection bar, and a marker stays. */
+[data-variant='shell'] .sh-cmd::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline: calc(var(--layout-cell) * -1);
+  z-index: -1;
+  border-radius: var(--ui-radius-control);
+  background: var(--color-selection);
+  transform-origin: left center;
+  opacity: 0;
+  pointer-events: none;
+}
+
+[data-variant='shell'] .sh-block:target > .sh-cmd::before {
+  content: '\25b8';
+  position: absolute;
+  inset-inline-start: calc(var(--layout-cell) * -2);
+  color: var(--layout-ps1);
+}
+
+/* ── Prose output: the body role, capped at about 66 cells ── */
+
+[data-variant='shell'] .sh-prose {
+  max-inline-size: var(--layout-prose);
+  font-family: var(--type-body-font-family);
+  font-size: var(--type-body-font-size);
+  font-weight: var(--type-body-font-weight);
+  line-height: var(--type-body-line-height);
+  letter-spacing: var(--type-body-letter-spacing);
+  text-wrap: pretty;
+}
+
+[data-variant='shell'] .sh-prose :where(p + p, p + ul, ul + p) {
+  margin-block-start: calc(var(--layout-row) / 2);
+}
+
+/* ── whoami: the thesis leads, the name its prefix ── */
+
+[data-variant='shell'] .sh-who {
+  display: grid;
+  /* A stack's one column is the transcript's width, never a long word's: it wraps inside. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+
+[data-variant='shell'] .sh-who__h {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+
+[data-variant='shell'] .sh-who__name {
+  color: var(--layout-ps1);
+  font-weight: 700;
+}
+
+[data-variant='shell'] .sh-who__thesis {
+  max-inline-size: calc(var(--layout-cell) * 40);
+  font-size: calc(var(--type-body-font-size) * 2);
+  line-height: calc(var(--layout-row) * 2);
+  font-weight: var(--type-display-font-weight);
+  text-wrap: balance;
+}
+
+[data-variant='shell'] .sh-who__rule {
+  inline-size: calc(var(--layout-cell) * 12);
+  block-size: calc(var(--layout-row) / 2);
+  border-block-end: 1px solid var(--layout-ps1);
+  margin-block-end: calc(var(--layout-row) / 2);
+}
+
+/* The hero's lines: comment lines under the thesis, no blank row between them, the tagline in
+   the text's own ink. */
+[data-variant='shell'] .sh-who__notes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-variant='shell'] .sh-who__notes > :first-child {
+  color: var(--color-text-primary);
+}
+
+[data-variant='shell'] .sh-who__split {
+  display: grid;
+  grid-template-columns: minmax(0, calc(var(--layout-cell) * 44)) minmax(
+      0,
+      calc(var(--layout-cell) * 48)
+    );
+  column-gap: calc(var(--layout-cell) * 4);
+  row-gap: var(--layout-row);
+  align-items: start;
+}
+
+[data-variant='shell'] .sh-who__pitch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--layout-row);
+  align-content: start;
+}
+
+[data-variant='shell'] .sh-kv {
+  display: grid;
+  grid-template-columns: calc(var(--layout-cell) * 10) minmax(0, 1fr);
+  column-gap: var(--layout-cell);
+}
+
+[data-variant='shell'] .sh-kv > div {
+  display: contents;
+}
+
+[data-variant='shell'] .sh-kv dt {
+  color: var(--layout-ps1);
+  font-weight: 700;
+}
+
+[data-variant='shell'] .sh-kv dd {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+[data-variant='shell'] .sh-kv__list {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: calc(var(--layout-cell) * 2);
+}
+
+[data-variant='shell'] .sh-kv__list--rows {
+  display: grid;
+}
+
+/* A line of links is never shorter than a target, so under a type whose line is under 24px the
+   links on stacked lines still stand 24px apart (WCAG 2.5.8). The links keep their own boxes:
+   a grown box would only crowd the next line's. Where the line is a target tall, nothing moves. */
+[data-variant='shell'] :is(.sh-kv__list, .sh-complete ul) > li {
+  min-block-size: var(--layout-target);
+}
+
+[data-variant='shell'] .sh-complete {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='shell'] .sh-complete ul {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: calc(var(--layout-cell) * 3);
+}
+
+[data-variant='shell'] .sh-complete a {
+  color: var(--layout-dir);
+  font-weight: 700;
+}
+
+/* ── Buttons: whiptail's < Ok > ── */
+
+[data-variant='shell'] .sh-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) calc(var(--layout-cell) * 2);
+}
+
+[data-variant='shell'] .sh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--layout-cell);
+  min-block-size: var(--layout-target);
+  /* The platform's ring sits on the border box at the language's offset, drawn in a later
+     layer no composition overrides: where that offset is under a pixel, the box's own outer
+     pixel is a clear one, the page showing through it, so the ring has the page on both its
+     sides; where the language already sets the ring off, the border is nothing, never a gap on
+     top of its gap. The padding takes up the difference, so the box is the same size. */
+  --layout-clear: max(0px, calc(1px - var(--ui-focus-offset)));
+
+  padding-inline: calc(var(--layout-cell) + 1px - var(--layout-clear));
+  border: var(--layout-clear) solid transparent;
+  border-radius: var(--ui-radius-control);
+  background-clip: padding-box;
+  color: var(--color-text-primary);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* A whiptail button underlines its label, never its brackets. */
+[data-variant='shell'] a.sh-btn:not([data-ui-slot]) {
+  text-decoration: none;
+}
+
+[data-variant='shell'] .sh-btn__label {
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+[data-variant='shell'] .sh-btn__ang {
+  color: var(--layout-ps1);
+  font-weight: 400;
+}
+
+/* The fill alone, never the `background` shorthand, which would reset the clip and paint the
+   clear outer pixel (combo r12: the ring met the fill, 2.74:1 in light). */
+[data-variant='shell'] .sh-btn--primary,
+[data-variant='shell'] .sh-btn:hover {
+  background-color: var(--color-selection);
+}
+
+/* The page's one loud fill is the status line: the primary action is the selection bar with
+   an accent edge, drawn inside its clear outer pixel (on its padding box, where an absolute
+   box sits), so the ring outside the border box still has the page on both its sides. */
+[data-variant='shell'] .sh-btn--primary {
+  position: relative;
+}
+
+[data-variant='shell'] .sh-btn--primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--color-accent-text);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+[data-variant='shell'] :is(.sh-btn--primary, .sh-btn:hover) .sh-btn__ang {
+  color: inherit;
+}
+
+/* ── ls -l: works as a long listing ── */
+
+[data-variant='shell'] .sh-ls {
+  display: grid;
+  /* One column, the transcript's width: a row is never wider than the column, whatever its
+     content's narrowest it can be (large text measured a row past the window, r21). */
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: var(--layout-row);
+  isolation: isolate;
+}
+
+/* Single-column output grids keep to the column whatever their content's narrowest. */
+[data-variant='shell'] :is(.sh-ent__body, .sh-gl__msg, .sh-mails, .sh-mail, .sh-mail__hdr) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-variant='shell'] .sh-ent {
+  position: relative;
+  display: grid;
+  min-inline-size: 0;
+  grid-template-columns: var(--layout-cell) calc(var(--layout-cell) * 10) minmax(0, 1fr);
+  column-gap: calc(var(--layout-cell) * 2);
+  align-items: start;
+}
+
+[data-variant='shell'] .sh-ent > .sh-ent__body > .sh-icat {
+  inline-size: min(100%, calc(var(--layout-cell) * 20));
+  margin-block: var(--space-3xs);
+}
+
+[data-variant='shell'] .sh-ent[data-preview='sig'] > .sh-ent__body > .sh-icat {
+  inline-size: min(100%, calc(var(--layout-cell) * 36));
+}
+
+/* Hover and focus show relation: the row takes the selection bar and its siblings step back (C1). */
+[data-variant='shell'] .sh-ent::before {
+  content: '';
+  position: absolute;
+  inset-block: calc(var(--layout-row) / -4);
+  inset-inline: calc(var(--layout-cell) * -1);
+  z-index: -1;
+  border-radius: var(--ui-radius-control);
+  background: var(--color-selection);
+  opacity: 0;
+}
+
+[data-variant='shell'] .sh-ent:focus-within::before {
+  opacity: 1;
+}
+
+[data-variant='shell'] .sh-ls:has(.sh-ent:focus-within) .sh-ent:not(:focus-within) {
+  opacity: 0.55;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-variant='shell'] .sh-ent:hover::before {
+    opacity: 1;
+  }
+
+  [data-variant='shell'] .sh-ls:has(.sh-ent:hover) .sh-ent:not(:hover) {
+    opacity: 0.55;
+  }
+}
+
+[data-variant='shell'] .sh-ent__t {
+  color: var(--layout-dir);
+  font-weight: 700;
+}
+
+[data-variant='shell'] .sh-ent__date {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='shell'] .sh-ent__body {
+  display: grid;
+  min-inline-size: 0;
+}
+
+[data-variant='shell'] .sh-ent__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: calc(var(--layout-cell) * 2);
+}
+
+[data-variant='shell'] .sh-ent__nm {
+  font-weight: 700;
+}
+
+[data-variant='shell'] .sh-ent__star {
+  color: var(--layout-fig);
+}
+
+[data-variant='shell'] .sh-ent__med {
+  margin-inline-start: auto;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='shell'] .sh-ent__sum {
+  max-inline-size: var(--layout-prose);
+  color: var(--color-text-secondary);
+  text-wrap: pretty;
+}
+
+[data-variant='shell'] .sh-ent__meta {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: calc(var(--layout-cell) * 2);
+  color: var(--color-text-muted);
+}
+
+[data-variant='shell'] .sh-ent__links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: calc(var(--layout-cell) * 2);
+  margin-block-start: var(--space-3xs);
+}
+
+/* A text link keeps a clear band round its words, laid out as nothing (the margin gives it
+   back): the ring's width, less the language's own offset, so the ring stands a ring's width
+   off the glyphs and the underline whatever the language sets, and never twice that. */
+[data-variant='shell'] :is(.sh-main, .sh-end) a:not([data-ui-slot], .sh-btn, .sh-row) {
+  --layout-band: max(0px, calc(var(--ui-focus-width) - var(--ui-focus-offset)));
+
+  margin-inline: calc(var(--layout-band) * -1);
+  padding-inline: var(--layout-band);
+}
+
+[data-variant='shell'] .sh-ent__links .sh-btn {
+  margin-inline-start: calc(var(--layout-cell) * -1);
+}
+
+/* Each link on the row's links line is a target tall, as the button beside it is. */
+[data-variant='shell'] .sh-ent__links > a {
+  min-block-size: var(--layout-target);
+}
+
+[data-variant='shell'] .sh-ent[data-archived] :is(.sh-ent__nm, .sh-ent__t) {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='shell'] .sh-figs {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--layout-cell);
+  color: var(--layout-fig);
+  font-weight: 700;
+}
+
+[data-variant='shell'] .sh-figs li::before {
+  content: '[';
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+
+[data-variant='shell'] .sh-figs li::after {
+  content: ']';
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+
+[data-variant='shell'] .sh-figs__sub {
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+
+/* A row's fold (gate item 8): one line naming what it holds, `[+]` before it, the cat bodies a
+   press away; each body under its # comment, indented under the row. */
+[data-variant='shell'] .sh-more {
+  max-inline-size: var(--layout-prose);
+}
+
+[data-variant='shell'] .sh-more__sum {
+  display: flex;
+  align-items: center;
+  inline-size: fit-content;
+  min-block-size: var(--layout-target);
+  color: var(--color-text-secondary);
+  list-style: none;
+  cursor: pointer;
+}
+
+[data-variant='shell'] .sh-more__sum::-webkit-details-marker {
+  display: none;
+}
+
+[data-variant='shell'] .sh-more__sum::before {
+  content: '[+] ' / '';
+  color: var(--color-text-muted);
+  white-space: pre;
+}
+
+[data-variant='shell'] .sh-more[open] > .sh-more__sum::before {
+  content: '[-] ' / '';
+}
+
+[data-variant='shell'] .sh-more__sum:hover {
+  color: var(--color-text-primary);
+  text-decoration: underline;
+}
+
+[data-variant='shell'] .sh-more__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: calc(var(--layout-row) / 2);
+  padding-inline-start: calc(var(--layout-cell) * 4);
+  padding-block-end: calc(var(--layout-row) / 2);
+}
+
+[data-variant='shell'] .sh-more__q {
+  padding-inline-start: calc(var(--layout-cell) * 2);
+  border-inline-start: 1px solid var(--layout-rule);
+}
+
+/* A release's tracks as ls prints them: number, title, length, in columns. */
+[data-variant='shell'] .sh-trk li {
+  display: grid;
+  grid-template-columns: calc(var(--layout-cell) * 4) minmax(0, 1fr) auto;
+  column-gap: calc(var(--layout-cell) * 2);
+}
+
+[data-variant='shell'] .sh-trk__n {
+  color: var(--color-text-muted);
+}
+
+[data-variant='shell'] .sh-trk__d {
+  color: var(--layout-fig);
+  font-variant-numeric: tabular-nums;
+}
+
+/* imgcat: images in whole cells */
+[data-variant='shell'] .sh-icat img {
+  inline-size: 100%;
+  block-size: auto;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: var(--ui-radius-media);
+  background: var(--color-surface-subtle);
+}
+
+/* ── Tables: dated listings ── */
+
+[data-variant='shell'] .sh-tab {
+  inline-size: 100%;
+  max-inline-size: calc(var(--layout-cell) * 100);
+  border-collapse: collapse;
+}
+
+[data-variant='shell'] .sh-tab thead th {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+[data-variant='shell'] .sh-tab td {
+  padding-block: 0;
+  padding-inline: 0 calc(var(--layout-cell) * 2);
+  vertical-align: top;
+}
+
+[data-variant='shell'] .sh-tab td:last-child {
+  padding-inline-end: 0;
+}
+
+[data-variant='shell'] .sh-tab tbody tr + tr td {
+  padding-block-start: calc(var(--layout-row) / 2);
+}
+
+[data-variant='shell'] :is(.sh-tab__d, .sh-tab__f, .sh-tab__k) {
+  white-space: nowrap;
+}
+
+[data-variant='shell'] .sh-tab__d {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='shell'] .sh-tab__f {
+  color: var(--layout-fig);
+}
+
+[data-variant='shell'] .sh-tab__k {
+  color: var(--layout-ps1);
+}
+
+[data-variant='shell'] .sh-tab__ttl {
+  font-weight: 700;
+}
+
+[data-variant='shell'] .sh-tab__desc {
+  display: block;
+  max-inline-size: var(--layout-prose);
+  color: var(--color-text-secondary);
+  text-wrap: pretty;
+}
+
+[data-variant='shell'] .sh-tab__links {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: calc(var(--layout-cell) * 2);
+}
+
+/* ── open dir/: a gallery in cells ── */
+
+[data-variant='shell'] .sh-imgs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--layout-cell) * 28)), 1fr));
+  gap: var(--layout-row) calc(var(--layout-cell) * 3);
+  max-inline-size: calc(var(--layout-cell) * 100);
+}
+
+[data-variant='shell'] .sh-imgs .sh-icat img {
+  aspect-ratio: 3 / 2;
+}
+
+/* ── key ........ value ── */
+
+[data-variant='shell'] .sh-lead {
+  display: grid;
+  grid-template-columns:
+    calc(var(--layout-cell) * 26) calc(var(--layout-cell) * 12)
+    minmax(0, 1fr);
+  column-gap: calc(var(--layout-cell) * 2);
+  row-gap: calc(var(--layout-row) / 2);
+}
+
+[data-variant='shell'] .sh-lead > div {
+  display: contents;
+}
+
+/* The key, then its leader dots to the value: the dots clip themselves in the room the key
+   leaves, so the key itself is never cut (it wraps when the column is narrow). */
+[data-variant='shell'] .sh-lead dt {
+  display: flex;
+  align-items: baseline;
+  min-inline-size: 0;
+}
+
+[data-variant='shell'] .sh-lead dt::after {
+  content: ' ................................................';
+  flex: 1 1 0;
+  min-inline-size: 0;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+[data-variant='shell'] .sh-lead__v {
+  color: var(--layout-fig);
+  font-weight: 700;
+  text-align: end;
+  white-space: nowrap;
+}
+
+[data-variant='shell'] .sh-lead__s {
+  max-inline-size: var(--layout-prose);
+  color: var(--color-text-secondary);
+}
+
+/* ── git log --graph ── */
+
+[data-variant='shell'] .sh-gl > li {
+  display: grid;
+  grid-template-columns:
+    calc(var(--layout-lanes) * var(--layout-cell) + var(--layout-cell))
+    calc(var(--layout-cell) * 7) minmax(0, 1fr);
+  column-gap: var(--layout-cell);
+}
+
+[data-variant='shell'] .sh-gl__g {
+  position: relative;
+  grid-row: 1 / span 3;
+  align-self: stretch;
+  white-space: pre;
+  font-weight: 700;
+}
+
+[data-variant='shell'] .sh-gl__lane {
+  position: absolute;
+  inset-block: var(--layout-row) 0;
+  inset-inline-start: calc(var(--layout-col) * var(--layout-cell) + var(--layout-cell) / 2);
+  border-inline-start: 1px solid currentColor;
+}
+
+[data-variant='shell'] .sh-gl__g [data-lane='1'] {
+  color: color-mix(in oklab, var(--color-data-categorical-1) 72%, var(--color-text-primary));
+}
+
+[data-variant='shell'] .sh-gl__g [data-lane='2'] {
+  color: color-mix(in oklab, var(--color-data-categorical-2) 72%, var(--color-text-primary));
+}
+
+[data-variant='shell'] .sh-gl__g [data-lane='4'] {
+  color: color-mix(in oklab, var(--color-data-categorical-4) 72%, var(--color-text-primary));
+}
+
+[data-variant='shell'] .sh-gl__g [data-lane='5'] {
+  color: color-mix(in oklab, var(--color-data-categorical-5) 72%, var(--color-text-primary));
+}
+
+[data-variant='shell'] .sh-gl__hash {
+  color: var(--layout-fig);
+}
+
+[data-variant='shell'] .sh-gl__rng {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='shell'] .sh-gl__subj {
+  grid-column: 2 / -1;
+  font-weight: 700;
+}
+
+[data-variant='shell'] :is(.sh-gl__org, .sh-gl__deco) {
+  font-weight: 400;
+}
+
+[data-variant='shell'] .sh-gl__deco {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='shell'] .sh-gl__msg {
+  grid-column: 2 / -1;
+  display: grid;
+  gap: var(--space-3xs);
+  max-inline-size: calc(var(--layout-prose) + var(--layout-cell) * 2);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='shell'] .sh-gl__msg li {
+  display: grid;
+  grid-template-columns: calc(var(--layout-cell) * 2) minmax(0, 1fr);
+}
+
+[data-variant='shell'] .sh-gl__msg li::before,
+[data-variant='shell'] .sh-lines li::before {
+  content: '-';
+  color: var(--color-text-muted);
+}
+
+[data-variant='shell'] .sh-gl__tr {
+  color: var(--color-text-muted);
+}
+
+[data-variant='shell'] .sh-gl__conn {
+  grid-template-columns: auto;
+}
+
+[data-variant='shell'] .sh-gl > li:not(.sh-gl__conn) {
+  padding-block-end: calc(var(--layout-row) / 2);
+}
+
+/* ── BibTeX ── */
+
+[data-variant='shell'] .sh-bib + .sh-bib {
+  margin-block-start: var(--layout-row);
+}
+
+[data-variant='shell'] .sh-bib__at {
+  color: var(--layout-ps1);
+}
+
+[data-variant='shell'] .sh-bib__key {
+  color: var(--layout-fig);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+[data-variant='shell'] .sh-bib dl {
+  display: grid;
+  grid-template-columns:
+    calc(var(--layout-cell) * 2) calc(var(--layout-cell) * 10)
+    minmax(0, 1fr);
+}
+
+[data-variant='shell'] .sh-bib dl > div {
+  display: contents;
+}
+
+[data-variant='shell'] .sh-bib dt {
+  grid-column: 2;
+  color: var(--layout-dir);
+}
+
+[data-variant='shell'] .sh-bib dd {
+  grid-column: 3;
+  min-inline-size: 0;
+  max-inline-size: var(--layout-prose);
+  overflow-wrap: anywhere;
+}
+
+[data-variant='shell'] .sh-bib cite {
+  font-style: normal;
+  font-weight: 700;
+}
+
+/* ── mail: quoted messages ── */
+
+[data-variant='shell'] .sh-mails {
+  display: grid;
+  row-gap: var(--layout-row);
+}
+
+[data-variant='shell'] .sh-mail {
+  display: grid;
+  max-inline-size: calc(var(--layout-prose) + var(--layout-cell) * 2);
+}
+
+[data-variant='shell'] .sh-mail__hdr {
+  display: grid;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='shell'] .sh-mail__hdr b {
+  color: var(--color-text-primary);
+}
+
+[data-variant='shell'] .sh-mail__k {
+  display: inline-block;
+  min-inline-size: calc(var(--layout-cell) * 9);
+  color: var(--color-text-muted);
+}
+
+[data-variant='shell'] .sh-mail__q {
+  padding-inline-start: calc(var(--layout-cell) * 2);
+  border-inline-start: 1px solid var(--layout-ps1);
+  font-family: var(--type-body-font-family);
+  font-size: var(--type-body-font-size);
+  line-height: var(--type-body-line-height);
+  text-wrap: pretty;
+}
+
+/* ── ls skills/, tree tools/, man services, jobs, finger, motd ── */
+
+[data-variant='shell'] :is(.sh-dirs, .sh-svc) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: calc(var(--layout-row) / 2);
+}
+
+[data-variant='shell'] .sh-dirs ul {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: calc(var(--layout-cell) * 3);
+  padding-inline-start: calc(var(--layout-cell) * 2);
+}
+
+[data-variant='shell'] .sh-trees {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--layout-cell) * 24)), 1fr));
+  gap: var(--layout-row) calc(var(--layout-cell) * 3);
+}
+
+[data-variant='shell'] .sh-tree li {
+  display: grid;
+  grid-template-columns: calc(var(--layout-cell) * 4) minmax(0, 1fr);
+}
+
+[data-variant='shell'] .sh-tree li::before {
+  content: '\251c\2500\2500 ';
+  color: var(--color-text-muted);
+}
+
+[data-variant='shell'] .sh-tree li:last-child::before {
+  content: '\2514\2500\2500 ';
+}
+
+[data-variant='shell'] .sh-svc__grp {
+  margin-block-start: calc(var(--layout-row) / 2);
+}
+
+[data-variant='shell'] .sh-svc__grp:first-child {
+  margin-block-start: 0;
+}
+
+[data-variant='shell'] .sh-svc__nm {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: calc(var(--layout-cell) * 3);
+}
+
+[data-variant='shell'] .sh-svc__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3xs);
+  padding-inline-start: calc(var(--layout-cell) * 4);
+}
+
+[data-variant='shell'] .sh-plus li {
+  display: grid;
+  grid-template-columns: calc(var(--layout-cell) * 2) minmax(0, 1fr);
+}
+
+[data-variant='shell'] .sh-plus li::before {
+  content: '+';
+  color: var(--layout-ps1);
+}
+
+[data-variant='shell'] .sh-jobs li {
+  display: grid;
+  grid-template-columns: calc(var(--layout-cell) * 5) calc(var(--layout-cell) * 9) minmax(0, 1fr);
+}
+
+[data-variant='shell'] .sh-jobs__n {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='shell'] .sh-jobs__st {
+  color: var(--layout-ps1);
+}
+
+[data-variant='shell'] .sh-finger {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-variant='shell'] .sh-finger__row {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: calc(var(--layout-cell) * 4);
+}
+
+[data-variant='shell'] .sh-lines li {
+  display: grid;
+  grid-template-columns: calc(var(--layout-cell) * 2) minmax(0, 1fr);
+  max-inline-size: calc(var(--layout-prose) + var(--layout-cell) * 2);
+}
+
+[data-variant='shell'] .sh-motd blockquote {
+  max-inline-size: var(--layout-prose);
+  padding-inline-start: calc(var(--layout-cell) * 2);
+  font-weight: 700;
+  text-wrap: balance;
+}
+
+[data-variant='shell'] .sh-motd figcaption {
+  padding-inline-start: calc(var(--layout-cell) * 6);
+  color: var(--color-text-secondary);
+}
+
+/* ── mail <address>: the biggest link on the page ── */
+
+[data-variant='shell'] .sh-mailto {
+  display: grid;
+  grid-template-columns: calc(var(--layout-cell) * 11) minmax(0, 1fr);
+  column-gap: var(--layout-cell);
+}
+
+[data-variant='shell'] .sh-mailto > div {
+  display: contents;
+}
+
+[data-variant='shell'] .sh-mailto dt {
+  color: var(--color-text-muted);
+}
+
+[data-variant='shell'] .sh-mailto__big {
+  font-size: calc(var(--type-body-font-size) * 2);
+  line-height: calc(var(--layout-row) * 2);
+  font-weight: var(--type-display-font-weight);
+  color: var(--layout-dir);
+  overflow-wrap: anywhere;
+}
+
+[data-variant='shell'] .sh-gh-sum {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: calc(var(--layout-cell) * 3);
+  color: var(--color-text-secondary);
+}
+
+/* ── The end of the session ── */
+
+[data-variant='shell'] .sh-end {
+  display: grid;
+  gap: var(--layout-row);
+  padding-block: calc(var(--layout-row) * 3) calc(var(--layout-row) * 2);
+  padding-inline: var(--layout-gutter);
+  color: var(--color-text-muted);
+}
+
+[data-variant='shell'] .sh-caret {
+  display: inline-block;
+  inline-size: var(--layout-cell);
+  block-size: 1.1em;
+  vertical-align: -0.2em;
+  background: var(--layout-ps1);
+}
+
+[data-variant='shell'] .sh-end__colo {
+  display: grid;
+  max-inline-size: var(--layout-prose);
+}
+
+[data-variant='shell'] .sh-end__colo b {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='shell'] .sh-end__slot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: calc(var(--layout-cell) * 2);
+}
+
+/* ── The index pane: ls -R ~ ── */
+
+[data-variant='shell'] .sh-pane {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+  margin-block-start: calc(var(--layout-row) * 2);
+  padding-block: var(--layout-row) 0;
+  padding-inline: var(--layout-gutter);
+  border-block-start: 1px solid var(--layout-rule);
+}
+
+[data-variant='shell'] .sh-pane__hd {
+  display: flex;
+  justify-content: space-between;
+  column-gap: calc(var(--layout-cell) * 2);
+  padding-block-end: calc(var(--layout-row) / 2);
+  font-weight: 700;
+}
+
+/* One line: a long command ends in an ellipsis, and the count never breaks. Positioned, so
+   the visually hidden name after the command is clipped with it: an absolute box escapes a
+   clip that isn't its containing block's, and at the end of a long one-line command it would
+   reach past the window (combo r7). */
+[data-variant='shell'] .sh-pane__hd > :first-child {
+  position: relative;
+  flex: 1 1 0;
+  contain: inline-size;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-variant='shell'] .sh-pane__hd > :last-child {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+[data-variant='shell'] .sh-pane__list {
+  display: grid;
+  gap: calc(var(--layout-row) / 2);
+  align-content: start;
+}
+
+/* Room round each row for the platform's ring, so a focused row's ring lies on the pane's
+   ground, never on its neighbour's selection bar or the directory name above it. */
+[data-variant='shell'] .sh-grp ul {
+  display: grid;
+  row-gap: calc(var(--ui-focus-width) + var(--ui-focus-offset));
+  padding-block-start: calc(var(--ui-focus-width) + var(--ui-focus-offset));
+}
+
+[data-variant='shell'] .sh-row {
+  display: grid;
+  grid-template-columns:
+    var(--layout-cell) calc(var(--layout-cell) * 7) minmax(0, 1fr)
+    calc(var(--layout-cell) * 3);
+  column-gap: var(--layout-cell);
+  padding-inline: var(--space-3xs);
+  border-radius: var(--ui-radius-control);
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+[data-variant='shell'] a.sh-row:not([data-ui-slot]) {
+  text-decoration: none;
+}
+
+[data-variant='shell'] .sh-row__p {
+  color: var(--layout-ps1);
+}
+
+[data-variant='shell'] :is(.sh-row__v, .sh-row__n) {
+  color: var(--color-text-muted);
+}
+
+[data-variant='shell'] .sh-row__n {
+  text-align: end;
+}
+
+[data-variant='shell'] .sh-row__v {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+[data-variant='shell'] .sh-pane__q {
+  display: grid;
+  grid-template-columns: calc(var(--layout-cell) * 2) minmax(0, 1fr) auto;
+  column-gap: var(--layout-cell);
+  align-items: center;
+  inline-size: 100%;
+  min-block-size: var(--layout-target);
+  margin-block-start: var(--layout-row);
+  padding-block: calc(var(--layout-row) / 2);
+  padding-inline: 0;
+  border: 0;
+  border-block-start: 1px solid var(--layout-rule);
+  background: none;
+  color: var(--color-text-secondary);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+[data-variant='shell'] .sh-pane__q[hidden] {
+  display: none;
+}
+
+[data-variant='shell'] .sh-tmux__cur {
+  display: none;
+}
+
+[data-variant='shell'] .sh-row__ttl {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+[data-variant='shell'] .sh-row__ttl mark {
+  background: none;
+  color: var(--layout-ps1);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+[data-variant='shell'] :is(.sh-row:hover, .sh-row[aria-current], .sh-row[aria-selected='true']) {
+  background: var(--color-selection);
+}
+
+[data-variant='shell']
+  :is(.sh-row[aria-current], .sh-row[aria-selected='true'])
+  .sh-row__p::before {
+  content: '\258c';
+}
+
+[data-variant='shell'] .sh-row[aria-current] .sh-row__ttl {
+  font-weight: 700;
+}
+
+[data-variant='shell']
+  :is(.sh-row:hover, .sh-row[aria-current], .sh-row[aria-selected='true'])
+  :is(.sh-row__v, .sh-row__n, .sh-row__p) {
+  color: var(--color-text-primary);
+}
+
+/* With the script, below the docked width, the palette is the index (SH-M3): the in-flow copy,
+   a third navigation after the status line and the palette, goes. Without the script, jump links
+   to it, and on paper it prints. With the pane set to the dialog, the palette is the index at
+   every width. */
+@media screen and (width < 80rem) {
+  [data-variant='shell'] .sh-pane[data-sh-spy] {
+    display: none;
+  }
+}
+
+@media screen {
+  [data-variant='shell'] .sh-session[data-pane='dialog'] .sh-pane[data-sh-spy] {
+    display: none;
+  }
+}
+
+/* A shortcut is no use with no keyboard to press it. */
+@media (hover: none) {
+  [data-variant='shell'] :is(.sh-tmux__kb, [data-sh-keys]) {
+    display: none;
+  }
+}
+
+/* ── The status line ── */
+
+[data-variant='shell'] .sh-tmux {
+  box-sizing: border-box;
+  /* Measured in cells of its own text, so large text sheds the bar's parts as a narrow window
+     does (below). */
+  container: bar / inline-size;
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  column-gap: calc(var(--layout-cell) * 2);
+  /* Exactly the token, never what a fallback glyph's taller line makes it, so the docked index
+     fitted above it ends where the bar begins. */
+  block-size: var(--layout-bar);
+  padding-inline: var(--layout-cell);
+  /* Room for the platform's ring, outside a control, on the bar's own ground (K-2's surface hook). */
+  padding-block: calc(var(--ui-focus-width) + var(--ui-focus-offset))
+    calc(var(--ui-focus-width) + var(--ui-focus-offset) + env(safe-area-inset-bottom));
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  white-space: nowrap;
+}
+
+/* Without the script the status line closes the session in the flow, so nothing it covers can
+   take focus under it: the browser's own focus scroll leaves a stop already in the window where
+   it is (WCAG 2.4.11). With the script it's fixed to the window's foot from the first paint,
+   and the enhancement's clearance lifts every stop above it. Paper keeps its own rules.
+   "Without the script" is the session's noscript mark being an element, which the parser makes
+   it only when it reads the page with scripting off (NoScriptMark): no scripting query, so
+   nothing flips once the page has been read, and a visitor with JavaScript whose enhancement
+   never comes still has the fixed bar. The mark itself is never a box, nor a cell of the
+   session's grid. */
+[data-variant='shell'] .sh-session > :has(> [data-sh-nojs]) {
+  display: none;
+}
+
+@media screen {
+  /* Positioned, so the forced-colours rule over its edge stays on it. */
+  [data-variant='shell']:has(.sh-session > * > [data-sh-nojs]) .sh-tmux {
+    position: relative;
+  }
+
+  [data-variant='shell'] .sh-session:has(> * > [data-sh-nojs]) {
+    padding-block-end: 0;
+  }
+}
+
+/* And the docked index takes the window's whole height, with no bar to stop short of. */
+@media screen and (min-width: 80rem) {
+  [data-variant='shell'] .sh-session:not([data-pane='dialog']):has(> * > [data-sh-nojs]) .sh-pane {
+    block-size: 100dvh;
+  }
+}
+
+[data-variant='shell'] .sh-tmux a {
+  color: inherit;
+  text-decoration: none;
+}
+
+[data-variant='shell'] .sh-tmux__sess {
+  font-weight: 700;
+}
+
+[data-variant='shell'] .sh-tmux__wins {
+  display: flex;
+  column-gap: var(--layout-cell);
+}
+
+[data-variant='shell'] :is(.sh-tmux__sess, .sh-tmux__win, .sh-tmux__jump) {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--layout-target);
+  padding-inline: var(--layout-cell);
+  border-radius: var(--ui-radius-control);
+}
+
+[data-variant='shell'] .sh-tmux__win::after {
+  content: ' ';
+  white-space: pre;
+}
+
+[data-variant='shell'] .sh-tmux__win[aria-current]::after {
+  content: '*';
+}
+
+[data-variant='shell'] .sh-tmux__win[aria-current] {
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.22em;
+}
+
+[data-variant='shell'] .sh-tmux__right {
+  display: flex;
+  align-items: center;
+  column-gap: calc(var(--layout-cell) * 2);
+  margin-inline-start: auto;
+}
+
+[data-variant='shell'] .sh-tmux__meter {
+  display: inline-block;
+  inline-size: calc(var(--layout-cell) * 8);
+  block-size: 0.75em;
+  overflow: hidden;
+  border: 1px solid currentColor;
+  border-radius: var(--ui-radius-control);
+}
+
+[data-variant='shell'] .sh-tmux__meter i {
+  display: block;
+  block-size: 100%;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+/* The button is the bar's target tall, its edge included, never its own line and padding
+   taller: the bar's box holds it with the ring's room above and below. */
+[data-variant='shell'] button.sh-tmux__jump {
+  box-sizing: border-box;
+  block-size: var(--layout-target);
+  padding-block: 0;
+  line-height: 1;
+  gap: var(--layout-cell);
+  border: 1px solid currentColor;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+[data-variant='shell'] .sh-tmux__jump[hidden] {
+  display: none;
+}
+
+/* With the script, the no-script link gives way to the button, on screen only: paper keeps the
+   link. A mark of Shell's own, not hidden, which the platform hides from a layer above this one. */
+@media screen {
+  [data-variant='shell'] a.sh-tmux__jump[data-sh-off] {
+    display: none;
+  }
+}
+
+/* ── The palette dialog ── */
+
+[data-variant='shell'] .sh-dlg {
+  inset-block: auto 0;
+  inline-size: min(100%, calc(var(--layout-cell) * 64));
+  max-inline-size: none;
+  max-block-size: min(80dvh, calc(var(--layout-row) * 24));
+  margin-block: 0;
+  margin-inline: auto;
+  padding-block: var(--layout-row) var(--space-2xs);
+  padding-inline: calc(var(--layout-cell) * 2);
+  border: 1px solid var(--color-border-default);
+  border-block-end: 0;
+  border-start-start-radius: var(--ui-radius-overlay);
+  border-start-end-radius: var(--ui-radius-overlay);
+  background: var(--color-surface-overlay);
+  color: var(--color-text-primary);
+  font: inherit;
+  box-shadow: var(--ui-shadow-overlay);
+}
+
+[data-variant='shell'] .sh-dlg[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+[data-variant='shell'] .sh-dlg::backdrop {
+  background: color-mix(in oklab, var(--color-scrim) 55%, transparent);
+}
+
+[data-variant='shell'] .sh-dlg__hd {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-block-end: calc(var(--layout-row) / 2);
+}
+
+[data-variant='shell'] .sh-dlg__hd button {
+  min-block-size: 32px;
+  padding-inline: var(--layout-cell);
+  border: 0;
+  border-radius: var(--ui-radius-control);
+  background: none;
+  color: var(--color-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+[data-variant='shell'] .sh-q {
+  display: grid;
+  grid-template-columns: calc(var(--layout-cell) * 2) minmax(0, 1fr) auto;
+  column-gap: var(--layout-cell);
+  align-items: center;
+  padding-block: calc(var(--layout-row) / 2);
+  border-block: 1px solid var(--layout-rule);
+}
+
+[data-variant='shell'] .sh-q__gt {
+  color: var(--layout-ps1);
+  font-weight: 700;
+}
+
+[data-variant='shell'] .sh-q input {
+  min-inline-size: 0;
+  min-block-size: var(--layout-target);
+  padding: 0;
+  border: 0;
+  border-radius: var(--ui-radius-control);
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+}
+
+[data-variant='shell'] .sh-q input::placeholder {
+  color: var(--color-text-muted);
+  opacity: 1;
+}
+
+[data-variant='shell'] .sh-q__cnt {
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+[data-variant='shell'] .sh-dlg__list {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  padding-block-start: calc(var(--layout-row) / 2);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+[data-variant='shell'] .sh-dlg__list .sh-row {
+  grid-template-columns: var(--layout-cell) minmax(0, 1fr);
+  cursor: pointer;
+}
+
+[data-variant='shell'] .sh-dlg__list .sh-row::before {
+  content: '';
+  color: var(--layout-ps1);
+}
+
+[data-variant='shell'] .sh-dlg__list .sh-row[aria-selected='true']::before {
+  content: '\258c';
+}
+
+[data-variant='shell'] .sh-dlg__g {
+  margin-block-start: calc(var(--layout-row) / 2);
+  color: var(--layout-dir);
+  font-weight: 700;
+}
+
+@media (min-width: 48rem) {
+  [data-variant='shell'] .sh-dlg {
+    inset-block: calc(var(--layout-row) * 4) auto;
+    border-block-end: 1px solid var(--color-border-default);
+    border-radius: var(--ui-radius-overlay);
+  }
+}
+
+/* ── cat <id>: a custom section's items under head(1)'s banner ── */
+
+[data-variant='shell'] .sh-cat {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: var(--layout-row);
+}
+
+[data-variant='shell'] .sh-cat__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: calc(var(--layout-row) / 2);
+}
+
+/* The banner's file starts right under it, and a caption sits right under its picture. */
+[data-variant='shell'] .sh-cat__h + * {
+  margin-block-start: 0;
+}
+
+[data-variant='shell'] .sh-cat__media :is(figure, figcaption, figcaption > *) {
+  margin-block: 0;
+}
+
+[data-variant='shell'] .sh-cat__h {
+  font-weight: 700;
+}
+
+[data-variant='shell'] .sh-cat__h > [aria-hidden] {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+/* Every picture an item has, at the listing's thumbnail size, each with its caption under it. */
+[data-variant='shell'] .sh-cat__media {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--layout-cell) * 20)), 1fr));
+  gap: var(--layout-row) calc(var(--layout-cell) * 3);
+  max-inline-size: calc(var(--layout-cell) * 92);
+}
+
+/* ── The case page: man(1). Section names at the margin, bodies indented seven cells. ── */
+
+[data-variant='shell'] .sh-man {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-variant='shell'] .sh-man__run {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  column-gap: calc(var(--layout-cell) * 2);
+  font-weight: 700;
+}
+
+[data-variant='shell'] .sh-man__mid {
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+
+/* The running head and foot are one line each, as man(1) prints them at any width: what
+   doesn't fit on it wraps to a line that's clipped away, never stacked, and a first part longer
+   than the line ends in an ellipsis. */
+[data-variant='shell'] .sh-man__run {
+  max-block-size: var(--layout-row);
+  overflow: hidden;
+  /* Its width is the column's, never its content's: a long slug or name, kept to one line,
+     can't widen the page through the line's min-content size. */
+  contain: inline-size;
+}
+
+[data-variant='shell'] .sh-man__run > :first-child {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-variant='shell'] .sh-man__run--foot {
+  margin-block-start: calc(var(--layout-row) * 2);
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+
+[data-variant='shell'] .sh-man__top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: calc(var(--layout-cell) * 4);
+  row-gap: var(--layout-row);
+  align-items: start;
+}
+
+[data-variant='shell'] .sh-man__lead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-variant='shell'] .sh-man__sec {
+  margin-block-start: calc(var(--layout-row) * 2);
+}
+
+[data-variant='shell'] .sh-man__h {
+  position: relative;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+/* The landed section: a marker at the margin, as a landed command line has. It isn't text,
+   so the heading's name stays its own, and it stays inside the gutter, two cells out or as far
+   as a phone's narrower gutter lets it. */
+[data-variant='shell'] .sh-man__sec:target > .sh-man__h::before {
+  content: '\25b8' / '';
+  position: absolute;
+  inset-inline-start: max(calc(var(--layout-cell) * -2), calc(var(--layout-gutter) * -1));
+  color: var(--layout-ps1);
+}
+
+[data-variant='shell'] .sh-man__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: var(--layout-row);
+  padding-inline-start: calc(var(--layout-cell) * 7);
+}
+
+[data-variant='shell'] .sh-man__title {
+  max-inline-size: calc(var(--layout-cell) * 40);
+  font-size: calc(var(--type-body-font-size) * 2);
+  line-height: calc(var(--layout-row) * 2);
+  font-weight: var(--type-display-font-weight);
+  text-wrap: balance;
+}
+
+/* With large text NAME drops its double size, as the thesis does, so no word breaks. */
+@container transcript (max-width: 28ch) {
+  [data-variant='shell'] .sh-man__title {
+    font-size: var(--type-body-font-size);
+    line-height: var(--layout-row);
+  }
+}
+
+[data-variant='shell'] .sh-man__sum {
+  color: var(--color-text-secondary);
+}
+
+/* NAME is the title and its one line, as man(1) prints them: no row between. */
+[data-variant='shell'] .sh-man__sec[data-man='name'] > .sh-man__body {
+  row-gap: 0;
+}
+
+/* SYNOPSIS: key and value lines, each ruled under. */
+[data-variant='shell'] .sh-man__kv {
+  grid-template-columns: calc(var(--layout-cell) * 12) minmax(0, 1fr);
+  max-inline-size: calc(var(--layout-cell) * 62);
+  column-gap: calc(var(--layout-cell) * 2);
+}
+
+[data-variant='shell'] .sh-man__kv :is(dt, dd) {
+  padding-block: calc(var(--layout-row) / 4);
+  border-block-end: 1px solid var(--layout-rule);
+}
+
+[data-variant='shell'] .sh-man__cover {
+  min-inline-size: 0;
+}
+
+[data-variant='shell'] .sh-man__cover img {
+  inline-size: 100%;
+  block-size: auto;
+}
+
+[data-variant='shell'] .sh-man__media {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--layout-cell) * 36)), 1fr));
+  gap: var(--layout-row) calc(var(--layout-cell) * 3);
+}
+
+[data-variant='shell'] .sh-man__media img {
+  inline-size: 100%;
+  block-size: auto;
+}
+
+/* DECISIONS: the decision in bold, its reason and what else was weighed indented under it. */
+[data-variant='shell'] .sh-man__dec {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: var(--layout-row);
+}
+
+[data-variant='shell'] .sh-man__dt {
+  max-inline-size: var(--layout-prose);
+  font-weight: 700;
+}
+
+[data-variant='shell'] :is(.sh-man__dd, .sh-man__alt) {
+  padding-inline-start: calc(var(--layout-cell) * 4);
+}
+
+[data-variant='shell'] .sh-man__alt {
+  max-inline-size: calc(var(--layout-prose) + var(--layout-cell) * 4);
+  color: var(--color-text-secondary);
+}
+
+/* HISTORY: a changelog, each line a dash. */
+[data-variant='shell'] .sh-man__hist {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: calc(var(--layout-row) / 2);
+}
+
+[data-variant='shell'] .sh-man__hist li {
+  max-inline-size: calc(var(--layout-prose) + var(--layout-cell) * 2);
+  padding-inline-start: calc(var(--layout-cell) * 2);
+  text-indent: calc(var(--layout-cell) * -2);
+}
+
+[data-variant='shell'] .sh-man__hist li::before {
+  content: '- ';
+  color: var(--color-text-muted);
+}
+
+[data-variant='shell'] .sh-man__hist li > .sh-prose {
+  text-indent: 0;
+}
+
+/* SEE ALSO: a reference and what it is. */
+[data-variant='shell'] .sh-man__see {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: calc(var(--layout-row) / 2);
+}
+
+[data-variant='shell'] .sh-man__see > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: calc(var(--layout-cell) * 3);
+}
+
+[data-variant='shell'] .sh-man__see dt {
+  font-weight: 700;
+}
+
+[data-variant='shell'] .sh-man__see dd {
+  min-inline-size: 0;
+  max-inline-size: var(--layout-prose);
+}
+
+[data-variant='shell'] .sh-man__ref {
+  color: var(--layout-dir);
+}
+
+/* The way on. */
+[data-variant='shell'] .sh-man__on {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: calc(var(--layout-row) / 2);
+  margin-block-start: calc(var(--layout-row) * 3);
+}
+
+[data-variant='shell'] .sh-man__go + .sh-cmd {
+  margin-block-start: var(--layout-row);
+}
+
+[data-variant='shell'] .sh-man__all a {
+  color: var(--layout-dir);
+  font-weight: 700;
+}
+
+@container transcript (min-width: 96ch) {
+  [data-variant='shell'] .sh-man__top[data-cover] {
+    grid-template-columns: minmax(0, calc(var(--layout-cell) * 62)) minmax(0, 1fr);
+  }
+
+  [data-variant='shell'] .sh-man__top[data-cover] > .sh-man__cover {
+    margin-block-start: calc(var(--layout-row) * 3);
+  }
+
+  [data-variant='shell'] .sh-man__see > div {
+    grid-template-columns: minmax(0, calc(var(--layout-cell) * 28)) minmax(0, 1fr);
+  }
+}
+
+/* A phone's manual indents four cells, not seven, so the text keeps its measure. */
+@container transcript (max-width: 60ch) {
+  [data-variant='shell'] .sh-man__body {
+    padding-inline-start: calc(var(--layout-cell) * 4);
+  }
+
+  [data-variant='shell'] :is(.sh-man__dd, .sh-man__alt) {
+    padding-inline-start: calc(var(--layout-cell) * 2);
+  }
+
+  [data-variant='shell'] .sh-man__mid {
+    display: none;
+  }
+
+  /* Too narrow for both copies of the title: the running head keeps the one at its start, as
+     man(1) on a narrow terminal does, never the two stacked. The foot's are different words. */
+  [data-variant='shell'] .sh-man__run:not(.sh-man__run--foot) > :last-child {
+    display: none;
+  }
+}
+
+/* ── Wide: the pane docks beside the transcript, a tmux split (SH-M3). On screen only: on
+   paper the index prints whole, in the flow after the transcript. ── */
+
+@media screen and (min-width: 80rem) {
+  [data-variant='shell'] .sh-session:not([data-pane='dialog']) {
+    grid-template-columns: minmax(0, 1fr) var(--layout-pane);
+    max-inline-size: var(--layout-session);
+    margin-inline: auto;
+  }
+
+  [data-variant='shell'] .sh-session:not([data-pane='dialog']) .sh-pane {
+    position: sticky;
+    inset-block-start: 0;
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    block-size: calc(100dvh - var(--layout-bar));
+    margin-block-start: 0;
+    padding-inline: calc(var(--layout-cell) * 3) calc(var(--layout-cell) * 2);
+    border-block-start: 0;
+    border-inline-start: 1px solid var(--layout-rule);
+    background: var(--color-surface-subtle);
+    /* The open button's ring stays above the status line, on the pane's own ground. */
+    padding-block-end: calc(var(--ui-focus-width) + var(--ui-focus-offset));
+  }
+
+  [data-variant='shell'] .sh-session:not([data-pane='dialog']) .sh-pane__list {
+    /* The list scrolls, so its scrollport holds a row's whole ring. */
+    padding: calc(var(--ui-focus-width) + var(--ui-focus-offset));
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* The open button sits at the pane's foot, folded or not, at its own height (the list gives
+     way, scrolling, never the button), so it never moves under focus. */
+  [data-variant='shell'] .sh-session:not([data-pane='dialog']) .sh-pane__q {
+    flex-shrink: 0;
+    margin-block-start: auto;
+  }
+
+  /* With the scroll spy, collapsed to the five directories, the current one expanded. A folded
+     directory's rows are closed, not removed: Tab still reaches each one, a screen reader
+     still reads the whole index, and the moment the keyboard is on a row it's the whole index,
+     as it is when any focus, a script's or a screen reader's, arrives on a folded row (the
+     enhancement marks the pane data-sh-unfold until focus leaves it), so a row with focus is
+     never folded away. A pointer can only press a row it sees, and that doesn't unfold it,
+     nor does reading on into another directory with the pressed row still focused: what it
+     pressed doesn't move away. */
+  [data-variant='shell']
+    .sh-session:not([data-pane='dialog'])
+    .sh-pane[data-sh-spy]:not([data-sh-whole], [data-sh-unfold], :has(.sh-row:focus-visible))
+    .sh-grp:not([data-current])
+    ul {
+    block-size: 0;
+    padding-block: 0;
+    overflow: hidden;
+  }
+
+  [data-variant='shell'] .sh-session:not([data-pane='dialog']) :is(.sh-main, .sh-end) {
+    grid-column: 1;
+  }
+}
+
+/* Past the session's cap, its edges are ruled, as a terminal window's are. */
+@media (min-width: 106rem) {
+  [data-variant='shell'] .sh-session {
+    border-inline: 1px solid var(--layout-rule);
+  }
+}
+
+/* ── The transcript narrows: listings fold to fewer columns ── */
+
+@container transcript (max-width: 95ch) {
+  [data-variant='shell'] .sh-who__split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@container transcript (max-width: 60ch) {
+  [data-variant='shell'] .sh-ent {
+    grid-template-columns: var(--layout-cell) minmax(0, 1fr);
+    column-gap: var(--layout-cell);
+  }
+
+  [data-variant='shell'] :is(.sh-ent__date, .sh-ent__body) {
+    grid-column: 2;
+  }
+
+  [data-variant='shell'] .sh-ent__date:empty {
+    display: none;
+  }
+
+  [data-variant='shell'] .sh-ent__med {
+    margin-inline-start: 0;
+  }
+
+  [data-variant='shell'] .sh-lead {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  [data-variant='shell'] .sh-lead__s {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='shell'] .sh-gl > li {
+    grid-template-columns:
+      calc(var(--layout-lanes) * var(--layout-cell) + var(--layout-cell))
+      minmax(0, 1fr);
+  }
+
+  [data-variant='shell'] :is(.sh-gl__hash, .sh-gl__rng, .sh-gl__subj, .sh-gl__msg) {
+    grid-column: 2;
+  }
+
+  [data-variant='shell'] .sh-gl__hash {
+    display: none;
+  }
+
+  [data-variant='shell'] :is(.sh-bib dl, .sh-mailto) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='shell'] :is(.sh-bib dt, .sh-bib dd) {
+    grid-column: 1;
+  }
+
+  [data-variant='shell'] .sh-bib dd {
+    padding-inline-start: calc(var(--layout-cell) * 2);
+  }
+
+  [data-variant='shell'] .sh-mailto__big {
+    font-size: calc(var(--type-body-font-size) * 1.5);
+    line-height: calc(var(--layout-row) * 1.5);
+  }
+
+  [data-variant='shell'] :is(.sh-tab, .sh-tab tbody, .sh-tab td) {
+    display: block;
+  }
+
+  [data-variant='shell'] .sh-tab tr {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    column-gap: calc(var(--layout-cell) * 2);
+  }
+
+  [data-variant='shell'] .sh-tab td {
+    padding: 0;
+  }
+
+  [data-variant='shell'] .sh-tab__wide {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='shell'] .sh-tab tbody tr + tr {
+    margin-block-start: calc(var(--layout-row) / 2);
+  }
+
+  [data-variant='shell'] .sh-tab tbody tr + tr td {
+    padding-block-start: 0;
+  }
+
+  [data-variant='shell'] .sh-jobs li {
+    grid-template-columns: calc(var(--layout-cell) * 5) minmax(0, 1fr);
+  }
+
+  [data-variant='shell'] .sh-jobs__st {
+    display: none;
+  }
+}
+
+/* ── Phones: the prompt drops user@host, the bar keeps the name and jump ── */
+
+@media (max-width: 47.99rem) {
+  [data-variant='shell'] {
+    --layout-gutter: calc(var(--layout-cell) * 1.5);
+  }
+
+  [data-variant='shell'] .sh-ps1__who,
+  [data-variant='shell'] .sh-tmux__wins,
+  [data-variant='shell'] .sh-tmux__kb {
+    display: none;
+  }
+
+  [data-variant='shell'] .sh-tmux__cur {
+    display: inline;
+  }
+
+  [data-variant='shell'] .sh-tmux {
+    column-gap: var(--layout-cell);
+  }
+
+  /* A phone's bar holds the name, the current directory and jump: no meter, no counter. */
+  [data-variant='shell'] :is(.sh-tmux__meter, .sh-tmux__pos) {
+    display: none;
+  }
+}
+
+/* From 48 to 64rem the window list doesn't fit beside the counter and jump: the bar names
+   the current directory alone, and the windows stay in the whoami line and the index. */
+@media (min-width: 48rem) and (max-width: 63.99rem) {
+  [data-variant='shell'] .sh-tmux__wins {
+    display: none;
+  }
+
+  [data-variant='shell'] .sh-tmux__cur {
+    display: inline;
+  }
+}
+
+/* Whatever the width, the right side shrinks before jump is pushed out of the bar. */
+[data-variant='shell'] .sh-tmux__right {
+  flex-shrink: 1;
+  min-inline-size: 0;
+}
+
+[data-variant='shell'] .sh-tmux__jump {
+  flex-shrink: 0;
+}
+
+/* A long session name gives way first: it ends in an ellipsis, never past the window's edge
+   (its whole name is the link's, in the visually hidden text). */
+[data-variant='shell'] .sh-tmux__sess {
+  flex-shrink: 1;
+  min-inline-size: 0;
+}
+
+[data-variant='shell'] .sh-tmux__sess > [aria-hidden] {
+  min-inline-size: 0;
+  max-inline-size: calc(var(--layout-cell) * 24);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A listing row's cover on a narrow transcript is a preview at the row's indent, as icat
+   places one in a terminal: part of the column and a few rows tall, never a card edge to edge. */
+@container transcript (max-width: 60ch) {
+  [data-variant='shell'] .sh-ent > .sh-ent__body > .sh-icat,
+  [data-variant='shell'] .sh-ent[data-preview='sig'] > .sh-ent__body > .sh-icat {
+    inline-size: 60%;
+  }
+
+  [data-variant='shell'] .sh-ent > .sh-ent__body > .sh-icat img {
+    max-block-size: calc(var(--layout-row) * 8);
+  }
+}
+
+/* A narrow transcript wraps a folded section's first line, as a terminal hard-wraps at its
+   edge, rather than cutting it at an ellipsis. */
+@container transcript (max-width: 40ch) {
+  [data-variant='shell'] .sh-fold__meta {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+}
+
+/* Large text (the column counted in cells of the text's own size): a key prints over its
+   value rather than squeezing it, and the thesis drops its double size, so no word breaks. */
+@container transcript (max-width: 28ch) {
+  [data-variant='shell'] .sh-who__thesis {
+    font-size: var(--type-body-font-size);
+    line-height: var(--layout-row);
+  }
+}
+
+@container transcript (max-width: 26ch) {
+  /* Any word longer than the column breaks inside it, as a terminal hard-wraps at its edge, and
+     no box in the transcript holds the column open at its content's narrowest. */
+  [data-variant='shell'] .sh-main > * {
+    overflow-wrap: anywhere;
+  }
+
+  [data-variant='shell'] .sh-main * {
+    min-inline-size: 0;
+  }
+
+  [data-variant='shell'] .sh-more__body {
+    padding-inline-start: calc(var(--layout-cell) * 2);
+  }
+
+  [data-variant='shell'] :is(.sh-more, .sh-more__sum) {
+    inline-size: auto;
+    max-inline-size: 100%;
+  }
+
+  [data-variant='shell'] .sh-trk li {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    column-gap: var(--layout-cell);
+  }
+
+  [data-variant='shell'] .sh-mailto__big {
+    font-size: var(--type-body-font-size);
+    line-height: var(--layout-row);
+  }
+
+  [data-variant='shell'] .sh-kv {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* A dated row's date and type wrap, the entry under them, never past the column. */
+  [data-variant='shell'] .sh-tab tr {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  [data-variant='shell'] .sh-tab__wide {
+    flex-basis: 100%;
+    min-inline-size: 0;
+  }
+
+  [data-variant='shell'] .sh-kv dd {
+    padding-inline-start: calc(var(--layout-cell) * 2);
+  }
+
+  /* A leader's figure prints under its key, as a record's value does, and wraps there: no
+     dots to a value that's no longer beside them. */
+  [data-variant='shell'] .sh-lead {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='shell'] .sh-lead dt::after {
+    content: none;
+  }
+
+  [data-variant='shell'] .sh-lead__v {
+    padding-inline-start: calc(var(--layout-cell) * 2);
+    text-align: start;
+    white-space: normal;
+  }
+}
+
+/* The bar gives up the current directory, then the session's name, before jump: each ends in
+   an ellipsis, then goes, and only then does the right side give way. */
+[data-variant='shell'] .sh-tmux__cur {
+  flex-shrink: 1000;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-variant='shell'] .sh-tmux__sess {
+  flex-shrink: 100;
+}
+
+/* The bar in cells of its own text: under about 102 the window list goes and the current
+   directory names where the reader is; under about 76 the keys, the meter and the counter go
+   too. At the text's usual size (1ch is 9.6 px) these fall just inside the window widths above
+   (64rem, 48rem), so nothing changes there; with large text they come first. */
+@container bar (width < 102ch) {
+  [data-variant='shell'] .sh-tmux__wins {
+    display: none;
+  }
+
+  [data-variant='shell'] .sh-tmux__cur {
+    display: inline;
+  }
+}
+
+@container bar (width < 76ch) {
+  [data-variant='shell'] :is(.sh-tmux__kb, .sh-tmux__meter, .sh-tmux__pos) {
+    display: none;
+  }
+}
+
+/* ── Motion: written for full motion on both sides only ── */
+
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-variant='shell']:not([data-motion='reduced'], [data-motion='static']) .sh-tmux__meter i {
+      animation: shell-meter linear both;
+      animation-timeline: scroll(root block);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='shell']:not([data-motion='reduced'], [data-motion='static'])
+    .sh-block:target
+    > .sh-cmd::after {
+    animation: shell-land calc(var(--motion-scene) / 2) var(--motion-curve) both;
+  }
+
+  [data-variant='shell']:not([data-motion='reduced'], [data-motion='static'])
+    .sh-end.is-live
+    .sh-caret {
+    animation: shell-blink calc(var(--motion-scene) * 1.75) steps(1, end) 4;
+  }
+
+  [data-variant='shell']:not([data-motion='reduced'], [data-motion='static']) .sh-dlg[open] {
+    animation: shell-pop var(--motion-feedback) var(--motion-curve) both;
+  }
+
+  [data-variant='shell']:not([data-motion='reduced'], [data-motion='static'])
+    :is(.sh-ent, .sh-ent::before) {
+    transition: opacity var(--motion-feedback) var(--motion-curve);
+  }
+
+  [data-variant='shell']:not([data-motion='reduced'], [data-motion='static'])
+    :is(.sh-row, .sh-btn) {
+    transition: background-color var(--motion-feedback) var(--motion-curve);
+  }
+}
+
+/* Reduced transparency: the palette still settles in, but never fades in, so nothing under
+   it shows through on its way. */
+@media (prefers-reduced-motion: no-preference) and (prefers-reduced-transparency: reduce) {
+  [data-variant='shell']:not([data-motion='reduced'], [data-motion='static']) .sh-dlg[open] {
+    animation-name: shell-pop-solid;
+  }
+}
+
+/* Reduced motion, designed: the landed line keeps the selection bar as a still marker. */
+@media (prefers-reduced-motion: reduce) {
+  [data-variant='shell'] .sh-block:target > .sh-cmd::after {
+    opacity: 1;
+  }
+}
+
+[data-variant='shell']:is([data-motion='reduced'], [data-motion='static'])
+  .sh-block:target
+  > .sh-cmd::after {
+  opacity: 1;
+}
+
+/* On paper every fold prints open (gate item 8), where the engine draws a closed fold's content
+   on demand; the enhancement opens them before printing where it doesn't. */
+@media print {
+  @supports selector(::details-content) {
+    [data-variant='shell'] :is(.sh-fold, .sh-more)::details-content {
+      content-visibility: visible;
+    }
+  }
+
+  [data-variant='shell'] .sh-more__sum {
+    display: none;
+  }
+
+  [data-variant='shell'] .sh-fold__cmd::before {
+    content: none;
+  }
+
+  [data-variant='shell'] .sh-fold__meta {
+    display: none;
+  }
+}
+
+/* On paper both navigations stay, as plain lines in the flow: the index after the transcript,
+   the status line closing the session, without its ground. What a sheet can't press goes. */
+@media print {
+  [data-variant='shell']
+    :is(.sh-dlg, .sh-pane__q, .sh-tmux__meter, button.sh-tmux__jump, .sh-tmux__kb) {
+    display: none;
+  }
+
+  [data-variant='shell'] .sh-session {
+    padding: 0;
+  }
+
+  [data-variant='shell'] .sh-tmux {
+    position: static;
+    flex-wrap: wrap;
+    block-size: auto;
+    border-block-start: 1px solid var(--layout-rule);
+    background: none;
+    color: var(--color-text-primary);
+    white-space: normal;
+  }
+
+  /* A sheet is no width a phone is: it names all five destinations, not where the screen was,
+     and no row prints as the one being read. */
+  [data-variant='shell'] .sh-tmux__wins {
+    display: flex;
+  }
+
+  [data-variant='shell'] :is(.sh-tmux__cur, .sh-tmux__pos) {
+    display: none;
+  }
+
+  [data-variant='shell'] .sh-row[aria-current] {
+    background: none;
+  }
+
+  [data-variant='shell'] .sh-row[aria-current] .sh-row__p::before {
+    content: none;
+  }
+
+  [data-variant='shell'] .sh-row[aria-current] .sh-row__ttl {
+    font-weight: inherit;
+  }
+}
+
+/* Under forced colours the accent fill is a button's (ButtonText) under button-face ink, and
+   the text's Canvas backplate would hide that ink: the bar takes the page's own ground and
+   ink, which the browser forces to Canvas and CanvasText, so it stays opaque over the
+   transcript scrolling under it, ruled off by a line over its edge, its controls ringed in that
+   ink; the primary action keeps its edge. */
+@media (forced-colors: active) {
+  [data-variant='shell'] .sh-tmux {
+    background: var(--color-canvas);
+    color: var(--color-text-primary);
+  }
+
+  /* The bar's controls draw their own ring here. The bar is marked as the accent surface, so
+     the platform's ring takes on-accent, which forced colours map to ButtonFace, the bar's own
+     Canvas ground here; and that ring sits in the platform's utilities layer, above Shell's, so
+     its colour can't be set from here. A border in the text's ink, the platform's width and offset off the
+     control. */
+  [data-variant='shell'] .sh-tmux :is(a, button) {
+    --layout-edge: 0px;
+
+    position: relative;
+  }
+
+  [data-variant='shell'] button.sh-tmux__jump {
+    --layout-edge: 1px;
+  }
+
+  /* Off the control's border box: the insets resolve against its padding box. */
+  [data-variant='shell'] .sh-tmux :is(a, button):focus-visible::before {
+    content: '';
+    position: absolute;
+    inset: calc((var(--ui-focus-width) + var(--ui-focus-offset)) * -1 - var(--layout-edge));
+    border: var(--ui-focus-width) solid var(--color-text-primary);
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  [data-variant='shell'] :is(.sh-btn--primary, .sh-btn:hover) {
+    background: none;
+  }
+
+  /* The current row takes no fill, which the text's backplates would break into boxes: it's
+     marked by its pointer and drawn in the selection colour (Highlight), and focus keeps the
+     platform's ring. */
+  [data-variant='shell'] :is(.sh-row:hover, .sh-row[aria-current], .sh-row[aria-selected='true']) {
+    background: none;
+    color: var(--color-selection);
+  }
+
+  [data-variant='shell']
+    :is(.sh-row:hover, .sh-row[aria-current], .sh-row[aria-selected='true'])
+    :is(.sh-row__v, .sh-row__n, .sh-row__p, .sh-row__ttl) {
+    color: var(--color-selection);
+  }
+}
+
+/* The rule lies over the bar's edge, not in its box, so the controls keep their full height. On
+   screen only: on paper the bar is in the flow, with its own rule. */
+@media screen and (forced-colors: active) {
+  [data-variant='shell'] .sh-tmux::before {
+    content: '';
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline: 0;
+    border-block-start: 1px solid currentColor;
+  }
+}
+
+@keyframes shell-land {
+  0% {
+    transform: scaleX(0);
+    opacity: 1;
+  }
+
+  55% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+}
+
+@keyframes shell-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes shell-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+@keyframes shell-pop-solid {
+  from {
+    transform: scale(0.98);
+  }
+}
+
+@keyframes shell-meter {
+  to {
+    transform: scaleX(1);
+  }
+}

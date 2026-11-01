@@ -1,0 +1,143 @@
+{
+  "id": "mission-control",
+  "name": "Mission Control",
+  "promise": "The portfolio as an operations wall: one measured instrument of square panels whose lamps report real state from the content.",
+  "description": "A board rail and a status line frame one measured 16-column wall of uniform panels, packed by kind. Each panel has a title bar with its count, a body and a source line, and its lamps report state only from fields that exist, such as Archived, Active since or Granted. The first view is a monoscale anchor panel: the name at title size, the thesis's first sentence at lede size, and square readout modules for the metrics. Pointing at or pinning a record lights the records it names. The boards follow the content's destinations.",
+  "contract": "2.0",
+  "schemas": {
+    "portfolio": {
+      "min": 3,
+      "max": 3
+    },
+    "site": {
+      "min": 2,
+      "max": 2
+    }
+  },
+  "tokenContract": 1,
+  "compositionFamily": "custom",
+  "motionIntent": "subtle",
+  "performanceTier": "medium",
+  "budgets": {
+    "js": 6144,
+    "css": 10240,
+    "image": 61440,
+    "font": 0,
+    "animation": 1,
+    "enhancement": 4096
+  },
+  "stills": [
+    {
+      "file": "./stills/1440.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "file": "./stills/720.webp",
+      "width": 720,
+      "height": 450
+    }
+  ],
+  "renderedKinds": [
+    "hero",
+    "lede",
+    "works",
+    "evidence",
+    "github",
+    "chronology",
+    "practice",
+    "focus",
+    "now",
+    "quote",
+    "fun-facts",
+    "contact",
+    "cta",
+    "custom"
+  ],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": {
+    "home": "bespoke",
+    "work": "bespoke",
+    "views": []
+  },
+  "controls": {
+    "version": 1,
+    "items": [
+      {
+        "type": "integer",
+        "id": "latestCount",
+        "label": "Latest records",
+        "description": "How many dated records the Latest panel lists, newest first. 0 hides the panel, and the readouts take its columns.",
+        "min": 0,
+        "max": 8,
+        "step": 1,
+        "default": 3
+      },
+      {
+        "type": "boolean",
+        "id": "correlate",
+        "label": "Correlate",
+        "description": "Light the records a record names when a visitor points at it or pins it. Off removes the Linked buttons and the tracing.",
+        "default": true
+      },
+      {
+        "type": "integer",
+        "id": "nowFreshForDays",
+        "label": "Now stays fresh for",
+        "description": "How many days after its as-of date the Now record keeps a filled lamp. After that its lamp is an outline, never a warning.",
+        "min": 30,
+        "max": 730,
+        "step": 1,
+        "default": 365
+      },
+      {
+        "type": "contentRefList",
+        "id": "overviewTail",
+        "label": "Overview tail",
+        "description": "Up to two sections the Overview shows after its readouts, such as Now or Focus. Empty keeps the Overview to the anchor, the readouts and Latest, so the first view reaches the signature work.",
+        "min": 0,
+        "max": 2,
+        "default": []
+      }
+    ],
+    "migrations": []
+  },
+  "enhancements": [
+    {
+      "id": "correlate",
+      "export": "./enhancements/correlate",
+      "requires": []
+    },
+    {
+      "id": "record",
+      "export": "./enhancements/record",
+      "requires": []
+    }
+  ],
+  "visitorControl": {
+    "placement": "header"
+  },
+  "textDirection": ["ltr", "rtl"],
+  "recommendedAppearance": "mission-control",
+  "provenance": {
+    "provisional": true,
+    "sources": [
+      {
+        "source": "Variants report, Mission Control",
+        "disposition": "preserved",
+        "note": "The icon board rail, the status line, one measured wall of uniform panels with title bars and source lines, square readout modules, lamps as a dot plus a word, and correlate."
+      },
+      {
+        "source": "The report's console hexes and its Inter and JetBrains Mono pairing",
+        "disposition": "folded-into-pack",
+        "note": "Colour is the control-room scheme, type the console-mono pack, and materials the utility-dense language, through the mission-control recipe. The composition reads roles only."
+      },
+      {
+        "source": "The report's fixed status text, uptime tile and availability lamp",
+        "disposition": "retired",
+        "note": "The status line carries only readings the content holds: the Now as-of date, the newest push in the GitHub snapshot, and an optional presence status."
+      }
+    ]
+  }
+}

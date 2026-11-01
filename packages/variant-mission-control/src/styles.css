@@ -1,0 +1,2545 @@
+/*
+ * Mission Control: the portfolio as an operations wall. Composition only:
+ * every colour is a role, every size a step or a role's size, every space a
+ * step, every radius the language's, every duration a motion slot. The
+ * composition owns the 52 px board rail, the status line, the measured
+ * 16-column wall with its one seam, the panel (a title bar, a body, cells
+ * split by hairlines), the square readout modules and the lamps (a dot and
+ * a word). The packs own the console palette, the status roles and the
+ * numeric face. Logical properties throughout, so a right-to-left page
+ * mirrors.
+ */
+
+[data-variant='mission-control'] {
+  --layout-rail: 3.25rem;
+  --layout-status: 2.5rem;
+  /*
+   * The status line's height on a desk: one line, as tall as its row or the
+   * visitor's control, whichever is taller, and its rule. Whatever a fragment,
+   * a focus move or a pointer brings into view lands below it.
+   */
+  --layout-status-line: calc(max(var(--layout-status), var(--ui-control-height)) + 1px);
+  --layout-seam: var(--space-3xs);
+  --layout-columns: 16;
+  --layout-sticky-offset: var(--layout-status-line);
+  --layout-motion-feedback: 150ms;
+  --layout-motion-scene: 700ms;
+  --layout-motion-curve: cubic-bezier(0.2, 0, 0, 1);
+  display: block;
+  background: var(--color-canvas);
+  color: var(--color-text-primary);
+  font-variant-numeric: lining-nums;
+  /* A word longer than its line breaks rather than widen the page (X1). */
+  overflow-wrap: break-word;
+}
+
+[data-variant='mission-control']
+  :where(h1, h2, h3, h4, h5, h6, p, ul, ol, dl, dd, figure, blockquote) {
+  margin: 0;
+}
+
+[data-variant='mission-control'] :where(ul, ol) {
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='mission-control'] :where(img) {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+}
+
+[data-variant='mission-control'] :where(h1, h2, h3, h4, h5, h6) {
+  text-wrap: balance;
+}
+
+[data-variant='mission-control'] :where(p, li, dd, blockquote) {
+  text-wrap: pretty;
+}
+
+[data-variant='mission-control'] :where(a) {
+  color: inherit;
+}
+
+[data-variant='mission-control'] .mc-sr {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+[data-variant='mission-control'] .mc-num {
+  font-family: var(--type-numeric-font-family);
+  font-weight: var(--type-numeric-font-weight);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+[data-variant='mission-control'] .mc-out {
+  margin-inline-start: 0.15em;
+}
+
+/* ---------- The frame: rail, status line, wall, colophon ---------- */
+
+[data-variant='mission-control'] .mc-root {
+  display: grid;
+  grid-template-columns: var(--layout-rail) minmax(0, 1fr);
+  grid-template-areas:
+    'rail status'
+    'rail main'
+    'rail foot';
+  grid-template-rows: auto 1fr auto;
+  min-block-size: 100dvh;
+}
+
+[data-variant='mission-control'] .mc-rail {
+  grid-area: rail;
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2xs);
+  block-size: 100dvh;
+  padding-block: var(--space-2xs);
+  background: var(--color-surface-subtle);
+  border-inline-end: 1px solid var(--color-border-default);
+}
+
+[data-variant='mission-control'] .mc-rail__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3xs);
+}
+
+[data-variant='mission-control'] :is(.mc-rail__mark, .mc-rail__link) {
+  position: relative;
+  display: grid;
+  place-items: center;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: var(--ui-radius-control);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+
+[data-variant='mission-control'] .mc-rail__mark {
+  margin-block-end: var(--space-2xs);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text-primary);
+  font-family: var(--type-label-font-family);
+  font-weight: var(--type-label-font-weight);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='mission-control'] :is(.mc-rail__mark, .mc-rail__link):hover {
+  background: var(--color-surface-prominent);
+  color: var(--color-text-primary);
+}
+
+[data-variant='mission-control'] .mc-icon {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  flex: none;
+}
+
+/*
+ * A rail link's word: real text, read by assistive technology at all
+ * times, shown beside the icon on hover after a wait, and at once on
+ * keyboard focus (MC-S6).
+ */
+[data-variant='mission-control'] .mc-rail__label {
+  position: absolute;
+  inset-inline-start: calc(100% + var(--space-2xs));
+  inset-block-start: 50%;
+  translate: 0 -50%;
+  padding-block: var(--space-3xs);
+  padding-inline: var(--space-2xs);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--ui-radius-control);
+  background: var(--color-surface-overlay);
+  color: var(--color-text-primary);
+  font-family: var(--type-label-font-family);
+  font-weight: var(--type-label-font-weight);
+  font-size: var(--type-step--1);
+  line-height: var(--type-label-line-height);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+}
+
+[data-variant='mission-control']
+  :is(.mc-rail__mark, .mc-rail__link):is(:hover, :focus-visible)
+  .mc-rail__label {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='mission-control'] .mc-rail__label {
+    transition: opacity var(--motion-feedback) var(--motion-curve);
+  }
+
+  [data-variant='mission-control']
+    :is(.mc-rail__mark, .mc-rail__link):hover:not(:focus-visible)
+    .mc-rail__label {
+    transition-delay: var(--motion-scene);
+  }
+
+  [data-variant='mission-control'] :is(.mc-rail__mark, .mc-rail__link, .mc-readout, .mc-act) {
+    transition: background-color var(--motion-feedback) var(--motion-curve);
+  }
+}
+
+[data-variant='mission-control'] .mc-status {
+  grid-area: status;
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-s) var(--space-l);
+  min-block-size: var(--layout-status-line);
+  padding-inline: var(--space-s);
+  background: var(--color-surface-subtle);
+  border-block-end: 1px solid var(--color-border-default);
+  font-family: var(--type-label-font-family);
+  font-size: var(--type-step--1);
+  line-height: var(--type-label-line-height);
+}
+
+[data-variant='mission-control'] .mc-status__where {
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='mission-control'] .mc-status__where a {
+  text-decoration: none;
+}
+
+[data-variant='mission-control'] .mc-status__where a:hover {
+  text-decoration: underline;
+}
+
+[data-variant='mission-control'] .mc-status__signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-m);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='mission-control'] .mc-status__end {
+  flex: none;
+  margin-inline-start: auto;
+}
+
+/* On a desk the status line is one line, whatever it holds, so the offset that keeps scrolled-to
+   records below it is its height: a long name ends in an ellipsis (it's the h1 just below, and
+   the rail's mark), and a reading with no room left on the line drops out whole, never cut. */
+@media (width >= 64rem) {
+  [data-variant='mission-control'] .mc-status {
+    container: mc-status / inline-size;
+  }
+
+  /* The name gives way first, to its ellipsis. Its box holds the focus ring's reach inside its
+     clip, so a focused name or crumb shows its whole ring, and gives that room back by its
+     margin, so the line doesn't move. Above and below, the reach is from the link's text box,
+     which a face's ascent and descent can take past the line box: a quarter em covers that. */
+  [data-variant='mission-control'] .mc-status__where {
+    flex: 0 1 auto;
+    min-inline-size: 6rem;
+    padding: calc(var(--ui-focus-width) + var(--ui-focus-offset) + 0.25em)
+      calc(var(--ui-focus-width) + var(--ui-focus-offset));
+    margin: calc(-1 * (var(--ui-focus-width) + var(--ui-focus-offset) + 0.25em))
+      calc(-1 * (var(--ui-focus-width) + var(--ui-focus-offset)));
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The readings keep their width; which of them the line holds is decided by its width in its
+     own type, so under larger text a reading goes out whole rather than under a clip. The
+     measures, in the line's em across its content box, over every type pack: the name at its
+     6rem floor, a gap, each reading (at most 16.2em and 14.4em, a gap of 1.9em between), a gap
+     and the visitor control (5 to 6em, taken as 9em), with 2em for a longer date. Both readings from 54em,
+     the first alone from 39em: at 1024 and 100% text the line is 58.9em, so both stay. */
+  [data-variant='mission-control'] .mc-status__signals {
+    flex: none;
+  }
+
+  [data-variant='mission-control'] .mc-status__signals > li {
+    white-space: nowrap;
+  }
+
+  @container mc-status (width < 54em) {
+    [data-variant='mission-control'] .mc-status__signals > li + li {
+      display: none;
+    }
+  }
+
+  @container mc-status (width < 39em) {
+    [data-variant='mission-control'] .mc-status__signals {
+      display: none;
+    }
+  }
+}
+
+[data-variant='mission-control'] .mc-status__end > [data-visitor-control-slot]:empty {
+  display: none;
+}
+
+/* On the status line the control is one more item on its line, unruled: its chevron says it opens. */
+[data-variant='mission-control'] .mc-status__end [data-ui-slot='disclosure'] {
+  border-block: none;
+  padding-block: 0;
+}
+
+[data-variant='mission-control'] .mc-main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  gap: var(--layout-seam);
+  padding: var(--layout-seam);
+  min-inline-size: 0;
+}
+
+[data-variant='mission-control'] .mc-main:focus {
+  outline: none;
+}
+
+/* ---------- The wall: 16 columns, one seam ---------- */
+
+[data-variant='mission-control'] .mc-wall {
+  container-type: inline-size;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--layout-seam);
+}
+
+[data-variant='mission-control'] .mc-panel {
+  --layout-span: 16;
+  flex: 1 1
+    calc(
+      (100% - (var(--layout-columns) - 1) * var(--layout-seam)) * var(--layout-span) /
+        var(--layout-columns) + (var(--layout-span) - 1) * var(--layout-seam)
+    );
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+  container-type: inline-size;
+  background: var(--color-surface-default);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--ui-radius-card);
+}
+
+/* A panel is the wall's cell, with no margin of its own. It ends where its content ends,
+   rather than paint a dead foot to match its row's tallest (G2). */
+[data-variant='mission-control'] .mc-wall > :is(.mc-panel, .mc-stack) {
+  align-self: start;
+  margin: 0;
+}
+
+/* A stack: short panels beside a long lede, one over the other in the lede's row, so the row
+   ends with the lede rather than a canvas notch under one short partner (G2). */
+[data-variant='mission-control'] .mc-stack {
+  --layout-span: 6;
+  flex: 1 1
+    calc(
+      (100% - (var(--layout-columns) - 1) * var(--layout-seam)) * var(--layout-span) /
+        var(--layout-columns) + (var(--layout-span) - 1) * var(--layout-seam)
+    );
+  display: flex;
+  flex-direction: column;
+  gap: var(--layout-seam);
+  min-inline-size: 0;
+}
+
+[data-variant='mission-control'] .mc-stack > .mc-panel {
+  flex: none;
+  margin: 0;
+}
+
+[data-variant='mission-control'] .mc-stack[data-span='4'] {
+  --layout-span: 4;
+}
+
+[data-variant='mission-control'] .mc-stack[data-span='8'] {
+  --layout-span: 8;
+}
+
+[data-variant='mission-control'] .mc-stack[data-span='10'] {
+  --layout-span: 10;
+}
+
+[data-variant='mission-control'] .mc-stack[data-span='12'] {
+  --layout-span: 12;
+}
+
+[data-variant='mission-control'] .mc-stack[data-span='14'] {
+  --layout-span: 14;
+}
+
+[data-variant='mission-control'] .mc-stack[data-span='16'] {
+  --layout-span: 16;
+}
+
+/* Except the first view's band, one measured instrument (MC-M2): the anchor, the readouts and
+   Latest end on one line, Latest's foot and the anchor's actions pinned to it. */
+[data-variant='mission-control']
+  .mc-board--overview
+  .mc-wall:has(> .mc-readouts)
+  > :is(.mc-anchor, .mc-readouts, .mc-latest) {
+  align-self: stretch;
+}
+
+[data-variant='mission-control'] .mc-panel[data-span='4'] {
+  --layout-span: 4;
+}
+
+[data-variant='mission-control'] .mc-panel[data-span='6'] {
+  --layout-span: 6;
+}
+
+[data-variant='mission-control'] .mc-panel[data-span='8'] {
+  --layout-span: 8;
+}
+
+[data-variant='mission-control'] .mc-panel[data-span='10'] {
+  --layout-span: 10;
+}
+
+[data-variant='mission-control'] .mc-panel[data-span='12'] {
+  --layout-span: 12;
+}
+
+[data-variant='mission-control'] .mc-panel[data-span='14'] {
+  --layout-span: 14;
+}
+
+/* The title bar: the section's heading in the label voice, its count at the end. */
+[data-variant='mission-control'] .mc-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3xs) var(--space-s);
+  margin: 0;
+  padding-block: var(--space-2xs);
+  padding-inline: var(--space-s);
+  border-block-end: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='mission-control'] .mc-bar__title {
+  margin: 0;
+  font-family: var(--type-label-font-family);
+  font-weight: var(--type-label-font-weight);
+  font-size: var(--type-step-0);
+  line-height: var(--type-label-line-height);
+  letter-spacing: normal;
+}
+
+[data-variant='mission-control'] .mc-bar__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3xs) var(--space-s);
+  color: var(--color-text-secondary);
+  font-family: var(--type-caption-font-family);
+  font-size: var(--type-step--1);
+  line-height: var(--type-caption-line-height);
+}
+
+[data-variant='mission-control'] .mc-panel__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-s);
+}
+
+/* A rich text's paragraphs apart by a step, MC's reset notwithstanding. */
+[data-variant='mission-control'] .pf-rich-text > * + * {
+  margin-block-start: var(--space-xs);
+}
+
+[data-variant='mission-control'] .mc-panel__sub,
+[data-variant='mission-control'] .mc-panel__foot {
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+  line-height: var(--type-body-compact-line-height);
+}
+
+[data-variant='mission-control'] .mc-readouts > .mc-panel__foot {
+  display: flex;
+  flex: 1;
+  align-items: end;
+}
+
+[data-variant='mission-control'] .mc-panel__foot {
+  margin-block-start: auto;
+  padding-block: var(--space-2xs);
+  padding-inline: var(--space-s);
+  border-block-start: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='mission-control'] .mc-prose {
+  max-inline-size: 68ch;
+  font-size: var(--type-step-0);
+  line-height: var(--type-body-line-height);
+}
+
+/* ---------- Lamps: a dot and a word, always ---------- */
+
+[data-variant='mission-control'] .mc-lamps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-s);
+  font-family: var(--type-label-font-family);
+  font-size: var(--type-step--1);
+  line-height: var(--type-label-line-height);
+}
+
+[data-variant='mission-control'] .mc-lamp {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2xs);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='mission-control'] .mc-lamp::before {
+  content: '';
+  flex: none;
+  inline-size: 0.5em;
+  block-size: 0.5em;
+  translate: 0 -0.05em;
+  border: 1px solid var(--color-text-secondary);
+  border-radius: var(--ui-radius-badge);
+}
+
+[data-variant='mission-control'] .mc-lamp[data-lamp='positive']::before {
+  background: var(--color-positive);
+  border-color: var(--color-positive);
+}
+
+[data-variant='mission-control'] .mc-lamp[data-lamp='information']::before {
+  background: var(--color-information);
+  border-color: var(--color-information);
+}
+
+[data-variant='mission-control'] .mc-count {
+  white-space: nowrap;
+}
+
+/* ---------- Correlate: a record's state line, its Linked control and its popover (MC-M4, M5) ---------- */
+
+[data-variant='mission-control'] .mc-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3xs) var(--space-s);
+}
+
+[data-variant='mission-control'] .mc-state:empty {
+  display: none;
+}
+
+[data-variant='mission-control'] .mc-linked__button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3xs);
+  min-block-size: var(--space-l);
+  padding-block: 0;
+  padding-inline: var(--space-2xs);
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-control);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--type-label-font-family);
+  font-size: var(--type-step--1);
+  line-height: var(--type-label-line-height);
+  cursor: pointer;
+}
+
+[data-variant='mission-control'] .mc-linked__button:focus-visible {
+  border-color: var(--color-border-default);
+}
+
+[data-variant='mission-control'] .mc-linked__button:hover,
+[data-variant='mission-control'] .mc-linked:has(:popover-open) .mc-linked__button {
+  border-color: var(--color-border-strong);
+  color: var(--color-text-primary);
+}
+
+[data-variant='mission-control'] .mc-icon--small {
+  inline-size: 0.875rem;
+  block-size: 0.875rem;
+}
+
+/* The browser's own popover, in the top layer and inside the window; anchored below its button where anchoring holds. */
+[data-variant='mission-control'] .mc-pop {
+  max-inline-size: min(24rem, calc(100vw - 2 * var(--space-s)));
+  max-block-size: calc(100dvh - 2 * var(--space-s));
+  overflow: auto;
+  padding: var(--space-s);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--ui-radius-card);
+  background: var(--color-surface-overlay);
+  color: var(--color-text-primary);
+  font-size: var(--type-step--1);
+  line-height: var(--type-body-compact-line-height);
+}
+
+[data-variant='mission-control'] .mc-linked {
+  anchor-scope: --mc-linked;
+}
+
+[data-variant='mission-control'] .mc-linked__button {
+  anchor-name: --mc-linked;
+}
+
+@supports (anchor-scope: --mc-linked) and (position-try-fallbacks: flip-block) {
+  [data-variant='mission-control'] .mc-pop {
+    position-anchor: --mc-linked;
+    position-area: block-end span-inline-end;
+    position-try-fallbacks:
+      flip-block,
+      flip-inline,
+      flip-block flip-inline;
+    inset: auto;
+    margin: var(--space-3xs);
+  }
+}
+
+[data-variant='mission-control'] .mc-pop__title {
+  margin-block-end: var(--space-2xs);
+  font-family: var(--type-label-font-family);
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='mission-control'] .mc-pop__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+
+[data-variant='mission-control'] .mc-pop__list a {
+  text-underline-offset: 0.2em;
+}
+
+[data-variant='mission-control'] .mc-pop__kind {
+  color: var(--color-text-secondary);
+}
+
+/*
+ * While a record lights (the enhancement's marks): what it names keeps its
+ * colours and takes a ring in the information role; the rest dims to the
+ * muted text role, which every scheme holds at 4.5:1 or more on the panels,
+ * its lamps go to outlines and its images fade. Text never fades by opacity.
+ */
+[data-variant='mission-control'] .mc-root[data-mc-trace] [data-mc-lit] {
+  outline: 1px solid var(--color-information);
+  outline-offset: -1px;
+}
+
+[data-variant='mission-control'] .mc-root[data-mc-trace] [data-mc-lit='source'] {
+  outline-color: var(--color-border-strong);
+}
+
+[data-variant='mission-control'] .mc-root[data-mc-trace] :is([data-mc-dim], [data-mc-dim] *) {
+  color: var(--color-text-muted);
+  text-decoration-color: currentColor;
+}
+
+[data-variant='mission-control'] .mc-root[data-mc-trace] [data-mc-dim] .mc-act--primary {
+  border-color: var(--color-border-default);
+  background: transparent;
+}
+
+[data-variant='mission-control'] .mc-root[data-mc-trace] [data-mc-dim] .mc-lamp::before {
+  border-color: currentColor;
+  background: transparent;
+}
+
+[data-variant='mission-control'] .mc-root[data-mc-trace] [data-mc-dim] img {
+  opacity: var(--ui-state-disabled-opacity);
+}
+
+/* Under no-preference and full motion the dim eases; otherwise it's an instant change. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='mission-control']:not([data-motion='reduced'], [data-motion='static'])
+    :is([data-mc-rec], .mc-panel, [data-mc-rec] *, .mc-panel *) {
+    transition:
+      color var(--motion-feedback) var(--motion-curve),
+      background-color var(--motion-feedback) var(--motion-curve),
+      outline-color var(--motion-feedback) var(--motion-curve),
+      opacity var(--motion-feedback) var(--motion-curve);
+  }
+}
+
+/* ---------- The Overview: anchor, readouts, Latest ---------- */
+
+[data-variant='mission-control'] .mc-anchor__bar {
+  align-items: center;
+}
+
+[data-variant='mission-control'] .mc-name {
+  font-family: var(--type-title-font-family);
+  font-weight: var(--type-title-font-weight);
+  font-size: var(--type-step-2);
+  line-height: var(--type-title-line-height);
+  letter-spacing: var(--type-title-letter-spacing);
+}
+
+[data-variant='mission-control'] .mc-anchor__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-s);
+  padding-block: var(--space-s) var(--space-m);
+  padding-inline: var(--space-m);
+}
+
+[data-variant='mission-control'] .mc-role {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) 0.35em;
+  color: var(--color-text-secondary);
+  font-family: var(--type-label-font-family);
+  font-size: var(--type-step--1);
+  line-height: var(--type-label-line-height);
+}
+
+[data-variant='mission-control'] .mc-role__org {
+  color: var(--color-text-primary);
+}
+
+[data-variant='mission-control'] .mc-anchor__part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+}
+
+[data-variant='mission-control'] .mc-anchor__part[data-part='hero'] {
+  margin-block-start: auto;
+}
+
+[data-variant='mission-control'] .mc-lede {
+  max-inline-size: 30ch;
+  font-family: var(--type-body-font-family);
+  font-weight: var(--type-body-font-weight);
+  font-size: var(--type-step-1);
+  line-height: var(--type-title-line-height);
+}
+
+/* The rest of the lede's text, the one statement continued at the caption's size (MC-M1). */
+[data-variant='mission-control'] .mc-lede__rest {
+  max-inline-size: 52ch;
+  margin-block-start: calc(var(--space-xs) - var(--space-s));
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+  line-height: var(--type-body-compact-line-height);
+}
+
+/* The hero's tagline above the status line, when no About text takes it. */
+[data-variant='mission-control'] .mc-anchor__tagline {
+  max-inline-size: 60ch;
+  font-size: var(--type-step-0);
+  line-height: var(--type-body-line-height);
+}
+
+/* The hero's tagline opening About's lede panel: one paragraph a step over its bio. */
+[data-variant='mission-control'] .mc-panel__standfirst {
+  max-inline-size: 45ch;
+  font-size: var(--type-step-0);
+  line-height: var(--type-body-line-height);
+}
+
+[data-variant='mission-control'] .mc-anchor__status {
+  max-inline-size: 60ch;
+  padding-block-start: var(--space-s);
+  border-block-start: 1px solid var(--color-border-subtle);
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+  line-height: var(--type-body-compact-line-height);
+}
+
+[data-variant='mission-control'] .mc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2xs) var(--space-s);
+  /* Each action is a flex item, whose min-content break-word leaves at a whole word: a link
+     with no label shows its address, one unbroken word, which breaks in the word rather than
+     widen the page (X1). Nothing here is clipped. */
+  overflow-wrap: anywhere;
+}
+
+[data-variant='mission-control'] .mc-act {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--ui-control-height);
+  padding-inline: var(--ui-space-control-inline);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--ui-radius-control);
+  color: var(--color-text-primary);
+  font-family: var(--type-label-font-family);
+  font-weight: var(--type-label-font-weight);
+  font-size: var(--type-step--1);
+  text-decoration: none;
+}
+
+[data-variant='mission-control'] .mc-act:hover {
+  background: var(--color-surface-prominent);
+}
+
+[data-variant='mission-control'] .mc-act--primary {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+[data-variant='mission-control'] .mc-act--primary:hover {
+  border-color: var(--color-accent-hover);
+  background: var(--color-accent-hover);
+}
+
+[data-variant='mission-control'] .mc-link {
+  color: var(--color-text-primary);
+  text-decoration-color: var(--color-border-strong);
+  text-underline-offset: 0.2em;
+}
+
+[data-variant='mission-control'] .mc-link:hover {
+  text-decoration-color: currentColor;
+}
+
+/* The square readouts (MC-M3): the label on the module's top line, the figure on its last. */
+[data-variant='mission-control'] .mc-readouts__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--color-border-subtle);
+}
+
+[data-variant='mission-control'] .mc-readouts:is([data-count='1']) .mc-readouts__grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-variant='mission-control']
+  .mc-readouts:is(
+    [data-count='3'],
+    [data-count='5'],
+    [data-count='6'],
+    [data-count='7'],
+    [data-count='8'],
+    [data-count='9']
+  )
+  .mc-readouts__grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* The squares fill the panel to its rounded edge; their links ring inside them. */
+[data-variant='mission-control'] .mc-readouts {
+  overflow: clip;
+}
+
+/* The platform draws the focus ring in a later layer than this one, outside the link at
+   var(--ui-focus-offset), so an outline-offset here never takes. Instead each square holds
+   its link inset by the ring's reach: the ring lands inside the square, on all four sides,
+   where neither the panel's clip nor the next square covers it (C2). The square, not the
+   link, takes the hover, so the inset never shows. */
+[data-variant='mission-control'] .mc-readout {
+  padding: calc(var(--ui-focus-width) + var(--ui-focus-offset));
+}
+
+[data-variant='mission-control'] .mc-readout:has(> .mc-readout__link:hover) {
+  background: var(--color-surface-subtle);
+}
+
+[data-variant='mission-control'] .mc-readout {
+  aspect-ratio: 1;
+  background: var(--color-surface-default);
+}
+
+[data-variant='mission-control'] .mc-readout__link {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  block-size: 100%;
+  padding: max(0px, var(--space-xs) - var(--ui-focus-width) - var(--ui-focus-offset));
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+[data-variant='mission-control'] .mc-readout__label {
+  hyphens: manual;
+  color: var(--color-text-secondary);
+  font-family: var(--type-label-font-family);
+  font-size: var(--type-step--1);
+  line-height: var(--type-label-line-height);
+}
+
+[data-variant='mission-control'] .mc-readout__figure {
+  display: flex;
+  align-items: baseline;
+  align-self: end;
+  gap: var(--space-3xs);
+  white-space: nowrap;
+  font-size: var(--type-step-5);
+  line-height: 1;
+}
+
+[data-variant='mission-control'] .mc-readout__unit {
+  color: var(--color-text-secondary);
+  font-family: var(--type-label-font-family);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='mission-control'] .mc-latest__list {
+  display: flex;
+  flex-direction: column;
+}
+
+[data-variant='mission-control'] .mc-latest__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3xs);
+  padding-block: var(--space-xs);
+  padding-inline: var(--space-s);
+}
+
+[data-variant='mission-control'] .mc-latest__item + .mc-latest__item {
+  border-block-start: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='mission-control'] .mc-latest__when {
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+  line-height: var(--type-label-line-height);
+}
+
+[data-variant='mission-control'] .mc-latest__title {
+  font-size: var(--type-step--1);
+  line-height: var(--type-body-compact-line-height);
+  text-decoration-color: var(--color-border-strong);
+  text-underline-offset: 0.2em;
+}
+
+/* ---------- Boards ---------- */
+
+[data-variant='mission-control'] .mc-board {
+  display: flex;
+  flex-direction: column;
+  gap: var(--layout-seam);
+  scroll-margin-block-start: var(--layout-sticky-offset);
+}
+
+/* A record correlate lights, with no id of its own, comes into view below the status line too. */
+[data-variant='mission-control'] [data-mc-rec] {
+  scroll-margin-block-start: var(--layout-sticky-offset);
+}
+
+/* A board's band: its title, then its counts on the same line while they fit and on the next when they don't, then its index. */
+[data-variant='mission-control'] .mc-board__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2xs) var(--space-m);
+  padding-block: var(--space-l) var(--space-s);
+  padding-inline: var(--space-s);
+}
+
+[data-variant='mission-control'] .mc-board__title {
+  display: flex;
+  min-inline-size: 0;
+  align-items: center;
+  gap: var(--space-xs);
+  font-family: var(--type-headline-font-family);
+  font-weight: var(--type-headline-font-weight);
+  font-size: var(--type-step-3);
+  line-height: var(--type-headline-line-height);
+  letter-spacing: var(--type-headline-letter-spacing);
+}
+
+[data-variant='mission-control'] .mc-board__title .mc-icon {
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='mission-control'] .mc-board__counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-s);
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='mission-control'] .mc-board__index {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-m);
+  font-size: var(--type-step--1);
+  line-height: var(--type-body-compact-line-height);
+}
+
+[data-variant='mission-control'] .mc-board__index a {
+  color: var(--color-text-secondary);
+  text-decoration-color: var(--color-border-default);
+  text-underline-offset: 0.2em;
+}
+
+[data-variant='mission-control'] .mc-board__index a:hover {
+  color: var(--color-text-primary);
+}
+
+/* ---------- Works: the showcase, cells, logs ---------- */
+
+[data-variant='mission-control'] .mc-panel[data-kind='works'] > .mc-panel__body,
+[data-variant='mission-control'] .mc-panel[data-kind='evidence'] > .mc-panel__body {
+  padding: 0;
+  gap: 0;
+}
+
+/* A subtitle has its own line on the body's edge, whether the body pads itself or runs its
+   rows to the panel's edge (G1); a padded body under it starts at once. */
+[data-variant='mission-control'] .mc-panel__intro {
+  padding-block: var(--space-xs);
+  padding-inline: var(--space-s);
+}
+
+[data-variant='mission-control'] .mc-panel__intro + .mc-panel__body {
+  padding-block-start: 0;
+}
+
+[data-variant='mission-control'] .mc-showcase__lead {
+  display: grid;
+  grid-template-columns: minmax(0, 10fr) minmax(0, 6fr);
+  gap: 1px;
+  background: var(--color-border-subtle);
+}
+
+[data-variant='mission-control'] .mc-showcase__lead > :only-child {
+  grid-column: 1 / -1;
+}
+
+[data-variant='mission-control'] .mc-cell {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+  block-size: 100%;
+  background: var(--color-surface-default);
+}
+
+[data-variant='mission-control'] .mc-cell__media {
+  margin: 0;
+  border-block-end: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='mission-control'] :is(img.mc-cell__media, .mc-cell__media img) {
+  inline-size: 100%;
+  max-block-size: 22rem;
+  object-position: calc(var(--focal-x, 0.5) * 100%) calc(var(--focal-y, 0.5) * 100%);
+  aspect-ratio: 16 / 7;
+  object-fit: cover;
+}
+
+[data-variant='mission-control']
+  .mc-cell:is([data-form='cell'], [data-form='featured'])
+  :is(img.mc-cell__media, .mc-cell__media img) {
+  aspect-ratio: 16 / 9;
+}
+
+[data-variant='mission-control'] .mc-cell__media figcaption {
+  padding-block: var(--space-3xs);
+  padding-inline: var(--space-s);
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='mission-control'] .mc-cell__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-s);
+}
+
+[data-variant='mission-control'] .mc-cell[data-form='signature'] .mc-cell__body {
+  padding-inline: var(--space-m);
+}
+
+[data-variant='mission-control'] .mc-cell__title {
+  font-family: var(--type-title-font-family);
+  font-weight: var(--type-title-font-weight);
+  font-size: var(--type-step-1);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='mission-control'] .mc-cell__title--lead {
+  font-family: var(--type-headline-font-family);
+  font-weight: var(--type-headline-font-weight);
+  font-size: var(--type-step-3);
+  line-height: var(--type-headline-line-height);
+  letter-spacing: var(--type-headline-letter-spacing);
+}
+
+[data-variant='mission-control'] .mc-cell__summary {
+  max-inline-size: 60ch;
+  color: var(--color-text-secondary);
+  font-size: var(--type-step-0);
+  line-height: var(--type-body-line-height);
+}
+
+[data-variant='mission-control'] .mc-cell:not([data-form='signature']) .mc-cell__summary {
+  font-size: var(--type-step--1);
+  line-height: var(--type-body-compact-line-height);
+}
+
+[data-variant='mission-control'] .mc-cell__meta {
+  color: var(--color-text-secondary);
+  font-family: var(--type-code-font-family);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='mission-control'] .mc-cell .mc-cell__foot {
+  margin-block-start: auto;
+  padding-block-start: var(--space-2xs);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='mission-control'] .mc-ticks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3xs);
+  font-size: var(--type-step--1);
+  line-height: var(--type-body-compact-line-height);
+}
+
+[data-variant='mission-control'] .mc-ticks li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2xs);
+}
+
+[data-variant='mission-control'] .mc-ticks li::before {
+  content: '';
+  border: 1px solid var(--color-positive);
+  flex: none;
+  inline-size: 0.4em;
+  block-size: 0.4em;
+  translate: 0 -0.1em;
+  background: var(--color-positive);
+  border-radius: var(--ui-radius-badge);
+}
+
+[data-variant='mission-control'] .mc-panel[data-kind='focus'] .mc-ticks {
+  font-size: var(--type-step-0);
+  line-height: var(--type-body-line-height);
+}
+
+[data-variant='mission-control'] .mc-panel[data-kind='focus'] .mc-ticks li::before {
+  border-color: var(--color-text-secondary);
+  background: var(--color-text-secondary);
+}
+
+/* The archived strip: its name and lamp, its summary, then its foot. The summary keeps a reading
+   measure at every width: its track never gives way to the foot, which takes at most 30rem and
+   wraps its links and fold inside it, however long the fold's name (B1). The lamp sits under the
+   name, and a tall summary's height goes below it, not between them. */
+[data-variant='mission-control'] .mc-strip {
+  display: grid;
+  grid-template-columns: minmax(10rem, auto) minmax(min(100%, 22rem), 1fr) fit-content(30rem);
+  grid-template-rows: auto 1fr;
+  align-items: baseline;
+  gap: var(--space-2xs) var(--space-m);
+  padding-block: var(--space-xs);
+  padding-inline: var(--space-m);
+  border-block-start: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='mission-control'] .mc-strip__title {
+  font-family: var(--type-title-font-family);
+  font-weight: var(--type-title-font-weight);
+  font-size: var(--type-step-0);
+}
+
+[data-variant='mission-control'] .mc-strip > .mc-state {
+  grid-row: 2;
+  grid-column: 1;
+}
+
+[data-variant='mission-control'] .mc-strip__summary {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+  line-height: var(--type-body-compact-line-height);
+}
+
+[data-variant='mission-control'] .mc-strip > .mc-cell__foot {
+  grid-row: 1 / span 2;
+  grid-column: 3;
+  font-size: var(--type-step--1);
+}
+
+[data-variant='mission-control'] .mc-strip > :is(.mc-credits, .mc-excerpt) {
+  grid-column: 2;
+}
+
+/* Narrower than a desk's panel, the foot goes under the summary, as a cell's foot does, so the
+   summary keeps the strip's width beside the name. */
+@container (36rem <= width < 72rem) {
+  [data-variant='mission-control'] .mc-strip {
+    grid-template-columns: minmax(10rem, auto) minmax(min(100%, 18rem), 1fr);
+  }
+
+  [data-variant='mission-control'] .mc-strip > .mc-cell__foot {
+    grid-row: auto;
+    grid-column: 2;
+  }
+}
+
+/* Cells wrap in rows whose last cells widen to the row's end, so no row leaves a lit empty
+   track (G2); as the panel's last block, they share out its height rather than leave a dead
+   foot under them. */
+[data-variant='mission-control'] .mc-cells {
+  display: flex;
+  flex-wrap: wrap;
+  flex-grow: 1;
+  gap: 1px;
+  background: var(--color-border-subtle);
+  border-end-start-radius: var(--ui-radius-card);
+  border-end-end-radius: var(--ui-radius-card);
+}
+
+[data-variant='mission-control'] .mc-cells > li {
+  flex: 1 1 min(100%, 15rem);
+}
+
+[data-variant='mission-control'] .mc-showcase .mc-cells {
+  border-block-start: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='mission-control'] .mc-log {
+  display: flex;
+  flex-direction: column;
+}
+
+[data-variant='mission-control'] .mc-log__row {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr) minmax(0, 11rem);
+  align-items: baseline;
+  gap: var(--space-2xs) var(--space-s);
+  padding-block: var(--space-xs);
+  padding-inline: var(--space-s);
+}
+
+@container (width >= 36rem) {
+  [data-variant='mission-control'] .mc-log[data-dated='none'] .mc-log__row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 11rem);
+  }
+}
+
+[data-variant='mission-control'] .mc-log__row + .mc-log__row {
+  border-block-start: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='mission-control'] .mc-log__date {
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='mission-control'] .mc-log__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3xs);
+  min-inline-size: 0;
+}
+
+[data-variant='mission-control'] .mc-log__title {
+  font-family: var(--type-title-font-family);
+  font-weight: var(--type-title-font-weight);
+  font-size: var(--type-step-0);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='mission-control'] .mc-log__title a {
+  text-decoration-color: var(--color-border-strong);
+  text-underline-offset: 0.2em;
+}
+
+[data-variant='mission-control'] .mc-log__summary {
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+  line-height: var(--type-body-compact-line-height);
+}
+
+[data-variant='mission-control'] .mc-log__meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3xs);
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+  line-height: var(--type-body-compact-line-height);
+}
+
+@container (width < 36rem) {
+  [data-variant='mission-control'] .mc-log__row {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'date meta'
+      'main main';
+  }
+
+  [data-variant='mission-control'] .mc-log__row > .mc-log__date {
+    grid-area: date;
+  }
+
+  [data-variant='mission-control'] .mc-log__row > .mc-log__main {
+    grid-area: main;
+  }
+
+  [data-variant='mission-control'] .mc-log__row > .mc-log__meta {
+    grid-area: meta;
+    justify-content: end;
+    justify-self: end;
+  }
+
+  [data-variant='mission-control'] .mc-strip {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+
+  [data-variant='mission-control']
+    .mc-strip
+    > :is(.mc-state, .mc-strip__summary, .mc-cell__foot, .mc-credits, .mc-excerpt) {
+    grid-row: auto;
+    grid-column: auto;
+  }
+}
+
+/* ---------- Evidence: ledger, quotes ---------- */
+
+[data-variant='mission-control'] .mc-ledger {
+  display: flex;
+  flex-direction: column;
+}
+
+[data-variant='mission-control'] .mc-ledger__row {
+  display: grid;
+  grid-template-columns: minmax(6rem, auto) minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--space-s);
+  padding-block: var(--space-xs);
+  padding-inline: var(--space-s);
+}
+
+[data-variant='mission-control'] .mc-ledger__row + .mc-ledger__row {
+  border-block-start: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='mission-control'] :is(.mc-ledger__figure, .mc-log__figure) {
+  font-size: var(--type-step-2);
+  line-height: 1.1;
+}
+
+/* A quote in a mixed log sits in the row's own padding. */
+[data-variant='mission-control'] .mc-log__main > .mc-quote {
+  padding: 0;
+}
+
+[data-variant='mission-control'] .mc-ledger__unit {
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='mission-control'] .mc-ledger__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3xs);
+  font-size: var(--type-step--1);
+  line-height: var(--type-body-compact-line-height);
+}
+
+[data-variant='mission-control'] .mc-ledger__note {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='mission-control'] .mc-quotes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: 1px;
+  background: var(--color-border-subtle);
+  border-end-start-radius: var(--ui-radius-card);
+  border-end-end-radius: var(--ui-radius-card);
+}
+
+[data-variant='mission-control'] .mc-quotes > li {
+  background: var(--color-surface-default);
+}
+
+[data-variant='mission-control'] .mc-quote {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  block-size: 100%;
+  padding: var(--space-s);
+}
+
+[data-variant='mission-control'] .mc-quote__text {
+  font-family: var(--type-quote-font-family);
+  font-size: var(--type-step-0);
+  line-height: var(--type-quote-line-height);
+}
+
+[data-variant='mission-control'] .mc-quote__source {
+  display: flex;
+  flex-direction: column;
+  margin-block-start: auto;
+  font-size: var(--type-step--1);
+  line-height: var(--type-caption-line-height);
+}
+
+[data-variant='mission-control'] .mc-quote__role {
+  color: var(--color-text-secondary);
+}
+
+/* ---------- P2: every core kind in the instrument's own forms ---------- */
+
+/* Logs and telemetry run to the panel's edge, their rows split by hairlines. */
+[data-variant='mission-control']
+  .mc-panel:is([data-kind='chronology'], [data-kind='github'], [data-kind='custom'])
+  .mc-panel__body,
+[data-variant='mission-control']
+  .mc-panel--fold:is([data-kind='works'], [data-kind='evidence'])
+  .mc-panel__body,
+[data-variant='mission-control']
+  .mc-panel[data-kind='practice']:has(.mc-cells, .mc-manifest)
+  .mc-panel__body {
+  padding: 0;
+  gap: 0;
+}
+
+/* The experience rows on declared tracks (S2): when, who and what, the state lamp. */
+[data-variant='mission-control'] .mc-chron__row {
+  grid-template-columns: 9rem minmax(0, 1fr) minmax(0, 9rem);
+}
+
+[data-variant='mission-control'] .mc-chron__where {
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+  line-height: var(--type-body-compact-line-height);
+}
+
+[data-variant='mission-control'] .mc-log__main .mc-ticks {
+  max-inline-size: 68ch;
+  margin-block-start: var(--space-3xs);
+}
+
+/* The full record: a closed panel is its bar, the summary; the cue turns when it opens. */
+[data-variant='mission-control'] .mc-fold__bar {
+  cursor: pointer;
+  list-style: none;
+}
+
+[data-variant='mission-control'] .mc-fold__bar::-webkit-details-marker {
+  display: none;
+}
+
+[data-variant='mission-control'] .mc-fold__bar::after {
+  content: '';
+  flex: none;
+  align-self: center;
+  inline-size: 0.5em;
+  block-size: 0.5em;
+  margin-inline-start: var(--space-2xs);
+  border-block-end: 1px solid currentColor;
+  border-inline-end: 1px solid currentColor;
+  rotate: 45deg;
+  translate: 0 -0.15em;
+}
+
+[data-variant='mission-control'] .mc-fold[open] > .mc-fold__bar::after {
+  rotate: 225deg;
+  translate: 0 0.1em;
+}
+
+[data-variant='mission-control'] .mc-fold:not([open]) > .mc-fold__bar {
+  border-block-end: 0;
+}
+
+[data-variant='mission-control'] .mc-fold__bar:hover {
+  background: var(--color-surface-subtle);
+}
+
+[data-variant='mission-control'] .mc-fold__bar > .mc-bar__meta {
+  margin-inline-start: auto;
+}
+
+[data-variant='mission-control'] .mc-panel--fold > .mc-fold {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+[data-variant='mission-control'] .mc-fold__bar--inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-block: var(--space-2xs);
+  padding-inline: var(--space-s);
+  border-block-start: 1px solid var(--color-border-subtle);
+  color: var(--color-text-secondary);
+  font-family: var(--type-label-font-family);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='mission-control'] .mc-fold--inner[open] > .mc-fold__bar--inner {
+  border-block-end: 1px solid var(--color-border-subtle);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='mission-control']:not([data-motion='reduced'], [data-motion='static'])
+    .mc-fold__bar::after {
+    transition: rotate var(--motion-feedback) var(--motion-curve);
+  }
+}
+
+/* With no script, or before the record enhancement has run (it marks the root data-mc-folds once
+   it's attached), a link to a folded panel shows its content, as the enhancement would open it.
+   Never a scripting media query: the quality runner's no-JavaScript rows audit with script on
+   for axe, which such a query would flip (the platform's rule, experience-base.css). */
+[data-variant='mission-control']
+  .mc-root:not([data-mc-folds])
+  :is(:target > details.mc-fold, details.mc-fold:has(:target))::details-content {
+  content-visibility: visible;
+  block-size: auto;
+}
+
+/* And it looks opened: the cue turned, the bar ruled off from what it shows. */
+[data-variant='mission-control']
+  .mc-root:not([data-mc-folds])
+  :is(:target > details.mc-fold, details.mc-fold:has(:target))
+  > .mc-fold__bar::after {
+  rotate: 225deg;
+  translate: 0 0.1em;
+}
+
+[data-variant='mission-control']
+  .mc-root:not([data-mc-folds])
+  :is(:target > details.mc-fold, details.mc-fold:has(:target))
+  > .mc-fold__bar:not(.mc-fold__bar--inner) {
+  border-block-end: 1px solid var(--color-border-subtle);
+}
+
+/* The practice's manifest: the group on the left track, its items on the right. */
+[data-variant='mission-control'] .mc-manifest__row {
+  display: grid;
+  grid-template-columns: minmax(0, 12rem) minmax(0, 1fr);
+  gap: var(--space-2xs) var(--space-s);
+  padding-block: var(--space-xs);
+  padding-inline: var(--space-s);
+}
+
+[data-variant='mission-control'] .mc-manifest__row + .mc-manifest__row {
+  border-block-start: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='mission-control'] .mc-manifest__name {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3xs);
+  font-family: var(--type-label-font-family);
+  font-weight: var(--type-label-font-weight);
+  font-size: var(--type-step--1);
+  line-height: var(--type-label-line-height);
+}
+
+[data-variant='mission-control'] .mc-manifest__note {
+  color: var(--color-text-secondary);
+  font-weight: var(--type-body-font-weight);
+}
+
+[data-variant='mission-control'] .mc-manifest__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-s);
+  font-size: var(--type-step--1);
+  line-height: var(--type-body-compact-line-height);
+}
+
+[data-variant='mission-control'] .mc-manifest__version {
+  color: var(--color-text-secondary);
+}
+
+/* The GitHub snapshot as telemetry: numerals, a square heatmap with no band under it (S3). */
+[data-variant='mission-control'] .mc-gh__telemetry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+  padding-block-start: var(--space-s);
+}
+
+[data-variant='mission-control'] .mc-gh__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs) var(--space-l);
+  padding-inline: var(--space-s);
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='mission-control'] .mc-gh__figure {
+  color: var(--color-text-primary);
+  font-size: var(--type-step-2);
+}
+
+[data-variant='mission-control'] .mc-gh__heat {
+  display: block;
+  inline-size: calc(100% - 2 * var(--space-s));
+  block-size: auto;
+  margin-inline: var(--space-s);
+}
+
+[data-variant='mission-control'] .mc-gh__heat rect {
+  fill: var(--color-surface-prominent);
+}
+
+[data-variant='mission-control'] .mc-gh__heat rect[data-level='1'] {
+  fill: var(--color-data-sequential-start);
+}
+
+[data-variant='mission-control'] .mc-gh__heat rect[data-level='2'] {
+  fill: var(--color-data-sequential-middle);
+}
+
+[data-variant='mission-control'] .mc-gh__heat rect:is([data-level='3'], [data-level='4']) {
+  fill: var(--color-data-sequential-end);
+}
+
+[data-variant='mission-control'] .mc-gh__bar {
+  display: flex;
+  gap: 1px;
+  block-size: var(--space-2xs);
+  margin-inline: var(--space-s);
+  overflow: clip;
+  border-radius: var(--ui-radius-badge);
+}
+
+[data-variant='mission-control'] .mc-gh__bar > span {
+  flex-basis: 0;
+  background: var(--color-border-strong);
+}
+
+[data-variant='mission-control'] .mc-gh__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-m);
+  padding-inline: var(--space-s);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='mission-control'] .mc-gh__lang {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-3xs);
+}
+
+[data-variant='mission-control'] .mc-gh__lang::before {
+  content: '';
+  inline-size: 0.6em;
+  block-size: 0.6em;
+  border-radius: var(--ui-radius-badge);
+  background: var(--color-border-strong);
+}
+
+[data-variant='mission-control'] .mc-gh__bar > span[data-slot='1'],
+[data-variant='mission-control'] .mc-gh__lang[data-slot='1']::before {
+  background: var(--color-data-categorical-1);
+}
+
+[data-variant='mission-control'] .mc-gh__bar > span[data-slot='2'],
+[data-variant='mission-control'] .mc-gh__lang[data-slot='2']::before {
+  background: var(--color-data-categorical-2);
+}
+
+[data-variant='mission-control'] .mc-gh__bar > span[data-slot='3'],
+[data-variant='mission-control'] .mc-gh__lang[data-slot='3']::before {
+  background: var(--color-data-categorical-3);
+}
+
+[data-variant='mission-control'] .mc-gh__bar > span[data-slot='4'],
+[data-variant='mission-control'] .mc-gh__lang[data-slot='4']::before {
+  background: var(--color-data-categorical-4);
+}
+
+[data-variant='mission-control'] .mc-gh__bar > span[data-slot='5'],
+[data-variant='mission-control'] .mc-gh__lang[data-slot='5']::before {
+  background: var(--color-data-categorical-5);
+}
+
+[data-variant='mission-control'] .mc-gh__bar > span[data-slot='6'],
+[data-variant='mission-control'] .mc-gh__lang[data-slot='6']::before {
+  background: var(--color-data-categorical-6);
+}
+
+[data-variant='mission-control'] .mc-gh__source {
+  margin-block-start: 0;
+}
+
+[data-variant='mission-control'] .mc-gh__sub {
+  padding-block: var(--space-2xs);
+  padding-inline: var(--space-s);
+  border-block: 1px solid var(--color-border-subtle);
+  color: var(--color-text-secondary);
+  font-family: var(--type-label-font-family);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='mission-control'] .mc-gh__name {
+  font-family: var(--type-code-font-family);
+}
+
+/* The open channel: the message, the address at headline size, the channel chips. */
+[data-variant='mission-control'] .mc-channel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+}
+
+[data-variant='mission-control'] .mc-channel__message {
+  max-inline-size: 60ch;
+  font-size: var(--type-step-0);
+  line-height: var(--type-body-line-height);
+}
+
+[data-variant='mission-control'] .mc-channel__address {
+  font-family: var(--type-headline-font-family);
+  font-weight: var(--type-headline-font-weight);
+  font-size: var(--type-step-3);
+  line-height: var(--type-headline-line-height);
+  letter-spacing: var(--type-headline-letter-spacing);
+  overflow-wrap: anywhere;
+}
+
+[data-variant='mission-control'] .mc-channel__address a {
+  text-decoration-thickness: from-font;
+  text-underline-offset: 0.15em;
+}
+
+[data-variant='mission-control'] .mc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+}
+
+[data-variant='mission-control'] .mc-chip {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--ui-control-height);
+  padding-inline: var(--space-s);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--ui-radius-control);
+  font-family: var(--type-label-font-family);
+  font-size: var(--type-step--1);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+[data-variant='mission-control'] .mc-chip:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-subtle);
+}
+
+[data-variant='mission-control'] .mc-cta {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-s);
+}
+
+[data-variant='mission-control'] .mc-cta .mc-actions {
+  margin-block-start: auto;
+}
+
+/* A saying: the quote voice at title size, its source under it. */
+[data-variant='mission-control'] .mc-saying {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+}
+
+[data-variant='mission-control'] .mc-saying__text {
+  max-inline-size: 40ch;
+  font-family: var(--type-quote-font-family);
+  font-size: var(--type-step-2);
+  line-height: var(--type-quote-line-height);
+}
+
+/* The portrait, a square module at the lede's start; the words run beside it and then take
+   the panel's measure under it, rather than park in a column (smell 2). */
+[data-variant='mission-control'] .mc-lede-body[data-portrait] {
+  display: flow-root;
+}
+
+[data-variant='mission-control'] .mc-lede-body[data-portrait] > .mc-portrait {
+  float: inline-start;
+  inline-size: 8rem;
+  margin-block-end: var(--space-2xs);
+  margin-inline-end: var(--space-s);
+}
+
+[data-variant='mission-control'] .mc-portrait :is(img, figure) {
+  margin: 0;
+  inline-size: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--ui-radius-control);
+}
+
+[data-variant='mission-control'] .mc-ticks--columns {
+  display: block;
+  columns: 2 16rem;
+  column-gap: var(--space-l);
+}
+
+[data-variant='mission-control'] .mc-ticks--columns li {
+  break-inside: avoid;
+  padding-block-end: var(--space-3xs);
+}
+
+[data-variant='mission-control'] .mc-statement {
+  font-size: var(--type-step-1);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='mission-control'] .mc-hero2 {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+}
+
+[data-variant='mission-control'] .mc-custom__body {
+  padding: var(--space-s);
+}
+
+@container (width < 36rem) {
+  [data-variant='mission-control'] :is(.mc-chron__row, .mc-manifest__row) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* A narrow panel's portrait is a smaller square. */
+  [data-variant='mission-control'] .mc-lede-body[data-portrait] > .mc-portrait {
+    inline-size: 5rem;
+  }
+}
+
+/* ---------- A work's own page: one board, the brief, the inspector, the log ---------- */
+
+[data-variant='mission-control'] .mc-case__title {
+  align-items: baseline;
+}
+
+[data-variant='mission-control'] .mc-case__title .mc-icon {
+  align-self: center;
+}
+
+[data-variant='mission-control'] .mc-board__nav {
+  flex-basis: 100%;
+}
+
+/* A work's state and count are one line of readings: lamps, then the count, wrapping as words do. */
+[data-variant='mission-control'] .mc-board--case .mc-board__counts {
+  align-items: baseline;
+  gap: var(--space-3xs) var(--space-s);
+}
+
+[data-variant='mission-control'] .mc-status__sep {
+  margin-inline: var(--space-2xs);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='mission-control'] .mc-case__part > .mc-panel__body,
+[data-variant='mission-control'] .mc-case__part .mc-panel__body {
+  flex: 1;
+}
+
+[data-variant='mission-control'] .mc-case__summary {
+  max-inline-size: 60ch;
+  font-size: var(--type-step-1);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='mission-control'] .mc-facts__row {
+  display: grid;
+  grid-template-columns: minmax(0, 7rem) minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--space-s);
+  padding-block: var(--space-xs);
+  padding-inline: var(--space-s);
+  font-size: var(--type-step--1);
+  line-height: var(--type-body-compact-line-height);
+}
+
+[data-variant='mission-control'] .mc-facts__row + .mc-facts__row {
+  border-block-start: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='mission-control'] .mc-facts__row > dt {
+  color: var(--color-text-secondary);
+  font-family: var(--type-label-font-family);
+}
+
+[data-variant='mission-control'] .mc-decision {
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1fr) minmax(0, 18rem);
+  align-items: baseline;
+  gap: var(--space-2xs) var(--space-s);
+  padding-block: var(--space-s);
+  padding-inline: var(--space-s);
+}
+
+[data-variant='mission-control'] .mc-decision + .mc-decision {
+  border-block-start: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='mission-control'] .mc-decision__no {
+  color: var(--color-text-secondary);
+  font-size: var(--type-step-1);
+}
+
+[data-variant='mission-control'] .mc-decision__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3xs);
+}
+
+[data-variant='mission-control'] .mc-decision__alt {
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+  line-height: var(--type-body-compact-line-height);
+}
+
+[data-variant='mission-control'] .mc-decision__label {
+  display: block;
+  color: var(--color-text-primary);
+  font-family: var(--type-label-font-family);
+}
+
+[data-variant='mission-control'] .mc-case__onward {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
+
+[data-variant='mission-control'] .mc-case__onward > :only-child {
+  grid-column: 1 / -1;
+}
+
+[data-variant='mission-control'] .mc-case__next-title {
+  font-family: var(--type-headline-font-family);
+  font-weight: var(--type-headline-font-weight);
+  font-size: var(--type-step-2);
+  line-height: var(--type-headline-line-height);
+}
+
+[data-variant='mission-control'] .mc-case__next-title a,
+[data-variant='mission-control'] .mc-case__next .mc-bar__title a {
+  text-decoration-color: var(--color-border-strong);
+  text-underline-offset: 0.15em;
+}
+
+[data-variant='mission-control'] .mc-case__thumb {
+  border-block-end: 0;
+  border-inline-start: 1px solid var(--color-border-subtle);
+}
+
+@container (width < 36rem) {
+  [data-variant='mission-control'] .mc-decision {
+    grid-template-columns: 2.5rem minmax(0, 1fr);
+  }
+
+  [data-variant='mission-control'] .mc-decision__alt {
+    grid-column: 2;
+  }
+
+  [data-variant='mission-control'] .mc-case__onward {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='mission-control'] .mc-case__thumb {
+    border-inline-start: 0;
+    border-block-start: 1px solid var(--color-border-subtle);
+  }
+}
+
+/* ---------- The colophon ---------- */
+
+[data-variant='mission-control'] .mc-colophon {
+  grid-area: foot;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  padding-block: var(--space-l);
+  padding-inline: var(--space-s);
+  border-block-start: 1px solid var(--color-border-default);
+  background: var(--color-surface-subtle);
+  font-size: var(--type-step--1);
+  line-height: var(--type-body-compact-line-height);
+}
+
+[data-variant='mission-control'] .mc-index__title {
+  margin-block-end: var(--space-xs);
+  font-family: var(--type-label-font-family);
+  font-weight: var(--type-label-font-weight);
+  font-size: var(--type-step-0);
+}
+
+[data-variant='mission-control'] .mc-index__boards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs) var(--space-m);
+}
+
+[data-variant='mission-control'] .mc-index__head {
+  font-weight: var(--type-label-font-weight);
+  text-decoration: none;
+}
+
+[data-variant='mission-control'] .mc-colophon__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2xs) var(--space-m);
+  padding-block-start: var(--space-s);
+  border-block-start: 1px solid var(--color-border-subtle);
+  /* The owner's name, address and link labels are flex items, whose min-content break-word
+     leaves at a whole word: an unbroken label, such as a URL, breaks in the word rather than
+     widen the page. Nothing here is clipped. */
+  overflow-wrap: anywhere;
+}
+
+[data-variant='mission-control'] .mc-colophon__name {
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='mission-control'] .mc-colophon__tagline {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='mission-control'] .mc-colophon__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs) var(--space-m);
+}
+
+/* ---------- What the owner wrote past a summary (P2 r3) ---------- */
+
+/* A cell's title with its lamps and Linked control, on one line while they fit. */
+[data-variant='mission-control'] .mc-cell__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3xs) var(--space-s);
+}
+
+/* A lone work its panel's bar names has no title of its own; with no lamps either, no line. */
+[data-variant='mission-control'] .mc-cell__head:empty {
+  display: none;
+}
+
+/* A cell's foot: its actions, then its Details, on one line while closed; open, the details
+   take the cell's width under them. */
+[data-variant='mission-control'] .mc-cell__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2xs) var(--space-m);
+}
+
+[data-variant='mission-control'] .mc-cell__foot:empty {
+  display: none;
+}
+
+[data-variant='mission-control'] .mc-cell .mc-cell__foot:not(:has(.mc-actions)) {
+  padding-block-start: 0;
+}
+
+[data-variant='mission-control'] .mc-cell__foot > .mc-more[open] {
+  flex-basis: 100%;
+}
+
+/* A work's credits and a record's facts: one line in the label voice. */
+[data-variant='mission-control'] :is(.mc-credits, .mc-log__facts) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-s);
+  color: var(--color-text-secondary);
+  font-family: var(--type-label-font-family);
+  font-size: var(--type-step--1);
+  line-height: var(--type-label-line-height);
+}
+
+/* An excerpt, a writer's or an article's: their own words in the quote voice. */
+[data-variant='mission-control'] .mc-excerpt {
+  max-inline-size: 60ch;
+  margin: 0;
+  font-family: var(--type-quote-font-family);
+  font-size: var(--type-step-0);
+  line-height: var(--type-quote-line-height);
+}
+
+[data-variant='mission-control'] .mc-log__cite {
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+  line-height: var(--type-body-compact-line-height);
+}
+
+/* An outside work's figures: the numeral, then what it counts. */
+[data-variant='mission-control'] .mc-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-m);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='mission-control'] .mc-figures__figure {
+  font-size: var(--type-step-1);
+}
+
+[data-variant='mission-control'] .mc-figures__sub {
+  color: var(--color-text-secondary);
+}
+
+/* A release's tracklist on declared tracks: the number, the title, its length. */
+[data-variant='mission-control'] .mc-tracks {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-3xs) var(--space-s);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='mission-control'] .mc-tracks > li {
+  display: contents;
+}
+
+[data-variant='mission-control'] :is(.mc-tracks__n, .mc-tracks__time) {
+  color: var(--color-text-secondary);
+}
+
+/* A work's frames: each with its caption, place and tags, as many to a row as fit. */
+[data-variant='mission-control'] .mc-frames {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 10rem), 1fr));
+  gap: var(--space-s);
+}
+
+[data-variant='mission-control'] .mc-frames__frame {
+  margin: 0;
+}
+
+[data-variant='mission-control'] .mc-frames__frame img {
+  inline-size: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: var(--ui-radius-control);
+}
+
+[data-variant='mission-control'] .mc-frames__frame figcaption {
+  padding-block-start: var(--space-3xs);
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+  line-height: var(--type-body-compact-line-height);
+}
+
+/* A cell's or a row's Details: its word and cue, on the cell's own edge, no rule of its own. */
+[data-variant='mission-control'] .mc-more > .mc-fold__bar--inner {
+  display: inline-flex;
+  justify-content: start;
+  min-block-size: var(--space-l);
+  padding: 0;
+  border: 0;
+}
+
+[data-variant='mission-control'] .mc-more[open] > .mc-fold__bar--inner {
+  border: 0;
+}
+
+[data-variant='mission-control'] .mc-more__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding-block: var(--space-xs) 0;
+}
+
+/* A services group's name and note, over its offers. */
+[data-variant='mission-control'] .mc-group__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-s);
+  padding-block: var(--space-xs) 0;
+  padding-inline: var(--space-s);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='mission-control'] .mc-group__name {
+  font-family: var(--type-label-font-family);
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='mission-control'] .mc-group__note {
+  color: var(--color-text-secondary);
+}
+
+/* A section's own subtitle on the anchor and on a hero past it, in the label voice. */
+[data-variant='mission-control'] .mc-anchor__sub {
+  color: var(--color-text-secondary);
+  font-family: var(--type-label-font-family);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='mission-control'] .mc-hero2__name {
+  font-family: var(--type-title-font-family);
+  font-weight: var(--type-title-font-weight);
+  font-size: var(--type-step-1);
+}
+
+[data-variant='mission-control'] :is(.mc-channel__via, .mc-ledger__title) {
+  display: block;
+  color: var(--color-text-secondary);
+  font-family: var(--type-label-font-family);
+  font-size: var(--type-step--1);
+}
+
+/* The first quote alone: the panel's width, at a reading measure. */
+[data-variant='mission-control'] .mc-quotes--lead {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-variant='mission-control'] .mc-quotes--lead .mc-quote__text {
+  max-inline-size: 60ch;
+}
+
+/* The case page's inspector rides beside the brief: its column takes the row, its sheet sticks
+   under the status line, so the brief's length is the sheet's travel, not a notch. */
+@media (width >= 64rem) {
+  [data-variant='mission-control'] .mc-wall > .mc-case__facts {
+    align-self: stretch;
+  }
+
+  [data-variant='mission-control'] .mc-case__facts > .mc-facts {
+    position: sticky;
+    inset-block-start: calc(var(--layout-sticky-offset) + var(--layout-seam));
+  }
+}
+
+/* On a phone wide enough that every label fits two lines whole, four squares sit across, the
+   label over the figure (P1 should-fix 3); narrower, they keep the 2x2 grid of squares. */
+@media (width < 47.5rem) {
+  @container (width >= 26rem) {
+    [data-variant='mission-control'] .mc-readouts[data-count='4'] .mc-readouts__grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    [data-variant='mission-control'] .mc-readouts[data-count='4'] .mc-readout__figure {
+      font-size: var(--type-step-3);
+    }
+  }
+}
+
+/* A quote's source, then its Linked control at the caption row's end. */
+[data-variant='mission-control'] .mc-quote__source {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--space-2xs) var(--space-s);
+}
+
+[data-variant='mission-control'] .mc-quote__who {
+  display: flex;
+  flex-direction: column;
+}
+
+/* On 8 columns and more every quote stands, three across; the one-quote fold is a phone's. */
+@media (width >= 47.5rem) {
+  [data-variant='mission-control'] .mc-quoteset {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    gap: 1px;
+    background: var(--color-border-subtle);
+  }
+
+  [data-variant='mission-control'] .mc-quoteset[data-more='1'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  [data-variant='mission-control'] .mc-quoteset[data-more='3'] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+  }
+
+  [data-variant='mission-control'] .mc-quoteset > .mc-quotes--lead .mc-quote__text {
+    max-inline-size: none;
+  }
+
+  /* The fold's bar goes only where its content can be shown without it: a browser with no
+     ::details-content keeps the bar, so the other quotes are still one press away. */
+  @supports selector(::details-content) {
+    [data-variant='mission-control'] .mc-quoteset__more > .mc-fold__bar {
+      display: none;
+    }
+
+    [data-variant='mission-control'] .mc-quoteset__more::details-content {
+      content-visibility: visible;
+      block-size: auto;
+    }
+  }
+
+  [data-variant='mission-control'] .mc-quoteset__more > .mc-quotes {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+    block-size: 100%;
+  }
+}
+
+/* ---------- 8 columns, then 4 with the rail docked at the foot ---------- */
+
+@media (width < 73.75rem) {
+  [data-variant='mission-control'] {
+    --layout-columns: 8;
+  }
+
+  [data-variant='mission-control'] :is(.mc-panel, .mc-stack):is([data-span='4'], [data-span='6']) {
+    --layout-span: 4;
+  }
+
+  [data-variant='mission-control']
+    .mc-panel:is([data-span='8'], [data-span='10'], [data-span='12'], [data-span='14']) {
+    --layout-span: 8;
+  }
+
+  [data-variant='mission-control'] .mc-anchor {
+    --layout-span: 8;
+  }
+
+  /* Below a desk the lede takes its row, so a stack's panels go back to the wall, four
+     columns each, side by side. */
+  [data-variant='mission-control'] .mc-stack {
+    display: contents;
+  }
+
+  [data-variant='mission-control'] .mc-stack > .mc-panel {
+    --layout-span: 4;
+    flex: 1 1
+      calc(
+        (100% - (var(--layout-columns) - 1) * var(--layout-seam)) * var(--layout-span) /
+          var(--layout-columns) + (var(--layout-span) - 1) * var(--layout-seam)
+      );
+    align-self: start;
+  }
+}
+
+/*
+ * Below a desk's width the status line can take a second line, so it stays at
+ * the top of the page rather than over it, and nothing scrolls in under it.
+ */
+@media (width < 64rem) {
+  [data-variant='mission-control'] {
+    --layout-sticky-offset: 0px;
+  }
+
+  [data-variant='mission-control'] .mc-status {
+    position: static;
+    flex-wrap: wrap;
+    min-block-size: auto;
+    padding-block: var(--space-2xs);
+  }
+}
+
+@media (width < 47.5rem) {
+  [data-variant='mission-control'] {
+    --layout-columns: 4;
+    /* The rail docked at the phone's foot: the page's bottom inset, as the status line is its top. */
+    --layout-dock: 3.5rem;
+  }
+
+  /* Whatever focus, a fragment or a scroll brings into view lands above the dock, never under
+     it, as the status line's offset keeps it below the top (C2, the quality occlusion check). */
+  [data-variant='mission-control']
+    :is([id], a[href], button, summary, input, select, textarea, [tabindex]) {
+    scroll-margin-block-end: calc(var(--layout-dock) + var(--space-2xs));
+  }
+
+  [data-variant='mission-control'] :is(.mc-panel, .mc-stack)[data-span] {
+    --layout-span: 4;
+  }
+
+  [data-variant='mission-control'] .mc-root {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'status'
+      'main'
+      'foot';
+    /* The page ends clear of the dock, so its last links scroll out from under it. */
+    padding-block-end: calc(var(--layout-dock) + var(--space-2xs));
+  }
+
+  [data-variant='mission-control'] .mc-status {
+    padding-block: var(--space-2xs);
+  }
+
+  [data-variant='mission-control'] .mc-rail {
+    position: fixed;
+    inset-inline: 0;
+    inset-block: auto 0;
+    flex-direction: row;
+    justify-content: space-around;
+    block-size: var(--layout-dock);
+    padding-block: 0;
+    padding-inline: var(--space-2xs);
+    border-inline-end: 0;
+    border-block-start: 1px solid var(--color-border-default);
+  }
+
+  /* While keyboard focus is on the page past the dock, the dock steps down below the window, so
+     no focused control sits under it (WCAG 2.4.11). Its links stay in the tab order: Shift+Tab
+     onto one brings the dock back. A touch never shows a focus ring there, so a phone keeps it. */
+  [data-variant='mission-control']
+    .mc-root:has(> :is(.mc-status, .mc-main, .mc-colophon) :focus-visible)
+    > .mc-rail {
+    translate: 0 100%;
+  }
+
+  /* It steps aside and back with an ease-out, so it reads as moving out of the way, not as a
+     glitch; under reduced motion it goes and comes at once. */
+  @media (prefers-reduced-motion: no-preference) {
+    [data-variant='mission-control'] .mc-rail {
+      transition: translate var(--motion-feedback) var(--motion-curve);
+    }
+  }
+
+  [data-variant='mission-control'] .mc-rail__list {
+    display: contents;
+  }
+
+  [data-variant='mission-control'] .mc-rail__mark {
+    margin-block-end: 0;
+  }
+
+  [data-variant='mission-control'] :is(.mc-rail__mark, .mc-rail__link) {
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+  }
+
+  /* Icons only on the phone's bar (MC-S4): the words stay as each link's name. */
+  [data-variant='mission-control'] .mc-rail__label,
+  [data-variant='mission-control']
+    :is(.mc-rail__mark, .mc-rail__link):is(:hover, :focus-visible)
+    .mc-rail__label {
+    inset: auto;
+    inline-size: 1px;
+    block-size: 1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    opacity: 1;
+  }
+
+  [data-variant='mission-control'] .mc-showcase__lead {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* A phone's squares are wider than a desk's: the figure takes the step above. */
+  [data-variant='mission-control'] .mc-readout__figure {
+    font-size: var(--type-step-6);
+  }
+
+  [data-variant='mission-control'] .mc-anchor__body {
+    padding-inline: var(--space-s);
+  }
+
+  [data-variant='mission-control'] .mc-board__head {
+    padding-block-start: var(--space-m);
+  }
+}
+
+@media print {
+  /* On paper the rail is a row of its destinations with their words, above the status line,
+     and no foot is kept for a docked bar. */
+  [data-variant='mission-control'] .mc-root {
+    padding-block-end: 0;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'rail'
+      'status'
+      'main'
+      'foot';
+  }
+
+  [data-variant='mission-control'] :is(.mc-rail, .mc-status) {
+    position: static;
+  }
+
+  [data-variant='mission-control'] .mc-rail {
+    flex-direction: row;
+    flex-wrap: wrap;
+    block-size: auto;
+    border-inline-end: 0;
+    border-block-end: 1px solid var(--color-border-default);
+  }
+
+  [data-variant='mission-control'] .mc-rail__list {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  [data-variant='mission-control'] :is(.mc-rail__mark, .mc-rail__link) {
+    display: inline-flex;
+    gap: var(--space-3xs);
+    inline-size: auto;
+    block-size: auto;
+    padding-inline: var(--space-2xs);
+  }
+
+  /* Its words print beside their icons at every paper width: the phone rule, which keeps them
+     for assistive technology only, would clip them to a pixel on Letter or A4. */
+  [data-variant='mission-control'] .mc-rail__label,
+  [data-variant='mission-control']
+    :is(.mc-rail__mark, .mc-rail__link):is(:hover, :focus-visible)
+    .mc-rail__label {
+    position: static;
+    translate: none;
+    inline-size: auto;
+    block-size: auto;
+    padding: 0;
+    border: 0;
+    overflow: visible;
+    clip-path: none;
+    background: none;
+    opacity: 1;
+  }
+
+  [data-variant='mission-control'] .mc-readout {
+    aspect-ratio: auto;
+  }
+
+  [data-variant='mission-control'] .mc-panel {
+    break-inside: avoid;
+  }
+
+  /* A printed page holds the whole record, the closed panels too; the controls that only act on screen go. */
+  [data-variant='mission-control'] details.mc-fold::details-content {
+    content-visibility: visible;
+    block-size: auto;
+  }
+
+  [data-variant='mission-control'] .mc-fold__bar::after,
+  [data-variant='mission-control'] .mc-linked {
+    display: none;
+  }
+
+  [data-variant='mission-control'] .mc-panel--fold {
+    break-inside: auto;
+  }
+}

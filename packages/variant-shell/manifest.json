@@ -1,0 +1,172 @@
+{
+  "id": "shell",
+  "name": "Shell",
+  "promise": "The portfolio as one open terminal session.",
+  "description": "A transcript read top to bottom: each section a shell comment carrying its title, the command that prints it, then its output. An index jumps to every section, work, record, and link, a status line names the five destinations and where you are, and a case study reads as a man page. Every length is a character cell or a row, in one monospaced scale.",
+  "contract": "2.1",
+  "schemas": {
+    "portfolio": {
+      "min": 3,
+      "max": 3
+    },
+    "site": {
+      "min": 2,
+      "max": 2
+    }
+  },
+  "tokenContract": 1,
+  "compositionFamily": "document",
+  "motionIntent": "subtle",
+  "performanceTier": "light",
+  "budgets": {
+    "js": 1024,
+    "css": 10240,
+    "image": 61440,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 6144
+  },
+  "stills": [
+    {
+      "file": "./stills/1440.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "file": "./stills/720.webp",
+      "width": 720,
+      "height": 450
+    }
+  ],
+  "renderedKinds": [
+    "hero",
+    "lede",
+    "works",
+    "evidence",
+    "chronology",
+    "practice",
+    "contact",
+    "now",
+    "quote",
+    "focus",
+    "fun-facts",
+    "cta",
+    "github",
+    "custom"
+  ],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": {
+    "home": "bespoke",
+    "work": "bespoke",
+    "views": []
+  },
+  "controls": {
+    "version": 1,
+    "items": [
+      {
+        "type": "enum",
+        "id": "prompt",
+        "label": "Prompt",
+        "description": "What each command line's prompt shows: user@host and the directory, the directory alone, or a bare $. A prompt with no user or host to derive shows what it has.",
+        "options": [
+          {
+            "value": "full",
+            "label": "Full"
+          },
+          {
+            "value": "directory",
+            "label": "Directory"
+          },
+          {
+            "value": "bare",
+            "label": "Bare"
+          }
+        ],
+        "default": "full"
+      },
+      {
+        "type": "enum",
+        "id": "pane",
+        "label": "Index",
+        "description": "Where the index of every section goes on a wide screen: docked beside the transcript, or only in the jump dialog and at the end of the page.",
+        "options": [
+          {
+            "value": "docked",
+            "label": "Docked"
+          },
+          {
+            "value": "dialog",
+            "label": "Dialog"
+          }
+        ],
+        "default": "docked"
+      },
+      {
+        "type": "enum",
+        "id": "commands",
+        "label": "Commands",
+        "description": "Whether each section shows the command that prints it under its title, or only its title, for a quieter transcript.",
+        "options": [
+          {
+            "value": "shown",
+            "label": "Shown"
+          },
+          {
+            "value": "titles",
+            "label": "Titles only"
+          }
+        ],
+        "default": "shown"
+      },
+      {
+        "type": "contentRef",
+        "id": "pinned",
+        "label": "Pinned work",
+        "description": "The work the listings star and preview at full size. Empty uses the signature work.",
+        "kinds": ["works"],
+        "default": null
+      }
+    ],
+    "migrations": []
+  },
+  "enhancements": [
+    {
+      "id": "palette",
+      "export": "./enhancements/palette",
+      "requires": []
+    }
+  ],
+  "keyBindings": [
+    {
+      "region": "document",
+      "keys": ["mod+k", "/"],
+      "action": "palette.open"
+    }
+  ],
+  "visitorControl": {
+    "placement": "footer"
+  },
+  "textDirection": ["ltr", "rtl"],
+  "recommendedAppearance": "shell",
+  "provenance": {
+    "provisional": true,
+    "sources": [
+      {
+        "source": "The design report's Variant 8, Shell, and the variants-10 concept (V10/shell/concept.json)",
+        "disposition": "preserved",
+        "note": "The transcript of commands by kind, the ls, git log, BibTeX and mail forms, the docked index at 1280 px and up, the tmux status line, and the palette, rebuilt on the v3 records with the thesis first and the transcript in directory order."
+      },
+      {
+        "source": "The report's Primer-like dark palette and JetBrains Mono",
+        "disposition": "folded-into-pack",
+        "note": "Colour is the night-terminal scheme, type the shell-mono pack, and materials the primer-inspired language, through the shell recipe. The composition reads roles only and never forces dark."
+      },
+      {
+        "source": "The report's infinite caret blink and per-character typing",
+        "disposition": "retired",
+        "note": "The caret blinks four times when the end comes into view, then holds; nothing types. Nothing loops."
+      }
+    ]
+  }
+}
