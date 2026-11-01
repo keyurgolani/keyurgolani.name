@@ -1,0 +1,2719 @@
+/*
+ * Editorial Evidence (#13, redesign stream C): a long-form issue on one
+ * grid. Its signature is the margin system: a head column where each
+ * section's head hangs, held in view while the section reads; a 1 px spine
+ * beside it; the text column; and a notes column where captions, fact
+ * sheets, notes, and short sections sit beside what they support.
+ *
+ * Arrangement only, on the platform's shared scales. The grid is the
+ * shared 12 columns: the head column is 3, the text column 6, and the notes
+ * column 3, at the shared page width, gutter, and margin. Every space is a
+ * --space-* step or pair, every size a --type-step-*, every color a
+ * --color-* role, every rule, radius, and height a --ui-* token, and every
+ * duration a --motion-* token. The only custom properties it defines are
+ * its own --layout-* placements. Every property is logical, so a
+ * right-to-left page mirrors.
+ *
+ * Below 81.25rem the head column folds: heads stack over their sections
+ * and the notes column stays. Below 48rem it's one column, notes
+ * following what they note. Placement never reorders: what comes first in
+ * the source reads first on screen, in print, and with no styles.
+ */
+
+[data-variant='editorial-evidence'] {
+  --layout-ee-head: 1 / span 3;
+  --layout-ee-main: 4 / -1;
+  --layout-ee-text: 1 / span 6;
+  --layout-ee-notes: 7 / -1;
+  --layout-ee-note-row: 1 / span 3;
+  /* How many of the grid's columns a band's body spans: everything but the head column. */
+  --layout-ee-cols: 9;
+  /* How many of those the text column spans, and so its width inside a band's body. */
+  --layout-ee-text-span: 6;
+  /* The notes column's span: what the text column leaves of a band's body. */
+  --layout-ee-notes-span: calc(var(--layout-ee-cols) - var(--layout-ee-text-span));
+  /*
+   * The notes column's width on a grid the page's width, n of its C columns and the n - 1 gutters
+   * between them, (n * 100% - (C - n) * gutter) / C: the masthead's tools take it at least.
+   */
+  --layout-ee-toolsw: calc(
+    (
+        var(--layout-ee-notes-span) * 100% -
+          (var(--layout-grid-columns) - var(--layout-ee-notes-span)) * var(--layout-grid-gutter)
+      ) /
+      var(--layout-grid-columns)
+  );
+  --layout-ee-textw: calc(
+    (100% - (var(--layout-ee-cols) - 1) * var(--layout-grid-gutter)) / var(--layout-ee-cols) *
+      var(--layout-ee-text-span) + (var(--layout-ee-text-span) - 1) * var(--layout-grid-gutter)
+  );
+  --layout-ee-bar: calc(var(--ui-control-height) + 2 * var(--space-2xs));
+  /* The Contents sheet's tallest: the window under the masthead. */
+  --layout-ee-sheet-max: calc(100dvh - var(--layout-ee-bar));
+  /*
+   * The lead quotation's measure: half the compact measure, a step derived
+   * from the pack's own (unregistered, so its em is the quotation's), 26
+   * characters at the headline size it sets at.
+   */
+  --layout-ee-quote-measure: calc(var(--type-measure-compact) / 2);
+  /* The hanging head's height, which the running head sets on the issue as heads change; a two-line head's without it. */
+  --layout-ee-head-h: var(--space-2xl);
+  --layout-ee-inset: max(var(--layout-grid-margin), calc((100% - var(--layout-width-page)) / 2));
+  --layout-ee-half: calc(var(--layout-grid-gutter) / 2);
+  /* How far the platform's focus ring reaches past a control: what a scroller keeps clear inside its edge. */
+  --layout-ee-ring: calc(var(--ui-focus-width) + var(--ui-focus-offset));
+  /*
+   * A plate's mat, equal on every side: EDI-1's step at least, so each note's leader runs inside
+   * the mat's ground, never on its edge; the language's surface space only if a pack ever sets one wider.
+   */
+  --layout-ee-mat: max(
+    var(--space-l),
+    var(--ui-space-surface-block),
+    var(--ui-space-surface-inline)
+  );
+  /* The head column's width, three of the twelve columns and their two gutters, for what sits outside a band. */
+  --layout-ee-headw: calc(
+    (
+        min(100% - 2 * var(--layout-grid-margin), var(--layout-width-page)) - 11 *
+          var(--layout-grid-gutter)
+      ) /
+      4 + 2 * var(--layout-grid-gutter)
+  );
+
+  display: block;
+  color: var(--color-text-primary);
+  font-family: var(--type-body-font-family);
+  font-size: var(--type-step-0);
+  line-height: 1.6;
+  font-variant-numeric: lining-nums;
+  overflow-wrap: break-word;
+}
+
+/* Elements set flush; their parents space them. */
+[data-variant='editorial-evidence']
+  :where(h1, h2, h3, h4, h5, h6, p, ul, ol, dl, dd, figure, blockquote) {
+  margin: 0;
+}
+
+[data-variant='editorial-evidence'] :where(ul[role='list'], ol[role='list']) {
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='editorial-evidence'] :where(h1, h2, h3, h4, h5) {
+  text-wrap: balance;
+}
+
+[data-variant='editorial-evidence'] :where(p, li, dd, blockquote) {
+  text-wrap: pretty;
+}
+
+[data-variant='editorial-evidence'] :where(time, data, .ee-n, .ee-row__end) {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+[data-variant='editorial-evidence'] :where(img) {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+}
+
+/* The steps each role takes in the issue: four sizes to a view, display at least 4.5 times body. */
+[data-variant='editorial-evidence']
+  :is([data-type-role='body-compact'], [data-type-role='caption'], [data-type-role='label']) {
+  max-inline-size: none;
+  font-size: var(--type-step--1);
+  line-height: 1.5;
+}
+
+[data-variant='editorial-evidence'] [data-type-role='quote'] {
+  font-size: var(--type-step-1);
+  line-height: 1.4;
+}
+
+[data-variant='editorial-evidence'] [data-type-role='headline'] {
+  font-size: var(--type-step-4);
+  line-height: 1.1;
+}
+
+[data-variant='editorial-evidence'] [data-type-role='title'] {
+  font-size: var(--type-step-0);
+  line-height: 1.3;
+}
+
+/* Links: inline ones in the accent text color; titles and chrome quiet until hovered or focused. */
+[data-variant='editorial-evidence'] :where(a:not([data-ui-slot])) {
+  color: var(--color-accent-text);
+  text-decoration-line: underline;
+  text-decoration-thickness: from-font;
+}
+
+[data-variant='editorial-evidence']
+  :is(
+    .ee-masthead,
+    .ee-contents__chapter,
+    .ee-row__title,
+    .ee-chapter__toc,
+    .ee-colophon__links,
+    .ee-plate__title,
+    .ee-fig__title,
+    .ee-case__next-title
+  )
+  a:not([data-ui-slot]) {
+  color: var(--color-text-primary);
+  text-decoration-color: var(--color-border-default);
+}
+
+[data-variant='editorial-evidence']
+  :is(
+    .ee-masthead,
+    .ee-contents__chapter,
+    .ee-row__title,
+    .ee-chapter__toc,
+    .ee-colophon__links,
+    .ee-plate__title,
+    .ee-fig__title,
+    .ee-case__next-title
+  )
+  a:not([data-ui-slot]):is(:hover, :focus-visible) {
+  color: var(--color-accent-text);
+  text-decoration-color: currentcolor;
+}
+
+[data-variant='editorial-evidence'] .ee-n {
+  color: var(--color-accent-text);
+  font-weight: var(--type-title-font-weight);
+}
+
+/* The grid every band of the issue sits on: the shared 12 columns at the page width, its margins full bleed. */
+[data-variant='editorial-evidence']
+  :is(.ee-masthead, .ee-opening, .ee-chapter__open, .ee-band, .ee-colophon) {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  padding-inline: var(--layout-ee-inset);
+}
+
+/* ── Masthead and running head ─────────────────────────────────────────── */
+
+/*
+ * The issue's layers: the rail (1), the hanging heads over it (2), the rail
+ * while it holds focus (3), and the masthead over all of them (4), so an
+ * outgoing head goes under its hairline and the Contents sheet, inside it,
+ * is never covered, as a popover or, with no JavaScript, as the target.
+ */
+[data-variant='editorial-evidence'] .ee-masthead {
+  position: relative;
+  z-index: 4;
+  align-items: center;
+  min-block-size: var(--layout-ee-bar);
+  border-block-end: var(--ui-border-divider);
+  background: var(--color-canvas);
+}
+
+[data-variant='editorial-evidence'] .ee-masthead__name {
+  justify-self: start;
+  font-family: var(--type-title-font-family);
+  font-weight: var(--type-title-font-weight);
+  letter-spacing: var(--type-title-letter-spacing);
+  text-decoration-line: none;
+}
+
+[data-variant='editorial-evidence'] .ee-masthead__folio {
+  color: var(--color-text-primary);
+}
+
+/* The tools start on the notes line and end on the page edge (EE-M2). */
+[data-variant='editorial-evidence'] .ee-masthead__end {
+  display: flex;
+  /* Under large root text the visitor control takes a line of its own, never the page's width. */
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-m);
+}
+
+/*
+ * From 48rem the masthead is three tracks on the shared grid's lines: the name on the head
+ * column's three columns, the tools from the notes line to the page edge, and the running head
+ * between them. The tools' track is the notes column at least, and takes what the tools need
+ * when a language's type sets them wider, so they keep one line: the running head gives up the
+ * room, never the tools' text (EE-LANG P3).
+ */
+@media (width >= 48rem) {
+  [data-variant='editorial-evidence'] .ee-masthead {
+    /* The name on the head column's three of the grid's columns, as --layout-ee-toolsw counts. */
+    grid-template-columns:
+      calc(
+        (300% - (var(--layout-grid-columns) - 3) * var(--layout-grid-gutter)) /
+          var(--layout-grid-columns)
+      )
+      1fr minmax(var(--layout-ee-toolsw), max-content);
+  }
+
+  [data-variant='editorial-evidence'] .ee-masthead__folio {
+    grid-column: 2;
+  }
+
+  [data-variant='editorial-evidence'] .ee-masthead__end {
+    grid-column: 3;
+  }
+}
+
+[data-variant='editorial-evidence'] .ee-masthead__tools {
+  flex: 1;
+  font-size: var(--type-step--1);
+}
+
+/* An empty visitor-control slot takes no room, so the last tool ends on the page edge. */
+[data-variant='editorial-evidence'] .ee-masthead__end > [data-visitor-control-slot]:empty {
+  display: none;
+}
+
+[data-variant='editorial-evidence'] .ee-masthead__tools ul {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-m);
+}
+
+[data-variant='editorial-evidence'] .ee-masthead__tools a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--ui-control-height);
+}
+
+[data-variant='editorial-evidence'] .ee-masthead__contents {
+  color: var(--color-text-primary);
+  font-weight: var(--type-title-font-weight);
+  text-decoration-line: none;
+}
+
+[data-variant='editorial-evidence'] .ee-masthead__contents:is(:hover, [aria-expanded='true']) {
+  text-decoration-line: underline;
+}
+
+/*
+ * The Contents sheet: every section, by chapter, under the masthead, in the top layer. A
+ * full-bleed sheet, so EE's own, not the overlay Surface's floating pane: an opaque overlay
+ * ground, which forced colours keep as Canvas, under the language's surface stack.
+ */
+[data-variant='editorial-evidence'] .ee-sheet {
+  position: fixed;
+  inset: var(--layout-ee-bar) 0 auto;
+  inline-size: auto;
+  max-inline-size: none;
+  max-block-size: var(--layout-ee-sheet-max);
+  margin: 0;
+  overflow: auto;
+  padding-block: var(--space-l) var(--space-xl);
+  padding-inline: var(--layout-ee-inset);
+  border: 0;
+  border-block-end: var(--ui-border-divider);
+  background-color: var(--color-surface-overlay);
+  background-image:
+    var(--ui-texture),
+    linear-gradient(
+      color-mix(in srgb, var(--color-surface-overlay) var(--ui-surface-opacity), transparent),
+      color-mix(in srgb, var(--color-surface-overlay) var(--ui-surface-opacity), transparent)
+    ),
+    var(--ui-surface-material);
+  color: var(--color-text-primary);
+  box-shadow: var(--ui-shadow-overlay);
+}
+
+/* Where popover isn't supported, the sheet shows only as the page's target. */
+@supports not selector(:popover-open) {
+  [data-variant='editorial-evidence'] .ee-sheet:not(:target) {
+    display: none;
+  }
+}
+
+/* Open as a popover, or with no JavaScript as the target: following a link in it closes it. */
+[data-variant='editorial-evidence'] .ee-sheet:is(:popover-open, :target) {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+  gap: var(--space-l) var(--layout-grid-gutter);
+}
+
+[data-variant='editorial-evidence'] .ee-sheet__label {
+  grid-column: 1 / span 3;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='editorial-evidence'] .ee-sheet__chapters {
+  grid-column: 4 / -1;
+  columns: 2;
+  column-gap: var(--layout-grid-gutter);
+}
+
+[data-variant='editorial-evidence'] .ee-sheet__chapter {
+  break-inside: avoid;
+  padding-block-end: var(--space-l);
+}
+
+[data-variant='editorial-evidence'] .ee-sheet__chapter-link {
+  display: flex;
+  gap: var(--space-2xs);
+  padding-block-end: var(--space-2xs);
+  border-block-end: var(--ui-border-divider);
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-step-1);
+  font-weight: var(--type-title-font-weight);
+  line-height: 1.25;
+}
+
+[data-variant='editorial-evidence'] .ee-sheet__chapter ol {
+  display: grid;
+  gap: var(--space-3xs);
+  padding-block-start: var(--space-xs);
+}
+
+/* A print contents page: the entry's number in its chapter, its name, a leader, its count. */
+[data-variant='editorial-evidence'] .ee-sheet .ee-sheet__entry {
+  text-decoration-line: none;
+}
+
+[data-variant='editorial-evidence']
+  .ee-sheet__entry:is(:hover, :focus-visible, [aria-current])
+  .ee-sheet__title {
+  text-decoration-line: underline;
+  text-decoration-color: var(--color-accent);
+}
+
+[data-variant='editorial-evidence'] .ee-sheet__entry {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2xs);
+}
+
+[data-variant='editorial-evidence'] :is(.ee-sheet__no, .ee-sheet__count) {
+  flex: none;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-variant='editorial-evidence'] .ee-sheet__no {
+  min-inline-size: var(--space-l);
+}
+
+[data-variant='editorial-evidence'] .ee-sheet__leader {
+  flex: 1 1 var(--space-s);
+  align-self: center;
+  /* A leader is EE's annotation, a hairline in every language; the language draws the rules. */
+  border-block-end: 1px solid var(--color-border-default);
+}
+
+[data-variant='editorial-evidence'] .ee-sheet a:not([data-ui-slot]) {
+  color: var(--color-text-primary);
+  text-decoration-color: var(--color-border-subtle);
+}
+
+[data-variant='editorial-evidence'] .ee-sheet ol ol a:not([data-ui-slot]) {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='editorial-evidence']
+  .ee-sheet
+  a:not([data-ui-slot]):is(:hover, :focus-visible, [aria-current]) {
+  color: var(--color-text-primary);
+  text-decoration-color: var(--color-accent);
+}
+
+[data-variant='editorial-evidence'] .ee-sheet__foot {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 4 / -1;
+  gap: var(--space-l);
+  padding-block-start: var(--space-s);
+  border-block-start: var(--ui-border-divider);
+}
+
+@media (min-height: 31.25rem) {
+  /* What a fragment link or focus brings into view lands below the masthead (WCAG 2.4.11). */
+  [data-variant='editorial-evidence'] {
+    --layout-sticky-offset: calc(var(--layout-ee-bar) + var(--space-s));
+  }
+
+  [data-variant='editorial-evidence'] .ee-masthead {
+    position: sticky;
+    inset-block-start: 0;
+  }
+}
+
+/*
+ * Motion, only while the boundary's motion is full and the visitor hasn't
+ * asked for less: under the site's reduce policy (data-motion reduced) or
+ * the OS setting, nothing transitions and the reading rule doesn't run.
+ * State feedback on links, rows, the rail, and Pl. 1's marks and notes;
+ * and reading progress, a 1 px accent rule along the masthead's foot,
+ * tied to the page's scroll.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='editorial-evidence']:not([data-motion='reduced'], [data-motion='static'])
+    :where(a:not([data-ui-slot])) {
+    transition:
+      color var(--motion-feedback) var(--motion-curve),
+      text-decoration-color var(--motion-feedback) var(--motion-curve);
+  }
+
+  [data-variant='editorial-evidence']:not([data-motion='reduced'], [data-motion='static'])
+    :is(.ee-row, .ee-row__title a) {
+    transition: color var(--motion-feedback) var(--motion-curve);
+  }
+
+  [data-variant='editorial-evidence']:not([data-motion='reduced'], [data-motion='static'])
+    .ee-row__leader {
+    transition: border-color var(--motion-feedback) var(--motion-curve);
+  }
+
+  [data-variant='editorial-evidence']:not([data-motion='reduced'], [data-motion='static'])
+    .ee-rail__link::after {
+    transition: transform var(--motion-feedback) var(--motion-curve);
+  }
+
+  [data-variant='editorial-evidence']:not([data-motion='reduced'], [data-motion='static'])
+    .ee-rail {
+    transition:
+      opacity var(--motion-feedback) var(--motion-curve),
+      visibility var(--motion-feedback) var(--motion-curve);
+  }
+
+  [data-variant='editorial-evidence']:not([data-motion='reduced'], [data-motion='static'])
+    :is(.ee-lead__pin, .ee-lead__rise, .ee-lead__run) {
+    transition: border-color var(--motion-feedback) var(--motion-curve);
+  }
+
+  @supports (animation-timeline: scroll()) {
+    [data-variant='editorial-evidence']:not([data-motion='reduced'], [data-motion='static'])
+      .ee-masthead::after {
+      content: '';
+      position: absolute;
+      inset-inline: 0;
+      inset-block-end: 0;
+      border-block-end: var(--ui-border-divider);
+      border-block-end-color: var(--color-accent);
+      transform: scaleX(0);
+      transform-origin: 0 50%;
+      animation: editorial-evidence-progress linear both;
+      animation-timeline: scroll(root);
+    }
+  }
+}
+
+@keyframes editorial-evidence-progress {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* The running head's sentinel: the window's size, its top padding the sticky offset, never painted. */
+[data-variant='editorial-evidence'] .ee-spy {
+  position: fixed;
+  inset: 0;
+  padding-block-start: var(--layout-sticky-offset, 0);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+[data-variant='editorial-evidence'] .ee-masthead__section {
+  color: var(--color-text-secondary);
+}
+
+/* ── The opening ───────────────────────────────────────────────────────── */
+
+[data-variant='editorial-evidence'] .ee-opening {
+  grid-template-rows: auto auto 1fr auto auto;
+  padding-block-start: var(--space-s);
+}
+
+[data-variant='editorial-evidence'] :is(.ee-opening__practice, .ee-opening__thesis) {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-template-rows: subgrid;
+  grid-column: 1 / -1;
+  grid-row: 1 / span 2;
+}
+
+[data-variant='editorial-evidence'] .ee-thesis__title {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  padding-block-end: var(--space-xs);
+  font-family: var(--type-display-font-family);
+  font-size: var(--type-step-7);
+  font-weight: var(--type-display-font-weight);
+  line-height: 1;
+  letter-spacing: var(--type-display-letter-spacing);
+}
+
+[data-variant='editorial-evidence'] .ee-thesis__title--whole {
+  font-size: var(--type-step-5);
+  line-height: 1.08;
+}
+
+/* Beside the head column a step over Pl. 1's caption, so its notes ride high enough for note 1's leader (N-2, below). */
+[data-variant='editorial-evidence'] .ee-thesis__stand {
+  grid-column: 10 / -1;
+  grid-row: 2;
+  padding-block-end: var(--space-s);
+}
+
+/* With no Pl. 1 there's no leader to make room for, so the bare opening keeps its full step (P3 L-4). */
+[data-variant='editorial-evidence'] .ee-opening--bare .ee-thesis__stand {
+  grid-column: 4 / span 6;
+  padding-block-end: var(--space-m);
+}
+
+[data-variant='editorial-evidence'] .ee-contents {
+  display: flex;
+  flex-direction: column;
+  grid-column: 1 / span 3;
+  grid-row: 2 / span 2;
+  gap: var(--space-xs);
+  padding-block-end: var(--space-s);
+}
+
+[data-variant='editorial-evidence'] .ee-contents__label {
+  color: var(--color-text-secondary);
+}
+
+/* The language's Disclosure draws the line's rules, height, and density; EE's cue ends the line. */
+[data-variant='editorial-evidence'] .ee-contents__cue {
+  margin-inline-start: auto;
+}
+
+[data-variant='editorial-evidence'] .ee-contents__details > summary::-webkit-details-marker {
+  display: none;
+}
+
+[data-variant='editorial-evidence'] :is(.ee-contents__cue, .ee-archive__cue)::before {
+  content: '+' / '';
+}
+
+[data-variant='editorial-evidence']
+  details[open]
+  > summary
+  :is(.ee-contents__cue, .ee-archive__cue)::before {
+  content: '\2212' / '';
+}
+
+[data-variant='editorial-evidence'] .ee-contents__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+[data-variant='editorial-evidence'] .ee-contents .ee-contents__link {
+  text-decoration-line: none;
+}
+
+[data-variant='editorial-evidence']
+  .ee-contents__link:is(:hover, :focus-visible)
+  .ee-contents__name {
+  text-decoration-line: underline;
+}
+
+[data-variant='editorial-evidence'] .ee-contents__link {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  font-family: var(--type-title-font-family);
+  font-weight: var(--type-title-font-weight);
+  line-height: 1.3;
+}
+
+[data-variant='editorial-evidence'] .ee-contents__link .ee-n {
+  min-inline-size: var(--space-s);
+}
+
+[data-variant='editorial-evidence'] .ee-contents__sections {
+  line-height: 1.3;
+  padding-inline-start: calc(var(--space-s) + var(--space-xs));
+  color: var(--color-text-secondary);
+}
+
+/* Only the chapter names read as links; their sections are quiet until hovered or focused (C9). */
+[data-variant='editorial-evidence']
+  :is(.ee-contents__sections, .ee-chapter__toc-list)
+  a:not([data-ui-slot]) {
+  color: var(--color-text-secondary);
+  text-decoration-line: none;
+}
+
+[data-variant='editorial-evidence']
+  :is(.ee-contents__sections, .ee-chapter__toc-list)
+  a:not([data-ui-slot]):is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+}
+
+[data-variant='editorial-evidence'] .ee-lead {
+  position: relative;
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-template-rows: subgrid;
+  grid-column: 4 / -1;
+  grid-row: 2 / span 2;
+  padding-block-end: var(--space-s);
+}
+
+[data-variant='editorial-evidence'] .ee-lead > :is(.ee-lead__frame, .ee-lead__words) {
+  grid-column: 1 / span 6;
+  grid-row: 1 / span 2;
+}
+
+/*
+ * Pl. 1's artwork, whole on the plate's mat (C10), the padding equal on
+ * every side: the mat hugs the artwork and hangs from the contents' top
+ * line (EDI-1, P0-3), and the ground under it is the band's foot. The mat
+ * is the language's Surface: its material, texture, corner, border, and
+ * depth; its padding the larger of the language's two surface spaces.
+ */
+[data-variant='editorial-evidence'] .ee-lead__frame {
+  position: relative;
+  grid-column: 1 / span 6;
+  grid-row: 1 / span 2;
+  align-self: start;
+  padding: var(--layout-ee-mat);
+}
+
+[data-variant='editorial-evidence'] .ee-lead__frame :is(figure, picture) {
+  display: block;
+}
+
+/*
+ * An unavailable picture keeps the picture's place and shape, its corners the picture's, on a
+ * placeholder's ground (the Media primitive's), its label quiet: square on a mat, as the picture
+ * is there, and never a pill. No mark sits on it.
+ */
+[data-variant='editorial-evidence'] .pf-media-box {
+  /*
+   * A keyline of its own, so the field keeps its shape in forced colours, where the tonal step goes
+   * (N-3). It is decorative, so not held to 3:1 (WCAG 1.4.11): the label says what the field is,
+   * in text-secondary at 4.5:1, and the mat holds its place; a 3:1 line would frame an absence.
+   */
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--ui-radius-media);
+  background: linear-gradient(var(--color-surface-subtle), var(--color-surface-prominent));
+  color: var(--color-text-secondary);
+}
+
+[data-variant='editorial-evidence']
+  :is(.ee-lead__frame, .ee-case__plate, .ee-plate__mat)
+  :is(.pf-media-box, .ee-media),
+[data-variant='editorial-evidence'] .pf-media-box--small {
+  border-radius: 0;
+}
+
+[data-variant='editorial-evidence'] .ee-lead__words {
+  padding-block: var(--space-m);
+  border-block: var(--ui-border-divider);
+}
+
+[data-variant='editorial-evidence'] .ee-lead__lines {
+  font-size: var(--type-step--1);
+  line-height: 1.4;
+}
+
+/*
+ * Pl. 1's marks (EE-M3, EDI-1): hairline numerals on the artwork, set by
+ * the cover's focal point, and each note's leader, a run at its key's
+ * height across the gutter and a rise to its mark. The leader is two
+ * hairlines, the canvas over the ink, and the mark sits on its own canvas
+ * disc, so both read on every tone of the picture.
+ */
+[data-variant='editorial-evidence'] .ee-lead__pins {
+  position: absolute;
+  inset: var(--layout-ee-mat);
+  z-index: 2;
+}
+
+[data-variant='editorial-evidence'] .ee-lead__pin {
+  position: absolute;
+  inset-inline-start: var(--layout-ee-pin-x);
+  inset-block-start: var(--layout-ee-pin-y);
+  translate: -50% -50%;
+  display: inline-grid;
+  place-items: center;
+  min-inline-size: var(--space-m);
+  min-block-size: var(--space-m);
+  border: var(--ui-border-control);
+  border-color: var(--color-text-primary);
+  border-radius: var(--ui-radius-badge);
+  background: var(--color-canvas);
+  font-size: var(--type-step--1);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+[data-variant='editorial-evidence'] .ee-lead__leaders {
+  display: none;
+}
+
+@supports (anchor-name: --a) {
+  [data-variant='editorial-evidence'] :is(.ee-lead__leaders, .ee-lead__leader) {
+    display: contents;
+  }
+
+  [data-variant='editorial-evidence'] :is(.ee-lead__rise, .ee-lead__run) {
+    position: absolute;
+    z-index: 1;
+    inset-inline-start: anchor(var(--layout-ee-pin) center);
+    pointer-events: none;
+  }
+
+  [data-variant='editorial-evidence'] .ee-lead__run {
+    inset-block-start: anchor(var(--layout-ee-key) center);
+    inset-inline-end: calc(anchor(var(--layout-ee-key) start) + var(--space-2xs));
+    /* Pl. 1's leaders are EE's annotation, as its marks are: a hairline in every language. */
+    border-block: 1px solid;
+    border-block-color: var(--color-canvas) var(--color-text-primary);
+  }
+
+  /* From the higher of its two points to the lower, so it holds with the notes under the marks or over them. */
+  [data-variant='editorial-evidence'] .ee-lead__rise {
+    inset-block: min(anchor(var(--layout-ee-pin) center), anchor(var(--layout-ee-key) center));
+    border-inline: 1px solid;
+    border-inline-color: var(--color-text-primary) var(--color-canvas);
+  }
+}
+
+/* Under 64rem the notes sit among the marks, and on the page, so the numerals key them alone. */
+@media (width < 64rem) {
+  [data-variant='editorial-evidence'] .ee-lead__leaders {
+    display: none;
+  }
+}
+
+/* A note under the pointer lights its mark and its leader. */
+[data-variant='editorial-evidence']
+  .ee-lead:has(.ee-lead__lines li:nth-child(1):hover)
+  .ee-lead__pin:nth-child(1),
+[data-variant='editorial-evidence']
+  .ee-lead:has(.ee-lead__lines li:nth-child(2):hover)
+  .ee-lead__pin:nth-child(2),
+[data-variant='editorial-evidence']
+  .ee-lead:has(.ee-lead__lines li:nth-child(3):hover)
+  .ee-lead__pin:nth-child(3) {
+  border-color: var(--color-accent);
+}
+
+[data-variant='editorial-evidence']
+  .ee-lead:has(.ee-lead__lines li:nth-child(1):hover)
+  .ee-lead__leader:nth-child(1)
+  > *,
+[data-variant='editorial-evidence']
+  .ee-lead:has(.ee-lead__lines li:nth-child(2):hover)
+  .ee-lead__leader:nth-child(2)
+  > *,
+[data-variant='editorial-evidence']
+  .ee-lead:has(.ee-lead__lines li:nth-child(3):hover)
+  .ee-lead__leader:nth-child(3)
+  > * {
+  border-block-end-color: var(--color-accent);
+  border-inline-start-color: var(--color-accent);
+}
+
+/* An unavailable picture: no marks, no keys, no leaders, and its mat stays on the caption's foot. */
+[data-variant='editorial-evidence']
+  .ee-lead:has(.pf-media-box)
+  :is(.ee-lead__pins, .ee-lead__key, .ee-lead__leaders) {
+  display: none;
+}
+
+/*
+ * Beside its caption it fills the plate's place, from the contents' line to the caption's foot; on
+ * one column, where nothing sets that place, it keeps the picture's 3:2 (the kit's box).
+ */
+[data-variant='editorial-evidence'] .ee-lead:has(.pf-media-box) .ee-lead__frame {
+  align-self: stretch;
+}
+
+[data-variant='editorial-evidence'] .ee-lead__frame > figure {
+  block-size: 100%;
+}
+
+/* Its box takes what its credit leaves, so the credit stays on the mat. */
+[data-variant='editorial-evidence'] .ee-lead__frame > .pf-figure--unavailable {
+  display: flex;
+  flex-direction: column;
+}
+
+[data-variant='editorial-evidence'] .ee-lead__frame .pf-media-box {
+  flex-grow: 1;
+}
+
+[data-variant='editorial-evidence'] .ee-lead__go {
+  font-size: var(--type-step--1);
+}
+
+[data-variant='editorial-evidence'] .ee-lead__caption {
+  display: grid;
+  grid-column: 7 / -1;
+  grid-row: 2;
+  align-self: end;
+  gap: var(--space-xs);
+}
+
+[data-variant='editorial-evidence'] .ee-opening__hero {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  grid-row: 4 / span 2;
+}
+
+[data-variant='editorial-evidence'] .ee-byline {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  grid-column: 1 / -1;
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='editorial-evidence'] .ee-byline > * {
+  padding-block-start: var(--space-s);
+}
+
+[data-variant='editorial-evidence'] .ee-byline__name {
+  display: grid;
+  grid-column: 1 / span 3;
+  align-content: start;
+  gap: var(--space-3xs);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='editorial-evidence'] .ee-byline__name b {
+  color: var(--color-text-primary);
+}
+
+[data-variant='editorial-evidence'] .ee-byline__facts {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  grid-column: 4 / -1;
+  row-gap: var(--space-s);
+}
+
+[data-variant='editorial-evidence'] .ee-byline__facts > div {
+  display: grid;
+  grid-column: span 3;
+  align-content: start;
+  gap: var(--space-3xs);
+}
+
+[data-variant='editorial-evidence'] :is(.ee-byline__facts, .ee-facts) dt {
+  color: var(--color-text-secondary);
+}
+
+/* The hero's words: a word longer than the line, such as a coined subtitle, breaks rather than widening the page. */
+[data-variant='editorial-evidence'] .ee-byline__lede {
+  display: grid;
+  grid-column: 4 / span 6;
+  gap: var(--space-s);
+  min-inline-size: 0;
+  padding-block-start: var(--space-xl);
+  overflow-wrap: anywhere;
+}
+
+/* ── The chapter index: held at the foot of the head column, or under the masthead ── */
+
+[data-variant='editorial-evidence'] .ee-issue {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-variant='editorial-evidence'] .ee-issue__chapters {
+  grid-column: 1;
+  grid-row: 1;
+  min-inline-size: 0;
+}
+
+[data-variant='editorial-evidence'] .ee-rail {
+  position: relative;
+  z-index: 1;
+  grid-column: 1;
+  grid-row: 1;
+  background: var(--color-canvas);
+}
+
+[data-variant='editorial-evidence'] .ee-rail__label {
+  color: var(--color-text-muted);
+}
+
+[data-variant='editorial-evidence'] .ee-rail__list {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+[data-variant='editorial-evidence'] .ee-rail__link {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2xs);
+  color: var(--color-text-secondary);
+  text-decoration-line: none;
+}
+
+/* The chapter being read: full ink, and a rule that grows beside it, as heavy as the language marks a selection. */
+[data-variant='editorial-evidence'] .ee-rail__link::after {
+  content: '';
+  flex: 0 0 var(--space-l);
+  align-self: center;
+  border-block-start: var(--ui-state-selected-emphasis) solid var(--color-accent);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+}
+
+/*
+ * The rule and the one-column underline are a non-text mark, so they hold 3:1 on the canvas: under
+ * a scheme whose accent doesn't, they take its text role. The platform has no accent role gated for
+ * non-text use, so this is a list, and package.test.tsx measures every registered scheme against it.
+ */
+[data-variant='editorial-evidence'][data-color-scheme='pastel-sorbet'] .ee-rail__link::after,
+[data-variant='editorial-evidence'][data-color-scheme='pastel-sorbet']
+  .ee-rail__link[aria-current] {
+  border-block-start-color: var(--color-accent-text);
+  text-decoration-color: var(--color-accent-text);
+}
+
+[data-variant='editorial-evidence'] .ee-rail__link[aria-current] {
+  color: var(--color-text-primary);
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='editorial-evidence'] .ee-rail__link[aria-current]::after {
+  transform: scaleX(1);
+}
+
+[data-variant='editorial-evidence'] .ee-rail__sections {
+  display: none;
+}
+
+[data-variant='editorial-evidence'] .ee-rail__sections a {
+  color: var(--color-text-secondary);
+  text-decoration-color: transparent;
+}
+
+[data-variant='editorial-evidence'] .ee-rail__sections a[aria-current] {
+  color: var(--color-text-primary);
+  text-decoration-color: var(--color-accent);
+}
+
+/* ── Chapters ──────────────────────────────────────────────────────────── */
+
+[data-variant='editorial-evidence'] .ee-chapter__open {
+  align-items: start;
+  padding-block-start: var(--space-xl-3xl);
+}
+
+/* A full-page rule: the chapter starts here. */
+[data-variant='editorial-evidence'] .ee-chapter__open::before {
+  content: '';
+  grid-column: 1 / -1;
+  border-block-start: var(--ui-border-divider);
+  border-block-start-color: var(--color-border-default);
+}
+
+[data-variant='editorial-evidence'] .ee-chapter__title {
+  position: relative;
+  grid-column: 4 / span 6;
+  grid-row: 2;
+  padding-block-start: var(--space-l-2xl);
+}
+
+[data-variant='editorial-evidence'] .ee-chapter__n {
+  color: var(--color-text-muted);
+}
+
+[data-variant='editorial-evidence'] .ee-chapter__toc {
+  grid-column: 10 / -1;
+  grid-row: 2;
+  padding-block-start: var(--space-l-2xl);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='editorial-evidence']
+  :is(.ee-chapter__toc-label, .ee-chapter__toc-list, .ee-chapter__toc-list li) {
+  display: inline;
+}
+
+[data-variant='editorial-evidence'] .ee-chapter__toc-label {
+  color: var(--color-text-muted);
+}
+
+[data-variant='editorial-evidence'] .ee-chapter__toc-list li:not(:last-child)::after {
+  content: ', ';
+}
+
+/* ── Bands: a section, its head hanging beside it ──────────────────────── */
+
+[data-variant='editorial-evidence'] .ee-band > * {
+  padding-block-start: var(--space-l-2xl);
+}
+
+[data-variant='editorial-evidence'] .ee-chapter__open + .ee-band > * {
+  padding-block-start: var(--space-xl);
+}
+
+[data-variant='editorial-evidence'] .ee-band__head {
+  grid-column: var(--layout-ee-head);
+}
+
+[data-variant='editorial-evidence'] .ee-head {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+[data-variant='editorial-evidence'] .ee-head-title {
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-step-0);
+  font-weight: var(--type-title-font-weight);
+  line-height: 1.3;
+  letter-spacing: var(--type-title-letter-spacing);
+}
+
+[data-variant='editorial-evidence'] :is(.ee-head-meta, .ee-aside__head-meta) {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='editorial-evidence'] .ee-band__body {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-ee-cols), minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  grid-column: var(--layout-ee-main);
+  align-content: start;
+  row-gap: var(--space-l);
+}
+
+[data-variant='editorial-evidence'] .ee-band__body > * {
+  grid-column: var(--layout-ee-text);
+  min-inline-size: 0;
+}
+
+/* What sets on both columns: rows, plates, quotations, figures. */
+[data-variant='editorial-evidence']
+  .ee-band__body
+  > :is(.ee-rows, .ee-run, .ee-quotes, .ee-github, .ee-offers, .ee-case__plates, .ee-case__quote) {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-ee-cols), minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  grid-column: 1 / -1;
+}
+
+/* One quotation or one offer reads on the text column, as prose does, never alone across both. */
+[data-variant='editorial-evidence']
+  .ee-band__body
+  > :is(.ee-quotes, .ee-offers):has(> :only-child) {
+  display: block;
+  grid-column: var(--layout-ee-text);
+}
+
+[data-variant='editorial-evidence'] .ee-band--margined .ee-band__body > :first-child {
+  grid-row: 1;
+}
+
+[data-variant='editorial-evidence'] .ee-band__margin {
+  display: grid;
+  grid-column: var(--layout-ee-notes);
+  grid-row: 1;
+  align-content: start;
+  gap: var(--space-xl);
+}
+
+/* Prose keeps its own rows beside a taller margin: the notes never stretch them (EDI-4). */
+[data-variant='editorial-evidence'] .ee-prose {
+  display: grid;
+  align-content: start;
+  gap: var(--space-s);
+}
+
+[data-variant='editorial-evidence'] .ee-prose :is(ul, ol) {
+  padding-inline-start: var(--space-m);
+}
+
+/* A short section in a band's margin. */
+[data-variant='editorial-evidence'] .ee-aside {
+  display: grid;
+  gap: var(--space-xs);
+  color: var(--color-text-secondary);
+  font-size: var(--type-step--1);
+  line-height: 1.5;
+}
+
+[data-variant='editorial-evidence'] .ee-aside__head-title {
+  color: var(--color-text-primary);
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-step--1);
+  font-weight: var(--type-title-font-weight);
+}
+
+/* A case note's label sits on its text: its line ends on the baseline, a hair step above the text, 4-8 px of ink (EDI-4). */
+[data-variant='editorial-evidence'] .ee-case :is(.ee-aside, .ee-row__note, .ee-case__matter > div) {
+  gap: calc(var(--space-3xs) / 2);
+}
+
+/* A case band's notes step apart by less than its bands do. */
+[data-variant='editorial-evidence'] .ee-case .ee-band__margin {
+  gap: var(--space-m);
+}
+
+[data-variant='editorial-evidence'] .ee-case .ee-aside__head-title {
+  text-box: trim-end cap alphabetic;
+}
+
+[data-variant='editorial-evidence'] .ee-case .ee-aside__head-title + * {
+  margin-block-start: 0;
+}
+
+[data-variant='editorial-evidence'] .ee-aside .ee-ruled,
+[data-variant='editorial-evidence'] .ee-aside .ee-pull__text {
+  color: var(--color-text-primary);
+}
+
+[data-variant='editorial-evidence'] .ee-aside :is([data-type-role='quote'], .ee-pull__text) {
+  font-size: var(--type-step-0);
+}
+
+[data-variant='editorial-evidence'] .ee-ruled li {
+  padding-block: var(--space-2xs);
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='editorial-evidence'] .ee-ruled li:last-child {
+  border-block-end: var(--ui-border-divider);
+}
+
+[data-variant='editorial-evidence'] .ee-now {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+[data-variant='editorial-evidence'] .ee-pull {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+[data-variant='editorial-evidence'] .ee-pull__text {
+  font-family: var(--type-quote-font-family);
+  font-size: var(--type-step-3);
+  line-height: 1.2;
+}
+
+[data-variant='editorial-evidence'] .ee-attrib {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='editorial-evidence'] .ee-attrib b {
+  color: var(--color-text-primary);
+}
+
+/* ── Rows: title, a hairline leader, and its date; its note in the margin ─ */
+
+[data-variant='editorial-evidence'] .ee-rows {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-ee-cols), minmax(0, 1fr));
+  grid-column: 1 / -1;
+  column-gap: var(--layout-grid-gutter);
+  row-gap: var(--space-l);
+}
+
+[data-variant='editorial-evidence'] :is(.ee-row, .ee-fig) {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-ee-cols), minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  grid-column: 1 / -1;
+  align-items: start;
+  row-gap: var(--space-2xs);
+}
+
+[data-variant='editorial-evidence'] .ee-row > * {
+  grid-column: var(--layout-ee-text);
+  min-inline-size: 0;
+}
+
+/* A decision's note spans its rows, and a taller note grows only the last. */
+[data-variant='editorial-evidence'] .ee-case .ee-row:has(> .ee-row__note) {
+  grid-template-rows: auto auto 1fr;
+}
+
+[data-variant='editorial-evidence'] .ee-row > .ee-row__note {
+  display: grid;
+  grid-column: var(--layout-ee-notes);
+  grid-row: var(--layout-ee-note-row);
+  gap: var(--space-2xs);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='editorial-evidence'] .ee-row__line {
+  display: flex;
+  align-items: last baseline;
+  gap: var(--space-xs);
+}
+
+/*
+ * In a list where no row has a note, the margin takes the dates: each line
+ * runs on across the gutter, the title held to the text column, the leader
+ * to the notes column's edge, where the date ends. One end line per list.
+ */
+[data-variant='editorial-evidence']
+  .ee-rows:not(:has(> .ee-row > .ee-row__note), .ee-archive .ee-rows)
+  > .ee-row
+  > .ee-row__line {
+  grid-column: 1 / -1;
+}
+
+[data-variant='editorial-evidence']
+  .ee-rows:not(:has(> .ee-row > .ee-row__note), .ee-archive .ee-rows)
+  > .ee-row
+  > .ee-row__line
+  > .ee-row__title {
+  max-inline-size: var(--layout-ee-textw);
+}
+
+[data-variant='editorial-evidence'] .ee-row__title {
+  min-inline-size: 0;
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-step-0);
+  font-weight: var(--type-title-font-weight);
+  line-height: 1.35;
+}
+
+/* The leader runs along the title's last line, to what ends it. */
+[data-variant='editorial-evidence'] .ee-row__leader {
+  flex: 1 0 var(--space-2xl);
+  align-self: last baseline;
+  /* Every EE leader is its hairline; the language draws the rules. */
+  border-block-end: 1px solid var(--color-border-default);
+}
+
+[data-variant='editorial-evidence'] .ee-row__end {
+  flex: none;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+[data-variant='editorial-evidence'] .ee-row__sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-s);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='editorial-evidence'] .ee-row__body {
+  display: grid;
+  gap: var(--space-xs);
+  padding-block-start: var(--space-2xs);
+}
+
+[data-variant='editorial-evidence'] .ee-row__quote {
+  color: var(--color-text-primary);
+}
+
+[data-variant='editorial-evidence'] .ee-row:is(:hover, :focus-within) .ee-row__leader {
+  border-block-end-color: var(--color-border-strong);
+}
+
+/* Hover shows relation (C1): the row under the pointer keeps full ink, the rest step back. */
+@media (hover: hover) and (pointer: fine) {
+  [data-variant='editorial-evidence'] .ee-rows:has(> .ee-row:hover) > .ee-row:not(:hover) {
+    color: var(--color-text-secondary);
+  }
+}
+
+/* Focus earns the same: the row holding focus keeps full ink, the rest step back. */
+[data-variant='editorial-evidence']
+  .ee-rows:has(> .ee-row:focus-within)
+  > .ee-row:not(:focus-within) {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='editorial-evidence'] .ee-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-s);
+}
+
+[data-variant='editorial-evidence'] .ee-highlights {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+[data-variant='editorial-evidence'] .ee-highlights li {
+  display: grid;
+  grid-template-columns: var(--space-m) minmax(0, 1fr);
+}
+
+[data-variant='editorial-evidence'] .ee-highlights li::before {
+  content: '';
+  margin-block-start: calc(0.5lh);
+  margin-inline-end: var(--space-2xs);
+  border-block-start: var(--ui-border-divider);
+  border-block-start-color: var(--color-border-strong);
+}
+
+[data-variant='editorial-evidence'] .ee-badge {
+  color: var(--color-accent-text);
+}
+
+/* ── The curated run: the lead's feature, the plates, the archive ──────── */
+
+[data-variant='editorial-evidence'] .ee-run {
+  row-gap: var(--space-2xl);
+}
+
+[data-variant='editorial-evidence'] .ee-plate {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-ee-cols), minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  grid-column: 1 / -1;
+  align-items: start;
+  row-gap: var(--space-s);
+}
+
+[data-variant='editorial-evidence'] :is(.ee-plate__title, .ee-fig__title) {
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-step-1);
+  font-weight: var(--type-title-font-weight);
+  line-height: 1.25;
+  letter-spacing: var(--type-title-letter-spacing);
+}
+
+[data-variant='editorial-evidence'] .ee-fig__title {
+  font-size: var(--type-step--1);
+}
+
+[data-variant='editorial-evidence'] :is(.ee-plate__dek, .ee-standfirst, .ee-case__lede) {
+  font-size: var(--type-step-1);
+  line-height: 1.4;
+}
+
+[data-variant='editorial-evidence'] :is(.ee-plate__dek, .ee-standfirst) {
+  color: var(--color-text-secondary);
+  font-family: var(--type-quote-font-family);
+}
+
+[data-variant='editorial-evidence'] .ee-label {
+  padding-block-end: var(--space-2xs);
+  color: var(--color-text-secondary);
+}
+
+/*
+ * One label column for the list, as wide as its longest label, so every value starts on one
+ * line. Its rows keep their own height at its top, so a sheet taller than its rows, as a
+ * case's is beside its lede and plate, ends where its content ends (EDI-3, OWN-13).
+ */
+[data-variant='editorial-evidence'] .ee-facts {
+  display: grid;
+  grid-template-columns: minmax(min-content, 1fr) minmax(0, 2fr);
+  align-content: start;
+}
+
+[data-variant='editorial-evidence'] .ee-facts > div {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  gap: var(--space-xs);
+  padding-block: var(--space-2xs);
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='editorial-evidence'] .ee-facts > div:last-child {
+  border-block-end: var(--ui-border-divider);
+}
+
+[data-variant='editorial-evidence'] .ee-plate__mat {
+  grid-column: 1 / -1;
+}
+
+/* A plate's mat, on the language's Surface, is equal on every side, as Pl. 1's is. */
+[data-variant='editorial-evidence'] :is(.ee-plate__mat, .ee-case__plate) {
+  padding: var(--layout-ee-mat);
+}
+
+[data-variant='editorial-evidence'] .ee-media {
+  inline-size: 100%;
+  object-fit: cover;
+  border-radius: var(--ui-radius-media);
+}
+
+[data-variant='editorial-evidence'] .ee-plate--media .ee-media {
+  aspect-ratio: 2 / 1;
+}
+
+[data-variant='editorial-evidence'] .ee-plate__excerpt {
+  grid-column: var(--layout-ee-text);
+  font-family: var(--type-quote-font-family);
+}
+
+[data-variant='editorial-evidence'] .ee-plate__text {
+  display: grid;
+  grid-column: var(--layout-ee-text);
+  gap: var(--space-2xs);
+}
+
+[data-variant='editorial-evidence'] .ee-plate__line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-s);
+}
+
+[data-variant='editorial-evidence'] .ee-plate__index {
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+/*
+ * The plate's margin (G2): its caption, fact sheet, evidence and links, held
+ * to the foot of the plate's words, so the band ends level on both columns.
+ */
+[data-variant='editorial-evidence'] .ee-plate__side {
+  grid-column: var(--layout-ee-notes);
+  align-self: end;
+  row-gap: var(--space-s);
+}
+
+[data-variant='editorial-evidence'] .ee-plate__lines {
+  font-size: var(--type-step--1);
+  line-height: 1.4;
+}
+
+[data-variant='editorial-evidence'] .ee-plate--quote > .ee-plate__side {
+  grid-row: 1 / span 2;
+}
+
+[data-variant='editorial-evidence'] .ee-archive {
+  grid-column: var(--layout-ee-text);
+}
+
+/* The rest of the record: a band whose head is its label, its summary on the text line. */
+[data-variant='editorial-evidence'] .ee-fold__summary {
+  cursor: pointer;
+}
+
+[data-variant='editorial-evidence'] .ee-fold__summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Skills and Stack: open beside the head column, a one-line summary under the head on one column. */
+[data-variant='editorial-evidence'] .ee-band__fold {
+  grid-column: var(--layout-ee-main);
+}
+
+[data-variant='editorial-evidence'] .ee-band__fold-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  min-block-size: var(--ui-control-height);
+  /* In the text's own ink, not the subtitle's: the way into the section (OWN-7). */
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+[data-variant='editorial-evidence'] .ee-archive__summary {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2xs);
+}
+
+[data-variant='editorial-evidence'] .ee-archive__cue {
+  display: inline-grid;
+  place-items: center;
+  font-size: var(--type-step--1);
+  line-height: 1;
+  inline-size: var(--space-s);
+  block-size: var(--space-s);
+  border: var(--ui-border-control);
+  border-radius: var(--ui-radius-control);
+}
+
+[data-variant='editorial-evidence'] .ee-archive__count {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='editorial-evidence'] .ee-archive .ee-rows {
+  grid-template-columns: minmax(0, 1fr);
+  padding-block-start: var(--space-m);
+}
+
+[data-variant='editorial-evidence'] .ee-archive :is(.ee-row, .ee-row > *) {
+  grid-column: 1 / -1;
+  grid-row: auto;
+}
+
+/* ── The one caption system: title, then index; the rest quieter below ── */
+
+[data-variant='editorial-evidence'] .ee-caption {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3xs) var(--space-s);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='editorial-evidence'] .ee-caption > * {
+  grid-column: 1 / -1;
+}
+
+[data-variant='editorial-evidence'] .ee-caption > .ee-caption__title {
+  grid-column: 1;
+  color: var(--color-text-primary);
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='editorial-evidence'] .ee-caption > .ee-caption__index {
+  grid-column: 2;
+  grid-row: 1;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* A photograph's when and where read as a sentence, comma to comma (C3): never a dot between. */
+[data-variant='editorial-evidence'] .pf-meta {
+  display: block;
+}
+
+[data-variant='editorial-evidence'] .pf-meta__part:not(:last-child)::after {
+  content: ',';
+}
+
+/* ── Figures: photographs, a release's tracks, a figure table, a calendar ─ */
+
+[data-variant='editorial-evidence'] .ee-fig > figure {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-ee-cols), minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  grid-column: 1 / -1;
+  align-items: start;
+  row-gap: var(--space-s);
+}
+
+[data-variant='editorial-evidence'] .ee-gallery {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-m);
+}
+
+[data-variant='editorial-evidence'] .ee-gallery--1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-variant='editorial-evidence'] .ee-gallery--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+[data-variant='editorial-evidence'] .ee-gallery .ee-media {
+  aspect-ratio: 4 / 3;
+}
+
+[data-variant='editorial-evidence'] .ee-fig > figure > figcaption {
+  grid-column: var(--layout-ee-text);
+}
+
+/* A gallery's caption spans the gallery, so its number ends on the figure's edge (P1-3). */
+[data-variant='editorial-evidence'] .ee-fig--gallery > figure > figcaption {
+  grid-column: 1 / -1;
+}
+
+[data-variant='editorial-evidence'] .ee-fig--gallery .ee-caption > :not(.ee-caption__index) {
+  max-inline-size: var(--type-measure-body);
+}
+
+[data-variant='editorial-evidence'] .ee-fig--album .ee-album {
+  display: grid;
+  grid-column: var(--layout-ee-text);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  align-items: start;
+  gap: var(--space-m);
+}
+
+[data-variant='editorial-evidence'] .ee-fig--album > figure > figcaption {
+  grid-column: var(--layout-ee-notes);
+  grid-row: 1;
+}
+
+[data-variant='editorial-evidence'] .ee-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+}
+
+[data-variant='editorial-evidence'] .ee-table caption {
+  padding-block-end: var(--space-2xs);
+  color: var(--color-text-secondary);
+  text-align: start;
+}
+
+[data-variant='editorial-evidence'] .ee-table td {
+  padding-block: var(--space-2xs);
+  border-block-end: var(--ui-border-divider);
+  vertical-align: baseline;
+}
+
+[data-variant='editorial-evidence'] .ee-table__n {
+  inline-size: var(--space-l);
+  color: var(--color-text-muted);
+}
+
+[data-variant='editorial-evidence'] .ee-table__end {
+  color: var(--color-text-secondary);
+  text-align: end;
+}
+
+[data-variant='editorial-evidence'] .ee-table tfoot td {
+  border-block-end: 0;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='editorial-evidence'] .ee-figtable {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='editorial-evidence'] .ee-figrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-xs);
+  padding-block: var(--space-xs);
+}
+
+[data-variant='editorial-evidence'] .ee-figrow + .ee-figrow {
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='editorial-evidence'] .ee-figrow dt {
+  display: grid;
+  flex: 0 1 auto;
+  gap: var(--space-3xs);
+  max-inline-size: var(--layout-width-text);
+}
+
+[data-variant='editorial-evidence'] .ee-opening__write {
+  display: none;
+}
+
+[data-variant='editorial-evidence'] .ee-figrow dt small {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='editorial-evidence'] .ee-figrow dd {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: var(--space-2xs);
+}
+
+[data-variant='editorial-evidence'] .ee-figrow__leader {
+  flex: 1 1 var(--space-l);
+  align-self: center;
+  border-block-end: 1px solid var(--color-border-default);
+}
+
+[data-variant='editorial-evidence'] .ee-figrow__value {
+  line-height: 1;
+}
+
+[data-variant='editorial-evidence'] .ee-figrow__unit {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='editorial-evidence'] .ee-figtable > figcaption {
+  padding-block-start: var(--space-xs);
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='editorial-evidence'] .ee-github {
+  row-gap: var(--space-l);
+}
+
+[data-variant='editorial-evidence'] .ee-github > :not(.ee-rows) {
+  grid-column: 1 / -1;
+}
+
+[data-variant='editorial-evidence'] .ee-github > .ee-github__source {
+  grid-column: var(--layout-ee-text);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='editorial-evidence'] .ee-cal {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='editorial-evidence'] .ee-cal__scroll {
+  overflow-x: auto;
+}
+
+[data-variant='editorial-evidence'] .ee-cal__svg {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+}
+
+/* Looking's captions sit at caption size, as every other caption does. */
+[data-variant='editorial-evidence'] .ee-gallery figcaption {
+  font-size: var(--type-step--1);
+  line-height: 1.5;
+}
+
+/* The rail leaves out the sections the closed fold holds, so its five chapters always show. */
+[data-variant='editorial-evidence'] .ee-issue:has(.ee-fold:not([open])) [data-ee-folded] {
+  display: none;
+}
+
+[data-variant='editorial-evidence'] .ee-cal__month {
+  fill: var(--color-text-secondary);
+  font-family: var(--type-body-compact-font-family);
+  font-size: var(--type-step--1);
+}
+
+[data-variant='editorial-evidence'] .ee-cal__day--0 {
+  fill: var(--color-border-subtle);
+}
+
+[data-variant='editorial-evidence'] .ee-cal__day--1 {
+  fill: var(--color-data-sequential-start);
+}
+
+[data-variant='editorial-evidence'] .ee-cal__day--2 {
+  fill: var(--color-data-sequential-middle);
+}
+
+[data-variant='editorial-evidence'] .ee-cal__day--3 {
+  fill: var(--color-data-sequential-end);
+}
+
+[data-variant='editorial-evidence'] .ee-cal__day--4 {
+  fill: var(--color-accent-active);
+}
+
+/* ── Quotations, skills, offers, contact ───────────────────────────────── */
+
+[data-variant='editorial-evidence'] .ee-quotes {
+  align-items: start;
+  row-gap: var(--space-xl);
+}
+
+[data-variant='editorial-evidence'] .ee-quote {
+  grid-column: var(--layout-ee-text);
+}
+
+[data-variant='editorial-evidence'] .ee-quote--lead {
+  grid-column: 1 / -1;
+}
+
+[data-variant='editorial-evidence'] .ee-quote:not(.ee-quote--lead):nth-child(odd) {
+  grid-column: var(--layout-ee-notes);
+}
+
+[data-variant='editorial-evidence'] .ee-quote figure {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+[data-variant='editorial-evidence'] .ee-quote__text {
+  font-family: var(--type-quote-font-family);
+}
+
+[data-variant='editorial-evidence'] .ee-quote--lead .ee-quote__text {
+  max-inline-size: var(--layout-ee-quote-measure);
+}
+
+[data-variant='editorial-evidence'] .ee-pairs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-m) var(--space-l);
+}
+
+[data-variant='editorial-evidence'] .ee-pairs > div {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3xs);
+  padding-block-start: var(--space-xs);
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='editorial-evidence'] .ee-pairs dt {
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='editorial-evidence'] .ee-pairs dd {
+  display: grid;
+  gap: var(--space-3xs);
+  color: var(--color-text-secondary);
+}
+
+/*
+ * A band with nothing for its margin runs its figure table or its pairs
+ * out to the notes column's edge, so no column is held empty beside them (G2).
+ */
+[data-variant='editorial-evidence']
+  .ee-band:not(.ee-band--margined)
+  .ee-band__body
+  > :is(.ee-figtable, .ee-pairs) {
+  grid-column: 1 / -1;
+}
+
+/* Two pairs or one keep to the text column, never a short run across both. */
+@media (width >= 48rem) {
+  [data-variant='editorial-evidence']
+    .ee-band:not(.ee-band--margined)
+    .ee-band__body
+    > .ee-pairs:not(:has(> :nth-child(3))) {
+    grid-column: var(--layout-ee-text);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  [data-variant='editorial-evidence']
+    .ee-band:not(.ee-band--margined)
+    .ee-band__body
+    > .ee-pairs:not(:has(> :nth-child(3)))
+    > * {
+    grid-column: auto;
+  }
+}
+
+[data-variant='editorial-evidence'] .ee-offers {
+  align-items: start;
+  row-gap: var(--space-l);
+}
+
+[data-variant='editorial-evidence'] .ee-offer {
+  display: grid;
+  grid-column: var(--layout-ee-notes);
+  gap: var(--space-xs);
+  padding-block-start: var(--space-xs);
+  border-block-start: var(--ui-border-divider);
+}
+
+[data-variant='editorial-evidence'] .ee-offer--lead {
+  grid-column: var(--layout-ee-text);
+  grid-row: 1 / span 3;
+  padding-block-start: 0;
+  border-block-start: 0;
+}
+
+[data-variant='editorial-evidence'] .ee-offer__name {
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-step-0);
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='editorial-evidence'] .ee-offer--lead .ee-offer__name {
+  font-size: var(--type-step-1);
+}
+
+[data-variant='editorial-evidence'] .ee-offer__price {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='editorial-evidence'] .ee-contact {
+  display: grid;
+  gap: var(--space-m);
+}
+
+[data-variant='editorial-evidence'] .ee-contact__mail {
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+/* Set this tight, the underline hangs past the line's box; the address's box reaches past it, so the ring's foot clears it. */
+[data-variant='editorial-evidence'] .ee-contact__mail a {
+  padding-block: var(--space-3xs);
+}
+
+[data-variant='editorial-evidence'] .ee-cta {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+/* ── The colophon ──────────────────────────────────────────────────────── */
+
+[data-variant='editorial-evidence'] .ee-colophon {
+  align-items: start;
+  row-gap: var(--space-m);
+  margin-block-start: var(--space-xl-3xl);
+  padding-block: var(--space-l) var(--space-xl);
+  border-block-start: var(--ui-border-divider);
+  border-block-start-color: var(--color-border-default);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='editorial-evidence'] .ee-colophon__name {
+  display: grid;
+  grid-column: 1 / span 3;
+  gap: var(--space-3xs);
+}
+
+[data-variant='editorial-evidence'] :is(.ee-colophon__name, .ee-colophon__text) b {
+  color: var(--color-text-primary);
+}
+
+[data-variant='editorial-evidence'] .ee-colophon__text {
+  grid-column: 4 / span 6;
+}
+
+[data-variant='editorial-evidence'] .ee-colophon__links {
+  display: grid;
+  grid-column: 10 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2xs) var(--space-m);
+}
+
+/* ── A work's own page: a feature article on the issue's grid ──────────── */
+
+/* The title at display size, from the head line; the lede on the standfirst step. */
+[data-variant='editorial-evidence'] .ee-case__title {
+  grid-column: 1 / -1;
+  hyphens: auto;
+  font-family: var(--type-display-font-family);
+  font-size: var(--type-step-7);
+  font-weight: var(--type-display-font-weight);
+  line-height: 1;
+  letter-spacing: var(--type-display-letter-spacing);
+}
+
+[data-variant='editorial-evidence'] :is(.ee-case__way, .ee-case__out) {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2xs);
+  color: var(--color-text-secondary);
+}
+
+/* The fact sheet holds the margin from the lede's top; Pl. 1's caption meets the plate's foot. */
+[data-variant='editorial-evidence'] :is(.ee-case__facts, .ee-case__facts > .ee-facts) {
+  grid-column: var(--layout-ee-notes);
+  grid-row: 1 / span 2;
+  align-self: start;
+}
+
+/*
+ * In the notes column the sheet is ruled, not carded (EE-LANG P3, N-1): the Surface gives up its
+ * box, and its frame and depth with it, and the list takes the language's subtle tone, the
+ * Surface's own stack, its rules running to its edges and closing it top and foot.
+ */
+@media (width >= 48rem) {
+  [data-variant='editorial-evidence'] .ee-case__facts {
+    display: contents;
+  }
+
+  [data-variant='editorial-evidence'] .ee-case__facts > .ee-facts {
+    background-image:
+      var(--ui-texture),
+      linear-gradient(
+        color-mix(in srgb, var(--color-surface-subtle) var(--ui-surface-opacity), transparent),
+        color-mix(in srgb, var(--color-surface-subtle) var(--ui-surface-opacity), transparent)
+      ),
+      var(--ui-surface-material);
+    /* The tone and the rules hang a step into the gutter, so the words sit inside them (S-1). */
+    margin-inline: calc(-1 * var(--space-2xs));
+  }
+
+  [data-variant='editorial-evidence'] .ee-case__facts > .ee-facts > div {
+    padding-inline: var(--space-2xs);
+  }
+}
+
+[data-variant='editorial-evidence'] .ee-case__plate {
+  grid-row: 2;
+}
+
+[data-variant='editorial-evidence'] .ee-case__open .ee-plate__side {
+  grid-column: var(--layout-ee-text);
+  grid-row: 3;
+  align-self: start;
+}
+
+/* The work's other plates break out across the text and the margin, each caption under its own. */
+[data-variant='editorial-evidence'] :is(.ee-case__pl, .ee-case__matter > div) {
+  display: grid;
+  align-content: start;
+  gap: var(--space-xs);
+}
+
+[data-variant='editorial-evidence'] .ee-case__pl {
+  grid-column: var(--layout-ee-text);
+}
+
+/* A lone plate breaks out across the text and the margin, its caption under it. */
+[data-variant='editorial-evidence'] .ee-case__pl:only-child {
+  grid-column: 1 / -1;
+}
+
+[data-variant='editorial-evidence'] .ee-case__pl:nth-child(even) {
+  grid-column: var(--layout-ee-notes);
+}
+
+[data-variant='editorial-evidence'] .ee-decision {
+  font-size: var(--type-step-0);
+}
+
+[data-variant='editorial-evidence'] .ee-decision .ee-n {
+  padding-inline-end: var(--space-2xs);
+}
+
+/* A cited quotation at headline size, between rules, its open mark hung in the gutter. */
+[data-variant='editorial-evidence'] .ee-case__quote {
+  row-gap: var(--space-s);
+  padding-block: var(--space-l);
+  border-block: var(--ui-border-divider);
+}
+
+[data-variant='editorial-evidence'] .ee-case__quote > * {
+  grid-column: 1 / -1;
+}
+
+[data-variant='editorial-evidence'] .ee-case__quote p::before {
+  content: open-quote;
+  margin-inline-start: -0.45em;
+}
+
+[data-variant='editorial-evidence'] .ee-case__quote p::after {
+  content: close-quote;
+}
+
+/*
+ * A part of an address breaks only after its slash, never at a hyphen inside
+ * it (P2-2); a link's own child, it takes the link's underline, as an inline
+ * block can't by propagation.
+ */
+[data-variant='editorial-evidence'] .ee-url__part {
+  display: inline-block;
+  text-decoration: inherit;
+}
+
+[data-variant='editorial-evidence'] .ee-case__matter {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: var(--space-l) var(--layout-grid-gutter);
+}
+
+@media (width >= 64rem) {
+  [data-variant='editorial-evidence'] .ee-case__matter {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+[data-variant='editorial-evidence'] .ee-case__next {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='editorial-evidence'] .ee-case__next-title {
+  font-family: var(--type-display-font-family);
+  font-weight: var(--type-display-font-weight);
+}
+
+[data-variant='editorial-evidence'] .ee-case__out {
+  grid-column: var(--layout-ee-notes);
+}
+
+/* The way on keeps the spine down its whole height, never a stub above it. */
+[data-variant='editorial-evidence'] .ee-case__end {
+  align-items: stretch;
+}
+
+/* ── Wide: the head column, and the spine beside it ────────────────────── */
+
+@media (width >= 81.25rem) {
+  /*
+   * Pl. 1's notes ride a step higher, the action a step under them, so note 1's leader turns on
+   * the mat's flat ground, clear of a bevel or rim a language draws inside its foot (EE-LANG P3, N-2).
+   */
+  [data-variant='editorial-evidence'] .ee-lead__go {
+    margin-block-start: var(--space-xs);
+  }
+
+  [data-variant='editorial-evidence'] :is(.ee-band__head, .ee-contents, .ee-byline__name),
+  [data-variant='editorial-evidence'] .ee-chapter__open::after {
+    margin-inline-end: calc(-1 * var(--layout-ee-half));
+    padding-inline-end: var(--layout-ee-half);
+    border-inline-end: var(--ui-border-divider);
+  }
+
+  [data-variant='editorial-evidence'] .ee-chapter__open::after {
+    content: '';
+    grid-column: 1 / span 3;
+    grid-row: 2;
+    align-self: stretch;
+  }
+
+  [data-variant='editorial-evidence'] .ee-chapter__n {
+    position: absolute;
+    inset-inline-end: calc(100% + var(--layout-grid-gutter));
+  }
+
+  /* Pairs run to the outset in three columns (two tracks each), the measure of each kept short. */
+  [data-variant='editorial-evidence'] .ee-band:not(.ee-band--margined) .ee-band__body > .ee-pairs {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  [data-variant='editorial-evidence']
+    .ee-band:not(.ee-band--margined)
+    .ee-band__body
+    > .ee-pairs
+    > * {
+    grid-column: span 2;
+  }
+
+  /* A run that would leave one pair alone (4, 7, 13) ends on two lines of two (G8). */
+  [data-variant='editorial-evidence']
+    .ee-band:not(.ee-band--margined)
+    .ee-band__body
+    > .ee-pairs:has(> :nth-child(3)):has(> :last-child:nth-child(3n + 1))
+    > :nth-last-child(-n + 4) {
+    grid-column: span 3;
+  }
+
+  /*
+   * Beside the head column, the contents is always open: its column is the index, EE's own, so the
+   * Disclosure gives up its box there, its rules and padding with it (EE-LANG P3). Below, one line.
+   */
+  @supports selector(::details-content) {
+    [data-variant='editorial-evidence'] .ee-contents__details > summary {
+      display: none;
+    }
+
+    [data-variant='editorial-evidence']
+      .ee-contents
+      :is(.ee-contents__details, .ee-contents__details > div) {
+      display: contents;
+    }
+
+    [data-variant='editorial-evidence'] .ee-contents__details::details-content {
+      content-visibility: visible;
+      display: contents;
+    }
+
+    /*
+     * The open index rules itself in the language's divider, as the notes column across the page
+     * does: a head rule under "In this issue" and one over each chapter after the first, so each
+     * language's index reads in its own rule (EE-LANG P4). Each rule sits a 2xs step from the
+     * words on either side, the column's spare room going above it, and the steps are what the
+     * plain list's xs gaps were, near enough, so the index never grows the opening or moves Pl. 1's
+     * notes. Its numerals take the issue's display voice, the type's own, as the thesis does.
+     */
+    [data-variant='editorial-evidence'] :is(.ee-contents, .ee-contents__list) {
+      gap: var(--space-2xs);
+    }
+
+    [data-variant='editorial-evidence'] .ee-contents__label {
+      padding-block-end: var(--space-2xs);
+      border-block-end: var(--ui-border-divider);
+    }
+
+    [data-variant='editorial-evidence'] .ee-contents__chapter + .ee-contents__chapter {
+      padding-block-start: var(--space-2xs);
+      border-block-start: var(--ui-border-divider);
+    }
+
+    [data-variant='editorial-evidence'] .ee-contents__link .ee-n {
+      font-family: var(--type-display-font-family);
+      font-weight: var(--type-display-font-weight);
+    }
+  }
+
+  /*
+   * The head stays beside its section while the section reads, and goes with
+   * its band's end. It passes over the chapter index, never under it.
+   */
+  [data-variant='editorial-evidence'] .ee-head {
+    position: sticky;
+    inset-block-start: calc(var(--layout-ee-bar) + var(--space-s));
+    z-index: 2;
+    padding-block-end: var(--space-xs);
+    background: var(--color-canvas);
+  }
+
+  /* A head passing over the index masks a band of it above and below, so no entry peeks around it. */
+  [data-variant='editorial-evidence'] .ee-head::before,
+  [data-variant='editorial-evidence'] .ee-head::after {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    block-size: var(--space-m);
+    background: var(--color-canvas);
+  }
+
+  /* Above, only as far as the masthead's foot, which a held head sits that far below. */
+  [data-variant='editorial-evidence'] .ee-head::before {
+    inset-block-end: 100%;
+    block-size: var(--space-s);
+  }
+
+  [data-variant='editorial-evidence'] .ee-head::after {
+    inset-block-start: 100%;
+  }
+
+  /* While the index holds focus, it stays over the heads, so a focused entry is never covered (2.4.11). */
+  [data-variant='editorial-evidence'] .ee-rail:focus-within {
+    z-index: 3;
+    /* Over a crossing head, it takes the canvas, so text never prints over text. */
+    background: var(--color-canvas);
+  }
+
+  [data-variant='editorial-evidence'] .ee-contents__list {
+    flex: 1;
+    justify-content: space-between;
+  }
+
+  [data-variant='editorial-evidence'] :is(.ee-contents__details, .ee-contents__details > div) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  /*
+   * The chapter index holds the head column directly under the hanging head,
+   * whose height the running head gives it (--layout-ee-head-h), while the
+   * issue reads; the heads that come next pass over it.
+   */
+  [data-variant='editorial-evidence'] .ee-rail {
+    /* Under the masthead, the hanging head, and a gap; set here, where the head's height reaches. */
+    --layout-ee-rail-top: calc(
+      var(--layout-ee-bar) + var(--space-s) + var(--layout-ee-head-h) + var(--space-m)
+    );
+    --layout-ee-rail-max: calc(100dvh - var(--layout-ee-rail-top) - var(--space-s));
+
+    position: sticky;
+    inset-block-start: var(--layout-ee-rail-top);
+    display: grid;
+    align-self: start;
+    justify-self: start;
+    gap: var(--space-xs);
+    inline-size: calc(
+      var(--layout-ee-headw) - var(--layout-ee-half) - var(--space-s) + 2 * var(--layout-ee-ring)
+    );
+    max-block-size: var(--layout-ee-rail-max);
+    /*
+     * Out of the page's flow: at rest, in the first chapter's opening space, it
+     * ends a line clear of that chapter's rule (P2-3), and draws no ground over it or the spine.
+     */
+    margin-block-start: var(--space-2xs);
+    /* It scrolls, so it clips: the ring's reach stays clear inside its edges, its links where they were. */
+    margin-inline-start: calc(var(--layout-ee-inset) - var(--layout-ee-ring));
+    overflow-y: auto;
+    padding-block: var(--space-s);
+    padding-inline: var(--layout-ee-ring);
+    background: none;
+  }
+
+  /*
+   * While the next head or a chapter's title crosses it, it folds to its
+   * label and the chapter being read, above the crossing; just before the
+   * head docks it steps aside. Never while it holds focus.
+   */
+  [data-variant='editorial-evidence']
+    .ee-rail[data-ee-yield='fold']:not(:focus-within)
+    :is(.ee-rail__list > li:not([data-current]), .ee-rail__sections) {
+    display: none;
+  }
+
+  /* Before any chapter is read, folded, it names the first, never its label alone. */
+  [data-variant='editorial-evidence']
+    .ee-rail[data-ee-yield='fold']:not(:focus-within, :has([data-current]))
+    .ee-rail__list
+    > li:first-child {
+    display: block;
+  }
+
+  /* Stepped aside, it's neither seen, nor read, nor clicked. */
+  [data-variant='editorial-evidence'] .ee-rail[data-ee-yield='away']:not(:focus-within) {
+    visibility: hidden;
+    opacity: 0;
+  }
+
+  [data-variant='editorial-evidence'] [data-current] > .ee-rail__sections {
+    display: grid;
+    gap: var(--space-3xs);
+    padding-block: var(--space-3xs) var(--space-2xs);
+    padding-inline-start: calc(var(--space-s) + var(--space-2xs));
+  }
+}
+
+/* The rest of a lede follows its "Read more" line, or its first paragraph where that line goes (OWN-7). */
+[data-variant='editorial-evidence'] .ee-more > summary + * {
+  margin-block-start: 0;
+}
+
+/* Beside the text column, the phone's folds read open: their summary goes, their content shows. */
+@media (width >= 48rem) {
+  @supports selector(::details-content) {
+    [data-variant='editorial-evidence'] .ee-band__fold-summary {
+      display: none;
+    }
+
+    [data-variant='editorial-evidence'] :is(.ee-band__fold, .ee-more)::details-content {
+      content-visibility: visible;
+      display: contents;
+    }
+  }
+}
+
+/* ── Two columns: the head column folds, heads stack over their sections ─ */
+
+@media (width < 81.25rem) {
+  [data-variant='editorial-evidence'] {
+    --layout-ee-head: 1 / -1;
+    --layout-ee-main: 1 / -1;
+    --layout-ee-text: 1 / span 8;
+    --layout-ee-notes: 9 / -1;
+    --layout-ee-cols: 12;
+    --layout-ee-text-span: 8;
+  }
+
+  /* The masthead on the lines the page keeps here: the running head ends on the text column's edge, the tools start on the notes line. */
+  [data-variant='editorial-evidence'] .ee-masthead__folio {
+    justify-self: end;
+  }
+
+  /* Under a stacked head, a fold's line sits as close under it as a band's body does (OWN-7). */
+  [data-variant='editorial-evidence'] .ee-band > .ee-band__fold {
+    padding-block-start: var(--space-s);
+  }
+
+  /*
+   * The opening in the order it reads (X3): the h1, the standfirst under it,
+   * the issue's contents folded to one line, then Pl. 1 with its caption
+   * and notes on the notes column, then the byline.
+   */
+  [data-variant='editorial-evidence'] .ee-opening {
+    grid-template-rows: auto auto auto auto 1fr auto auto;
+  }
+
+  /* Bare or not, one rule: the :is() weighs as much as the bare one above, so it gives way here. */
+  [data-variant='editorial-evidence'] :is(.ee-thesis__stand, .ee-opening--bare .ee-thesis__stand) {
+    grid-column: 1 / span 8;
+    padding-block-end: var(--space-l);
+  }
+
+  [data-variant='editorial-evidence'] .ee-contents {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    padding-block-end: var(--space-l);
+  }
+
+  [data-variant='editorial-evidence'] .ee-contents__list {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: var(--space-m);
+  }
+
+  [data-variant='editorial-evidence'] .ee-lead {
+    grid-column: 1 / -1;
+    grid-row: 4 / span 2;
+  }
+
+  /* Pl. 1 runs to the notes line, so each note's leader crosses one gutter, as at full width. */
+  [data-variant='editorial-evidence'] .ee-lead > :is(.ee-lead__frame, .ee-lead__words) {
+    grid-column: 1 / span 8;
+  }
+
+  /* The notes sit over the marks here, so note 1's mark is leftmost and no leader crosses another. */
+  [data-variant='editorial-evidence'] .ee-lead__pin {
+    inset-inline-start: var(--layout-ee-pin-mx);
+  }
+
+  /* The caption and notes meet Pl. 1's top here, so the notes column beside it is never empty above them. */
+  [data-variant='editorial-evidence'] .ee-lead__caption {
+    grid-column: 9 / -1;
+    align-self: start;
+  }
+
+  [data-variant='editorial-evidence'] .ee-opening__hero {
+    grid-row: 6 / span 2;
+  }
+
+  [data-variant='editorial-evidence'] .ee-byline__lede {
+    grid-column: 1 / span 8;
+  }
+
+  [data-variant='editorial-evidence'] :is(.ee-chapter__title, .ee-colophon__text) {
+    grid-column: 1 / span 8;
+  }
+
+  [data-variant='editorial-evidence'] :is(.ee-chapter__toc, .ee-colophon__links) {
+    grid-column: 9 / -1;
+  }
+
+  [data-variant='editorial-evidence'] .ee-colophon__name {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='editorial-evidence'] .ee-band > .ee-band__body {
+    padding-block-start: var(--space-s);
+  }
+
+  /* The chapter bar's rule opens the first chapter here, so its opener draws no second one. */
+  [data-variant='editorial-evidence']
+    .ee-issue__chapters
+    > .ee-chapter:first-child
+    > .ee-chapter__open::before {
+    display: none;
+  }
+
+  /* The chapter index as a one-line chapter bar, under the masthead (EE-M4). */
+  [data-variant='editorial-evidence'] .ee-rail {
+    align-self: start;
+    margin-block-start: var(--space-l);
+    padding-inline: var(--layout-ee-inset);
+    border-block-end: var(--ui-border-divider);
+  }
+
+  [data-variant='editorial-evidence'] :is(.ee-rail__label, .ee-rail .ee-n),
+  [data-variant='editorial-evidence'] .ee-rail__link::after {
+    display: none;
+  }
+
+  /*
+   * A scroller clips what it holds, so the bar keeps the ring's reach clear
+   * inside its edge, and gives it back outside, so its links stay where they sit;
+   * under them it keeps it, so the ring ends where the bar's hairline starts.
+   */
+  [data-variant='editorial-evidence'] .ee-rail__list {
+    display: flex;
+    gap: var(--space-s);
+    margin: calc(-1 * var(--layout-ee-ring));
+    margin-block-end: 0;
+    padding: var(--layout-ee-ring);
+    overflow-x: auto;
+  }
+
+  [data-variant='editorial-evidence'] .ee-rail__link {
+    align-items: center;
+    min-block-size: var(--ui-control-height);
+    white-space: nowrap;
+  }
+
+  [data-variant='editorial-evidence'] .ee-rail__link[aria-current] {
+    text-decoration-line: underline;
+    text-decoration-color: var(--color-accent);
+    text-decoration-thickness: var(--ui-state-selected-emphasis);
+  }
+
+  @media (min-height: 31.25rem) {
+    /* Below the masthead and the chapter bar under it. */
+    [data-variant='editorial-evidence'] {
+      --layout-sticky-offset: calc(
+        var(--layout-ee-bar) + var(--ui-control-height) + var(--space-s)
+      );
+    }
+
+    [data-variant='editorial-evidence'] .ee-rail {
+      position: sticky;
+      inset-block-start: var(--layout-ee-bar);
+    }
+  }
+
+  [data-variant='editorial-evidence'] :is(.ee-sheet__label, .ee-sheet__chapters, .ee-sheet__foot) {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ── One column: notes follow what they note ───────────────────────────── */
+
+@media (width < 48rem) {
+  [data-variant='editorial-evidence'] {
+    --layout-ee-text: 1 / -1;
+    --layout-ee-notes: 1 / -1;
+    --layout-ee-note-row: auto;
+    --layout-ee-text-span: 12;
+  }
+
+  /* The sheet is the whole Surface here, whose edge closes it: its rules fall only between its rows. */
+  [data-variant='editorial-evidence'] .ee-case__facts .ee-facts > div:first-child {
+    padding-block-start: 0;
+    border-block-start: 0;
+  }
+
+  [data-variant='editorial-evidence'] .ee-case__facts .ee-facts > div:last-child {
+    padding-block-end: 0;
+    border-block-end: 0;
+  }
+
+  [data-variant='editorial-evidence']
+    :is(.ee-opening, .ee-opening__practice, .ee-opening__thesis, .ee-lead, .ee-opening__hero) {
+    grid-template-rows: none;
+  }
+
+  [data-variant='editorial-evidence']
+    :is(
+      .ee-opening > *,
+      .ee-opening__practice > *,
+      .ee-opening__thesis > *,
+      .ee-lead > *,
+      .ee-band__margin,
+      .ee-band--margined .ee-band__body > :first-child,
+      .ee-case__open .ee-band__body > *,
+      .ee-plate > *,
+      .ee-offer--lead,
+      .ee-fig--album > figure > figcaption,
+      .ee-quote,
+      .ee-chapter__title,
+      .ee-chapter__toc,
+      .ee-colophon > *
+    ) {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
+  [data-variant='editorial-evidence'] .ee-masthead__name {
+    grid-column: 1 / span 6;
+  }
+
+  [data-variant='editorial-evidence'] .ee-masthead__end {
+    grid-column: 7 / -1;
+  }
+
+  /* Contents alone, on the page edge (EE-M2). */
+  [data-variant='editorial-evidence'] .ee-masthead__tools ul {
+    justify-content: flex-end;
+  }
+
+  /*
+   * The caption and its notes follow the plate here (round 3). EE-S4: the
+   * way to write sits under the standfirst, in the first view.
+   */
+  [data-variant='editorial-evidence'] .ee-opening__write {
+    display: grid;
+    padding-block-end: var(--space-l);
+  }
+
+  [data-variant='editorial-evidence'] .ee-byline > .ee-byline__facts {
+    display: none;
+  }
+
+  /* The heatmap at its own size, its labels legible, in its labelled scroller. */
+  [data-variant='editorial-evidence'] .ee-cal__svg {
+    inline-size: auto;
+    max-inline-size: none;
+  }
+
+  /* The byline's name and role take the full width, never a sliver. */
+  [data-variant='editorial-evidence'] .ee-byline__name {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='editorial-evidence'] :is(.ee-masthead__folio, .ee-masthead__contact) {
+    display: none;
+  }
+
+  [data-variant='editorial-evidence'] .ee-contents__list {
+    display: flex;
+  }
+
+  [data-variant='editorial-evidence'] .ee-byline__facts > div {
+    grid-column: span 6;
+  }
+
+  [data-variant='editorial-evidence'] .ee-byline__facts {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+  }
+
+  [data-variant='editorial-evidence'] .ee-byline__lede {
+    padding-block-start: var(--space-l);
+  }
+
+  [data-variant='editorial-evidence'] .ee-sheet__chapters {
+    columns: 1;
+  }
+
+  [data-variant='editorial-evidence']
+    :is(.ee-pairs, .ee-gallery, .ee-colophon__links, .ee-case__matter) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='editorial-evidence'] .ee-fig--album .ee-album {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='editorial-evidence'] .ee-row__line {
+    flex-direction: column;
+    align-items: start;
+    gap: 0;
+  }
+
+  [data-variant='editorial-evidence'] .ee-row__leader {
+    display: none;
+  }
+
+  /* Under what it notes, a decision's note keeps a step above its label (EDI-4). */
+  [data-variant='editorial-evidence'] .ee-case .ee-row > .ee-row__note {
+    margin-block-start: var(--space-xs);
+  }
+
+  /* On one column the quotation's open mark stays inside the page margin. */
+  [data-variant='editorial-evidence'] .ee-case__quote p::before {
+    margin-inline-start: 0;
+  }
+
+  /* The ways on from a case sit on one line under the next work, not a column of three. */
+  [data-variant='editorial-evidence'] .ee-case__out {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: var(--space-m);
+  }
+}
+
+/* On the narrowest windows the name and the masthead's tools share the line by what they hold. */
+@media (width < 30rem) {
+  [data-variant='editorial-evidence'] .ee-case__title {
+    font-size: var(--type-step-6);
+  }
+
+  [data-variant='editorial-evidence'] .ee-masthead {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  [data-variant='editorial-evidence'] :is(.ee-masthead__name, .ee-masthead__end) {
+    grid-column: auto;
+  }
+}
+
+/* Below 22.5rem the chapter bar wraps to two lines, so every chapter shows. */
+@media (width < 22.5rem) {
+  [data-variant='editorial-evidence'] .ee-rail__list {
+    flex-wrap: wrap;
+    column-gap: var(--space-s);
+    overflow-x: visible;
+  }
+
+  [data-variant='editorial-evidence'] .ee-rail__link {
+    min-block-size: var(--space-l);
+  }
+
+  /* Pl. 1's marks are a tenth of a narrow picture apart here, so their discs come down a step. */
+  [data-variant='editorial-evidence'] .ee-lead__pin {
+    min-inline-size: var(--space-s);
+    min-block-size: var(--space-s);
+  }
+}
+
+@media (width < 22.5rem) and (min-height: 31.25rem) {
+  [data-variant='editorial-evidence'] {
+    --layout-sticky-offset: calc(var(--layout-ee-bar) + 2 * var(--space-l) + 2 * var(--space-s));
+  }
+}
+
+/* Print: the same order, every disclosure open, nothing held to the screen, no visitor control. */
+@media print {
+  [data-variant='editorial-evidence'] :is([data-visitor-control-slot], .ee-spy) {
+    display: none;
+  }
+
+  [data-variant='editorial-evidence'] details::details-content {
+    content-visibility: visible;
+    display: contents;
+  }
+
+  [data-variant='editorial-evidence'] :is(.ee-masthead, .ee-head, .ee-rail) {
+    position: static;
+  }
+
+  [data-variant='editorial-evidence'] .ee-contents__details > summary,
+  [data-variant='editorial-evidence'] .ee-masthead::after {
+    display: none;
+  }
+
+  [data-variant='editorial-evidence'] :is(figure, .ee-row, .ee-plate, .ee-aside) {
+    break-inside: avoid;
+  }
+}

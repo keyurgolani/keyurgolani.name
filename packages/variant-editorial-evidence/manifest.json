@@ -1,0 +1,91 @@
+{
+  "id": "editorial-evidence",
+  "name": "Editorial Evidence",
+  "promise": "A practice thesis, one signature artifact, and the work that proves it, before anything else.",
+  "description": "The platform's default composition, set as a long-form issue. It opens with the practice thesis at display size over the issue's contents, the signature work on its plate with the standfirst beside it, and a byline, then up to five chapters whose section heads hang in a margin column beside a 1 px spine, with evidence, captions, and fact sheets in the notes column beside what they support. Every section renders in its own markup, the archive sits behind a disclosure, each case study gets its own page, and a colophon closes it. It runs no motion beyond state feedback, and its color, type, and materials come from the appearance packs.",
+  "contract": "2.1",
+  "schemas": {
+    "portfolio": {
+      "min": 3,
+      "max": 3
+    },
+    "site": {
+      "min": 2,
+      "max": 2
+    }
+  },
+  "tokenContract": 1,
+  "compositionFamily": "monograph",
+  "motionIntent": "still",
+  "performanceTier": "light",
+  "budgets": {
+    "js": 2304,
+    "css": 9472,
+    "image": 53248,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "stills": [
+    {
+      "file": "./stills/1440.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "file": "./stills/720.webp",
+      "width": 720,
+      "height": 450
+    }
+  ],
+  "renderedKinds": [
+    "hero",
+    "lede",
+    "works",
+    "evidence",
+    "github",
+    "chronology",
+    "practice",
+    "focus",
+    "now",
+    "quote",
+    "fun-facts",
+    "contact",
+    "cta",
+    "custom"
+  ],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": {
+    "home": "bespoke",
+    "work": "bespoke",
+    "views": []
+  },
+  "controls": {
+    "version": 1,
+    "items": [],
+    "migrations": []
+  },
+  "visitorControl": {
+    "placement": "header"
+  },
+  "textDirection": ["ltr", "rtl"],
+  "provenance": {
+    "provisional": true,
+    "sources": [
+      {
+        "source": "The v1 Editorial composition's single reading column and section labels",
+        "disposition": "preserved"
+      },
+      {
+        "source": "The v1 Editorial palette, fonts, fixed table of contents, and theme toggle",
+        "disposition": "retired",
+        "note": "Color, type, and display mode belong to the appearance axes (#19), and navigation stays in flow."
+      }
+    ]
+  },
+  "studio": {
+    "signature": "Margin index",
+    "order": 1
+  }
+}
