@@ -1,0 +1,26 @@
+# The demo with one published portfolio beside its sample, read-only (#9).
+# Layer it over compose.demo.yml, with PORTFOLIO_REFERENCE_HOST_DIR in
+# deploy/.env set to a directory holding a full export of the portfolio's
+# live revision, verified (see "The read-only reference" in
+# docs/deployment.md). Run it from deploy/:
+#
+#   docker compose -f compose.demo.yml -f compose.demo.reference.yml up --build
+#
+# Never mount a --documents-only export: it has no bundle.json, so the demo
+# refuses it and serves no reference.
+#
+# The export holds the portfolio's private records, which the demo never
+# serves: keep it readable by uid 1001, the server's user, and no one else.
+services:
+  web:
+    environment:
+      PORTFOLIO_REFERENCE_DIR: /reference
+    volumes:
+      # Read-only, and never made: a directory that isn't there stops the
+      # container from starting, rather than mounting an empty one.
+      - type: bind
+        source: ${PORTFOLIO_REFERENCE_HOST_DIR:?set PORTFOLIO_REFERENCE_HOST_DIR in .env to the verified export's directory}
+        target: /reference
+        read_only: true
+        bind:
+          create_host_path: false

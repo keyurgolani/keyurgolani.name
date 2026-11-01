@@ -1,0 +1,1436 @@
+# The one CI workflow. `gate` is the only required check: it fails unless this
+# is a complete run and every job it needs succeeded, so new jobs join by
+# being added to its `needs` and to `selected`'s.
+#
+# `changes` (ci/select-jobs.mjs) picks the jobs a run needs. A draft PR runs
+# only the jobs its changed paths select, for fast feedback, and `selected`
+# reports on them; gate fails a draft's run by design, and GitHub refuses to
+# merge a draft. A PR that's ready for review, a PR into main, and a push run
+# the complete product on every head, so gate's pass always covers the whole
+# product on the merge commit it ran. Each check job waits on `changes` and
+# runs when the selection names it; a job that skips that wiring just always
+# runs.
+#
+# Every check step runs one `pnpm ci:<job>` script, or a shard of one
+# (ci/shards.mjs), which is also its local command. On a push to main, after
+# `gate` passes, `publish-build` builds each platform natively and pushes it
+# by digest, `publish-merge` merges them into one multi-arch digest,
+# `publish-smoke` smoke-tests both platforms from that digest, and `publish`
+# tags it sha-<short>. Nothing publishes from a PR or another branch.
+name: ci
+
+on:
+  pull_request:
+    branches: [main, next]
+    # ready_for_review starts the complete run gate needs on a draft's head.
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  # A PR cancels its superseded runs. A push gets one group per commit, so no
+  # push run is ever cancelled.
+  group: ${{ github.event_name == 'pull_request' && format('ci-pr-{0}', github.event.pull_request.number) || format('ci-{0}', github.sha) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # The Node release the image ships: the Dockerfile's node:X.Y.Z tag.
+  # pnpm check:pins fails when the two differ.
+  NODE_VERSION: 22.23.4
+  TZ: UTC
+  NEXT_TELEMETRY_DISABLED: '1'
+  REPORT_RETENTION_DAYS: ${{ github.event_name == 'pull_request' && 14 || 90 }}
+
+jobs:
+  # The selection: which check jobs this run needs, and whether that's the
+  # complete product (ci/select-jobs.mjs). On a PR the checkout is the merge
+  # commit, so its first parent is the base tip and the diff is the merge's.
+  # Pure Node on the runner's own, so it needs no install.
+  changes:
+    name: changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      jobs: ${{ steps.select.outputs.jobs }}
+      complete: ${{ steps.select.outputs.complete }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Select jobs
+        id: select
+        env:
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          BASE_REF: ${{ github.base_ref }}
+        run: node ci/select-jobs.mjs --github
+
+  static:
+    name: static
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'static') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # check:appearance holds the catalog lock to the one at HEAD^1 (#20).
+          fetch-depth: 2
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: Install workflow linters
+        id: linters
+        run: |
+          node ci/install-workflow-linters.mjs "$RUNNER_TEMP/workflow-linters"
+          echo "$RUNNER_TEMP/workflow-linters" >> "$GITHUB_PATH"
+      # Each check runs even when an earlier one failed, so one run reports all.
+      - name: pnpm ci:format
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm ci:format
+      - name: pnpm ci:lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm ci:lint
+      - name: pnpm ci:typecheck
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm ci:typecheck
+      - name: pnpm ci:skills
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm ci:skills
+      - name: pnpm ci:registry
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm ci:registry
+      - name: pnpm ci:appearance
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm ci:appearance
+        env:
+          # The base branch's tip under a PR's merge commit, or the commit before a push.
+          CATALOG_LOCK_BASE: HEAD^1
+      - name: pnpm ci:deps
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm ci:deps
+      - name: pnpm ci:pins
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm ci:pins
+      - name: pnpm ci:workflows
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.linters.outcome == 'success' }}
+        run: pnpm ci:workflows
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-static
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # `pnpm test` in three shards, split by workspace package and root test
+  # script on their measured durations (ci/shards.mjs,
+  # ci/shard-durations.json). Together they run exactly what `pnpm ci:unit`
+  # runs.
+  unit:
+    name: unit (${{ matrix.shard }}/3)
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'unit') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: pnpm test:shard unit ${{ matrix.shard }}/3
+        env:
+          SHARD: ${{ matrix.shard }}/3
+          CI_REPRO_COMMAND: pnpm test:shard unit ${{ matrix.shard }}/3
+        run: node ci/run.mjs unit -- node ci/shards.mjs run unit "$SHARD"
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-unit-${{ matrix.shard }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  build:
+    name: build
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'build') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      # Next's own cache, keyed by the lockfile and the hash of the build
+      # inputs. This job is its one writer, with the plain build: no fixture
+      # flag, no analyze build. browser and variants only restore it. It
+      # never holds the generated registry, which each build writes fresh,
+      # and the image and publish never read it.
+      - name: Restore the Next build cache
+        id: next-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/web/.next/cache
+          key: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/src/**', 'apps/web/scripts/**', 'apps/web/public/**', 'apps/web/*.ts', 'apps/web/*.json', 'packages/*/src/**', 'packages/*/packs/**', 'packages/*/*.json', 'package.json', 'tsconfig.base.json', 'pnpm-workspace.yaml', '.npmrc', '*.example.yml', 'example-media/**', 'snapshots/**') }}
+          restore-keys: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      - name: Next build cache hit
+        if: ${{ steps.next-cache.outputs.cache-hit == 'true' }}
+        run: echo "Next build cache restored for these build inputs"
+      - name: pnpm ci:build
+        run: pnpm ci:build
+      # The default build ships no browser source maps. Only the analyze
+      # build pnpm test:trace reads has them (#6, ci/source-maps.test.mjs).
+      - name: pnpm ci:source-maps
+        run: pnpm ci:source-maps
+      # The standalone output holds the bundled sample and nothing the image
+      # scan refuses: no other portfolio or site document, no snapshot but
+      # the sample's, and no test tree, so none of a contract fixture's
+      # files, since the image copies it whole (#5, #7,
+      # ci/standalone.test.mjs).
+      - name: pnpm ci:standalone
+        run: pnpm ci:standalone
+      # The site and preview pages load the Markdown post-pass, and no
+      # browser chunk carries sanitize-html (#10, ci/markdown-pass.test.mjs).
+      - name: pnpm ci:markdown-pass
+        run: pnpm ci:markdown-pass
+      # No Research record or id reaches the generated modules, ASSET_MANIFEST,
+      # any .next/static chunk, or the build output the image ships (#20,
+      # ci/check-catalog-build.test.mjs).
+      - name: pnpm ci:catalog-build
+        run: pnpm ci:catalog-build
+      # /studio's client entry holds neither shell, and each profile's shell
+      # chunks hold none of the other's (#9, studio-entry.test.ts). The unit
+      # job has no build, so the check runs here, where a missing or stale
+      # build fails it.
+      - name: pnpm ci:studio-chunks
+        run: pnpm ci:studio-chunks
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-build
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # The browser suite in two shards, split by spec file on measured
+  # durations (ci/shards.mjs). Each shard builds, then runs its files.
+  browser:
+    name: browser (${{ matrix.shard }}/2)
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'browser') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    # Browsers come baked into the image, at the version @playwright/test pins.
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      # Playwright's container guidance: the host IPC namespace so Chromium
+      # has enough shared memory, and an init process to reap children.
+      options: --user 1001 --ipc=host --init
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The image ships Node 24; the app under test runs on the image's Node 22.
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      # The build job's Next cache (see there), restored only: build is its
+      # one writer.
+      - name: Restore the Next build cache
+        id: next-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/web/.next/cache
+          key: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/src/**', 'apps/web/scripts/**', 'apps/web/public/**', 'apps/web/*.ts', 'apps/web/*.json', 'packages/*/src/**', 'packages/*/packs/**', 'packages/*/*.json', 'package.json', 'tsconfig.base.json', 'pnpm-workspace.yaml', '.npmrc', '*.example.yml', 'example-media/**', 'snapshots/**') }}
+          restore-keys: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      - name: Next build cache hit
+        if: ${{ steps.next-cache.outputs.cache-hit == 'true' }}
+        run: echo "Next build cache restored for these build inputs"
+      - name: pnpm ci:build
+        run: pnpm ci:build
+      - name: pnpm test:shard browser ${{ matrix.shard }}/2
+        env:
+          SHARD: ${{ matrix.shard }}/2
+          CI_REPRO_COMMAND: pnpm test:shard browser ${{ matrix.shard }}/2
+        run: node ci/run.mjs browser -- node ci/shards.mjs run browser "$SHARD"
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-browser-${{ matrix.shard }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # The runtime budgets (#6, items 3 and 4): pnpm ci:budgets builds the
+  # budget fixtures with source maps, traces each registered composition, and
+  # runs pnpm check:budgets, which must pass on BUDGET_FIXTURES=1 and must
+  # fail fixture-over-budget with one record per metric it breaks. Its
+  # builds stay on this runner: no image, no other job, no cache, and no
+  # upload takes them. It uploads the budget and trace reports, and the
+  # trace's results on failure, never .next or a source map.
+  trace:
+    name: trace
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'trace') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    # Browsers come baked into the image, at the version @playwright/test pins.
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm ci:budgets
+        run: pnpm ci:budgets
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-trace
+          path: |
+            reports/budgets/
+            reports/trace/trace-report.json
+            reports/failures/
+            !reports/budgets/over-budget/trace/results/
+            !reports/**/*.map
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+      - name: Upload traces
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: traces-trace
+          path: |
+            reports/trace/results/
+            reports/budgets/over-budget/trace/results/
+            !reports/**/*.map
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # The route specs (#5, Slice 4) need variants that declare path views, so
+  # they build a fixture host of their own: a copy of the workspace with
+  # test-only variants from tests/fixtures/variants/ installed, linked offline
+  # from the store this job's install fills. Nothing in the checkout is built.
+  routes:
+    name: routes
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'routes') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: pnpm ci:routes
+        run: pnpm ci:routes
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-routes
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # The appearance specs (#19, Slice 3) need the fixture packs and the
+  # /_fixtures/appearance page, which only a build made with
+  # APPEARANCE_FIXTURES=1 has, so they build a fixture host of their own, as
+  # the route specs do: a copy of the workspace built with that flag, linked
+  # offline from the store this job's install fills. Nothing in the checkout
+  # is built.
+  appearance-browser:
+    name: appearance-browser
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'appearance-browser') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: pnpm ci:appearance-browser
+        run: pnpm ci:appearance-browser
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-appearance-browser
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # The preview's fixture renders (#7, Slice 4) need fixture-environment,
+  # which only a build made with PREVIEW_FIXTURES=1 registers, so they build
+  # a fixture host of their own, as the appearance specs do. Every render's
+  # screenshot stays in the reports artifact, under
+  # reports/preview-fixtures/screenshots.
+  preview-fixtures-browser:
+    name: preview-fixtures-browser
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'preview-fixtures-browser') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: pnpm ci:preview-fixtures-browser
+        run: pnpm ci:preview-fixtures-browser
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-preview-fixtures-browser
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # The variant source audit (#5, Slice 3): registry generation, then every
+  # registered variant's code and styles, and the kit modules they reach.
+  check-variants:
+    name: check-variants
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'check-variants') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: pnpm ci:check-variants
+        run: pnpm ci:check-variants
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-check-variants
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # The variant specs (#5, Slice 6): every registered composition on every
+  # contract fixture and on the bundled sample, in six modes, with the hidden
+  # canary and render parity, against this checkout's build. Screenshots
+  # compare against tests/variants/__screenshots__/ here, in the pinned
+  # image, and nowhere else. A missing baseline fails the job, which writes
+  # it and uploads it in its shard's variants-screenshots-1 or -2 artifact
+  # to be committed.
+  # In two shards, split by Playwright project (one per composition and
+  # fixture, plus the modes' own checks) on measured durations.
+  variants:
+    name: variants (${{ matrix.shard }}/2)
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'variants') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      PORTFOLIO_SCREENSHOTS: compare
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      # The build job's Next cache (see there), restored only: build is its
+      # one writer.
+      - name: Restore the Next build cache
+        id: next-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/web/.next/cache
+          key: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/src/**', 'apps/web/scripts/**', 'apps/web/public/**', 'apps/web/*.ts', 'apps/web/*.json', 'packages/*/src/**', 'packages/*/packs/**', 'packages/*/*.json', 'package.json', 'tsconfig.base.json', 'pnpm-workspace.yaml', '.npmrc', '*.example.yml', 'example-media/**', 'snapshots/**') }}
+          restore-keys: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      - name: Next build cache hit
+        if: ${{ steps.next-cache.outputs.cache-hit == 'true' }}
+        run: echo "Next build cache restored for these build inputs"
+      - name: pnpm ci:build
+        run: pnpm ci:build
+      - name: pnpm test:shard variants ${{ matrix.shard }}/2
+        env:
+          SHARD: ${{ matrix.shard }}/2
+          CI_REPRO_COMMAND: pnpm test:shard variants ${{ matrix.shard }}/2
+        run: node ci/run.mjs variants -- node ci/shards.mjs run variants "$SHARD"
+      # The scheme and type pack guards (LANG-5), enforced: one axis a shard. The
+      # shard above runs pack-distinct on the design languages alone, which
+      # report only until LANG-5c.
+      - name: pnpm ci:pack-distinct-schemes
+        if: ${{ matrix.shard == 1 }}
+        run: pnpm ci:pack-distinct-schemes
+      - name: pnpm ci:pack-distinct-type
+        if: ${{ matrix.shard == 2 }}
+        run: pnpm ci:pack-distinct-type
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-variants-${{ matrix.shard }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+      - name: Upload screenshots
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: variants-screenshots-${{ matrix.shard }}
+          path: tests/variants/__screenshots__/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # The reference third-party variant (#5, Slice 6), packed from
+  # tests/external-variant/ and installed from its tarball in a temporary
+  # git worktree, linked from the store this job's install fills (the add
+  # and the remove may read package metadata from the registry), then
+  # checked and removed. The worktree builds its own host twice; nothing in
+  # the checkout is built.
+  external-variant:
+    name: external-variant
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'external-variant') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: pnpm ci:external-variant
+        run: pnpm ci:external-variant
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-external-variant
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # The quality cells (#11, Slice 1): the PR set (each composition's
+  # published default appearance, each tier fixture pack on the fallback
+  # composition, each state fixture, and each registered surface) against
+  # the standalone servers of a QUALITY_FIXTURES=1 build of a copy of the
+  # workspace, judged fail-closed by tests/quality/run.ts. The reports are
+  # scrubbed of cookies, Authorization, and CSRF values however the run
+  # ended, the run fails if its canary is left in any, and they upload only
+  # when the scrub step succeeds. Nothing in the checkout is built. The PR
+  # set adds the cells the owner's [37] rule directs from the paths the
+  # merge changes (tests/quality/lib/changes.ts): the checkout keeps the
+  # merge commit's first parent, the base tip, which QUALITY_CHANGED_BASE
+  # names. It runs in the shards quality-pr-plan counts, each planning the
+  # whole PR set and running the test groups tests/quality/lib/pr-shards.ts
+  # gives it by measured duration; quality-pr-verdict judges them whole.
+  #
+  # quality-pr-plan, which every rule that selects quality-pr selects, plans the same PR set from the
+  # registry the quality host builds and the paths the merge changes, and
+  # picks the fewest shards that keep each within about 5 minutes
+  # (tests/quality/pr-count.ts), whatever the plan, up to 48. Needing more
+  # fails, naming the heaviest group. It also says how many run at once,
+  # which quality-pr's max-parallel reads: the count, up to 10, so a larger
+  # plan runs in waves of 10 (the account rule in tests/quality/lib/pr-shards.ts).
+  quality-pr-plan:
+    name: quality-pr-plan
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'quality-pr-plan') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      count: ${{ steps.count.outputs.count }}
+      shards: ${{ steps.count.outputs.shards }}
+      parallel: ${{ steps.count.outputs.parallel }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: The quality host's registry
+        run: pnpm --filter @portfolio/web build:registry --modules-only
+        env:
+          QUALITY_FIXTURES: '1'
+          APPEARANCE_FIXTURES: '1'
+          BUDGET_FIXTURES: '1'
+      - name: Count the shards
+        id: count
+        env:
+          QUALITY_WEB: apps/web
+          QUALITY_CHANGED_BASE: HEAD^1
+        run: pnpm exec tsx tests/quality/pr-count.ts
+
+  quality-pr:
+    name: quality-pr (${{ matrix.shard }}/${{ needs.quality-pr-plan.outputs.count }})
+    needs: [changes, quality-pr-plan]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'quality-pr') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ fromJSON(needs.quality-pr-plan.outputs.parallel) }}
+      matrix:
+        shard: ${{ fromJSON(needs.quality-pr-plan.outputs.shards) }}
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      # The image this job runs in, so the visual cells know they're in it.
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: pnpm ci:quality-pr --shard=${{ matrix.shard }}/${{ needs.quality-pr-plan.outputs.count }}
+        run: pnpm ci:quality-pr "--shard=$SHARD"
+        env:
+          SHARD: ${{ matrix.shard }}/${{ needs.quality-pr-plan.outputs.count }}
+          CI_REPRO_COMMAND: pnpm ci:quality-pr --shard=${{ matrix.shard }}/${{ needs.quality-pr-plan.outputs.count }}
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+          QUALITY_CHANGED_BASE: HEAD^1
+      # The reports upload only when this succeeds: it deletes what it can't
+      # read, and fails when it did, or when the canary is still in any.
+      - name: Scrub reports
+        id: scrub
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-quality-pr-shard-${{ matrix.shard }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # quality-pr's shards judged whole (tests/quality/lib/shards.ts): zero
+  # tests, the plan's coverage, perf coverage, empty projects, the canary
+  # probe, and targets with no result, across every shard together. A shard
+  # job that failed, was cancelled, or was skipped fails it, as does a
+  # missing, unjudged, or mismatched shard. It runs however the shards
+  # ended, unless the run was cancelled (gate fails a skipped verdict), and
+  # reads only their scrubbed reports, downloaded into a
+  # directory of their own.
+  quality-pr-verdict:
+    name: quality-pr-verdict
+    needs: [changes, quality-pr-plan, quality-pr]
+    if: ${{ !cancelled() && contains(fromJSON(needs.changes.outputs.jobs), 'quality-pr-verdict') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      # A shard that uploaded nothing is the merge's missing-shard failure,
+      # not this step's.
+      - name: Download the shards' reports
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: reports-quality-pr-shard-*
+          path: ${{ runner.temp }}/quality-shards
+      - name: pnpm ci:quality-pr-verdict
+        env:
+          SHARDS: ${{ runner.temp }}/quality-shards
+          SHARD_JOBS: ${{ needs.quality-pr.result }}
+          SHARD_COUNT: ${{ needs.quality-pr-plan.outputs.count }}
+        run: pnpm ci:quality-pr-verdict "$SHARDS" --shards "$SHARD_COUNT" --mode pr --jobs "$SHARD_JOBS"
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-quality-pr-verdict
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # The quality gates' own proof (#11): every gate's known-bad input fails
+  # it and its known-good one passes, the browser cases included, in the
+  # pinned Playwright image. It runs whole whenever the selection picks it:
+  # every complete run, and a draft that changes what its gates read.
+  quality-meta:
+    name: quality-meta
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'quality-meta') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: pnpm ci:quality-meta
+        run: pnpm ci:quality-meta
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-quality-meta
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # The offline docs check (ci/docs-check.mjs): every relative link and
+  # anchor in the repository's Markdown resolves, and every `pnpm <script>`
+  # it names exists. Pure Node, so no install. The scheduled workflow checks
+  # external links weekly. It writes its own job summary, since the failure
+  # summary needs the install this job skips.
+  docs:
+    name: docs
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'docs') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: pnpm ci:docs
+        run: node ci/run.mjs docs -- node ci/docs-check.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-docs
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  image:
+    name: image
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'image') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      # 'true' once the image this job built and checked is in the
+      # image-amd64 artifact, which profiles loads.
+      saved: ${{ steps.saved.outputs.saved }}
+    env:
+      IMAGE_TAG: portfolio:ci
+      IMAGE_PLATFORM: linux/amd64
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      # Builds amd64 without pushing, starts the container, and checks health.
+      - name: pnpm ci:image
+        id: image
+        run: pnpm ci:image
+      # The image this job built and checked, for profiles, so nothing builds
+      # it twice. Any signed-in GitHub user can download it for a day, and it
+      # holds only what the public source builds. Nothing publishes it.
+      - name: Save the image for profiles
+        id: save
+        if: ${{ !cancelled() && steps.image.outcome == 'success' }}
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/image"
+          docker save "$IMAGE_TAG" | gzip -1 > "$RUNNER_TEMP/image/portfolio-ci.tar.gz"
+      - name: Upload the image for profiles
+        id: upload-image
+        if: ${{ !cancelled() && steps.save.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-amd64
+          path: ${{ runner.temp }}/image/portfolio-ci.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+      - name: Mark the image saved
+        id: saved
+        if: ${{ !cancelled() && steps.upload-image.outcome == 'success' }}
+        run: echo "saved=true" >> "$GITHUB_OUTPUT"
+      - name: pnpm ci:proxy
+        if: ${{ !cancelled() && steps.image.outcome == 'success' }}
+        run: pnpm ci:proxy
+        env:
+          PORTFOLIO_IMAGE: ${{ env.IMAGE_TAG }}
+      # #2's security suite under owner, through the same HTTPS proxy.
+      - name: pnpm ci:security-proxy
+        if: ${{ !cancelled() && steps.image.outcome == 'success' }}
+        run: pnpm ci:security-proxy
+        env:
+          PORTFOLIO_IMAGE: ${{ env.IMAGE_TAG }}
+      # The demo origin against the owner's in Chromium over https (#9,
+      # threat rows origin-1 and origin-2): the owner and the demo behind the
+      # same proxy, and the spec in the browser jobs' Playwright image, with
+      # the checkout read-only, no token, and no container socket.
+      - name: pnpm ci:demo-origin
+        if: ${{ !cancelled() && steps.image.outcome == 'success' }}
+        run: pnpm ci:demo-origin
+        env:
+          PORTFOLIO_IMAGE: ${{ env.IMAGE_TAG }}
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-image
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # The three profiles' containers (#12): pnpm smoke:profiles against the
+  # image the image job built and checked, loaded from its image-amd64
+  # artifact, so nothing builds twice. Each container runs hardened, on an
+  # internal network with no route out, with no token and only .test
+  # origins: read-only, demo, and owner on a seeded data volume, owner's
+  # startup refusals, and every startup row. It runs whenever image saved
+  # the image, so a later image step's failure doesn't hide these results.
+  profiles:
+    name: profiles
+    needs: [changes, image]
+    if: ${{ !cancelled() && contains(fromJSON(needs.changes.outputs.jobs), 'profiles') && needs.image.outputs.saved == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      IMAGE_TAG: portfolio:ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: Download the image
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image-amd64
+          path: ${{ runner.temp }}/image
+      - name: pnpm ci:profiles
+        env:
+          SMOKE_IMAGE_ARCHIVE: ${{ runner.temp }}/image/portfolio-ci.tar.gz
+        run: pnpm ci:profiles
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-profiles
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # The release-candidate rehearsal's PR run (#12, ci/rehearsal.mjs): from a
+  # clean data directory, the frozen old configs refused, config:migrate twice,
+  # import, publish, and rollback, a backup during a publish and its restore,
+  # and a damaged revision serving the last known good, natively; then, on
+  # the image the image job built and checked, on an internal network with
+  # HARDENING: the old config refused, the image's own import, owner ready,
+  # an in-app rollback, a restart into the last known good, and the base
+  # tip's image, built here, serving the old site from its pre-upgrade
+  # backup. release.yml's rc-rehearsal runs the same script and rows on
+  # every release candidate. No token, and a canary scan over every report.
+  rehearsal:
+    name: rehearsal
+    needs: [changes, image]
+    if: ${{ !cancelled() && contains(fromJSON(needs.changes.outputs.jobs), 'rehearsal') && needs.image.outputs.saved == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      IMAGE_TAG: portfolio:ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The merge commit and its first parent, the base tip, whose image
+          # the previous-digest row builds.
+          fetch-depth: 2
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: Download the image
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image-amd64
+          path: ${{ runner.temp }}/image
+      - name: pnpm ci:rehearsal
+        env:
+          REHEARSAL_IMAGE_ARCHIVE: ${{ runner.temp }}/image/portfolio-ci.tar.gz
+          REHEARSAL_CONTAINER: required
+          REHEARSAL_PREVIOUS_REF: HEAD^1
+        run: pnpm ci:rehearsal
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-rehearsal
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # The public guide from a fresh clone (#12, ci/fresh-clone.mjs): the
+  # commit under test cloned into an empty directory, with an empty HOME and
+  # XDG directories, no token, and no cache, then the guide's own commands
+  # from docs/getting-started.md, README.md, and docs/deployment.md, natively
+  # and then in Compose: production read-only and owner refuse the untouched
+  # sample and get past it after the guide's identity step, and demo serves
+  # the sample. The runner's Node and Corepack are the guide's prerequisites;
+  # this job installs nothing else, and the clone's install is the guide's.
+  fresh-clone:
+    name: fresh-clone
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'fresh-clone') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Enable pnpm
+        run: corepack enable
+      - name: pnpm ci:fresh-clone
+        env:
+          FRESH_CLONE_CONTAINERS: '1'
+        run: node ci/run.mjs fresh-clone -- node ci/fresh-clone.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-fresh-clone
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # A draft's feedback: every selected job succeeded and the rest were
+  # skipped. Never required; gate is.
+  selected:
+    name: selected
+    if: ${{ always() }}
+    needs:
+      [
+        changes,
+        static,
+        unit,
+        build,
+        browser,
+        routes,
+        appearance-browser,
+        preview-fixtures-browser,
+        check-variants,
+        variants,
+        external-variant,
+        quality-pr-plan,
+        quality-pr,
+        quality-pr-verdict,
+        quality-meta,
+        trace,
+        image,
+        profiles,
+        rehearsal,
+        fresh-clone,
+        docs,
+      ]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: ci/gate.mjs
+          sparse-checkout-cone-mode: false
+      - name: Require every selected job to succeed
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: node ci/gate.mjs --selected
+
+  # The one required check: a complete run where every job succeeded.
+  gate:
+    name: gate
+    if: ${{ always() }}
+    needs:
+      [
+        changes,
+        static,
+        unit,
+        build,
+        browser,
+        routes,
+        appearance-browser,
+        preview-fixtures-browser,
+        check-variants,
+        variants,
+        external-variant,
+        quality-pr-plan,
+        quality-pr,
+        quality-pr-verdict,
+        quality-meta,
+        trace,
+        image,
+        profiles,
+        rehearsal,
+        fresh-clone,
+        docs,
+      ]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: ci/gate.mjs
+          sparse-checkout-cone-mode: false
+      - name: Require a complete run where every needed job succeeded
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: node ci/gate.mjs
+
+  # On a push to main, after gate. publish-build builds amd64 and arm64 once
+  # each, natively on its own runner, and pushes each platform to GHCR by
+  # digest with no tag. publish-merge merges the two into one index with
+  # ci/release/merge-index.mjs and pushes it by digest with no tag.
+  # publish-smoke pulls each platform from that merged digest on its own
+  # runner and smoke-tests it. Only then does publish tag the merged digest
+  # sha-<short>. The main tag is retired, and latest moves only with final
+  # release tags. No publish job emulates another platform.
+  publish-build:
+    name: publish-build (${{ matrix.arch }})
+    needs: [gate]
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    permissions:
+      contents: read # check out the commit
+      packages: write # push the platform's image to GHCR
+    outputs:
+      digest-amd64: ${{ steps.digest.outputs.digest-amd64 }}
+      digest-arm64: ${{ steps.digest.outputs.digest-arm64 }}
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          # provenance-add-gha=false: by default the driver hands BuildKit the
+          # GitHub event payload, which a provenance would then carry.
+          driver-opts: |
+            image=moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c
+            provenance-add-gha=false
+          version: v0.38.1
+          cache-binary: false
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute labels
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,format=short
+          flavor: |
+            latest=false
+      - name: Build the platform and push by digest
+        id: build
+        # A healthy build takes 4 to 7 minutes, so a stuck build fails here
+        # instead of holding the runner for the job's timeout.
+        timeout-minutes: 25
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        env:
+          # The build record artifact holds the build's logs; it isn't needed.
+          DOCKER_BUILD_RECORD_UPLOAD: 'false'
+          # buildx's metadata provenance would print the event payload in
+          # this step's log.
+          BUILDX_METADATA_PROVENANCE: disabled
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          provenance: false
+      - name: Record the digest
+        id: digest
+        env:
+          ARCH: ${{ matrix.arch }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: echo "digest-$ARCH=$DIGEST" >> "$GITHUB_OUTPUT"
+
+  # The two platforms become the one index publish-smoke tests and publish tags.
+  publish-merge:
+    name: publish-merge
+    needs: [publish-build]
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read # check out the helpers
+      packages: write # push the merged index to GHCR
+    outputs:
+      digest: ${{ steps.merge.outputs.digest }}
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: ci/release/
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver-opts: image=moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c
+          version: v0.38.1
+          cache-binary: false
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # The legs build with provenance off, so the index has no attestations.
+      - name: Merge the platforms and push by digest
+        id: merge
+        env:
+          AMD64: ${{ needs.publish-build.outputs.digest-amd64 }}
+          ARM64: ${{ needs.publish-build.outputs.digest-arm64 }}
+        run: node ci/release/merge-index.mjs --unattested --purpose sha-publish "$IMAGE_NAME" "$AMD64" "$ARM64"
+
+  # Each platform, pulled from the merged digest, smoke-tested on its own runner.
+  publish-smoke:
+    name: publish-smoke (${{ matrix.arch }})
+    needs: [publish-merge]
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    strategy:
+      # Both legs report, even when one fails.
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read # check out the commit
+      packages: read # pull the merged index from GHCR
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: pnpm ci:image (merged digest)
+        env:
+          SMOKE_IMAGE: ${{ env.IMAGE_NAME }}@${{ needs.publish-merge.outputs.digest }}
+          IMAGE_PLATFORM: linux/${{ matrix.arch }}
+        run: pnpm ci:image
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-publish-${{ matrix.arch }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # The merged digest both platforms passed on gets its sha-<short> tag.
+  publish:
+    name: publish
+    needs: [publish-merge, publish-smoke]
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read # metadata-action reads the repository
+      packages: write # tag the merged index in GHCR
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository }}
+      # Empty when the secret isn't set, which skips the Docker Hub steps.
+      # The Docker Hub secrets move into a `publish` environment once the owner
+      # creates it; until then they stay repository secrets.
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }} # zizmor: ignore[secrets-outside-env]
+    steps:
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver-opts: image=moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c
+          version: v0.38.1
+          cache-binary: false
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Log in to Docker Hub
+        if: ${{ env.DOCKERHUB_USERNAME != '' }}
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }} # zizmor: ignore[secrets-outside-env]
+          password: ${{ secrets.DOCKERHUB_TOKEN }} # zizmor: ignore[secrets-outside-env]
+      - name: Compute the sha tag
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,format=short
+          flavor: |
+            latest=false
+      # Docker Hub, if configured, gets the same digest.
+      - name: Tag the tested digest sha-<short>
+        env:
+          DIGEST: ${{ needs.publish-merge.outputs.digest }}
+          TAG: ${{ steps.meta.outputs.version }}
+          DOCKERHUB_IMAGE: ${{ env.DOCKERHUB_USERNAME && format('docker.io/{0}/{1}', env.DOCKERHUB_USERNAME, github.event.repository.name) || '' }}
+        run: |
+          if ! [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error title=publish::publish-merge gave no digest"
+            exit 1
+          fi
+          targets=("$IMAGE_NAME:$TAG")
+          if [ -n "$DOCKERHUB_IMAGE" ]; then targets+=("$DOCKERHUB_IMAGE:$TAG"); fi
+          for target in "${targets[@]}"; do
+            docker buildx imagetools create --tag "$target" "$IMAGE_NAME@$DIGEST"
+            pushed=$(docker buildx imagetools inspect "$target" --format '{{json .Manifest}}' | jq -r .digest)
+            if [ "$pushed" != "$DIGEST" ]; then
+              echo "::error title=publish::$target resolves to $pushed, not the tested $DIGEST"
+              exit 1
+            fi
+            echo "$target -> $DIGEST"
+          done

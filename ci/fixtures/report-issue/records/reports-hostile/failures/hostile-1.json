@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "1.0",
+  "gate": "links",
+  "test": "<img src=x onerror=alert(1)> @keyurgolani see #12 and [this](https://evil.example/x) | `code`",
+  "asset": "README.md:3",
+  "actual": "<script>",
+  "reproCommand": "pnpm ci:links @owner #1"
+}

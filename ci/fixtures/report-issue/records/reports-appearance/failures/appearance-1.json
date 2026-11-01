@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "1.0",
+  "gate": "appearance",
+  "test": "body text contrast | warm-parchment",
+  "pack": "warm-parchment",
+  "threshold": "4.5",
+  "actual": "3.9",
+  "reproCommand": "pnpm check:appearance"
+}

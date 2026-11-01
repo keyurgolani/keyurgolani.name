@@ -1,0 +1,73 @@
+**/node_modules
+**/.next
+**/dist
+**/build
+**/coverage
+**/test-results
+**/playwright-report
+**/*.tsbuildinfo
+**/.cache
+# The appearance packs' compiled files (#19), the variants' compiled
+# stylesheets with the images they name, and each variant's experience
+# segment (#6): the image build writes its own, so a checkout's, fixtures'
+# files among them, never reach it.
+apps/web/public/_portfolio/pack
+apps/web/public/_portfolio/font
+apps/web/public/_portfolio/variant
+apps/web/public/_portfolio/asset
+apps/web/public/_portfolio/still
+apps/web/public/_portfolio/studio
+apps/web/src/app/(site)/%5Fexperience
+# The catalog's Research records (#20), which never register and never
+# reach a build: the image build never even reads them.
+packages/*/research
+# Held packs (#20), which fail their gate and never register either.
+packages/*/held
+
+archive
+experiments
+**/.variant-preview
+.git
+.github
+.husky
+.vscode
+.idea
+
+# Env files at any depth: Next's standalone output copies apps/web/.env and
+# apps/web/.env.production into the image.
+**/.env
+**/.env.*
+!**/.env.example
+
+# Deployment secrets, such as deploy/secrets/owner_password_hash (#2). The
+# builder copies the whole tree, so they'd otherwise reach the image.
+**/secrets/
+# `pnpm dev`'s owner data directory (#3): sessions, drafts, and revisions.
+.data
+
+# Personal portfolio data stays out of the image: the six document names, and
+# any other portfolio.* such as an old portfolio.toml. Only the examples ship.
+config
+portfolio.yml
+portfolio.yaml
+portfolio.json
+site.yml
+site.yaml
+site.json
+portfolio.*
+!portfolio.example.yml
+
+# Tests, CI, and dev tooling: not part of the build or the runtime.
+tests
+ci
+reports
+playwright.config.ts
+.dependency-cruiser.cjs
+eslint.config.mjs
+.prettierrc.json
+.prettierignore
+docs
+skills
+
+*.log
+.DS_Store

@@ -1,0 +1,78 @@
+# The owner profile: your portfolio from ../config, with Studio, drafts, and
+# revisions in a data volume, and the owner password's hash in a secret file,
+# deploy/secrets/owner_password_hash, which hash-password writes
+# (docs/deployment.md, Owner authentication). It refuses to start without
+# that file. Run it from deploy/, with PORTFOLIO_ORIGIN in deploy/.env:
+#
+#   docker compose -f compose.owner.yml up --build
+name: portfolio-owner
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: portfolio:latest
+    # A fixed name also stops `--scale`: one server per data volume.
+    container_name: portfolio-owner
+    restart: unless-stopped
+    # Loopback only: the TLS-terminating proxy in front publishes the site.
+    ports:
+      - '127.0.0.1:${PORT:-3000}:3000'
+    environment:
+      PORTFOLIO_PROFILE: owner
+      # The origin visitors use, https unless it's loopback.
+      PORTFOLIO_ORIGIN: ${PORTFOLIO_ORIGIN:?set PORTFOLIO_ORIGIN in .env to the origin visitors use}
+      PORTFOLIO_SOURCE_DIR: /config
+      PORTFOLIO_DATA_DIR: /var/lib/portfolio
+      # Where media sources resolve, read-only (#10).
+      PORTFOLIO_MEDIA_ROOT: /media
+      # A file, never the hash itself: Compose reads $ in environment values
+      # and .env as a variable, which breaks a PHC string.
+      PORTFOLIO_AUTH_PASSWORD_HASH_FILE: /run/secrets/owner_password_hash
+      # How many proxies in front append X-Forwarded-For, so sign-in can
+      # limit each client by its address. Set it in .env to the number in
+      # front, usually 1. At 0 sign-in has only its global limits, and
+      # startup warns (docs/deployment.md, Owner authentication).
+      PORTFOLIO_TRUSTED_PROXY_HOPS: ${PORTFOLIO_TRUSTED_PROXY_HOPS:-0}
+      NODE_ENV: production
+    # Nothing in the container is writable but Next's cache and the data
+    # volume.
+    read_only: true
+    # No capabilities, and no way to gain privileges: the server needs
+    # neither (threat row deploy-2).
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /app/apps/web/.next/cache
+    volumes:
+      - ../config:/config:ro
+      # The files the portfolio's media sources name. The server only reads them.
+      - ../assets:/media:ro
+      # Drafts and revisions (#2, #3). Back it up with portfolio-store backup,
+      # which leaves out ephemeral/, where sessions live, so restoring one
+      # brings back none. A file-level copy of the whole volume holds
+      # ephemeral/: run revoke-sessions after restoring one of those
+      # (docs/deployment.md, Backups).
+      - portfolio-data:/var/lib/portfolio
+    secrets:
+      - owner_password_hash
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        # Same probe as the image HEALTHCHECK (see the Dockerfile).
+        - "const h=process.env.HOSTNAME;const a=!h||h==='0.0.0.0'||h==='::'?'127.0.0.1':h.includes(':')?'['+h+']':h;fetch('http://'+a+':'+(process.env.PORT||3000)+'/api/health',{signal:AbortSignal.timeout(4000)}).then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  portfolio-data: {}
+
+secrets:
+  owner_password_hash:
+    file: ./secrets/owner_password_hash

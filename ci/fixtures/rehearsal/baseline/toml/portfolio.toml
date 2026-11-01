@@ -1,0 +1,18 @@
+# Frozen for the release-candidate rehearsal (ci/rehearsal.mjs, #12): a
+# one-file portfolio in TOML, which this release doesn't read at all.
+
+variant = "editorial"
+theme = "system"
+
+[identity]
+name = "Jane Rehearsal"
+tagline = "Engineer, writer, speaker"
+email = "jane@rehearsal.test"
+
+[meta]
+title = "Jane Rehearsal"
+url = "https://jane.test"
+
+[[sections]]
+kind = "hero"
+title = "Hello"

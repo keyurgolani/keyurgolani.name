@@ -1,0 +1,68 @@
+{
+  "matches": [
+    {
+      "vulnerability": {
+        "id": "GHSA-1111-2222-3333",
+        "dataSource": "https://nvd.nist.gov/vuln/detail/GHSA-1111-2222-3333",
+        "namespace": "github:language:javascript",
+        "severity": "High",
+        "fix": {
+          "versions": [],
+          "state": "not-fixed"
+        }
+      },
+      "relatedVulnerabilities": [],
+      "matchDetails": [
+        {
+          "type": "exact-direct-match",
+          "matcher": "npm-matcher"
+        }
+      ],
+      "artifact": {
+        "name": "sanitize-html",
+        "version": "2.18.1",
+        "type": "npm",
+        "purl": "pkg:npm/sanitize-html@2.18.1"
+      }
+    },
+    {
+      "vulnerability": {
+        "id": "CVE-2026-2002",
+        "dataSource": "https://nvd.nist.gov/vuln/detail/CVE-2026-2002",
+        "namespace": "github:language:javascript",
+        "severity": "Low",
+        "fix": {
+          "versions": ["3.3.12"],
+          "state": "fixed"
+        }
+      },
+      "relatedVulnerabilities": [],
+      "matchDetails": [
+        {
+          "type": "exact-direct-match",
+          "matcher": "npm-matcher"
+        }
+      ],
+      "artifact": {
+        "name": "nanoid",
+        "version": "3.3.11",
+        "type": "npm",
+        "purl": "pkg:npm/nanoid@3.3.11"
+      }
+    }
+  ],
+  "source": {
+    "type": "image",
+    "target": {
+      "userInput": "registry:localhost:5000/portfolio@sha256:..."
+    }
+  },
+  "distro": {
+    "name": "alpine",
+    "version": "3.22"
+  },
+  "descriptor": {
+    "name": "grype",
+    "version": "0.120.1"
+  }
+}

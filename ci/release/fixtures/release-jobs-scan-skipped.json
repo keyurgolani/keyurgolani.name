@@ -1,0 +1,47 @@
+{
+  "total_count": 7,
+  "jobs": [
+    {
+      "id": 1,
+      "name": "classify",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 2,
+      "name": "rc-verify",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 3,
+      "name": "rc-build",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 4,
+      "name": "rc-scan",
+      "status": "completed",
+      "conclusion": "skipped"
+    },
+    {
+      "id": 7,
+      "name": "rc-quality-verdict",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 5,
+      "name": "rc-tag",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 6,
+      "name": "rc-release",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ]
+}

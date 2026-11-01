@@ -1,0 +1,15 @@
+# Release scan exceptions (ci/release/scan-gate.mjs, docs/releasing.md).
+#
+# Each entry lets one finding through the image or production dependency
+# scan until it expires: the CVE or GHSA id Grype reports (or one of its
+# aliases), the package it's in, why it's safe to ship for now, who owns the
+# fix, and an expiry no more than 90 days out. The scan fails while any
+# entry has expired, whether or not the finding is still there, so an entry
+# is renewed on purpose or removed.
+#
+#   - id: CVE-2026-12345
+#     package: openssl
+#     reason: Only the server's outbound TLS uses it, and the fixed apk isn't in the base image yet.
+#     owner: keyurgolani
+#     expires: 2026-12-31
+exceptions: []

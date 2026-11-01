@@ -1,0 +1,35 @@
+{
+  "linux/amd64": {
+    "SLSA": {
+      "buildDefinition": {
+        "buildType": "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md",
+        "externalParameters": {
+          "configSource": {},
+          "request": {}
+        },
+        "internalParameters": {
+          "buildConfig": {
+            "llbDefinition": []
+          }
+        }
+      },
+      "runDetails": {
+        "builder": {
+          "id": ""
+        }
+      }
+    }
+  },
+  "linux/arm64": {
+    "SLSA": {
+      "buildDefinition": {
+        "buildType": "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md",
+        "internalParameters": {
+          "buildConfig": {
+            "llbDefinition": []
+          }
+        }
+      }
+    }
+  }
+}

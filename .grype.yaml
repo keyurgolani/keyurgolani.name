@@ -1,0 +1,11 @@
+# Grype's configuration for the release scan (.github/workflows/release.yml).
+# Grype reads it from the working directory. It reports and never decides:
+# ci/release/scan-gate.mjs reads its JSON and applies the release policy and
+# the expiring exceptions in ci/release/scan-exceptions.yml, so nothing is
+# ignored here.
+check-for-app-update: false
+db:
+  auto-update: true
+  # Refuse a database older than five days rather than scan with it.
+  validate-age: true
+  max-allowed-built-age: 120h

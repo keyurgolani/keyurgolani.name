@@ -1,0 +1,7 @@
+User-Agent: *
+Allow: /
+Disallow: /studio
+Disallow: /api/
+
+Host: https://jane-rehearsal.test
+Sitemap: https://jane-rehearsal.test/sitemap.xml

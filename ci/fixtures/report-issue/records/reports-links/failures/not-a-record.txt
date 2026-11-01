@@ -1,0 +1,1 @@
+Not a record: only *.json files under a failures/ directory are read.

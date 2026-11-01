@@ -1,0 +1,1173 @@
+// The runtime budget check's core (#6, items 3 and 4): pure functions over
+// what pnpm check:budgets reads, so its tests feed them fixtures. A unit is
+// a variant or one of #19's appearance packs, as ASSET_MANIFEST lists it.
+// Each declares six budgets in its manifest; a kind it leaves out is held to
+// the ceiling runtime-budgets.json sets for its tier or axis, and one it
+// declares over that ceiling is a breach in itself. Every breach is a record
+// of its own: the unit, the metric, the route where the trace measured it,
+// the asset that carries the most of it, and every asset that adds to it.
+// One unit's bytes are never summed with another's, one metric with
+// another, or one trace case with another: a route's measure is its worst
+// case.
+
+/** The six kinds, in the order a report lists them. */
+export const BUDGET_KINDS = ['js', 'css', 'image', 'font', 'animation', 'enhancement'];
+
+/**
+ * The environment the CI trace job builds with, so the trace can attribute
+ * chunks through source maps. Only ci/budgets.mjs passes it, to that build
+ * alone (ci/source-maps.test.mjs), and nothing that build writes reaches an
+ * image or an uploaded artifact.
+ */
+export const ANALYZE_ENV = Object.freeze({ PORTFOLIO_ANALYZE: '1' });
+
+const analyzeAssignments = () =>
+  Object.entries(ANALYZE_ENV)
+    .map(([name, value]) => `${name}=${value}`)
+    .join(' ');
+
+/**
+ * The local command that rebuilds, traces, and checks what a record came
+ * from: the fixture flag the build had, when it had one.
+ *
+ * @param {string | undefined} fixtures BUDGET_FIXTURES, as the check ran with it
+ */
+export function reproCommand(fixtures) {
+  const flag = fixtures ? `BUDGET_FIXTURES=${fixtures} ` : '';
+  return `${flag}${analyzeAssignments()} pnpm build && ${flag}pnpm test:trace && pnpm check:budgets`;
+}
+
+/** What to do about a build or trace without source maps. */
+export const NEEDS_MAPS = `build with ${analyzeAssignments()} pnpm build, which ships source maps, and trace that`;
+
+/** Which kinds the trace measures, once per case, and so per route. */
+const TRACED = new Set(['js', 'animation']);
+
+/** How a unit reads in a message: `variant fixture-over-budget`. */
+export const label = (unit) => `${unit.kind} ${unit.id}`;
+
+/** Where a unit's ceilings come from, for a message: `the light tier` or `the color-scheme axis`. */
+export const rowName = (unit) =>
+  unit.kind === 'variant' ? `the ${unit.performanceTier} tier` : `the ${unit.kind} axis`;
+
+/**
+ * The ceilings `unit` is held to: its tier's row for a variant, its axis's
+ * for a pack. Null when runtime-budgets.json has none for it.
+ *
+ * @param {{ kind: string, performanceTier?: string }} unit
+ * @param {{ tiers?: Record<string, Record<string, number>>, packs?: Record<string, Record<string, number>> }} ceilings
+ */
+export function ceilingsFor(unit, ceilings) {
+  const row =
+    unit.kind === 'variant' ? ceilings.tiers?.[unit.performanceTier] : ceilings.packs?.[unit.kind];
+  return row ?? null;
+}
+
+/**
+ * Each kind's declared budget, ceiling, and limit for `unit`: the limit is
+ * what it declares, else its ceiling.
+ */
+export function limitsFor(unit, ceilings) {
+  const row = ceilingsFor(unit, ceilings);
+  return Object.fromEntries(
+    BUDGET_KINDS.map((kind) => {
+      const declared = unit.budgets?.[kind] ?? null;
+      const ceiling = row?.[kind] ?? null;
+      return [kind, { declared, ceiling, limit: declared ?? ceiling }];
+    }),
+  );
+}
+
+/** CSS with comments gone and escapes decoded, so `\68ttps:` reads as what a browser fetches. */
+function plainCss(css) {
+  return css
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\\([0-9a-f]{1,6})[ \t\n\r\f]?/gi, (_, hex) => {
+      const point = Number.parseInt(hex, 16);
+      return point > 0 && point <= 0x10ffff ? String.fromCodePoint(point) : '�';
+    })
+    .replace(/\\([^\n\r\f])/g, '$1');
+}
+
+/** The origin every unit file resolves against, standing in for the site's own. */
+const UNIT_ORIGIN = 'https://unit.invalid';
+const UNIT_BASE = `${UNIT_ORIGIN}/_portfolio/x/`;
+
+/** The functions whose arguments a browser fetches: url(), src(), and both image-set()s. */
+const URL_FUNCTIONS = new Set(['url', 'src', 'image-set', '-webkit-image-set']);
+
+const HEX = /[0-9a-f]/i;
+const NAME = /[a-z0-9_\-\u0080-\uffff]/i;
+const SPACE = /[ \t\n\r\f]/;
+
+/**
+ * A CSS escape at `css[at]`, a backslash: what it stands for and where the
+ * text goes on. A backslash before a newline, in a string, continues the
+ * line and stands for nothing.
+ */
+function escapeAt(css, at) {
+  let end = at + 1;
+  if (end >= css.length) return { value: '�', end };
+  if (HEX.test(css[end])) {
+    let hex = '';
+    while (end < css.length && hex.length < 6 && HEX.test(css[end])) hex += css[end++];
+    if (end < css.length && SPACE.test(css[end]))
+      end += css[end] === '\r' && css[end + 1] === '\n' ? 2 : 1;
+    const point = Number.parseInt(hex, 16);
+    const valid = point > 0 && point <= 0x10ffff && !(point >= 0xd800 && point <= 0xdfff);
+    return { value: valid ? String.fromCodePoint(point) : '�', end };
+  }
+  if (css[end] === '\n' || css[end] === '\f') return { value: '', end: end + 1 };
+  if (css[end] === '\r') return { value: '', end: css[end + 1] === '\n' ? end + 2 : end + 1 };
+  return { value: css[end], end: end + 1 };
+}
+
+/**
+ * The tokens of `css` the URL scan reads, as CSS Syntax tokenizes them:
+ * strings, unquoted url() contents, functions, at-keywords, and
+ * parentheses, with escapes decoded and comments dropped.
+ */
+export function cssTokens(css) {
+  const tokens = [];
+  let at = 0;
+  while (at < css.length) {
+    const char = css[at];
+    if (char === '/' && css[at + 1] === '*') {
+      const close = css.indexOf('*/', at + 2);
+      at = close === -1 ? css.length : close + 2;
+    } else if (char === '"' || char === "'") {
+      let value = '';
+      at += 1;
+      while (at < css.length && css[at] !== char && css[at] !== '\n') {
+        if (css[at] === '\\') {
+          const escape = escapeAt(css, at);
+          value += escape.value;
+          at = escape.end;
+        } else value += css[at++];
+      }
+      at += 1;
+      tokens.push({ type: 'string', value });
+    } else if (char === '(' || char === ')') {
+      tokens.push({ type: char });
+      at += 1;
+    } else if (NAME.test(char) || char === '\\' || char === '@') {
+      const keyword = char === '@';
+      if (keyword) at += 1;
+      let name = '';
+      while (at < css.length && (NAME.test(css[at]) || css[at] === '\\')) {
+        if (css[at] === '\\') {
+          const escape = escapeAt(css, at);
+          name += escape.value;
+          at = escape.end;
+        } else name += css[at++];
+      }
+      if (keyword) {
+        tokens.push({ type: 'at', name: name.toLowerCase() });
+      } else if (css[at] === '(') {
+        at += 1;
+        const lower = name.toLowerCase();
+        let ahead = at;
+        while (ahead < css.length && SPACE.test(css[ahead])) ahead += 1;
+        if (lower === 'url' && css[ahead] !== '"' && css[ahead] !== "'") {
+          // An unquoted url(): its contents up to the ), escapes decoded.
+          let value = '';
+          at = ahead;
+          while (at < css.length && css[at] !== ')') {
+            if (css[at] === '\\') {
+              const escape = escapeAt(css, at);
+              value += escape.value;
+              at = escape.end;
+            } else value += css[at++];
+          }
+          at += 1;
+          tokens.push({ type: 'url', value: value.replace(/[ \t\n\r\f]+$/, '') });
+        } else tokens.push({ type: 'function', name: lower });
+      }
+    } else at += 1;
+  }
+  return tokens;
+}
+
+/** Every URL `css` fetches: each @import's, and each string or url() inside a URL function, nested ones included. */
+export function urlTargets(css) {
+  const tokens = cssTokens(css);
+  const targets = [];
+  // How deep the parentheses of each open URL function go.
+  const open = [];
+  let depth = 0;
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token.type === 'at' && token.name === 'import') {
+      const next = tokens[index + 1];
+      if (next?.type === 'string' || next?.type === 'url') targets.push(next.value);
+      continue;
+    }
+    if (token.type === 'function' || token.type === '(') {
+      depth += 1;
+      if (token.type === 'function' && URL_FUNCTIONS.has(token.name)) open.push(depth);
+      continue;
+    }
+    if (token.type === ')') {
+      if (open.at(-1) === depth) open.pop();
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+    if (token.type === 'url') targets.push(token.value);
+    else if (token.type === 'string' && open.length > 0) targets.push(token.value);
+  }
+  return targets;
+}
+
+/**
+ * Whether a browser fetching `target` from a unit's stylesheet reaches
+ * another host: resolved against the site's own origin, as the URL parser
+ * resolves it, it lands anywhere else. A data: URL fetches nothing.
+ */
+export function isRemote(target) {
+  if (/^[\t\n\r\f ]*data:/i.test(target)) return false;
+  try {
+    return new URL(target, UNIT_BASE).origin !== UNIT_ORIGIN;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Every URL a unit's stylesheet names that reaches another host: from an
+ * @import, url(), src(), image-set(), or -webkit-image-set(), each string
+ * in them read, resolved as a browser resolves it. A unit's files are its
+ * own, and a public page makes no third-party request.
+ *
+ * @param {string} css
+ */
+export function remoteReferences(css) {
+  return [...new Set(urlTargets(css).filter(isRemote))];
+}
+
+/** A finite iteration count over this runs for as long as a page shows, so it counts as a loop (K-4 M3). */
+export const LOOP_ITERATIONS = 1000;
+
+/** Whether an `animation` item or an `animation-iteration-count` value loops: `infinite`, or a count over LOOP_ITERATIONS. */
+export function loops(value) {
+  if (/(?<![\w-])infinite(?![\w-])/i.test(value)) return true;
+  return value
+    .split(/\s+/)
+    .some(
+      (word) => /^(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(word) && Number(word) > LOOP_ITERATIONS,
+    );
+}
+
+/** The comma-separated items of a value, its parentheses' commas left alone. */
+function listItems(value) {
+  const out = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < value.length; i++) {
+    if (value[i] === '(') depth++;
+    else if (value[i] === ')') depth = Math.max(0, depth - 1);
+    else if (value[i] === ',' && depth === 0) {
+      out.push(value.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  out.push(value.slice(start).trim());
+  return out;
+}
+
+/**
+ * Whether an `animation-timeline` item hands its animation to a scroll, or
+ * stops it: `scroll(...)`, `view(...)`, a named timeline, or `none`. Any
+ * other value, `auto`, a CSS-wide keyword, or a `var()`, runs on the clock.
+ */
+const OFF_THE_CLOCK = /^(?:(?:scroll|view)\(.*\)|--[\w-]+|none)$/i;
+
+/** A positive support test for a scroll or view timeline. */
+const TIMELINE_TEST = /\(\s*animation-timeline\s*:\s*(?:scroll|view)\(/i;
+
+/**
+ * Whether a block under `prelude` sits where scroll-driven animation works:
+ * an `@supports` whose condition tests a scroll or view timeline with no
+ * `not` and no `or`, so it holds only where the timeline does; a block
+ * under any other `@supports` with a `not` or an `or` doesn't, whatever
+ * its parent's; and any other block keeps its parent's answer.
+ */
+function scrollSupported(prelude, parent) {
+  if (!/^@supports\b/i.test(prelude)) return parent;
+  const condition = prelude.slice('@supports'.length);
+  if (/(?<![\w-])(?:not|or)(?![\w-])/i.test(condition)) return false;
+  return TIMELINE_TEST.test(condition) || parent;
+}
+
+/**
+ * The infinite animations a stylesheet declares, each rule's own
+ * declarations read with nested rules walked: every `animation` or
+ * `animation-iteration-count` item that loops (`infinite`, or a count over
+ * LOOP_ITERATIONS), counted item by item, unless its rule's
+ * `animation-timeline` item for it hands it to a scroll and the rule sits
+ * under `@supports (animation-timeline: scroll())` or view(), since a
+ * browser without scroll timelines drops the timeline and runs the loop on
+ * the clock. A later `animation` shorthand resets the timeline to `auto`.
+ * (RB ruling R3: a finite or a scroll-driven animation does no work while
+ * the page sits still.) A pack's animation measure, since a pack ships no
+ * script and the trace counts what runs on a page against the variant it
+ * renders.
+ *
+ * @param {string} css
+ */
+export function infiniteDeclarations(css) {
+  const text = plainCss(css);
+  const found = [];
+  /** @type {{ supported: boolean, loops: { declaration: string, looping: boolean[] } | null, timeline: string[] }[]} */
+  const stack = [];
+  let start = 0;
+  const declaration = (raw) => {
+    const block = stack.at(-1);
+    const body = raw.trim().replace(/\s+/g, ' ');
+    const match = /^(animation(?:-iteration-count|-timeline)?)\s*:(.*)$/i.exec(body);
+    if (!block || !match) return;
+    const property = match[1].toLowerCase();
+    const values = listItems(match[2].trim());
+    if (property === 'animation-timeline') {
+      block.timeline = values.map((value) => value.toLowerCase());
+      return;
+    }
+    // The shorthand resets the timeline to auto.
+    if (property === 'animation') block.timeline = ['auto'];
+    const looping = values.map(loops);
+    if (looping.some(Boolean)) block.loops = { declaration: body, looping };
+    else if (property === 'animation') block.loops = null;
+  };
+  const close = () => {
+    const block = stack.pop();
+    if (!block?.loops) return;
+    const { declaration: body, looping } = block.loops;
+    let counted = 0;
+    looping.forEach((loop, index) => {
+      if (!loop) return;
+      const timeline = block.timeline[index % block.timeline.length] ?? 'auto';
+      if (block.supported && OFF_THE_CLOCK.test(timeline)) return;
+      counted += 1;
+    });
+    for (let index = 0; index < counted; index++) found.push(body);
+  };
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (char === '"' || char === "'") {
+      for (i++; i < text.length && text[i] !== char; i++) if (text[i] === '\\') i++;
+    } else if (char === '(') {
+      for (let depth = 1; depth > 0 && i + 1 < text.length;) {
+        i++;
+        if (text[i] === '(') depth++;
+        else if (text[i] === ')') depth--;
+      }
+    } else if (char === '{') {
+      const prelude = text.slice(start, i).trim();
+      const parent = stack.at(-1);
+      stack.push({
+        supported: scrollSupported(prelude, parent?.supported ?? false),
+        loops: null,
+        timeline: ['auto'],
+      });
+      start = i + 1;
+    } else if (char === ';') {
+      declaration(text.slice(start, i));
+      start = i + 1;
+    } else if (char === '}') {
+      declaration(text.slice(start, i));
+      close();
+      start = i + 1;
+    }
+  }
+  return found;
+}
+
+/** The path a request names on the app's origin, or null for another origin or no URL. */
+export function pathOn(url, origin) {
+  try {
+    const parsed = new URL(url);
+    return parsed.origin === new URL(origin).origin ? parsed.pathname : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether `source`, a module attribution names, is the file a unit's
+ * enhancement export resolves to: the export's target in its package, such
+ * as ./src/enhancements/glint.tsx, ending the module's path.
+ */
+const isEntry = (source, entry) =>
+  entry !== null && (source === entry || source.endsWith(`/${entry.replace(/^\.\//, '')}`));
+
+/**
+ * The build's chunks that load each of `unit`'s enhancements, with every
+ * gzip byte in each: the chunk that holds its entry, and every chunk its
+ * async group loads with it (`loadedWith`, which buildChunks reads from the
+ * build's loaders), so a library split into a chunk of its own counts too.
+ * The unit's own bytes and every package's beside them count, so a 3D
+ * library an enhancement loads counts against it. A chunk counts whole, its
+ * gzip size, or the sum of its modules' where only they are known.
+ * `chunks` is the build's attributed chunks, each with the path it's served
+ * at; `entries` maps an enhancement id to the file its export resolves to
+ * in the package, or null for none. A chunk of its group that the unit's
+ * page loads statically, in `statics`, is the page's, which it would load
+ * anyway: it counts in the route's js, and not here, so its bytes count
+ * once. A chunk holding its entry that no group names is `ungrouped`: the
+ * build's loader wasn't read, so what its import loads isn't known.
+ *
+ * @param {any} unit
+ * @param {{ path: string, gzipBytes?: number, loadedWith?: string[], ungrouped?: boolean, modules: { source: string, package: string | null, gzipBytes: number }[] }[]} chunks
+ * @param {Record<string, string | null>} entries
+ * @param {ReadonlySet<string>} [statics] the chunks the unit's page loads statically, by served path
+ */
+export function enhancementChunks(unit, chunks, entries, statics = new Set()) {
+  const byPath = new Map(chunks.map((chunk) => [chunk.path, chunk]));
+  const size = (chunk) =>
+    chunk.gzipBytes ?? chunk.modules.reduce((total, module) => total + module.gzipBytes, 0);
+  return (unit.enhancements ?? []).map((enhancement) => {
+    const entry = entries[enhancement.id] ?? null;
+    const holding = chunks.filter((chunk) =>
+      chunk.modules.some(
+        (module) => module.package === unit.packageName && isEntry(module.source, entry),
+      ),
+    );
+    // The chunks its import loads, each once: the ones holding its entry, then their group's
+    // others, but for those the page loads statically, which are the page's.
+    const loaded = new Map(holding.map((chunk) => [chunk.path, chunk]));
+    const shared = new Set();
+    for (const chunk of holding) {
+      for (const other of chunk.loadedWith ?? []) {
+        const found = byPath.get(other);
+        if (!found || loaded.has(other)) continue;
+        if (statics.has(other)) shared.add(other);
+        else loaded.set(other, found);
+      }
+    }
+    return {
+      id: enhancement.id,
+      entry,
+      shared: [...shared].sort(),
+      ungrouped: holding.filter((chunk) => chunk.ungrouped).map((chunk) => chunk.path),
+      // Everything it loads is the enhancement's to load: its own code, and the kit's,
+      // three.js's, or any library's beside it, which nothing else on the page needed.
+      chunks:
+        holding.length === 0
+          ? []
+          : [...loaded.values()].map((chunk) => ({ path: chunk.path, gzipBytes: size(chunk) })),
+    };
+  });
+}
+
+const largestFirst = (assets) =>
+  [...assets].sort((a, b) => b.amount - a.amount || a.asset.localeCompare(b.asset));
+const total = (assets) => assets.reduce((sum, asset) => sum + asset.amount, 0);
+const at = (site) => site ?? 'an unnamed site';
+
+/**
+ * The continuous work a trace case's probe counted, one asset per loop,
+ * timer, and animation, as #62's counters count it: a frame loop and a
+ * recurring timeout, idle-callback, scheduler-task, or restarting-animation
+ * site as many as ran at once, and an interval, an infinite animation, and
+ * a CSS animation or transition restarted on one target as one each (K-4:
+ * RB ruling R3).
+ */
+export function animationAssets(probe) {
+  return [
+    ...(probe?.frames?.loops ?? []).map((loop) => ({
+      asset: `frame loop at ${at(loop.site)}`,
+      amount: Math.max(1, loop.concurrent ?? 1),
+    })),
+    ...(probe?.timers?.intervals ?? []).map((timer) => ({
+      asset: `interval at ${at(timer.site)}`,
+      amount: 1,
+    })),
+    ...(probe?.timers?.timeouts ?? []).map((timer) => ({
+      asset: `recurring timeout at ${at(timer.site)}`,
+      amount: Math.max(1, timer.concurrent ?? 1),
+    })),
+    ...(probe?.timers?.idle ?? []).map((timer) => ({
+      asset: `recurring idle callback at ${at(timer.site)}`,
+      amount: Math.max(1, timer.concurrent ?? 1),
+    })),
+    ...(probe?.timers?.tasks ?? []).map((timer) => ({
+      asset: `recurring scheduler task at ${at(timer.site)}`,
+      amount: Math.max(1, timer.concurrent ?? 1),
+    })),
+    ...(probe?.animations?.infinite ?? []).map((animation) => ({
+      asset: `${animation.kind} on ${animation.target}`,
+      amount: 1,
+    })),
+    ...(probe?.animations?.restarting ?? []).map((animation) => ({
+      asset: `restarting animation at ${at(animation.site)}`,
+      amount: Math.max(1, animation.concurrent ?? 1),
+    })),
+    ...(probe?.animations?.cssRestarts ?? []).map((restart) => ({
+      asset: `restarting css (${restart.type}) on ${restart.target}`,
+      amount: 1,
+    })),
+  ];
+}
+
+/**
+ * A variant's own JavaScript a trace case downloaded, chunk by chunk: its
+ * package's gzip bytes in each JS chunk, by source map attribution, leaving
+ * out the chunks that hold its enhancements, which `enhancement` counts.
+ */
+export function jsAssets(unit, entry, enhancementPaths) {
+  return (entry.attribution?.chunks ?? [])
+    .filter((chunk) => chunk.kind === 'js')
+    .map((chunk) => ({
+      asset: pathOn(chunk.url, entry.origin) ?? chunk.url,
+      amount: (chunk.packages ?? [])
+        .filter((pkg) => pkg.package === unit.packageName)
+        .reduce((sum, pkg) => sum + pkg.gzipBytes, 0),
+    }))
+    .filter((asset) => asset.amount > 0 && !enhancementPaths.has(asset.asset));
+}
+
+/**
+ * Each place a unit is measured, kind by kind, with its amount and the
+ * assets that make it up, largest first. A stylesheet, image, or font is
+ * measured once, from ASSET_MANIFEST. A variant's JS and animation are
+ * measured once per trace case that renders it, and a pack's animation from
+ * its stylesheet; a pack ships no script, so its JS and enhancements are 0.
+ * Each enhancement is measured once, from the build's chunks.
+ *
+ * @param {object} input
+ * @param {any} input.unit
+ * @param {any[]} input.cases the trace cases that render it
+ * @param {ReturnType<typeof enhancementChunks>} input.enhancements
+ * @param {string | null} input.css its stylesheet's text, when the build has it
+ */
+export function measure({ unit, cases, enhancements, css }) {
+  const once = (assets) => [{ amount: total(assets), assets: largestFirst(assets) }];
+  const files = (list) => (list ?? []).map((file) => ({ asset: file.url, amount: file.bytes }));
+  const enhancementPaths = new Set(enhancements.flatMap(({ chunks }) => chunks.map((c) => c.path)));
+  const perCase = (read) =>
+    cases.map((entry) => {
+      const assets = read(entry);
+      return {
+        route: entry.route,
+        profile: entry.profile ?? null,
+        viewport: entry.viewport ?? null,
+        amount: total(assets),
+        assets: largestFirst(assets),
+      };
+    });
+  const variant = unit.kind === 'variant';
+  return {
+    js: variant ? perCase((entry) => jsAssets(unit, entry, enhancementPaths)) : once([]),
+    css: once(
+      unit.stylesheet ? [{ asset: unit.stylesheet.url, amount: unit.stylesheet.gzipBytes }] : [],
+    ),
+    image: once([...files(unit.images), ...files(unit.stills)]),
+    font: once(files(unit.fonts)),
+    animation: variant
+      ? perCase((entry) => animationAssets(entry.probe))
+      : once(
+          infiniteDeclarations(css ?? '').map((declaration) => ({
+            asset: `${unit.stylesheet?.url ?? 'its stylesheet'}: ${declaration}`,
+            amount: 1,
+          })),
+        ),
+    enhancement: enhancements.map(({ id, chunks }) => ({
+      enhancement: id,
+      amount: chunks.reduce((sum, chunk) => sum + chunk.gzipBytes, 0),
+      assets: largestFirst(chunks.map((chunk) => ({ asset: chunk.path, amount: chunk.gzipBytes }))),
+    })),
+  };
+}
+
+/** The manifest a unit's budgets are declared in, as a record's asset. */
+const manifestOf = (unit) => `${unit.packageName} manifest.json`;
+
+/** Each [first, last] code point range a unicode-range descriptor names. */
+export function unicodeRanges(value) {
+  return value
+    .split(',')
+    .map((part) => part.trim().replace(/^U\+/i, ''))
+    .filter(Boolean)
+    .map((part) => {
+      if (part.includes('?')) {
+        return [
+          Number.parseInt(part.replace(/\?/g, '0'), 16),
+          Number.parseInt(part.replace(/\?/g, 'F'), 16),
+        ];
+      }
+      const [first, last = first] = part.split('-');
+      return [Number.parseInt(first, 16), Number.parseInt(last, 16)];
+    })
+    .filter(([first, last]) => Number.isFinite(first) && Number.isFinite(last));
+}
+
+/**
+ * The webfont faces a compiled typography stylesheet declares: each
+ * @font-face with a url() source, its URL, and the code points its
+ * unicode-range covers, null for a face with none, which covers every one.
+ * A fallback face over local() fetches nothing, so it isn't one.
+ *
+ * @param {string} css
+ * @returns {{ url: string, ranges: [number, number][] | null }[]}
+ */
+export function fontFaces(css) {
+  const faces = [];
+  for (const [, block] of plainCss(css).matchAll(/@font-face\s*\{([^}]*)\}/gi)) {
+    const urls = urlTargets(block);
+    if (urls.length === 0) continue;
+    const range = /unicode-range\s*:\s*([^;]+)/i.exec(block)?.[1];
+    for (const url of urls) faces.push({ url, ranges: range ? unicodeRanges(range) : null });
+  }
+  return faces;
+}
+
+/**
+ * What a Latin page's text is made of, as @portfolio/appearance's
+ * LATIN_PAGE gives it: printable Basic Latin, Latin-1's letters and signs,
+ * General Punctuation's hyphen, dashes, curly quotes, bullet, and ellipsis
+ * (points, since Google's latin-ext range names the dagger, U+2020), the
+ * euro, and the trade mark sign. A sample with no text of its own counts
+ * every face whose range meets any of them, so a caps-only display face, a
+ * range that skips "a" (review R2-M1), and a face of curly quotes alone
+ * (R3-L1) all count, and a latin-ext face doesn't. font-metrics.test.ts
+ * holds the two lists equal.
+ */
+export const LATIN_PAGE = [
+  [0x20, 0x7e],
+  [0xa0, 0xff],
+  [0x2010, 0x2010],
+  [0x2013, 0x2014],
+  [0x2018, 0x2019],
+  [0x201c, 0x201d],
+  [0x2022, 0x2022],
+  [0x2026, 0x2026],
+  [0x20ac, 0x20ac],
+  [0x2122, 0x2122],
+];
+
+const covers = (ranges, point) =>
+  ranges === null || ranges.some(([first, last]) => point >= first && point <= last);
+
+const meets = (ranges, [low, high]) =>
+  ranges === null || ranges.some(([first, last]) => first <= high && last >= low);
+
+/**
+ * The bytes of fonts a sample page loads under the typography `unit`: the
+ * faces whose unicode-range a traced page's text covers, from the trace
+ * cases that rendered under it (requested its stylesheet) and recorded
+ * their text, the worst of them; otherwise, with no such case, its Latin
+ * faces, every one whose range meets LATIN_PAGE. It's an estimate: a face counts when the
+ * text touches its range, whatever weight or style the page renders, and
+ * text that only CSS or a later interaction shows isn't read. Null for a
+ * unit that ships no font, or whose stylesheet the build lacks or names
+ * none of its fonts in, so its shipped total gates instead.
+ *
+ * @param {object} input
+ * @param {any} input.unit an ASSET_MANIFEST typography unit
+ * @param {string | null} input.css its compiled stylesheet's text
+ * @param {any[]} input.cases the trace report's cases
+ * @returns {{ basis: 'text' | 'latin', route: string | null, amount: number, assets: { asset: string, amount: number }[] } | null}
+ */
+export function sampleFonts({ unit, css, cases }) {
+  if (unit.kind !== 'typography' || !(unit.fonts?.length > 0) || css === null) return null;
+  const bytes = new Map(unit.fonts.map((font) => [font.url, font.bytes]));
+  const faces = fontFaces(css).filter(({ url }) => bytes.has(url));
+  // No face of its own read from its stylesheet: nothing to estimate by, so no sample.
+  if (faces.length === 0) return null;
+  const pick = (test) => {
+    const urls = [...new Set(faces.filter(test).map(({ url }) => url))];
+    const assets = largestFirst(urls.map((url) => ({ asset: url, amount: bytes.get(url) })));
+    return { amount: total(assets), assets };
+  };
+  const sheet = unit.stylesheet?.url;
+  const traced = cases.filter(
+    (entry) =>
+      typeof entry.text === 'string' &&
+      (entry.requests ?? []).some((request) => pathOn(request.url, entry.origin ?? '') === sheet),
+  );
+  if (traced.length > 0) {
+    let worst = null;
+    for (const entry of traced) {
+      const points = [...new Set([...entry.text].map((char) => char.codePointAt(0)))];
+      const measured = pick(({ ranges }) => points.some((point) => covers(ranges, point)));
+      if (!worst || measured.amount > worst.amount) worst = { ...measured, route: entry.route };
+    }
+    return {
+      basis: 'text',
+      route: worst.route ?? null,
+      amount: worst.amount,
+      assets: worst.assets,
+    };
+  }
+  return {
+    basis: 'latin',
+    route: null,
+    ...pick(({ ranges }) => LATIN_PAGE.some((span) => meets(ranges, span))),
+  };
+}
+
+/** Where the host serves Studio's own assets (P-5), which only Studio's pages request. */
+export const STUDIO_ASSETS = '/_portfolio/studio/';
+
+/**
+ * Studio's own image line (P-5): the typography picker's stills, each a
+ * file the build serves under /_portfolio/studio/, against runtime-budgets
+ * .json's `budgets.studio` row, `image` in total and `imagePerFile` for any
+ * one. A breach is one record each:
+ *
+ * - no `budgets.studio` row, or one without both ceilings, while the build
+ *   serves Studio assets;
+ * - a still over the per-file ceiling, and the stills over the total;
+ * - a still the record lists that the build output lacks;
+ * - a trace case that requested a file under /_portfolio/studio/: every
+ *   trace case is a public page, and a public page never loads one.
+ *
+ * Every still is one row in `checked`, with the total as one more.
+ *
+ * @param {object} input
+ * @param {{ url: string, bytes: number | null }[]} input.files each still, its bytes null when the build lacks it
+ * @param {any} input.ceilings runtime-budgets.json's budgets block
+ * @param {any[]} input.cases the trace report's cases
+ */
+export function checkStudio({ files, ceilings, cases }) {
+  const records = [];
+  const checked = [];
+  const row = ceilings?.studio ?? null;
+  const totalLimit = Number.isFinite(row?.image) ? row.image : null;
+  const perFile = Number.isFinite(row?.imagePerFile) ? row.imagePerFile : null;
+  const studio = { kind: 'studio', id: 'type-stills', packageName: '@portfolio/web' };
+  if (files.length > 0 && (totalLimit === null || perFile === null)) {
+    records.push({
+      unit: studio,
+      metric: 'ceiling',
+      test: "the build serves Studio's own stills, and runtime-budgets.json's budgets.studio row sets no image and imagePerFile ceilings for them",
+      asset: 'runtime-budgets.json',
+    });
+  }
+  for (const file of files) {
+    if (file.bytes === null) {
+      records.push({
+        unit: studio,
+        metric: 'image',
+        test: `${file.url} is in apps/web/studio-stills/type/stills.json and not in the build output, so its bytes go unmeasured: run pnpm build`,
+        asset: file.url,
+      });
+      continue;
+    }
+    checked.push({
+      kind: 'studio',
+      id: 'type-stills',
+      metric: 'image',
+      actual: file.bytes,
+      limit: perFile,
+      limitFrom: 'ceiling',
+      assets: [{ asset: file.url, amount: file.bytes }],
+    });
+    if (perFile !== null && file.bytes > perFile) {
+      records.push({
+        unit: studio,
+        metric: 'image',
+        test: `${file.url} is ${file.bytes} bytes, over Studio's ceiling of ${perFile} for any one still: it goes back to the budget owner, and the ceiling never rises quietly`,
+        asset: file.url,
+        actual: file.bytes,
+        threshold: perFile,
+      });
+    }
+  }
+  const measured = files.filter((file) => file.bytes !== null);
+  const sum = measured.reduce((all, file) => all + file.bytes, 0);
+  const assets = largestFirst(measured.map((file) => ({ asset: file.url, amount: file.bytes })));
+  if (files.length > 0) {
+    checked.push({
+      kind: 'studio',
+      id: 'type-stills',
+      metric: 'image',
+      total: true,
+      actual: sum,
+      limit: totalLimit,
+      limitFrom: 'ceiling',
+      assets,
+    });
+  }
+  if (totalLimit !== null && sum > totalLimit) {
+    records.push({
+      unit: studio,
+      metric: 'image',
+      test: `Studio's stills are ${sum} bytes in all, over Studio's ceiling of ${totalLimit}; ${assets[0]?.asset ?? 'no one still'} carries ${assets[0]?.amount ?? 0} of it`,
+      asset: assets[0]?.asset ?? 'runtime-budgets.json',
+      actual: sum,
+      threshold: totalLimit,
+      assets,
+    });
+  }
+  const seen = new Set();
+  for (const entry of cases) {
+    for (const request of entry.requests ?? []) {
+      const pathname = pathOn(request.url, entry.origin ?? '');
+      if (!pathname?.startsWith(STUDIO_ASSETS)) continue;
+      const key = `${entry.route} ${pathname}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      records.push({
+        unit: studio,
+        metric: 'unlisted',
+        route: entry.route,
+        profile: entry.profile ?? undefined,
+        viewport: entry.viewport ?? undefined,
+        test: `${entry.route}, a public page, loaded ${pathname}, one of Studio's own assets, which only Studio's pages load`,
+        asset: pathname,
+      });
+    }
+  }
+  return { records, checked };
+}
+
+/**
+ * Every breach, and every unit and kind checked: what pnpm check:budgets
+ * writes to its report. A breach is one record each:
+ *
+ * - a unit over a limit where it was measured: once per route for JS and
+ *   animation, from that route's worst trace case, with the other cases
+ *   listed in the report; once per enhancement; once for the rest;
+ * - a declared budget over its ceiling, or a unit with no ceiling row;
+ * - a unit stylesheet with a remote @import or url(), or one the build
+ *   output lacks;
+ * - a file under /_portfolio/ a traced page loaded that ASSET_MANIFEST
+ *   lists for no unit;
+ * - a variant no trace case renders, or one whose cases have chunks
+ *   without source maps;
+ * - an enhancement no chunk of the build holds;
+ * - a sample page under a typography that ships fonts loading more font
+ *   bytes than its font limit, as sampleFonts() estimates them. Each such
+ *   typography gets its line in `samples`, a breach or not, and that line
+ *   is its font gate: its `font` row in `checked`, every file it ships, is
+ *   reported with `gated: false` and never a breach (R4).
+ *
+ * @param {object} input
+ * @param {any[]} input.units ASSET_MANIFEST's units
+ * @param {{ url: string } | null} [input.platform] ASSET_MANIFEST's platform stylesheet
+ * @param {any} input.ceilings runtime-budgets.json's budgets block
+ * @param {{ cases?: any[] }} input.trace the trace report
+ * @param {{ path: string, modules: any[] }[]} input.chunks the build's attributed chunks
+ * @param {(unit: any) => Record<string, string | null>} input.entries each enhancement's file
+ * @param {(url: string) => string | null} input.stylesheet a stylesheet's text, by URL
+ * @param {{ url: string, bytes: number | null }[]} [input.studio] Studio's own stills (checkStudio())
+ */
+export function checkBudgets({
+  units,
+  platform = null,
+  ceilings,
+  trace,
+  chunks,
+  entries,
+  statics = () => new Set(),
+  stylesheet,
+  studio = [],
+}) {
+  const records = [];
+  const checked = [];
+  /** Each font-shipping typography's sample page line (sampleFonts()). */
+  const samples = [];
+  const cases = trace?.cases ?? [];
+  /**
+   * The trace cases that requested any of `assets`, by URL path, in the
+   * report's order: where a stylesheet, image, font, or chunk record's
+   * route comes from, since the build measures those once.
+   */
+  const requestedOn = (assets) => {
+    const paths = new Set(assets);
+    return cases
+      .filter((entry) =>
+        (entry.requests ?? []).some((request) =>
+          paths.has(pathOn(request.url, entry.origin ?? '') ?? ''),
+        ),
+      )
+      .map(({ route, profile, viewport }) => ({
+        route,
+        profile: profile ?? null,
+        viewport: viewport ?? null,
+      }));
+  };
+  /** A record's route, profile, and viewport: the first case that requested its asset, and every one in `requestedOn`. */
+  const where = (assets) => {
+    const on = requestedOn(assets);
+    const [first] = on;
+    return first
+      ? {
+          route: first.route,
+          profile: first.profile ?? undefined,
+          viewport: first.viewport ?? undefined,
+          requestedOn: on,
+        }
+      : {};
+  };
+  for (const unit of units) {
+    const row = ceilingsFor(unit, ceilings);
+    const limits = limitsFor(unit, ceilings);
+    const rendering =
+      unit.kind === 'variant' ? cases.filter((entry) => entry.composition === unit.id) : [];
+    const pageStatics = unit.enhancements?.length ? statics(unit) : new Set();
+    const enhancements = enhancementChunks(unit, chunks, entries(unit), pageStatics ?? new Set());
+    const css = unit.stylesheet ? stylesheet(unit.stylesheet.url) : null;
+    const measured = measure({ unit, cases: rendering, enhancements, css });
+    // A typography that ships fonts is gated by what a sample page loads
+    // under it (R4): a pack may ship latin-ext, cyrillic, and other subsets a
+    // page loads only when its text needs them, so the bytes it ships in all
+    // are reported, never failed. With no sample to measure, as when its
+    // stylesheet isn't in the build, the total gates, failing closed.
+    const sample = sampleFonts({ unit, css, cases });
+    const reportedOnly = (kind) => kind === 'font' && sample !== null;
+    if (sample) {
+      const { declared, limit } = limits.font;
+      samples.push({
+        kind: unit.kind,
+        id: unit.id,
+        metric: 'font',
+        basis: sample.basis,
+        route: sample.route,
+        actual: sample.amount,
+        limit,
+        limitFrom: declared !== null ? 'declared' : 'ceiling',
+        assets: sample.assets,
+      });
+      if (limit !== null && sample.amount > limit) {
+        const against = declared !== null ? 'its declared budget' : `${rowName(unit)}'s ceiling`;
+        records.push({
+          unit,
+          metric: 'font',
+          ...(sample.route ? { route: sample.route } : {}),
+          test: `a sample page under ${label(unit)} loads an estimated ${sample.amount} bytes of fonts (${sample.basis === 'text' ? "by its text's unicode ranges" : 'its Latin faces'}), over ${against} of ${limit}; ${sample.assets[0]?.asset ?? 'no one asset'} carries ${sample.assets[0]?.amount ?? 0} of it`,
+          asset: sample.assets[0]?.asset ?? manifestOf(unit),
+          actual: sample.amount,
+          threshold: limit,
+          assets: sample.assets,
+        });
+      }
+    }
+    if (!row) {
+      records.push({
+        unit,
+        metric: 'ceiling',
+        test: `${label(unit)} has no ceilings: runtime-budgets.json's budgets block needs a row for ${rowName(unit)}`,
+        asset: 'runtime-budgets.json',
+      });
+    }
+    for (const kind of BUDGET_KINDS) {
+      const { declared, ceiling, limit } = limits[kind];
+      if (declared !== null && ceiling !== null && declared > ceiling) {
+        records.push({
+          unit,
+          metric: kind,
+          test: `${label(unit)} declares a ${kind} budget of ${declared}, over ${rowName(unit)}'s ceiling of ${ceiling}`,
+          asset: manifestOf(unit),
+          actual: declared,
+          threshold: ceiling,
+        });
+      }
+      const routed = TRACED.has(kind) && unit.kind === 'variant';
+      const worst = new Map();
+      for (const entry of measured[kind]) {
+        const key = routed ? entry.route : (entry.enhancement ?? '');
+        const best = worst.get(key);
+        if (!best || entry.amount > best.amount) worst.set(key, entry);
+      }
+      for (const [key, entry] of worst) {
+        checked.push({
+          kind: unit.kind,
+          id: unit.id,
+          metric: kind,
+          ...(routed ? { route: key } : {}),
+          ...(entry.enhancement ? { enhancement: entry.enhancement } : {}),
+          actual: entry.amount,
+          limit,
+          limitFrom: declared !== null ? 'declared' : 'ceiling',
+          assets: entry.assets,
+          ...(routed
+            ? {
+                cases: measured[kind]
+                  .filter((other) => other.route === key)
+                  .map(({ profile, viewport, amount }) => ({ profile, viewport, amount })),
+              }
+            : {}),
+          ...(reportedOnly(kind) ? { gated: false } : {}),
+        });
+        if (reportedOnly(kind) || limit === null || entry.amount <= limit) continue;
+        const place = [
+          entry.enhancement ? ` in enhancement ${entry.enhancement}` : '',
+          routed ? ` on ${key}` : '',
+        ].join('');
+        const against = declared !== null ? 'declared budget' : `${rowName(unit)}'s ceiling`;
+        records.push({
+          unit,
+          metric: kind,
+          ...(routed
+            ? {
+                route: key,
+                profile: entry.profile ?? undefined,
+                viewport: entry.viewport ?? undefined,
+              }
+            : where(entry.assets.map(({ asset }) => asset))),
+          test: `${label(unit)}'s ${kind}${place} is ${entry.amount}, over its ${against} of ${limit}; ${entry.assets[0]?.asset ?? 'no one asset'} carries ${entry.assets[0]?.amount ?? 0} of it`,
+          asset: entry.assets[0]?.asset ?? manifestOf(unit),
+          actual: entry.amount,
+          threshold: limit,
+          assets: entry.assets,
+        });
+      }
+    }
+    if (unit.kind === 'variant') {
+      if (rendering.length === 0) {
+        records.push({
+          unit,
+          metric: 'trace',
+          test: `no trace case renders ${label(unit)}, so its JS and animation go unmeasured: trace every registered composition`,
+          asset: manifestOf(unit),
+        });
+      }
+      // A stylesheet ships without a map, and its bytes come from ASSET_MANIFEST;
+      // a script without one leaves the unit's JS unknown.
+      const unmapped = [
+        ...new Set(
+          rendering.flatMap((entry) =>
+            (entry.attribution?.withoutMap ?? [])
+              .map((url) => pathOn(url, entry.origin ?? '') ?? url)
+              .filter((url) => /\.m?js$/i.test(url.replace(/[?#].*$/, ''))),
+          ),
+        ),
+      ];
+      const unattributed = rendering.filter((entry) => !entry.attribution?.chunks);
+      if (unmapped.length > 0 || unattributed.length > 0) {
+        records.push({
+          unit,
+          metric: 'trace',
+          test: `the trace couldn't attribute ${label(unit)}'s JS, since ${unmapped.length > 0 ? `${unmapped.length} script(s) had no source map` : 'a case has no attribution'}: ${NEEDS_MAPS}`,
+          asset: unmapped[0] ?? manifestOf(unit),
+        });
+      }
+    }
+    if (pageStatics === null) {
+      records.push({
+        unit,
+        metric: 'enhancement',
+        test: `the build names no client reference manifest for ${label(unit)}'s page, so the chunks it loads statically, and so what its enhancements load beside them, aren't known: run pnpm build`,
+        asset: manifestOf(unit),
+      });
+    }
+    for (const { id, ungrouped = [] } of enhancements) {
+      for (const chunk of ungrouped) {
+        records.push({
+          unit,
+          metric: 'enhancement',
+          test: `no async group of the build's loaders names ${chunk}, which holds ${label(unit)}'s enhancement ${id}, so what its import loads beside it isn't known: the loader's text may have changed, and asyncGroups() in ci/check-budgets.mjs reads it`,
+          asset: chunk,
+        });
+      }
+    }
+    for (const { id, entry, chunks: holding } of enhancements) {
+      if (holding.length > 0) continue;
+      records.push({
+        unit,
+        metric: 'enhancement',
+        test: `no chunk of the build holds ${label(unit)}'s enhancement ${id}${entry ? `, ${entry}` : ', whose export resolves to no file'}: ${NEEDS_MAPS}`,
+        asset: manifestOf(unit),
+      });
+    }
+    if (unit.stylesheet) {
+      if (css === null) {
+        records.push({
+          unit,
+          metric: 'remote',
+          test: `${label(unit)}'s stylesheet isn't in the build output, so the check can't read it: run pnpm build`,
+          asset: unit.stylesheet.url,
+        });
+      } else {
+        const remote = remoteReferences(css);
+        if (remote.length > 0) {
+          records.push({
+            unit,
+            metric: 'remote',
+            ...where([unit.stylesheet.url]),
+            test: `${label(unit)}'s stylesheet reaches another host, and a unit's CSS may fetch only its own files: ${remote.join(', ')}`,
+            asset: unit.stylesheet.url,
+            actual: remote.length,
+            threshold: 0,
+            assets: remote.map((url) => ({ asset: url, amount: 1 })),
+          });
+        }
+      }
+    }
+  }
+  // A file under /_portfolio/ that no unit lists: ASSET_MANIFEST has to name
+  // all a unit ships, or no budget counts its bytes.
+  const listed = new Set([
+    ...(platform ? [platform.url] : []),
+    ...units.flatMap((unit) => [
+      ...(unit.stylesheet ? [unit.stylesheet.url] : []),
+      ...[...(unit.images ?? []), ...(unit.fonts ?? []), ...(unit.stills ?? [])].map((f) => f.url),
+    ]),
+  ]);
+  const unlisted = new Map();
+  for (const entry of cases) {
+    for (const request of entry.requests ?? []) {
+      const pathname = pathOn(request.url, entry.origin ?? '');
+      if (!pathname?.startsWith('/_portfolio/') || listed.has(pathname)) continue;
+      // Studio's own assets: checkStudio() says a public page loaded one.
+      if (pathname.startsWith(STUDIO_ASSETS)) continue;
+      if (!unlisted.has(pathname)) unlisted.set(pathname, entry);
+    }
+  }
+  for (const [pathname, entry] of unlisted) {
+    const unit =
+      units.find((one) => one.kind === 'variant' && one.id === entry.composition) ?? null;
+    records.push({
+      unit,
+      metric: 'unlisted',
+      route: entry.route,
+      profile: entry.profile ?? undefined,
+      viewport: entry.viewport ?? undefined,
+      test: `${entry.route} loaded ${pathname}, which ASSET_MANIFEST lists for no unit, so no budget counts it`,
+      asset: pathname,
+    });
+  }
+  const own = checkStudio({ files: studio, ceilings, cases });
+  records.push(...own.records);
+  checked.push(...own.checked);
+  return { records, checked, samples };
+}
+
+/**
+ * A breach as a CI failure record (ci/failure-record.schema.json, 1.1): its
+ * unit as `variant`, or as `pack` with its `axis`, and its metric.
+ */
+export function failureFields(record, { gate, reproCommand: command, artifacts }) {
+  const { unit } = record;
+  // Studio's own stills (checkStudio()) are neither a variant nor a pack: their package is the host's.
+  const pack = unit && unit.kind !== 'variant' && unit.kind !== 'studio';
+  return {
+    schemaVersion: '1.1',
+    gate,
+    test: record.test,
+    // A unit from ASSET_MANIFEST names its package packageName; one from the report, package.
+    package: unit?.packageName ?? unit?.package,
+    variant: unit?.kind === 'variant' ? unit.id : undefined,
+    pack: pack ? unit.id : undefined,
+    axis: pack ? unit.kind : undefined,
+    profile: record.profile,
+    route: record.route,
+    viewport: record.viewport,
+    asset: record.asset,
+    metric: record.metric,
+    actual: record.actual,
+    threshold: record.threshold,
+    artifacts,
+    reproCommand: command,
+  };
+}
+
+/** A record as the report keeps it: its unit by kind and id. */
+export function reportRecord(record) {
+  const { unit, ...rest } = record;
+  return {
+    unit: unit ? { kind: unit.kind, id: unit.id, package: unit.packageName } : null,
+    ...rest,
+  };
+}
