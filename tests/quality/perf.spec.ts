@@ -2,6 +2,7 @@ import { writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { reportsDir } from '../../ci/lib/reports.mjs';
+import { CPU_THROTTLING_RATE } from '../harness/trace/report.mjs';
 import { loadThresholds } from '../../quality/thresholds';
 import type * as PreviewScheduler from '../../apps/web/src/lib/studio/preview-scheduler';
 import { CHECKS_ANNOTATION, KIND_ANNOTATION, PERF_INTERACTION_KIND } from './lib/checks';
@@ -159,8 +160,11 @@ for (const cell of perfCells(plan)) {
 // 200, the grid holds four frames at most, the page's heap after a collection at
 // memory.sampleMs is within memory.heapMiB for the tier, and a pointer sweep across the four
 // plates and back blocks the main thread for at most vitals.tbtMs (the code review's C5-L2:
-// each plate's frame loads again as it takes the heavy slot and gives it up). Its values go
-// in its perf.json, which the reporter keeps in summary.json.
+// each plate's frame loads again as it takes the heavy slot and gives it up). The sweep runs
+// under the lab profile's CPU, throttled CPU_THROTTLING_RATE times as the page-load cells'
+// loads are, so it's judged on a slow phone's CPU, not on the runner's: unthrottled, the same
+// work measured 0 ms here and 285 ms on CI's runner (run 41433352108). Its values go in its
+// perf.json, which the reporter keeps in summary.json.
 const demoStudio = perfCells(plan).find((cell) => cell.target === 'demo-studio');
 /** The plates a sweep points at, in order: across the four and back. */
 const SWEEP_ORDER = [0, 1, 2, 3, 2, 1, 0] as const;
@@ -226,6 +230,7 @@ if (demoStudio) {
         // page's probe sees from the sweep's start until the frames settle: the plates' frames
         // are same-origin, on the page's own event loop.
         const views = page.locator('.studio-plate__view');
+        await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU_THROTTLING_RATE });
         const start = await page.evaluate(() => {
           const counter = { loads: 0 };
           Object.defineProperty(window, '__gridLoads', { value: counter });
@@ -266,6 +271,7 @@ if (demoStudio) {
             reloads: state.__gridLoads?.loads ?? 0,
           };
         });
+        await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
         const swept = longTasks.filter((task) => task.startTime >= start);
         const sweepTbtMs = Math.round(totalBlockingTime(swept, start, end));
         const tbtCeiling = ceilingFor('tbtMs', demoStudio.performanceTier, thresholds);
@@ -296,6 +302,7 @@ if (demoStudio) {
             longTaskMs: Math.round(swept.reduce((total, task) => total + task.duration, 0)),
             tbtMs: sweepTbtMs,
             ceilingMs: tbtCeiling,
+            cpuThrottling: CPU_THROTTLING_RATE,
           },
         };
         writeFileSync(file, `${JSON.stringify(result, null, 2)}\n`);
