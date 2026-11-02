@@ -15,18 +15,18 @@ const read = (file: string) => readFileSync(new URL(`../../${file}`, import.meta
 const GATE_DOCS = {
   'docs/variants.md': [
     'pnpm quality:pr',
-    'QUALITY_CHANGED_BASE=origin/next',
+    'QUALITY_CHANGED_BASE=origin/main',
     'pnpm quality:checklist',
     'pnpm quality:full',
     'pnpm quality:release',
   ],
   'skills/variant-developer/references/quality-gates.md': [
-    'QUALITY_CHANGED_BASE=origin/next pnpm quality:pr',
+    'QUALITY_CHANGED_BASE=origin/main pnpm quality:pr',
     'pnpm quality:checklist -- <id>',
     'quality/manual-runs/',
   ],
   'skills/variant-developer/references/audit-checklist.md': [
-    'QUALITY_CHANGED_BASE=origin/next pnpm quality:pr',
+    'QUALITY_CHANGED_BASE=origin/main pnpm quality:pr',
     'pnpm quality:checklist -- <id> --record',
     'pnpm quality:meta',
   ],

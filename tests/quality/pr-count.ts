@@ -18,7 +18,7 @@
 // Locally, after `QUALITY_FIXTURES=1 APPEARANCE_FIXTURES=1 BUDGET_FIXTURES=1
 // pnpm --filter @portfolio/web build:registry --modules-only`:
 //
-//   QUALITY_CHANGED_BASE=origin/next QUALITY_WEB=apps/web pnpm exec tsx tests/quality/pr-count.ts
+//   QUALITY_CHANGED_BASE=origin/main QUALITY_WEB=apps/web pnpm exec tsx tests/quality/pr-count.ts
 
 import { appendFileSync } from 'node:fs';
 import path from 'node:path';

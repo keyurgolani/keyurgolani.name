@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Picks the ci.yml jobs a pull request runs from the paths it changes.
 //
-//   node ci/select-jobs.mjs                  # local: this branch against origin/next
+//   node ci/select-jobs.mjs                  # local: this branch against origin/main
 //   node ci/select-jobs.mjs --base <ref>     # local: against another base
 //   node ci/select-jobs.mjs --github         # the `changes` job
 //
@@ -540,7 +540,7 @@ export const LOCAL_COMMANDS = {
   variants:
     'pnpm build && pnpm test:variants && pnpm ci:pack-distinct-schemes && pnpm ci:pack-distinct-type',
   'external-variant': 'pnpm test:external-variant',
-  'quality-pr-plan': 'pnpm exec tsx tests/quality/pr-count.ts (QUALITY_CHANGED_BASE=origin/next)',
+  'quality-pr-plan': 'pnpm exec tsx tests/quality/pr-count.ts (QUALITY_CHANGED_BASE=origin/main)',
   image:
     'pnpm ci:image && pnpm ci:proxy && pnpm ci:security-proxy && pnpm ci:demo-origin (needs Docker)',
   profiles: 'pnpm smoke:profiles (needs Docker; SMOKE_PROFILES=<part> for one part)',
@@ -604,7 +604,7 @@ function main(argv) {
     };
   } else {
     const at = argv.indexOf('--base');
-    const base = at === -1 ? 'origin/next' : argv[at + 1];
+    const base = at === -1 ? 'origin/main' : argv[at + 1];
     // Committed changes since the merge base, plus uncommitted ones, as a
     // draft PR would see them once pushed.
     const committed = parseNameStatus(git(['diff', '--name-status', '-M', '-z', `${base}...HEAD`]));
