@@ -1,0 +1,21 @@
+# Known bad: an exception that expired before the fixtures' run date, 2026-11-01.
+version: 1
+exceptions:
+  - id: login-primary-target
+    kind: above-aa
+    gate: targets
+    rule: primary
+    owner: keyurgolani
+    rationale: The sign-in button is 40px tall at 390px until #8's sticky bar lands.
+    affectedUsers: Touch users on narrow phones, who get a 40px target where 44px is the floor.
+    fallback: The button still clears the 24px and 32px floors, and Enter submits the form.
+    trackingIssue: '#8'
+    created: '2026-07-01'
+    expires: '2026-09-01'
+    scope:
+      surface: login
+      route: /studio/login
+      tuple: platform-neutral/warm-parchment/humanist-ui/light
+      viewport: 390x844
+      inputMode: touch
+falsePositives: []

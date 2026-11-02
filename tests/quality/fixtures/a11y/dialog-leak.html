@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Dialog that lets focus out, known-bad</title>
+    <style>
+      :focus-visible {
+        outline: 2px solid #000;
+        outline-offset: 2px;
+      }
+      [role='dialog'][hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A dialog Tab walks out of</h1>
+      <div role="dialog" aria-modal="true" aria-label="Settings" id="dialog" hidden>
+        <button type="button" id="close">Close</button>
+      </div>
+      <button type="button" aria-haspopup="dialog" id="open">Open</button>
+      <a href="#behind">Behind the dialog</a>
+    </main>
+    <script>
+      const dialog = document.getElementById('dialog');
+      const open = document.getElementById('open');
+      open.addEventListener('click', () => {
+        dialog.hidden = false;
+        document.getElementById('close').focus();
+      });
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !dialog.hidden) {
+          dialog.hidden = true;
+          open.focus();
+        }
+      });
+    </script>
+  </body>
+</html>

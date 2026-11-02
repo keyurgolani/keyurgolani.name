@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A stop shown only while it has focus, known-good</title>
+    <!--
+      A skip link off the top of the page until it has focus, then two links
+      with a 2px ring. The blur takes the skip link away: its showing is the
+      change, so the check doesn't focus it again, which would scroll to it
+      and start what its focus starts, and Tab goes on from it to the next.
+      The walk ends with no trap, and every stop reached. Its twins
+      (a11y-cases.ts) add a menu open only on :focus-within whose items
+      have no ring, which the blur hides with its items, and a link that no
+      longer takes focus once it's blurred: each unresolved.
+    -->
+    <style>
+      body {
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #fff;
+        color: #222;
+      }
+      a {
+        color: #222;
+      }
+      a:focus-visible {
+        outline: 2px solid #222;
+        outline-offset: 2px;
+      }
+      .skip {
+        position: absolute;
+        top: -10rem;
+        left: 1rem;
+        padding: 0.5rem;
+        background: #fff;
+      }
+      .skip:focus {
+        top: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+    <main id="content">
+      <h1>Shown on focus</h1>
+      <p><a href="#one">One</a></p>
+      <p><a href="#two">Two</a></p>
+      <!-- twin -->
+    </main>
+  </body>
+</html>

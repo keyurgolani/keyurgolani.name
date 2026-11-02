@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A heading over a large numeral, known-bad</title>
+    <!--
+      A large aria-hidden numeral sits behind a heading, out of flow, on a
+      dark gradient. axe skips text behind an element when it resolves a
+      background, so it only sends the heading to the sampler, as
+      incomplete, because the section's background is a gradient (or an
+      image would do). The numeral is the heading's backdrop: #9a9a9a under
+      the #e0e0e0 heading is about 2.1:1, under the 3:1 large text needs.
+      The sampler hides only a neighbour's glyphs at the box's edge, so it
+      measures the numeral and the heading fails there. axe sends the
+      numeral too, overlapped by the heading, and it fails at about 1:1
+      against the heading's antialiased edges, which pass through its grey.
+    -->
+    <style>
+      body {
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #111;
+        color: #e0e0e0;
+        color-scheme: dark;
+      }
+      .chapter {
+        position: relative;
+        padding: 2rem;
+        background: linear-gradient(90deg, #111, #151515);
+      }
+      .chapter .numeral {
+        position: absolute;
+        top: 0;
+        left: 1rem;
+        font-size: 10rem;
+        font-weight: 700;
+        line-height: 1;
+        color: #9a9a9a;
+      }
+      .chapter h2 {
+        position: relative;
+        margin: 2rem 0 0;
+        font-size: 2rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Chapters</h1>
+      <section class="chapter">
+        <span class="numeral" aria-hidden="true">08</span>
+        <h2>Overlapping heading text</h2>
+      </section>
+    </main>
+  </body>
+</html>

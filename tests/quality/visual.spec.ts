@@ -1,0 +1,89 @@
+import { CHECKS_ANNOTATION, KIND_ANNOTATION, type VisualCheck } from './lib/checks';
+import { VISUAL_TAG } from './lib/pr-shards';
+import { cellServer, serverTag } from './lib/server';
+import { VIEWPORTS } from './lib/matrix';
+import {
+  expectedFonts,
+  fontDifference,
+  imageFonts,
+  inPinnedImage,
+  RANDOM_SEED,
+  seedRandomScript,
+  VISUAL_SKIP,
+  VISUAL_VIEWPORTS,
+  visualCells,
+} from './lib/visual';
+import { expect, test } from './fixtures';
+import { loadPlan } from './plan';
+
+// The visual cells (#11, Slice 1, item 7): each composition sentinel on the
+// complete fixture, at 1440x900 and 390x844, only in the pinned Playwright
+// image, with Math.random seeded and the image's fonts exactly fonts.txt's.
+// Their screenshots are attached; Slice 4 commits baselines for the ones
+// tests/variants doesn't cover.
+
+const plan = await loadPlan();
+const cells = visualCells(plan);
+const viewports = VIEWPORTS.filter(({ id }) => VISUAL_VIEWPORTS.includes(id));
+
+/**
+ * The image's fonts against fonts.txt, read once per worker. run.ts writes
+ * the list it found as quality/fonts.observed.txt on every run in the image,
+ * whatever the run's tests (writeObservedFonts).
+ */
+let fontCheck: { missing: string[]; extra: string[] } | undefined;
+function checkFonts(): { missing: string[]; extra: string[] } {
+  fontCheck ??= fontDifference(expectedFonts(), imageFonts());
+  return fontCheck;
+}
+
+test.describe('visual', () => {
+  test.skip(!inPinnedImage(), VISUAL_SKIP);
+
+  for (const cell of cells) {
+    const tag = serverTag(cellServer(cell));
+    test.describe(cell.id, () => {
+      for (const viewport of viewports) {
+        test.describe(viewport.id, () => {
+          test.use({
+            viewport: { width: viewport.width, height: viewport.height },
+            isMobile: viewport.isMobile ?? false,
+            hasTouch: viewport.hasTouch ?? false,
+          });
+          test(
+            `${cell.target} ${cell.state} at ${viewport.id}, seeded, in the pinned image`,
+            {
+              tag: [tag, VISUAL_TAG],
+              annotation: [
+                { type: KIND_ANNOTATION, description: 'visual' },
+                { type: 'route', description: cell.route },
+                { type: 'cell', description: cell.id },
+                { type: 'target', description: `${cell.kind}:${cell.target}` },
+                { type: 'viewport', description: viewport.id },
+              ],
+            },
+            async ({ page }, testInfo) => {
+              const ran: VisualCheck[] = [];
+              expect(checkFonts(), "the image's fonts against fonts.txt").toEqual({
+                missing: [],
+                extra: [],
+              });
+              ran.push('fonts');
+              await page.addInitScript(seedRandomScript, RANDOM_SEED);
+              const response = await page.goto(cell.path);
+              expect(response?.status()).toBe(cell.expectedStatus);
+              ran.push('status');
+              await page.evaluate(() => document.fonts.ready);
+              await testInfo.attach('screenshot.png', {
+                body: await page.screenshot({ fullPage: true, animations: 'disabled' }),
+                contentType: 'image/png',
+              });
+              ran.push('screenshot');
+              testInfo.annotations.push({ type: CHECKS_ANNOTATION, description: ran.join(' ') });
+            },
+          );
+        });
+      }
+    });
+  }
+});

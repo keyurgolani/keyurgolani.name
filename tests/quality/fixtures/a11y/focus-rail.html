@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A faint ring beside a full-height rail, known-bad</title>
+    <!--
+      A fixed rail down the left edge, the viewport's full height, and a link
+      just past it, low on a tall page, with a 1px #ccc ring. The rail is a
+      stuck cover over the ring's band that no scroll clears: scrolled to
+      clear it either way, the link would leave the viewport. So the page
+      stays, and the ring is measured where it is, and fails; it never
+      passes because a scroll took the link out of the shot.
+    -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #fff;
+        color: #222;
+      }
+      .rail {
+        position: fixed;
+        inset: 0 auto 0 0;
+        width: 48px;
+        background: #000;
+      }
+      main {
+        padding: 0 0 100vh 52px;
+      }
+      .spacer {
+        height: 150vh;
+      }
+      a {
+        color: #222;
+      }
+      a:focus-visible {
+        outline: 1px solid #ccc;
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="rail"></div>
+    <main>
+      <h1>Beside a rail</h1>
+      <div class="spacer"></div>
+      <p><a href="#beside">A link beside the rail</a></p>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Motion under reduce, known-bad</title>
+    <!-- A spinner that ignores the reduced-motion preference. -->
+    <style>
+      .spin {
+        width: 2rem;
+        height: 2rem;
+        border: 4px solid #333;
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(1turn);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A spinner that never stops</h1>
+      <div class="spin" aria-hidden="true"></div>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,14 @@
+# Known bad (#11, Slice 1, item 13): a pull_request_target trigger, which runs a
+# fork's pull request with the base repository's secrets. Its job is otherwise
+# fine, so it fails for the trigger alone.
+name: label
+on:
+  pull_request_target:
+    types: [labeled]
+permissions:
+  contents: read
+jobs:
+  label:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo labeled

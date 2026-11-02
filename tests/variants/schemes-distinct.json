@@ -1,0 +1,297 @@
+{
+  "note": "Thresholds from pack-distinct-calibration.spec.ts. Each score has an alike line (null when its calibration found no gap of 0.1 at both viewports, so it doesn't vote) and a clone floor. A pair fails when its pixels are under their alike line, whatever its tokens say (the token line decides only while the pixels have none), or when either score is under its clone floor. For a design language the token score reads only the groups a static render shows (corners, depth, borders, density), and the material (surface) only when the composition's render shows a visible Surface primitive (`material` records that detection and its reason); focus, motion, states, icons, texture, and an unrendered material are informational lines that never score. `pinned` true holds `composition` as the scored one whatever the coverage procedure picks, and `procedurePick` records that pick and its coverage. `enforced` true fails the run on a failing pair no ruling names, on any clone, and on a ruling whose pair fails nowhere (unneeded); false only reports. For a color scheme the perceptual score is ΔE00 (`de`, CIEDE2000) over the canvas, the primary and secondary text, the accent, and the default, subtle, and raised (prominent) surfaces, in each base mode, from the colors the render computes, each mode combined as the mean of its roles, and the worse mode's mean over 50 decides (a mean over 50 counts as 1), so a pair under the line in either mode fails whatever the other does (lead A, the LANG-5b fix round; before it, one mean over both modes let a dark-only twin pass); a role under a ΔE00 of 2 is flagged near and never votes. The ΔE00 scale of 50 was chosen so the controls' gap can vote (over 100 the nearest family pair, at a mean ΔE00 of 7.5, never cleared calibrate()'s 0.1), and the calibrated line, alike under a mean ΔE00 of 3.8, is the decision (lead A, LANG-4). The edges are dropped: no `px` line, and a scheme pair is never judged on them. Generator schemes are unscorable without the owner's input and never counted as distinct (`skipped`). The ΔE00 alike line is kept at 0.076 (a mean of 3.8) by decision; recalibrate after the surge (lead A, 2026-10-30). Derived roles may shift up to 2.0 ΔE00 for contrast, hue within 5°; beyond that, lead review (lead A, 2026-10-30).",
+  "calibrated": true,
+  "enforced": true,
+  "axis": "colorScheme",
+  "composition": "spatial-bento",
+  "pinned": true,
+  "procedurePick": {
+    "composition": "aurora-glass",
+    "coverage": 16.79,
+    "scoredCoverage": 9.285
+  },
+  "tuple": {
+    "designLanguage": "platform-neutral",
+    "colorScheme": "warm-parchment",
+    "typography": "humanist-ui",
+    "displayMode": "system"
+  },
+  "material": {
+    "mode": "detected",
+    "scored": false,
+    "shares": {
+      "desktop": 0,
+      "mobile": 0
+    },
+    "reason": "visible Surfaces cover 0 at desktop and 0 at mobile, under 0.02 of the first viewport at one or more viewport: the material is informational"
+  },
+  "thresholds": {
+    "de": {
+      "alike": {
+        "desktop": 0.076,
+        "mobile": 0.076
+      },
+      "clone": {
+        "desktop": 0.001,
+        "mobile": 0.001
+      }
+    },
+    "token": {
+      "alike": null,
+      "clone": {
+        "desktop": 0.001,
+        "mobile": 0.001
+      }
+    }
+  },
+  "calibration": {
+    "de": {
+      "alike": {
+        "desktop": {
+          "same": 0,
+          "different": 0.151,
+          "gap": 0.151,
+          "threshold": 0.076
+        },
+        "mobile": {
+          "same": 0,
+          "different": 0.151,
+          "gap": 0.151,
+          "threshold": 0.076
+        }
+      },
+      "clone": {
+        "desktop": {
+          "floor": 0,
+          "threshold": 0
+        },
+        "mobile": {
+          "floor": 0,
+          "threshold": 0
+        }
+      }
+    },
+    "token": {
+      "alike": {
+        "desktop": {
+          "same": 0,
+          "different": 0.06,
+          "gap": 0.06,
+          "threshold": null
+        },
+        "mobile": {
+          "same": 0,
+          "different": 0.06,
+          "gap": 0.06,
+          "threshold": null
+        }
+      },
+      "clone": {
+        "desktop": {
+          "floor": 0,
+          "threshold": 0
+        },
+        "mobile": {
+          "floor": 0,
+          "threshold": 0
+        }
+      }
+    }
+  },
+  "packs": [
+    {
+      "id": "arctic-aurora",
+      "family": "vivid"
+    },
+    {
+      "id": "aurora-meadow",
+      "family": "earthy"
+    },
+    {
+      "id": "blue-orange-color-safe",
+      "family": "accessible"
+    },
+    {
+      "id": "bookcloth",
+      "family": "earthy"
+    },
+    {
+      "id": "botanical-sage",
+      "family": "earthy"
+    },
+    {
+      "id": "control-room",
+      "family": "neutral"
+    },
+    {
+      "id": "cool-color-safe",
+      "family": "accessible"
+    },
+    {
+      "id": "coral-lagoon",
+      "family": "vivid"
+    },
+    {
+      "id": "desert-terracotta",
+      "family": "earthy"
+    },
+    {
+      "id": "drafting-blue",
+      "family": "vivid"
+    },
+    {
+      "id": "earthy-clay",
+      "family": "earthy"
+    },
+    {
+      "id": "forest-moss",
+      "family": "earthy"
+    },
+    {
+      "id": "graphite",
+      "family": "neutral"
+    },
+    {
+      "id": "high-contrast",
+      "family": "accessible"
+    },
+    {
+      "id": "iridescent-pearl",
+      "family": "vivid"
+    },
+    {
+      "id": "jewel-twilight",
+      "family": "vivid"
+    },
+    {
+      "id": "lavender-dusk",
+      "family": "vivid"
+    },
+    {
+      "id": "liquid-dusk",
+      "family": "vivid"
+    },
+    {
+      "id": "low-stimulus-warm",
+      "family": "accessible"
+    },
+    {
+      "id": "neon-city",
+      "family": "vivid"
+    },
+    {
+      "id": "neutral-slate",
+      "family": "neutral"
+    },
+    {
+      "id": "night-terminal",
+      "family": "neutral"
+    },
+    {
+      "id": "ocean-abyss",
+      "family": "earthy"
+    },
+    {
+      "id": "oled-black",
+      "family": "vivid"
+    },
+    {
+      "id": "paper-ink",
+      "family": "neutral"
+    },
+    {
+      "id": "pastel-sorbet",
+      "family": "vivid"
+    },
+    {
+      "id": "poster-primaries",
+      "family": "vivid"
+    },
+    {
+      "id": "reduced-chroma",
+      "family": "accessible"
+    },
+    {
+      "id": "sepia-film",
+      "family": "earthy"
+    },
+    {
+      "id": "signal-paper",
+      "family": "neutral"
+    },
+    {
+      "id": "sunset-ember",
+      "family": "vivid"
+    },
+    {
+      "id": "ultramarine-ink",
+      "family": "neutral"
+    },
+    {
+      "id": "warm-parchment",
+      "family": "earthy"
+    },
+    {
+      "id": "zinc",
+      "family": "neutral"
+    }
+  ],
+  "skipped": [
+    {
+      "id": "brand-seed",
+      "reason": "a generator scheme: its colors come from the owner's appearance input, and with none the fallback renders in its place"
+    },
+    {
+      "id": "hct-tonal",
+      "reason": "a generator scheme: its colors come from the owner's appearance input, and with none the fallback renders in its place"
+    },
+    {
+      "id": "portfolio-artwork",
+      "reason": "a generator scheme: its colors come from the owner's appearance input, and with none the fallback renders in its place"
+    }
+  ],
+  "excluded": [
+    {
+      "id": "profile-image",
+      "reason": "it's image-derived and waits for the owner to accept its reference record (pnpm catalog show profile-image)."
+    }
+  ],
+  "rulings": [
+    {
+      "pack": "reduced-chroma",
+      "pairs": [["graphite", "reduced-chroma"]],
+      "ruling": "kept by the owner, 2026-10-29",
+      "why": "reduced-chroma is low in saturation on purpose, for visitors who want less color, so it sits near a gray scheme; its purpose is the point, not its look (LANG-4, kept unchanged by LANG-5)."
+    },
+    {
+      "pack": "cool-color-safe",
+      "pairs": [],
+      "ruling": "kept by the owner, 2026-10-29",
+      "why": "cool-color-safe is the color-blind-safe option and doesn't move. neutral-slate isn't a keep: scored per mode it sat 3.17 (light) and 3.78 (dark) from cool-color-safe, so the LANG-5b fix round moved neutral-slate instead, to 5.33 and 5.11 (lead A, 2026-10-30), and LANG-5e lifted its dark slate further apart, to 5.83."
+    },
+    {
+      "pack": "signal-paper",
+      "pairs": [],
+      "ruling": "kept by the owner, 2026-10-29",
+      "why": "signal-paper keeps its paper and signal accent unchanged; LANG-5b moved paper-ink's light away from it instead, and LANG-5d made paper-ink one dove-grey stock in both modes, so the pair no longer fails: per mode after 5d, light 14.04 and dark 10.75, over the line. It rules no pair; enforced, a ruling that rules nothing failing is unneeded."
+    },
+    {
+      "pack": "blue-orange-color-safe",
+      "pairs": [],
+      "ruling": "derived shifts accepted: derived roles may shift up to 2.0 ΔE00 for contrast, hue within 5°; beyond that, lead review (lead A, 2026-10-30)",
+      "why": "The LANG-5b fix round moved only its light text and dark canvas anchors (accent and secondary, the color-safe pairing, unchanged). The solver's contrast derivations moved light accent-text #0260ac to #0460a9 (ΔE00 0.39, hue 1.2°) and signature-end #ba610f to #bc610a (0.51, 0.1°), and dark accent-text #5eb3ff to #6eb9fc (1.96, hue 2.3°, lightness 70.8 to 72.9), lifted for contrast on the deeper navy."
+    },
+    {
+      "pack": "desert-terracotta",
+      "pairs": [],
+      "ruling": "derived shift 2.06 ΔE00, hue 0.5°, accepted (lead A, 2026-10-30)",
+      "why": "LANG-5b moved desert-terracotta 1.1.1 to 1.1.2 off its warm-paper twins. With its accent anchor fixed, the solver darkened light accent-text #8d452f to #84422d for contrast on the new paper: ΔE00 2.06, hue 0.5°, 0.06 over the 2.0 bound. The lead's merge check flagged it (report:derived-bound against 131fe8863) and accepted it on review as a pure darkening."
+    },
+    {
+      "pack": "paper-ink",
+      "pairs": [],
+      "ruling": "the contrast floor forces both reds to the same lightness; hue and context carry the difference (lead A, 2026-10-30)",
+      "why": "LANG-5d moved paper-ink's claret rubric off the danger red: ΔE_ok accent to danger light 0.040 to 0.115 (#87133b, hue 8°, against #b53143, 18°) and dark 0.080 to 0.173 (#c8536c, 10°, against #ff8e9c, 13°). Two derived pairs stay closer, accepted: dark accent-text #dda4b4 to danger 0.070, since a link lifts to about L 0.78 to read at 4.95:1 on the raised dark surface where the danger red already sits (L 0.77), and the high-contrast sets, 0.033 light (#87133b to #7f222f) and 0.056 dark (#de98a7 to #ff8e9c), since high-contrast-v2 solves both reds to the same 7:1. The claret is the stock's identity, so the dark link stays red."
+    }
+  ]
+}

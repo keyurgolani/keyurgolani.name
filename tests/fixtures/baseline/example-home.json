@@ -1,0 +1,39 @@
+{
+  "about": "What the baseline home page rendered for portfolio.example.yml, recorded before #4 changed any renderer: next dev with an empty config/, then curl -s of /. sectionIds lists every <section id> in document order.",
+  "recordedAt": "2026-10-20",
+  "root": {
+    "data-variant": "editorial",
+    "data-color-scheme": "warm",
+    "data-typography": "classic"
+  },
+  "sectionIds": [
+    "top",
+    "about",
+    "now",
+    "at-a-glance",
+    "years-in",
+    "currently-focused-on",
+    "work-showcase",
+    "skills",
+    "off-the-page",
+    "experience",
+    "education",
+    "essays",
+    "publications",
+    "talks",
+    "awards",
+    "incident-history",
+    "patents",
+    "looking",
+    "listening-a-small-experiment",
+    "press",
+    "words-from-collaborators",
+    "quote",
+    "stack-i-currently-reach-for",
+    "engagements",
+    "elsewhere",
+    "on-github",
+    "contact",
+    "want-to-work-together"
+  ]
+}

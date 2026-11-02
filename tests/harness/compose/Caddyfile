@@ -1,0 +1,27 @@
+{
+	# No ACME and no outbound requests: certificates come from the local CA.
+	local_certs
+	skip_install_trust
+	auto_https disable_redirects
+	admin off
+	# The test client reaches the proxy from a private address, so Caddy
+	# appends to an X-Forwarded-For the client sent rather than replacing it,
+	# as a proxy behind another proxy does. The app's hop count, not the
+	# proxy, then decides which entry is the source (#2).
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+https://portfolio.test {
+	tls internal
+	reverse_proxy app:3000
+}
+
+# The demo, same-site with the owner's origin as demo.jane.name is with
+# jane.name, when proxy-stack.mjs adds compose.demo.yml (#9, origin-2). With
+# no demo service, a request here fails and nothing else changes.
+https://demo.portfolio.test {
+	tls internal
+	reverse_proxy demo:3000
+}

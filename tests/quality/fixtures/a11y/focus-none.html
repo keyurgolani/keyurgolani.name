@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>No focus indicator, known-bad</title>
+    <!-- The ring is taken away and nothing replaces it. -->
+    <style>
+      button:focus {
+        outline: none;
+      }
+      button {
+        font: 16px system-ui;
+        padding: 4px 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A button with no focus change</h1>
+      <button type="button">Save</button>
+    </main>
+  </body>
+</html>

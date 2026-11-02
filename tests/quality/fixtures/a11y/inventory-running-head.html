@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A running head that follows the scroll, known-good</title>
+    <!--
+      Editorial Evidence's running head: a line a script keeps in step with
+      the section in view. The baseline is read at the top, "Section 1". An
+      earlier check leaves the page scrolled to the last section, "Section
+      3", and print, read on the page as it stands, would say an item went
+      missing. Print reads from the top, where the baseline did.
+    -->
+    <style>
+      body {
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+      }
+      section {
+        min-height: 120vh;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Running head</h1>
+      <p id="running">Section 1</p>
+      <section id="s1"><h2>One</h2></section>
+      <section id="s2"><h2>Two</h2></section>
+      <section id="s3"><h2>Three</h2></section>
+    </main>
+    <script>
+      const running = document.getElementById('running');
+      addEventListener('scroll', () => {
+        const sections = [...document.querySelectorAll('section')];
+        const at = sections.filter((each) => each.getBoundingClientRect().top < innerHeight / 2);
+        running.textContent = `Section ${Math.max(1, at.length)}`;
+      });
+    </script>
+  </body>
+</html>

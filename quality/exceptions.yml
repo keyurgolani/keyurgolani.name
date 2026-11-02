@@ -1,0 +1,150 @@
+# Exceptions to #11's quality gates (Slice 1, item 12). pnpm quality:exceptions
+# validates this file, and the exceptions block of #6's runtime-budgets.json,
+# with tests/quality/lib/exceptions.ts.
+#
+# An exception waives one rule of one gate for an exact scope: every field
+# the gate varies on, each named outright and never wildcarded, and no other.
+# Its kind says what it waives: a floor above AA (above-aa), a contrast rule
+# on decorative content, named by selector (decorative), a timing ceiling
+# (timing), or a flaky interaction test owned by the surface's owner
+# (quarantine, 14 days at most). Budget exceptions live in runtime-budgets.json.
+# WCAG A and AA failures on essential content can't be excepted, in any tier.
+# expires is at most 90 days after created, and an expired entry fails.
+#
+#   exceptions:
+#     - id: login-primary-target
+#       kind: above-aa
+#       gate: targets
+#       rule: primary
+#       owner: keyurgolani
+#       rationale: Why the floor can't hold yet.
+#       affectedUsers: Who meets the smaller control.
+#       fallback: What they can use instead.
+#       trackingIssue: '#8'
+#       created: '2026-10-22'
+#       expires: '2026-12-01'
+#       scope:
+#         surface: login
+#         route: /studio/login
+#         tuple: platform-neutral/warm-parchment/humanist-ui/light
+#         viewport: 390x844
+#         inputMode: touch
+#
+# An exception may also name one element by selector, the exact selector the
+# cell's finding reports: it then waives that element's findings alone, and the
+# same rule on any other element in the cell still fails.
+#
+# A confirmed axe false positive goes under falsePositives, with the axe rule,
+# the selector, the quality/manual-runs/ record proving the criterion passes,
+# and the axe-core version it was confirmed under. It lapses on an axe upgrade.
+
+version: 1
+exceptions:
+  - id: flux-perimeter-390
+    kind: above-aa
+    gate: focus
+    rule: perimeter
+    owner: keyurgolani
+    rationale: "Pending the post-Sun platform focus target (lead's ruling 2026-10-31): the 390 ring findings move between elements with sub-pixel position; see _execution/notes/kgn-e-flux-p2-ring-ruling.md."
+    affectedUsers: Keyboard users on a phone meet whole 2px rings at 3.69:1 whose antialiased edge pixels read under 3:1 at some sub-pixel positions, so the pixel count falls short on one control or another (the talks summary, then a stats disclosure).
+    fallback: Every ring is drawn whole, 2px, at 3.69:1 against the canvas where it covers a pixel; each control keeps its own text and hover cues.
+    trackingIssue: '#11'
+    created: '2026-10-31'
+    expires: '2027-01-29'
+    scope:
+      surface: flux
+      route: /
+      tuple: platform-neutral/warm-parchment/humanist-ui/system
+      viewport: 390x844
+      preferenceMode: default
+  - id: flux-appearance-summary-perimeter-1024
+    kind: above-aa
+    gate: focus
+    rule: perimeter
+    owner: keyurgolani
+    rationale: "Pending the post-Sun platform focus target (lead's ruling 2026-10-31); see _execution/notes/kgn-e-flux-p2-ring-ruling.md."
+    affectedUsers: Keyboard users focusing the visitor's Appearance control meet a whole 2px ring at 3.69:1 whose antialiased edge pixels read under 3:1, so the pixel count falls short of the ring's area.
+    fallback: The ring is drawn whole, 2px, at 3.69:1 against the canvas where it covers a pixel; the element keeps its own text and hover cues.
+    trackingIssue: '#11'
+    created: '2026-10-31'
+    expires: '2027-01-29'
+    selector: '#appearance > summary:nth-child(1)'
+    scope:
+      surface: flux
+      route: /
+      tuple: platform-neutral/warm-parchment/humanist-ui/system
+      viewport: 1024x768
+      preferenceMode: default
+  - id: flux-contact-email-perimeter-1024
+    kind: above-aa
+    gate: focus
+    rule: perimeter
+    owner: keyurgolani
+    rationale: "Pending the post-Sun platform focus target (lead's ruling 2026-10-31); see _execution/notes/kgn-e-flux-p2-ring-ruling.md."
+    affectedUsers: Keyboard users focusing the contact address meet a whole 2px ring at 3.69:1 whose antialiased edge pixels read under 3:1, so the pixel count falls short of the ring's area.
+    fallback: The ring is drawn whole, 2px, at 3.69:1 against the canvas where it covers a pixel; the element keeps its own text and hover cues.
+    trackingIssue: '#11'
+    created: '2026-10-31'
+    expires: '2027-01-29'
+    selector: '#contact > div:nth-child(2) > div:nth-child(1) > div:nth-child(1) > p:nth-child(1) > a:nth-child(1)'
+    scope:
+      surface: flux
+      route: /
+      tuple: platform-neutral/warm-parchment/humanist-ui/system
+      viewport: 1024x768
+      preferenceMode: default
+  - id: flux-contact-email-perimeter-1440
+    kind: above-aa
+    gate: focus
+    rule: perimeter
+    owner: keyurgolani
+    rationale: "Pending the post-Sun platform focus target (lead's ruling 2026-10-31); see _execution/notes/kgn-e-flux-p2-ring-ruling.md."
+    affectedUsers: Keyboard users focusing the contact address meet a whole 2px ring at 3.69:1 whose antialiased edge pixels read under 3:1, so the pixel count falls short of the ring's area.
+    fallback: The ring is drawn whole, 2px, at 3.69:1 against the canvas where it covers a pixel; the element keeps its own text and hover cues.
+    trackingIssue: '#11'
+    created: '2026-10-31'
+    expires: '2027-01-29'
+    selector: '#contact > div:nth-child(2) > div:nth-child(1) > div:nth-child(1) > p:nth-child(1) > a:nth-child(1)'
+    scope:
+      surface: flux
+      route: /
+      tuple: platform-neutral/warm-parchment/humanist-ui/system
+      viewport: 1440x900
+      preferenceMode: default
+  - id: flux-contact-email-perimeter-1440-forced-colors
+    kind: above-aa
+    gate: focus
+    rule: perimeter
+    owner: keyurgolani
+    rationale: "Pending the post-Sun platform focus target (lead's ruling 2026-10-31); see _execution/notes/kgn-e-flux-p2-ring-ruling.md. Under forced-colors the ring is drawn whole around every line fragment of the link, wrapped or not (the lead's check, 2026-11-01): _execution/artifacts/kgn-e-flux-p2-mail-ring/."
+    affectedUsers: Keyboard users focusing the contact address meet a whole 2px ring, in the mode's own colour, whose antialiased edge pixels read under 3:1, so the pixel count falls short of the ring's area.
+    fallback: The ring is drawn whole, 2px, around every line fragment of the link; the element keeps its own text and hover cues.
+    trackingIssue: '#11'
+    created: '2026-11-01'
+    expires: '2027-01-29'
+    selector: '#contact > div:nth-child(2) > div:nth-child(1) > div:nth-child(1) > p:nth-child(1) > a:nth-child(1)'
+    scope:
+      surface: flux
+      route: /
+      tuple: platform-neutral/warm-parchment/humanist-ui/system
+      viewport: 1440x900
+      preferenceMode: forced-colors
+  - id: flux-contact-email-perimeter-1440-contrast-more
+    kind: above-aa
+    gate: focus
+    rule: perimeter
+    owner: keyurgolani
+    rationale: "Pending the post-Sun platform focus target (lead's ruling 2026-10-31); see _execution/notes/kgn-e-flux-p2-ring-ruling.md. Under contrast-more the ring is drawn whole around every line fragment of the link, wrapped or not (the lead's check, 2026-11-01): _execution/artifacts/kgn-e-flux-p2-mail-ring/."
+    affectedUsers: Keyboard users focusing the contact address meet a whole 2px ring, in the mode's own colour, whose antialiased edge pixels read under 3:1, so the pixel count falls short of the ring's area.
+    fallback: The ring is drawn whole, 2px, around every line fragment of the link; the element keeps its own text and hover cues.
+    trackingIssue: '#11'
+    created: '2026-11-01'
+    expires: '2027-01-29'
+    selector: '#contact > div:nth-child(2) > div:nth-child(1) > div:nth-child(1) > p:nth-child(1) > a:nth-child(1)'
+    scope:
+      surface: flux
+      route: /
+      tuple: platform-neutral/warm-parchment/humanist-ui/system
+      viewport: 1440x900
+      preferenceMode: contrast-more
+falsePositives: []

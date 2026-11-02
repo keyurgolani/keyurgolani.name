@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A star in a plate, beside its name, known-good</title>
+    <!--
+      Kinetic Cosmos's plates: a name on a near-white gradient, which axe
+      leaves to the sampler, and a star painted in the name's own color in
+      the plate's box, well clear of its letters. The name reads at about
+      15:1 on the gradient; the whole box, star and all, is 1.00:1. Only
+      the background within HALO (2px) of the glyphs counts, so it passes.
+      The known-bad cases add a plate whose star touches the last letter,
+      and a faint name with no star (a11y-cases.ts).
+    -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #fff;
+        color: #222;
+      }
+      main {
+        padding: 1rem;
+      }
+      .plate {
+        position: relative;
+        width: 24rem;
+        margin: 0 0 1rem;
+        background: linear-gradient(90deg, #fff, #f6f6f6);
+        color: #222;
+      }
+      .star {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #222;
+        vertical-align: middle;
+      }
+      .plate .star.far {
+        position: absolute;
+        inset-inline-end: 2rem;
+        inset-block-start: calc(50% - 3px);
+      }
+      .faint {
+        color: #bbb;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Plates</h1>
+      <p class="plate">Pluto<span class="star far" aria-hidden="true"></span></p>
+      <!-- crowd -->
+      <!-- faint -->
+    </main>
+  </body>
+</html>

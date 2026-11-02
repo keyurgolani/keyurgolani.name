@@ -1,0 +1,17 @@
+%YAML 1.1
+---
+# Known bad (#11, Slice 1, item 13): a %YAML 1.1 directive, under which on: is
+# the boolean true, so a reader would see no trigger and skip every rule. The
+# workflow also has pull_request_target, write-all, and a secret, and fails for
+# the directive alone, since the check refuses the file before it reads it.
+name: label
+on:
+  pull_request_target:
+permissions: write-all
+jobs:
+  label:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: ./label.sh
+        env:
+          TOKEN: ${{ secrets.LABEL_TOKEN }}

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Fixed-width content, known-bad</title>
+    <!-- A 760px column that never narrows: sideways scroll at 320px and at 200% zoom. -->
+    <style>
+      body {
+        margin: 0;
+      }
+      .column {
+        width: 760px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="column">
+      <h1>A column that won't reflow</h1>
+      <p>Text in a column that stays 760 pixels wide whatever the viewport does.</p>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A ring under a sticky header, and a rotated one, known-good</title>
+    <!--
+      Two rings that pass, which a clip at rest misreads. Focus on the
+      first link scrolls the page, as a dock's focus lift or an anchor's
+      jump can, so the link sits just under the sticky header: its center
+      shows, and the top of its 2px ring is under the header's fill. The
+      second link is rotated 5deg, so the bounds round it are longer than
+      the ring it draws. Scrolled clear, and measured round its own sides,
+      each has a whole 2px ring at 3:1. Whether the header hides a stop
+      from a visitor is the occlusion check's. The known-bad case adds a
+      visible link with a faint 1px ring (a11y-cases.ts).
+    -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #fff;
+        color: #222;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        height: 4rem;
+        background: #222;
+        color: #fff;
+      }
+      header p {
+        margin: 0;
+        padding: 1rem;
+      }
+      main {
+        padding: 2rem 1rem 120vh;
+      }
+      a {
+        color: #222;
+      }
+      a:focus-visible {
+        outline: 2px solid #222;
+        outline-offset: 2px;
+      }
+      .turned {
+        display: inline-block;
+        rotate: 5deg;
+        padding: 0.25rem 0.5rem;
+      }
+      .faint:focus-visible {
+        outline: 1px solid #ccc;
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <header><p>Site header</p></header>
+    <main>
+      <h1>Links</h1>
+      <p><a href="#lifted" id="lifted">A link focus leaves under the header</a></p>
+      <p style="margin-top: 4rem"><a class="turned" href="#turned">A rotated link</a></p>
+      <!-- faint -->
+    </main>
+    <script>
+      // Focus lands the link with the top of its ring under the header: its top 2px under it.
+      document.getElementById('lifted').addEventListener('focus', (event) => {
+        const top = event.target.getBoundingClientRect().top + scrollY;
+        scrollTo(0, top - 64 + 2);
+      });
+    </script>
+  </body>
+</html>

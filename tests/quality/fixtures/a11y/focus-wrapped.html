@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A link that wraps onto three lines, known-good</title>
+    <!--
+      A link wrapped onto three lines: 2px, dark, set out 2px. Chromium draws
+      one outline round line boxes that touch once the ring sets them out,
+      so the ring is held to the length round its line boxes, the edges two
+      lines share left out; it passes. Its twin's second wrapped link has a
+      faint 1px ring, #ccc on white, and still fails (a11y-cases.ts).
+    -->
+    <style>
+      body {
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #fff;
+        color: #222;
+      }
+      p {
+        width: 9rem;
+      }
+      a {
+        color: #222;
+      }
+      a:focus-visible {
+        outline: 2px solid #222;
+        outline-offset: 2px;
+      }
+      .faint:focus-visible {
+        outline: 1px solid #ccc;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Wrapped</h1>
+      <p><a href="#wrapped">A link long enough to wrap onto three short lines</a></p>
+      <!-- faint -->
+    </main>
+  </body>
+</html>

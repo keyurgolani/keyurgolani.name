@@ -1,0 +1,105 @@
+// The quality cells' config (#11, Slice 1): the browser suite's config
+// (#12's, Playwright 1.58.2), with the cells' specs and the quality
+// reporter. `pnpm quality:pr` and `pnpm quality:full` run it through
+// tests/quality/run.ts, which builds the quality host, plants the canary,
+// and judges the run; without them it stops.
+//
+// A cell's server is a worker fixture, which Playwright sets per project,
+// so the plan's servers each get a project per engine the mode plans, and
+// each cell test carries its server's tag, which only that project's grep
+// takes. The harness's own checks get a project per engine too. Tests of
+// one project share its server, so they run in order on one worker; two
+// projects run at once. Nothing retries: accessibility and performance
+// assertions never do. A quality:pr shard runs only its own spec files in
+// each project (lib/pr-shards.ts), and only its part's tests in a project
+// whose cell group is split; so does a quality:full shard, of the release
+// plan or of a night's slice (lib/full-shards.ts).
+import path from 'node:path';
+import { defineConfig, devices } from '@playwright/test';
+import { reportsDir } from '../../ci/lib/reports.mjs';
+import base from '../../playwright.config';
+import { TRACE_LAUNCH_ARGS } from '../harness/trace/policy.mjs';
+import { runCanary, runNight, runShard } from './lib/env';
+import { fullShard, VISUAL_SPEC } from './lib/full-shards';
+import { RUN_ENGINES, type Engine } from './lib/matrix';
+import {
+  CELL_SPEC,
+  HARNESS_SPECS,
+  harnessProject,
+  PERF_SPEC,
+  projectGrep,
+  prShard,
+  serverProject,
+  SHARD_WORKERS,
+  shardFiles,
+  shardTests,
+} from './lib/pr-shards';
+import { HARNESS_SERVER, planServers } from './lib/server';
+import { loadPlan } from './plan';
+
+const reports = path.join(reportsDir(), 'quality');
+const plan = await loadPlan();
+// Fails here, before any test, when run.ts planted none.
+runCanary();
+
+const DEVICES: Readonly<Record<Engine, (typeof devices)[string]>> = {
+  chromium: devices['Desktop Chrome'],
+  firefox: devices['Desktop Firefox'],
+  webkit: devices['Desktop Safari'],
+};
+
+/** Each engine's device, and for Chromium, #6's trace policy: no name but loopback resolves, and no proxy is used. */
+const engineUse = (engine: Engine) => ({
+  ...DEVICES[engine],
+  // Named outright, so summary.json can say which engine each test ran on.
+  browserName: engine,
+  ...(engine === 'chromium' ? { launchOptions: { args: [...TRACE_LAUNCH_ARGS] } } : {}),
+});
+
+// perf.spec.ts runs each target's representative cell on the same servers (#11, 11-3).
+const cellSpecs = [CELL_SPEC, PERF_SPEC, ...(plan.mode === 'full' ? [VISUAL_SPEC] : [])];
+
+// A PR shard (lib/pr-shards.ts) keeps every project, so each shard's
+// summary lists them all, and runs only the spec files it was given in each.
+// A full run's shard or night (lib/full-shards.ts) does the same, with the
+// projects its run lists: a night's, those of its slice.
+const shard = runShard();
+const night = runNight();
+if (night && plan.mode !== 'full') throw new Error('QUALITY_NIGHT is for quality:full.');
+const full =
+  plan.mode === 'full' && (shard || night) ? fullShard(plan, RUN_ENGINES.full, shard, night) : null;
+const mine = full ? full.shard : shard ? prShard(plan, RUN_ENGINES[plan.mode], shard) : null;
+const assigned = mine ? shardFiles(mine) : null;
+// A project whose cell group is split runs only its part's tests here.
+const testsOf = mine ? shardTests(mine) : new Map<string, string[]>();
+const specsFor = (project: string, specs: readonly string[]) =>
+  assigned ? specs.filter((file) => assigned.get(project)?.includes(file)) : [...specs];
+const listed = (project: string) => !full || full.projects.has(project);
+
+export default defineConfig({
+  ...base,
+  testDir: '.',
+  outputDir: path.join(reports, 'results'),
+  fullyParallel: false,
+  retries: 0,
+  // The planner sizes shards for this many (lib/pr-shards.ts).
+  workers: SHARD_WORKERS,
+  reporter: [['list'], ['./reporter.ts']],
+  use: { ...base.use, trace: 'retain-on-failure', screenshot: 'only-on-failure' },
+  projects: RUN_ENGINES[plan.mode].flatMap((engine) => [
+    {
+      name: harnessProject(engine),
+      testMatch: specsFor(harnessProject(engine), HARNESS_SPECS),
+      use: { ...engineUse(engine), cellServer: HARNESS_SERVER },
+    },
+    ...planServers(plan)
+      .filter(({ id }) => listed(serverProject(engine, id)))
+      .map(({ id, label, server }) => ({
+        name: serverProject(engine, id),
+        testMatch: specsFor(serverProject(engine, id), cellSpecs),
+        grep: projectGrep(id, testsOf.get(serverProject(engine, id))),
+        use: { ...engineUse(engine), cellServer: server },
+        metadata: { server: label },
+      })),
+  ]),
+});

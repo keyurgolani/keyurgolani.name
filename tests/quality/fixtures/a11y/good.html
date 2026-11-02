@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Accessibility suites, known-good</title>
+    <!--
+      The page every Slice 2 suite passes (#11): a skip link, one main and
+      an h1, a 2px focus ring, a native modal dialog, hover content focus
+      shows too, text that wraps, a gradient behind dark text, a translucent
+      surface reduced transparency makes opaque, and motion only without a
+      reduce preference.
+    -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 system-ui,
+          sans-serif;
+        color: #111;
+        background: #fff;
+      }
+      main {
+        max-width: 40rem;
+        margin: 0 auto;
+        padding: 1rem;
+      }
+      :focus-visible {
+        outline: 2px solid #000;
+        outline-offset: 2px;
+      }
+      .skip:not(:focus) {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+      }
+      a,
+      button {
+        display: inline-block;
+        min-width: 24px;
+        min-height: 24px;
+      }
+      .card .more {
+        display: none;
+      }
+      .card:hover .more,
+      .card:focus-within .more {
+        display: block;
+      }
+      .scroller {
+        margin: 0;
+        overflow-x: auto;
+      }
+      .scroller table {
+        min-width: 30rem;
+        white-space: nowrap;
+      }
+      .band {
+        background: linear-gradient(90deg, #fff, #ddd);
+        padding: 0.5rem;
+      }
+      [data-ui-slot='surface'] {
+        background: rgb(255 255 255 / 0.8);
+        backdrop-filter: blur(4px);
+        padding: 0.5rem;
+      }
+      @media (prefers-reduced-transparency: reduce) {
+        [data-ui-slot='surface'] {
+          background: #fff;
+          backdrop-filter: none;
+        }
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .pulse {
+          animation: pulse 2s ease-in-out infinite;
+        }
+      }
+      @keyframes pulse {
+        50% {
+          transform: scale(1.05);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <nav aria-label="Sections"><a href="#work">Work</a> <a href="#notes">Notes</a></nav>
+    <main id="main" tabindex="-1">
+      <h1>Known good</h1>
+      <section id="work">
+        <h2>Work</h2>
+        <p class="band">Readable text over a gradient that stays light.</p>
+        <div class="card">
+          <a href="#notes">A card</a>
+          <p class="more">More about the card.</p>
+        </div>
+        <p class="pulse">Something that moves only when motion is welcome.</p>
+      </section>
+      <section id="notes" data-ui-slot="surface">
+        <h2>Notes</h2>
+        <p>
+          A long paragraph that wraps at any width, so nothing scrolls sideways at 320 pixels or at
+          twice the text size.
+        </p>
+        <figure class="scroller" tabindex="0">
+          <figcaption>Figures by year, in a region a keyboard scrolls</figcaption>
+          <table>
+            <tr>
+              <th scope="col">Year</th>
+              <th scope="col">Visitors</th>
+              <th scope="col">Downloads</th>
+              <th scope="col">Revenue</th>
+            </tr>
+            <tr>
+              <td>2026</td>
+              <td>1,234,567</td>
+              <td>8,901,234</td>
+              <td>12,048.72</td>
+            </tr>
+          </table>
+        </figure>
+        <button type="button" aria-haspopup="dialog" id="open">Open the dialog</button>
+        <dialog id="dialog" aria-labelledby="dialog-title">
+          <h2 id="dialog-title">A dialog</h2>
+          <button type="button" id="close">Close</button>
+        </dialog>
+      </section>
+    </main>
+    <script>
+      const dialog = document.getElementById('dialog');
+      document.getElementById('open').addEventListener('click', () => dialog.showModal());
+      document.getElementById('close').addEventListener('click', () => dialog.close());
+    </script>
+  </body>
+</html>

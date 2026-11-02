@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Content too wide for 320 alone, known-bad</title>
+    <!-- A 400px banner: wider than a 320px phone, narrower than 640px at 200% zoom, so only the 320 condition fails. -->
+    <style>
+      body {
+        margin: 0;
+      }
+      .banner {
+        width: 400px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1 class="banner">A banner</h1>
+    </main>
+  </body>
+</html>

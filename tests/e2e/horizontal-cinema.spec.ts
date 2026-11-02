@@ -1,0 +1,324 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fixtureSiteSelecting } from '../../packages/variant-contract/src/contract-fixtures';
+import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
+import { expect, test } from '../harness/fixtures';
+import { expectAnnounced, expectAt, keys, load, read, watchKeys } from './horizontal-cinema-model';
+
+// Horizontal Cinema's scene controller (redesign), on the complete contract
+// fixture: Previous and Next, the arrow keys, Home and End, the page's own
+// scroll through the pinned strip, a chapter link, and a direct link all
+// land on the same scene index, which the URL names by replaceState alone,
+// the live status says once, and the minimap marks. The page's scroll goes
+// on to the credits past the strip's end; with reduced motion every move
+// is a cut; with no script the scenes read in a native scroller; on a phone
+// they read top to bottom with a chapter sheet.
+
+const FIXTURE = contractFixture('complete');
+const DIR = path.dirname(FIXTURE.files.portfolio);
+const READ_ONLY = { type: 'profile', description: 'read-only' };
+const annotation = [{ type: 'route', description: '/' }, READ_ONLY];
+const tag = '@interaction';
+
+test.use({
+  appOptions: {
+    portfolio: FIXTURE.files.portfolio,
+    siteText: fixtureSiteSelecting(readFileSync(FIXTURE.files.site, 'utf8'), 'horizontal-cinema'),
+    sourceFiles: Object.fromEntries(
+      FIXTURE.unitFiles.map((file) => [file, readFileSync(path.join(DIR, file), 'utf8')]),
+    ),
+  },
+  viewport: { width: 1440, height: 900 },
+});
+
+test(
+  'Previous, Next, the arrows, Home, and End step scene by scene, replace the URL, and stop at either end',
+  { annotation, tag },
+  async ({ page }) => {
+    await load(page);
+    const start = await read(page);
+    expect(start).toMatchObject({ layout: 'horizontal', pinned: true, current: 0, hash: '' });
+    const total = start.scenes.length;
+    const next = page.getByRole('button', { name: 'Next scene' });
+    const previous = page.getByRole('button', { name: 'Previous scene' });
+    await expect(previous).toBeDisabled();
+
+    // Next, three times: each scene current and on screen, named in the URL, announced, no history entry.
+    for (const index of [1, 2, 3]) {
+      await next.click();
+      await expectAt(page, index);
+      await expectAnnounced(page, index, total);
+      expect(await read(page)).toMatchObject({
+        hash: `#${start.scenes[index]}`,
+        history: start.history,
+      });
+    }
+    await previous.click();
+    await expectAt(page, 2);
+
+    // The keys, with focus in the strip: each step cancels its key, and End and Home jump.
+    await watchKeys(page);
+    await page.locator('.hc-stage').focus();
+    await page.keyboard.press('ArrowRight');
+    await expectAt(page, 3);
+    await page.keyboard.press('ArrowLeft');
+    await expectAt(page, 2);
+    await page.keyboard.press('End');
+    await expectAt(page, total - 1);
+    await expect(next).toBeDisabled();
+    // Past the end an arrow is no step: it isn't cancelled, and nothing moves.
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(400);
+    expect((await read(page)).current).toBe(total - 1);
+    await page.keyboard.press('Home');
+    await expectAt(page, 0);
+    expect(await keys(page)).toEqual([true, true, true, false, true]);
+    expect((await read(page)).history).toBe(start.history);
+  },
+);
+
+test(
+  "the page's own scroll travels the strip in step, snaps onto a scene, and goes on to the credits",
+  { annotation, tag },
+  async ({ page }) => {
+    await load(page);
+    await page.mouse.move(720, 450);
+    for (let notch = 0; notch < 4; notch++) {
+      await page.mouse.wheel(0, 400);
+      await page.waitForTimeout(80);
+    }
+    // The strip moved with the page, and once the scroll rests it sits on a scene's start.
+    await expect.poll(async () => (await read(page)).current).toBeGreaterThan(0);
+    const travelled = await read(page);
+    expect(travelled.along).toBeGreaterThan(0);
+    await expectAt(page, travelled.current);
+    // Nothing traps the wheel: scrolling on reaches the credits after the strip.
+    for (let notch = 0; notch < 120; notch++) await page.mouse.wheel(0, 600);
+    await expect
+      .poll(() =>
+        page.evaluate(() => document.querySelector('.hc-credits')!.getBoundingClientRect().top),
+      )
+      .toBeLessThan(900);
+  },
+);
+
+test(
+  'three quick presses of Next, within 300 ms, end three scenes on',
+  { annotation, tag },
+  async ({ page }) => {
+    await load(page);
+    const next = page.getByRole('button', { name: 'Next scene' });
+    await expect(next).toBeEnabled();
+    // Three presses in one go, with no wait between them for the move under way: each retargets
+    // it from the scene it was headed for.
+    const elapsed = await next.evaluate((button: HTMLButtonElement) => {
+      const started = performance.now();
+      for (let press = 0; press < 3; press++) button.click();
+      return performance.now() - started;
+    });
+    expect(elapsed).toBeLessThan(300);
+    await expectAt(page, 3);
+    await page.waitForTimeout(600);
+    expect((await read(page)).current).toBe(3);
+  },
+);
+
+test(
+  "a scroll of the visitor's during a step takes over: the scene marked current is the one the page comes to rest on",
+  { annotation, tag },
+  async ({ page }) => {
+    await load(page);
+    await page.getByRole('button', { name: 'Next scene' }).click();
+    // The step is under way, the page moving toward scene 2, when the visitor scrolls on past it. A
+    // page scroll, as the scroll bar or a key makes, ends the step's smooth scroll; Chromium carries
+    // a programmatic smooth scroll on to its target through a wheel turn, so a wheel can't stand in.
+    await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(0);
+    await page.evaluate(() => window.scrollBy({ top: 2400, behavior: 'instant' }));
+    // Soon after it rests, not once a stalled step's safety net gives up, the scene the page
+    // rests on is the one marked current.
+    await expect
+      .poll(
+        async () => {
+          const state = await read(page);
+          return state.onScreen > 1 && state.current === state.onScreen;
+        },
+        { timeout: 2000 },
+      )
+      .toBe(true);
+  },
+);
+
+test(
+  'a chapter link and a direct link land on the scene they name, a reload keeps it, and Back returns',
+  { annotation, tag },
+  async ({ page }) => {
+    await load(page);
+    const { scenes } = await read(page);
+    // A chapter in the minimap opens its first scene, the chapter card.
+    await page.locator('.hc-minimap__chapter a').nth(3).click();
+    const craft = scenes.indexOf('chapter-craft');
+    expect(craft).toBeGreaterThan(0);
+    await expectAt(page, craft);
+    expect((await read(page)).hash).toBe('#chapter-craft');
+    // A direct link to a scene loads on it, and a reload keeps it.
+    await load(page, `/#${scenes[4]}`);
+    await expectAt(page, 4);
+    await page.reload({ waitUntil: 'load' });
+    await expectAt(page, 4);
+    // Back returns to the chapter the link opened.
+    await page.goBack();
+    await expect.poll(async () => (await read(page)).hash).toBe('#chapter-craft');
+  },
+);
+
+test.describe('reduced motion', () => {
+  test(
+    'the strip stays, and every step is a cut onto its scene',
+    { annotation, tag },
+    async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await load(page);
+      expect(await read(page)).toMatchObject({ layout: 'horizontal', pinned: true });
+      await page.locator('.hc-stage').focus();
+      for (const index of [1, 2, 3]) {
+        await page.keyboard.press('ArrowRight');
+        // A cut: the scene is at the stage's start straight away, with no travel to wait for.
+        expect((await read(page)).onScreen).toBe(index);
+        await expectAt(page, index);
+      }
+    },
+  );
+});
+
+test.describe('without JavaScript', () => {
+  test.use({ javaScriptEnabled: false });
+
+  test(
+    'every scene reads in a native scroller, with no pin and no live controller',
+    { annotation, tag },
+    async ({ page }) => {
+      await page.goto('/', { waitUntil: 'load' });
+      const state = await page.evaluate(() => ({
+        scenes: document.querySelectorAll('.hc-track .hc-scene').length,
+        pinned: document.querySelector('.hc-shell')!.hasAttribute('data-pin'),
+        live: document.querySelectorAll('.hc-scrub[data-live]').length,
+        scroller: getComputedStyle(document.querySelector('.hc-stage')!).overflowX,
+      }));
+      expect(state.scenes).toBeGreaterThan(5);
+      expect(state).toMatchObject({ pinned: false, live: 0, scroller: 'auto' });
+    },
+  );
+});
+
+test.describe('on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test(
+    'the scenes read top to bottom, the chapter sheet lands on its chapter, and a folded scene opens for its link',
+    { annotation, tag },
+    async ({ page }) => {
+      await load(page);
+      expect(await read(page)).toMatchObject({ layout: 'vertical', pinned: false });
+      // The chapter control on the top edge opens the sheet; a chapter in it lands on its card.
+      await page.locator('.hc-jump__button').click();
+      const sheet = page.locator('.hc-jump__sheet');
+      await expect(sheet).toBeVisible();
+      // Its chapters are the sheet's top-level links; each chapter's scenes are listed under it.
+      await sheet.locator(':scope > ol > li > a').nth(2).click();
+      await expect(sheet).toBeHidden();
+      await expect.poll(() => page.evaluate(() => location.hash)).toBe('#chapter-journey');
+      // A scene in the sheet is one tap from it too: two taps reach any scene from anywhere.
+      await page.locator('.hc-jump__button').click();
+      await sheet.locator('.hc-jump__scenes a').first().click();
+      await expect(sheet).toBeHidden();
+      const sceneHash = await page.evaluate(() => location.hash);
+      expect(sceneHash).toMatch(/^#(scene-\d+|chapter-[a-z]+)$/);
+      const { scenes: placed } = await read(page);
+      await expectAt(page, placed.indexOf(sceneHash.slice(1)), { landed: true });
+      // The quieter scenes fold to their title; a link to one opens it and lands on it.
+      const folded = page.locator('details[data-fold]');
+      expect(await folded.count(), 'the complete fixture has scenes that fold').toBeGreaterThan(0);
+      await expect(folded.first()).not.toHaveAttribute('open', '');
+      const id = await folded.first().evaluate((one) => one.closest('.hc-scene')!.id);
+      const { scenes } = await read(page);
+      await load(page, `/#${id}`);
+      await expect(page.locator(`[id="${id}"] details[data-fold]`)).toHaveAttribute('open', '');
+      await expectAt(page, scenes.indexOf(id), { landed: true });
+    },
+  );
+
+  test(
+    'turning the phone to landscape and back keeps the chapter it was on',
+    { annotation, tag },
+    async ({ page }) => {
+      await load(page, '/#chapter-craft');
+      const { scenes } = await read(page);
+      const craft = scenes.indexOf('chapter-craft');
+      await expectAt(page, craft, { landed: true });
+      for (const viewport of [
+        { width: 844, height: 390 },
+        { width: 390, height: 844 },
+      ]) {
+        await page.setViewportSize(viewport);
+        await page.waitForTimeout(600);
+        // The controller brings the chapter back to the top as the folds turn over, a landing of its own.
+        await expectAt(page, craft, { landed: true });
+      }
+    },
+  );
+
+  test(
+    'a tap in the sheet on the chapter the URL already names lands on it and keeps it, a short card too',
+    { annotation, tag },
+    async ({ page }) => {
+      await load(page);
+      const { scenes } = await read(page);
+      const craft = scenes.indexOf('chapter-craft');
+      expect(craft).toBeGreaterThan(0);
+      // The URL names the chapter already, with no landing of the page's own on it.
+      await page.evaluate(() => history.replaceState(history.state, '', '#chapter-craft'));
+      await page.locator('.hc-jump__button').click();
+      // The same fragment fires no hashchange, but the tap lands as any link does.
+      await page.locator('.hc-jump__sheet').locator(':scope > ol > li > a').nth(3).click();
+      await expectAt(page, craft, { landed: true });
+      await page.waitForTimeout(600);
+      expect((await read(page, { landed: true })).current).toBe(craft);
+    },
+  );
+
+  test(
+    'reading on down, the next scene is current as soon as it crosses the reading line',
+    { annotation, tag },
+    async ({ page }) => {
+      await load(page);
+      const { scenes } = await read(page);
+      // A scene taller than the reading line's depth, so resting with it at the top reads it, and a scene after it.
+      const at = await page.evaluate(() =>
+        [...document.querySelectorAll('.hc-track .hc-scene')].findIndex(
+          (scene, index, all) =>
+            index >= 2 &&
+            index < all.length - 1 &&
+            scene.getBoundingClientRect().height > innerHeight * 0.45,
+        ),
+      );
+      expect(at, 'the fixture has a tall scene with one after it').toBeGreaterThanOrEqual(2);
+      // The reader brings it to the top and rests there; the controller writes it to the URL.
+      await page.evaluate(
+        (index) =>
+          document
+            .querySelectorAll('.hc-track .hc-scene')
+            [index]!.scrollIntoView({ block: 'start', behavior: 'instant' }),
+        at,
+      );
+      await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#${scenes[at]}`);
+      await expectAt(page, at);
+      // Then scrolls on until the next scene's top crosses the reading line, this one still on screen.
+      await page.evaluate((index) => {
+        const next = document.querySelectorAll('.hc-track .hc-scene')[index + 1]!;
+        const by = next.getBoundingClientRect().top - innerHeight * 0.3 + 8;
+        window.scrollBy({ top: by, behavior: 'instant' });
+      }, at);
+      await expectAt(page, at + 1);
+    },
+  );
+});

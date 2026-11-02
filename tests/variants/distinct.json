@@ -1,0 +1,2327 @@
+{
+  "note": "Thresholds and controls from distinct-calibration.spec.ts. Every control names its role in each guard: 'same' and 'different' set a threshold, and 'informational' sets none. A design guard (dom, box) whose threshold is null found no gap of 0.1 at both viewports, and doesn't gate.",
+  "calibrated": true,
+  "accepted": [
+    {
+      "a": "editorial-evidence",
+      "b": "kinetic-cosmos",
+      "viewport": "mobile",
+      "box": 0.57,
+      "reason": "On the complete fixture, whose project image is missing, EE's honest 3:2 placeholder at 390 shares Kinetic Cosmos's stacked first-view blocks (boxes 0.567). Structure (0.244) and pixels (0.972) both clear, every honest shape tried fails boxes alone (sweep: _execution/artifacts/kgn-c-ee-lang-89d744afa/sweep.png), and by eye they aren't alike.",
+      "by": "lead A, 2026-10-29",
+      "until": "the guard scores a fixture with media, or EE's 390 first view changes"
+    }
+  ],
+  "thresholds": {
+    "dom": {
+      "desktop": 0.734,
+      "mobile": 0.734
+    },
+    "box": {
+      "desktop": 0.678,
+      "mobile": 0.533
+    },
+    "px": {
+      "desktop": 0.202,
+      "mobile": 0.188
+    }
+  },
+  "calibration": {
+    "dom": {
+      "desktop": {
+        "same": 1,
+        "different": 0.469,
+        "gap": 0.531,
+        "threshold": 0.734
+      },
+      "mobile": {
+        "same": 1,
+        "different": 0.469,
+        "gap": 0.531,
+        "threshold": 0.734
+      }
+    },
+    "box": {
+      "desktop": {
+        "same": 0.952,
+        "different": 0.403,
+        "gap": 0.549,
+        "threshold": 0.678
+      },
+      "mobile": {
+        "same": 0.665,
+        "different": 0.401,
+        "gap": 0.264,
+        "threshold": 0.533
+      }
+    },
+    "px": {
+      "desktop": {
+        "floor": 0.101,
+        "threshold": 0.202
+      },
+      "mobile": {
+        "floor": 0.094,
+        "threshold": 0.188
+      }
+    }
+  },
+  "tuple": {
+    "designLanguage": "platform-neutral",
+    "colorScheme": "warm-parchment",
+    "typography": "humanist-ui",
+    "displayMode": "system"
+  },
+  "controls": [
+    {
+      "a": "editorial-evidence",
+      "b": "editorial-evidence@rerender",
+      "control": "rerender",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0
+    },
+    {
+      "a": "editorial-evidence",
+      "b": "editorial-evidence@dark",
+      "control": "dark",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0.007
+    },
+    {
+      "a": "editorial-evidence",
+      "b": "editorial-evidence@typography",
+      "control": "typography",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0.025
+    },
+    {
+      "a": "editorial-evidence",
+      "b": "editorial-evidence@textured",
+      "control": "textured",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "informational"
+      },
+      "dom": 1,
+      "box": 0.963,
+      "px": 0.196
+    },
+    {
+      "a": "editorial-evidence",
+      "b": "editorial-evidence in 3 more divs",
+      "control": "wrapped",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same"
+      },
+      "dom": 1
+    },
+    {
+      "a": "horizontal-cinema",
+      "b": "horizontal-cinema@rerender",
+      "control": "rerender",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0
+    },
+    {
+      "a": "horizontal-cinema",
+      "b": "horizontal-cinema@dark",
+      "control": "dark",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0.011
+    },
+    {
+      "a": "horizontal-cinema",
+      "b": "horizontal-cinema@typography",
+      "control": "typography",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 0.999,
+      "px": 0.014
+    },
+    {
+      "a": "horizontal-cinema",
+      "b": "horizontal-cinema@textured",
+      "control": "textured",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "informational"
+      },
+      "dom": 1,
+      "box": 0.998,
+      "px": 0.318
+    },
+    {
+      "a": "horizontal-cinema",
+      "b": "horizontal-cinema in 3 more divs",
+      "control": "wrapped",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same"
+      },
+      "dom": 1
+    },
+    {
+      "a": "kinetic-cosmos",
+      "b": "kinetic-cosmos@rerender",
+      "control": "rerender",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0
+    },
+    {
+      "a": "kinetic-cosmos",
+      "b": "kinetic-cosmos@dark",
+      "control": "dark",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0.016
+    },
+    {
+      "a": "kinetic-cosmos",
+      "b": "kinetic-cosmos@typography",
+      "control": "typography",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 0.995,
+      "px": 0.101
+    },
+    {
+      "a": "kinetic-cosmos",
+      "b": "kinetic-cosmos@textured",
+      "control": "textured",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "informational"
+      },
+      "dom": 1,
+      "box": 0.963,
+      "px": 0.321
+    },
+    {
+      "a": "kinetic-cosmos",
+      "b": "kinetic-cosmos in 3 more divs",
+      "control": "wrapped",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same"
+      },
+      "dom": 1
+    },
+    {
+      "a": "obsidian-atelier",
+      "b": "obsidian-atelier@rerender",
+      "control": "rerender",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0
+    },
+    {
+      "a": "obsidian-atelier",
+      "b": "obsidian-atelier@dark",
+      "control": "dark",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0.009
+    },
+    {
+      "a": "obsidian-atelier",
+      "b": "obsidian-atelier@typography",
+      "control": "typography",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 0.997,
+      "px": 0.01
+    },
+    {
+      "a": "obsidian-atelier",
+      "b": "obsidian-atelier@textured",
+      "control": "textured",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "informational"
+      },
+      "dom": 1,
+      "box": 0.996,
+      "px": 0.225
+    },
+    {
+      "a": "obsidian-atelier",
+      "b": "obsidian-atelier in 3 more divs",
+      "control": "wrapped",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same"
+      },
+      "dom": 1
+    },
+    {
+      "a": "spatial-bento",
+      "b": "spatial-bento@rerender",
+      "control": "rerender",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0
+    },
+    {
+      "a": "spatial-bento",
+      "b": "spatial-bento@dark",
+      "control": "dark",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0.016
+    },
+    {
+      "a": "spatial-bento",
+      "b": "spatial-bento@typography",
+      "control": "typography",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0.101
+    },
+    {
+      "a": "spatial-bento",
+      "b": "spatial-bento@textured",
+      "control": "textured",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "informational"
+      },
+      "dom": 1,
+      "box": 0.977,
+      "px": 0.626
+    },
+    {
+      "a": "spatial-bento",
+      "b": "spatial-bento in 3 more divs",
+      "control": "wrapped",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "same"
+      },
+      "dom": 1
+    },
+    {
+      "a": "fixture-chapters",
+      "b": "static-card-grid",
+      "control": "constructed",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.231,
+      "box": 0.063,
+      "px": 0.682
+    },
+    {
+      "a": "fixture-chapters",
+      "b": "static-full-bleed-hero",
+      "control": "constructed",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.015,
+      "box": 0.073,
+      "px": 0.387
+    },
+    {
+      "a": "fixture-chapters",
+      "b": "static-horizontal-strip",
+      "control": "constructed",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.106,
+      "box": 0.057,
+      "px": 0.552
+    },
+    {
+      "a": "fixture-chapters",
+      "b": "static-one-column",
+      "control": "constructed",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.469,
+      "box": 0.135,
+      "px": 0.462
+    },
+    {
+      "a": "fixture-chapters",
+      "b": "static-two-column",
+      "control": "constructed",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.161,
+      "box": 0.111,
+      "px": 0.608
+    },
+    {
+      "a": "static-card-grid",
+      "b": "static-full-bleed-hero",
+      "control": "constructed",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.011,
+      "box": 0.136,
+      "px": 0.71
+    },
+    {
+      "a": "static-card-grid",
+      "b": "static-horizontal-strip",
+      "control": "constructed",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.456,
+      "box": 0.403,
+      "px": 0.67
+    },
+    {
+      "a": "static-card-grid",
+      "b": "static-one-column",
+      "control": "constructed",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.181,
+      "box": 0.1,
+      "px": 0.769
+    },
+    {
+      "a": "static-card-grid",
+      "b": "static-two-column",
+      "control": "constructed",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.054,
+      "box": 0.221,
+      "px": 0.745
+    },
+    {
+      "a": "static-full-bleed-hero",
+      "b": "static-horizontal-strip",
+      "control": "constructed",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.012,
+      "box": 0.16,
+      "px": 0.599
+    },
+    {
+      "a": "static-full-bleed-hero",
+      "b": "static-one-column",
+      "control": "constructed",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.012,
+      "box": 0.044,
+      "px": 0.543
+    },
+    {
+      "a": "static-full-bleed-hero",
+      "b": "static-two-column",
+      "control": "constructed",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.012,
+      "box": 0.102,
+      "px": 0.735
+    },
+    {
+      "a": "static-horizontal-strip",
+      "b": "static-one-column",
+      "control": "constructed",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.083,
+      "box": 0.068,
+      "px": 0.652
+    },
+    {
+      "a": "static-horizontal-strip",
+      "b": "static-two-column",
+      "control": "constructed",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.022,
+      "box": 0.223,
+      "px": 0.786
+    },
+    {
+      "a": "static-one-column",
+      "b": "static-two-column",
+      "control": "constructed",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.216,
+      "box": 0.104,
+      "px": 0.712
+    },
+    {
+      "a": "fixture-chapters",
+      "b": "editorial-evidence",
+      "control": "chapters-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.054,
+      "box": 0.034,
+      "px": 0.413
+    },
+    {
+      "a": "fixture-notes",
+      "b": "editorial-evidence",
+      "control": "notes-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.738,
+      "box": 0.172,
+      "px": 0.493
+    },
+    {
+      "a": "static-card-grid",
+      "b": "editorial-evidence",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.044,
+      "box": 0.105,
+      "px": 0.805
+    },
+    {
+      "a": "static-full-bleed-hero",
+      "b": "editorial-evidence",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.06,
+      "box": 0.263,
+      "px": 0.532
+    },
+    {
+      "a": "static-horizontal-strip",
+      "b": "editorial-evidence",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.026,
+      "box": 0.131,
+      "px": 0.658
+    },
+    {
+      "a": "static-one-column",
+      "b": "editorial-evidence",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.081,
+      "box": 0.057,
+      "px": 0.675
+    },
+    {
+      "a": "static-two-column",
+      "b": "editorial-evidence",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.047,
+      "box": 0.058,
+      "px": 0.727
+    },
+    {
+      "a": "fixture-chapters",
+      "b": "horizontal-cinema",
+      "control": "chapters-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.025,
+      "box": 0.051,
+      "px": 0.397
+    },
+    {
+      "a": "fixture-notes",
+      "b": "horizontal-cinema",
+      "control": "notes-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.286,
+      "box": 0.112,
+      "px": 0.443
+    },
+    {
+      "a": "static-card-grid",
+      "b": "horizontal-cinema",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.014,
+      "box": 0.262,
+      "px": 0.741
+    },
+    {
+      "a": "static-full-bleed-hero",
+      "b": "horizontal-cinema",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.026,
+      "box": 0.446,
+      "px": 0.474
+    },
+    {
+      "a": "static-horizontal-strip",
+      "b": "horizontal-cinema",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.022,
+      "box": 0.359,
+      "px": 0.594
+    },
+    {
+      "a": "static-one-column",
+      "b": "horizontal-cinema",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.024,
+      "box": 0.076,
+      "px": 0.632
+    },
+    {
+      "a": "static-two-column",
+      "b": "horizontal-cinema",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.002,
+      "box": 0.168,
+      "px": 0.707
+    },
+    {
+      "a": "fixture-chapters",
+      "b": "kinetic-cosmos",
+      "control": "chapters-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.053,
+      "box": 0.04,
+      "px": 0.553
+    },
+    {
+      "a": "fixture-notes",
+      "b": "kinetic-cosmos",
+      "control": "notes-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.858,
+      "box": 0.105,
+      "px": 0.645
+    },
+    {
+      "a": "static-card-grid",
+      "b": "kinetic-cosmos",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.035,
+      "box": 0.164,
+      "px": 0.781
+    },
+    {
+      "a": "static-full-bleed-hero",
+      "b": "kinetic-cosmos",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.002,
+      "box": 0.238,
+      "px": 0.684
+    },
+    {
+      "a": "static-horizontal-strip",
+      "b": "kinetic-cosmos",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.02,
+      "box": 0.138,
+      "px": 0.795
+    },
+    {
+      "a": "static-one-column",
+      "b": "kinetic-cosmos",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.068,
+      "box": 0.061,
+      "px": 0.761
+    },
+    {
+      "a": "static-two-column",
+      "b": "kinetic-cosmos",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.044,
+      "box": 0.082,
+      "px": 0.76
+    },
+    {
+      "a": "fixture-chapters",
+      "b": "obsidian-atelier",
+      "control": "chapters-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.026,
+      "box": 0.077,
+      "px": 0.359
+    },
+    {
+      "a": "fixture-notes",
+      "b": "obsidian-atelier",
+      "control": "notes-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.673,
+      "box": 0.152,
+      "px": 0.373
+    },
+    {
+      "a": "static-card-grid",
+      "b": "obsidian-atelier",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.044,
+      "box": 0.103,
+      "px": 0.726
+    },
+    {
+      "a": "static-full-bleed-hero",
+      "b": "obsidian-atelier",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.002,
+      "box": 0.273,
+      "px": 0.393
+    },
+    {
+      "a": "static-horizontal-strip",
+      "b": "obsidian-atelier",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.055,
+      "box": 0.105,
+      "px": 0.624
+    },
+    {
+      "a": "static-one-column",
+      "b": "obsidian-atelier",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.049,
+      "box": 0.054,
+      "px": 0.585
+    },
+    {
+      "a": "static-two-column",
+      "b": "obsidian-atelier",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.029,
+      "box": 0.068,
+      "px": 0.673
+    },
+    {
+      "a": "fixture-chapters",
+      "b": "spatial-bento",
+      "control": "chapters-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.062,
+      "box": 0.042,
+      "px": 0.646
+    },
+    {
+      "a": "fixture-notes",
+      "b": "spatial-bento",
+      "control": "notes-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.991,
+      "box": 0.146,
+      "px": 0.726
+    },
+    {
+      "a": "static-card-grid",
+      "b": "spatial-bento",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.04,
+      "box": 0.181,
+      "px": 0.874
+    },
+    {
+      "a": "static-full-bleed-hero",
+      "b": "spatial-bento",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.002,
+      "box": 0.231,
+      "px": 0.712
+    },
+    {
+      "a": "static-horizontal-strip",
+      "b": "spatial-bento",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.023,
+      "box": 0.162,
+      "px": 0.788
+    },
+    {
+      "a": "static-one-column",
+      "b": "spatial-bento",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.078,
+      "box": 0.061,
+      "px": 0.84
+    },
+    {
+      "a": "static-two-column",
+      "b": "spatial-bento",
+      "control": "static-composition",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.05,
+      "box": 0.088,
+      "px": 0.876
+    },
+    {
+      "a": "acme-reference",
+      "b": "fallback",
+      "control": "reference",
+      "viewport": "desktop",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.712,
+      "box": 0.348,
+      "px": 0.284
+    },
+    {
+      "a": "editorial-evidence",
+      "b": "editorial-evidence@rerender",
+      "control": "rerender",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0
+    },
+    {
+      "a": "editorial-evidence",
+      "b": "editorial-evidence@dark",
+      "control": "dark",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0.005
+    },
+    {
+      "a": "editorial-evidence",
+      "b": "editorial-evidence@typography",
+      "control": "typography",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0.036
+    },
+    {
+      "a": "editorial-evidence",
+      "b": "editorial-evidence@textured",
+      "control": "textured",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "informational"
+      },
+      "dom": 1,
+      "box": 0.923,
+      "px": 0.183
+    },
+    {
+      "a": "editorial-evidence",
+      "b": "editorial-evidence in 3 more divs",
+      "control": "wrapped",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same"
+      },
+      "dom": 1
+    },
+    {
+      "a": "horizontal-cinema",
+      "b": "horizontal-cinema@rerender",
+      "control": "rerender",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0
+    },
+    {
+      "a": "horizontal-cinema",
+      "b": "horizontal-cinema@dark",
+      "control": "dark",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0.006
+    },
+    {
+      "a": "horizontal-cinema",
+      "b": "horizontal-cinema@typography",
+      "control": "typography",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 0.996,
+      "px": 0.06
+    },
+    {
+      "a": "horizontal-cinema",
+      "b": "horizontal-cinema@textured",
+      "control": "textured",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "informational"
+      },
+      "dom": 1,
+      "box": 0.96,
+      "px": 0.632
+    },
+    {
+      "a": "horizontal-cinema",
+      "b": "horizontal-cinema in 3 more divs",
+      "control": "wrapped",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same"
+      },
+      "dom": 1
+    },
+    {
+      "a": "kinetic-cosmos",
+      "b": "kinetic-cosmos@rerender",
+      "control": "rerender",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0
+    },
+    {
+      "a": "kinetic-cosmos",
+      "b": "kinetic-cosmos@dark",
+      "control": "dark",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0.006
+    },
+    {
+      "a": "kinetic-cosmos",
+      "b": "kinetic-cosmos@typography",
+      "control": "typography",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0.029
+    },
+    {
+      "a": "kinetic-cosmos",
+      "b": "kinetic-cosmos@textured",
+      "control": "textured",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "informational"
+      },
+      "dom": 1,
+      "box": 0.984,
+      "px": 0.326
+    },
+    {
+      "a": "kinetic-cosmos",
+      "b": "kinetic-cosmos in 3 more divs",
+      "control": "wrapped",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same"
+      },
+      "dom": 1
+    },
+    {
+      "a": "obsidian-atelier",
+      "b": "obsidian-atelier@rerender",
+      "control": "rerender",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0
+    },
+    {
+      "a": "obsidian-atelier",
+      "b": "obsidian-atelier@dark",
+      "control": "dark",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0.005
+    },
+    {
+      "a": "obsidian-atelier",
+      "b": "obsidian-atelier@typography",
+      "control": "typography",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 0.992,
+      "px": 0.036
+    },
+    {
+      "a": "obsidian-atelier",
+      "b": "obsidian-atelier@textured",
+      "control": "textured",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "informational"
+      },
+      "dom": 1,
+      "box": 0.997,
+      "px": 0.404
+    },
+    {
+      "a": "obsidian-atelier",
+      "b": "obsidian-atelier in 3 more divs",
+      "control": "wrapped",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same"
+      },
+      "dom": 1
+    },
+    {
+      "a": "spatial-bento",
+      "b": "spatial-bento@rerender",
+      "control": "rerender",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0
+    },
+    {
+      "a": "spatial-bento",
+      "b": "spatial-bento@dark",
+      "control": "dark",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 1,
+      "px": 0.01
+    },
+    {
+      "a": "spatial-bento",
+      "b": "spatial-bento@typography",
+      "control": "typography",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "same"
+      },
+      "dom": 1,
+      "box": 0.665,
+      "px": 0.094
+    },
+    {
+      "a": "spatial-bento",
+      "b": "spatial-bento@textured",
+      "control": "textured",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same",
+        "box": "same",
+        "px": "informational"
+      },
+      "dom": 1,
+      "box": 0.932,
+      "px": 0.382
+    },
+    {
+      "a": "spatial-bento",
+      "b": "spatial-bento in 3 more divs",
+      "control": "wrapped",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "same"
+      },
+      "dom": 1
+    },
+    {
+      "a": "fixture-chapters",
+      "b": "static-card-grid",
+      "control": "constructed",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.231,
+      "box": 0.265,
+      "px": 0.777
+    },
+    {
+      "a": "fixture-chapters",
+      "b": "static-full-bleed-hero",
+      "control": "constructed",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.015,
+      "box": 0.277,
+      "px": 0.701
+    },
+    {
+      "a": "fixture-chapters",
+      "b": "static-horizontal-strip",
+      "control": "constructed",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.106,
+      "box": 0.307,
+      "px": 0.737
+    },
+    {
+      "a": "fixture-chapters",
+      "b": "static-one-column",
+      "control": "constructed",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.469,
+      "box": 0.158,
+      "px": 0.921
+    },
+    {
+      "a": "fixture-chapters",
+      "b": "static-two-column",
+      "control": "constructed",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.161,
+      "box": 0.382,
+      "px": 0.875
+    },
+    {
+      "a": "static-card-grid",
+      "b": "static-full-bleed-hero",
+      "control": "constructed",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.011,
+      "box": 0.401,
+      "px": 0.694
+    },
+    {
+      "a": "static-card-grid",
+      "b": "static-horizontal-strip",
+      "control": "constructed",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.456,
+      "box": 0.213,
+      "px": 0.704
+    },
+    {
+      "a": "static-card-grid",
+      "b": "static-one-column",
+      "control": "constructed",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.181,
+      "box": 0.217,
+      "px": 0.914
+    },
+    {
+      "a": "static-card-grid",
+      "b": "static-two-column",
+      "control": "constructed",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.054,
+      "box": 0.37,
+      "px": 0.812
+    },
+    {
+      "a": "static-full-bleed-hero",
+      "b": "static-horizontal-strip",
+      "control": "constructed",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.012,
+      "box": 0.282,
+      "px": 0.598
+    },
+    {
+      "a": "static-full-bleed-hero",
+      "b": "static-one-column",
+      "control": "constructed",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.012,
+      "box": 0.141,
+      "px": 0.905
+    },
+    {
+      "a": "static-full-bleed-hero",
+      "b": "static-two-column",
+      "control": "constructed",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.012,
+      "box": 0.345,
+      "px": 0.672
+    },
+    {
+      "a": "static-horizontal-strip",
+      "b": "static-one-column",
+      "control": "constructed",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.083,
+      "box": 0.141,
+      "px": 0.863
+    },
+    {
+      "a": "static-horizontal-strip",
+      "b": "static-two-column",
+      "control": "constructed",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.022,
+      "box": 0.22,
+      "px": 0.76
+    },
+    {
+      "a": "static-one-column",
+      "b": "static-two-column",
+      "control": "constructed",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.216,
+      "box": 0.379,
+      "px": 0.875
+    },
+    {
+      "a": "fixture-chapters",
+      "b": "editorial-evidence",
+      "control": "chapters-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.054,
+      "box": 0.054,
+      "px": 0.786
+    },
+    {
+      "a": "fixture-notes",
+      "b": "editorial-evidence",
+      "control": "notes-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.738,
+      "box": 0.29,
+      "px": 0.762
+    },
+    {
+      "a": "static-card-grid",
+      "b": "editorial-evidence",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.044,
+      "box": 0.289,
+      "px": 0.918
+    },
+    {
+      "a": "static-full-bleed-hero",
+      "b": "editorial-evidence",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.06,
+      "box": 0.398,
+      "px": 0.753
+    },
+    {
+      "a": "static-horizontal-strip",
+      "b": "editorial-evidence",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.026,
+      "box": 0.14,
+      "px": 0.811
+    },
+    {
+      "a": "static-one-column",
+      "b": "editorial-evidence",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.081,
+      "box": 0.176,
+      "px": 0.911
+    },
+    {
+      "a": "static-two-column",
+      "b": "editorial-evidence",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.047,
+      "box": 0.251,
+      "px": 0.908
+    },
+    {
+      "a": "fixture-chapters",
+      "b": "horizontal-cinema",
+      "control": "chapters-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.025,
+      "box": 0.127,
+      "px": 0.758
+    },
+    {
+      "a": "fixture-notes",
+      "b": "horizontal-cinema",
+      "control": "notes-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.286,
+      "box": 0.219,
+      "px": 0.58
+    },
+    {
+      "a": "static-card-grid",
+      "b": "horizontal-cinema",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.014,
+      "box": 0.267,
+      "px": 0.841
+    },
+    {
+      "a": "static-full-bleed-hero",
+      "b": "horizontal-cinema",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.026,
+      "box": 0.399,
+      "px": 0.692
+    },
+    {
+      "a": "static-horizontal-strip",
+      "b": "horizontal-cinema",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.022,
+      "box": 0.263,
+      "px": 0.746
+    },
+    {
+      "a": "static-one-column",
+      "b": "horizontal-cinema",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.024,
+      "box": 0.169,
+      "px": 0.844
+    },
+    {
+      "a": "static-two-column",
+      "b": "horizontal-cinema",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.002,
+      "box": 0.255,
+      "px": 0.776
+    },
+    {
+      "a": "fixture-chapters",
+      "b": "kinetic-cosmos",
+      "control": "chapters-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.053,
+      "box": 0.161,
+      "px": 0.675
+    },
+    {
+      "a": "fixture-notes",
+      "b": "kinetic-cosmos",
+      "control": "notes-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.858,
+      "box": 0.288,
+      "px": 0.519
+    },
+    {
+      "a": "static-card-grid",
+      "b": "kinetic-cosmos",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.035,
+      "box": 0.338,
+      "px": 0.749
+    },
+    {
+      "a": "static-full-bleed-hero",
+      "b": "kinetic-cosmos",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.002,
+      "box": 0.37,
+      "px": 0.559
+    },
+    {
+      "a": "static-horizontal-strip",
+      "b": "kinetic-cosmos",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.02,
+      "box": 0.131,
+      "px": 0.692
+    },
+    {
+      "a": "static-one-column",
+      "b": "kinetic-cosmos",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.068,
+      "box": 0.106,
+      "px": 0.849
+    },
+    {
+      "a": "static-two-column",
+      "b": "kinetic-cosmos",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.044,
+      "box": 0.249,
+      "px": 0.682
+    },
+    {
+      "a": "fixture-chapters",
+      "b": "obsidian-atelier",
+      "control": "chapters-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.026,
+      "box": 0.219,
+      "px": 0.73
+    },
+    {
+      "a": "fixture-notes",
+      "b": "obsidian-atelier",
+      "control": "notes-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.673,
+      "box": 0.202,
+      "px": 0.49
+    },
+    {
+      "a": "static-card-grid",
+      "b": "obsidian-atelier",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.044,
+      "box": 0.364,
+      "px": 0.833
+    },
+    {
+      "a": "static-full-bleed-hero",
+      "b": "obsidian-atelier",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.002,
+      "box": 0.513,
+      "px": 0.616
+    },
+    {
+      "a": "static-horizontal-strip",
+      "b": "obsidian-atelier",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.055,
+      "box": 0.261,
+      "px": 0.688
+    },
+    {
+      "a": "static-one-column",
+      "b": "obsidian-atelier",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.049,
+      "box": 0.149,
+      "px": 0.833
+    },
+    {
+      "a": "static-two-column",
+      "b": "obsidian-atelier",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.029,
+      "box": 0.255,
+      "px": 0.71
+    },
+    {
+      "a": "fixture-chapters",
+      "b": "spatial-bento",
+      "control": "chapters-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "different",
+        "box": "different",
+        "px": "different"
+      },
+      "dom": 0.062,
+      "box": 0.2,
+      "px": 0.832
+    },
+    {
+      "a": "fixture-notes",
+      "b": "spatial-bento",
+      "control": "notes-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.991,
+      "box": 0.413,
+      "px": 0.754
+    },
+    {
+      "a": "static-card-grid",
+      "b": "spatial-bento",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.04,
+      "box": 0.468,
+      "px": 0.919
+    },
+    {
+      "a": "static-full-bleed-hero",
+      "b": "spatial-bento",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.002,
+      "box": 0.373,
+      "px": 0.842
+    },
+    {
+      "a": "static-horizontal-strip",
+      "b": "spatial-bento",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.023,
+      "box": 0.358,
+      "px": 0.855
+    },
+    {
+      "a": "static-one-column",
+      "b": "spatial-bento",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.078,
+      "box": 0.239,
+      "px": 0.961
+    },
+    {
+      "a": "static-two-column",
+      "b": "spatial-bento",
+      "control": "static-composition",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.05,
+      "box": 0.282,
+      "px": 0.79
+    },
+    {
+      "a": "acme-reference",
+      "b": "fallback",
+      "control": "reference",
+      "viewport": "mobile",
+      "roles": {
+        "dom": "informational",
+        "box": "informational",
+        "px": "informational"
+      },
+      "dom": 0.712,
+      "box": 0.325,
+      "px": 0.728
+    }
+  ],
+  "today": [
+    {
+      "a": "editorial-evidence",
+      "b": "horizontal-cinema",
+      "viewport": "desktop",
+      "dom": 0.334,
+      "box": 0.167,
+      "px": 0.409
+    },
+    {
+      "a": "editorial-evidence",
+      "b": "kinetic-cosmos",
+      "viewport": "desktop",
+      "dom": 0.652,
+      "box": 0.531,
+      "px": 0.617
+    },
+    {
+      "a": "editorial-evidence",
+      "b": "obsidian-atelier",
+      "viewport": "desktop",
+      "dom": 0.646,
+      "box": 0.309,
+      "px": 0.42
+    },
+    {
+      "a": "editorial-evidence",
+      "b": "spatial-bento",
+      "viewport": "desktop",
+      "dom": 0.739,
+      "box": 0.298,
+      "px": 0.698
+    },
+    {
+      "a": "horizontal-cinema",
+      "b": "kinetic-cosmos",
+      "viewport": "desktop",
+      "dom": 0.268,
+      "box": 0.219,
+      "px": 0.628
+    },
+    {
+      "a": "horizontal-cinema",
+      "b": "obsidian-atelier",
+      "viewport": "desktop",
+      "dom": 0.323,
+      "box": 0.16,
+      "px": 0.303
+    },
+    {
+      "a": "horizontal-cinema",
+      "b": "spatial-bento",
+      "viewport": "desktop",
+      "dom": 0.291,
+      "box": 0.188,
+      "px": 0.651
+    },
+    {
+      "a": "kinetic-cosmos",
+      "b": "obsidian-atelier",
+      "viewport": "desktop",
+      "dom": 0.637,
+      "box": 0.314,
+      "px": 0.57
+    },
+    {
+      "a": "kinetic-cosmos",
+      "b": "spatial-bento",
+      "viewport": "desktop",
+      "dom": 0.862,
+      "box": 0.277,
+      "px": 0.614
+    },
+    {
+      "a": "obsidian-atelier",
+      "b": "spatial-bento",
+      "viewport": "desktop",
+      "dom": 0.676,
+      "box": 0.305,
+      "px": 0.647
+    },
+    {
+      "a": "editorial-evidence",
+      "b": "horizontal-cinema",
+      "viewport": "mobile",
+      "dom": 0.334,
+      "box": 0.429,
+      "px": 0.719
+    },
+    {
+      "a": "editorial-evidence",
+      "b": "kinetic-cosmos",
+      "viewport": "mobile",
+      "dom": 0.652,
+      "box": 0.409,
+      "px": 0.741
+    },
+    {
+      "a": "editorial-evidence",
+      "b": "obsidian-atelier",
+      "viewport": "mobile",
+      "dom": 0.646,
+      "box": 0.383,
+      "px": 0.758
+    },
+    {
+      "a": "editorial-evidence",
+      "b": "spatial-bento",
+      "viewport": "mobile",
+      "dom": 0.739,
+      "box": 0.291,
+      "px": 0.901
+    },
+    {
+      "a": "horizontal-cinema",
+      "b": "kinetic-cosmos",
+      "viewport": "mobile",
+      "dom": 0.268,
+      "box": 0.344,
+      "px": 0.614
+    },
+    {
+      "a": "horizontal-cinema",
+      "b": "obsidian-atelier",
+      "viewport": "mobile",
+      "dom": 0.323,
+      "box": 0.386,
+      "px": 0.472
+    },
+    {
+      "a": "horizontal-cinema",
+      "b": "spatial-bento",
+      "viewport": "mobile",
+      "dom": 0.291,
+      "box": 0.367,
+      "px": 0.843
+    },
+    {
+      "a": "kinetic-cosmos",
+      "b": "obsidian-atelier",
+      "viewport": "mobile",
+      "dom": 0.637,
+      "box": 0.419,
+      "px": 0.501
+    },
+    {
+      "a": "kinetic-cosmos",
+      "b": "spatial-bento",
+      "viewport": "mobile",
+      "dom": 0.862,
+      "box": 0.293,
+      "px": 0.847
+    },
+    {
+      "a": "obsidian-atelier",
+      "b": "spatial-bento",
+      "viewport": "mobile",
+      "dom": 0.676,
+      "box": 0.31,
+      "px": 0.822
+    }
+  ]
+}

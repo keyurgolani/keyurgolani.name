@@ -1,0 +1,97 @@
+<!--
+  A static layout for the distinct guards' calibration (Design gate rule 5):
+  a "different" control by construction, never a product page. A fixed
+  sidebar of identity and navigation beside a wide reading column, which
+  stack on a narrow screen.
+-->
+<style>
+  [data-static-layout='two-column'] {
+    display: grid;
+    grid-template-columns: 18rem 1fr;
+    min-block-size: 100vh;
+    color: var(--color-text-primary);
+  }
+  [data-static-layout='two-column'] aside {
+    padding: 3rem 2rem;
+    background: var(--color-surface-prominent);
+    border-inline-end: 1px solid var(--color-border-strong);
+  }
+  [data-static-layout='two-column'] aside ol {
+    margin: 2rem 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 0.75rem;
+  }
+  [data-static-layout='two-column'] main {
+    padding: 3rem 4rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem 3rem;
+    align-content: start;
+  }
+  [data-static-layout='two-column'] main h1 {
+    grid-column: 1 / -1;
+    font-size: 3rem;
+    margin: 0;
+  }
+  [data-static-layout='two-column'] section {
+    border-top: 2px solid var(--color-border-strong);
+    padding-top: 1rem;
+  }
+  @media (max-width: 48rem) {
+    [data-static-layout='two-column'] {
+      grid-template-columns: 1fr;
+    }
+    [data-static-layout='two-column'] main {
+      grid-template-columns: 1fr;
+      padding: 2rem 1.25rem;
+    }
+  }
+</style>
+<div data-static-layout="two-column">
+  <aside aria-label="About">
+    <p><strong>Rowan Vale</strong></p>
+    <p>they/them, Lisbon</p>
+    <nav aria-label="Sections">
+      <ol>
+        <li><a href="#thesis">Thesis</a></li>
+        <li><a href="#lede">Lede</a></li>
+        <li><a href="#now">Now</a></li>
+        <li><a href="#experience">Experience</a></li>
+        <li><a href="#projects">Projects</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ol>
+    </nav>
+  </aside>
+  <main id="main">
+    <h1>Hero name</h1>
+    <section id="thesis">
+      <h2>Thesis title</h2>
+      <p>Practice thesis.</p>
+    </section>
+    <section id="lede">
+      <h2>Lede title</h2>
+      <p>Lede body.</p>
+    </section>
+    <section id="now">
+      <h2>Now title</h2>
+      <p>As of September 2026. Now body.</p>
+    </section>
+    <section id="experience">
+      <h2>Experience title</h2>
+      <dl>
+        <dt>Experience role</dt>
+        <dd>Experience organization, 2019 to now</dd>
+      </dl>
+    </section>
+    <section id="projects">
+      <h2>Projects title</h2>
+      <p>Project name, Software.</p>
+    </section>
+    <section id="contact">
+      <h2>Contact title</h2>
+      <p><a href="#main">Contact link</a></p>
+    </section>
+  </main>
+</div>

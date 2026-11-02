@@ -1,0 +1,89 @@
+<!--
+  A static layout for the distinct guards' calibration (Design gate rule 5):
+  a "different" control by construction, never a product page. A thin
+  masthead, then the work as one horizontal strip of tall panels, side by
+  side past the window's edge, at every width.
+-->
+<style>
+  [data-static-layout='horizontal-strip'] {
+    color: var(--color-text-primary);
+  }
+  [data-static-layout='horizontal-strip'] header {
+    display: flex;
+    gap: 2rem;
+    align-items: baseline;
+    padding: 1rem 2rem;
+    border-bottom: 1px solid var(--color-border-strong);
+  }
+  [data-static-layout='horizontal-strip'] header p {
+    margin: 0;
+  }
+  [data-static-layout='horizontal-strip'] main h1 {
+    margin: 1.5rem 2rem;
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+  }
+  [data-static-layout='horizontal-strip'] main > ol {
+    display: flex;
+    gap: 1rem;
+    overflow-x: auto;
+    margin: 0;
+    padding: 0 2rem 2rem;
+    list-style: none;
+  }
+  [data-static-layout='horizontal-strip'] main > ol > li {
+    flex: 0 0 min(28rem, 80vw);
+  }
+  [data-static-layout='horizontal-strip'] article {
+    display: flex;
+    flex-direction: column;
+    block-size: 70vh;
+    border: 2px solid var(--color-border-strong);
+    background: var(--color-surface-default);
+  }
+  [data-static-layout='horizontal-strip'] figure {
+    flex: 1;
+    margin: 0;
+    background: var(--color-surface-prominent);
+  }
+  [data-static-layout='horizontal-strip'] article h2 {
+    margin: 1rem;
+    font-size: 1.5rem;
+  }
+</style>
+<div data-static-layout="horizontal-strip">
+  <header>
+    <p><strong>Rowan Vale</strong></p>
+    <p>they/them, Lisbon</p>
+  </header>
+  <main id="main">
+    <h1>Selected work</h1>
+    <ol>
+      <li>
+        <article>
+          <figure><figcaption>Project media</figcaption></figure>
+          <h2>Project name</h2>
+        </article>
+      </li>
+      <li>
+        <article>
+          <figure><figcaption>Writing media</figcaption></figure>
+          <h2>Writing title</h2>
+        </article>
+      </li>
+      <li>
+        <article>
+          <figure><figcaption>Release media</figcaption></figure>
+          <h2>Release title</h2>
+        </article>
+      </li>
+      <li>
+        <article>
+          <figure><figcaption>Talk media</figcaption></figure>
+          <h2>Talk title</h2>
+        </article>
+      </li>
+    </ol>
+  </main>
+</div>

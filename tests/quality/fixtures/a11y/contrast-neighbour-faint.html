@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A faint date after an en dash, in dark mode, known-bad</title>
+    <!--
+      contrast-neighbour.html's layout, with the date itself in #3a3a3a on
+      the near-black gradient, under 2:1. Hiding the dash beside it must not
+      hide that: the date still fails.
+    -->
+    <style>
+      body {
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #000;
+        color: #e8e8e8;
+        color-scheme: dark;
+      }
+      .pf-period {
+        display: inline-block;
+        padding: 0.5rem;
+        background: linear-gradient(90deg, #0a0a0a, #161616);
+      }
+      .pf-period time {
+        margin-left: -0.1em;
+        color: #3a3a3a;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Experience</h1>
+      <p class="pf-period">2019–<time datetime="2021">2021</time></p>
+    </main>
+  </body>
+</html>

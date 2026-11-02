@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A see-through gradient surface, known-bad</title>
+    <!--
+      A surface whose fill is a translucent gradient image, with no
+      backdrop-filter and a transparent background-color, as #19's Surface
+      draws its material. Under reduced transparency the page still shows
+      through: only the pixels can tell.
+    -->
+    <style>
+      body {
+        background: linear-gradient(135deg, #234, #789);
+      }
+      [data-ui-slot='surface'] {
+        background-color: transparent;
+        background-image: linear-gradient(rgb(255 255 255 / 0.6), rgb(255 255 255 / 0.6));
+        padding: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section data-ui-slot="surface">
+        <h1>A surface the page shows through</h1>
+      </section>
+    </main>
+  </body>
+</html>

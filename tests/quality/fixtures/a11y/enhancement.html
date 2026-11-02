@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Content that needs a canvas, known-bad</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      // The page builds itself only where a 2D canvas works: without one, no
+      // main, no heading, and no navigation.
+      if (document.createElement('canvas').getContext('2d')) {
+        document.getElementById('app').innerHTML =
+          '<a href="#main">Skip to content</a><nav aria-label="Sections"><a href="#work">Work</a></nav>' +
+          '<main id="main" tabindex="-1"><h1>Drawn on a canvas</h1><section id="work"><h2>Work</h2><p>A project.</p></section></main>';
+      }
+    </script>
+  </body>
+</html>

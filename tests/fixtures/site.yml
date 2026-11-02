@@ -1,0 +1,19 @@
+# Harness fixture: the site document beside every portfolio fixture, with
+# the feed on. It selects missing-variant, which no package registers, so the
+# fallback composition renders (#5).
+schemaVersion: 2
+appearance:
+  variant: missing-variant
+  designLanguage: platform-neutral
+  colorScheme: warm-parchment
+  typography: humanist-ui
+  displayMode: system
+visitorControls:
+  variant: locked
+  designLanguage: locked
+  colorScheme: selectable
+  typography: locked
+  displayMode: selectable
+motionPolicy: respect-os
+features:
+  feed: true

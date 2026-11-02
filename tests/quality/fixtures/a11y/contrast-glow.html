@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>White text raised over a fixed glow, known-bad</title>
+    <!--
+      A fixed #eee glow over the top 60vh of a black page, a gradient so axe
+      leaves the text over it to the sampler, and white text raised over it
+      in a wrapping span (position: relative; z-index: 1). The glow is stuck,
+      but it's under the text: in the span's own line boxes the stack shows
+      the span first and the glow after it. It is the text's background, so
+      the text is measured on it, about 1.16:1, and fails. Hit-tested over
+      the span's bounding rect, the empty corner its short last line leaves
+      would find the glow on top there, call it a cover, and scroll the text
+      onto black, where it would pass.
+    -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #000;
+        color: #fff;
+      }
+      .glow {
+        position: fixed;
+        inset: 0 0 auto;
+        height: 60vh;
+        background: linear-gradient(#eee, #eee);
+      }
+      main {
+        padding: 1rem 1rem 200vh;
+      }
+      h1,
+      .raised {
+        position: relative;
+        z-index: 1;
+      }
+      p {
+        width: 12rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <main>
+      <h1 class="raised">A glow</h1>
+      <p>
+        <span class="raised"
+          >White text raised over the glow, long enough to wrap onto a shorter line</span
+        >
+      </p>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A visible heading clipped by its own box, known-bad</title>
+    <!-- A heading that shows, a fixed width with its overflow hidden, whose words sit in a span
+         and run past it on one line: the visitor sees them cut. -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 system-ui,
+          sans-serif;
+      }
+      main {
+        padding: 0 1rem;
+      }
+      h2 {
+        inline-size: 8rem;
+        overflow: hidden;
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A heading cut to a fixed width</h1>
+      <section aria-labelledby="practice--head">
+        <h2><span id="practice--head">Practice, and everything else it holds</span></h2>
+        <p>The section's own words, which wrap at any width.</p>
+      </section>
+    </main>
+  </body>
+</html>

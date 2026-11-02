@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A half-hidden heading, known-bad</title>
+    <!-- Not the sr-only pattern: the box is 1px wide but as tall as its text, so a sliver of
+         every line shows, cut. Only a box 1px or less both ways, and clipped, is visually
+         hidden. -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 system-ui,
+          sans-serif;
+      }
+      main {
+        padding: 0 1rem;
+      }
+      .sliver {
+        inline-size: 1px;
+        overflow: hidden;
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A heading a pixel wide</h1>
+      <section aria-labelledby="practice--head">
+        <h2 class="sliver"><span id="practice--head">Practice, and what it holds</span></h2>
+        <p>The section's own words, which wrap at any width.</p>
+      </section>
+    </main>
+  </body>
+</html>

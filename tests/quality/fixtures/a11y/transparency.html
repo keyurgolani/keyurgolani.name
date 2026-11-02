@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Translucency under reduce, known-bad</title>
+    <!-- A frosted surface that stays frosted when the visitor asks for less transparency. -->
+    <style>
+      body {
+        background: linear-gradient(135deg, #234, #789);
+      }
+      [data-ui-slot='surface'] {
+        background: rgb(255 255 255 / 0.6);
+        backdrop-filter: blur(12px);
+        padding: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section data-ui-slot="surface">
+        <h1>A surface that stays see-through</h1>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A visually hidden heading, known-good</title>
+    <!-- A section named by an sr-only heading whose words sit in a span, as a composition's
+         anchor part labels itself: the 1px clipped box holds a span wider than it, which no one
+         sees, so reflow has nothing to say about it. -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 system-ui,
+          sans-serif;
+      }
+      main {
+        padding: 0 1rem;
+      }
+      .sr {
+        position: absolute;
+        inline-size: 1px;
+        block-size: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+      .sr-clip {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A page with headings for screen readers</h1>
+      <section aria-labelledby="practice--head">
+        <h2 class="sr"><span id="practice--head">Practice, and what it holds</span></h2>
+        <p>The section's own words, which wrap at any width.</p>
+      </section>
+      <section aria-labelledby="top--head">
+        <h2 class="sr-clip"><span id="top--head">The top of the page, named</span></h2>
+        <p>More of the page's own words, which wrap too.</p>
+      </section>
+    </main>
+  </body>
+</html>

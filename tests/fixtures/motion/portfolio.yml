@@ -1,0 +1,61 @@
+# Harness fixture: what a composition might animate. A hero, profile links,
+# and an ongoing role, with a contact section far enough down to scroll to.
+# The motion contract spec renders it in every registered composition (#5).
+# .test hosts only.
+schemaVersion: 3
+locale: en
+direction: ltr
+identity:
+  name: Rowan Motion
+  tagline: Builds calm software.
+links:
+  - platform: github
+    url: https://code.rowan.test/rowan
+    label: Code
+  - platform: linkedin
+    url: https://people.rowan.test/rowan
+    label: People
+chronology:
+  - id: staff-engineer-calm-co
+    kind: role
+    title: Staff engineer
+    period:
+      start: 2023-04
+    organization: Calm Co
+  - id: engineer-quiet-ltd
+    kind: role
+    title: Engineer
+    period:
+      start: 2018-01
+      end: 2023-03
+    organization: Quiet Ltd
+  - id: bsc-rowan-university
+    kind: study
+    title: BSc
+    period:
+      start: 2014-09
+      end: 2017-06
+    organization: Rowan University
+    field: Computer science
+contact:
+  message: Write to rowan@rowan.test.
+sections:
+  - kind: hero
+    id: top
+    greeting: Hello, I'm
+    tagline: I build calm software.
+    subtagline: Engineer / Writer
+  - kind: chronology
+    id: work
+    title: Work
+    items:
+      - staff-engineer-calm-co
+      - engineer-quiet-ltd
+  - kind: chronology
+    id: study
+    title: Study
+    items:
+      - bsc-rowan-university
+  - kind: contact
+    id: contact
+    title: Contact

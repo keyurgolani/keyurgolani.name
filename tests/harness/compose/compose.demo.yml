@@ -1,0 +1,29 @@
+# Harness overlay on compose.yml and compose.owner.yml: the demo beside the
+# owner, behind the same proxy, at demo.portfolio.test, same-site with the
+# owner's portfolio.test as demo.jane.name is with jane.name (#9, threat rows
+# origin-1 and origin-2). proxy-stack.mjs adds it with its `demo` option. It
+# runs as deploy/compose.demo.yml does, on the internal network alone, and
+# publishes nothing: the proxy's 127.0.0.1 port stays the only one.
+services:
+  demo:
+    image: ${PORTFOLIO_IMAGE:?set PORTFOLIO_IMAGE to the image under test}
+    environment:
+      TZ: UTC
+      PORTFOLIO_PROFILE: demo
+      PORTFOLIO_ORIGIN: https://demo.portfolio.test:${PROXY_PORT:?set PROXY_PORT to a free port}
+      NODE_ENV: production
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /app/apps/web/.next/cache
+      - /tmp/portfolio-media:uid=1001,gid=1001,mode=0700
+    networks:
+      - internal
+
+  proxy:
+    depends_on:
+      - app
+      - demo

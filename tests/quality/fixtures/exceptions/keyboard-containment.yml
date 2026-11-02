@@ -1,0 +1,22 @@
+# Known bad (#11, Slice 2): an exception for a dialog that lets focus out,
+# keyboard containment, WCAG 2.1.2 at level A. No kind waives an A rule.
+version: 1
+exceptions:
+  - id: primitives-dialog-containment
+    kind: above-aa
+    gate: keyboard
+    rule: containment
+    owner: keyurgolani
+    rationale: The dialog lets Tab reach the page behind it until the primitive traps focus.
+    affectedUsers: Keyboard and switch users.
+    fallback: Escape closes the dialog.
+    trackingIssue: '#11'
+    created: '2026-10-20'
+    expires: '2026-12-15'
+    scope:
+      surface: primitives
+      route: /_fixtures/appearance
+      tuple: platform-neutral/warm-parchment/humanist-ui/system
+      viewport: 1440x900
+      preferenceMode: default
+falsePositives: []

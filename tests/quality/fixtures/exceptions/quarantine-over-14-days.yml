@@ -1,0 +1,21 @@
+# Known bad: a flake quarantine that runs 21 days, past the 14 quality/thresholds.json allows.
+version: 1
+exceptions:
+  - id: login-dialog-escape-flake
+    kind: quarantine
+    gate: keyboard
+    rule: dialog-escape
+    owner: keyurgolani
+    rationale: The Escape test flakes when the dialog's open transition overlaps the key press.
+    affectedUsers: None while quarantined; the test still runs and reports.
+    fallback: The close button closes the dialog.
+    trackingIssue: '#11'
+    created: '2026-10-25'
+    expires: '2026-11-15'
+    scope:
+      surface: login
+      route: /studio/login
+      tuple: platform-neutral/warm-parchment/humanist-ui/light
+      viewport: 1440x900
+      preferenceMode: default
+falsePositives: []

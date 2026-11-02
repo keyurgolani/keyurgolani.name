@@ -1,0 +1,204 @@
+// Starts the Compose fixture in tests/harness/compose/: the image under test on
+// an internal network behind a Caddy HTTPS proxy that issues its certificate
+// from its own local CA (`tls internal`). `pnpm ci:proxy` smoke-tests it, and
+// #2's security suite runs through it under owner (`test:security:proxy`),
+// with compose.owner.yml on top, on a data volume seeded with the fixture
+// pair (owner-store.mjs). With compose.demo.yml on top of that, the demo runs
+// beside the owner at DEMO_HOST, same-site with PROXY_HOST, for the demo
+// origin's browser checks (#9, ci/demo-origin.mjs).
+//
+//   const stack = await startProxyStack({ image: 'portfolio:ci' });
+//   const res = await stack.request('/api/health');
+//   await stack.stop();
+import { spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { send } from './http-client.mjs';
+import { freePort, waitFor } from './net.mjs';
+import { COPY_SEED_INTO_VOLUME, seedOwnerStore } from './owner-store.mjs';
+
+const HARNESS = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(HARNESS, '..', '..');
+const COMPOSE_FILE = path.join(HARNESS, 'compose', 'compose.yml');
+const OWNER_FILE = path.join(HARNESS, 'compose', 'compose.owner.yml');
+const DEMO_FILE = path.join(HARNESS, 'compose', 'compose.demo.yml');
+const CA_ROOT = '/data/caddy/pki/authorities/local/root.crt';
+export const PROXY_HOST = 'portfolio.test';
+/** The demo's host beside the owner's, a subdomain of it, so the two are same-site. */
+export const DEMO_HOST = `demo.${PROXY_HOST}`;
+export const DEFAULT_PORTFOLIO = path.join(REPO_ROOT, 'tests', 'fixtures', 'portfolio.yml');
+export const DEFAULT_SITE = path.join(REPO_ROOT, 'tests', 'fixtures', 'site.yml');
+/** Where compose.owner.yml mounts the owner's data directory and hash, in the app container. */
+export const OWNER_DATA_DIR = '/var/lib/portfolio';
+export const OWNER_HASH_FILE = '/run/owner-secret/owner_password_hash';
+
+/**
+ * @param {object} options
+ * @param {string} options.image the image under test
+ * @param {string} [options.cli] docker or finch (default $CONTAINER_CLI or docker)
+ * @param {string} [options.projectPrefix] Compose project name prefix
+ * @param {string} [options.portfolio] portfolio file mounted at /config/portfolio.yml
+ * @param {string} [options.site] site file mounted beside it, at /config/site.yml
+ * @param {{ hash: string, hops?: number }} [options.owner] the app under owner with the
+ *   password provider instead of read-only: the hash it reads from its _FILE, and how many
+ *   proxies it trusts to append to X-Forwarded-For (default 1, the fixture's one)
+ * @param {boolean} [options.demo] the demo beside the owner, at DEMO_HOST behind the same
+ *   proxy; only with `owner`
+ */
+export async function startProxyStack({
+  image,
+  cli = process.env.CONTAINER_CLI || 'docker',
+  projectPrefix = process.env.CONTAINER_PREFIX || 'portfolio-ci-',
+  portfolio = DEFAULT_PORTFOLIO,
+  site = DEFAULT_SITE,
+  owner,
+  demo = false,
+} = {}) {
+  if (!image) throw new Error('startProxyStack needs the image under test');
+  if (demo && !owner) throw new Error('startProxyStack runs the demo only beside the owner');
+  const project = `${projectPrefix}proxy-${randomBytes(4).toString('hex')}`;
+  // Under the repo (gitignored) rather than os.tmpdir(): Finch's VM shares the
+  // home directory but not macOS's per-user temp directory.
+  const stateDir = path.join(REPO_ROOT, 'test-results', 'harness', project);
+  const sourceDir = path.join(stateDir, 'config');
+  mkdirSync(sourceDir, { recursive: true });
+  cpSync(portfolio, path.join(sourceDir, 'portfolio.yml'));
+  cpSync(site, path.join(sourceDir, 'site.yml'));
+  const port = await freePort();
+
+  // An env file rather than the process environment: Finch runs Compose inside
+  // its VM, where this process's environment doesn't reach interpolation.
+  // Finch also only takes --env-file after -f.
+  const env = [`PORTFOLIO_IMAGE=${image}`, `FIXTURE_SOURCE_DIR=${sourceDir}`, `PROXY_PORT=${port}`];
+  const files = ['-f', COMPOSE_FILE];
+  // Owner's first start refuses the fixture's unregistered variant, so its
+  // volume starts with the pair published into it.
+  const seedDir = path.join(stateDir, 'owner-seed');
+  if (owner) {
+    mkdirSync(seedDir, { mode: 0o700 });
+    seedOwnerStore(seedDir, sourceDir);
+    const secretDir = path.join(stateDir, 'owner-secret');
+    mkdirSync(secretDir, { recursive: true });
+    // 0400, as docs/deployment.md asks of the real one. CI's runner is uid
+    // 1001, the server's user in the image, so the server can read it.
+    writeFileSync(path.join(secretDir, path.basename(OWNER_HASH_FILE)), `${owner.hash}\n`, {
+      mode: 0o400,
+    });
+    env.push(`OWNER_SECRET_DIR=${secretDir}`, `TRUSTED_PROXY_HOPS=${owner.hops ?? 1}`);
+    files.push('-f', OWNER_FILE);
+  }
+  if (demo) files.push('-f', DEMO_FILE);
+  const envFile = path.join(stateDir, 'stack.env');
+  writeFileSync(envFile, `${env.join('\n')}\n`);
+  const compose = (args, options = {}) =>
+    spawnSync(cli, ['compose', '-p', project, ...files, '--env-file', envFile, ...args], {
+      encoding: 'utf8',
+      ...options,
+    });
+  /** What a service, or every service, has written so far. */
+  const logs = (service) => {
+    const result = compose(['logs', '--no-color', ...(service ? [service] : [])]);
+    return `${result.stdout ?? ''}${result.stderr ?? ''}`;
+  };
+  const stop = () => {
+    compose(['down', '-v', '--remove-orphans'], { stdio: 'inherit' });
+    rmSync(stateDir, { recursive: true, force: true });
+  };
+  /** Caddy's local CA root certificate, once the proxy has made it. */
+  let ca;
+  const request = (pathname, { method, headers = {}, body, timeoutMs, host = PROXY_HOST } = {}) =>
+    send({
+      protocol: 'https:',
+      port,
+      path: pathname,
+      method,
+      headers: { host: `${host}:${port}`, ...headers },
+      body,
+      servername: host,
+      ca,
+      timeoutMs,
+    });
+  const healthy = async () => {
+    for (const host of demo ? [PROXY_HOST, DEMO_HOST] : [PROXY_HOST]) {
+      await waitFor(
+        async () => {
+          const response = await request('/api/health', { timeoutMs: 5_000, host });
+          return response.status === 200 ? response : undefined;
+        },
+        { timeoutMs: 90_000, what: `GET https://${host}/api/health through the proxy` },
+      );
+    }
+  };
+
+  try {
+    if (owner) {
+      // As root, once, before the server's first start: into the project's data volume, for uid 1001.
+      const seeded = compose(
+        [
+          'run',
+          '--rm',
+          '--no-deps',
+          '-T',
+          '-u',
+          '0',
+          '-v',
+          `${seedDir}:/seed:ro`,
+          'app',
+          'node',
+          '-e',
+          COPY_SEED_INTO_VOLUME,
+        ],
+        { stdio: 'inherit' },
+      );
+      if (seeded.status !== 0) {
+        throw new Error(`${cli} compose run couldn't seed the owner volume for project ${project}`);
+      }
+    }
+    if (compose(['up', '-d'], { stdio: 'inherit' }).status !== 0) {
+      throw new Error(`${cli} compose up failed for project ${project}`);
+    }
+    ca = await waitFor(
+      () => {
+        const result = compose(['exec', '-T', 'proxy', 'cat', CA_ROOT]);
+        return result.status === 0 && result.stdout.includes('BEGIN CERTIFICATE')
+          ? result.stdout
+          : undefined;
+      },
+      { timeoutMs: 60_000, what: "Caddy's local CA root certificate" },
+    );
+    const stack = {
+      cli,
+      project,
+      port,
+      ca,
+      origin: `https://${PROXY_HOST}:${port}`,
+      /** The demo's origin beside the owner's, or null without the `demo` option. */
+      demoOrigin: demo ? `https://${DEMO_HOST}:${port}` : null,
+      /**
+       * One HTTPS request through the proxy, verified against Caddy's local CA
+       * (http-client.mjs), to PROXY_HOST unless `host` names DEMO_HOST.
+       */
+      request,
+      /** Runs a command in a service container, with `input` on its stdin; returns spawnSync's result. */
+      exec: (service, command, { input } = {}) =>
+        compose(['exec', '-T', service, ...command], input === undefined ? {} : { input }),
+      logs,
+      /** Restarts a service, and waits until the app answers through the proxy again. */
+      restart: async (service) => {
+        if (compose(['restart', service], { stdio: 'inherit' }).status !== 0) {
+          throw new Error(`${cli} compose restart ${service} failed for project ${project}`);
+        }
+        await healthy();
+      },
+      stop,
+    };
+    await healthy();
+    return stack;
+  } catch (error) {
+    error.logs = logs();
+    stop();
+    throw error;
+  }
+}

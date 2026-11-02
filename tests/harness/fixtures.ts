@@ -1,0 +1,251 @@
+// Playwright fixtures for browser tests against the app under test.
+//
+//   import { test, expect } from '../harness/fixtures';
+//   test.use({ appOptions: { env: { PORTFOLIO_ORIGIN: 'https://jane.test' } } });
+//
+// `app` is worker-scoped: every distinct `appOptions` gets its own server,
+// source directory, and port. Every request the browser makes outside the app's
+// origin fails, and the blocked URLs are attached to the test. A blocked
+// request to a host outside EXPECTED_BLOCKED_HOSTS fails the test. The server
+// itself reaches no host outside the app: any attempt it makes while a test
+// runs fails that test. `request` gives each API request a connection of its
+// own. Only `request` does: `page.request`, `context.request`, and a context
+// a spec makes itself keep Playwright's shared keep-alive sockets.
+import path from 'node:path';
+import { test as base } from '@playwright/test';
+import { startApp } from './app-server.mjs';
+import { fixtureHostWeb } from './fixture-host.mjs';
+
+export { expect } from '@playwright/test';
+
+// Outside requests a page may make today, which stay blocked: third-party
+// fonts until #6 self-hosts them, and the fixtures' own .test hosts. A spec
+// adds the hosts its own content names with the `blockedHosts` option.
+const EXPECTED_BLOCKED_HOSTS = new Set(['fonts.googleapis.com', 'fonts.gstatic.com']);
+
+function expectedBlock(url: string, extra: readonly string[]): boolean {
+  const { hostname } = new URL(url);
+  return (
+    EXPECTED_BLOCKED_HOSTS.has(hostname) || extra.includes(hostname) || hostname.endsWith('.test')
+  );
+}
+
+export interface AppOptions {
+  /** Extra server environment. The default is read-only from `sourceDir`. */
+  env?: Record<string, string>;
+  /** Portfolio document copied into `sourceDir`; null for none. */
+  portfolio?: string | null;
+  /** Site document copied beside it; null for none. Defaults to tests/fixtures/site.yml. */
+  site?: string | null;
+  /** Site document text, written beside it as site.yml in place of `site`. */
+  siteText?: string;
+  /** The source directory's name (default `config`). */
+  sourceName?: string;
+  /**
+   * Files written before the server starts, by the variable that names each
+   * one: `path` is relative to the app's root, and the variable gets the
+   * absolute path.
+   */
+  envFiles?: Record<string, { path: string; text: string }>;
+  /** A data directory made under the app's root, mode 0700, as PORTFOLIO_DATA_DIR. */
+  dataName?: string;
+  /**
+   * With `dataName`, the source pair published into it as revision 1 first
+   * (owner-store.mjs), since owner's first start refuses a site whose variant
+   * this build doesn't register. Default true.
+   */
+  seed?: boolean;
+  /**
+   * Run the fixture host's build (fixture-host.mjs), which registers the test
+   * variants or fixture packs its suite asks for, in place of this checkout's.
+   * The route and appearance specs build one.
+   */
+  fixtureHost?: boolean;
+  /**
+   * The apps/web whose build runs, in place of this checkout's: the variant
+   * specs' target, such as test:external-variant's worktree.
+   */
+  web?: string;
+  /** Files added to the server copy's public/, by path, as an owner adds the assets a portfolio names. */
+  publicFiles?: Record<string, string | Uint8Array>;
+  /** Files added to the source directory beside the documents, by path, such as `snapshots/github.json` (#10). */
+  sourceFiles?: Record<string, string | Uint8Array>;
+  /**
+   * A host for PORTFOLIO_PREVIEW_ORIGIN on the server's own port, such as
+   * preview.localhost, which the browser resolves to loopback (#7, Slice 4).
+   * Requests to that origin go through, as the app's own do.
+   */
+  previewHost?: string;
+}
+
+export interface App {
+  origin: string;
+  port: number;
+  /** PORTFOLIO_PREVIEW_ORIGIN, when the app has one. */
+  previewOrigin?: string;
+  /** The directory the server runs from, holding its build copy and `sourceDir`. */
+  root: string;
+  /** The server's PORTFOLIO_SOURCE_DIR unless `env` names another. */
+  sourceDir: string;
+  log: string;
+  env: Record<string, string>;
+  /** Every outside host the server tried to reach, in order (`host:port`). None got out. */
+  egress: () => string[];
+}
+
+interface TestFixtures {
+  /** More hosts a page may try to reach, such as the bundled sample's image host. */
+  blockedHosts: readonly string[];
+  /**
+   * Whether the harness routes the context's WebSockets, true by default.
+   * Playwright's routing puts a mock in every frame in the browser's own
+   * WebSocket's place, so a spec that tests what a page's CSP does to a
+   * socket turns it off, and the browser's own refuses or connects.
+   */
+  routeWebSockets: boolean;
+  /** URLs the browser tried to fetch outside the app; all were aborted. */
+  blockedRequests: string[];
+  /** Fails the test when the server tried to reach a host outside the app during it. */
+  serverEgress: void;
+  /**
+   * The task Owner Studio's tab last used, as its sessionStorage keeps it,
+   * set in each of the context's pages before Studio loads, or null for a
+   * fresh tab, which lands on Appearance (OWN-3). A spec about a task Studio
+   * reaches by its link sets none; one written while Studio opened on
+   * Content, and about Content, says so with `test.use({ studioLastTask:
+   * 'content' })`, and a later task link still moves it on.
+   */
+  studioLastTask: string | null;
+  /** Applies studioLastTask to the context. */
+  lastTask: void;
+}
+
+interface WorkerFixtures {
+  appOptions: AppOptions;
+  app: App;
+}
+
+// Playwright's fixture callback is conventionally named `use`; it is `provide`
+// here because the React Hooks lint rule mistakes `use(...)` for React's use().
+export const test = base.extend<TestFixtures, WorkerFixtures>({
+  appOptions: [{}, { scope: 'worker', option: true }],
+  blockedHosts: [[], { option: true }],
+  routeWebSockets: [true, { option: true }],
+  studioLastTask: [null, { option: true }],
+
+  app: [
+    async ({ appOptions }, provide, workerInfo) => {
+      const logFile = path.join(
+        workerInfo.project.outputDir,
+        `app-server-worker-${workerInfo.workerIndex}.log`,
+      );
+      const { fixtureHost, web: built, ...options } = appOptions;
+      // The global setup that built it ran before this worker started.
+      const web = built ?? (fixtureHost ? fixtureHostWeb() : undefined);
+      const app = await startApp({ ...options, web, logFile });
+      await provide(app);
+      await app.stop();
+    },
+    { scope: 'worker', timeout: 120_000 },
+  ],
+
+  baseURL: async ({ app }, provide) => {
+    await provide(app.origin);
+  },
+
+  // Each API request on a connection of its own, which it closes, as
+  // http-client.mjs's requests are. Playwright's agent keeps an idle socket
+  // until the server closes it, and Node's server closes one idle for 6 s, so
+  // a request sent straight after a long synchronous step could go out on a
+  // socket already closed, and fail with a socket hang up (#52). A spec that
+  // sends through page.request, context.request, or a context of its own
+  // gets no such header, so it shares those sockets.
+  request: async ({ playwright, extraHTTPHeaders }, provide) => {
+    const request = await playwright.request.newContext({
+      extraHTTPHeaders: { ...extraHTTPHeaders, connection: 'close' },
+    });
+    await provide(request);
+    await request.dispose();
+  },
+
+  blockedRequests: [
+    async ({ context, app, blockedHosts, routeWebSockets }, provide, testInfo) => {
+      const blocked: string[] = [];
+      const appHost = new URL(app.origin).host;
+      await context.route('**/*', (route) => {
+        const url = route.request().url();
+        const { origin } = new URL(url);
+        if (origin === app.origin || origin === app.previewOrigin) return route.continue();
+        blocked.push(url);
+        return route.abort('blockedbyclient');
+      });
+      if (routeWebSockets) {
+        await context.routeWebSocket(/.*/, (ws) => {
+          if (new URL(ws.url()).host === appHost) ws.connectToServer();
+          else {
+            blocked.push(ws.url());
+            ws.close();
+          }
+        });
+      }
+      await provide(blocked);
+      if (blocked.length > 0) {
+        await testInfo.attach('blocked-requests.txt', {
+          body: `${blocked.join('\n')}\n`,
+          contentType: 'text/plain',
+        });
+      }
+      const unexpected = [...new Set(blocked.filter((url) => !expectedBlock(url, blockedHosts)))];
+      if (unexpected.length > 0) {
+        throw new Error(
+          [
+            `The page requested ${unexpected.length} URL(s) outside the app: ${unexpected.join(', ')}`,
+            '',
+            "Expected: only the app, third-party fonts, .test fixture hosts, and the spec's blockedHosts",
+            `Received: ${unexpected.join(', ')}`,
+          ].join('\n'),
+        );
+      }
+    },
+    { auto: true },
+  ],
+
+  lastTask: [
+    async ({ context, studioLastTask }, provide) => {
+      if (studioLastTask !== null) {
+        // Only where the tab has none yet, so a task the spec opens stays the tab's last.
+        await context.addInitScript((task) => {
+          if (window.top !== window || !location.pathname.startsWith('/studio')) return;
+          if (sessionStorage.getItem('studio.task') === null) {
+            sessionStorage.setItem('studio.task', task);
+          }
+        }, studioLastTask);
+      }
+      await provide();
+    },
+    { auto: true },
+  ],
+
+  serverEgress: [
+    async ({ app }, provide, testInfo) => {
+      const before = app.egress().length;
+      await provide();
+      const attempts = app.egress().slice(before);
+      if (attempts.length > 0) {
+        await testInfo.attach('server-egress.txt', {
+          body: `${attempts.join('\n')}\n`,
+          contentType: 'text/plain',
+        });
+        throw new Error(
+          [
+            `The server tried to reach ${attempts.length} host(s) outside the app: ${[...new Set(attempts)].join(', ')}`,
+            '',
+            'Expected: no outbound request from the server under test',
+            `Received: ${attempts.join(', ')}`,
+          ].join('\n'),
+        );
+      }
+    },
+    { auto: true },
+  ],
+});

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Text under a sticky header, known-good</title>
+    <!--
+      Raw Grid's sticky header, with text that passes. A sticky header
+      painted in the text's own color sits over a paragraph the page has
+      scrolled under it, as an earlier check can leave the page: axe sends
+      the paragraph to the sampler, since it's on a gradient, and the clip
+      at rest is the header's fill, 1.00:1. Scrolled clear of the header,
+      it reads at about 15:1. The known-bad case adds text at 1.00:1 that
+      nothing covers (a11y-cases.ts).
+    -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #fff;
+        color: #222;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        height: 4rem;
+        background: #222;
+        color: #fff;
+      }
+      header p {
+        margin: 0;
+        padding: 1rem;
+      }
+      main {
+        padding: 0 1rem 120vh;
+      }
+      .band {
+        margin: 0 0 1rem;
+        background: linear-gradient(90deg, #fff, #f6f6f6);
+        color: #222;
+      }
+      .faint {
+        background: linear-gradient(90deg, #777, #777);
+        color: #777;
+      }
+    </style>
+  </head>
+  <body>
+    <header><p>Site header</p></header>
+    <main>
+      <h1>Index</h1>
+      <p class="band" id="under">A paragraph the page leaves under the sticky header.</p>
+      <!-- under -->
+      <p class="band">Another paragraph, clear of it.</p>
+      <!-- faint -->
+    </main>
+    <script>
+      // Where an earlier check left the page: the paragraph at the top of the viewport, under the header.
+      addEventListener('load', () => {
+        const under = document.getElementById('under');
+        scrollTo(0, under.getBoundingClientRect().top + scrollY - 8);
+      });
+    </script>
+  </body>
+</html>

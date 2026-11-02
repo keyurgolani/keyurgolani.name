@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A stop the clearing scroll takes out of view, known-bad</title>
+    <!--
+      A link that focus leaves under a 64px sticky header, and a page that
+      moves it out of the viewport once it's scrolled up past where focus
+      left it. The focus check scrolls it clear of the header, the page moves
+      it away, and its ring can't be measured: unresolved, never passed.
+    -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #fff;
+        color: #222;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        height: 64px;
+        background: #fff;
+        border-bottom: 1px solid #222;
+      }
+      a {
+        color: #222;
+      }
+      a:focus-visible {
+        outline: 2px solid #222;
+        outline-offset: 2px;
+      }
+      .away {
+        position: fixed;
+        top: -200px;
+      }
+    </style>
+  </head>
+  <body>
+    <header><p>Header</p></header>
+    <main>
+      <div style="height: 600px"></div>
+      <p><a id="target" href="#target">A link left under the header</a></p>
+      <div style="height: 2000px"></div>
+    </main>
+    <script>
+      const link = document.getElementById('target');
+      link.addEventListener('focus', () => {
+        const start = link.getBoundingClientRect().top + scrollY - 20;
+        scrollTo({ left: 0, top: start, behavior: 'instant' });
+        addEventListener('scroll', () => {
+          if (scrollY < start - 1) link.classList.add('away');
+        });
+      });
+    </script>
+  </body>
+</html>

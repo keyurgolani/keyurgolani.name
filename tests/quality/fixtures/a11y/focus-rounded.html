@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Rounded rings, known-good</title>
+    <!--
+      Three upright buttons with a 2px ring set out 2px: a 120px circle at
+      border-radius: 50%, one at 999px, which CSS scales to 60px, and a
+      160 by 80 ellipse at 50%, each axis its own. A 2px ring round each is
+      about twice its own path, short of 0.9 of twice the box's perimeter:
+      they pass only when the probe reads each radius in the browser, a
+      percentage resolved and an overlong length scaled, and the check holds
+      the ring to the rounded path.
+    -->
+    <style>
+      body {
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #fff;
+        color: #222;
+      }
+      button {
+        display: inline-block;
+        margin: 1rem;
+        padding: 0;
+        border: 0;
+        background: #fff;
+        color: #222;
+        font: inherit;
+      }
+      button:focus-visible {
+        outline: 2px solid #222;
+        outline-offset: 2px;
+      }
+      .circle {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+      }
+      .long {
+        width: 120px;
+        height: 120px;
+        border-radius: 999px;
+      }
+      .ellipse {
+        width: 160px;
+        height: 80px;
+        border-radius: 50%;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Rounded</h1>
+      <button type="button" class="circle">Circle</button>
+      <button type="button" class="long">Long radius</button>
+      <button type="button" class="ellipse">Ellipse</button>
+    </main>
+  </body>
+</html>

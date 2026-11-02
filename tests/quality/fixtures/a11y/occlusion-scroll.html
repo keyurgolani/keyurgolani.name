@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A footer shown on scroll, known-bad</title>
+    <!-- The footer appears only once the page scrolls, which focusing the link does. -->
+    <style>
+      :focus-visible {
+        outline: 2px solid #000;
+        outline-offset: 2px;
+      }
+      footer {
+        position: fixed;
+        inset: auto 0 0 0;
+        height: 160px;
+        background: #222;
+        color: #fff;
+        display: none;
+      }
+      footer.shown {
+        display: block;
+      }
+      .spacer {
+        height: 1600px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A link under a footer that comes with the scroll</h1>
+      <div class="spacer"></div>
+      <p><a href="#below" id="below">Below the fold</a></p>
+    </main>
+    <footer><p>A fixed footer</p></footer>
+    <script>
+      addEventListener('scroll', () => {
+        requestAnimationFrame(() =>
+          document.querySelector('footer').classList.toggle('shown', scrollY > 0),
+        );
+      });
+    </script>
+  </body>
+</html>

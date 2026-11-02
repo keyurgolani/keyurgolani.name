@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A line on a rotated sticker, known-good</title>
+    <!--
+      Raw Grid's stickers, with text that passes. A sticker rotated 4deg,
+      with a border in the text's color, holds a line that spans it: axe
+      sends the line to the sampler, since it's on a gradient, and the
+      axis-aligned clip round it takes in the border at its corners, 1.00:1.
+      Sampled inside its own quad, it reads at about 15:1. The known-bad
+      case adds a sticker whose line is its own background's color
+      (a11y-cases.ts).
+    -->
+    <style>
+      body {
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #fff;
+        color: #222;
+      }
+      .sticker {
+        width: 16rem;
+        margin: 3rem 2rem;
+        rotate: 4deg;
+        border: 3px solid #222;
+        background: linear-gradient(#fff, #f8f8f8);
+      }
+      .sticker p {
+        margin: 0;
+        color: #222;
+        background: linear-gradient(#fff, #fbfbfb);
+      }
+      .sticker .faint {
+        background: linear-gradient(#777, #777);
+        color: #777;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Stickers</h1>
+      <div class="sticker"><p>A line across a rotated sticker</p></div>
+      <!-- faint -->
+    </main>
+  </body>
+</html>

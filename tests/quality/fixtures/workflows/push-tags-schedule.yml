@@ -1,0 +1,51 @@
+# Known good (#11, Slice 1, item 13): pull requests run the test job with
+# contents: read and actions: read. The jobs that publish, release, and run
+# nightly hold write permissions and secrets, and each if: keeps pull
+# requests from running them.
+name: release
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  schedule:
+    - cron: '0 6 * * *'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - run: echo test
+  publish:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: [test]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - run: echo publish
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - run: echo release
+        env:
+          TOKEN: ${{ secrets.RELEASE_TOKEN }}
+  nightly:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    permissions:
+      issues: write
+    steps:
+      - run: echo nightly
+        env:
+          TOKEN: ${{ secrets.NIGHTLY_TOKEN }}

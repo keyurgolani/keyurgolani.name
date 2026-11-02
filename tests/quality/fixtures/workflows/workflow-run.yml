@@ -1,0 +1,15 @@
+# Known bad (#11, Slice 1, item 13): a workflow_run trigger, which runs with the
+# base repository's secrets on what a pull request's run leaves behind. Its job
+# is otherwise fine, so it fails for the trigger alone.
+name: after-ci
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+permissions:
+  contents: read
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo report

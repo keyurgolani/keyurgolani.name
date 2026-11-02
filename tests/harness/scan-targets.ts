@@ -1,0 +1,41 @@
+// What the leak scans request (#1, Verification item 2, and #2): every route,
+// retired route, and operation, each at a path of its own, and some paths
+// that don't exist. The profile matrix and #2's security suite share it.
+import { createRequire } from 'node:module';
+import type * as Operations from '../../apps/web/src/server/operations';
+import type * as Routes from '../../apps/web/src/server/routes';
+import { IMAGE_PROBE } from './canaries.mjs';
+
+// apps/web has no "type": "module", so its modules are CommonJS to Node and
+// load through require().
+const require = createRequire(import.meta.url);
+const { listOperations } = require('../../apps/web/src/server/operations.ts') as typeof Operations;
+const { listRoutes, RETIRED_PATTERNS } =
+  require('../../apps/web/src/server/routes.ts') as typeof Routes;
+
+/**
+ * A concrete path for a pattern: an optional catch-all left empty, and each
+ * other dynamic segment a word no route starts with, so the path is the
+ * pattern's own and not a static route's.
+ */
+export const concrete = (pattern: string) =>
+  pattern.replace(/\/\[\[\.\.\.[^\]]+\]\]/g, '').replace(/\[\.{0,3}[^\]]+\]/g, 'probe') || '/';
+
+/** Every target the leak scan requests: each route, retired route, and operation, and some that don't exist. */
+export function scanTargets(): string[] {
+  return [
+    ...listRoutes()
+      .filter((route) => route.capability !== 'operations')
+      .map((route) => concrete(route.pattern)),
+    ...RETIRED_PATTERNS.map(concrete),
+    ...listOperations().map((operation) => `/api/studio/${operation.name}`),
+    '/api/studio/no.such.operation',
+    '/no-such-page',
+    '/api/no-such-route',
+    // Preview paths no grant admits (#7): the status document under owner,
+    // and the preview's 404s under the other profiles.
+    '/preview/probe',
+    '/preview-assets/probe/asset',
+    IMAGE_PROBE,
+  ];
+}

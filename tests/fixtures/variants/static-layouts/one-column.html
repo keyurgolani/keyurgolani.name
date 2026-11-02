@@ -1,0 +1,76 @@
+<!--
+  A static layout for the distinct guards' calibration (Design gate rule 5):
+  a "different" control by construction, never a product page. One centered
+  column: a header with a row of links, the identity, then each section in
+  turn, and a footer. distinct-calibration.spec.ts puts it inside a
+  presentation boundary in the guards' tuple, so it takes the tuple's tokens.
+-->
+<style>
+  [data-static-layout='one-column'] {
+    max-inline-size: 40rem;
+    margin-inline: auto;
+    padding: 2rem 1.25rem;
+    color: var(--color-text-primary);
+  }
+  [data-static-layout='one-column'] header ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    margin: 0 0 3rem;
+    padding: 0;
+    list-style: none;
+  }
+  [data-static-layout='one-column'] h1 {
+    margin: 0 0 1rem;
+    font-size: 2.5rem;
+  }
+  [data-static-layout='one-column'] section {
+    margin-block: 2.5rem;
+  }
+  [data-static-layout='one-column'] footer {
+    margin-top: 4rem;
+    border-top: 1px solid var(--color-border-default);
+    padding-top: 1rem;
+  }
+</style>
+<div data-static-layout="one-column">
+  <header>
+    <nav aria-label="Sections">
+      <ul>
+        <li><a href="#thesis">Thesis</a></li>
+        <li><a href="#lede">Lede</a></li>
+        <li><a href="#now">Now</a></li>
+        <li><a href="#experience">Experience</a></li>
+        <li><a href="#projects">Projects</a></li>
+      </ul>
+    </nav>
+  </header>
+  <main id="main">
+    <h1>Rowan Vale</h1>
+    <p>Hero tagline. Hero subtagline, they/them, Lisbon.</p>
+    <section id="thesis">
+      <h2>Thesis title</h2>
+      <p>
+        Practice thesis, set as a paragraph long enough to wrap onto a second line at this measure.
+      </p>
+    </section>
+    <section id="lede">
+      <h2>Lede title</h2>
+      <p>Lede body, a second paragraph of plain prose in the same column as the first.</p>
+    </section>
+    <section id="now">
+      <h2>Now title</h2>
+      <p>As of September 2026. Now body, what the practice is working on at the moment.</p>
+    </section>
+    <section id="experience">
+      <h2>Experience title</h2>
+      <p>Experience role, Experience organization, 2019 to now.</p>
+      <p>Experience summary, a paragraph about the role.</p>
+    </section>
+    <section id="projects">
+      <h2>Projects title</h2>
+      <p>Project name, Software. Project summary in a sentence or two.</p>
+    </section>
+  </main>
+  <footer><p>Rowan Vale, Lisbon</p></footer>
+</div>

@@ -1,0 +1,107 @@
+<!--
+  A static layout for the distinct guards' calibration (Design gate rule 5):
+  a "different" control by construction, never a product page. A compact
+  title bar, then the work as a grid of bordered cards, each with media on
+  top, three across on a wide screen and one on a narrow one.
+-->
+<style>
+  [data-static-layout='card-grid'] {
+    padding: 1.5rem 2rem 3rem;
+    color: var(--color-text-primary);
+  }
+  [data-static-layout='card-grid'] header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--color-border-strong);
+  }
+  [data-static-layout='card-grid'] h1 {
+    margin: 0;
+    font-size: 1.25rem;
+  }
+  [data-static-layout='card-grid'] main > ul {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    margin: 2rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  [data-static-layout='card-grid'] article {
+    border: 2px solid var(--color-border-strong);
+    border-radius: 0.75rem;
+    overflow: hidden;
+    background: var(--color-surface-default);
+  }
+  [data-static-layout='card-grid'] figure {
+    margin: 0;
+    aspect-ratio: 4 / 3;
+    background: var(--color-surface-prominent);
+    border-bottom: 2px solid var(--color-border-strong);
+  }
+  [data-static-layout='card-grid'] article h2 {
+    margin: 1rem 1rem 0.25rem;
+    font-size: 1.1rem;
+  }
+  [data-static-layout='card-grid'] article p {
+    margin: 0 1rem 1rem;
+  }
+  @media (max-width: 48rem) {
+    [data-static-layout='card-grid'] main > ul {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+<div data-static-layout="card-grid">
+  <header>
+    <h1>Rowan Vale</h1>
+    <nav aria-label="Pages"><a href="#main">Work</a> <a href="#main">About</a></nav>
+  </header>
+  <main id="main">
+    <ul>
+      <li>
+        <article>
+          <figure><figcaption>Project media</figcaption></figure>
+          <h2>Project name</h2>
+          <p>Software</p>
+        </article>
+      </li>
+      <li>
+        <article>
+          <figure><figcaption>Writing media</figcaption></figure>
+          <h2>Writing title</h2>
+          <p>Writing</p>
+        </article>
+      </li>
+      <li>
+        <article>
+          <figure><figcaption>Release media</figcaption></figure>
+          <h2>Release title</h2>
+          <p>Music</p>
+        </article>
+      </li>
+      <li>
+        <article>
+          <figure><figcaption>Talk media</figcaption></figure>
+          <h2>Talk title</h2>
+          <p>Talk</p>
+        </article>
+      </li>
+      <li>
+        <article>
+          <figure><figcaption>Episode media</figcaption></figure>
+          <h2>Episode title</h2>
+          <p>Episode</p>
+        </article>
+      </li>
+      <li>
+        <article>
+          <figure><figcaption>Gallery media</figcaption></figure>
+          <h2>Gallery title</h2>
+          <p>Photography</p>
+        </article>
+      </li>
+    </ul>
+  </main>
+</div>

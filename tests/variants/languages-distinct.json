@@ -1,0 +1,449 @@
+{
+  "note": "Thresholds from pack-distinct-calibration.spec.ts. Each score has an alike line (null when its calibration found no gap of 0.1 at both viewports, so it doesn't vote) and a clone floor. A pair fails when its pixels are under their alike line, whatever its tokens say (the token line decides only while the pixels have none), or when either score is under its clone floor. For a design language the token score reads only the groups a static render shows (corners, depth, borders, density), and the material (surface) only when the composition's render shows a visible Surface primitive (`material` records that detection and its reason); focus, motion, states, icons, texture, and an unrendered material are informational lines that never score. `pinned` true holds `composition` as the scored one whatever the coverage procedure picks, and `procedurePick` records that pick and its coverage. `enforced` false reports failures without failing the run. `rulings` names pairs that pass while failing, each with why; a `scope` (a viewport, desktop or mobile) holds a ruling to those rows only, so the pair still fails anywhere else, and `evidence` names the shots that carry it.",
+  "calibrated": true,
+  "enforced": false,
+  "axis": "designLanguage",
+  "composition": "spatial-bento",
+  "pinned": true,
+  "procedurePick": {
+    "composition": "aurora-glass",
+    "coverage": 5.618,
+    "scoredCoverage": 3.113
+  },
+  "tuple": {
+    "designLanguage": "platform-neutral",
+    "colorScheme": "warm-parchment",
+    "typography": "humanist-ui",
+    "displayMode": "system"
+  },
+  "material": {
+    "mode": "detected",
+    "scored": false,
+    "shares": {
+      "desktop": 0,
+      "mobile": 0
+    },
+    "reason": "visible Surfaces cover 0 at desktop and 0 at mobile, under 0.02 of the first viewport at one or more viewport: the material is informational"
+  },
+  "thresholds": {
+    "px": {
+      "alike": {
+        "desktop": 0.113,
+        "mobile": 0.273
+      },
+      "clone": {
+        "desktop": 0.04,
+        "mobile": 0.008
+      }
+    },
+    "token": {
+      "alike": {
+        "desktop": 0.054,
+        "mobile": 0.054
+      },
+      "clone": {
+        "desktop": 0.001,
+        "mobile": 0.001
+      }
+    }
+  },
+  "calibration": {
+    "px": {
+      "alike": {
+        "desktop": {
+          "same": 0.02,
+          "different": 0.206,
+          "gap": 0.186,
+          "threshold": 0.113
+        },
+        "mobile": {
+          "same": 0.004,
+          "different": 0.542,
+          "gap": 0.538,
+          "threshold": 0.273
+        }
+      },
+      "clone": {
+        "desktop": {
+          "floor": 0.02,
+          "threshold": 0.04
+        },
+        "mobile": {
+          "floor": 0.004,
+          "threshold": 0.008
+        }
+      }
+    },
+    "token": {
+      "alike": {
+        "desktop": {
+          "same": 0,
+          "different": 0.107,
+          "gap": 0.107,
+          "threshold": 0.054
+        },
+        "mobile": {
+          "same": 0,
+          "different": 0.107,
+          "gap": 0.107,
+          "threshold": 0.054
+        }
+      },
+      "clone": {
+        "desktop": {
+          "floor": 0,
+          "threshold": 0
+        },
+        "mobile": {
+          "floor": 0,
+          "threshold": 0
+        }
+      }
+    }
+  },
+  "packs": [
+    {
+      "id": "art-deco",
+      "family": "retro"
+    },
+    {
+      "id": "atelier-luxury",
+      "family": "quiet"
+    },
+    {
+      "id": "bauhaus-geometric",
+      "family": "raw"
+    },
+    {
+      "id": "blueprint",
+      "family": "expressive"
+    },
+    {
+      "id": "carbon-inspired",
+      "family": "product-systems"
+    },
+    {
+      "id": "claymorphic",
+      "family": "expressive"
+    },
+    {
+      "id": "cyberpunk",
+      "family": "expressive"
+    },
+    {
+      "id": "fluent-2-inspired",
+      "family": "product-systems"
+    },
+    {
+      "id": "glassmorphism",
+      "family": "expressive"
+    },
+    {
+      "id": "handcrafted-collage",
+      "family": "raw"
+    },
+    {
+      "id": "industrial",
+      "family": "raw"
+    },
+    {
+      "id": "international-grid",
+      "family": "quiet"
+    },
+    {
+      "id": "letterpress",
+      "family": "quiet"
+    },
+    {
+      "id": "material-3-inspired",
+      "family": "product-systems"
+    },
+    {
+      "id": "material-expressive-inspired",
+      "family": "product-systems"
+    },
+    {
+      "id": "memphis",
+      "family": "expressive"
+    },
+    {
+      "id": "minimal-flat",
+      "family": "quiet"
+    },
+    {
+      "id": "monochrome-functional",
+      "family": "quiet"
+    },
+    {
+      "id": "neobrutalist",
+      "family": "raw"
+    },
+    {
+      "id": "neumorphic",
+      "family": "expressive"
+    },
+    {
+      "id": "paper-tactile",
+      "family": "quiet"
+    },
+    {
+      "id": "pixel-interface",
+      "family": "retro"
+    },
+    {
+      "id": "platform-neutral",
+      "family": "quiet"
+    },
+    {
+      "id": "poster-press",
+      "family": "raw"
+    },
+    {
+      "id": "primer-inspired",
+      "family": "product-systems"
+    },
+    {
+      "id": "raw-brutalist",
+      "family": "raw"
+    },
+    {
+      "id": "retro-web",
+      "family": "retro"
+    },
+    {
+      "id": "skeuomorphic",
+      "family": "expressive"
+    },
+    {
+      "id": "soft-organic",
+      "family": "quiet"
+    },
+    {
+      "id": "spectrum-2-inspired",
+      "family": "product-systems"
+    },
+    {
+      "id": "synthwave",
+      "family": "retro"
+    },
+    {
+      "id": "terminal-chrome",
+      "family": "expressive"
+    },
+    {
+      "id": "utility-dense",
+      "family": "quiet"
+    }
+  ],
+  "rulings": [
+    {
+      "pack": "fluent-2-inspired",
+      "pairs": [["fluent-2-inspired", "primer-inspired"]],
+      "scope": {
+        "viewport": "mobile"
+      },
+      "ruling": "SB at 390 reads box height, and these share one; ruled at 390 only; apart at 1440 since fluent-2-inspired 1.1.5 (0.144) (lead A, 2026-10-31; LANG-5c decision 1a, r2)",
+      "scores": {
+        "pixels": {
+          "desktop": 0.144,
+          "mobile": 0.115
+        },
+        "tokens": 0.144,
+        "editorialEvidence": {
+          "desktop": 0.049,
+          "mobile": 0.059
+        }
+      },
+      "why": "Spatial Bento paints canvas tiles from the language's shape, elevation, border and control-height tokens and no Surface, so a language's tonal colour, texture and stylesheet never reach its tiles. At 390, where its tiles stack, the edges mostly measure control height and border width, and Fluent and Primer both keep their real 32px controls (2rem). At 1440 Fluent's elevation ramp (cards at shadow28, a 36% key) lifts every tile where Primer draws a hairline: 0.087 before r2, 0.144 now, over the 0.113 line, so the pair is ruled at 390 only. The lift barely shows in dark (the shadow role is black), which the strips record.",
+      "evidence": [
+        "_execution/artifacts/kgn-b-languages/lang5c/r2-strips-af02cb2b8/fluent-2-inspired-spatial-bento-390.png (light and dark rows)",
+        "_execution/artifacts/kgn-b-languages/lang5c/r2-strips-af02cb2b8/fluent-2-inspired-spatial-bento-1440.png",
+        "_execution/artifacts/kgn-b-languages/lang5c/r2-strips-af02cb2b8/signatures.png (Fluent's surface levels)"
+      ]
+    },
+    {
+      "pack": "material-3-inspired",
+      "pairs": [["material-3-inspired", "platform-neutral"]],
+      "ruling": "ALIKE on SB at both viewports: SB's canvas tiles don't paint M3's signature, tonal colour and filled controls; ruled on SB (lead A, 2026-10-31; LANG-5c r2, option a)",
+      "scores": {
+        "pixels": {
+          "desktop": 0.087,
+          "mobile": 0.173
+        },
+        "tokens": 0.204,
+        "editorialEvidence": {
+          "desktop": 0.08,
+          "mobile": 0.091
+        }
+      },
+      "why": "Spatial Bento paints canvas tiles from the language's shape, elevation, border and control-height tokens and no Surface, so a language's tonal colour, texture and stylesheet never reach its tiles. Material 3 and platform-neutral share what SB does paint: rounded tiles, a two-layer card elevation, 40px pill controls. By eye they read ALIKE on SB at 1440 and 390, in light and dark (B's strip review), and the pixels agree (0.087 at 1440, 0.173 at 390). M3's signature is the tonal colour and the filled controls, which show where the primitives paint: Editorial Evidence's Actions and Fields, and Studio. No honest M3 token SB paints separates them (probe 3: level-1, level-2 and level-3 card elevations score 0.087 to 0.092). Painting tile material on SB, with the 528-pair recalibration, is post-surge (a known gap the lead holds with the owner). platform-neutral is the anchor and doesn't move.",
+      "evidence": [
+        "_execution/artifacts/kgn-b-languages/lang5c/r2-strips-af02cb2b8/signatures.png (actions and field rows: M3's filled tonal button and filled field against platform-neutral's)",
+        "_execution/artifacts/kgn-b-languages/lang5c/r2-strips-af02cb2b8/tiles/crop-actions-light-material-3-inspired.png",
+        "_execution/artifacts/kgn-b-languages/lang5c/r2-strips-af02cb2b8/tiles/crop-field-light-material-3-inspired.png",
+        "_execution/artifacts/kgn-b-languages/lang5c/r2-strips-af02cb2b8/material-3-inspired-spatial-bento-1440.png"
+      ]
+    },
+    {
+      "pack": "material-3-inspired",
+      "pairs": [["material-3-inspired", "glassmorphism"]],
+      "ruling": "ALIKE on SB at both viewports: SB's canvas tiles don't paint M3's tonal colour and filled controls, or glassmorphism's translucency; ruled on SB (lead A, 2026-10-31; LANG-5c r2, option a)",
+      "scores": {
+        "pixels": {
+          "desktop": 0.1,
+          "mobile": 0.152
+        },
+        "tokens": 0.254,
+        "editorialEvidence": {
+          "desktop": 0.431,
+          "mobile": 0.577
+        }
+      },
+      "why": "Spatial Bento paints canvas tiles from the language's shape, elevation, border and control-height tokens and no Surface, so a language's tonal colour, texture and stylesheet never reach its tiles. Both draw parchment tiles with large rounded corners and soft elevation on SB, and by eye they read ALIKE there (B's strip review), as the pixels say (0.100 at 1440, 0.152 at 390). What separates them, M3's tonal fills and filled controls and glassmorphism's frosted translucency, paints only on Surfaces, Actions and Fields: Editorial Evidence scores them 0.431 and 0.577. Painting tile material on SB is post-surge.",
+      "evidence": [
+        "_execution/artifacts/kgn-b-languages/lang5c/r2-strips-af02cb2b8/material-3-inspired-spatial-bento-1440.png (columns M3 and glassmorphism)",
+        "_execution/artifacts/kgn-b-languages/lang5c/r2-strips-af02cb2b8/material-3-inspired-editorial-evidence-1440.png",
+        "_execution/artifacts/kgn-b-languages/lang5c/r2-strips-af02cb2b8/signatures.png"
+      ]
+    },
+    {
+      "pack": "material-3-inspired",
+      "pairs": [["material-3-inspired", "blueprint"]],
+      "ruling": "apart by eye at 1440 and 390, light and dark (B's strip review: blueprint's dashed accent outlines, square tiles and square buttons against M3's rounded, stroke-less tiles and pills); the pixel score (0.080 at 1440, 0.180 at 390) reads shape and elevation only; ruled on SB (lead A, 2026-10-31; LANG-5c r2)",
+      "scores": {
+        "pixels": {
+          "desktop": 0.08,
+          "mobile": 0.18
+        },
+        "tokens": 0.263,
+        "editorialEvidence": {
+          "desktop": 0.308,
+          "mobile": 0.377
+        }
+      },
+      "why": "Spatial Bento paints canvas tiles from the language's shape, elevation, border and control-height tokens and no Surface, so a language's tonal colour, texture and stylesheet never reach its tiles. At 1440 the edges score 0.080 and at 390 0.180, both under their lines, but by eye the pair reads APART at both viewports and in both modes: blueprint draws square tiles ruled in dashed accent lines over a grid, with square buttons; M3 rounded, stroke-less, lifted tiles and pill buttons. The dashes stay visible in dark.",
+      "evidence": [
+        "_execution/artifacts/kgn-b-languages/lang5c/r2-strips-af02cb2b8/material-3-inspired-spatial-bento-1440.png (columns M3 and blueprint)",
+        "_execution/artifacts/kgn-b-languages/lang5c/r2-strips-af02cb2b8/tiles/spatial-bento-desktop-light-blueprint.png",
+        "_execution/artifacts/kgn-b-languages/lang5c/r2-strips-af02cb2b8/tiles/spatial-bento-desktop-light-material-3-inspired.png",
+        "_execution/artifacts/kgn-b-languages/lang5c/r2-strips-af02cb2b8/material-3-inspired-spatial-bento-390.png (columns M3 and blueprint)"
+      ]
+    },
+    {
+      "pack": "pixel-interface",
+      "pairs": [["pixel-interface", "synthwave"]],
+      "scope": {
+        "viewport": "mobile"
+      },
+      "ruling": "apart at 1440 (0.172); at 390 SB's score reads stacked control height and frame thickness, and by eye the frames read clearly apart (strips at aea99e449); ruled at 390 only (lead A, 2026-10-31; LANG-5c r1, option 1)",
+      "scores": {
+        "pixels": {
+          "desktop": 0.172,
+          "mobile": 0.199
+        },
+        "tokens": 0.197,
+        "editorialEvidence": {
+          "desktop": 0.276,
+          "mobile": 0.872
+        }
+      },
+      "why": "Spatial Bento paints canvas tiles from the language's tokens and no Surface, so at 390, where its tiles stack, its edges mostly measure control height and frame thickness. pixel-interface's controls are 2.25rem and its frame 6px (a 2px ring outside a 4px border); the stacks nearly coincide, they don't share a height. At 1440 the pair clears the line at 0.172; at 390 it scores 0.199. By eye, on every tile in light and dark: pixel-interface's hard 6px square ink frame against synthwave's 2px rust line with a soft halo that bleeds into the gutter; synthwave's accent on every frame edge, pixel-interface's inside the content. pixel-interface 1.0.5's 390 frames now separate (5 CSS px of page ground in every SB gutter), so these tiles are the shipped look (strip review, option 1). Editorial Evidence, report only, reads the pair apart at both viewports.",
+      "evidence": [
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/spatial-bento-390.html (light and dark rows, columns 1 and 2)",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/tiles/spatial-bento-mobile-light-pixel-interface.png",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/tiles/spatial-bento-mobile-light-synthwave.png",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/tiles/spatial-bento-mobile-dark-pixel-interface.png",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/tiles/spatial-bento-mobile-dark-synthwave.png",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/crops.html (1:1, pixel-interface at 390 and 1440)",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/spatial-bento-1440.html (the 1440 counterpart, clear at 0.172)"
+      ]
+    },
+    {
+      "pack": "pixel-interface",
+      "pairs": [["pixel-interface", "bauhaus-geometric"]],
+      "scope": {
+        "viewport": "mobile"
+      },
+      "ruling": "apart at 1440 (0.115); at 390 SB's score reads stacked control height and frame thickness, and by eye the frames read clearly apart (strips at aea99e449); ruled at 390 only (lead A, 2026-10-31; LANG-5c r1, option 1)",
+      "scores": {
+        "pixels": {
+          "desktop": 0.115,
+          "mobile": 0.159
+        },
+        "tokens": 0.199,
+        "editorialEvidence": {
+          "desktop": 0.589,
+          "mobile": 0.889
+        }
+      },
+      "why": "Spatial Bento paints canvas tiles from the language's tokens and no Surface, so at 390, where its tiles stack, its edges mostly measure control height and frame thickness. pixel-interface's controls are 2.25rem and its frame 6px (a 2px ring outside a 4px border); the stacks nearly coincide, they don't share a height. At 1440 the pair clears the line at 0.115; at 390 it scores 0.159. By eye, on every tile in light and dark: a 6px square frame against bauhaus's 2px line, and bauhaus's 12px rust band along the bottom of every tile, which pixel-interface has nothing like; a square status mark against a round one. pixel-interface 1.0.5's 390 frames now separate (5 CSS px of page ground in every SB gutter), so these tiles are the shipped look (strip review, option 1). Editorial Evidence, report only, reads the pair apart at both viewports.",
+      "evidence": [
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/spatial-bento-390.html (light and dark rows, columns 1 and 3)",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/tiles/spatial-bento-mobile-light-pixel-interface.png",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/tiles/spatial-bento-mobile-light-bauhaus-geometric.png",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/tiles/spatial-bento-mobile-dark-pixel-interface.png",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/tiles/spatial-bento-mobile-dark-bauhaus-geometric.png",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/crops.html (1:1, pixel-interface at 390 and 1440)",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/spatial-bento-1440.html (the 1440 counterpart, clear at 0.115)"
+      ]
+    },
+    {
+      "pack": "pixel-interface",
+      "pairs": [["pixel-interface", "art-deco"]],
+      "scope": {
+        "viewport": "mobile"
+      },
+      "ruling": "apart at 1440 (0.147); at 390 SB's score reads stacked control height and frame thickness, and by eye the frames read clearly apart (strips at aea99e449); ruled at 390 only (lead A, 2026-10-31; LANG-5c r1, option 1)",
+      "scores": {
+        "pixels": {
+          "desktop": 0.147,
+          "mobile": 0.248
+        },
+        "tokens": 0.299,
+        "editorialEvidence": {
+          "desktop": 0.536,
+          "mobile": 0.894
+        }
+      },
+      "why": "Spatial Bento paints canvas tiles from the language's tokens and no Surface, so at 390, where its tiles stack, its edges mostly measure control height and frame thickness. pixel-interface's controls are 2.25rem and its frame 6px (a 2px ring outside a 4px border); the stacks nearly coincide, they don't share a height. At 1440 the pair clears the line at 0.147; at 390 it scores 0.248. By eye, on every tile in light and dark: a single 6px square ink stroke against art-deco's fine rounded double rule (2px rust, a 3px gap, 1px grey) and its rounded controls and image wells. pixel-interface 1.0.5's 390 frames now separate (5 CSS px of page ground in every SB gutter), so these tiles are the shipped look (strip review, option 1). Editorial Evidence, report only, reads the pair apart at both viewports.",
+      "evidence": [
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/spatial-bento-390.html (light and dark rows, columns 1 and 6)",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/tiles/spatial-bento-mobile-light-pixel-interface.png",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/tiles/spatial-bento-mobile-light-art-deco.png",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/tiles/spatial-bento-mobile-dark-pixel-interface.png",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/tiles/spatial-bento-mobile-dark-art-deco.png",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/crops.html (1:1, pixel-interface at 390 and 1440)",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/spatial-bento-1440.html (the 1440 counterpart, clear at 0.147)"
+      ]
+    },
+    {
+      "pack": "pixel-interface",
+      "pairs": [["pixel-interface", "neobrutalist"]],
+      "scope": {
+        "viewport": "mobile"
+      },
+      "ruling": "apart at 1440 (0.117); at 390 SB's score reads stacked control height and frame thickness, and by eye the frames read clearly apart (strips at aea99e449); ruled at 390 only (lead A, 2026-10-31; LANG-5c r1, option 1)",
+      "scores": {
+        "pixels": {
+          "desktop": 0.117,
+          "mobile": 0.25
+        },
+        "tokens": 0.184,
+        "editorialEvidence": {
+          "desktop": 0.281,
+          "mobile": 0.931
+        }
+      },
+      "why": "Spatial Bento paints canvas tiles from the language's tokens and no Surface, so at 390, where its tiles stack, its edges mostly measure control height and frame thickness. pixel-interface's controls are 2.25rem and its frame 6px (a 2px ring outside a 4px border); the stacks nearly coincide, they don't share a height. At 1440 the pair clears the line at 0.117; at 390 it scores 0.250. By eye, on every tile in light and dark: square everywhere against neobrutalist's rounded corners and controls (about 6px); a grey slab on x only against a black drop on x and y; an even 6px frame against 3px thin top and left; a square status mark against a round one. pixel-interface 1.0.5's 390 frames now separate (5 CSS px of page ground in every SB gutter), so these tiles are the shipped look (strip review, option 1). Editorial Evidence, report only, reads the pair apart at both viewports.",
+      "evidence": [
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/spatial-bento-390.html (light and dark rows, columns 1 and 7)",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/tiles/spatial-bento-mobile-light-pixel-interface.png",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/tiles/spatial-bento-mobile-light-neobrutalist.png",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/tiles/spatial-bento-mobile-dark-pixel-interface.png",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/tiles/spatial-bento-mobile-dark-neobrutalist.png",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/crops.html (1:1, pixel-interface at 390 and 1440)",
+        "_execution/artifacts/kgn-b-languages/lang5c/r1-strips-aea99e449/spatial-bento-1440.html (the 1440 counterpart, clear at 0.117)"
+      ]
+    }
+  ]
+}

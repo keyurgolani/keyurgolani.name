@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Content that needs hover, known-bad</title>
+    <!-- On a device without hover, the price disappears: essential content that needs a pointer. -->
+    <style>
+      @media (hover: none) {
+        .price {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A price a phone never shows</h1>
+      <p class="price">Twelve dollars a month.</p>
+    </main>
+  </body>
+</html>

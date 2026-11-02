@@ -1,0 +1,97 @@
+<!--
+  A static layout for the distinct guards' calibration (Design gate rule 5):
+  a "different" control by construction, never a product page. A hero that
+  fills the first viewport edge to edge, its name set large over a media
+  field at the bottom left, then a band of three facts and a centered
+  statement below the fold.
+-->
+<style>
+  [data-static-layout='full-bleed-hero'] {
+    color: var(--color-text-primary);
+  }
+  [data-static-layout='full-bleed-hero'] .hero {
+    position: relative;
+    min-block-size: 100vh;
+    display: flex;
+    align-items: flex-end;
+    padding: 4rem;
+    background: var(--color-surface-prominent);
+    color: var(--color-text-primary);
+  }
+  [data-static-layout='full-bleed-hero'] .hero figure {
+    position: absolute;
+    inset: 2rem 2rem 2rem 45%;
+    margin: 0;
+    border: 3px solid var(--color-border-strong);
+    background: var(--color-surface-subtle);
+  }
+  [data-static-layout='full-bleed-hero'] .hero h1 {
+    position: relative;
+    margin: 0;
+    font-size: 6rem;
+    line-height: 1;
+    max-inline-size: 8ch;
+  }
+  [data-static-layout='full-bleed-hero'] nav {
+    position: absolute;
+    top: 2rem;
+    left: 4rem;
+  }
+  [data-static-layout='full-bleed-hero'] .facts {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-block: 2px solid var(--color-border-strong);
+  }
+  [data-static-layout='full-bleed-hero'] .facts article {
+    padding: 2rem;
+    border-inline-end: 2px solid var(--color-border-strong);
+  }
+  [data-static-layout='full-bleed-hero'] .statement {
+    padding: 6rem 2rem;
+    text-align: center;
+    font-size: 2rem;
+  }
+  @media (max-width: 48rem) {
+    [data-static-layout='full-bleed-hero'] .hero {
+      padding: 2rem 1.25rem;
+    }
+    [data-static-layout='full-bleed-hero'] .hero figure {
+      inset: 5rem 1rem 50% 1rem;
+    }
+    [data-static-layout='full-bleed-hero'] .hero h1 {
+      font-size: 3.5rem;
+    }
+    [data-static-layout='full-bleed-hero'] nav {
+      left: 1.25rem;
+    }
+    [data-static-layout='full-bleed-hero'] .facts {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+<div data-static-layout="full-bleed-hero">
+  <main id="main">
+    <section class="hero" aria-label="Introduction">
+      <nav aria-label="Pages"><a href="#facts">Work</a> <a href="#statement">About</a></nav>
+      <figure><figcaption>Hero media</figcaption></figure>
+      <h1>Rowan Vale</h1>
+    </section>
+    <section class="facts" id="facts" aria-label="Facts">
+      <article>
+        <h2>Stats title</h2>
+        <p>Stat value</p>
+      </article>
+      <article>
+        <h2>Focus title</h2>
+        <p>Focus body</p>
+      </article>
+      <article>
+        <h2>Tenure title</h2>
+        <p>Tenure body</p>
+      </article>
+    </section>
+    <section class="statement" id="statement" aria-label="Statement">
+      <p>Practice thesis.</p>
+    </section>
+  </main>
+</div>

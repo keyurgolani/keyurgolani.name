@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Folded controls, known-good</title>
+    <!--
+      A closed full-record fold, as Spatial Bento's: its own summary is a
+      stop, and the summaries of the details nested inside it, and the
+      links under them, are folded away until a visitor opens it. So are
+      the controls in a closed dialog, a closed popover, a hidden subtree
+      and an inert one. Tab reaches every control a visitor can, and none
+      of the folded ones is owed. The known-bad case adds a script that
+      skips the fold's own summary (a11y-cases.ts).
+    -->
+    <style>
+      :focus-visible {
+        outline: 2px solid #000;
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A record, folded</h1>
+      <p><a href="#first" id="first">First</a></p>
+      <details id="record">
+        <summary id="record-summary">Full record</summary>
+        <details>
+          <summary>2019 to 2021</summary>
+          <p><a href="#role-one">Role one</a></p>
+        </details>
+        <details open>
+          <summary>2021 to now</summary>
+          <p><a href="#role-two">Role two</a></p>
+        </details>
+        <button type="button">Inside the fold</button>
+      </details>
+      <dialog><button type="button">In a closed dialog</button></dialog>
+      <div popover id="tip"><a href="#in-popover">In a closed popover</a></div>
+      <div hidden><a href="#in-hidden">In a hidden subtree</a></div>
+      <div inert><a href="#in-inert">In an inert subtree</a></div>
+      <p><a href="#last" id="last">Last</a></p>
+    </main>
+    <!-- skip -->
+  </body>
+</html>

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Hidden focusable, known-bad</title>
+    <style>
+      :focus-visible {
+        outline: 2px solid #000;
+        outline-offset: 2px;
+      }
+      /* Off the page even while it has focus: a keyboard user lands on nothing. */
+      .offscreen {
+        position: absolute;
+        left: -9999px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A link that never shows</h1>
+      <p><a href="#one" id="one">One</a> <a class="offscreen" href="#two">Two</a></p>
+    </main>
+  </body>
+</html>

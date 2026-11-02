@@ -1,0 +1,19 @@
+# Harness fixture: motion always reduced, whatever the visitor's setting. It
+# selects missing-variant, so the fallback composition renders; the motion
+# contract spec selects each registered composition in turn.
+schemaVersion: 2
+appearance:
+  variant: missing-variant
+  designLanguage: platform-neutral
+  colorScheme: nebula
+  typography: geometric
+  displayMode: dark
+visitorControls:
+  variant: locked
+  designLanguage: locked
+  colorScheme: selectable
+  typography: locked
+  displayMode: selectable
+motionPolicy: reduce
+features:
+  feed: true

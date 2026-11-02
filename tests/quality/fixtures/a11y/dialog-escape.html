@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Dialog without Escape, known-bad</title>
+    <style>
+      :focus-visible {
+        outline: 2px solid #000;
+        outline-offset: 2px;
+      }
+      [role='dialog'][hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A dialog Escape doesn't close</h1>
+      <button type="button" aria-haspopup="dialog" id="open">Open</button>
+      <div role="dialog" aria-modal="true" aria-label="Settings" id="dialog" hidden>
+        <button type="button" id="close">Close</button>
+      </div>
+    </main>
+    <script>
+      const dialog = document.getElementById('dialog');
+      const open = document.getElementById('open');
+      const close = document.getElementById('close');
+      open.addEventListener('click', () => {
+        dialog.hidden = false;
+        close.focus();
+      });
+      // Focus stays in, and only the button closes it.
+      close.addEventListener('keydown', (event) => event.key === 'Tab' && event.preventDefault());
+      close.addEventListener('click', () => {
+        dialog.hidden = true;
+        open.focus();
+      });
+    </script>
+  </body>
+</html>

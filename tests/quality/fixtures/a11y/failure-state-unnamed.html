@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A page whose script didn't arrive, whose control does something else</title>
+    <!--
+      Known-bad (#11): a surface that declares requiresScript whose script
+      failed to load, with an alert whose one control only dismisses it.
+    -->
+  </head>
+  <body>
+    <a href="#content">Skip to the task</a>
+    <h1>Portfolio Studio</h1>
+    <main>
+      <div id="content" tabindex="-1"></div>
+      <div role="alert">
+        <p>Studio couldn't load.</p>
+        <button type="button">Dismiss</button>
+      </div>
+    </main>
+  </body>
+</html>

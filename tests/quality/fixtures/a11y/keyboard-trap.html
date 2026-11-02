@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Keyboard trap, known-bad</title>
+    <style>
+      :focus-visible {
+        outline: 2px solid #000;
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A field that keeps focus</h1>
+      <p>
+        <a href="#one" id="one">One</a> <input aria-label="Stuck" id="stuck" />
+        <button type="button">Never reached</button>
+      </p>
+    </main>
+    <script>
+      // Tab goes back to the field, as a rich editor that swallows Tab would keep it.
+      document.getElementById('stuck').addEventListener('keydown', (event) => {
+        if (event.key === 'Tab') {
+          event.preventDefault();
+          document.getElementById('one').focus();
+        }
+      });
+    </script>
+  </body>
+</html>

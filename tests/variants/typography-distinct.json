@@ -1,0 +1,232 @@
+{
+  "note": "Thresholds from pack-distinct-calibration.spec.ts. Each score has an alike line (null when its calibration found no gap of 0.1 at both viewports, so it doesn't vote) and a clone floor. A pair fails when its pixels are under their alike line, whatever its tokens say (the token line decides only while the pixels have none), or when either score is under its clone floor. For a design language the token score reads only the groups a static render shows (corners, depth, borders, density), and the material (surface) only when the composition's render shows a visible Surface primitive (`material` records that detection and its reason); focus, motion, states, icons, texture, and an unrendered material are informational lines that never score. `pinned` true holds `composition` as the scored one whatever the coverage procedure picks, and `procedurePick` records that pick and its coverage. `enforced` true fails the run on a failing pair no ruling names, on any clone, and on a ruling whose pair fails nowhere (unneeded); false only reports.",
+  "calibrated": true,
+  "enforced": true,
+  "axis": "typography",
+  "composition": "spatial-bento",
+  "pinned": true,
+  "procedurePick": {
+    "composition": "spatial-bento",
+    "coverage": 11.777,
+    "scoredCoverage": 11.777
+  },
+  "tuple": {
+    "designLanguage": "platform-neutral",
+    "colorScheme": "warm-parchment",
+    "typography": "humanist-ui",
+    "displayMode": "system"
+  },
+  "material": {
+    "mode": "detected",
+    "scored": false,
+    "shares": {
+      "desktop": 0,
+      "mobile": 0
+    },
+    "reason": "visible Surfaces cover 0 at desktop and 0 at mobile, under 0.02 of the first viewport at one or more viewport: the material is informational"
+  },
+  "thresholds": {
+    "px": {
+      "alike": {
+        "desktop": 0.07,
+        "mobile": 0.097
+      },
+      "clone": {
+        "desktop": 0.02,
+        "mobile": 0.002
+      }
+    },
+    "token": {
+      "alike": {
+        "desktop": 0.08,
+        "mobile": 0.08
+      },
+      "clone": {
+        "desktop": 0.001,
+        "mobile": 0.001
+      }
+    }
+  },
+  "calibration": {
+    "px": {
+      "alike": {
+        "desktop": {
+          "same": 0.01,
+          "different": 0.13,
+          "gap": 0.12,
+          "threshold": 0.07
+        },
+        "mobile": {
+          "same": 0.001,
+          "different": 0.192,
+          "gap": 0.191,
+          "threshold": 0.097
+        }
+      },
+      "clone": {
+        "desktop": {
+          "floor": 0.01,
+          "threshold": 0.02
+        },
+        "mobile": {
+          "floor": 0.001,
+          "threshold": 0.002
+        }
+      }
+    },
+    "token": {
+      "alike": {
+        "desktop": {
+          "same": 0,
+          "different": 0.159,
+          "gap": 0.159,
+          "threshold": 0.08
+        },
+        "mobile": {
+          "same": 0,
+          "different": 0.159,
+          "gap": 0.159,
+          "threshold": 0.08
+        }
+      },
+      "clone": {
+        "desktop": {
+          "floor": 0,
+          "threshold": 0
+        },
+        "mobile": {
+          "floor": 0,
+          "threshold": 0
+        }
+      }
+    }
+  },
+  "packs": [
+    {
+      "id": "accessible-reading",
+      "family": "sans-serif"
+    },
+    {
+      "id": "book-serif",
+      "family": "serif"
+    },
+    {
+      "id": "console-mono",
+      "family": "sans-serif"
+    },
+    {
+      "id": "drafting-grotesk",
+      "family": "sans-serif"
+    },
+    {
+      "id": "editorial-serif",
+      "family": "serif"
+    },
+    {
+      "id": "field-serif",
+      "family": "sans-serif"
+    },
+    {
+      "id": "geometric-display",
+      "family": "sans-serif"
+    },
+    {
+      "id": "humanist-ui",
+      "family": "sans-serif"
+    },
+    {
+      "id": "literary-reading",
+      "family": "serif"
+    },
+    {
+      "id": "multilingual-system",
+      "family": "sans-serif"
+    },
+    {
+      "id": "neutral-ui",
+      "family": "sans-serif"
+    },
+    {
+      "id": "paste-up",
+      "family": "sans-serif"
+    },
+    {
+      "id": "screen-grotesque",
+      "family": "sans-serif"
+    },
+    {
+      "id": "shell-mono",
+      "family": "monospace"
+    },
+    {
+      "id": "swiss-grotesque",
+      "family": "sans-serif"
+    },
+    {
+      "id": "technical-sans-mono",
+      "family": "sans-serif"
+    }
+  ],
+  "rulings": [
+    {
+      "pack": "multilingual-system",
+      "pairs": [["humanist-ui", "multilingual-system"]],
+      "ruling": "kept by the owner, 2026-10-29",
+      "why": "multilingual-system is the platform's own interface font for every role, so each script renders in the font its operating system provides; in Latin text it sits near humanist-ui by design, and Studio describes it as covering other scripts (LANG-4). Its look is unchanged by LANG-5; mono fallback fixed (Menlo)."
+    },
+    {
+      "pack": "humanist-ui",
+      "pairs": [],
+      "ruling": "platform default, fixed (lead A, 2026-10-29)",
+      "why": "humanist-ui is the platform's fallback typography profile, which every guard's tuple and every composition baseline renders, so it keeps the scale the shared-scale packs had, as warm-parchment keeps its colors. A pair alike only because of that scale is fixed by moving the other pack; one that can't be gets its own ruling. Its look is unchanged by LANG-5; mono fallback fixed (Menlo)."
+    },
+    {
+      "pairs": [["humanist-ui", "screen-grotesque"]],
+      "ruling": "desktop edges only (LANG-4's reflow caveat); tokens and mobile apart; kept until its composition's lane moves the pack (lead A, 2026-10-29)",
+      "scores": {
+        "pixels": {
+          "desktop": 0.037,
+          "mobile": 0.743
+        },
+        "tokens": 0.097
+      },
+      "why": "Alike at desktop only, under the 0.07 edge line, and apart on mobile (line 0.097) and in tokens (line 0.08), unchanged by LANG-5b; screen-grotesque is Aurora Glass's and Flux's, so it moves only through that lane."
+    },
+    {
+      "pairs": [["multilingual-system", "screen-grotesque"]],
+      "ruling": "desktop edges only (LANG-4's reflow caveat); tokens and mobile apart; kept until its composition's lane moves the pack (lead A, 2026-10-29)",
+      "scores": {
+        "pixels": {
+          "desktop": 0.041,
+          "mobile": 0.737
+        },
+        "tokens": 0.097
+      },
+      "why": "Alike at desktop only, under the 0.07 edge line, and apart on mobile (line 0.097) and in tokens (line 0.08), unchanged by LANG-5b; screen-grotesque is Aurora Glass's and Flux's, so it moves only through that lane."
+    },
+    {
+      "pairs": [["field-serif", "humanist-ui"]],
+      "ruling": "desktop edges only (LANG-4's reflow caveat); tokens and mobile apart; kept until its composition's lane moves the pack (lead A, 2026-10-29)",
+      "scores": {
+        "pixels": {
+          "desktop": 0.068,
+          "mobile": 0.735
+        },
+        "tokens": 0.141
+      },
+      "why": "Alike at desktop only, under the 0.07 edge line, and apart on mobile (line 0.097) and in tokens (line 0.08), unchanged by LANG-5b; field-serif is Terra Field's, so it moves only through that lane."
+    },
+    {
+      "pairs": [["field-serif", "screen-grotesque"]],
+      "ruling": "desktop edges only (LANG-4's reflow caveat); tokens and mobile apart; kept until its composition's lane moves the pack (lead A, 2026-10-29)",
+      "scores": {
+        "pixels": {
+          "desktop": 0.069,
+          "mobile": 0.34
+        },
+        "tokens": 0.098
+      },
+      "why": "Alike at desktop only, under the 0.07 edge line, and apart on mobile (line 0.097) and in tokens (line 0.08), unchanged by LANG-5b; field-serif is Terra Field's, and screen-grotesque Aurora Glass's and Flux's, so it moves only through that lane."
+    }
+  ]
+}

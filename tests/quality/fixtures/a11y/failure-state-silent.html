@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A page whose script didn't arrive, and says nothing</title>
+    <!--
+      Known-bad (#11): a surface that declares requiresScript whose script
+      failed to load, with no alert to say so: only an empty task area.
+    -->
+  </head>
+  <body>
+    <a href="#content">Skip to the task</a>
+    <h1>Portfolio Studio</h1>
+    <main>
+      <div id="content" tabindex="-1"></div>
+      <p>Where things stand</p>
+    </main>
+  </body>
+</html>
