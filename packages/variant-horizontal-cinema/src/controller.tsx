@@ -11,7 +11,7 @@ import {
 } from 'react';
 import { Action } from '@portfolio/appearance/primitives';
 import { useBoundary } from '@portfolio/appearance/react';
-import { arrowStep, sceneAlong } from './chapters';
+import { arrowStep, sceneAlong, snapAlong } from './chapters';
 import { numeralOf, SceneTitle, Words, type TitleMark } from './parts';
 import { Runtime } from './runtime';
 
@@ -37,8 +37,9 @@ import { Runtime } from './runtime';
 //
 // Every scene fits the stage by construction, and the controller checks:
 // where a scene's picture still overflows, at this viewport and in these
-// faces, the shell falls back to the same scenes top to bottom, so nothing
-// is ever clipped under the snap. Top to bottom, a chapter control on the
+// faces, that scene opens a width wider, and where one overflows even so,
+// the shell falls back to the same scenes top to bottom, so nothing is
+// ever clipped under the snap. Top to bottom, a chapter control on the
 // top edge says where the reader is and opens the five chapters.
 
 /** How long scrolling has to stop before the controller reads where it settled. */
@@ -444,6 +445,8 @@ function LiveStage(props: StageProps) {
       landedAt = window.scrollY;
     };
     let moved = false;
+    /** Where the page last came to rest, so the pin's snap knows which way a travel went from there. */
+    let rest = window.scrollY;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let frame: number | undefined;
 
@@ -652,17 +655,33 @@ function LiveStage(props: StageProps) {
       }
     };
 
+    /** The pictures that run past their frame, at this viewport and in these faces. */
+    const overflowing = () =>
+      [...stageElement.querySelectorAll<HTMLElement>('.hc-pic')].filter(
+        (pic) => pic.scrollHeight > pic.clientHeight + 1,
+      );
+    /** Every scene back at its authored width. */
+    const unroom = () => {
+      for (const scene of stageElement.querySelectorAll<HTMLElement>('.hc-scene[data-room]'))
+        delete scene.dataset.room;
+    };
     /**
-     * Whether every scene's picture fits the stage. Where one doesn't, the
-     * shell reads top to bottom until the viewport changes, so nothing is
-     * clipped under the snap.
+     * Whether every scene's picture fits the stage. A scene whose picture
+     * doesn't, in a wider face than the one it was sized for, first opens a
+     * width wider; where one still doesn't, the shell reads top to bottom
+     * until the viewport changes, so nothing is clipped under the snap.
      */
     const fit = (landing = true) => {
       if (!strip()) return;
-      const over = [...stageElement.querySelectorAll('.hc-pic')].some(
-        (pic) => pic.scrollHeight > pic.clientHeight + 1,
-      );
+      // Sized afresh in the faces now in force: a scene that needed room in the fallback may not now.
+      unroom();
+      for (const pic of overflowing()) {
+        const scene = pic.closest<HTMLElement>('.hc-scene');
+        if (scene) scene.dataset.room = '';
+      }
+      const over = overflowing().length > 0;
       if (over) {
+        unroom();
         rootElement.dataset.fit = 'over';
         invalidate();
         pin();
@@ -724,15 +743,13 @@ function LiveStage(props: StageProps) {
       }
       restConfirmed = false;
       wrote = {};
-      // The pin's snap: a travel that comes to rest between scenes finishes onto the nearer one.
+      // The pin's snap: a travel that comes to rest between scenes finishes onto the next one the
+      // way it went from where the page last rested, so a slow wheel's notch is never pulled back.
       if (pinned && aligning === null && !reduced()) {
         const progress = window.scrollY - pinStart();
         if (progress > 0 && progress < travel() - 1) {
-          let nearest = 0;
-          elements.forEach((_, index) => {
-            if (Math.abs(offsetOf(index) - progress) < Math.abs(offsetOf(nearest) - progress))
-              nearest = index;
-          });
+          const from = Math.min(travel(), Math.max(0, rest - pinStart()));
+          const nearest = snapAlong(geometry().offsets, progress, from);
           const top = pinStart() + offsetOf(nearest);
           if (Math.abs(window.scrollY - top) > 1) {
             window.scrollTo({ top, behavior: behavior() });
@@ -741,6 +758,7 @@ function LiveStage(props: StageProps) {
         }
       }
       aligning = null;
+      rest = window.scrollY;
       // The move is over: its limit no longer runs.
       if (overdueTimer !== undefined) clearTimeout(overdueTimer);
       overdueTimer = undefined;
@@ -990,6 +1008,7 @@ function LiveStage(props: StageProps) {
       refit = setTimeout(() => {
         refit = undefined;
         delete rootElement.dataset.fit;
+        unroom();
         invalidate();
         requestAnimationFrame(() => {
           // Where the page was in the pin, as a scene, before the pin's length changes under it.
@@ -1079,6 +1098,7 @@ function LiveStage(props: StageProps) {
       delete rootElement.dataset.pin;
       rootElement.style.removeProperty('--layout-pin-length');
       rootElement.querySelector<HTMLElement>('.hc-card')?.style.removeProperty('--layout-card-fit');
+      unroom();
     };
   }, [scenes]);
 
