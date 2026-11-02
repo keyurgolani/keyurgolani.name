@@ -2938,4 +2938,9 @@
     block-size: auto;
     content-visibility: visible;
   }
+
+  /* The visitor's Appearance control isn't a fold: its form would widen the corner over the room switch. */
+  [data-variant='obsidian-atelier'] .oa-chrome__appearance details::details-content {
+    content-visibility: hidden;
+  }
 }

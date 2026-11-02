@@ -1146,6 +1146,12 @@ test('print opens every fold and keeps the chrome once: Index static, the marker
     count(markup, /<details class="oa-whole">/g) >= 2,
     'the whole practice and the whole record',
   );
+  // But the visitor's Appearance control isn't a fold of the page: its panel stays closed on
+  // paper, past the rule above, or its form widens the top row's corner over the room switch.
+  assert.match(
+    print,
+    /\[data-variant='obsidian-atelier'\] \.oa-chrome__appearance details::details-content \{\s*content-visibility: hidden;/,
+  );
 });
 
 test("the floor's words are all the primary ink, which the floor holds at 4.5:1 (N1), and a vitrine draws no column no row fills (N2)", () => {

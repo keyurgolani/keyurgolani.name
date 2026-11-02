@@ -122,6 +122,33 @@ test(
   },
 );
 
+test(
+  'in print the top row keeps each room in the switch readable: no corner lies over its name',
+  { annotation, tag },
+  async ({ page }) => {
+    await load(page);
+    await page.emulateMedia({ media: 'print' });
+    const covered = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>('.oa-chrome__rooms .oa-chrome__name')]
+        .filter((name) => name.checkVisibility())
+        .flatMap((name) => {
+          const box = name.getBoundingClientRect();
+          const link = name.closest('a')!;
+          const at = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+          return at && link.contains(at)
+            ? []
+            : [`${link.getAttribute('aria-label')}: under ${at?.outerHTML.slice(0, 80)}`];
+        }),
+    );
+    expect(covered).toEqual([]);
+    // The visitor's Appearance control prints its summary, its panel closed: a form isn't content.
+    await expect(
+      page.locator('.oa-chrome__appearance [data-ui-slot="disclosure.summary"]'),
+    ).toBeVisible();
+    await expect(page.locator('.oa-chrome__appearance form')).toBeHidden();
+  },
+);
+
 test.describe('with no script', () => {
   test.use({ javaScriptEnabled: false });
 
