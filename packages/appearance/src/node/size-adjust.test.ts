@@ -67,8 +67,12 @@ test("a role that sets none keeps the platform's 0.5, and the pack writes no asp
   const platform = scaleDeclarations();
   for (const role of TYPOGRAPHY_ROLES) assert.equal(platform[sizeAdjustProperty(role)], '0.5');
   assert.ok(validate(HUMANIST_UI).ok);
-  // No role's --type-<role>-size-adjust (the measures' comment names font-size-adjust, R11.1).
-  assert.doesNotMatch(stylesheet({ ...HUMANIST_UI, id: 'acme-type' }), /size-adjust:/);
+  // No role's --type-<role>-size-adjust (the measures' comment names font-size-adjust, R11.1);
+  // its Linux metric fallbacks' size-adjust descriptors are @font-face's own.
+  assert.doesNotMatch(
+    stylesheet({ ...HUMANIST_UI, id: 'acme-type' }),
+    /--type-[a-z-]+-size-adjust/,
+  );
 });
 
 test("a role's own aspect goes into its --type-<role>-size-adjust, in the typography layer, over the platform's", () => {

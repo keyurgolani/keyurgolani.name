@@ -1409,6 +1409,209 @@ export function stackTextFace(
   return null;
 }
 
+/** The four faces a family has, by the style and weight text inside a role sets: 400 and 700, upright and italic. */
+export type FaceKey = 'regular' | 'bold' | 'italic' | 'boldItalic';
+export const FACE_KEYS: readonly FaceKey[] = ['regular', 'bold', 'italic', 'boldItalic'];
+
+/** One face of a family a system stack leads with, as macOS installs it. */
+export interface LeadingFace {
+  readonly file: string;
+  readonly unitsPerEm: number;
+  /** Its latinWidth, measured as a webfont's is. */
+  readonly latinWidth: number;
+  /** hhea's ascender, descender, and line gap: what Chromium lays it out with, since its USE_TYPO_METRICS bit is clear. */
+  readonly hhea: VerticalMetrics;
+}
+
+/**
+ * A family a system-stack pack leads a role with, which macOS, Windows, and
+ * iOS install and Linux doesn't: Ubuntu, CI's Playwright image among them,
+ * renders the stack in Liberation Sans, Arial's metric clone, or in DejaVu
+ * Sans. The compiler gives such a role two metric fallbacks right behind it
+ * (compile.ts), sized to its faces, so text set there takes the room it
+ * takes on a Mac.
+ *
+ * Measured with readFontMetrics() from each file below, on this Mac (macOS,
+ * 2026-11-02), once; `unicodeRange` is the LATIN_PAGE code points all four
+ * faces map (Verdana has no U+2010). In font units:
+ *
+ * | Face | latinWidth | hhea ascender, descender, line gap |
+ * | --- | --- | --- |
+ * | Trebuchet MS | 939.81 | 1923, -455, 0 |
+ * | Trebuchet MS Bold | 981.46 | 1923, -455, 0 |
+ * | Trebuchet MS Italic | 950.08 | 1923, -455, 0 |
+ * | Trebuchet MS Bold Italic | 997.50 | 1923, -455, 0 |
+ * | Verdana | 1052.62 | 2059, -430, 0 |
+ * | Verdana Bold | 1177.49 | 2059, -430, 0 |
+ * | Verdana Italic | 1052.48 | 2059, -430, 0 |
+ * | Verdana Bold Italic | 1177.35 | 2059, -430, 0 |
+ *
+ * The fallbacks' unicode-range is that coverage, so where the family is
+ * installed every code point they could draw is drawn by it first, and
+ * they're never used: macOS, Windows, and iOS render as before.
+ * font-metrics.test.ts measures each file again wherever it's installed.
+ */
+export interface LeadingFamily {
+  readonly name: string;
+  /** The names a font-family stack gives it by. */
+  readonly names: readonly string[];
+  readonly unicodeRange: string;
+  readonly faces: Readonly<Record<FaceKey, LeadingFace>>;
+}
+
+const leadingFaces = (
+  name: string,
+  widths: readonly [number, number, number, number],
+  hhea: VerticalMetrics,
+): Record<FaceKey, LeadingFace> =>
+  Object.fromEntries(
+    FACE_KEYS.map((key, i) => [
+      key,
+      {
+        file: `${SUPPLEMENTAL}${name}${['', ' Bold', ' Italic', ' Bold Italic'][i]}.ttf`,
+        unitsPerEm: 2048,
+        latinWidth: widths[i]!,
+        hhea,
+      },
+    ]),
+  ) as Record<FaceKey, LeadingFace>;
+
+export const LEADING_FAMILIES: readonly LeadingFamily[] = [
+  {
+    name: 'Trebuchet MS',
+    names: ['Trebuchet MS', 'TrebuchetMS'],
+    unicodeRange:
+      'U+0020-007E, U+00A0-00FF, U+2010, U+2013-2014, U+2018-2019, U+201C-201D, U+2022, U+2026, U+20AC, U+2122',
+    faces: leadingFaces('Trebuchet MS', [939.81, 981.46, 950.08, 997.5], {
+      ascender: 1923,
+      descender: -455,
+      lineGap: 0,
+    }),
+  },
+  {
+    name: 'Verdana',
+    names: ['Verdana'],
+    unicodeRange:
+      'U+0020-007E, U+00A0-00FF, U+2013-2014, U+2018-2019, U+201C-201D, U+2022, U+2026, U+20AC, U+2122',
+    faces: leadingFaces('Verdana', [1052.62, 1177.49, 1052.48, 1177.35], {
+      ascender: 2059,
+      descender: -430,
+      lineGap: 0,
+    }),
+  },
+];
+
+/** A Linux face a leading family's fallback stands on: its four faces' local() names and metrics. */
+export interface LinuxFace {
+  /** The suffix of the fallback's family name: "<pack id> <family> <suffix>". */
+  readonly suffix: string;
+  readonly faces: Readonly<
+    Record<
+      FaceKey,
+      { readonly name: string; readonly locals: readonly string[]; readonly metrics: SystemMetrics }
+    >
+  >;
+}
+
+/** Liberation Sans' face `key`: Arial's, by its clones' names first, then Arial's own. */
+function liberation(key: FaceKey): LinuxFace['faces'][FaceKey] {
+  const face = systemVariant(systemFont('Arial'), {
+    bold: key === 'bold' || key === 'boldItalic',
+    italic: key === 'italic' || key === 'boldItalic',
+  });
+  return {
+    name: `Liberation Sans${{ regular: '', bold: ' Bold', italic: ' Italic', boldItalic: ' Bold Italic' }[key]}`,
+    locals: [
+      ...face.elsewhere.filter((name) => !name.startsWith('Arial')),
+      ...face.elsewhere.filter((name) => name.startsWith('Arial')),
+    ],
+    metrics: face.metrics,
+  };
+}
+
+/**
+ * The faces a leading family's fallbacks stand on, in stack order. First
+ * Liberation Sans, which Ubuntu installs and CI renders in, by its name and
+ * its other Arial-metric names (Arimo, then Arial itself, which some Linux
+ * installs add): one set of metrics, Arial's in SYSTEM_FONTS. Then DejaVu
+ * Sans, where a desktop Linux has no Arial clone, as its own face, since its
+ * widths aren't Arial's.
+ *
+ * DejaVu Sans isn't installed on macOS. It was measured with
+ * readFontMetrics() from the copy of DejaVu Sans 2.35 that matplotlib
+ * bundles, already on this Mac (2026-11-02), not from Ubuntu's 2.37, whose
+ * Latin advances are the same design's; font-metrics.test.ts measures the
+ * Linux file wherever it's installed, so a CI runner checks it. In font
+ * units, at 2048 to the em: 1050.85 regular and oblique, 1187.34 bold and
+ * bold oblique, x-height 1120.
+ */
+export const LINUX_FACES: readonly LinuxFace[] = [
+  {
+    suffix: 'Linux Fallback',
+    faces: {
+      regular: liberation('regular'),
+      bold: liberation('bold'),
+      italic: liberation('italic'),
+      boldItalic: liberation('boldItalic'),
+    },
+  },
+  {
+    suffix: 'DejaVu Fallback',
+    faces: {
+      regular: {
+        name: 'DejaVu Sans',
+        locals: ['DejaVu Sans', 'DejaVuSans'],
+        metrics: { unitsPerEm: 2048, latinWidth: 1050.85, xHeight: 1120 },
+      },
+      bold: {
+        name: 'DejaVu Sans Bold',
+        locals: ['DejaVu Sans Bold', 'DejaVuSans-Bold'],
+        metrics: { unitsPerEm: 2048, latinWidth: 1187.34, xHeight: 1120 },
+      },
+      italic: {
+        name: 'DejaVu Sans Oblique',
+        locals: ['DejaVu Sans Oblique', 'DejaVuSans-Oblique'],
+        metrics: { unitsPerEm: 2048, latinWidth: 1050.85, xHeight: 1120 },
+      },
+      boldItalic: {
+        name: 'DejaVu Sans Bold Oblique',
+        locals: ['DejaVu Sans Bold Oblique', 'DejaVuSans-BoldOblique'],
+        metrics: { unitsPerEm: 2048, latinWidth: 1187.34, xHeight: 1120 },
+      },
+    },
+  },
+];
+
+/**
+ * The family `stack` leads with, when LEADING_FAMILIES has it and the pack
+ * doesn't ship it (`shipped`, its fontAssets' families), else null. Only
+ * the first entry: a family further down is reached only where the one
+ * before it is missing anyway.
+ */
+export function leadingFamily(
+  stack: string,
+  shipped: readonly string[] = [],
+): LeadingFamily | null {
+  const first = stack
+    .split(',')[0]!
+    .trim()
+    .replace(/^["'](.*)["']$/, '$1')
+    .toLowerCase();
+  if (shipped.some((family) => family.toLowerCase() === first)) return null;
+  return (
+    LEADING_FAMILIES.find((family) => family.names.some((name) => name.toLowerCase() === first)) ??
+    null
+  );
+}
+
+/** The overrides that make a Linux face take the room a leading family's face does. */
+export function leadingOverrides(
+  face: LeadingFace,
+  system: { readonly metrics: SystemMetrics },
+): FallbackOverrides {
+  return fallbackOverrides({ ...face, typo: face.hhea, useTypoMetrics: false }, system)!;
+}
+
 /** One fallback alias: the system face it stands on, the local() names, its overrides, and how well it fits. */
 export interface FallbackAlias {
   readonly face: SystemFont;
@@ -1558,7 +1761,7 @@ const percent = (value: number) => `${(Math.round(value * 10000) / 100).toFixed(
  * metrics when its USE_TYPO_METRICS bit is set, hhea's otherwise.
  */
 export function fallbackOverrides(
-  font: FontMetrics,
+  font: Pick<FontMetrics, 'unitsPerEm' | 'latinWidth' | 'hhea' | 'typo' | 'useTypoMetrics'>,
   system: { readonly metrics: SystemMetrics },
 ): FallbackOverrides | null {
   if (font.latinWidth === null || font.latinWidth <= 0) return null;

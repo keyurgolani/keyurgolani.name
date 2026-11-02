@@ -8,7 +8,12 @@ import {
   fallbackAliases,
   fallbackOverrides,
   FontMetricsError,
+  LATIN_PAGE,
   LATIN_WEIGHTS,
+  LEADING_FAMILIES,
+  leadingFamily,
+  LINUX_FACES,
+  mappedCodePoints,
   readFontMetrics,
   stackClass,
   stackTextFace,
@@ -305,6 +310,98 @@ test("each face a pack's measures may be counted in has the width its file on di
     [sf.wght, sf.opsz, (sf.latinWidth / sf.unitsPerEm).toFixed(4)],
     [400, 17, '0.4785'],
   );
+});
+
+test('each leading family has the widths, vertical metrics, and Latin coverage its files on disk have', (t) => {
+  if (!fs.existsSync(SUPPLEMENTAL)) {
+    t.skip('no macOS system fonts here to read');
+    return;
+  }
+  const points = LATIN_PAGE.flatMap(([first, last]) =>
+    Array.from({ length: last - first + 1 }, (_, i) => first + i),
+  );
+  let measured = 0;
+  for (const family of LEADING_FAMILIES) {
+    let covered = new Set(points);
+    for (const [key, face] of Object.entries(family.faces)) {
+      if (!fs.existsSync(face.file)) continue;
+      const bytes = new Uint8Array(fs.readFileSync(face.file));
+      const read = readFontMetrics(bytes, face.file);
+      const name = `${family.name} ${key}`;
+      assert.equal(read.unitsPerEm, face.unitsPerEm, name);
+      assert.equal(read.latinWidth!.toFixed(2), face.latinWidth.toFixed(2), name);
+      // hhea's, the metrics Chromium lays it out with while USE_TYPO_METRICS is clear.
+      assert.equal(read.useTypoMetrics, false, name);
+      assert.deepEqual(read.hhea, face.hhea, name);
+      const maps = mappedCodePoints(bytes, points, face.file);
+      covered = new Set([...covered].filter((point) => maps.has(point)));
+      measured += 1;
+    }
+    // Its fallbacks' range is exactly what every face draws on a Latin page, so where it's installed they're never reached.
+    const ranges: string[] = [];
+    for (const point of [...covered].sort((a, b) => a - b)) {
+      const hex = (n: number) => n.toString(16).toUpperCase().padStart(4, '0');
+      const last = ranges.at(-1);
+      const [start, end = start] = last
+        ? last
+            .slice(2)
+            .split('-')
+            .map((n) => parseInt(n, 16))
+        : [];
+      if (last && end! + 1 === point) ranges[ranges.length - 1] = `U+${hex(start!)}-${hex(point)}`;
+      else ranges.push(`U+${hex(point)}`);
+    }
+    assert.equal(ranges.join(', '), family.unicodeRange, family.name);
+  }
+  assert.equal(measured, 8, 'every leading face was measured');
+});
+
+test("each Linux face a leading family's fallback stands on has its file's width, where Linux installs it", (t) => {
+  const files: Record<string, string> = {
+    'Liberation Sans': '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+    'Liberation Sans Bold': '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+    'Liberation Sans Italic': '/usr/share/fonts/truetype/liberation/LiberationSans-Italic.ttf',
+    'Liberation Sans Bold Italic':
+      '/usr/share/fonts/truetype/liberation/LiberationSans-BoldItalic.ttf',
+    'DejaVu Sans': '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+    'DejaVu Sans Bold': '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+    'DejaVu Sans Oblique': '/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf',
+    'DejaVu Sans Bold Oblique': '/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf',
+  };
+  // Every face is named, and Liberation Sans goes by its own name first, then Arimo and Arial's.
+  const [liberation, dejavu] = LINUX_FACES;
+  assert.deepEqual(liberation!.faces.regular.locals, [
+    'Liberation Sans',
+    'Arimo',
+    'Arial',
+    'ArialMT',
+  ]);
+  assert.deepEqual(dejavu!.faces.bold.locals, ['DejaVu Sans Bold', 'DejaVuSans-Bold']);
+  const present = LINUX_FACES.flatMap((linux) => Object.values(linux.faces)).filter((face) =>
+    fs.existsSync(files[face.name]!),
+  );
+  if (present.length === 0) {
+    t.skip('no Liberation Sans or DejaVu Sans here to read');
+    return;
+  }
+  for (const face of present) {
+    const read = readFontMetrics(new Uint8Array(fs.readFileSync(files[face.name]!)), face.name);
+    // Within 0.2%: Liberation Sans is Arial's metrics, and DejaVu Sans was measured from 2.35's file.
+    const error =
+      read.latinWidth! / read.unitsPerEm / (face.metrics.latinWidth / face.metrics.unitsPerEm) - 1;
+    assert.ok(Math.abs(error) < 0.002, `${face.name}: ${(error * 100).toFixed(2)}%`);
+  }
+});
+
+test('a leading family is the first entry of a stack, by any name, unless the pack ships it', () => {
+  assert.equal(leadingFamily('"Trebuchet MS", "Segoe UI", sans-serif')?.name, 'Trebuchet MS');
+  assert.equal(leadingFamily("'trebuchet ms', sans-serif")?.name, 'Trebuchet MS');
+  assert.equal(leadingFamily('Verdana, Tahoma, "Segoe UI", sans-serif')?.name, 'Verdana');
+  // Further down, it's reached only where the first is missing: no fallback for it.
+  assert.equal(leadingFamily('"Space Grotesk", "Avenir Next", Verdana, sans-serif'), null);
+  assert.equal(leadingFamily('"Avenir Next", Avenir, sans-serif'), null);
+  // A pack that ships a family by the name gets that family's own fallbacks instead.
+  assert.equal(leadingFamily('Verdana, sans-serif', ['Verdana']), null);
 });
 
 test("a stack's text face is the first one TEXT_FACES has, by any name a stack gives it", () => {

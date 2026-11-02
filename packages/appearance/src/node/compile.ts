@@ -26,7 +26,12 @@
 //   macOS names and the second by the names Windows and Linux give it,
 //   each with size-adjust and the metric overrides computed from the font's
 //   own tables, right after it in the stack, and the profile names the one
-//   font a page preloads.
+//   font a page preloads. A role whose system stack leads with a family
+//   Linux doesn't install (LEADING_FAMILIES, font-metrics.ts) gets two
+//   metric fallbacks right behind it, "<pack id> <family> Linux Fallback"
+//   over Liberation Sans and "... DejaVu Fallback" over DejaVu Sans, sized to
+//   that family's faces and limited to the code points it draws, so they're
+//   used only where it's missing.
 // - A design language gets its tokens, and its stylesheet inside
 //   @scope ([data-design-language="<id>"]) to ([data-appearance-boundary]),
 //   written from what readLanguageStylesheet() read. Its --ui-motion-*
@@ -66,8 +71,12 @@ import {
 import { SCRIPT_FILE, type PackManifest } from '../validate-pack';
 import {
   BASIC_LATIN,
+  FACE_KEYS,
   fallbackAliases,
   fallbackFace,
+  leadingFamily,
+  leadingOverrides,
+  LINUX_FACES,
   FontMetricsError,
   mappedCodePoints,
   readFontMetrics,
@@ -869,6 +878,51 @@ function compileTypography(manifest: TypographyManifest, dir: string): CompileRe
       }
     }
   }
+  // A role whose stack leads with a family macOS, Windows, and iOS install
+  // and Linux doesn't (LEADING_FAMILIES: Trebuchet MS, Verdana) gets two
+  // metric fallbacks right behind it, as a shipped family does: Liberation
+  // Sans, by its Arial-metric names, then DejaVu Sans, each face sized to
+  // the family's own face at 400 and 700, upright and italic. Their range is
+  // what the family draws, so where it's installed they're never used.
+  const leading = new Map<string, readonly string[]>();
+  for (const role of TYPOGRAPHY_ROLES) {
+    const lead = leadingFamily(String(manifest.roles[role]['font-family']), families);
+    if (!lead || leading.has(lead.name)) continue;
+    leading.set(
+      lead.name,
+      LINUX_FACES.map((linux) => `${manifest.id} ${lead.name} ${linux.suffix}`),
+    );
+    for (const linux of LINUX_FACES) {
+      for (const key of FACE_KEYS) {
+        const own = lead.faces[key];
+        const system = linux.faces[key];
+        const overrides = leadingOverrides(own, system);
+        const width =
+          system.metrics.latinWidth /
+            system.metrics.unitsPerEm /
+            (own.latinWidth / own.unitsPerEm) -
+          1;
+        const weight = key.startsWith('bold') ? 700 : 400;
+        faces.push(
+          [
+            `/* ${lead.name} at ${weight}${key === 'italic' || key === 'boldItalic' ? ' italic' : ''}, where it isn't installed: ${system.name}, width ${signed(width)} before size-adjust. */`,
+            '@font-face {',
+            `  font-family: "${manifest.id} ${lead.name} ${linux.suffix}";`,
+            `  src: ${system.locals.map((local) => `local("${local}")`).join(', ')};`,
+            `  font-weight: ${weight};`,
+            `  font-style: ${key === 'italic' || key === 'boldItalic' ? 'italic' : 'normal'};`,
+            `  size-adjust: ${overrides.sizeAdjust};`,
+            `  ascent-override: ${overrides.ascentOverride};`,
+            `  descent-override: ${overrides.descentOverride};`,
+            `  line-gap-override: ${overrides.lineGapOverride};`,
+            `  unicode-range: ${lead.unicodeRange};`,
+            '}',
+            '',
+          ].join('\n'),
+        );
+      }
+    }
+  }
   const preload = preloadFace(manifest);
   const measured = bodyAdvance(manifest, preload, metricsAt, pxOf);
   const resolved = 'advance' in measured ? measured : null;
@@ -878,7 +932,7 @@ function compileTypography(manifest: TypographyManifest, dir: string): CompileRe
         const value = manifest.roles[role][field];
         return `  --type-${role}-${field}: ${
           field === 'font-family'
-            ? namespacedStack(String(value), manifest.id, families, fallbacks)
+            ? namespacedStack(String(value), manifest.id, families, fallbacks, leading)
             : value
         };\n`;
       }),
@@ -925,19 +979,25 @@ function compileTypography(manifest: TypographyManifest, dir: string): CompileRe
  * A role's stack with each family the pack ships first, as "<pack id>
  * <family>", in the order the role lists them, each followed by its
  * fallback aliases, "<pack id> <family> Fallback 1" and "... Fallback 2",
- * as many as `fallbacks` gives it, then the declared fallbacks. A pack's
- * own name can't match an installed font or another pack's face, so two
- * profiles side by side never share one.
+ * as many as `fallbacks` gives it, then the declared fallbacks, a leading
+ * system family's metric fallbacks right behind it, as `leading` names
+ * them (leadingFamily()). A pack's own name can't match an installed font
+ * or another pack's face, so two profiles side by side never share one.
  */
 export function namespacedStack(
   stack: string,
   id: string,
   families: readonly string[],
   fallbacks: ReadonlyMap<string, number> = new Map(),
+  leading: ReadonlyMap<string, readonly string[]> = new Map(),
 ): string {
   const shipped: string[] = [];
   const fallback: string[] = [];
-  for (const entry of stack.split(',').map((family) => family.trim())) {
+  const lead = leadingFamily(stack, families);
+  for (const [index, entry] of stack
+    .split(',')
+    .map((family) => family.trim())
+    .entries()) {
     const name = entry.replace(/^"(.*)"$/, '$1');
     const match = families.find((family) => family.toLowerCase() === name.toLowerCase());
     if (match) {
@@ -945,7 +1005,12 @@ export function namespacedStack(
       for (let alias = 1; alias <= (fallbacks.get(match) ?? 0); alias += 1) {
         shipped.push(`"${fallbackFamily(id, match, alias)}"`);
       }
-    } else fallback.push(entry);
+    } else {
+      fallback.push(entry);
+      // A leading system family's metric fallbacks, right behind it.
+      if (index === 0 && lead)
+        fallback.push(...(leading.get(lead.name) ?? []).map((n) => `"${n}"`));
+    }
   }
   return [...shipped, ...fallback].join(', ');
 }

@@ -485,7 +485,7 @@ test('a typography profile scopes its roles and namespaces each font it ships', 
     assert.equal(result.pack.preload, assets[0]!.url);
     assert.match(
       css,
-      /\[data-typography="acme-type"\] \{\n {4}--type-display-font-family: "Trebuchet MS", "Segoe UI", sans-serif;/,
+      /\[data-typography="acme-type"\] \{\n {4}--type-display-font-family: "Trebuchet MS", "acme-type Trebuchet MS Linux Fallback", "acme-type Trebuchet MS DejaVu Fallback", "Segoe UI", sans-serif;/,
     );
     // The measures are counts of characters, 68 and 52, at the body face's
     // measured width, 500 per 1000 (R11): never ch, a 0's width. Each is
@@ -1047,12 +1047,24 @@ test('a system-font profile compiles with no preload, and its leading family get
   );
   assert.match(
     css,
-    face('Linux Fallback', 'local\\("Liberation Sans Bold Italic"\\)[^;]*', 700, 'italic', '100\\.63%'),
+    face(
+      'Linux Fallback',
+      'local\\("Liberation Sans Bold Italic"\\)[^;]*',
+      700,
+      'italic',
+      '100\\.63%',
+    ),
   );
   // Then DejaVu Sans, its own face.
   assert.match(
     css,
-    face('DejaVu Fallback', 'local\\("DejaVu Sans"\\), local\\("DejaVuSans"\\)', 400, 'normal', '89\\.43%'),
+    face(
+      'DejaVu Fallback',
+      'local\\("DejaVu Sans"\\), local\\("DejaVuSans"\\)',
+      400,
+      'normal',
+      '89\\.43%',
+    ),
   );
   assert.match(
     css,
@@ -1079,7 +1091,9 @@ test('accessible-reading gets the Linux metric fallbacks sized to Verdana, witho
   assert.ok(result.ok);
   const css = new TextDecoder().decode(result.pack.stylesheet!.bytes);
   const sizes = [
-    ...css.matchAll(/font-family: "accessible-reading Verdana ([^"]+)";[^}]*?font-weight: (\d+);\s*font-style: (\w+);\s*size-adjust: ([\d.]+%);/g),
+    ...css.matchAll(
+      /font-family: "accessible-reading Verdana ([^"]+)";[^}]*?font-weight: (\d+);\s*font-style: (\w+);\s*size-adjust: ([\d.]+%);/g,
+    ),
   ].map(([, family, weight, style, size]) => `${family} ${weight} ${style} ${size}`);
   assert.deepEqual(sizes, [
     'Linux Fallback 400 normal 114.99%',
@@ -1330,6 +1344,11 @@ test("an italic-only family's faces and fallbacks take every weight from their o
     for (const [, family, weight] of css.matchAll(
       /@font-face \{\s*font-family: "([^"]+)";\s*src: [^;]+;\s*font-weight: ([^;]+);/g,
     )) {
+      // A leading system family's Linux metric fallbacks: 400 and 700 alone, as its own faces are.
+      if (/ (Linux|DejaVu) Fallback$/.test(family!)) {
+        assert.match(weight!, /^(400|700)$/, `${id}: ${family}`);
+        continue;
+      }
       const own = family!.slice(id.length + 1).replace(/ Fallback \d$/, '');
       const declared = manifest.fontAssets.find((asset) => asset.family === own)!;
       if (italicOnly.has(own)) {
