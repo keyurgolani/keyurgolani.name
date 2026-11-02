@@ -722,8 +722,8 @@
 
 /*
  * 64 to 80rem the plates' rows are too close for a summary on two lines, so
- * each plate takes the width its words need on one line, on the stage's
- * ground, and its leader comes out from under its right edge.
+ * each plate takes the width its words need on one line, and its leader comes
+ * out from under its right edge.
  */
 @media (min-width: 64rem) and (max-width: 79.99rem) {
   [data-variant='kinetic-cosmos'] .kc-plate {
@@ -734,7 +734,6 @@
   [data-variant='kinetic-cosmos'] .kc-plate__link {
     padding-inline-end: var(--space-xs);
     white-space: nowrap;
-    background-color: var(--color-text-primary);
   }
 }
 
@@ -954,6 +953,14 @@
   [data-variant='kinetic-cosmos'] .kc-plates__list {
     display: block;
     padding: 0;
+  }
+
+  /*
+   * Over the map, the words sit on the stage's own ground: the far stars
+   * drift behind the caption and the plates, never through their words.
+   */
+  [data-variant='kinetic-cosmos'] :is(.kc-plates__caption, .kc-plate__link) {
+    background-color: var(--color-text-primary);
   }
 
   /* Two lines across the top left, clear of the first plate below and the halo's upper arc beside it. */
@@ -3057,9 +3064,11 @@
   font-size: var(--type-label-font-size);
 }
 
+/* The stops stand apart by more than a focus ring's reach, so a ring never lands on the current stop's ground. */
 [data-variant='kinetic-cosmos'] .kc-dock__stops {
   display: none;
   align-items: center;
+  gap: var(--space-2xs);
 }
 
 [data-variant='kinetic-cosmos'] .kc-dock__stop {
