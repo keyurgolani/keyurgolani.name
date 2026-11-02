@@ -102,6 +102,43 @@ test.describe('the bundled sample', () => {
     });
   }
 
+  // A work's title beside its stickers is sized for the column it gets, the poster less the
+  // stickers and the gap, never for more: at 1024 its share was 320 px against a 304 px column,
+  // and POSTMORTEM kept its line by 2.75 px, which Linux's wider Archivo took (run 41433352108).
+  // Geometry, not glyphs, so it holds in any face: the fit's whole budget, the title's size by its
+  // characters by the fit, is at most the title's own box.
+  for (const width of [1440, 1200, 1024, 768]) {
+    test.describe(`at ${width}px`, () => {
+      test.use({
+        viewport: { width, height: 900 },
+        contextOptions: { reducedMotion: 'reduce' },
+      });
+
+      for (const [recipe, query] of RECIPES) {
+        test(
+          `the case title beside its stickers, ${recipe} recipe: sized for its column, never past it`,
+          { annotation: SAMPLE_ANNOTATION },
+          async ({ page }) => {
+            await page.goto(`${CASE_PAGE}&${query}`, { waitUntil: 'networkidle' });
+            await expect(page.locator('.rg-poster--stuck > .rg-case__title')).toHaveCount(1);
+            const fit = await page.locator('.rg-case__title').evaluate((title) => {
+              const style = getComputedStyle(title);
+              const number = (name: string) => parseFloat(style.getPropertyValue(name));
+              return {
+                budget:
+                  parseFloat(style.fontSize) *
+                  number('--layout-name-chars') *
+                  number('--layout-fit'),
+                column: title.getBoundingClientRect().width,
+              };
+            });
+            expect(fit.budget, JSON.stringify(fit)).toBeLessThanOrEqual(fit.column + 0.5);
+          },
+        );
+      }
+    });
+  }
+
   // The guard's own check: in Raw Grid's faces at tight leading, it catches each kind of split.
   test.describe('at 1024px, planted splits', () => {
     test.use({
