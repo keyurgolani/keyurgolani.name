@@ -734,6 +734,27 @@ const WRAPPED_HALF = withFixture(
 );
 
 /**
+ * focus-straight.html with a second plate at the same sub-pixel offset, whose straight ring fails
+ * however it's measured: a square one a box clips along its right side, or an opaque neighbour
+ * in the stage's colour covers along its top (each a quarter of its ring, so its pixels reach a
+ * 1px ring's and it's held to its centre line, which refuses it); one 1px (held to its pixels);
+ * or one whose colour is under 3:1 (2.4:1).
+ */
+const straightTwin = (html: string) => withFixture('focus-straight.html', '<!-- twin -->', html);
+const STRAIGHT_CLIPPED = straightTwin(
+  '<div class="clip"><a class="plate square" id="clipped" href="#clipped" style="top: 20px">Writing</a></div>',
+);
+const STRAIGHT_THIN = straightTwin(
+  '<a class="plate thin" id="thin" href="#thin" style="top: 300px">Record, 12 years</a>',
+);
+const STRAIGHT_FAINT = straightTwin(
+  '<a class="plate faint" id="faint" href="#faint" style="top: 300px">Personal, now</a>',
+);
+const STRAIGHT_COVERED = straightTwin(
+  '<a class="plate square" id="covered" href="#covered" style="top: 600px">Personal</a><div class="cover" style="top: 594px"></div>',
+);
+
+/**
  * focus-only-shown.html with a menu open only on :focus-within, whose items have no ring: the
  * blur hides each item with the list that holds it.
  */
@@ -1025,6 +1046,43 @@ export const A11Y_CASES: readonly MetaCase[] = [
     WRAPPED_HALF,
     /^focus (?:perimeter|contrast): /,
     focus,
+  ),
+  // A straight 2px ring at a sub-pixel place, whole at its colour, its horizontal sides
+  // antialiased across three rows, passes along its centre line, as a rounded ring does. One a
+  // box clips on a side, one 1px (held to its pixels), one under 3:1, and one a neighbour covers
+  // still fail, one finding each on its own stop.
+  goodFile('straight-sub-pixel', 'focus-straight.html', 'focus', focus),
+  builtCase(
+    'straight-clipped',
+    'focus',
+    'tests/quality/fixtures/a11y/focus-straight.html, with a square plate a box clips along its right side',
+    STRAIGHT_CLIPPED,
+    /^focus perimeter: \d+ of \d+ points/,
+    onePerStop(focus, ['#clipped']),
+  ),
+  builtCase(
+    'straight-thin',
+    'focus',
+    'tests/quality/fixtures/a11y/focus-straight.html, with a second plate whose straight ring is 1px',
+    STRAIGHT_THIN,
+    /^focus (?:perimeter|contrast): /,
+    onePerStop(focus, ['#thin']),
+  ),
+  builtCase(
+    'straight-faint',
+    'focus',
+    'tests/quality/fixtures/a11y/focus-straight.html, with a second plate whose straight ring is 2.4:1 on the stage',
+    STRAIGHT_FAINT,
+    /^focus (?:perimeter|contrast): /,
+    onePerStop(focus, ['#faint']),
+  ),
+  builtCase(
+    'straight-covered',
+    'focus',
+    'tests/quality/fixtures/a11y/focus-straight.html, with a square plate an opaque neighbour covers along its top',
+    STRAIGHT_COVERED,
+    /^focus perimeter: \d+ of \d+ points/,
+    onePerStop(focus, ['#covered']),
   ),
   // A skip link shown only while it has focus isn't focused again after the blur, and the walk
   // goes on from it: no trap, every stop reached, every ring whole.

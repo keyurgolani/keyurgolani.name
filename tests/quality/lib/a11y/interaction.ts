@@ -15,10 +15,12 @@
 // - focus: at each stop, the focused clip (4 px around the control) against
 //   the blurred one. Some pixel changes (visible), some by 3:1 (contrast),
 //   and the 3:1 change covers the area of a 2 px ring round the control
-//   (perimeter), as quality/thresholds.json sets them; a rounded outline of
-//   2 px or more that falls short there passes on 90% of its centre line
-//   (the lead's ruling, 31 Oct 2026, (b): the antialiased fringe round a
-//   curve is a sampling artefact, not a visibility problem), a point
+//   (perimeter), as quality/thresholds.json sets them; an outline of 2 px or
+//   more round one box, rounded or straight, upright and wholly in view, that
+//   falls short there passes on 90% of its centre line (the lead's ruling,
+//   31 Oct 2026, (b): the antialiased fringe round a curve, or along a
+//   straight side at a sub-pixel offset, is a sampling artefact, not a
+//   visibility problem; item 17 gave a straight one the rescue), a point
 //   counting when a pixel within one px of it reaches 3:1 and the ring is
 //   drawn across its width there (the revised ruling, option 1: every
 //   scheme's focus colour sits just over 3:1 on its worst surface).
@@ -396,13 +398,15 @@ export function ringFindings(
       ? Math.min(1, (sides.width + sides.height) / (box.width + box.height))
       : 1;
   // A wrapped control's ring goes round its line boxes, not round their bounding box; a rounded
-  // one, upright and wholly in view, is held to its own path, edges and corner arcs.
+  // one, upright and wholly in view, is held to its own path, edges and corner arcs. A straight
+  // one keeps the box's perimeter.
   const square = ringLength(box, margin, viewport);
   const whole = square === 2 * (box.width + box.height);
+  const rounded = rounding?.corners.some(([h, v]) => h > 0 && v > 0) ?? false;
   const length =
     fragments && fragments.length > 1
       ? fragmentsLength(fragments, margin, viewport)
-      : rounding && whole && !sides
+      : rounding && rounded && whole && !sides
         ? roundedRingLength(box, rounding)
         : square;
   const ring = length * turned * (focused.width / clip.width) ** 2;
@@ -429,13 +433,16 @@ export function ringFindings(
   }
   // A ring whose pixels reach a 2px ring's need passes, as before.
   if (strong >= need * EDGE_ALLOWANCE) return [];
-  // One that doesn't, and is a rounded outline of perimeterPx or more, upright and wholly in
-  // view, is measured again along its centre line, an outline's offset plus half its width out
-  // from the border box, following its radii: the lead's ruling, 31 Oct 2026, (b). Round a
-  // pill's or a rounded corner's curve the ring's edge pixels antialias under 3:1 (a whole 2px
-  // ring round a pill counted 84% of its pixels' need in Chromium, 059b4d7af's run, where 90%
-  // passes), and that fringe is a sampling artefact, not a visibility problem: the ring is there,
-  // whole, at its colour. Its centre line holds the same 3:1 and the same 90%, a point counting
+  // One that doesn't, and is an outline of perimeterPx or more round one box, rounded or
+  // straight, upright and wholly in view, is measured again along its centre line, an outline's
+  // offset plus half its width out from the border box, following its radii (a straight one's
+  // are 0, so its line is the box set out, square-cornered): the lead's ruling, 31 Oct 2026, (b),
+  // and for a straight one item 17's. Round a pill's or a rounded corner's curve the ring's edge
+  // pixels antialias under 3:1 (a whole 2px ring round a pill counted 84% of its pixels' need in
+  // Chromium, 059b4d7af's run, where 90% passes), and so do a straight ring's sides at a
+  // sub-pixel offset, such as a translate leaves (a whole 2px ring at 0.633px counted 61%: each
+  // side straddles three rows, the middle one at full colour); that fringe is a sampling
+  // artefact, not a visibility problem: the ring is there, whole, at its colour. Its centre line holds the same 3:1 and the same 90%, a point counting
   // when a pixel within one px of it reaches 3:1 and the band changes at both its edges there
   // (the revised ruling, 31 Oct 2026, option 1; centreLineChange). The centre line
   // only ever passes a ring the pixels failed, so it adds no finding: an outline that draws
