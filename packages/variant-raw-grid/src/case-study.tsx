@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
-import type { Evidence, Work } from '@portfolio/schema';
+import type { Evidence, Link, Work } from '@portfolio/schema';
 import {
   CASE_STUDY_FIELDS,
   DateText,
@@ -38,7 +38,7 @@ import {
   workHref,
 } from './model';
 import { Stickers } from './opening/poster';
-import { caseOf, Checks, Fit, Line, Lines, linkText, Out, Words } from './parts';
+import { Breakable, caseOf, Checks, Fit, Line, Lines, linkText, Out, Words } from './parts';
 import { RuledTable } from './renderers/ruled-table';
 
 // A work's own page, /work/<slug> (phase 2): the case pasted up as a poster
@@ -86,16 +86,21 @@ const RECORD_WORDS: Readonly<Record<string, string>> = {
 const partId = (input: VariantRenderInput, work: ViewWork, key: CaseStudyField) =>
   `${input.ids.prefix}${work.id}--${key}`;
 
-/** The work's own links, as the poster's block buttons: its address, then its links, each once. */
+/**
+ * The work's own links, as the poster's block buttons: its address, then its links, each once.
+ * A button that names no label or platform says its address, which wraps where an address does.
+ */
 function actionsOf(work: Work, input: VariantRenderInput) {
-  const list: { href: string; text: string }[] = [];
-  const add = (url: string | undefined, text: string) => {
-    if (!present(url)) return;
-    const href = hrefFor(url, input);
-    if (!list.some((each) => sameTarget(each.href, href))) list.push({ href, text });
+  const list: { href: string; text: string; address: boolean }[] = [];
+  const add = (link: Pick<Link, 'label' | 'platform' | 'url'>) => {
+    if (!present(link.url)) return;
+    const href = hrefFor(link.url, input);
+    const text = linkText(link);
+    const address = ![link.label, link.platform].some(present);
+    if (!list.some((each) => sameTarget(each.href, href))) list.push({ href, text, address });
   };
-  if (work.url) add(work.url, linkText({ url: work.url }));
-  for (const link of work.links ?? []) add(link.url, linkText(link));
+  if (work.url) add({ url: work.url });
+  for (const link of work.links ?? []) add(link);
   return list;
 }
 
@@ -536,8 +541,10 @@ export function CaseStudyPage({ input, work, outline }: CaseStudyPageProps) {
                       className="rg-act"
                       data-ui-surface={index === 0 ? 'accent' : undefined}
                     >
+                      {/* An address wraps at its own points, never inside a word, rather
+                          than run the button past a phone's page in a wider face. */}
                       <Out className="rg-go rg-btn" href={action.href}>
-                        {action.text}
+                        {action.address ? <Breakable text={action.text} /> : action.text}
                       </Out>
                     </li>
                   ))}

@@ -152,7 +152,9 @@ export function brokenWords(options: { breaks: boolean }): WordScan {
  * Run in the page: each short call to action set on more than one line. A button, the big
  * link when it isn't an address, the second action and a card's way in are phrases: their
  * words keep one line at every width. A big link past sixteen characters is a sentence, which
- * may wrap by its words, as its fit allows (bigChars).
+ * may wrap by its words, as its fit allows (bigChars). A button that says an address (Breakable's
+ * <wbr>s in it) wraps at the address's own points, as the big link's address does; brokenWords
+ * still holds each piece of it whole.
  */
 export function splitPhrases(): string[] {
   const root = document.querySelector('[data-variant]')!;
@@ -166,6 +168,7 @@ export function splitPhrases(): string[] {
   for (const phrase of phrases) {
     const words = phrase.textContent?.trim() ?? '';
     if (phrase.matches('.rg-ink__big') && [...words].length > 16) continue;
+    if (phrase.matches('.rg-btn') && phrase.querySelector('wbr')) continue;
     const range = document.createRange();
     range.selectNodeContents(phrase);
     const rects = [...range.getClientRects()].filter((rect) => rect.width > 0.5);
