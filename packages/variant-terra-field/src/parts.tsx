@@ -13,6 +13,22 @@ export function Words({ lang, children }: { lang: 'en' | undefined; children: Re
   return lang ? <span lang={lang}>{children}</span> : <>{children}</>;
 }
 
+/**
+ * The root's first child: an empty mark inside <noscript>. The parser makes it an element only
+ * when it reads the page with scripting off; with scripting on it's the noscript's text. The
+ * stylesheet plays the opening's entrances only where the mark isn't, so a page read with no
+ * script shows its opening at once, and a visitor with JavaScript has them from the first paint,
+ * whatever the enhancement does. Never a scripting query: the quality runner's no-JavaScript
+ * rows audit with script on for axe, which such a query would flip (Shell's NoScriptMark).
+ */
+export function NoScriptMark() {
+  return (
+    <noscript>
+      <i data-tf-nojs="" hidden />
+    </noscript>
+  );
+}
+
 /** Whether a link leaves the site: anything with a scheme but mail. */
 export const outbound = (href: string) =>
   /^[a-z][a-z0-9+.-]*:/i.test(href) && !href.startsWith('mailto:');

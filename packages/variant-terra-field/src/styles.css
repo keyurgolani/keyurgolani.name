@@ -621,6 +621,16 @@
   object-fit: cover;
 }
 
+/*
+ * Under its frame's aspect ratio, a box grows to hold its label at any text size, so its frame's
+ * clip never cuts the words off (WCAG 1.4.4, 1.4.10): the ratio's own minimum is the content's.
+ */
+[data-variant='terra-field']
+  :is(.tf-frame, .tf-band__frame, .tf-lede__portrait, .tf-sleeve__cover, .tf-casecover__frame)
+  .pf-media-box {
+  min-block-size: auto;
+}
+
 /* The photograph's own caption on its line, the series and its count on the next (S-3). */
 [data-variant='terra-field'] .tf-band__cap {
   display: grid;
@@ -948,19 +958,29 @@
   }
 }
 
-/* With no script, a link to a folded section shows its content, as the enhancement would open it. */
-@media (scripting: none) {
-  [data-variant='terra-field']
-    :is(:target > details.tf-fold, details.tf-fold:has(:target))
-    > :not(summary) {
-    display: grid;
-  }
+/*
+ * The page read with no script: the root's noscript mark is an element (NoScriptMark, parts.tsx),
+ * which the parser makes it only then. Never a scripting query: the quality runner's
+ * no-JavaScript rows audit with script on for axe, which such a query would flip (the platform's
+ * rule, experience-base.css). The mark itself is never a box, nor a cell of the root's layout.
+ */
+[data-variant='terra-field'] .tf-root > :has(> [data-tf-nojs]) {
+  display: none;
+}
 
-  [data-variant='terra-field']
-    :is(:target > details.tf-fold, details.tf-fold:has(:target))::details-content {
-    content-visibility: visible;
-    block-size: auto;
-  }
+/* With no script, a link to a folded section shows its content, as the enhancement would open it. */
+[data-variant='terra-field']
+  .tf-root:has(> * > [data-tf-nojs])
+  :is(:target > details.tf-fold, details.tf-fold:has(:target))
+  > :not(summary) {
+  display: grid;
+}
+
+[data-variant='terra-field']
+  .tf-root:has(> * > [data-tf-nojs])
+  :is(:target > details.tf-fold, details.tf-fold:has(:target))::details-content {
+  content-visibility: visible;
+  block-size: auto;
 }
 
 /* ---------- Works: the series template, one form for every work ---------- */
@@ -1633,17 +1653,20 @@
   grid-column: 3 / 11;
 }
 
+/* The circle is the portrait's own; its credit reads under it, never cut off by it (WCAG 1.4.10). */
 [data-variant='terra-field'] .tf-lede__portrait {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3xs);
   inline-size: calc(var(--layout-seal) * 1.1);
-  aspect-ratio: 1;
-  overflow: hidden;
-  border-radius: var(--layout-round);
+  text-align: center;
 }
 
 [data-variant='terra-field'] .tf-lede__portrait :is(img, .pf-media-box) {
   inline-size: 100%;
-  block-size: 100%;
+  aspect-ratio: 1;
   object-fit: cover;
+  border-radius: var(--layout-round);
 }
 
 [data-variant='terra-field'] .tf-lede__text {
@@ -1886,7 +1909,10 @@
  * data-motion='reduced', the visitor's pause 'static'), as the other
  * compositions do. Scroll-linked parts have no duration to shorten, so
  * they stop entirely outside full motion; the gauge's dot then rests at
- * its start.
+ * its start. What enters from opacity 0 plays only where the root's
+ * noscript mark isn't (NoScriptMark): read with no script, the opening is
+ * there at once, never waiting out a delay at opacity 0, and with script it
+ * plays from the first paint, as before.
  */
 
 @media (prefers-reduced-motion: no-preference) {
@@ -1895,35 +1921,48 @@
     animation: terra-field-settle calc(var(--motion-scene) * 1.3) var(--motion-curve) both;
   }
 
-  [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static']) .tf-hero__line {
+  [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static'])
+    .tf-root:not(:has(> * > [data-tf-nojs]))
+    .tf-hero__line {
     animation: terra-field-rise var(--motion-scene) var(--motion-curve) both;
   }
 
   [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static'])
+    .tf-root:not(:has(> * > [data-tf-nojs]))
     .tf-hero__kicker,
-  [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static']) .tf-hero__lede {
+  [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static'])
+    .tf-root:not(:has(> * > [data-tf-nojs]))
+    .tf-hero__lede {
     animation: terra-field-rise-s var(--motion-scene) var(--motion-curve)
       calc(var(--motion-scene) * 0.18) both;
   }
 
-  [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static']) .tf-hero__acts,
-  [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static']) .tf-hero__sub {
+  [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static'])
+    .tf-root:not(:has(> * > [data-tf-nojs]))
+    .tf-hero__acts,
+  [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static'])
+    .tf-root:not(:has(> * > [data-tf-nojs]))
+    .tf-hero__sub {
     animation: terra-field-rise-s var(--motion-scene) var(--motion-curve)
       calc(var(--motion-scene) * 0.36) both;
   }
 
-  [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static']) .tf-seal {
+  [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static'])
+    .tf-root:not(:has(> * > [data-tf-nojs]))
+    .tf-seal {
     animation: terra-field-fade var(--motion-scene) var(--motion-curve)
       calc(var(--motion-scene) * 0.5) both;
   }
 
   [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static'])
+    .tf-root:not(:has(> * > [data-tf-nojs]))
     .tf-notes[open]
     .tf-notes__ground {
     animation: terra-field-drop var(--motion-scene) var(--motion-curve) both;
   }
 
   [data-variant='terra-field']:not([data-motion='reduced'], [data-motion='static'])
+    .tf-root:not(:has(> * > [data-tf-nojs]))
     .tf-notes[open]::backdrop {
     animation: terra-field-fade calc(var(--motion-scene) * 0.5) var(--motion-curve) both;
   }
@@ -1971,12 +2010,16 @@
 
 /* Reduced motion, the visitor's or the owner's: the opening fades in, short, and nothing travels. */
 @media (prefers-reduced-motion: reduce) {
-  [data-variant='terra-field']:not([data-motion='static']) .tf-hero__inner {
+  [data-variant='terra-field']:not([data-motion='static'])
+    .tf-root:not(:has(> * > [data-tf-nojs]))
+    .tf-hero__inner {
     animation: terra-field-fade var(--motion-feedback) linear both;
   }
 }
 
-[data-variant='terra-field'][data-motion='reduced'] .tf-hero__inner {
+[data-variant='terra-field'][data-motion='reduced']
+  .tf-root:not(:has(> * > [data-tf-nojs]))
+  .tf-hero__inner {
   animation: terra-field-fade var(--motion-feedback) linear both;
 }
 

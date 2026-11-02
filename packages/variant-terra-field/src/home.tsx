@@ -15,6 +15,7 @@ import { Field } from './field/field';
 import { headId, named, sectionFrame } from './frame';
 import { Opening, sealStyle } from './hero';
 import { echoedHeads, folds, homeModel, said, sectionForm, type HomeModel } from './model';
+import { NoScriptMark } from './parts';
 import { renderersFor } from './renderers';
 import { closeFrame } from './renderers/contact';
 
@@ -84,6 +85,7 @@ export function HomePage({ input }: HomePageProps) {
       data-tf-field={model.quiet ? 'quiet' : 'accent'}
       style={sealStyle(model)}
     >
+      <NoScriptMark />
       <Masthead input={input} model={model} />
       {/* Focusable, so the host's skip link moves focus here, not only the view. */}
       <main id={input.ids.main} className="tf-main" tabIndex={-1}>

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { pageOutline } from '@portfolio/kit/sections';
+import { isRoutedWork, pageOutline } from '@portfolio/kit/sections';
 import { newestFirst } from '@portfolio/schema';
 import { homeModel } from '../model';
 import { checkOutline } from '@portfolio/variant-contract/node';
@@ -31,6 +31,28 @@ import {
 
 const sample = () => renderInput(sampleInput());
 const STYLES = readFileSync(path.join(PACKAGE_DIR, 'src', 'styles.css'), 'utf8');
+
+/** The selectors of the rule a declaration at `at` in the stylesheet sits in, split at the top-level commas. */
+function selectorsAt(at: number): string[] {
+  const prelude = STYLES.slice(
+    Math.max(STYLES.lastIndexOf('}', at), STYLES.lastIndexOf(';', at)) + 1,
+    STYLES.lastIndexOf('{', at),
+  );
+  const list = prelude.slice(prelude.lastIndexOf('{') + 1);
+  const out: string[] = [];
+  let depth = 0;
+  let from = 0;
+  for (let i = 0; i < list.length; i++) {
+    if (list[i] === '(') depth++;
+    else if (list[i] === ')') depth--;
+    else if (list[i] === ',' && depth === 0) {
+      out.push(list.slice(from, i).trim());
+      from = i + 1;
+    }
+  }
+  out.push(list.slice(from).trim());
+  return out.filter((selector) => selector !== '' && !selector.startsWith('@'));
+}
 
 test('every core kind renders bespoke, and the manifest says so', () => {
   assert.equal(MANIFEST.renderedKinds.length, 14);
@@ -273,7 +295,7 @@ test('the stylesheet: tokens only, the field from the scheme, focus never overri
   assert.match(reduce, /terra-field-fade var\(--motion-feedback\)/);
   assert.match(
     STYLES,
-    /\[data-variant='terra-field'\]\[data-motion='reduced'\] \.tf-hero__inner \{\s*animation: terra-field-fade var\(--motion-feedback\)/,
+    /\[data-variant='terra-field'\]\[data-motion='reduced'\]\s+\.tf-root:not\(:has\(> \* > \[data-tf-nojs\]\)\)\s+\.tf-hero__inner \{\s*animation: terra-field-fade var\(--motion-feedback\)/,
     "the owner's reduce gets the same short fade",
   );
   assert.doesNotMatch(STYLES, /infinite/);
@@ -296,27 +318,6 @@ test('the stylesheet: tokens only, the field from the scheme, focus never overri
     }
     gated.push([head.index!, at]);
   }
-  /** The selectors of the rule a declaration at `at` sits in, split at the top-level commas. */
-  const selectorsAt = (at: number) => {
-    const prelude = STYLES.slice(
-      Math.max(STYLES.lastIndexOf('}', at), STYLES.lastIndexOf(';', at)) + 1,
-      STYLES.lastIndexOf('{', at),
-    );
-    const list = prelude.slice(prelude.lastIndexOf('{') + 1);
-    const out: string[] = [];
-    let depth = 0;
-    let from = 0;
-    for (let i = 0; i < list.length; i++) {
-      if (list[i] === '(') depth++;
-      else if (list[i] === ')') depth--;
-      else if (list[i] === ',' && depth === 0) {
-        out.push(list.slice(from, i).trim());
-        from = i + 1;
-      }
-    }
-    out.push(list.slice(from).trim());
-    return out.filter((selector) => selector !== '' && !selector.startsWith('@'));
-  };
   const check = (what: string, at: number) => {
     assert.ok(
       gated.some(([open, close]) => at > open && at < close),
@@ -344,6 +345,40 @@ test('the stylesheet: tokens only, the field from the scheme, focus never overri
     STYLES,
     /(?:^|[\s;{])(?:margin|padding)-(?:left|right)\s*:|(?:^|[\s;{])(?:left|right)\s*:/m,
   );
+});
+
+test('with no script the page shows at once: nothing waits at opacity 0 for an entrance, and no scripting query', () => {
+  // The no-JavaScript rows audit with script on for axe, which a scripting query would flip.
+  assert.doesNotMatch(STYLES, /@media[^{]*\bscripting\b/);
+  // The page says it was read with no script by an element only the parser makes, in <noscript>.
+  const work = sampleInput().portfolio.works.find(isRoutedWork)!;
+  const pages = {
+    home: renderInput(sampleInput()),
+    case: renderInput({ ...sampleInput(), route: { route: 'work', slug: work.slug } }),
+  };
+  for (const [name, html] of Object.entries(pages))
+    assert.match(
+      html,
+      /<div class="tf-root"[^>]*><noscript><i data-tf-nojs="" hidden=""><\/i><\/noscript>/,
+      `${name}: the root's first child is the no-script mark`,
+    );
+  // The mark is never a box, nor a cell of the root's layout.
+  assert.match(STYLES, /\.tf-root > :has\(> \[data-tf-nojs\]\) \{\s*display: none;/);
+  // Every entrance that starts at opacity 0 plays only where the mark isn't: with no script the
+  // opening is there from the first read, not waiting out a delay (WCAG 1.3.1, the inventory).
+  const hiding = [...STYLES.matchAll(/@keyframes (terra-field-[\w-]+) \{([^@]*?)\n\}/g)]
+    .filter(([, , body]) => /(?:from|0%)\s*\{[^}]*\bopacity:\s*0\b/.test(body!))
+    .map(([, name]) => name!);
+  assert.ok(hiding.length >= 3, hiding.join(' '));
+  const SCRIPTED = '.tf-root:not(:has(> * > [data-tf-nojs]))';
+  let uses = 0;
+  for (const name of hiding)
+    for (const use of STYLES.matchAll(new RegExp(`animation(?:-name)?:[^;]*\\b${name}\\b`, 'g'))) {
+      uses++;
+      for (const selector of selectorsAt(use.index!))
+        assert.ok(selector.includes(SCRIPTED), `${name} plays with no script: ${selector}`);
+    }
+  assert.ok(uses >= 6, `${uses}`);
 });
 
 test('right to left: the page keeps its order and its words, the composition’s own marked English', () => {
@@ -501,7 +536,11 @@ test('the full record folds behind closed disclosures, each keeping its frame, i
   // Print and no script show what's folded.
   assert.match(
     STYLES,
-    /@media \(scripting: none\) \{\s*\[data-variant='terra-field'\]\s+:is\(:target > details\.tf-fold, details\.tf-fold:has\(:target\)\)\s+> :not\(summary\)/,
+    /\[data-variant='terra-field'\]\s+\.tf-root:has\(> \* > \[data-tf-nojs\]\)\s+:is\(:target > details\.tf-fold, details\.tf-fold:has\(:target\)\)\s+> :not\(summary\) \{\s*display: grid;/,
+  );
+  assert.match(
+    STYLES,
+    /\[data-variant='terra-field'\]\s+\.tf-root:has\(> \* > \[data-tf-nojs\]\)\s+:is\(:target > details\.tf-fold, details\.tf-fold:has\(:target\)\)::details-content \{\s*content-visibility: visible;/,
   );
   assert.match(
     STYLES,

@@ -219,6 +219,45 @@ test(
 );
 
 test(
+  'with no script the opening is there from the first read: no part of it waits at opacity 0',
+  { annotation },
+  async ({ page, browser }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/', { waitUntil: 'networkidle' });
+    const context = await browser.newContext({
+      javaScriptEnabled: false,
+      baseURL: page.url(),
+      viewport: { width: 1440, height: 900 },
+    });
+    const still = await context.newPage();
+    await still.goto('/', { waitUntil: 'load' });
+    // Read at once, as the quality runner's no-JavaScript inventory does: nothing waits out a delay.
+    const parts = await still.evaluate(() =>
+      [
+        '.tf-hero__kicker',
+        '.tf-hero__line',
+        '.tf-hero__lede',
+        '.tf-hero__acts',
+        '.tf-hero__sub',
+        '.tf-seal',
+      ].flatMap((selector) => {
+        const element = document.querySelector(selector);
+        if (!element) return [];
+        const shown = element.checkVisibility({ opacityProperty: true });
+        const playing = element.getAnimations().length;
+        return [`${selector} ${shown ? 'shown' : 'hidden'}, ${playing} playing`];
+      }),
+    );
+    expect(parts.length).toBeGreaterThanOrEqual(4);
+    expect(parts).toEqual(parts.map((each) => each.replace(/ .*/, ' shown, 0 playing')));
+    await expect(still.locator('.tf-root > noscript > [data-tf-nojs]')).toHaveCount(1);
+    await context.close();
+    // With script the opening still plays, from the first paint: the mark is only the parser's.
+    await expect(page.locator('[data-tf-nojs]')).toHaveCount(0);
+  },
+);
+
+test(
   'the masthead marks no destination in the opening, then the one the reader is in (aria-current)',
   { annotation },
   async ({ page }) => {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { attachAll, currentField, entrance, fragmentId, holdsStill } from './field';
+import { attachAll, currentField, enters, entrance, fragmentId, holdsStill } from './field';
 
 // The field enhancement's decisions, apart from the DOM: which destination
 // is current, when the page holds still, how the entrances are timed, and
@@ -29,6 +29,14 @@ test('entrances fill backwards and spread at most 500 ms across a group (TF-S3)'
     assert.ok(last.delay <= 500, `${count}: ${last.delay}`);
   }
   assert.equal(entrance(1, 2, 700, 'ease-out').delay, 60);
+});
+
+test('what holds focus never plays an entrance: it shows at once, never transparent while focused', () => {
+  const child = {};
+  const row = { contains: (other: unknown) => other === child };
+  assert.equal(enters(row, null), true);
+  assert.equal(enters(row, {}), true);
+  assert.equal(enters(row, child), false);
 });
 
 test('a fragment that isn’t valid percent-encoding reads as written, never throws', () => {

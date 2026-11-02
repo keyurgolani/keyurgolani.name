@@ -20,7 +20,7 @@ import { Footer } from './chrome/footer';
 import { Marker } from './chrome/marker';
 import { Masthead } from './chrome/masthead';
 import { caseModel, chromeIds, MEDIUM_WORDS, said, type CaseModel, type CasePart } from './model';
-import { linkText, Links, Words } from './parts';
+import { linkText, Links, NoScriptMark, Words } from './parts';
 import { renderersFor } from './renderers';
 import { closeFrame } from './renderers/contact';
 import { CitedRecords } from './renderers/evidence';
@@ -314,6 +314,7 @@ export function CaseStudyPage({ input, work, outline }: CaseStudyPageProps) {
   const closing = home.contact ?? home.cta;
   return (
     <div className="tf-root" data-tf-field={home.quiet ? 'quiet' : 'accent'} data-tf-page="case">
+      <NoScriptMark />
       <Masthead input={input} model={home} current={model.here} />
       <main
         id={input.ids.main}

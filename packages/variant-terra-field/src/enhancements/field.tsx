@@ -15,7 +15,9 @@ import type { VariantRenderInput } from '@portfolio/variant-contract';
 // 4. below the fold, each work, frame and column rises into place once as
 //    it enters (a row fades in), under no-preference and full motion only, staggered at
 //    most 500 ms across a group (TF-S3), as a WAAPI entrance with
-//    fill: 'backwards', so what's there is never hidden waiting for it.
+//    fill: 'backwards', so what's there is never hidden waiting for it; what holds focus
+//    never enters, and focus landing in one that's entering ends it at once, so a focused
+//    link is never transparent (WCAG 2.4.7).
 // No frame loop, no timer, no scroll listener: idle cost is nothing.
 // Inside an inert plate it attaches nothing.
 
@@ -42,6 +44,14 @@ export function holdsStill(reduce: boolean, motion: string | undefined): boolean
 export function entrance(index: number, count: number, scene: number, easing: string) {
   const step = Math.min(STAGGER, SPREAD / Math.max(1, count));
   return { duration: scene, easing, delay: index * step, fill: 'backwards' } as const;
+}
+
+/** Whether an element entering the view plays its entrance: never one that holds focus, which shows at once. */
+export function enters<T>(
+  target: { contains(other: T | null): boolean },
+  active: T | null,
+): boolean {
+  return !(active && target.contains(active));
 }
 
 /** A fragment's id, as written when it isn't valid percent-encoding. */
@@ -199,6 +209,7 @@ function reveals(root: HTMLElement): () => void {
   const scene = ms(style.getPropertyValue('--motion-scene'), 700);
   const curve = style.getPropertyValue('--motion-curve').trim() || 'ease-out';
   const seen = new WeakSet<Element>();
+  const playing = new Set<Animation>();
   let first = true;
   const watch = new IntersectionObserver(
     (entries) => {
@@ -216,7 +227,9 @@ function reveals(root: HTMLElement): () => void {
         if (seen.has(entry.target)) return;
         seen.add(entry.target);
         watch.unobserve(entry.target);
-        entry.target.animate(
+        // Focus brought it in (a keyboard's Tab scrolls to it): it shows as it is.
+        if (!enters(entry.target, document.activeElement)) return;
+        const played = entry.target.animate(
           [
             // The report's 16 px rise, at the element's own text size; a row only fades.
             { opacity: 0, translate: entry.target.matches('li') ? '0 0' : '0 1em' },
@@ -224,12 +237,25 @@ function reveals(root: HTMLElement): () => void {
           ],
           entrance(index, entering.length, scene, curve),
         );
+        playing.add(played);
+        played.addEventListener('finish', () => playing.delete(played), { once: true });
       });
     },
     { rootMargin: '0px 0px -8% 0px' },
   );
+  // Focus landing in what's still entering ends its entrance: a focused link is never transparent.
+  const onFocus = (event: FocusEvent) => {
+    for (const each of playing) {
+      const target = (each.effect as KeyframeEffect | null)?.target;
+      if (target && target.contains(event.target as Node)) each.finish();
+    }
+  };
   for (const element of root.querySelectorAll(REVEAL)) watch.observe(element);
-  return () => watch.disconnect();
+  root.addEventListener('focusin', onFocus);
+  return () => {
+    watch.disconnect();
+    root.removeEventListener('focusin', onFocus);
+  };
 }
 
 export default function FieldEnhancement({
