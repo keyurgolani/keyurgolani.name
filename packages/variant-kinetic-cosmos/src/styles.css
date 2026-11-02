@@ -865,20 +865,16 @@
 }
 
 /*
- * Held still, there's nothing to pause, so the control goes and "Held still"
- * stays (KC-S8). These come after the outlined control and name its slot, so
- * they outrank its display (design re-review r2).
+ * Held still, there's nothing to pause: the control stays, the kit's disabled
+ * one, quiet beside "Held still", which says why (12b; KC-S8 took it away, and
+ * the page's controls are the same under reduced motion as without it). Quiet
+ * by its ink, the stage's quiet one, not by the primitive's fade, so its word
+ * still reads at 4.5:1.
  */
-@media (prefers-reduced-motion: reduce) {
-  [data-variant='kinetic-cosmos'] .kc-pause__control :is(button, [data-ui-slot='action']) {
-    display: none;
-  }
-}
-
-[data-variant='kinetic-cosmos']:is([data-motion='reduced'], [data-motion='static'])
-  .kc-pause__control
-  :is(button, [data-ui-slot='action']) {
-  display: none;
+[data-variant='kinetic-cosmos'] .kc-pause__control [data-ui-slot='action']:disabled {
+  color: var(--layout-ink-quiet);
+  cursor: default;
+  opacity: 1;
 }
 
 /* With no script nothing turns, so there's nothing to pause, and no status to give. */

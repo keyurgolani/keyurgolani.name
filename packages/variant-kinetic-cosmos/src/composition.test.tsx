@@ -522,67 +522,23 @@ test('a fold opens only when the address names its own section or something insi
   assert.equal(hashId(''), '');
 });
 
-/** A selector's specificity, as [ids, classes and attributes, elements]; :is and :not take their heaviest argument. */
-function specificity(selector: string): [number, number, number] {
-  const total: [number, number, number] = [0, 0, 0];
-  const add = ([a, b, c]: readonly number[]) => {
-    total[0] += a!;
-    total[1] += b!;
-    total[2] += c!;
-  };
-  let rest = selector.replace(/:where\((?:[^()]|\([^()]*\))*\)/g, '');
-  rest = rest.replace(/:(?:is|not|has)\(((?:[^()]|\([^()]*\))*)\)/g, (_, inner: string) => {
-    add(inner.split(',').map(specificity).sort(outranks).at(-1)!);
-    return ' ';
-  });
-  const count = (pattern: RegExp, at: 0 | 1 | 2) => {
-    rest = rest.replace(pattern, () => {
-      total[at] += 1;
-      return ' ';
-    });
-  };
-  count(/\[[^\]]*\]/g, 1);
-  count(/::[\w-]+/g, 2);
-  count(/#[\w-]+/g, 0);
-  count(/[.:][\w-]+/g, 1);
-  count(/(?<![\w-])[a-z][\w-]*/gi, 2);
-  return total;
-}
-
-/** Sorts by specificity, lightest first. */
-function outranks(a: readonly number[], b: readonly number[]): number {
-  return a[0]! - b[0]! || a[1]! - b[1]! || a[2]! - b[2]!;
-}
-
-test('held still, the pause control is hidden: each hide rule outranks the outlined control (KC-S8)', () => {
-  assert.deepEqual(specificity("[data-variant='x'] .a :is(button, [b='c'])"), [0, 3, 0]);
-  assert.deepEqual(specificity('.a button::before'), [0, 1, 2]);
-  const rules = [...CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
-    .map((match) => ({
-      selector: match[1]!.trim().replace(/\s+/g, ' '),
-      body: match[2]!,
-      at: match.index!,
-    }))
-    .filter(
-      ({ selector, body }) =>
-        /\.kc-pause__control (?:button|\[data-ui-slot='action'\]|:is\()/.test(selector) &&
-        !selector.includes('::') &&
-        /(?:^|;)\s*display\s*:/.test(body),
-    );
-  const hides = rules.filter(({ body }) => /display\s*:\s*none/.test(body));
-  const shows = rules.filter(({ body }) => !/display\s*:\s*none/.test(body));
-  assert.equal(hides.length, 2);
-  assert.ok(shows.length >= 1);
-  for (const hide of hides) {
-    assert.match(hide.selector, /\[data-ui-slot='action'\]/);
-    for (const show of shows) {
-      const order = outranks(specificity(hide.selector), specificity(show.selector));
-      assert.ok(
-        order > 0 || (order === 0 && hide.at > show.at),
-        `${hide.selector} over ${show.selector}`,
-      );
-    }
-  }
+test('held still, the pause control stays, disabled and quiet: no rule hides it (12b)', () => {
+  const rules = [...CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match) => ({
+    selector: match[1]!.trim().replace(/\s+/g, ' '),
+    body: match[2]!,
+  }));
+  const control = rules.filter(
+    ({ selector }) =>
+      /\.kc-pause__control (?:button|\[data-ui-slot='action'\]|:is\()/.test(selector) &&
+      !selector.includes('::'),
+  );
+  assert.deepEqual(
+    control.filter(({ body }) => /display\s*:\s*none/.test(body)).map(({ selector }) => selector),
+    [],
+  );
+  assert.ok(
+    control.some(({ selector, body }) => selector.endsWith(':disabled') && /color\s*:/.test(body)),
+  );
 });
 
 /** The render input of a work's own page, as the host builds it. */

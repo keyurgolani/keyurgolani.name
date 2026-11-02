@@ -91,9 +91,9 @@ test.describe('reduced motion', () => {
     { annotation },
     async ({ page }) => {
       await load(page);
+      // Held still, the control stays, disabled, beside the status that says why (12b).
       await expect(page.locator('[data-motion-control] button')).toBeDisabled();
-      // Held still, the disabled control doesn't show beside the status (KC-S8).
-      await expect(page.locator('[data-motion-control] button')).toBeHidden();
+      await expect(page.locator('[data-motion-control] button')).toBeVisible();
       await expect(page.locator('[data-motion-control] [role="status"]')).toHaveText(
         'Held still: your device asks for less motion',
       );
