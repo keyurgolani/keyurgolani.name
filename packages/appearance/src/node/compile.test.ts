@@ -1009,11 +1009,94 @@ test("a face's declared range is held to its cmap over Basic Latin (review R2-M1
   }
 });
 
-test('a system-font profile compiles with no fallback face and no preload', () => {
+test('a system-font profile compiles with no preload, and its leading family gets the Linux metric fallbacks right behind it', () => {
   const result = compilePack({ kind: 'typography', manifest: HUMANIST_UI, dir: EMPTY_DIR });
   assert.ok(result.ok);
-  assert.doesNotMatch(new TextDecoder().decode(result.pack.stylesheet!.bytes), /@font-face/);
   assert.equal(result.pack.preload, undefined);
+  const css = new TextDecoder().decode(result.pack.stylesheet!.bytes);
+  // No webfont: every face is a local() fallback.
+  assert.doesNotMatch(css, /url\(/);
+  const trebuchet =
+    'U\\+0020-007E, U\\+00A0-00FF, U\\+2010, U\\+2013-2014, U\\+2018-2019, U\\+201C-201D, U\\+2022, U\\+2026, U\\+20AC, U\\+2122';
+  const face = (family: string, src: string, weight: number, style: string, size: string) =>
+    new RegExp(
+      `@font-face \\{\\n {4}font-family: "humanist-ui Trebuchet MS ${family}";\\n {4}src: ${src};\\n {4}font-weight: ${weight};\\n {4}font-style: ${style};\\n {4}size-adjust: ${size};\\n {4}ascent-override: [\\d.]+%;\\n {4}descent-override: [\\d.]+%;\\n {4}line-gap-override: 0\\.00%;\\n {4}unicode-range: ${trebuchet};\\n {2}\\}`,
+    );
+  // Liberation Sans first, by its Arial-metric names, sized to Trebuchet MS face by face.
+  assert.match(
+    css,
+    face(
+      'Linux Fallback',
+      'local\\("Liberation Sans"\\), local\\("Arimo"\\), local\\("Arial"\\), local\\("ArialMT"\\)',
+      400,
+      'normal',
+      '102\\.67%',
+    ),
+  );
+  assert.match(
+    css,
+    /size-adjust: 102\.67%;\n {4}ascent-override: 91\.46%;\n {4}descent-override: 21\.64%;/,
+  );
+  assert.match(
+    css,
+    face('Linux Fallback', 'local\\("Liberation Sans Bold"\\)[^;]*', 700, 'normal', '99\\.01%'),
+  );
+  assert.match(
+    css,
+    face('Linux Fallback', 'local\\("Liberation Sans Italic"\\)[^;]*', 400, 'italic', '103\\.79%'),
+  );
+  assert.match(
+    css,
+    face('Linux Fallback', 'local\\("Liberation Sans Bold Italic"\\)[^;]*', 700, 'italic', '100\\.63%'),
+  );
+  // Then DejaVu Sans, its own face.
+  assert.match(
+    css,
+    face('DejaVu Fallback', 'local\\("DejaVu Sans"\\), local\\("DejaVuSans"\\)', 400, 'normal', '89\\.43%'),
+  );
+  assert.match(
+    css,
+    face('DejaVu Fallback', 'local\\("DejaVu Sans Bold"\\)[^;]*', 700, 'normal', '82\\.66%'),
+  );
+  assert.equal(css.match(/@font-face/g)!.length, 8);
+  // Right behind Trebuchet MS, ahead of Segoe UI and the generic; the mono stack, which leads with none, as declared.
+  assert.match(
+    css,
+    /--type-body-font-family: "Trebuchet MS", "humanist-ui Trebuchet MS Linux Fallback", "humanist-ui Trebuchet MS DejaVu Fallback", "Segoe UI", sans-serif;/,
+  );
+  assert.match(
+    css,
+    /--type-code-font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;/,
+  );
+});
+
+test('accessible-reading gets the Linux metric fallbacks sized to Verdana, without the U+2010 Verdana lacks, ahead of Tahoma', () => {
+  const dir = fileURLToPath(shippedDir('appearance-typography', 'accessible-reading'));
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'),
+  ) as TypographyManifest;
+  const result = compilePack({ kind: 'typography', manifest, dir });
+  assert.ok(result.ok);
+  const css = new TextDecoder().decode(result.pack.stylesheet!.bytes);
+  const sizes = [
+    ...css.matchAll(/font-family: "accessible-reading Verdana ([^"]+)";[^}]*?font-weight: (\d+);\s*font-style: (\w+);\s*size-adjust: ([\d.]+%);/g),
+  ].map(([, family, weight, style, size]) => `${family} ${weight} ${style} ${size}`);
+  assert.deepEqual(sizes, [
+    'Linux Fallback 400 normal 114.99%',
+    'Linux Fallback 700 normal 118.78%',
+    'Linux Fallback 400 italic 114.98%',
+    'Linux Fallback 700 italic 118.77%',
+    'DejaVu Fallback 400 normal 100.17%',
+    'DejaVu Fallback 700 normal 99.17%',
+    'DejaVu Fallback 400 italic 100.16%',
+    'DejaVu Fallback 700 italic 99.16%',
+  ]);
+  assert.match(css, /unicode-range: U\+0020-007E, U\+00A0-00FF, U\+2013-2014,/);
+  assert.doesNotMatch(css, /U\+2010/);
+  assert.match(
+    css,
+    /--type-display-font-family: Verdana, "accessible-reading Verdana Linux Fallback", "accessible-reading Verdana DejaVu Fallback", Tahoma, "Segoe UI", sans-serif;/,
+  );
 });
 
 test('namespacedStack moves shipped families ahead and leaves the fallbacks in order', () => {
