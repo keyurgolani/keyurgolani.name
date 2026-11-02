@@ -706,6 +706,87 @@ for (const width of [320, 390]) {
   });
 }
 
+// A work whose button says a long address (its url, with no label): at 320 the button wraps at the
+// address's own points (Breakable: before each dot or slash), never inside a word and never past
+// its poster or the page, whatever the face; under Linux's wider fallback the fixture's own
+// "ROWAN.TEST/PROJECT" ran 3 px past a 320 page (run 41433352108). A second server on the
+// fixture with that address made longer, in a context of its own that reaches that server alone.
+test.describe('at 320px, a work’s button that says a long address', () => {
+  const LONG = 'https://rowan.test/projects/observatory/casestudy';
+  let other: { origin: string; stop: () => Promise<void> } | undefined;
+  let dir: string | undefined;
+
+  test.beforeAll(async () => {
+    test.setTimeout(120_000);
+    dir = mkdtempSync(path.join(tmpdir(), 'rg-address-'));
+    const text = readFileSync(FIXTURE.files.portfolio, 'utf8');
+    const long = text.replace(/^    url: https:\/\/rowan\.test\/project$/m, `    url: ${LONG}`);
+    if (long === text) throw new Error('The complete fixture no longer gives its work that url');
+    const portfolio = path.join(dir, 'portfolio.yml');
+    writeFileSync(portfolio, long);
+    other = await startApp({ ...APP_OPTIONS, portfolio });
+  });
+
+  test.afterAll(async () => {
+    await other?.stop();
+    if (dir) rmSync(dir, { recursive: true, force: true });
+  });
+
+  test(
+    'it wraps by the address’s pieces, each whole, inside its poster, and nothing scrolls sideways',
+    { annotation: CASE_ANNOTATION },
+    async ({ browser }) => {
+      const origin = other!.origin;
+      const context = await browser.newContext({
+        viewport: { width: 320, height: 844 },
+        hasTouch: true,
+        isMobile: true,
+        reducedMotion: 'reduce',
+      });
+      try {
+        await context.route('**/*', (route) =>
+          new URL(route.request().url()).origin === origin
+            ? route.continue()
+            : route.abort('blockedbyclient'),
+        );
+        const page = await context.newPage();
+        await page.goto(`${origin}${CASE}`, { waitUntil: 'networkidle' });
+        await page.evaluate(() => document.fonts.ready);
+        const button = page.locator('.rg-act .rg-btn', { hasText: /observatory/i });
+        await expect(button).toHaveCount(1);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+        // The button's block stays inside its poster.
+        const past = await page.locator('.rg-poster .rg-act').evaluateAll((acts) =>
+          acts
+            .filter((act) => {
+              const box = act.getBoundingClientRect();
+              const poster = act.closest('.rg-poster')!.getBoundingClientRect();
+              return box.left < poster.left - 0.5 || box.right > poster.right + 0.5;
+            })
+            .map((act) => act.textContent),
+        );
+        expect(past).toEqual([]);
+        // Each piece of the address whole and in its cell; the address takes more than one line.
+        const scan = await page.evaluate(brokenWords, { breaks: true });
+        expect(scan.measured.some((word) => word.startsWith('observatory'))).toBe(true);
+        expect(scan.found).toEqual([]);
+        // The address alone, its first child: the mark is a box of its own beside it.
+        const lines = await button.evaluate((link) => {
+          const range = document.createRange();
+          range.setStart(link, 0);
+          range.setEnd(link, 1);
+          return new Set(
+            [...range.getClientRects()].filter((r) => r.width > 0.5).map((r) => Math.round(r.top)),
+          ).size;
+        });
+        expect(lines).toBeGreaterThan(1);
+      } finally {
+        await context.close();
+      }
+    },
+  );
+});
+
 // A work's own page, /work/<slug> (phase 2): its own field, under home's rules.
 test.describe('a work’s own page', () => {
   test(

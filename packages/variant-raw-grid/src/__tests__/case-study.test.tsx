@@ -179,6 +179,39 @@ test('a bare case: no stickers, no fact sheet, no ticker, no next work, and stil
   assert.deepEqual(checkOutline(html, input.ids, {}), []);
 });
 
+test('a button that says its address wraps where an address does; a labelled one stays as it is', () => {
+  const input = inputFor(
+    pairOf({
+      schemaVersion: 3,
+      locale: 'en',
+      direction: 'ltr',
+      identity: { name: 'Rowan Case' },
+      works: [
+        {
+          id: 'atlas',
+          slug: 'atlas',
+          title: 'Atlas',
+          medium: 'system',
+          url: 'https://rowan.test/projects/atlas',
+          links: [{ label: 'Atlas.js docs', url: 'https://docs.rowan.test/atlas' }],
+          caseStudy: { challenge: 'Hard.' },
+        },
+      ],
+      sections: [{ kind: 'works', id: 'work', title: 'Work', items: ['atlas'] }],
+    }),
+    { route: { route: 'work', slug: 'atlas' } },
+  );
+  const html = renderInput(input);
+  const buttons = [
+    ...html.matchAll(/<a class="rg-go rg-btn"[^>]*>((?:(?!<\/a>)[\s\S])*)<\/a>/g),
+  ].map((match) => match[1]!);
+  assert.equal(buttons.length, 2);
+  // Before each dot and slash, so a narrow poster never splits a word of it (run 41433352108).
+  assert.match(buttons[0]!, /^<span>rowan<wbr\/>.test<wbr\/>\/projects<wbr\/>\/atlas<\/span>/);
+  assert.match(buttons[1]!, /^Atlas\.js docs<span class="rg-out"/);
+  assert.equal(count(buttons[1]!, /<wbr/g), 0);
+});
+
 test('decisions with no alternative anywhere drop the column: no dash, no label, no none recorded', () => {
   const input = inputFor(
     pairOf({
