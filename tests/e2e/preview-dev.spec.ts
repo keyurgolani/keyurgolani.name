@@ -19,8 +19,11 @@ const { VARIANTS } =
 
 const PREVIEW = { type: 'route', description: '/preview/dev/[variant]/[fixture]' };
 
-// One dev server for the file: next dev keeps its output in apps/web/.next/dev.
-test.describe.configure({ mode: 'serial', timeout: 300_000 });
+// One dev server at a time: next dev keeps its output in apps/web/.next/dev,
+// so the file's tests run in order in one worker (default mode, out of the
+// project's fullyParallel), not serial: a composition that fails restarts the
+// worker and the dev server, and the rest still run and report their own.
+test.describe.configure({ mode: 'default', timeout: 300_000 });
 
 let app: Awaited<ReturnType<typeof startApp>>;
 test.beforeAll(async () => {
@@ -53,69 +56,78 @@ async function open(page: Page, path: string) {
   return response;
 }
 
-test(
-  'every #5 fixture renders on the dev route with the preview headers, no CSP violation, and no host CSS',
-  { annotation: [PREVIEW] },
-  async ({ page }) => {
-    await recordViolations(page);
-    expect(VARIANTS.length).toBeGreaterThan(0);
-    expect(CONTRACT_FIXTURE_NAMES.length).toBeGreaterThan(10);
-    for (const { manifest } of VARIANTS) {
-      for (const fixture of CONTRACT_FIXTURE_NAMES) {
-        const path = `/preview/dev/${manifest.id}/${fixture}`;
-        const response = await open(page, path);
-        expect(response?.status(), path).toBe(200);
-        const policies = (await response!.headersArray()).filter(
-          ({ name }) => name.toLowerCase() === 'content-security-policy',
-        );
-        expect(policies.length, `${path}: CSP headers`).toBe(1);
-        const csp = policies[0]!.value;
-        expect(csp, path).toMatch(devPolicy(app.origin));
-        const headers = response!.headers();
-        for (const [name, value] of Object.entries(PREVIEW_HEADERS)) {
-          // next dev sends its own Cache-Control on every page after the
-          // app's, no-store since 16.4, so a dev page never stays in a cache;
-          // a production build sends private, no-store, which the profile
-          // matrix checks.
-          const expected = name === 'cache-control' ? 'no-store' : value;
-          expect(headers[name], `${path}: ${name}`).toBe(expected);
-        }
-        // The composition the route names, in the preview document.
-        await expect(page.locator('[data-variant]'), path).toHaveAttribute(
-          'data-variant',
-          manifest.id,
-        );
-        const found = await inventory(page, nonceOf(csp));
-        expect(found.sentinel, `${path}: the sentinel`).toBe('');
-        expect(
-          found.selectors.filter((selector) => HOST_SELECTOR.test(selector)),
-          `${path}: host CSS`,
-        ).toEqual([]);
-        expect(
-          found.selectors.some((selector) => selector.includes('[data-ui-slot="skip-link"]')),
-          "the skip link's focus ring",
-        ).toBe(true);
-        expect(found.forms + found.passwordFields, `${path}: Studio's forms`).toBe(0);
-        // No theme script: a preview document has none.
-        expect(
-          await page.evaluate(() => document.documentElement.dataset.theme ?? null),
-          `${path}: the theme script`,
-        ).toBeNull();
-        expect(await page.locator('meta[name="robots"]').getAttribute('content'), path).toBe(
-          'noindex, nofollow',
-        );
-        expect(await violations(page), `${path}: CSP violations`).toEqual([]);
+/** Every #5 fixture of `id` on the dev route, each fixture its own step, so a failure names it. */
+async function walk(page: Page, id: string) {
+  await recordViolations(page);
+  for (const fixture of CONTRACT_FIXTURE_NAMES) {
+    const path = `/preview/dev/${id}/${fixture}`;
+    await test.step(fixture, async () => {
+      const response = await open(page, path);
+      expect(response?.status(), path).toBe(200);
+      const policies = (await response!.headersArray()).filter(
+        ({ name }) => name.toLowerCase() === 'content-security-policy',
+      );
+      expect(policies.length, `${path}: CSP headers`).toBe(1);
+      const csp = policies[0]!.value;
+      expect(csp, path).toMatch(devPolicy(app.origin));
+      const headers = response!.headers();
+      for (const [name, value] of Object.entries(PREVIEW_HEADERS)) {
+        // next dev sends its own Cache-Control on every page after the
+        // app's, no-store since 16.4, so a dev page never stays in a cache;
+        // a production build sends private, no-store, which the profile
+        // matrix checks.
+        const expected = name === 'cache-control' ? 'no-store' : value;
+        expect(headers[name], `${path}: ${name}`).toBe(expected);
       }
-    }
-    // next dev asks npm for its latest version once hot reloading connects
-    // (hot-reloader-shared-utils.js), which the egress trap refuses. Nothing
-    // the app does may try to go out.
-    expect(
-      app.egress().filter((target) => target !== 'registry.npmjs.org:443'),
-      'requests the dev server tried to send out',
-    ).toEqual([]);
-  },
-);
+      // The composition the route names, in the preview document.
+      await expect(page.locator('[data-variant]'), path).toHaveAttribute('data-variant', id);
+      const found = await inventory(page, nonceOf(csp));
+      expect(found.sentinel, `${path}: the sentinel`).toBe('');
+      expect(
+        found.selectors.filter((selector) => HOST_SELECTOR.test(selector)),
+        `${path}: host CSS`,
+      ).toEqual([]);
+      expect(
+        found.selectors.some((selector) => selector.includes('[data-ui-slot="skip-link"]')),
+        "the skip link's focus ring",
+      ).toBe(true);
+      expect(found.forms + found.passwordFields, `${path}: Studio's forms`).toBe(0);
+      // No theme script: a preview document has none.
+      expect(
+        await page.evaluate(() => document.documentElement.dataset.theme ?? null),
+        `${path}: the theme script`,
+      ).toBeNull();
+      expect(await page.locator('meta[name="robots"]').getAttribute('content'), path).toBe(
+        'noindex, nofollow',
+      );
+      expect(await violations(page), `${path}: CSP violations`).toEqual([]);
+    });
+  }
+  // next dev asks npm for its latest version once hot reloading connects
+  // (hot-reloader-shared-utils.js), which the egress trap refuses. Nothing
+  // the app does may try to go out.
+  expect(
+    app.egress().filter((target) => target !== 'registry.npmjs.org:443'),
+    'requests the dev server tried to send out',
+  ).toEqual([]);
+}
+
+test('this checkout registers variants and the contract has its fixtures', () => {
+  expect(VARIANTS.length).toBeGreaterThan(0);
+  expect(CONTRACT_FIXTURE_NAMES.length).toBeGreaterThan(10);
+});
+
+// One test a composition, each walking every fixture (the walk of them all
+// in one test ran past its 5 minutes on CI's slower runner, run 41433352108).
+for (const { manifest } of VARIANTS) {
+  test(
+    `${manifest.id}: every #5 fixture renders on the dev route with the preview headers, no CSP violation, and no host CSS`,
+    { annotation: [PREVIEW] },
+    async ({ page }) => {
+      await walk(page, manifest.id);
+    },
+  );
+}
 
 test(
   'the dev route sets the environment its query asks for on the presentation boundary, and a variant, fixture, or value that names nothing gets the 404 an unknown path gets',
