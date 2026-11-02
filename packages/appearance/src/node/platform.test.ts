@@ -244,12 +244,17 @@ test("under prefers-contrast: more and prefers-reduced-transparency: reduce, the
       color: 'var(--color-text-primary)',
     });
     // Room on that ground for a ring's width past each part's ring, so a focused summary's ring
-    // lies whole on it, not on what's behind it.
+    // lies whole on it, not on what's behind it; and the ring in that ground's own ink, the
+    // control's text, not a focus color inherited from a region around it (K-2's on-accent was
+    // white on the plate in Terra Field's footer: 0 of 576 pixels at 3:1 under contrast-more).
     assert.deepEqual(
       Object.fromEntries(
         declarations('    [data-appearance-boundary] [data-ui-slot="appearance-control"]', within),
       ),
-      { padding: 'calc(2 * var(--ui-focus-width) + max(0px, var(--ui-focus-offset)))' },
+      {
+        padding: 'calc(2 * var(--ui-focus-width) + max(0px, var(--ui-focus-offset)))',
+        '--color-focus': 'var(--color-text-primary)',
+      },
     );
     // In the accessibility layer, past every pack and composition.
     assert.ok(css.indexOf(within) > css.indexOf('@layer accessibility {'), within);

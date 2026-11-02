@@ -210,9 +210,14 @@ const CONTROL_SURFACE = {
  * The ground's room round the control's parts for their focus rings, which draw outside each
  * part at the language's offset: a ring's width past the ring, so it lies whole on the opaque
  * ground and not on what's behind (Aurora's summary measured a 2px ring's perimeter short there).
+ * And the ring in that ground's own ink, its text-primary, which reads on surface-default past
+ * the ring's 3:1: a focus color the control inherits from a region round it (K-2's surface hook)
+ * is that region's pair, not the plate's (on-accent was white on the plate in Terra Field's
+ * accent footer, 0 of 576 changed pixels at 3:1 under prefers-contrast: more).
  */
 const CONTROL_RING_ROOM = {
   padding: 'calc(2 * var(--ui-focus-width) + max(0px, var(--ui-focus-offset)))',
+  '--color-focus': 'var(--color-text-primary)',
 };
 
 /**
