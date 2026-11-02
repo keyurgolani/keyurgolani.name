@@ -67,6 +67,11 @@ export function Out({
   );
 }
 
+/** The board's column lines, behind the fields of main or the foot: decoration, a box of its own. */
+export function Lines() {
+  return <div className="rg-lines" aria-hidden="true" />;
+}
+
 /**
  * An address as words that wrap where an address does: after the @ and
  * before each dot or slash, so a narrow cell never splits a word of it

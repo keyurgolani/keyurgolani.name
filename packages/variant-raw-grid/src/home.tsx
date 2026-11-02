@@ -6,6 +6,7 @@ import { RawGridClient } from './enhancements/raw-grid';
 import { bandFrame } from './frame';
 import { homeModel } from './model';
 import { Opening } from './opening/opening';
+import { Lines } from './parts';
 import { renderersFor } from './renderers';
 import { Sheet } from './sheet';
 
@@ -26,6 +27,7 @@ export function HomePage({ input }: HomePageProps) {
       <HeaderRow input={input} model={model} />
       {/* Focusable, so the host's skip link moves focus here, not only the view. */}
       <main id={input.ids.main} className="rg-main" tabIndex={-1}>
+        <Lines />
         <Opening input={input} model={model} />
         {model.sheets.map((sheet) => (
           <Sheet key={sheet.id} sheet={sheet} input={input} model={model} band={band} />

@@ -38,7 +38,7 @@ import {
   workHref,
 } from './model';
 import { Stickers } from './opening/poster';
-import { caseOf, Checks, Fit, Line, linkText, Out, Words } from './parts';
+import { caseOf, Checks, Fit, Line, Lines, linkText, Out, Words } from './parts';
 import { RuledTable } from './renderers/ruled-table';
 
 // A work's own page, /work/<slug> (phase 2): the case pasted up as a poster
@@ -476,6 +476,7 @@ export function CaseStudyPage({ input, work, outline }: CaseStudyPageProps) {
         rest={[label, 'Case study']}
       />
       <main id={input.ids.main} className="rg-main" tabIndex={-1}>
+        <Lines />
         <article
           className="rg-casepage"
           aria-labelledby={titleId}

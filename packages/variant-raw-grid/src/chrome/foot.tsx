@@ -3,7 +3,7 @@ import { renderSection, VisitorControlSlot } from '@portfolio/kit/sections';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
 import { chromeIds, type HomeModel } from '../model';
 import { foldedLast } from '../fold';
-import { Words } from '../parts';
+import { Lines, Words } from '../parts';
 import { renderersFor } from '../renderers';
 import { inkFrame } from '../renderers/contact';
 
@@ -163,6 +163,7 @@ export function Foot({
   const ink = { renderers: renderersFor({ model }), Frame: inkFrame(input) };
   return (
     <footer className="rg-foot">
+      <Lines />
       <SiteIndex input={input} model={model} home={home} lead={lead} />
       {closing ? renderSection(closing, input, ink, { level: 2 }) : null}
       <Colophon input={input} model={model} />

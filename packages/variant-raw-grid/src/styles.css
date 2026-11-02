@@ -326,8 +326,9 @@
   isolation: isolate;
 }
 
-[data-variant='raw-grid'] :is(.rg-main, .rg-foot)::before {
-  content: '';
+/* A box of its own, never main's or the foot's ::before: axe reads no text's ground through an
+   absolutely placed pseudo-element with one, and sent every text to the quality cell's sampler. */
+[data-variant='raw-grid'] .rg-lines {
   position: absolute;
   inset-block: 0;
   inset-inline: var(--layout-x);
