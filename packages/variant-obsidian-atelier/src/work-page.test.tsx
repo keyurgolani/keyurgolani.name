@@ -163,6 +163,13 @@ const caseInput = (portfolio: unknown = CASE, idPrefix = '') =>
     idPrefix,
   );
 
+test("a work's page carries the no-script mark first in its main, as home does, so its installation is there at once with no script", () => {
+  assert.match(
+    html(caseInput()),
+    /<main [^>]*class="oa-main oa-casepage"[^>]*><noscript><i data-oa-nojs=""><\/i><\/noscript>/,
+  );
+});
+
 test("every contract fixture's routed works: the outline holds, every id once, and the page is the composition's own", () => {
   let pages = 0;
   for (const { name } of CONTRACT_FIXTURES) {

@@ -1091,6 +1091,32 @@ test("a title-size link's box reaches under its hanging rule, so the focus ring'
   );
 });
 
+test('with no script the entrance is there at once: nothing in it waits at opacity 0 or unveiled, and no scripting query', () => {
+  // The no-JavaScript rows audit with script on for axe, which a scripting query would flip.
+  assert.doesNotMatch(CSS, /@media[^{]*\bscripting\b/);
+  // The page says it was read with no script by an element only the parser makes, in <noscript>.
+  assert.match(
+    html(sampleInput()),
+    /<main [^>]*class="oa-main"[^>]*><noscript><i data-oa-nojs=""><\/i><\/noscript>/,
+  );
+  // The mark is never a box, nor a cell of the main's layout.
+  assert.match(CSS, /\.oa-main > :has\(> \[data-oa-nojs\]\) \{\s*display: none;/);
+  // Each rule that plays the entrance's keyframes plays them only where the mark isn't.
+  const entrance = ['obsidian-atelier-light', 'obsidian-atelier-unveil', 'obsidian-atelier-settle'];
+  let uses = 0;
+  for (const name of entrance)
+    for (const use of CSS.matchAll(new RegExp(`animation(?:-name)?:[^;]*\\b${name}\\b`, 'g'))) {
+      uses++;
+      const prelude = CSS.slice(CSS.lastIndexOf('}', use.index!) + 1, use.index!);
+      assert.match(
+        prelude,
+        /\.oa-main:not\(:has\(> \* > \[data-oa-nojs\]\)\)/,
+        `${name}: ${prelude}`,
+      );
+    }
+  assert.ok(uses >= 3, `${uses}`);
+});
+
 test('print opens every fold and keeps the chrome once: Index static, the marker and its strip not printed', () => {
   const print = CSS.slice(CSS.indexOf('@media print'));
   assert.match(print, /\.oa-chrome, \.oa-chrome__pin\) \{\s*position: static;/);

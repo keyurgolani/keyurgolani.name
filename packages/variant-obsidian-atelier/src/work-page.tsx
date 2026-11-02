@@ -20,7 +20,7 @@ import { Chrome } from './chrome';
 import { NavLandmark } from './client/nav-landmark';
 import { atelierComposition, Colophon } from './home';
 import { atelierModel, imagesOf, mediumLabel, type AtelierModel, type Room } from './model';
-import { addressOf, homeHref, ownId, periodWords, Words, yearOf } from './parts';
+import { addressOf, homeHref, NoScriptMark, ownId, periodWords, Words, yearOf } from './parts';
 
 // A work's own page, /work/<slug> (redesign, stream C): the case, hung as
 // a room of its own, in Atelier's anatomy rather than the kit's parts:
@@ -653,6 +653,7 @@ export function CaseStudyPage({ input, work, outline }: CaseStudyPageProps) {
         lang={work.lang}
         data-work-id={work.id}
       >
+        <NoScriptMark />
         <article aria-labelledby={ownId(input, 'case-title')}>
           {/* The installation view leads: the work on its wall, its label at its foot, the room's title on the floor. */}
           <section

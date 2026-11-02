@@ -38,7 +38,7 @@ import {
   type Gallery,
   type Hall,
 } from './model';
-import { homeHref, numbers, ownId, Words } from './parts';
+import { homeHref, NoScriptMark, numbers, ownId, Words } from './parts';
 import { destination } from './navigation';
 import { entranceAnchor, hasPlan, Plan } from './plan';
 import { RoomView } from './room';
@@ -412,6 +412,7 @@ export function HomePage({ input }: HomePageProps) {
       <Chrome input={input} model={model} />
       {/* Focusable, so the host's skip link moves focus here, not only the view. */}
       <main id={ids.main} className="oa-main" tabIndex={-1}>
+        <NoScriptMark />
         <Entrance
           input={input}
           model={model}

@@ -140,6 +140,78 @@ test(
   },
 );
 
+for (const width of [1440, 1024]) {
+  test(
+    `a wall room on either side hangs its work and label on its own wall, inside the window, at ${width} and at 200% text`,
+    { annotation: [{ type: 'route', description: '/' }, READ_ONLY], tag },
+    async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      for (const text of [1, 2]) {
+        await load(page, '/');
+        if (text !== 1)
+          await page.evaluate(
+            (scale) =>
+              document.documentElement.style.setProperty(
+                'font-size',
+                `${scale * 100}%`,
+                'important',
+              ),
+            text,
+          );
+        const rooms = await page.evaluate(() =>
+          [...document.querySelectorAll<HTMLElement>('.oa-room--wall')].map((room) => {
+            const box = (selector: string) => room.querySelector(selector)!.getBoundingClientRect();
+            const [wall, hang, label] = [box('.oa-room__wall'), box('.oa-hang'), box('.oa-label')];
+            return {
+              room: `${room.id} (${room.dataset.side})`,
+              // The hang lies on its wall, and the label ends inside the window.
+              hangOnWall: hang.left >= wall.left - 1 && hang.right <= wall.right + 1,
+              labelPastWindow: Math.round(label.right - document.documentElement.clientWidth),
+              labelWidth: Math.round(label.width),
+              labelReads: room.querySelector<HTMLElement>('.oa-label')!.scrollWidth,
+            };
+          }),
+        );
+        expect(rooms.map((room) => room.room.replace(/.* /, '')).sort()).toContain('(end)');
+        for (const room of rooms) {
+          const at = `${room.room} at ${width}, ${text * 100}% text`;
+          expect(room.hangOnWall, `${at}: the hang on its wall`).toBe(true);
+          expect(room.labelPastWindow, `${at}: the label's end`).toBeLessThanOrEqual(0);
+          expect(room.labelReads, `${at}: the label's words`).toBeLessThanOrEqual(
+            room.labelWidth + 1,
+          );
+        }
+      }
+    },
+  );
+}
+
+test(
+  'on a phone each checklist entry keeps its number in a box as wide as the number reads',
+  { annotation: [{ type: 'route', description: '/' }, READ_ONLY], tag },
+  async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await load(page, '/');
+    const numbers = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>('.oa-checktable tbody .oa-checktable__no')]
+        .filter((cell) => cell.checkVisibility())
+        .map((cell) => ({
+          row: cell.closest('tr')?.id ?? '',
+          width: Math.round(cell.getBoundingClientRect().width * 10) / 10,
+          reads: cell.scrollWidth,
+        })),
+    );
+    expect(numbers.length).toBeGreaterThanOrEqual(2);
+    // The table's 1% shrink-to-fit width is a table cell's; in the phone's grid row it's a sliver.
+    // scrollWidth is whole pixels, so a pixel's rounding is allowed.
+    for (const number of numbers)
+      expect(
+        number.width,
+        `${number.row}: ${number.width}px for ${number.reads}px`,
+      ).toBeGreaterThanOrEqual(number.reads - 1);
+  },
+);
+
 test(
   'past five windows the running head stays in the window as a plate beside Index',
   { annotation: [{ type: 'route', description: '/' }, READ_ONLY], tag },

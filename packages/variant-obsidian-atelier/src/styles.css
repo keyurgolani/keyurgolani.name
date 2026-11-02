@@ -1887,8 +1887,10 @@
     text-align: start;
   }
 
+  /* Its number is as wide as it reads: the table's 1% shrink-to-fit is a cell's, a sliver in a grid row. */
   [data-variant='obsidian-atelier'] .oa-checktable .oa-checktable__no {
     grid-row: 1 / span 3;
+    inline-size: auto;
   }
 
   [data-variant='obsidian-atelier'] .oa-checktable tbody :is(td, th):not(.oa-checktable__no) {
@@ -2037,8 +2039,12 @@
     padding-inline-end: var(--space-m);
   }
 
+  /*
+   * On the end side the wall starts at the page's col 5, and its subgrid counts its col lines from
+   * there: its first is the page's col 5, so the floor and the hang start at col 1, not col 5.
+   */
   [data-variant='obsidian-atelier'] .oa-room--wall[data-side='end'] .oa-room__wall > .oa-wallfloor {
-    grid-column: col 5 / span 8;
+    grid-column: col 1 / span 8;
   }
 
   [data-variant='obsidian-atelier'] .oa-room--wall {
@@ -2098,7 +2104,7 @@
   }
 
   [data-variant='obsidian-atelier'] .oa-room--wall[data-side='end'] .oa-hang {
-    grid-column: col 5 / span 8;
+    grid-column: col 1 / span 8;
   }
 
   [data-variant='obsidian-atelier'] .oa-room--wall[data-side='end'] .oa-side {
@@ -2756,17 +2762,25 @@
 /*
  * Motion runs only with full motion on both sides: the visitor's system
  * asks for none of it reduced, and the site's own motion policy, the
- * boundary's data-motion, is neither reduced nor static.
+ * boundary's data-motion, is neither reduced nor static. The entrance plays
+ * only where the main's noscript mark isn't (NoScriptMark): read with no
+ * script, the work and its label are there at once, never held hidden.
  */
+[data-variant='obsidian-atelier'] .oa-main > :has(> [data-oa-nojs]) {
+  display: none;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   /* The entrance: the light comes up, the work is unveiled top-down, the label settles. */
   [data-variant='obsidian-atelier']:not([data-motion='reduced'], [data-motion='static'])
+    .oa-main:not(:has(> * > [data-oa-nojs]))
     :is(.oa-entrance, .oa-installation)
     .oa-hang__work::before {
     animation: obsidian-atelier-light var(--motion-scene) var(--motion-curve) backwards;
   }
 
   [data-variant='obsidian-atelier']:not([data-motion='reduced'], [data-motion='static'])
+    .oa-main:not(:has(> * > [data-oa-nojs]))
     :is(.oa-entrance, .oa-installation)
     .oa-hang__work {
     animation: obsidian-atelier-unveil var(--motion-scene) var(--motion-curve)
@@ -2774,6 +2788,7 @@
   }
 
   [data-variant='obsidian-atelier']:not([data-motion='reduced'], [data-motion='static'])
+    .oa-main:not(:has(> * > [data-oa-nojs]))
     :is(.oa-entrance, .oa-installation)
     .oa-label {
     animation: obsidian-atelier-settle var(--motion-feedback) var(--motion-curve)

@@ -13,6 +13,23 @@ export const ownId = (input: Pick<VariantRenderInput, 'ids'>, name: string) =>
   `${input.ids.prefix}oa--${name}`;
 
 /**
+ * The main's first child: an empty mark inside <noscript>. The parser makes it an element only
+ * when it reads the page with scripting off; with scripting on it's the noscript's text. The
+ * entrance plays only where the mark isn't, so a page read with no script shows its entrance at
+ * once, and a visitor with JavaScript sees it play from the first paint. Never a scripting query:
+ * the quality runner's no-JavaScript rows audit with script on for axe, which one would flip.
+ * Empty, it draws nothing, and the stylesheet keeps its holder out of the layout, so it takes
+ * no hidden attribute: the page with no script hides nothing.
+ */
+export function NoScriptMark() {
+  return (
+    <noscript>
+      <i data-oa-nojs="" />
+    </noscript>
+  );
+}
+
+/**
  * A link to an element of the home page: its fragment on home, and home's
  * address with it on a work's own page, so the chrome, the plan, and the
  * colophon reach the same places from either.
