@@ -13,6 +13,7 @@ import {
   LEADING_FAMILIES,
   leadingFamily,
   LINUX_FACES,
+  LINUX_FONTS,
   mappedCodePoints,
   readFontMetrics,
   stackClass,
@@ -393,6 +394,29 @@ test("each Linux face a leading family's fallback stands on has its file's width
   }
 });
 
+test("each LINUX_FONTS face has its file's width where Linux installs it, and goes by Linux's names alone", (t) => {
+  let measured = 0;
+  for (const font of LINUX_FONTS) {
+    for (const face of [font, font.bold, font.italic, font.boldItalic]) {
+      assert.ok(face, font.name);
+      // No macOS name, and none SYSTEM_FONTS' macOS faces go by: never reached where those are installed.
+      assert.deepEqual(face.mac, [], font.name);
+      assert.ok(
+        face.elsewhere.every((name) => /^(Liberation|Arimo|Tinos|Cousine|DejaVu)/.test(name)),
+        font.name,
+      );
+      if (!fs.existsSync(face.file)) continue;
+      const read = readFontMetrics(new Uint8Array(fs.readFileSync(face.file)), face.file);
+      const error =
+        read.latinWidth! / read.unitsPerEm / (face.metrics.latinWidth / face.metrics.unitsPerEm) -
+        1;
+      assert.ok(Math.abs(error) < 0.002, `${face.file}: ${(error * 100).toFixed(2)}%`);
+      measured += 1;
+    }
+  }
+  if (measured === 0) t.skip('no Liberation or DejaVu files here to read');
+});
+
 test('a leading family is the first entry of a stack, by any name, unless the pack ships it', () => {
   assert.equal(leadingFamily('"Trebuchet MS", "Segoe UI", sans-serif')?.name, 'Trebuchet MS');
   assert.equal(leadingFamily("'trebuchet ms', sans-serif")?.name, 'Trebuchet MS');
@@ -557,6 +581,15 @@ const PICKS: Record<keyof typeof PLAN_FACES, [first: string, second: string, pla
   'Space Grotesk': ['Avenir Next', 'Verdana', -2.03],
 };
 
+/** The third alias, the class's Liberation face, for a family whose first two have no face a stock Linux has. */
+const THIRD: Partial<Record<keyof typeof PLAN_FACES, string>> = {
+  Newsreader: 'Liberation Serif',
+  'IBM Plex Mono': 'Liberation Mono',
+  'JetBrains Mono': 'Liberation Mono',
+  Fraunces: 'Liberation Serif',
+  'Space Grotesk': 'Liberation Sans',
+};
+
 test("each family's fallbacks are the system faces whose width per x-height fits best (packs-plan §3.4)", () => {
   for (const [family, face] of Object.entries(PLAN_FACES) as [
     keyof typeof PLAN_FACES,
@@ -572,7 +605,7 @@ test("each family's fallbacks are the system faces whose width per x-height fits
     const [first, second, planError] = PICKS[family];
     assert.deepEqual(
       aliases.map(({ face: system }) => system.name),
-      [first, second],
+      [first, second, ...(THIRD[family] ? [THIRD[family]] : [])],
       family,
     );
     // The plan's best-fit error, from its own measurements: within a third of a point.
@@ -589,8 +622,9 @@ test("each family's fallbacks are the system faces whose width per x-height fits
       ),
     );
     assert.equal(Math.abs(aliases[0]!.xHeightWidthError!).toFixed(9), best.toFixed(9), family);
-    // Two aliases at most, four local() names each, the second none of the first's.
-    assert.ok(aliases.length <= 2);
+    // Three aliases at most, four local() names each, the second none of the first's, the third Linux's alone.
+    assert.ok(aliases.length <= 3);
+    if (aliases[2]) assert.deepEqual(aliases[2].face.mac, [], family);
     for (const alias of aliases) assert.ok(alias.locals.length >= 1 && alias.locals.length <= 4);
     assert.deepEqual(
       aliases[1]!.locals.filter((local) => aliases[0]!.locals.includes(local)),
@@ -660,11 +694,11 @@ const REAL: [family: string, file: string, kind: 'sans' | 'serif' | 'mono', pick
   // Archivo's variable file defaults to weight 600 (0.458 per em); at 400, as the compiler
   // picks it, it's 0.441, as the static face capsize measured for the plan, and Tahoma fits.
   ['Archivo', '@fontsource-variable/archivo/files/archivo-latin-wght-normal.woff2', 'sans', ['Tahoma', 'Arial']],
-  ['Newsreader', '@fontsource/newsreader/files/newsreader-latin-400-normal.woff2', 'serif', ['Palatino', 'Palatino']],
-  ['IBM Plex Mono', '@ibm/plex-mono/fonts/split/woff2/IBMPlexMono-Regular-Latin1.woff2', 'mono', ['Menlo', 'Menlo']],
-  ['JetBrains Mono', '@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2', 'mono', ['Menlo', 'Menlo']],
-  ['Fraunces', '@fontsource/fraunces/files/fraunces-latin-400-normal.woff2', 'serif', ['Palatino', 'Palatino']],
-  ['Space Grotesk', '@fontsource-variable/space-grotesk/files/space-grotesk-latin-wght-normal.woff2', 'sans', ['Avenir Next', 'Verdana']],
+  ['Newsreader', '@fontsource/newsreader/files/newsreader-latin-400-normal.woff2', 'serif', ['Palatino', 'Palatino', 'Liberation Serif']],
+  ['IBM Plex Mono', '@ibm/plex-mono/fonts/split/woff2/IBMPlexMono-Regular-Latin1.woff2', 'mono', ['Menlo', 'Menlo', 'Liberation Mono']],
+  ['JetBrains Mono', '@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2', 'mono', ['Menlo', 'Menlo', 'Liberation Mono']],
+  ['Fraunces', '@fontsource/fraunces/files/fraunces-latin-400-normal.woff2', 'serif', ['Palatino', 'Palatino', 'Liberation Serif']],
+  ['Space Grotesk', '@fontsource-variable/space-grotesk/files/space-grotesk-latin-wght-normal.woff2', 'sans', ['Avenir Next', 'Verdana', 'Liberation Sans']],
 ]; // prettier-ignore
 
 test('the installed font packages read as fonts, map all of Basic Latin, and get the expected picks', (t) => {
@@ -692,32 +726,32 @@ test('the installed font packages read as fonts, map all of Basic Latin, and get
 // The files the typography packs ship, which are in the repository, so this always runs.
 const SHIPPED: [file: string, kind: 'sans' | 'serif' | 'mono', picks: string[], italic?: boolean][] = [
   ['swiss-grotesque/fonts/archivo-latin-wght-normal.woff2', 'sans', ['Tahoma', 'Arial']],
-  // Fitted against the italics: Georgia Italic, then Gelasio Italic elsewhere.
-  ['swiss-grotesque/fonts/newsreader-latin-400-italic.woff2', 'serif', ['Georgia', 'Georgia'], true],
-  ['swiss-grotesque/fonts/ibmplexmono-medium-latin1.woff2', 'mono', ['Menlo', 'Menlo']],
+  // Fitted against the italics: Georgia Italic, then Gelasio Italic elsewhere, then Liberation Serif Italic on Linux.
+  ['swiss-grotesque/fonts/newsreader-latin-400-italic.woff2', 'serif', ['Georgia', 'Georgia', 'Liberation Serif'], true],
+  ['swiss-grotesque/fonts/ibmplexmono-medium-latin1.woff2', 'mono', ['Menlo', 'Menlo', 'Liberation Mono']],
   ['screen-grotesque/fonts/inter-latin-opsz-normal.woff2', 'sans', ['Helvetica Neue', 'Arial']],
   // paste-up and drafting-grotesk: the plan's Avenir Next for Space Grotesk, then Verdana elsewhere.
   ['paste-up/fonts/archivo-latin-wght-normal.woff2', 'sans', ['Tahoma', 'Arial']],
-  ['paste-up/fonts/space-grotesk-latin-wght-normal.woff2', 'sans', ['Avenir Next', 'Verdana']],
-  ['paste-up/fonts/ibmplexmono-medium-latin1.woff2', 'mono', ['Menlo', 'Menlo']],
-  ['drafting-grotesk/fonts/space-grotesk-latin-wght-normal.woff2', 'sans', ['Avenir Next', 'Verdana']],
-  ['drafting-grotesk/fonts/ibmplexmono-regular-latin1.woff2', 'mono', ['Menlo', 'Menlo']],
+  ['paste-up/fonts/space-grotesk-latin-wght-normal.woff2', 'sans', ['Avenir Next', 'Verdana', 'Liberation Sans']],
+  ['paste-up/fonts/ibmplexmono-medium-latin1.woff2', 'mono', ['Menlo', 'Menlo', 'Liberation Mono']],
+  ['drafting-grotesk/fonts/space-grotesk-latin-wght-normal.woff2', 'sans', ['Avenir Next', 'Verdana', 'Liberation Sans']],
+  ['drafting-grotesk/fonts/ibmplexmono-regular-latin1.woff2', 'mono', ['Menlo', 'Menlo', 'Liberation Mono']],
   // field-serif and shell-mono: the plan's Palatino for Fraunces, then Palatino Linotype elsewhere.
-  ['field-serif/fonts/fraunces-latin-600-normal.woff2', 'serif', ['Palatino', 'Palatino']],
+  ['field-serif/fonts/fraunces-latin-600-normal.woff2', 'serif', ['Palatino', 'Palatino', 'Liberation Serif']],
   // Fraunces Italic, an italic-only family, fitted against the italics: Times New Roman Italic, then its clones.
   ['field-serif/fonts/fraunces-latin-400-italic.woff2', 'serif', ['Times New Roman', 'Times New Roman'], true],
   ['field-serif/fonts/inter-latin-wght-normal.woff2', 'sans', ['Helvetica Neue', 'Arial']],
-  ['shell-mono/fonts/jetbrains-mono-latin-wght-normal.woff2', 'mono', ['Menlo', 'Menlo']],
+  ['shell-mono/fonts/jetbrains-mono-latin-wght-normal.woff2', 'mono', ['Menlo', 'Menlo', 'Liberation Mono']],
   // console-mono and book-serif: the same picks for the same files, and Newsreader's upright Palatino.
-  ['console-mono/fonts/jetbrains-mono-latin-wght-normal.woff2', 'mono', ['Menlo', 'Menlo']],
+  ['console-mono/fonts/jetbrains-mono-latin-wght-normal.woff2', 'mono', ['Menlo', 'Menlo', 'Liberation Mono']],
   ['console-mono/fonts/inter-latin-wght-normal.woff2', 'sans', ['Helvetica Neue', 'Arial']],
-  ['book-serif/fonts/fraunces-latin-600-normal.woff2', 'serif', ['Palatino', 'Palatino']],
-  ['book-serif/fonts/newsreader-latin-400-normal.woff2', 'serif', ['Palatino', 'Palatino']],
+  ['book-serif/fonts/fraunces-latin-600-normal.woff2', 'serif', ['Palatino', 'Palatino', 'Liberation Serif']],
+  ['book-serif/fonts/newsreader-latin-400-normal.woff2', 'serif', ['Palatino', 'Palatino', 'Liberation Serif']],
   // Its italic beside the upright, fitted against the italics as a style of its own: Georgia Italic.
-  ['book-serif/fonts/newsreader-latin-400-italic.woff2', 'serif', ['Georgia', 'Georgia'], true],
+  ['book-serif/fonts/newsreader-latin-400-italic.woff2', 'serif', ['Georgia', 'Georgia', 'Liberation Serif'], true],
   // technical-sans-mono: paste-up's Plex Mono 500, so paste-up's picks, and its SemiBold's (Mono (b)).
-  ['technical-sans-mono/fonts/ibmplexmono-medium-latin1.woff2', 'mono', ['Menlo', 'Menlo']],
-  ['technical-sans-mono/fonts/ibmplexmono-semibold-latin1.woff2', 'mono', ['Menlo', 'Menlo']],
+  ['technical-sans-mono/fonts/ibmplexmono-medium-latin1.woff2', 'mono', ['Menlo', 'Menlo', 'Liberation Mono']],
+  ['technical-sans-mono/fonts/ibmplexmono-semibold-latin1.woff2', 'mono', ['Menlo', 'Menlo', 'Liberation Mono']],
 ]; // prettier-ignore
 
 test("the typography packs' shipped Latin files map all of Basic Latin and get the expected picks", () => {

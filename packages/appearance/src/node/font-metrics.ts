@@ -1293,6 +1293,130 @@ export function systemFont(name: string): SystemFont {
   return found;
 }
 
+const LIBERATION = '/usr/share/fonts/truetype/liberation/';
+const DEJAVU = '/usr/share/fonts/truetype/dejavu/';
+
+/**
+ * A Linux face with its metric clone's metrics: `clone`'s regular, bold,
+ * italic, and bold italic, by Linux's names alone (Liberation's, then
+ * ChromeOS' Croscore clone), so it resolves nowhere SYSTEM_FONTS' faces do.
+ */
+function cloneOf(
+  name: string,
+  file: string,
+  clone: string,
+  croscore: string,
+  kind: FontClass,
+): SystemFont {
+  const of = systemFont(clone);
+  const face = (suffix: string, variant: SystemFace | undefined, at: string): SystemFace => ({
+    file: `${LIBERATION}${file}-${at}.ttf`,
+    mac: [],
+    elsewhere: [`${name}${suffix}`, `${croscore}${suffix}`],
+    metrics: (variant ?? of).metrics,
+  });
+  return {
+    name,
+    class: kind,
+    ...face('', undefined, 'Regular'),
+    bold: face(' Bold', of.bold, 'Bold'),
+    italic: face(' Italic', of.italic, 'Italic'),
+    boldItalic: face(' Bold Italic', of.boldItalic, 'BoldItalic'),
+  };
+}
+
+/** A DejaVu face, measured from its own files: regular, bold, italic, and bold italic latinWidth, and its x-height. */
+function dejaVu(
+  name: string,
+  file: string,
+  kind: FontClass,
+  widths: readonly [number, number, number, number],
+  xHeight: number,
+  italic: 'Oblique' | 'Italic',
+): SystemFont {
+  const post = name.replace(/ /g, '');
+  const face = (suffix: string, at: string, latinWidth: number): SystemFace => ({
+    file: `${DEJAVU}${file}${at}.ttf`,
+    mac: [],
+    elsewhere: [`${name}${suffix}`, `${post}${at}`],
+    metrics: { unitsPerEm: 2048, latinWidth, xHeight },
+  });
+  return {
+    name,
+    class: kind,
+    ...face('', '', widths[0]),
+    bold: face(' Bold', '-Bold', widths[1]),
+    italic: face(` ${italic}`, `-${italic}`, widths[2]),
+    boldItalic: face(` Bold ${italic}`, `-Bold${italic}`, widths[3]),
+  };
+}
+
+/**
+ * The faces a stock Linux has, by class, for a fallback chain that would
+ * otherwise have no face there: Liberation Sans, Serif, and Mono, which
+ * Ubuntu installs, CI's Playwright image among them, with Arial's, Times New
+ * Roman's, and Courier New's metrics, and DejaVu Sans, Serif, and Sans Mono.
+ * Each goes by its Linux names only (and ChromeOS' Arimo, Tinos, and
+ * Cousine), none of which macOS, Windows, or iOS installs, so a fallback over
+ * one of them is never reached there.
+ *
+ * DejaVu Sans and DejaVu Serif were measured with readFontMetrics() from the
+ * DejaVu 2.35 files matplotlib bundles, already on this Mac (2026-11-02), not
+ * from Ubuntu's 2.37; DejaVu Sans Mono is Menlo's metrics, as SYSTEM_FONTS
+ * says. In font units, at 2048 to the em, latinWidth regular, bold, italic,
+ * and bold italic, then x-height:
+ *
+ * | Face | Regular | Bold | Italic | Bold italic | xHeight |
+ * | --- | --- | --- | --- | --- | --- |
+ * | DejaVu Sans | 1050.85 | 1187.34 | 1050.85 (Oblique) | 1187.34 | 1120 |
+ * | DejaVu Serif | 1062.06 | 1172.79 | 1062.06 | 1172.79 | 1063 |
+ *
+ * font-metrics.test.ts measures each Linux file wherever it's installed.
+ */
+export const LINUX_FONTS: readonly SystemFont[] = [
+  cloneOf('Liberation Sans', 'LiberationSans', 'Arial', 'Arimo', 'sans'),
+  dejaVu(
+    'DejaVu Sans',
+    'DejaVuSans',
+    'sans',
+    [1050.85, 1187.34, 1050.85, 1187.34],
+    1120,
+    'Oblique',
+  ),
+  cloneOf('Liberation Serif', 'LiberationSerif', 'Times New Roman', 'Tinos', 'serif'),
+  dejaVu(
+    'DejaVu Serif',
+    'DejaVuSerif',
+    'serif',
+    [1062.06, 1172.79, 1062.06, 1172.79],
+    1063,
+    'Italic',
+  ),
+  cloneOf('Liberation Mono', 'LiberationMono', 'Courier New', 'Cousine', 'mono'),
+  dejaVu('DejaVu Sans Mono', 'DejaVuSansMono', 'mono', [1233, 1233, 1233, 1233], 1120, 'Oblique'),
+];
+
+/**
+ * The Liberation faces, Arial's, Times New Roman's, and Courier New's
+ * metric clones: what Ubuntu's fonts-liberation installs, on CI's image and
+ * a stock desktop alike, where DejaVu may not be.
+ */
+export const LIBERATION_FONTS: readonly SystemFont[] = LINUX_FONTS.filter(({ name }) =>
+  name.startsWith('Liberation '),
+);
+
+/** Every name the Liberation faces go by, and their Croscore clones'. */
+const LIBERATION_NAMES: ReadonlySet<string> = new Set(
+  LIBERATION_FONTS.flatMap((font) =>
+    [font, font.bold, font.italic, font.boldItalic].flatMap((face) => face?.elsewhere ?? []),
+  ),
+);
+
+/** Whether `face` resolves on a stock Linux: one of its names is a Liberation face's, or its Croscore clone's. */
+export function resolvesOnLinux(face: { readonly elsewhere: readonly string[] }): boolean {
+  return face.elsewhere.some((name) => LIBERATION_NAMES.has(name));
+}
+
 /** A system face a pack's body text may render in, for its measures: the names a stack calls it by, and its width. */
 export interface TextFace {
   /** The family names a font-family stack gives it by, such as `system-ui` for SF Pro. */
@@ -1513,73 +1637,49 @@ export interface LinuxFace {
   >;
 }
 
-/** Liberation Sans' face `key`: Arial's, by its clones' names first, then Arial's own. */
-function liberation(key: FaceKey): LinuxFace['faces'][FaceKey] {
-  const face = systemVariant(systemFont('Arial'), {
+/** `font`'s face `key` as a leading family's fallback stands on it, with `extra` names after its own. */
+function linuxFace(
+  font: SystemFont,
+  key: FaceKey,
+  extra: (face: SystemFace) => readonly string[] = () => [],
+): LinuxFace['faces'][FaceKey] {
+  const face = systemVariant(font, {
     bold: key === 'bold' || key === 'boldItalic',
     italic: key === 'italic' || key === 'boldItalic',
   });
   return {
-    name: `Liberation Sans${{ regular: '', bold: ' Bold', italic: ' Italic', boldItalic: ' Bold Italic' }[key]}`,
-    locals: [
-      ...face.elsewhere.filter((name) => !name.startsWith('Arial')),
-      ...face.elsewhere.filter((name) => name.startsWith('Arial')),
-    ],
+    name: face.elsewhere[0]!,
+    locals: [...face.elsewhere, ...extra(face)],
     metrics: face.metrics,
   };
 }
 
+const linuxFaces = (font: SystemFont, extra?: (face: SystemFace) => readonly string[]) =>
+  Object.fromEntries(FACE_KEYS.map((key) => [key, linuxFace(font, key, extra)])) as Record<
+    FaceKey,
+    LinuxFace['faces'][FaceKey]
+  >;
+
 /**
- * The faces a leading family's fallbacks stand on, in stack order. First
- * Liberation Sans, which Ubuntu installs and CI renders in, by its name and
- * its other Arial-metric names (Arimo, then Arial itself, which some Linux
- * installs add): one set of metrics, Arial's in SYSTEM_FONTS. Then DejaVu
- * Sans, where a desktop Linux has no Arial clone, as its own face, since its
- * widths aren't Arial's.
- *
- * DejaVu Sans isn't installed on macOS. It was measured with
- * readFontMetrics() from the copy of DejaVu Sans 2.35 that matplotlib
- * bundles, already on this Mac (2026-11-02), not from Ubuntu's 2.37, whose
- * Latin advances are the same design's; font-metrics.test.ts measures the
- * Linux file wherever it's installed, so a CI runner checks it. In font
- * units, at 2048 to the em: 1050.85 regular and oblique, 1187.34 bold and
- * bold oblique, x-height 1120.
+ * The faces a leading family's fallbacks stand on, in stack order: Liberation
+ * Sans, which Ubuntu installs and CI renders in, by its names, Arimo's, then
+ * Arial's own, which some Linux installs add, all with Arial's metrics; then
+ * DejaVu Sans, where a desktop Linux has no Arial clone, as its own face,
+ * since its widths aren't Arial's. Both are LINUX_FONTS faces.
  */
 export const LINUX_FACES: readonly LinuxFace[] = [
   {
     suffix: 'Linux Fallback',
-    faces: {
-      regular: liberation('regular'),
-      bold: liberation('bold'),
-      italic: liberation('italic'),
-      boldItalic: liberation('boldItalic'),
-    },
+    // Liberation Sans and Arimo, then Arial's own names, from the Arial face of the same style.
+    faces: linuxFaces(LINUX_FONTS[0]!, (face) => {
+      const arial = SYSTEM_FONTS.find((font) => font.name === 'Arial')!;
+      const same = [arial, arial.bold, arial.italic, arial.boldItalic].find(
+        (each) => each?.metrics === face.metrics,
+      )!;
+      return same.mac;
+    }),
   },
-  {
-    suffix: 'DejaVu Fallback',
-    faces: {
-      regular: {
-        name: 'DejaVu Sans',
-        locals: ['DejaVu Sans', 'DejaVuSans'],
-        metrics: { unitsPerEm: 2048, latinWidth: 1050.85, xHeight: 1120 },
-      },
-      bold: {
-        name: 'DejaVu Sans Bold',
-        locals: ['DejaVu Sans Bold', 'DejaVuSans-Bold'],
-        metrics: { unitsPerEm: 2048, latinWidth: 1187.34, xHeight: 1120 },
-      },
-      italic: {
-        name: 'DejaVu Sans Oblique',
-        locals: ['DejaVu Sans Oblique', 'DejaVuSans-Oblique'],
-        metrics: { unitsPerEm: 2048, latinWidth: 1050.85, xHeight: 1120 },
-      },
-      boldItalic: {
-        name: 'DejaVu Sans Bold Oblique',
-        locals: ['DejaVu Sans Bold Oblique', 'DejaVuSans-BoldOblique'],
-        metrics: { unitsPerEm: 2048, latinWidth: 1187.34, xHeight: 1120 },
-      },
-    },
-  },
+  { suffix: 'DejaVu Fallback', faces: linuxFaces(LINUX_FONTS[1]!) },
 ];
 
 /**
@@ -1632,11 +1732,12 @@ export interface FallbackAlias {
 const MAX_LOCALS = 4;
 
 /**
- * The fallback aliases for a font of class `kind`, at most two (packs-plan
+ * The fallback aliases for a font of class `kind`, at most three (packs-plan
  * §3.4): first the class's system face whose width fits the font's best,
  * with its macOS names; then the best-fitting face that resolves on Windows
  * and Linux, by the names it goes by there, less any the first already
- * lists. Fit is the smallest width error per x-height, which is the error
+ * lists; then, when neither resolves on a stock Linux (resolvesOnLinux()),
+ * the class's Liberation face, by its Linux names. Fit is the smallest width error per x-height, which is the error
  * that's left once a composition applies font-size-adjust (whatever aspect
  * it sets, since that scales the font and the face alike); a font with no
  * x-height is fitted by plain width. None for a font with no latinWidth.
@@ -1671,11 +1772,20 @@ export function fallbackAliases(
   const [best] = ranked;
   if (!best) return [];
   const first = alias(best, best.face.mac);
+  const aliases = [first];
   for (const entry of ranked) {
     const locals = entry.face.elsewhere.filter((name) => !first.locals.includes(name));
-    if (locals.length > 0) return [first, alias(entry, locals)];
+    if (locals.length > 0) {
+      aliases.push(alias(entry, locals));
+      break;
+    }
   }
-  return [first];
+  // A chain with no face a stock Linux has gets a third: the class's Liberation face, by its Linux names.
+  if (!aliases.some(({ face }) => resolvesOnLinux(systemVariant(face, variant)))) {
+    const liberation = LIBERATION_FONTS.find((face) => face.class === kind);
+    if (liberation) aliases.push(alias(fit(liberation), liberation.elsewhere));
+  }
+  return aliases;
 }
 
 /** One fallback alias's face at a weight and style: the system face it stands on there, and how it's sized. */

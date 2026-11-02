@@ -1381,6 +1381,7 @@ test("an italic-only family's faces and fallbacks take every weight from their o
       'swiss-grotesque: swiss-grotesque Newsreader',
       'swiss-grotesque: swiss-grotesque Newsreader Fallback 1',
       'swiss-grotesque: swiss-grotesque Newsreader Fallback 2',
+      'swiss-grotesque: swiss-grotesque Newsreader Fallback 3',
     ],
   );
   // swiss-grotesque's Plex Mono keeps its 500, so a bold caption title over it is synthesized, as in drafting-grotesk.
@@ -1395,6 +1396,42 @@ test("an italic-only family's faces and fallbacks take every weight from their o
     new TextDecoder().decode(compiled.pack.stylesheet!.bytes),
     /font-family: "swiss-grotesque IBM Plex Mono";\s*src: url\([^)]+\) format\("woff2"\);\s*font-weight: 500;/,
   );
+});
+
+test("every typography pack's local() fallback chain, at each weight and style, has a face a stock Linux has (Liberation or its Croscore clone)", () => {
+  const LINUX = /^(Liberation (Sans|Serif|Mono)|Arimo|Tinos|Cousine)\b/;
+  const roots = [
+    'appearance-typography',
+    'appearance-fixtures-typography',
+    'quality-fixtures-typography',
+  ];
+  let chains = 0;
+  for (const root of roots) {
+    const packs = fileURLToPath(new URL(`../../../${root}/packs/`, import.meta.url));
+    if (!fs.existsSync(packs)) continue;
+    for (const id of fs.readdirSync(packs).sort()) {
+      const dir = path.join(packs, id);
+      if (!fs.existsSync(path.join(dir, 'manifest.json'))) continue;
+      const manifest = JSON.parse(
+        fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'),
+      ) as TypographyManifest;
+      const result = compilePack({ kind: 'typography', manifest, dir });
+      assert.ok(result.ok, id);
+      const css = new TextDecoder().decode(result.pack.stylesheet!.bytes);
+      // Each chain: a family's fallback aliases (or a leading system family's), at one weight and style.
+      const linux = new Map<string, boolean>();
+      for (const [, family, src, weight, style] of css.matchAll(
+        /font-family: "(.+?) (?:Fallback \d|Linux Fallback|DejaVu Fallback)";\s*src: ([^;]+);\s*font-weight: ([^;]+);\s*font-style: (\w+);/g,
+      )) {
+        const key = `${family} ${weight} ${style}`;
+        const names = [...src!.matchAll(/local\("([^"]+)"\)/g)].map(([, name]) => name!);
+        linux.set(key, (linux.get(key) ?? false) || names.some((name) => LINUX.test(name)));
+      }
+      for (const [chain, has] of linux) assert.ok(has, `${root}/${id}: ${chain} has no Linux face`);
+      chains += linux.size;
+    }
+  }
+  assert.ok(chains > 50, `${chains} chains`);
 });
 
 test("every pack writes each family, weight, and style's Latin face after its other subsets, and a code point they share stays on the one whose file draws it, the Latin face first (L-1)", () => {

@@ -25,8 +25,10 @@
 //   to its own face, so an italic to the system italics, the first by its
 //   macOS names and the second by the names Windows and Linux give it,
 //   each with size-adjust and the metric overrides computed from the font's
-//   own tables, right after it in the stack, and the profile names the one
-//   font a page preloads. A role whose system stack leads with a family
+//   own tables, right after it in the stack; a chain whose aliases have no
+//   face a stock Linux has gets a third, "... Fallback 3", over the
+//   class's Liberation face (LIBERATION_FONTS); and the profile names the one font a
+//   page preloads. A role whose system stack leads with a family
 //   Linux doesn't install (LEADING_FAMILIES, font-metrics.ts) gets two
 //   metric fallbacks right behind it, "<pack id> <family> Linux Fallback"
 //   over Liberation Sans and "... DejaVu Fallback" over DejaVu Sans, sized to
@@ -569,17 +571,18 @@ function compileTypography(manifest: TypographyManifest, dir: string): CompileRe
   const metrics = new Map<FontAsset, FontMetrics>();
   const fontBytes = new Map<FontAsset, Uint8Array>();
   const urls = new Map<FontAsset, string>();
-  // A family named "<another family> Fallback 1" (or 2) would share a fallback face's name.
+  // A family named "<another family> Fallback 1" (or 2, or 3) would share a fallback face's name.
   const named = new Set(manifest.fontAssets.map((asset) => asset.family.toLowerCase()));
   manifest.fontAssets.forEach((asset, index) => {
-    const alias = / fallback [12]$/i.exec(asset.family);
+    const alias = / fallback [123]$/i.exec(asset.family);
     const base = alias ? asset.family.slice(0, alias.index) : null;
     if (base !== null && named.has(base.toLowerCase())) {
       problems.push({
         file: 'manifest.json',
         pointer: `/fontAssets/${index}/family`,
         message: `names the family ${asset.family}, the name the compiler gives one of ${base}'s fallback faces.`,
-        remedy: 'Name the family something that does not end in " Fallback 1" or " Fallback 2".',
+        remedy:
+          'Name the family something that does not end in " Fallback 1", " Fallback 2", or " Fallback 3".',
       });
     }
   });
@@ -761,10 +764,11 @@ function compileTypography(manifest: TypographyManifest, dir: string): CompileRe
     const match = /^(\d+(?:\.\d+)?)(rem|px)$/.exec(String(size).trim());
     return match ? Number(match[1]) * (match[2] === 'rem' ? 16 : 1) : undefined;
   };
-  // Each family a role renders in gets up to two fallback aliases: the local
+  // Each family a role renders in gets up to three fallback aliases: the local
   // system faces of its class that fit it best, sized and spaced to take the
-  // room its webfont does, so the swap moves nothing. How many each family
-  // has, 0 to 2, goes into its stacks.
+  // room its webfont does, so the swap moves nothing, the third only where
+  // the first two have no Linux face. How many each family has, 0 to 3,
+  // goes into its stacks.
   const fallbacks = new Map<string, number>();
   for (const family of families) {
     const roles = TYPOGRAPHY_ROLES.filter(
