@@ -7,6 +7,7 @@ import { startApp } from '../harness/app-server.mjs';
 import { expect, test } from '../harness/fixtures';
 import {
   brokenWords,
+  groundedPseudos,
   pastPage,
   ringContrast,
   sidewaysCause,
@@ -44,6 +45,21 @@ const APP_OPTIONS = {
 };
 
 test.use({ appOptions: APP_OPTIONS });
+
+// The board's column lines are a box of their own behind the fields, never a pseudo-element of
+// main or the foot: axe reads no text's ground through an absolutely placed ::before with a
+// ground, so each text under one goes to the quality cell's screenshot sampler, and the board's
+// sent 338 of them, past the cell's 240 s on CI (run 41510373684). Home and a work's page.
+test(
+  'no text sits under a pseudo-element with a ground, so a contrast check reads each text’s own',
+  { annotation },
+  async ({ page }) => {
+    for (const route of ['/', CASE]) {
+      await page.goto(route, { waitUntil: 'networkidle' });
+      expect(await page.evaluate(groundedPseudos), route).toEqual([]);
+    }
+  },
+);
 
 test('no cell, field, card, button or label takes a radius', { annotation }, async ({ page }) => {
   await page.goto('/', { waitUntil: 'networkidle' });

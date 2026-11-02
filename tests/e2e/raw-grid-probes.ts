@@ -367,3 +367,37 @@ export function sidewaysCause(): string[] {
   }
   return chain;
 }
+
+/**
+ * Run in the page: each element in the variant that draws an absolutely placed pseudo-element
+ * with a ground (a color or an image) over more than a quarter of a text it holds. axe can't
+ * read a text's ground through one (its pseudoContent), so every text under it goes to the
+ * quality cell's sampler, a screenshot walk of about half a second a text: Raw Grid's board,
+ * as main's and the foot's ::before, sent 338 texts there and ran the cell past its 240 s on
+ * CI (run 41510373684).
+ */
+export function groundedPseudos(): string[] {
+  const root = document.querySelector('[data-variant]')!;
+  const found = new Set<string>();
+  const texts: Element[] = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode())
+    if (node.textContent?.trim() && node.parentElement) texts.push(node.parentElement);
+  const area = (element: Element, which: '::before' | '::after') => {
+    const style = getComputedStyle(element, which);
+    if (['none', 'normal'].includes(style.content) || style.display === 'none') return 0;
+    if (style.visibility === 'hidden' || style.position !== 'absolute') return 0;
+    const clear = /rgba\(.*,\s*0\)$|transparent/.test(style.backgroundColor);
+    if (clear && style.backgroundImage === 'none') return 0;
+    return parseFloat(style.width) * parseFloat(style.height);
+  };
+  for (const text of new Set(texts)) {
+    const box = text.getBoundingClientRect();
+    if (box.width * box.height === 0) continue;
+    for (let at: Element | null = text; at && at !== root.parentElement; at = at.parentElement)
+      for (const which of ['::before', '::after'] as const)
+        if (area(at, which) > 0.25 * box.width * box.height)
+          found.add(`${at.localName}.${[...at.classList].join('.')}${which}`);
+  }
+  return [...found];
+}
