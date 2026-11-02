@@ -187,14 +187,31 @@ test(
   { annotation: at },
   async ({ page, app }) => {
     await load(page, app.origin, 'platform-neutral', 'accessible-reading');
-    const m = await masthead(page, 10);
-    // The case the review saw: the tools are wider than the notes column under Verdana.
+    let m = await masthead(page, 10);
+    // The case the review saw: the tools are wider than the notes column under Verdana. Where the
+    // platform has no Verdana (Linux, whose Liberation or DejaVu Sans sets them narrower, so they
+    // fit), the case is made: the tools' letters spaced out by the shortfall and a rem besides.
+    if (m.need <= m.edge - m.notes) {
+      const tools =
+        '.ee-masthead__end :is(.ee-masthead__contents, .ee-masthead__contact a, summary)';
+      const letters = await page
+        .locator(tools)
+        .evaluateAll((els) => els.reduce((n, el) => n + el.textContent!.trim().length, 0));
+      const spacing = (m.edge - m.notes - m.need + 16) / letters;
+      await page.addStyleTag({
+        content: `[data-variant='editorial-evidence'] ${tools} { letter-spacing: ${spacing}px; }`,
+      });
+      m = await masthead(page, 10);
+    }
     expect(m.need, "accessible-reading's tools are wider than the notes column").toBeGreaterThan(
       m.edge - m.notes,
     );
     expect(Math.abs(m.appearance.cy - m.contents.cy)).toBeLessThanOrEqual(2);
     expect(Math.abs(m.name.cy - m.contents.cy)).toBeLessThanOrEqual(2);
     expect(m.contact.r).toBeLessThan(m.appearance.x);
+    // Their track grows toward the running head by just what they need, the head ending before it.
+    expect(Math.abs(m.end.x - (m.edge - m.need)), "the tools' start").toBeLessThanOrEqual(1);
+    expect(m.folio.r, 'the running head before the tools').toBeLessThanOrEqual(m.end.x);
   },
 );
 
