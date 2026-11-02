@@ -528,20 +528,21 @@ jobs:
   # canary and render parity, against this checkout's build. Screenshots
   # compare against tests/variants/__screenshots__/ here, in the pinned
   # image, and nowhere else. A missing baseline fails the job, which writes
-  # it and uploads it in its shard's variants-screenshots-1 or -2 artifact
+  # it and uploads it in its shard's variants-screenshots-1 to -4 artifact
   # to be committed.
-  # In two shards, split by Playwright project (one per composition and
+  # In four shards (fifteen compositions; two ran past 30 minutes on the
+  # 2026-11-02 push), split by Playwright project (one per composition and
   # fixture, plus the modes' own checks) on measured durations.
   variants:
-    name: variants (${{ matrix.shard }}/2)
+    name: variants (${{ matrix.shard }}/4)
     needs: [changes]
     if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'variants') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3, 4]
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
       options: --user 1001 --ipc=host --init
@@ -573,10 +574,10 @@ jobs:
         run: echo "Next build cache restored for these build inputs"
       - name: pnpm ci:build
         run: pnpm ci:build
-      - name: pnpm test:shard variants ${{ matrix.shard }}/2
+      - name: pnpm test:shard variants ${{ matrix.shard }}/4
         env:
-          SHARD: ${{ matrix.shard }}/2
-          CI_REPRO_COMMAND: pnpm test:shard variants ${{ matrix.shard }}/2
+          SHARD: ${{ matrix.shard }}/4
+          CI_REPRO_COMMAND: pnpm test:shard variants ${{ matrix.shard }}/4
         run: node ci/run.mjs variants -- node ci/shards.mjs run variants "$SHARD"
       # The scheme and type pack guards (LANG-5), enforced: one axis a shard. The
       # shard above runs pack-distinct on the design languages alone, which

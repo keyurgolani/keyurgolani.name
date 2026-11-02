@@ -265,7 +265,7 @@ const browserWeights = (weights, specs) =>
 export const SUITES = {
   unit: { count: 3, items: () => unitItemsFromTree() },
   browser: { count: 2, items: () => specFiles('tests/e2e') },
-  variants: { count: 2, items: () => variantProjects() },
+  variants: { count: 4, items: () => variantProjects() },
 };
 
 function unitItemsFromTree() {
