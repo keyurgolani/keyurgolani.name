@@ -223,19 +223,24 @@ test('the layers: the masthead over the heads over the rail, and the rail steps 
     Number(new RegExp(`${selector.source} \\{[^}]*?z-index: (\\d+);`).exec(text)?.[1]);
   assert.equal(z(/\] \.ee-masthead/), 4);
   assert.equal(z(/\] \.ee-head/), 2);
-  assert.equal(z(/\] \.ee-rail:focus-within/), 3);
+  assert.equal(z(/\] \.ee-rail:is\(:focus-within, \[data-ee-yield='held'\]\)/), 3);
   assert.match(
     text,
     /\.ee-rail\[data-ee-yield='away'\]:not\(:focus-within\) \{\s*visibility: hidden;\s*opacity: 0;/,
   );
-  // Holding focus over a crossing head, it takes the canvas.
+  // Holding focus over a crossing head, or held open by it, it takes the canvas.
   assert.match(
     text,
-    /\.ee-rail:focus-within \{\s*z-index: 3;[^}]*background: var\(--color-canvas\);/,
+    /\.ee-rail:is\(:focus-within, \[data-ee-yield='held'\]\) \{\s*z-index: 3;[^}]*background: var\(--color-canvas\);/,
   );
   // It folds until it docks, and is watched from there.
   const spy = readFileSync(path.join(PACKAGE_DIR, 'src', 'scroll-spy.tsx'), 'utf8');
   assert.match(spy, /if \(!docked\) \{\s*rail\.setAttribute\('data-ee-yield', 'fold'\);/);
+  // Opened by focus, it's held open while focus goes nowhere, so a blur takes only a ring away:
+  // focus elsewhere in the page, or the reading moving on, lets it yield again.
+  assert.match(spy, /if \(held != \(held = !!rail\?\.contains\(stop\)\)\) rewatch\(\);/);
+  assert.match(spy, /if \(held\) return rail\.setAttribute\('data-ee-yield', 'held'\);/);
+  assert.match(spy, /held &&= !!rail\?\.matches\(':focus-within'\);/);
   assert.match(text, /\.ee-rail\[data-ee-yield='fold'\]:not\(:focus-within\)/);
   // The rail draws no ground over the first chapter's rule or the spine.
   assert.match(block(text, '(width >= 81.25rem)'), /\.ee-rail \{[^}]*?background: none;/);

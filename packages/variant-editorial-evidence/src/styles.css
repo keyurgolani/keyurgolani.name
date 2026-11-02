@@ -2242,8 +2242,8 @@
     inset-block-start: 100%;
   }
 
-  /* While the index holds focus, it stays over the heads, so a focused entry is never covered (2.4.11). */
-  [data-variant='editorial-evidence'] .ee-rail:focus-within {
+  /* While the index holds focus, or is held open by it, it stays over the heads, so a focused entry is never covered (2.4.11). */
+  [data-variant='editorial-evidence'] .ee-rail:is(:focus-within, [data-ee-yield='held']) {
     z-index: 3;
     /* Over a crossing head, it takes the canvas, so text never prints over text. */
     background: var(--color-canvas);

@@ -641,6 +641,38 @@ test.describe('focus under the masthead', () => {
   );
 });
 
+// The chapter index folded at the top of the issue opens to Tab; a blur that sends focus nowhere
+// leaves it open and over the heads as it was, so the blur takes only the entry's ring away (a
+// ring the quality walk can measure), and focus going on past it lets it fold again.
+test(
+  'at 1440 the chapter index Tab opens stays open while focus goes nowhere, and yields once focus goes on',
+  { annotation: at('/'), tag },
+  async ({ page }) => {
+    await load(page);
+    const rail = page.locator('.ee-rail');
+    const entries = rail.locator('.ee-rail__list > li > a');
+    await expect(rail).toHaveAttribute('data-ee-yield', 'fold');
+    await expect(entries.nth(1)).toBeHidden();
+    await entries.first().focus();
+    await page.keyboard.press('Tab');
+    await expect(entries.nth(1)).toBeFocused();
+    const layer = () => rail.evaluate((el) => getComputedStyle(el).zIndex);
+    expect(await layer(), 'over the heads while it holds focus').toBe('3');
+    await page.evaluate(() => (document.activeElement as HTMLElement).blur());
+    await page.evaluate(
+      () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+    );
+    await expect(entries.nth(1), 'the blur left the entry where it was').toBeVisible();
+    expect(await layer(), 'and the index over the heads').toBe('3');
+    await entries.nth(1).focus();
+    const inRail = () => rail.evaluate((el) => el.contains(document.activeElement));
+    for (let n = 0; n < 40 && (await inRail()); n++) await page.keyboard.press('Tab');
+    expect(await inRail(), 'Tab went on past the index').toBe(false);
+    await expect(rail).not.toHaveAttribute('data-ee-yield', 'held');
+    expect(await layer(), 'back under the heads').toBe('1');
+  },
+);
+
 test.describe('at 320', () => {
   test.use({ viewport: { width: 320, height: 640 } });
 

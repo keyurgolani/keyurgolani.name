@@ -65,6 +65,12 @@ export function ScrollSpy() {
       if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
       target.focus({ preventScroll: true });
     };
+    // Opened by focus, the chapter index stays open ("held") while focus goes nowhere, a click on
+    // the page or a blur, so that blur takes only the entry's ring away; focus going on to another
+    // stop, or the reading to another place, gives it back to the heads.
+    const rail = root.querySelector<HTMLElement>('.ee-rail');
+    let held = false;
+    let rewatch = () => {};
     // K-12 removes this
     // What Tab reaches under the sticky chrome comes out below it (2.4.11): the browser
     // scrolls focus into view only from off the window, never from under a sticky bar on it.
@@ -72,6 +78,8 @@ export function ScrollSpy() {
     // is -1 too), only a stop a shown bar really covers and short enough to clear it, at once.
     const clear = (event: FocusEvent) => {
       const stop = event.target as HTMLElement;
+      // Whether focus is in the index, and if that changed, the index's yield again (K-12 keeps this).
+      if (held != (held = !!rail?.contains(stop))) rewatch();
       if (!stop.matches(':focus-visible') || stop.tabIndex < 0) return;
       const r = stop.getBoundingClientRect();
       let foot = 0;
@@ -99,7 +107,6 @@ export function ScrollSpy() {
     }
     const folio = root.querySelector<HTMLElement>('[data-ee-folio]');
     const issue = root.querySelector<HTMLElement>('.ee-issue');
-    const rail = root.querySelector<HTMLElement>('.ee-rail');
     const places = [
       ...root.querySelectorAll<HTMLElement>(
         '.ee-opening, .ee-chapter__open, .ee-band[data-section-id]',
@@ -158,6 +165,7 @@ export function ScrollSpy() {
       inTop.clear();
       rail?.removeAttribute('data-ee-yield');
       if (!rail || !wide()) return;
+      if (held) return rail.setAttribute('data-ee-yield', 'held');
       if (!docked) {
         rail.setAttribute('data-ee-yield', 'fold');
         return;
@@ -203,6 +211,8 @@ export function ScrollSpy() {
       }
     };
 
+    rewatch = watchRail;
+
     const show = (place: HTMLElement) => {
       // The opening is the issue's start, before any chapter: the running head names the
       // first chapter, and nothing is marked as the place being read.
@@ -229,6 +239,7 @@ export function ScrollSpy() {
         // Its sticky top moved with the head, so where it docks did too.
         watchDock();
       }
+      held &&= !!rail?.matches(':focus-within');
       markCurrent('[data-ee-rail]', (entry) => !opening && entry.dataset.eeRail === parts.n);
       markCurrent(
         '[data-ee-section]',
