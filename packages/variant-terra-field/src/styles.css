@@ -1752,6 +1752,28 @@
   gap: var(--space-m);
 }
 
+/*
+ * The address's underline is its words' own, the same line every link has: a decoration is painted
+ * by the box that declares it, and drawn by the link round the words it was what's behind them
+ * wherever a face sets its underline into their box (a Linux fallback's from-font line). An
+ * address with no break points is the link's own text, and keeps the link's line.
+ */
+[data-variant='terra-field'] .tf-display-link:has(> span) {
+  text-decoration-line: none;
+}
+
+[data-variant='terra-field'] .tf-display-link > span {
+  text-decoration-line: underline;
+  text-decoration-thickness: from-font;
+  text-decoration-color: color-mix(in oklab, currentColor 42%, transparent);
+  text-underline-offset: 0.22em;
+  transition: text-decoration-color var(--motion-feedback) var(--motion-curve);
+}
+
+[data-variant='terra-field'] .tf-display-link:hover > span {
+  text-decoration-color: currentColor;
+}
+
 [data-variant='terra-field'] .tf-close__mail {
   font-family: var(--type-display-font-family);
   font-weight: var(--type-display-font-weight);

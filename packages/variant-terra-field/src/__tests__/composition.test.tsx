@@ -226,6 +226,25 @@ test('one close: the contact holds the call to action under one heading, the add
   assert.match(STYLES, /\.tf-close a:not\(\.tf-act\) \{\s*color: inherit;/);
 });
 
+test('the closing address underlines its own words: the line is the text’s, not the link’s round it', () => {
+  // A decoration is painted by the box that declares it. Drawn by the link round the address's
+  // words, it's what's behind them wherever a face sets its underline into their box (a Linux
+  // fallback's from-font line: 2.19:1 on the address at 1440 and 390), so the words' own box
+  // draws it, the same line every link has.
+  const close = sample().slice(sample().indexOf('class="tf-close"'), sample().indexOf('<footer'));
+  assert.match(close, /<a class="tf-display-link" href="mailto:[^"]+"><span>/);
+  assert.match(STYLES, /\.tf-display-link:has\(> span\) \{\s*text-decoration-line: none;/);
+  const own = /\.tf-display-link > span \{([^}]*)\}/.exec(STYLES)?.[1] ?? '';
+  for (const declaration of [
+    'text-decoration-line: underline;',
+    'text-decoration-thickness: from-font;',
+    'text-decoration-color: color-mix(in oklab, currentColor 42%, transparent);',
+    'text-underline-offset: 0.22em;',
+  ])
+    assert.ok(own.includes(declaration), `the words' own line: ${declaration}`);
+  assert.match(STYLES, /\.tf-display-link:hover > span \{\s*text-decoration-color: currentColor;/);
+});
+
 test('Field notes: a closed modal dialog, invoked with show-modal, Contact in its first lines (S2)', () => {
   const html = sample();
   assert.match(
