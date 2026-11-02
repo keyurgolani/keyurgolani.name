@@ -1741,6 +1741,17 @@
 
 /* Cells side by side: each span a class, and the last row of a run always filled, so no hole opens. */
 @container rg-page (width >= 48rem) {
+  /* A work's title beside its stickers fits its column, never more: the poster less the
+     stickers and the gap. At 1024 its share was 320 px against a 304 px column, and
+     POSTMORTEM kept its line by 2.75 px, which Linux's wider Archivo took (run 41433352108). */
+  [data-variant='raw-grid'] .rg-casepage .rg-poster--stuck > .rg-case__title {
+    --layout-name-inset: max(
+      0px,
+      var(--space-l) + min(var(--layout-sticker-max), 38cqi) - 100cqi *
+        (1 - var(--layout-name-share))
+    );
+  }
+
   [data-variant='raw-grid'] :is(.rg-fact, .rg-oddity, .rg-tools) {
     grid-column: span 3;
   }
