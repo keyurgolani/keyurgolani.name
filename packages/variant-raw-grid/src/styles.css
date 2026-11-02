@@ -1,0 +1,3038 @@
+/*
+ * Raw Grid: an exposed-structure poster wall. Composition only. It owns the
+ * grid as geometry, whatever the design language: zero gutters, zero
+ * radius on every cell and block, and the cell rules at its own weight
+ * (--layout-rule), each cell drawing its block-start and inline-start edge
+ * and the field its inline-end and block-end, so every boundary is one
+ * rule. The language decides only shadow depth and the badge radius; the
+ * scheme the grounds. Every color is a role, every size a step, every
+ * space a step, every duration a motion token. Logical properties
+ * throughout, so a right-to-left page mirrors, tilts included.
+ */
+
+[data-variant='raw-grid'] {
+  --layout-grid-columns: 12;
+  /* The columns the grids lay out: the platform's twelve, four where the page is narrow (a
+     container query, which can't set the root's own slot). */
+  --layout-columns: var(--layout-grid-columns);
+  --layout-grid-gutter: 0px;
+  --layout-grid-margin: var(--space-s-l);
+  --layout-width-page: 90rem;
+  --layout-motion-curve: var(--ui-motion-easing);
+  --layout-motion-feedback: 150ms;
+  --layout-motion-scene: 600ms;
+  --layout-motion-ambient: 40s;
+  --layout-rule: 3px solid var(--color-text-primary);
+  --layout-cell-x: var(--space-m);
+  /* A focus ring's reach and as much again: what a control keeps clear inside its ruled cell,
+     so the platform's ring lies on the cell's ground, never on a rule or a shadow. */
+  --layout-ring: calc(var(--ui-focus-width) + 2 * max(var(--ui-focus-offset), 0px));
+  --layout-line: 2px solid var(--color-border-strong);
+  --layout-x: max(var(--layout-grid-margin), calc((100% - var(--layout-width-page)) / 2));
+  --layout-head: 3.5rem;
+  --layout-tick: 2.75rem;
+  --layout-col-min: 12rem;
+  --layout-strip-min: 12rem;
+  --layout-sticker-max: 25rem;
+  --layout-opening-min: 32rem;
+  --layout-opening-max: 56rem;
+  --layout-fit: 0.84;
+  --layout-name-max: var(--type-step-7);
+  --layout-name-min: var(--type-step-1);
+  --layout-name-inset: 0px;
+  --layout-name-share: 1;
+  /* The page is a container, and every width breakpoint asks it, not the window: a container
+     query's rem follows the root's own size, as a media query's doesn't, so a wide window with
+     200% text takes the layout its width in those ems takes (the phone's at 1024), never the
+     desktop's columns at twice the text. */
+  container: rg-page / inline-size;
+  display: block;
+  font-variant-numeric: lining-nums;
+  overflow-wrap: break-word;
+}
+
+[data-variant='raw-grid'] :where(h1, h2, h3, h4, h5, h6, p, ul, ol, dl, dd, figure, blockquote) {
+  margin: 0;
+}
+
+[data-variant='raw-grid'] :where(ul, ol) {
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='raw-grid'] :where(img) {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+}
+
+/* Whole words: no label, head, tab, count, cell or quote breaks inside a word, since each is
+   sized so its longest word fits at 100% text. break-word (above) is only the net under 200%
+   text: unlike anywhere it never narrows a track to its letters, so it needs a box that can't
+   grow past its cell. Every cell's one column, and the card's and the big link's, has a zero
+   minimum for that, and a band head's pieces may shrink. Addresses wrap at Breakable's points. */
+[data-variant='raw-grid']
+  :where(.rg-cell, .rg-card__body, .rg-ink__mail, .pf-rich-text, .rg-note, .rg-sticker a) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-variant='raw-grid']
+  :where(.rg-tab, .rg-skill__tab, .rg-index__tab, .rg-ink__second, .rg-ink__mail, .rg-paste) {
+  max-inline-size: 100%;
+}
+
+[data-variant='raw-grid']
+  :where(
+    .rg-band__head,
+    .rg-meta,
+    .rg-chips,
+    .rg-links,
+    .rg-card__links,
+    .rg-photo__cap,
+    .rg-tracks li,
+    .rg-ink__links a
+  )
+  > * {
+  min-inline-size: 0;
+}
+
+/* The kit sets anywhere on its own rich text; display text set in it keeps its words whole. */
+[data-variant='raw-grid']
+  :is(.rg-thesis__lead, .rg-note, .rg-fact, .rg-t-title, .rg-reflect, .rg-quote, [data-wide='set'])
+  [class*='pf-'] {
+  overflow-wrap: break-word;
+}
+
+[data-variant='raw-grid'] :where(h1, h2, h3, h4) {
+  text-wrap: balance;
+}
+
+[data-variant='raw-grid'] :where(p, li, td, blockquote) {
+  text-wrap: pretty;
+}
+
+[data-variant='raw-grid'] .pf-rich-text {
+  display: grid;
+  gap: var(--space-2xs);
+  max-inline-size: var(--type-measure-body);
+}
+
+[data-variant='raw-grid'] :is(.rg-hidden, .rg-ticker__toggle:not(:has(:disabled)) [role='status']) {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The voices, all from the typography roles. Caps carry the poster voices; long titles fall back to sentence case. */
+[data-variant='raw-grid']
+  :is(.rg-name, .rg-sheet__word, .rg-fact__n, .rg-quote blockquote, .rg-ink__big, .rg-next__title) {
+  font-family: var(--type-display-font-family);
+  font-weight: var(--type-display-font-weight);
+  font-variation-settings: var(--type-display-font-variation-settings);
+  letter-spacing: var(--type-display-letter-spacing);
+  line-height: var(--type-display-line-height);
+}
+
+[data-variant='raw-grid'] :is(.rg-thesis__lead, .rg-album__title, .rg-ink__lead, .rg-reflect) {
+  font-family: var(--type-headline-font-family);
+  font-weight: var(--type-headline-font-weight);
+  font-variation-settings: var(--type-headline-font-variation-settings);
+  letter-spacing: var(--type-headline-letter-spacing);
+  line-height: var(--type-headline-line-height);
+}
+
+[data-variant='raw-grid']
+  :is(
+    .rg-tab,
+    .rg-head__name,
+    .rg-head__dest,
+    .rg-head__index,
+    .rg-poster__role,
+    .rg-paste__lede,
+    .rg-card__title,
+    .rg-row__title,
+    .rg-t-title,
+    .rg-pin__title,
+    .rg-item__title,
+    .rg-skill__tab,
+    .rg-tools__k,
+    .rg-index__tab,
+    .rg-index__title,
+    .rg-note__who,
+    .rg-sticker__line,
+    .rg-btn,
+    .rg-case,
+    .rg-ref,
+    .rg-ink__second,
+    .rg-ink__links a,
+    .rg-quote__who,
+    .rg-colophon__top,
+    .rg-index__close,
+    .rg-ticker__toggle,
+    .rg-dl dt
+  ) {
+  font-family: var(--type-title-font-family);
+  font-weight: var(--type-title-font-weight);
+  font-variation-settings: var(--type-title-font-variation-settings);
+  letter-spacing: var(--type-title-letter-spacing);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='raw-grid']
+  :is(
+    .rg-name,
+    .rg-sheet__word,
+    .rg-quote blockquote,
+    .rg-ink__big,
+    .rg-next__title,
+    .rg-thesis__lead,
+    .rg-album__title,
+    .rg-ink__lead,
+    .rg-tab,
+    .rg-head__name,
+    .rg-head__dest,
+    .rg-head__index,
+    .rg-poster__role,
+    .rg-card__title,
+    .rg-pin__title,
+    .rg-skill__tab,
+    .rg-tools__k,
+    .rg-index__tab,
+    .rg-index__title,
+    .rg-sticker__line,
+    .rg-btn,
+    .rg-case,
+    .rg-ink__second,
+    .rg-ink__links a,
+    .rg-colophon__top,
+    .rg-index__close,
+    .rg-dl dt
+  ) {
+  text-transform: uppercase;
+  font-feature-settings: 'case';
+}
+
+/* Doubled, to outrank the caps list, whose :is() takes its most specific entry's weight. */
+[data-variant='raw-grid'] [data-case='sentence'][data-case] {
+  text-transform: none;
+}
+
+/* The data voice: numbers, dates, counts, the ticker. Never a costume label. */
+[data-variant='raw-grid']
+  :is(
+    .rg-num,
+    .rg-count,
+    .rg-band__count,
+    .rg-ticker__run,
+    .rg-t-date,
+    .rg-t-no,
+    .rg-sticker__sub,
+    .rg-ink__addr
+  ) {
+  font-family: var(--type-numeric-font-family);
+  font-weight: var(--type-numeric-font-weight);
+  font-variation-settings: var(--type-numeric-font-variation-settings);
+  letter-spacing: var(--type-numeric-letter-spacing);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+[data-variant='raw-grid']
+  :is(
+    .rg-card__sum,
+    .rg-checks,
+    .rg-t-desc,
+    .rg-row__sum,
+    .rg-item__desc,
+    .rg-album__desc,
+    .rg-fact figcaption,
+    .rg-sheet__toc,
+    .rg-index__col ul,
+    .rg-band__sub,
+    .rg-skill__desc,
+    .rg-tools ul,
+    .rg-pin__fact
+  ) {
+  font-family: var(--type-body-compact-font-family);
+  font-size: var(--type-body-compact-font-size);
+  font-weight: var(--type-body-compact-font-weight);
+  line-height: var(--type-body-compact-line-height);
+}
+
+[data-variant='raw-grid']
+  :is(.rg-meta, .rg-photo__cap, .rg-head__where, .rg-colophon__note, .rg-band__count, .rg-count) {
+  font-family: var(--type-label-font-family);
+  font-size: var(--type-label-font-size);
+  font-weight: var(--type-label-font-weight);
+  line-height: var(--type-label-line-height);
+  letter-spacing: var(--type-label-letter-spacing);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='raw-grid']
+  :is(
+    .rg-note blockquote,
+    .rg-item__quote,
+    .rg-row__quote,
+    .rg-list li,
+    .rg-oddity,
+    .rg-about__text > .pf-rich-text > :first-child
+  ) {
+  font-family: var(--type-quote-font-family);
+  font-weight: var(--type-quote-font-weight);
+  font-variation-settings: var(--type-quote-font-variation-settings);
+  letter-spacing: var(--type-quote-letter-spacing);
+  line-height: var(--type-quote-line-height);
+}
+
+/* Links: a heavy underline in the accent, never color alone. */
+[data-variant='raw-grid'] a {
+  color: inherit;
+  text-decoration-line: underline;
+  text-decoration-thickness: var(--ui-state-selected-emphasis);
+  text-decoration-color: var(--color-accent);
+  text-underline-offset: 0.18em;
+}
+
+[data-variant='raw-grid'] a:hover {
+  color: var(--color-accent-text);
+}
+
+[data-variant='raw-grid'] .rg-out {
+  margin-inline-start: var(--space-3xs);
+  text-decoration: none;
+}
+
+/* A line of parts lays them out as boxes, each free to shrink to its cell. A meta that is one
+   run of text stays text: a flex box would hold it at its longest word, past a narrow cell. */
+[data-variant='raw-grid'] .rg-meta[data-parts] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-s);
+}
+
+/* The board and the field. The bare board shows the column lines, a tile a column, full width,
+   and full height, through the gaps between the main and the foot too (RG-M2). */
+[data-variant='raw-grid'] .rg-main {
+  display: grid;
+  gap: var(--rhythm-section);
+  padding: var(--space-s) var(--layout-x) var(--rhythm-group);
+}
+
+[data-variant='raw-grid'] :is(.rg-main, .rg-foot) {
+  position: relative;
+  isolation: isolate;
+}
+
+[data-variant='raw-grid'] :is(.rg-main, .rg-foot)::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline: var(--layout-x);
+  z-index: -1;
+  background-image: linear-gradient(to right, var(--color-border-subtle) 1px, transparent 1px);
+  background-size: calc(100% / var(--layout-columns)) var(--space-s);
+}
+
+[data-variant='raw-grid'] .rg-main > .rg-opening {
+  margin-block-end: calc(var(--rhythm-group) - var(--rhythm-section));
+}
+
+[data-variant='raw-grid'] .rg-field {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-columns), minmax(0, 1fr));
+  border-inline-end: var(--layout-rule);
+  border-block-end: var(--layout-rule);
+}
+
+[data-variant='raw-grid']
+  :is(
+    .rg-field,
+    .rg-band,
+    .rg-row,
+    .rg-album,
+    .rg-frames,
+    .rg-ink__ask,
+    .rg-bay,
+    .rg-board,
+    .rg-wall,
+    .rg-pair,
+    .rg-sheet__head
+  )
+  > * {
+  grid-column: 1 / -1;
+}
+
+[data-variant='raw-grid']
+  :is(
+    .rg-band,
+    .rg-row,
+    .rg-album,
+    .rg-frames,
+    .rg-ink__ask,
+    .rg-bay,
+    .rg-board,
+    .rg-wall,
+    .rg-sheet__head
+  ) {
+  display: grid;
+  grid-template-columns: subgrid;
+  align-content: start;
+}
+
+[data-variant='raw-grid'] :is(.rg-cell, .rg-bay) {
+  position: relative;
+  min-inline-size: 0;
+  border-inline-start: var(--layout-rule);
+  border-block-start: var(--layout-rule);
+  border-radius: 0;
+}
+
+/* A cell that is itself the link or the scroll region lifts while focused, so the cells that
+   follow it, each positioned, never paint over its ring. */
+[data-variant='raw-grid'] .rg-cell:focus-visible {
+  z-index: 1;
+}
+
+[data-variant='raw-grid'] .rg-cell {
+  display: grid;
+  align-content: start;
+  gap: var(--space-xs);
+  padding: var(--space-s) var(--layout-cell-x) var(--space-m);
+  background-color: var(--color-canvas);
+}
+
+/* Whatever a link lands on or focus reaches clears the sticky header row. */
+[data-variant='raw-grid'] :is([id], a[href], button) {
+  scroll-margin-block-start: calc(var(--layout-head) + var(--space-s));
+}
+
+/* The full record's folds (gate item 8): a ruled cell whose summary, a ring's reach inside its
+   rules, reads as content (the title as tape, the first item, the count); open, the section's
+   band runs under it on the sheet's columns, its own head left to the summary. */
+[data-variant='raw-grid'] .rg-fold {
+  grid-column: 1 / -1;
+  border-block-start: var(--layout-rule);
+  border-inline-start: var(--layout-rule);
+  background-color: var(--color-canvas);
+}
+
+[data-variant='raw-grid'] .rg-fold > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-xs);
+  margin: var(--layout-ring);
+  list-style: none;
+  cursor: pointer;
+}
+
+[data-variant='raw-grid'] .rg-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+[data-variant='raw-grid'] .rg-fold .rg-band__count::after {
+  content: '\00a0+' / '';
+}
+
+[data-variant='raw-grid'] .rg-fold[open] .rg-band__count::after {
+  content: '\00a0−' / '';
+}
+
+[data-variant='raw-grid'] .rg-fold[open] .rg-fold__first,
+[data-variant='raw-grid'] .rg-fold > .rg-band > .rg-band__head {
+  display: none;
+}
+
+[data-variant='raw-grid'] .rg-fold > .rg-band {
+  grid-template-columns: repeat(var(--layout-columns), minmax(0, 1fr));
+  /* Back over the fold's own rule, the band's cells drawing it as everywhere else. */
+  margin-inline-start: -3px;
+}
+
+/* Two short neighbours share a row, each half its own column of cells, the shorter one's last cell filling it. */
+[data-variant='raw-grid'] .rg-pair {
+  display: grid;
+  grid-template-columns: subgrid;
+}
+
+[data-variant='raw-grid'] .rg-pair > .rg-band {
+  display: flex;
+  flex-direction: column;
+}
+
+[data-variant='raw-grid'] .rg-pair > .rg-band > :last-child {
+  flex: 1;
+}
+
+/* Ink under forced colours: its pair is system colours already (text on CanvasText, the
+   action's ButtonFace on ButtonText), so it keeps them, and no Canvas backplate blanks its words. */
+[data-variant='raw-grid']
+  :is(
+    .rg-tab,
+    .rg-index__tab,
+    .rg-sticker[data-tone='emphasis'],
+    .rg-act:first-child,
+    .rg-head__dest[aria-current],
+    .rg-ticker__toggle [aria-pressed='true']
+  ) {
+  forced-color-adjust: none;
+}
+
+/* The tab: a section's own heading as black tape hung from its rule. */
+[data-variant='raw-grid'] .rg-tab {
+  justify-self: start;
+  padding: var(--space-3xs) var(--space-xs) var(--space-2xs);
+  font-size: var(--type-body-font-size);
+  color: var(--color-text-inverse);
+  background-color: var(--color-text-primary);
+}
+
+[data-variant='raw-grid'] .rg-band__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  padding: 0;
+  background-color: var(--color-surface-subtle);
+}
+
+[data-variant='raw-grid'] .rg-band__head > :not(.rg-tab) {
+  padding: var(--space-2xs) var(--space-s);
+}
+
+[data-variant='raw-grid'] .rg-band__sub {
+  flex: 1 1 var(--layout-col-min);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='raw-grid'] .rg-band__count {
+  margin-inline-start: auto;
+}
+
+/* The ticker: full bleed on the prominent ground, the kit's pause in the cell at its end. */
+[data-variant='raw-grid'] .rg-ticker {
+  display: flex;
+  min-block-size: var(--layout-tick);
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-prominent);
+  border-block-end: var(--layout-rule);
+}
+
+[data-variant='raw-grid'] .rg-ticker__track {
+  display: flex;
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+}
+
+[data-variant='raw-grid'] .rg-ticker__belt {
+  display: flex;
+  flex: 1;
+  min-inline-size: 0;
+}
+
+[data-variant='raw-grid'] .rg-ticker[data-ticker='running'] .rg-ticker__belt {
+  flex: none;
+}
+
+[data-variant='raw-grid'] .rg-ticker__run {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3xs) var(--space-s);
+  padding-block: var(--space-2xs);
+  padding-inline: var(--layout-x) var(--space-s);
+  font-size: var(--type-label-font-size);
+  text-transform: uppercase;
+}
+
+[data-variant='raw-grid'] .rg-ticker__run li::after {
+  content: '★' / '';
+  margin-inline-start: var(--space-s);
+}
+
+[data-variant='raw-grid'] .rg-ticker:not([data-ticker='running']) .rg-ticker__run[data-copy] {
+  display: none;
+}
+
+[data-variant='raw-grid'] .rg-ticker[data-ticker='running'] .rg-ticker__run {
+  flex: none;
+  flex-wrap: nowrap;
+  padding-inline-start: var(--space-s);
+  white-space: nowrap;
+}
+
+/* The pause's cell keeps a ring's reach of canvas round the control, so its ring is drawn
+   whole on the canvas, clear of the rules; the status shows only when it says why it's off. */
+[data-variant='raw-grid'] .rg-ticker__toggle {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-xs);
+  padding-block: var(--layout-ring);
+  padding-inline: var(--space-s) var(--layout-x);
+  border-inline-start: var(--layout-rule);
+  font-size: var(--type-label-font-size);
+  background-color: var(--color-canvas);
+}
+
+[data-variant='raw-grid'] .rg-ticker__control {
+  display: flex;
+  align-items: center;
+  gap: inherit;
+}
+
+/* No script, or a plate: nothing runs, so there's nothing to pause. */
+[data-variant='raw-grid'] .rg-ticker[data-ticker='static'] .rg-ticker__toggle {
+  display: none;
+}
+
+/* Its press shows at once: none of the kit's transitions, so nothing moves once it pauses. */
+[data-variant='raw-grid'] .rg-ticker__toggle [data-ui-slot='action'] {
+  transition-property: none;
+  gap: var(--space-2xs);
+  padding-inline: var(--space-2xs);
+  color: inherit;
+  background-color: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+[data-variant='raw-grid'] .rg-ticker__toggle [aria-pressed='true'] {
+  color: var(--color-text-inverse);
+  background-color: var(--color-text-primary);
+}
+
+[data-variant='raw-grid'] .rg-ticker__toggle [data-ui-slot='action']::before {
+  content: '';
+  inline-size: 0.7em;
+  block-size: 0.8em;
+  border-inline: 0.22em solid currentColor;
+}
+
+[data-variant='raw-grid'] .rg-ticker__toggle [aria-pressed='true']::before {
+  block-size: 0;
+  border-inline-width: 0.7em 0;
+  border-block: 0.4em solid transparent;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='raw-grid']:not([data-motion='reduced'], [data-motion='static'])
+    .rg-ticker[data-ticker='running']
+    .rg-ticker__belt {
+    animation: raw-grid-ticker var(--motion-ambient) linear infinite;
+    animation-play-state: var(--motion-ambient-state);
+  }
+
+  /* Right to left the runs lie leftward, so the belt travels right: 0 to +50%. */
+  [data-variant='raw-grid']:not([data-motion='reduced'], [data-motion='static'])
+    .rg-ticker[data-ticker='running']:dir(rtl)
+    .rg-ticker__belt {
+    animation: raw-grid-ticker-rtl var(--motion-ambient) linear infinite;
+    animation-play-state: var(--motion-ambient-state);
+  }
+
+  /* Under the pointer it holds, over either direction by specificity; the runtime's pause
+     (the visitor's, off screen, a hidden tab) reaches it as --motion-ambient-state. */
+  [data-variant='raw-grid']:not([data-motion='reduced'], [data-motion='static'])
+    .rg-ticker[data-ticker='running']:has(.rg-ticker__track:hover)
+    .rg-ticker__belt {
+    animation-play-state: paused;
+  }
+
+  /* Feedback that moves, held while the visitor has paused motion too. */
+  [data-variant='raw-grid']:not(
+      [data-motion='reduced'],
+      [data-motion='static'],
+      :has(.rg-ticker__toggle [aria-pressed='true'])
+    )
+    :is(.rg-card, .rg-note, .rg-act) {
+    transition:
+      transform var(--motion-feedback) var(--motion-curve),
+      box-shadow var(--motion-feedback) var(--motion-curve);
+  }
+}
+
+@keyframes raw-grid-ticker {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes raw-grid-ticker-rtl {
+  to {
+    transform: translateX(50%);
+  }
+}
+
+/* The header row of cells: the name, the destinations, where you are, the Index. */
+[data-variant='raw-grid'] .rg-head {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 3;
+  padding-inline: var(--layout-x);
+  background-color: var(--color-canvas);
+}
+
+/* A short window, a phone on its side: the row scrolls away, so it never sits over what has focus. */
+@media (height < 32rem) {
+  [data-variant='raw-grid'] .rg-head {
+    position: static;
+  }
+}
+
+[data-variant='raw-grid'] .rg-head__row {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-columns), minmax(0, 1fr));
+  min-block-size: var(--layout-head);
+  border-inline-end: var(--layout-rule);
+  border-block-end: var(--layout-rule);
+}
+
+[data-variant='raw-grid'] :where(.rg-head__row > *, .rg-head__dests > li) {
+  display: flex;
+  align-items: center;
+  min-inline-size: 0;
+  border-inline-start: var(--layout-rule);
+}
+
+/* The name fits its own cell (the container), less its link's ring reach and padding. */
+[data-variant='raw-grid'] .rg-head__name {
+  container-type: inline-size;
+  grid-column: 1 / 4;
+  font-size: var(--type-body-font-size);
+}
+
+[data-variant='raw-grid'] .rg-head__name .rg-fit {
+  --layout-name-inset: calc(2 * (var(--layout-ring) + var(--space-xs)));
+}
+
+/* A link that fills its ruled cell, a ring's reach in from its rules; it still takes a press
+   anywhere in the cell, so its target is the whole cell (the sticky row's 44 px). */
+[data-variant='raw-grid'] .rg-go {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-self: stretch;
+  align-items: center;
+  gap: var(--space-2xs);
+  margin: var(--layout-ring);
+  padding-inline: var(--space-xs);
+  text-decoration: none;
+}
+
+[data-variant='raw-grid'] .rg-go::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--layout-ring));
+}
+
+[data-variant='raw-grid'] .rg-head__dests {
+  display: grid;
+  grid-column: 4 / 9;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: stretch;
+  border-inline-start: 0;
+}
+
+[data-variant='raw-grid'] .rg-head__dest {
+  justify-content: space-between;
+  gap: var(--space-3xs);
+  font-size: var(--type-label-font-size);
+}
+
+[data-variant='raw-grid'] .rg-head .rg-go:hover {
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-prominent);
+}
+
+[data-variant='raw-grid'] .rg-head__dest[aria-current] {
+  color: var(--color-text-inverse);
+  background-color: var(--color-text-primary);
+}
+
+[data-variant='raw-grid'] .rg-head__dest[aria-current] .rg-count {
+  color: inherit;
+}
+
+[data-variant='raw-grid'] .rg-head__where {
+  grid-column: 9 / 12;
+  gap: var(--space-2xs);
+  padding-inline: var(--space-s);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* A rule between where and what, for the eye; the cell is hidden from assistive technology. */
+[data-variant='raw-grid'] .rg-head__where[data-pair] .rg-head__where-k::after {
+  content: ' /' / '';
+}
+
+[data-variant='raw-grid'] .rg-head__where-v {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--color-text-primary);
+}
+
+[data-variant='raw-grid'] .rg-head__index {
+  grid-column: 12 / -1;
+  font-size: var(--type-body-font-size);
+}
+
+/* Centred, and with no padding of its own beside the burger, so the Index fits its two
+   columns under 200% text. */
+[data-variant='raw-grid'] :is(.rg-head__index, .rg-colophon__top) > a {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+[data-variant='raw-grid'] .rg-burger {
+  flex: none;
+  inline-size: 1em;
+  block-size: 0.7em;
+  border-block: var(--layout-line);
+  border-color: currentColor;
+  background: linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat;
+}
+
+/* The opening: the poster, the thesis, the pinned work. */
+[data-variant='raw-grid'] .rg-opening {
+  grid-template-rows: auto 1fr;
+  min-block-size: clamp(
+    var(--layout-opening-min),
+    calc(100svh - var(--layout-tick) - var(--layout-head) - var(--space-l)),
+    var(--layout-opening-max)
+  );
+}
+
+[data-variant='raw-grid'] .rg-poster {
+  container-type: inline-size;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto 1fr auto;
+  gap: var(--space-m) var(--space-l);
+  padding: var(--space-l);
+  background-color: var(--color-surface-prominent);
+}
+
+[data-variant='raw-grid'] .rg-poster > * {
+  grid-column: 1;
+}
+
+[data-variant='raw-grid'] .rg-poster__top {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+/* The first view keeps to four sizes (T1): label, body, the headline step, the name. */
+[data-variant='raw-grid'] .rg-poster__role {
+  font-size: var(--type-body-font-size);
+}
+
+[data-variant='raw-grid'] .rg-poster__tab {
+  margin-block-start: calc(-1 * var(--space-l));
+  margin-inline-start: calc(-1 * var(--space-l));
+}
+
+/* The name fit, its one size of its own (the type lint's exception): the share of the
+   poster's width the name may fill, the whole of it, or 58% beside the stickers, between the
+   first step and the display step. */
+[data-variant='raw-grid'] .rg-poster {
+  --layout-name-share: 1;
+}
+
+[data-variant='raw-grid'] .rg-poster--stuck {
+  --layout-name-share: 0.58;
+}
+
+[data-variant='raw-grid'] .rg-name {
+  grid-row: 2;
+  font-size: max(
+    var(--layout-name-min),
+    min(
+      var(--layout-name-max),
+      calc(
+        (var(--layout-name-share) * 100cqi - var(--layout-name-inset)) /
+          (var(--layout-name-chars) * var(--layout-fit))
+      )
+    )
+  );
+}
+
+/* Display, tape and title words (parts.tsx's Fit): the name's fit, at most the size their own
+   rule gives them, so they change only where their longest word wouldn't fit its cell, as under
+   200% text on a phone; never a word broken inside itself (design r5 P0-2). */
+[data-variant='raw-grid'] .rg-fit {
+  --layout-name-max: 1em;
+  --layout-name-min: min(0.5em, var(--type-label-font-size));
+  --layout-name-inset: calc(2 * (var(--layout-x) + var(--layout-cell-x)));
+  --layout-fit: 1;
+  grid-row: auto;
+  font-family: inherit;
+  font-weight: inherit;
+  font-variation-settings: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+}
+
+[data-variant='raw-grid'] .rg-name__line {
+  display: block;
+}
+
+/* The pasted label: the hero's tagline stuck on the poster with the language's shadow. */
+[data-variant='raw-grid'] .rg-paste {
+  grid-row: 3;
+  justify-self: start;
+  display: grid;
+  gap: var(--space-s);
+  max-inline-size: var(--type-measure-compact);
+  padding: var(--space-s) var(--space-m) var(--space-m);
+  background-color: var(--color-surface-default);
+  border: var(--layout-rule);
+  box-shadow: var(--ui-shadow-card);
+}
+
+[data-variant='raw-grid'] .rg-paste__lede {
+  font-size: var(--type-body-font-size);
+}
+
+[data-variant='raw-grid'] .rg-paste__status {
+  padding-block-start: var(--space-xs);
+  border-block-start: var(--layout-line);
+  color: var(--color-text-secondary);
+}
+
+/* A word longer than the line, on the label or in About's text, breaks rather than widening the page. */
+[data-variant='raw-grid'] :is(.rg-paste, .rg-about__text) p {
+  min-inline-size: 0;
+}
+
+[data-variant='raw-grid'] .rg-actions {
+  grid-row: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-s);
+}
+
+/* Block buttons: the composition's own, square, on the language's raised shadow. The item is
+   the block, its link a ring's reach inside, so the ring is drawn on the block's ground. */
+[data-variant='raw-grid'] .rg-act {
+  display: flex;
+  min-block-size: calc(var(--ui-control-height) + 2 * var(--layout-ring));
+  padding-inline: var(--space-xs);
+  font-size: var(--type-body-font-size);
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-default);
+  border: var(--layout-rule);
+  box-shadow: var(--ui-shadow-raised);
+}
+
+[data-variant='raw-grid'] .rg-act:first-child {
+  color: var(--color-on-accent);
+  background-color: var(--color-accent);
+}
+/* Stickers: facts pinned beside the name at a tilt, the first in ink, K-2's inverse pair.
+   Not on --color-emphasis: beside the primary action's accent that makes two loud fills in
+   the fold, and where a scheme gives no emphasis it is the accent itself (S3). */
+[data-variant='raw-grid'] .rg-stickers {
+  grid-column: 2;
+  grid-row: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: end;
+  justify-content: space-around;
+  gap: var(--space-l);
+  inline-size: min(var(--layout-sticker-max), 38cqi);
+  padding-block: var(--space-xs);
+}
+
+[data-variant='raw-grid'] .rg-sticker {
+  max-inline-size: 100%;
+  padding: var(--space-3xs);
+  border: var(--layout-rule);
+  border-radius: var(--ui-radius-badge);
+  box-shadow: var(--ui-shadow-raised);
+  background-color: var(--color-surface-default);
+  rotate: -4deg;
+}
+
+[data-variant='raw-grid'] .rg-sticker:nth-child(2) {
+  rotate: 3deg;
+  margin-inline-end: var(--space-xl);
+}
+
+[data-variant='raw-grid'] .rg-sticker:nth-child(3) {
+  rotate: -2deg;
+}
+
+[data-variant='raw-grid'] .rg-sticker:dir(rtl) {
+  rotate: 4deg;
+}
+
+[data-variant='raw-grid'] .rg-sticker:nth-child(2):dir(rtl) {
+  rotate: -3deg;
+}
+
+[data-variant='raw-grid'] .rg-sticker:nth-child(3):dir(rtl) {
+  rotate: 2deg;
+}
+
+[data-variant='raw-grid'] .rg-sticker[data-tone='emphasis'] {
+  background-color: var(--color-text-primary);
+}
+
+/* A sticker straightens while its link has focus: its ring, inside the sticker's border on
+   its own ground, is square and whole, not a tilted line half lost to antialiasing. */
+[data-variant='raw-grid'] .rg-stickers > .rg-sticker:has(a:focus-visible) {
+  rotate: none;
+}
+
+[data-variant='raw-grid'] .rg-sticker a {
+  display: grid;
+  justify-items: center;
+  padding: var(--space-2xs) var(--space-m);
+  text-align: center;
+  text-decoration: none;
+  color: var(--color-text-primary);
+}
+
+[data-variant='raw-grid'] .rg-sticker[data-tone='emphasis'] a {
+  color: var(--color-text-inverse);
+}
+
+[data-variant='raw-grid'] .rg-sticker__line {
+  font-size: var(--type-body-font-size);
+}
+
+/* The kit's words keep one line where they fit, and under large text break evenly, never past
+   the sticker. */
+[data-variant='raw-grid'] .rg-sticker__line[data-kit] {
+  text-wrap: balance;
+}
+
+[data-variant='raw-grid'] .rg-sticker__sub {
+  font-size: var(--type-label-font-size);
+}
+
+[data-variant='raw-grid'] .rg-thesis {
+  padding-block: 0 var(--space-m);
+  padding-inline: 0 var(--layout-cell-x);
+}
+
+[data-variant='raw-grid'] .rg-thesis > :not(.rg-tab) {
+  padding-inline-start: var(--layout-cell-x);
+}
+
+[data-variant='raw-grid'] .rg-thesis__lead {
+  font-size: var(--type-step-4);
+  text-transform: uppercase;
+}
+
+[data-variant='raw-grid'] .rg-thesis__whole {
+  font-size: var(--type-step-1);
+}
+
+[data-variant='raw-grid'] .rg-pin {
+  align-content: end;
+}
+
+[data-variant='raw-grid']
+  :is(.rg-pin__media, .rg-card__media, .rg-album__cover, .rg-about__portrait)
+  img {
+  object-fit: cover;
+}
+
+[data-variant='raw-grid'] .rg-pin__media img {
+  aspect-ratio: 2 / 1;
+  border: var(--layout-rule);
+}
+
+/* The pin's title sits a step under the thesis, at the first view's body size (T1's four). */
+[data-variant='raw-grid'] .rg-pin__title {
+  font-size: var(--type-body-font-size);
+  text-wrap: balance;
+}
+
+[data-variant='raw-grid'] .rg-opening :is(.rg-pin__fact, .rg-pin__sum, .rg-paste__status) {
+  font-size: var(--type-body-font-size);
+  line-height: var(--type-body-line-height);
+}
+
+[data-variant='raw-grid'] :is(.rg-pin__fact, .rg-checks li)::before {
+  content: '✓' / '';
+  display: inline-block;
+  inline-size: 1.4em;
+  font-weight: var(--type-title-font-weight);
+}
+
+/* Sheets: the destination's word at display size, the table of its sections beside it. */
+[data-variant='raw-grid'] .rg-sheet__word {
+  align-content: end;
+  padding: var(--space-l) var(--space-m) var(--space-s);
+  font-size: var(--type-step-7);
+  text-transform: uppercase;
+}
+
+[data-variant='raw-grid'] .rg-sheet__toc {
+  padding: var(--space-s) var(--space-m);
+  background-color: var(--color-surface-subtle);
+}
+
+[data-variant='raw-grid'] .rg-sheet__toc ul {
+  columns: 2;
+  column-gap: var(--space-m);
+}
+
+[data-variant='raw-grid'] :is(.rg-sheet__toc, .rg-index__col ul) li {
+  break-inside: avoid;
+  border-block-end: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='raw-grid'] :is(.rg-sheet__toc, .rg-index__col ul) a {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  padding-block: var(--space-3xs);
+  text-decoration: none;
+}
+
+/* A count keeps its digits whole however long the title beside it runs. */
+[data-variant='raw-grid'] .rg-count {
+  flex: none;
+}
+
+[data-variant='raw-grid'] :is(.rg-sheet__toc, .rg-index__col ul) a:hover {
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-prominent);
+}
+
+/* The bay: a bare stretch of board where stickers are pasted. */
+[data-variant='raw-grid'] .rg-bay {
+  row-gap: var(--space-l);
+  padding-block: var(--rhythm-item) calc(var(--rhythm-item) + var(--space-2xs));
+}
+
+[data-variant='raw-grid'] .rg-board,
+[data-variant='raw-grid'] .rg-wall {
+  row-gap: var(--space-l);
+}
+
+[data-variant='raw-grid'] .rg-slot,
+[data-variant='raw-grid'] .rg-ref {
+  min-inline-size: 0;
+  padding-inline: var(--space-s);
+}
+
+/* On the bare board, its words sit on a canvas plate, so no column line runs under a letter. */
+[data-variant='raw-grid'] .rg-ref {
+  justify-self: start;
+  padding-block: var(--space-3xs);
+  font-size: var(--type-body-font-size);
+  background-color: var(--color-canvas);
+}
+
+/* The sticker card: one template for every work, offer, and repository. It presses into its shadow. */
+[data-variant='raw-grid'] .rg-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  block-size: 100%;
+  background-color: var(--color-surface-default);
+  border: var(--layout-rule);
+  box-shadow: var(--ui-shadow-card);
+}
+
+[data-variant='raw-grid'] .rg-card[data-tone='prominent'] {
+  background-color: var(--color-surface-prominent);
+}
+
+[data-variant='raw-grid'] :is(.rg-slot:focus-within > .rg-card, .rg-slot:focus-within > .rg-note) {
+  transform: var(--ui-state-hover-transform);
+  box-shadow: var(--ui-shadow-raised);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-variant='raw-grid']
+    :is(.rg-slot:hover > .rg-card, .rg-slot:hover > .rg-note, .rg-act:hover) {
+    transform: var(--ui-state-hover-transform);
+    box-shadow: var(--ui-shadow-raised);
+  }
+
+  [data-variant='raw-grid'] :is(.rg-slot:active > .rg-card, .rg-act:active) {
+    transform: var(--ui-state-active-transform);
+    box-shadow: none;
+  }
+}
+
+[data-variant='raw-grid'] .rg-card__media {
+  border-block-end: var(--layout-rule);
+}
+
+[data-variant='raw-grid'] .rg-card__media img {
+  aspect-ratio: 16 / 10;
+}
+
+[data-variant='raw-grid'] .rg-card__body {
+  display: grid;
+  flex: 1;
+  align-content: start;
+  gap: var(--space-xs);
+  padding: var(--space-s) var(--space-m) var(--space-m);
+}
+
+[data-variant='raw-grid'] .rg-card__title {
+  --layout-name-max: var(--type-step-1);
+  --layout-name-min: var(--type-step-0);
+  font-size: var(--type-step-1);
+}
+
+[data-variant='raw-grid'] .rg-slot[data-size='l'] .rg-card__title {
+  --layout-name-max: var(--type-step-4);
+}
+
+/* A card's and the album's title take the name's fit, by the title's longest piece the browser
+   keeps whole (a pair's, across both), at most their step: so no title word ever breaks, at
+   any width. The fitted span keeps the title's voice. The card itself is the container, less
+   its body's padding, so the stretched title link's overlay still spans the whole card (a
+   container is the containing block of what's positioned inside it). */
+[data-variant='raw-grid'] :is(.rg-card, .rg-album__body) {
+  container-type: inline-size;
+  --layout-name-share: 1;
+}
+
+[data-variant='raw-grid'] .rg-card {
+  --layout-name-inset: calc(2 * var(--space-m));
+}
+
+[data-variant='raw-grid'] .rg-tools {
+  container-type: inline-size;
+  --layout-name-share: 1;
+  --layout-name-inset: calc(2 * var(--layout-cell-x));
+}
+
+[data-variant='raw-grid'] .rg-tools__k {
+  --layout-name-max: var(--type-step-1);
+  --layout-name-min: var(--type-step-0);
+}
+
+[data-variant='raw-grid'] :is(.rg-card__title, .rg-album__title, .rg-tools__k) > .rg-name {
+  grid-row: auto;
+  font-family: inherit;
+  font-weight: inherit;
+  font-variation-settings: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+}
+
+[data-variant='raw-grid'] .rg-card__title a {
+  text-decoration: none;
+}
+
+[data-variant='raw-grid'] .rg-stretch::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+[data-variant='raw-grid'] .rg-card__links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2xs) var(--space-m);
+  align-self: end;
+  padding-block-start: var(--space-xs);
+}
+
+/* Only the links rise over the title's overlay, never their row: a press on the row's empty
+   end opens the work, as anywhere else on the card. */
+[data-variant='raw-grid'] :is(.rg-card__links, .rg-card__sum) a {
+  position: relative;
+  z-index: 1;
+}
+
+[data-variant='raw-grid'] .rg-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs) var(--space-m);
+}
+
+[data-variant='raw-grid'] .rg-checks {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+[data-variant='raw-grid'] .rg-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+}
+
+[data-variant='raw-grid'] .rg-chips li {
+  padding: var(--space-3xs) var(--space-xs);
+  font-size: var(--type-label-font-size);
+  border: var(--layout-line);
+  border-radius: var(--ui-radius-badge);
+}
+
+[data-variant='raw-grid'] .rg-star {
+  padding: 0 var(--space-2xs);
+  border: var(--layout-line);
+  border-radius: var(--ui-radius-badge);
+}
+
+/* Rows: writing, dated, its pull quote beside it. */
+[data-variant='raw-grid'] .rg-row__title {
+  font-size: var(--type-step-2);
+}
+
+[data-variant='raw-grid'] .rg-row__quote {
+  font-size: var(--type-step-1);
+  background-color: var(--color-surface-subtle);
+}
+
+/* The ruled table. */
+[data-variant='raw-grid'] .rg-tablecell {
+  display: block;
+  padding: 0;
+}
+
+[data-variant='raw-grid'] .rg-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+}
+
+[data-variant='raw-grid'] .rg-table th {
+  padding: var(--space-2xs) var(--space-s);
+  font-family: var(--type-label-font-family);
+  font-weight: var(--type-label-font-weight);
+  font-size: var(--type-label-font-size);
+  text-align: start;
+  color: var(--color-text-secondary);
+  border-block-end: var(--layout-line);
+}
+
+/* Its words stay whole; a cell too narrow for its columns stacks the rows (the container
+   query below), so under enlarged text the table never runs past its cell. */
+[data-variant='raw-grid'] .rg-table td {
+  padding: var(--space-s);
+  vertical-align: top;
+}
+
+[data-variant='raw-grid'] .rg-table td > * + * {
+  margin-block-start: var(--space-2xs);
+}
+
+[data-variant='raw-grid'] .rg-table tr + tr td {
+  border-block-start: var(--layout-line);
+}
+
+[data-variant='raw-grid'] .rg-table :is(td, th) + :is(td, th) {
+  border-inline-start: var(--layout-line);
+}
+
+[data-variant='raw-grid'] .rg-t-title {
+  font-size: var(--type-step-0);
+}
+
+[data-variant='raw-grid'] .rg-t-no .rg-num {
+  font-size: var(--type-step-3);
+}
+
+/* A date is one token, in a table, a writing row, an episode's line or GitHub's "as of": its
+   column or line takes the whole date, so it never breaks between its words or at a hyphen.
+   A period breaks only at its dash, between its two dates. */
+[data-variant='raw-grid'] time {
+  white-space: nowrap;
+}
+
+/* A ruled cell's own label, for the phone, where the head row is hidden. */
+[data-variant='raw-grid'] .rg-t-k {
+  display: none;
+}
+
+/* Photographs: frames butt-jointed on the grid, each captioned in a white cell. */
+[data-variant='raw-grid'] .rg-photo {
+  grid-template-rows: auto 1fr;
+  gap: 0;
+  padding: 0;
+}
+
+/* What sits on the mat beside the picture, its credit or a missing rendition's label, reads in the inverse ink. */
+[data-variant='raw-grid'] .rg-photo__mat {
+  padding: var(--space-2xs);
+  color: var(--color-text-inverse);
+  background-color: var(--color-text-primary);
+}
+
+[data-variant='raw-grid'] .rg-photo__mat img {
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+}
+
+[data-variant='raw-grid'] .rg-photo__cap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-s);
+  padding: var(--space-xs) var(--space-s);
+}
+
+[data-variant='raw-grid'] .rg-photo__title {
+  flex: 1 1 100%;
+  font-family: var(--type-body-font-family);
+  font-size: var(--type-body-font-size);
+  color: var(--color-text-primary);
+}
+
+[data-variant='raw-grid'] .rg-photo__n {
+  margin-inline-start: auto;
+}
+
+[data-variant='raw-grid'] .rg-album__cover {
+  padding: 0;
+}
+
+[data-variant='raw-grid'] .rg-album__cover img {
+  aspect-ratio: 1;
+}
+
+[data-variant='raw-grid'] .rg-album__title {
+  --layout-name-max: var(--type-step-4);
+  font-size: var(--type-step-1);
+  text-transform: uppercase;
+}
+
+/* Half the tracks in each column, by count (the list sets its rows), not balanced by height. */
+[data-variant='raw-grid'] .rg-tracks {
+  display: grid;
+  grid-template-rows: repeat(var(--layout-track-rows), auto);
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  column-gap: var(--space-l);
+  counter-reset: rg-track;
+}
+
+[data-variant='raw-grid'] .rg-tracks li {
+  display: flex;
+  gap: var(--space-s);
+  padding-block: var(--space-3xs);
+  border-block-end: 1px solid var(--color-border-subtle);
+  counter-increment: rg-track;
+}
+
+[data-variant='raw-grid'] .rg-tracks li::before {
+  content: counter(rg-track);
+  min-inline-size: 1.5em;
+  font-family: var(--type-numeric-font-family);
+}
+
+/* A title fits its own column of the list (the container), not the album's width. */
+[data-variant='raw-grid'] .rg-tracks__t {
+  container-type: inline-size;
+  flex: 1;
+}
+
+[data-variant='raw-grid'] .rg-tracks__t > .rg-fit {
+  --layout-name-inset: 0px;
+}
+
+/* Proof: fact cells, a figure over its own words. */
+[data-variant='raw-grid'] .rg-fact {
+  padding-block-end: var(--space-l);
+}
+
+[data-variant='raw-grid'] .rg-fact__n {
+  font-size: var(--type-step-7);
+}
+
+[data-variant='raw-grid'] .rg-fact__unit {
+  font-size: var(--type-step-3);
+}
+
+[data-variant='raw-grid'] :is(.rg-fact figcaption, .rg-item__fig) {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+/* Notes: testimonials pasted on the bare board, staggered. */
+[data-variant='raw-grid'] .rg-note {
+  display: grid;
+  gap: var(--space-s);
+  padding: var(--space-m);
+  background-color: var(--color-surface-default);
+  border: var(--layout-rule);
+  box-shadow: var(--ui-shadow-card);
+}
+
+[data-variant='raw-grid'] .rg-note blockquote {
+  font-size: var(--type-step-1);
+}
+
+[data-variant='raw-grid'] .rg-wall > :first-child .rg-note blockquote {
+  font-size: var(--type-step-2);
+}
+
+[data-variant='raw-grid'] .rg-note blockquote p::before {
+  content: '“';
+}
+
+[data-variant='raw-grid'] .rg-note blockquote p::after {
+  content: '”';
+}
+
+[data-variant='raw-grid'] .rg-note figcaption {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+[data-variant='raw-grid'] .rg-item__title {
+  font-size: var(--type-step-1);
+}
+
+[data-variant='raw-grid'] .rg-item__quote {
+  font-size: var(--type-step-1);
+}
+
+[data-variant='raw-grid'] .rg-item__figs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs) var(--space-l);
+}
+
+[data-variant='raw-grid'] .rg-item__figs div {
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+[data-variant='raw-grid'] .rg-item__figs dd {
+  font-size: var(--type-step-2);
+}
+
+/* GitHub: the year as squares, decoration beside the figures it pictures. */
+[data-variant='raw-grid'] .rg-heat {
+  display: grid;
+  grid-template-rows: repeat(7, auto);
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  align-content: center;
+  gap: calc(var(--space-3xs) / 2);
+}
+
+[data-variant='raw-grid'] .rg-heat i {
+  aspect-ratio: 1;
+  background-color: var(--color-surface-subtle);
+}
+
+[data-variant='raw-grid'] .rg-heat [data-l='1'] {
+  background-color: var(--color-data-sequential-start);
+}
+
+[data-variant='raw-grid'] .rg-heat [data-l='2'] {
+  background-color: color-mix(
+    in oklab,
+    var(--color-data-sequential-start),
+    var(--color-data-sequential-middle)
+  );
+}
+
+[data-variant='raw-grid'] .rg-heat [data-l='3'] {
+  background-color: var(--color-data-sequential-middle);
+}
+
+[data-variant='raw-grid'] .rg-heat [data-l='4'] {
+  background-color: var(--color-data-sequential-end);
+}
+
+[data-variant='raw-grid'] .rg-gh__figs {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='raw-grid'] .rg-gh__figs .rg-fact__n {
+  font-size: var(--type-step-4);
+}
+
+/* About and the personal. */
+[data-variant='raw-grid'] .rg-about__text {
+  padding-block: var(--space-l);
+}
+
+[data-variant='raw-grid'] .rg-about__text > .pf-rich-text > :first-child {
+  font-size: var(--type-step-1);
+}
+
+[data-variant='raw-grid'] .rg-about__portrait {
+  padding: 0;
+}
+
+[data-variant='raw-grid'] .rg-about__portrait {
+  align-content: stretch;
+}
+
+[data-variant='raw-grid'] .rg-about__portrait > *,
+[data-variant='raw-grid'] .rg-about__portrait img {
+  block-size: 100%;
+  min-block-size: var(--layout-col-min);
+}
+
+[data-variant='raw-grid'] .rg-list {
+  gap: 0;
+  padding: 0;
+}
+
+[data-variant='raw-grid'] .rg-list li {
+  padding: var(--space-s) var(--space-m);
+  font-size: var(--type-step-1);
+}
+
+[data-variant='raw-grid'] .rg-list li + li {
+  border-block-start: var(--layout-line);
+}
+
+[data-variant='raw-grid'] .rg-skills {
+  gap: 0;
+  padding: 0;
+}
+
+[data-variant='raw-grid'] .rg-skill {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 9fr);
+  grid-template-rows: auto 1fr;
+  column-gap: var(--space-m);
+}
+
+[data-variant='raw-grid'] .rg-skill + .rg-skill {
+  border-block-start: var(--layout-rule);
+}
+
+[data-variant='raw-grid'] .rg-skill__tab {
+  grid-row: 1 / 3;
+  padding: var(--space-s);
+  font-size: var(--type-step-1);
+  color: var(--color-text-inverse);
+  background-color: var(--color-text-primary);
+}
+
+[data-variant='raw-grid'] .rg-skill > :not(.rg-skill__tab) {
+  grid-column: 2;
+  padding-block: var(--space-s) 0;
+  padding-inline-end: var(--space-s);
+}
+
+[data-variant='raw-grid'] .rg-skill > :last-child {
+  padding-block-end: var(--space-s);
+}
+
+[data-variant='raw-grid'] .rg-tools__k {
+  font-size: var(--type-step-1);
+}
+
+[data-variant='raw-grid'] .rg-tools li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-s);
+  padding-block: var(--space-3xs);
+  border-block-end: 1px solid var(--color-border-subtle);
+}
+
+[data-variant='raw-grid'] .rg-oddity {
+  font-size: var(--type-step-1);
+}
+
+[data-variant='raw-grid'] .rg-oddity:nth-child(even) {
+  background-color: var(--color-surface-subtle);
+}
+
+[data-variant='raw-grid'] .rg-quote {
+  gap: var(--space-m);
+  padding-block: var(--space-xl) var(--space-l);
+}
+
+[data-variant='raw-grid'] .rg-quote blockquote {
+  max-inline-size: var(--type-measure-compact);
+  font-size: var(--type-step-6);
+  text-transform: uppercase;
+}
+
+[data-variant='raw-grid'] .rg-quote figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-s);
+}
+
+/* A work's own page: the poster beside its fact sheet, the case in bands, the way on. */
+[data-variant='raw-grid'] .rg-casepage {
+  display: grid;
+  gap: var(--rhythm-section);
+}
+
+/* The case's opening is as tall as what it holds: no viewport-high poster with air in it. */
+[data-variant='raw-grid'] .rg-casepage .rg-opening {
+  min-block-size: 0;
+}
+
+/* One term column for every row, as wide as the longest term, the values aligned beside it. */
+[data-variant='raw-grid'] .rg-dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+[data-variant='raw-grid'] .rg-dl > div {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  gap: var(--space-xs);
+  padding-block: var(--space-2xs);
+  border-block-start: var(--layout-line);
+}
+
+/* A term is a label: at label size, whole, setting its column's width. */
+[data-variant='raw-grid'] .rg-dl dt {
+  font-size: var(--type-label-font-size);
+}
+
+/* A cited record's tape hangs from its cell's corner, as a band's does. */
+[data-variant='raw-grid'] .rg-item > .rg-tab:first-child {
+  margin-block-start: calc(-1 * var(--space-s));
+  margin-inline-start: calc(-1 * var(--layout-cell-x));
+}
+
+/* Beside its description the cover fills its cell's height, cropped, so no void opens under it. */
+[data-variant='raw-grid'] .rg-case__media {
+  align-content: stretch;
+  padding: 0;
+}
+
+[data-variant='raw-grid'] .rg-case__media > *,
+[data-variant='raw-grid'] .rg-case__media img {
+  block-size: 100%;
+}
+
+[data-variant='raw-grid'] .rg-case__media img {
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+/* The reflection's measure is its band: two or three balanced lines across it, no void. */
+[data-variant='raw-grid'] .rg-reflect {
+  padding-block: var(--space-l);
+  font-size: var(--type-step-3);
+}
+
+[data-variant='raw-grid'] .rg-reflect :is(.pf-rich-text, p) {
+  max-inline-size: none;
+}
+
+[data-variant='raw-grid'] :is(.rg-next__go, .rg-next__all) {
+  align-content: end;
+  padding-block: var(--space-l);
+  text-decoration: none;
+}
+
+[data-variant='raw-grid'] .rg-next__go {
+  background-color: var(--color-surface-prominent);
+}
+
+[data-variant='raw-grid'] .rg-next__all .rg-next__title {
+  font-size: var(--type-step-4);
+}
+
+/* Cells side by side: each span a class, and the last row of a run always filled, so no hole opens. */
+@container rg-page (width >= 48rem) {
+  [data-variant='raw-grid'] :is(.rg-fact, .rg-oddity, .rg-tools) {
+    grid-column: span 3;
+  }
+
+  /* Records two to a row; three or more, three to a row, as photographs are. */
+  [data-variant='raw-grid'] .rg-item {
+    grid-column: span 6;
+  }
+
+  [data-variant='raw-grid']
+    :is(.rg-photo, .rg-item:nth-last-child(n + 3), .rg-item:nth-last-child(n + 3) ~ .rg-item) {
+    grid-column: span 4;
+  }
+
+  [data-variant='raw-grid']
+    :is(.rg-fact, .rg-oddity, .rg-tools):nth-child(
+      4n + 1 of .rg-fact,
+      .rg-oddity,
+      .rg-tools
+    ):last-child,
+  [data-variant='raw-grid']
+    :is(.rg-photo, .rg-item):nth-child(3n + 1 of .rg-photo, .rg-item):last-child {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='raw-grid']
+    :is(.rg-fact, .rg-oddity, .rg-tools):nth-child(
+      4n + 1 of .rg-fact,
+      .rg-oddity,
+      .rg-tools
+    ):nth-last-child(2),
+  [data-variant='raw-grid']
+    :is(.rg-fact, .rg-oddity, .rg-tools):nth-child(
+      4n + 2 of .rg-fact,
+      .rg-oddity,
+      .rg-tools
+    ):last-child,
+  [data-variant='raw-grid']
+    :is(.rg-photo, .rg-item):nth-child(3n + 1 of .rg-photo, .rg-item):nth-last-child(2),
+  [data-variant='raw-grid']
+    :is(.rg-photo, .rg-item):nth-child(3n + 2 of .rg-photo, .rg-item):last-child {
+    grid-column: span 6;
+  }
+
+  [data-variant='raw-grid']
+    :is(.rg-fact, .rg-oddity, .rg-tools):nth-child(
+      4n + 1 of .rg-fact,
+      .rg-oddity,
+      .rg-tools
+    ):nth-last-child(3),
+  [data-variant='raw-grid']
+    :is(.rg-fact, .rg-oddity, .rg-tools):nth-child(
+      4n + 2 of .rg-fact,
+      .rg-oddity,
+      .rg-tools
+    ):nth-last-child(2),
+  [data-variant='raw-grid']
+    :is(.rg-fact, .rg-oddity, .rg-tools):nth-child(
+      4n + 3 of .rg-fact,
+      .rg-oddity,
+      .rg-tools
+    ):last-child {
+    grid-column: span 4;
+  }
+
+  [data-variant='raw-grid'] .rg-pair > .rg-band:first-child {
+    grid-column: 1 / 7;
+  }
+
+  [data-variant='raw-grid'] .rg-pair > .rg-band:last-child {
+    grid-column: 7 / -1;
+  }
+
+  [data-variant='raw-grid'] .rg-pair .rg-item {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='raw-grid'] .rg-poster {
+    grid-column: 1 / 9;
+    grid-row: 1 / 3;
+  }
+
+  [data-variant='raw-grid'] :is(.rg-thesis, .rg-pin) {
+    grid-column: 9 / -1;
+  }
+
+  [data-variant='raw-grid']
+    .rg-opening:is([data-thesis='none'], [data-pin='none'])
+    > :is(.rg-thesis, .rg-pin) {
+    grid-row: 1 / 3;
+  }
+
+  [data-variant='raw-grid'] .rg-opening[data-facts='none'] > .rg-poster {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='raw-grid'] :is(.rg-case__media, .rg-next__go) {
+    grid-column: 1 / 9;
+  }
+
+  [data-variant='raw-grid'] :is(.rg-case__media, .rg-next__go) + .rg-cell {
+    grid-column: 9 / -1;
+  }
+
+  /* A cover with no description beside it runs the width: no empty columns 9 to 12. */
+  [data-variant='raw-grid'] .rg-case__media:not(:has(+ :not(.rg-photo))) {
+    grid-column: 1 / -1;
+  }
+
+  /* A part alone across the field's width fills it: a long one in two columns, a short one
+     a step up and balanced, never a measure of lines in the band's corner. */
+  [data-variant='raw-grid'] [data-wide] :is(.pf-rich-text, p) {
+    max-inline-size: none;
+  }
+
+  [data-variant='raw-grid'] [data-wide='columns'] .pf-rich-text {
+    display: block;
+    columns: 2;
+    column-gap: var(--space-l);
+  }
+
+  [data-variant='raw-grid'] [data-wide='set'] .pf-rich-text {
+    font-size: var(--type-step-2);
+  }
+
+  [data-variant='raw-grid'] .rg-sheet__word {
+    grid-column: 1 / 8;
+  }
+
+  [data-variant='raw-grid'] .rg-sheet__word:only-child {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='raw-grid'] .rg-sheet__toc {
+    grid-column: 8 / -1;
+  }
+
+  [data-variant='raw-grid'] .rg-slot {
+    grid-column: span 4;
+  }
+
+  [data-variant='raw-grid'] .rg-board[data-count='1'] > .rg-slot {
+    grid-column: 1 / 9;
+  }
+
+  [data-variant='raw-grid'] .rg-board[data-count='3'] > :first-child {
+    grid-column: 1 / 8;
+    grid-row: span 2;
+  }
+
+  [data-variant='raw-grid'] .rg-board[data-count='3'] > .rg-slot:not(:first-child) {
+    grid-column: 8 / -1;
+  }
+
+  [data-variant='raw-grid'] .rg-board[data-count='4'] > :first-child {
+    grid-column: 1 / 7;
+    grid-row: span 2;
+  }
+
+  [data-variant='raw-grid'] .rg-board[data-count='4'] > .rg-slot:not(:first-child) {
+    grid-column: span 3;
+  }
+
+  [data-variant='raw-grid'] .rg-board .rg-slot[data-size='s'] {
+    align-self: start;
+  }
+
+  /* Two cards are an equal pair, each half the field and as tall as the other (S1),
+     when both have a cover or neither does. */
+  [data-variant='raw-grid'] .rg-board[data-count='2'] > .rg-slot {
+    grid-column: span 6;
+    align-self: stretch;
+  }
+
+  /* A large card as tall as the two or three beside it keeps its last line, the facts or its
+     links, at its foot, the links still at the start edge. */
+  [data-variant='raw-grid']
+    .rg-board:is([data-count='3'], [data-count='4'])
+    > .rg-slot[data-size='l']
+    .rg-card__body {
+    display: flex;
+    flex-direction: column;
+  }
+
+  [data-variant='raw-grid']
+    .rg-board:is([data-count='3'], [data-count='4'])
+    > .rg-slot[data-size='l']
+    .rg-card__body
+    > :last-child:not(:first-child) {
+    align-self: stretch;
+    margin-block-start: auto;
+  }
+
+  /* Peers: one title step for both, not the first a step above the other. */
+  [data-variant='raw-grid'] .rg-board[data-count='2'] > .rg-slot .rg-card__title {
+    --layout-name-max: var(--type-step-3);
+  }
+
+  /* One covered, one not: each runs the field's width, the cover beside the text and as
+     tall as it, the other a strip, so neither card holds blank. */
+  [data-variant='raw-grid'] .rg-board[data-pair='strip'] > .rg-slot {
+    grid-column: 1 / -1;
+    align-self: start;
+  }
+
+  [data-variant='raw-grid'] .rg-board[data-pair='strip'] .rg-card:has(> .rg-card__media) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  [data-variant='raw-grid'] .rg-board[data-pair='strip'] .rg-card__media {
+    position: relative;
+    min-block-size: var(--layout-strip-min);
+    overflow: hidden;
+    border-block-end: 0;
+    border-inline-end: var(--layout-rule);
+  }
+
+  [data-variant='raw-grid'] .rg-board[data-pair='strip'] .rg-card__media > * {
+    position: absolute;
+    inset: 0;
+  }
+
+  [data-variant='raw-grid'] .rg-board[data-pair='strip'] .rg-card__media img {
+    inline-size: 100%;
+    block-size: 100%;
+    aspect-ratio: auto;
+    object-fit: cover;
+  }
+
+  /* The strip itself, on the field's columns: what it is, its title and description on
+     about c1 to c7; its tags at the title's top and its links on the description's last
+     line, on c8 to c12, set to the far edge. Full, not padded. */
+  [data-variant='raw-grid']
+    .rg-board[data-pair='strip']
+    .rg-card:not(:has(> .rg-card__media))
+    .rg-card__body {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    column-gap: var(--space-l);
+    /* Its title has the first column only. */
+    --layout-name-share: 0.55;
+  }
+
+  [data-variant='raw-grid']
+    .rg-board[data-pair='strip']
+    .rg-card:not(:has(> .rg-card__media))
+    .rg-card__body
+    > * {
+    grid-column: 1;
+  }
+
+  [data-variant='raw-grid']
+    .rg-board[data-pair='strip']
+    .rg-card:not(:has(> .rg-card__media))
+    .rg-meta {
+    grid-row: 1;
+  }
+
+  [data-variant='raw-grid']
+    .rg-board[data-pair='strip']
+    .rg-card:not(:has(> .rg-card__media))
+    .rg-card__title {
+    grid-row: 2;
+  }
+
+  [data-variant='raw-grid']
+    .rg-board[data-pair='strip']
+    .rg-card:not(:has(> .rg-card__media))
+    .rg-card__sum {
+    grid-row: 3;
+  }
+
+  [data-variant='raw-grid']
+    .rg-board[data-pair='strip']
+    .rg-card:not(:has(> .rg-card__media))
+    .rg-checks {
+    grid-row: 4;
+  }
+
+  [data-variant='raw-grid']
+    .rg-board[data-pair='strip']
+    .rg-card:not(:has(> .rg-card__media))
+    .rg-chips {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: start;
+    justify-content: end;
+  }
+
+  [data-variant='raw-grid']
+    .rg-board[data-pair='strip']
+    .rg-card:not(:has(> .rg-card__media))
+    .rg-card__links {
+    grid-column: 2;
+    grid-row: 3;
+    align-self: end;
+    justify-content: end;
+  }
+
+  [data-variant='raw-grid'] .rg-wall > :nth-child(3n + 1) {
+    grid-column: 1 / 6;
+  }
+
+  [data-variant='raw-grid'] .rg-wall > :nth-child(3n + 2) {
+    grid-column: 6 / 10;
+    margin-block-start: var(--space-xl);
+  }
+
+  [data-variant='raw-grid'] .rg-wall > :nth-child(3n) {
+    grid-column: 10 / -1;
+    margin-block-start: var(--space-2xl);
+  }
+
+  /* Three columns hold the longest date whole. */
+  [data-variant='raw-grid'] .rg-row__when {
+    grid-column: 1 / 4;
+  }
+
+  [data-variant='raw-grid'] .rg-row__main {
+    grid-column: 4 / 9;
+  }
+
+  [data-variant='raw-grid'] .rg-row__main:last-child {
+    grid-column: 4 / -1;
+  }
+
+  [data-variant='raw-grid'] .rg-row__quote {
+    grid-column: 9 / -1;
+  }
+
+  [data-variant='raw-grid'] .rg-album__cover {
+    grid-column: 1 / 5;
+  }
+
+  /* A picture beside words keeps its own shape at the top of its cell, closed by a rule, and
+     the exposed grid shows under it: never a picture stretched to its neighbour's height. */
+  [data-variant='raw-grid'] :is(.rg-album__cover, .rg-about__portrait) {
+    align-self: start;
+    border-block-end: var(--layout-rule);
+  }
+
+  [data-variant='raw-grid'] .rg-about__portrait * {
+    block-size: auto;
+  }
+
+  [data-variant='raw-grid'] .rg-about__portrait img {
+    aspect-ratio: 4 / 5;
+  }
+
+  [data-variant='raw-grid'] .rg-album__cover + .rg-album__body {
+    grid-column: 5 / -1;
+  }
+
+  [data-variant='raw-grid'] .rg-heat {
+    grid-column: 4 / -1;
+    grid-row: 2;
+  }
+
+  [data-variant='raw-grid'] .rg-heat + .rg-gh {
+    grid-column: 1 / 4;
+    grid-row: 2;
+  }
+
+  [data-variant='raw-grid'] .rg-about__text:not(:last-child) {
+    grid-column: 1 / 9;
+  }
+
+  [data-variant='raw-grid'] .rg-about__portrait {
+    grid-column: 9 / -1;
+  }
+
+  [data-variant='raw-grid'] .rg-ink__msg {
+    grid-column: 1 / 8;
+  }
+
+  [data-variant='raw-grid'] .rg-ink__msg + .rg-ink__go {
+    grid-column: 8 / -1;
+  }
+
+  [data-variant='raw-grid'] .rg-table--roles :is(td, th):first-child,
+  [data-variant='raw-grid'] .rg-table--study :is(td, th):first-child,
+  [data-variant='raw-grid'] .rg-table--talks :is(td, th):first-child {
+    inline-size: calc(100% * 2 / 12);
+  }
+
+  [data-variant='raw-grid'] .rg-table--roles :is(td, th):nth-child(2) {
+    inline-size: calc(100% * 3 / 12);
+  }
+
+  [data-variant='raw-grid'] .rg-table--episodes :is(td, th):first-child {
+    inline-size: calc(100% / 12);
+  }
+
+  [data-variant='raw-grid'] .rg-table--episodes :is(td, th):nth-child(n + 3) {
+    inline-size: calc(100% * 1.5 / 12);
+  }
+}
+
+/* The close: the ink block, its biggest link the email (the prominent ground until K-2's inverse focus). */
+[data-variant='raw-grid'] .rg-foot {
+  display: grid;
+  gap: var(--rhythm-group);
+  padding: var(--rhythm-section) var(--layout-x) var(--space-l);
+}
+
+[data-variant='raw-grid'] .rg-index:not(:popover-open) {
+  padding-block-start: var(--space-s);
+  background-color: var(--color-canvas);
+}
+
+[data-variant='raw-grid'] .rg-ink .rg-cell {
+  background-color: var(--color-surface-prominent);
+}
+
+[data-variant='raw-grid'] .rg-ink__head {
+  padding: 0;
+}
+
+/* The tape sits on the corner; the subtitles under it start at the block's content edge. */
+[data-variant='raw-grid'] .rg-ink__head > :not(.rg-tab) {
+  padding: var(--space-2xs) var(--layout-cell-x);
+}
+
+[data-variant='raw-grid'] .rg-ink__msg {
+  padding-block: var(--space-l);
+  font-size: var(--type-step-0);
+}
+
+[data-variant='raw-grid'] .rg-ink__lead {
+  max-inline-size: var(--type-measure-compact);
+  font-size: var(--type-step-5);
+  text-transform: uppercase;
+}
+
+[data-variant='raw-grid'] .rg-ink__go {
+  align-content: end;
+  gap: var(--space-m);
+  padding-block: var(--space-l);
+}
+
+/* The heading of a block that holds only its big link hangs from the link cell's corner. */
+[data-variant='raw-grid'] .rg-ink__go--head {
+  align-content: space-between;
+  padding-block-start: 0;
+}
+
+[data-variant='raw-grid'] .rg-ink__go--head > .rg-tab {
+  justify-self: start;
+  margin-inline-start: calc(-1 * var(--layout-cell-x));
+}
+
+[data-variant='raw-grid'] .rg-ink__mail {
+  display: grid;
+  gap: var(--space-2xs);
+  justify-self: start;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  text-decoration: none;
+}
+
+/* The big link and the way on: underlined caps, an accent rule under them. */
+[data-variant='raw-grid'] :is(.rg-ink__big, .rg-next__title) {
+  text-transform: uppercase;
+  text-decoration-line: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.1em;
+  text-decoration-color: var(--color-accent);
+}
+
+[data-variant='raw-grid'] .rg-ink__addr {
+  font-size: var(--type-step-2);
+  overflow-wrap: anywhere;
+}
+
+[data-variant='raw-grid'] .rg-ink__second {
+  justify-self: start;
+  font-size: var(--type-step-1);
+}
+
+/* The ways out divide by the line showing through the gaps between them, so a row's last one,
+   wherever the row wraps, meets the block's own rule with no second edge, and rows rule apart. */
+[data-variant='raw-grid'] .rg-ink .rg-ink__links {
+  container-type: inline-size;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 0;
+  background-color: var(--color-border-strong);
+}
+
+/* Each as wide as its words to start with, so a name or a hostname keeps its line when the
+   row has room, and the row's ways share what's left. */
+[data-variant='raw-grid'] .rg-ink__links li {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  font-size: var(--type-step-1);
+  background-color: var(--color-surface-prominent);
+}
+
+/* Under forced colours the grounds are all Canvas, so each way out draws the line round itself,
+   in the system's colour, over the gaps and the block's own rules. */
+@media (forced-colors: active) {
+  [data-variant='raw-grid'] .rg-ink__links li {
+    outline: var(--layout-line);
+  }
+}
+
+/* A long address wraps at the points Breakable gives it, a label never inside a word (X1). Its
+   ring lies a ring's reach inside its way's own ground, never on the block's rules, where under
+   forced colours or more contrast it would be the rules' colour (the sweep's quality cells). */
+[data-variant='raw-grid'] .rg-ink__links a {
+  display: flex;
+  justify-content: space-between;
+  min-inline-size: 0;
+  margin: var(--layout-ring);
+  padding: calc(var(--space-s) - var(--layout-ring)) calc(var(--space-m) - var(--layout-ring));
+  text-decoration: none;
+}
+
+/* A name and its mark fit the list's width (the container) less the link's padding: one alone
+   on its row has the whole of it. */
+[data-variant='raw-grid'] .rg-ink__links .rg-fit {
+  --layout-name-inset: calc(2 * var(--space-m));
+}
+
+[data-variant='raw-grid'] .rg-ink__links a:hover {
+  color: var(--color-text-inverse);
+  background-color: var(--color-text-primary);
+}
+
+/* The index: every section by sheet, a grid of columns; over the page as a popover when the Index opens it. */
+/* The bar sets INDEX on the grid's top rule as tape, Close (when it's open) at the far end. */
+[data-variant='raw-grid'] .rg-index__bar {
+  display: flex;
+  align-items: end;
+  gap: var(--space-m);
+}
+
+[data-variant='raw-grid'] .rg-index__close {
+  margin-inline-start: auto;
+  min-block-size: var(--ui-control-height);
+  padding-inline: var(--space-s);
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-default);
+  border: var(--layout-rule);
+  border-radius: 0;
+  box-shadow: var(--ui-shadow-raised);
+  cursor: pointer;
+}
+
+[data-variant='raw-grid'] .rg-index__close[hidden] {
+  display: none;
+}
+
+/* Columns wrap in rows that each fill the width, so no row leaves an open slot whose missing
+   rule makes a taller column above look as if it runs past its row. */
+[data-variant='raw-grid'] .rg-index__grid {
+  display: flex;
+  flex-wrap: wrap;
+  border-inline-end: var(--layout-rule);
+  border-block-end: var(--layout-rule);
+}
+
+[data-variant='raw-grid'] .rg-index__col {
+  flex: 1 1 var(--layout-col-min);
+  min-inline-size: 0;
+  display: grid;
+  align-content: start;
+  gap: var(--space-2xs);
+  padding-block: 0 var(--space-s);
+  padding-inline: 0 var(--space-s);
+  border-inline-start: var(--layout-rule);
+  border-block-start: var(--layout-rule);
+  background-color: var(--color-canvas);
+}
+
+[data-variant='raw-grid'] .rg-index__col ul {
+  padding-inline-start: var(--space-s);
+}
+
+/* Below wide desktop up to three columns share a row and more split in two rows of halves; one
+   row above it. A row is never one column alone. */
+@container rg-page (48rem <= width < 75rem) {
+  [data-variant='raw-grid'] .rg-index__col {
+    --layout-index-row: calc(
+      var(--layout-index-cols) - clamp(0, var(--layout-index-cols) - 3, 1) *
+        (var(--layout-index-cols) - round(up, var(--layout-index-cols) / 2, 1))
+    );
+    flex-basis: calc(100% / var(--layout-index-row) - 1px);
+  }
+}
+
+/* A laptop's width: the where cell gives its columns to the destinations, so each tab keeps its
+   label and count clear of its rules (design r5 P1-2). */
+@container rg-page (75rem <= width < 82.5rem) {
+  [data-variant='raw-grid'] .rg-head__where {
+    display: none;
+  }
+
+  [data-variant='raw-grid'] .rg-head__dests {
+    grid-column: 4 / 12;
+  }
+}
+
+@container rg-page (width >= 75rem) {
+  [data-variant='raw-grid'] .rg-index__col {
+    flex-basis: calc(100% / var(--layout-index-cols) - 1px);
+  }
+}
+
+/* It hangs a ring's width in from its column's rules, so its focus ring lies whole on the
+   canvas, never on the rule's ink. */
+[data-variant='raw-grid'] .rg-index__tab {
+  justify-self: start;
+  margin-block-start: calc(var(--ui-focus-offset) + var(--ui-focus-width));
+  margin-inline-start: calc(var(--ui-focus-offset) + var(--ui-focus-width));
+  padding: var(--space-3xs) var(--space-xs) var(--space-2xs);
+  font-size: var(--type-body-font-size);
+  color: var(--color-text-inverse);
+  background-color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+[data-variant='raw-grid'] .rg-index:popover-open {
+  position: fixed;
+  inset: calc(var(--layout-head) + var(--space-s)) var(--layout-x) auto;
+  inline-size: auto;
+  block-size: auto;
+  max-block-size: calc(100dvh - var(--layout-head) - var(--space-l));
+  margin: 0;
+  padding: var(--space-m);
+  overflow: auto;
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-overlay);
+  border: var(--layout-rule);
+  box-shadow: var(--ui-shadow-overlay);
+}
+
+[data-variant='raw-grid'] .rg-index::backdrop {
+  background-color: color-mix(in oklab, var(--color-scrim) 55%, transparent);
+}
+
+/* The colophon row of cells. */
+[data-variant='raw-grid'] .rg-colophon {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-columns), minmax(0, 1fr));
+  border-inline-end: var(--layout-rule);
+  border-block-end: var(--layout-rule);
+}
+
+[data-variant='raw-grid'] .rg-colophon > * {
+  display: flex;
+  background-color: var(--color-canvas);
+  align-items: center;
+  padding-block: var(--space-xs);
+  grid-column: 1 / -1;
+  min-block-size: var(--layout-head);
+  padding-inline: var(--space-s);
+  border-inline-start: var(--layout-rule);
+  border-block-start: var(--layout-rule);
+}
+
+[data-variant='raw-grid'] .rg-colophon__slot:has(> :empty) {
+  display: none;
+}
+
+@container rg-page (width >= 48rem) {
+  /* Its last column is as wide as its word, Top, so the word never stacks a letter a line. */
+  [data-variant='raw-grid'] .rg-colophon {
+    grid-template-columns: repeat(11, minmax(0, 1fr)) auto;
+  }
+
+  [data-variant='raw-grid'] .rg-colophon__name {
+    grid-column: 1 / 4;
+  }
+
+  [data-variant='raw-grid'] .rg-colophon__note {
+    grid-column: 4 / 10;
+  }
+
+  [data-variant='raw-grid'] .rg-colophon__slot {
+    grid-column: 10 / 12;
+  }
+
+  [data-variant='raw-grid'] .rg-colophon:has(.rg-colophon__slot > :empty) .rg-colophon__note {
+    grid-column: 4 / 12;
+  }
+
+  [data-variant='raw-grid'] .rg-colophon__top {
+    grid-column: 12 / -1;
+  }
+}
+
+/* Between phone and desktop the opening stacks: the poster runs the field's width, then the
+   thesis and the pin share the row under it (or the case's fact sheet runs it), so no word
+   breaks inside a narrow column and no sticker spills over the pasted label. */
+@container rg-page (48rem <= width < 64rem) {
+  [data-variant='raw-grid'] .rg-opening {
+    grid-template-rows: none;
+    min-block-size: 0;
+  }
+
+  [data-variant='raw-grid'] .rg-opening > .rg-poster.rg-cell {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
+  [data-variant='raw-grid'] .rg-opening > :is(.rg-thesis, .rg-pin).rg-cell {
+    grid-column: span 6;
+    grid-row: auto;
+  }
+
+  [data-variant='raw-grid']
+    .rg-opening:is([data-thesis='none'], [data-pin='none'])
+    > :is(.rg-thesis, .rg-pin).rg-cell {
+    grid-column: 1 / -1;
+  }
+
+  /* The work's cover runs the width, its description under it, not in a narrow column. */
+  [data-variant='raw-grid'] :is(.rg-case__media, .rg-case__media + .rg-cell).rg-cell {
+    grid-column: 1 / -1;
+  }
+
+  /* The ink block's message and its big link each run the width, so the link's word fits. */
+  [data-variant='raw-grid'] :is(.rg-ink__msg, .rg-ink__msg + .rg-ink__go).rg-cell {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='raw-grid'] :is(.rg-sheet__word, .rg-sheet__toc) {
+    grid-column: 1 / -1;
+  }
+
+  /* A writing row's date over its title, as on a phone: never a month broken in a narrow column. */
+  [data-variant='raw-grid'] .rg-row__when {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='raw-grid'] .rg-row__main {
+    grid-column: 1 / 9;
+  }
+
+  [data-variant='raw-grid'] .rg-row__main:last-child {
+    grid-column: 1 / -1;
+  }
+
+  /* Facts, oddities and the stack two to a row, not four phone-wide columns; an odd last one
+     runs the width. */
+  [data-variant='raw-grid']
+    :is(.rg-fact, .rg-oddity, .rg-tools):nth-child(n of .rg-fact, .rg-oddity, .rg-tools).rg-cell {
+    grid-column: span 6;
+  }
+
+  [data-variant='raw-grid']
+    :is(.rg-fact, .rg-oddity, .rg-tools):nth-child(
+      odd of .rg-fact,
+      .rg-oddity,
+      .rg-tools
+    ):last-child.rg-cell {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Below desktop a large card's title is a step down, so its longest word fits a half-width
+   card, and a skill's tab sits over its words, so its longest word has the width. */
+@container rg-page (width < 64rem) {
+  /* A writing row's date is a band over its title. */
+  [data-variant='raw-grid'] .rg-row__when {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-s);
+    padding-block: var(--space-2xs);
+    background-color: var(--color-surface-subtle);
+  }
+
+  [data-variant='raw-grid'] .rg-slot[data-size='l'] .rg-card__title {
+    --layout-name-max: var(--type-step-3);
+  }
+
+  [data-variant='raw-grid'] .rg-skill {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+
+  [data-variant='raw-grid'] .rg-skill > :nth-child(n) {
+    grid-column: 1;
+    grid-row: auto;
+    padding-inline-start: var(--space-s);
+  }
+
+  [data-variant='raw-grid'] .rg-skill__tab {
+    justify-self: start;
+    padding-block: var(--space-2xs);
+  }
+}
+
+/* Up to wide desktop the stack's heads (INFRASTRUCTURE, OBSERVABILITY) and the oddities' display lines take half the band. */
+@container rg-page (64rem <= width < 75rem) {
+  [data-variant='raw-grid']
+    :is(.rg-tools, .rg-oddity):nth-child(n of .rg-tools, .rg-oddity).rg-cell {
+    grid-column: span 6;
+  }
+
+  [data-variant='raw-grid']
+    :is(.rg-tools, .rg-oddity):nth-child(odd of .rg-tools, .rg-oddity):last-child.rg-cell {
+    grid-column: 1 / -1;
+  }
+}
+
+/* The big link and the next work's title take the name's fit (.rg-name) by their longest
+   word, over the whole cell, so the word fits whatever the cell's width or the text size; the
+   display step is the ceiling. An address is lowercase, so its fit takes the narrower advance. */
+[data-variant='raw-grid'] :is(.rg-ink__go, .rg-next__go) {
+  container-type: inline-size;
+  --layout-name-share: 1;
+}
+
+[data-variant='raw-grid'] :is(.rg-ink__mail, .rg-next__go) > .rg-name {
+  grid-row: auto;
+}
+
+[data-variant='raw-grid'] .rg-ink__big[data-case='sentence'] {
+  --layout-fit: 0.56;
+}
+
+/* Between phone and wide desktop the stickers stop above the actions, which take the poster's
+   width, so two buttons keep one row instead of stacking beside the stickers. */
+@container rg-page (48rem <= width < 75rem) {
+  /* Words from collaborators two to a row, the third across the middle, until a third column
+     gets its measure: no 150 or 200 px columns. */
+  [data-variant='raw-grid'] .rg-wall > .rg-slot:nth-child(n) {
+    grid-column: span 6;
+    margin-block-start: 0;
+  }
+
+  [data-variant='raw-grid'] .rg-wall > .rg-slot:nth-child(odd):last-child {
+    grid-column: 3 / 11;
+  }
+
+  [data-variant='raw-grid'] .rg-poster > .rg-stickers {
+    grid-row: 1 / 5;
+  }
+
+  [data-variant='raw-grid'] .rg-poster > .rg-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Medium widths: the destinations fold into the Index. */
+@container rg-page (width < 75rem) {
+  [data-variant='raw-grid'] .rg-head__dests {
+    display: none;
+  }
+
+  [data-variant='raw-grid'] .rg-head__name {
+    grid-column: 1 / 5;
+  }
+
+  [data-variant='raw-grid'] .rg-head__where {
+    grid-column: 5 / 11;
+  }
+
+  [data-variant='raw-grid'] .rg-head__index {
+    grid-column: 11 / -1;
+  }
+}
+
+/* Narrow: four columns, every block re-spans, nothing shrinks away. */
+@container rg-page (width < 48rem) {
+  [data-variant='raw-grid'] > * {
+    --layout-columns: 4;
+    --layout-cell-x: var(--space-s);
+    --layout-head: 3.25rem;
+    --layout-tick: 2.75rem;
+  }
+
+  [data-variant='raw-grid'] .rg-head__where {
+    display: none;
+  }
+
+  [data-variant='raw-grid'] .rg-head__name {
+    grid-column: 1 / 3;
+  }
+
+  [data-variant='raw-grid'] .rg-head__index {
+    grid-column: 3 / -1;
+  }
+
+  /* With script the header's Index opens this same list over the page, so the foot doesn't set
+     it out a third time after the sheets' contents (page length); without script it stays, where
+     the Index link lands. Every section is still two taps away: Index, then the section. */
+  [data-variant='raw-grid']:has([data-rg-index][aria-expanded]) .rg-index:not(:popover-open) {
+    display: none;
+  }
+
+  /* Still, the facts run the full width and the control, its label shown, is a slim row under
+     them (design r5 P1-3): each a whole line, since the track's basis of nothing would take the
+     toggle's line and leave the facts no width. Running, it's the glyph at the belt's end. */
+  [data-variant='raw-grid'] .rg-ticker:not([data-ticker='running']) {
+    flex-wrap: wrap;
+  }
+
+  [data-variant='raw-grid']
+    .rg-ticker:not([data-ticker='running'])
+    :is(.rg-ticker__track, .rg-ticker__toggle) {
+    flex: 1 1 100%;
+  }
+
+  [data-variant='raw-grid'] .rg-ticker:not([data-ticker='running']) .rg-ticker__toggle {
+    justify-content: flex-start;
+    border-inline-start: 0;
+    border-block-start: var(--layout-rule);
+  }
+
+  /* The word is read, not seen: one pixel wide, so its box never reaches past the window's edge. */
+  [data-variant='raw-grid']
+    .rg-ticker[data-ticker='running']
+    .rg-ticker__toggle
+    [data-ui-slot='action.label'] {
+    position: absolute;
+    inline-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  [data-variant='raw-grid'] .rg-ticker__toggle {
+    padding-inline: var(--space-xs);
+  }
+
+  [data-variant='raw-grid'] .rg-opening {
+    min-block-size: 0;
+  }
+
+  [data-variant='raw-grid'] .rg-poster {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    gap: var(--space-s);
+    padding: var(--space-m) var(--space-s);
+  }
+
+  [data-variant='raw-grid'] .rg-poster > * {
+    grid-row: auto;
+  }
+
+  [data-variant='raw-grid'] .rg-poster__tab {
+    margin-block-start: calc(-1 * var(--space-m));
+    margin-inline-start: calc(-1 * var(--space-s));
+  }
+
+  [data-variant='raw-grid'] .rg-poster--stuck {
+    --layout-name-share: 1;
+  }
+
+  [data-variant='raw-grid'] .rg-paste {
+    padding: var(--space-xs) var(--space-s) var(--space-s);
+  }
+
+  /* The stickers: one compact row after the actions (RG-M6). */
+  [data-variant='raw-grid'] .rg-stickers {
+    grid-column: 1;
+    flex-flow: row wrap;
+    justify-content: start;
+    align-items: center;
+    gap: var(--space-xs);
+    inline-size: auto;
+    padding-block: var(--space-2xs) 0;
+  }
+
+  [data-variant='raw-grid'] .rg-sticker:nth-child(n) {
+    margin: 0;
+  }
+
+  /* One sticker on a phone, the director's cap: the others' facts are on the page as text. */
+  [data-variant='raw-grid'] .rg-sticker:nth-child(n + 2) {
+    display: none;
+  }
+
+  /* Paste-up's wider faces (N11): the two actions keep one row at 390. */
+  [data-variant='raw-grid'] .rg-actions {
+    gap: var(--space-xs);
+  }
+
+  [data-variant='raw-grid'] .rg-sticker a {
+    padding: var(--space-3xs) var(--space-s);
+  }
+
+  [data-variant='raw-grid'] .rg-sticker__line {
+    font-size: var(--type-label-font-size);
+  }
+
+  [data-variant='raw-grid'] .rg-thesis__lead {
+    font-size: var(--type-step-3);
+  }
+
+  [data-variant='raw-grid'] .rg-sheet__word {
+    padding: var(--space-m) var(--space-s) var(--space-2xs);
+    font-size: var(--type-step-6);
+  }
+
+  [data-variant='raw-grid'] .rg-sheet__toc ul {
+    columns: 1;
+  }
+
+  /* A band's count stays on its tab's row, the description under both. */
+  [data-variant='raw-grid'] .rg-band__sub {
+    order: 1;
+    flex-basis: 100%;
+  }
+
+  [data-variant='raw-grid'] .rg-fact {
+    grid-column: span 2;
+  }
+
+  [data-variant='raw-grid']
+    :is(.rg-fact, .rg-oddity, .rg-tools):nth-child(
+      odd of .rg-fact,
+      .rg-oddity,
+      .rg-tools
+    ):last-child {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='raw-grid'] .rg-fact__n {
+    font-size: var(--type-step-5);
+  }
+
+  [data-variant='raw-grid'] .rg-pair > .rg-band + .rg-band > .rg-band__head {
+    border-block-start: var(--layout-rule);
+  }
+
+  [data-variant='raw-grid'] .rg-tracks {
+    grid-template-rows: none;
+    grid-auto-flow: row;
+  }
+
+  [data-variant='raw-grid'] .rg-quote blockquote {
+    font-size: var(--type-step-3);
+  }
+
+  /* The narrowest phones: a step down, so its longest word (PROGRAMMERS,) keeps one line. */
+  @container rg-page (width < 22.5rem) {
+    [data-variant='raw-grid'] .rg-quote blockquote {
+      font-size: var(--type-step-2);
+    }
+
+    /* At a glance one figure a row, so a long caption isn't a word a line beside its pair. */
+    [data-variant='raw-grid'] .rg-fact {
+      grid-column: 1 / -1;
+    }
+  }
+
+  [data-variant='raw-grid'] .rg-ink__lead {
+    font-size: var(--type-step-4);
+  }
+
+  [data-variant='raw-grid'] .rg-ink__addr {
+    font-size: var(--type-step-0);
+  }
+}
+
+/* A ruled table becomes rows of blocks when its cell is narrow for its text: a phone, or a wider
+   window under enlarged text (the query is in em, so 200% text reaches it), so no column is ever
+   squeezed until a word breaks, and nothing scrolls sideways. */
+[data-variant='raw-grid'] .rg-tablecell {
+  container: rg-table / inline-size;
+}
+
+@container rg-table (width < 48em) {
+  /* The table: each row a block, its short cells on one line, its title on its own (RG-M3). */
+  [data-variant='raw-grid'] :is(.rg-table, .rg-table tbody) {
+    display: block;
+  }
+
+  [data-variant='raw-grid'] .rg-table thead {
+    display: none;
+  }
+
+  [data-variant='raw-grid'] .rg-tablecell :is(td, th):nth-child(n) {
+    inline-size: auto;
+  }
+
+  [data-variant='raw-grid'] .rg-t-k {
+    display: block;
+    font-family: var(--type-label-font-family);
+    font-size: var(--type-label-font-size);
+    color: var(--color-text-secondary);
+  }
+
+  [data-variant='raw-grid'] .rg-table tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-2xs) var(--space-s);
+    padding: var(--space-s);
+  }
+
+  [data-variant='raw-grid'] .rg-table tr + tr {
+    border-block-start: var(--layout-line);
+  }
+
+  [data-variant='raw-grid'] .rg-table td {
+    display: block;
+    flex: 1 1 100%;
+    min-inline-size: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  [data-variant='raw-grid'] .rg-table tr td.rg-t-no {
+    flex: 0 1 auto;
+  }
+
+  /* A date and a length keep their own width, so on a narrow line the next wraps under them
+     rather than printing over them. */
+  [data-variant='raw-grid'] .rg-table tr td.rg-t-date,
+  [data-variant='raw-grid'] .rg-table--episodes td:last-child {
+    flex: none;
+  }
+
+  [data-variant='raw-grid'] .rg-table tr + tr td,
+  [data-variant='raw-grid'] .rg-table :is(td, th) + :is(td, th) {
+    border: 0;
+  }
+
+  /* An episode's date line: its date, whole, its length, and Listen at the far end; where they
+     don't fit one line they wrap, never overlap. */
+  [data-variant='raw-grid'] .rg-table--episodes td:last-child {
+    margin-inline-start: auto;
+  }
+}
+
+/* Enlarged text on a phone (under 18 root ems across: 200% text at 390 or 320). The paddings
+   are rem steps, so at 200% they ate the cells: a card kept a third of the window for its
+   words. Here the margin and the cells', cards' and labels' inline padding drop to a small
+   step, the fact sheet and the facts run one column, every flex or grid item may shrink to its
+   cell, an episode's date line wraps, and a link a flex box held at its longest word flows as
+   text. So the words fit whole; break-word stays the net for one wider than the column. */
+@container rg-page (width < 18rem) {
+  [data-variant='raw-grid'] > * {
+    --layout-x: var(--space-3xs);
+    --layout-cell-x: var(--space-2xs);
+  }
+
+  [data-variant='raw-grid'] :where(*) {
+    min-inline-size: 0;
+  }
+
+  /* A date wider than a phone's column at 200% wraps at its spaces, never past its cell. */
+  [data-variant='raw-grid'] time {
+    white-space: normal;
+  }
+
+  [data-variant='raw-grid'] .rg-table tr td.rg-t-date {
+    flex: 0 1 auto;
+  }
+
+  [data-variant='raw-grid'] :is(.rg-slot, .rg-ref) {
+    padding-inline: var(--space-3xs);
+  }
+
+  [data-variant='raw-grid'] .rg-card {
+    --layout-name-inset: calc(2 * var(--space-2xs));
+  }
+
+  /* A fitted word may go down to half its size, at 200% its size at 100%, never below: the
+     floors that hold it at a step at 100% would hold it wider than the window here. */
+  [data-variant='raw-grid']
+    :is(.rg-fit, :is(.rg-card__title, .rg-album__title, .rg-tools__k) > .rg-name) {
+    --layout-name-min: 0.5em;
+  }
+
+  [data-variant='raw-grid']
+    :is(
+      .rg-card__body,
+      .rg-note,
+      .rg-paste,
+      .rg-poster,
+      .rg-sticker a,
+      .rg-sheet__word,
+      .rg-sheet__toc,
+      .rg-band__head > :not(.rg-tab),
+      .rg-photo__cap,
+      .rg-list li,
+      .rg-skill > :nth-child(n),
+      .rg-table tr,
+      .rg-index__col ul,
+      .rg-colophon > *,
+      .rg-ink__links a,
+      .rg-head__name
+    ) {
+    padding-inline: var(--space-2xs);
+  }
+
+  [data-variant='raw-grid'] .rg-poster__tab {
+    margin-inline-start: calc(-1 * var(--space-2xs));
+  }
+
+  [data-variant='raw-grid'] .rg-dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='raw-grid'] :is(.rg-fact, .rg-oddity, .rg-tools):nth-child(n) {
+    grid-column: 1 / -1;
+  }
+
+  /* A track's title takes its own row over its number and time. */
+  [data-variant='raw-grid'] :is(.rg-tools, .rg-tracks) li {
+    flex-wrap: wrap;
+  }
+
+  [data-variant='raw-grid'] .rg-tracks__t {
+    flex-basis: 100%;
+    order: -1;
+  }
+
+  [data-variant='raw-grid'] :is(.rg-ink__links a, .rg-colophon > *, .rg-index__col ul a) {
+    display: block;
+  }
+
+  [data-variant='raw-grid'] .rg-ink__links li {
+    font-size: var(--type-step-0);
+  }
+
+  [data-variant='raw-grid'] .rg-ink__links .rg-fit {
+    --layout-name-inset: calc(2 * (var(--space-2xs) + var(--layout-ring)));
+  }
+
+  /* The header's name gives its cell's padding to the word: the link keeps the ring's reach and
+     the cell a small step, and the fit, by the cell itself, has no floor to hold the word wider
+     than the cell (round 10: "ANAMIK/A" at 390). */
+  [data-variant='raw-grid'] .rg-head .rg-head__name {
+    padding-inline: var(--space-3xs);
+  }
+
+  [data-variant='raw-grid'] .rg-head__name .rg-go {
+    padding-inline: 0;
+  }
+
+  [data-variant='raw-grid'] .rg-head__name .rg-fit {
+    --layout-name-inset: calc(2 * var(--layout-ring));
+    --layout-name-min: 0px;
+  }
+
+  /* A work's own page: its title fits the poster by a whole em a letter, as Fit does, with no
+     floor (a step held POSTMORTEM wider than the poster), and the reflection drops to a title's
+     step, so a long word of it keeps its line (round 11). */
+  [data-variant='raw-grid'] .rg-casepage .rg-case__title {
+    --layout-fit: 1;
+    --layout-name-min: 0px;
+  }
+
+  [data-variant='raw-grid'] .rg-casepage .rg-reflect {
+    font-size: var(--type-step-1);
+  }
+}
+
+/* Print: flat, every rule kept, nothing moving or fixed. */
+@media print {
+  [data-variant='raw-grid'] :is(.rg-card, .rg-note, .rg-paste, .rg-sticker, .rg-act) {
+    box-shadow: none;
+  }
+
+  /* On paper the ticker is its one still pass, wrapped, and the header keeps every word. */
+  [data-variant='raw-grid'] .rg-ticker[data-ticker='running'] .rg-ticker__run {
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+
+  [data-variant='raw-grid'] .rg-ticker[data-ticker] .rg-ticker__run[data-copy] {
+    display: none;
+  }
+
+  /* As specific as the right-to-left belt (its :dir()), and later, so print stills both. */
+  [data-variant='raw-grid']:not([data-motion='print'])
+    .rg-ticker[data-ticker='running']:is(:dir(ltr), :dir(rtl))
+    .rg-ticker__belt {
+    flex: 1;
+    animation-name: none;
+  }
+
+  [data-variant='raw-grid'] .rg-head {
+    position: static;
+  }
+
+  [data-variant='raw-grid'] .rg-main {
+    background-image: none;
+  }
+
+  /* Every fold prints open, with or without script; the client module opens them before print
+     in an engine without ::details-content, where this rule drops alone. */
+  [data-variant='raw-grid'] .rg-fold::details-content {
+    content-visibility: visible;
+    display: block;
+  }
+}

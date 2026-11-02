@@ -1,0 +1,43 @@
+{
+  "name": "@portfolio/variant-spatial-bento",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Spatial Bento: the portfolio as one composed field of tiles, its boards indexed by isometric planes, with a spatial stage that draws them in 3D on demand.",
+  "main": "./src/index.tsx",
+  "types": "./src/index.tsx",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.tsx",
+    "./manifest": "./manifest.json",
+    "./styles.css": "./src/styles.css",
+    "./studio-thumbnail": "./src/studio-thumbnail.tsx",
+    "./enhancements/stage": "./src/stage-canvas.tsx",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test 'src/**/*.test.tsx'"
+  },
+  "portfolio": {
+    "kind": "variant",
+    "manifest": "./manifest.json"
+  },
+  "dependencies": {
+    "@portfolio/appearance": "workspace:*",
+    "@portfolio/kit": "workspace:*",
+    "@portfolio/schema": "workspace:*",
+    "@portfolio/variant-contract": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.7.2"
+  }
+}

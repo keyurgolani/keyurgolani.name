@@ -1,0 +1,139 @@
+{
+  "id": "schematic",
+  "name": "Schematic",
+  "promise": "The portfolio as an engineering drawing set.",
+  "description": "A drawing set on bordered, zoned sheets over a drafting grid: a cover sheet that dimensions the owner's name with the thesis as its label, leader notes from the curated proof, and the signature work drawn as an interface figure, its ports the work's own links, beside a dashed depth region of what it measured, used and cites. Five sheets follow, About, Work, Writing, Record and Contact, each a numbered set of views; chronology is a revision block, practice a bill of materials, and the title block sits in the bottom-right corner, where drawings keep it.",
+  "contract": "2.0",
+  "schemas": {
+    "portfolio": {
+      "min": 3,
+      "max": 3
+    },
+    "site": {
+      "min": 2,
+      "max": 2
+    }
+  },
+  "tokenContract": 1,
+  "compositionFamily": "document",
+  "motionIntent": "subtle",
+  "performanceTier": "light",
+  "budgets": {
+    "js": 4096,
+    "css": 10240,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 4096
+  },
+  "kitLayout": false,
+  "renderedKinds": [
+    "hero",
+    "lede",
+    "now",
+    "works",
+    "evidence",
+    "chronology",
+    "practice",
+    "contact",
+    "custom",
+    "quote",
+    "focus",
+    "fun-facts",
+    "cta",
+    "github"
+  ],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": {
+    "home": "bespoke",
+    "work": "bespoke",
+    "views": []
+  },
+  "controls": {
+    "version": 1,
+    "items": [
+      {
+        "type": "boolean",
+        "id": "annotations",
+        "label": "Annotations",
+        "description": "Draws the dimension lines, leaders, balloons and count dimensions. Off, the sheets read as a clean drawing with every word kept.",
+        "default": true
+      },
+      {
+        "type": "enum",
+        "id": "constructionLines",
+        "label": "Construction lines",
+        "description": "Drafting draws the zone references and the construction grid on every sheet; Final leaves only the sheet frame.",
+        "options": [
+          {
+            "value": "drafting",
+            "label": "Drafting"
+          },
+          {
+            "value": "final",
+            "label": "Final"
+          }
+        ],
+        "default": "drafting"
+      },
+      {
+        "type": "contentRef",
+        "id": "signatureFigure",
+        "label": "Figure 1",
+        "description": "The work the cover sheet draws as Figure 1. Empty: the portfolio's signature work, else its first featured work, else the first work listed.",
+        "kinds": ["works"],
+        "default": null
+      },
+      {
+        "type": "contentRefList",
+        "id": "heroNotes",
+        "label": "Cover notes",
+        "description": "Up to four evidence entries the cover's leader notes point to. Empty: the portfolio's proof list.",
+        "kinds": ["evidence"],
+        "min": 0,
+        "max": 4,
+        "default": []
+      },
+      {
+        "type": "enum",
+        "id": "sheetOrder",
+        "label": "Sheet order",
+        "description": "Grouped keeps the sheets in drawing order, About, Work, Writing, Record and Contact; Authored orders them by where their first section sits in the portfolio.",
+        "options": [
+          {
+            "value": "grouped",
+            "label": "Grouped"
+          },
+          {
+            "value": "authored",
+            "label": "Authored"
+          }
+        ],
+        "default": "grouped"
+      }
+    ],
+    "migrations": []
+  },
+  "enhancements": [
+    {
+      "id": "sheets",
+      "export": "./enhancements/sheets",
+      "requires": []
+    }
+  ],
+  "visitorControl": {
+    "placement": "footer"
+  },
+  "textDirection": ["ltr", "rtl"],
+  "provenance": {
+    "provisional": true,
+    "sources": [
+      {
+        "source": "The Schematic concept (variants-10, Variant 6)",
+        "disposition": "reused-interaction",
+        "note": "The cover elevation, the interface figure, the drawing devices and the sheet set, rebuilt on the platform tokens with the title block moved to the sheet's bottom-right corner (SC-M1)."
+      }
+    ]
+  }
+}

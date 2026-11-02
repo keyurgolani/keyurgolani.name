@@ -1,0 +1,42 @@
+{
+  "name": "@portfolio/variant-schematic",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Schematic: the portfolio as an engineering drawing set, every work an interface figure on a bordered, zoned sheet.",
+  "main": "./src/index.tsx",
+  "types": "./src/index.tsx",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.tsx",
+    "./enhancements/sheets": "./src/enhancements/sheets.ts",
+    "./manifest": "./manifest.json",
+    "./styles.css": "./src/styles.css",
+    "./studio-thumbnail": "./src/studio-thumbnail.tsx",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test 'src/**/*.test.ts' 'src/**/*.test.tsx'"
+  },
+  "portfolio": {
+    "kind": "variant",
+    "manifest": "./manifest.json"
+  },
+  "dependencies": {
+    "@portfolio/kit": "workspace:*",
+    "@portfolio/schema": "workspace:*",
+    "@portfolio/variant-contract": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.7.2"
+  }
+}

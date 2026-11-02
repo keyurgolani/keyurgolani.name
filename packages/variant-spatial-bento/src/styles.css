@@ -1,0 +1,3400 @@
+/*
+ * Spatial Bento (#16; the redesign's stream E): the composed tile field.
+ *
+ * Composition only. Every color is a pack role (--color-*), every border,
+ * radius, shadow, and focus ring a design-language token (--ui-*), every
+ * size of text a typography role or the shared type steps, every space the
+ * shared space scale (--space-*), and every duration and curve the
+ * platform's --motion-*. The only custom properties declared here are
+ * --layout-* ones. Every selector sits under [data-variant='spatial-bento']
+ * and every property is logical, so a right-to-left page mirrors.
+ *
+ * The grid: 12 columns, an xs gutter, an s margin. The overview is one
+ * field the height of the window: a top band on 24 half columns, as tall as
+ * its tiles need, and a bottom band on the 12 that takes the rest, so their
+ * seams don't line up, like brick bond. Boards below it pack
+ * their tiles into rows that each fill 12 columns (model.ts), the board's
+ * label taking the first row's first three.
+ */
+
+[data-variant='spatial-bento'] {
+  --layout-grid-columns: 12;
+  --layout-grid-gutter: var(--space-xs);
+  --layout-grid-margin: var(--space-s);
+  --layout-motion-curve: var(--ui-motion-easing);
+  --layout-motion-feedback: 180ms;
+  --layout-motion-scene: 640ms;
+  /*
+   * The page applies font-size-adjust to its body text (.sb-page), so the body
+   * face renders at the aspect it's adjusted to over its own: the measures
+   * follow, so they count characters as they render (R11.1). Set here, on the
+   * boundary, where the profile's measures read it.
+   */
+  --layout-measure-scale: calc(var(--type-body-size-adjust) / var(--type-body-aspect));
+  /* A tile's padding: large tiles take more, dense ones less. */
+  --layout-pad: var(--space-m);
+  --layout-pad-dense: var(--space-s);
+  /* Quiet text and hairlines on the dark plate, mixed from its two roles. */
+  --layout-inverse-quiet: color-mix(
+    in oklab,
+    var(--color-text-inverse) 76%,
+    var(--color-text-primary)
+  );
+  --layout-inverse-hair: color-mix(
+    in oklab,
+    var(--color-text-inverse) 20%,
+    var(--color-text-primary)
+  );
+  --layout-hair: color-mix(in oklab, var(--color-border-default) 70%, var(--color-canvas));
+  /* A link's underline: its own color, half there until hovered. */
+  --layout-underline: color-mix(in oklab, var(--color-accent-text) 45%, var(--color-canvas));
+  /* The width a plane drawing takes beside the Contents list. */
+  --layout-plane: calc(var(--space-3xl) * 0.95);
+
+  display: block;
+  box-sizing: border-box;
+  min-block-size: 100dvh;
+  background: var(--color-surface-prominent);
+  color: var(--color-text-primary);
+  overflow-wrap: break-word;
+}
+
+[data-variant='spatial-bento'] *,
+[data-variant='spatial-bento'] *::before,
+[data-variant='spatial-bento'] *::after {
+  box-sizing: border-box;
+}
+
+[data-variant='spatial-bento']
+  :is(h1, h2, h3, h4, h5, h6, p, ol, ul, dl, dd, figure, blockquote, table) {
+  margin: 0;
+}
+
+[data-variant='spatial-bento'] :is(ol, ul) {
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='spatial-bento'] img {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+  object-position: calc(var(--focal-x, 0.5) * 100%) calc(var(--focal-y, 0.5) * 100%);
+}
+
+[data-variant='spatial-bento'] :is(h1, h2, h3, h4) {
+  text-wrap: balance;
+}
+
+[data-variant='spatial-bento'] p {
+  text-wrap: pretty;
+}
+
+[data-variant='spatial-bento'] :is(time, data, dd, td, .sb-label) {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* The kit's flow steps a rich-text block off what comes before it; in a tile the tile's gap does. */
+[data-variant='spatial-bento'] .pf-rich-text {
+  margin-block: 0;
+}
+
+[data-variant='spatial-bento'] .pf-rich-text > :not(:first-child) {
+  margin-block-start: var(--space-xs);
+}
+
+/*
+ * Links: the underline is the affordance, and it firms up on hover. A kit
+ * slot (the skip link) keeps its own colours: :where() holds this rule's
+ * weight to the bare element's, so the composition's classes still win.
+ */
+[data-variant='spatial-bento'] a:where(:not([data-ui-slot])) {
+  color: var(--color-accent-text);
+  text-decoration-line: underline;
+  text-decoration-thickness: from-font;
+  text-underline-offset: 0.2em;
+  text-decoration-color: var(--layout-underline);
+}
+
+[data-variant='spatial-bento'] a:where(:not([data-ui-slot])):hover {
+  text-decoration-color: currentColor;
+}
+
+/* A link that leaves the site says so, and only that kind does. */
+[data-variant='spatial-bento'] a[data-outbound]::after {
+  content: '\2009\2197';
+  display: inline-block;
+  text-decoration: none;
+}
+
+[data-variant='spatial-bento'] :focus-visible {
+  outline: var(--ui-focus-width) var(--ui-focus-style) var(--color-focus);
+  outline-offset: var(--ui-focus-offset);
+}
+
+/*
+ * The skip link, once focused, floats over the hero's corner in the top
+ * layer's stead, so the field under it doesn't move.
+ */
+[data-variant='spatial-bento'] [data-ui-slot='skip-link']:focus {
+  position: fixed;
+  z-index: 2;
+  inset-block-start: var(--layout-grid-margin);
+  inset-inline-start: var(--layout-grid-margin);
+  min-block-size: var(--ui-control-height);
+  color: var(--color-on-accent);
+  background-color: var(--color-accent);
+  font-weight: var(--type-title-font-weight);
+  text-decoration: none;
+  box-shadow: var(--ui-shadow-overlay);
+}
+
+[data-variant='spatial-bento'] .sb-hidden,
+[data-variant='spatial-bento'] .sb-tile[data-echo] > .sb-tile__head > .sb-title,
+[data-variant='spatial-bento'] .sb-archive__part > .sb-tile__head > .sb-title {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ── Type, from the roles ─────────────────────────────────────────────── */
+
+[data-variant='spatial-bento'] .sb-page {
+  font-family: var(--type-body-font-family);
+  font-size: var(--type-body-font-size);
+  font-weight: var(--type-body-font-weight);
+  line-height: var(--type-body-line-height);
+  font-size-adjust: var(--type-body-size-adjust);
+}
+
+[data-variant='spatial-bento']
+  :is(
+    .sb-title,
+    .sb-hero__name,
+    .sb-reach__where,
+    .sb-archive__name,
+    .sb-latest__role,
+    .sb-fact__value
+  ) {
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-title-font-size);
+  font-weight: var(--type-title-font-weight);
+  line-height: var(--type-title-line-height);
+  letter-spacing: var(--type-title-letter-spacing);
+}
+
+[data-variant='spatial-bento'] .sb-strong {
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-body-font-size);
+  font-weight: var(--type-title-font-weight);
+  line-height: var(--type-body-compact-line-height);
+}
+
+[data-variant='spatial-bento'] :is(.sb-label, .sb-tile__sub, .sb-now__when) {
+  font-size: var(--type-label-font-size);
+  font-weight: var(--type-label-font-weight);
+  line-height: var(--type-caption-line-height);
+  letter-spacing: var(--type-caption-letter-spacing);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='spatial-bento'] .sb-quiet {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='spatial-bento'] :is(.sb-board__title, .sb-poster__title, .sb-pull blockquote) {
+  font-family: var(--type-display-font-family);
+  font-size: var(--type-step-5);
+  font-weight: var(--type-display-font-weight);
+  line-height: var(--type-headline-line-height);
+  letter-spacing: var(--type-display-letter-spacing);
+}
+
+[data-variant='spatial-bento'] :is(.sb-standfirst, .sb-press__words, .sb-quote__words) {
+  font-family: var(--type-quote-font-family);
+  font-size: var(--type-step-1);
+  line-height: var(--type-title-line-height);
+}
+
+/* ── Controls ─────────────────────────────────────────────────────────── */
+
+[data-variant='spatial-bento'] .sb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  min-block-size: var(--ui-control-height);
+  padding-inline: var(--ui-space-control-inline);
+  border: var(--ui-border-control);
+  border-radius: var(--ui-radius-control);
+  font-weight: var(--type-title-font-weight);
+  line-height: var(--type-body-compact-line-height);
+  text-decoration: none;
+}
+
+[data-variant='spatial-bento'] .sb-btn--strong {
+  border-color: var(--color-text-primary);
+  background: var(--color-text-primary);
+  color: var(--color-text-inverse);
+}
+
+[data-variant='spatial-bento'] .sb-btn--strong:hover {
+  background: color-mix(in oklab, var(--color-text-primary) 84%, var(--color-canvas));
+}
+
+[data-variant='spatial-bento'] .sb-btn--ghost {
+  border-color: var(--color-border-strong);
+  background: transparent;
+  color: var(--color-text-primary);
+}
+
+[data-variant='spatial-bento'] .sb-btn--ghost:hover {
+  background: color-mix(in oklab, var(--color-text-primary) 6%, var(--color-canvas));
+}
+
+[data-variant='spatial-bento'] .sb-tile--inverse .sb-btn--strong {
+  border-color: var(--color-canvas);
+  background: var(--color-canvas);
+  color: var(--color-text-primary);
+}
+
+[data-variant='spatial-bento'] .sb-tile--inverse .sb-btn--strong:hover {
+  background: var(--color-surface-default);
+}
+
+[data-variant='spatial-bento'] .sb-tile--inverse .sb-btn--ghost {
+  border-color: var(--layout-inverse-quiet);
+  color: var(--color-text-inverse);
+}
+
+[data-variant='spatial-bento'] .sb-tile--inverse .sb-btn--ghost:hover {
+  background: color-mix(in oklab, var(--color-text-inverse) 10%, var(--color-text-primary));
+}
+
+[data-variant='spatial-bento'] .sb-tile--accent .sb-btn--ghost {
+  border-color: var(--color-on-accent);
+  color: var(--color-on-accent);
+}
+
+[data-variant='spatial-bento'] .sb-dot {
+  display: inline-block;
+  flex: none;
+  inline-size: var(--space-2xs);
+  block-size: var(--space-2xs);
+  border-radius: var(--ui-radius-badge);
+  background: var(--color-positive);
+}
+
+[data-variant='spatial-bento'] .sb-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs);
+}
+
+[data-variant='spatial-bento'] .sb-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  padding-inline: var(--space-2xs);
+  border-radius: var(--ui-radius-badge);
+  background: color-mix(in oklab, var(--color-positive) 16%, var(--color-canvas));
+  color: var(--color-text-primary);
+  font-size: var(--type-label-font-size);
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='spatial-bento'] .sb-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-s);
+}
+
+[data-variant='spatial-bento'] .sb-checks {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+[data-variant='spatial-bento'] .sb-checks > li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2xs);
+}
+
+[data-variant='spatial-bento'] .sb-checks > li::before {
+  content: '';
+  flex: none;
+  inline-size: var(--space-2xs);
+  block-size: var(--space-2xs);
+  border-radius: var(--ui-radius-badge);
+  background: var(--color-accent);
+}
+
+/* Ruled lists: a hairline between items, tinted toward the ground. */
+[data-variant='spatial-bento'] .sb-ruled > :not(:first-child) {
+  border-block-start: 1px solid var(--layout-hair);
+}
+
+[data-variant='spatial-bento'] .sb-tile--inverse .sb-ruled > :not(:first-child) {
+  border-block-start-color: var(--layout-inverse-hair);
+}
+
+/* ── Tiles ────────────────────────────────────────────────────────────── */
+
+[data-variant='spatial-bento'] .sb-tile {
+  container-type: inline-size;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-inline-size: 0;
+  padding: var(--layout-pad);
+  border: var(--ui-border-card);
+  border-radius: var(--ui-radius-card);
+  background: var(--color-canvas);
+  box-shadow: var(--ui-shadow-card);
+  color: var(--color-text-primary);
+}
+
+[data-variant='spatial-bento'] .sb-tile--large {
+  border-radius: var(--ui-radius-overlay);
+}
+
+/* A dense tile is still a tile: its corners are the card's, never a control's (LANG-5c r2). */
+[data-variant='spatial-bento'] .sb-tile--dense {
+  padding: var(--layout-pad-dense) var(--layout-pad);
+  border-radius: var(--ui-radius-card);
+}
+
+[data-variant='spatial-bento'] .sb-tile--well {
+  background: var(--color-surface-default);
+}
+
+[data-variant='spatial-bento'] .sb-tile--inverse {
+  --layout-underline: color-mix(in oklab, var(--color-text-inverse) 45%, var(--color-text-primary));
+  background: var(--color-text-primary);
+  color: var(--color-text-inverse);
+}
+
+[data-variant='spatial-bento']
+  .sb-tile--inverse
+  :is(a:not(.sb-btn), .sb-label, .sb-quiet, .sb-tile__sub) {
+  color: var(--layout-inverse-quiet);
+}
+
+[data-variant='spatial-bento'] .sb-tile--inverse :is(.sb-title, .sb-strong) a,
+[data-variant='spatial-bento'] .sb-tile--inverse .sb-links a {
+  color: var(--color-text-inverse);
+}
+
+[data-variant='spatial-bento'] .sb-tile--inverse :focus-visible {
+  outline-color: var(--color-text-inverse);
+}
+
+[data-variant='spatial-bento'] .sb-tile--accent {
+  --layout-underline: color-mix(in oklab, var(--color-on-accent) 55%, var(--color-accent));
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+[data-variant='spatial-bento'] .sb-tile--accent :is(a:not(.sb-btn), .sb-label, .sb-quiet) {
+  color: var(--color-on-accent);
+}
+
+[data-variant='spatial-bento'] .sb-tile--accent :focus-visible {
+  outline-color: var(--color-on-accent);
+}
+
+[data-variant='spatial-bento'] .sb-tile__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3xs) var(--space-xs);
+}
+
+[data-variant='spatial-bento'] .sb-tile__sub {
+  flex-basis: 100%;
+}
+
+/*
+ * The Record board's own tile (design gate 8): the full record. Its head is
+ * the latest role, one line of who, where and since when with the way to
+ * every role, ruled off from the parts (M2); under it a closed disclosure a
+ * section, each summary its name and, for another board's, that board, a
+ * plus that turns to a minus open, and inside it the section as a part.
+ */
+[data-variant='spatial-bento'] .sb-latest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3xs) var(--space-s);
+  padding-block-end: var(--space-xs);
+  border-block-end: 1px solid var(--layout-hair);
+}
+
+[data-variant='spatial-bento'] .sb-latest > .sb-label:first-child {
+  flex-basis: 100%;
+}
+
+[data-variant='spatial-bento'] .sb-latest__more {
+  margin-inline-start: auto;
+}
+
+[data-variant='spatial-bento'] .sb-archive__item + .sb-archive__item {
+  border-block-start: 1px solid var(--layout-hair);
+}
+
+[data-variant='spatial-bento'] .sb-archive__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3xs) var(--space-xs);
+  padding-block: var(--space-xs);
+  cursor: pointer;
+  list-style: none;
+}
+
+[data-variant='spatial-bento'] .sb-archive__summary::-webkit-details-marker {
+  display: none;
+}
+
+/* A long name wraps in its own track, so its board's name stays beside it. */
+[data-variant='spatial-bento'] .sb-archive__name {
+  flex: 1;
+}
+
+[data-variant='spatial-bento'] .sb-archive__name::before {
+  content: '+';
+  margin-inline-end: var(--space-2xs);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='spatial-bento'] .sb-archive__item[open] .sb-archive__name::before {
+  content: '\2212';
+}
+
+[data-variant='spatial-bento'] .sb-archive__board {
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-font-size);
+}
+
+[data-variant='spatial-bento'] .sb-archive__part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding-block-end: var(--space-m);
+}
+
+/* A title that repeats its board's label is there for assistive technology alone. */
+[data-variant='spatial-bento'] .sb-tile__head[data-hidden],
+[data-variant='spatial-bento'] .sb-tile[data-echo] > .sb-tile__head {
+  display: contents;
+}
+
+/* ── The overview: one field the height of the window ────────────────── */
+
+[data-variant='spatial-bento'] .sb-overview {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  min-block-size: max(100dvh, calc(var(--space-3xl) * 6));
+  padding: var(--layout-grid-margin);
+  scroll-margin-block-start: 0;
+}
+
+[data-variant='spatial-bento'] .sb-band {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+  gap: var(--layout-grid-gutter);
+}
+
+/*
+ * Only a full field, every tile of the top and three works, is the window's
+ * height; a thinner one is as tall as its tiles, since tiles stretched to the
+ * window would hold nothing.
+ */
+[data-variant='spatial-bento']
+  .sb-overview:not(:has(> .sb-band[data-layout='both'][data-works='3'])) {
+  min-block-size: 0;
+}
+
+/* Nothing to index: the hero takes the row. */
+[data-variant='spatial-bento'] .sb-band[data-index='none'] > [data-area='hero'] {
+  grid-column: 1 / -1;
+}
+
+/*
+ * The field is one band in reading order: the hero, Selected work, Contents,
+ * Now, the ledger and reach. It sets on half columns, 24 to the 12. Its top
+ * row or two hold the hero (half the field), Contents (five) and Now and the
+ * ledger (seven), wide enough that their words close up inside the window;
+ * the works and reach take the rows from the line named works, on the 12's
+ * seams (10, 8 and 6 of the 24), so the seams of the two rows never line up.
+ */
+[data-variant='spatial-bento'] .sb-band {
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+  grid-template-rows: auto auto [works] auto 1fr;
+  grid-template-areas:
+    'hero hero hero hero hero hero hero hero hero hero hero hero contents contents contents contents contents now now now now now now now'
+    'hero hero hero hero hero hero hero hero hero hero hero hero contents contents contents contents contents glance glance glance glance glance glance glance';
+}
+
+/*
+ * From 1280 to 1440 the field gives Now and the ledger a half column more,
+ * from the hero, so their words and the tally's strips keep the lines they
+ * have at 1440 and the field stays near one screen (the 1280 field, S8).
+ */
+@media (min-width: 80rem) and (max-width: 89.99rem) {
+  [data-variant='spatial-bento'] .sb-band {
+    grid-template-areas:
+      'hero hero hero hero hero hero hero hero hero hero hero contents contents contents contents contents now now now now now now now now'
+      'hero hero hero hero hero hero hero hero hero hero hero contents contents contents contents contents glance glance glance glance glance glance glance glance';
+  }
+}
+
+[data-variant='spatial-bento'] .sb-band[data-layout='now'] {
+  grid-template-rows: auto [works] auto 1fr;
+  grid-template-areas: 'hero hero hero hero hero hero hero hero hero hero hero hero contents contents contents contents contents now now now now now now now';
+}
+
+[data-variant='spatial-bento'] .sb-band[data-layout='glance'] {
+  grid-template-rows: auto [works] auto 1fr;
+  grid-template-areas: 'hero hero hero hero hero hero hero hero hero hero hero hero contents contents contents contents contents glance glance glance glance glance glance glance';
+}
+
+[data-variant='spatial-bento'] .sb-band[data-layout='none'] {
+  grid-template-rows: auto [works] auto 1fr;
+  grid-template-areas: 'hero hero hero hero hero hero hero hero hero hero hero hero hero hero hero hero hero contents contents contents contents contents contents contents';
+}
+
+[data-variant='spatial-bento'] .sb-band [data-area='hero'] {
+  grid-area: hero;
+}
+
+[data-variant='spatial-bento'] .sb-band [data-area='contents'] {
+  grid-area: contents;
+}
+
+[data-variant='spatial-bento'] .sb-band [data-area='now'] {
+  grid-area: now;
+}
+
+[data-variant='spatial-bento'] .sb-band [data-area='glance'] {
+  grid-area: glance;
+}
+
+[data-variant='spatial-bento'] .sb-band [data-area='lead'] {
+  grid-column: 1 / span 10;
+  grid-row: works / -1;
+}
+
+[data-variant='spatial-bento'] .sb-band [data-area='second'] {
+  grid-column: 11 / span 8;
+  grid-row: works / -1;
+}
+
+[data-variant='spatial-bento'] .sb-band [data-area='rest'] {
+  grid-column: 19 / -1;
+  grid-row: works;
+}
+
+[data-variant='spatial-bento'] .sb-band [data-area='reach'] {
+  grid-column: 19 / -1;
+  grid-row: -2 / -1;
+}
+
+[data-variant='spatial-bento'] .sb-band:is([data-works='2'], [data-works='1']) [data-area='reach'] {
+  grid-row: works / -1;
+}
+
+[data-variant='spatial-bento'] .sb-band[data-works='1'] [data-area='lead'] {
+  grid-column: 1 / span 18;
+}
+
+[data-variant='spatial-bento'] .sb-band[data-works='0'] [data-area='reach'] {
+  grid-column: 1 / -1;
+  grid-row: works / -1;
+}
+
+/* With no way to reach the owner there's no reach tile: the works take its place. */
+@media (min-width: 80rem) {
+  [data-variant='spatial-bento'] .sb-band:not(:has(> .sb-reach)) [data-area='rest'] {
+    grid-row: works / -1;
+  }
+
+  [data-variant='spatial-bento']
+    .sb-band[data-works='2']:not(:has(> .sb-reach))
+    [data-area='second'] {
+    grid-column: 11 / -1;
+  }
+
+  [data-variant='spatial-bento']
+    .sb-band[data-works='1']:not(:has(> .sb-reach))
+    [data-area='lead'] {
+    grid-column: 1 / -1;
+  }
+}
+
+/*
+ * From 768 up the band's rows aren't its reading order (M3): the DOM is the
+ * phone's, the hero then Selected work (E2), while the rows set Contents, Now
+ * and the ledger beside the hero and the works under it. Focus and reading
+ * follow the rows where the browser knows reading-flow; elsewhere they follow
+ * the DOM, Selected work first, as E2 asks. The order is given, not grid-rows:
+ * Chromium's grid-rows skips a subgrid item's contents, so Tab never reached
+ * the works. The top in DOM order, then the works, then reach.
+ */
+@media (min-width: 48rem) {
+  [data-variant='spatial-bento'] .sb-band {
+    reading-flow: source-order;
+  }
+
+  [data-variant='spatial-bento'] .sb-band > .sb-group {
+    reading-order: 2;
+  }
+
+  [data-variant='spatial-bento'] .sb-band > [data-area='reach'] {
+    reading-order: 3;
+  }
+}
+
+/*
+ * The showcase spans the works' rows on the band's tracks, a subgrid, so its
+ * works take the band's lines and its anchor has a box; reach sits beside it.
+ */
+[data-variant='spatial-bento'] .sb-group {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-row: works / -1;
+  grid-template-columns: subgrid;
+  grid-template-rows: subgrid;
+}
+
+/* ── The hero plate ───────────────────────────────────────────────────── */
+
+[data-variant='spatial-bento'] .sb-tile--hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    'head menu'
+    'body body'
+    'foot foot';
+  gap: var(--space-m) var(--space-s);
+  padding: var(--space-m) var(--space-l);
+}
+
+[data-variant='spatial-bento'] .sb-hero__head {
+  grid-area: head;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3xs) var(--space-xs);
+}
+
+[data-variant='spatial-bento'] .sb-hero__role {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='spatial-bento'] .sb-hero__pronouns {
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-font-size);
+}
+
+[data-variant='spatial-bento'] .sb-menu-slot {
+  grid-area: menu;
+  display: none;
+}
+
+[data-variant='spatial-bento'] .sb-hero__body {
+  grid-area: body;
+  align-self: start;
+  display: grid;
+  gap: var(--space-s);
+  min-inline-size: 0;
+}
+
+/* A word longer than the plate is wide breaks rather than push the page sideways. */
+[data-variant='spatial-bento'] :is(.sb-hero__display, .sb-hero__now, .sb-hero__name) {
+  overflow-wrap: anywhere;
+}
+
+[data-variant='spatial-bento'] .sb-hero__thesis {
+  display: grid;
+  gap: var(--space-m);
+}
+
+/*
+ * From 768 to 1024 the hero runs the field's width, wider than its measure:
+ * the display line takes the left half and the lede the right, so the plate
+ * reads across rather than leaving its right half to the ground.
+ */
+@media (min-width: 48rem) and (max-width: 63.99rem) {
+  [data-variant='spatial-bento'] .sb-hero__thesis:has(> .sb-hero__display + .sb-hero__lede) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+[data-variant='spatial-bento'] .sb-hero__display {
+  max-inline-size: 14ch;
+  font-family: var(--type-display-font-family);
+  font-size: var(--type-step-6);
+  font-weight: var(--type-display-font-weight);
+  line-height: var(--type-display-line-height);
+  letter-spacing: var(--type-display-letter-spacing);
+  text-wrap: balance;
+}
+
+[data-variant='spatial-bento'] :is(.sb-hero__lede, .sb-hero__standfirst) {
+  max-inline-size: var(--layout-width-text);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='spatial-bento'] .sb-hero__standfirst {
+  font-size: var(--type-step-2);
+  line-height: var(--type-title-line-height);
+  color: var(--color-text-primary);
+}
+
+/*
+ * What the owner is doing now, after the lede, in the hero's own body text:
+ * one sentence, not running text, so it sets to the outset, and a line the
+ * measure would break in two keeps the field on its one screen.
+ */
+[data-variant='spatial-bento'] .sb-hero__now {
+  max-inline-size: var(--layout-width-outset);
+  color: var(--color-text-primary);
+}
+
+/* The hero's standfirst again, for a phone alone (E1): wider, the hero sets it. */
+[data-variant='spatial-bento'] .sb-lead {
+  display: none;
+}
+
+[data-variant='spatial-bento'] .sb-hero__foot {
+  grid-area: foot;
+  align-self: end;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-s);
+}
+
+[data-variant='spatial-bento'] .sb-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+}
+
+/* ── Contents: the field's own index, and the stage's still ──────────── */
+
+[data-variant='spatial-bento'] .sb-contents {
+  padding-inline: var(--layout-pad-dense);
+}
+
+[data-variant='spatial-bento'] .sb-contents .sb-stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+  flex: 1;
+  min-block-size: 0;
+}
+
+[data-variant='spatial-bento'] .sb-stage__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2xs);
+}
+
+/* A board's name keeps its line (S8): the plane beside it gives way first. */
+[data-variant='spatial-bento'] .sb-stage__body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: auto minmax(0, var(--layout-plane));
+  grid-auto-rows: 1fr;
+}
+
+[data-variant='spatial-bento'] .sb-contents__list,
+[data-variant='spatial-bento'] .sb-still {
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: 1 / span 6;
+}
+
+[data-variant='spatial-bento'] .sb-contents[data-rows='5'] :is(.sb-contents__list, .sb-still) {
+  grid-row: 1 / span 5;
+}
+
+[data-variant='spatial-bento'] .sb-contents[data-rows='4'] :is(.sb-contents__list, .sb-still) {
+  grid-row: 1 / span 4;
+}
+
+[data-variant='spatial-bento'] .sb-contents[data-rows='3'] :is(.sb-contents__list, .sb-still) {
+  grid-row: 1 / span 3;
+}
+
+[data-variant='spatial-bento'] .sb-contents[data-rows='2'] :is(.sb-contents__list, .sb-still) {
+  grid-row: 1 / span 2;
+}
+
+[data-variant='spatial-bento'] .sb-contents[data-rows='1'] :is(.sb-contents__list, .sb-still) {
+  grid-row: 1 / span 1;
+}
+
+[data-variant='spatial-bento'] .sb-contents__list {
+  grid-column: 1;
+}
+
+[data-variant='spatial-bento'] .sb-contents__row {
+  display: grid;
+  grid-template-columns: auto minmax(var(--space-xs), 1fr);
+  align-items: center;
+}
+
+[data-variant='spatial-bento'] .sb-contents__row a {
+  display: grid;
+  padding-block: var(--space-3xs);
+  color: var(--color-text-primary);
+  text-decoration: none;
+  line-height: var(--type-body-compact-line-height);
+}
+
+[data-variant='spatial-bento'] .sb-contents__name {
+  font-weight: var(--type-title-font-weight);
+  white-space: nowrap;
+}
+
+[data-variant='spatial-bento'] .sb-contents__meta {
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-font-size);
+}
+
+[data-variant='spatial-bento']
+  .sb-contents__row
+  a:is(:hover, :focus-visible, [aria-current])
+  .sb-contents__name {
+  color: var(--color-accent-text);
+}
+
+[data-variant='spatial-bento'] .sb-contents__leader {
+  block-size: 0;
+  margin-inline: var(--space-2xs) 0;
+  border-block-start: 1px dashed var(--color-border-default);
+}
+
+[data-variant='spatial-bento'] .sb-still {
+  position: relative;
+  grid-column: 2;
+}
+
+/* A plane takes its row's height and adds none: the list sets the rows. */
+[data-variant='spatial-bento'] .sb-still__plane {
+  position: relative;
+  min-block-size: 0;
+}
+
+[data-variant='spatial-bento'] .sb-still__plane svg {
+  position: absolute;
+  inset-block: calc(var(--space-3xs) * -1);
+  inset-inline-end: 0;
+  block-size: calc(100% + var(--space-2xs));
+  inline-size: auto;
+  max-inline-size: 100%;
+  overflow: visible;
+}
+
+[data-variant='spatial-bento'] .sb-still__canvas {
+  position: absolute;
+  inset: 0;
+}
+
+[data-variant='spatial-bento'] .sb-still[data-stage='live'] .sb-still__plane {
+  visibility: hidden;
+}
+
+[data-variant='spatial-bento'] .sb-still[data-stage='live']:has([data-stale]) .sb-still__plane {
+  visibility: visible;
+}
+
+[data-variant='spatial-bento'] .sb-still__canvas:has([data-stale]) {
+  visibility: hidden;
+}
+
+/* Pointing at a board, or tabbing to it, marks its plane; with motion it lifts too. */
+[data-variant='spatial-bento']
+  .sb-stage__body:has(.sb-contents__row:nth-child(1) a:is(:hover, :focus-visible))
+  .sb-still__plane:nth-child(1)
+  .sb-plane__ground,
+[data-variant='spatial-bento']
+  .sb-stage__body:has(.sb-contents__row:nth-child(2) a:is(:hover, :focus-visible))
+  .sb-still__plane:nth-child(2)
+  .sb-plane__ground,
+[data-variant='spatial-bento']
+  .sb-stage__body:has(.sb-contents__row:nth-child(3) a:is(:hover, :focus-visible))
+  .sb-still__plane:nth-child(3)
+  .sb-plane__ground,
+[data-variant='spatial-bento']
+  .sb-stage__body:has(.sb-contents__row:nth-child(4) a:is(:hover, :focus-visible))
+  .sb-still__plane:nth-child(4)
+  .sb-plane__ground,
+[data-variant='spatial-bento']
+  .sb-stage__body:has(.sb-contents__row:nth-child(5) a:is(:hover, :focus-visible))
+  .sb-still__plane:nth-child(5)
+  .sb-plane__ground,
+[data-variant='spatial-bento']
+  .sb-stage__body:has(.sb-contents__row:nth-child(6) a:is(:hover, :focus-visible))
+  .sb-still__plane:nth-child(6)
+  .sb-plane__ground {
+  stroke: var(--color-accent-text);
+}
+
+/* The planes' drawing: the ground, each tile's block, and its tone. */
+[data-variant='spatial-bento'] .sb-plane__ground {
+  fill: var(--color-surface-subtle);
+  stroke: var(--color-border-default);
+  stroke-width: 1;
+}
+
+[data-variant='spatial-bento'] .sb-plane__top {
+  fill: var(--color-canvas);
+  stroke: var(--color-border-default);
+  stroke-width: 0.75;
+}
+
+[data-variant='spatial-bento'] .sb-plane__front {
+  fill: var(--color-border-subtle);
+}
+
+[data-variant='spatial-bento'] .sb-plane__side {
+  fill: var(--color-border-default);
+}
+
+[data-variant='spatial-bento'] .sb-plane__block[data-tone='ink'] .sb-plane__top {
+  fill: var(--color-text-primary);
+  stroke: var(--color-text-primary);
+}
+
+[data-variant='spatial-bento'] .sb-plane__block[data-tone='accent'] .sb-plane__top {
+  fill: var(--color-accent);
+  stroke: var(--color-accent-text);
+}
+
+[data-variant='spatial-bento'] svg[data-raised] .sb-plane__ground {
+  fill: var(--color-canvas);
+}
+
+/* ── Now and the ledger ───────────────────────────────────────────────── */
+
+[data-variant='spatial-bento'] .sb-now__when {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+}
+
+[data-variant='spatial-bento'] .sb-now__body {
+  max-inline-size: var(--layout-width-text);
+  line-height: var(--type-body-compact-line-height);
+}
+
+/*
+ * At a glance: a tally, one chart (S6). Three tracks, what it counts, its
+ * figure, and a strip of squares three deep, one a count; every row sets on
+ * them, so the strips start on one line and compare without an axis to
+ * read. A name that can't fit wraps before a strip gives way.
+ */
+[data-variant='spatial-bento'] .sb-tally {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, max-content) max-content minmax(max-content, 1fr);
+  align-content: space-evenly;
+  gap: var(--space-3xs) var(--space-xs);
+}
+
+[data-variant='spatial-bento'] .sb-tally__row,
+[data-variant='spatial-bento'] .sb-tally__figure {
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+}
+
+[data-variant='spatial-bento'] .sb-tally__row {
+  grid-column: 1 / -1;
+  color: var(--color-text-secondary);
+  font-size: var(--type-body-compact-font-size);
+  line-height: var(--type-body-compact-line-height);
+}
+
+[data-variant='spatial-bento'] .sb-tally__figure {
+  grid-column: 2 / -1;
+  color: var(--color-text-primary);
+  font-size: var(--type-body-font-size);
+  font-weight: var(--type-title-font-weight);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+[data-variant='spatial-bento'] .sb-tally__unit {
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-font-size);
+  font-weight: var(--type-body-font-weight);
+}
+
+/* The strip in the figure's own track: the secondary ink, since the accent means "reach me". */
+[data-variant='spatial-bento'] .sb-tally__marks {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(3, var(--space-3xs));
+  grid-auto-columns: var(--space-3xs);
+  gap: calc(var(--space-3xs) / 2);
+  justify-content: start;
+}
+
+[data-variant='spatial-bento'] .sb-tally__marks > span {
+  background: var(--color-text-secondary);
+}
+
+/* A note runs under its row, across, and sizes no track: the tracks are the words' and the strips'. */
+[data-variant='spatial-bento'] .sb-tally__note {
+  grid-column: 1 / -1;
+  contain: inline-size;
+}
+
+/* ── The showcase's works ─────────────────────────────────────────────── */
+
+[data-variant='spatial-bento'] .sb-work__summary {
+  line-height: var(--type-body-compact-line-height);
+}
+
+[data-variant='spatial-bento'] .sb-work__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2xs) var(--space-s);
+  margin-block-start: auto;
+}
+
+[data-variant='spatial-bento'] .sb-work--plate {
+  overflow: clip;
+  gap: 0;
+  padding: 0;
+}
+
+[data-variant='spatial-bento'] .sb-work--plate .sb-work__media {
+  flex: 1 1 0;
+  min-block-size: calc(var(--space-3xl) * 1.2);
+  overflow: clip;
+}
+
+[data-variant='spatial-bento'] .sb-work--plate .sb-work__media :is(figure, picture) {
+  block-size: 100%;
+}
+
+/* A cover's caption, credit and rights sit under its picture, on the tile's ground, never clipped. */
+[data-variant='spatial-bento'] :is(.sb-work__media, .sb-work__band) figure {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+[data-variant='spatial-bento'] :is(.sb-work__media, .sb-work__band) figcaption {
+  padding: var(--space-3xs) var(--layout-pad) 0;
+}
+
+[data-variant='spatial-bento'] .sb-work--band .sb-work__band figcaption {
+  color: var(--layout-inverse-quiet);
+}
+
+[data-variant='spatial-bento'] .sb-work--band .sb-work__band figcaption .pf-caption {
+  color: var(--color-text-inverse);
+}
+
+[data-variant='spatial-bento'] .sb-work--plate .sb-work__media img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+[data-variant='spatial-bento'] .sb-work__caption {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-2xs) var(--space-m);
+  padding: var(--space-s) var(--layout-pad) var(--layout-pad-dense);
+}
+
+[data-variant='spatial-bento'] .sb-work__words {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+[data-variant='spatial-bento'] .sb-work__actions {
+  display: grid;
+  justify-items: end;
+  gap: var(--space-2xs);
+}
+
+@container (max-width: 30rem) {
+  [data-variant='spatial-bento'] .sb-work__caption {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* A row that wraps before an action does, so "Read the case study" keeps its line at 320. */
+  [data-variant='spatial-bento'] .sb-work__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: var(--space-s);
+  }
+}
+
+[data-variant='spatial-bento'] .sb-work--band {
+  overflow: clip;
+  gap: var(--space-2xs);
+}
+
+[data-variant='spatial-bento'] .sb-work__band {
+  flex: 1 1 0;
+  min-block-size: calc(var(--space-3xl) * 0.6);
+  margin: calc(var(--layout-pad) * -1) calc(var(--layout-pad) * -1) var(--space-2xs);
+  overflow: clip;
+}
+
+[data-variant='spatial-bento'] .sb-work__band :is(figure, picture) {
+  block-size: 100%;
+}
+
+/* The band bleeds its picture across the plate's top, cover-fit, as the signature plate does (E3). */
+[data-variant='spatial-bento'] .sb-work__band img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+  object-position: 50% 100%;
+}
+
+[data-variant='spatial-bento'] .sb-work--band .sb-work__summary {
+  max-inline-size: 52ch;
+  color: var(--layout-inverse-quiet);
+}
+
+[data-variant='spatial-bento'] .sb-work--note {
+  gap: var(--space-2xs);
+}
+
+[data-variant='spatial-bento'] .sb-work--list .sb-ruled > li {
+  display: grid;
+  gap: var(--space-3xs);
+  padding-block: var(--space-2xs);
+}
+
+/* An image not there yet keeps its box and its label. */
+[data-variant='spatial-bento'] .pf-media-box {
+  display: grid;
+  place-items: center;
+  inline-size: 100%;
+  block-size: 100%;
+  min-block-size: calc(var(--space-3xl) * 0.8);
+  padding: var(--space-s);
+  background: var(--color-surface-subtle);
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-font-size);
+}
+
+/* A custom item's box is as wide as its item, its height from 3:2: a set height or floor would widen it. */
+[data-variant='spatial-bento'] .sb-custom .pf-media-box {
+  block-size: auto;
+  min-block-size: auto;
+}
+
+/* ── The reach tile ───────────────────────────────────────────────────── */
+
+[data-variant='spatial-bento'] .sb-reach {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: 1fr auto auto;
+  align-items: center;
+  column-gap: var(--space-s);
+  row-gap: var(--space-3xs);
+  padding-block: var(--space-xs);
+}
+
+[data-variant='spatial-bento'] .sb-reach__mark {
+  grid-row: 1;
+  inline-size: calc(var(--space-3xl) * 0.45);
+  fill: none;
+  stroke: var(--color-on-accent);
+  stroke-width: 1.5;
+}
+
+[data-variant='spatial-bento'] .sb-reach__promise {
+  grid-column: 1 / -1;
+  align-self: end;
+  font-size: var(--type-label-font-size);
+  line-height: var(--type-body-compact-line-height);
+}
+
+[data-variant='spatial-bento'] .sb-reach__mail {
+  grid-column: 1 / -1;
+  align-self: end;
+  font-size: var(--type-title-font-size);
+  font-weight: var(--type-title-font-weight);
+  line-height: var(--type-title-line-height);
+}
+
+/* ── Boards ───────────────────────────────────────────────────────────── */
+
+[data-variant='spatial-bento'] .sb-board {
+  margin-block-start: var(--space-2xl);
+  scroll-margin-block-start: calc(var(--ui-control-height) + var(--space-l));
+}
+
+[data-variant='spatial-bento'] .sb-board[data-board='work'] {
+  margin-block-start: var(--space-3xl);
+}
+
+[data-variant='spatial-bento'] .sb-board[data-board='contact'] {
+  margin-block-start: var(--space-xl);
+}
+
+[data-variant='spatial-bento'] .sb-field {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+  gap: var(--layout-grid-gutter);
+  padding-inline: var(--layout-grid-margin);
+}
+
+/*
+ * A board's tiles are as tall as their words: a short list, a quote and its
+ * citation, sit at the top of their row rather than stretch to a taller
+ * neighbour with a gap under them.
+ */
+[data-variant='spatial-bento'] .sb-field > [data-span] {
+  align-self: start;
+  scroll-margin-block-start: calc(var(--ui-control-height) + var(--space-l));
+}
+
+[data-variant='spatial-bento'] [data-span='1'] {
+  grid-column: auto / span 1;
+}
+
+[data-variant='spatial-bento'] [data-span='2'] {
+  grid-column: auto / span 2;
+}
+
+[data-variant='spatial-bento'] [data-span='3'] {
+  grid-column: auto / span 3;
+}
+
+[data-variant='spatial-bento'] [data-span='4'] {
+  grid-column: auto / span 4;
+}
+
+[data-variant='spatial-bento'] [data-span='5'] {
+  grid-column: auto / span 5;
+}
+
+[data-variant='spatial-bento'] [data-span='6'] {
+  grid-column: auto / span 6;
+}
+
+[data-variant='spatial-bento'] [data-span='7'] {
+  grid-column: auto / span 7;
+}
+
+[data-variant='spatial-bento'] [data-span='8'] {
+  grid-column: auto / span 8;
+}
+
+[data-variant='spatial-bento'] [data-span='9'] {
+  grid-column: auto / span 9;
+}
+
+[data-variant='spatial-bento'] [data-span='10'] {
+  grid-column: auto / span 10;
+}
+
+[data-variant='spatial-bento'] [data-span='11'] {
+  grid-column: auto / span 11;
+}
+
+[data-variant='spatial-bento'] [data-span='12'] {
+  grid-column: auto / span 12;
+}
+
+/* The board's label, on the ground: its name, its plane, its index. */
+/*
+ * A tall tile beside a stacked pair takes two rows, and the lower of the pair
+ * is set under the upper, in its column: the model's places, at the wide
+ * layout only. The label beside a stacked first row takes both its rows. A
+ * span is the end of a tile's columns (auto / span n), so a start set here
+ * keeps it.
+ */
+[data-variant='spatial-bento'] .sb-field > [data-rows='2'] {
+  grid-row: span 2;
+}
+
+[data-variant='spatial-bento'] .sb-field > [data-col='1'] {
+  grid-column-start: 1;
+}
+
+[data-variant='spatial-bento'] .sb-field > [data-col='2'] {
+  grid-column-start: 2;
+}
+
+[data-variant='spatial-bento'] .sb-field > [data-col='3'] {
+  grid-column-start: 3;
+}
+
+[data-variant='spatial-bento'] .sb-field > [data-col='4'] {
+  grid-column-start: 4;
+}
+
+[data-variant='spatial-bento'] .sb-field > [data-col='5'] {
+  grid-column-start: 5;
+}
+
+[data-variant='spatial-bento'] .sb-field > [data-col='6'] {
+  grid-column-start: 6;
+}
+
+[data-variant='spatial-bento'] .sb-field > [data-col='7'] {
+  grid-column-start: 7;
+}
+
+[data-variant='spatial-bento'] .sb-field > [data-col='8'] {
+  grid-column-start: 8;
+}
+
+[data-variant='spatial-bento'] .sb-field > [data-col='9'] {
+  grid-column-start: 9;
+}
+
+[data-variant='spatial-bento'] .sb-field > [data-col='10'] {
+  grid-column-start: 10;
+}
+
+[data-variant='spatial-bento'] .sb-field > [data-col='11'] {
+  grid-column-start: 11;
+}
+
+[data-variant='spatial-bento'] .sb-field > [data-col='12'] {
+  grid-column-start: 12;
+}
+
+[data-variant='spatial-bento'] .sb-label[data-area='label'] {
+  grid-column: span 3;
+  align-self: start;
+  display: grid;
+  gap: var(--space-s);
+  padding-inline-end: var(--space-s);
+  color: var(--color-text-primary);
+  font-size: var(--type-body-font-size);
+}
+
+[data-variant='spatial-bento'] .sb-label__plane {
+  inline-size: calc(var(--space-3xl) * 1.2);
+  overflow: visible;
+}
+
+[data-variant='spatial-bento'] .sb-label__index {
+  border-block-start: 1px solid var(--color-border-default);
+}
+
+[data-variant='spatial-bento'] .sb-label__index li {
+  border-block-end: 1px solid var(--layout-hair);
+}
+
+[data-variant='spatial-bento'] .sb-label__index a {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  padding-block: var(--space-2xs);
+  color: var(--color-text-primary);
+  text-decoration: none;
+  line-height: var(--type-body-compact-line-height);
+}
+
+[data-variant='spatial-bento'] .sb-label__index a:hover .sb-label__name {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+/* ── Board tiles ──────────────────────────────────────────────────────── */
+
+[data-variant='spatial-bento'] .sb-prose {
+  display: grid;
+  gap: var(--space-xs);
+  max-inline-size: var(--layout-width-text);
+}
+
+[data-variant='spatial-bento'] .sb-standfirst {
+  max-inline-size: 34ch;
+}
+
+/*
+ * A tile wider than two measures sets its prose in two columns, each its
+ * measure, rather than one column and half the tile left to the ground.
+ */
+@container (min-width: 56rem) {
+  [data-variant='spatial-bento'] .sb-prose {
+    display: block;
+    max-inline-size: none;
+    columns: 2 var(--layout-width-text);
+    column-gap: var(--space-xl);
+  }
+
+  [data-variant='spatial-bento'] .sb-prose > * + * {
+    margin-block-start: var(--space-xs);
+  }
+}
+
+/* Entries, episodes, papers, and the rest: ruled rows with room between. */
+[data-variant='spatial-bento']
+  :is(.sb-entries, .sb-episodes, .sb-ev, .sb-focus, .sb-rings, .sb-custom)
+  > li {
+  display: grid;
+  gap: var(--space-3xs);
+  padding-block: var(--space-s);
+}
+
+[data-variant='spatial-bento']
+  :is(.sb-entries, .sb-episodes, .sb-ev, .sb-focus, .sb-rings, .sb-custom)
+  > li:first-child {
+  padding-block-start: 0;
+}
+
+[data-variant='spatial-bento']
+  :is(.sb-entries, .sb-episodes, .sb-ev, .sb-focus, .sb-rings, .sb-custom)
+  > li:last-child {
+  padding-block-end: 0;
+}
+
+[data-variant='spatial-bento'] .sb-ev > :not(:first-child),
+[data-variant='spatial-bento'] .sb-focus > :not(:first-child),
+[data-variant='spatial-bento'] .sb-rings > :not(:first-child) {
+  border-block-start: 1px solid var(--layout-hair);
+}
+
+[data-variant='spatial-bento'] .sb-tile--inverse .sb-ev > :not(:first-child) {
+  border-block-start-color: var(--layout-inverse-hair);
+}
+
+/* An essay's title at the title step, in ink: the essay, not the link, is what the row is. */
+[data-variant='spatial-bento'] .sb-entries__title a {
+  color: var(--color-text-primary);
+}
+
+[data-variant='spatial-bento'] .sb-entries__excerpt {
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+[data-variant='spatial-bento'] .sb-episodes__top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-3xs) var(--space-s);
+}
+
+[data-variant='spatial-bento'] .sb-episodes__length {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+[data-variant='spatial-bento'] .sb-bar {
+  display: block;
+  block-size: var(--space-3xs);
+  border-radius: var(--ui-radius-badge);
+  background: var(--layout-hair);
+  overflow: clip;
+}
+
+[data-variant='spatial-bento'] .sb-tile--inverse .sb-bar {
+  background: var(--layout-inverse-hair);
+}
+
+[data-variant='spatial-bento'] .sb-bar__fill {
+  display: block;
+  block-size: 100%;
+  border-radius: var(--ui-radius-badge);
+  background: var(--color-data-sequential-middle);
+}
+
+/* Photographs: the first wide, the rest in pairs, each with its caption. */
+[data-variant='spatial-bento'] .sb-photos {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='spatial-bento'] .sb-photos__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-xs) var(--space-2xs);
+}
+
+[data-variant='spatial-bento'] .sb-photos__grid > li:first-child {
+  grid-column: 1 / -1;
+}
+
+[data-variant='spatial-bento'] .sb-photos__grid figure {
+  display: grid;
+  gap: var(--space-3xs);
+  align-content: start;
+}
+
+[data-variant='spatial-bento'] .sb-photos__grid img {
+  inline-size: 100%;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  border-radius: var(--ui-radius-media);
+}
+
+[data-variant='spatial-bento']
+  :is(.sb-photos, .sb-custom, .sb-sheet__cover, .sb-work__media, .sb-work__band)
+  figcaption {
+  display: grid;
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-font-size);
+  line-height: var(--type-caption-line-height);
+}
+
+[data-variant='spatial-bento']
+  :is(.sb-photos, .sb-custom, .sb-sheet__cover, .sb-work__media, .sb-work__band)
+  figcaption
+  .pf-caption {
+  color: var(--color-text-primary);
+}
+
+/* A release, as a compact player: a small cover beside its title, its tracks as plain lines. */
+[data-variant='spatial-bento'] .sb-album {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-m);
+  align-items: start;
+}
+
+[data-variant='spatial-bento'] .sb-album__body {
+  display: grid;
+  gap: var(--space-2xs);
+  min-inline-size: 0;
+}
+
+[data-variant='spatial-bento'] .sb-album__media {
+  inline-size: var(--space-3xl);
+}
+
+[data-variant='spatial-bento'] .sb-album__cover {
+  inline-size: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--ui-radius-media);
+}
+
+[data-variant='spatial-bento'] .sb-tracks {
+  display: grid;
+}
+
+[data-variant='spatial-bento'] .sb-tracks > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2xs);
+  line-height: var(--type-body-compact-line-height);
+}
+
+[data-variant='spatial-bento'] .sb-album__more > summary {
+  cursor: pointer;
+}
+
+[data-variant='spatial-bento'] .sb-tracks__time {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-variant='spatial-bento'] .sb-plates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--space-3xl) * 2.4)), 1fr));
+  gap: var(--space-m);
+}
+
+[data-variant='spatial-bento'] .sb-plate {
+  display: grid;
+  gap: var(--space-3xs);
+  align-content: start;
+}
+
+[data-variant='spatial-bento'] .sb-plate__cover {
+  inline-size: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: var(--ui-radius-media);
+}
+
+/* Testimonials: a band of quotes, their attributions on one line across. */
+[data-variant='spatial-bento'] .sb-quotes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--space-3xl) * 2.1)), 1fr));
+  gap: var(--space-l) var(--space-xl);
+}
+
+[data-variant='spatial-bento'] .sb-quote {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: var(--space-m);
+}
+
+/* The attribution: the name over the role, at the quote's edge. */
+[data-variant='spatial-bento'] .sb-quote__who {
+  display: grid;
+}
+
+/* Tickets: the date punched out at the start, a dashed tear between. */
+[data-variant='spatial-bento'] .sb-ev--talk {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2xs);
+}
+
+[data-variant='spatial-bento'] .sb-ev--talk > li.sb-ticket {
+  display: grid;
+  grid-template-columns: calc(var(--space-3xl) * 0.6) minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--ui-radius-card);
+  background: var(--color-surface-subtle);
+}
+
+[data-variant='spatial-bento'] .sb-ticket__stub {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  padding: var(--space-2xs);
+  border-inline-end: 1px dashed var(--color-border-strong);
+  text-align: center;
+}
+
+[data-variant='spatial-bento'] .sb-ticket__stub time {
+  display: grid;
+}
+
+[data-variant='spatial-bento'] .sb-ticket__day {
+  font-size: var(--type-title-font-size);
+  font-weight: var(--type-title-font-weight);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='spatial-bento'] .sb-ticket__month {
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-font-size);
+}
+
+[data-variant='spatial-bento'] .sb-ticket__body {
+  display: grid;
+  gap: var(--space-3xs);
+  padding: var(--space-xs) var(--space-s);
+}
+
+/* Dated rows, and the case sheet's award seal: the year large, the facts beside it. */
+[data-variant='spatial-bento'] .sb-ev .sb-dated {
+  grid-template-columns: calc(var(--space-3xl) * 0.55) minmax(0, 1fr);
+  column-gap: var(--space-s);
+}
+
+/* A case figure (SPA-1): its rows, each a label over its drawing, then its caption. */
+[data-variant='spatial-bento'] .sb-fig {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+/* Its drawings in the secondary ink, as the tally's strips are: the accent means "reach me". */
+[data-variant='spatial-bento'] .sb-fig svg {
+  color: var(--color-text-secondary);
+}
+
+/* Right to left, a row's drawing fills from the start edge too; the award's seal, a direct child, keeps its year. */
+[data-variant='spatial-bento'] .sb-fig div svg:dir(rtl) {
+  scale: -1 1;
+}
+
+[data-variant='spatial-bento'] .sb-dated__year,
+[data-variant='spatial-bento'] .sb-patent__number {
+  font-size: var(--type-title-font-size);
+  font-weight: var(--type-title-font-weight);
+  line-height: var(--type-title-line-height);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+[data-variant='spatial-bento'] .sb-dated__body {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+[data-variant='spatial-bento'] .sb-patent__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2xs);
+}
+
+[data-variant='spatial-bento'] .sb-span {
+  display: grid;
+  grid-template-columns: auto minmax(var(--space-m), 1fr) auto;
+  align-items: center;
+  gap: var(--space-2xs);
+}
+
+[data-variant='spatial-bento'] .sb-span__line {
+  block-size: var(--space-3xs);
+  border-radius: var(--ui-radius-badge);
+  background: linear-gradient(to right, var(--color-border-strong), var(--color-positive));
+}
+
+[data-variant='spatial-bento'] .sb-press__words {
+  font-size: var(--type-title-font-size);
+}
+
+[data-variant='spatial-bento'] .sb-entry__figure {
+  font-size: var(--type-title-font-size);
+  font-weight: var(--type-title-font-weight);
+}
+
+/* Practice: a spec sheet, keycaps, and a menu of offers. */
+[data-variant='spatial-bento'] .sb-spec > div {
+  display: grid;
+  gap: var(--space-3xs);
+  padding-block: var(--space-xs);
+}
+
+[data-variant='spatial-bento'] .sb-spec > div:first-child {
+  padding-block-start: 0;
+}
+
+/* Tools: one line a group, set apart by commas, each version quiet after its tool. */
+[data-variant='spatial-bento'] .sb-materials {
+  display: inline;
+}
+
+[data-variant='spatial-bento'] .sb-materials > li {
+  display: inline;
+}
+
+[data-variant='spatial-bento'] .sb-materials > li:not(:last-child)::after {
+  content: ', ';
+}
+
+[data-variant='spatial-bento'] .sb-materials__version {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-variant='spatial-bento'] .sb-menu {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+[data-variant='spatial-bento'] .sb-menu__offer {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto;
+  align-items: start;
+  column-gap: var(--space-l);
+  row-gap: var(--space-xs);
+  padding-block: var(--space-s);
+}
+
+[data-variant='spatial-bento'] .sb-menu__offer:first-child {
+  padding-block-start: var(--space-2xs);
+}
+
+[data-variant='spatial-bento'] .sb-menu__name,
+[data-variant='spatial-bento'] .sb-menu__what {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2xs);
+}
+
+[data-variant='spatial-bento'] .sb-menu__ask {
+  display: flex;
+  justify-content: end;
+}
+
+/* A release keeps its cover beside its tracks down to a phone's column, so it's no taller than it needs (N4). */
+@container (max-width: 24rem) {
+  [data-variant='spatial-bento'] .sb-album {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@container (max-width: 36rem) {
+  [data-variant='spatial-bento'] .sb-menu__offer {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='spatial-bento'] .sb-menu__ask {
+    justify-content: start;
+  }
+}
+
+/* Focus, facts, and the pull quote. A focus is a step under its tile's title, in the body's weight. */
+[data-variant='spatial-bento'] .sb-focus > li {
+  font-size: var(--type-step-1);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='spatial-bento'] .sb-rings > li {
+  grid-template-columns: var(--space-s) minmax(0, 1fr);
+  column-gap: var(--space-2xs);
+}
+
+[data-variant='spatial-bento'] .sb-rings > li::before {
+  content: '';
+  inline-size: var(--space-2xs);
+  block-size: var(--space-2xs);
+  margin-block-start: 0.5lh;
+  translate: 0 -50%;
+  border: 1px solid var(--color-text-secondary);
+  border-radius: var(--ui-radius-badge);
+}
+
+[data-variant='spatial-bento'] .sb-pull {
+  display: grid;
+  flex: 1;
+  align-content: space-between;
+  gap: var(--space-l);
+}
+
+[data-variant='spatial-bento'] .sb-pull blockquote {
+  max-inline-size: 22ch;
+  font-size: var(--type-step-4);
+}
+
+/* Who said it and the source: apart by more than a focus ring's reach, so a ring never meets the other's words. */
+[data-variant='spatial-bento'] .sb-pull figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2xs);
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-font-size);
+}
+
+[data-variant='spatial-bento'] .sb-tile--inverse .sb-pull figcaption {
+  color: var(--layout-inverse-quiet);
+}
+
+/*
+ * A quote that takes a board's row whole, at the wide layout, is a two-track
+ * plate (N1): its words keep their display measure in the first seven of the
+ * twelve, and the attribution and source sit in the last four, on the words'
+ * last line and against the plate's far edge, so no half of the plate is
+ * left bare. With nothing to cite, the words keep their own measure.
+ */
+@media (min-width: 80rem) {
+  [data-variant='spatial-bento'] .sb-field > [data-span='12'] .sb-pull:has(figcaption) {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    align-items: end;
+    column-gap: var(--layout-grid-gutter);
+  }
+
+  [data-variant='spatial-bento'] .sb-field > [data-span='12'] .sb-pull:has(figcaption) blockquote {
+    grid-column: 1 / span 7;
+    max-inline-size: none;
+  }
+
+  [data-variant='spatial-bento'] .sb-field > [data-span='12'] .sb-pull figcaption {
+    grid-column: 9 / -1;
+    text-align: end;
+    justify-content: flex-end;
+  }
+}
+
+/* The contact ledger, and the poster. */
+[data-variant='spatial-bento'] .sb-contact__mail {
+  font-size: var(--type-title-font-size);
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='spatial-bento'] .sb-contact__links {
+  border-block-start: 1px solid var(--layout-hair);
+}
+
+/* A row a link: its name, its handle to the right, and the mark that it leaves, always the last track. */
+[data-variant='spatial-bento'] .sb-contact__links a {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--space-3xs) var(--space-2xs);
+  padding-block: var(--space-2xs);
+  border-block-end: 1px solid var(--layout-hair);
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+[data-variant='spatial-bento'] .sb-contact__links a[data-outbound]::after {
+  grid-column: 3;
+}
+
+[data-variant='spatial-bento'] .sb-contact__links a:hover .sb-contact__name {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+/* The name keeps its words whole; the handle gives way first, and breaks only where it must. */
+[data-variant='spatial-bento'] .sb-contact__name {
+  grid-column: 1;
+  overflow-wrap: normal;
+}
+
+[data-variant='spatial-bento'] .sb-contact__where {
+  grid-column: 2;
+  justify-self: end;
+  min-inline-size: 0;
+  text-align: end;
+  overflow-wrap: anywhere;
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-font-size);
+}
+
+[data-variant='spatial-bento'] .sb-tile--cta {
+  justify-content: space-between;
+  gap: var(--space-l);
+}
+
+[data-variant='spatial-bento'] .sb-poster__title {
+  max-inline-size: 12ch;
+}
+
+[data-variant='spatial-bento'] .sb-poster__foot {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='spatial-bento'] .sb-poster__text {
+  max-inline-size: 44ch;
+}
+
+[data-variant='spatial-bento'] .sb-poster__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+}
+
+/* The Gantt: one axis of years, a bar a row, each row a disclosure. */
+[data-variant='spatial-bento'] .sb-gantt {
+  --layout-gantt-label: calc(var(--space-3xl) * 2.2);
+  display: grid;
+}
+
+[data-variant='spatial-bento'] .sb-gantt__axis,
+[data-variant='spatial-bento'] .sb-gantt__row > summary {
+  display: grid;
+  grid-template-columns: var(--layout-gantt-label) minmax(0, 1fr);
+  column-gap: var(--space-s);
+  align-items: center;
+}
+
+[data-variant='spatial-bento'] .sb-gantt__ticks {
+  position: relative;
+  block-size: 1lh;
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-font-size);
+}
+
+[data-variant='spatial-bento'] .sb-gantt__ticks > span {
+  position: absolute;
+  inset-block-start: 0;
+}
+
+[data-variant='spatial-bento'] .sb-gantt__rows > li {
+  border-block-start: 1px solid var(--layout-hair);
+}
+
+[data-variant='spatial-bento'] .sb-gantt__row > summary {
+  padding-block: var(--space-2xs);
+  cursor: pointer;
+  list-style: none;
+}
+
+[data-variant='spatial-bento'] .sb-gantt__row > summary::-webkit-details-marker {
+  display: none;
+}
+
+[data-variant='spatial-bento'] .sb-gantt__who {
+  display: grid;
+  grid-template-columns: var(--space-s) minmax(0, 1fr);
+  column-gap: var(--space-3xs);
+}
+
+[data-variant='spatial-bento'] .sb-gantt__who::before {
+  content: '+';
+  grid-row: span 2;
+  color: var(--color-text-secondary);
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='spatial-bento'] .sb-gantt__row[open] .sb-gantt__who::before {
+  content: '\2212';
+}
+
+[data-variant='spatial-bento'] .sb-gantt__track {
+  position: relative;
+  block-size: var(--space-m);
+  border-inline: 1px solid var(--layout-hair);
+}
+
+[data-variant='spatial-bento'] .sb-gantt__bar {
+  position: absolute;
+  inset-block: var(--space-3xs);
+  border-radius: var(--ui-radius-badge);
+  background: var(--color-data-categorical-1);
+}
+
+[data-variant='spatial-bento'] [data-series='2'].sb-gantt__bar,
+[data-variant='spatial-bento'] .sb-gantt__legend [data-series='2']::before {
+  background: var(--color-data-categorical-2);
+}
+
+[data-variant='spatial-bento'] [data-series='3'].sb-gantt__bar,
+[data-variant='spatial-bento'] .sb-gantt__legend [data-series='3']::before {
+  background: var(--color-data-categorical-6);
+}
+
+[data-variant='spatial-bento'] [data-series='4'].sb-gantt__bar,
+[data-variant='spatial-bento'] .sb-gantt__legend [data-series='4']::before {
+  background: var(--color-data-categorical-4);
+}
+
+[data-variant='spatial-bento'] .sb-gantt__bar[data-open] {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+}
+
+[data-variant='spatial-bento'] .sb-gantt__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-s);
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-font-size);
+}
+
+[data-variant='spatial-bento'] .sb-gantt__legend > li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3xs);
+}
+
+[data-variant='spatial-bento'] .sb-gantt__legend > li::before {
+  content: '';
+  inline-size: var(--space-xs);
+  block-size: var(--space-3xs);
+  border-radius: var(--ui-radius-badge);
+  background: var(--color-data-categorical-1);
+}
+
+[data-variant='spatial-bento'] .sb-gantt__detail {
+  display: grid;
+  grid-template-columns: var(--layout-gantt-label) minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: var(--space-s);
+  row-gap: var(--space-xs);
+  padding-block: var(--space-3xs) var(--space-s);
+}
+
+[data-variant='spatial-bento'] .sb-gantt__detail > .sb-label {
+  grid-column: 1;
+  padding-inline-start: var(--space-m);
+}
+
+[data-variant='spatial-bento'] .sb-gantt__words {
+  grid-column: 2;
+}
+
+[data-variant='spatial-bento'] .sb-gantt__detail > .sb-checks {
+  grid-column: 3;
+}
+
+[data-variant='spatial-bento'] .sb-gantt__detail > .sb-gantt__skills {
+  grid-column: 2 / -1;
+  padding-inline-start: 0;
+}
+
+/* GitHub: figures, a heatmap of the year, and the pinned repositories. */
+/* The totals in one sentence, the heatmap's key at its end. */
+[data-variant='spatial-bento'] .sb-github__totals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2xs) var(--space-l);
+}
+
+[data-variant='spatial-bento'] .sb-github__sentence {
+  color: var(--layout-inverse-quiet);
+}
+
+[data-variant='spatial-bento'] .sb-github__sentence .sb-strong {
+  color: var(--color-text-inverse);
+}
+
+[data-variant='spatial-bento'] .sb-heat__legend {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  color: var(--layout-inverse-quiet);
+  font-size: var(--type-label-font-size);
+}
+
+[data-variant='spatial-bento'] .sb-heat__key {
+  display: inline-flex;
+  gap: var(--space-3xs);
+}
+
+[data-variant='spatial-bento'] .sb-heat__key > span {
+  inline-size: var(--space-xs);
+  block-size: var(--space-xs);
+  background: color-mix(in oklab, var(--color-text-inverse) 10%, var(--color-text-primary));
+}
+
+[data-variant='spatial-bento'] .sb-heat {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+[data-variant='spatial-bento'] .sb-heat :is(.sb-heat__months, .sb-heat__cells) {
+  display: grid;
+  grid-template-columns: repeat(53, minmax(0, 1fr));
+  gap: calc(var(--space-3xs) * 0.6);
+}
+
+[data-variant='spatial-bento'] .sb-heat[data-weeks='54'] :is(.sb-heat__months, .sb-heat__cells) {
+  grid-template-columns: repeat(54, minmax(0, 1fr));
+}
+
+[data-variant='spatial-bento'] .sb-heat[data-weeks='52'] :is(.sb-heat__months, .sb-heat__cells) {
+  grid-template-columns: repeat(52, minmax(0, 1fr));
+}
+
+[data-variant='spatial-bento'] .sb-heat__months {
+  color: var(--layout-inverse-quiet);
+  font-size: var(--type-label-font-size);
+}
+
+[data-variant='spatial-bento'] .sb-heat__months > li {
+  grid-row: 1;
+  white-space: nowrap;
+}
+
+[data-variant='spatial-bento'] .sb-heat__cells {
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, auto);
+}
+
+[data-variant='spatial-bento'] .sb-heat__cells > li {
+  aspect-ratio: 1;
+  background: color-mix(in oklab, var(--color-text-inverse) 10%, var(--color-text-primary));
+}
+
+[data-variant='spatial-bento'] .sb-heat__cells > li[data-empty] {
+  background: transparent;
+}
+
+[data-variant='spatial-bento'] .sb-heat__cells > li[data-level='1'],
+[data-variant='spatial-bento'] .sb-heat__key > [data-level='1'] {
+  background: var(--color-data-sequential-start);
+}
+
+[data-variant='spatial-bento'] .sb-heat__cells > li[data-level='2'],
+[data-variant='spatial-bento'] .sb-heat__key > [data-level='2'] {
+  background: var(--color-data-sequential-middle);
+}
+
+[data-variant='spatial-bento'] .sb-heat__cells > li[data-level='3'],
+[data-variant='spatial-bento'] .sb-heat__key > [data-level='3'] {
+  background: var(--color-data-sequential-end);
+}
+
+[data-variant='spatial-bento'] .sb-heat__cells > li[data-level='4'],
+[data-variant='spatial-bento'] .sb-heat__key > [data-level='4'] {
+  background: var(--color-accent);
+}
+
+[data-variant='spatial-bento'] .sb-repos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--space-3xl) * 2.4)), 1fr));
+  gap: var(--space-s) var(--space-xl);
+  padding-block-start: var(--space-s);
+  border-block-start: 1px solid var(--layout-inverse-hair);
+}
+
+[data-variant='spatial-bento'] .sb-repos > li {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3xs);
+}
+
+@container (max-width: 44rem) {
+  [data-variant='spatial-bento'] .sb-heat .sb-heat__months {
+    display: none;
+  }
+
+  [data-variant='spatial-bento'] .sb-heat :is(.sb-heat__cells) {
+    grid-template-columns: repeat(27, minmax(0, 1fr));
+  }
+
+  [data-variant='spatial-bento'] .sb-heat__cells > li:nth-child(-n + 189) {
+    display: none;
+  }
+
+  [data-variant='spatial-bento'] .sb-gantt {
+    --layout-gantt-label: minmax(0, 1fr);
+  }
+
+  [data-variant='spatial-bento'] :is(.sb-gantt__axis, .sb-gantt__row > summary) {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--space-3xs);
+  }
+
+  [data-variant='spatial-bento'] .sb-gantt__axis > span:first-child {
+    display: none;
+  }
+
+  [data-variant='spatial-bento'] .sb-gantt__detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='spatial-bento']
+    .sb-gantt__detail
+    > :is(.sb-label, .sb-gantt__words, .sb-checks, .sb-gantt__skills) {
+    grid-column: 1;
+    padding-inline-start: 0;
+  }
+}
+
+/* ── The case study's sheet ───────────────────────────────────────────── */
+
+/*
+ * The work's tile, opened: one sheet over the receded field, the overview's
+ * plane faded across the first screen behind it and showing past its sides.
+ * The sheet is one surface; its parts are ruled off inside it, never tiles
+ * of their own, and each is as tall as its words.
+ */
+[data-variant='spatial-bento'] .sb-case {
+  position: relative;
+  display: grid;
+  gap: var(--space-m);
+  padding: var(--layout-grid-margin);
+  isolation: isolate;
+}
+
+[data-variant='spatial-bento'] .sb-case__field {
+  position: absolute;
+  z-index: -1;
+  inset-block-start: 0;
+  inset-inline: 0;
+  display: flex;
+  justify-content: center;
+  block-size: 100dvh;
+  overflow: clip;
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+[data-variant='spatial-bento'] .sb-case__field svg {
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+/* The sheet's top edge: the way back, the steps, and what Escape does. */
+[data-variant='spatial-bento'] .sb-case__nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-s) var(--space-l);
+}
+
+[data-variant='spatial-bento'] .sb-case__esc {
+  display: none;
+  margin-inline-start: auto;
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-font-size);
+}
+
+[data-variant='spatial-bento'] .sb-case__esc kbd {
+  padding-inline: var(--space-3xs);
+  border: 1px solid var(--layout-hair);
+  border-radius: var(--ui-radius-badge);
+  font-family: inherit;
+}
+
+/*
+ * Only where a script hears the key (the sheet's own, which marks the hint
+ * once it listens) and there's a keyboard to press it on.
+ */
+@media (pointer: fine) {
+  [data-variant='spatial-bento'] .sb-case__esc[data-listening] {
+    display: block;
+  }
+}
+
+[data-variant='spatial-bento'] .sb-case__step {
+  display: grid;
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+/*
+ * The opened tile: the way back on the field, then its head as tiles, the
+ * title and its facts beside it (E3), then the sheet of its parts. Every
+ * tile a sibling on the field, so none sits inside another.
+ */
+[data-variant='spatial-bento'] .sb-case__open {
+  display: grid;
+  gap: var(--layout-grid-gutter);
+  inline-size: min(100% - 2 * var(--space-2xl), calc(var(--space-3xl) * 13));
+  margin-inline: auto;
+  margin-block-start: var(--space-xl);
+}
+
+[data-variant='spatial-bento'] .sb-case__head {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--layout-grid-gutter);
+}
+
+[data-variant='spatial-bento'] .sb-case__title {
+  gap: var(--space-m);
+  padding: var(--space-xl);
+}
+
+[data-variant='spatial-bento'] .sb-case__facts {
+  display: grid;
+  align-content: start;
+  gap: var(--layout-grid-gutter);
+}
+
+[data-variant='spatial-bento'] .sb-fact__more {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='spatial-bento'] .sb-sheet {
+  display: grid;
+  gap: var(--space-xl);
+  overflow: clip;
+  padding: var(--space-xl) var(--space-xl) var(--space-l);
+  border-radius: var(--ui-radius-overlay);
+  background: var(--color-canvas);
+  box-shadow: var(--ui-shadow-overlay);
+}
+
+[data-variant='spatial-bento'] .sb-case__name {
+  font-family: var(--type-display-font-family);
+  font-size: var(--type-step-6);
+  font-weight: var(--type-display-font-weight);
+  line-height: var(--type-display-line-height);
+  letter-spacing: var(--type-display-letter-spacing);
+  overflow-wrap: anywhere;
+}
+
+[data-variant='spatial-bento'] .sb-case__lede {
+  max-inline-size: 40ch;
+  color: var(--color-text-secondary);
+  font-size: var(--type-step-1);
+  line-height: var(--type-title-line-height);
+}
+
+[data-variant='spatial-bento'] .sb-sheet__cover {
+  margin-inline: calc(var(--space-xl) * -1);
+  overflow: clip;
+}
+
+/* Opening the sheet, the cover bleeds to its top edge too, clipped to the sheet's corners. */
+[data-variant='spatial-bento'] .sb-sheet > .sb-sheet__cover:first-child {
+  margin-block-start: calc(var(--space-xl) * -1);
+}
+
+[data-variant='spatial-bento'] .sb-sheet__cover img {
+  inline-size: 100%;
+  max-block-size: 60dvh;
+  object-fit: cover;
+}
+
+[data-variant='spatial-bento'] .sb-sheet__cover figcaption {
+  padding: var(--space-xs) var(--space-xl) 0;
+}
+
+[data-variant='spatial-bento'] .sb-sheet__about {
+  max-inline-size: 65ch;
+}
+
+/* The parts: two columns of ruled stops, each its own height; decisions and evidence across both. */
+[data-variant='spatial-bento'] .sb-sheet__parts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--space-l) var(--space-xl);
+}
+
+[data-variant='spatial-bento'] .sb-sheet__part {
+  display: grid;
+  align-content: start;
+  gap: var(--space-xs);
+  padding-block-start: var(--space-s);
+  border-block-start: 1px solid var(--layout-hair);
+}
+
+[data-variant='spatial-bento'] .sb-sheet__part[data-wide] {
+  grid-column: 1 / -1;
+}
+
+[data-variant='spatial-bento'] .sb-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+}
+
+[data-variant='spatial-bento'] .sb-table :is(th, td) {
+  padding-block: var(--space-2xs);
+  padding-inline: 0 var(--space-s);
+  border-block-end: 1px solid var(--layout-hair);
+  text-align: start;
+  vertical-align: top;
+}
+
+/* The next stop's rule closes the table, so its last row draws none of its own. */
+[data-variant='spatial-bento'] .sb-table tbody tr:last-child,
+[data-variant='spatial-bento'] .sb-table tbody tr:last-child > td {
+  border-block-end: 0;
+}
+
+[data-variant='spatial-bento'] .sb-table th {
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-font-size);
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='spatial-bento'] .sb-sheet__next {
+  display: grid;
+  gap: var(--space-2xs);
+  padding-block-start: var(--space-m);
+  border-block-start: 1px solid var(--layout-hair);
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+[data-variant='spatial-bento'] .sb-case__next-title {
+  font-family: var(--type-display-font-family);
+  font-size: var(--type-step-5);
+  font-weight: var(--type-display-font-weight);
+  line-height: var(--type-headline-line-height);
+  text-decoration: underline from-font var(--layout-underline);
+  text-underline-offset: 0.12em;
+}
+
+/* The sheet's foot with no next case: the way back, and another work of the field beside it. */
+[data-variant='spatial-bento'] .sb-sheet__end {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--space-3xl) * 3)), 1fr));
+  gap: var(--space-l) var(--space-xl);
+}
+
+[data-variant='spatial-bento'] .sb-sheet__other {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2xs);
+  padding-block-start: var(--space-m);
+  border-block-start: 1px solid var(--layout-hair);
+}
+
+[data-variant='spatial-bento'] .sb-case__other {
+  font-size: var(--type-title-font-size);
+  font-weight: var(--type-title-font-weight);
+}
+
+/*
+ * Wide, the sheet's opening words set in two measures, and What it showed
+ * sets its records beside its words, so neither leaves half the sheet bare.
+ */
+@media (min-width: 64rem) {
+  [data-variant='spatial-bento'] .sb-sheet__about {
+    display: block;
+    max-inline-size: none;
+    columns: 2;
+    column-gap: var(--space-xl);
+  }
+
+  [data-variant='spatial-bento'] .sb-sheet__part:has(> .sb-prose + .sb-ev) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-xl);
+  }
+
+  [data-variant='spatial-bento'] .sb-sheet__part > h2 {
+    grid-column: 1 / -1;
+  }
+
+  /* What it changed's figure, down beside Looking back too (SPA-1). */
+  [data-variant='spatial-bento'] .sb-sheet__part[data-span] {
+    grid-row: span 2;
+  }
+}
+
+[data-variant='spatial-bento'] .sb-sheet__next:hover .sb-case__next-title {
+  color: var(--color-accent-text);
+}
+
+/* Narrower, the sheet's head and its parts stack, and the decisions table becomes rows of three lines. */
+@media (max-width: 63.99rem) {
+  [data-variant='spatial-bento'] .sb-case__open {
+    inline-size: 100%;
+  }
+
+  [data-variant='spatial-bento'] .sb-case__head,
+  [data-variant='spatial-bento'] .sb-sheet__parts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='spatial-bento'] .sb-case__facts {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--space-3xl) * 2)), 1fr));
+  }
+
+  /* One column, What it changed's figure follows its words as What it showed's does: no rule of its own. */
+  [data-variant='spatial-bento'] .sb-sheet__part[data-figure] {
+    padding-block-start: 0;
+    border-block-start: 0;
+  }
+}
+
+@media (max-width: 47.99rem) {
+  [data-variant='spatial-bento'] .sb-case__open {
+    margin-block-start: var(--space-l);
+  }
+
+  [data-variant='spatial-bento'] :is(.sb-sheet, .sb-case__title) {
+    padding: var(--space-m) var(--space-s);
+  }
+
+  [data-variant='spatial-bento'] .sb-sheet__cover {
+    margin-inline: calc(var(--space-s) * -1);
+  }
+
+  [data-variant='spatial-bento'] .sb-sheet > .sb-sheet__cover:first-child {
+    margin-block-start: calc(var(--space-m) * -1);
+  }
+
+  [data-variant='spatial-bento'] .sb-case__name {
+    font-size: var(--type-step-5);
+  }
+
+  [data-variant='spatial-bento'] .sb-table,
+  [data-variant='spatial-bento'] .sb-table :is(thead, tbody, tr, th, td) {
+    display: block;
+  }
+
+  [data-variant='spatial-bento'] .sb-table thead {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  [data-variant='spatial-bento'] .sb-table tr {
+    padding-block: var(--space-2xs);
+    border-block-end: 1px solid var(--layout-hair);
+  }
+
+  [data-variant='spatial-bento'] .sb-table :is(th, td) {
+    border-block-end: 0;
+    padding-block: var(--space-3xs);
+  }
+
+  /* A cell with nothing in it shows neither its head nor a row's worth of ground (N2). */
+  [data-variant='spatial-bento'] .sb-table td:empty {
+    display: none;
+  }
+
+  [data-variant='spatial-bento'] .sb-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    color: var(--color-text-secondary);
+    font-size: var(--type-label-font-size);
+    font-weight: var(--type-label-font-weight);
+  }
+}
+
+/* ── Footer and dock ──────────────────────────────────────────────────── */
+
+[data-variant='spatial-bento'] .sb-footer {
+  padding: var(--layout-grid-gutter) var(--layout-grid-margin) var(--layout-grid-margin);
+  font-family: var(--type-body-font-family);
+  font-size: var(--type-body-font-size);
+}
+
+[data-variant='spatial-bento'] .sb-footer__tile {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs) var(--space-l);
+}
+
+[data-variant='spatial-bento'] .sb-footer__name {
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='spatial-bento'] .sb-footer__colophon {
+  flex: 1 1 calc(var(--space-3xl) * 3);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='spatial-bento'] .sb-footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-s);
+}
+
+[data-variant='spatial-bento'] .sb-footer__end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-s);
+  margin-inline-start: auto;
+}
+
+[data-variant='spatial-bento'] .sb-dock {
+  position: fixed;
+  z-index: 1;
+  inset-block-start: var(--layout-grid-margin);
+  inset-inline-start: var(--layout-grid-margin);
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-3xs);
+  padding: var(--space-3xs);
+  border-radius: var(--ui-radius-overlay);
+  background: var(--color-canvas);
+  box-shadow: var(--ui-shadow-overlay);
+  font-family: var(--type-label-font-family);
+  font-size: var(--type-label-font-size);
+  font-weight: var(--type-label-font-weight);
+}
+
+[data-variant='spatial-bento'] .sb-dock[data-state='hidden'] {
+  opacity: 0;
+  visibility: hidden;
+}
+
+[data-variant='spatial-bento'] .sb-dock a {
+  display: flex;
+  align-items: center;
+  min-block-size: var(--ui-control-height);
+  padding-inline: var(--space-xs);
+  border-radius: var(--ui-radius-control);
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+[data-variant='spatial-bento'] .sb-dock__name {
+  font-family: var(--type-title-font-family);
+  font-size: var(--type-body-font-size);
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='spatial-bento'] .sb-dock__boards {
+  display: flex;
+  gap: var(--space-3xs);
+}
+
+[data-variant='spatial-bento'] .sb-dock__boards a {
+  justify-content: center;
+  min-inline-size: calc(var(--ui-control-height) * 1.9);
+  border-radius: 0;
+  background: var(--color-surface-subtle);
+}
+
+[data-variant='spatial-bento'] .sb-dock__boards a:hover {
+  background: var(--color-surface-default);
+}
+
+[data-variant='spatial-bento'] .sb-dock__boards a[aria-current] {
+  background: var(--color-text-primary);
+  color: var(--color-text-inverse);
+}
+
+/* The phone's three cells: wider, the boards. */
+[data-variant='spatial-bento'] .sb-dock__phone {
+  display: none;
+}
+
+/*
+ * The menu dialog's lists. The dialog sits in the hero's markup but draws on
+ * its own surface in the top layer, so it takes the plain tile's ink back.
+ */
+[data-variant='spatial-bento'] .sb-menu-slot dialog {
+  --layout-underline: color-mix(in oklab, var(--color-accent-text) 45%, var(--color-canvas));
+  color: var(--color-text-primary);
+}
+
+[data-variant='spatial-bento'] .sb-menu-slot :is(.sb-menu__boards, .sb-menu__sections) a {
+  color: var(--color-text-primary);
+}
+
+/*
+ * Close comes first, under the title, and holds the dialog's top while the
+ * list scrolls under it; the kit's own Close at the foot goes.
+ */
+[data-variant='spatial-bento'] .sb-menu__close {
+  position: sticky;
+  z-index: 1;
+  inset-block-start: calc(var(--ui-space-surface-block) * -1);
+  display: flex;
+  justify-content: end;
+  margin-block-end: var(--space-s);
+  padding-block: var(--space-3xs);
+  background: var(--color-surface-overlay);
+}
+
+[data-variant='spatial-bento'] .sb-menu-slot [data-ui-slot='dialog.actions'] {
+  display: none;
+}
+
+/* A thumb's size: the accessibility layer sets the floor of min-block-size, so this sets the box. */
+[data-variant='spatial-bento'] .sb-menu-slot [data-ui-slot='action'] {
+  block-size: calc(var(--ui-control-height) + var(--space-2xs));
+}
+
+[data-variant='spatial-bento'] .sb-menu__boards {
+  display: grid;
+  gap: var(--space-s);
+}
+
+[data-variant='spatial-bento'] .sb-menu__board {
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='spatial-bento'] .sb-menu__sections {
+  display: grid;
+  gap: var(--space-3xs);
+  padding-inline-start: var(--space-s);
+}
+
+/* ── Re-span, never shrink ────────────────────────────────────────────── */
+
+/*
+ * Six columns under 1280px, the hero across them: twelve at 1024 squeeze the
+ * Contents tile until its planes sit over its words.
+ */
+@media (max-width: 79.99rem) {
+  [data-variant='spatial-bento'] {
+    --layout-grid-columns: 6;
+  }
+
+  [data-variant='spatial-bento'] .sb-overview {
+    grid-template-rows: auto;
+    min-block-size: 0;
+  }
+
+  /*
+   * The works' rows follow the top's, from the line named works: the rows
+   * after it are the implicit ones, which count as works lines too.
+   */
+  [data-variant='spatial-bento'] .sb-band[data-layout][data-works] {
+    grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+    grid-template-rows: auto auto [works];
+    grid-template-areas:
+      'hero hero hero hero hero hero'
+      'contents contents contents now now now';
+  }
+
+  [data-variant='spatial-bento'] .sb-band[data-layout='both'][data-works] {
+    grid-template-rows: auto auto auto [works];
+    grid-template-areas:
+      'hero hero hero hero hero hero'
+      'contents contents contents now now now'
+      'contents contents contents glance glance glance';
+  }
+
+  [data-variant='spatial-bento'] .sb-band[data-layout='glance'] [data-area='glance'],
+  [data-variant='spatial-bento'] .sb-band[data-layout='none'] [data-area='contents'] {
+    grid-area: now;
+  }
+
+  [data-variant='spatial-bento'] .sb-band[data-layout='none'][data-works] {
+    grid-template-areas:
+      'hero hero hero hero hero hero'
+      'contents contents contents contents contents contents';
+  }
+
+  [data-variant='spatial-bento'] .sb-band[data-layout='none'][data-works] [data-area='contents'] {
+    grid-area: contents;
+  }
+
+  /* The lead across, then the second beside the rest and reach; inside the showcase, its own lines. */
+  [data-variant='spatial-bento'] .sb-band[data-works] > .sb-group {
+    grid-row: works / span 3;
+  }
+
+  [data-variant='spatial-bento'] .sb-band[data-works] [data-area='lead'] {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  [data-variant='spatial-bento'] .sb-band[data-works] [data-area='second'] {
+    grid-column: 1 / span 3;
+    grid-row: 2 / span 2;
+  }
+
+  [data-variant='spatial-bento'] .sb-band[data-works] [data-area='rest'] {
+    grid-column: 4 / -1;
+    grid-row: 2;
+  }
+
+  [data-variant='spatial-bento'] .sb-band[data-works] [data-area='reach'] {
+    grid-column: 4 / -1;
+    grid-row: 3 works;
+  }
+
+  [data-variant='spatial-bento'] .sb-band[data-works='2'] > .sb-group {
+    grid-row: works / span 2;
+  }
+
+  [data-variant='spatial-bento'] .sb-band[data-works='2'] [data-area='second'] {
+    grid-row: 2;
+  }
+
+  [data-variant='spatial-bento'] .sb-band[data-works='2'] [data-area='reach'] {
+    grid-row: 2 works;
+  }
+
+  [data-variant='spatial-bento'] .sb-band[data-works='1'] > .sb-group {
+    grid-row: works / span 1;
+  }
+
+  [data-variant='spatial-bento']
+    .sb-band:is([data-works='1'], [data-works='0'])
+    [data-area='reach'] {
+    grid-column: 1 / -1;
+    grid-row: 2 works;
+  }
+
+  [data-variant='spatial-bento'] .sb-band[data-works='0'] [data-area='reach'] {
+    grid-row: works;
+  }
+
+  [data-variant='spatial-bento'] .sb-work--plate[data-media] {
+    min-block-size: calc(var(--space-3xl) * 3.6);
+  }
+
+  [data-variant='spatial-bento'] .sb-field > :is([data-rows], [data-col]) {
+    grid-row: auto;
+    grid-column-start: auto;
+  }
+
+  /*
+   * Across the field, the name, its plane, then the index to the tiles' edge.
+   * After the reset above, at its specificity: a tall-first board's label
+   * carries data-rows, and its start reset to auto left it one track wide at
+   * the field's end, its plane past the page's edge (long-text, 141 px at 768).
+   */
+  [data-variant='spatial-bento'] .sb-label[data-area='label'] {
+    grid-column: 1 / -1;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    align-items: end;
+    column-gap: var(--space-l);
+    padding-inline-end: 0;
+  }
+
+  [data-variant='spatial-bento'] .sb-field > [data-span] {
+    grid-column: span 6;
+  }
+
+  [data-variant='spatial-bento'] .sb-field > [data-span-md='3'] {
+    grid-column: span 3;
+  }
+
+  [data-variant='spatial-bento'] .sb-field > [data-span-md='4'] {
+    grid-column: span 4;
+  }
+
+  [data-variant='spatial-bento'] .sb-field > [data-span-md='2'] {
+    grid-column: span 2;
+  }
+
+  /* No reach tile: the rest stands beside the second, and a second of two takes the row. */
+  [data-variant='spatial-bento'] .sb-band[data-works]:not(:has(> .sb-reach)) [data-area='rest'] {
+    grid-row: 2 / span 2;
+  }
+
+  [data-variant='spatial-bento']
+    .sb-band[data-works='2']:not(:has(> .sb-reach))
+    [data-area='second'] {
+    grid-column: 1 / -1;
+  }
+}
+
+/*
+ * From 1024 to 1280 the six columns set Contents beside the hero, four and
+ * two, as the mock's 1024 does, its list as tall as the hero's words; Now
+ * and the ledger share the row under them, two up (S1), so neither
+ * stretches to Contents' height. Rows and reading order agree.
+ */
+@media (min-width: 64rem) and (max-width: 79.99rem) {
+  [data-variant='spatial-bento'] .sb-band[data-layout][data-works] {
+    grid-template-rows: auto auto [works];
+    grid-template-areas:
+      'hero hero hero hero contents contents'
+      'now now now now now now';
+  }
+
+  [data-variant='spatial-bento'] .sb-band[data-layout='both'][data-works] {
+    grid-template-areas:
+      'hero hero hero hero contents contents'
+      'now now now glance glance glance';
+  }
+
+  [data-variant='spatial-bento'] .sb-band[data-layout='none'][data-works] {
+    grid-template-rows: auto [works];
+    grid-template-areas: 'hero hero hero hero contents contents';
+  }
+}
+
+@media (max-width: 47.99rem) {
+  [data-variant='spatial-bento'] {
+    --layout-grid-columns: 1;
+    --layout-grid-gutter: var(--space-2xs);
+    --layout-pad: var(--space-s);
+  }
+
+  [data-variant='spatial-bento'] .sb-band,
+  [data-variant='spatial-bento'] .sb-band[data-layout],
+  [data-variant='spatial-bento'] .sb-band[data-layout][data-works],
+  [data-variant='spatial-bento'] .sb-field {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas: none;
+  }
+
+  [data-variant='spatial-bento'] .sb-band [data-area],
+  [data-variant='spatial-bento'] .sb-band[data-layout][data-works] [data-area],
+  [data-variant='spatial-bento'] .sb-band[data-layout][data-works] > .sb-group {
+    grid-area: auto;
+  }
+
+  /*
+   * On a phone the showcase follows the hero (E2): the flagship across, the
+   * other two two up under it, the band's gutter between.
+   */
+  [data-variant='spatial-bento'] .sb-group {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none;
+    gap: var(--layout-grid-gutter);
+  }
+
+  [data-variant='spatial-bento']
+    .sb-band[data-layout][data-works]
+    .sb-group
+    > :is([data-area='lead'], [data-area='second']:last-child) {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='spatial-bento'] .sb-field > :is([data-span], [data-span-md], .sb-label) {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='spatial-bento'] .sb-tile--hero {
+    gap: var(--space-m) var(--space-s);
+    padding: var(--space-s);
+  }
+
+  [data-variant='spatial-bento'] .sb-menu-slot {
+    display: block;
+  }
+
+  [data-variant='spatial-bento'] .sb-hero__head {
+    flex-direction: column;
+    align-items: start;
+  }
+
+  [data-variant='spatial-bento'] .sb-hero__pronouns {
+    display: none;
+  }
+
+  /*
+   * E1: on a phone the hero is the name, the thesis and one action. Its
+   * role goes, and its standfirst and now line set in Now instead, under
+   * its head, so the field's tiles read on the first screen (S2).
+   */
+  [data-variant='spatial-bento'] .sb-band:has(.sb-lead) :is(.sb-hero__lede, .sb-hero__now),
+  [data-variant='spatial-bento'] .sb-hero__role,
+  [data-variant='spatial-bento'] .sb-tile--hero .sb-hero__actions > li + li {
+    display: none;
+  }
+
+  [data-variant='spatial-bento'] .sb-lead {
+    display: grid;
+    gap: var(--space-2xs);
+    padding-block-end: var(--space-xs);
+    border-block-end: 1px solid var(--layout-hair);
+  }
+
+  [data-variant='spatial-bento'] .sb-lead__words {
+    color: var(--color-text-secondary);
+  }
+
+  /* S2: a work's way on follows its words; the tile doesn't stretch to its neighbour's height. */
+  [data-variant='spatial-bento'] .sb-group > [data-area='rest'] {
+    align-self: start;
+  }
+
+  /*
+   * On a phone the field's margin is the page's own: main stands in from the
+   * screen's edges, the tiles a column inside it, rather than a full-bleed
+   * page that pads its bands.
+   */
+  [data-variant='spatial-bento'] .sb-page:not(.sb-case) {
+    margin-inline: var(--layout-grid-margin);
+  }
+
+  [data-variant='spatial-bento'] .sb-page:not(.sb-case) :is(.sb-overview, .sb-field) {
+    padding-inline: 0;
+  }
+
+  [data-variant='spatial-bento'] .sb-work--plate[data-media] {
+    min-block-size: calc(var(--space-3xl) * 3.6);
+  }
+
+  /*
+   * A phone's column is a short measure, so the boards' text takes the
+   * compact leading, the way a narrow column is set; the hero keeps its own.
+   */
+  [data-variant='spatial-bento'] .sb-field {
+    line-height: var(--type-body-compact-line-height);
+  }
+
+  [data-variant='spatial-bento'] .sb-quotes {
+    row-gap: var(--space-m);
+  }
+
+  /* A phone's column is narrow: the quotes set at the title size, the ruled rows closer. */
+  [data-variant='spatial-bento'] .sb-quote__words {
+    font-size: var(--type-title-font-size);
+  }
+
+  [data-variant='spatial-bento']
+    :is(.sb-entries, .sb-episodes, .sb-ev, .sb-focus, .sb-rings, .sb-custom)
+    > li:not(:first-child) {
+    padding-block-start: var(--space-xs);
+  }
+
+  [data-variant='spatial-bento']
+    :is(.sb-entries, .sb-episodes, .sb-ev, .sb-focus, .sb-rings, .sb-custom)
+    > li:not(:last-child) {
+    padding-block-end: var(--space-xs);
+  }
+
+  [data-variant='spatial-bento'] .sb-quote {
+    gap: var(--space-s);
+  }
+
+  [data-variant='spatial-bento'] .sb-work__band {
+    min-block-size: calc(var(--space-3xl) * 1.6);
+  }
+
+  [data-variant='spatial-bento'] .sb-board,
+  [data-variant='spatial-bento'] .sb-board[data-board] {
+    margin-block-start: var(--space-m);
+  }
+
+  [data-variant='spatial-bento'] .sb-label[data-area='label'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /*
+   * On a phone, Contents is a keyboard of the boards: three across, each key
+   * its plane over its name and count, rather than a list a column wide. The
+   * list and the still give their items to one grid; the planes stay
+   * decoration, and the reading order is the list's.
+   */
+  [data-variant='spatial-bento'] .sb-stage__body {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: auto;
+    column-gap: var(--space-2xs);
+    row-gap: var(--space-3xs);
+  }
+
+  [data-variant='spatial-bento'] .sb-contents__list,
+  [data-variant='spatial-bento'] .sb-stage__body .sb-still {
+    display: contents;
+  }
+
+  [data-variant='spatial-bento'] .sb-stage__body .sb-contents__row {
+    display: block;
+    padding-block-end: var(--space-xs);
+  }
+
+  [data-variant='spatial-bento'] .sb-stage__body .sb-contents__name {
+    white-space: normal;
+  }
+
+  [data-variant='spatial-bento'] .sb-stage__body .sb-contents__leader {
+    display: none;
+  }
+
+  [data-variant='spatial-bento'] .sb-stage__body .sb-still__plane {
+    display: block;
+    block-size: calc(var(--space-3xl) * 0.6);
+    border-radius: var(--ui-radius-media);
+    background: var(--color-surface-subtle);
+  }
+
+  [data-variant='spatial-bento'] .sb-stage__body .sb-still__plane svg {
+    position: static;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  /*
+   * Each key's plane on the row above its name, three keys a row, Contents
+   * across the column (S2): the row is set, and the grid places each in the
+   * next free column, in the list's order.
+   */
+  [data-variant='spatial-bento'] .sb-still__plane:nth-child(-n + 3) {
+    grid-row: 1;
+  }
+
+  [data-variant='spatial-bento'] .sb-contents__row:nth-child(-n + 3) {
+    grid-row: 2;
+  }
+
+  [data-variant='spatial-bento'] .sb-still__plane:nth-child(n + 4) {
+    grid-row: 3;
+  }
+
+  [data-variant='spatial-bento'] .sb-contents__row:nth-child(n + 4) {
+    grid-row: 4;
+  }
+
+  /*
+   * On a phone a board opens on its name alone: its index of sections is the
+   * Menu's, a thumb away, so the page doesn't carry five of them.
+   */
+  [data-variant='spatial-bento'] :is(.sb-label__index, .sb-label__plane) {
+    display: none;
+  }
+
+  [data-variant='spatial-bento'] .sb-dock {
+    inset-block-start: auto;
+    inset-block-end: var(--layout-grid-margin);
+    inset-inline: var(--layout-grid-margin);
+    justify-content: center;
+    padding-block-end: calc(var(--space-3xs) + env(safe-area-inset-bottom));
+  }
+
+  [data-variant='spatial-bento'] .sb-dock .sb-dock__name {
+    display: none;
+  }
+
+  /*
+   * On a phone the dock is three cells (M1): the works, Contact, and the
+   * Menu, which holds every board and section, so every destination is two
+   * taps from any depth. They share the width.
+   */
+  [data-variant='spatial-bento'] .sb-dock__boards {
+    display: none;
+  }
+
+  [data-variant='spatial-bento'] .sb-dock__phone {
+    display: flex;
+    flex: 1;
+    gap: var(--space-3xs);
+    min-inline-size: 0;
+  }
+
+  [data-variant='spatial-bento'] .sb-dock__phone > li {
+    display: flex;
+    flex: 1 1 0;
+    min-inline-size: 0;
+  }
+
+  [data-variant='spatial-bento'] .sb-dock__phone > li > * {
+    flex: 1;
+    justify-content: center;
+    min-inline-size: 0;
+    background: var(--color-surface-subtle);
+  }
+
+  [data-variant='spatial-bento'] .sb-footer {
+    padding-block-end: calc(var(--ui-control-height) + var(--space-xl));
+  }
+
+  /* Whatever takes focus or a jump stops above the dock, never under it. */
+  [data-variant='spatial-bento'] :is(.sb-page, .sb-footer) :is(a[href], button, summary, [id]) {
+    scroll-margin-block-end: calc(var(--ui-control-height) + var(--space-xl));
+  }
+}
+
+/*
+ * A half column is a readable measure only from 40rem (SPA-2): at 390 the
+ * works' 2-up set its words about 17 characters a line, so under 40rem the
+ * pair goes to one column, the mock's phone, and every phone's words set
+ * across the column. From 40rem to 48rem the 2-up holds 30 or more. Titles
+ * wrap only at their own hyphens, never mid-word unless a word is wider
+ * than the line (M4).
+ */
+@media (max-width: 39.99rem) {
+  [data-variant='spatial-bento'] .sb-group {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+[data-variant='spatial-bento'] :is(h1, h2, h3, h4, .sb-title) {
+  hyphens: manual;
+}
+
+/*
+ * The stage needs 768px, the same px query as its runtime's requirement, so
+ * narrower there's no stage to leave: the exit goes, unless the stage runs or
+ * could (data-offered), which the slot ends on a resize under 768px anyway.
+ */
+@media (max-width: 767.98px) {
+  [data-variant='spatial-bento'] .sb-stage__exit:not([data-offered]) {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  [data-variant='spatial-bento'] :is(.sb-btn, .sb-dock a) {
+    min-block-size: calc(var(--ui-control-height) + var(--space-2xs));
+  }
+}
+
+@media (prefers-contrast: more), (forced-colors: active) {
+  [data-variant='spatial-bento'] .sb-tile {
+    border: 1px solid var(--color-border-strong);
+    box-shadow: none;
+  }
+}
+
+/*
+ * Motion, only where the visitor's system asks for it not to stop and the
+ * site hasn't reduced it. Every transition, travel and scale lives here, so
+ * under either nothing moves, and the colour marks left change at once.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='spatial-bento']:not([data-motion='reduced'], [data-motion='static']) a {
+    transition: text-decoration-color var(--motion-feedback) var(--motion-curve);
+  }
+
+  [data-variant='spatial-bento']:not([data-motion='reduced'], [data-motion='static']) .sb-btn {
+    transition:
+      background-color var(--motion-feedback) var(--motion-curve),
+      border-color var(--motion-feedback) var(--motion-curve);
+  }
+
+  [data-variant='spatial-bento']:not([data-motion='reduced'], [data-motion='static'])
+    .sb-btn:active {
+    transform: var(--ui-state-active-transform);
+  }
+
+  [data-variant='spatial-bento']:not([data-motion='reduced'], [data-motion='static'])
+    .sb-contents__name {
+    transition: color var(--motion-feedback) var(--motion-curve);
+  }
+
+  [data-variant='spatial-bento']:not([data-motion='reduced'], [data-motion='static'])
+    .sb-still__plane
+    svg {
+    transition: translate var(--motion-feedback) var(--motion-curve);
+  }
+
+  [data-variant='spatial-bento']:not([data-motion='reduced'], [data-motion='static'])
+    .sb-stage__body:has(.sb-contents__row:nth-child(1) a:is(:hover, :focus-visible))
+    .sb-still__plane:nth-child(1)
+    svg,
+  [data-variant='spatial-bento']:not([data-motion='reduced'], [data-motion='static'])
+    .sb-stage__body:has(.sb-contents__row:nth-child(2) a:is(:hover, :focus-visible))
+    .sb-still__plane:nth-child(2)
+    svg,
+  [data-variant='spatial-bento']:not([data-motion='reduced'], [data-motion='static'])
+    .sb-stage__body:has(.sb-contents__row:nth-child(3) a:is(:hover, :focus-visible))
+    .sb-still__plane:nth-child(3)
+    svg,
+  [data-variant='spatial-bento']:not([data-motion='reduced'], [data-motion='static'])
+    .sb-stage__body:has(.sb-contents__row:nth-child(4) a:is(:hover, :focus-visible))
+    .sb-still__plane:nth-child(4)
+    svg,
+  [data-variant='spatial-bento']:not([data-motion='reduced'], [data-motion='static'])
+    .sb-stage__body:has(.sb-contents__row:nth-child(5) a:is(:hover, :focus-visible))
+    .sb-still__plane:nth-child(5)
+    svg,
+  [data-variant='spatial-bento']:not([data-motion='reduced'], [data-motion='static'])
+    .sb-stage__body:has(.sb-contents__row:nth-child(6) a:is(:hover, :focus-visible))
+    .sb-still__plane:nth-child(6)
+    svg {
+    translate: 0 calc(var(--space-xs) * -1);
+  }
+
+  [data-variant='spatial-bento']:not([data-motion='reduced'], [data-motion='static'])
+    :is(.sb-work--plate, .sb-work--band, .sb-work--note) {
+    transition: translate var(--motion-feedback) var(--motion-curve);
+  }
+
+  [data-variant='spatial-bento']:not([data-motion='reduced'], [data-motion='static'])
+    .sb-work
+    :is(.sb-work__media, .sb-work__band)
+    img {
+    transition: scale var(--motion-scene) var(--motion-curve);
+  }
+
+  [data-variant='spatial-bento']:not([data-motion='reduced'], [data-motion='static'])
+    :is(.sb-work--plate, .sb-work--band, .sb-work--note):focus-within {
+    translate: 0 calc(var(--space-3xs) * -1);
+  }
+
+  [data-variant='spatial-bento']:not([data-motion='reduced'], [data-motion='static']) .sb-dock {
+    transition:
+      opacity var(--motion-feedback) var(--motion-curve),
+      visibility var(--motion-feedback) var(--motion-curve);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {
+  [data-variant='spatial-bento']:not([data-motion='reduced'], [data-motion='static'])
+    :is(.sb-work--plate, .sb-work--band, .sb-work--note):hover {
+    translate: 0 calc(var(--space-3xs) * -1);
+  }
+
+  [data-variant='spatial-bento']:not([data-motion='reduced'], [data-motion='static'])
+    .sb-work:hover
+    :is(.sb-work__media, .sb-work__band)
+    img {
+    scale: 1.03;
+  }
+}
+
+/* Print: the words in reading order, one tile after another, the chrome gone. */
+@media print {
+  [data-variant='spatial-bento'] :is(.sb-dock, .sb-menu-slot, .sb-stage__exit, .sb-still) {
+    display: none;
+  }
+
+  [data-variant='spatial-bento'] .sb-archive__item::details-content {
+    content-visibility: visible;
+  }
+
+  [data-variant='spatial-bento'] :is(.sb-overview, .sb-band, .sb-group, .sb-field) {
+    display: block;
+    min-block-size: 0;
+  }
+
+  [data-variant='spatial-bento'] .sb-tile {
+    margin-block-end: var(--space-s);
+    box-shadow: none;
+    break-inside: avoid;
+  }
+
+  [data-variant='spatial-bento'] .sb-gantt__row:not([open]) > :not(summary) {
+    display: block;
+  }
+}

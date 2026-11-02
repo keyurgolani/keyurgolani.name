@@ -1,0 +1,2596 @@
+/*
+ * Schematic: the portfolio as an engineering drawing set. Composition only:
+ * the sheet border with its zone references on all four edges, the
+ * drafting grid as token hairlines, the dimension lines, leaders, balloons
+ * and the ISO 128 line grammar (visible, heavy, hidden, thin, hair), radius
+ * none on every drawing frame and control, the title block in the sheet's
+ * bottom-right corner, and the one-shot draw-on. Every colour is a role or
+ * a color-mix of two roles, every size a type step or a role, every space
+ * a space step, every duration a motion slot, so the drawing reads as
+ * itself under blueprint, whiteprint and the default recipe (SC-M2, F8).
+ * Every rule sits under [data-variant='schematic'] and every property is
+ * logical (rtl mirrors the title block to the bottom-left).
+ */
+
+[data-variant='schematic'] {
+  --layout-grid-columns: 8;
+  --layout-grid-gutter: var(--space-s);
+  --layout-grid-margin: var(--space-s-l);
+  --layout-width-page: 96rem;
+  --layout-motion-feedback: 160ms;
+  --layout-motion-scene: 640ms;
+  --layout-line-visible: 1px solid var(--color-border-strong);
+  --layout-line-heavy: 2px solid var(--color-border-strong);
+  --layout-line-hidden: 1px dashed
+    color-mix(in oklab, var(--color-border-strong) 80%, var(--color-canvas));
+  --layout-line-thin: 1px solid var(--color-accent);
+  --layout-line-hair: 1px solid
+    color-mix(in oklab, var(--color-border-strong) 28%, var(--color-canvas));
+  --layout-line-cloud: 1px dashed var(--color-accent);
+  --layout-line-center: 1px dashed color-mix(in oklab, var(--color-accent) 55%, var(--color-canvas));
+  --layout-grid-minor: color-mix(in oklab, var(--color-border-strong) 9%, var(--color-canvas));
+  --layout-grid-major: color-mix(in oklab, var(--color-border-strong) 19%, var(--color-canvas));
+  --layout-band-ground: color-mix(in oklab, var(--color-border-strong) 26%, var(--color-canvas));
+  --layout-head-ground: color-mix(in oklab, var(--color-border-strong) 12%, var(--color-canvas));
+  --layout-cell: var(--space-m);
+  --layout-band: var(--space-s);
+  --layout-arrow: var(--space-2xs);
+  --layout-round: 50%;
+  --layout-scallop: var(--space-s);
+  /* The sticky chrome's sizes, and the clearance every target and focus stop keeps from it (K-12's shape): the running marker docks at the bottom past 48rem, the phone bar at the top below. */
+  /* Every control the composition draws is 44 px or more, whatever the language's control height (WCAG 2.5.8, pinned chrome). */
+  --layout-control: max(var(--ui-control-height), 2.75rem);
+  --layout-run-block: calc(var(--layout-control) + var(--space-xs));
+  --layout-run-inset: var(--space-s);
+  --layout-phone-block: calc(var(--layout-control) + var(--space-xs));
+  --layout-stick-start: calc(var(--layout-band) + var(--space-s));
+  --layout-stick-end: calc(var(--layout-run-block) + var(--layout-run-inset) + var(--space-s));
+  /* Four type sizes, no more (T1): the drawing's lettering, the body, the sheet heads and the name. Every role and device sits on one. */
+  --layout-type-small: var(--type-label-font-size);
+  --layout-type-body: var(--type-body-font-size);
+  --layout-type-head: var(--type-step-2);
+  --layout-type-display: var(--type-step-6);
+  display: block;
+  min-block-size: 100svh;
+  background-color: var(--color-canvas);
+  color: var(--color-text-primary);
+  font-variant-numeric: lining-nums;
+  overflow-wrap: break-word;
+}
+
+@media (max-width: 47.99rem) {
+  [data-variant='schematic'] {
+    --layout-grid-columns: 4;
+    --layout-grid-gutter: var(--space-xs);
+    --layout-grid-margin: var(--space-xs);
+    --layout-stick-start: calc(var(--layout-phone-block) + var(--space-s));
+    --layout-stick-end: var(--space-s);
+    /* The name as large as a word of it fits its outline: 1.2 times step 6 on a phone, step 5 under 22.5rem. */
+    --layout-type-display: calc(var(--type-step-6) * 1.2);
+  }
+}
+
+[data-variant='schematic'] :is(h1, h2, h3, h4, h5, h6, p, ol, ul, dl, dd, figure, blockquote) {
+  margin: 0;
+}
+
+/* A block of text never holds its grid or flex track open to its longest
+   unbroken word: it shrinks with the track, and overflow-wrap breaks the word. */
+[data-variant='schematic'] :is(h1, h2, h3, h4, h5, h6, p, li, dt, dd, figcaption, blockquote) {
+  min-inline-size: 0;
+}
+
+[data-variant='schematic'] :is(h1, h2, h3, h4) {
+  text-wrap: balance;
+}
+
+[data-variant='schematic'] :is(p, li, dd, td, figcaption) {
+  text-wrap: pretty;
+}
+
+[data-variant='schematic'] :is(ol, ul) {
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='schematic'] [data-type-role] {
+  max-inline-size: none;
+}
+
+[data-variant='schematic']
+  :is(
+    [data-type-role='body-compact'],
+    [data-type-role='label'],
+    [data-type-role='caption'],
+    [data-type-role='code'],
+    [data-type-role='numeric']
+  ) {
+  font-size: var(--layout-type-small);
+}
+
+[data-variant='schematic'] :is([data-type-role='body'], [data-type-role='title']) {
+  font-size: var(--layout-type-body);
+}
+
+[data-variant='schematic'] :is([data-type-role='headline'], [data-type-role='quote']) {
+  font-size: var(--layout-type-head);
+}
+
+[data-variant='schematic'] [data-type-role='display'] {
+  font-size: var(--layout-type-display);
+}
+
+[data-variant='schematic']
+  :is([id], a[href], button, summary, input, select, textarea, [tabindex]) {
+  scroll-margin-block: var(--layout-stick-start) var(--layout-stick-end);
+}
+
+[data-variant='schematic'] a {
+  color: inherit;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--color-accent);
+  text-underline-offset: 0.2em;
+}
+
+[data-variant='schematic'] a[data-out]::after {
+  content: '';
+  display: inline-block;
+  inline-size: 0.55em;
+  block-size: 0.55em;
+  margin-inline-start: 0.25em;
+  background-color: currentColor;
+  clip-path: polygon(20% 0, 100% 0, 100% 80%, 80% 80%, 80% 34%, 14% 100%, 0 86%, 66% 20%, 20% 20%);
+}
+
+[data-variant='schematic'] :is(.sx-muted, .sx-vt__sub) {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='schematic'] .sx-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+[data-variant='schematic'] :is(.sx-field-name, .sx-tag, .sx-depth__h, thead, .sx-stamp) {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--color-text-secondary);
+}
+
+/* ── Controls: the composition's own, radius none (R10-4) ── */
+
+[data-variant='schematic'] .sx-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  min-block-size: var(--layout-control);
+  min-inline-size: var(--layout-control);
+  padding: var(--ui-space-control-block) var(--ui-space-control-inline);
+  border: var(--layout-line-visible);
+  border-radius: 0;
+  background-color: var(--color-canvas);
+  color: var(--color-text-primary);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--motion-feedback) var(--motion-curve);
+}
+
+[data-variant='schematic'] .sx-btn--primary {
+  border-color: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
+[data-variant='schematic'] .sx-btn[hidden] {
+  display: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-variant='schematic'] .sx-btn:hover {
+    background-color: var(--color-accent);
+    color: var(--color-on-accent);
+  }
+  [data-variant='schematic'] a:hover {
+    color: var(--color-accent-text);
+    text-decoration-thickness: 2px;
+  }
+}
+
+[data-variant='schematic'] .sx-btn:active {
+  transform: var(--ui-state-active-transform);
+}
+
+[data-variant='schematic'] .sx-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-s) var(--space-m);
+}
+
+/* ── The sheet: border, zone references on four edges, the drafting grid ── */
+
+[data-variant='schematic'] .sx-main {
+  display: grid;
+  row-gap: var(--space-l);
+  max-inline-size: var(--layout-width-page);
+  margin-inline: auto;
+  padding: var(--space-2xs) var(--layout-grid-margin) var(--space-l);
+}
+
+[data-variant='schematic'] .sx-set {
+  display: grid;
+  row-gap: var(--space-l);
+}
+
+[data-variant='schematic'] .sx-border {
+  display: grid;
+  grid-template-columns: var(--layout-band) minmax(0, 1fr) var(--layout-band);
+  grid-template-rows: var(--layout-band) 1fr var(--layout-band);
+  grid-template-areas: '. top .' 'start field end' '. bottom .';
+  border: var(--layout-line-heavy);
+  background-color: var(--layout-band-ground);
+}
+
+[data-variant='schematic'] .sx-zones {
+  display: grid;
+  font-family: var(--type-numeric-font-family);
+  font-size: var(--layout-type-small);
+  line-height: 1;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='schematic'] :is(.sx-zones--top, .sx-zones--bottom) {
+  grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+}
+
+[data-variant='schematic'] :is(.sx-zones--start, .sx-zones--end) {
+  grid-auto-rows: minmax(0, 1fr);
+}
+
+[data-variant='schematic'] .sx-zones li {
+  display: grid;
+  place-items: center;
+}
+
+[data-variant='schematic'] :is(.sx-zones--top, .sx-zones--bottom) li + li {
+  border-inline-start: var(--layout-line-hair);
+}
+
+[data-variant='schematic'] :is(.sx-zones--start, .sx-zones--end) li + li {
+  border-block-start: var(--layout-line-hair);
+}
+
+[data-variant='schematic'] .sx-zones--top {
+  grid-area: top;
+  border-block-end: var(--layout-line-visible);
+}
+
+[data-variant='schematic'] .sx-zones--bottom {
+  grid-area: bottom;
+  border-block-start: var(--layout-line-visible);
+}
+
+[data-variant='schematic'] .sx-zones--start {
+  grid-area: start;
+  border-inline-end: var(--layout-line-visible);
+}
+
+[data-variant='schematic'] .sx-zones--end {
+  grid-area: end;
+  border-inline-start: var(--layout-line-visible);
+}
+
+[data-variant='schematic'] .sx-field {
+  grid-area: field;
+  min-inline-size: 0;
+  background-color: var(--color-canvas);
+  padding: var(--space-m) var(--space-s-l);
+  background-image:
+    linear-gradient(to right, var(--layout-grid-major) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--layout-grid-major) 1px, transparent 1px),
+    linear-gradient(to right, var(--layout-grid-minor) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--layout-grid-minor) 1px, transparent 1px);
+  background-size:
+    calc(var(--layout-cell) * 4) calc(var(--layout-cell) * 4),
+    calc(var(--layout-cell) * 4) calc(var(--layout-cell) * 4),
+    var(--layout-cell) var(--layout-cell),
+    var(--layout-cell) var(--layout-cell);
+}
+
+[data-variant='schematic'] [data-sx-lines='final'] .sx-field {
+  background-image: none;
+}
+
+[data-variant='schematic'] [data-sx-lines='final'] .sx-zones {
+  visibility: hidden;
+}
+
+[data-variant='schematic'] .sx-sheet--cover .sx-border {
+  min-block-size: min(calc(100svh - var(--space-s) * 2), calc(var(--space-3xl) * 8));
+}
+
+[data-variant='schematic'] .sx-sheet--cover .sx-field {
+  display: grid;
+  padding-block: var(--space-xs);
+}
+
+[data-variant='schematic'] .sx-fig[data-cover] .sx-plan {
+  gap: var(--space-s) var(--space-m);
+  padding-block: var(--space-xs) var(--space-s);
+}
+
+[data-variant='schematic'] .sx-fig[data-cover] .sx-fig__head > * {
+  padding-block: var(--space-3xs);
+}
+
+[data-variant='schematic'] .sx-sheet__head {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: end;
+  gap: var(--space-xs) var(--space-l);
+  margin-block-end: var(--space-xl);
+  padding-block-end: var(--space-xs);
+  border-block-end: var(--layout-line-heavy);
+  box-shadow: none;
+}
+
+[data-variant='schematic'] .sx-sheet__no {
+  color: var(--color-accent-text);
+  font-size: inherit;
+}
+
+[data-variant='schematic'] .sx-sheet__views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-m);
+}
+
+[data-variant='schematic'] .sx-sheet__views a,
+[data-variant='schematic'] .sx-index__list a {
+  text-decoration-color: var(--color-border-subtle);
+}
+
+[data-variant='schematic'] .sx-sheet__views [data-type-role='numeric'],
+[data-variant='schematic'] .sx-index__no {
+  color: var(--color-accent-text);
+  margin-inline-end: var(--space-3xs);
+}
+
+/* ── Views ── */
+
+[data-variant='schematic'] .sx-views {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  row-gap: var(--space-2xl);
+  align-items: start;
+}
+
+[data-variant='schematic'] .sx-views > *,
+[data-variant='schematic'] .sx-pair {
+  grid-column: 1 / -1;
+  min-inline-size: 0;
+}
+
+[data-variant='schematic'] .sx-pair {
+  display: grid;
+  grid-template-columns: subgrid;
+  row-gap: var(--space-xl);
+  align-items: start;
+}
+
+[data-variant='schematic'] .sx-pair__host {
+  grid-column: 1 / span 5;
+}
+
+[data-variant='schematic'] .sx-pair__asides {
+  grid-column: 6 / -1;
+  display: grid;
+  row-gap: var(--space-xl);
+}
+
+[data-variant='schematic'] .sx-vt {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--space-s);
+  margin-block-end: var(--space-m);
+}
+
+[data-variant='schematic'] .sx-vt__sub {
+  grid-column: 2;
+  max-inline-size: var(--layout-width-text);
+}
+
+[data-variant='schematic'] summary.sx-vt {
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  cursor: pointer;
+  list-style: none;
+}
+
+/* Closed views, run together as one ruled drawing schedule (G2, G4): a row
+   each, 44 to 48 px, bubble, title, count and chevron; no gap inside, and a
+   step less after it than an open view takes. */
+[data-variant='schematic'] .sx-schedule {
+  display: grid;
+  margin-block-end: calc(var(--space-xl) - var(--space-2xl));
+  border-block: var(--layout-line-visible);
+}
+
+/* The step less is the gap to the next view only: a schedule that ends its
+   sheet takes no negative margin, so the sheet's corner never rides up over
+   its last row (on a phone the running marker isn't there to absorb it). */
+[data-variant='schematic'] .sx-views > .sx-schedule:last-child {
+  margin-block-end: 0;
+}
+
+[data-variant='schematic'] .sx-schedule > .sx-view + .sx-view {
+  border-block-start: var(--layout-line-hair);
+}
+
+[data-variant='schematic'] .sx-schedule summary.sx-vt {
+  grid-template-columns: max-content minmax(0, 1fr) max-content max-content;
+  min-block-size: max(var(--layout-control), 3rem);
+  margin-block-end: 0;
+  padding-block: var(--space-3xs);
+}
+
+[data-variant='schematic'] .sx-schedule details[open] > .sx-view__body {
+  padding-block: var(--space-s) var(--space-l);
+}
+
+/* Rows are 48 px; the bubble fits inside them, at most 38 px, so a
+   two-digit label clears the circle's edge (re-check carry, P3). */
+[data-variant='schematic'] .sx-schedule .sx-bubble {
+  inline-size: min(var(--space-l), 3rem - var(--space-3xs) * 2);
+}
+
+/* The lede's continuation (P2): a phone fold. Past a phone an open one shows no control
+   (the rule after the phone block); a closed one keeps its control, so its paragraphs
+   are never out of reach. */
+[data-variant='schematic'] .sx-lede-run,
+[data-variant='schematic'] .sx-run-on {
+  display: grid;
+  row-gap: var(--space-s);
+}
+
+[data-variant='schematic'] .sx-vt__count {
+  color: var(--color-text-secondary);
+}
+
+/* Past a phone the count is a quantity column, as a parts list sets it: the
+   row runs on the views' own grid, the title in its first three columns
+   beside the bubble, the count from the fourth ruler line, the chevron at the
+   end. On a phone the count keeps the right, and the title the width between. */
+@media (min-width: 48rem) {
+  [data-variant='schematic'] .sx-schedule summary.sx-vt {
+    grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+    column-gap: var(--layout-grid-gutter);
+  }
+  [data-variant='schematic'] .sx-schedule summary.sx-vt > * {
+    grid-row: 1;
+  }
+  [data-variant='schematic'] .sx-schedule summary.sx-vt > .sx-bubble {
+    grid-column: 1;
+  }
+  [data-variant='schematic'] .sx-schedule summary.sx-vt > .sx-vt__title {
+    grid-column: 1 / 4;
+    padding-inline-start: calc(min(var(--space-l), 3rem - var(--space-3xs) * 2) + var(--space-s));
+  }
+  [data-variant='schematic'] .sx-schedule summary.sx-vt > .sx-vt__count {
+    grid-column: 4 / span 2;
+  }
+}
+
+/* "n more drawings": the rest of a drawings section, behind one control. */
+[data-variant='schematic'] .sx-more {
+  display: grid;
+  row-gap: var(--space-l);
+  margin-block-start: var(--space-l);
+}
+
+[data-variant='schematic'] .sx-more > summary {
+  justify-self: start;
+  list-style: none;
+}
+
+[data-variant='schematic'] .sx-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+[data-variant='schematic'] summary.sx-vt::-webkit-details-marker {
+  display: none;
+}
+
+[data-variant='schematic'] .sx-bubble {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  inline-size: calc(var(--space-l) * 1.25);
+  aspect-ratio: 1;
+  border: var(--layout-line-thin);
+  border-radius: var(--layout-round);
+  overflow: hidden;
+  color: var(--color-accent-text);
+  font-family: var(--type-numeric-font-family);
+  font-size: var(--layout-type-small);
+  line-height: 1;
+  text-align: center;
+}
+
+[data-variant='schematic'] .sx-bubble span {
+  display: grid;
+  place-items: center;
+}
+
+[data-variant='schematic'] .sx-bubble span:first-child {
+  border-block-end: var(--layout-line-thin);
+  padding-block-start: var(--space-3xs);
+}
+
+[data-variant='schematic'] .sx-bubble span:last-child {
+  padding-block-end: var(--space-3xs);
+}
+
+[data-variant='schematic'] details.sx-fold[open] .sx-vt::after,
+[data-variant='schematic'] details.sx-fold .sx-vt::after {
+  content: '';
+  grid-column: -2 / -1;
+  grid-row: 1;
+  justify-self: end;
+  inline-size: var(--space-xs);
+  block-size: var(--space-xs);
+  /* Turned 45 degrees the box's corner reaches a fifth of its side past its edge, and
+     its V sits a third of its side below its centre: the margin keeps it inside the row's
+     rule, and the shift centres the V on the row (P2 design review). */
+  margin-inline-end: calc(var(--space-xs) * 0.25);
+  border-block-end: var(--layout-line-visible);
+  border-inline-end: var(--layout-line-visible);
+  transform: translateY(-35%) rotate(45deg);
+}
+
+[data-variant='schematic'] details.sx-fold[open] .sx-vt::after {
+  transform: translateY(35%) rotate(225deg);
+}
+
+/* ── Drawing devices ── */
+
+[data-variant='schematic'] .sx-dim {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  padding-block: var(--space-3xs);
+  color: var(--color-accent-text);
+  font-family: var(--type-caption-font-family);
+  font-size: var(--layout-type-small);
+  line-height: var(--type-caption-line-height);
+  text-align: center;
+}
+
+[data-variant='schematic'] .sx-dim--h {
+  border-inline: var(--layout-line-thin);
+}
+
+[data-variant='schematic'] .sx-dim--h::before,
+[data-variant='schematic'] .sx-dim--h::after {
+  content: '';
+  flex: 1 1 0;
+  min-inline-size: var(--space-s);
+  block-size: var(--layout-arrow);
+  background-color: var(--color-accent);
+  clip-path: polygon(
+    0 50%,
+    var(--layout-arrow) 0,
+    var(--layout-arrow) calc(50% - 0.5px),
+    100% calc(50% - 0.5px),
+    100% calc(50% + 0.5px),
+    var(--layout-arrow) calc(50% + 0.5px),
+    var(--layout-arrow) 100%
+  );
+}
+
+[data-variant='schematic'] .sx-dim--h::after,
+[data-variant='schematic'] .sx-dim--h:dir(rtl)::before {
+  transform: scaleX(-1);
+}
+
+[data-variant='schematic'] .sx-dim--h:dir(rtl)::after {
+  transform: none;
+}
+
+[data-variant='schematic'] .sx-dim__label {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+}
+
+[data-variant='schematic'] .sx-dim--v {
+  display: grid;
+  grid-template-columns: calc(var(--layout-arrow) * 3) minmax(0, max-content);
+  align-items: center;
+  column-gap: var(--space-2xs);
+  padding: 0;
+  text-align: start;
+}
+
+[data-variant='schematic'] .sx-dim--v::before {
+  content: '';
+  grid-area: 1 / 1;
+  justify-self: center;
+  align-self: stretch;
+  inline-size: var(--layout-arrow);
+  background-color: var(--color-accent);
+  clip-path: polygon(
+    50% 0,
+    100% var(--layout-arrow),
+    calc(50% + 0.5px) var(--layout-arrow),
+    calc(50% + 0.5px) calc(100% - var(--layout-arrow)),
+    100% calc(100% - var(--layout-arrow)),
+    50% 100%,
+    0 calc(100% - var(--layout-arrow)),
+    calc(50% - 0.5px) calc(100% - var(--layout-arrow)),
+    calc(50% - 0.5px) var(--layout-arrow),
+    0 var(--layout-arrow)
+  );
+}
+
+[data-variant='schematic'] .sx-dim--v::after {
+  content: '';
+  grid-area: 1 / 1;
+  align-self: stretch;
+  border-block: var(--layout-line-thin);
+}
+
+[data-variant='schematic'] .sx-balloon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  inline-size: var(--space-m);
+  block-size: var(--space-m);
+  border: var(--layout-line-thin);
+  border-radius: var(--layout-round);
+  background-color: var(--color-canvas);
+  color: var(--color-accent-text);
+  font-family: var(--type-numeric-font-family);
+  font-size: var(--layout-type-small);
+  line-height: 1;
+}
+
+[data-variant='schematic'] .sx-end__stamp {
+  margin-block-start: var(--space-xl);
+}
+
+[data-variant='schematic'] .sx-stamp {
+  display: inline-block;
+  padding: var(--space-2xs) var(--space-s);
+  border: var(--layout-line-heavy);
+  border-color: var(--color-accent);
+  color: var(--color-accent-text);
+  font-family: var(--type-label-font-family);
+  font-size: var(--layout-type-body);
+  transform: rotate(-3deg);
+}
+
+[data-variant='schematic'][data-sx-annotations='off']
+  :is(.sx-dim[aria-hidden], .sx-balloon, .sx-bubble),
+[data-variant='schematic']
+  [data-sx-annotations='off']
+  :is(.sx-dim[aria-hidden], .sx-balloon, .sx-bubble) {
+  display: none;
+}
+
+[data-variant='schematic'] [data-sx-annotations='off'] .sx-dim {
+  border: 0;
+}
+
+[data-variant='schematic'] [data-sx-annotations='off'] .sx-dim::before,
+[data-variant='schematic'] [data-sx-annotations='off'] .sx-dim::after {
+  display: none;
+}
+
+/* ── The cover sheet ── */
+
+[data-variant='schematic'] .sx-cover {
+  display: grid;
+  grid-template-columns: minmax(0, 6fr) minmax(0, 7fr);
+  grid-template-areas: 'id fig' 'notes fig' 'notes tb';
+  grid-template-rows: auto 1fr auto;
+  gap: var(--space-s) var(--space-l);
+}
+
+[data-variant='schematic'] .sx-cover:not([data-figure]) {
+  grid-template-areas: 'id notes' '. notes' '. tb';
+}
+
+/* Two columns: the right one starts on zone line 5, the field's centre, and
+   runs to the field's end edge, so Figure 1 and the title block sit on the
+   grid and the block holds the corner itself (G1, SC-M1). The field's
+   inline padding is what the column takes back: half of the field is 50%
+   of the cover plus half that padding. */
+@media (min-width: 64rem) {
+  [data-variant='schematic'] .sx-cover {
+    grid-template-columns: minmax(0, 1fr) calc(50% + var(--space-s-l) / 2);
+    row-gap: 0;
+    margin-inline-end: calc(var(--space-s-l) * -1);
+    margin-block-end: calc(var(--space-xs) * -1);
+  }
+  [data-variant='schematic'] .sx-cover__tb {
+    margin-block-start: var(--space-s);
+  }
+}
+
+[data-variant='schematic'] .sx-id {
+  grid-area: id;
+  display: grid;
+  row-gap: var(--space-m);
+  align-content: start;
+}
+
+[data-variant='schematic'] .sx-elev {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  column-gap: var(--space-s);
+  align-items: end;
+}
+
+[data-variant='schematic'] .sx-elev__part {
+  display: contents;
+}
+
+[data-variant='schematic'] .sx-elev__w {
+  grid-area: 1 / 1;
+  margin-block-end: var(--space-xs);
+  font-size: var(--layout-type-head);
+}
+
+[data-variant='schematic'] .sx-elev__w [data-type-role] {
+  font-size: inherit;
+  line-height: 1.15;
+}
+
+/* The name drawn as the part: a heavy outline the two dimensions measure, with a centre line through it. */
+[data-variant='schematic'] .sx-elev__name {
+  grid-area: 2 / 1;
+  position: relative;
+  font-size: var(--layout-type-display);
+  line-height: 0.95;
+  padding: var(--space-xs) var(--space-s);
+  border: var(--layout-line-heavy);
+  background-color: var(--color-canvas);
+  isolation: isolate;
+}
+
+[data-variant='schematic'] .sx-elev__name::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset-inline: calc(var(--space-s) * -1);
+  inset-block-start: 50%;
+  border-block-start: var(--layout-line-center);
+  pointer-events: none;
+}
+
+[data-variant='schematic'] .sx-elev__h {
+  grid-area: 2 / 2;
+  align-self: stretch;
+}
+
+[data-variant='schematic'] .sx-lede {
+  display: grid;
+  row-gap: var(--space-s);
+  max-inline-size: 34ch;
+}
+
+[data-variant='schematic'] .sx-lede__sub {
+  color: var(--color-text-secondary);
+}
+
+/* The notes' leader (S9): one trunk from a dot on the name outline's lower
+   edge, down the lede's start edge to the last note, with an orthogonal
+   branch to each balloon. */
+[data-variant='schematic'] .sx-notes__h {
+  position: relative;
+  margin-inline-start: calc(var(--space-m) / 2);
+  padding-inline-start: var(--space-m);
+  border-inline-start: var(--layout-line-thin);
+}
+
+/* Two columns: the trunk starts at the name and runs down the lede. On one
+   column Figure 1 comes between, so the notes' own label carries the dot. */
+@media (min-width: 64rem) {
+  [data-variant='schematic'] .sx-cover:has(.sx-notes) .sx-lede {
+    position: relative;
+    margin-block-start: calc(var(--space-m) * -1);
+    margin-inline-start: calc(var(--space-m) / 2);
+    padding-block: var(--space-m) var(--space-l);
+    padding-inline-start: var(--space-m);
+    border-inline-start: var(--layout-line-thin);
+  }
+}
+
+[data-variant='schematic'] :is(.sx-cover:has(.sx-notes) .sx-lede, .sx-notes__h)::before {
+  content: '';
+  position: absolute;
+  inset-block-start: calc(var(--layout-arrow) / -2);
+  inset-inline-start: calc(var(--layout-arrow) / -2 - 0.5px);
+  inline-size: var(--layout-arrow);
+  block-size: var(--layout-arrow);
+  border-radius: var(--layout-round);
+  background-color: var(--color-accent);
+}
+
+@media (min-width: 64rem) {
+  [data-variant='schematic'] .sx-cover:has(.sx-lede) .sx-notes__h::before {
+    display: none;
+  }
+}
+
+@media (max-width: 63.99rem) {
+  [data-variant='schematic'] .sx-cover:has(.sx-notes) .sx-lede::before {
+    display: none;
+  }
+}
+
+[data-variant='schematic'] .sx-notes {
+  grid-area: notes;
+  align-self: start;
+  display: grid;
+  max-inline-size: 40rem;
+}
+
+[data-variant='schematic'] .sx-notes__h {
+  padding-block-end: var(--space-xs);
+}
+
+[data-variant='schematic']
+  [data-sx-annotations='off']
+  :is(.sx-lede, .sx-notes__h, .sx-notes__list) {
+  border-inline-start-color: transparent;
+}
+
+[data-variant='schematic'] [data-sx-annotations='off'] :is(.sx-lede, .sx-notes__h)::before {
+  display: none;
+}
+
+[data-variant='schematic'] .sx-notes__list {
+  position: relative;
+  display: grid;
+  row-gap: var(--space-s);
+  margin-inline-start: calc(var(--space-m) / 2);
+  padding-inline-start: var(--space-m);
+  border-inline-start: var(--layout-line-thin);
+}
+
+[data-variant='schematic'] .sx-note {
+  position: relative;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: var(--space-s);
+  align-items: baseline;
+}
+
+[data-variant='schematic'] .sx-note::before {
+  content: '';
+  position: absolute;
+  inset-block-start: calc(var(--space-m) / 2);
+  inset-inline-start: calc(var(--space-m) * -1);
+  inline-size: var(--space-m);
+  border-block-start: var(--layout-line-thin);
+}
+
+[data-variant='schematic'] .sx-note > :not(.sx-balloon) {
+  grid-column: 2;
+}
+
+[data-variant='schematic'] .sx-note .sx-balloon {
+  grid-row: 1 / span 3;
+  align-self: start;
+}
+
+[data-variant='schematic'] .sx-note__value[data-type-role='headline'] {
+  font-size: var(--layout-type-head);
+  color: var(--color-data-categorical-2);
+}
+
+[data-variant='schematic'] .sx-note__text {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='schematic'] .sx-cover__fig {
+  grid-area: fig;
+  min-inline-size: 0;
+}
+
+[data-variant='schematic'] .sx-cover__tb {
+  grid-area: tb;
+  align-self: end;
+}
+
+/* ── The interface figure ── */
+
+[data-variant='schematic'] .sx-fig {
+  container-type: inline-size;
+  border: var(--layout-line-visible);
+  background-color: var(--color-canvas);
+  transition:
+    border-color var(--motion-feedback) var(--motion-curve),
+    opacity var(--motion-feedback) var(--motion-curve);
+}
+
+[data-variant='schematic'] .sx-fig__head {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  border-block-end: var(--layout-line-visible);
+  background-color: var(--layout-head-ground);
+}
+
+[data-variant='schematic'] .sx-fig__head > * {
+  padding: var(--space-xs) var(--space-s);
+}
+
+[data-variant='schematic'] .sx-fig__no {
+  grid-row: 1 / span 3;
+  border-inline-end: var(--layout-line-visible);
+  color: var(--color-accent-text);
+}
+
+[data-variant='schematic'] .sx-fig__title {
+  padding-block-end: 0;
+}
+
+[data-variant='schematic'] .sx-fig__sum {
+  padding-block: var(--space-3xs) 0;
+}
+
+[data-variant='schematic'] .sx-fig__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-s);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='schematic'] .sx-plan {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas: 'io iface' 'depth depth';
+  gap: var(--space-m) var(--space-l);
+  padding: var(--space-s) var(--space-m) var(--space-m);
+}
+
+[data-variant='schematic'] .sx-fig[data-plan='noio ports'] .sx-plan {
+  grid-template-areas: 'iface depth';
+}
+
+[data-variant='schematic'] .sx-fig[data-plan$='noports'] .sx-plan {
+  grid-template-areas: 'io io' 'depth depth';
+}
+
+/* A plan's parts may shrink below their longest word, and a figure under about 20 of its
+   letters' ems wide stacks its plan as a phone does, so under 200% text at 1024 the cover's
+   Fig. 1 keeps its interface box and ports inside the figure instead of running past the page
+   (the quality cells' root-text reflow). At 100% only a phone's figure is that narrow. */
+[data-variant='schematic'] .sx-plan > * {
+  min-inline-size: 0;
+}
+
+@container (max-width: 20em) {
+  [data-variant='schematic'] .sx-plan,
+  [data-variant='schematic'] .sx-fig[data-plan] .sx-plan {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'io' 'iface' 'depth';
+  }
+}
+
+@container (min-width: 52rem) {
+  [data-variant='schematic'] .sx-plan {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 0.8fr) minmax(0, 1.6fr);
+    grid-template-areas: 'io iface depth';
+  }
+  [data-variant='schematic'] .sx-fig[data-plan='noio ports'] .sx-plan {
+    grid-template-areas: 'iface depth depth';
+  }
+}
+
+[data-variant='schematic'] .sx-io {
+  grid-area: io;
+  display: grid;
+  align-content: center;
+  row-gap: var(--space-m);
+}
+
+[data-variant='schematic'] .sx-io dt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  color: var(--color-accent-text);
+}
+
+[data-variant='schematic'] .sx-io dt::after {
+  content: '';
+  flex: 1;
+  block-size: var(--layout-arrow);
+  background-color: var(--color-accent);
+  clip-path: polygon(
+    0 calc(50% - 0.5px),
+    calc(100% - var(--layout-arrow)) calc(50% - 0.5px),
+    calc(100% - var(--layout-arrow)) 0,
+    100% 50%,
+    calc(100% - var(--layout-arrow)) 100%,
+    calc(100% - var(--layout-arrow)) calc(50% + 0.5px),
+    0 calc(50% + 0.5px)
+  );
+}
+
+[data-variant='schematic'] [data-io='out'] dt::after,
+[data-variant='schematic'] [data-io='in'] dt:dir(rtl)::after {
+  transform: scaleX(-1);
+}
+
+[data-variant='schematic'] [data-io='out'] dt:dir(rtl)::after {
+  transform: none;
+}
+
+[data-variant='schematic'] .sx-iface {
+  grid-area: iface;
+  display: grid;
+  row-gap: var(--space-2xs);
+  /* The box is as tall as its ports, never the depth beside it (SC-M6). */
+  align-self: start;
+}
+
+[data-variant='schematic'] .sx-iface__box {
+  padding: var(--space-s) var(--space-m);
+  border: var(--layout-line-heavy);
+}
+
+/* A box's name sits on its own top line, as a drawing letters a view's outline. */
+[data-variant='schematic'] .sx-tag {
+  inline-size: fit-content;
+  margin-block: calc(-1 * var(--space-s) - 0.75em) var(--space-2xs);
+  margin-inline-start: calc(-1 * var(--space-2xs));
+  padding-inline: var(--space-2xs);
+  background-color: var(--color-canvas);
+}
+
+[data-variant='schematic'] .sx-ports {
+  display: grid;
+  row-gap: var(--space-2xs);
+}
+
+[data-variant='schematic'] .sx-ports li {
+  position: relative;
+}
+
+[data-variant='schematic'] .sx-ports li::before {
+  content: '';
+  position: absolute;
+  inset-block-start: calc(50% - var(--layout-arrow) / 2);
+  inset-inline-start: calc(var(--space-m) * -1 - var(--layout-arrow) / 2 - 1px);
+  inline-size: var(--layout-arrow);
+  block-size: var(--layout-arrow);
+  border: var(--layout-line-visible);
+  background-color: var(--color-canvas);
+}
+
+[data-variant='schematic'] .sx-depth {
+  grid-area: depth;
+}
+
+[data-variant='schematic'] .sx-depth__inner {
+  display: grid;
+  row-gap: var(--space-2xs);
+}
+
+[data-variant='schematic'] .sx-depth__box {
+  padding: var(--space-s) var(--space-m);
+  border: var(--layout-line-hidden);
+}
+
+[data-variant='schematic'] .sx-depth__cols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-s) var(--space-m);
+}
+
+/* Each column grows by what it holds, so the long one (references) takes
+   the room and none runs to seven lines. */
+[data-variant='schematic'] .sx-depth__cols > * {
+  flex: 1 1 9rem;
+  min-inline-size: 0;
+}
+
+[data-variant='schematic'] .sx-depth__cols > [data-col='parts'] {
+  flex: 0.6 1 6rem;
+}
+
+[data-variant='schematic'] .sx-depth__cols > [data-col='refs'] {
+  flex: 1.4 1 11rem;
+}
+
+[data-variant='schematic'] .sx-depth__h {
+  margin-block-end: var(--space-3xs);
+}
+
+[data-variant='schematic'] .sx-measured {
+  display: grid;
+  row-gap: var(--space-3xs);
+}
+
+[data-variant='schematic'] .sx-measured li {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: var(--space-xs);
+  align-items: baseline;
+}
+
+[data-variant='schematic'] .sx-measured li::before {
+  content: '';
+  inline-size: 0.45em;
+  block-size: 0.45em;
+  background-color: var(--color-data-categorical-2);
+  transform: rotate(45deg) translateY(-0.1em);
+}
+
+[data-variant='schematic'] .sx-figs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 34rem), 1fr));
+  gap: var(--space-l);
+  align-items: start;
+}
+
+[data-variant='schematic'] .sx-backref {
+  margin-block-end: var(--space-m);
+  color: var(--color-text-secondary);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-variant='schematic'] .sx-figs:has(.sx-fig:hover) .sx-fig:not(:hover) {
+    opacity: 0.45;
+  }
+  [data-variant='schematic'] .sx-fig:hover {
+    border-color: var(--color-accent);
+  }
+}
+
+[data-variant='schematic'] .sx-figs:has(.sx-fig:focus-within) .sx-fig:not(:focus-within) {
+  opacity: 0.45;
+}
+
+[data-variant='schematic'] .sx-fig:focus-within {
+  border-color: var(--color-accent);
+}
+
+/* ── The title block, the running marker, the phone bar ── */
+
+[data-variant='schematic'] .sx-tb {
+  container-type: inline-size;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: var(--layout-line-heavy);
+  background-color: var(--color-canvas);
+}
+
+[data-variant='schematic'] .sx-tb__cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  align-content: start;
+  gap: 0 var(--space-xs);
+  padding: var(--space-3xs) var(--space-xs);
+  border-block-end: var(--layout-line-hair);
+  border-inline-end: var(--layout-line-hair);
+}
+
+[data-variant='schematic'] .sx-tb__cell[data-span='2'] {
+  grid-column: span 2;
+}
+
+[data-variant='schematic'] .sx-tb__cell[data-span='3'] {
+  grid-column: span 3;
+}
+
+[data-variant='schematic'] .sx-tb__cell[data-span='4'] {
+  grid-column: 1 / -1;
+}
+
+/* The visitor's control in the foot's title block: the cell's own lines rule it,
+   so the host's disclosure draws none of its own, and it takes the cell's width. */
+/* Where the page shows no control (a demo, a preview), its row goes, so the block draws no
+   empty band (P2 design review). */
+[data-variant='schematic'] .sx-tb__control:has(> [data-visitor-control-slot]:empty) {
+  display: none;
+}
+
+[data-variant='schematic'] .sx-tb__control > [data-visitor-control-slot] {
+  flex: 1 1 100%;
+}
+
+[data-variant='schematic'] .sx-tb__control [data-ui-slot='disclosure'] {
+  border-block: none;
+}
+
+/* A field's name holds one line ("DRAWING NO."), down to the narrowest phone, while the
+   block's four columns can hold it: a sheet's block at 1440 is about 34rem and does. In a
+   narrower block, as the cover's at 1024 (about 29rem), a name wraps between its words
+   rather than run over its cell's lines (Slice 2's contrast cell). */
+@media (min-width: 22.5rem) {
+  [data-variant='schematic'] .sx-tb__cell > .sx-field-name {
+    white-space: nowrap;
+  }
+}
+
+/* A cell's name and value may shrink below their longest word, so under 200% text a word
+   that still won't fit breaks rather than run past the block (the quality cells' root-text
+   reflow at 1024). At 100% every name fits its cell, so nothing changes there. */
+[data-variant='schematic'] .sx-tb__cell > * {
+  min-inline-size: 0;
+}
+
+@container (max-width: 31rem) {
+  [data-variant='schematic'] .sx-tb__cell > .sx-field-name {
+    white-space: normal;
+  }
+}
+
+/* A drawing number or a sheet count holds one line. */
+[data-variant='schematic'] .sx-tb__value > [data-type-role='numeric'] {
+  white-space: nowrap;
+}
+
+[data-variant='schematic'] .sx-tb__here {
+  flex-direction: column;
+  align-items: start;
+  gap: var(--space-3xs);
+}
+
+[data-variant='schematic'] .sx-tb__sheet {
+  color: var(--color-accent-text);
+}
+
+/* The hero's title names the cover sheet on one line, whatever its length, so
+   the title block's top row keeps one height; the whole title stays in the
+   text and in its tooltip. */
+[data-variant='schematic'] .sx-tb__sheet-title {
+  max-inline-size: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The cover's sheet title is cut to one line while the block holds about 18 of its letters'
+   ems; under that, as with 200% text at 1024, it wraps whole instead of losing words.
+   After the rule that cuts it, which it overrides. */
+@container (max-width: 18em) {
+  [data-variant='schematic'] .sx-tb__sheet-title {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+}
+
+[data-variant='schematic'] .sx-sheets ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-xs);
+}
+
+[data-variant='schematic'] .sx-sheets a {
+  display: inline-flex;
+  gap: var(--space-3xs);
+  align-items: baseline;
+  min-block-size: var(--space-m);
+  text-decoration-color: var(--color-border-subtle);
+}
+
+[data-variant='schematic'] .sx-sheets__no {
+  color: var(--color-accent-text);
+}
+
+[data-variant='schematic'] .sx-sheets a[aria-current] {
+  text-decoration-color: var(--color-accent);
+  text-decoration-thickness: 2px;
+}
+
+/* The stylesheet declares its --layout-* properties at its root alone. A
+   per-element value (an essay sheet's height, a chain's tracks, a track's
+   share) comes from code, inline, as a --layout-* too: the source audit
+   allows a variant only --layout-* properties of its own, set at the root
+   or from code, and refuses any other name (an --sx-* one included). */
+
+/* Each sheet's corner: the running marker (its number and Index, sticky in
+   the sheet's bottom-right corner while the sheet passes, docked on the
+   title block at its end), then the sheet's own title block. */
+[data-variant='schematic'] .sx-run {
+  position: sticky;
+  inset-block-end: var(--layout-run-inset);
+  z-index: 2;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  inline-size: fit-content;
+  block-size: var(--layout-run-block);
+  margin-block: var(--space-l) var(--space-2xs);
+  margin-inline-start: auto;
+  padding-inline: var(--space-s) var(--space-2xs);
+  white-space: nowrap;
+  border: var(--layout-line-heavy);
+  background-color: var(--color-canvas);
+}
+
+/* The cover's block takes the head ground, a mass that survives a blurred
+   thumbnail in any recipe (N12). */
+[data-variant='schematic'] .sx-tb[data-at='cover'] {
+  background-color: var(--layout-head-ground);
+}
+
+[data-variant='schematic'] .sx-tb[data-at='sheet'] {
+  inline-size: min(100%, var(--layout-width-text));
+  margin-inline-start: auto;
+}
+
+[data-variant='schematic'] .sx-run__no {
+  color: var(--color-accent-text);
+}
+
+[data-variant='schematic'] .sx-phone {
+  display: none;
+}
+
+/* ── The footer and the drawing index ── */
+
+[data-variant='schematic'] .sx-foot {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+  gap: var(--space-l) var(--layout-grid-gutter);
+  align-items: end;
+  max-inline-size: var(--layout-width-page);
+  margin-inline: auto;
+  padding: var(--space-xl) var(--layout-grid-margin);
+  border-block-start: var(--layout-line-heavy);
+}
+
+[data-variant='schematic'] .sx-foot__index {
+  grid-column: 1 / span 5;
+  display: grid;
+  row-gap: var(--space-m);
+}
+
+[data-variant='schematic'] .sx-foot .sx-tb {
+  grid-column: 6 / -1;
+}
+
+[data-variant='schematic'] .sx-index__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 10rem), 1fr));
+  gap: var(--space-m) var(--space-l);
+}
+
+[data-variant='schematic'] .sx-index__head {
+  padding-block-end: var(--space-3xs);
+  margin-block-end: var(--space-2xs);
+  border-block-end: var(--layout-line-visible);
+}
+
+[data-variant='schematic'] .sx-index__head [data-type-role='numeric'] {
+  color: var(--color-accent-text);
+}
+
+[data-variant='schematic'] .sx-index__sheet ol {
+  display: grid;
+  row-gap: var(--space-3xs);
+}
+
+[data-variant='schematic'] .sx-dialog {
+  inline-size: min(64rem, 100% - var(--space-l) * 2);
+  max-block-size: calc(100svh - var(--space-l) * 2);
+  padding: var(--space-m);
+  border: var(--layout-line-heavy);
+  border-radius: 0;
+  background-color: var(--color-canvas);
+  color: var(--color-text-primary);
+}
+
+[data-variant='schematic'] .sx-dialog::backdrop {
+  background-color: var(--color-scrim);
+}
+
+[data-variant='schematic'] .sx-dialog__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: center;
+  margin-block-end: var(--space-m);
+  padding-block-end: var(--space-xs);
+  border-block-end: var(--layout-line-heavy);
+}
+
+/* ── Forms on the sheets ── */
+
+[data-variant='schematic'] :is(.sx-spec, .sx-general, .sx-cloud, .sx-note-block) {
+  display: grid;
+  row-gap: var(--space-s);
+  max-inline-size: var(--layout-width-text);
+}
+
+[data-variant='schematic'] .sx-general > * {
+  font-size: var(--layout-type-head);
+  line-height: 1.35;
+}
+
+/* The revision cloud: scallops along all four edges, radial-gradient arcs in the accent. */
+[data-variant='schematic'] .sx-cloud {
+  padding: calc(var(--space-s) + var(--layout-scallop) / 2)
+    calc(var(--space-m) + var(--layout-scallop) / 2);
+  background-image:
+    radial-gradient(
+      circle at 50% 100%,
+      transparent calc(var(--layout-scallop) / 2 - 1.5px),
+      var(--color-accent) calc(var(--layout-scallop) / 2 - 1px),
+      var(--color-accent) calc(var(--layout-scallop) / 2),
+      transparent calc(var(--layout-scallop) / 2 + 0.5px)
+    ),
+    radial-gradient(
+      circle at 50% 0,
+      transparent calc(var(--layout-scallop) / 2 - 1.5px),
+      var(--color-accent) calc(var(--layout-scallop) / 2 - 1px),
+      var(--color-accent) calc(var(--layout-scallop) / 2),
+      transparent calc(var(--layout-scallop) / 2 + 0.5px)
+    ),
+    radial-gradient(
+      circle at 100% 50%,
+      transparent calc(var(--layout-scallop) / 2 - 1.5px),
+      var(--color-accent) calc(var(--layout-scallop) / 2 - 1px),
+      var(--color-accent) calc(var(--layout-scallop) / 2),
+      transparent calc(var(--layout-scallop) / 2 + 0.5px)
+    ),
+    radial-gradient(
+      circle at 0 50%,
+      transparent calc(var(--layout-scallop) / 2 - 1.5px),
+      var(--color-accent) calc(var(--layout-scallop) / 2 - 1px),
+      var(--color-accent) calc(var(--layout-scallop) / 2),
+      transparent calc(var(--layout-scallop) / 2 + 0.5px)
+    );
+  background-size:
+    var(--layout-scallop) calc(var(--layout-scallop) / 2),
+    var(--layout-scallop) calc(var(--layout-scallop) / 2),
+    calc(var(--layout-scallop) / 2) var(--layout-scallop),
+    calc(var(--layout-scallop) / 2) var(--layout-scallop);
+  background-position: top, bottom, left, right;
+  background-repeat: repeat-x, repeat-x, repeat-y, repeat-y;
+}
+
+[data-variant='schematic'] .sx-delta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  color: var(--color-accent-text);
+}
+
+[data-variant='schematic'] .sx-delta__mark {
+  inline-size: var(--space-s);
+  block-size: var(--space-s);
+  background-color: var(--color-accent);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%, 50% 0, 50% 22%, 16% 88%, 84% 88%, 50% 22%);
+}
+
+[data-variant='schematic']
+  :is(
+    .sx-holds,
+    .sx-flags,
+    .sx-refs,
+    .sx-reports,
+    .sx-signoffs,
+    .sx-certs,
+    .sx-patents,
+    .sx-related,
+    .sx-orders,
+    .sx-items
+  ) {
+  display: grid;
+  row-gap: var(--space-s);
+}
+
+[data-variant='schematic'] .sx-holds li {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: var(--space-s);
+  align-items: baseline;
+}
+
+[data-variant='schematic'] .sx-holds li::before {
+  content: '';
+  inline-size: 0.8em;
+  block-size: 0.8em;
+  border: var(--layout-line-visible);
+}
+
+[data-variant='schematic'] .sx-flags li {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: var(--space-s);
+}
+
+[data-variant='schematic'] .sx-flag {
+  display: grid;
+  place-items: center start;
+  inline-size: calc(var(--space-l) * 1.1);
+  block-size: var(--space-m);
+  padding-inline-start: var(--space-2xs);
+  background-color: var(--color-accent);
+  color: var(--color-on-accent);
+  font-family: var(--type-numeric-font-family);
+  font-size: var(--layout-type-small);
+  clip-path: polygon(0 0, 76% 0, 100% 50%, 76% 100%, 0 100%);
+}
+
+[data-variant='schematic'] .sx-quote {
+  display: grid;
+  row-gap: var(--space-xs);
+  padding-block-start: var(--space-s);
+  border-block-start: var(--layout-line-visible);
+}
+
+[data-variant='schematic'] .sx-quote figcaption {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='schematic'] .sx-request,
+[data-variant='schematic'] .sx-end {
+  display: grid;
+  row-gap: var(--space-m);
+  justify-items: start;
+}
+
+[data-variant='schematic'] .sx-end__links,
+[data-variant='schematic'] .sx-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs) var(--space-m);
+}
+
+/* chain dimensions: metrics not to scale, tracks to scale */
+[data-variant='schematic'] .sx-chain {
+  display: grid;
+  grid-template-columns: var(--layout-chain, repeat(auto-fit, minmax(0, 1fr)));
+  margin-block-end: var(--space-xs);
+}
+
+[data-variant='schematic'] .sx-chain > * {
+  position: relative;
+  display: grid;
+  align-content: start;
+  row-gap: var(--space-2xs);
+  min-inline-size: 0;
+  padding: var(--space-s) var(--space-xs) 0;
+  border-inline-start: var(--layout-line-thin);
+}
+
+[data-variant='schematic'] .sx-chain > :last-child {
+  border-inline-end: var(--layout-line-thin);
+}
+
+[data-variant='schematic'] .sx-chain > *::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 0;
+  block-size: var(--layout-arrow);
+  background-color: var(--color-accent);
+  clip-path: polygon(
+    0 50%,
+    var(--layout-arrow) 0,
+    var(--layout-arrow) calc(50% - 0.5px),
+    calc(100% - var(--layout-arrow)) calc(50% - 0.5px),
+    calc(100% - var(--layout-arrow)) 0,
+    100% 50%,
+    calc(100% - var(--layout-arrow)) 100%,
+    calc(100% - var(--layout-arrow)) calc(50% + 0.5px),
+    var(--layout-arrow) calc(50% + 0.5px),
+    var(--layout-arrow) 100%
+  );
+}
+
+[data-variant='schematic'] .sx-chain__value {
+  order: -1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  color: var(--color-data-categorical-2);
+}
+
+[data-variant='schematic'] .sx-chain__value [data-type-role='numeric'] {
+  font-size: inherit;
+}
+
+/* A value's unit is body-size text: it takes the secondary ink, not the data colour the value
+   carries at headline size, on a solid ground the drafting grid doesn't cross (4.5:1, Slice 2). */
+[data-variant='schematic'] .sx-unit {
+  font-size: var(--layout-type-body);
+  color: var(--color-text-secondary);
+  background-color: var(--color-canvas);
+}
+
+[data-variant='schematic'] .sx-chain__label {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='schematic'] .sx-record .sx-chain__value {
+  color: var(--color-text-primary);
+}
+
+[data-variant='schematic'] :is(.sx-metrics, .sx-record, .sx-trace) figcaption {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='schematic'] .sx-record {
+  display: grid;
+  row-gap: var(--space-s);
+}
+
+/* tables: revision block, bill of materials, schedules, parts index */
+[data-variant='schematic'] .sx-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  border: var(--layout-line-visible);
+  background-color: var(--color-canvas);
+}
+
+[data-variant='schematic'] .sx-table :is(th, td) {
+  padding: var(--space-2xs) var(--space-xs);
+  border-block-end: var(--layout-line-hair);
+  text-align: start;
+  vertical-align: top;
+  font-weight: inherit;
+}
+
+[data-variant='schematic'] .sx-table thead th {
+  border-block-end: var(--layout-line-visible);
+}
+
+[data-variant='schematic'] :is(.sx-num, .sx-rev) {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+[data-variant='schematic'] .sx-num {
+  text-align: end;
+}
+
+[data-variant='schematic'] .sx-rev {
+  color: var(--color-accent-text);
+}
+
+[data-variant='schematic'] .sx-nowrap {
+  white-space: nowrap;
+}
+
+[data-variant='schematic'] :is(.sx-row-title, .sx-row-body) {
+  display: block;
+}
+
+[data-variant='schematic'] .sx-row-title {
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='schematic'] .sx-row-body {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='schematic'] .sx-row-list {
+  margin-block-start: var(--space-3xs);
+  padding-inline-start: var(--space-s);
+  list-style: square;
+}
+
+[data-variant='schematic'] .sx-branch {
+  display: block;
+  color: var(--color-accent-text);
+}
+
+/* essays: sheets standing on one baseline, each drawn to its reading time */
+[data-variant='schematic'] .sx-docs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-l);
+}
+
+[data-variant='schematic'] .sx-doc {
+  flex: 1 1 14rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  column-gap: var(--space-2xs);
+}
+
+[data-variant='schematic'] .sx-doc__sheet {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  row-gap: var(--space-xs);
+  /* 15rem plus 9rem times its reading time over the longest's (6 and 6 on a phone). */
+  min-block-size: calc(15rem + 9rem * var(--layout-doc, 0));
+  padding: var(--space-s);
+  border: var(--layout-line-visible);
+  background-color: var(--color-canvas);
+}
+
+[data-variant='schematic'] .sx-doc__tb {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-s);
+  padding-block-start: var(--space-2xs);
+  border-block-start: var(--layout-line-hair);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='schematic'] .sx-doc__dim {
+  align-self: stretch;
+}
+
+[data-variant='schematic']
+  :is(.sx-ref, .sx-cert, .sx-patent, .sx-report, .sx-order, .sx-related li) {
+  display: grid;
+  row-gap: var(--space-3xs);
+  padding-block: var(--space-s);
+  border-block-start: var(--layout-line-hair);
+}
+
+[data-variant='schematic'] .sx-ref {
+  grid-template-columns: minmax(0, 12rem) minmax(0, 1fr);
+  column-gap: var(--space-m);
+}
+
+[data-variant='schematic'] .sx-ref__code {
+  display: grid;
+  color: var(--color-accent-text);
+}
+
+[data-variant='schematic'] .sx-report__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs) var(--space-m);
+}
+
+[data-variant='schematic'] .sx-report__fields dt,
+[data-variant='schematic'] .sx-order dt {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='schematic'] .sx-signoffs {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: var(--space-l);
+}
+
+[data-variant='schematic'] .sx-signoff {
+  display: grid;
+  row-gap: var(--space-s);
+  padding: var(--space-s) var(--space-m);
+  border: var(--layout-line-visible);
+  background-color: var(--color-canvas);
+}
+
+[data-variant='schematic'] .sx-signoff figcaption {
+  display: grid;
+  padding-block-start: var(--space-2xs);
+  border-block-start: var(--layout-line-hair);
+}
+
+[data-variant='schematic'] .sx-cert__year {
+  color: var(--color-data-categorical-2);
+  font-size: var(--layout-type-head);
+}
+
+[data-variant='schematic'] .sx-patent__span {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  align-items: center;
+  column-gap: var(--space-xs);
+  max-inline-size: 40rem;
+}
+
+[data-variant='schematic'] .sx-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: var(--space-m);
+}
+
+[data-variant='schematic'] .sx-photo {
+  display: grid;
+  row-gap: var(--space-2xs);
+  padding: var(--space-2xs);
+  border: var(--layout-line-visible);
+  background-color: var(--color-canvas);
+}
+
+[data-variant='schematic'] .sx-photo img {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+}
+
+[data-variant='schematic'] .sx-photo__no {
+  color: var(--color-accent-text);
+}
+
+[data-variant='schematic'] :is(.sx-gh, .sx-view__body, .sx-pair__host, .sx-pair__asides) {
+  min-inline-size: 0;
+}
+
+[data-variant='schematic'] .sx-gh {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: var(--space-m);
+}
+
+[data-variant='schematic'] .sx-gh > * {
+  min-inline-size: 0;
+}
+
+[data-variant='schematic'] .sx-trace svg {
+  display: block;
+  inline-size: 100%;
+  block-size: calc(var(--space-3xl) * 1.5);
+  border-block-end: var(--layout-line-visible);
+}
+
+[data-variant='schematic'] .sx-trace__pen {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 1.5;
+}
+
+[data-variant='schematic'] .sx-trace__area {
+  fill: var(--layout-grid-major);
+}
+
+/* ── The draw-on: linework only, one shot, finished text from the first frame (M1) ── */
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-variant='schematic'] .sx-cover [data-draw]::before,
+  [data-variant='schematic'] .sx-cover [data-draw]::after {
+    mask: linear-gradient(black, black) center / 100% 100% no-repeat;
+    animation: schematic-draw var(--motion-scene) var(--motion-curve) backwards;
+  }
+  [data-variant='schematic'] .sx-cover :is(.sx-iface__box, .sx-depth__box)[data-draw] {
+    animation: schematic-ink var(--motion-scene) var(--motion-curve) backwards;
+  }
+  [data-variant='schematic'] .sx-cover [data-draw='1'],
+  [data-variant='schematic'] .sx-cover [data-draw='1']::before,
+  [data-variant='schematic'] .sx-cover [data-draw='1']::after {
+    animation-delay: calc(var(--motion-feedback) * 0.6875);
+  }
+  [data-variant='schematic'] .sx-cover [data-draw='2'],
+  [data-variant='schematic'] .sx-cover [data-draw='2']::before,
+  [data-variant='schematic'] .sx-cover [data-draw='2']::after {
+    animation-delay: calc(var(--motion-feedback) * 1.375);
+  }
+  [data-variant='schematic'] .sx-cover [data-draw='3'],
+  [data-variant='schematic'] .sx-cover [data-draw='3']::before,
+  [data-variant='schematic'] .sx-cover [data-draw='3']::after {
+    animation-delay: calc(var(--motion-feedback) * 2.0625);
+  }
+  [data-variant='schematic'] .sx-cover [data-draw='4'],
+  [data-variant='schematic'] .sx-cover [data-draw='4']::before,
+  [data-variant='schematic'] .sx-cover [data-draw='4']::after {
+    animation-delay: calc(var(--motion-feedback) * 2.75);
+  }
+}
+
+@keyframes schematic-draw {
+  from {
+    mask-size: 0% 100%;
+  }
+}
+
+@keyframes schematic-ink {
+  from {
+    border-color: transparent;
+  }
+}
+
+/* ── Narrower sheets ── */
+
+@media (max-width: 63.99rem) {
+  [data-variant='schematic'] .sx-cover,
+  [data-variant='schematic'] .sx-cover:not([data-figure]) {
+    /* Figure 1 straight after the name and lede: the thesis and one artifact first (F5). */
+    grid-template-areas: 'id' 'fig' 'notes' 'tb';
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+  [data-variant='schematic'] .sx-sheet--cover .sx-border {
+    min-block-size: 0;
+  }
+  [data-variant='schematic'] .sx-pair__host,
+  [data-variant='schematic'] .sx-pair__asides {
+    grid-column: 1 / -1;
+  }
+  [data-variant='schematic'] .sx-foot__index,
+  [data-variant='schematic'] .sx-foot .sx-tb {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 47.99rem) {
+  [data-variant='schematic'] {
+    --layout-band: var(--space-s);
+  }
+  [data-variant='schematic'] .sx-main {
+    padding-block-start: var(--space-xs);
+  }
+  [data-variant='schematic'] .sx-field {
+    padding: var(--space-s) var(--space-xs);
+  }
+  [data-variant='schematic'] :is(.sx-zones--top, .sx-zones--bottom) li:nth-child(n + 5) {
+    display: none;
+  }
+  [data-variant='schematic'] .sx-phone {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 2;
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, max-content);
+    align-items: center;
+    column-gap: var(--space-s);
+    block-size: var(--layout-phone-block);
+    padding-inline: var(--layout-grid-margin);
+    border-block-end: var(--layout-line-heavy);
+    background-color: var(--color-canvas);
+  }
+  /* One line each, so the bar keeps the height the targets clear: the h1 and the index carry the full name and title. */
+  [data-variant='schematic'] :is(.sx-phone__name, .sx-phone__here) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* A 44 px target that still ends in an ellipsis: one line as tall as a control. */
+  [data-variant='schematic'] .sx-phone__name {
+    display: block;
+    line-height: var(--layout-control);
+    text-decoration: none;
+  }
+  [data-variant='schematic'] .sx-run {
+    display: none;
+  }
+  [data-variant='schematic'] .sx-elev {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  [data-variant='schematic'] .sx-elev__h {
+    display: none;
+  }
+  [data-variant='schematic'] .sx-elev__name {
+    font-size: var(--layout-type-display);
+  }
+  [data-variant='schematic'] .sx-fig__head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  [data-variant='schematic'] .sx-fig__no {
+    grid-row: auto;
+    border-inline-end: 0;
+    border-block-end: var(--layout-line-hair);
+  }
+  [data-variant='schematic'] .sx-plan,
+  [data-variant='schematic'] .sx-fig[data-plan] .sx-plan {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'io' 'iface' 'depth';
+    padding-inline: var(--space-s);
+  }
+  [data-variant='schematic'] .sx-tb {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* Half cells pair up, so no cell sits empty beside a full-width one. */
+    grid-auto-flow: row dense;
+  }
+  [data-variant='schematic'] .sx-tb__cell:is([data-span='2'], [data-span='3']) {
+    grid-column: 1 / -1;
+  }
+  /* The sheet count ends its row past a phone; on one it's a half cell that pairs. */
+  [data-variant='schematic'] .sx-tb__cell[data-cell='sheets'] {
+    grid-column: auto;
+  }
+  [data-variant='schematic'] .sx-sheet__head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  [data-variant='schematic'] .sx-ref {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  [data-variant='schematic'] .sx-table thead {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  [data-variant='schematic'] :is(.sx-table, .sx-table tbody) {
+    display: block;
+  }
+  [data-variant='schematic'] .sx-patent__span {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  [data-variant='schematic'] .sx-table tr {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    column-gap: var(--space-xs);
+    padding-block: var(--space-2xs);
+    border-block-end: var(--layout-line-hair);
+  }
+  [data-variant='schematic'] .sx-table :is(th, td) {
+    grid-column: 2;
+    padding: 0 var(--space-xs);
+    border: 0;
+  }
+  [data-variant='schematic'] .sx-table :is(th, td):is(.sx-rev, .sx-nowrap):first-child {
+    grid-column: 1;
+    grid-row: 1 / span 4;
+  }
+  [data-variant='schematic'] .sx-table tr:not(:has(> :is(.sx-rev, .sx-nowrap):first-child)) > * {
+    grid-column: 1 / -1;
+  }
+  /* Talks: the date stacks above its talk, so no column falls under 12ch. */
+  [data-variant='schematic'] .sx-table.sx-sched tr > :is(th, td):nth-child(n) {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+  [data-variant='schematic'] .sx-table :is(th, td) {
+    min-inline-size: 0;
+  }
+  [data-variant='schematic'] .sx-num {
+    text-align: start;
+  }
+  [data-variant='schematic'] .sx-metrics .sx-chain {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: var(--space-s);
+  }
+  [data-variant='schematic'] .sx-record .sx-chain {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* Stacked, each track's dimension keeps the scale: its share of the longest. */
+  [data-variant='schematic'] .sx-record .sx-chain > * {
+    border-inline-end: 0;
+  }
+  [data-variant='schematic'] .sx-record .sx-chain > *::before {
+    inset-inline-end: auto;
+    inline-size: var(--layout-share, 100%);
+  }
+}
+
+/* More contrast asked (prefers-contrast: more, or the site's own data-contrast='more'):
+   the drafting grid and the section hatching go, as in forced colours, so no text sits on a
+   grid line; the frame and the rulers carry the drawing (the quality cells' contrast-more
+   row, 7:1 against the worst pixel). */
+@media (prefers-contrast: more) {
+  [data-variant='schematic'] :is(.sx-field, .sx-stratum__h) {
+    background-image: none;
+  }
+}
+
+/* The site's own override of the visitor's contrast (apps/web/src/lib/environment.ts) sets
+   data-contrast on the boundary, the element that carries data-variant (boundary.ts). */
+[data-variant='schematic']:is([data-contrast='more']) :is(.sx-field, .sx-stratum__h) {
+  background-image: none;
+}
+
+@media (forced-colors: active) {
+  [data-variant='schematic'] .sx-field {
+    background-image: none;
+  }
+  [data-variant='schematic'] .sx-cloud {
+    border: var(--layout-line-cloud);
+  }
+  [data-variant='schematic'] :is(.sx-dim--h, .sx-chain > *, .sx-notes__list)::before,
+  [data-variant='schematic'] :is(.sx-dim--v, .sx-measured li)::before,
+  [data-variant='schematic'] :is(.sx-dim--h, .sx-io dt)::after {
+    background-color: currentColor;
+    forced-color-adjust: none;
+  }
+}
+
+@media print {
+  /* Only the chrome's own controls go: the phone bar, the markers and the
+     dialog. The cover's Index prints, a reference to the drawing index the
+     footer prints; a call to action prints, its address beside it, and every
+     disclosure's content prints. */
+  [data-variant='schematic'] :is(.sx-phone, .sx-run, .sx-dialog) {
+    display: none;
+  }
+  [data-variant='schematic']
+    :is(.sx-actions, .sx-request)
+    a:is([href^='http'], [href^='mailto:'])::after {
+    content: ' (' attr(href) ')';
+    overflow-wrap: anywhere;
+  }
+  [data-variant='schematic'] .sx-field {
+    background-image: none;
+  }
+  [data-variant='schematic'] .sx-sheet--cover .sx-border {
+    min-block-size: 0;
+  }
+}
+
+@supports selector(::details-content) {
+  @media print {
+    [data-variant='schematic'] details::details-content {
+      content-visibility: visible;
+      block-size: auto;
+    }
+  }
+}
+
+[data-variant='schematic'] .sx-phone__here {
+  min-inline-size: 0;
+  color: var(--color-accent-text);
+}
+
+[data-variant='schematic'] .sx-order dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-3xs) var(--space-s);
+  max-inline-size: var(--layout-width-text);
+}
+
+[data-variant='schematic'] .sx-phone .sx-btn {
+  column-gap: var(--space-3xs);
+  max-inline-size: 100%;
+  white-space: nowrap;
+}
+
+[data-variant='schematic'] :is(.sx-end, .sx-ref, .sx-refs) {
+  overflow-wrap: anywhere;
+}
+
+/* The address breaks after its @ and nowhere else on a phone: a step down under 30rem. */
+@media (max-width: 29.99rem) {
+  [data-variant='schematic'] .sx-end__mail {
+    font-size: var(--layout-type-body);
+  }
+}
+
+/* ── The detail sheet: a work's own page (step 8) ── */
+
+[data-variant='schematic'] .sx-sheet--detail {
+  max-inline-size: var(--layout-width-page);
+  margin-inline: auto;
+  padding: var(--space-2xs) var(--layout-grid-margin) var(--space-l);
+}
+
+[data-variant='schematic'] .sx-dhead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-l);
+  align-items: end;
+  margin-block-end: var(--space-l);
+  padding-block-end: var(--space-m);
+  border-block-end: var(--layout-line-heavy);
+}
+
+[data-variant='schematic'] .sx-dhead__id {
+  display: grid;
+  row-gap: var(--space-s);
+  align-content: start;
+}
+
+[data-variant='schematic'] .sx-crumb {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-3xs);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='schematic'] .sx-crumb a {
+  color: var(--color-accent-text);
+}
+
+/* A detail sheet's title is never bigger than its longest word allows on one line: the
+   width over the word's characters at about 0.7 of an em each (P2 review, a long word at
+   320). The step rules below take the smaller of their step and this. */
+[data-variant='schematic'] .sx-dhead__title {
+  --layout-fit: calc(100cqi / (var(--layout-word, 1) * 0.7));
+  font-size: min(var(--layout-type-display), var(--layout-fit));
+  line-height: 1;
+}
+
+[data-variant='schematic'] .sx-dhead__dim {
+  max-inline-size: 36rem;
+}
+
+/* The case's lede at the head size, at a lede's measure (C5). */
+[data-variant='schematic'] .sx-dlede {
+  max-inline-size: 34ch;
+  font-size: var(--layout-type-head);
+  line-height: 1.25;
+}
+
+/* The head runs as one column: the title and lede, then the fact sheet as a
+   title block holding the head's end (P2 change 6). */
+[data-variant='schematic'] .sx-dhead {
+  container-type: inline-size;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-variant='schematic'] .sx-dfacts {
+  inline-size: min(100%, var(--layout-width-text));
+  margin-inline-start: auto;
+}
+
+[data-variant='schematic'] .sx-dparts {
+  margin-block-end: var(--space-xl);
+}
+
+[data-variant='schematic'] .sx-dparts ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs) var(--space-l);
+}
+
+[data-variant='schematic'] .sx-dparts [data-type-role='numeric'] {
+  color: var(--color-accent-text);
+}
+
+[data-variant='schematic'] .sx-dview {
+  grid-column: 1 / -1;
+}
+
+[data-variant='schematic'] .sx-dvt {
+  grid-template-columns: max-content minmax(0, 1fr);
+  padding-block-end: var(--space-2xs);
+  border-block-end: var(--layout-line-visible);
+}
+
+[data-variant='schematic'] .sx-dvt .sx-vt__sub {
+  grid-column: 2;
+  max-inline-size: var(--layout-width-text);
+}
+
+[data-variant='schematic'] .sx-code {
+  font-family: var(--type-numeric-font-family);
+  font-size: var(--layout-type-head);
+  line-height: 1;
+  color: var(--color-accent-text);
+}
+
+[data-variant='schematic'] .sx-elevation {
+  display: grid;
+  row-gap: var(--space-l);
+}
+
+[data-variant='schematic'] .sx-cover-view {
+  display: grid;
+  row-gap: var(--space-2xs);
+  max-inline-size: 60rem;
+}
+
+[data-variant='schematic'] .sx-cover-view__plate {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  column-gap: var(--space-s);
+}
+
+[data-variant='schematic'] .sx-cover-view__plate :is(img, picture) {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  border: var(--layout-line-visible);
+}
+
+[data-variant='schematic'] .sx-cover-view__dim {
+  align-self: stretch;
+}
+
+/* The work's further views, each a plate over its caption, as many to a row as fit. */
+[data-variant='schematic'] .sx-plates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  gap: var(--space-m) var(--layout-grid-gutter);
+}
+
+/* A work order's group, named once over its first order. */
+[data-variant='schematic'] .sx-order__group {
+  margin-block-end: var(--space-3xs);
+  color: var(--color-accent-text);
+}
+
+/* A–A: the cut line, then the strata, each label hatched as a section is. */
+[data-variant='schematic'] .sx-cut {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-block-end: var(--space-s);
+  border-block-start: var(--layout-line-center);
+  color: var(--color-accent-text);
+  font-family: var(--type-numeric-font-family);
+  font-size: var(--layout-type-small);
+}
+
+[data-variant='schematic'] .sx-cut span {
+  padding-block-start: var(--space-3xs);
+}
+
+[data-variant='schematic'] .sx-strata {
+  display: grid;
+  border-block-start: var(--layout-line-visible);
+}
+
+[data-variant='schematic'] .sx-stratum {
+  display: grid;
+  grid-template-columns: minmax(0, 12rem) minmax(0, 1fr);
+  column-gap: var(--space-m);
+  align-items: start;
+  border-block-end: var(--layout-line-visible);
+}
+
+[data-variant='schematic'] .sx-stratum > :last-child {
+  padding-block: var(--space-s);
+  max-inline-size: var(--layout-width-text);
+}
+
+[data-variant='schematic'] .sx-stratum__h {
+  align-self: stretch;
+  padding: var(--space-s) var(--space-xs);
+  border-inline-end: var(--layout-line-visible);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--layout-grid-major) 0 1px,
+    transparent 1px var(--space-2xs)
+  );
+}
+
+/* ECN: change notices as forms. */
+[data-variant='schematic'] .sx-ecns {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+  gap: var(--space-m);
+  align-items: start;
+}
+
+[data-variant='schematic'] .sx-ecn {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: var(--space-s);
+  border: var(--layout-line-visible);
+  background-color: var(--color-canvas);
+}
+
+[data-variant='schematic'] .sx-ecn__no {
+  padding: var(--space-xs);
+  border-inline-end: var(--layout-line-visible);
+  border-block-end: var(--layout-line-visible);
+  color: var(--color-accent-text);
+}
+
+[data-variant='schematic'] .sx-ecn__title {
+  align-self: center;
+  padding-block: var(--space-xs);
+  padding-inline-end: var(--space-xs);
+}
+
+[data-variant='schematic'] .sx-ecn__fields {
+  grid-column: 1 / -1;
+  display: grid;
+}
+
+[data-variant='schematic'] .sx-ecn__fields > div {
+  display: grid;
+  grid-template-columns: minmax(0, 7rem) minmax(0, 1fr);
+  column-gap: var(--space-s);
+  padding: var(--space-xs);
+  border-block-start: var(--layout-line-hair);
+}
+
+/* TR: the report, what was observed beside what witnessed it. */
+[data-variant='schematic'] .sx-report {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  border: var(--layout-line-visible);
+  background-color: var(--color-canvas);
+}
+
+[data-variant='schematic'] :is(.sx-report__observed, .sx-report__witness) {
+  display: grid;
+  align-content: start;
+  row-gap: var(--space-xs);
+  padding: var(--space-m);
+}
+
+[data-variant='schematic'] .sx-report__witness {
+  border-inline-start: var(--layout-line-visible);
+}
+
+[data-variant='schematic'] .sx-report__witness .sx-refs {
+  display: grid;
+  row-gap: var(--space-2xs);
+}
+
+[data-variant='schematic'] .sx-return {
+  display: grid;
+  row-gap: var(--space-s);
+  margin-block: var(--space-2xl) var(--space-l);
+  padding-block-start: var(--space-m);
+  border-block-start: var(--layout-line-heavy);
+}
+
+[data-variant='schematic'] .sx-return__ways {
+  display: grid;
+  row-gap: var(--space-2xs);
+}
+
+@media (max-width: 47.99rem) {
+  /* The page's length on a phone (N3): views a step closer, and the footer's
+     index by its sheets, whose own heads list their views (the Sheet
+     dialog keeps the full index). */
+  [data-variant='schematic'] .sx-views {
+    row-gap: var(--space-xl);
+  }
+  /* Views are already --space-xl apart here, so a schedule needs no step less. */
+  [data-variant='schematic'] .sx-schedule {
+    margin-block-end: 0;
+  }
+  /* The running marker isn't drawn here, so the sheet's title block takes its
+     gap from the last view itself, never sitting flush on a schedule's row. */
+  [data-variant='schematic'] .sx-tb[data-at='sheet'] {
+    margin-block-start: var(--space-l);
+  }
+  [data-variant='schematic'] .sx-doc__sheet {
+    min-block-size: calc(6rem + 6rem * var(--layout-doc, 0));
+  }
+  /* A sheet's head on a phone is its number and title: the Sheet dialog lists its views. */
+  [data-variant='schematic'] .sx-sheet__views {
+    display: none;
+  }
+  [data-variant='schematic'] .sx-depth__fold[open] > .sx-depth__sum {
+    margin-block-end: var(--space-xs);
+  }
+  [data-variant='schematic'] .sx-depth__inner > .sx-dim {
+    display: none;
+  }
+  /* The cover's title block on a phone is its sheets and Index: the footer's holds the rest. */
+  [data-variant='schematic'] .sx-tb[data-at='cover'] > :not(.sx-tb__nav, .sx-tb__here) {
+    display: none;
+  }
+  [data-variant='schematic'] .sx-foot__index .sx-index__sheet:not(.sx-index__sheet--details) > ol {
+    display: none;
+  }
+  [data-variant='schematic'] :is(.sx-dhead, .sx-report, .sx-stratum) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  [data-variant='schematic'] .sx-stratum__h {
+    border-inline-end: 0;
+    border-block-end: var(--layout-line-visible);
+  }
+  [data-variant='schematic'] .sx-report__witness {
+    border-inline-start: 0;
+    border-block-start: var(--layout-line-visible);
+  }
+  [data-variant='schematic'] .sx-ecn__fields > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  [data-variant='schematic'] .sx-cover-view__plate {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  [data-variant='schematic'] .sx-cover-view__dim {
+    display: none;
+  }
+}
+
+/* Below 30rem one frame line: the sheet drops its side bands and outer
+   border, keeping its zoned top and bottom rulers over one field line, so the
+   field and the name get the width back (the name two lines at 64 px and up). */
+@media (max-width: 29.99rem) {
+  [data-variant='schematic'] {
+    --layout-type-display: calc(var(--type-step-6) * 1.35);
+  }
+  [data-variant='schematic'] .sx-border {
+    grid-template-columns: 0 minmax(0, 1fr) 0;
+    border-inline: 0;
+  }
+  [data-variant='schematic'] :is(.sx-zones--start, .sx-zones--end) {
+    display: none;
+  }
+  [data-variant='schematic'] .sx-field {
+    padding-inline: var(--space-xs);
+    border-inline: var(--layout-line-visible);
+  }
+}
+
+/* A detail sheet's title on a phone steps down, so a word like "Postmortem"
+   holds one line and never breaks inside (P2 change 1); its phone bar names
+   it by number alone, so the owner's name stays whole (P2 change 2). */
+@media (max-width: 29.99rem) {
+  [data-variant='schematic'] .sx-dhead__title {
+    font-size: min(var(--type-step-5), var(--layout-fit));
+  }
+  [data-variant='schematic'] [data-sx-page='case'] .sx-here__title {
+    display: none;
+  }
+}
+
+@media (max-width: 22.99rem) {
+  [data-variant='schematic'] .sx-dhead__title {
+    font-size: min(var(--type-step-4), var(--layout-fit));
+  }
+  [data-variant='schematic'] {
+    --layout-type-display: var(--type-step-5);
+  }
+  /* At 320 the thesis dimension steps to the body size, so its label holds a
+     line and its arrows keep their length (re-check carry). */
+  [data-variant='schematic'] .sx-elev__w {
+    font-size: var(--layout-type-body);
+  }
+}
+
+/* The name's outline is the cover's one double heavy line, so it reads
+   heavier than any figure frame (re-check carry, item 14). */
+[data-variant='schematic'] .sx-elev__name {
+  outline: var(--layout-line-heavy);
+  outline-offset: var(--space-3xs);
+}
+
+/* The thesis at its large size wraps greedily: pretty pulls its last lines
+   short (four short tails at 390), which reads unset at this size. */
+[data-variant='schematic'] .sx-general .pf-rich-text p {
+  text-wrap: wrap;
+}
+
+/* A fold's control, at every width: a dashed box with its chevron. A description's, an
+   abstract's and show notes' folds take it too, never the browser's triangle (P2 review). */
+[data-variant='schematic'] :is(.sx-run-on__sum, .sx-depth__sum, .sx-abstract > summary) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-s);
+  min-block-size: var(--layout-control);
+  padding-inline: var(--space-xs);
+  border: var(--layout-line-hidden);
+  color: var(--color-accent-text);
+  cursor: pointer;
+  list-style: none;
+}
+
+[data-variant='schematic']
+  :is(.sx-run-on__sum, .sx-depth__sum, .sx-abstract > summary)::-webkit-details-marker {
+  display: none;
+}
+
+[data-variant='schematic'] :is(.sx-run-on__sum, .sx-depth__sum, .sx-abstract > summary)::after {
+  content: '';
+  inline-size: var(--space-xs);
+  block-size: var(--space-xs);
+  margin-inline-end: calc(var(--space-xs) * 0.25);
+  border-block-end: var(--layout-line-visible);
+  border-inline-end: var(--layout-line-visible);
+  transform: translateY(-35%) rotate(45deg);
+}
+
+[data-variant='schematic']
+  :is(.sx-run-on, .sx-depth__fold, .sx-abstract)[open]
+  > :is(.sx-run-on__sum, .sx-depth__sum, summary)::after {
+  transform: translateY(35%) rotate(225deg);
+}
+
+/* Past a phone an open phone fold shows no control: it reads as the drawing does, its count
+   on the dimension. A closed one, as after a phone turns, keeps its control. */
+@media (min-width: 48rem) {
+  [data-variant='schematic']
+    :is(.sx-run-on, .sx-depth__fold)[open]
+    > :is(.sx-run-on__sum, .sx-depth__sum) {
+    display: none;
+  }
+}
+
+/* On paper (narrower than 48rem at A4) every fold prints open, and no fold's control
+   prints: the phone folds' summaries go, and a description's or an abstract's prints as
+   its label alone, with no box or chevron (P2 review). After the fold controls, and more
+   specific than their :is() list, which a summary in .sx-abstract raises. */
+@media print {
+  [data-variant='schematic']
+    :is(.sx-run-on, .sx-depth__fold)
+    > :is(.sx-run-on__sum, .sx-depth__sum) {
+    display: none;
+  }
+  [data-variant='schematic'] .sx-abstract > summary {
+    border: 0;
+    padding-inline: 0;
+  }
+  [data-variant='schematic'] .sx-abstract > summary::after {
+    content: none;
+  }
+}

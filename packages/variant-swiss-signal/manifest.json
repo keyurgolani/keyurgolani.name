@@ -1,0 +1,166 @@
+{
+  "id": "swiss-signal",
+  "name": "Swiss Signal",
+  "promise": "The portfolio as a Swiss print poster that works as an index.",
+  "description": "A 12-column ruled grid: the thesis as a poster in uppercase grotesque, the selected work as a ruled index beside the lede, a band of ruled figures, and five part openers, Work, Writing, Record, About, and Contact. Every collection is a ruled table on the column lines, with no cards and no shadows; state shows by underline and ground, the selected work settles once into place, and the page prints as a résumé.",
+  "contract": "2.0",
+  "schemas": {
+    "portfolio": {
+      "min": 3,
+      "max": 3
+    },
+    "site": {
+      "min": 2,
+      "max": 2
+    }
+  },
+  "tokenContract": 1,
+  "compositionFamily": "document",
+  "motionIntent": "subtle",
+  "performanceTier": "light",
+  "budgets": {
+    "js": 3072,
+    "css": 9216,
+    "image": 61440,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "stills": [
+    {
+      "file": "./stills/1440.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "file": "./stills/720.webp",
+      "width": 720,
+      "height": 450
+    }
+  ],
+  "renderedKinds": [
+    "hero",
+    "lede",
+    "now",
+    "works",
+    "evidence",
+    "chronology",
+    "practice",
+    "contact",
+    "custom",
+    "quote",
+    "focus",
+    "fun-facts",
+    "cta",
+    "github"
+  ],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": {
+    "home": "bespoke",
+    "work": "bespoke",
+    "views": []
+  },
+  "controls": {
+    "version": 1,
+    "items": [
+      {
+        "type": "enum",
+        "id": "posterLine",
+        "label": "Poster line",
+        "description": "Where the poster line comes from; each falls back to the next when it has nothing.",
+        "options": [
+          {
+            "value": "thesis",
+            "label": "The thesis"
+          },
+          {
+            "value": "hero",
+            "label": "The hero's tagline"
+          },
+          {
+            "value": "tagline",
+            "label": "The identity tagline"
+          },
+          {
+            "value": "name",
+            "label": "The name"
+          }
+        ],
+        "default": "thesis"
+      },
+      {
+        "type": "enum",
+        "id": "aside",
+        "label": "Aside",
+        "description": "The parenthetical after the poster line. An aside written into the line always stays.",
+        "options": [
+          {
+            "value": "tagline",
+            "label": "The identity tagline"
+          },
+          {
+            "value": "off",
+            "label": "None"
+          }
+        ],
+        "default": "tagline"
+      },
+      {
+        "type": "contentRef",
+        "id": "figures",
+        "label": "Figures band",
+        "description": "The evidence section the figures band shows. Empty: the first section of metrics.",
+        "kinds": ["evidence"],
+        "default": null
+      },
+      {
+        "type": "enum",
+        "id": "partOrder",
+        "label": "Part order",
+        "description": "Which part follows the poster. Contact always closes the page.",
+        "options": [
+          {
+            "value": "work-first",
+            "label": "Work first"
+          },
+          {
+            "value": "writing-first",
+            "label": "Writing first"
+          },
+          {
+            "value": "record-first",
+            "label": "Record first"
+          },
+          {
+            "value": "about-first",
+            "label": "About first"
+          }
+        ],
+        "default": "work-first"
+      },
+      {
+        "type": "boolean",
+        "id": "since",
+        "label": "Working since",
+        "description": "Shows the year of the earliest role in the masthead.",
+        "default": true
+      }
+    ],
+    "migrations": []
+  },
+  "visitorControl": {
+    "placement": "footer"
+  },
+  "textDirection": ["ltr", "rtl"],
+  "provenance": {
+    "provisional": true,
+    "sources": [
+      {
+        "source": "The Swiss Signal concept (variants-10, Variant 2)",
+        "disposition": "reused-interaction",
+        "note": "The parenthetical poster, the ruled figures band, part openers and ruled tables, rebuilt on the platform tokens."
+      }
+    ]
+  }
+}

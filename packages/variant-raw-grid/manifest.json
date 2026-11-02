@@ -1,0 +1,121 @@
+{
+  "id": "raw-grid",
+  "name": "Raw Grid",
+  "promise": "The portfolio as an exposed-structure poster wall: every boundary a drawn rule, the proof running across the top, the facts pasted on.",
+  "description": "One gutterless twelve-column field where cells share their edges, so every boundary on the page is a single rule. A proof ticker runs across the top with a Pause, over a header row of cells: the name, five destinations with their counts, where you are, and the Index. The opening is a pasted-up poster, the name stacked and fitted with up to three tilted stickers of facts from the records, beside the thesis and the pinned work. Then five destination sheets, each opening on its word at display size and a table of its sections, every section a band of cells with its title as black tape, works as sticker cards that press into their shadows, and an ink block whose biggest link is the email. A work's own page is a poster of its own on the same field: its title fitted, its cited records as stickers, a fact sheet beside it, then every part of the case as a band. Its color, type, and materials come from the appearance packs; the grid's geometry is its own.",
+  "contract": "2.0",
+  "schemas": {
+    "portfolio": {
+      "min": 3,
+      "max": 3
+    },
+    "site": {
+      "min": 2,
+      "max": 2
+    }
+  },
+  "tokenContract": 1,
+  "compositionFamily": "custom",
+  "motionIntent": "subtle",
+  "performanceTier": "medium",
+  "budgets": {
+    "js": 4096,
+    "css": 10752,
+    "image": 61440,
+    "font": 0,
+    "animation": 1,
+    "enhancement": 0
+  },
+  "stills": [
+    {
+      "file": "./stills/1440.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "file": "./stills/720.webp",
+      "width": 720,
+      "height": 450
+    }
+  ],
+  "renderedKinds": [
+    "hero",
+    "lede",
+    "works",
+    "evidence",
+    "github",
+    "chronology",
+    "practice",
+    "focus",
+    "now",
+    "quote",
+    "fun-facts",
+    "contact",
+    "cta",
+    "custom"
+  ],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": {
+    "home": "bespoke",
+    "work": "bespoke",
+    "views": []
+  },
+  "controls": {
+    "version": 1,
+    "items": [
+      {
+        "type": "boolean",
+        "id": "ticker",
+        "label": "Proof ticker",
+        "description": "Run the proof facts across the top of the page. Off, the facts still show in their own sections.",
+        "default": true
+      },
+      {
+        "type": "contentRefList",
+        "id": "tickerItems",
+        "label": "Ticker facts",
+        "description": "Up to eight evidence records the ticker runs, in this order. Empty, it runs the proof list, then the metrics the page shows.",
+        "kinds": ["evidence"],
+        "min": 0,
+        "max": 8,
+        "default": []
+      },
+      {
+        "type": "contentRefList",
+        "id": "stickers",
+        "label": "Poster stickers",
+        "description": "Up to three evidence or chronology records the poster pins as stickers. Empty, it pins the newest award, the newest publication, and the current role.",
+        "kinds": ["evidence", "chronology"],
+        "min": 0,
+        "max": 3,
+        "default": []
+      }
+    ],
+    "migrations": []
+  },
+  "visitorControl": {
+    "placement": "footer"
+  },
+  "textDirection": ["ltr", "rtl"],
+  "recommendedAppearance": "raw-grid",
+  "provenance": {
+    "provisional": true,
+    "sources": [
+      {
+        "source": "The Raw Grid concept: the cell field, ticker, header row, poster and stickers, sheets, sticker cards, ink block",
+        "disposition": "preserved"
+      },
+      {
+        "source": "The report's private hexes, borders, shadows, and fonts",
+        "disposition": "folded-into-pack",
+        "note": "Poster Press, Poster Primaries, and Paste-Up carry them; the composition reads roles."
+      },
+      {
+        "source": "The report's shadowDepth control and hard-coded career badges",
+        "disposition": "retired",
+        "note": "Shadow depth is the design language's; stickers are derived from records, with a stickers control to choose them."
+      }
+    ]
+  }
+}

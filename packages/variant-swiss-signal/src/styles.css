@@ -1,0 +1,2354 @@
+/*
+ * Swiss Signal: a Swiss print poster that works as an index. Composition
+ * only: a 12-column ruled grid on the shared space scale, the rule
+ * hierarchy as geometry (3 px heavy, 1.5 px section, the language's divider
+ * between rows), the poster's promotion to the display ceiling, and every
+ * table and component below. Every colour is a role, every size a type
+ * step, every duration the platform's motion tokens. Every rule sits under
+ * [data-variant='swiss-signal'] and every property is logical. No card, no
+ * shadow, no texture: state shows by underline and ground.
+ */
+
+[data-variant='swiss-signal'] {
+  --layout-grid-columns: 12;
+  --layout-grid-gutter: var(--space-s);
+  --layout-grid-margin: var(--space-s-l);
+  --layout-width-page: 90rem;
+  --layout-motion-curve: var(--ui-motion-easing);
+  --layout-motion-feedback: 200ms;
+  --layout-motion-scene: 600ms;
+  --layout-rule-heavy-size: 3px;
+  --layout-rule-section-size: 1.5px;
+  /* Rows take a hairline of the composition's own: the rules are the design, so they survive every language (F8). */
+  --layout-rule-row-size: 1px;
+  --layout-masthead: calc(var(--space-s) * 3);
+  display: block;
+  min-block-size: 100svh;
+  background-color: var(--color-canvas);
+  color: var(--color-text-primary);
+  overflow-wrap: break-word;
+}
+
+[data-variant='swiss-signal'] :is(h1, h2, h3, h4) {
+  margin: 0;
+  text-wrap: balance;
+}
+
+[data-variant='swiss-signal'] :is(p, li, td, dd, figcaption, blockquote) {
+  margin: 0;
+  text-wrap: pretty;
+}
+
+[data-variant='swiss-signal'] :is(ol, ul, dl, dd, figure, blockquote) {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='swiss-signal'] [id] {
+  scroll-margin-block-start: calc(var(--layout-masthead) + var(--space-s));
+}
+
+[data-variant='swiss-signal'] .ss-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+[data-variant='swiss-signal'] .ss-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  max-inline-size: var(--layout-width-page);
+  margin-inline: auto;
+  padding-inline: var(--layout-grid-margin);
+}
+
+[data-variant='swiss-signal']
+  :is(
+    ul,
+    ol,
+    dl,
+    td,
+    th,
+    .ss-cols,
+    .ss-index__foot,
+    .ss-crumb,
+    .ss-case__figure figcaption,
+    .ss-fold__first,
+    .ss-fold__count
+  )[data-type-role] {
+  max-inline-size: none;
+}
+
+[data-variant='swiss-signal'] .ss-num {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* Links: always underlined, never colour alone. */
+[data-variant='swiss-signal'] a {
+  color: inherit;
+  text-decoration-line: underline;
+  text-decoration-thickness: var(--layout-rule-row-size);
+  text-underline-offset: 0.18em;
+  text-decoration-color: var(--color-border-strong);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-variant='swiss-signal'] a:hover {
+    text-decoration-color: var(--color-accent);
+    text-decoration-thickness: var(--layout-rule-section-size);
+  }
+}
+
+/* A link's printed address: paper alone (the print block shows it). */
+[data-variant='swiss-signal'] .ss-addr {
+  display: none;
+}
+
+[data-variant='swiss-signal'] .ss-out {
+  white-space: nowrap;
+}
+
+/* The parenthetical: the quote role, italic under every typography pack (SS-M1). */
+[data-variant='swiss-signal'] .ss-paren {
+  font-size: inherit;
+  line-height: inherit;
+  font-style: italic;
+  font-weight: var(--type-quote-font-weight);
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--color-accent-text);
+}
+
+/* The signal itself only at 24 px and up (S5). */
+[data-variant='swiss-signal'] .ss-paren--signal {
+  color: var(--color-accent);
+}
+
+[data-variant='swiss-signal'] .ss-muted,
+[data-variant='swiss-signal'] .ss-sub {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='swiss-signal'] .ss-strong {
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='swiss-signal'] .ss-sub {
+  display: block;
+  margin-block-start: var(--space-3xs);
+}
+
+[data-variant='swiss-signal'] .ss-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs) var(--space-m);
+  margin-block-start: var(--space-2xs);
+}
+
+/* The call to action: its signal underline in the padding below the text, never under a glyph,
+   and on hover and focus the ink as its own ground, the text in the canvas over it. The state
+   changes at once: no frame between the two has text over a colour it can't be read on. */
+[data-variant='swiss-signal'] .ss-cta {
+  text-decoration: none;
+  font-weight: var(--type-title-font-weight);
+  /* The ground reaches past the words; the text stays on its flush-left line, the band under it. */
+  padding-inline: 0.2em;
+  margin-inline: -0.2em;
+  padding-block-end: 0.25em;
+  background: linear-gradient(var(--color-accent), var(--color-accent)) no-repeat 0.2em 100% /
+    calc(100% - 0.4em) var(--layout-rule-heavy-size);
+}
+
+[data-variant='swiss-signal'] .ss-cta:focus-visible {
+  background-color: var(--color-text-primary);
+  color: var(--color-canvas);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-variant='swiss-signal'] .ss-cta:hover {
+    background-color: var(--color-text-primary);
+    color: var(--color-canvas);
+  }
+}
+
+/* ── Masthead: three cells on the heavy rule ───────────────────────── */
+
+[data-variant='swiss-signal'] .ss-masthead {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 2;
+  background-color: var(--color-canvas);
+  border-block-end: var(--layout-rule-heavy-size) solid var(--color-text-primary);
+}
+
+[data-variant='swiss-signal'] .ss-masthead__row {
+  align-items: center;
+  min-block-size: var(--layout-masthead);
+}
+
+[data-variant='swiss-signal'] .ss-masthead__name {
+  grid-column: 1 / span 4;
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='swiss-signal'] .ss-masthead__name a {
+  text-decoration: none;
+}
+
+/* The part being read, beside the name at every width (empty above the first part). */
+[data-variant='swiss-signal'] .ss-masthead__where {
+  display: inline;
+  font-size: inherit;
+  line-height: inherit;
+  margin-inline-start: var(--space-2xs);
+  font-style: italic;
+  white-space: nowrap;
+  color: var(--color-accent-text);
+}
+
+[data-variant='swiss-signal'] .ss-masthead__cell {
+  grid-column: 5 / span 5;
+  color: var(--color-text-secondary);
+}
+
+/* ── The Index sheet ────────────────────────────────────────────────── */
+
+[data-variant='swiss-signal'] .ss-index {
+  grid-column: 10 / -1;
+  justify-self: end;
+}
+
+[data-variant='swiss-signal'] :is(.ss-index__button, .ss-index__link) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  min-block-size: 2.75rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* The Index: its plain link to the contents list by default, and the popover's
+   button only once the Position controller has run and marked the page, so
+   the button never opens a sheet that nothing closes (before hydration, or
+   with a failed bundle). Not (scripting): no-script audits run with script
+   on. The host's Menu does the same (experience-base.css). */
+[data-variant='swiss-signal'] .ss-index__link {
+  text-decoration: none;
+}
+
+[data-variant='swiss-signal'] .ss:not([data-ss-live]) .ss-index__button,
+[data-variant='swiss-signal'] .ss[data-ss-live] .ss-index__link {
+  display: none;
+}
+
+/* Unmarked, the sheet is a contents list in the page's flow after main. */
+[data-variant='swiss-signal'] .ss:not([data-ss-live]) .ss-index__sheet {
+  display: block;
+  position: static;
+  inset: auto;
+  inline-size: auto;
+  block-size: auto;
+  overflow: visible;
+  margin: 0;
+  padding: var(--space-xl) 0;
+  border: 0;
+  background: none;
+  color: inherit;
+}
+
+/* Open, the button's mark is a minus, as the Archive's is. */
+[data-variant='swiss-signal'] .ss-index__button[data-open] .ss-index__mark {
+  background: linear-gradient(currentColor, currentColor) center / 0.625rem
+    var(--layout-rule-section-size) no-repeat;
+}
+
+[data-variant='swiss-signal'] .ss-index__mark {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  border: var(--layout-rule-section-size) solid currentColor;
+  border-radius: 0;
+  background:
+    linear-gradient(currentColor, currentColor) center / 0.625rem var(--layout-rule-section-size)
+      no-repeat,
+    linear-gradient(currentColor, currentColor) center / var(--layout-rule-section-size) 0.625rem
+      no-repeat;
+}
+
+[data-variant='swiss-signal'] .ss-index__sheet:popover-open {
+  position: fixed;
+  inset: calc(var(--layout-masthead) + var(--layout-rule-heavy-size)) 0 auto;
+  inline-size: auto;
+  max-block-size: calc(100dvh - var(--layout-masthead) - var(--layout-rule-heavy-size));
+  overflow: auto;
+  overscroll-behavior: contain;
+  margin: 0;
+  padding: var(--space-l) 0 var(--space-xl);
+  border: 0;
+  border-block-end: var(--layout-rule-heavy-size) solid var(--color-text-primary);
+  background-color: var(--color-surface-overlay);
+  color: var(--color-text-primary);
+}
+
+[data-variant='swiss-signal'] .ss-index__parts {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  border-block-start: var(--layout-rule-section-size) solid var(--color-border-strong);
+}
+
+[data-variant='swiss-signal'] .ss-index__row {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: baseline;
+  padding-block: var(--space-s);
+  border-block-end: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+[data-variant='swiss-signal'] .ss-index__part {
+  grid-column: 1 / span 3;
+  font-size: var(--type-step-2);
+}
+
+[data-variant='swiss-signal'] .ss-index__part a {
+  text-decoration: none;
+}
+
+[data-variant='swiss-signal'] .ss-index__part a[aria-current] {
+  text-decoration: underline;
+  text-decoration-color: var(--color-accent);
+  text-decoration-thickness: var(--layout-rule-heavy-size);
+}
+
+[data-variant='swiss-signal'] .ss-index__list {
+  grid-column: 4 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs) var(--space-m);
+}
+
+[data-variant='swiss-signal'] .ss-index__foot {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-s);
+  padding-block-start: var(--space-s);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='swiss-signal'] .ss-print {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  cursor: pointer;
+}
+
+[data-variant='swiss-signal'] .ss-print[hidden] {
+  display: none;
+}
+
+/* ── The poster ─────────────────────────────────────────────────────── */
+
+[data-variant='swiss-signal'] .ss-poster__grid {
+  padding-block: var(--space-m) var(--space-m);
+}
+
+[data-variant='swiss-signal'] .ss-poster__line {
+  grid-column: 1 / -1;
+  padding-block-end: var(--space-m);
+  border-block-end: var(--layout-rule-section-size) solid var(--color-text-primary);
+  font-weight: var(--type-display-font-weight);
+  line-height: var(--type-display-line-height);
+}
+
+/* The hero's own name over the poster line, in the title voice, where it isn't the masthead's. */
+[data-variant='swiss-signal'] .ss-poster__name {
+  display: block;
+  margin-block-end: var(--space-xs);
+  font-size: var(--type-step-1);
+  font-weight: var(--type-title-font-weight);
+  line-height: var(--type-title-line-height, 1.2);
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+[data-variant='swiss-signal'] .ss-poster__text {
+  font-size: var(--type-step-7);
+  text-transform: uppercase;
+  word-spacing: 0.06em;
+}
+
+[data-variant='swiss-signal'] .ss-poster__line[data-length='medium'] .ss-poster__text {
+  font-size: var(--type-step-6);
+}
+
+[data-variant='swiss-signal'] .ss-poster__line[data-length='long'] .ss-poster__text {
+  font-size: var(--type-step-5);
+  text-transform: none;
+  word-spacing: normal;
+}
+
+/* The poster line and Next measure their own width for the long-word fit
+   (cqi). The container is Next's frame, never .ss-next itself: containment
+   would turn its subgrid columns into none and stack the block in column 1. */
+[data-variant='swiss-signal'] :is(.ss-poster__grid, .ss-next__frame) {
+  container-type: inline-size;
+}
+
+/* Above a phone a long word is held to its line too, under any pack's width:
+   its length class's step, or the size that word fits, whichever is smaller. */
+[data-variant='swiss-signal'] .ss-poster__line[data-word='long'] .ss-poster__text {
+  font-size: min(var(--type-step-7), calc(100cqi / (var(--layout-ss-word, 8) * 0.85)));
+}
+
+[data-variant='swiss-signal']
+  .ss-poster__line[data-length='medium'][data-word='long']
+  .ss-poster__text {
+  font-size: min(var(--type-step-6), calc(100cqi / (var(--layout-ss-word, 8) * 0.85)));
+}
+
+/* The case's h1 runs inline in its poster line, so the page's own aside sets
+   on its baseline as the home poster's does inside its h1. The line, not the
+   inline h1, is the block that wraps, so the balance is the line's. */
+[data-variant='swiss-signal'] .ss-case__title {
+  display: inline;
+  font: inherit;
+}
+
+[data-variant='swiss-signal'] .ss-case__poster .ss-poster__line {
+  text-wrap: balance;
+}
+
+[data-variant='swiss-signal'] .ss-poster__aside {
+  /* With the word space, at least 0.3em of the line's size before the aside. */
+  margin-inline-start: 0.2em;
+  font-size: var(--type-step-3);
+  line-height: 1;
+}
+
+[data-variant='swiss-signal'] .ss-poster__left {
+  grid-column: 1 / span 5;
+  display: grid;
+  align-content: start;
+  gap: var(--space-s);
+  padding-block-start: var(--space-m);
+}
+
+[data-variant='swiss-signal'] .ss-poster__lede {
+  font-style: italic;
+  max-inline-size: 30ch;
+}
+
+[data-variant='swiss-signal'] .ss-poster__position {
+  color: var(--color-text-secondary);
+  max-inline-size: 44ch;
+}
+
+[data-variant='swiss-signal'] .ss-poster__ctas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-xs) var(--space-l);
+  padding-block-start: var(--space-2xs);
+}
+
+/* The selected index: the poster's proof. */
+[data-variant='swiss-signal'] .ss-sel {
+  grid-column: 7 / -1;
+  padding-block-start: var(--space-m);
+}
+
+[data-variant='swiss-signal'] .ss-sel__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-s);
+  padding-block-end: var(--space-xs);
+}
+
+[data-variant='swiss-signal'] .ss-sel__list {
+  border-block-end: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+[data-variant='swiss-signal'] .ss-sel__row {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--space-l) 6rem minmax(0, 1fr) auto;
+  grid-template-areas: 'no thumb title proof' 'no thumb meta proof';
+  column-gap: var(--space-s);
+  align-items: center;
+  padding-block: var(--space-xs);
+  border-block-start: var(--layout-rule-row-size) solid var(--color-border-default);
+  transition: background-color var(--motion-feedback) var(--motion-curve);
+}
+
+[data-variant='swiss-signal'] .ss-sel__row:not([data-thumb]) {
+  grid-template-areas: 'no title title proof' 'no meta meta proof';
+}
+
+[data-variant='swiss-signal'] .ss-sel__no {
+  grid-area: no;
+  align-self: start;
+  color: var(--color-text-muted);
+}
+
+[data-variant='swiss-signal'] .ss-sel__thumb {
+  grid-area: thumb;
+}
+
+[data-variant='swiss-signal'] .ss-sel__thumb img {
+  display: block;
+  inline-size: 6rem;
+  block-size: auto;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: 0;
+  /* A dark image keeps its edge on a dark page: a hairline inside its box. */
+  outline: var(--layout-rule-row-size) solid var(--color-border-default);
+  outline-offset: calc(-1 * var(--layout-rule-row-size));
+}
+
+[data-variant='swiss-signal'] .ss-sel__title {
+  grid-area: title;
+  align-self: end;
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='swiss-signal'] .ss-sel__title a {
+  text-decoration: none;
+}
+
+[data-variant='swiss-signal'] .ss-sel__title a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+[data-variant='swiss-signal'] .ss-sel__meta {
+  grid-area: meta;
+  align-self: start;
+  color: var(--color-text-muted);
+}
+
+[data-variant='swiss-signal'] .ss-sel__proof {
+  grid-area: proof;
+  text-align: end;
+  color: var(--color-text-secondary);
+}
+
+/* Row state: the ground and the number, never a lift. */
+[data-variant='swiss-signal'] :is(.ss-sel__row, .ss-row):focus-within {
+  background-color: var(--color-surface-subtle);
+}
+
+[data-variant='swiss-signal']
+  :is(.ss-sel__row, .ss-row):focus-within
+  :is(.ss-sel__no, .ss-row__no) {
+  color: var(--color-accent-text);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-variant='swiss-signal'] :is(.ss-sel__row, .ss-row):hover {
+    background-color: var(--color-surface-subtle);
+  }
+
+  [data-variant='swiss-signal'] :is(.ss-sel__row, .ss-row):hover :is(.ss-sel__no, .ss-row__no) {
+    color: var(--color-accent-text);
+  }
+
+  [data-variant='swiss-signal']
+    :is(.ss-sel__row, .ss-row):hover
+    :is(.ss-sel__title, .ss-row__title)
+    a {
+    text-decoration-line: underline;
+    text-decoration-thickness: var(--layout-rule-section-size);
+    text-decoration-color: var(--color-accent);
+  }
+}
+
+/* ── The figures band ───────────────────────────────────────────────── */
+
+[data-variant='swiss-signal'] .ss-figures > .ss-grid {
+  padding-block-end: var(--space-m);
+}
+
+[data-variant='swiss-signal'] .ss-figures > .ss-grid::before {
+  content: '';
+  grid-column: 1 / -1;
+  border-block-start: var(--layout-rule-heavy-size) solid var(--color-text-primary);
+}
+
+[data-variant='swiss-signal'] .ss-figures__head {
+  grid-column: 1 / span 6;
+  padding-block: var(--space-xs) var(--space-s);
+}
+
+/* The band's subtitle, on the head's line, where a section head sets its own. */
+[data-variant='swiss-signal'] .ss-figures__sub {
+  grid-column: 7 / -1;
+  padding-block: var(--space-xs) var(--space-s);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='swiss-signal'] .ss-figs {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  column-gap: var(--layout-grid-gutter);
+}
+
+[data-variant='swiss-signal'] .ss-fig {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2xs);
+}
+
+[data-variant='swiss-signal'] .ss-fig + .ss-fig {
+  padding-inline-start: var(--space-s);
+  border-inline-start: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+/* A figure sizes down to its cell, by its unbroken run's length, and never breaks a number. */
+[data-variant='swiss-signal'] .ss-fig {
+  container-type: inline-size;
+}
+
+[data-variant='swiss-signal'] .ss-fig__value {
+  font-size: min(var(--type-step-4), calc(100cqi / (var(--layout-ss-fig, 4) * 0.62)));
+  line-height: 1;
+}
+
+[data-variant='swiss-signal'] .ss-fig__run {
+  white-space: nowrap;
+}
+
+[data-variant='swiss-signal'] .ss-fig__caption {
+  color: var(--color-text-secondary);
+  max-inline-size: 34ch;
+}
+
+[data-variant='swiss-signal'] .ss-fig__note {
+  display: block;
+  color: var(--color-text-muted);
+}
+
+/* ── Parts and section heads ────────────────────────────────────────── */
+
+[data-variant='swiss-signal'] .ss-part {
+  padding-block-start: var(--rhythm-section);
+}
+
+[data-variant='swiss-signal'] .ss-part__open {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--space-s);
+  padding-block-start: var(--space-xs);
+  border-block-start: var(--layout-rule-heavy-size) solid var(--color-text-primary);
+}
+
+[data-variant='swiss-signal'] .ss-part__title {
+  font-size: var(--type-step-7);
+  text-transform: uppercase;
+}
+
+/* The contents wrap over several lines in a long part: their leading leaves room for each link's
+   focus ring between the lines, so the ring never lands on the next line's links. */
+[data-variant='swiss-signal'] .ss-part__toc {
+  font-size: var(--type-step-2);
+  font-style: italic;
+  line-height: 1.6;
+}
+
+[data-variant='swiss-signal'] .ss-part__toc a {
+  color: var(--color-accent-text);
+  text-decoration-color: var(--color-accent);
+}
+
+[data-variant='swiss-signal'] .ss-section {
+  padding-block-start: var(--rhythm-group);
+}
+
+[data-variant='swiss-signal'] .ss-part__open + .ss-section,
+[data-variant='swiss-signal'] .ss-part__open + .ss-spread {
+  padding-block-start: var(--space-xl);
+}
+
+[data-variant='swiss-signal'] .ss-head {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  padding-block: var(--space-xs) var(--space-l);
+  border-block-start: var(--layout-rule-section-size) solid var(--color-border-strong);
+}
+
+[data-variant='swiss-signal'] .ss-head--bare {
+  padding-block-end: 0;
+  border: 0;
+}
+
+/* Under the part opener that stands for its head, the subtitle opens the section at the left. */
+[data-variant='swiss-signal'] .ss-head--bare .ss-head__sub {
+  grid-column: 1 / span 8;
+  padding-block-end: var(--space-l);
+}
+
+[data-variant='swiss-signal'] .ss-head__title {
+  grid-column: 1 / span 6;
+  font-size: var(--type-step-2);
+}
+
+[data-variant='swiss-signal'] .ss-head__sub {
+  grid-column: 7 / -1;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='swiss-signal'] .ss-body {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  row-gap: var(--space-l);
+}
+
+[data-variant='swiss-signal'] .ss-body > * {
+  grid-column: 1 / -1;
+}
+
+/* ── The works index ────────────────────────────────────────────────── */
+
+[data-variant='swiss-signal'] .ss-rows {
+  display: grid;
+  grid-template-columns: subgrid;
+  border-block-end: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+[data-variant='swiss-signal'] .ss-row {
+  position: relative;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  row-gap: var(--space-s);
+  padding-block: var(--space-m);
+  transition: background-color var(--motion-feedback) var(--motion-curve);
+}
+
+[data-variant='swiss-signal'] .ss-row + .ss-row {
+  border-block-start: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+[data-variant='swiss-signal'] .ss-row__no {
+  grid-column: 1;
+  color: var(--color-text-muted);
+}
+
+[data-variant='swiss-signal'] .ss-row__id {
+  grid-column: 2 / span 4;
+  display: grid;
+  align-content: start;
+  gap: var(--space-2xs);
+}
+
+[data-variant='swiss-signal'] .ss-row__title {
+  font-size: var(--type-step-2);
+}
+
+[data-variant='swiss-signal'] .ss-row__title a {
+  text-decoration: none;
+}
+
+[data-variant='swiss-signal'] .ss-row__title a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+[data-variant='swiss-signal'] :is(.ss-row__meta, .ss-row__made, .ss-skills, .ss-tags) {
+  color: var(--color-text-muted);
+}
+
+[data-variant='swiss-signal'] .ss-row__text {
+  grid-column: 6 / span 4;
+  display: grid;
+  align-content: start;
+  gap: var(--space-s);
+}
+
+[data-variant='swiss-signal'] .ss-row--text .ss-row__text {
+  grid-column: 6 / -1;
+}
+
+[data-variant='swiss-signal'] .ss-row__media {
+  grid-column: 10 / -1;
+}
+
+[data-variant='swiss-signal'] :is(.ss-row__media, .ss-album__cover, .ss-sheet) img {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: 0;
+}
+
+/* The signature work is a spread: the title at headline scale beside a large plate. */
+[data-variant='swiss-signal'] .ss-row--signature .ss-row__id {
+  grid-column: 2 / span 5;
+}
+
+[data-variant='swiss-signal'] .ss-row--signature .ss-row__title {
+  font-size: var(--type-step-5);
+  line-height: 1;
+}
+
+[data-variant='swiss-signal'] .ss-row--signature .ss-row__text {
+  grid-column: 2 / span 5;
+  grid-row: 2;
+}
+
+[data-variant='swiss-signal'] .ss-row--signature .ss-row__media {
+  grid-column: 7 / -1;
+  grid-row: 1 / span 2;
+}
+
+[data-variant='swiss-signal'] .ss-row__cta {
+  position: relative;
+  z-index: 1;
+}
+
+[data-variant='swiss-signal'] .ss-ruled > li {
+  padding-block: var(--space-2xs);
+  border-block-start: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+[data-variant='swiss-signal'] .ss-ruled > li:last-child {
+  border-block-end: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+/* The owner's paragraph and the secondary line after it, in a table cell or a fact sheet: one
+   block gap on this shared rule, the gap a ruled list's first row gives (D's design check, P3). */
+[data-variant='swiss-signal'] :is(td, .ss-sheet-fact__main) .pf-rich-text + p {
+  margin-block-start: var(--space-xs);
+}
+
+[data-variant='swiss-signal'] .ss-ruled--quiet > li:first-child {
+  border-block-start: 0;
+}
+
+[data-variant='swiss-signal'] .ss-ruled--quiet > li:last-child {
+  border-block-end: 0;
+}
+
+[data-variant='swiss-signal'] .ss-archive {
+  border-block-end: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+[data-variant='swiss-signal'] .ss-archive > summary {
+  display: flex;
+  gap: var(--space-xs);
+  align-items: center;
+  padding-block: var(--space-s);
+  cursor: pointer;
+  list-style: none;
+}
+
+[data-variant='swiss-signal'] .ss-archive > summary::-webkit-details-marker {
+  display: none;
+}
+
+[data-variant='swiss-signal'] .ss-archive > summary::before,
+[data-variant='swiss-signal'] .ss-more > summary::before {
+  content: '';
+  flex: none;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  border: var(--layout-rule-section-size) solid currentColor;
+  border-radius: 0;
+  background:
+    linear-gradient(currentColor, currentColor) center / 0.625rem var(--layout-rule-section-size)
+      no-repeat,
+    linear-gradient(currentColor, currentColor) center / var(--layout-rule-section-size) 0.625rem
+      no-repeat;
+}
+
+[data-variant='swiss-signal'] :is(.ss-archive[open] > summary, .ss-more[open] > summary)::before {
+  background: linear-gradient(currentColor, currentColor) center / 0.625rem
+    var(--layout-rule-section-size) no-repeat;
+}
+
+/* ── Ruled tables: native tables on the column lines (SS-M2) ───────── */
+
+[data-variant='swiss-signal'] .ss-table {
+  inline-size: calc(100% + var(--layout-grid-gutter));
+  margin-inline-end: calc(-1 * var(--layout-grid-gutter));
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+[data-variant='swiss-signal'] .ss-c1 {
+  inline-size: 8.3333%;
+}
+[data-variant='swiss-signal'] .ss-c2 {
+  inline-size: 16.6667%;
+}
+[data-variant='swiss-signal'] .ss-c3 {
+  inline-size: 25%;
+}
+[data-variant='swiss-signal'] .ss-c4 {
+  inline-size: 33.3333%;
+}
+[data-variant='swiss-signal'] .ss-c5 {
+  inline-size: 41.6667%;
+}
+[data-variant='swiss-signal'] .ss-c6 {
+  inline-size: 50%;
+}
+[data-variant='swiss-signal'] .ss-c7 {
+  inline-size: 58.3333%;
+}
+[data-variant='swiss-signal'] .ss-c9 {
+  inline-size: 75%;
+}
+
+[data-variant='swiss-signal'] .ss-table :is(th, td) {
+  padding-block: var(--space-xs);
+  padding-inline: 0 var(--layout-grid-gutter);
+  text-align: start;
+  vertical-align: baseline;
+}
+
+[data-variant='swiss-signal'] .ss-table thead th {
+  padding-block: 0 var(--space-2xs);
+  color: var(--color-text-secondary);
+  background: linear-gradient(var(--color-border-strong), var(--color-border-strong)) no-repeat 0
+    100% / 100% var(--layout-rule-section-size);
+}
+
+[data-variant='swiss-signal'] .ss-table tbody td {
+  background: linear-gradient(var(--color-border-default), var(--color-border-default)) no-repeat 0
+    100% / 100% var(--layout-rule-row-size);
+}
+
+[data-variant='swiss-signal'] .ss-table :is(th, td):last-child {
+  background-size: calc(100% - var(--layout-grid-gutter)) var(--layout-rule-row-size);
+}
+
+[data-variant='swiss-signal'] .ss-table thead th:last-child {
+  background-size: calc(100% - var(--layout-grid-gutter)) var(--layout-rule-section-size);
+}
+
+[data-variant='swiss-signal'] .ss-table :is(th, td):last-child:dir(rtl) {
+  background-position: 100% 100%;
+}
+
+[data-variant='swiss-signal'] .ss-table .ss-end {
+  text-align: end;
+  white-space: nowrap;
+}
+
+[data-variant='swiss-signal'] .ss-table tfoot :is(th, td) {
+  font-weight: var(--type-title-font-weight);
+}
+
+/* A row group's name: a sub-head on the column line, over the rows it names. */
+[data-variant='swiss-signal'] .ss-table .ss-group-row th {
+  padding-block: var(--space-m) var(--space-2xs);
+  background: linear-gradient(var(--color-border-strong), var(--color-border-strong)) no-repeat 0
+    100% / calc(100% - var(--layout-grid-gutter)) var(--layout-rule-row-size);
+}
+
+[data-variant='swiss-signal'] .ss-branch td:nth-child(2) {
+  padding-inline-start: var(--space-m);
+}
+
+[data-variant='swiss-signal'] .ss-narrow {
+  display: none;
+}
+
+/* ── Contact sheet, album, GitHub ───────────────────────────────────── */
+
+[data-variant='swiss-signal'] .ss-sheet {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+}
+
+[data-variant='swiss-signal'] .ss-sheet figure {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+[data-variant='swiss-signal'] .ss-sheet figcaption {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--space-s);
+  padding-inline-end: var(--space-s);
+}
+
+[data-variant='swiss-signal'] .ss-sheet__no {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+[data-variant='swiss-signal'] .ss-sheet__where {
+  grid-column: 1;
+  color: var(--color-text-secondary);
+}
+
+/* A frame whose image isn't there yet keeps the plate's shape, a ground with the kit's words, joined to the next by a canvas hairline. */
+[data-variant='swiss-signal'] :is(.ss-sheet, .ss-case__figure, .ss-custom__fig) .pf-media-box {
+  display: grid;
+  place-items: center;
+  inline-size: 100%;
+  aspect-ratio: 16 / 10;
+  background-color: var(--color-surface-subtle);
+  border-inline-end: var(--layout-rule-row-size) solid var(--color-canvas);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='swiss-signal'] .ss-custom__fig {
+  display: grid;
+  gap: var(--space-2xs);
+  max-inline-size: 24rem;
+  padding-block: var(--space-xs) var(--space-2xs);
+}
+
+[data-variant='swiss-signal'] .ss-custom__fig img {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+}
+
+[data-variant='swiss-signal'] .ss-custom__fig figcaption {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='swiss-signal'] .ss-album {
+  display: grid;
+  grid-template-columns: subgrid;
+  row-gap: var(--space-m);
+}
+
+[data-variant='swiss-signal'] .ss-album__cover {
+  grid-column: 1 / span 4;
+}
+
+[data-variant='swiss-signal'] .ss-album__cover img {
+  aspect-ratio: 1;
+}
+
+[data-variant='swiss-signal'] .ss-album__body {
+  grid-column: 5 / -1;
+  display: grid;
+  align-content: start;
+  gap: var(--space-s);
+}
+
+[data-variant='swiss-signal'] .ss-album__title {
+  font-size: var(--type-step-2);
+}
+
+[data-variant='swiss-signal'] .ss-gh {
+  display: grid;
+  gap: var(--space-l);
+}
+
+[data-variant='swiss-signal'] .ss-gh__figs {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  column-gap: var(--layout-grid-gutter);
+}
+
+[data-variant='swiss-signal'] .ss-gh__figs li {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+[data-variant='swiss-signal'] .ss-gh__value {
+  font-size: var(--type-step-4);
+  line-height: 1;
+}
+
+[data-variant='swiss-signal'] .ss-cal {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-template-rows: repeat(7, auto);
+  gap: var(--space-3xs);
+  inline-size: min(100%, 60rem);
+}
+
+[data-variant='swiss-signal'] .ss-cal i {
+  display: block;
+  aspect-ratio: 1;
+  background-color: var(--color-surface-default);
+}
+
+[data-variant='swiss-signal'] .ss-cal i[data-level='1'] {
+  background-color: color-mix(
+    in oklab,
+    var(--color-text-primary) 22%,
+    var(--color-surface-default)
+  );
+}
+[data-variant='swiss-signal'] .ss-cal i[data-level='2'] {
+  background-color: color-mix(
+    in oklab,
+    var(--color-text-primary) 44%,
+    var(--color-surface-default)
+  );
+}
+[data-variant='swiss-signal'] .ss-cal i[data-level='3'] {
+  background-color: color-mix(
+    in oklab,
+    var(--color-text-primary) 66%,
+    var(--color-surface-default)
+  );
+}
+[data-variant='swiss-signal'] .ss-cal i[data-level='4'] {
+  background-color: var(--color-text-primary);
+}
+
+/* ── Citations, quotes, press ───────────────────────────────────────── */
+
+[data-variant='swiss-signal'] .ss-cites {
+  grid-column: 1 / span 9;
+}
+
+[data-variant='swiss-signal'] .ss-cite__venue {
+  white-space: nowrap;
+}
+
+[data-variant='swiss-signal'] .ss-cite {
+  display: grid;
+  grid-template-columns: var(--space-2xl) minmax(0, 1fr);
+  padding-block: var(--space-s);
+  border-block-start: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+[data-variant='swiss-signal'] .ss-cite:last-child {
+  border-block-end: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+[data-variant='swiss-signal'] .ss-cite__no {
+  color: var(--color-text-muted);
+}
+
+[data-variant='swiss-signal'] .ss-cite__text {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+[data-variant='swiss-signal'] .ss-more > summary {
+  display: inline-flex;
+  gap: var(--space-2xs);
+  align-items: center;
+  cursor: pointer;
+  list-style: none;
+}
+
+[data-variant='swiss-signal'] .ss-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* The excerpt in the quote voice at its cell's size, as the parenthetical sets it (SS-M1). */
+[data-variant='swiss-signal'] .ss-excerpt {
+  font-size: inherit;
+  line-height: inherit;
+  font-style: italic;
+}
+
+[data-variant='swiss-signal'] .ss-more > p {
+  margin-block-start: var(--space-2xs);
+}
+
+[data-variant='swiss-signal'] td .ss-more {
+  margin-block-start: var(--space-2xs);
+}
+
+[data-variant='swiss-signal'] .ss-quotes {
+  display: grid;
+  grid-template-columns: subgrid;
+}
+
+[data-variant='swiss-signal'] .ss-quotes > li {
+  grid-column: span 4;
+}
+
+[data-variant='swiss-signal'] .ss-quotes > li + li {
+  padding-inline-start: var(--space-m);
+  border-inline-start: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+[data-variant='swiss-signal'] .ss-quote {
+  display: grid;
+  block-size: 100%;
+  align-content: space-between;
+  gap: var(--space-l);
+  font-style: italic;
+}
+
+/* Hanging punctuation: the opening mark sits outside the text edge. */
+[data-variant='swiss-signal'] :is(.ss-quote, .ss-press, .ss-quote-poster) blockquote p {
+  text-indent: -0.42em;
+}
+
+[data-variant='swiss-signal'] :is(.ss-quote, .ss-press) figcaption {
+  display: grid;
+  gap: var(--space-3xs);
+  font-style: normal;
+}
+
+[data-variant='swiss-signal'] .ss-press-list > li {
+  padding-block: var(--space-m);
+  border-block-start: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+[data-variant='swiss-signal'] .ss-press-list > li:last-child {
+  border-block-end: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+[data-variant='swiss-signal'] .ss-press {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+}
+
+[data-variant='swiss-signal'] .ss-press blockquote {
+  grid-column: 1 / span 8;
+  font-size: var(--type-step-2);
+  font-style: italic;
+}
+
+[data-variant='swiss-signal'] .ss-press figcaption {
+  grid-column: 10 / -1;
+}
+
+/* ── About: the spread, practice, facts, the quote poster ──────────── */
+
+[data-variant='swiss-signal'] .ss-spread {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  /* Stacked on a phone, Now and focus keep their distance from the lede. */
+  gap: var(--space-xl) var(--layout-grid-gutter);
+  max-inline-size: var(--layout-width-page);
+  margin-inline: auto;
+  padding-block-start: var(--rhythm-group);
+  padding-inline: var(--layout-grid-margin);
+}
+
+[data-variant='swiss-signal'] .ss-spread .ss-grid {
+  padding-inline: 0;
+}
+
+[data-variant='swiss-signal'] .ss-spread .ss-section {
+  padding-block-start: 0;
+}
+
+[data-variant='swiss-signal'] .ss-spread__main {
+  grid-column: 1 / span 8;
+}
+
+[data-variant='swiss-signal'] .ss-spread__side {
+  grid-column: 9 / -1;
+  display: grid;
+  align-content: start;
+  gap: var(--space-xl);
+}
+
+[data-variant='swiss-signal'] .ss-spread .ss-head__title {
+  grid-column: 1 / -1;
+}
+
+/* The side column is four tracks wide: its sections set one column inside it, title over
+   subtitle, so no row of eleven gutters, which grow with the reader's text size, can push it
+   past the page (quality, reflow at 200% text). */
+[data-variant='swiss-signal'] .ss-spread__side .ss-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-variant='swiss-signal'] .ss-spread__side .ss-head__sub {
+  grid-column: 1 / -1;
+}
+
+[data-variant='swiss-signal'] .ss-cols {
+  columns: 2;
+  column-gap: var(--layout-grid-gutter);
+}
+
+[data-variant='swiss-signal'] .ss-cols p + p,
+[data-variant='swiss-signal'] .ss-now p + p {
+  margin-block-start: var(--space-s);
+}
+
+[data-variant='swiss-signal'] .ss-now {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+[data-variant='swiss-signal'] .ss-statement {
+  grid-column: 1 / span 9;
+  font-size: var(--type-step-2);
+  font-style: italic;
+  max-inline-size: 40ch;
+}
+
+[data-variant='swiss-signal'] .ss-statement strong {
+  font-size: inherit;
+  font-style: normal;
+}
+
+[data-variant='swiss-signal'] .ss-groups,
+[data-variant='swiss-signal'] .ss-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-l) var(--layout-grid-gutter);
+  align-items: start;
+}
+
+[data-variant='swiss-signal'] .ss-group {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+[data-variant='swiss-signal'] .ss-group h4 {
+  font-size: var(--type-step-1);
+}
+
+[data-variant='swiss-signal'] .ss-group .ss-ruled li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-s);
+}
+
+[data-variant='swiss-signal'] .ss-facts > li {
+  padding-block-start: var(--space-s);
+  border-block-start: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+[data-variant='swiss-signal'] .ss-quote-poster {
+  grid-column: 1 / span 11;
+  display: grid;
+  gap: var(--space-m);
+}
+
+[data-variant='swiss-signal'] .ss-quote-poster blockquote {
+  font-size: var(--type-step-5);
+}
+
+[data-variant='swiss-signal'] .ss-quote-poster figcaption {
+  font-size: var(--type-step-2);
+}
+
+[data-variant='swiss-signal'] .ss-facts-sheets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-l) var(--layout-grid-gutter);
+}
+
+[data-variant='swiss-signal'] .ss-sheet-fact {
+  display: grid;
+  gap: var(--space-s);
+  align-content: start;
+  padding-block-start: var(--space-s);
+  border-block-start: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+[data-variant='swiss-signal'] .ss-sheet-fact:only-child {
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+}
+
+[data-variant='swiss-signal'] .ss-sheet-fact h4 {
+  font-size: var(--type-step-2);
+}
+
+[data-variant='swiss-signal'] .ss-dl > div {
+  display: grid;
+  grid-template-columns: minmax(6rem, max-content) minmax(0, 1fr);
+  column-gap: var(--space-m);
+  padding-block: var(--space-2xs);
+  border-block-start: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+[data-variant='swiss-signal'] .ss-dl dt {
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='swiss-signal'] .ss-dl dd {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='swiss-signal'] .ss-group__aside {
+  font-style: italic;
+}
+
+/* ── The contact finale ─────────────────────────────────────────────── */
+
+[data-variant='swiss-signal'] .ss-contact {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  row-gap: var(--space-l);
+}
+
+[data-variant='swiss-signal'] .ss-email {
+  grid-column: 1 / -1;
+  font-size: var(--type-step-7);
+  line-height: 1.05;
+}
+
+[data-variant='swiss-signal'] .ss-email[data-fit='l'] {
+  font-size: var(--type-step-6);
+}
+
+[data-variant='swiss-signal'] .ss-email[data-fit='xl'] {
+  font-size: var(--type-step-5);
+}
+
+/* The address at display size is large text: on its band, the canvas-ink pair and the band with
+   the on-accent text both clear 3:1. Its band rises at once, so no frame sets half-faded text on
+   half the band. */
+[data-variant='swiss-signal'] .ss-email a {
+  text-decoration: none;
+  padding-block-end: 0.04em;
+  background: linear-gradient(var(--color-accent), var(--color-accent)) no-repeat 0 100% / 100%
+    var(--layout-rule-heavy-size);
+}
+
+[data-variant='swiss-signal'] .ss-email a:focus-visible {
+  background-size: 100% 100%;
+  color: var(--color-on-accent);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-variant='swiss-signal'] .ss-email a:hover {
+    background-size: 100% 100%;
+    color: var(--color-on-accent);
+  }
+}
+
+[data-variant='swiss-signal'] .ss-contact__msg {
+  grid-column: 1 / span 5;
+  font-style: italic;
+  max-inline-size: 34ch;
+}
+
+[data-variant='swiss-signal'] .ss-contact__links {
+  grid-column: 7 / -1;
+  border-block-end: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+/* SS-M4: the label column sizes to its words, so no label breaks inside a word. */
+[data-variant='swiss-signal'] .ss-contact__links > div {
+  display: grid;
+  grid-template-columns: minmax(max-content, 8rem) minmax(0, 1fr);
+  column-gap: var(--space-m);
+  align-items: baseline;
+  padding-block: var(--space-2xs);
+  border-block-start: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+[data-variant='swiss-signal'] .ss-contact__links dt {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='swiss-signal'] .ss-contact__links dd {
+  overflow-wrap: anywhere;
+}
+
+[data-variant='swiss-signal'] .ss-cta-row {
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+}
+
+[data-variant='swiss-signal'] .ss-cta-row > p:first-child {
+  grid-column: 5 / span 4;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='swiss-signal'] .ss-cta-row__actions {
+  grid-column: 9 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-xs) var(--space-l);
+}
+
+/* The call to action is one ruled row: its title, its words and its actions on one baseline. */
+[data-variant='swiss-signal'] .ss-section[data-kind='cta'] :is(.ss-head, .ss-body) {
+  grid-row: 1;
+}
+
+[data-variant='swiss-signal'] .ss-section[data-kind='cta'] .ss-head__title {
+  grid-column: 1 / span 4;
+}
+
+[data-variant='swiss-signal'] .ss-section[data-kind='cta'] .ss-body {
+  padding-block-start: var(--space-s);
+}
+
+/* ── The full record's folds (gate item 8) ─────────────────────────── */
+
+[data-variant='swiss-signal'] .ss-folds {
+  max-inline-size: var(--layout-width-page);
+  margin-inline: auto;
+  padding-block-start: var(--rhythm-group);
+  padding-inline: var(--layout-grid-margin);
+}
+
+/* A target inside a fold lands below the masthead too. */
+[data-variant='swiss-signal'] .ss-fold [id] {
+  scroll-margin-block-start: calc(var(--layout-masthead) + var(--space-s));
+}
+
+[data-variant='swiss-signal'] .ss-fold {
+  scroll-margin-block-start: calc(var(--layout-masthead) + var(--space-s));
+  border-block-start: var(--layout-rule-section-size) solid var(--color-border-strong);
+}
+
+[data-variant='swiss-signal'] .ss-fold:last-child {
+  border-block-end: var(--layout-rule-section-size) solid var(--color-border-strong);
+}
+
+/* A closed fold is a ruled table row on the page's column lines: the title
+   (its mark before it), the first thing it holds, and its count at the end. */
+[data-variant='swiss-signal'] .ss-fold__summary {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  row-gap: var(--space-3xs);
+  align-items: baseline;
+  padding-block: var(--space-xs);
+  cursor: pointer;
+  list-style: none;
+}
+
+[data-variant='swiss-signal'] .ss-fold__summary::-webkit-details-marker {
+  display: none;
+}
+
+/* The mark, centred on the title's first line however many lines it takes. */
+[data-variant='swiss-signal'] .ss-fold__title::before {
+  content: '';
+  position: absolute;
+  inset-block-start: calc(0.5lh - 0.5rem);
+  inset-inline-start: 0;
+  inline-size: 1rem;
+  block-size: 1rem;
+  border: var(--layout-rule-section-size) solid currentColor;
+  background:
+    linear-gradient(currentColor, currentColor) center / 0.5rem var(--layout-rule-section-size)
+      no-repeat,
+    linear-gradient(currentColor, currentColor) center / var(--layout-rule-section-size) 0.5rem
+      no-repeat;
+}
+
+[data-variant='swiss-signal'] .ss-fold[open] > .ss-fold__summary .ss-fold__title::before {
+  background: linear-gradient(currentColor, currentColor) center / 0.5rem
+    var(--layout-rule-section-size) no-repeat;
+}
+
+/* A fold opens for its fragment by the engine's own ancestor-revealing step
+   (Chromium natively; Position does it wherever the engine doesn't), and a
+   closed fold always shows closed. No rule shows a closed fold's content for
+   a :target: one did, and it held a fold the reader had just closed open,
+   with JS and without, since CSS can't tell a fold the engine opened and the
+   reader shut from one it never opened. The limit, with no script, in an
+   engine without fragment auto-expand: the Index link doesn't land inside a
+   closed fold; the Index still lists the section, and its summary opens it. */
+
+/* At a table row's size, a step under the open section heads. */
+[data-variant='swiss-signal'] .ss-fold__title {
+  margin: 0;
+  text-wrap: balance;
+  position: relative;
+  grid-column: 1 / span 4;
+  padding-inline-start: calc(1rem + var(--space-s));
+  font-size: var(--type-step-1);
+  font-weight: var(--type-title-font-weight);
+}
+
+[data-variant='swiss-signal'] .ss-fold__first {
+  grid-column: 5 / span 5;
+  color: var(--color-text-secondary);
+}
+
+[data-variant='swiss-signal'] .ss-fold__count {
+  grid-column: 10 / -1;
+  justify-self: end;
+  text-align: end;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-variant='swiss-signal'] .ss-fold__summary:hover .ss-fold__title {
+    text-decoration: underline;
+    text-decoration-thickness: var(--layout-rule-row-size);
+    text-underline-offset: 0.18em;
+  }
+}
+
+/* Open, the section is its own frame without a second rule or title: the summary heads it. */
+[data-variant='swiss-signal'] .ss-fold > .ss-section {
+  padding-block-start: 0;
+}
+
+[data-variant='swiss-signal'] .ss-fold > .ss-section > .ss-grid {
+  padding-inline: 0;
+}
+
+[data-variant='swiss-signal'] .ss-fold > .ss-section .ss-head {
+  padding-block-start: 0;
+  border-block-start: 0;
+}
+
+/* The summary's heading is the section's: the frame's own leaves the page and
+   the outline (aria-labelledby still names the section by it). */
+[data-variant='swiss-signal']
+  .ss-fold
+  > .ss-section
+  > .ss-grid
+  > .ss-head
+  > :is(h2, h3, h4, h5, h6) {
+  display: none;
+}
+
+/* Open, the first item is the content's own first line: the summary drops it. */
+[data-variant='swiss-signal'] .ss-fold[open] > .ss-fold__summary .ss-fold__first {
+  display: none;
+}
+
+[data-variant='swiss-signal'] .ss-fold > .ss-section {
+  padding-block-end: var(--space-l);
+}
+
+/* ── The case study (component 19) ─────────────────────────────────── */
+
+[data-variant='swiss-signal'] .ss-crumb {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2xs) var(--space-s);
+  padding-block: var(--space-s);
+  border-block-end: var(--layout-rule-row-size) solid var(--color-border-default);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='swiss-signal'] .ss-case__links {
+  margin-block-start: 0;
+}
+
+[data-variant='swiss-signal'] .ss-case__facts {
+  grid-column: 7 / -1;
+  padding-block: var(--space-m) var(--space-xl);
+}
+
+[data-variant='swiss-signal'] .ss-case__facts .ss-dl {
+  border-block-end: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+[data-variant='swiss-signal'] .ss-case__facts .ss-dl > div {
+  grid-template-columns: minmax(7rem, 1fr) minmax(0, 4fr);
+}
+
+[data-variant='swiss-signal'] .ss-case__figure {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  padding-block-end: var(--rhythm-group);
+}
+
+[data-variant='swiss-signal'] .ss-case__figure > :not(figcaption) {
+  grid-column: 1 / span 8;
+}
+
+[data-variant='swiss-signal'] .ss-case__figure img {
+  inline-size: 100%;
+  block-size: auto;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+}
+
+[data-variant='swiss-signal'] .ss-case__figure figcaption {
+  grid-column: 9 / -1;
+  align-self: end;
+  display: grid;
+  gap: var(--space-2xs);
+  padding-block-start: var(--space-xs);
+  border-block-start: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+[data-variant='swiss-signal'] .ss-overview {
+  padding-block-end: var(--rhythm-group);
+}
+
+[data-variant='swiss-signal'] .ss-overview__text {
+  grid-column: 5 / span 7;
+  display: grid;
+  gap: var(--space-s);
+  max-inline-size: var(--type-measure-body);
+}
+
+[data-variant='swiss-signal'] .ss-overview__text > p:first-child {
+  font-size: var(--type-step-1);
+}
+
+[data-variant='swiss-signal'] .ss-nowrap {
+  white-space: nowrap;
+}
+
+[data-variant='swiss-signal'] :is(.ss-case__spec, .ss-case__plates, .ss-case__record) {
+  padding-block-end: var(--rhythm-group);
+}
+
+[data-variant='swiss-signal'] .ss-spec {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  border-block-end: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+[data-variant='swiss-signal'] .ss-spec__row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  /* A specification row, as tight as the fact sheet's: the rules carry the order. */
+  padding-block: var(--space-s);
+  border-block-start: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+[data-variant='swiss-signal'] .ss-spec__no {
+  grid-column: 1;
+  color: var(--color-text-muted);
+}
+
+/* Beside its text the name is a row label, a step under the section heads;
+   stacked on a phone it heads its text and takes one more. */
+[data-variant='swiss-signal'] .ss-spec__name {
+  grid-column: 2 / span 3;
+  font-size: var(--type-step-1);
+}
+
+[data-variant='swiss-signal'] .ss-spec__text {
+  grid-column: 5 / span 7;
+  display: grid;
+  gap: var(--space-s);
+  max-inline-size: var(--type-measure-body);
+}
+
+[data-variant='swiss-signal'] .ss-spec__wide {
+  grid-column: 5 / -1;
+}
+
+/* The Decisions table's last row closes on the specification row's own rule, not one of its own. */
+[data-variant='swiss-signal'] .ss-spec__wide .ss-table tbody tr:last-child > td {
+  background: none;
+}
+
+[data-variant='swiss-signal'] .ss-spec__cited {
+  gap: var(--space-2xs);
+}
+
+[data-variant='swiss-signal'] .ss-spec__cited > li {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-xs);
+  align-items: baseline;
+}
+
+[data-variant='swiss-signal'] :is(.ss-spec__row, .ss-case__cited > li) {
+  scroll-margin-block-start: calc(var(--layout-masthead) + var(--space-s));
+}
+
+[data-variant='swiss-signal'] .ss-case__cited {
+  grid-column: 1 / -1;
+}
+
+[data-variant='swiss-signal'] .ss-case__cited > li {
+  padding-block: var(--space-m);
+  border-block-start: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+[data-variant='swiss-signal'] .ss-case__cited > li:last-child {
+  border-block-end: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+[data-variant='swiss-signal'] .ss-cited {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--layout-grid-gutter);
+  align-items: baseline;
+}
+
+[data-variant='swiss-signal'] .ss-cited__main {
+  grid-column: 1 / span 8;
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+[data-variant='swiss-signal'] .ss-cited__by {
+  grid-column: 10 / -1;
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+[data-variant='swiss-signal'] .ss-next {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  row-gap: var(--space-l);
+  margin-block-start: var(--rhythm-group);
+  padding-block-start: var(--space-s);
+  border-block-start: var(--layout-rule-heavy-size) solid var(--color-text-primary);
+}
+
+[data-variant='swiss-signal'] .ss-next__lead {
+  grid-column: 1 / span 3;
+  padding-block-start: var(--space-xs);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='swiss-signal'] .ss-next__link {
+  grid-column: 4 / -1;
+  justify-self: start;
+  font-size: var(--type-step-6);
+  font-weight: var(--type-display-font-weight);
+  line-height: var(--type-display-line-height);
+  text-transform: uppercase;
+  text-decoration: none;
+  text-wrap: balance;
+}
+
+[data-variant='swiss-signal'] .ss-next__link:is(:hover, :focus-visible) {
+  text-decoration: underline;
+  text-decoration-color: var(--color-accent);
+  text-decoration-thickness: var(--layout-rule-heavy-size);
+}
+
+[data-variant='swiss-signal'] .ss-next__others {
+  grid-column: 4 / -1;
+  border-block-end: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+[data-variant='swiss-signal'] .ss-next__others > li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2xs) var(--space-s);
+  padding-block: var(--space-2xs);
+  border-block-start: var(--layout-rule-row-size) solid var(--color-border-default);
+}
+
+/* ── The colophon ───────────────────────────────────────────────────── */
+
+[data-variant='swiss-signal'] .ss-colophon {
+  margin-block-start: var(--rhythm-group);
+  border-block-start: var(--layout-rule-heavy-size) solid var(--color-text-primary);
+}
+
+[data-variant='swiss-signal'] .ss-colophon > .ss-grid {
+  padding-block: var(--space-m) var(--space-xl);
+  row-gap: var(--space-m);
+}
+
+[data-variant='swiss-signal'] .ss-colophon__cell {
+  grid-column: span 3;
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: var(--space-3xs);
+  color: var(--color-text-secondary);
+}
+
+[data-variant='swiss-signal'] .ss-colophon__cell b {
+  color: var(--color-text-primary);
+}
+
+/* ── Narrower: re-span, never shrink ────────────────────────────────── */
+
+/* A short desktop window (1024x768, 1280x800) keeps the whole figures band in view (S1, F4):
+   the short poster line steps down once and the poster's spacing tightens. */
+@media (min-width: 48.01rem) and (max-height: 52rem) {
+  [data-variant='swiss-signal'] .ss-poster__line[data-length='short'] .ss-poster__text {
+    font-size: var(--type-step-6);
+  }
+
+  [data-variant='swiss-signal'] .ss-poster__grid {
+    padding-block: var(--space-s);
+  }
+
+  [data-variant='swiss-signal'] .ss-poster__line {
+    padding-block-end: var(--space-s);
+  }
+
+  [data-variant='swiss-signal'] :is(.ss-poster__left, .ss-sel) {
+    padding-block-start: var(--space-s);
+  }
+}
+
+@media (max-width: 70rem) {
+  [data-variant='swiss-signal'] .ss-poster__left {
+    grid-column: 1 / span 6;
+  }
+
+  [data-variant='swiss-signal'] .ss-sel__row {
+    grid-template-columns: var(--space-l) minmax(0, 1fr) auto;
+    grid-template-areas: 'no title proof' 'no meta proof';
+  }
+
+  [data-variant='swiss-signal'] .ss-sel__row:not([data-thumb]) {
+    grid-template-areas: 'no title proof' 'no meta proof';
+  }
+
+  [data-variant='swiss-signal'] .ss-sel__thumb {
+    display: none;
+  }
+
+  [data-variant='swiss-signal'] .ss-quotes > li {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='swiss-signal'] .ss-quotes > li + li {
+    padding-inline-start: 0;
+    padding-block-start: var(--space-m);
+    margin-block-start: var(--space-m);
+    border-inline-start: 0;
+    border-block-start: var(--layout-rule-row-size) solid var(--color-border-default);
+  }
+
+  [data-variant='swiss-signal'] :is(.ss-groups, .ss-facts) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* A wide grotesque at the ceiling runs past a narrow desktop: the email steps down a size. */
+  [data-variant='swiss-signal'] .ss-email[data-fit='m'] {
+    font-size: var(--type-step-6);
+  }
+
+  [data-variant='swiss-signal'] .ss-email[data-fit='l'] {
+    font-size: var(--type-step-5);
+  }
+
+  [data-variant='swiss-signal'] .ss-email[data-fit='xl'] {
+    font-size: var(--type-step-4);
+  }
+}
+
+@media (max-width: 48rem) {
+  [data-variant='swiss-signal'] .ss-masthead__name {
+    grid-column: 1 / span 9;
+  }
+
+  [data-variant='swiss-signal'] .ss-masthead__cell {
+    display: none;
+  }
+
+  [data-variant='swiss-signal'] .ss-index__part,
+  [data-variant='swiss-signal'] .ss-index__list {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='swiss-signal']
+    :is(
+      .ss-poster__left,
+      .ss-sel,
+      .ss-head__title,
+      .ss-head__sub,
+      .ss-figures__head,
+      .ss-figures__sub,
+      .ss-row__id,
+      .ss-row__text,
+      .ss-row__media,
+      .ss-album__cover,
+      .ss-album__body,
+      .ss-cites,
+      .ss-press blockquote,
+      .ss-press figcaption,
+      .ss-spread__main,
+      .ss-spread__side,
+      .ss-statement,
+      .ss-contact__msg,
+      .ss-contact__links,
+      .ss-quote-poster,
+      .ss-colophon__cell,
+      .ss-case__facts,
+      .ss-case__figure > *,
+      .ss-overview__text,
+      .ss-spec__name,
+      .ss-spec__text,
+      .ss-spec__wide,
+      .ss-cited__main,
+      .ss-cited__by,
+      .ss-next__lead,
+      .ss-next__link,
+      .ss-next__others
+    ) {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='swiss-signal'] .ss-spec__no {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='swiss-signal'] .ss-cited__by {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: var(--space-xs);
+  }
+
+  [data-variant='swiss-signal'] .ss-case__figure figcaption {
+    align-self: start;
+    margin-block-start: var(--space-s);
+  }
+
+  [data-variant='swiss-signal'] .ss-row--signature :is(.ss-row__id, .ss-row__text, .ss-row__media) {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
+  [data-variant='swiss-signal'] .ss-row__no {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='swiss-signal'] .ss-row--signature .ss-row__title {
+    font-size: var(--type-step-3);
+  }
+
+  [data-variant='swiss-signal'] .ss-sel {
+    padding-block-start: var(--space-l);
+  }
+
+  [data-variant='swiss-signal'] .ss-sel__row,
+  [data-variant='swiss-signal'] .ss-sel__row:not([data-thumb]) {
+    grid-template-columns: var(--space-l) minmax(0, 1fr);
+    grid-template-areas: 'no title' 'no meta' 'no proof';
+  }
+
+  [data-variant='swiss-signal'] .ss-sel__proof {
+    text-align: start;
+  }
+
+  [data-variant='swiss-signal'] .ss-figs {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: var(--space-s);
+  }
+
+  [data-variant='swiss-signal'] .ss-fig + .ss-fig {
+    padding-inline-start: 0;
+    border-inline-start: 0;
+  }
+
+  [data-variant='swiss-signal'] .ss-fig:nth-child(even) {
+    padding-inline-start: var(--space-s);
+    border-inline-start: var(--layout-rule-row-size) solid var(--color-border-default);
+  }
+
+  [data-variant='swiss-signal'] .ss-cols {
+    columns: 1;
+  }
+
+  [data-variant='swiss-signal'] .ss-sheet,
+  [data-variant='swiss-signal'] .ss-facts-sheets,
+  [data-variant='swiss-signal'] :is(.ss-groups, .ss-facts) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-variant='swiss-signal'] .ss-sheet {
+    row-gap: var(--space-s);
+  }
+
+  [data-variant='swiss-signal'] .ss-cal {
+    display: none;
+  }
+
+  [data-variant='swiss-signal'] .ss-gh__figs {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: var(--space-s);
+  }
+
+  [data-variant='swiss-signal'] .ss-email {
+    font-size: var(--type-step-3);
+  }
+
+  [data-variant='swiss-signal'] .ss-email[data-fit='m'] {
+    font-size: var(--type-step-2);
+  }
+
+  [data-variant='swiss-signal'] .ss-email:is([data-fit='l'], [data-fit='xl']) {
+    font-size: var(--type-step-1);
+  }
+
+  /* A long word sets its own size: the step, or the size at which that word
+     fits the page's width, whichever is smaller (0.85em a character holds an
+     uppercase grotesque with room to spare). It never breaks inside. */
+  [data-variant='swiss-signal'] .ss-poster__line[data-word='long'] .ss-poster__text,
+  [data-variant='swiss-signal'] .ss-next__link {
+    font-size: min(var(--type-step-6), calc(100cqi / (var(--layout-ss-word, 8) * 0.85)));
+  }
+
+  [data-variant='swiss-signal'] .ss-spec__name {
+    font-size: var(--type-step-2);
+  }
+
+  /* On a phone the row is the title and its count, the first item under the title. */
+  [data-variant='swiss-signal'] .ss-fold__summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  [data-variant='swiss-signal'] .ss-fold__title {
+    grid-column: 1;
+  }
+
+  [data-variant='swiss-signal'] .ss-fold__count {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  [data-variant='swiss-signal'] .ss-fold__first {
+    grid-column: 1 / -1;
+    padding-inline-start: calc(1rem + var(--space-s));
+  }
+
+  /* N11 on a phone: a lone fact sheet is one column, so its values keep their words. */
+  [data-variant='swiss-signal'] .ss-sheet-fact:only-child {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* The call to action's title takes the line, so its last word keeps its mark. */
+  [data-variant='swiss-signal'] .ss-section[data-kind='cta'] .ss-head__title {
+    grid-column: 1 / -1;
+  }
+
+  /* Contact rows stack, label over address, so an address never breaks inside a word. */
+  [data-variant='swiss-signal'] .ss-contact__links > div {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--space-3xs);
+  }
+
+  [data-variant='swiss-signal'] .ss-cta-row {
+    row-gap: var(--space-s);
+  }
+
+  [data-variant='swiss-signal'] .ss-cta-row > *,
+  [data-variant='swiss-signal'] .ss-cta-row > p:first-child {
+    grid-column: 1 / -1;
+  }
+
+  [data-variant='swiss-signal'] .ss-section[data-kind='cta'] :is(.ss-head, .ss-body) {
+    grid-row: auto;
+  }
+
+  [data-variant='swiss-signal'] .ss-cta-row__actions {
+    justify-content: flex-start;
+  }
+
+  [data-variant='swiss-signal'] .ss-cite {
+    grid-template-columns: var(--space-xl) minmax(0, 1fr);
+  }
+
+  /* Tables stay tables: the wide columns leave, their words move onto the sub-line. */
+  [data-variant='swiss-signal'] .ss-table {
+    inline-size: 100%;
+    margin-inline-end: 0;
+    table-layout: auto;
+  }
+
+  [data-variant='swiss-signal'] .ss-table :is(th, td):last-child {
+    padding-inline-end: 0;
+    background-size: 100% var(--layout-rule-row-size);
+  }
+
+  [data-variant='swiss-signal'] .ss-table thead th:last-child {
+    background-size: 100% var(--layout-rule-section-size);
+  }
+
+  [data-variant='swiss-signal'] .ss-table col {
+    inline-size: auto;
+  }
+
+  [data-variant='swiss-signal'] .ss-table .ss-wide {
+    display: none;
+  }
+
+  [data-variant='swiss-signal'] .ss-narrow {
+    display: block;
+    margin-block-start: var(--space-3xs);
+  }
+
+  /* Decisions on a phone: one row each, Why and Instead of as labelled lines
+     under the decision; the lone "Decision" head would only repeat the part's
+     name, so it stays for assistive technology alone, and the table keeps
+     its distance from the name above it. */
+  [data-variant='swiss-signal'] .ss-spec__wide .ss-table {
+    margin-block-start: var(--space-xs);
+  }
+
+  [data-variant='swiss-signal'] .ss-spec__wide .ss-table thead th {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  [data-variant='swiss-signal'] .ss-decision {
+    display: grid;
+    gap: var(--space-2xs);
+    margin-block-start: var(--space-2xs);
+    font-weight: normal;
+  }
+
+  [data-variant='swiss-signal'] .ss-decision dt {
+    color: var(--color-text-secondary);
+  }
+}
+
+/* ── Motion: state only ─────────────────────────────────────────────── */
+
+[data-variant='swiss-signal'][data-motion='static']
+  :is(.ss-cta, .ss-email a, .ss-sel__row, .ss-row) {
+  transition: none;
+}
+
+/* ── Print: the page doubles as a résumé ────────────────────────────── */
+
+@media print {
+  [data-variant='swiss-signal'] .ss-masthead {
+    position: static;
+  }
+
+  [data-variant='swiss-signal'] :is(.ss-index, .ss-index__sheet, .ss-colophon__control, .ss-print) {
+    display: none;
+  }
+
+  [data-variant='swiss-signal'] .ss:not([data-ss-live]) .ss-index__sheet {
+    display: none;
+  }
+
+  /* Every disclosure prints open, with or without script: the folds, the
+     archive and the abstracts, where ::details-content exists; Position's
+     beforeprint opens them in an engine without it. */
+  @supports selector(::details-content) {
+    [data-variant='swiss-signal'] :is(.ss-fold, .ss-archive, .ss-more)::details-content {
+      content-visibility: visible;
+      display: block;
+    }
+  }
+
+  [data-variant='swiss-signal']
+    :is(.ss-fold__title, .ss-archive > summary, .ss-more > summary)::before {
+    display: none;
+  }
+
+  [data-variant='swiss-signal'] .ss-fold__title {
+    padding-inline-start: 0;
+  }
+
+  /* Every fold prints open, so its first item is its content's first line. */
+  [data-variant='swiss-signal'] .ss-fold__first {
+    display: none;
+  }
+
+  /* The last fold's own bottom rule would double the next part's on paper. */
+  [data-variant='swiss-signal'] .ss-fold:last-child {
+    border-block-end: 0;
+  }
+
+  /* Paper has no top to go back to, nor a page to print: the whole cell goes. */
+  [data-variant='swiss-signal'] :is(.ss-top, .ss-colophon__page) {
+    display: none;
+  }
+
+  /* Print drops backgrounds, so the table rules are borders on paper. The
+     columns keep their twelfths as a start and grow for an address. */
+  [data-variant='swiss-signal'] .ss-table {
+    inline-size: 100%;
+    margin-inline-end: 0;
+    table-layout: auto;
+  }
+
+  [data-variant='swiss-signal'] .ss-table :is(thead th, tbody td, tfoot th, tfoot td) {
+    background: none;
+    border-block-end: var(--layout-rule-row-size) solid var(--color-border-default);
+  }
+
+  [data-variant='swiss-signal'] .ss-table :is(th, td):last-child {
+    padding-inline-end: 0;
+  }
+
+  [data-variant='swiss-signal'] .ss-spec__wide .ss-table tbody tr:last-child > td {
+    border-block-end: 0;
+  }
+
+  [data-variant='swiss-signal'] .ss-table thead tr th {
+    border-block-end: var(--layout-rule-section-size) solid var(--color-border-strong);
+  }
+
+  /* An end column's link prints its address on a line of its own, inside the page. */
+  [data-variant='swiss-signal'] .ss-table .ss-end {
+    white-space: normal;
+  }
+
+  [data-variant='swiss-signal'] .ss-table a[href^='http']:not([data-address])::after,
+  [data-variant='swiss-signal'] .ss-table .ss-addr {
+    display: block;
+  }
+
+  [data-variant='swiss-signal'] .ss-part {
+    padding-block-start: var(--space-xl);
+  }
+
+  [data-variant='swiss-signal'] :is(.ss-row, .ss-sel__row, tr, figure, .ss-cite, .ss-sheet-fact) {
+    break-inside: avoid;
+  }
+
+  /* A link prints its address after it: Out's own, breakable at its
+     separators; a link without one, its href, never broken inside a word. */
+  [data-variant='swiss-signal']
+    :is(.ss-body, .ss-contact, .ss-case__links, .ss-cited, .ss-press)
+    a[href^='http']:not([data-address])
+    .ss-addr {
+    display: inline;
+    color: var(--color-text-secondary);
+    overflow-wrap: normal;
+  }
+
+  [data-variant='swiss-signal']
+    :is(.ss-body, .ss-contact, .ss-case__links, .ss-cited, .ss-press)
+    a[href^='http']:not([data-address]):not(:has(.ss-addr))::after {
+    content: ' (' attr(href) ')';
+    color: var(--color-text-secondary);
+    overflow-wrap: normal;
+  }
+
+  [data-variant='swiss-signal'] :is(.ss-sel__title, .ss-row__title) a::after {
+    position: static;
+  }
+}
