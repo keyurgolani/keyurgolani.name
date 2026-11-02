@@ -708,9 +708,19 @@ test(
     await fresh.mouse.wheel(0, 10);
     await expect.poll(() => fresh.evaluate(() => Math.round(window.scrollY))).toBe(margin + 50);
     await fresh.evaluate((y) => window.scrollTo(0, y), margin);
+    // Content above the reader changes height before load, as it does wherever the local
+    // fallback faces are missing (Linux: the swap to the shipped fonts reflows the page above):
+    // scroll anchoring keeps the reader's place, so their offset moves while the target doesn't.
+    await fresh.evaluate(() => {
+      const shift = document.createElement('div');
+      shift.style.blockSize = '13px';
+      document.querySelector('main')!.prepend(shift);
+    });
     await fresh.waitForLoadState('load');
     await fresh.waitForTimeout(400);
-    expect(await fresh.evaluate(() => Math.round(window.scrollY))).toBe(margin);
+    // The reader's place is where they left the target, at its margin, not an offset from before
+    // the page above settled; landing would have set the fold's summary below the masthead instead.
+    expect(await atMargin(fresh, 'patents')).toBe(true);
     expect(await landing(fresh, 'patents')).toMatchObject({ open: true, below: false });
     await fresh.close();
   },
