@@ -178,6 +178,44 @@ test(
   },
 );
 
+test(
+  'phone landscape by keyboard: no focused control sits under the masthead, forward or back (WCAG 2.4.11, the quality occlusion check at 844x390)',
+  { annotation, tag },
+  async ({ page }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    await loadLive(page);
+    const covered: string[] = [];
+    for (const key of ['Tab', 'Shift+Tab'] as const) {
+      let last = '';
+      for (let press = 0; press < 400; press++) {
+        await page.keyboard.press(key);
+        const stop = await page.evaluate(() => {
+          const active = document.activeElement;
+          if (!active || active === document.body || !active.closest('.ss')) return null;
+          const box = active.getBoundingClientRect();
+          const name = (active.textContent ?? '').trim().slice(0, 40);
+          if (active.closest('.ss-masthead'))
+            return { key: `masthead:${active.tagName}:${name}`, cover: null };
+          const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+          const cover = hit && !active.contains(hit) ? hit.closest('.ss-masthead') : null;
+          return {
+            key: `${active.tagName}:${name}:${Math.round(box.top + scrollY)}`,
+            cover: cover ? 'masthead' : null,
+          };
+        });
+        if (!stop) {
+          if (last) break;
+          continue;
+        }
+        if (stop.key === last) break;
+        last = stop.key;
+        if (stop.cover) covered.push(`${key} ${stop.key} under the ${stop.cover}`);
+      }
+    }
+    expect(covered).toEqual([]);
+  },
+);
+
 test.describe('under reduced motion', () => {
   test.use({ contextOptions: { reducedMotion: 'reduce' } });
 
