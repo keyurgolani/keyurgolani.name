@@ -49,7 +49,9 @@ import {
   shownPlace,
   withoutTrailingPeriod,
   MediaBackdrop,
+  MediaFigure,
   pageOutline,
+  placedMedia,
   VisitorControlSlot,
   type BespokeRenderers,
   type SectionComposition,
@@ -706,6 +708,24 @@ test('a ready image takes its srcset, sizes, width, and height from derived data
   // Decoration has an empty alt, and no image takes its alt from a title or a caption.
   assert.match(works, /src="[^"]*\/ornament\/[^"]*" [^>]*alt=""/);
   assert.doesNotMatch(page(READY), /alt="(?:Work title|Placement caption|Custom caption)"/);
+});
+
+test("a figure decodes async unless it's asked to decode sync, before first paint, as a rounded tile's clipped cover is", () => {
+  const ctx = renderContext(READY, { id: 'decoding', lang: undefined, title: undefined }, 1);
+  const work = READY.portfolio.works.find(({ id }) => id === 'tide-atlas')!;
+  const image = placedMedia(work.cover, ctx);
+  assert.ok(image, 'the fixture work has a ready cover');
+  const img = (props: { decoding?: 'async' | 'sync' }) =>
+    /<img\b[^>]*>/.exec(
+      renderToStaticMarkup(<MediaFigure placed={image} ctx={ctx} {...props} />),
+    )![0];
+  // The default is every other figure's, byte for byte.
+  assert.equal(img({}), img({ decoding: 'async' }));
+  assert.match(img({}), /\sdecoding="async"/);
+  assert.match(img({ decoding: 'sync' }), /\sdecoding="sync"/);
+  assert.doesNotMatch(img({ decoding: 'sync' }), /decoding="async"/);
+  // Decoding is its own: a sync figure still loads lazily unless it's eager too.
+  assert.match(img({ decoding: 'sync' }), /\sloading="lazy"/);
 });
 
 test('an unavailable image keeps its box, caption, credit, and rights with Image unavailable, and decoration renders nothing', () => {

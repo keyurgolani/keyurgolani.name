@@ -102,12 +102,14 @@ function Picture({
   image,
   className,
   eager,
+  decoding,
   sizes,
 }: {
   placed: PlacedImage;
   image: DerivedImage;
   className?: string;
   eager: boolean;
+  decoding: 'async' | 'sync';
   sizes: string;
 }) {
   const byType = new Map<string, ImageRendition[]>();
@@ -136,7 +138,7 @@ function Picture({
       height={image.height}
       alt={alt}
       loading={eager ? undefined : 'lazy'}
-      decoding="async"
+      decoding={decoding}
       style={focalStyle(placed.focalPoint)}
     />
   );
@@ -201,8 +203,19 @@ export interface MediaFigureProps {
   readonly placed: PlacedImage;
   readonly ctx: RenderContext;
   readonly className?: string;
-  /** Loads at once: the signature work's cover alone. Every other image loads lazily. */
+  /**
+   * Loads at once: a cover above the fold, or one a rounded tile clips (with `decoding: 'sync'`).
+   * Every other image loads lazily.
+   */
   readonly eager?: boolean;
+  /**
+   * `sync` for a cover a rounded tile clips: decoded before first paint, so the tile rasters
+   * once. Decoded after it, the tile re-rasters, and the rounded edge over the image differs by
+   * 1/255 from one run to the next. Keep it to such clipped covers: a sync decode runs on the
+   * main thread before paint, cheap for a cover or two and a cost if it spreads. Every other
+   * image decodes `async`.
+   */
+  readonly decoding?: 'async' | 'sync';
   /** How wide it shows, for the renditions a browser picks. */
   readonly sizes?: string;
   /** A logo or avatar beside text: no figure, its caption and credit right after it. */
@@ -226,6 +239,7 @@ export function MediaFigure({
   ctx,
   className,
   eager = false,
+  decoding = 'async',
   sizes = '100vw',
   inline = false,
   link,
@@ -239,7 +253,14 @@ export function MediaFigure({
   const ready = image !== undefined;
   if (!ready && placed.decorative) return null;
   const shown = image ? (
-    <Picture placed={placed} image={image} className={className} eager={eager} sizes={sizes} />
+    <Picture
+      placed={placed}
+      image={image}
+      className={className}
+      eager={eager}
+      decoding={decoding}
+      sizes={sizes}
+    />
   ) : (
     <UnavailableBox placed={placed} ctx={ctx} small={inline} />
   );

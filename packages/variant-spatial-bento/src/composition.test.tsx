@@ -1697,3 +1697,65 @@ test('P3 fixture shapes: a long statement is the standfirst, a reach tile names 
   assert.match(html(fixtureInput('rtl')), /<p class="sb-footer__colophon" lang="en" dir="ltr">/);
   assert.match(sparse, /<p class="sb-reach__mail"><a href="#contact">Say hello\.<\/a><\/p>/);
 });
+
+/** `pair`'s view with every image asset ready: one webp rendition each, as derivation leaves it. */
+function readyInput(pair: ParsedPair): VariantRenderInput {
+  const sha = 'a'.repeat(64);
+  const media = {
+    assets: (pair.portfolio.media ?? [])
+      .filter(({ kind }) => kind === 'image')
+      .map(({ id, source }) => ({
+        assetId: id,
+        sha256: sha,
+        mime: 'image/png',
+        bytes: 4096,
+        width: 1200,
+        height: 800,
+        aspectRatio: 1.5,
+        dominantColor: '#806040',
+        renditions: [
+          {
+            name: 'w480-a1',
+            ext: 'webp',
+            mime: 'image/webp',
+            bytes: 1024,
+            width: 480,
+            height: 320,
+            sha256: 'b'.repeat(64),
+          },
+        ],
+        derivedAt: '2026-11-02T09:00:00Z',
+        algorithmVersion: 1,
+        source: { kind: 'local', path: typeof source === 'string' ? source : 'image.png' },
+        availability: { state: 'available' },
+      })),
+  };
+  return buildRenderInput({
+    view: resolvePortfolioView(pair, { media }, { mediaBase: '/media' }),
+    manifest: MANIFEST,
+    route: { route: 'home' },
+    basePath: '',
+    origin: 'https://rowan.test',
+    requestTime: '2026-10-23T12:00:00Z',
+  });
+}
+
+test("the two covers a rounded tile clips, the plate's and the band's, load at once and decode before first paint; every other image is lazy and async", () => {
+  const markup = html(readyInput(pairOf('sample')));
+  const coverIn = (kind: string) => {
+    const at = markup.search(new RegExp(`<article[^>]*class="[^"]*${kind}[^"]*"`));
+    assert.ok(at >= 0, `the sample has a ${kind} tile`);
+    return /<img\b[^>]*>/.exec(markup.slice(at))![0];
+  };
+  const rounded = [coverIn('sb-work--plate'), coverIn('sb-work--band')];
+  for (const img of rounded) {
+    assert.doesNotMatch(img, /loading=/, img);
+    assert.match(img, /\sdecoding="sync"/, img);
+  }
+  const others = [...markup.matchAll(/<img\b[^>]*>/g)]
+    .map(([img]) => img)
+    .filter((img) => !rounded.includes(img));
+  assert.ok(others.length > 0, 'the sample has other images');
+  for (const img of others) assert.match(img, /\sdecoding="async"/, img);
+  assert.ok(others.some((img) => /\sloading="lazy"/.test(img)));
+});

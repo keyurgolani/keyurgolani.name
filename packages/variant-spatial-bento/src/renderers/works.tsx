@@ -85,14 +85,25 @@ function WorkFacts({
   );
 }
 
-/** A work's cover, else its first image. */
-function coverOf(work: Work, ctx: RenderContext, eager = false, className?: string) {
+/**
+ * A work's cover, else its first image. `rounded` is a cover the tile's rounded corner clips, the
+ * plate's and the band's: loaded at once and decoded before first paint, so the tile rasters once
+ * and its corner is the same in every run.
+ */
+function coverOf(
+  work: Work,
+  ctx: RenderContext,
+  eager = false,
+  className?: string,
+  rounded = false,
+) {
   const image = placed(work.cover ?? work.media?.[0], ctx);
   return image ? (
     <MediaFigure
       placed={image}
       ctx={ctx}
-      eager={eager}
+      eager={eager || rounded}
+      decoding={rounded ? 'sync' : 'async'}
       className={className}
       sizes="(min-width: 64rem) 40vw, 100vw"
     />
@@ -113,7 +124,7 @@ function SignaturePlate({
   ctx: RenderContext;
   anchor?: string;
 }) {
-  const cover = coverOf(work, ctx, true);
+  const cover = coverOf(work, ctx, true, undefined, true);
   return (
     <article
       id={anchor}
@@ -150,7 +161,7 @@ function SignaturePlate({
 
 /** The second: a dark tile under a band of its cover. */
 function BandPlate({ work, ctx, anchor }: { work: Work; ctx: RenderContext; anchor?: string }) {
-  const cover = coverOf(work, ctx);
+  const cover = coverOf(work, ctx, false, undefined, true);
   return (
     <article
       id={anchor}
