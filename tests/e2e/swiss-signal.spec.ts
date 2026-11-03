@@ -178,6 +178,45 @@ test(
   },
 );
 
+test(
+  'phone landscape by keyboard: no focused control sits under the masthead, forward or back (WCAG 2.4.11, the quality occlusion check at 844x390)',
+  { annotation, tag },
+  async ({ page }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    await loadLive(page);
+    const covered: string[] = [];
+    for (const key of ['Tab', 'Shift+Tab'] as const) {
+      // Every stop inside the page, once: a stop outside it (the browser's chrome, a control the
+      // host draws) is stepped past, and the walk ends when it comes back round to one it's seen.
+      const seen = new Set<string>();
+      for (let press = 0; press < 400; press++) {
+        await page.keyboard.press(key);
+        const stop = await page.evaluate(() => {
+          const active = document.activeElement;
+          if (!active || active === document.body || !active.closest('.ss')) return null;
+          const box = active.getBoundingClientRect();
+          const name = (active.textContent ?? '').trim().slice(0, 40);
+          if (active.closest('.ss-masthead'))
+            return { key: `masthead:${active.tagName}:${name}`, cover: null };
+          const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+          const cover = hit && !active.contains(hit) ? hit.closest('.ss-masthead') : null;
+          return {
+            key: `${active.tagName}:${name}:${Math.round(box.top + scrollY)}`,
+            cover: cover ? 'masthead' : null,
+          };
+        });
+        if (!stop) continue;
+        if (seen.has(stop.key)) break;
+        seen.add(stop.key);
+        if (stop.cover) covered.push(`${key} ${stop.key} under the ${stop.cover}`);
+      }
+      // The walk reached the page's stops, not just its first few: the sample has dozens.
+      expect(seen.size, `${key} stops visited`).toBeGreaterThan(30);
+    }
+    expect(covered).toEqual([]);
+  },
+);
+
 test.describe('under reduced motion', () => {
   test.use({ contextOptions: { reducedMotion: 'reduce' } });
 
