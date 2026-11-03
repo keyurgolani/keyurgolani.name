@@ -1120,7 +1120,9 @@ function LiveStage(props: StageProps) {
           });
     if (emRef.current) textSize?.observe(emRef.current);
     // Focus that moves into another scene, a Tab's say, steps the strip to that scene once the browser
-    // has brought it into view, so the snap never carries the strip off what the Tab reached.
+    // has brought it into view, so the snap never carries the strip off what the Tab reached. The step
+    // is a cut, as the browser's own focus scroll is: a glide would carry what has focus on under the
+    // reader's eye, out of the place it was shown, and the move settles, status and all, at once.
     const onFocusIn = (event: FocusEvent) => {
       const target = event.target as Element;
       const at = elements.findIndex(
@@ -1133,7 +1135,7 @@ function LiveStage(props: StageProps) {
           aligning = at;
           position = at;
           setCurrent(at);
-          align(at, behavior());
+          align(at, 'instant');
         }
       });
     };
