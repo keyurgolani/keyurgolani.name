@@ -87,11 +87,20 @@ test(
       await page.mouse.wheel(0, 400);
       await page.waitForTimeout(80);
     }
-    // The strip moved with the page, and once the scroll rests it sits on a scene's start.
+    // The strip moved with the page, and once the scroll rests it sits on a scene's start: the
+    // scene the travel had reached, or the next one the way it went, never one behind it.
     await expect.poll(async () => (await read(page)).current).toBeGreaterThan(0);
-    const travelled = await read(page);
-    expect(travelled.along).toBeGreaterThan(0);
-    await expectAt(page, travelled.current);
+    const reached = await read(page);
+    expect(reached.along).toBeGreaterThan(0);
+    await expect
+      .poll(async () => {
+        const state = await read(page);
+        return state.onScreen > 0 && state.onScreen === state.current;
+      })
+      .toBe(true);
+    const rested = await read(page);
+    expect(rested.current).toBeGreaterThanOrEqual(reached.current);
+    await expectAt(page, rested.current);
     // Nothing traps the wheel: scrolling on reaches the credits after the strip.
     for (let notch = 0; notch < 120; notch++) await page.mouse.wheel(0, 600);
     await expect
