@@ -82,6 +82,90 @@ export interface SkippedPack {
   readonly reason: string;
 }
 
+/**
+ * A language the shadow-key check (B, 2026-11-02) found failing on the day
+ * it landed: its worst pair, over every authored scheme, set, and ground.
+ */
+export interface KnownShadowFailure {
+  readonly language: string;
+  readonly scheme: string;
+  readonly set: ColorSetName;
+  readonly ground: string;
+  /** Its worst text-secondary ratio beside its shadow key, as the gate floors it. */
+  readonly ratio: number;
+}
+
+/**
+ * The shadow-key check's known failures (the lead's ruling, 2026-11-02): the
+ * six languages it found under 4.5:1 when it landed, each with its worst
+ * pair. They're findings with a ticket each, not a waiver, and the list only
+ * shrinks. A listed language's shadow-key pairs at or above its ratio don't
+ * fail the run; one under it does, as every pair outside the list does. A
+ * full run fails a listed language that passes now (take it off) or whose
+ * worst has risen (raise its ratio), so an entry never outlives its failure.
+ */
+export const SHADOW_KEY_KNOWN_FAILURES: readonly KnownShadowFailure[] = Object.freeze([
+  {
+    language: 'synthwave',
+    scheme: 'botanical-sage',
+    set: 'light',
+    ground: 'surface-prominent',
+    ratio: 3.49,
+  },
+  // CI run 41510373684's OA captions (4.00:1 on warm-parchment's light surface-prominent, as
+  // here). Fluent 2's source alphas pass, but fall under the distinct line against
+  // primer-inspired at 1440 (0.080 against 0.113), so its fix waits for the 19i fidelity
+  // pass (kgn/b-fluent-source-values).
+  {
+    language: 'fluent-2-inspired',
+    scheme: 'botanical-sage',
+    set: 'light',
+    ground: 'surface-prominent',
+    ratio: 3.9,
+  },
+  {
+    language: 'skeuomorphic',
+    scheme: 'botanical-sage',
+    set: 'light',
+    ground: 'surface-prominent',
+    ratio: 4.02,
+  },
+  {
+    language: 'carbon-inspired',
+    scheme: 'botanical-sage',
+    set: 'light',
+    ground: 'surface-prominent',
+    ratio: 4.21,
+  },
+  {
+    language: 'atelier-luxury',
+    scheme: 'botanical-sage',
+    set: 'light',
+    ground: 'surface-prominent',
+    ratio: 4.3,
+  },
+  {
+    language: 'glassmorphism',
+    scheme: 'botanical-sage',
+    set: 'light',
+    ground: 'surface-prominent',
+    ratio: 4.33,
+  },
+]);
+
+/** A known failure as one run found it: its shadow-key pairs, and the worst over the authored schemes. */
+export interface KnownShadowRun {
+  readonly entry: KnownShadowFailure;
+  /** Its shadow-key failures this run held to the entry, in any scheme. */
+  readonly excused: number;
+  readonly worst: {
+    readonly scheme: string;
+    readonly set: ColorSetName;
+    readonly ground: string;
+    readonly ratio: number;
+  } | null;
+}
+
 /** How checkAppearance() runs. */
 export interface CheckOptions {
   /** The targets to gate at: GATE_TARGETS unless the caller reads them from quality/thresholds.json. */
@@ -106,6 +190,8 @@ export interface CheckOptions {
    * and profile. `pnpm check:appearance` passes each one's reference record.
    */
   readonly generated?: GeneratedSchemes;
+  /** The shadow-key check's known failures: SHADOW_KEY_KNOWN_FAILURES unless the caller says. */
+  readonly knownShadowFailures?: readonly KnownShadowFailure[];
 }
 
 export interface AppearanceCheck {
@@ -118,6 +204,8 @@ export interface AppearanceCheck {
   readonly hierarchy: readonly HierarchyFailure[];
   readonly problems: readonly PackProblem[];
   readonly skipped: readonly SkippedPack[];
+  /** Each listed shadow-key failure whose language this run gated. */
+  readonly known: readonly KnownShadowRun[];
 }
 
 const MODES = [
@@ -240,7 +328,13 @@ const byId = <T extends { readonly manifest: { readonly id: string } }>(entries:
  */
 export function checkAppearance(
   registry: AppearanceRegistry,
-  { targets = GATE_TARGETS, gateFixture, only, generated }: CheckOptions = {},
+  {
+    targets = GATE_TARGETS,
+    gateFixture,
+    only,
+    generated,
+    knownShadowFailures = SHADOW_KEY_KNOWN_FAILURES,
+  }: CheckOptions = {},
 ): AppearanceCheck {
   const skipped: SkippedPack[] = [];
   const problems: PackProblem[] = [];
@@ -280,7 +374,7 @@ export function checkAppearance(
       if (entry.manifest.generator) {
         const sets = generatedSets(generated, entry.manifest.id);
         if (sets) {
-          return [{ id: entry.manifest.id, sets: generatedSchemeSets(sets) }];
+          return [{ id: entry.manifest.id, authored: false, sets: generatedSchemeSets(sets) }];
         }
         skipped.push({
           axis: 'colorScheme',
@@ -292,6 +386,7 @@ export function checkAppearance(
       return [
         {
           id: entry.manifest.id,
+          authored: !entry.fixture,
           sets: schemeSets(
             entry.sets,
             entry.manifest.highContrast,
@@ -336,14 +431,52 @@ export function checkAppearance(
       }
     }
   }
+  // The known shadow-key failures: held to their entries, never waived.
+  const listed = new Map(knownShadowFailures.map((entry) => [entry.language, entry]));
+  const authored = new Set(schemes.filter((scheme) => scheme.authored).map(({ id }) => id));
+  const excused = new Map<string, number>();
+  const failing = failures.filter((failure) => {
+    const entry = listed.get(failure.language);
+    if (!entry || !failure.pair.shadow || failure.pair.ratio < entry.ratio) return true;
+    excused.set(entry.language, (excused.get(entry.language) ?? 0) + 1);
+    return false;
+  });
+  const known: KnownShadowRun[] = [];
+  for (const entry of knownShadowFailures) {
+    if (!languages.some(({ id }) => id === entry.language)) continue;
+    let worst: KnownShadowRun['worst'] = null;
+    for (const { language, scheme, pair } of failures) {
+      if (language !== entry.language || !pair.shadow || !authored.has(scheme)) continue;
+      if (!worst || pair.ratio < worst.ratio)
+        worst = { scheme, set: pair.set, ground: pair.ground, ratio: pair.ratio };
+    }
+    known.push({ entry, excused: excused.get(entry.language) ?? 0, worst });
+    // A known-bad input's run gates a slice: only a whole run can say an entry is stale.
+    if (only) continue;
+    const id = entry.language;
+    if (!worst) {
+      problems.push({
+        axis: 'designLanguage',
+        id,
+        message: `${id} passes the shadow-key check now: take it off SHADOW_KEY_KNOWN_FAILURES, which only shrinks.`,
+      });
+    } else if (worst.ratio > entry.ratio) {
+      problems.push({
+        axis: 'designLanguage',
+        id,
+        message: `${id}'s worst shadow-key pair is ${worst.ratio}:1 now (${worst.scheme} ${worst.set} ${worst.ground}), above the ${entry.ratio}:1 SHADOW_KEY_KNOWN_FAILURES records: raise its entry to ${worst.ratio}, since the list only shrinks.`,
+      });
+    }
+  }
   return {
-    ok: failures.length === 0 && hierarchy.length === 0 && problems.length === 0,
+    ok: failing.length === 0 && hierarchy.length === 0 && problems.length === 0,
     combinations,
     pairs,
-    failures,
+    failures: failing,
     hierarchy,
     problems,
     skipped,
+    known,
   };
 }
 

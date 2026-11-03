@@ -132,6 +132,7 @@ export {
   responsiblePack,
   runKnownBad,
   setsForMode,
+  SHADOW_KEY_KNOWN_FAILURES,
   stylesheetsUnder,
   unmetExpectations,
   type AppearanceCheck,
@@ -141,6 +142,8 @@ export {
   type KnownBadExpectation,
   type KnownBadFixture,
   type KnownBadRun,
+  type KnownShadowFailure,
+  type KnownShadowRun,
   type PackProblem,
   type SkippedPack,
 } from './check';

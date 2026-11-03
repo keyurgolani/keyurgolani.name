@@ -28,6 +28,7 @@ import {
   readKnownBadFixture,
   runKnownBad,
   setsForMode,
+  SHADOW_KEY_KNOWN_FAILURES,
   stylesheetsUnder,
   unmetExpectations,
 } from './check';
@@ -435,4 +436,104 @@ test("a known-bad patch that names none of the roles K-2 added leaves them out, 
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("the shadow-key check's known failures are the six it found when it landed, worst first, each on botanical-sage light surface-prominent", () => {
+  assert.deepEqual(
+    SHADOW_KEY_KNOWN_FAILURES.map(({ language, scheme, set, ground, ratio }) =>
+      [language, ratio, `${scheme} ${set} ${ground}`].join(' '),
+    ),
+    [
+      'synthwave 3.49 botanical-sage light surface-prominent',
+      'fluent-2-inspired 3.9 botanical-sage light surface-prominent',
+      'skeuomorphic 4.02 botanical-sage light surface-prominent',
+      'carbon-inspired 4.21 botanical-sage light surface-prominent',
+      'atelier-luxury 4.3 botanical-sage light surface-prominent',
+      'glassmorphism 4.33 botanical-sage light surface-prominent',
+    ],
+  );
+});
+
+test('a known shadow-key failure is held to its entry both ways, and the list only shrinks', () => {
+  // platform-neutral with fluent-2-inspired 1.1.5's raised shadow fails the shadow-key check.
+  const shadowed = {
+    kind: 'design-language',
+    packageName: '@portfolio/appearance',
+    version: '0.0.0',
+    manifest: {
+      ...PLATFORM_NEUTRAL,
+      id: 'acme-shadow',
+      tokens: {
+        ...PLATFORM_NEUTRAL.tokens,
+        'shadow-raised':
+          '0 0 8px color-mix(in srgb, var(--color-shadow) 16%, transparent), 0 32px 64px color-mix(in srgb, var(--color-shadow) 36%, transparent)',
+      },
+    },
+  } as MetaPack;
+  const registry = createAppearanceRegistry({ VARIANTS, PACKS: [...FALLBACKS, shadowed] });
+  const bare = checkAppearance(registry, { knownShadowFailures: [] });
+  const mine = bare.failures.filter(
+    ({ language, pair }) => language === 'acme-shadow' && pair.shadow,
+  );
+  assert.ok(mine.length > 0);
+  assert.equal(bare.ok, false);
+  assert.deepEqual(bare.known, []);
+  const worst = [...mine].sort((a, b) => a.pair.ratio - b.pair.ratio)[0]!;
+  const entry = {
+    language: 'acme-shadow',
+    scheme: worst.scheme,
+    set: worst.pair.set,
+    ground: worst.pair.ground,
+    ratio: worst.pair.ratio,
+  };
+  // Listed at its worst: it passes the run, and the run says what it held.
+  const listed = checkAppearance(registry, { knownShadowFailures: [entry] });
+  assert.equal(listed.ok, true, JSON.stringify(listed.problems));
+  assert.deepEqual(listed.known, [
+    {
+      entry,
+      excused: mine.length,
+      worst: { scheme: entry.scheme, set: entry.set, ground: entry.ground, ratio: entry.ratio },
+    },
+  ]);
+  // Only its shadow-key pairs: the same language failing anything else still fails.
+  assert.ok(listed.failures.every(({ pair }) => !pair.shadow));
+  // Worse than its entry: the pairs under the entry fail, as any pack's do.
+  const worse = checkAppearance(registry, {
+    knownShadowFailures: [{ ...entry, ratio: entry.ratio + 0.5 }],
+  });
+  assert.equal(worse.ok, false);
+  assert.ok(worse.failures.some(({ language, pair }) => language === 'acme-shadow' && pair.shadow));
+  // Better than its entry: the entry must rise to its worst.
+  const better = checkAppearance(registry, {
+    knownShadowFailures: [{ ...entry, ratio: entry.ratio - 0.5 }],
+  });
+  assert.equal(better.ok, false);
+  assert.match(
+    better.problems.map(({ message }) => message).join('\n'),
+    new RegExp(`acme-shadow's worst shadow-key pair is ${entry.ratio}:1 now .*raise its entry`),
+  );
+  // Passing: the entry comes off.
+  const passing = checkAppearance(createAppearanceRegistry(META), {
+    knownShadowFailures: [{ ...entry, language: 'platform-neutral' }],
+  });
+  assert.equal(passing.ok, false);
+  assert.deepEqual(
+    passing.problems.map(({ id, message }) => [
+      id,
+      /passes the shadow-key check now/.test(message),
+    ]),
+    [['platform-neutral', true]],
+  );
+  // A language this run doesn't gate isn't judged: the command checks every entry is registered.
+  assert.equal(
+    checkAppearance(createAppearanceRegistry(META), { knownShadowFailures: [entry] }).ok,
+    true,
+  );
+  // A slice, as a known-bad input's run gates, holds its pairs to the entry but can't call it stale.
+  const slice = checkAppearance(registry, {
+    knownShadowFailures: [{ ...entry, ratio: entry.ratio - 0.5 }],
+    only: { axis: 'designLanguage', id: 'acme-shadow' },
+  });
+  assert.equal(slice.ok, true, JSON.stringify(slice.problems));
 });

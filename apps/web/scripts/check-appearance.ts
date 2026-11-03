@@ -46,6 +46,7 @@ import {
   readKnownBadFixture,
   runKnownBad,
   sourceAuditReport,
+  SHADOW_KEY_KNOWN_FAILURES,
   stylesheetsUnder,
   unmetExpectations,
   type AppearanceCheck,
@@ -265,6 +266,12 @@ async function main(): Promise<number> {
     );
   }
 
+  // The shadow-key check's known failures (B, 2026-11-02): each a finding with a ticket, not a waiver.
+  for (const { entry, excused, worst } of check.known) {
+    process.stdout.write(
+      `${TAG} Known failure ${entry.language}: the shadow-key check takes text-secondary to ${entry.ratio}:1 beside its key layer (${entry.scheme} ${entry.set} ${entry.ground}), in ${plural(excused, 'pair')}; it stays on SHADOW_KEY_KNOWN_FAILURES, which only shrinks, until it passes${worst && worst.ratio < entry.ratio ? `, and it's under that now, at ${worst.ratio}:1` : ''}.\n`,
+    );
+  }
   for (const { axis, id, reason } of check.skipped)
     process.stdout.write(`${TAG} Skipped ${axis} ${id}: ${reason}.\n`);
   for (const pack of (excluded ?? []).filter(
@@ -274,8 +281,16 @@ async function main(): Promise<number> {
     process.stdout.write(
       `${TAG} Excluded ${pack.kind} ${pack.id} in ${pack.packageName}: ${pack.reason}\n`,
     );
+  // Every entry names a language this build registers: a retired or renamed one comes off.
+  const unregistered = SHADOW_KEY_KNOWN_FAILURES.filter(
+    ({ language }) => !check.known.some(({ entry }) => entry.language === language),
+  ).map(
+    ({ language }) =>
+      `SHADOW_KEY_KNOWN_FAILURES lists ${language}, which this build doesn't gate: take it off, since the list only shrinks.`,
+  );
   const findings = [
     ...describe(check),
+    ...unregistered,
     ...unordered.map(
       (file) => `${file} uses @layer and doesn't start with the layer order statement.`,
     ),
