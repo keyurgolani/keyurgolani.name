@@ -1,6 +1,6 @@
 import { expect, test } from '../harness/fixtures';
 import { DEMO_APP } from '../harness/profile-matrix';
-import { brokenHeadingWords, load, read } from './horizontal-cinema-model';
+import { brokenHeadingWords, load, railClashes, read } from './horizontal-cinema-model';
 
 // Horizontal Cinema on a laptop's window (HOR-1): the bundled sample, whose
 // Practice scene is the tallest, at the viewports a 13 to 15 inch laptop's
@@ -55,3 +55,18 @@ test(
     await expect.poll(() => brokenHeadingWords(page)).toEqual([]);
   },
 );
+
+for (const [width, height] of [
+  [1366, 768],
+  [1280, 800],
+] as const) {
+  test(
+    `at ${width} by ${height} nothing on the sample's rail under the stage overlaps or runs out of its bar`,
+    { annotation },
+    async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await load(page, '/sample?variant=horizontal-cinema');
+      expect(await railClashes(page)).toEqual([]);
+    },
+  );
+}
