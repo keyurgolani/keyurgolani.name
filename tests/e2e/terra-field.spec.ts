@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fixtureSiteSelecting } from '../../packages/variant-contract/src/contract-fixtures';
 import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
 import { expect, test } from '../harness/fixtures';
+import { decodePng, pixel } from '../quality/lib/pixels';
 
 // Terra Field's checks in a browser (variants-10 brief §5.5, step 10): the
 // arc commits (60 px or more at 1440, TF-M3), the seal is whole and never
@@ -420,3 +421,51 @@ test(
     }
   },
 );
+
+for (const [width, height] of [
+  [1440, 900],
+  [1024, 768],
+  [390, 844],
+] as const) {
+  test(
+    `the closing address’s focus ring clears its underline, all round it, at ${width}`,
+    { annotation },
+    async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto('/', { waitUntil: 'networkidle' });
+      const link = page.locator('.tf-close__mail .tf-display-link');
+      await link.scrollIntoViewIfNeeded();
+      // The words' glyphs hide; the line keeps its place in a color no ground has, and so does the
+      // ring, so a screenshot tells each from the other and from the field.
+      await page.addStyleTag({
+        content: `[data-variant='terra-field'] .tf-close__mail .tf-display-link, [data-variant='terra-field'] .tf-close__mail .tf-display-link * { -webkit-text-fill-color: transparent !important; text-decoration-color: rgb(255, 0, 255) !important; outline-color: rgb(0, 255, 255) !important; }`,
+      });
+      await page.waitForTimeout(200);
+      const box = (await link.boundingBox())!;
+      const clip = { x: box.x - 8, y: box.y - 8, width: box.width + 16, height: box.height + 16 };
+      const rows = (png: Buffer, match: (rgb: readonly number[]) => boolean) => {
+        const shot = decodePng(png);
+        const found = new Set<number>();
+        // Inside the ring's sides, so only its head and foot count.
+        for (let y = 0; y < shot.height; y++)
+          for (let x = 16; x < shot.width - 16; x++)
+            if (match(pixel(shot, y * shot.width + x))) found.add(y);
+        return [...found];
+      };
+      const line = rows(await page.screenshot({ clip }), ([r, g, b]) => r > 150 && b > 150 && g < 120);
+      await page.keyboard.press('Shift');
+      await link.focus();
+      expect(await link.evaluate((a) => a.matches(':focus-visible'))).toBe(true);
+      await page.waitForTimeout(200);
+      const ring = rows(await page.screenshot({ clip }), ([r, g, b]) => g > 150 && b > 150 && r < 150);
+      expect(line.length, 'the underline is drawn').toBeGreaterThan(0);
+      expect(ring.length, 'the ring is drawn, head and foot').toBeGreaterThan(1);
+      const gap = Math.min(...ring.flatMap((y) => line.map((each) => Math.abs(y - each))));
+      // At least one row of the field between them, so no part of the ring lies on the line.
+      expect(gap, 'rows between the ring and the underline').toBeGreaterThanOrEqual(2);
+      const foot = Math.max(...ring);
+      expect(foot, 'the ring’s foot is below the line').toBeGreaterThan(Math.max(...line));
+    },
+  );
+}
