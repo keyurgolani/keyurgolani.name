@@ -176,6 +176,17 @@
   container-type: inline-size;
 }
 
+/* The controller's 1rem sentinel: its size says the text size changed. Out of the flow, unseen. */
+[data-variant='horizontal-cinema'] .hc-shell__em {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  inline-size: 1rem;
+  block-size: 1rem;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 [data-variant='horizontal-cinema'] .hc-stage {
   position: relative;
   background-color: var(--color-surface-default);

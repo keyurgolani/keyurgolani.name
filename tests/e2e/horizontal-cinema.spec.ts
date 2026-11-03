@@ -198,6 +198,84 @@ test(
   },
 );
 
+test(
+  'focus moved into a later scene keeps that scene on screen once the strip rests',
+  { annotation, tag },
+  async ({ page }) => {
+    await load(page);
+    const { scenes } = await read(page);
+    // A link in the far half of a scene well into the strip, focused as a Tab reaches it: the browser
+    // brings it into view at the stage's end, and the snap that follows finishes on its scene rather
+    // than carrying the strip on past it. Only scenes whose start can reach the stage's: the last few
+    // share the strip's end.
+    const picks = await page.evaluate((ids) => {
+      const stage = document.querySelector<HTMLElement>('.hc-stage')!;
+      const travel = stage.scrollWidth - stage.clientWidth;
+      const found: { index: number; link: number }[] = [];
+      ids.forEach((id, index) => {
+        const scene = document.getElementById(id)!;
+        const start = scene.getBoundingClientRect().left - stage.getBoundingClientRect().left;
+        if (index < 3 || start + stage.scrollLeft > travel - 1) return;
+        const links = [...scene.querySelectorAll<HTMLElement>('a[href]')];
+        const box = scene.getBoundingClientRect();
+        const far = links.findIndex(
+          (one) => one.getBoundingClientRect().left > box.left + box.width / 2,
+        );
+        if (far >= 0) found.push({ index, link: far });
+      });
+      return found;
+    }, scenes);
+    expect(picks.length).toBeGreaterThanOrEqual(2);
+    for (const { index, link: nth } of picks.slice(0, 3)) {
+      const link = page.locator(`#${scenes[index]} a[href]`).nth(nth);
+      await link.focus();
+      await expectAt(page, index);
+      await page.waitForTimeout(400);
+      const seen = await link.evaluate((element) => {
+        const at = element.getBoundingClientRect();
+        const stage = document.querySelector('.hc-stage')!.getBoundingClientRect();
+        return (
+          at.left >= stage.left && at.right <= stage.right && document.activeElement === element
+        );
+      });
+      expect(seen, scenes[index]).toBe(true);
+    }
+  },
+);
+
+test(
+  'a larger text size fits the strip again at once, top to bottom where its scenes no longer fit',
+  { annotation, tag },
+  async ({ page }) => {
+    await load(page);
+    expect(await read(page)).toMatchObject({ layout: 'horizontal', pinned: true });
+    // The root's text doubled, as a reader's own setting does, with no resize of the window.
+    await page.evaluate(() =>
+      document.documentElement.style.setProperty('font-size', '200%', 'important'),
+    );
+    await expect
+      .poll(
+        async () => {
+          const { layout, pinned, fit } = await read(page);
+          return { layout, pinned, fit };
+        },
+        { timeout: 1000 },
+      )
+      .toEqual({ layout: 'vertical', pinned: false, fit: 'over' });
+    // And back: at its own size the strip shows and pins again.
+    await page.evaluate(() => document.documentElement.style.removeProperty('font-size'));
+    await expect
+      .poll(
+        async () => {
+          const { layout, pinned, fit } = await read(page);
+          return { layout, pinned, fit };
+        },
+        { timeout: 1000 },
+      )
+      .toEqual({ layout: 'horizontal', pinned: true, fit: null });
+  },
+);
+
 test.describe('reduced motion', () => {
   test(
     'the strip stays, and every step is a cut onto its scene',
