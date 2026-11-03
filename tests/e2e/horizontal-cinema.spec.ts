@@ -3,7 +3,15 @@ import path from 'node:path';
 import { fixtureSiteSelecting } from '../../packages/variant-contract/src/contract-fixtures';
 import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
 import { expect, test } from '../harness/fixtures';
-import { expectAnnounced, expectAt, keys, load, read, watchKeys } from './horizontal-cinema-model';
+import {
+  expectAnnounced,
+  expectAt,
+  keys,
+  load,
+  railClashes,
+  read,
+  watchKeys,
+} from './horizontal-cinema-model';
 
 // Horizontal Cinema's scene controller (redesign), on the complete contract
 // fixture: Previous and Next, the arrow keys, Home and End, the page's own
@@ -275,6 +283,31 @@ test(
       .toEqual({ layout: 'horizontal', pinned: true, fit: null });
   },
 );
+
+test(
+  'at 1440 by 900 the strip pins with its rail whole: nothing on the bar overlaps or runs out of it',
+  { annotation },
+  async ({ page }) => {
+    await load(page);
+    expect(await read(page)).toMatchObject({ layout: 'horizontal', pinned: true, fit: null });
+    expect(await railClashes(page)).toEqual([]);
+  },
+);
+
+for (const [width, height] of [
+  [1024, 768],
+  [1280, 800],
+] as const) {
+  test(
+    `at ${width} by ${height} nothing on the rail under the stage overlaps or runs out of its bar`,
+    { annotation },
+    async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await load(page);
+      expect(await railClashes(page)).toEqual([]);
+    },
+  );
+}
 
 test.describe('reduced motion', () => {
   test(
