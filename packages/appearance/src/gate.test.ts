@@ -23,6 +23,7 @@ import { schemeSets } from './sets';
 import type { LanguageTokens } from './tokens';
 import {
   HUMANIST_UI,
+  PACKAGES_DIR,
   packDir,
   PLATFORM_NEUTRAL,
   shippingSchemeSets,
@@ -789,4 +790,29 @@ test('fluent-2-inspired 1.1.5 is the case CI run 41510373684 found: its raised a
     ground: 'surface-prominent',
     ratio: 4,
   });
+});
+
+test("gateLanguage, the draft-save gate's runtime read, reads every shipping language's shadows and fails closed on one it can't read", () => {
+  const dir = new URL('appearance-languages/packs/', PACKAGES_DIR);
+  const ids = fs
+    .readdirSync(dir)
+    .filter((id) => fs.existsSync(new URL(`${id}/manifest.json`, dir)));
+  assert.equal(ids.length, 33);
+  for (const id of ids) {
+    const { tokens } = JSON.parse(
+      fs.readFileSync(new URL('manifest.json', packDir('appearance-languages', id)), 'utf8'),
+    ) as { tokens: LanguageTokens };
+    const read = gateLanguage(tokens);
+    assert.ok(read.ok, `${id}: ${read.ok ? '' : read.problems.join('; ')}`);
+    assert.ok(Array.isArray(read.language.shadowKeys), id);
+    // The same language with a shadow the gate can't read is a problem, never a pass.
+    for (const token of ['shadow-raised', 'shadow-card'] as const) {
+      const broken = gateLanguage({ ...tokens, [token]: '0 2px 8px rgba(0, 0, 0, 0.2)' });
+      assert.equal(broken.ok, false, `${id} ${token}`);
+      assert.match(
+        broken.ok ? '' : broken.problems.join('\n'),
+        new RegExp(`^${token} layer 1 `, 'm'),
+      );
+    }
+  }
 });
