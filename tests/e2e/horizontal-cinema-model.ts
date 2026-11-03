@@ -173,3 +173,51 @@ export const brokenHeadingWords = (scope: Scope) =>
     },
     [WORD.source, WORD.flags] as const,
   );
+
+/**
+ * What on the bar under the stage overlaps or runs out of its box, by the boxes the page draws: a
+ * chapter label's text past the bar's inner box, over the next label, or over the bar's other
+ * parts (the transport, the position text, the credits), and the position text or the credits past
+ * the bar. A chapter's contents, shown only on hover or focus, don't count. Empty where the bar
+ * isn't shown.
+ */
+export function railClashes(scope: Scope) {
+  return scope.evaluate(() => {
+    const bar = document.querySelector<HTMLElement>('.hc-scrub');
+    if (!bar || bar.offsetParent === null) return [];
+    const outer = bar.getBoundingClientRect();
+    const style = getComputedStyle(bar);
+    const left = outer.left + (Number.parseFloat(style.paddingLeft) || 0);
+    const right = outer.right - (Number.parseFloat(style.paddingRight) || 0);
+    const drawn = (element: Element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      return range.getBoundingClientRect();
+    };
+    const meet = (a: DOMRect, b: DOMRect) =>
+      a.left < b.right - 0.5 &&
+      b.left < a.right - 0.5 &&
+      a.top < b.bottom - 0.5 &&
+      b.top < a.bottom - 0.5;
+    const clashes: string[] = [];
+    const ends = [
+      ...bar.querySelectorAll('.hc-scrub__transport, .hc-scrub__status, .hc-scrub__credits'),
+    ];
+    const labels = [...bar.querySelectorAll('.hc-minimap__label')];
+    labels.forEach((label, index) => {
+      const text = label.textContent ?? '';
+      const at = drawn(label);
+      if (at.left < left - 0.5 || at.right > right + 0.5) clashes.push(`${text} past the bar`);
+      if (index > 0 && at.left < drawn(labels[index - 1]!).right - 0.5)
+        clashes.push(`${text} over the label before it`);
+      for (const end of ends)
+        if (meet(at, drawn(end))) clashes.push(`${text} over ${end.className}`);
+    });
+    for (const end of ends) {
+      const at = drawn(end);
+      if (at.width > 0 && (at.left < left - 0.5 || at.right > right + 0.5))
+        clashes.push(`${end.className} past the bar`);
+    }
+    return [...new Set(clashes)];
+  });
+}
