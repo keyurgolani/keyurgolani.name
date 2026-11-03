@@ -400,6 +400,21 @@ test('with no script the page shows at once: nothing waits at opacity 0 for an e
   assert.ok(uses >= 6, `${uses}`);
 });
 
+test('the marker chip is as tall as its words, and they carry its ground, whatever a pack’s raised level draws', () => {
+  // The marker takes no room (block-size: 0); a stretched flex item would be its padding alone, its
+  // words spilling past its ground onto a pack's inset band or hard offset (row 12: 3.46:1 under
+  // international-grid, 1.37:1 under neobrutalist).
+  assert.match(STYLES, /\.tf-marker \{[^}]*block-size: 0;[^}]*align-items: flex-start;[^}]*\}/);
+  assert.match(
+    STYLES,
+    /\.tf-marker__chip > :is\(\.tf-marker__where, \[data-tf-notes\]\) \{\s*background-color: var\(--color-surface-overlay\);/,
+  );
+  assert.match(
+    STYLES,
+    /\.tf-marker__chip \{[^}]*background-color: var\(--color-surface-overlay\);/,
+  );
+});
+
 test('right to left: the page keeps its order and its words, the composition’s own marked English', () => {
   const html = renderInput(fixtureInput('rtl'));
   assert.equal(count(html, /<h1\b/g), 1);

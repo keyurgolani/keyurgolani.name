@@ -711,6 +711,11 @@
 
 /* ---------- The marker: a horizon gauge that sticks on the axis ---------- */
 
+/*
+ * The marker takes no room in the flow (block-size: 0), and its chip isn't stretched to that: it's
+ * as tall as its words and its padding, so they sit on its ground. Stretched, the chip was its
+ * padding alone and its words spilled past it, onto whatever a pack's raised level draws there.
+ */
 [data-variant='terra-field'] .tf-marker {
   position: sticky;
   inset-block-start: var(--space-s);
@@ -718,6 +723,7 @@
   margin-block-start: var(--space-2xl);
   z-index: 2;
   display: flex;
+  align-items: flex-start;
   justify-content: center;
   pointer-events: none;
 }
@@ -733,6 +739,11 @@
   box-shadow: var(--ui-shadow-raised);
   padding-block: var(--space-2xs);
   padding-inline: var(--space-s) var(--space-m);
+}
+
+/* The chip's words carry its ground themselves, so a pack's inset band, however deep, is never behind them. */
+[data-variant='terra-field'] .tf-marker__chip > :is(.tf-marker__where, [data-tf-notes]) {
+  background-color: var(--color-surface-overlay);
 }
 
 [data-variant='terra-field'] .tf-gauge {
