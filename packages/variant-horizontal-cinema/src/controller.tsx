@@ -449,8 +449,6 @@ function LiveStage(props: StageProps) {
     let moved = false;
     /** Where the page last came to rest, so the pin's snap knows which way a travel went from there. */
     let rest = window.scrollY;
-    /** The scene focus moved into since then, which the browser scrolled into view: the snap keeps it. */
-    let focusScene: number | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let frame: number | undefined;
 
@@ -689,6 +687,42 @@ function LiveStage(props: StageProps) {
       [...stageElement.querySelectorAll<HTMLElement>('.hc-pic')].filter(
         (pic) => pic.scrollHeight > pic.clientHeight + 1 || breaksAWord(pic),
       );
+    /**
+     * Whether the bar under the stage holds its own content at this width: each chapter label's
+     * text, as drawn, inside the bar's inner box, clear of the next label, and clear of the bar's
+     * other parts, the transport and the position text with the credits. A chapter's contents,
+     * shown only on hover or focus, aren't measured.
+     */
+    const railOver = (): boolean => {
+      const bar = rootElement.querySelector<HTMLElement>('.hc-scrub');
+      if (!bar || bar.offsetParent === null) return false;
+      const outer = bar.getBoundingClientRect();
+      const style = getComputedStyle(bar);
+      const left = outer.left + (Number.parseFloat(style.paddingLeft) || 0);
+      const right = outer.right - (Number.parseFloat(style.paddingRight) || 0);
+      const drawn = (element: Element): DOMRect => {
+        const range = doc.createRange();
+        range.selectNodeContents(element);
+        return range.getBoundingClientRect();
+      };
+      const meet = (a: DOMRect, b: DOMRect) =>
+        a.left < b.right - 0.5 &&
+        b.left < a.right - 0.5 &&
+        a.top < b.bottom - 0.5 &&
+        b.top < a.bottom - 0.5;
+      const labels = [...bar.querySelectorAll('.hc-minimap__label')].map(drawn);
+      const parts = [...bar.children]
+        .filter((part) => !part.querySelector('.hc-minimap__label'))
+        .map(drawn)
+        .filter((box) => box.width > 0 && box.height > 0);
+      return labels.some(
+        (label, index) =>
+          label.left < left - 0.5 ||
+          label.right > right + 0.5 ||
+          (index > 0 && label.left < labels[index - 1]!.right - 0.5) ||
+          parts.some((part) => meet(label, part)),
+      );
+    };
     /** Every scene back at its authored width. */
     const unroom = () => {
       for (const scene of stageElement.querySelectorAll<HTMLElement>('.hc-scene[data-room]'))
@@ -709,9 +743,17 @@ function LiveStage(props: StageProps) {
         const scene = pic.closest<HTMLElement>('.hc-scene');
         if (scene) scene.dataset.room = '';
       }
-      const over = overflowing().length > 0;
+      // The rail under the stage: where a chapter's label runs past its share, its years go first,
+      // the full label kept for assistive technology; where even that doesn't fit, top to bottom.
+      delete rootElement.dataset.rail;
+      let over = overflowing().length > 0;
+      if (!over && railOver()) {
+        rootElement.dataset.rail = 'short';
+        over = railOver();
+      }
       if (over) {
         unroom();
+        delete rootElement.dataset.rail;
         rootElement.dataset.fit = 'over';
         invalidate();
         pin();
@@ -779,13 +821,7 @@ function LiveStage(props: StageProps) {
         const progress = window.scrollY - pinStart();
         if (progress > 0 && progress < travel() - 1) {
           const from = Math.min(travel(), Math.max(0, rest - pinStart()));
-          // Focus that moved into a scene brought it into view: the snap finishes on that scene, so a
-          // Tab is never carried off what it reached.
-          const held =
-            focusScene !== undefined && elements[focusScene]?.contains(doc.activeElement)
-              ? focusScene
-              : undefined;
-          const nearest = held ?? snapAlong(geometry().offsets, progress, from);
+          const nearest = snapAlong(geometry().offsets, progress, from);
           const top = pinStart() + offsetOf(nearest);
           if (Math.abs(window.scrollY - top) > 1) {
             // The scene it finishes on is where the next turn sets out from, even one that comes
@@ -798,7 +834,6 @@ function LiveStage(props: StageProps) {
       }
       aligning = null;
       rest = window.scrollY;
-      focusScene = undefined;
       // The move is over: its limit no longer runs.
       if (overdueTimer !== undefined) clearTimeout(overdueTimer);
       overdueTimer = undefined;
@@ -1079,9 +1114,23 @@ function LiveStage(props: StageProps) {
             sized = true;
           });
     if (emRef.current) textSize?.observe(emRef.current);
+    // Focus that moves into another scene, a Tab's say, steps the strip to that scene once the browser
+    // has brought it into view, so the snap never carries the strip off what the Tab reached.
     const onFocusIn = (event: FocusEvent) => {
-      const at = elements.findIndex((element) => element?.contains(event.target as Node));
-      focusScene = at >= 0 ? at : undefined;
+      const target = event.target as Element;
+      const at = elements.findIndex(
+        (element) => element !== null && element !== target && element.contains(target),
+      );
+      if (at < 0) return;
+      requestAnimationFrame(() => {
+        if (disposed || !strip() || doc.activeElement !== target) return;
+        if (at !== (aligning ?? position) || !arrived(at)) {
+          aligning = at;
+          position = at;
+          setCurrent(at);
+          align(at, behavior());
+        }
+      });
     };
     stageElement.addEventListener('focusin', onFocusIn);
 
@@ -1149,6 +1198,7 @@ function LiveStage(props: StageProps) {
       stageElement.removeEventListener('scroll', onStageScroll);
       stageElement.removeEventListener('focusin', onFocusIn);
       textSize?.disconnect();
+      delete rootElement.dataset.rail;
       window.removeEventListener('scroll', onPageScroll);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('load', relayout);

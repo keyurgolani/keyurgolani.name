@@ -1943,6 +1943,16 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Where the rail's labels don't fit their chapters, the controller shortens them: the years go, kept for assistive technology. */
+[data-variant='horizontal-cinema'] .hc-shell[data-rail='short'] .hc-minimap__years {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 [data-variant='horizontal-cinema'] .hc-minimap__blocks {
   display: flex;
   gap: var(--space-3xs);
