@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
 import path from 'node:path';
 import { fixtureSiteSelecting } from '../../packages/variant-contract/src/contract-fixtures';
 import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
@@ -243,6 +244,151 @@ test(
   },
 );
 
+/**
+ * From a scene's last link, mid-strip, Tab goes on into a later scene, as a keyboard walk does: a
+ * foot's Next, or a chapter's own list. Read as the walk reads it, two frames and 50 ms on and then
+ * frame by frame for 800 ms, the stop is shown in the stage, never moves more than a pixel, keeps
+ * focus, and once the strip rests its scene is current and announced. Returns how many Tabs crossed.
+ * With `back`, the same from a scene's first link, Shift+Tab back into an earlier scene.
+ */
+async function tabIntoLaterScenes(
+  page: Page,
+  { back = false }: { back?: boolean } = {},
+): Promise<number> {
+  const { scenes } = await read(page);
+  const total = scenes.length;
+  let crossed = 0;
+  for (const from of back ? [3, 6, 9, 12] : [2, 5, 8, 11]) {
+    const links = page.locator(`#${scenes[from]} a[href]`);
+    await (back ? links.first() : links.last()).focus();
+    await expectAt(page, from);
+    await page.keyboard.press(back ? 'Shift+Tab' : 'Tab');
+    const seen = await page.evaluate(async (ids) => {
+      const frame = () => new Promise((done) => requestAnimationFrame(done));
+      await frame();
+      await frame();
+      await new Promise((done) => setTimeout(done, 50));
+      const active = document.activeElement as HTMLElement;
+      const to = ids.findIndex((id) => document.getElementById(id)?.contains(active));
+      const first = active.getBoundingClientRect();
+      const stage = document.querySelector('.hc-stage')!.getBoundingClientRect();
+      const shown =
+        first.width > 0 &&
+        first.left >= stage.left - 0.5 &&
+        first.right <= stage.right + 0.5 &&
+        first.top >= 0 &&
+        first.bottom <= window.innerHeight;
+      let moved = 0;
+      const end = performance.now() + 800;
+      while (performance.now() < end) {
+        await frame();
+        const now = active.getBoundingClientRect();
+        moved = Math.max(moved, Math.abs(now.left - first.left), Math.abs(now.top - first.top));
+      }
+      return { to, shown, still: moved <= 1, focused: document.activeElement === active };
+    }, scenes);
+    if (seen.to < 0 || (back ? seen.to >= from : seen.to <= from)) continue;
+    crossed += 1;
+    expect(
+      seen,
+      `${back ? 'Shift+Tab' : 'Tab'} from ${scenes[from]} into ${scenes[seen.to]}`,
+    ).toEqual({
+      to: seen.to,
+      shown: true,
+      still: true,
+      focused: true,
+    });
+    await expectAt(page, seen.to);
+    await expectAnnounced(page, seen.to, total);
+  }
+  return crossed;
+}
+
+test(
+  'a Tab into a later scene steps the strip there at once: what it reached holds still in view, and the status names its scene once the strip rests',
+  { annotation, tag },
+  async ({ page }) => {
+    await load(page);
+    expect(await tabIntoLaterScenes(page)).toBeGreaterThanOrEqual(2);
+  },
+);
+
+test(
+  'a Shift+Tab back into an earlier scene steps the strip there at once too: what it reached holds still in view, and the status names its scene once the strip rests',
+  { annotation, tag },
+  async ({ page }) => {
+    await load(page);
+    expect(await tabIntoLaterScenes(page, { back: true })).toBeGreaterThanOrEqual(2);
+  },
+);
+
+/**
+ * The page's scroll, frame by frame, from just before `act` until it has held still for 30 frames
+ * after moving (at most 3 s).
+ */
+async function framesOf(page: Page, act: () => Promise<unknown>): Promise<number[]> {
+  await page.evaluate(() => {
+    const w = window as unknown as { hcFrames: Promise<number[]> };
+    w.hcFrames = new Promise((done) => {
+      const frames = [window.scrollY];
+      const end = performance.now() + 3000;
+      let still = 0;
+      const tick = () => {
+        const at = window.scrollY;
+        still = at === frames[frames.length - 1] ? still + 1 : 0;
+        frames.push(at);
+        const moved = frames.some((y) => y !== frames[0]);
+        if (performance.now() > end || (moved && still >= 30)) done(frames);
+        else requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+  });
+  await act();
+  return page.evaluate(() => (window as unknown as { hcFrames: Promise<number[]> }).hcFrames);
+}
+
+/**
+ * How many distinct places a move's last leg passed through on its way to rest: from the last place
+ * the page held for three frames short of where it rests. A cut passes through none.
+ */
+function glidePlaces(frames: number[]): number {
+  const rest = frames[frames.length - 1]!;
+  let from = frames[0]!;
+  for (let i = 0; i + 2 < frames.length; i++) {
+    if (frames[i] !== rest && frames[i] === frames[i + 1] && frames[i] === frames[i + 2])
+      from = frames[i]!;
+  }
+  const [low, high] = [Math.min(from, rest) + 1, Math.max(from, rest) - 1];
+  return new Set(frames.filter((y) => y > low && y < high)).size;
+}
+
+test(
+  'a wheel notch, Next and Previous still glide: only a focus moved into another scene cuts',
+  { annotation, tag },
+  async ({ page }) => {
+    await load(page);
+    expect(await read(page)).toMatchObject({ layout: 'horizontal', pinned: true, current: 0 });
+    // One notch rests short of the next scene, and the snap glides the strip on onto it.
+    await page.mouse.move(720, 450);
+    const wheel = await framesOf(page, () => page.mouse.wheel(0, 400));
+    expect(glidePlaces(wheel), `wheel: ${wheel.join(' ')}`).toBeGreaterThanOrEqual(2);
+    const after = (await read(page)).current;
+    expect(after).toBeGreaterThan(0);
+    await expectAt(page, after);
+    const next = await framesOf(page, () =>
+      page.getByRole('button', { name: 'Next scene' }).click(),
+    );
+    expect(glidePlaces(next), `Next: ${next.join(' ')}`).toBeGreaterThanOrEqual(2);
+    await expectAt(page, after + 1);
+    const previous = await framesOf(page, () =>
+      page.getByRole('button', { name: 'Previous scene' }).click(),
+    );
+    expect(glidePlaces(previous), `Previous: ${previous.join(' ')}`).toBeGreaterThanOrEqual(2);
+    await expectAt(page, after);
+  },
+);
+
 test(
   'a larger text size fits the strip again at once, top to bottom where its scenes no longer fit',
   { annotation, tag },
@@ -328,6 +474,24 @@ test.describe('reduced motion', () => {
       for (const index of [1, 2, 3]) {
         await page.keyboard.press('ArrowRight');
         // A cut: the scene is at the stage's start straight away, with no travel to wait for.
+        expect((await read(page)).onScreen).toBe(index);
+        await expectAt(page, index);
+      }
+    },
+  );
+
+  test(
+    'a Tab into a later scene is a cut there too, and the steps after it still cut',
+    { annotation, tag },
+    async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await load(page);
+      expect(await tabIntoLaterScenes(page)).toBeGreaterThanOrEqual(2);
+      // The keys from where the Tabs left the strip: each step still lands at once.
+      const from = (await read(page)).current;
+      await page.locator('.hc-stage').focus();
+      for (const index of [from + 1, from + 2]) {
+        await page.keyboard.press('ArrowRight');
         expect((await read(page)).onScreen).toBe(index);
         await expectAt(page, index);
       }
