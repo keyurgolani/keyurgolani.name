@@ -2840,7 +2840,8 @@
     overflow-x: auto;
     overflow-y: hidden;
     overscroll-behavior-x: contain;
-    scroll-snap-type: x mandatory;
+    /* No snap in CSS, which would pull Tab and find back off what they reach: without a script the
+       strip is a free native scroller, and with one the controller aligns a scene after a move. */
     scroll-padding-inline: var(--layout-inset);
     scrollbar-width: none;
   }
@@ -2874,7 +2875,6 @@
         var(--layout-pad)
     );
     block-size: 100%;
-    scroll-snap-align: start;
   }
 
   [data-variant='horizontal-cinema']
@@ -3118,10 +3118,9 @@
   inset-block-start: 0;
 }
 
-/* While it travels in step with the page, the page's position is the strip's, so the stage keeps no snap of its own. */
+/* While it travels in step with the page, the page's position is the strip's, so the stage moves at once. */
 @media (prefers-reduced-motion: no-preference) {
   [data-variant='horizontal-cinema'] .hc-shell[data-pin] .hc-stage {
-    scroll-snap-type: none;
     scroll-behavior: auto;
   }
 }
