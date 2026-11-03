@@ -8,7 +8,11 @@ import {
   type DesignLanguageManifest,
   type MetaPack,
 } from '@portfolio/appearance';
-import { compareVersions, packPackages } from '@portfolio/appearance/node';
+import {
+  compareVersions,
+  packPackages,
+  SHADOW_KEY_KNOWN_FAILURES,
+} from '@portfolio/appearance/node';
 import { registryMeta } from '@portfolio/variant-contract/node';
 import { appearanceTargets } from './appearance-targets';
 import {
@@ -323,10 +327,26 @@ test('a translucent language ships at its floor, the least surface-opacity that 
   assert.equal(glass.tokens['surface-opacity'], '97%');
   const at = (percent: number) => ({ ...glass.tokens, 'surface-opacity': `${percent}%` });
   // The search starts at the approved value and stops at the first that passes.
-  assert.equal(surfaceOpacityFloor(registry, at(78), targets), 97);
-  assert.equal(surfaceOpacityFloor(registry, at(97), targets), 97);
-  assert.equal(heldRecord(registry, { ...glass, tokens: at(97) }, targets), null);
-  const below = heldRecord(registry, { ...glass, tokens: at(96) }, targets)!;
+  assert.equal(surfaceOpacityFloor(registry, at(97), targets), 99);
+  // The shadow-key check (B, 2026-11-02) raised its floor from 97% to 99%: at 97% and 98%
+  // its key layer, over a surface on a black or white backdrop, takes text-secondary under
+  // 4.5:1. It ships at 97%, a known failure (SHADOW_KEY_KNOWN_FAILURES) until its ticket.
+  assert.equal(surfaceOpacityFloor(registry, at(78), targets), 99);
+  assert.ok(SHADOW_KEY_KNOWN_FAILURES.some(({ language }) => language === 'glassmorphism'));
+  const unshadowed = (percent: number) => ({
+    ...at(percent),
+    'shadow-raised': 'none',
+    'shadow-card': 'none',
+  });
+  assert.equal(surfaceOpacityFloor(registry, unshadowed(78), targets), 97);
+  assert.equal(heldRecord(registry, { ...glass, tokens: at(99) }, targets), null);
+  const shipped = heldRecord(registry, { ...glass, tokens: at(97) }, targets)!;
+  assert.ok(shipped.pairs.length > 0);
+  for (const pair of shipped.pairs) {
+    assert.ok(pair.shadow && (pair.backdrop === '#000000' || pair.backdrop === '#ffffff'));
+  }
+  assert.equal(heldRecord(registry, { ...glass, tokens: unshadowed(97) }, targets), null);
+  const below = heldRecord(registry, { ...glass, tokens: unshadowed(96) }, targets)!;
   assert.ok(
     below.pairs.every((pair) => pair.backdrop === '#000000' || pair.backdrop === '#ffffff'),
   );
@@ -336,11 +356,20 @@ test('a translucent language ships at its floor, the least surface-opacity that 
   // A marked translucent language passes only opaque, so its floor is 100%.
   const vapor = held().find(({ id }) => id === 'vaporwave')!.manifest as DesignLanguageManifest;
   assert.equal(surfaceOpacityFloor(registry, vapor.tokens, targets), 100);
-  assert.equal(surfaceOpacityFloor(registry, { ...vapor.tokens, texture: 'none' }, targets), 97);
+  // Without its texture: 99%, raised from 97% by the shadow-key check, as glassmorphism's was.
+  const bare = (tokens: DesignLanguageManifest['tokens']) => ({ ...tokens, texture: 'none' });
+  const unlifted = (tokens: DesignLanguageManifest['tokens']) => ({
+    ...bare(tokens),
+    'shadow-raised': 'none',
+    'shadow-card': 'none',
+  });
+  assert.equal(surfaceOpacityFloor(registry, bare(vapor.tokens), targets), 99);
+  assert.equal(surfaceOpacityFloor(registry, unlifted(vapor.tokens), targets), 97);
   // A washed one fails at every opacity, since the wash takes the text under the targets (LANG-5c r2).
   const aero = held().find(({ id }) => id === 'frutiger-aero')!.manifest as DesignLanguageManifest;
   assert.equal(surfaceOpacityFloor(registry, aero.tokens, targets), null);
-  assert.equal(surfaceOpacityFloor(registry, { ...aero.tokens, texture: 'none' }, targets), 97);
+  assert.equal(surfaceOpacityFloor(registry, bare(aero.tokens), targets), 99);
+  assert.equal(surfaceOpacityFloor(registry, unlifted(aero.tokens), targets), 97);
 });
 
 test('the languages take no script, no stylesheet, no ambient motion, and neumorphic controls gain a border', () => {
