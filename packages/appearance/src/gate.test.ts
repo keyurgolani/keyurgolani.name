@@ -752,7 +752,7 @@ test('text-secondary keeps 4.5:1 beside each shadow key, on the canvas and every
   assert.ok(glassy.some(({ backdrop }) => backdrop !== undefined));
 });
 
-test("fluent-2-inspired keeps text-secondary at 4.5:1 beside its key layers in every shipping scheme and set at Fluent 2's source shadows (19i; 1.1.5's 36% key went to 3.90:1, CI run 41510373684's OA cells)", () => {
+test("fluent-2-inspired keeps text-secondary at 4.5:1 beside its key layers in every shipping scheme and set at Fluent 2's Darker shadow pair, worst 4.52:1 (19i; 1.1.5's 36% key went to 3.90:1, CI run 41510373684's OA cells)", () => {
   const manifest = JSON.parse(
     fs.readFileSync(
       new URL('manifest.json', packDir('appearance-languages', 'fluent-2-inspired')),
@@ -771,6 +771,17 @@ test("fluent-2-inspired keeps text-secondary at 4.5:1 beside its key layers in e
     ),
   );
   assert.deepEqual(failing.slice(0, 5), [], `${failing.length} pairs under 4.5:1`);
+  // The Darker pair's 24% key, at its worst: 4.52:1 (botanical-sage light surface-prominent).
+  const worst = Math.min(
+    ...shippingSchemeSets().flatMap(({ sets }) =>
+      (Object.keys(sets) as (keyof typeof sets)[]).flatMap((name) =>
+        gateSet(sets[name]!, name, read.language, SMALL_SIGNATURE)
+          .filter(({ shadow }) => shadow)
+          .map(({ ratio }) => ratio),
+      ),
+    ),
+  );
+  assert.equal(worst, 4.52);
 });
 
 test("gateLanguage, the draft-save gate's runtime read, reads every shipping language's shadows and fails closed on one it can't read", () => {

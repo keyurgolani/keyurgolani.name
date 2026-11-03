@@ -204,10 +204,10 @@
     "fluent-2-inspired": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
-      "version": "1.1.6",
+      "version": "1.1.7",
       "tier": "stable",
       "license": "independent-inspired-interpretation",
-      "digest": "sha256-2b5e8a733075a263eefd8e37ee449f6ac9c9e093226b8b8bb4fdbfad843ddb74",
+      "digest": "sha256-1dbcaaa382290e4c206da6a3c2bd58a3fb37c013b13baafcc3992d67e85fc8c1",
       "surfaceOpacity": {
         "approved": "92%",
         "shipped": "100%"
