@@ -22,6 +22,13 @@
   --layout-motion-feedback: 200ms;
   --layout-motion-scene: 800ms;
   --layout-motion-ambient: 60s;
+  /* The ground a part sits on: the canvas here, a stage's inside the stages (below). */
+  --layout-ground: var(--color-canvas);
+  /*
+   * A focus ring's reach past its box (the kit's offset plus its width) and one ring's width of
+   * ground beyond it: the margin a part over decoration keeps, so its ring sits on the ground.
+   */
+  --layout-focus-halo: max(0px, var(--ui-focus-offset) + 2 * var(--ui-focus-width));
 
   display: block;
   overflow-wrap: break-word;
@@ -36,6 +43,7 @@
   --layout-ink-quiet: color-mix(in oklab, var(--color-text-inverse) 76%, var(--color-text-primary));
   --layout-ink-line: color-mix(in oklab, var(--color-text-inverse) 26%, var(--color-text-primary));
   --layout-ink-faint: color-mix(in oklab, var(--color-text-inverse) 48%, var(--color-text-primary));
+  --layout-ground: var(--color-text-primary);
 
   color: var(--layout-ink);
   background-color: var(--color-text-primary);
@@ -678,7 +686,9 @@
   );
   inset-block-start: calc(var(--layout-clip) * 0.4634 * var(--layout-y));
   max-inline-size: 10em;
+  /* Whole pixels, so its focus ring paints on its own box; the first line is for a browser without round(). */
   translate: calc(-100% - var(--space-xs)) -50%;
+  translate: round(calc(-100% - var(--space-xs)), 1px) round(-50%, 1px);
   padding-block: var(--space-3xs);
   padding-inline: var(--space-xs);
   color: var(--layout-ink);
@@ -691,6 +701,22 @@
   border: var(--ui-border-control);
   border-color: var(--layout-ink-line);
   border-radius: var(--ui-radius-control);
+  isolation: isolate;
+}
+
+/*
+ * A margin of the stage's ground past a focus ring, behind the label: the map's lines stop short
+ * of it, so its ring always sits on the stage. A real element, not a pseudo-element, so axe reads
+ * the ground behind the label's words. It's set round the padding box, so it reaches past a
+ * control border's 1px as well. Forced colors paint it Canvas, so the ring sits on Canvas there too.
+ */
+[data-variant='kinetic-cosmos'] .kc-signature-label__ground {
+  position: absolute;
+  inset: calc(-1 * (var(--layout-focus-halo) + 1px));
+  z-index: -1;
+  background-color: var(--layout-ground);
+  border-radius: var(--ui-radius-control);
+  pointer-events: none;
 }
 
 [data-variant='kinetic-cosmos'] .kc-signature-label:hover {
@@ -708,6 +734,7 @@
 @media (max-width: 47.99rem) {
   [data-variant='kinetic-cosmos'] .kc-signature-label {
     translate: -30% var(--space-xs);
+    translate: round(-30%, 1px) round(var(--space-xs), 1px);
     text-align: start;
   }
 }
@@ -716,6 +743,7 @@
   [data-variant='kinetic-cosmos'] .kc-signature-label {
     max-inline-size: none;
     translate: -50% calc(-100% - var(--space-s));
+    translate: round(-50%, 1px) round(calc(-100% - var(--space-s)), 1px);
     white-space: nowrap;
   }
 }
@@ -1147,14 +1175,18 @@
     display: flex;
     flex-direction: column-reverse;
     align-items: center;
-    gap: var(--space-3xs);
+    /* A focus ring's halo clear of the dot, so the arc's line never runs under a stop's ring. */
+    gap: calc(var(--space-3xs) + var(--layout-focus-halo));
+    /* Whole pixels, so a stop's focus ring paints on its own box; the first line is for a browser without round(). */
     translate: -50% calc(-100% + var(--space-3xs));
+    translate: round(-50%, 1px) round(calc(-100% + var(--space-3xs)), 1px);
     white-space: nowrap;
   }
 
   [data-variant='kinetic-cosmos'] .kc-arc__stop[data-tier='1'] {
     flex-direction: column;
     translate: -50% calc(-1 * var(--space-3xs));
+    translate: round(-50%, 1px) round(calc(-1 * var(--space-3xs)), 1px);
   }
 
   [data-variant='kinetic-cosmos'] .kc-arc__stop::before {
@@ -3437,8 +3469,10 @@
 }
 
 @media (min-width: 64rem) {
+  /* A halo of headroom over the arc, so a lifted stop's focus ring at the apex stays on the stage. */
   [data-variant='kinetic-cosmos'] .kc-ring__opener {
     margin-inline: var(--space-s);
+    padding-block-start: calc(var(--space-l) + var(--layout-focus-halo));
   }
 }
 

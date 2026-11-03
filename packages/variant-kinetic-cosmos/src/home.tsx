@@ -367,6 +367,7 @@ function SignatureLabel({
         } as CSSProperties
       }
     >
+      <span className="kc-signature-label__ground" aria-hidden="true" />
       {work.title}
     </a>
   );
