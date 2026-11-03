@@ -97,8 +97,8 @@ export interface KnownShadowFailure {
 
 /**
  * The shadow-key check's known failures (the lead's ruling, 2026-11-02): the
- * six languages it found under 4.5:1 when it landed, each with its worst
- * pair. They're findings with a ticket each, not a waiver, and the list only
+ * languages it found under 4.5:1 when it landed, each with its worst pair
+ * (six then; fluent-2-inspired came off with the 19i fidelity pass). They're findings with a ticket each, not a waiver, and the list only
  * shrinks. A listed language's shadow-key pairs at or above its ratio don't
  * fail the run; one under it does, as every pair outside the list does. A
  * full run fails a listed language that passes now (take it off) or whose
@@ -111,17 +111,6 @@ export const SHADOW_KEY_KNOWN_FAILURES: readonly KnownShadowFailure[] = Object.f
     set: 'light',
     ground: 'surface-prominent',
     ratio: 3.49,
-  },
-  // CI run 41510373684's OA captions (4.00:1 on warm-parchment's light surface-prominent, as
-  // here). Fluent 2's source alphas pass, but fall under the distinct line against
-  // primer-inspired at 1440 (0.080 against 0.113), so its fix waits for the 19i fidelity
-  // pass (kgn/b-fluent-source-values).
-  {
-    language: 'fluent-2-inspired',
-    scheme: 'botanical-sage',
-    set: 'light',
-    ground: 'surface-prominent',
-    ratio: 3.9,
   },
   {
     language: 'skeuomorphic',

@@ -438,14 +438,13 @@ test("a known-bad patch that names none of the roles K-2 added leaves them out, 
   }
 });
 
-test("the shadow-key check's known failures are the six it found when it landed, worst first, each on botanical-sage light surface-prominent", () => {
+test("the shadow-key check's known failures are the ones it found when it landed that still fail, worst first, each on botanical-sage light surface-prominent", () => {
   assert.deepEqual(
     SHADOW_KEY_KNOWN_FAILURES.map(({ language, scheme, set, ground, ratio }) =>
       [language, ratio, `${scheme} ${set} ${ground}`].join(' '),
     ),
     [
       'synthwave 3.49 botanical-sage light surface-prominent',
-      'fluent-2-inspired 3.9 botanical-sage light surface-prominent',
       'skeuomorphic 4.02 botanical-sage light surface-prominent',
       'carbon-inspired 4.21 botanical-sage light surface-prominent',
       'atelier-luxury 4.3 botanical-sage light surface-prominent',

@@ -752,44 +752,25 @@ test('text-secondary keeps 4.5:1 beside each shadow key, on the canvas and every
   assert.ok(glassy.some(({ backdrop }) => backdrop !== undefined));
 });
 
-test('fluent-2-inspired 1.1.5 is the case CI run 41510373684 found: its raised and card key layers take text-secondary under 4.5:1, worst 3.90:1, and 4.00:1 on warm-parchment', () => {
+test("fluent-2-inspired keeps text-secondary at 4.5:1 beside its key layers in every shipping scheme and set at Fluent 2's source shadows (19i; 1.1.5's 36% key went to 3.90:1, CI run 41510373684's OA cells)", () => {
   const manifest = JSON.parse(
     fs.readFileSync(
       new URL('manifest.json', packDir('appearance-languages', 'fluent-2-inspired')),
       'utf8',
     ),
   ) as { version: string; tokens: LanguageTokens };
-  assert.equal(manifest.version, '1.1.5');
+  assert.notEqual(manifest.version, '1.1.5');
   const read = gateLanguage(manifest.tokens);
   assert.ok(read.ok);
-  assert.deepEqual(read.language.shadowKeys, [
-    { tokens: ['shadow-raised', 'shadow-card'], percent: 36 },
-  ]);
-  const worst = (id?: string) => {
-    let found: { scheme: string; set: string; ground: string; ratio: number } | null = null;
-    for (const { id: scheme, sets } of shippingSchemeSets()) {
-      if (id && scheme !== id) continue;
-      for (const name of Object.keys(sets) as (keyof typeof sets)[]) {
-        for (const pair of gateSet(sets[name]!, name, read.language, SMALL_SIGNATURE)) {
-          if (pair.shadow && (!found || pair.ratio < found.ratio))
-            found = { scheme, set: name, ground: pair.ground, ratio: pair.ratio };
-        }
-      }
-    }
-    return found;
-  };
-  assert.deepEqual(worst(), {
-    scheme: 'botanical-sage',
-    set: 'light',
-    ground: 'surface-prominent',
-    ratio: 3.9,
-  });
-  assert.deepEqual(worst('warm-parchment'), {
-    scheme: 'warm-parchment',
-    set: 'light',
-    ground: 'surface-prominent',
-    ratio: 4,
-  });
+  assert.ok((read.language.shadowKeys ?? []).length > 0);
+  const failing = shippingSchemeSets().flatMap(({ id, sets }) =>
+    (Object.keys(sets) as (keyof typeof sets)[]).flatMap((name) =>
+      gateSet(sets[name]!, name, read.language, SMALL_SIGNATURE)
+        .filter(({ shadow, passes }) => shadow && !passes)
+        .map(({ ground, ratio }) => `${id} ${name} ${ground} ${ratio}:1`),
+    ),
+  );
+  assert.deepEqual(failing.slice(0, 5), [], `${failing.length} pairs under 4.5:1`);
 });
 
 test("gateLanguage, the draft-save gate's runtime read, reads every shipping language's shadows and fails closed on one it can't read", () => {
