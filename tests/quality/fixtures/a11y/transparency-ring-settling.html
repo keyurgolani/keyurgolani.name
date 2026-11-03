@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>An opaque surface whose focused control's ring is still moving, known-good</title>
+    <!--
+      A dialog-like surface, opaque, as Kinetic Cosmos's offer dialog is under reduced
+      transparency, with its Close button focused and its ring still settling: for its first
+      three seconds the ring's colour shifts by a few levels every frame, by script,
+      which no CSS transition or Web Animation carries, so a screenshot can't fast-forward it.
+      Nothing under the surface shows through, so the see-through check passes once both fills
+      are read off the same settled frame.
+    -->
+    <style>
+      body {
+        margin: 0;
+        background: linear-gradient(135deg, #234, #789);
+      }
+      [data-ui-slot='surface'] {
+        position: fixed;
+        top: 120px;
+        left: 120px;
+        width: 480px;
+        padding: 24px;
+        background: #f6eddc;
+        color: #2b241c;
+        border-radius: 12px;
+      }
+      button {
+        font: inherit;
+        padding: 6px 12px;
+        border: 1px solid #2b241c;
+        border-radius: 6px;
+        background: #f6eddc;
+        color: #2b241c;
+      }
+      button:focus-visible {
+        outline: 2px solid #c57b54;
+        outline-offset: 2px;
+        outline-color: var(--ring-color, #c57b54);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section data-ui-slot="surface" aria-labelledby="offer">
+        <h1 id="offer">An offer, in a surface that stays opaque</h1>
+        <p>Its control's ring settles over three seconds.</p>
+        <button type="button" id="close">Close</button>
+      </section>
+    </main>
+    <script>
+      // Focus the Close button from the keyboard's side, then shift its ring's colour by a
+      // few levels every frame for three seconds, as a ring still settling differs from one frame
+      // to the next by 2 to 4 levels at its antialiased corner, and leave it at #c57b54.
+      const close = document.getElementById('close');
+      close.focus({ focusVisible: true });
+      const start = performance.now();
+      let frame = 0;
+      const step = (now) => {
+        frame += 1;
+        const done = now - start >= 3000;
+        close.style.setProperty(
+          '--ring-color',
+          done ? '#c57b54' : `rgb(${193 + (frame % 5)} 120 82)`,
+        );
+        if (!done) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    </script>
+  </body>
+</html>

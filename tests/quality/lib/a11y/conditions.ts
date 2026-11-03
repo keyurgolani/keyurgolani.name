@@ -1209,13 +1209,114 @@ export async function reflowFindings(
 /** The two fills put under a surface: a pixel inside it that changes between them is see-through. */
 const UNDER = ['rgb(255, 0, 255)', 'rgb(0, 255, 0)'];
 
+/** How long a fill's shot may wait for the surface to hold still: a ring still settling, say. */
+const SETTLE_MS = 5_000;
+
+/**
+ * The surface's clip once the page holds still under a fill: every finite animation done (a
+ * transition the fill's restyle started among them), two frames on, then shots two frames apart
+ * until two in a row are the same with nothing in the surface changed between them, within
+ * SETTLE_MS (then the last, and `settled` false). "Nothing changed" is a DOM mutation (an attribute,
+ * a child, a text) in the surface's own subtree or on an element whose box meets the clip, its
+ * ancestors among them: two equal shots alone can be two frames of a change that repeats (a script
+ * stepping a ring's colour every frame on a five-frame cycle matched itself under load), while a
+ * change beside the clip, such as a star field's, can't touch these pixels and never holds it up.
+ * It reads the surface's own clip, for the same reason. Both fills are read off a settled frame, so
+ * what moves on its own, such as a focused control's ring still settling (KC's offer dialog under
+ * reduced transparency), never passes for the fill showing through. Nothing is blurred or hidden:
+ * the state under test stays as it is.
+ */
+async function settledShot(
+  page: Page,
+  clip: { x: number; y: number; width: number; height: number },
+  path: string,
+): Promise<{ shot: Buffer; settled: boolean }> {
+  await page.evaluate(async () => {
+    const finite = document
+      .getAnimations()
+      .filter((animation) =>
+        Number.isFinite(Number(animation.effect?.getComputedTiming().endTime)),
+      );
+    await Promise.race([
+      Promise.all(finite.map((animation) => animation.finished.catch(() => undefined))),
+      new Promise((done) => setTimeout(done, 2_000)),
+    ]);
+  });
+  // Count the mutations that can change the clip's pixels: in the surface, or on a box over the clip.
+  await page.evaluate(
+    ({ at, area }) => {
+      const scope = window as unknown as {
+        __qualityStill?: MutationObserver;
+        __qualityMoved: number;
+      };
+      scope.__qualityStill?.disconnect();
+      scope.__qualityMoved = 0;
+      const surface = document.querySelector(at);
+      const counts = (node: Node): boolean => {
+        const el = node instanceof Element ? node : node.parentElement;
+        if (!el) return false;
+        if (surface?.contains(el)) return true;
+        const r = el.getBoundingClientRect();
+        return (
+          r.right > area.x &&
+          r.left < area.x + area.width &&
+          r.bottom > area.y &&
+          r.top < area.y + area.height
+        );
+      };
+      scope.__qualityStill = new MutationObserver((list) => {
+        for (const mutation of list) if (counts(mutation.target)) scope.__qualityMoved += 1;
+      });
+      scope.__qualityStill.observe(document, {
+        subtree: true,
+        attributes: true,
+        childList: true,
+        characterData: true,
+      });
+    },
+    { at: path, area: clip },
+  );
+  const moved = () =>
+    page.evaluate(() => {
+      const scope = window as unknown as { __qualityMoved: number };
+      const count = scope.__qualityMoved;
+      scope.__qualityMoved = 0;
+      return count;
+    });
+  const shoot = () => page.screenshot({ clip, animations: 'disabled', caret: 'hide' });
+  try {
+    await frames(page);
+    const until = Date.now() + SETTLE_MS;
+    await moved();
+    let shot = await shoot();
+    while (Date.now() < until) {
+      await frames(page);
+      const next = await shoot();
+      const changed = await moved();
+      if (changed === 0 && next.equals(shot)) return { shot: next, settled: true };
+      shot = next;
+    }
+    return { shot, settled: false };
+  } finally {
+    await page.evaluate(() => {
+      const scope = window as unknown as { __qualityStill?: MutationObserver };
+      scope.__qualityStill?.disconnect();
+      delete scope.__qualityStill;
+    });
+  }
+}
+
 /**
  * Whether anything shows through the element `path` names: every ancestor
  * is filled with one color, then another, with everything beside them and
  * their own pseudo-elements faded out, and a pixel inside the element's
  * corner radius and border that changes is what's behind coming through.
  */
-async function seeThrough(page: Page, path: string, inset: number): Promise<boolean> {
+async function seeThrough(
+  page: Page,
+  path: string,
+  inset: number,
+): Promise<{ through: boolean; settled: boolean }> {
   await page
     .locator(path)
     .first()
@@ -1226,13 +1327,14 @@ async function seeThrough(page: Page, path: string, inset: number): Promise<bool
     path,
   });
   const viewport = page.viewportSize()!;
-  if (!box) return false;
+  if (!box) return { through: false, settled: true };
   const x = Math.max(0, Math.ceil(box.x + inset));
   const y = Math.max(0, Math.ceil(box.y + inset));
   const width = Math.min(viewport.width, Math.floor(box.x + box.width - inset)) - x;
   const height = Math.min(viewport.height, Math.floor(box.y + box.height - inset)) - y;
-  if (width < 2 || height < 2) return false;
+  if (width < 2 || height < 2) return { through: false, settled: true };
   const shots: Uint8Array[] = [];
+  let settled = true;
   for (const fill of UNDER) {
     await page.evaluate(
       ({ at, color }) => {
@@ -1258,13 +1360,9 @@ async function seeThrough(page: Page, path: string, inset: number): Promise<bool
       },
       { at: path, color: fill },
     );
-    shots.push(
-      await page.screenshot({
-        clip: { x, y, width, height },
-        animations: 'disabled',
-        caret: 'hide',
-      }),
-    );
+    const read = await settledShot(page, { x, y, width, height }, path);
+    shots.push(read.shot);
+    settled &&= read.settled;
   }
   await page.evaluate(() => {
     document.querySelector('style[data-quality-under]')?.remove();
@@ -1274,7 +1372,7 @@ async function seeThrough(page: Page, path: string, inset: number): Promise<bool
     }
   });
   const [a, b] = shots.map(decodePng);
-  return a!.data.some((value, i) => value !== b!.data[i]);
+  return { through: a!.data.some((value, i) => value !== b!.data[i]), settled };
 }
 
 interface Transparency {
@@ -1299,13 +1397,19 @@ async function transparencyNow(page: Page, seen: Set<string>): Promise<Finding[]
   }
   for (const surface of surfaces.filter((each) => !seen.has(each.path))) {
     seen.add(surface.path);
-    if (await seeThrough(page, surface.path, surface.inset)) {
+    const { through, settled } = await seeThrough(page, surface.path, surface.inset);
+    // A surface that never held still is read off its last pair of shots, as before settling
+    // was asked for: the log says so either way, and so does a finding, so a flaky verdict on it
+    // is traceable.
+    const unsettled = `the surface never held still in ${SETTLE_MS / 1000} s`;
+    if (!settled) console.log(`[quality] transparency: ${surface.path}: ${unsettled}`);
+    if (through) {
       findings.push({
         gate: 'transparency',
         rule: 'opaque',
         path: surface.path,
         expected,
-        actual: 'what is under it shows through',
+        actual: `what is under it shows through${settled ? '' : ` (${unsettled})`}`,
       });
     }
   }

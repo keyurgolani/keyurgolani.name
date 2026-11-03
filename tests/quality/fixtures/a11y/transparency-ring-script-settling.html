@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>An opaque surface whose ring answers the restyle by script, known-good</title>
+    <!--
+      As transparency-ring-settling.html, but a change two equal shots can't see: for three seconds
+      from the first fill the check puts under the surface, a script sets the Close button's ring
+      colour from that fill (one colour over one fill, another over the other) and ticks a data
+      attribute on the button every frame, and then it leaves the ring at #c57b54. Under either fill
+      the ring's pixels hold still frame to frame, so shots alone call it settled at once, and the
+      two fills are read off different rings. The surface is still changing (its button's attributes
+      move every frame), so the see-through check passes once it waits for the DOM to hold still too.
+    -->
+    <style>
+      body {
+        margin: 0;
+        background: linear-gradient(135deg, #234, #789);
+      }
+      [data-ui-slot='surface'] {
+        position: fixed;
+        top: 120px;
+        left: 120px;
+        width: 480px;
+        padding: 24px;
+        background: #f6eddc;
+        color: #2b241c;
+        border-radius: 12px;
+      }
+      button {
+        font: inherit;
+        padding: 6px 12px;
+        border: 1px solid #2b241c;
+        border-radius: 6px;
+        background: #f6eddc;
+        color: #2b241c;
+      }
+      button:focus-visible {
+        outline: 2px solid #c57b54;
+        outline-offset: 2px;
+        outline-color: var(--ring-color, #c57b54);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section data-ui-slot="surface" aria-labelledby="offer">
+        <h1 id="offer">An offer, in a surface that stays opaque</h1>
+        <p>Its control's ring answers the restyle for three seconds.</p>
+        <button type="button" id="close">Close</button>
+      </section>
+    </main>
+    <script>
+      // Focus the Close button from the keyboard's side. From the first fill under the surface
+      // (the check marks the surface's ancestors data-quality-under), for three seconds: the ring
+      // takes a colour from the fill, and the button's data-tick flips every frame. Then the ring
+      // is #c57b54 and the ticking stops.
+      const close = document.getElementById('close');
+      close.focus({ focusVisible: true });
+      let since = null;
+      let frame = 0;
+      const step = (now) => {
+        if (since === null && document.body.hasAttribute('data-quality-under')) since = now;
+        if (since !== null && now - since >= 3000) {
+          close.style.setProperty('--ring-color', '#c57b54');
+          delete close.dataset.tick;
+          return;
+        }
+        frame += 1;
+        close.dataset.tick = String(frame % 2);
+        const fill = getComputedStyle(document.body).backgroundColor;
+        close.style.setProperty('--ring-color', fill === 'rgb(0, 255, 0)' ? '#a8603c' : '#c57b54');
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    </script>
+  </body>
+</html>

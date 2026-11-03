@@ -2887,6 +2887,39 @@ export const A11Y_CASES: readonly MetaCase[] = [
     { features: TRANSPARENCY },
   ),
   good('transparency', transparencyFindings, { features: TRANSPARENCY }),
+  // An opaque surface whose focused control's ring is still moving, by script, which a
+  // screenshot can't fast-forward: both fills must be read off one settled frame, or the ring's
+  // antialiased corner passes for the fill showing through (KC's offer dialog under reduced
+  // transparency, lead, 3 Nov 2026).
+  goodFile(
+    'ring-settling',
+    'transparency-ring-settling.html',
+    'transparency',
+    transparencyFindings,
+    { features: TRANSPARENCY },
+  ),
+  // The same surface, its ring answering the fill by script for three seconds while its pixels
+  // hold still frame to frame: two equal shots aren't a settled surface while its DOM is still
+  // moving (a change that repeats matched itself under load, 3 Nov 2026).
+  goodFile(
+    'ring-script-settling',
+    'transparency-ring-script-settling.html',
+    'transparency',
+    transparencyFindings,
+    { features: TRANSPARENCY },
+  ),
+  // A ring that never holds still: the finding says so, so a flaky verdict is traceable.
+  {
+    id: 'transparency/ring-restless',
+    gate: 'transparency',
+    input: 'tests/quality/fixtures/a11y/transparency-ring-restless.html',
+    expect: 'fail',
+    reason:
+      /^transparency opaque: what is under it shows through \(the surface never held still in 5 s\)$/,
+    browser: true,
+    run: () =>
+      onPage('transparency-ring-restless.html', transparencyFindings, { features: TRANSPARENCY }),
+  },
   bad('gradient', 'contrast-gradient.html', 'contrast', 'text|large-text', contrast),
   builtCase(
     'past-forty',

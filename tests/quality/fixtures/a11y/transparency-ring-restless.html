@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>An opaque surface whose ring never holds still, known-bad</title>
+    <!--
+      As transparency-ring-settling.html, but the Close button's ring never stops moving: a script
+      steps its colour a level every frame, for as long as the page is open. The surface never
+      holds still, so each fill is read off its last pair of shots, the two differ at the ring, and
+      the finding must say the surface never held still, so a flaky verdict is traceable.
+    -->
+    <style>
+      body {
+        margin: 0;
+        background: linear-gradient(135deg, #234, #789);
+      }
+      [data-ui-slot='surface'] {
+        position: fixed;
+        top: 120px;
+        left: 120px;
+        width: 480px;
+        padding: 24px;
+        background: #f6eddc;
+        color: #2b241c;
+        border-radius: 12px;
+      }
+      button {
+        font: inherit;
+        padding: 6px 12px;
+        border: 1px solid #2b241c;
+        border-radius: 6px;
+        background: #f6eddc;
+        color: #2b241c;
+      }
+      button:focus-visible {
+        outline: 2px solid #c57b54;
+        outline-offset: 2px;
+        outline-color: var(--ring-color, #c57b54);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section data-ui-slot="surface" aria-labelledby="offer">
+        <h1 id="offer">An offer, in a surface that stays opaque</h1>
+        <p>Its control's ring never stops moving.</p>
+        <button type="button" id="close">Close</button>
+      </section>
+    </main>
+    <script>
+      // Focus the Close button from the keyboard's side, then step its ring's colour a level every
+      // frame, as long as the page is open: red and green on cycles of 97 and 89 frames, so the
+      // colour comes round again only after 8,633 frames, and two reads seconds apart never match.
+      const close = document.getElementById('close');
+      close.focus({ focusVisible: true });
+      let frame = 0;
+      const step = () => {
+        frame += 1;
+        close.style.setProperty(
+          '--ring-color',
+          `rgb(${120 + (frame % 97)} ${80 + (frame % 89)} 82)`,
+        );
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    </script>
+  </body>
+</html>

@@ -215,6 +215,13 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'contrast/high-contrast-7-5',
     'runner/no-javascript-scripting-media',
     'transparency/nav-over-image',
+    // Both fills read off one settled frame: a focused control's ring still settling is no
+    // see-through surface (lead, 3 Nov 2026, KC's offer dialog under reduced transparency).
+    'transparency/ring-settling',
+    // A surface whose DOM still moves isn't settled because two shots match, and one that never
+    // holds still says so (lead, 3 Nov 2026, the ring-settling case's 2-in-10 flake under load).
+    'transparency/ring-script-settling',
+    'transparency/ring-restless',
     'occlusion/grain-overlay',
     // 11-4: what only a sharded run's shards together show.
     'merged-verdict/whole-run',
