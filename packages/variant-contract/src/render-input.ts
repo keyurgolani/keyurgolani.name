@@ -236,11 +236,60 @@ function linkQuery(
 }
 
 /**
+ * The public view's fields the server takes from its clock, not from what a
+ * visitor sees, which the seed leaves out by name:
+ * - `derivedAt` on every ready derived record, a media asset's or a github
+ *   section's: when the server derived the asset or fetched the snapshot.
+ *   Read-only and demo derive their media at each start (deriveStartupMedia,
+ *   with no previous document), so it moves with every start;
+ * - `fetchedAt` in a github section's ready value: the same fetch time again.
+ * Nothing else in the view comes from a clock: an unavailable record's
+ * `since` is always null there, and every other date is authored or is
+ * GitHub's own data.
+ */
+export const SEED_CLOCK_FIELDS = Object.freeze([
+  'media.*.derived.derivedAt',
+  'derived.*.derivedAt',
+  'derived.*.value.fetchedAt',
+] as const);
+
+/** A derived record without the time it was derived at, and a github value without its fetch time. */
+function untimed(derived: { readonly state: string }): unknown {
+  if (derived.state !== 'ready') return derived;
+  const record: Record<string, unknown> = { ...derived };
+  delete record.derivedAt;
+  const value = record.value;
+  if (value !== null && typeof value === 'object' && 'fetchedAt' in value) {
+    const shown: Record<string, unknown> = { ...value };
+    delete shown.fetchedAt;
+    record.value = shown;
+  }
+  return record;
+}
+
+/** `view` as the seed reads it: SEED_CLOCK_FIELDS left out, everything else as it is. */
+function seedView(view: PublicView): unknown {
+  return {
+    ...view,
+    media: Object.fromEntries(
+      Object.entries(view.media).map(([id, asset]) => [
+        id,
+        { ...asset, derived: untimed(asset.derived) },
+      ]),
+    ),
+    derived: Object.fromEntries(
+      Object.entries(view.derived).map(([id, section]) => [id, untimed(section)]),
+    ),
+  };
+}
+
+/**
  * The first 8 hex digits of the SHA-256 of the public view's canonical JSON,
- * as an integer. The same visible content always gives the same seed, in
- * every runtime, and an edit to a hidden section changes nothing.
+ * less SEED_CLOCK_FIELDS, as an integer. The same visible content always
+ * gives the same seed, in every runtime and at every start, and an edit to a
+ * hidden section changes nothing.
  */
 export function viewSeed(view: PublicView): number {
-  const digest = sha256(new TextEncoder().encode(canonicalize(view)));
+  const digest = sha256(new TextEncoder().encode(canonicalize(seedView(view))));
   return ((digest[0]! << 24) | (digest[1]! << 16) | (digest[2]! << 8) | digest[3]!) >>> 0;
 }

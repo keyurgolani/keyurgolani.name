@@ -241,6 +241,90 @@ test("the seed is the first 8 hex digits of the published view's SHA-256, stable
   assert.ok(Number.isInteger(expected) && expected >= 0 && expected < 2 ** 32);
 });
 
+/**
+ * The engineering pair with an avatar asset and its github section, and its derived data as of
+ * `at`: the media document's one ready record derived then, and the snapshot fetched then.
+ */
+function derivedAt(at: string, { alt = 'Ines Okafor', stars = 4 } = {}) {
+  const from = pair('', (text) =>
+    text
+      .replace(
+        '  email: ines@okafor.test\n',
+        '  email: ines@okafor.test\n  avatar: { asset: ines-portrait }\n',
+      )
+      .replace(
+        '\nsections:\n',
+        `\nmedia:\n  - { id: ines-portrait, kind: image, source: ines.jpg, alt: ${alt} }\nsections:\n`,
+      ),
+  );
+  const sha = 'a'.repeat(64);
+  const media = {
+    assets: [
+      {
+        assetId: 'ines-portrait',
+        sha256: sha,
+        mime: 'image/jpeg',
+        bytes: 2048,
+        width: 800,
+        height: 1000,
+        aspectRatio: 0.8,
+        dominantColor: '#806040',
+        renditions: [
+          {
+            name: 'w480-a1',
+            ext: 'webp',
+            mime: 'image/webp',
+            bytes: 512,
+            width: 480,
+            height: 600,
+            sha256: 'b'.repeat(64),
+          },
+        ],
+        derivedAt: at,
+        algorithmVersion: 1,
+        source: { kind: 'local', path: 'ines.jpg' },
+        availability: { state: 'available' },
+      },
+    ],
+  };
+  const snapshot = {
+    adapter: 'github',
+    sectionId: 'on-code',
+    fetchedAt: at,
+    data: {
+      username: 'ines',
+      profileUrl: 'https://github.com/ines',
+      source: 'rest',
+      totalRepos: 3,
+      totalStarsReceived: stars,
+      starsGiven: null,
+      contributionsLastYear: null,
+      pinnedRepos: [],
+      recentlyActive: [],
+      contributionCalendar: [],
+      languageBreakdown: [],
+    },
+  };
+  return viewOf(from, { media, snapshots: { github: { records: [snapshot] } } });
+}
+
+test("the seed leaves out the times the server took from its clock: a derived record's derivedAt and a snapshot's fetchedAt", () => {
+  const morning = derivedAt('2026-11-02T09:00:00Z');
+  const night = derivedAt('2026-11-02T21:30:00Z');
+  // Both views are ready, and differ only in those times.
+  assert.equal(morning.media['ines-portrait']?.derived.state, 'ready');
+  assert.equal(morning.derived['on-code']?.state, 'ready');
+  assert.notEqual(canonicalize(morning), canonicalize(night));
+  assert.equal(viewSeed(morning), viewSeed(night));
+});
+
+test("a visible change to derived content still moves the seed: an asset's alt, a snapshot's count", () => {
+  const at = '2026-11-02T09:00:00Z';
+  const seed = viewSeed(derivedAt(at));
+  assert.notEqual(viewSeed(derivedAt(at, { alt: 'Ines Okafor smiling' })), seed);
+  assert.notEqual(viewSeed(derivedAt(at, { stars: 5 })), seed);
+});
+
 test('an edit no visitor sees leaves the seed alone, so decoration stays put', () => {
   const hidden = 'sections:\n  stack:\n    hidden: true\n';
   const before = buildRenderInput(args(pair(hidden))).env.seed;
