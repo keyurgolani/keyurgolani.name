@@ -779,6 +779,9 @@ function LiveStage(props: StageProps) {
           const nearest = snapAlong(geometry().offsets, progress, from);
           const top = pinStart() + offsetOf(nearest);
           if (Math.abs(window.scrollY - top) > 1) {
+            // The scene it finishes on is where the next turn sets out from, even one that comes
+            // as the snap closes, so that turn travels on from it rather than being pulled back.
+            rest = top;
             window.scrollTo({ top, behavior: behavior() });
             return;
           }
