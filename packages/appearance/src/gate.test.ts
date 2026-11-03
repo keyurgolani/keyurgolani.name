@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { contrast } from './color';
+import fs from 'node:fs';
+import { composite, contrast } from './color';
 import { anchorV1 } from './derive';
 import {
   contrastReport,
@@ -12,13 +13,21 @@ import {
   NEUTRAL_LANGUAGE,
   SMALL_SIGNATURE,
   MARK_MAX_PX,
+  SHADOW_KEY_PEAK,
+  shadowKey,
   textureLayers,
   type GateLanguage,
   type GatePair,
 } from './gate';
 import { schemeSets } from './sets';
 import type { LanguageTokens } from './tokens';
-import { HUMANIST_UI, PLATFORM_NEUTRAL, WARM_PARCHMENT } from './test-support/packs';
+import {
+  HUMANIST_UI,
+  packDir,
+  PLATFORM_NEUTRAL,
+  shippingSchemeSets,
+  WARM_PARCHMENT,
+} from './test-support/packs';
 
 // The computed gate (#19, Slice 2, items 2 and 8): the pairs, the targets,
 // compositing at surface-opacity over the worst backdrop, and the texture
@@ -84,8 +93,8 @@ test('the fallback trio passes every pair in every set it renders', () => {
     );
     // 4 text roles on 5 grounds, 9 fills, 5 signature, focus and border-strong on 5, text-primary
     // on surface-lit, focus-inverse on text-primary, and the lit surface's order (K-2), 6
-    // categorical, and focus-width.
-    assert.equal(pairs.length, 20 + 9 + 5 + 10 + 3 + 6 + 1);
+    // categorical, and focus-width; and text-secondary on 5 beside each of its 2 shadow keys.
+    assert.equal(pairs.length, 20 + 9 + 5 + 10 + 3 + 6 + 1 + 10);
   }
 });
 
@@ -368,6 +377,10 @@ test("what the gate reads from a language, and what it can't compute fails", () 
     focusWidth: 2,
     focusOffset: 2,
     signature: ['signature-start', 'signature-end'],
+    shadowKeys: [
+      { tokens: ['shadow-raised'], percent: 16 },
+      { tokens: ['shadow-card'], percent: 12 },
+    ],
   });
   assert.equal(language({ 'focus-offset': '0px' }).focusOffset, 0);
   assert.equal(language({ 'focus-offset': '-0.125rem' }).focusOffset, -2);
@@ -589,4 +602,171 @@ test('a flush focus ring is measured in its own color against each fill: one sch
     high.filter((pair) => !pair.passes).map((pair) => pair.ground),
     ['surface-default', 'surface-subtle'],
   );
+});
+
+// The shadow key (B, 2026-11-02): CI run 41510373684 found OA's captions,
+// text-secondary at the label role's size, at 4.00:1 32px below a raised
+// object under fluent-2-inspired, whose shadow64 key layer was 36% black.
+
+const layer = (shadow: string) => (role: string, percent: number) =>
+  `${shadow} color-mix(in srgb, var(--color-${role}) ${percent}%, transparent)`;
+const ambient = layer('0 0 8px');
+const shadow64 = layer('0 32px 64px');
+const shadow28 = layer('0 14px 28px');
+
+test("a shadow's key layer is its outer blurred layer that reaches furthest past its object, failing closed", () => {
+  const key = (value: string) => shadowKey('shadow-raised', value);
+  // Fluent's ambient-then-key pair: the key, not the ambient.
+  assert.deepEqual(key(`${ambient('shadow', 12)}, ${shadow64('shadow', 14)}`), {
+    key: { percent: 14 },
+    problems: [],
+  });
+  // One layer is its own key, in any role.
+  assert.deepEqual(key(layer('0 10px 28px')('text-primary', 16)).key, { percent: 16 });
+  // A wide soft layer over a tight contact one: the reach, not the strength, picks it.
+  assert.deepEqual(
+    key(`${layer('0 2px 3px')('shadow', 35)}, ${layer('0 14px 28px -6px')('shadow', 30)}`).key,
+    { percent: 30 },
+  );
+  // A tie in reach below goes to the stronger; a bare role is all of it; rem reads at 16px.
+  assert.deepEqual(
+    key(`${layer('0 1rem 1rem')('shadow', 10)}, 16px 16px 16px var(--color-accent)`).key,
+    { percent: 100 },
+  );
+  // A layer cast up and back reaches less far below: neumorphic's highlight isn't its key.
+  assert.deepEqual(
+    key(`${layer('8px 8px 16px')('text-primary', 16)}, ${layer('-8px -8px 16px')('canvas', 85)}`)
+      .key,
+    { percent: 16 },
+  );
+  // Nothing casts: none, inset layers, rings and hard offsets with no blur, transparent.
+  for (const none of [
+    'none',
+    'inset 0 -12px 0 var(--color-accent)',
+    `inset 0 1px 0 ${layer('')('canvas', 80).trim()}`,
+    '0 0 0 3px var(--color-canvas), 0 0 0 4px var(--color-accent)',
+    '8px 8px 0 var(--color-shadow)',
+    '0 4px 12px transparent',
+  ]) {
+    assert.deepEqual(key(none), { key: null, problems: [] }, none);
+  }
+  // A layer the gate can't read fails, never passes as no shadow.
+  for (const unreadable of [
+    '0 2px 8px rgba(0, 0, 0, 0.2)',
+    '0 2px 8px red',
+    '2px var(--color-shadow)',
+    '0 2px 8px var(--color-no-such-role)',
+    `0 2px 8px color-mix(in srgb, var(--color-shadow) 12%, var(--color-canvas))`,
+  ]) {
+    const read = key(unreadable);
+    assert.equal(read.key, null, unreadable);
+    assert.equal(read.problems.length, 1, unreadable);
+    const gate = gateLanguage({ ...PLATFORM_NEUTRAL.tokens, 'shadow-card': unreadable });
+    assert.equal(gate.ok, false, unreadable);
+    assert.match(
+      gate.ok ? '' : gate.problems.join('\n'),
+      /^shadow-card layer 1 .* isn't a shadow the gate reads/,
+    );
+  }
+  // The language reads raised and card, and one key both cast once.
+  assert.deepEqual(
+    language({
+      'shadow-raised': `${ambient('shadow', 12)}, ${shadow64('shadow', 14)}`,
+      'shadow-card': `${ambient('shadow', 12)}, ${shadow28('shadow', 14)}`,
+    }).shadowKeys,
+    [{ tokens: ['shadow-raised', 'shadow-card'], percent: 14 }],
+  );
+  assert.deepEqual(language({ 'shadow-raised': 'none', 'shadow-card': 'none' }).shadowKeys, []);
+});
+
+test("the darkest point is half the key layer, Phi(0) at its own box edge, which gives C's probe of OA x fluent-2-inspired to the pixel", () => {
+  assert.equal(SHADOW_KEY_PEAK, 0.5);
+  const parchment = shippingSchemeSets().find(({ id }) => id === 'warm-parchment')!.sets.light!;
+  // shadow64 at 36% black, 32px below its object: C read (185, 178, 164) there, 4.00:1, and 6.02:1 bare.
+  const darkest = composite(
+    parchment.shadow,
+    parchment['surface-prominent'],
+    0.36 * SHADOW_KEY_PEAK,
+  );
+  const channels = [1, 3, 5].map((at) => Number.parseInt(darkest.slice(at, at + 2), 16));
+  [185, 178, 164].forEach((probed, index) => assert.ok(Math.abs(channels[index]! - probed) <= 1));
+  assert.equal(floor(contrast(parchment['text-secondary'], darkest)), 4.0);
+  assert.equal(floor(contrast(parchment['text-secondary'], parchment['surface-prominent'])), 6.02);
+});
+
+test('text-secondary keeps 4.5:1 beside each shadow key, on the canvas and every surface, in every set', () => {
+  const raised = `${ambient('shadow', 16)}, ${shadow64('shadow', 36)}`;
+  const dark = language({ 'shadow-raised': raised, 'shadow-card': 'none' });
+  for (const name of ['light', 'dark', 'high-contrast-light', 'high-contrast-dark'] as const) {
+    const set = SETS[name]!;
+    const pairs = gateSet(set, name, dark, SMALL_SIGNATURE).filter(({ shadow }) => shadow);
+    assert.deepEqual(
+      pairs.map(({ ground }) => ground),
+      ['canvas', 'surface-subtle', 'surface-default', 'surface-prominent', 'surface-overlay'],
+      name,
+    );
+    for (const pair of pairs) {
+      assert.equal(pair.kind, 'text');
+      assert.equal(pair.foreground, 'text-secondary');
+      assert.equal(pair.shadow, 'the shadow-raised key layer at 36%');
+      // 4.5:1, in a high-contrast set too: the label's size, not the set, sets it.
+      assert.equal(pair.target, 4.5);
+      const shaded = composite(set.shadow, set[pair.ground as 'canvas'], 0.36 * SHADOW_KEY_PEAK);
+      assert.equal(
+        pair.ratio,
+        floor(contrast(set['text-secondary'], shaded)),
+        `${name} ${pair.ground}`,
+      );
+    }
+  }
+  // In light, surface-prominent goes under, as OA's captions did, where the bare pair passes.
+  const light = gateSet(SETS.light!, 'light', dark, SMALL_SIGNATURE);
+  assert.equal(
+    light.find((pair) => pair.shadow && pair.ground === 'surface-prominent')!.passes,
+    false,
+  );
+  assert.equal(find(light, 'text-secondary', 'surface-prominent').shadow, undefined);
+  assert.equal(find(light, 'text-secondary', 'surface-prominent').passes, true);
+  // A key written in another role darkens in --color-shadow at its alpha, as the lead ruled.
+  const written = language({
+    'shadow-raised': shadow64('text-primary', 36),
+    'shadow-card': 'none',
+  });
+  assert.deepEqual(
+    gateSet(SETS.dark!, 'dark', written, SMALL_SIGNATURE).filter(({ shadow }) => shadow),
+    gateSet(SETS.dark!, 'dark', dark, SMALL_SIGNATURE).filter(({ shadow }) => shadow),
+  );
+  // No key, no pair; a translucent surface is read over each backdrop under it.
+  const flat = language({ 'shadow-raised': 'none', 'shadow-card': 'none' });
+  assert.equal(
+    gateSet(SETS.light!, 'light', flat, SMALL_SIGNATURE).filter(({ shadow }) => shadow).length,
+    0,
+  );
+  const glassy = gateSet(
+    SETS.light!,
+    'light',
+    language({ 'surface-opacity': '72%', 'shadow-raised': raised, 'shadow-card': 'none' }),
+    SMALL_SIGNATURE,
+  ).filter(({ shadow }) => shadow);
+  assert.ok(glassy.some(({ backdrop }) => backdrop !== undefined));
+});
+
+test("fluent-2-inspired keeps text-secondary at 4.5:1 beside its raised and card key layers in every shipping scheme and set (CI run 41510373684's OA cells)", () => {
+  const manifest = JSON.parse(
+    fs.readFileSync(
+      new URL('manifest.json', packDir('appearance-languages', 'fluent-2-inspired')),
+      'utf8',
+    ),
+  ) as { tokens: LanguageTokens };
+  const read = gateLanguage(manifest.tokens);
+  assert.ok(read.ok);
+  assert.ok((read.language.shadowKeys ?? []).length > 0);
+  const failing = shippingSchemeSets().flatMap(({ id, sets }) =>
+    (Object.keys(sets) as (keyof typeof sets)[]).flatMap((name) =>
+      gateSet(sets[name]!, name, read.language, SMALL_SIGNATURE)
+        .filter(({ shadow, passes }) => shadow && !passes)
+        .map(({ ground, ratio, shadow }) => `${id} ${name} ${ground} ${ratio}:1 beside ${shadow}`),
+    ),
+  );
+  assert.deepEqual(failing.slice(0, 5), [], `${failing.length} pairs under 4.5:1`);
 });

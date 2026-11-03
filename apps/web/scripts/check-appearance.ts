@@ -129,7 +129,7 @@ function describe(check: AppearanceCheck): string[] {
     ),
     ...check.failures.map(({ language, scheme, typography, modes, pair }) => {
       const on = pair.ground
-        ? ` on ${pair.ground}${pair.backdrop ? ` over ${pair.backdrop}` : ''}${pair.wash ? ` under ${pair.wash}` : ''}`
+        ? ` on ${pair.ground}${pair.backdrop ? ` over ${pair.backdrop}` : ''}${pair.wash ? ` under ${pair.wash}` : ''}${pair.shadow ? ` beside ${pair.shadow}` : ''}`
         : '';
       const measured =
         pair.kind === 'focus-width'

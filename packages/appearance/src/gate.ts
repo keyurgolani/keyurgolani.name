@@ -21,6 +21,14 @@
 // a budget for it; pairs on fills (on-accent, on-status, on-scrim) keep
 // theirs. A texture with both gets both.
 //
+// A shadow key (B, 2026-11-02, the lead's ruling after CI run 41510373684):
+// a raised object's or a card's shadow falls on the ground beside it, where
+// a caption sits, so the gate reads the key layer of shadow-raised and
+// shadow-card (shadowKey()), composites --color-shadow at SHADOW_KEY_PEAK of
+// its alpha over the canvas and each surface, and holds text-secondary there,
+// at the label role's size, to 4.5:1 in every set. A failure names the key
+// layer and is the language's, unless the bare pair fails too.
+//
 // A flush focus ring (LANG-5c, lead A's ruling): with --ui-focus-offset 0 or
 // less, the ring touches the part it rings, or sits inside it, so on a filled
 // part the ring reads against that fill, not the ground around it. Then focus
@@ -154,6 +162,8 @@ export interface GateLanguage {
   readonly focusOffset: number;
   /** The color roles --ui-signature-fill paints, in order. */
   readonly signature: readonly ColorRole[];
+  /** The key layers --ui-shadow-raised and --ui-shadow-card cast beside their object (shadowKey()). */
+  readonly shadowKeys?: readonly ShadowKey[];
 }
 
 /** What the gate reads from a typography profile. */
@@ -192,6 +202,8 @@ export interface GatePair {
   readonly backdrop?: string;
   /** For a surface under a texture wash, the wash it reads worst under, such as `the 4% accent wash`. */
   readonly wash?: string;
+  /** For a ground beside a raised object, the key layer darkening it, such as `the shadow-raised key layer at 14%`. */
+  readonly shadow?: string;
   /** The contrast ratio, or the width in px for focus-width, rounded down to two places. */
   readonly ratio: number;
   readonly target: number;
@@ -389,6 +401,87 @@ export function textureLayers(texture: string): {
   };
 }
 
+/** The shadows whose key layer falls on the ground beside their object, where a caption sits. */
+export const SHADOW_KEY_TOKENS = ['shadow-raised', 'shadow-card'] as const;
+export type ShadowToken = (typeof SHADOW_KEY_TOKENS)[number];
+
+/**
+ * The share of a key layer's alpha the gate lays at its darkest point
+ * beside its object (B, 2026-11-02, after CI run 41510373684's OA x
+ * fluent-2-inspired captions). A box-shadow's blur is a Gaussian whose
+ * sigma is half the blur length, so at the edge of the shadow's own box,
+ * its offset plus its spread past the object's edge, it lays half its
+ * alpha, Phi(0), whatever its blur. Content beside a raised object starts
+ * there: shadow64's box ends 32px below its object, where OA's captions
+ * sit, and C's probe read the darkest ground pixel there with the glyphs
+ * hidden at 18% black, half the 36% key, 4.00:1 on warm-parchment's
+ * surface-prominent, which this model gives to the hundredth. Nearer the
+ * object the layer is darker, up to Phi((offset + spread) / sigma), 0.84
+ * for every Fluent level: text inside a shadow's box reads darker than this.
+ */
+export const SHADOW_KEY_PEAK = 0.5;
+
+/**
+ * A shadow's key layer as the gate reads it: its alpha, the share of its
+ * color's role, which the gate lays in --color-shadow, as the lead ruled
+ * (the darkening a key layer casts, whatever role it's written in).
+ */
+export interface ShadowKey {
+  /** The tokens that cast it: one key both cast is read once. */
+  readonly tokens: readonly ShadowToken[];
+  /** From 0 to 100. */
+  readonly percent: number;
+}
+
+/**
+ * A shadow's key layer, failing closed: of its outer layers with a blur,
+ * the one that reaches furthest below its object, where a caption sits
+ * (its y offset, plus its spread and its blur), the stronger on a tie.
+ * Fluent's ambient layer, `0 0 8px`, reaches 8px; its key, `0 32px 64px`,
+ * 96px; neumorphic's light upper-left layer, `-8px -8px 16px`, 8px, under
+ * its dark lower-right one's 24px. An inset layer
+ * paints inside the object, and a layer with no blur is an edge (a ring,
+ * a hard offset block) that ends within its offset, so neither casts
+ * onto the ground beside it. Null when no layer does. A layer whose
+ * lengths or color the gate can't read is a problem, never a pass.
+ */
+export function shadowKey(
+  token: ShadowToken,
+  value: string,
+): { readonly key: Omit<ShadowKey, 'tokens'> | null; readonly problems: readonly string[] } {
+  const shadow = normalTexture(value);
+  if (shadow === 'none') return { key: null, problems: [] };
+  const problems: string[] = [];
+  let key: { percent: number; reach: number } | null = null;
+  topLevel(shadow, ',').forEach((layer, index) => {
+    const words = topLevel(layer, ' ');
+    if (words.includes('inset')) return;
+    const lengths: number[] = [];
+    const colors: string[] = [];
+    for (const word of words) {
+      const length = pixels(word, true);
+      if (length === null) colors.push(word);
+      else lengths.push(length);
+    }
+    const color = colors.length === 1 ? stopColor(colors[0]!) : null;
+    if (lengths.length < 2 || lengths.length > 4 || !color) {
+      problems.push(
+        `${token} layer ${index + 1} (${layer}) isn't a shadow the gate reads: write it as two to four px, rem, or em lengths and one color, var(--color-<role>) or color-mix(in <space>, var(--color-<role>) P%, transparent).`,
+      );
+      return;
+    }
+    const [, y = 0, blur = 0, spread = 0] = lengths;
+    if (blur <= 0 || color.role === null || color.percent === 0) return;
+    const reach = y + spread + blur;
+    if (!key || reach > key.reach || (reach === key.reach && color.percent > key.percent)) {
+      key = { percent: color.percent, reach };
+    }
+  });
+  if (problems.length > 0) return { key: null, problems };
+  const found = key as { percent: number } | null;
+  return { key: found && { percent: found.percent }, problems };
+}
+
 /**
  * What the gate reads from a language's tokens, or why it can't: a value
  * it can't compute fails the gate rather than passing unchecked.
@@ -432,6 +525,15 @@ export function gateLanguage(
   }
   const texture = textureLayers(tokens.texture);
   problems.push(...texture.problems);
+  const shadowKeys: { tokens: ShadowToken[]; percent: number }[] = [];
+  for (const token of SHADOW_KEY_TOKENS) {
+    const read = shadowKey(token, tokens[token]);
+    problems.push(...read.problems);
+    if (!read.key) continue;
+    const same = shadowKeys.find(({ percent }) => percent === read.key!.percent);
+    if (same) same.tokens.push(token);
+    else shadowKeys.push({ tokens: [token], ...read.key });
+  }
   if (problems.length > 0) return { ok: false, problems };
   return {
     ok: true,
@@ -443,6 +545,7 @@ export function gateLanguage(
       focusWidth: focusWidth!,
       focusOffset: focusOffset!,
       signature: colorReferences(tokens['signature-fill']),
+      shadowKeys,
     },
   };
 }
@@ -514,6 +617,7 @@ interface Reading {
   readonly ratio: number;
   readonly backdrop?: string;
   readonly wash?: string;
+  readonly shadow?: string;
 }
 
 /** The worst ratio of any of `colors` on any view of `ground`, with the backdrop and wash it's under. */
@@ -548,7 +652,7 @@ function fillColors(set: ColorTokens, roles: readonly ColorRole[]): string[] {
 
 /**
  * Every pair one color set must pass with `language` and `typography`, in a
- * fixed order: text on grounds, fills, the signature fill, non-text, a
+ * fixed order: text on grounds, text-secondary under each shadow key, fills, the signature fill, non-text, a
  * flush focus ring on each fill it touches, and the focus ring's width.
  */
 export function gateSet(
@@ -579,6 +683,7 @@ export function gateSet(
       ground: on,
       ...(result.backdrop !== undefined ? { backdrop: result.backdrop } : {}),
       ...(result.wash !== undefined ? { wash: result.wash } : {}),
+      ...(result.shadow !== undefined ? { shadow: result.shadow } : {}),
       ratio: floor2(result.ratio),
       target,
       passes: result.ratio >= target,
@@ -587,6 +692,28 @@ export function gateSet(
 
   for (const role of TEXT_ROLES) {
     for (const g of ground) add('text', role, g.role, worstOn([set[role]], g), raised(text, raise));
+  }
+  // The shadow key (B, 2026-11-02): a caption, text-secondary at the label
+  // role's size, on the ground beside a raised object or a card, darkened by
+  // its key layer at SHADOW_KEY_PEAK of its alpha, keeps 4.5:1 in every set.
+  for (const key of language.shadowKeys ?? []) {
+    const shadow = `the ${key.tokens.join(' and ')} key layer at ${Math.round(key.percent * 100) / 100}%`;
+    for (const g of ground) {
+      const shaded: Ground = {
+        role: g.role,
+        views: g.views.map((view) => ({
+          ...view,
+          color: composite(set.shadow, view.color, (key.percent / 100) * SHADOW_KEY_PEAK),
+        })),
+      };
+      add(
+        'text',
+        'text-secondary',
+        g.role,
+        { ...worstOn([set['text-secondary']], shaded), shadow },
+        targets.text,
+      );
+    }
   }
   for (const [on, fills] of FILL_PAIRS) {
     for (const fill of fills) {

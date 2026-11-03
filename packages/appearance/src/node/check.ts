@@ -195,7 +195,9 @@ const schemePairKey = ({ scheme, pair }: GateFailure) =>
 
 /** The scheme pairs among `failures` that fail on an opaque surface under no wash, for responsiblePack(). */
 export function opaqueFailing(failures: readonly GateFailure[]): ReadonlySet<string> {
-  return new Set(failures.filter(({ pair }) => !pair.backdrop && !pair.wash).map(schemePairKey));
+  return new Set(
+    failures.filter(({ pair }) => !pair.backdrop && !pair.wash && !pair.shadow).map(schemePairKey),
+  );
 }
 
 /**
@@ -203,8 +205,9 @@ export function opaqueFailing(failures: readonly GateFailure[]): ReadonlySet<str
  * focus ring's width, a flush ring on a fill it touches (its offset is the
  * language's), a translucent surface read over its worst backdrop, or a
  * surface read under a texture wash (LANG-5c round 2), is the design
- * language's; every other pair is between the color scheme's own roles. A
- * backdrop or wash failure stays the scheme's when the same pair fails on a
+ * language's, and so is one read beside a raised object under the language's
+ * shadow key (B, 2026-11-02); every other pair is between the color scheme's own roles. A
+ * backdrop, wash, or shadow failure stays the scheme's when the same pair fails on a
  * bare opaque surface too (`opaque`, from opaqueFailing()), since no floor
  * or lighter wash would fix it (#20 PR 2c).
  */
@@ -215,7 +218,8 @@ export function responsiblePack(
   if (
     failure.pair.kind === 'focus-width' ||
     failure.pair.kind === 'focus-inside' ||
-    ((failure.pair.backdrop || failure.pair.wash) && !opaque.has(schemePairKey(failure)))
+    ((failure.pair.backdrop || failure.pair.wash || failure.pair.shadow) &&
+      !opaque.has(schemePairKey(failure)))
   ) {
     return { axis: 'designLanguage', id: failure.language };
   }

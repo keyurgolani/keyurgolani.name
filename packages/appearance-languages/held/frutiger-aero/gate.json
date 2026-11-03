@@ -145,6 +145,19 @@
       "failing": 12
     },
     {
+      "set": "light",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-prominent",
+      "backdrop": "#000000",
+      "wash": "the 18% accent wash",
+      "shadow": "the shadow-raised and shadow-card key layer at 22%",
+      "ratio": 2.69,
+      "target": 4.5,
+      "scheme": "ultramarine-ink",
+      "failing": 18
+    },
+    {
       "set": "dark",
       "kind": "text",
       "foreground": "text-muted",
@@ -229,6 +242,19 @@
       "failing": 20
     },
     {
+      "set": "light",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-prominent",
+      "backdrop": "#000000",
+      "wash": "the 16% information wash",
+      "shadow": "the shadow-raised and shadow-card key layer at 22%",
+      "ratio": 2.84,
+      "target": 4.5,
+      "scheme": "signal-paper",
+      "failing": 9
+    },
+    {
       "set": "dark",
       "kind": "text",
       "foreground": "text-muted",
@@ -239,6 +265,19 @@
       "target": 4.5,
       "scheme": "aurora-meadow",
       "failing": 20
+    },
+    {
+      "set": "light",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-default",
+      "backdrop": "#000000",
+      "wash": "the 18% accent wash",
+      "shadow": "the shadow-raised and shadow-card key layer at 22%",
+      "ratio": 2.85,
+      "target": 4.5,
+      "scheme": "ultramarine-ink",
+      "failing": 19
     },
     {
       "set": "light",
@@ -375,6 +414,19 @@
     {
       "set": "light",
       "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-subtle",
+      "backdrop": "#000000",
+      "wash": "the 18% accent wash",
+      "shadow": "the shadow-raised and shadow-card key layer at 22%",
+      "ratio": 3.02,
+      "target": 4.5,
+      "scheme": "paper-ink",
+      "failing": 20
+    },
+    {
+      "set": "light",
+      "kind": "text",
       "foreground": "text-muted",
       "ground": "surface-default",
       "backdrop": "#000000",
@@ -383,6 +435,19 @@
       "target": 4.5,
       "scheme": "ultramarine-ink",
       "failing": 19
+    },
+    {
+      "set": "light",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-default",
+      "backdrop": "#000000",
+      "wash": "the 16% information wash",
+      "shadow": "the shadow-raised and shadow-card key layer at 22%",
+      "ratio": 3.04,
+      "target": 4.5,
+      "scheme": "aurora-meadow",
+      "failing": 8
     },
     {
       "set": "light",
@@ -410,6 +475,19 @@
     },
     {
       "set": "light",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-overlay",
+      "backdrop": "#000000",
+      "wash": "the 18% accent wash",
+      "shadow": "the shadow-raised and shadow-card key layer at 22%",
+      "ratio": 3.07,
+      "target": 4.5,
+      "scheme": "ultramarine-ink",
+      "failing": 20
+    },
+    {
+      "set": "light",
       "kind": "non-text",
       "foreground": "data-categorical-5",
       "ground": "surface-default",
@@ -431,6 +509,19 @@
       "target": 4.5,
       "scheme": "high-contrast",
       "failing": 8
+    },
+    {
+      "set": "dark",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-prominent",
+      "backdrop": "#ffffff",
+      "wash": "the 18% accent wash",
+      "shadow": "the shadow-raised and shadow-card key layer at 22%",
+      "ratio": 3.09,
+      "target": 4.5,
+      "scheme": "aurora-meadow",
+      "failing": 17
     },
     {
       "set": "dark",
@@ -527,6 +618,19 @@
       "target": 4.5,
       "scheme": "high-contrast",
       "failing": 9
+    },
+    {
+      "set": "light",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-subtle",
+      "backdrop": "#000000",
+      "wash": "the 16% information wash",
+      "shadow": "the shadow-raised and shadow-card key layer at 22%",
+      "ratio": 3.2,
+      "target": 4.5,
+      "scheme": "signal-paper",
+      "failing": 7
     },
     {
       "set": "light",
@@ -686,6 +790,19 @@
     {
       "set": "light",
       "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-overlay",
+      "backdrop": "#000000",
+      "wash": "the 16% information wash",
+      "shadow": "the shadow-raised and shadow-card key layer at 22%",
+      "ratio": 3.28,
+      "target": 4.5,
+      "scheme": "signal-paper",
+      "failing": 7
+    },
+    {
+      "set": "light",
+      "kind": "text",
       "foreground": "accent-text",
       "ground": "surface-overlay",
       "backdrop": "#000000",
@@ -718,6 +835,19 @@
       "target": 3,
       "scheme": "neon-city",
       "failing": 12
+    },
+    {
+      "set": "dark",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-overlay",
+      "backdrop": "#ffffff",
+      "wash": "the 18% accent wash",
+      "shadow": "the shadow-raised and shadow-card key layer at 22%",
+      "ratio": 3.35,
+      "target": 4.5,
+      "scheme": "aurora-meadow",
+      "failing": 17
     },
     {
       "set": "light",
@@ -802,6 +932,32 @@
       "target": 4.5,
       "scheme": "ultramarine-ink",
       "failing": 10
+    },
+    {
+      "set": "dark",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-prominent",
+      "backdrop": "#ffffff",
+      "wash": "the 16% information wash",
+      "shadow": "the shadow-raised and shadow-card key layer at 22%",
+      "ratio": 3.47,
+      "target": 4.5,
+      "scheme": "ultramarine-ink",
+      "failing": 12
+    },
+    {
+      "set": "dark",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-default",
+      "backdrop": "#ffffff",
+      "wash": "the 18% accent wash",
+      "shadow": "the shadow-raised and shadow-card key layer at 22%",
+      "ratio": 3.49,
+      "target": 4.5,
+      "scheme": "aurora-meadow",
+      "failing": 18
     },
     {
       "set": "dark",
@@ -960,6 +1116,19 @@
       "set": "dark",
       "kind": "text",
       "foreground": "text-secondary",
+      "ground": "surface-overlay",
+      "backdrop": "#ffffff",
+      "wash": "the 16% information wash",
+      "shadow": "the shadow-raised and shadow-card key layer at 22%",
+      "ratio": 3.78,
+      "target": 4.5,
+      "scheme": "ultramarine-ink",
+      "failing": 11
+    },
+    {
+      "set": "dark",
+      "kind": "text",
+      "foreground": "text-secondary",
       "ground": "surface-subtle",
       "backdrop": "#ffffff",
       "wash": "the 16% information wash",
@@ -1015,6 +1184,19 @@
     },
     {
       "set": "dark",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-subtle",
+      "backdrop": "#ffffff",
+      "wash": "the 18% accent wash",
+      "shadow": "the shadow-raised and shadow-card key layer at 22%",
+      "ratio": 3.84,
+      "target": 4.5,
+      "scheme": "aurora-meadow",
+      "failing": 13
+    },
+    {
+      "set": "dark",
       "kind": "non-text",
       "foreground": "focus",
       "ground": "surface-default",
@@ -1060,6 +1242,19 @@
       "target": 3,
       "scheme": "sunset-ember",
       "failing": 8
+    },
+    {
+      "set": "dark",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-default",
+      "backdrop": "#ffffff",
+      "wash": "the 16% information wash",
+      "shadow": "the shadow-raised and shadow-card key layer at 22%",
+      "ratio": 3.98,
+      "target": 4.5,
+      "scheme": "jewel-twilight",
+      "failing": 10
     },
     {
       "set": "dark",
@@ -1251,6 +1446,19 @@
       "failing": 2
     },
     {
+      "set": "dark",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-subtle",
+      "backdrop": "#ffffff",
+      "wash": "the 16% information wash",
+      "shadow": "the shadow-raised and shadow-card key layer at 22%",
+      "ratio": 4.33,
+      "target": 4.5,
+      "scheme": "ultramarine-ink",
+      "failing": 6
+    },
+    {
       "set": "light",
       "kind": "non-text",
       "foreground": "focus",
@@ -1300,10 +1508,10 @@
   ],
   "opacityFloor": {
     "withTexture": null,
-    "withoutTexture": 97
+    "withoutTexture": 99
   },
   "unblockedBy": [
     "a lighter wash than 18% accent and 16% information, since the gate composites a wash over each surface",
-    "its translucency floor once its wash passes: surface-opacity 97% without its texture, the least that passes over the worst backdrop"
+    "its translucency floor once its wash passes: surface-opacity 99% without its texture, the least that passes over the worst backdrop"
   ]
 }

@@ -503,6 +503,19 @@ test("the responsible pack: a focus ring's width, a flush ring on a fill, and a 
     axis: 'colorScheme',
     id: 'scheme',
   });
+  // So is a pair beside a raised object under its shadow key (B, 2026-11-02).
+  const shaded = {
+    ...failure,
+    pair: { ...failure.pair, shadow: 'the shadow-raised key layer at 36%' },
+  };
+  assert.deepEqual(responsiblePack(shaded, opaqueFailing([shaded])), {
+    axis: 'designLanguage',
+    id: 'lang',
+  });
+  assert.deepEqual(responsiblePack(shaded, opaqueFailing([shaded, failure])), {
+    axis: 'colorScheme',
+    id: 'scheme',
+  });
   // A flush ring on a fill it touches is the language's: its offset puts the ring on the fill
   // (LANG-5c review P1-2). It has no backdrop, so it is in the opaque set, and stays the language's.
   const focusInside = {

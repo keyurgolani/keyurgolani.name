@@ -79,6 +79,7 @@ export interface HeldPair {
   readonly ground: string;
   readonly backdrop?: string;
   readonly wash?: string;
+  readonly shadow?: string;
   readonly ratio: number;
   readonly target: number;
   /** The scheme it's measured with. */
@@ -189,6 +190,7 @@ function failures(
             ground: pair.ground,
             ...(pair.backdrop ? { backdrop: pair.backdrop } : {}),
             ...(pair.wash ? { wash: pair.wash } : {}),
+            ...(pair.shadow ? { shadow: pair.shadow } : {}),
             ratio: pair.ratio,
             target: pair.target,
             scheme: scheme.manifest.id,
@@ -242,7 +244,7 @@ export function heldRecord(
   if (!found || found.pairs.length === 0) return null;
   const groups = new Map<string, HeldPair[]>();
   for (const pair of found.pairs) {
-    const key = `${pair.set} ${pair.kind} ${pair.foreground} ${pair.ground} ${pair.backdrop ?? ''} ${pair.wash ?? ''}`;
+    const key = `${pair.set} ${pair.kind} ${pair.foreground} ${pair.ground} ${pair.backdrop ?? ''} ${pair.wash ?? ''} ${pair.shadow ?? ''}`;
     groups.set(key, [...(groups.get(key) ?? []), pair]);
   }
   const pairs = [...groups.values()]

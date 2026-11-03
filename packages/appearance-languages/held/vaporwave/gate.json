@@ -3,7 +3,7 @@
   "id": "vaporwave",
   "kind": "design-language",
   "tier": "experimental",
-  "reason": "It fails check:appearance with 31 of 31 color schemes: its floor is opaque: its 78% surfaces fall under the targets over a black or white backdrop at every opacity under 100%, and without its texture they'd pass at 97%.",
+  "reason": "It fails check:appearance with 31 of 31 color schemes: its floor is opaque: its 78% surfaces fall under the targets over a black or white backdrop at every opacity under 100%, and without its texture they'd pass at 99%.",
   "causes": [
     "texture",
     "translucency"
@@ -255,6 +255,18 @@
       "failing": 25
     },
     {
+      "set": "light",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-prominent",
+      "backdrop": "#000000",
+      "shadow": "the shadow-raised key layer at 22%",
+      "ratio": 2.82,
+      "target": 4.5,
+      "scheme": "botanical-sage",
+      "failing": 27
+    },
+    {
       "set": "high-contrast-light",
       "kind": "non-text",
       "foreground": "data-categorical-1",
@@ -398,6 +410,30 @@
       "failing": 31
     },
     {
+      "set": "light",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-prominent",
+      "backdrop": "#000000",
+      "shadow": "the shadow-card key layer at 16%",
+      "ratio": 2.99,
+      "target": 4.5,
+      "scheme": "botanical-sage",
+      "failing": 27
+    },
+    {
+      "set": "light",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-default",
+      "backdrop": "#000000",
+      "shadow": "the shadow-raised key layer at 22%",
+      "ratio": 3,
+      "target": 4.5,
+      "scheme": "reduced-chroma",
+      "failing": 27
+    },
+    {
       "set": "dark",
       "kind": "non-text",
       "foreground": "data-categorical-2",
@@ -510,6 +546,18 @@
     {
       "set": "light",
       "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-subtle",
+      "backdrop": "#000000",
+      "shadow": "the shadow-raised key layer at 22%",
+      "ratio": 3.16,
+      "target": 4.5,
+      "scheme": "botanical-sage",
+      "failing": 27
+    },
+    {
+      "set": "light",
+      "kind": "text",
       "foreground": "accent-text",
       "ground": "surface-overlay",
       "backdrop": "#000000",
@@ -526,6 +574,30 @@
       "backdrop": "#000000",
       "ratio": 3.53,
       "target": 4.95,
+      "scheme": "botanical-sage",
+      "failing": 27
+    },
+    {
+      "set": "light",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-overlay",
+      "backdrop": "#000000",
+      "shadow": "the shadow-raised key layer at 22%",
+      "ratio": 3.22,
+      "target": 4.5,
+      "scheme": "botanical-sage",
+      "failing": 27
+    },
+    {
+      "set": "light",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-default",
+      "backdrop": "#000000",
+      "shadow": "the shadow-card key layer at 16%",
+      "ratio": 3.22,
+      "target": 4.5,
       "scheme": "botanical-sage",
       "failing": 27
     },
@@ -552,6 +624,18 @@
       "failing": 31
     },
     {
+      "set": "dark",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-prominent",
+      "backdrop": "#ffffff",
+      "shadow": "the shadow-card key layer at 16%",
+      "ratio": 3.26,
+      "target": 4.5,
+      "scheme": "control-room",
+      "failing": 29
+    },
+    {
       "set": "high-contrast-dark",
       "kind": "non-text",
       "foreground": "data-categorical-1",
@@ -563,6 +647,18 @@
       "failing": 23
     },
     {
+      "set": "light",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-subtle",
+      "backdrop": "#000000",
+      "shadow": "the shadow-card key layer at 16%",
+      "ratio": 3.38,
+      "target": 4.5,
+      "scheme": "botanical-sage",
+      "failing": 27
+    },
+    {
       "set": "dark",
       "kind": "text",
       "foreground": "text-secondary",
@@ -571,6 +667,18 @@
       "ratio": 3.72,
       "target": 4.95,
       "scheme": "sepia-film",
+      "failing": 29
+    },
+    {
+      "set": "dark",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-prominent",
+      "backdrop": "#ffffff",
+      "shadow": "the shadow-raised key layer at 22%",
+      "ratio": 3.4,
+      "target": 4.5,
+      "scheme": "control-room",
       "failing": 29
     },
     {
@@ -594,6 +702,18 @@
       "target": 3.3,
       "scheme": "pastel-sorbet",
       "failing": 21
+    },
+    {
+      "set": "light",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-overlay",
+      "backdrop": "#000000",
+      "shadow": "the shadow-card key layer at 16%",
+      "ratio": 3.42,
+      "target": 4.5,
+      "scheme": "low-stimulus-warm",
+      "failing": 27
     },
     {
       "set": "light",
@@ -638,6 +758,18 @@
       "target": 7.7,
       "scheme": "low-stimulus-warm",
       "failing": 31
+    },
+    {
+      "set": "dark",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-overlay",
+      "backdrop": "#ffffff",
+      "shadow": "the shadow-card key layer at 16%",
+      "ratio": 3.58,
+      "target": 4.5,
+      "scheme": "control-room",
+      "failing": 29
     },
     {
       "set": "light",
@@ -686,6 +818,18 @@
     {
       "set": "dark",
       "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-overlay",
+      "backdrop": "#ffffff",
+      "shadow": "the shadow-raised key layer at 22%",
+      "ratio": 3.74,
+      "target": 4.5,
+      "scheme": "control-room",
+      "failing": 28
+    },
+    {
+      "set": "dark",
+      "kind": "text",
       "foreground": "text-primary",
       "ground": "surface-overlay",
       "backdrop": "#ffffff",
@@ -693,6 +837,18 @@
       "target": 4.95,
       "scheme": "neutral-slate",
       "failing": 8
+    },
+    {
+      "set": "dark",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-default",
+      "backdrop": "#ffffff",
+      "shadow": "the shadow-card key layer at 16%",
+      "ratio": 3.77,
+      "target": 4.5,
+      "scheme": "sepia-film",
+      "failing": 28
     },
     {
       "set": "high-contrast-dark",
@@ -728,6 +884,18 @@
       "failing": 4
     },
     {
+      "set": "dark",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-default",
+      "backdrop": "#ffffff",
+      "shadow": "the shadow-raised key layer at 22%",
+      "ratio": 3.92,
+      "target": 4.5,
+      "scheme": "control-room",
+      "failing": 28
+    },
+    {
       "set": "light",
       "kind": "non-text",
       "foreground": "focus",
@@ -759,6 +927,18 @@
       "target": 3.3,
       "scheme": "sepia-film",
       "failing": 18
+    },
+    {
+      "set": "dark",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-subtle",
+      "backdrop": "#ffffff",
+      "shadow": "the shadow-card key layer at 16%",
+      "ratio": 4.16,
+      "target": 4.5,
+      "scheme": "sepia-film",
+      "failing": 24
     },
     {
       "set": "high-contrast-dark",
@@ -805,6 +985,18 @@
       "failing": 1
     },
     {
+      "set": "dark",
+      "kind": "text",
+      "foreground": "text-secondary",
+      "ground": "surface-subtle",
+      "backdrop": "#ffffff",
+      "shadow": "the shadow-raised key layer at 22%",
+      "ratio": 4.3,
+      "target": 4.5,
+      "scheme": "sepia-film",
+      "failing": 14
+    },
+    {
       "set": "light",
       "kind": "non-text",
       "foreground": "focus",
@@ -829,7 +1021,7 @@
   ],
   "opacityFloor": {
     "withTexture": 100,
-    "withoutTexture": 97
+    "withoutTexture": 99
   },
   "unblockedBy": [
     "the owner's call: whether the approved design still holds at 100% surface-opacity, its floor, since no translucent opacity passes over the worst backdrop with its texture"

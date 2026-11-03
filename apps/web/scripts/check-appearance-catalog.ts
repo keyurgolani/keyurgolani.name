@@ -136,7 +136,7 @@ export function contrastRecords(check: AppearanceCheck): CatalogRecord[] {
     const { pair } = failure;
     const label = `contrast: ${pair.foreground}${pair.ground ? ` on ${pair.ground}` : ''}${
       pair.backdrop ? ` over ${pair.backdrop}` : ''
-    } in ${pair.set}`;
+    }${pair.shadow ? ` beside ${pair.shadow}` : ''} in ${pair.set}`;
     for (const mode of failure.modes) {
       const key = [
         id,
@@ -145,6 +145,7 @@ export function contrastRecords(check: AppearanceCheck): CatalogRecord[] {
         pair.foreground,
         pair.ground,
         pair.backdrop ?? '',
+        pair.shadow ?? '',
         pair.set,
         mode,
       ].join('\0');

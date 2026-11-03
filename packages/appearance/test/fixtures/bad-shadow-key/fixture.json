@@ -1,0 +1,19 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "fluent-2-inspired's raised shadow at 1.1.5, an 8px ambient layer at 16% and a 0 32px 64px key at 36% of the shadow role, on platform-neutral, which every registry holds. CI run 41510373684 found OA's captions at 4.00:1 beside it, 32px below a raised object, where the key lays half its alpha, so the gate reads the key layer and composites it beside the object (B, 2026-11-02).",
+  "patch": {
+    "tokens": {
+      "shadow-raised": "0 0 8px color-mix(in srgb, var(--color-shadow) 16%, transparent), 0 32px 64px color-mix(in srgb, var(--color-shadow) 36%, transparent)"
+    }
+  },
+  "expect": [
+    {
+      "pair": {
+        "set": "light",
+        "foreground": "text-secondary",
+        "ground": "surface-prominent"
+      }
+    }
+  ]
+}
