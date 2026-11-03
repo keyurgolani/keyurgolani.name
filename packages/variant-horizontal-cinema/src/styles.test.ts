@@ -56,9 +56,10 @@ test('on a laptop’s short window the strip steps its spacing down and widens t
   );
   assert.equal(short.length, 1);
   const block = short[0]!;
-  // Only where the strip shows, below the 900 px window the strip was laid out for.
+  // Only where the strip shows, below the 900 px window the strip was laid out for: a shell that
+  // falls back top to bottom keeps the full top line, so the visitor control's ring clears the top.
   assert.match(
-    declared(at(".hc[data-view='strip']"), block),
+    declared(at(".hc[data-view='strip']:not(:has(.hc-shell[data-fit='over']))"), block),
     /--layout-pad-block: var\(--space-2xs\);/,
   );
   assert.match(block, /\[data-w='8'\]:has\(\.hc-section \+ \.hc-section\) \{\s*--layout-cols: 10;/);
@@ -98,4 +99,34 @@ test('a scene that still overflows in a wider face opens a width wider, never sh
     if (head!.includes('[data-room]'))
       assert.doesNotMatch(body!, /font-size|line-height|font-family|--type-|zoom|scale/);
   }
+});
+
+test('the stage, the top line’s links, and a folded scene’s title ring where nothing covers or clips them', () => {
+  // The stage's ring is the frame's, over the stage's row, above its scenes.
+  const ring = declared(at('.hc-frame:has(> .hc-stage:focus-visible)::after'), CSS);
+  assert.match(ring, /grid-row: 1;/);
+  assert.match(ring, /z-index: 1;/);
+  assert.match(ring, /border: var\(--ui-focus-width\) solid var\(--color-focus\);/);
+  assert.match(declared(at('.hc-frame'), CSS), /grid-template-columns: minmax\(0, 1fr\);/);
+  // The top line's links ring in the matte's ink, over the platform's ring, at its width and offset.
+  const chrome = declared(
+    at(':is(.hc-chrome__name, .hc-chrome__nav a):focus-visible::before'),
+    CSS,
+  );
+  assert.match(chrome, /border: var\(--ui-focus-width\) solid var\(--color-on-scrim\);/);
+  assert.match(
+    chrome,
+    /inset: calc\(\(var\(--ui-focus-width\) \+ var\(--ui-focus-offset\)\) \* -1\);/,
+  );
+  // On a phone a folded scene's title keeps its ring's room inside the scene's clip.
+  const summary = declared(at('.hc-fold__summary'), blocks(PHONE).join('\n'));
+  assert.match(summary, /margin-inline: var\(--layout-ring\);/);
+  assert.match(summary, /margin-block-end: var\(--layout-ring\);/);
+});
+
+test('a scene’s words arrive by moving alone, never dimmed, so a frame off screen keeps its contrast', () => {
+  const arrive = CSS.slice(CSS.indexOf('@keyframes horizontal-cinema-arrive'));
+  const body = arrive.slice(0, arrive.indexOf('\n}\n'));
+  assert.match(body, /transform: translateX\(var\(--layout-arrive\)\);/);
+  assert.doesNotMatch(body, /opacity|filter/);
 });

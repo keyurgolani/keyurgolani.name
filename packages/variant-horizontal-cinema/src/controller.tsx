@@ -263,6 +263,11 @@ function Scrubber({
  * chapter and scene the reader is in, and a sheet of the five chapters.
  * The sheet is a native popover, so it opens and closes with no script.
  */
+/** The chapter sheet's links, in order: what its focus goes round. */
+const sheetLinks = (sheet: HTMLElement): HTMLAnchorElement[] => [
+  ...sheet.querySelectorAll<HTMLAnchorElement>('a[href]'),
+];
+
 function Jump({
   scenes,
   chapters,
@@ -306,6 +311,28 @@ function Jump({
         aria-label="Chapters"
         onClick={(event) => {
           if ((event.target as Element).closest('a')) event.currentTarget.hidePopover();
+        }}
+        // Opened, the sheet takes focus to the chapter the reader is in, and Tab and Shift and Tab go
+        // round its links until Escape or a link closes it, when the popover gives focus back.
+        onToggle={(event) => {
+          if (event.newState !== 'open') return;
+          const links = sheetLinks(event.currentTarget);
+          (links.find((link) => link.hasAttribute('aria-current')) ?? links[0])?.focus();
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== 'Tab' || event.altKey || event.ctrlKey || event.metaKey) return;
+          const links = sheetLinks(event.currentTarget);
+          const at = links.indexOf(event.target as HTMLAnchorElement);
+          const to = event.shiftKey
+            ? at <= 0
+              ? links.at(-1)
+              : undefined
+            : at === links.length - 1
+              ? links[0]
+              : undefined;
+          if (!to) return;
+          event.preventDefault();
+          to.focus();
         }}
       >
         <ol role="list">

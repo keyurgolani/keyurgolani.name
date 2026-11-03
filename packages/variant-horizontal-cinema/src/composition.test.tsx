@@ -312,8 +312,13 @@ test('the controller never handles the wheel or a touch, writes no history entry
   for (const [line] of source.matchAll(/addEventListener\('scroll'[^\n]*/g)) {
     assert.match(line, /passive: true/, line);
   }
-  // It calls preventDefault for an arrow step and for Home or End alone.
-  assert.equal(source.match(/preventDefault\(\)/g)?.length, 2);
+  // It calls preventDefault for an arrow step and for Home or End alone, and in the open chapter
+  // sheet for Tab at either end of its links, which goes round them.
+  assert.equal(source.match(/preventDefault\(\)/g)?.length, 3);
+  assert.match(
+    source,
+    /if \(event\.key !== 'Tab' \|\| event\.altKey \|\| event\.ctrlKey \|\| event\.metaKey\) return;[\s\S]{0,400}if \(!to\) return;\s*event\.preventDefault\(\);/,
+  );
   assert.doesNotMatch(source, /pushState|location\.(?:assign|replace)\(|location\.hash\s*=/);
   assert.equal(source.match(/history\.replaceState/g)?.length, 1);
   // It names a scene in the URL only while one is being read, and never over a fragment inside that scene.

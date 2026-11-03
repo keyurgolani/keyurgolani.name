@@ -97,6 +97,26 @@
   outline-color: var(--color-on-scrim);
 }
 
+/*
+ * The top line's own links ring in the matte's ink, drawn here: the platform's ring (the utilities
+ * layer, above this one, so its colour can't be set from here) is the scheme's focus colour, which
+ * falls under 3:1 on cinema black and on the views' band. A border in on-scrim, at the platform's
+ * width and offset off the link, lies over it, only while the link has focus. The visitor control
+ * is the platform's own, and keeps its ring.
+ */
+[data-variant='horizontal-cinema'] :is(.hc-chrome__name, .hc-chrome__nav a):focus-visible {
+  position: relative;
+}
+
+[data-variant='horizontal-cinema'] :is(.hc-chrome__name, .hc-chrome__nav a):focus-visible::before {
+  content: '';
+  position: absolute;
+  inset: calc((var(--ui-focus-width) + var(--ui-focus-offset)) * -1);
+  border: var(--ui-focus-width) solid var(--color-on-scrim);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
 [data-variant='horizontal-cinema'] .hc-chrome__name {
   display: inline-flex;
   flex-wrap: wrap;
@@ -194,6 +214,29 @@
 
 [data-variant='horizontal-cinema'] .hc-stage:focus-visible {
   outline-offset: calc(var(--ui-focus-width) * -1);
+}
+
+/*
+ * The stage's focus ring, drawn here over its scenes: the platform's ring sits outside the stage,
+ * where the viewport's edges, the top line, and the strip's fade hide it, and its offset isn't the
+ * composition's to set. The frame is one column, so the ring takes the stage's row, whatever the
+ * scrubber under it, and stays put while the strip travels under it.
+ */
+[data-variant='horizontal-cinema'] .hc-frame {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-variant='horizontal-cinema'] .hc-frame:has(> .hc-stage:focus-visible)::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  grid-row: 1;
+  grid-column: 1;
+  inset: 0;
+  border: var(--ui-focus-width) solid var(--color-focus);
+  pointer-events: none;
 }
 
 [data-variant='horizontal-cinema'] .hc-track {
@@ -1813,8 +1856,13 @@
     justify-content: space-between;
     gap: var(--space-2xs) var(--space-s);
     min-block-size: 2.75rem;
-    padding-block: var(--space-s);
-    padding-inline: var(--layout-pad);
+    /* Its ring's room inside the scene, which clips at its sides and, folded, its foot: the words
+       stay where they were, and the scene keeps its height. */
+    --layout-ring: calc(var(--ui-focus-width) + var(--ui-focus-offset));
+    margin-inline: var(--layout-ring);
+    margin-block-end: var(--layout-ring);
+    padding-block: var(--space-s) calc(var(--space-s) - var(--layout-ring));
+    padding-inline: calc(var(--layout-pad) - var(--layout-ring));
     cursor: pointer;
   }
 
@@ -2907,7 +2955,9 @@
  * still fits its frame, and the fit check keeps the strip.
  */
 @media (min-width: 64rem) and (min-height: 44rem) and (max-height: 56rem) and (hover: hover) and (pointer: fine) {
-  [data-variant='horizontal-cinema'] .hc[data-view='strip'] {
+  /* Only while the strip shows: a shell that falls back top to bottom keeps the top line's full
+     height, so the visitor control's ring clears the page's top edge. */
+  [data-variant='horizontal-cinema'] .hc[data-view='strip']:not(:has(.hc-shell[data-fit='over'])) {
     --layout-chrome: calc(var(--space-s) * 2);
     --layout-scrub: calc(var(--space-s) * 3);
     --layout-bar: calc(var(--space-s) * 1.4);
@@ -3120,14 +3170,14 @@
   }
 }
 
+/* A scene's words arrive by moving alone, at full strength: a frame not yet on screen reads at its
+   own contrast, and the stage's fade at its end is what dims the peek. */
 @keyframes horizontal-cinema-arrive {
   from {
-    opacity: 0.4;
     transform: translateX(var(--layout-arrive));
   }
 
   to {
-    opacity: 1;
     transform: none;
   }
 }
