@@ -509,6 +509,13 @@
   align-items: center;
   /* Never closer than a focus ring reaches, so no tool's box lies over its neighbour's ring. */
   gap: max(var(--space-2xs), calc(var(--ui-focus-offset) + var(--ui-focus-width)));
+  /* The ground reaches past the tools as far as a focus ring does, and no further (a wrapped
+     bar's rows are that far apart), with the layout unmoved: the end tool's ring otherwise ran
+     onto the liquid where it reaches the bar, 1.35:1 there (quality-pr, 1440: Appearance's ring
+     with the Linux fonts). */
+  --layout-fx-ring-reach: calc(var(--ui-focus-offset) + var(--ui-focus-width));
+  padding: var(--layout-fx-ring-reach);
+  margin: calc(-1 * var(--layout-fx-ring-reach));
   border-radius: var(--ui-radius-badge);
   background-color: var(--color-canvas);
 }
@@ -1423,6 +1430,14 @@
   list-style: none;
 }
 
+/* A focused fold's ring is painted over the folds after it: the next fold's hairline runs within a
+   ring's reach of this one's foot, and a later box paints over an earlier one's outline, so the
+   ring's foot lost a row to it (quality-pr, 390: #talks, the talks fold over the next one's line). */
+[data-variant='flux'] .fx-fold__summary:focus-visible {
+  position: relative;
+  z-index: 1;
+}
+
 [data-variant='flux'] .fx-fold__summary::-webkit-details-marker {
   display: none;
 }
@@ -2100,6 +2115,10 @@
 [data-variant='flux'] .fx-close__address a {
   text-decoration-color: var(--layout-fx-ink);
   text-decoration-thickness: 0.08em;
+  /* The underline ends inside the link's box, clear of its focus ring: at the links' 0.18em it ran
+     about 0.04em past the box's foot, under the ring's inner row, where the ring read 1.46:1 on
+     the ink (quality-pr, 1440 and 1024: the address's ring short by a row along its foot). */
+  text-underline-offset: 0.08em;
 }
 
 [data-variant='flux'] .fx-close__copy {
@@ -2580,8 +2599,12 @@
     padding-block-end: calc(var(--layout-bar) + var(--space-2xl));
   }
 
+  /* Clear of the whole dock: its row (at least --layout-bar) and the padding round it, which the
+     row's min-block-size doesn't include. At --layout-bar alone a control Tab brought up from
+     below stopped its last few pixels under the dock, and its ring's foot with them (quality-pr,
+     390: a stats fold, 5.8px under). */
   [data-variant='flux'] :is(a, button, summary) {
-    scroll-margin-block-end: calc(var(--layout-bar) + var(--space-s));
+    scroll-margin-block-end: calc(var(--layout-bar) + 2 * var(--space-xs) + var(--space-s));
   }
 
   [data-variant='flux'] .fx-opening-frame {
