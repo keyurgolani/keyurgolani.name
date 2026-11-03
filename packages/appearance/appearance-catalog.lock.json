@@ -536,10 +536,10 @@
     "primer-inspired": {
       "axis": "designLanguage",
       "package": "@portfolio/appearance-languages",
-      "version": "1.0.6",
+      "version": "1.0.7",
       "tier": "stable",
       "license": "independent-inspired-interpretation",
-      "digest": "sha256-d0b741f64f009c9d6c3a183c0056419c262cd10ab094f3bf074218a56acddf42"
+      "digest": "sha256-d7e86493e05a529703a6621ecea3e9d6836edfac2f8a940f23dd9d8c4cc50ac1"
     },
     "profile-image": {
       "axis": "colorScheme",
