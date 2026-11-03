@@ -39,6 +39,16 @@
 // isn't skipped: the ground shows between it and the fill, so what it reads
 // against is the ground, which the focus-on-ground pairs already hold there.
 //
+// A focus ring's offset (B, 2026-11-02, cause 4 of CI run 41510373684): a
+// language's focus-offset is at least the offset target, 2px. At 1px, Primer's
+// 2px ring put its inner bottom row on an underlined inline link's underline,
+// so those pixels changed from the underline's color to the ring's at 1.0 to
+// 2.4:1, and the ring's change fell short of 2.4.7 and 1.4.11 in all five of
+// OA's cells. It's a language's own check, not a pair: focusOffsetProblem().
+// A flush ring, an offset of 0 or less, is exempt (the lead's ruling,
+// 2026-11-02): LANG-5c's allowance stands, its focus-inside pairs hold it, and
+// a flush ring over an underline is for the quality cells to catch.
+//
 // The targets are #11's, in quality/thresholds.json (#11, AC5). `pnpm
 // check:appearance` reads them from that file and passes them in. A browser
 // can't read the file, so GATE_TARGETS is the default every other caller
@@ -69,6 +79,8 @@ export interface GateTargets {
   readonly textureRaise: number;
   /** The narrowest focus ring, in CSS px. */
   readonly focusWidth: number;
+  /** The nearest a focus ring sits off the part it rings, in CSS px (focusOffsetProblem()). */
+  readonly focusOffset: number;
   /** WCAG large text: at least this many points... */
   readonly largeTextPt: number;
   /** ...or at least this many at largeBoldWeight or heavier. */
@@ -86,6 +98,7 @@ export const GATE_TARGETS: GateTargets = Object.freeze({
   highContrastNonText: 4.5,
   textureRaise: 1.1,
   focusWidth: 2,
+  focusOffset: 2,
   largeTextPt: 18,
   largeBoldTextPt: 14,
   largeBoldWeight: 700,
@@ -799,6 +812,22 @@ export function gateSet(
     passes: language.focusWidth >= targets.focusWidth,
   });
   return pairs;
+}
+
+/**
+ * Why `language`'s focus ring sits too near the part it rings, or null when
+ * it doesn't: a focus-offset over 0 and under `targets.focusOffset` (2px) puts the
+ * ring's inner row on an underlined inline link's underline, where the ring
+ * changes those pixels under 3:1 (WCAG 2.4.7 and 1.4.11). It doesn't depend
+ * on a color set, so `pnpm check:appearance` asks it once per language.
+ */
+export function focusOffsetProblem(
+  language: GateLanguage,
+  targets: GateTargets = GATE_TARGETS,
+): string | null {
+  // A flush ring (0 or less) is LANG-5c's, held by its focus-inside pairs instead.
+  if (language.focusOffset <= 0 || language.focusOffset >= targets.focusOffset) return null;
+  return `focus-offset is ${floor2(language.focusOffset)}px, under the ${targets.focusOffset}px a focus ring needs: nearer, its inner row lands on an underlined link's underline and changes those pixels under 3:1.`;
 }
 
 /** A scheme's sets gated on their own: what a generator reports with what it generates. */

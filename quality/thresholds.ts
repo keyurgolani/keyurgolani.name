@@ -73,7 +73,9 @@ export const ThresholdsSchema = z
         textureRaise: z.number().min(1).max(2),
       })
       .strict(),
-    focus: z.object({ description: Description, perimeterPx: Positive }).strict(),
+    focus: z
+      .object({ description: Description, perimeterPx: Positive, offsetPx: Positive })
+      .strict(),
     targets: z
       .object({
         description: Description,

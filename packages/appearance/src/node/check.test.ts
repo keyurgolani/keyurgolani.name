@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LAYER_ORDER } from '../layers';
+import { GATE_TARGETS } from '../gate';
 import { DERIVED_ROLES, withDerivedRoles } from '../derived-roles';
 import { createAppearanceRegistry, findPack, type MetaPack } from '../registry';
 import { schemeSets } from '../sets';
@@ -150,6 +151,47 @@ test('a failure names its pack on each axis, the set, the pair, and the modes th
   assert.deepEqual(failure.modes, ['system', 'light', 'dark']);
   assert.equal(failure.pair.kind, 'large-text');
   assert.equal(failure.pair.target, 3.3);
+});
+
+test("a language whose focus ring sits over 0 and under 2px off its part fails once, as its own problem, and its pairs still run, while a flush ring is LANG-5c's (cause 4)", () => {
+  const near = (id: string, offset: string) =>
+    ({
+      kind: 'design-language',
+      packageName: '@portfolio/appearance',
+      version: '0.0.0',
+      manifest: {
+        ...PLATFORM_NEUTRAL,
+        id,
+        tokens: { ...PLATFORM_NEUTRAL.tokens, 'focus-offset': offset },
+      },
+    }) as MetaPack;
+  const check = checkAppearance(
+    createAppearanceRegistry({
+      VARIANTS,
+      PACKS: [
+        ...FALLBACKS,
+        near('acme-near', '1px'),
+        near('acme-flush', '0px'),
+        near('acme-clear', '2px'),
+      ],
+    }),
+  );
+  assert.equal(check.ok, false);
+  assert.deepEqual(
+    check.problems.map(({ axis, id, message }) => `${axis} ${id}: ${message.split(':')[0]}`),
+    ['designLanguage acme-near: focus-offset is 1px, under the 2px a focus ring needs'],
+  );
+  // A flush ring is exempt (the lead's ruling): no problem of its own; LANG-5c's focus-inside pairs hold it.
+  assert.ok(check.problems.every(({ id }) => id !== 'acme-flush'));
+  // Its pairs are gated as every language's are: acme-near's are platform-neutral's, all passing.
+  assert.ok(check.combinations > 0);
+  assert.equal(check.failures.filter(({ language }) => language === 'acme-near').length, 0);
+  // At a caller's 1px target, 1px passes.
+  const loose = checkAppearance(
+    createAppearanceRegistry({ VARIANTS, PACKS: [...FALLBACKS, near('acme-near', '1px')] }),
+    { targets: { ...GATE_TARGETS, focusOffset: 1 } },
+  );
+  assert.deepEqual(loose.problems, []);
 });
 
 test('the hierarchy check holds the accent states and the quieter text roles apart', () => {

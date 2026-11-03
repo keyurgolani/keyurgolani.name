@@ -5,6 +5,7 @@ import { composite, contrast } from './color';
 import { anchorV1 } from './derive';
 import {
   contrastReport,
+  focusOffsetProblem,
   GATE_TARGETS,
   gateLanguage,
   gateSet,
@@ -61,6 +62,7 @@ test('the targets are the refined body and #11 targets', () => {
       highContrastNonText: 4.5,
       textureRaise: 1.1,
       focusWidth: 2,
+      focusOffset: 2,
       largeTextPt: 18,
       largeBoldTextPt: 14,
       largeBoldWeight: 700,
@@ -411,6 +413,36 @@ test("what the gate reads from a language, and what it can't compute fails", () 
     assert.equal(read.ok, false, `${key}: ${value}`);
     assert.match(read.ok ? '' : read.problems.join('\n'), pattern);
   }
+});
+
+test("a focus ring nearer than 2px off its part fails, a flush or inset one is LANG-5c's and exempt, and the target is the caller's (cause 4)", () => {
+  // primer-inspired 1.0.6's 1px: the ring's inner row lands on an underlined link's underline.
+  assert.equal(
+    focusOffsetProblem(language({ 'focus-offset': '1px' })),
+    "focus-offset is 1px, under the 2px a focus ring needs: nearer, its inner row lands on an underlined link's underline and changes those pixels under 3:1.",
+  );
+  for (const offset of ['0.5px', '1.5px', '0.0625rem']) {
+    assert.match(
+      focusOffsetProblem(language({ 'focus-offset': offset })) ?? '',
+      /under the 2px a focus ring needs/,
+      offset,
+    );
+  }
+  // The flush and inset rings are exempt (the lead's ruling): their focus-inside pairs hold them.
+  for (const offset of ['0px', '-2px', '2px', '3px', '0.125rem']) {
+    assert.equal(focusOffsetProblem(language({ 'focus-offset': offset })), null, offset);
+  }
+  assert.equal(GATE_TARGETS.focusOffset, 2);
+  assert.match(
+    focusOffsetProblem(language({ 'focus-offset': '2px' }), { ...GATE_TARGETS, focusOffset: 3 }) ??
+      '',
+    /focus-offset is 2px, under the 3px/,
+  );
+  // It's the language's, not a pair: no set's pairs change with the offset outward.
+  assert.deepEqual(
+    gateSet(SETS.light!, 'light', language({ 'focus-offset': '1px' }), SMALL_SIGNATURE),
+    gateSet(SETS.light!, 'light', language({ 'focus-offset': '2px' }), SMALL_SIGNATURE),
+  );
 });
 
 test('a focus ring under 2px fails, and a gradient fill is checked along its length', () => {
