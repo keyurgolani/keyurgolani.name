@@ -20,8 +20,9 @@
     "textureRaise": 1.1
   },
   "focus": {
-    "description": "Non-text focus contrast is contrast.nonText against adjacent colors. The focus change covers at least perimeterPx, in CSS px, also under forced colors.",
-    "perimeterPx": 2
+    "description": "Non-text focus contrast is contrast.nonText against adjacent colors. The focus change covers at least perimeterPx, in CSS px, also under forced colors. A design language's focus-offset, when it's over 0, is at least offsetPx, in CSS px (a flush ring, 0 or less, is held by #19's focus-inside pairs instead): nearer, an outline's inner row lands on an underlined inline link's underline, where it changes those pixels under 3:1.",
+    "perimeterPx": 2,
+    "offsetPx": 2
   },
   "targets": {
     "description": "Target sizes in CSS px, measured on the padded hit area by hit-testing. minimumPx everywhere (2.5.8: its spacing exception allowed, inline text links exempt). narrowPx for non-inline targets at narrowMaxWidth or narrower. primaryPx at any density for fixed or sticky controls, computed on the control or an ancestor, and for primary touch controls: those inside the #19 Navigation primitive, or in a registration's primaryActions.",

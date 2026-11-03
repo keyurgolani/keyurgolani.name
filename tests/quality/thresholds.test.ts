@@ -62,6 +62,7 @@ test("quality/thresholds.json holds the refined body's Thresholds table", () => 
   assert.deepEqual(t.contrast.print, { text: 4.5, paper: '#ffffff' });
   assert.equal(t.contrast.textureRaise, 1.1);
   assert.equal(t.focus.perimeterPx, 2);
+  assert.equal(t.focus.offsetPx, 2);
   assert.deepEqual(
     [t.targets.minimumPx, t.targets.narrowPx, t.targets.narrowMaxWidth, t.targets.primaryPx],
     [24, 32, 768, 44],

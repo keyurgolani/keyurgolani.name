@@ -19,6 +19,7 @@ export function appearanceTargets(thresholds: Thresholds = loadThresholds()): Ga
     highContrastNonText: contrast.highContrast.nonText,
     textureRaise: contrast.textureRaise,
     focusWidth: focus.perimeterPx,
+    focusOffset: focus.offsetPx,
     largeTextPt: contrast.largeTextPt,
     largeBoldTextPt: contrast.largeBoldTextPt,
     largeBoldWeight: contrast.largeBoldWeight,

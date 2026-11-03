@@ -29,6 +29,7 @@ test('appearanceTargets maps every threshold the gate reads, and nothing else', 
   moved.contrast.largeBoldTextPt = 15;
   moved.contrast.largeBoldWeight = 600;
   moved.focus.perimeterPx = 3;
+  moved.focus.offsetPx = 4;
   assert.deepEqual(appearanceTargets(moved), {
     text: 5,
     largeText: 3.5,
@@ -38,6 +39,7 @@ test('appearanceTargets maps every threshold the gate reads, and nothing else', 
     highContrastNonText: 5.5,
     textureRaise: 1.2,
     focusWidth: 3,
+    focusOffset: 4,
     largeTextPt: 20,
     largeBoldTextPt: 15,
     largeBoldWeight: 600,

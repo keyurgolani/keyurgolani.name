@@ -1,0 +1,15 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with its focus ring 1px off the part, as primer-inspired 1.0.6 set it: under the 2px offset the gate needs, the ring's inner row lands on an underlined inline link's underline (cause 4 of CI run 41510373684).",
+  "patch": {
+    "tokens": {
+      "focus-offset": "1px"
+    }
+  },
+  "expect": [
+    {
+      "problem": "focus-offset is 1px, under the 2px a focus ring needs"
+    }
+  ]
+}

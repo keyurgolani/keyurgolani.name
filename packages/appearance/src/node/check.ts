@@ -1,8 +1,9 @@
 // `pnpm check:appearance` (#19, Slice 2, item 8): the computed gate over every
 // registered design-language, color-scheme, typography, and display-mode
 // combination, skipping single-mode tuples a scheme can't render and fixture
-// packs; the hierarchy check, which holds each scheme's accent states and
-// quieter text roles apart; and the layer order of every layered stylesheet.
+// packs; each language's focus offset, at least 2px when over 0
+// (focusOffsetProblem()); the hierarchy check, which holds each scheme's
+// accent states and quieter text roles apart; and the layer order of every layered stylesheet.
 // A known-bad test input under packages/appearance/test/fixtures/ joins the
 // run when named, and the run must fail on it.
 //
@@ -21,6 +22,7 @@ import { deltaE } from '../color';
 import { DISTINCT_PAIRS } from '../derive';
 import { coreRoles, DERIVED_ROLES } from '../derived-roles';
 import {
+  focusOffsetProblem,
   GATE_TARGETS,
   gateLanguage,
   gateSet,
@@ -357,7 +359,13 @@ export function checkAppearance(
     .filter((entry) => keep('designLanguage', entry))
     .flatMap((entry) => {
       const read = gateLanguage(entry.manifest.tokens);
-      if (read.ok) return [{ id: entry.manifest.id, gate: read.language }];
+      if (read.ok) {
+        // The ring's offset is the language's alone, whatever set it reads in: one problem, not a pair per set.
+        const offset = focusOffsetProblem(read.language, targets);
+        if (offset)
+          problems.push({ axis: 'designLanguage', id: entry.manifest.id, message: offset });
+        return [{ id: entry.manifest.id, gate: read.language }];
+      }
       for (const message of read.problems)
         problems.push({ axis: 'designLanguage', id: entry.manifest.id, message });
       return [];
