@@ -384,6 +384,7 @@ function LiveStage(props: StageProps) {
   const root = useRef<HTMLDivElement | null>(null);
   const stage = useRef<HTMLDivElement | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
+  const emRef = useRef<HTMLSpanElement | null>(null);
   const animate = useRef(false);
   const step = useRef<(by: 1 | -1) => void>(() => {});
 
@@ -448,6 +449,8 @@ function LiveStage(props: StageProps) {
     let moved = false;
     /** Where the page last came to rest, so the pin's snap knows which way a travel went from there. */
     let rest = window.scrollY;
+    /** The scene focus moved into since then, which the browser scrolled into view: the snap keeps it. */
+    let focusScene: number | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let frame: number | undefined;
 
@@ -776,7 +779,13 @@ function LiveStage(props: StageProps) {
         const progress = window.scrollY - pinStart();
         if (progress > 0 && progress < travel() - 1) {
           const from = Math.min(travel(), Math.max(0, rest - pinStart()));
-          const nearest = snapAlong(geometry().offsets, progress, from);
+          // Focus that moved into a scene brought it into view: the snap finishes on that scene, so a
+          // Tab is never carried off what it reached.
+          const held =
+            focusScene !== undefined && elements[focusScene]?.contains(doc.activeElement)
+              ? focusScene
+              : undefined;
+          const nearest = held ?? snapAlong(geometry().offsets, progress, from);
           const top = pinStart() + offsetOf(nearest);
           if (Math.abs(window.scrollY - top) > 1) {
             // The scene it finishes on is where the next turn sets out from, even one that comes
@@ -789,6 +798,7 @@ function LiveStage(props: StageProps) {
       }
       aligning = null;
       rest = window.scrollY;
+      focusScene = undefined;
       // The move is over: its limit no longer runs.
       if (overdueTimer !== undefined) clearTimeout(overdueTimer);
       overdueTimer = undefined;
@@ -1033,29 +1043,47 @@ function LiveStage(props: StageProps) {
     setHydrated(true);
 
     let refit: ReturnType<typeof setTimeout> | undefined;
+    /** The strip laid out again for the viewport and the text size now in force: the fit check, room, and pin. */
+    const refitNow = () => {
+      delete rootElement.dataset.fit;
+      unroom();
+      invalidate();
+      // Where the page was in the pin, as a scene, before the pin's length changes under it.
+      const inside =
+        pinned && window.scrollY >= pinStart() && window.scrollY <= pinStart() + travel();
+      const held = position;
+      fitName();
+      fit(false);
+      pin();
+      // A reader inside the strip keeps their scene; one above or below it stays where they are.
+      if (inside && pinned)
+        window.scrollTo({ top: pinStart() + offsetOf(held), behavior: 'instant' });
+      paint();
+    };
     const onResize = () => {
       if (refit !== undefined) clearTimeout(refit);
       refit = setTimeout(() => {
         refit = undefined;
-        delete rootElement.dataset.fit;
-        unroom();
-        invalidate();
-        requestAnimationFrame(() => {
-          // Where the page was in the pin, as a scene, before the pin's length changes under it.
-          const inside =
-            pinned && window.scrollY >= pinStart() && window.scrollY <= pinStart() + travel();
-          const held = position;
-          fitName();
-          fit(false);
-          pin();
-          // A reader inside the strip keeps their scene; one above or below it stays where they are.
-          if (inside && pinned)
-            window.scrollTo({ top: pinStart() + offsetOf(held), behavior: 'instant' });
-          paint();
-        });
+        requestAnimationFrame(refitNow);
       }, SETTLE_MS);
       if (frame === undefined) frame = requestAnimationFrame(paint);
     };
+    // A change of text size, the root's font size or a reader's own, moves no edge of the window, so
+    // no resize comes: a sentinel 1rem square says it, and the strip is fitted again at once.
+    let sized = false;
+    const textSize =
+      typeof ResizeObserver === 'undefined'
+        ? undefined
+        : new ResizeObserver(() => {
+            if (sized && !disposed) refitNow();
+            sized = true;
+          });
+    if (emRef.current) textSize?.observe(emRef.current);
+    const onFocusIn = (event: FocusEvent) => {
+      const at = elements.findIndex((element) => element?.contains(event.target as Node));
+      focusScene = at >= 0 ? at : undefined;
+    };
+    stageElement.addEventListener('focusin', onFocusIn);
 
     rootElement.addEventListener('keydown', onKey);
     window.addEventListener('hashchange', onHash);
@@ -1119,6 +1147,8 @@ function LiveStage(props: StageProps) {
       rootElement.removeEventListener('keydown', onKey);
       window.removeEventListener('hashchange', onHash);
       stageElement.removeEventListener('scroll', onStageScroll);
+      stageElement.removeEventListener('focusin', onFocusIn);
+      textSize?.disconnect();
       window.removeEventListener('scroll', onPageScroll);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('load', relayout);
@@ -1140,6 +1170,7 @@ function LiveStage(props: StageProps) {
   return (
     <div ref={setRoot} className="hc-shell" data-runtime={state === 'static' ? undefined : state}>
       <Jump {...props} current={current} />
+      <span ref={emRef} className="hc-shell__em" aria-hidden="true" />
       <div ref={frameRef} className="hc-frame">
         <div ref={stage} className="hc-stage" role="region" aria-label={props.label} tabIndex={0}>
           <div className="hc-track">{props.children}</div>
