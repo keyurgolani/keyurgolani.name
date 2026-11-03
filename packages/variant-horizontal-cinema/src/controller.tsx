@@ -246,7 +246,9 @@ function Scrubber({
       </MapTag>
       <div className="hc-scrub__end">
         {live ? (
-          <p className="hc-scrub__status" role="status" data-type-role="label">
+          // Only the live script sets the position, and a static one would be wrong wherever the
+          // reader is, so the page without it, and on paper, has none: its words are script-only.
+          <p className="hc-scrub__status" role="status" data-type-role="label" data-script-only="">
             {scenes[live.status.number - 1] ? (
               <SceneTitle mark={scenes[live.status.number - 1]!} lang={lang} />
             ) : (

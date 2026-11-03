@@ -27,7 +27,14 @@ export interface ScriptOnlyMark {
 }
 
 /** Every file outside the harness, the docs and the tests that names data-script-only. */
-export const SCRIPT_ONLY_MARKS: readonly ScriptOnlyMark[] = [];
+export const SCRIPT_ONLY_MARKS: readonly ScriptOnlyMark[] = [
+  {
+    file: 'packages/variant-horizontal-cinema/src/controller.tsx',
+    marks: 1,
+    reason:
+      'The scrubber\'s position status ("Opening, 1 of 21"), a role="status" that only the hydrated scrubber fills, since a static stand-in would be wrong wherever the reader is.',
+  },
+];
 
 /** The mark's name, as a file's text holds it. */
 export const MARK = 'data-script-only';

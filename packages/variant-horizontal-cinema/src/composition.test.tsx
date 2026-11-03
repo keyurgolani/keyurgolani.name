@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
@@ -471,3 +471,18 @@ for (const { name } of CONTRACT_FIXTURES) {
     }
   });
 }
+
+test('only the live position status is marked script-only, the one text no page without script has', () => {
+  const dir = new URL('./', import.meta.url);
+  const marked = readdirSync(dir)
+    .filter((name) => /\.tsx?$/.test(name) && !/\.test\./.test(name))
+    .flatMap((name) =>
+      [...readFileSync(new URL(name, dir), 'utf8').matchAll(/data-script-only/g)].map(() => name),
+    );
+  assert.deepEqual(marked, ['controller.tsx']);
+  const source = readFileSync(new URL('./controller.tsx', import.meta.url), 'utf8');
+  assert.match(
+    source,
+    /<p\s+className="hc-scrub__status"\s+role="status"\s+data-type-role="label"\s+data-script-only=""\s*>/,
+  );
+});
