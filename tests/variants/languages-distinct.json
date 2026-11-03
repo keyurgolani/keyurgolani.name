@@ -242,23 +242,45 @@
       "scope": {
         "viewport": "mobile"
       },
-      "ruling": "SB at 390 reads box height, and these share one; ruled at 390 only; apart at 1440 since fluent-2-inspired 1.1.5 (0.144) (lead A, 2026-10-31; LANG-5c decision 1a, r2)",
+      "ruling": "SB at 390 reads box height, and these share one; ruled at 390 only; apart at 1440 since fluent-2-inspired 1.1.5 (0.144), and at 1.1.7's Darker shadow pair (0.123) (lead A, 2026-10-31; LANG-5c decision 1a, r2; evidence refreshed 19i, 2026-11-03)",
       "scores": {
         "pixels": {
-          "desktop": 0.144,
-          "mobile": 0.115
+          "desktop": 0.123,
+          "mobile": 0.103
         },
-        "tokens": 0.144,
+        "tokens": 0.147,
         "editorialEvidence": {
           "desktop": 0.049,
           "mobile": 0.059
         }
       },
-      "why": "Spatial Bento paints canvas tiles from the language's shape, elevation, border and control-height tokens and no Surface, so a language's tonal colour, texture and stylesheet never reach its tiles. At 390, where its tiles stack, the edges mostly measure control height and border width, and Fluent and Primer both keep their real 32px controls (2rem). At 1440 Fluent's elevation ramp (cards at shadow28, a 36% key) lifts every tile where Primer draws a hairline: 0.087 before r2, 0.144 now, over the 0.113 line, so the pair is ruled at 390 only. The lift barely shows in dark (the shadow role is black), which the strips record.",
+      "why": "Spatial Bento paints canvas tiles from the language's shape, elevation, border and control-height tokens and no Surface, so a language's tonal colour, texture and stylesheet never reach its tiles. At 390, where its tiles stack, the edges mostly measure control height and border width, and Fluent and Primer both keep their real 32px controls (2rem). At 1440 Fluent's elevation ramp (cards at shadow28) lifts every tile where Primer draws a hairline: 0.087 before r2, 0.144 at 1.1.5's 36% key, and 0.123 at 1.1.7's Darker pair (a 20% ambient and a 24% key, 19i), over the 0.113 line, so the pair is ruled at 390 only. Fluent's Neutral pair (12% and 14%) scored 0.080, under it (19i probe). The lift barely shows in dark (the shadow role is black), which the strips record.",
       "evidence": [
         "_execution/artifacts/kgn-b-languages/lang5c/r2-strips-af02cb2b8/fluent-2-inspired-spatial-bento-390.png (light and dark rows)",
         "_execution/artifacts/kgn-b-languages/lang5c/r2-strips-af02cb2b8/fluent-2-inspired-spatial-bento-1440.png",
-        "_execution/artifacts/kgn-b-languages/lang5c/r2-strips-af02cb2b8/signatures.png (Fluent's surface levels)"
+        "_execution/artifacts/kgn-b-languages/lang5c/r2-strips-af02cb2b8/signatures.png (Fluent's surface levels)",
+        "_execution/artifacts/kgn-b-fluent-fidelity/probe/ (19i, 2026-11-03: the five variants' pack-distinct logs and matrices)"
+      ]
+    },
+    {
+      "pack": "fluent-2-inspired",
+      "pairs": [["fluent-2-inspired", "utility-dense"]],
+      "scope": {
+        "viewport": "desktop"
+      },
+      "ruling": "ALIKE on SB at 1440: at Fluent 2's Darker shadow pair, SB's canvas tiles read fluent's lift close to utility-dense's; ruled at 1440 only, until post-surge 19k paints Surface on SB's tiles, which removes it after the RC (lead A, 2026-11-03; 19i option a)",
+      "scores": {
+        "pixels": {
+          "desktop": 0.111,
+          "mobile": 0.146
+        },
+        "tokens": 0.161
+      },
+      "why": "Spatial Bento paints canvas tiles from the language's shape, elevation, border and control-height tokens and no Surface, so the pack-distinct pixel score reads only those tiles, and a language's material, texture and stylesheet never reach it. 19i brings fluent-2-inspired to Fluent 2's own shadow tokens: the Neutral pair (12% and 14%) scored 0.080 against primer-inspired at 1440, under the 0.113 line, and the Darker pair (20% and 24%), which ships, clears primer at 0.123 but sets fluent at 0.111 against utility-dense, 0.002 under the line (0.140 at the Neutral pair). On the tiles only corners, borders and the lift can separate them, and Fluent's card radius (4px, against 8px) moved no pixel in the probe. Post-surge 19k, SB's tiles painting each language's Surface, removes this ruling after the RC.",
+      "evidence": [
+        "_execution/artifacts/kgn-b-fluent-fidelity/probe/pack-distinct-darker-radii.log (fluent-2-inspired and utility-dense at desktop: pixels 0.111, tokens 0.161)",
+        "_execution/artifacts/kgn-b-fluent-fidelity/probe/darker-radii/matrix-px-desktop.csv",
+        "_execution/artifacts/kgn-b-fluent-fidelity/probe/pack-distinct-neutral.log (the Neutral pair: utility-dense 0.140, primer 0.080)"
       ]
     },
     {
