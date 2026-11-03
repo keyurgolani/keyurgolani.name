@@ -22,6 +22,14 @@
   /* Rows take a hairline of the composition's own: the rules are the design, so they survive every language (F8). */
   --layout-rule-row-size: 1px;
   --layout-masthead: calc(var(--space-s) * 3);
+  /* What a jump to a section leaves above it: the sticky masthead and a breath. */
+  --layout-scroll-top: calc(var(--layout-masthead) + var(--space-s));
+  /* The platform's scroll margin for whatever takes focus or is jumped to (2.4.11): the sticky
+     masthead and its heavy rule, plus a breath, so a control Shift+Tab brings in from above lands
+     below the masthead rather than under its Index button (the quality cell at 844x390). */
+  --layout-sticky-offset: calc(
+    var(--layout-masthead) + var(--layout-rule-heavy-size) + var(--space-s)
+  );
   display: block;
   min-block-size: 100svh;
   background-color: var(--color-canvas);
@@ -46,7 +54,7 @@
 }
 
 [data-variant='swiss-signal'] [id] {
-  scroll-margin-block-start: calc(var(--layout-masthead) + var(--space-s));
+  scroll-margin-block-start: var(--layout-scroll-top);
 }
 
 [data-variant='swiss-signal'] .ss-hidden {
@@ -184,6 +192,22 @@
   z-index: 2;
   background-color: var(--color-canvas);
   border-block-end: var(--layout-rule-heavy-size) solid var(--color-text-primary);
+}
+
+/* On a short screen, such as a phone held sideways, the masthead stays at the page's top instead of
+   riding over it: sticky, it would take a sixth of the height, and a control Tab or Shift+Tab
+   brings in could sit under its Index button, which a scroll margin can't keep clear (2.4.11, the
+   quality cell at 844x390). */
+@media (max-height: 30rem) {
+  [data-variant='swiss-signal'] {
+    /* No masthead rides over the page here, so a jump or a focus keeps only the breath. */
+    --layout-scroll-top: var(--space-s);
+    --layout-sticky-offset: var(--space-s);
+  }
+
+  [data-variant='swiss-signal'] .ss-masthead {
+    position: static;
+  }
 }
 
 [data-variant='swiss-signal'] .ss-masthead__row {
@@ -1519,11 +1543,11 @@
 
 /* A target inside a fold lands below the masthead too. */
 [data-variant='swiss-signal'] .ss-fold [id] {
-  scroll-margin-block-start: calc(var(--layout-masthead) + var(--space-s));
+  scroll-margin-block-start: var(--layout-scroll-top);
 }
 
 [data-variant='swiss-signal'] .ss-fold {
-  scroll-margin-block-start: calc(var(--layout-masthead) + var(--space-s));
+  scroll-margin-block-start: var(--layout-scroll-top);
   border-block-start: var(--layout-rule-section-size) solid var(--color-border-strong);
 }
 
@@ -1781,7 +1805,7 @@
 }
 
 [data-variant='swiss-signal'] :is(.ss-spec__row, .ss-case__cited > li) {
-  scroll-margin-block-start: calc(var(--layout-masthead) + var(--space-s));
+  scroll-margin-block-start: var(--layout-scroll-top);
 }
 
 [data-variant='swiss-signal'] .ss-case__cited {

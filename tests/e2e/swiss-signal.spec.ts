@@ -186,7 +186,9 @@ test(
     await loadLive(page);
     const covered: string[] = [];
     for (const key of ['Tab', 'Shift+Tab'] as const) {
-      let last = '';
+      // Every stop inside the page, once: a stop outside it (the browser's chrome, a control the
+      // host draws) is stepped past, and the walk ends when it comes back round to one it's seen.
+      const seen = new Set<string>();
       for (let press = 0; press < 400; press++) {
         await page.keyboard.press(key);
         const stop = await page.evaluate(() => {
@@ -203,14 +205,13 @@ test(
             cover: cover ? 'masthead' : null,
           };
         });
-        if (!stop) {
-          if (last) break;
-          continue;
-        }
-        if (stop.key === last) break;
-        last = stop.key;
+        if (!stop) continue;
+        if (seen.has(stop.key)) break;
+        seen.add(stop.key);
         if (stop.cover) covered.push(`${key} ${stop.key} under the ${stop.cover}`);
       }
+      // The walk reached the page's stops, not just its first few: the sample has dozens.
+      expect(seen.size, `${key} stops visited`).toBeGreaterThan(30);
     }
     expect(covered).toEqual([]);
   },
