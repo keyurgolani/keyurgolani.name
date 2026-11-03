@@ -118,22 +118,31 @@ const readerReduces = (win: Window) =>
   win.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /**
- * Sets a sample frame's motion on its presentation boundary, in place: `full` only when neither
- * the site's motion policy nor the reader's own reduced-motion setting reduces it, and `reduced`
- * as the document rendered it held (`rendered`, `reduced` or `static`). Says whether it applied:
- * a `full` either one forbids changes nothing, so a message never raises motion they reduce.
+ * Sets a sample frame's motion on its presentation boundary, in place, against how its document
+ * rendered it (`rendered`): `full` only when the document rendered moving or reduced, never held
+ * still (`static`, a frame held for any reason), and neither the site's motion policy nor the
+ * reader's own reduced-motion setting reduces it; `reduced` back to how the document rendered it
+ * held, `static` or `reduced`. Says whether it applied: a `full` any of them forbids changes
+ * nothing, so a message never raises motion they hold or reduce.
  */
 export function setSampleMotion(
   win: Window,
   selection: EnvironmentSelection,
-  rendered: 'reduced' | 'static',
+  rendered: 'full' | 'reduced' | 'static',
   motion: ToFramePayload<'motion'>['motion'],
 ): boolean {
   const boundary = win.document.querySelector('[data-variant]');
   if (!boundary) return false;
-  if (motion === 'full' && (selection.motionPolicy === 'reduce' || readerReduces(win)))
+  if (
+    motion === 'full' &&
+    (rendered === 'static' || selection.motionPolicy === 'reduce' || readerReduces(win))
+  ) {
     return false;
-  boundary.setAttribute('data-motion', motion === 'full' ? 'full' : rendered);
+  }
+  boundary.setAttribute(
+    'data-motion',
+    motion === 'full' ? 'full' : rendered === 'static' ? 'static' : 'reduced',
+  );
   return true;
 }
 
@@ -448,10 +457,25 @@ export function startFrameChannel(win: Window, options: FrameChannelOptions): ((
    * In a sample frame, how its document rendered motion held, which a `reduced` motion message
    * sets back: `static` or `reduced` as the server rendered it, else `reduced`.
    */
-  const renderedMotion = sample
+  const renderedAs = sample
     ? win.document.querySelector('[data-variant]')?.getAttribute('data-motion')
     : null;
-  const heldMotion: 'reduced' | 'static' = renderedMotion === 'static' ? 'static' : 'reduced';
+  const renderedMotion: 'full' | 'reduced' | 'static' =
+    renderedAs === 'static' ? 'static' : renderedAs === 'full' ? 'full' : 'reduced';
+  /** Whether a `motion` message raised the frame to full motion, which the reader's reduce takes back. */
+  let raised = false;
+  // The reader turning on reduced motion while a message holds the frame at full motion sets it
+  // back at once: a raised boundary never outlasts the reader's own setting.
+  const readerQuery =
+    sample && typeof win.matchMedia === 'function'
+      ? win.matchMedia('(prefers-reduced-motion: reduce)')
+      : null;
+  const onReaderReduce = () => {
+    if (!raised || !readerQuery?.matches) return;
+    raised = false;
+    setSampleMotion(win, selection, renderedMotion, 'reduced');
+  };
+  readerQuery?.addEventListener?.('change', onReaderReduce);
 
   const drop = (reason: DropReason, type?: string) =>
     reportDrop({ side: 'frame', reason, ...(type === undefined ? {} : { type }) });
@@ -601,11 +625,12 @@ export function startFrameChannel(win: Window, options: FrameChannelOptions): ((
         return;
       }
       case 'motion':
-        // Never raised past the site's policy or the reader's own setting: a `full` they reduce
-        // is dropped, with nothing on the boundary changed.
-        if (!setSampleMotion(win, selection, heldMotion, message.payload.motion)) {
+        // Never raised past a held document, the site's policy, or the reader's own setting: a
+        // `full` they hold or reduce is dropped, with nothing on the boundary changed.
+        if (!setSampleMotion(win, selection, renderedMotion, message.payload.motion)) {
           return drop('payload', 'motion');
         }
+        raised = message.payload.motion === 'full';
         return;
       case 'scroll-to':
         return scrollTo(message.payload);
@@ -766,6 +791,7 @@ export function startFrameChannel(win: Window, options: FrameChannelOptions): ((
   return () => {
     stopped = true;
     switching();
+    readerQuery?.removeEventListener?.('change', onReaderReduce);
     if (trailing !== undefined) clearTimeout(trailing);
     for (const timer of helloTimers) clearTimeout(timer);
     win.removeEventListener('message', fromWindow);

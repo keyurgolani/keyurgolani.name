@@ -114,7 +114,7 @@ class FakeParent {
 }
 
 /** The /sample page: its document boundary as the server rendered it, and its pack sheets. */
-function samplePage() {
+function samplePage(motion = 'static') {
   const head = new FakeParent();
   const body = new FakeParent();
   for (const pack of ['platform-neutral', 'paper-ink', 'humanist-ui']) {
@@ -133,7 +133,7 @@ function samplePage() {
     'data-typography': 'humanist-ui',
     'data-display-mode': 'system',
     'data-contrast': 'system',
-    'data-motion': 'static',
+    'data-motion': motion,
     'data-enhancement': 'on',
   })) {
     boundary.setAttribute(name, value);
@@ -179,12 +179,30 @@ class FakeSampleWindow {
   };
   readonly replaced: string[] = [];
   readonly assigned: string[] = [];
-  readonly page = samplePage();
+  page = samplePage();
   readonly performance = { now: () => 0 };
-  /** Whether the reader's own setting asks for reduced motion. */
+  /** Whether the reader's own setting asks for reduced motion, and who listens for it changing. */
   reduces = false;
+  readonly reduceListeners = new Set<() => void>();
   matchMedia(query: string) {
-    return { matches: this.reduces && query === '(prefers-reduced-motion: reduce)' };
+    const reduce = query === '(prefers-reduced-motion: reduce)';
+    const reduces = () => reduce && this.reduces;
+    return {
+      get matches() {
+        return reduces();
+      },
+      addEventListener: (_type: string, listener: () => void) => {
+        if (reduce) this.reduceListeners.add(listener);
+      },
+      removeEventListener: (_type: string, listener: () => void) => {
+        this.reduceListeners.delete(listener);
+      },
+    };
+  }
+  /** The reader switches reduced motion on or off. */
+  setReduces(reduces: boolean) {
+    this.reduces = reduces;
+    for (const listener of [...this.reduceListeners]) listener();
   }
   url = new URL(`${STUDIO}/sample?${QUERY}#nonce=${NONCE}`);
   readonly history = {
@@ -244,9 +262,11 @@ function setup(
   {
     motionPolicy = 'respect-os',
     reduces = false,
-  }: { motionPolicy?: MotionPolicy; reduces?: boolean } = {},
+    rendered = 'static',
+  }: { motionPolicy?: MotionPolicy; reduces?: boolean; rendered?: string } = {},
 ) {
   const win = new FakeSampleWindow();
+  win.page = samplePage(rendered);
   win.reduces = reduces;
   const drops: PreviewDrop[] = [];
   globalThis.__kgnPreviewDrop = (drop) => drops.push(drop);
@@ -564,7 +584,7 @@ test("sampleDestination sets only the keys the link's query holds, keeps their o
 // Motion in place (kgn-e/compare-perf): the Compare grid's heavy slot moves with no document load.
 
 test("a motion over its port sets the boundary's data-motion in place, full and back to how the server rendered it held, with nothing else moved and no load", async (t) => {
-  const { win, drops, received, connect, send } = setup(t);
+  const { win, drops, received, connect, send } = setup(t, REGISTERED, { rendered: 'reduced' });
   await until(() => win.parent.posted.length > 0, 'the hello');
   const port = connect();
   await until(() => received.length > 0, 'ready');
@@ -576,7 +596,7 @@ test("a motion over its port sets the boundary's data-motion in place, full and 
     boundary: { ...before.boundary, 'data-motion': 'full' },
   });
   send(port, 'motion', { motion: 'reduced' });
-  await until(() => win.page.boundary.getAttribute('data-motion') === 'static', 'held again');
+  await until(() => win.page.boundary.getAttribute('data-motion') === 'reduced', 'reduced again');
   assert.deepEqual(win.page.snapshot(), before, 'back as the server rendered it');
   assert.deepEqual(win.assigned, [], 'no document load');
   assert.deepEqual(drops, []);
@@ -587,7 +607,10 @@ test("a full motion never raises a frame the site's reduce policy or the reader'
     ['the site policy', { motionPolicy: 'reduce' as const }],
     ["the reader's setting", { reduces: true }],
   ] as const) {
-    const { win, drops, received, connect, send } = setup(t, REGISTERED, options);
+    const { win, drops, received, connect, send } = setup(t, REGISTERED, {
+      ...options,
+      rendered: 'reduced',
+    });
     await until(() => win.parent.posted.length > 0, `${why}: the hello`);
     const port = connect();
     await until(() => received.length > 0, `${why}: ready`);
@@ -598,7 +621,7 @@ test("a full motion never raises a frame the site's reduce policy or the reader'
     assert.deepEqual(win.page.snapshot(), before, `${why}: nothing moved`);
     send(port, 'motion', { motion: 'reduced' });
     await wait(20);
-    assert.equal(win.page.boundary.getAttribute('data-motion'), 'static', why);
+    assert.equal(win.page.boundary.getAttribute('data-motion'), 'reduced', why);
     assert.equal(drops.length, 1, `${why}: a reduced motion goes`);
   }
 });
@@ -648,4 +671,36 @@ test("a motion from a connect any window but the page's parent, or any origin bu
   );
   assert.deepEqual(received, [], 'no ready went back over any of them');
   assert.deepEqual(win.page.snapshot(), before, 'not an attribute moved');
+});
+
+test('a document the server rendered held still, for any reason, takes no full motion, and a reduced one keeps it held', async (t) => {
+  const { win, drops, received, connect, send } = setup(t, REGISTERED, { rendered: 'static' });
+  await until(() => win.parent.posted.length > 0, 'the hello');
+  const port = connect();
+  await until(() => received.length > 0, 'ready');
+  const before = win.page.snapshot();
+  send(port, 'motion', { motion: 'full' });
+  await until(() => drops.length > 0, 'the drop');
+  assert.deepEqual(drops, [{ side: 'frame', reason: 'payload', type: 'motion' }]);
+  assert.deepEqual(win.page.snapshot(), before, 'held as it rendered');
+  send(port, 'motion', { motion: 'reduced' });
+  await wait(20);
+  assert.equal(win.page.boundary.getAttribute('data-motion'), 'static');
+  assert.equal(drops.length, 1);
+});
+
+test('the reader switching reduced motion on while a message holds the frame at full motion sets it back at once, and switching it off raises nothing', async (t) => {
+  const { win, received, connect, send } = setup(t, REGISTERED, { rendered: 'reduced' });
+  await until(() => win.parent.posted.length > 0, 'the hello');
+  const port = connect();
+  await until(() => received.length > 0, 'ready');
+  send(port, 'motion', { motion: 'full' });
+  await until(() => win.page.boundary.getAttribute('data-motion') === 'full', 'full motion');
+  win.setReduces(true);
+  assert.equal(win.page.boundary.getAttribute('data-motion'), 'reduced', 'set back at once');
+  win.setReduces(false);
+  assert.equal(win.page.boundary.getAttribute('data-motion'), 'reduced', 'nothing raises it again');
+  // A frame no message raised is left as it is.
+  win.setReduces(true);
+  assert.equal(win.page.boundary.getAttribute('data-motion'), 'reduced');
 });

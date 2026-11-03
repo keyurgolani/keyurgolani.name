@@ -228,6 +228,17 @@ test(
     await plates.nth(1).locator('.studio-plate__view').hover();
     await expect.poll(() => boundaryMotion(1)).toBe('full');
     await expect.poll(() => boundaryMotion(2)).toBe('reduced');
+    // The reader turning on reduced motion takes the raised plate back at once, and a pointer
+    // can't raise it while it's on.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await expect.poll(() => boundaryMotion(1)).toBe('reduced');
+    await plates.nth(3).locator('.studio-plate__view').hover();
+    await expect(page.locator('.studio-plate__view[data-motion="full"]')).toHaveCount(1);
+    await page.waitForTimeout(500);
+    expect(await boundaryMotion(3), "no message raises it under the reader's reduce").toBe(
+      'reduced',
+    );
+    await page.emulateMedia({ reducedMotion: null });
     expect(
       await page.evaluate(
         () => (window as unknown as { __plateLoads: { loads: number } }).__plateLoads.loads,
