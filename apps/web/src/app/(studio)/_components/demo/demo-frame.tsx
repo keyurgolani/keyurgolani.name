@@ -116,6 +116,14 @@ export interface DemoFrameProps {
    * it can't, such as a scheme with no build stylesheet: a change to it then loads the frame.
    */
   readonly appearance?: ToFramePayload<'appearance'> | null;
+  /**
+   * The motion the frame's document shows in place, over its channel, with no load: a Compare
+   * grid plate's, `full` while it holds the heavy slot, else `reduced`. Absent or null, the
+   * document's motion is its `src`'s alone. The frame takes `full` only where neither the site's
+   * policy nor the reader's own setting reduces it; `src` stays the held document's, so a frame
+   * whose channel never opens stays still.
+   */
+  readonly motion?: ToFramePayload<'motion'>['motion'] | null;
   /** What the frame shows, for its accessible name. */
   readonly title: string;
   readonly viewport: Viewport;
@@ -273,10 +281,38 @@ export function sendInPlace(
   }
 }
 
+/**
+ * A Compare grid plate's motion in place: `full` while it holds the heavy slot, and never while
+ * the visitor's own reduced-motion preview (`reduced`) asks for less; else `reduced`. The
+ * frame floors it again at the site's policy and the reader's own setting.
+ */
+export function plateMotion(heavy: boolean, reduced: boolean): ToFramePayload<'motion'>['motion'] {
+  return heavy && !reduced ? 'full' : 'reduced';
+}
+
+/**
+ * Sends `motion` to the frame's document in place, when its channel is open and it isn't the
+ * motion sent last (`sent`), and returns the motion the document now shows by message, or
+ * `sent` when nothing went. One the protocol refuses never goes.
+ */
+export function sendMotion(
+  open: Pick<StudioChannel, 'connected' | 'send'> | null,
+  motion: ToFramePayload<'motion'>['motion'] | null,
+  sent: ToFramePayload<'motion'>['motion'] | null,
+): ToFramePayload<'motion'>['motion'] | null {
+  if (!open?.connected || motion === null || motion === sent) return sent;
+  try {
+    return open.send('motion', { motion }) ? motion : sent;
+  } catch {
+    return sent;
+  }
+}
+
 export function DemoFrame({
   src: latestSrc,
   document: latestDocument,
   appearance = null,
+  motion = null,
   title,
   viewport,
   gate = 'visible',
@@ -312,10 +348,12 @@ export function DemoFrame({
   // The appearance the frame's document shows: what it loaded with, or what went to it in place since.
   const shows = useRef(load.shows);
   // What a document that says ready gets: the latest appearance, when it's for this document.
-  const latest = useRef({ documentKey, appearance, shown });
+  const latest = useRef({ documentKey, appearance, shown, motion });
   useEffect(() => {
-    latest.current = { documentKey, appearance, shown };
-  }, [documentKey, appearance, shown]);
+    latest.current = { documentKey, appearance, shown, motion };
+  }, [documentKey, appearance, shown, motion]);
+  // The motion the frame's document was last sent in place, or null: none since it loaded.
+  const moved = useRef<ToFramePayload<'motion'>['motion'] | null>(null);
   const src = load.src;
   const allowed = isDemoFrameSource(src);
   // Whether the visitor asked here, so the stage takes focus and its load is announced.
@@ -348,6 +386,8 @@ export function DemoFrame({
           if (now.documentKey !== load.document) return;
           if (sendInPlace(open, now.appearance, now.shown, shows.current))
             shows.current = now.shown;
+          // A new document shows its src's motion: it takes the latest at once.
+          moved.current = sendMotion(open, now.motion, null);
         },
       },
     });
@@ -364,6 +404,12 @@ export function DemoFrame({
     if (documentKey !== load.document) return;
     if (sendInPlace(channel.current, appearance, shown, shows.current)) shows.current = shown;
   }, [documentKey, appearance, shown, load]);
+
+  // Each new motion goes in place at once, with no load, to a document that is the selection's own.
+  useEffect(() => {
+    if (documentKey !== load.document) return;
+    moved.current = sendMotion(channel.current, motion, moved.current);
+  }, [documentKey, motion, load, connected]);
 
   // Fit: the frame scales down to the room it has, its layout width the viewport's.
   // Filled, at a phone's width, it fits across and its viewport's height follows the room's.

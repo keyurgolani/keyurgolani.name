@@ -162,7 +162,13 @@ export function experiencePage(
       canonical: route.canonical,
       // Demo Studio's frame shows these two (#9), and takes an appearance in place in them (DEM-2).
       ...(profile === 'demo' && (sample || reference)
-        ? { sampleChannel: sampleChannel(origin, sample ? '/sample' : '/reference') }
+        ? {
+            sampleChannel: sampleChannel(
+              origin,
+              sample ? '/sample' : '/reference',
+              route.view.site.motionPolicy,
+            ),
+          }
         : {}),
     });
   };

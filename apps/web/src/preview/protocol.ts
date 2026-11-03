@@ -261,6 +261,13 @@ export const TO_FRAME = {
       displayMode: z.enum(['system', 'light', 'dark', 'high-contrast']),
     })
     .strict(),
+  /**
+   * A Demo Studio sample frame's motion, set in place on its presentation boundary with no load
+   * (the Compare grid's heavy slot, kgn-e/compare-perf): `full`, which the frame takes only when
+   * neither the site's motion policy nor the reader's own reduced-motion setting reduces it, or
+   * `reduced`, which it always takes. Any other value is invalid, so the frame drops it.
+   */
+  motion: z.object({ motion: z.enum(['full', 'reduced']) }).strict(),
   /** Scroll `anchor` into view, `progress` of the way through it, without moving focus. */
   'scroll-to': z
     .object({
@@ -296,6 +303,9 @@ export const TO_FRAME = {
 
 /** The types only a local frame takes. */
 export const LOCAL_ONLY: ReadonlySet<string> = new Set(['document', 'asset']);
+
+/** The types only a sample frame takes: a grant's or a local frame's motion is its environment's. */
+export const SAMPLE_ONLY: ReadonlySet<string> = new Set(['motion']);
 
 type Table = Readonly<Record<string, z.ZodTypeAny>>;
 export type ToStudioType = keyof typeof TO_STUDIO;

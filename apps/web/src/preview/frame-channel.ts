@@ -7,6 +7,7 @@ import {
   PACK_STYLESHEET,
   readMessage,
   reportDrop,
+  SAMPLE_ONLY,
   SCROLLED_PER_SECOND,
   sizeOf,
   TO_FRAME,
@@ -108,8 +109,33 @@ export function sampleDestination(
   return next.href;
 }
 
-/** The only message a sample frame takes over its port. */
-const SAMPLE_TAKES: ReadonlySet<string> = new Set(['appearance']);
+/** The only messages a sample frame takes over its port: an appearance, and its motion. */
+const SAMPLE_TAKES: ReadonlySet<string> = new Set(['appearance', 'motion']);
+
+/** Whether the reader's own setting asks for reduced motion, which nothing a message says raises. */
+const readerReduces = (win: Window) =>
+  typeof win.matchMedia === 'function' &&
+  win.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * Sets a sample frame's motion on its presentation boundary, in place: `full` only when neither
+ * the site's motion policy nor the reader's own reduced-motion setting reduces it, and `reduced`
+ * as the document rendered it held (`rendered`, `reduced` or `static`). Says whether it applied:
+ * a `full` either one forbids changes nothing, so a message never raises motion they reduce.
+ */
+export function setSampleMotion(
+  win: Window,
+  selection: EnvironmentSelection,
+  rendered: 'reduced' | 'static',
+  motion: ToFramePayload<'motion'>['motion'],
+): boolean {
+  const boundary = win.document.querySelector('[data-variant]');
+  if (!boundary) return false;
+  if (motion === 'full' && (selection.motionPolicy === 'reduce' || readerReduces(win)))
+    return false;
+  boundary.setAttribute('data-motion', motion === 'full' ? 'full' : rendered);
+  return true;
+}
 
 /**
  * Whether every pack `appearance` names is one `registered` lists, with the
@@ -418,6 +444,14 @@ export function startFrameChannel(win: Window, options: FrameChannelOptions): ((
   let switching: () => void = () => {};
   /** In a sample frame, the appearance it last showed in place, which its own links carry on. */
   let shownInPlace: ToFramePayload<'appearance'> | null = null;
+  /**
+   * In a sample frame, how its document rendered motion held, which a `reduced` motion message
+   * sets back: `static` or `reduced` as the server rendered it, else `reduced`.
+   */
+  const renderedMotion = sample
+    ? win.document.querySelector('[data-variant]')?.getAttribute('data-motion')
+    : null;
+  const heldMotion: 'reduced' | 'static' = renderedMotion === 'static' ? 'static' : 'reduced';
 
   const drop = (reason: DropReason, type?: string) =>
     reportDrop({ side: 'frame', reason, ...(type === undefined ? {} : { type }) });
@@ -533,6 +567,7 @@ export function startFrameChannel(win: Window, options: FrameChannelOptions): ((
     const { message } = read;
     if (LOCAL_ONLY.has(message.type) && mode !== 'local') return drop('type', message.type);
     if (sample && !SAMPLE_TAKES.has(message.type)) return drop('type', message.type);
+    if (!sample && SAMPLE_ONLY.has(message.type)) return drop('type', message.type);
     // A sample frame shows only what its server rendered as this build's own packs.
     if (sample && message.type === 'appearance') {
       if (!registeredAppearance(message.payload, options.registered)) {
@@ -565,6 +600,13 @@ export function startFrameChannel(win: Window, options: FrameChannelOptions): ((
         );
         return;
       }
+      case 'motion':
+        // Never raised past the site's policy or the reader's own setting: a `full` they reduce
+        // is dropped, with nothing on the boundary changed.
+        if (!setSampleMotion(win, selection, heldMotion, message.payload.motion)) {
+          return drop('payload', 'motion');
+        }
+        return;
       case 'scroll-to':
         return scrollTo(message.payload);
       case 'navigate': {

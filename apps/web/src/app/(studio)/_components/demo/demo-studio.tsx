@@ -62,7 +62,7 @@ import {
 } from '../split/studio-split';
 import { CompareBar, CompareFlip, CompareGrid, CompareSide, CompareWipe } from '../split/compare';
 import { ContentTask } from './demo-content';
-import { DemoFrame } from './demo-frame';
+import { DemoFrame, plateMotion } from './demo-frame';
 import { LocalFrameHost } from './demo-local-frame';
 import {
   frameGate,
@@ -543,7 +543,8 @@ export function DemoStudio({
         rules={rules}
         local={local}
         viewportId={viewportId}
-        reduced={reduced || !heavy}
+        reduced={reduced}
+        liveMotion={heavy}
         load={load}
         source={showing}
         // The whole viewport, 1440 by 900 at the desktop width, scaled into a plate its shape (DEM-3).
@@ -1183,6 +1184,7 @@ function ContentFrame({
   page = HOME_PAGE,
   side,
   plate,
+  liveMotion,
 }: {
   catalog: AppearanceCatalog;
   selection: DemoSelection;
@@ -1200,6 +1202,13 @@ function ContentFrame({
   side?: 'A' | 'B';
   /** A Grid of 4 plate's name, its pick on the varied axis, which its name starts with likewise. */
   plate?: string;
+  /**
+   * A Grid of 4 plate's motion, which moves with the heavy slot: whether it holds the slot. Its
+   * document loads held, as a plate at rest is, and takes full motion in place over its channel
+   * while it holds the slot, unless `reduced` or the reader's own setting reduces it; so taking
+   * and giving up the slot loads no document (kgn-e/compare-perf). Absent, `reduced` alone.
+   */
+  liveMotion?: boolean;
 } & FrameSource) {
   const viewport = VIEWPORTS.find(({ id }) => id === viewportId) ?? VIEWPORTS[0]!;
   const name = optionNote(catalog, 'variant', selection.variant).option?.name ?? selection.variant;
@@ -1218,13 +1227,21 @@ function ContentFrame({
     held = holdsMotion(shownAs.selection, selection, shownAs.held);
     setShownAs({ selection, held });
   }
+  // A plate's document is the held one whether or not it holds the heavy slot: the slot's motion
+  // goes over the channel.
+  const plateHeld = liveMotion !== undefined;
   const src = frameSource(selection, rules, {
-    reduceMotion: reduced,
+    reduceMotion: reduced || plateHeld,
     holdMotion: held,
     source,
     page,
   });
-  const documentKey = frameDocument(selection, { reduceMotion: reduced, source, page });
+  const documentKey = frameDocument(selection, {
+    reduceMotion: reduced || plateHeld,
+    source,
+    page,
+  });
+  const motion = liveMotion === undefined ? null : plateMotion(liveMotion, reduced);
   const appearance = useMemo(() => inPlaceAppearance(catalog, selection), [catalog, selection]);
   const lead = side ? `${side}, ` : plate ? `${plate}, ` : '';
   const what = `${side ? `${side}, ${side === 'A' ? 'pinned' : 'editing'}: ` : plate ? `${plate}: ` : ''}${
@@ -1235,13 +1252,14 @@ function ContentFrame({
   if (local && frameKind(source, local !== null) === 'local') {
     return (
       <LocalFrameHost
-        // A new frame for a change of motion, as /sample's query reloads its own.
-        key={reduced ? 'reduced' : 'full'}
+        // A new frame for a change of motion, as /sample's query reloads its own: a plate's local
+        // frame still loads again as it takes and gives up the heavy slot.
+        key={reduced || (plateHeld && !liveMotion) ? 'reduced' : 'full'}
         sources={local}
         selection={selection}
         title={`${lead}Your documents, ${name}, ${viewportLabel(viewport)}`}
         viewport={viewport}
-        reduced={reduced}
+        reduced={reduced || (plateHeld && !liveMotion)}
         fit={fit}
         {...(onScale ? { onScale } : {})}
       />
@@ -1252,6 +1270,7 @@ function ContentFrame({
       src={src}
       document={documentKey}
       appearance={appearance}
+      motion={motion}
       title={`${what}, ${name}, ${viewportLabel(viewport)}`}
       viewport={viewport}
       gate={load.gate}

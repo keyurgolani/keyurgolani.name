@@ -29,10 +29,11 @@ test('the registered packs are each axis’s selectable packs with a build style
   assert.equal(Object.hasOwn(packs.colorScheme, 'constructor'), false);
 });
 
-test("the channel names Studio's origin, the page's link base, the packs, and #19's query keys", () => {
-  assert.deepEqual(sampleChannel('https://demo.test', '/reference'), {
+test("the channel names Studio's origin, the page's link base, the site's motion policy, the packs, and #19's query keys", () => {
+  assert.deepEqual(sampleChannel('https://demo.test', '/reference', 'reduce'), {
     studioOrigin: 'https://demo.test',
     linkBase: '/reference',
+    motionPolicy: 'reduce',
     registered: registeredPacks(),
     queryKeys: {
       designLanguage: 'language',

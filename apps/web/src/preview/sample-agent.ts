@@ -1,3 +1,4 @@
+import type { EnvironmentSelection } from '../lib/environment';
 import { startFrameChannel, type RegisteredPacks, type SampleQueryKeys } from './frame-channel';
 
 // The sample's agent (DEM-2): what lets Demo Studio's /sample or /reference
@@ -7,7 +8,8 @@ import { startFrameChannel, type RegisteredPacks, type SampleQueryKeys } from '.
 // in sample mode (frame-channel.ts), which takes `connect` from its parent
 // window and Studio's origin alone and over the port only an `appearance`
 // whose every pack is one the server rendered here as this build's own, and
-// carries what it shows on to the page's own links.
+// a `motion` it takes only below the site's policy and the reader's own
+// setting, and carries what it shows on to the page's own links.
 //
 // No page imports it: lib/sample-frame.tsx loads it with a dynamic import,
 // in a framed /sample or /reference page under demo alone, so it sits in a
@@ -25,6 +27,8 @@ export interface SampleChannel {
   readonly registered: RegisteredPacks;
   /** The query keys the page's links carry the appearance under, #19's. */
   readonly queryKeys: SampleQueryKeys;
+  /** The site's motion policy: under `reduce`, no motion message raises the frame's motion. */
+  readonly motionPolicy: EnvironmentSelection['motionPolicy'];
 }
 
 /** Starts the channel in sample mode in `win`, and returns what stops it, or null unframed. */
@@ -36,5 +40,6 @@ export function startSampleAgent(win: Window, channel: SampleChannel): (() => vo
     renderedVersion: null,
     registered: channel.registered,
     queryKeys: channel.queryKeys,
+    selection: { displayMode: 'system', motionPolicy: channel.motionPolicy },
   });
 }

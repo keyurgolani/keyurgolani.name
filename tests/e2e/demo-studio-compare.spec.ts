@@ -198,10 +198,42 @@ test(
     }
     // The head is the name and actions alone: no language specimen (DEM-3).
     await expect(page.locator('.studio-plate .studio-language')).toHaveCount(0);
-    // The pointer takes the one heavy slot; the rest stay static.
+    // The pointer takes the one heavy slot; the rest stay static. The slot moves in place, over
+    // each frame's channel: the plate's document takes full motion and gives it up with no load
+    // (kgn-e/compare-perf).
+    const boundaryMotion = async (at: number) => {
+      const frame = await plates.nth(at).locator('iframe').elementHandle();
+      const inside = await frame!.contentFrame();
+      return inside!.evaluate(
+        () => document.querySelector('[data-variant]')?.getAttribute('data-motion') ?? null,
+      );
+    };
+    const loads = await page.evaluate(() => {
+      const counter = { loads: 0 };
+      document.addEventListener(
+        'load',
+        (event) => {
+          if (event.target instanceof HTMLIFrameElement) counter.loads += 1;
+        },
+        true,
+      );
+      Object.defineProperty(window, '__plateLoads', { value: counter });
+      return counter.loads;
+    });
     await plates.nth(2).locator('.studio-plate__view').hover();
     await expect(page.locator('.studio-plate__view[data-motion="full"]')).toHaveCount(1);
     await expect(page.locator('.studio-plate__view[data-motion="static"]')).toHaveCount(3);
+    await expect.poll(() => boundaryMotion(2)).toBe('full');
+    for (const at of [0, 1, 3]) expect(await boundaryMotion(at), `plate ${at + 1}`).toBe('reduced');
+    await plates.nth(1).locator('.studio-plate__view').hover();
+    await expect.poll(() => boundaryMotion(1)).toBe('full');
+    await expect.poll(() => boundaryMotion(2)).toBe('reduced');
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { __plateLoads: { loads: number } }).__plateLoads.loads,
+      ),
+      'the slot moved with no frame loading again',
+    ).toBe(loads);
     expect(await page.locator('iframe').count()).toBeLessThanOrEqual(4);
     // The schemes page by Next 3, never "+30", with where the page is beside it, which
     // describes it; its name is what it shows (M3, WCAG 2.5.3).

@@ -43,11 +43,13 @@ export function registeredPacks(
 export function sampleChannel(
   origin: string,
   linkBase: SampleChannel['linkBase'],
+  motionPolicy: SampleChannel['motionPolicy'],
   registry: AppearanceRegistry = APPEARANCE_REGISTRY,
 ): SampleChannel {
   return {
     studioOrigin: origin,
     linkBase,
+    motionPolicy,
     registered: registeredPacks(registry),
     queryKeys: {
       designLanguage: QUERY_KEYS.designLanguage,

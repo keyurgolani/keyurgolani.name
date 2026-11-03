@@ -13,7 +13,9 @@ import {
   needsLoad,
   nonceSource,
   PENDING_MS,
+  plateMotion,
   sendInPlace,
+  sendMotion,
   SwapMark,
   SwapPending,
   underNext,
@@ -112,6 +114,25 @@ test("an appearance goes in place only over an open channel, only one the frame 
   assert.equal(sendInPlace(closed, APPEARANCE, key, ''), false);
   assert.equal(sendInPlace(null, APPEARANCE, key, ''), false);
   assert.equal(sendInPlace(fakeChannel(true, true), APPEARANCE, key, ''), false);
+});
+
+test("a plate's motion goes in place over an open channel alone, once a change, never full under the visitor's reduced-motion preview, and never one the protocol refuses (kgn-e/compare-perf)", () => {
+  assert.equal(plateMotion(true, false), 'full');
+  assert.equal(plateMotion(true, true), 'reduced', "the visitor's reduce wins over the heavy slot");
+  assert.equal(plateMotion(false, false), 'reduced');
+  assert.equal(plateMotion(false, true), 'reduced');
+  const open = fakeChannel(true);
+  assert.equal(sendMotion(open, 'full', null), 'full');
+  assert.equal(sendMotion(open, 'full', 'full'), 'full', 'sent already: nothing goes');
+  assert.equal(sendMotion(open, 'reduced', 'full'), 'reduced');
+  assert.equal(sendMotion(open, null, 'reduced'), 'reduced', 'no motion to send');
+  assert.deepEqual(open.sent, [
+    { type: 'motion', payload: { motion: 'full' } },
+    { type: 'motion', payload: { motion: 'reduced' } },
+  ]);
+  assert.equal(sendMotion(fakeChannel(false), 'full', null), null, 'closed');
+  assert.equal(sendMotion(null, 'full', null), null);
+  assert.equal(sendMotion(fakeChannel(true, true), 'full', null), null, 'refused');
 });
 
 test('each load is one of its own, by its id, even for a source a frame had before (P-5 slice 4)', () => {

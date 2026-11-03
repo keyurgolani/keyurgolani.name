@@ -306,31 +306,6 @@ function PlateStill({
 }
 
 /**
- * How much later a plate that gives up the heavy slot loads its static document than the plate
- * taking the slot loads its heavy one. Both used to load once the pointer had rested SETTLE_MS,
- * in the same tick, so the two frames' style and layout ran in one rendering update, about 60 ms
- * at the lab's 4x CPU, a long task each hand-off (the Compare sweep's perf cell). Apart, each
- * frame's is about 30 ms. The plate giving up the slot keeps its moving frame that much longer.
- */
-export const HAND_OFF_MS = 400;
-
-/**
- * Whether a plate's frame shows its heavy document: at once when the plate takes the heavy slot,
- * and HAND_OFF_MS after it gives the slot up, unless it takes it back first.
- */
-export function useHandedOff(heavy: boolean): boolean {
-  const [held, setHeld] = useState(heavy);
-  // Taking the slot holds it at once, derived as it renders; giving it up lets go on a timer.
-  if (heavy && !held) setHeld(true);
-  useEffect(() => {
-    if (heavy || !held) return;
-    const timer = setTimeout(() => setHeld(false), HAND_OFF_MS);
-    return () => clearTimeout(timer);
-  }, [heavy, held]);
-  return heavy || held;
-}
-
-/**
  * A plate's poster, or its live frame once the scheduler lets it hold one: it asks for a slot
  * when it comes within a viewport of the screen, and when the pointer or the focus is on it.
  * The frame is `live`'s, the selection on the same load path as a pick, scaled into the plate.
@@ -351,8 +326,6 @@ function PlateView({
   onPoint: (id: string | null) => void;
 }) {
   const root = useRef<HTMLSpanElement | null>(null);
-  // The frame's document lags a hand-off by HAND_OFF_MS; the slot and the marker don't.
-  const frameHeavy = useHandedOff(heavy);
   const isLive = useSyncExternalStore(
     scheduler.subscribe,
     () => scheduler.isLive(id),
@@ -397,7 +370,7 @@ function PlateView({
       onPointerLeave={() => onPoint(null)}
       onFocusCapture={point}
     >
-      {isLive && live ? live(frameHeavy) : poster}
+      {isLive && live ? live(heavy) : poster}
     </span>
   );
 }

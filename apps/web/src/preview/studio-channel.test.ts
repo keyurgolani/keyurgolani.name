@@ -428,3 +428,33 @@ test('reset takes the new nonce and closes the channel until the frame says hell
   assert.equal(iframe.contentWindow.posted.length, 2, 'a closed channel answers nothing');
   await tick();
 });
+
+test("Studio sends a frame's motion only over the port its own frame's hello opened, at the frame's origin, and refuses a motion of another shape (kgn-e/compare-perf)", async (t) => {
+  const PREVIEW = 'https://preview.rowan.test';
+  const { iframe, channel, drops, fromFrame, lastPort } = setup(t, { now: 0 }, PREVIEW);
+  const hello = envelope('hello', { nonce: NONCE, instance: DOC_A }, 1);
+  // Before any hello, and after hellos from another window or another origin, nothing goes.
+  assert.equal(channel.send('motion', { motion: 'full' }), false);
+  for (const source of [new FakeFrameWindow(), {}, null]) fromFrame(hello, source);
+  for (const origin of ['null', 'https://rowan.test', 'https://evil.test']) {
+    fromFrame(hello, iframe.contentWindow, origin);
+  }
+  assert.equal(channel.connected, false);
+  assert.equal(channel.send('motion', { motion: 'full' }), false);
+  assert.deepEqual(
+    drops.map(({ reason }) => reason),
+    ['source', 'source', 'source', 'origin', 'origin', 'origin'],
+  );
+  assert.equal(iframe.contentWindow.posted.length, 0, 'no connect, so no port');
+  // The frame's own window at its origin: the port, and the motion over it alone.
+  fromFrame(hello);
+  const port = lastPort()!;
+  const received: unknown[] = [];
+  port.onmessage = (event) => received.push(event.data);
+  assert.equal(channel.send('motion', { motion: 'full' }), true);
+  for (const bad of [{ motion: 'fast' }, { motion: 'system' }, { motion: 'full', extra: 1 }]) {
+    assert.throws(() => channel.send('motion', bad as never), /refuses this motion message/);
+  }
+  await tick();
+  assert.deepEqual(received, [envelope('motion', { motion: 'full' }, 2)]);
+});

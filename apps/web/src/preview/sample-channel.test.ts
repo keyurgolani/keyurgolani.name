@@ -1,6 +1,7 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { setTimeout as wait } from 'node:timers/promises';
+import type { MotionPolicy } from '@portfolio/schema';
 import { envelope, type PreviewDrop } from './protocol';
 import {
   registeredAppearance,
@@ -12,11 +13,13 @@ import {
 
 // The frame's half of the channel in sample mode (DEM-2), against a stand-in
 // window and document: Demo Studio's /sample frame, a public page, which
-// shows an appearance in place and nothing else. Its `connect` comes from
-// its parent window and Studio's origin alone, as every frame's does; over
-// the port it takes `appearance` alone, and only one whose every pack is one
-// the server rendered as registered, with that stylesheet. Anything else
-// changes nothing on the page: no sheet linked, no boundary attribute moved.
+// shows an appearance and its motion in place and nothing else. Its
+// `connect` comes from its parent window and Studio's origin alone, as every
+// frame's does; over the port it takes `appearance`, only one whose every
+// pack is one the server rendered as registered, with that stylesheet, and
+// `motion`, only below the site's policy and the reader's own setting.
+// Anything else changes nothing on the page: no sheet linked, no boundary
+// attribute moved.
 
 const STUDIO = 'https://demo.test';
 const NONCE = 'SsSsSsSsSsSsSsSsSsSsSs';
@@ -178,6 +181,11 @@ class FakeSampleWindow {
   readonly assigned: string[] = [];
   readonly page = samplePage();
   readonly performance = { now: () => 0 };
+  /** Whether the reader's own setting asks for reduced motion. */
+  reduces = false;
+  matchMedia(query: string) {
+    return { matches: this.reduces && query === '(prefers-reduced-motion: reduce)' };
+  }
   url = new URL(`${STUDIO}/sample?${QUERY}#nonce=${NONCE}`);
   readonly history = {
     state: null,
@@ -230,8 +238,16 @@ async function until(done: () => boolean, what: string) {
 }
 
 /** A framed /sample page with its agent started in sample mode, and the drop hook set. */
-function setup(t: TestContext, registered: RegisteredPacks | null = REGISTERED) {
+function setup(
+  t: TestContext,
+  registered: RegisteredPacks | null = REGISTERED,
+  {
+    motionPolicy = 'respect-os',
+    reduces = false,
+  }: { motionPolicy?: MotionPolicy; reduces?: boolean } = {},
+) {
   const win = new FakeSampleWindow();
+  win.reduces = reduces;
   const drops: PreviewDrop[] = [];
   globalThis.__kgnPreviewDrop = (drop) => drops.push(drop);
   (globalThis as { getComputedStyle?: unknown }).getComputedStyle = () => ({ color: '' });
@@ -241,6 +257,7 @@ function setup(t: TestContext, registered: RegisteredPacks | null = REGISTERED) 
     linkBase: '/sample',
     renderedVersion: null,
     queryKeys: KEYS,
+    selection: { displayMode: 'system', motionPolicy },
     ...(registered ? { registered } : {}),
   });
   const ports: MessagePort[] = [];
@@ -305,7 +322,7 @@ test("a connect from any window but the page's parent, or from any origin but St
   assert.deepEqual(win.page.snapshot(), before, 'not a sheet nor an attribute moved');
 });
 
-test('over its port it takes appearance alone: an environment, a navigation, a scroll, a lifecycle, a sync, or a document changes nothing (DEM-2)', async (t) => {
+test('over its port it takes appearance and motion alone: an environment, a navigation, a scroll, a lifecycle, a sync, or a document changes nothing (DEM-2)', async (t) => {
   const { win, drops, received, connect, send } = setup(t);
   await until(() => win.parent.posted.length > 0, 'the hello');
   const port = connect();
@@ -542,4 +559,93 @@ test("sampleDestination sets only the keys the link's query holds, keeps their o
     ),
     `${base}?scheme=paper-ink`,
   );
+});
+
+// Motion in place (kgn-e/compare-perf): the Compare grid's heavy slot moves with no document load.
+
+test("a motion over its port sets the boundary's data-motion in place, full and back to how the server rendered it held, with nothing else moved and no load", async (t) => {
+  const { win, drops, received, connect, send } = setup(t);
+  await until(() => win.parent.posted.length > 0, 'the hello');
+  const port = connect();
+  await until(() => received.length > 0, 'ready');
+  const before = win.page.snapshot();
+  send(port, 'motion', { motion: 'full' });
+  await until(() => win.page.boundary.getAttribute('data-motion') === 'full', 'full motion');
+  assert.deepEqual(win.page.snapshot(), {
+    ...before,
+    boundary: { ...before.boundary, 'data-motion': 'full' },
+  });
+  send(port, 'motion', { motion: 'reduced' });
+  await until(() => win.page.boundary.getAttribute('data-motion') === 'static', 'held again');
+  assert.deepEqual(win.page.snapshot(), before, 'back as the server rendered it');
+  assert.deepEqual(win.assigned, [], 'no document load');
+  assert.deepEqual(drops, []);
+});
+
+test("a full motion never raises a frame the site's reduce policy or the reader's own reduced-motion setting reduces, and a reduced one still goes", async (t) => {
+  for (const [why, options] of [
+    ['the site policy', { motionPolicy: 'reduce' as const }],
+    ["the reader's setting", { reduces: true }],
+  ] as const) {
+    const { win, drops, received, connect, send } = setup(t, REGISTERED, options);
+    await until(() => win.parent.posted.length > 0, `${why}: the hello`);
+    const port = connect();
+    await until(() => received.length > 0, `${why}: ready`);
+    const before = win.page.snapshot();
+    send(port, 'motion', { motion: 'full' });
+    await until(() => drops.length > 0, `${why}: the drop`);
+    assert.deepEqual(drops, [{ side: 'frame', reason: 'payload', type: 'motion' }], why);
+    assert.deepEqual(win.page.snapshot(), before, `${why}: nothing moved`);
+    send(port, 'motion', { motion: 'reduced' });
+    await wait(20);
+    assert.equal(win.page.boundary.getAttribute('data-motion'), 'static', why);
+    assert.equal(drops.length, 1, `${why}: a reduced motion goes`);
+  }
+});
+
+test('a motion with an unknown value, another shape, or extra keys changes nothing', async (t) => {
+  const { win, drops, received, connect, send } = setup(t);
+  await until(() => win.parent.posted.length > 0, 'the hello');
+  const port = connect();
+  await until(() => received.length > 0, 'ready');
+  const before = win.page.snapshot();
+  const refused = [
+    { motion: 'fast' },
+    { motion: 'system' },
+    { motion: 'static' },
+    { motion: '' },
+    { motion: 3 },
+    { motion: 'full', also: 'enhancement' },
+    {},
+    'full',
+    ['full'],
+    null,
+  ];
+  for (const payload of refused) send(port, 'motion', payload);
+  await until(() => drops.length >= refused.length, 'the drops');
+  assert.deepEqual(
+    drops.map(({ type }) => type),
+    refused.map(() => 'motion'),
+  );
+  assert.ok(drops.every(({ reason }) => reason !== undefined && reason !== 'type'));
+  assert.deepEqual(win.page.snapshot(), before, 'not an attribute moved');
+});
+
+test("a motion from a connect any window but the page's parent, or any origin but Studio's, opened changes nothing", async (t) => {
+  const { win, drops, received, connect, send } = setup(t);
+  await until(() => win.parent.posted.length > 0, 'the hello');
+  const before = win.page.snapshot();
+  const foreignOrigin = connect({ origin: 'https://attacker.test' });
+  const opaqueOrigin = connect({ origin: 'null' });
+  const foreignWindow = connect({ source: { postMessage() {} } });
+  const itself = connect({ source: win });
+  for (const port of [foreignOrigin, opaqueOrigin, foreignWindow, itself])
+    send(port, 'motion', { motion: 'full' });
+  await wait(50);
+  assert.deepEqual(
+    drops.map(({ reason }) => reason),
+    ['origin', 'origin', 'source', 'source'],
+  );
+  assert.deepEqual(received, [], 'no ready went back over any of them');
+  assert.deepEqual(win.page.snapshot(), before, 'not an attribute moved');
 });
