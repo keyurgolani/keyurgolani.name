@@ -35,6 +35,12 @@ export interface ScriptOnlyMark {
 /** Every file outside the harness, the docs and the tests that names data-script-only. */
 export const SCRIPT_ONLY_MARKS: readonly ScriptOnlyMark[] = [
   {
+    file: 'packages/variant-horizontal-cinema/src/controller.tsx',
+    marks: 1,
+    reason:
+      'The scrubber\'s position status ("Opening, 1 of 21"), a role="status" that only the hydrated scrubber fills, since a static stand-in would be wrong wherever the reader is.',
+  },
+  {
     file: 'packages/variant-spatial-bento/src/esc-hint.tsx',
     marks: 1,
     reason:
