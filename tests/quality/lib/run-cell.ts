@@ -248,6 +248,8 @@ interface SuiteRun {
   readonly ran: Set<string>;
   /** Run the default row's content conditions: the inventory and failed enhancement. */
   readonly conditions: boolean;
+  /** What those conditions compare with: the page's inventory, as audit() read it before its sampler. */
+  readonly baseline: readonly string[];
   /** A Studio surface that needs JavaScript: without it, its notice stands in for its content. */
   readonly scriptRequired: boolean;
   /** A surface whose frame's document its composition cells cover: the walk takes the frame as one stop. */
@@ -263,7 +265,7 @@ async function suites(run: SuiteRun): Promise<Finding[]> {
     ran.add(check);
     return true;
   };
-  const baseline = await inPage<string[]>(page, { kind: 'inventory' });
+  const { baseline } = run;
   const scripts = await page.evaluate(() => [...document.scripts].map((script) => script.src));
   if (owed.has('keyboard')) {
     findings.push(
@@ -368,7 +370,21 @@ export function axeRunOptions({
   return { runOnly };
 }
 
-export async function audit(page: Page, row: PreferenceRow, sweptRules = false, framed = false) {
+/**
+ * With `baseline`, it also reads the page's inventory, the default row's
+ * content conditions' baseline, once axe has run and before the sampler
+ * moves anything: the sampler scrolls each element it samples into view,
+ * a strip's own scroller included, and text a script keeps in step with
+ * the scroll, such as a live status naming the scene in view, would say
+ * there what no condition's reload, read as the page loads, says.
+ */
+export async function audit(
+  page: Page,
+  row: PreferenceRow,
+  sweptRules = false,
+  framed = false,
+  baseline = false,
+) {
   const forced = row.context.forcedColors === 'active';
   const cdp = scriptless.get(page);
   // Read before script turns on: a query axe's pass would flip fails the row.
@@ -404,10 +420,11 @@ export async function audit(page: Page, row: PreferenceRow, sweptRules = false, 
       axeRunOptions({ swept: sweptRules, forced, highContrast }),
     );
     const results: AxeResults = await highContrastViolations(page, await builder.analyze());
+    const inventory = baseline ? await inPage<string[]>(page, { kind: 'inventory' }) : [];
     const contrast = forced ? [] : await incompleteContrastFindings(page, results, framed);
     // What the sampler left out, which the cell's report says.
     const framedLeftOut = framed && !forced ? framedItems(results) : 0;
-    return { results, contrast: [...scripting, ...contrast], framedLeftOut };
+    return { results, contrast: [...scripting, ...contrast], framedLeftOut, inventory };
   } finally {
     await cdp?.send('Emulation.setScriptExecutionDisabled', { value: true });
   }
@@ -529,11 +546,14 @@ export async function runPass(
 
   // Under reduced motion the frame window after load passes before axe, whose own frames would count.
   const motion = owed.has('motion') ? await motionFindings(page) : [];
-  const { results, contrast, framedLeftOut } = await audit(
+  // The default row's content conditions compare each reload with the page as audit() read it.
+  const contentRow = row.id === 'default';
+  const { results, contrast, framedLeftOut, inventory } = await audit(
     page,
     row,
     cell.sweep ?? false,
     cell.framed !== undefined,
+    contentRow && (owed.has('inventory') || owed.has('enhancement')),
   );
   ran.add('axe');
   const details: Record<string, ElementDetails[]> = {};
@@ -608,7 +628,8 @@ export async function runPass(
       interactions: await interactionsFor(cell.target, cell.route),
       viewport,
       ran,
-      conditions: row.id === 'default',
+      conditions: contentRow,
+      baseline: inventory,
       scriptRequired: cell.requiresScript !== undefined,
       framed: cell.framed !== undefined,
     })),
@@ -676,6 +697,7 @@ export async function runPass(
           viewport,
           ran: new Set(),
           conditions: false,
+          baseline: [],
           scriptRequired: false,
         })),
       );

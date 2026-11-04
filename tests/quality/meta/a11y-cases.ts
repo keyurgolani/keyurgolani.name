@@ -6,15 +6,17 @@
 // the check's own, so a page that breaks some other rule doesn't count.
 // The compiled-CSS audit needs no browser.
 
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { BrowserContextOptions, CDPSession, Page } from '@playwright/test';
+import type { BrowserContextOptions, CDPSession, Page, TestInfo } from '@playwright/test';
+import { defaultTuple, type Cell } from '../cells';
 import { axeFor } from '../lib/axe';
 import { checkEmulation } from '../lib/emulation';
-import { PREFERENCE_ROWS } from '../lib/matrix';
+import { DEFAULT_ROW, PREFERENCE_ROWS, VIEWPORTS } from '../lib/matrix';
 import {
   enhancementFindings,
   failureStateFindings,
@@ -42,7 +44,7 @@ import {
 } from '../lib/a11y/interaction';
 import { killSwitches, MOTION_SAMPLER, motionFindings, osWinsFindings } from '../lib/a11y/motion';
 import { inPage, type Active } from '../lib/a11y/probe';
-import { applyRow, audit, loadForPass } from '../lib/run-cell';
+import { applyRow, audit, loadForPass, runPass } from '../lib/run-cell';
 import type { MetaCase, MetaOutcome } from './cases';
 
 const FIXTURES = fileURLToPath(new URL('../fixtures/a11y/', import.meta.url));
@@ -310,7 +312,7 @@ const REVEAL = {
   body: "setTimeout(() => { for (const el of document.querySelectorAll('[data-lazy]')) el.hidden = false; }, 400);",
 };
 
-/** `check` once the lazy enhancement has revealed its control, as the cell reads its baseline after its other checks. */
+/** `check` once the lazy enhancement has revealed its control, as the cell reads its baseline once axe has run. */
 const revealed =
   (check: (page: Page) => Promise<Finding[]>) =>
   async (page: Page): Promise<Finding[]> => {
@@ -938,6 +940,64 @@ const printAfterScroll = async (page: Page): Promise<Finding[]> => {
   return inventoryFindings(page, '/', before, ['print']);
 };
 
+/** The checks whose failures defaultPassContent() keeps: the content conditions', and the runner's. */
+const CONTENT_GATES = new Set(['inventory', 'enhancement', 'runner']);
+
+/**
+ * The stand-in's page as a cell's default row at 1440x900 runs it, through
+ * run-cell.ts's own runPass(), in its order: the load, axe and the contrast
+ * sampler, then the suites, the inventory's conditions and failed
+ * enhancement among them. Its findings are what those conditions and the
+ * runner record. What the pass writes goes to a folder of its own, gone
+ * once it has run.
+ */
+const defaultPassContent = async (page: Page): Promise<Finding[]> => {
+  const out = mkdtempSync(path.join(tmpdir(), 'quality-meta-pass-'));
+  try {
+    const testInfo = {
+      outputPath: (name: string) => path.join(out, name),
+      attach: async () => undefined,
+    } as unknown as TestInfo;
+    const cell: Cell = {
+      id: 'surface:meta-stand-in / meta-stand-in/platform-neutral/warm-parchment/humanist-ui/system',
+      kind: 'surface',
+      target: 'meta-stand-in',
+      owner: '#11',
+      profile: 'read-only',
+      performanceTier: 'light',
+      tuple: defaultTuple('meta-stand-in', 'system'),
+      path: '/',
+      route: '/',
+      state: 'complete',
+      expectedStatus: 200,
+      source: 'complete',
+      sentinel: true,
+      fixture: true,
+    };
+    const pass = await runPass(
+      {
+        page,
+        cell,
+        viewport: VIEWPORTS[0]!,
+        row: DEFAULT_ROW,
+        conditions: true,
+        testInfo,
+        expect: undefined as never,
+      },
+      { reemulate: false },
+    );
+    return pass.suiteFailures
+      .filter((failure) => CONTENT_GATES.has(failure.check))
+      .map((failure) => ({
+        gate: failure.check,
+        rule: failure.rule,
+        actual: String(failure.actual),
+      }));
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
+};
+
 const TRANSPARENCY = [
   { name: 'prefers-color-scheme', value: 'light' },
   { name: 'prefers-reduced-transparency', value: 'reduce' },
@@ -1320,6 +1380,18 @@ export const A11Y_CASES: readonly MetaCase[] = [
     expect: 'pass',
     browser: true,
     run: () => onPage('inventory-running-head.html', printAfterScroll),
+  },
+  // The cell's baseline is read before the contrast sampler moves the page, not after: a live
+  // status that names the panel a strip rests on, which the sampler scrolls to its far end, says
+  // there what each condition's reload says.
+  {
+    id: 'inventory/scroll-status',
+    gate: 'inventory',
+    input:
+      "tests/quality/fixtures/a11y/inventory-scroll-status.html, through runPass()'s default row at 1440x900",
+    expect: 'pass',
+    browser: true,
+    run: () => onPage('inventory-scroll-status.html', defaultPassContent),
   },
   // A reload reads the page once its enhancements have mounted or failed: a button a lazy
   // chunk reveals after load is there under each condition, as it was for the baseline.
