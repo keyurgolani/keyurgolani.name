@@ -1,7 +1,19 @@
 // The pieces of <Enhancement>, apart so tests can reach them.
 
-import { Component, Suspense, use, useSyncExternalStore, type ReactNode } from 'react';
+import {
+  Component,
+  Suspense,
+  use,
+  useCallback,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
+import { enhancementPending } from '@portfolio/variant-contract/settle';
+import { afterNextFrame } from '../runtime/use-frame-loop';
+import { settleHolds } from './holds';
 import { hostModules, type EnhancementComponent } from '../sections/host-modules';
 
 declare global {
@@ -11,12 +23,26 @@ declare global {
   var __portfolioMountedEnhancements: unknown;
 }
 
-/** Renders nothing once anything below it throws, so a broken enhancement leaves the page as it was. */
-export class EnhancementBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+/**
+ * Renders nothing once anything below it throws, so a broken enhancement
+ * leaves the page as it was, and the kit's own settle signal goes with what
+ * it rendered. Given the enhancement's variant and id, it also takes that id
+ * off any hold the variant's markup renders for it
+ * (@portfolio/variant-contract/settle), since its first pass will never come.
+ */
+export class EnhancementBoundary extends Component<
+  { children: ReactNode; variant?: string; id?: string },
+  { failed: boolean }
+> {
   override state = { failed: false };
 
   static getDerivedStateFromError(): { failed: boolean } {
     return { failed: true };
+  }
+
+  override componentDidCatch() {
+    const { variant, id } = this.props;
+    if (variant !== undefined && id !== undefined) settleHolds(globalThis.document, variant, id);
   }
 
   override componentDidMount() {
@@ -73,10 +99,53 @@ export function moduleFor(key: string): Promise<{ default: EnhancementComponent 
   return load;
 }
 
-/** The loaded enhancement. It suspends while loading, and throws if the load failed. */
-function Loaded({ input, moduleKey }: { input: VariantRenderInput; moduleKey: string }) {
+/**
+ * The settle signal <Enhancement> renders in its own place until the
+ * enhancement's first pass has run (@portfolio/variant-contract/settle): a
+ * template, which has no box, holds nothing live, isn't in the
+ * accessibility tree and styles nothing. The variant shots and the quality
+ * cells' reads wait until no element on the page carries the attribute.
+ */
+export function PendingMarker({ id }: { id: string }) {
+  return <template {...enhancementPending(id)} />;
+}
+
+/**
+ * Calls `settled` one animation frame after its first commit. Rendered after
+ * the enhancement, so it commits with it: an enhancement that attaches in
+ * its first effect has attached by then, and so has one that attaches on
+ * the commit its own ref's setState makes, which React renders and flushes,
+ * effects too, in the same task. A frame boundary, not a time.
+ */
+function AfterFirstPass({ settled }: { settled: () => void }) {
+  useEffect(() => afterNextFrame(settled), [settled]);
+  return null;
+}
+
+/**
+ * The loaded enhancement, and its settle signal until its first pass has
+ * run, when it has one. It suspends while loading, and throws if the load
+ * failed.
+ */
+function Loaded({
+  input,
+  moduleKey,
+  marker,
+}: {
+  input: VariantRenderInput;
+  moduleKey: string;
+  marker: ReactNode;
+}) {
   const { default: Enhanced } = use(moduleFor(moduleKey));
-  return <Enhanced input={input} />;
+  const [pending, setPending] = useState(marker !== null);
+  const settled = useCallback(() => setPending(false), []);
+  return (
+    <>
+      {pending ? marker : null}
+      <Enhanced input={input} />
+      {pending ? <AfterFirstPass settled={settled} /> : null}
+    </>
+  );
 }
 
 const subscribe = () => () => {};
@@ -101,33 +170,44 @@ export function enhancementsOff(document: Pick<Document, 'querySelector'> | unde
 }
 
 /**
- * Nothing on the server or while hydrating, then the enhancement. It throws,
- * for the boundary to catch, when the variant doesn't declare `id` or when
+ * On the server and while hydrating, nothing, or with `pending` the settle
+ * signal (PendingMarker); then the enhancement, the signal kept while its
+ * module loads and until its first pass has run. It throws, for the boundary
+ * to catch, when the variant doesn't declare `id` or when
  * globalThis.__portfolioFailEnhancements is set, and renders nothing when the
- * page's boundary turns enhancements off.
+ * page's boundary turns enhancements off. Either way the signal goes with it.
  */
 export function MountedEnhancement({
   input,
   id,
   fallback = null,
+  pending = false,
 }: {
   input: VariantRenderInput;
   id: string;
   /** What shows while the module loads: nothing, or an island's server markup. */
   fallback?: ReactNode;
+  /** Whether it renders the settle signal: <Enhancement>'s, never an island's, which has data-island. */
+  pending?: boolean;
 }) {
+  const marker = pending ? <PendingMarker id={id} /> : null;
   const mounted = useMounted();
-  if (!mounted) return null;
+  const off = mounted && enhancementsOff(globalThis.document);
+  // Turned off, it never runs, so nothing waits on its first pass.
+  useEffect(() => {
+    if (off) settleHolds(globalThis.document, input.variant, id);
+  }, [off, input.variant, id]);
+  if (!mounted) return marker;
   if (!input.capabilities.enhancements.some((declared) => declared.id === id)) {
     throw new Error(`${input.variant} declares no enhancement ${id}.`);
   }
-  if (enhancementsOff(globalThis.document)) return null;
+  if (off) return null;
   if (globalThis.__portfolioFailEnhancements) {
     throw new Error('Every enhancement fails: globalThis.__portfolioFailEnhancements is set.');
   }
   return (
-    <Suspense fallback={fallback}>
-      <Loaded input={input} moduleKey={`${input.variant}/${id}`} />
+    <Suspense fallback={marker ?? fallback}>
+      <Loaded input={input} moduleKey={`${input.variant}/${id}`} marker={marker} />
     </Suspense>
   );
 }

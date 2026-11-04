@@ -7,6 +7,7 @@ import type { VariantRenderInput } from '@portfolio/variant-contract';
 import { registerHostModules } from '../sections';
 import * as entry from '.';
 import { Enhancement } from '.';
+import { settleHolds } from './holds';
 import { EnhancementBoundary, enhancementsOff, loadModule, moduleFor } from './load';
 
 // @portfolio/kit/enhancements (#5, Slice 2). What a browser does with it,
@@ -45,16 +46,21 @@ test('it exports components, which a server component renders, and no function t
   }
 });
 
-test('the server renders nothing, so the page never waits on or depends on an enhancement', () => {
+test('the server renders only the inert settle signal, so the page never waits on or depends on an enhancement', () => {
   registerHostModules({
     enhancementLoaders: { 'kit-shared/orbit': async () => ({ default: Orbit }) },
   });
+  // A template: no box, nothing live, not in the accessibility tree (@portfolio/variant-contract/settle).
+  const signal = (id: string) => `<template data-enhancement-pending="${id}"></template>`;
   try {
-    assert.equal(renderToStaticMarkup(<Enhancement input={INPUT} id="orbit" />), '');
+    assert.equal(renderToStaticMarkup(<Enhancement input={INPUT} id="orbit" />), signal('orbit'));
     // Not even an undeclared one, or with the throw switch set, makes the server throw.
-    assert.equal(renderToStaticMarkup(<Enhancement input={INPUT} id="missing" />), '');
+    assert.equal(
+      renderToStaticMarkup(<Enhancement input={INPUT} id="missing" />),
+      signal('missing'),
+    );
     globalThis.__portfolioFailEnhancements = true;
-    assert.equal(renderToStaticMarkup(<Enhancement input={INPUT} id="orbit" />), '');
+    assert.equal(renderToStaticMarkup(<Enhancement input={INPUT} id="orbit" />), signal('orbit'));
   } finally {
     globalThis.__portfolioFailEnhancements = undefined;
     registerHostModules({});
@@ -170,6 +176,115 @@ test('a failure below the boundary leaves nothing in its place', () => {
   assert.notEqual(boundary.render(), null);
   boundary.state = { failed: true };
   assert.equal(boundary.render(), null);
+});
+
+test('a failure below the boundary takes its id off the holds its variant rendered for it', () => {
+  // <Enhancement> names its variant and id to its boundary.
+  const element = Enhancement({ input: INPUT, id: 'orbit' }) as React.ReactElement<{
+    variant?: string;
+    id?: string;
+  }>;
+  assert.equal(element.type, EnhancementBoundary);
+  assert.equal(element.props.variant, 'kit-shared');
+  assert.equal(element.props.id, 'orbit');
+  // The first pass will never come, so nothing waits on it: the id comes off, the others stay.
+  const page = fakePage();
+  const boundary = page.add(null, { 'data-variant': 'kit-shared' });
+  const hold = page.add(boundary, { 'data-enhancement-pending': 'orbit comet' });
+  const before = globalThis.document;
+  Object.assign(globalThis, { document: page });
+  try {
+    new EnhancementBoundary({
+      children: <p>enhanced</p>,
+      variant: 'kit-shared',
+      id: 'orbit',
+    }).componentDidCatch();
+    assert.deepEqual(hold.attributes, { 'data-enhancement-pending': 'comet' });
+    // A boundary that wasn't told which enhancement it holds touches nothing.
+    new EnhancementBoundary({ children: <p>enhanced</p> }).componentDidCatch();
+    assert.deepEqual(hold.attributes, { 'data-enhancement-pending': 'comet' });
+  } finally {
+    Object.assign(globalThis, { document: before });
+  }
+});
+
+/** A document of plain elements with attributes and parents, for settleHolds(). */
+function fakePage() {
+  type Fake = {
+    attributes: Record<string, string>;
+    parentElement: Fake | null;
+    getAttribute(name: string): string | null;
+    setAttribute(name: string, value: string): void;
+    removeAttribute(name: string): void;
+  };
+  const all: Fake[] = [];
+  return {
+    asked: [] as string[],
+    add(parent: Fake | null, attributes: Record<string, string>): Fake {
+      const element: Fake = {
+        attributes,
+        parentElement: parent,
+        getAttribute: (name) => attributes[name] ?? null,
+        setAttribute: (name, value) => void (attributes[name] = value),
+        removeAttribute: (name) => void delete attributes[name],
+      };
+      all.push(element);
+      return element;
+    },
+    querySelectorAll(selector: string) {
+      this.asked.push(selector);
+      assert.equal(selector, '[data-enhancement-pending]');
+      return all.filter((each) => 'data-enhancement-pending' in each.attributes);
+    },
+  };
+}
+
+test('the kit settles a hold on the boundary itself, and only its own variant’s', () => {
+  const page = fakePage();
+  const boundary = page.add(null, {
+    'data-variant': 'kit-shared',
+    'data-enhancement-pending': 'orbit',
+  });
+  const inner = page.add(page.add(boundary, {}), { 'data-enhancement-pending': 'orbit' });
+  const other = page.add(page.add(null, { 'data-variant': 'other' }), {
+    'data-enhancement-pending': 'orbit',
+  });
+  settleHolds(page, 'kit-shared', 'orbit');
+  assert.deepEqual(boundary.attributes, { 'data-variant': 'kit-shared' });
+  assert.deepEqual(inner.attributes, {});
+  assert.deepEqual(other.attributes, { 'data-enhancement-pending': 'orbit' });
+  // On the server there's no document, and nothing to do.
+  settleHolds(undefined, 'kit-shared', 'orbit');
+});
+
+test('an id or variant with a quote and a bracket settles without throwing, and builds no selector from either', () => {
+  const page = fakePage();
+  const odd = 'or"]bit';
+  const boundary = page.add(null, { 'data-variant': 'kit"]shared' });
+  const hold = page.add(boundary, { 'data-enhancement-pending': `${odd} comet` });
+  assert.doesNotThrow(() => settleHolds(page, 'kit"]shared', odd));
+  assert.deepEqual(hold.attributes, { 'data-enhancement-pending': 'comet' });
+  assert.deepEqual(page.asked, ['[data-enhancement-pending]']);
+  // And the boundary's failure path, with an id the variant never declared, doesn't throw either.
+  const before = globalThis.document;
+  Object.assign(globalThis, {
+    document: {
+      querySelectorAll: () => {
+        throw new SyntaxError('not a selector');
+      },
+    },
+  });
+  try {
+    assert.doesNotThrow(() =>
+      new EnhancementBoundary({
+        children: <p>enhanced</p>,
+        variant: 'kit-shared',
+        id: odd,
+      }).componentDidCatch(),
+    );
+  } finally {
+    Object.assign(globalThis, { document: before });
+  }
 });
 
 test('each boundary that mounts adds one to a count a test has set, and writes nothing otherwise', () => {

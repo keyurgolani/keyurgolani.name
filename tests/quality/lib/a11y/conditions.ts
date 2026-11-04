@@ -44,6 +44,7 @@ import { axeFor } from '../axe';
 import { frames, type Finding } from './interaction';
 import { decodePng } from '../pixels';
 import { inPage } from './probe';
+import { ENHANCEMENT_PENDING } from '../../../../packages/variant-contract/src/settle';
 
 const thresholds = loadThresholds();
 
@@ -285,7 +286,7 @@ const stillBusy = (condition: string): Finding => ({
 });
 
 /** What a page whose enhancements never finished mounting or failing is, as a finding's words. */
-export const STILL_ENHANCING = `the page's enhancements were still loading, a script in flight or an island changing, after ${BUSY_LIMIT_MS / 1000} s`;
+export const STILL_ENHANCING = `the page's enhancements were still loading, a script in flight, an island changing or a first pass pending, after ${BUSY_LIMIT_MS / 1000} s`;
 
 /** The script requests a page has made since it started watching, and the ones still in flight. */
 interface ScriptWatch {
@@ -335,12 +336,17 @@ async function idle(page: Page, ms: number): Promise<void> {
  * marks nothing in the page: it loads its module through a script chunk of
  * its own once the page hydrates. An EnhancementIsland marks itself by
  * data-island: markup until it starts, then live, or failed once it tore
- * down to its markup. So the page is done when, across one idle period and
- * two frames, no script request was in flight or started and no island's
- * data-island changed. An island that never starts, out of view, paused,
- * or lacking what it requires, stays markup, which is settled too. Until
- * `end`: false when they still hadn't settled, and the caller fails the
- * cell with STILL_ENHANCING and reads the page as it stands.
+ * down to its markup. Every <Enhancement> renders an inert template marked
+ * ENHANCEMENT_PENDING (@portfolio/variant-contract/settle) in its place until
+ * it has attached, and an enhancement whose first real pass comes later
+ * holds its own markup marked so until then; the kit takes both off for one
+ * that fails or is turned off. So the page is done when, across one idle period and two
+ * frames, no script request was in flight or started, no island's
+ * data-island changed, and nothing on the page is still marked pending. An
+ * island that never starts, out of view, paused, or lacking what it
+ * requires, stays markup, which is settled too. Until `end`: false when
+ * they still hadn't settled, and the caller fails the cell with
+ * STILL_ENHANCING and reads the page as it stands.
  */
 async function enhancementsSettled(
   page: Page,
@@ -356,6 +362,8 @@ async function enhancementsSettled(
         )
         .join(' '),
     );
+  const pending = () =>
+    page.evaluate((marker) => document.querySelectorAll(`[${marker}]`).length, ENHANCEMENT_PENDING);
   let before: string | null = null;
   while (Date.now() < end) {
     if (scripts.pending() > 0) {
@@ -364,7 +372,7 @@ async function enhancementsSettled(
       continue;
     }
     const now = `${scripts.started()} ${await islands()}`;
-    if (now === before) return true;
+    if (now === before && (await pending()) === 0) return true;
     before = now;
     await idle(page, end - Date.now());
   }

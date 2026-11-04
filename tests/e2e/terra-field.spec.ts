@@ -4,6 +4,8 @@ import { fixtureSiteSelecting } from '../../packages/variant-contract/src/contra
 import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
 import { expect, test } from '../harness/fixtures';
 import { decodePng, pixel, type Rgb } from '../quality/lib/pixels';
+import { ENHANCEMENT_PENDING } from '../../packages/variant-contract/src/settle';
+import { watchEnhancements } from '../quality/lib/a11y/conditions';
 
 // Terra Field's checks in a browser (variants-10 brief §5.5, step 10): the
 // arc commits (60 px or more at 1440, TF-M3), the seal is whole and never
@@ -530,3 +532,31 @@ for (const [width, height] of [
     },
   );
 }
+
+// The kit's settle signal (the capture race, 2026-11-03; @portfolio/variant-contract/settle) on a
+// composition whose enhancement attaches in its first effect: <Enhancement> renders an inert
+// <template data-enhancement-pending="field"> in its place, it hydrates as rendered, and it comes off
+// a frame after the field has attached.
+test(
+  "the kit's settle signal hydrates without a mismatch, and comes off once the field has attached",
+  { annotation },
+  async ({ page, request }) => {
+    const html = await (await request.get('/')).text();
+    expect(html).toContain('<template data-enhancement-pending="field"></template>');
+    const errors: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(message.text());
+    });
+    page.on('pageerror', (error) => errors.push(error.message));
+    const watch = watchEnhancements(page);
+    try {
+      await page.goto('/');
+      expect(await watch.settled(), 'the watch settles').toBe(true);
+      await expect(page.locator(`[${ENHANCEMENT_PENDING}]`)).toHaveCount(0);
+      // React reports a hydration mismatch as a console error (#418, #423 or #425 in production).
+      expect(errors.filter((text) => /hydrat|#41[89]|#42[35]/i.test(text))).toEqual([]);
+    } finally {
+      watch.stop();
+    }
+  },
+);

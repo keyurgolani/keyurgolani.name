@@ -4,7 +4,9 @@
 // only while its runtime is active. It stops the moment the runtime pauses
 // or goes static, starts again when it's active, and ends for good when the
 // callback returns false. Every kit effect that draws frames loops through
-// it, so none keeps a frame loop of its own.
+// it, so none keeps a frame loop of its own. afterNextFrame() is its one-shot
+// for a kit piece that needs a frame boundary and draws nothing (the
+// enhancement's settle signal): one frame, never a loop, whatever the runtime.
 
 import { useEffect, useRef } from 'react';
 import type { RuntimeState } from './state';
@@ -44,4 +46,10 @@ export function useFrameLoop(
       if (frame !== 0) cancelAnimationFrame(frame);
     };
   }, [active]);
+}
+
+/** Calls `callback` once, at the next frame, and never again. Returns the cancel. */
+export function afterNextFrame(callback: () => void): () => void {
+  const frame = requestAnimationFrame(() => callback());
+  return () => cancelAnimationFrame(frame);
 }

@@ -1,5 +1,6 @@
 import { stripVTControlCharacters } from 'node:util';
 import { expect, test, type Page, type Route, type TestInfo } from '@playwright/test';
+import { ENHANCEMENT_PENDING } from '../../packages/variant-contract/src/settle';
 import { BUSY_LIMIT_MS, STILL_ENHANCING, watchEnhancements } from '../quality/lib/a11y/conditions';
 import {
   checkMode,
@@ -19,7 +20,8 @@ import {
 // sets; the readable and print checks, and what each leaves out; the
 // screenshot's wait for lazy images and for one that never loads, and for an
 // enhancement's chunk, which a lazy <Enhancement> starts after the page
-// loads, and for one that never lands; and the stand-in host, which lets
+// loads, and for one that never lands, and for a first pass the page marks
+// pending, and one that never runs; and the stand-in host, which lets
 // nothing out.
 
 const ORIGIN = 'https://modes.test';
@@ -481,6 +483,50 @@ test.describe('the screenshot enhancement wait', () => {
       expect(await listed(page), 'the contents list before the chunk lands').toBe(true);
       await expectEnhancementsSettled(watch);
       expect(await listed(page), 'the contents list once the chunk has run').toBe(false);
+    } finally {
+      watch.stop();
+    }
+  });
+
+  /**
+   * A page whose enhancement's first pass changes it a while after load with
+   * no chunk or island to show it, as Aurora Glass's sky marks the page live
+   * after hydration: it marks its own markup pending
+   * (@portfolio/variant-contract/settle) until then, and `clears` says
+   * whether it ever does.
+   */
+  const marked = (clears: boolean) => `<main><h1>Stand-in</h1>
+<nav id="contents" ${ENHANCEMENT_PENDING}="stand-in">Index</nav></main>
+<script>
+  addEventListener('load', () => setTimeout(() => {
+    if (!${clears}) return;
+    const contents = document.getElementById('contents');
+    contents.hidden = true;
+    contents.removeAttribute('${ENHANCEMENT_PENDING}');
+  }, 1500));
+</script>`;
+
+  test('waits for a first pass its markup marks pending, which no chunk or island shows', async ({
+    page,
+  }) => {
+    const watch = watchEnhancements(page);
+    try {
+      await open(page, marked(true));
+      expect(await listed(page), 'the contents list before the first pass').toBe(true);
+      await expectEnhancementsSettled(watch);
+      expect(await listed(page), 'the contents list once the first pass has run').toBe(false);
+    } finally {
+      watch.stop();
+    }
+  });
+
+  test('fails, saying so, when a first pass marked pending never runs', async ({ page }) => {
+    const watch = watchEnhancements(page);
+    try {
+      await open(page, marked(false));
+      const started = Date.now();
+      expect(await failure(expectEnhancementsSettled(watch))).toContain(STILL_ENHANCING);
+      expect(Date.now() - started).toBeGreaterThanOrEqual(BUSY_LIMIT_MS - 100);
     } finally {
       watch.stop();
     }
