@@ -684,11 +684,13 @@
  */
 [data-variant='kinetic-cosmos'] .kc-signature-spot {
   --layout-clip: calc(100cqi + 2 * var(--layout-stage-pad));
-
-  position: absolute;
-  inset-inline-start: calc(
+  /* Where the spot starts in the map, its anchor's x: the phone placement below keeps the pill inside it. */
+  --layout-spot-x: calc(
     var(--layout-clip) * (1.5805 * var(--layout-x) - 0.5732) - var(--layout-stage-pad)
   );
+
+  position: absolute;
+  inset-inline-start: var(--layout-spot-x);
   inset-block-start: calc(var(--layout-clip) * 0.4634 * var(--layout-y));
   max-inline-size: 10em;
   /* Whole pixels, so its focus ring paints on its own box; the first line is for a browser without round(). */
@@ -739,11 +741,23 @@
   }
 }
 
-/* On a phone the body sits near the crop's left edge, so the plate hangs under it, clear of the core above. */
+/*
+ * On a phone the body sits near the crop's left edge, and the other rings' anchors step down and to
+ * the left of it, so the plate hangs from it to the right, a step down: its knocked-out ground clear
+ * of every anchor's body and of the core, the orbits' lines stopping short of it as anywhere. Where
+ * its words are wider than the map has room for (enlarged text), it moves back toward the map's start
+ * only as far as keeps it a focus halo inside the map's end, and never past the map's start.
+ */
 @media (max-width: 47.99rem) {
   [data-variant='kinetic-cosmos'] .kc-signature-spot {
-    translate: -30% var(--space-xs);
-    translate: round(-30%, 1px) round(var(--space-xs), 1px);
+    --layout-spot-room: clamp(
+      calc(var(--layout-focus-halo) - var(--layout-spot-x)),
+      0px,
+      calc(100cqi - var(--layout-spot-x) - 100% - var(--layout-focus-halo))
+    );
+
+    translate: var(--layout-spot-room) var(--space-s);
+    translate: round(var(--layout-spot-room), 1px) round(var(--space-s), 1px);
     text-align: start;
   }
 }
