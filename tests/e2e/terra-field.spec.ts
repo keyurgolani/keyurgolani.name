@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fixtureSiteSelecting } from '../../packages/variant-contract/src/contract-fixtures';
 import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
 import { expect, test } from '../harness/fixtures';
-import { decodePng, pixel } from '../quality/lib/pixels';
+import { decodePng, pixel, type Rgb } from '../quality/lib/pixels';
 
 // Terra Field's checks in a browser (variants-10 brief §5.5, step 10): the
 // arc commits (60 px or more at 1440, TF-M3), the seal is whole and never
@@ -499,7 +499,7 @@ for (const [width, height] of [
       await page.waitForTimeout(200);
       const box = (await link.boundingBox())!;
       const clip = { x: box.x - 8, y: box.y - 8, width: box.width + 16, height: box.height + 16 };
-      const rows = (png: Buffer, match: (rgb: readonly number[]) => boolean) => {
+      const rows = (png: Buffer, match: (rgb: Rgb) => boolean) => {
         const shot = decodePng(png);
         const found = new Set<number>();
         // Inside the ring's sides, so only its head and foot count.
@@ -508,12 +508,18 @@ for (const [width, height] of [
             if (match(pixel(shot, y * shot.width + x))) found.add(y);
         return [...found];
       };
-      const line = rows(await page.screenshot({ clip }), ([r, g, b]) => r > 150 && b > 150 && g < 120);
+      const line = rows(
+        await page.screenshot({ clip }),
+        ([r, g, b]) => r > 150 && b > 150 && g < 120,
+      );
       await page.keyboard.press('Shift');
       await link.focus();
       expect(await link.evaluate((a) => a.matches(':focus-visible'))).toBe(true);
       await page.waitForTimeout(200);
-      const ring = rows(await page.screenshot({ clip }), ([r, g, b]) => g > 150 && b > 150 && r < 150);
+      const ring = rows(
+        await page.screenshot({ clip }),
+        ([r, g, b]) => g > 150 && b > 150 && r < 150,
+      );
       expect(line.length, 'the underline is drawn').toBeGreaterThan(0);
       expect(ring.length, 'the ring is drawn, head and foot').toBeGreaterThan(1);
       const gap = Math.min(...ring.flatMap((y) => line.map((each) => Math.abs(y - each))));

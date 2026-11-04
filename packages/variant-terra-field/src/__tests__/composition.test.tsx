@@ -250,10 +250,13 @@ test('the closing address’s focus ring clears its underline, and the line box 
   // underline 0.22em past the baseline lay just past that area’s foot, so the ring ran over the line
   // (inside it at 1440 and 1024). Block padding, in em so it scales with the address, moves the box’s
   // edges and the ring past the line; the link stays inline, so it moves no line of text.
-  const own = [...STYLES.matchAll(/\n\[data-variant='terra-field'\] \.tf-display-link \{([^}]*)\}/g)].map(
-    (each) => each[1]!,
+  const own = [
+    ...STYLES.matchAll(/\n\[data-variant='terra-field'\] \.tf-display-link \{([^}]*)\}/g),
+  ].map((each) => each[1]!);
+  assert.ok(
+    own.some((body) => /padding-block: 0\.1em;/.test(body)),
+    'the ring clears the line by 0.1em',
   );
-  assert.ok(own.some((body) => /padding-block: 0\.1em;/.test(body)), 'the ring clears the line by 0.1em');
   for (const body of own) assert.doesNotMatch(body, /display:/, 'the link stays an inline box');
 });
 
