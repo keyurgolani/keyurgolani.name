@@ -59,23 +59,77 @@ test(
   },
 );
 
+/**
+ * The sample on a phone once its band has its photograph. The demo derives the sample's media
+ * after it starts, so a cold server can serve the page before the photograph is ready, and the
+ * band then has none (TF-M6: only a ready image anchors it): load again until it's there, as
+ * editorial-evidence-plate.spec.ts waits for Pl. 1, then let the image decode before measuring.
+ */
+async function withBandPhoto(page: Page, look: string): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        await open(page, look);
+        return page.locator('.tf-band__photo img').count();
+      },
+      {
+        message:
+          "the band had no photograph within 20 s: the demo derives the sample's media after it starts, and the photograph never became ready, so there's nothing to measure",
+        // Under the test's own 30 s, so this message is what reports.
+        timeout: 20_000,
+      },
+    )
+    .toBeGreaterThan(0);
+  await page.locator('.tf-band__photo img').evaluate((img) => (img as HTMLImageElement).decode());
+}
+
+/** The arc's low point, the photograph's top, and the seal's edges (TF-M4). */
+async function bandAtArc(page: Page) {
+  const at = await page.evaluate(() => {
+    const hero = document.querySelector('.tf-hero')!.getBoundingClientRect();
+    const photo = document.querySelector('.tf-band__photo')?.getBoundingClientRect();
+    const seal = document.querySelector('.tf-seal')!.getBoundingClientRect();
+    return { arc: hero.bottom, photo: photo?.top, sealTop: seal.top, sealBottom: seal.bottom };
+  });
+  expect(at.photo, 'the sample anchors the band on its photograph').toBeDefined();
+  expect(Math.abs(at.photo! - at.arc)).toBeLessThan(1.5);
+  expect(at.sealTop).toBeLessThan(at.photo!);
+  expect(at.sealBottom).toBeGreaterThan(at.photo!);
+}
+
 test(
   'at 390 the photograph starts at the arc’s low point, the seal over its top edge (TF-M4)',
   { annotation },
   async ({ page }) => {
-    await open(page, LOOKS.own);
-    const at = await page.evaluate(() => {
-      const hero = document.querySelector('.tf-hero')!.getBoundingClientRect();
-      const photo = document.querySelector('.tf-band__photo')?.getBoundingClientRect();
-      const seal = document.querySelector('.tf-seal')!.getBoundingClientRect();
-      return { arc: hero.bottom, photo: photo?.top, sealTop: seal.top, sealBottom: seal.bottom };
-    });
-    expect(at.photo, 'the sample anchors the band on its photograph').toBeDefined();
-    expect(Math.abs(at.photo! - at.arc)).toBeLessThan(1.5);
-    expect(at.sealTop).toBeLessThan(at.photo!);
-    expect(at.sealBottom).toBeGreaterThan(at.photo!);
+    await withBandPhoto(page, LOOKS.own);
+    await bandAtArc(page);
   },
 );
+
+test.describe('on a cold server', () => {
+  // With no script, so nothing re-renders the page the server sent.
+  test.use({ javaScriptEnabled: false });
+
+  test(
+    'TF-M4 waits for the band’s photograph when the first loads come before the sample’s media is ready',
+    { annotation },
+    async ({ page }) => {
+      // The first two loads are what a cold server sends: the band without its photograph.
+      let loads = 0;
+      await page.route(/\/sample\?variant=terra-field/, async (route) => {
+        if (route.request().resourceType() !== 'document' || ++loads > 2) return route.continue();
+        const response = await route.fetch();
+        const body = (await response.text())
+          .replace(/<figure class="tf-band__photo"[\s\S]*?<\/figure>/, '')
+          .replace(/(class="tf-page tf-band"[^>]*data-photo=")"/, '$1none"');
+        await route.fulfill({ response, body });
+      });
+      await withBandPhoto(page, LOOKS.own);
+      expect(loads, 'it loaded again until the photograph was there').toBeGreaterThan(2);
+      await bandAtArc(page);
+    },
+  );
+});
 
 test(
   'at 390 the first view holds four type sizes at most (T1)',

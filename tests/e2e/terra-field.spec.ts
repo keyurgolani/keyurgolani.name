@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fixtureSiteSelecting } from '../../packages/variant-contract/src/contract-fixtures';
 import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
 import { expect, test } from '../harness/fixtures';
+import { decodePng, pixel } from '../quality/lib/pixels';
 
 // Terra Field's checks in a browser (variants-10 brief §5.5, step 10): the
 // arc commits (60 px or more at 1440, TF-M3), the seal is whole and never
@@ -256,6 +257,61 @@ test(
     await expect(page.locator('[data-tf-nojs]')).toHaveCount(0);
   },
 );
+
+for (const [width, height] of [
+  [1440, 900],
+  [390, 844],
+] as const) {
+  test(
+    `the marker chip holds its words on its own ground, whatever a raised object draws inside it, at ${width}`,
+    { annotation },
+    async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto('/', { waitUntil: 'networkidle' });
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight * 0.4));
+      // Any pack's raised level, at its deepest: an inset band at each edge (international-grid draws a
+      // 4px one at the top, bauhaus-geometric 12px at the foot) and a hard offset (neobrutalist's 8px),
+      // in a color no ground has. The words hide, so what's behind them is all a screenshot sees.
+      await page.addStyleTag({
+        content: `[data-variant='terra-field'] .tf-marker__chip { box-shadow: inset 0 12px 0 rgb(255, 0, 255), inset 0 -12px 0 rgb(255, 0, 255), 8px 8px 0 rgb(255, 0, 255) !important; }
+          [data-variant='terra-field'] .tf-marker__chip :is(.tf-marker__where, [data-tf-notes]), [data-variant='terra-field'] .tf-marker__chip :is(.tf-marker__where, [data-tf-notes]) * { color: transparent !important; -webkit-text-fill-color: transparent !important; text-decoration-color: transparent !important; }`,
+      });
+      await page.waitForTimeout(200);
+      const boxes = await page.evaluate(() => {
+        const chip = document.querySelector('.tf-marker__chip')!.getBoundingClientRect();
+        return [
+          ...document.querySelectorAll('.tf-marker__chip :is(.tf-marker__where, [data-tf-notes])'),
+        ]
+          .filter((each) => (each.textContent ?? '').trim() !== '')
+          .map((each) => {
+            const r = each.getBoundingClientRect();
+            return {
+              name: each.textContent!.trim(),
+              box: { x: r.x, y: r.y, width: r.width, height: r.height },
+              // Inside the chip's own box, by a rounding pixel.
+              inside:
+                r.top >= chip.top - 1 &&
+                r.bottom <= chip.bottom + 1 &&
+                r.left >= chip.left - 1 &&
+                r.right <= chip.right + 1,
+            };
+          });
+      });
+      expect(boxes.map((each) => each.name)).toContain('Field notes');
+      for (const { name, box, inside } of boxes) {
+        expect(inside, `${name}: inside the chip`).toBe(true);
+        const shot = decodePng(await page.screenshot({ clip: box }));
+        let band = 0;
+        for (let i = 0; i < shot.width * shot.height; i++) {
+          const [r, g, b] = pixel(shot, i);
+          if (r > 200 && g < 80 && b > 200) band++;
+        }
+        expect(band, `${name}: pixels of the raised level behind its words`).toBe(0);
+      }
+    },
+  );
+}
 
 test(
   'the masthead marks no destination in the opening, then the one the reader is in (aria-current)',
