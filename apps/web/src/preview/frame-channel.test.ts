@@ -109,6 +109,8 @@ class FakeFrame extends FakeTarget {
   navigation?: FakeTarget;
   /** The presentation boundary's attributes, as the channel sets them. */
   readonly boundary: Record<string, string> = {};
+  /** The boundary's laid-out parts, where a test gives it some (the plate hold reads them). */
+  readonly boundaryChildren: unknown[] = [];
   constructor(href: string) {
     super();
     this.url = new URL(href);
@@ -123,6 +125,7 @@ class FakeFrame extends FakeTarget {
           setAttribute: (name: string, value: string) => {
             this.boundary[name] = value;
           },
+          children: this.boundaryChildren,
         };
       },
       querySelectorAll: (selector: string) => {
@@ -1148,4 +1151,35 @@ test("the agent's marker is the one the chunk specs look for, and never the prot
   const { FRAME_AGENT_MARKER: harness } = await import('../../../../tests/harness/agent-chunks');
   assert.equal(FRAME_AGENT_MARKER, harness);
   assert.notEqual(FRAME_AGENT_MARKER, 'kgn-preview', "never the protocol's shared name");
+});
+
+test("a grant's frame takes no motion, which is a sample frame's alone (SAMPLE_ONLY), so it holds none of its page out of rendering (the plate hold, holdOffscreenParts)", async (t) => {
+  const { win, drops, send, handshake } = setup(t);
+  // A page laid out with a part a viewport below its 900px viewport, which a plate would hold.
+  class Part {
+    readonly attributes = new Map<string, string>();
+    readonly properties = new Map<string, string>();
+    readonly style = {
+      setProperty: (name: string, value: string) => this.properties.set(name, value),
+    };
+    getBoundingClientRect() {
+      return { top: 2000, bottom: 2300, width: 1440, height: 300 };
+    }
+    setAttribute(name: string, value: string) {
+      this.attributes.set(name, value);
+    }
+  }
+  const below = new Part();
+  win.boundaryChildren.push(below);
+  Object.assign(win, {
+    innerHeight: 900,
+    HTMLElement: Part,
+    getComputedStyle: () => ({ display: 'block', position: 'static' }),
+  });
+  const port = await handshake();
+  send(port, 'motion', { motion: 'reduced' });
+  await until(() => drops.length > 0, 'the drop');
+  assert.deepEqual(reasons(drops), [['type', 'motion']]);
+  assert.equal(below.properties.size, 0, 'nothing held');
+  assert.equal(below.attributes.size, 0);
 });
