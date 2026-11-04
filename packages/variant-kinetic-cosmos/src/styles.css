@@ -312,15 +312,6 @@
   text-decoration: none;
 }
 
-[data-variant='kinetic-cosmos'] .kc-wordmark__name {
-  grid-column: 2;
-  grid-row: 1;
-}
-
-[data-variant='kinetic-cosmos'] .kc-wordmark__role {
-  grid-row: 2;
-}
-
 [data-variant='kinetic-cosmos'] .kc-wordmark__mark {
   grid-row: span 2;
   inline-size: var(--space-l);
@@ -335,6 +326,8 @@
 }
 
 [data-variant='kinetic-cosmos'] .kc-wordmark__name {
+  grid-column: 2;
+  grid-row: 1;
   font-family: var(--type-title-font-family);
   font-size: var(--type-step-0);
   font-weight: var(--type-title-font-weight);
@@ -342,6 +335,7 @@
 }
 
 [data-variant='kinetic-cosmos'] .kc-wordmark__role {
+  grid-row: 2;
   grid-column: 2;
   color: var(--layout-ink-quiet);
   font-size: var(--type-label-font-size);
@@ -431,6 +425,7 @@
 
 /* The map: the orrery, and the system's plates over it. */
 [data-variant='kinetic-cosmos'] .kc-map {
+  container-type: inline-size;
   position: relative;
   grid-column: 1 / -1;
 }
@@ -662,11 +657,7 @@
   --layout-lit: var(--layout-ink);
 }
 
-[data-variant='kinetic-cosmos'] .kc-orrery__anchor .kc-orrery__leader {
-  stroke: var(--layout-lit, var(--layout-ink-faint));
-}
-
-[data-variant='kinetic-cosmos'] .kc-orrery__anchor .kc-orrery__ring {
+[data-variant='kinetic-cosmos'] .kc-orrery__anchor :is(.kc-orrery__leader, .kc-orrery__ring) {
   stroke: var(--layout-lit, var(--layout-ink-faint));
 }
 
@@ -677,12 +668,9 @@
  * 64rem the frame is 158.05% of the clip, which is the map's width plus the
  * stage's padding each side, starts 57.32% to its left, and is 380/820 as
  * tall as wide; from 64rem it's the map, 380/1296 as tall. Below 80rem it
- * hangs to the body's left, clear of the core; from 80rem above it.
+ * hangs to the body's left, clear of the core; from 80rem above it. (The map
+ * is the inline-size container these fractions are taken of.)
  */
-[data-variant='kinetic-cosmos'] .kc-map {
-  container-type: inline-size;
-}
-
 /*
  * The spot places the label on the map and is the stacking context its ground paints in, so the
  * ground (z-index -1) sits behind the pill's own border and ground. Inside the pill itself it
@@ -780,7 +768,10 @@
 /*
  * 64 to 80rem the plates' rows are too close for a summary on two lines, so
  * each plate takes the width its words need on one line, and its leader comes
- * out from under its right edge.
+ * out from under its right edge. A case's flight arc runs the window's width
+ * here, so a stop's label near its end, wider under enlarged text or a wider
+ * font, moves back along the arc only as far as keeps it a focus halo inside
+ * (its dot stays on the arc): the arc's index is the size the label is held in.
  */
 @media (min-width: 64rem) and (max-width: 79.99rem) {
   [data-variant='kinetic-cosmos'] .kc-plate {
@@ -791,6 +782,19 @@
   [data-variant='kinetic-cosmos'] .kc-plate__link {
     padding-inline-end: var(--space-xs);
     white-space: nowrap;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-flight .kc-arc__index {
+    container-type: inline-size;
+  }
+
+  /* Only the arc's end can push a label out: its stops run from 0.22 of the arc to 0.92 (flight-rail.tsx). */
+  [data-variant='kinetic-cosmos'] .kc-flight .kc-arc__stop a {
+    translate: round(
+        min(0px, calc((1 - var(--layout-at)) * 100cqi - 50% - var(--layout-focus-halo))),
+        1px
+      )
+      0;
   }
 }
 
@@ -1262,7 +1266,7 @@
   margin-block-end: var(--space-xl);
 }
 
-[data-variant='kinetic-cosmos'] .kc-ring__title {
+[data-variant='kinetic-cosmos'] :is(.kc-ring__title, .kc-contact__title) {
   font-family: var(--type-display-font-family);
   font-size: var(--type-step-5);
   font-weight: var(--type-display-font-weight);
@@ -1473,6 +1477,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-s);
+  color: var(--color-text-secondary);
 }
 
 /* The signature: the cover in its orbit, and its moons on the front arc. */
@@ -1998,10 +2003,6 @@
   font-weight: var(--type-quote-font-weight);
   line-height: var(--type-quote-line-height);
   letter-spacing: normal;
-}
-
-[data-variant='kinetic-cosmos'] .kc-quote__caption {
-  color: var(--color-text-secondary);
 }
 
 [data-variant='kinetic-cosmos'] .kc-quote__caption strong {
@@ -2812,14 +2813,6 @@
   gap: var(--space-m);
 }
 
-[data-variant='kinetic-cosmos'] .kc-contact__title {
-  font-family: var(--type-display-font-family);
-  font-size: var(--type-step-5);
-  font-weight: var(--type-display-font-weight);
-  line-height: var(--type-display-line-height);
-  letter-spacing: var(--type-display-letter-spacing);
-}
-
 [data-variant='kinetic-cosmos'] .kc-contact__message {
   max-inline-size: 42ch;
   color: var(--layout-ink-quiet);
@@ -3140,11 +3133,7 @@
   transition: background-color var(--motion-feedback) var(--motion-curve);
 }
 
-[data-variant='kinetic-cosmos'] .kc-dock__stop:hover {
-  background-color: var(--layout-ink-line);
-}
-
-[data-variant='kinetic-cosmos'] .kc-dock__stop[aria-current='location'] {
+[data-variant='kinetic-cosmos'] .kc-dock__stop:is(:hover, [aria-current='location']) {
   background-color: var(--layout-ink-line);
 }
 

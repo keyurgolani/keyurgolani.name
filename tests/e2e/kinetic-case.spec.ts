@@ -266,3 +266,41 @@ test.describe("a talk's dialog with no script", () => {
     },
   );
 });
+
+test(
+  "a work's own page: every stop's label on the arc stays in the viewport, at 100% and 200% root text",
+  { annotation: [{ type: 'route', description: '/work/[slug]' }, READ_ONLY] },
+  async ({ page }) => {
+    // From 64rem the flight arc runs the window's width and its last stop sits at 0.92 of it: under
+    // the quality root-text condition (200% at 1024) its label ran past the window's edge (795px to
+    // 1089px in 1024), and under a wider font (Ubuntu's, through the font proxy) at 100% too. The
+    // label now moves back along the arc as far as it must; its dot stays where it is.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    for (const [width, height, scale] of [
+      [1024, 768, 1],
+      [1440, 900, 1],
+      [1024, 768, 2],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await page.goto(`/work/${SLUG}`, { waitUntil: 'networkidle' });
+      await page.evaluate(
+        (at) =>
+          document.documentElement.style.setProperty('font-size', `${at * 100}%`, 'important'),
+        scale,
+      );
+      const stops = await page.locator('.kc-flight .kc-arc__stop a').evaluateAll((links) =>
+        links.map((link) => {
+          const box = link.getBoundingClientRect();
+          return { name: link.textContent?.trim() ?? '', start: box.left, end: box.right };
+        }),
+      );
+      expect(stops.length, `${width} at ${scale * 100}%: the arc's stops`).toBe(8);
+      const view = await page.evaluate(() => document.documentElement.clientWidth);
+      for (const stop of stops) {
+        const at = `${width} at ${scale * 100}% text, "${stop.name}"`;
+        expect(stop.start, `${at}: its start in view`).toBeGreaterThanOrEqual(0);
+        expect(stop.end, `${at}: its end in view`).toBeLessThanOrEqual(view);
+      }
+    }
+  },
+);
