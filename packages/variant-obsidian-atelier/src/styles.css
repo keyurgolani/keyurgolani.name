@@ -2892,6 +2892,15 @@
   [data-variant='obsidian-atelier'] .oa-hang__work::before {
     display: none;
   }
+
+  /*
+   * Every line of text there stands on a backplate of the canvas, so a caption's date, the line after its title,
+   * painted over the foot of the title link's ring. The title, a grid item, is raised while its link has focus, ring
+   * and all; the link keeps its place, stretched over its work.
+   */
+  [data-variant='obsidian-atelier'] .oa-caption__title:has(> :focus-visible) {
+    z-index: 1;
+  }
 }
 
 @media (forced-colors: active), (prefers-contrast: more) {
