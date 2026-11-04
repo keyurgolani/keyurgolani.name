@@ -86,3 +86,83 @@ test(
     }
   },
 );
+
+test(
+  "the signature label's knocked-out ground leaves the map's bodies whole, at 320, 390, 1024 and 1440",
+  { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
+  async ({ page }) => {
+    // 509a47777 hung the label below and left of its anchor on a phone, across the other rings'
+    // anchors: at 390 the pill and its ground covered ring 1's body whole and ring 2's but for a
+    // sliver. A body is the map's solid mark; its lines and coronae may stop short of the ground.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    for (const viewport of [
+      { width: 320, height: 844 },
+      { width: 390, height: 844 },
+      { width: 1024, height: 768 },
+      { width: 1440, height: 900 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.goto('/', { waitUntil: 'networkidle' });
+      const ground = (await page.locator('.kc-signature-label__ground').boundingBox())!;
+      const marks = [
+        ...(await page.locator('.kc-orrery__body').all()),
+        ...(await page.locator('.kc-core').all()),
+      ];
+      expect(marks.length, `${viewport.width}: the map's bodies`).toBeGreaterThan(1);
+      for (const [index, mark] of marks.entries()) {
+        const box = (await mark.boundingBox())!;
+        const clear =
+          box.x + box.width <= ground.x ||
+          ground.x + ground.width <= box.x ||
+          box.y + box.height <= ground.y ||
+          ground.y + ground.height <= box.y;
+        expect(
+          clear,
+          `${viewport.width}: body ${index} (${box.x.toFixed(1)},${box.y.toFixed(1)} ${box.width.toFixed(1)}x${box.height.toFixed(1)}) clear of the ground (${ground.x.toFixed(1)},${ground.y.toFixed(1)} ${ground.width.toFixed(1)}x${ground.height.toFixed(1)})`,
+        ).toBe(true);
+      }
+    }
+  },
+);
+
+test(
+  'on a phone the signature label and its focus ring stay in the viewport, at 100% and 200% root text',
+  { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
+  async ({ page }) => {
+    // Hung to its anchor's right, the label moves back toward the map's start only where its words
+    // need the room: enlarged text (the quality root-text condition's 200%) must not push it, or its
+    // ring, past the screen's edge, nor make the page scroll sideways.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    for (const width of [320, 390]) {
+      for (const scale of [1, 2]) {
+        await page.setViewportSize({ width, height: 844 });
+        await page.goto('/', { waitUntil: 'networkidle' });
+        await page.evaluate(
+          (at) =>
+            document.documentElement.style.setProperty('font-size', `${at * 100}%`, 'important'),
+          scale,
+        );
+        const label = page.locator('.kc-signature-label');
+        await label.evaluate((e) =>
+          (e as HTMLElement).focus({ focusVisible: true } as FocusOptions),
+        );
+        const fit = await label.evaluate((e) => {
+          const box = e.getBoundingClientRect();
+          const s = getComputedStyle(e);
+          const reach = (parseFloat(s.outlineOffset) || 0) + (parseFloat(s.outlineWidth) || 0);
+          const doc = document.documentElement;
+          return {
+            start: box.left - reach,
+            end: box.right + reach,
+            width: doc.clientWidth,
+            scroll: document.scrollingElement!.scrollWidth,
+          };
+        });
+        const at = `${width} at ${scale * 100}% text`;
+        expect(fit.start, `${at}: the ring's start in view`).toBeGreaterThanOrEqual(0);
+        expect(fit.end, `${at}: the ring's end in view`).toBeLessThanOrEqual(fit.width);
+        expect(fit.scroll, `${at}: no sideways scroll`).toBeLessThanOrEqual(fit.width);
+      }
+    }
+  },
+);
