@@ -1785,6 +1785,17 @@
   text-decoration-color: currentColor;
 }
 
+/*
+ * Its focus ring clears that line. An outline follows the link's border box, which for an inline
+ * box is its words' content area, and at the address's size the underline, 0.22em past the
+ * baseline, lies just past it, so the ring's foot ran over the line and changed nothing when
+ * focused. Block padding moves the box's edges, and the ring with them, past the line; on an inline
+ * box it moves no line of text.
+ */
+[data-variant='terra-field'] .tf-display-link {
+  padding-block: 0.1em;
+}
+
 [data-variant='terra-field'] .tf-close__mail {
   font-family: var(--type-display-font-family);
   font-weight: var(--type-display-font-weight);

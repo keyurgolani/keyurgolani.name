@@ -245,6 +245,18 @@ test('the closing address underlines its own words: the line is the text’s, no
   assert.match(STYLES, /\.tf-display-link:hover > span \{\s*text-decoration-color: currentColor;/);
 });
 
+test('the closing address’s focus ring clears its underline, and the line box keeps its height', () => {
+  // An outline follows the link’s border box, for an inline box its words’ content area, and the
+  // underline 0.22em past the baseline lay just past that area’s foot, so the ring ran over the line
+  // (inside it at 1440 and 1024). Block padding, in em so it scales with the address, moves the box’s
+  // edges and the ring past the line; the link stays inline, so it moves no line of text.
+  const own = [...STYLES.matchAll(/\n\[data-variant='terra-field'\] \.tf-display-link \{([^}]*)\}/g)].map(
+    (each) => each[1]!,
+  );
+  assert.ok(own.some((body) => /padding-block: 0\.1em;/.test(body)), 'the ring clears the line by 0.1em');
+  for (const body of own) assert.doesNotMatch(body, /display:/, 'the link stays an inline box');
+});
+
 test('Field notes: a closed modal dialog, invoked with show-modal, Contact in its first lines (S2)', () => {
   const html = sample();
   assert.match(
