@@ -1771,8 +1771,9 @@
   font-weight: var(--type-label-font-weight);
 }
 
+/* The quiet ink of the ground it sits on: the stage's on a stage (a case's opening figure), the page's elsewhere. */
 [data-variant='kinetic-cosmos'] :is(.kc-caption__details, figcaption small) {
-  color: var(--color-text-secondary);
+  color: var(--layout-ink-quiet, var(--color-text-secondary));
   font-weight: var(--type-body-font-weight);
   font-size: var(--type-label-font-size);
 }
