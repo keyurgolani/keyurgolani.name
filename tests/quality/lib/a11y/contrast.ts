@@ -44,6 +44,18 @@
 // rotate or skew is sampled inside its own content quad (insideQuad), not
 // the axis-aligned clip round it, whose corners hold its parent's paint;
 // one in 3D, or split across lines, is unresolved.
+//
+// Its box is read, and its three shots taken, once what moves it has come
+// to rest (stillnessScript): an arrival its scroll into view sets off, on it
+// or on an ancestor, time-based or scroll-driven, would otherwise move it
+// between its box's read and its shots, which end every finite animation
+// and cancel the rest, and its glyphs would paint off the box. Only an
+// animation that can move or repaint it counts (MOVES, and PAINTS on the
+// node itself). NODE_LIMIT_MS at most: one with an infinite time-based
+// animation, or one still moving then, is unresolved, saying which. At rest,
+// a counted scroll-driven animation's guarded values are pinned inline for
+// the shots, which would cancel it, and its target's style attribute is put
+// back as it was once the element is read (releaseScript).
 
 import { randomBytes } from 'node:crypto';
 import type { Page } from '@playwright/test';
@@ -56,6 +68,12 @@ import type { Finding } from './interaction';
 
 const thresholds = loadThresholds();
 const PX_PER_PT = 4 / 3;
+
+/**
+ * The longest the sampler gives one element at each step: its scroll into
+ * view, its read, and its animations' end.
+ */
+export const NODE_LIMIT_MS = 2_000;
 
 /**
  * The style that hides one call's marks, the sampled element's glyphs by
@@ -72,6 +90,183 @@ const hideCss = (key: string) =>
       return ` ${marked}, ${marked} * { -webkit-text-fill-color: ${fill} !important; text-decoration-color: ${fill} !important; } ${marked}:is(text, tspan), ${marked} :is(text, tspan) { fill: ${fill} !important; }`;
     })
     .join('')}`;
+
+/**
+ * The properties whose animation, on the element, an ancestor or a
+ * descendant, moves or repaints its glyphs, as getKeyframes() names them:
+ * the transforms, offset-* (`cssOffset` is the shorthand), opacity, filter
+ * and clip-path.
+ */
+export const MOVES =
+  /^(?:transform|translate|rotate|scale|cssOffset|offset[A-Z]\w*|opacity|filter|clipPath)$/;
+
+/** The properties whose animation repaints its glyphs or what's under them on the element itself. */
+export const PAINTS = /^(?:color|background(?:[A-Z]\w*)?)$/;
+
+/**
+ * What still moves an element once the sampler gives up, or null once it
+ * holds still: an infinite time-based animation, one still running or a
+ * scroll-driven one still changing at the limit, or a scroll-driven one at
+ * rest whose values its inline pin can't hold for the shots.
+ */
+export type Motion = {
+  readonly kind: 'infinite' | 'running' | 'scrolling' | 'unholdable';
+  readonly name: string;
+} | null;
+
+/**
+ * Waits, up to `limit` ms, for what moves `el` to come to rest, after one
+ * frame at least, so that what its scroll into view set off has begun (a
+ * scroll-driven animation still reads its old progress straight after the
+ * scroll): every time-based finite animation finished or idle, and every
+ * scroll-driven one (on a ScrollTimeline or ViewTimeline) at the same
+ * progress for two frames, where a visitor sees it, since one never
+ * finishes while its element rests part-way through its range. It counts
+ * the animations whose target is `el`, an ancestor, or a descendant (a
+ * pseudo-element's by its owner), that animate a property in `moves`, or
+ * in `paints` on `el` itself; an ancestor's on anything else, or a
+ * sibling's, doesn't count.
+ *
+ * At rest, it pins each counted scroll-driven animation's guarded
+ * properties (those its keyframes name that count) inline, !important, at
+ * their values then: the shots cancel a scroll-driven animation, whose end
+ * isn't a time, and would show its target un-animated, off the box read
+ * now. Each target's style attribute as it was before its first pin, it
+ * keeps on the window under `__qualityHeld_<key>` for releaseScript(). A
+ * value the pin doesn't hold, read back, makes it unholdable. Null once it rests and is pinned;
+ * else what still moves it: an infinite time-based animation at once, or
+ * the first still running at the limit. Runs in the browser.
+ */
+export function stillnessScript(
+  el: Element,
+  {
+    limit,
+    moves,
+    paints,
+    key,
+  }: {
+    readonly limit: number;
+    readonly moves: string;
+    readonly paints: string;
+    readonly key: string;
+  },
+): Promise<Motion> {
+  const [moving, painting] = [new RegExp(moves), new RegExp(paints)];
+  const frame =
+    (window as unknown as { __qualityRaf?: typeof requestAnimationFrame }).__qualityRaf ??
+    requestAnimationFrame;
+  // A ScrollTimeline, or a ViewTimeline, which extends it; the DOM types don't name it yet.
+  const Scrolling = (globalThis as unknown as { ScrollTimeline?: abstract new () => object })
+    .ScrollTimeline;
+  const scrolled = (animation: Animation) =>
+    Scrolling !== undefined && animation.timeline instanceof Scrolling;
+  const named = (animation: Animation) =>
+    (animation as CSSAnimation).animationName ??
+    ((animation as CSSTransition).transitionProperty
+      ? `a transition of ${(animation as CSSTransition).transitionProperty}`
+      : animation.id || 'unnamed');
+  // The properties of `animation` that count for `el`, as getKeyframes() names them.
+  const guarded = (animation: Animation): string[] => {
+    const effect = animation.effect;
+    if (!(effect instanceof KeyframeEffect) || !effect.target) return [];
+    const target = effect.target;
+    if (target !== el && !target.contains(el) && !el.contains(target)) return [];
+    const properties = new Set<string>();
+    for (const keyframe of effect.getKeyframes()) {
+      for (const property of Object.keys(keyframe)) {
+        if (moving.test(property) || (target === el && painting.test(property)))
+          properties.add(property);
+      }
+    }
+    return [...properties];
+  };
+  // getKeyframes()'s name for a property as CSS writes it: cssOffset is offset.
+  const css = (property: string) =>
+    property === 'cssOffset' ? 'offset' : property.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+  const pin = (animations: readonly Animation[]): Motion => {
+    // Each target's style attribute as it was, null when it had none, before its first pin.
+    const held: { target: Element; style: string | null }[] = [];
+    (window as unknown as Record<string, unknown>)[`__qualityHeld_${key}`] = held;
+    const wanted: { target: Element; property: string; value: string; name: string }[] = [];
+    // Every value read first, at rest, before any pin can change another's.
+    for (const animation of animations) {
+      const target = (animation.effect as KeyframeEffect).target!;
+      const style = getComputedStyle(target);
+      for (const property of guarded(animation).map(css))
+        wanted.push({
+          target,
+          property,
+          value: style.getPropertyValue(property),
+          name: named(animation),
+        });
+    }
+    for (const { target, property, value, name } of wanted) {
+      const inline = (target as HTMLElement).style;
+      if (!inline) return { kind: 'unholdable', name };
+      if (!held.some((each) => each.target === target))
+        held.push({ target, style: target.getAttribute('style') });
+      inline.setProperty(property, value, 'important');
+      if (
+        inline.getPropertyValue(property) === '' ||
+        getComputedStyle(target).getPropertyValue(property) !== value
+      )
+        return { kind: 'unholdable', name };
+    }
+    return null;
+  };
+  return new Promise((done) => {
+    const last = new Map<Animation, { progress: number | null | undefined; held: number }>();
+    let left: Motion = null;
+    let over = false;
+    const finish = (motion: Motion) => {
+      over = true;
+      clearTimeout(late);
+      done(motion);
+    };
+    const late = setTimeout(() => finish(left ?? { kind: 'running', name: 'unnamed' }), limit);
+    const look = () => {
+      if (over) return;
+      left = null;
+      const counted = document.getAnimations().filter((each) => guarded(each).length > 0);
+      for (const animation of counted) {
+        if (scrolled(animation)) {
+          const progress = animation.effect?.getComputedTiming().progress;
+          const before = last.get(animation);
+          const held = before && before.progress === progress ? before.held + 1 : 0;
+          last.set(animation, { progress, held });
+          if (held < 2) left ??= { kind: 'scrolling', name: named(animation) };
+        } else if (animation.effect?.getComputedTiming().iterations === Infinity) {
+          finish({ kind: 'infinite', name: named(animation) });
+          return;
+        } else if (animation.playState !== 'finished' && animation.playState !== 'idle') {
+          left ??= { kind: 'running', name: named(animation) };
+        }
+      }
+      if (left === null) finish(pin(counted.filter(scrolled)));
+      else frame(look);
+    };
+    frame(() => frame(look));
+  });
+}
+
+/**
+ * Takes off what stillnessScript() pinned under `key`: each target's style
+ * attribute as it was, byte for byte, or none if it had none. Runs in the
+ * browser.
+ */
+export function releaseScript(key: string): void {
+  const name = `__qualityHeld_${key}`;
+  const held = (window as unknown as Record<string, unknown>)[name] as
+    { target: Element; style: string | null }[] | undefined;
+  for (const { target, style } of held ?? []) {
+    // Reading the attribute first writes the pins' CSSOM changes into it, which the engine may
+    // otherwise do after the restore, as an empty style="".
+    void target.getAttribute('style');
+    if (style === null) target.removeAttribute('style');
+    else target.setAttribute('style', style);
+  }
+  delete (window as unknown as Record<string, unknown>)[name];
+}
 
 /** A box in the viewport, in CSS pixels. */
 export interface Box {
@@ -475,7 +670,7 @@ export async function incompleteContrastFindings(
       // Where the page was, which it goes back to once this element is read.
       const at = await page.evaluate(() => [scrollX, scrollY] as const).catch(() => null);
       try {
-        await locator.scrollIntoViewIfNeeded({ timeout: 2_000 }).catch(() => undefined);
+        await locator.scrollIntoViewIfNeeded({ timeout: NODE_LIMIT_MS }).catch(() => undefined);
         // A stuck header or dock over it isn't its background: scroll it clear, or say so.
         const cover = await clearOfStuckCovers(page, locator);
         if (cover.still) {
@@ -483,6 +678,26 @@ export async function incompleteContrastFindings(
             cover.scrolled
               ? `unresolved: ${cover.still}, fixed or sticky, still covers it once it's scrolled clear, so its background can't be sampled`
               : `unresolved: ${cover.still}, fixed or sticky, covers it, and leaves no room in the viewport to scroll it clear, so its background can't be sampled`,
+          );
+          continue;
+        }
+        // What moves it comes to rest before its box is read, or it's unresolved, saying which.
+        const motion = await locator
+          .evaluate(
+            stillnessScript,
+            { limit: NODE_LIMIT_MS, moves: MOVES.source, paints: PAINTS.source, key },
+            { timeout: NODE_LIMIT_MS },
+          )
+          .catch(() => null);
+        if (motion && typeof motion === 'object' && 'kind' in motion) {
+          unresolved(
+            motion.kind === 'infinite'
+              ? `unresolved: an infinite animation, ${motion.name}, moves or repaints it, so its glyphs never hold still to sample`
+              : motion.kind === 'scrolling'
+                ? `unresolved: a scroll-driven animation, ${motion.name}, that moves or repaints it was still changing after ${NODE_LIMIT_MS / 1000} s, so its glyphs never held still to sample`
+                : motion.kind === 'unholdable'
+                  ? `unresolved: it rests part-way through a scroll-driven animation, ${motion.name}, and the shots can't hold it where it rests`
+                  : `unresolved: an animation, ${motion.name}, that moves or repaints it was still running after ${NODE_LIMIT_MS / 1000} s, so its glyphs never held still to sample`,
           );
           continue;
         }
@@ -653,7 +868,7 @@ export async function incompleteContrastFindings(
               };
             },
             { key, near, query: MORE_CONTRAST, boundary: HIGH_CONTRAST_BOUNDARY },
-            { timeout: 2_000 },
+            { timeout: NODE_LIMIT_MS },
           )
           .catch(() => null as Sample | null);
         if (!sample || sample.box.width < 1 || sample.box.height < 1) {
@@ -732,6 +947,8 @@ export async function incompleteContrastFindings(
           });
         }
       } finally {
+        // What the wait pinned for the shots comes off, whatever happened since.
+        await page.evaluate(releaseScript, key).catch(() => undefined);
         if (at) {
           await page
             .evaluate(([x, y]) => scrollTo({ left: x, top: y, behavior: 'instant' }), at)

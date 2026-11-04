@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Text that animates, known-good</title>
+    <!--
+      Text over a gradient, so axe leaves it to the contrast sampler, on a
+      page the cases (a11y-cases.ts) add animated text to, each at its
+      marker: a figure that slides in as it scrolls into view, a
+      scroll-driven animation on the text's ancestor, which reads its old
+      place for a frame after the scroll and passes once its progress holds;
+      a block whose outline and --x pulse for good beside a spinning sibling,
+      which move none of its text, so it's sampled and passes; and, the
+      known-bad one, text that pulses for good, which never holds still;
+      and faint text whose figure rests part-way through a scroll-driven
+      slide, about 0.70 of it, which the shots would cancel: pinned for them,
+      its ratio is the one its static twin reads.
+    -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #fff;
+        color: #222;
+      }
+      main {
+        padding: 1rem 1rem 50vh;
+      }
+      .band {
+        background: linear-gradient(90deg, #fff, #f6f6f6);
+        color: #222;
+      }
+      .later {
+        margin-top: 150vh;
+      }
+      .arrives {
+        margin-inline: 0;
+        animation: slide linear both;
+        animation-timeline: view();
+        animation-range: entry 0% entry 40%;
+      }
+      @keyframes slide {
+        from {
+          transform: translateY(4rem);
+        }
+        to {
+          transform: none;
+        }
+      }
+      .rests {
+        margin-inline: 0;
+        animation: rest linear both;
+        animation-timeline: view();
+        animation-range: cover 0% cover 71.43%;
+      }
+      @keyframes rest {
+        from {
+          transform: translateY(8rem);
+        }
+        to {
+          transform: none;
+        }
+      }
+      .ramp {
+        background: linear-gradient(90deg, #fff, #ccc);
+        color: #999;
+      }
+      @property --x {
+        syntax: '<length>';
+        inherits: false;
+        initial-value: 0px;
+      }
+      .glow {
+        padding: 0.5rem;
+        outline: 2px solid #ddd;
+        animation: glow 1.2s ease-in-out infinite alternate;
+      }
+      @keyframes glow {
+        to {
+          --x: 4px;
+          outline-color: #bbb;
+        }
+      }
+      .spinner {
+        display: block;
+        width: 1rem;
+        height: 1rem;
+        margin-top: 2rem;
+        background: #222;
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          rotate: 1turn;
+        }
+      }
+      .pulse {
+        animation: pulse 1.2s ease-in-out infinite alternate;
+      }
+      @keyframes pulse {
+        to {
+          opacity: 0.9;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Animated text</h1>
+      <p class="band">Text at rest over a gradient.</p>
+      <!-- unrelated -->
+      <!-- infinite -->
+      <!-- scroll-driven -->
+      <!-- resting -->
+    </main>
+  </body>
+</html>
