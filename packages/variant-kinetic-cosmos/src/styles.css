@@ -392,6 +392,12 @@
   [data-variant='kinetic-cosmos'] .kc-masthead {
     padding-block: var(--space-m) 0;
   }
+
+  /* The masthead sits flush on the stage here, so the wordmark keeps its ring's reach below it: the
+     stage, painted after, would cover the ring's bottom edge (primer's 3 px, fluent-2's 4 px). */
+  [data-variant='kinetic-cosmos'] .kc-wordmark {
+    padding-block-end: var(--layout-focus-halo);
+  }
 }
 
 /* At 320 the name keeps one line: the role, which the legend's caption and the band say again, steps out. */
