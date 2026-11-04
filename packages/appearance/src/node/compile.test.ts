@@ -1559,3 +1559,36 @@ test("a one-length language token's bare 0 compiles to 0px, so it stays valid in
   assert.ok(LENGTH_KEYS.has('focus-offset') && LENGTH_KEYS.has('space-control-block'));
   assert.ok(!LENGTH_KEYS.has('radius-control') && !LENGTH_KEYS.has('surface-opacity'));
 });
+
+test("a design language gets its raised shadow's hard-edge reach beside its tokens, which a tooltip stands off by (#11, row 17)", () => {
+  const compile = (shadow: string) =>
+    compilePack({
+      kind: 'design-language',
+      manifest: {
+        ...PLATFORM_NEUTRAL,
+        tokens: { ...PLATFORM_NEUTRAL.tokens, 'shadow-raised': shadow },
+      },
+      dir: EMPTY_DIR,
+    });
+  const css = (shadow: string) => {
+    const result = compile(shadow);
+    assert.ok(result.ok, JSON.stringify(result.ok ? null : result.problems));
+    return new TextDecoder().decode(result.pack.stylesheet!.bytes);
+  };
+  assert.match(
+    css('0 1px 2px var(--color-shadow), 4px 4px 0 -1px var(--color-surface-default)'),
+    /\n {4}--ui-shadow-raised-reach: 3px;\n/,
+  );
+  assert.match(
+    css(PLATFORM_NEUTRAL.tokens['shadow-raised']),
+    /\n {4}--ui-shadow-raised-reach: 0px;\n/,
+  );
+  // Only in the boundary's block, never on the root's view-transition tree.
+  assert.equal(
+    css('8px 8px 0 var(--color-border-strong)').match(/--ui-shadow-raised-reach/g)?.length,
+    1,
+  );
+  const unreadable = compile('4px var(--color-shadow)');
+  assert.ok(!unreadable.ok);
+  assert.equal(unreadable.problems[0]!.pointer, '/tokens/shadow-raised');
+});

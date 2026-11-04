@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import {
   COLOR_ROLES,
   LANGUAGE_KEYS,
+  SHADOW_RAISED_REACH,
   TYPOGRAPHY_FIELDS,
   TYPOGRAPHY_MEASURES,
   TYPOGRAPHY_ROLES,
@@ -196,10 +197,11 @@ test("no !important, no custom property of its own, and no preference query, whi
   assert.doesNotMatch(CSS, /prefers-|forced-colors|inverted-colors|@media print/);
 });
 
-test('every custom property it reads is one token contract 1 defines, or a variant layout one', () => {
+test('every custom property it reads is one token contract 1 defines, one the compiler derives from them, or a variant layout one', () => {
   const tokens = new Set([
     ...COLOR_ROLES.map((role) => `--color-${role}`),
     ...LANGUAGE_KEYS.map((key) => `--ui-${key}`),
+    SHADOW_RAISED_REACH,
     ...TYPOGRAPHY_ROLES.flatMap((role) =>
       TYPOGRAPHY_FIELDS.map((field) => `--type-${role}-${field}`),
     ),
@@ -296,12 +298,16 @@ function px(value: string): number {
   return Number.parseFloat(match[1]!) * (match[2] === 'rem' ? 16 : 1);
 }
 
-/** `value`, a calc() or max() of --ui-* lengths, resolved in px with `tokens`. */
+/**
+ * `value`, a calc() or max() of --ui-* lengths, resolved in px with `tokens`; one with a fallback,
+ * such as the compiler's derived var(--ui-shadow-raised-reach, 0px), takes it where `tokens` lacks
+ * the property, as a manifest's own tokens do.
+ */
 function resolve(value: string, tokens: Record<string, string>): number {
   const expression = value
-    .replace(/var\(--ui-([a-z0-9-]+)\)/g, (_, key: string) => {
-      assert.ok(tokens[key] !== undefined, `the pack sets ${key}`);
-      return `(${px(tokens[key]!)})`;
+    .replace(/var\(--ui-([a-z0-9-]+)(?:, ([^()]+))?\)/g, (_, key: string, fallback?: string) => {
+      assert.ok(tokens[key] !== undefined || fallback !== undefined, `the pack sets ${key}`);
+      return `(${px(tokens[key] ?? fallback!)})`;
     })
     .replace(/calc\(/g, '(')
     .replace(/max\(/g, 'Math.max(');
@@ -333,6 +339,94 @@ test("the part after a field's or select's control, and a tooltip, stand off the
         `${pack.id}: the ${what} keeps the language's own spacing as its floor`,
       );
     }
+  }
+});
+
+/**
+ * How far a shadow's hard layers paint past its object's block-start or block-end edge, in px,
+ * read here on its own, not through the compiler: of its outer layers with no blur (an edge, such
+ * as paper-tactile's second sheet, `4px 4px 0 -1px`), the furthest y offset plus spread, up or
+ * down; 0 for none. A blurred layer is a translucent tail, not a sheet.
+ */
+function hardReach(shadow: string): number {
+  if (shadow.trim() === 'none') return 0;
+  // Its layers: the commas outside every parenthesis.
+  const layers: string[] = [''];
+  let depth = 0;
+  for (const character of shadow) {
+    if (character === '(') depth += 1;
+    if (character === ')') depth -= 1;
+    if (character === ',' && depth === 0) layers.push('');
+    else layers[layers.length - 1] += character;
+  }
+  let reach = 0;
+  for (const layer of layers) {
+    // Its words, a color's call (var(), color-mix()) taken out whole.
+    const words = layer
+      .replace(/[a-z-]+\((?:[^()]|\([^()]*\))*\)/g, ' ')
+      .trim()
+      .split(/\s+/);
+    if (words.includes('inset')) continue;
+    const lengths = words.filter((word) => /^-?(?:\d*\.?\d+(?:px|rem)|0)$/.test(word));
+    const [, y = 0, blur = 0, spread = 0] = lengths.map((word) =>
+      word === '0' || word === '-0'
+        ? 0
+        : px(word.replace(/^-/, '')) * (word.startsWith('-') ? -1 : 1),
+    );
+    if (blur > 0) continue;
+    reach = Math.max(reach, y + spread, -y + spread);
+  }
+  return reach;
+}
+
+test("a tooltip stands off the focus ring's reach and its own raised shadow's hard edge, so neither covers the ring of the action it describes, in every registered language (#11, row 17)", async (t) => {
+  const root = fileURLToPath(new URL('../../../../', import.meta.url));
+  const languages = catalogPacks(root, packPackages(root)).filter(
+    (pack) => pack.axis === 'designLanguage',
+  );
+  assert.ok(languages.length >= 30, `${languages.length} languages`);
+  // paper-tactile's second sheet reaches 4px; neobrutalist's hard block 8px.
+  assert.equal(hardReach('0 1px 2px red, 4px 4px 0 -1px red, 4px 4px 0 0 red'), 4);
+  assert.equal(hardReach('8px 8px 0 0 var(--color-border-strong)'), 8);
+  assert.equal(
+    hardReach('0 10px 28px color-mix(in srgb, var(--color-shadow) 16%, transparent)'),
+    0,
+  );
+  assert.equal(hardReach('inset 0 0 0 4px red, 0 0 0 3px red'), 3);
+  const offset = ruleValue("[data-ui-slot='tooltip']", 'margin-block-end');
+  const hard = languages.filter((pack) => {
+    const tokens = (pack.manifest as { tokens: Record<string, string> }).tokens;
+    return hardReach(tokens['shadow-raised']!) > 0;
+  });
+  assert.ok(
+    hard.some(({ id }) => id === 'paper-tactile'),
+    'paper-tactile is one with a hard raised edge',
+  );
+  for (const pack of hard) {
+    await t.test(pack.id, () => {
+      const manifest = pack.manifest as unknown as DesignLanguageManifest;
+      const result = compilePack({
+        kind: 'design-language',
+        manifest,
+        dir: fileURLToPath(new URL(`${pack.dir}/`, `file://${root}/`)),
+      });
+      assert.ok(result.ok, JSON.stringify(result.ok ? null : result.problems));
+      // The tokens as the compiler writes them, which is all a page has.
+      const compiled = new TextDecoder().decode(result.pack.stylesheet!.bytes);
+      const tokens = Object.fromEntries(
+        [...compiled.matchAll(/--ui-([a-z0-9-]+): ([^;]+);/g)].map(([, key, value]) => [
+          key!,
+          value!,
+        ]),
+      );
+      const ring = px(tokens['focus-width']!) + px(tokens['focus-offset']!);
+      const edge = hardReach(manifest.tokens['shadow-raised']);
+      const resolved = resolve(offset, tokens);
+      assert.ok(
+        resolved >= ring + edge,
+        `${pack.id}: the tooltip stands ${resolved}px off its action, so its raised shadow's ${edge}px hard edge lands on the ring's ${ring}px reach (it needs ${ring + edge}px)`,
+      );
+    });
   }
 });
 
