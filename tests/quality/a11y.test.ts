@@ -11,7 +11,12 @@ import test from 'node:test';
 import { PNG } from 'pngjs';
 import { REPO_ROOT } from '../../quality/thresholds';
 import {
+  BATCH_GAP,
+  batchConflict,
+  batches,
   CONTRAST_RULE,
+  cutShots,
+  shotRect,
   ENHANCED_CONTRAST_RULE,
   dilate,
   framedItems,
@@ -1089,5 +1094,99 @@ test("color-contrast-enhanced's incomplete items reach the sampler with color-co
       ['high-contrast-text', 'main p.both', '7:1', '5.49:1 against its worst background pixel'],
       ['high-contrast-text', 'main p.enhanced', '7:1', '5.49:1 against its worst background pixel'],
     ],
+  );
+});
+
+test("the batch path splits the elements it reads so no member's marks paint within BATCH_GAP of another's box, but a neighbour both hide by fill doesn't split them", () => {
+  const box = (x: number) => ({ x, y: 0, width: 40, height: 20 });
+  // Each candidate's own glyph mark paints over its box and BATCH_GAP - 1 round it, at most.
+  const reach = BATCH_GAP - 1;
+  const own = (id: number, x: number) => ({
+    id,
+    role: 'glyphs' as const,
+    extent: { x: x - reach, y: -reach, width: 40 + 2 * reach, height: 20 + 2 * reach },
+  });
+  const far = [0, 100, 200].map((x, id) => ({ box: box(x), marks: [own(id, x)], alone: false }));
+  assert.deepEqual(batches(far), [[0, 1, 2]], 'boxes 60 px apart share one batch');
+  // Two boxes 10 px apart: each one's glyphs paint within BATCH_GAP of the other.
+  const close = [0, 50].map((x, id) => ({ box: box(x), marks: [own(id, x)], alone: false }));
+  assert.equal(batchConflict(close[0]!, close[1]!), true);
+  assert.deepEqual(batches([...close, far[2]!]), [[0, 2], [1]]);
+  // A neighbour text's parent between two far boxes, which both hide by fill: each one's own path hides it too.
+  const shared = { id: 9, role: 'fill' as const, extent: { x: 40, y: 0, width: 60, height: 20 } };
+  const sharing = [0, 100].map((x, id) => ({
+    box: box(x),
+    marks: [own(id, x), shared],
+    alone: false,
+  }));
+  assert.equal(batchConflict(sharing[0]!, sharing[1]!), false);
+  // One hides it by fill and the other is it, hidden by color: its currentColor borders and icons go too.
+  const itself = { box: box(100), marks: [{ ...shared, role: 'glyphs' as const }], alone: false };
+  assert.equal(batchConflict(sharing[0]!, itself), true);
+  // A mark whose paint can't be bounded, or a member under a backdrop filter, has a batch to itself.
+  const unbounded = {
+    box: box(400),
+    marks: [{ id: 7, role: 'glyphs' as const, extent: null }],
+    alone: false,
+  };
+  assert.deepEqual(batches([far[0]!, unbounded, far[1]!]), [[0, 2], [1]]);
+  assert.deepEqual(batches([far[0]!, { ...far[1]!, alone: true }, far[2]!]), [[0, 2], [1]]);
+});
+
+test("a batch's shots are cut from one shot of its boxes on whole pixels, each what page.screenshot() gives its own clip, checked against one own shot for each way the boxes' origins round, and every box gets its own when a cut differs", async () => {
+  const viewport = { width: 200, height: 100 };
+  // page.screenshot({ clip }) as Chromium answers it: the pixels from the clip's rounded origin, its size floored.
+  const world = (x: number, y: number, skew = 0) =>
+    [(x * 7 + skew) % 256, (y * 11) % 256, (x + y) % 256] as const;
+  const fake = (skewUnion: boolean) => {
+    const asked: { x: number; y: number; width: number; height: number }[] = [];
+    return {
+      asked,
+      page: {
+        screenshot: async ({
+          clip,
+        }: {
+          clip: { x: number; y: number; width: number; height: number };
+        }) => {
+          asked.push(clip);
+          const { x, y, width, height } = shotRect(clip, viewport);
+          // A render that isn't the same for a wider clip, when asked for one.
+          const skew = skewUnion && width > 40 ? 1 : 0;
+          return png(
+            Array.from({ length: height }, (_, row) =>
+              Array.from({ length: width }, (_, column) => world(x + column, y + row, skew)),
+            ),
+          );
+        },
+      },
+    };
+  };
+  const boxes = [
+    { x: 10.25, y: 5.75, width: 30.5, height: 12.4 },
+    { x: 120.6, y: 60.1, width: 20, height: 10.999 },
+    { x: 60.5, y: 30.5, width: 8.2, height: 9.6 },
+    { x: 11.2, y: 70.3, width: 25, height: 8 },
+  ];
+  assert.deepEqual(shotRect(boxes[0]!, viewport), { x: 10, y: 6, width: 30, height: 12 });
+  const own = fake(false);
+  const ownShots = await Promise.all(boxes.map((clip) => own.page.screenshot({ clip })));
+  const cut = fake(false);
+  const shots = await cutShots(cut.page as never, viewport, boxes);
+  assert.deepEqual(
+    shots.map((shot) => decodePng(shot)),
+    ownShots.map((shot) => decodePng(shot)),
+  );
+  // One shot of them all, and one own shot for each of the four ways their origins round, across and down.
+  assert.equal(cut.asked.length, 1 + 4);
+  const skewed = fake(true);
+  const fallback = await cutShots(skewed.page as never, viewport, boxes);
+  assert.deepEqual(
+    fallback.map((shot) => decodePng(shot)),
+    ownShots.map((shot) => decodePng(shot)),
+  );
+  assert.equal(
+    skewed.asked.length,
+    1 + 1 + boxes.length - 1,
+    'its first check fails, and every box is shot on its own',
   );
 });

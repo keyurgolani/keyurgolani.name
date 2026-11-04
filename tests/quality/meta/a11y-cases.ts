@@ -509,6 +509,87 @@ const contrast = async (page: Page) =>
   incompleteContrastFindings(page, await axeFor(page).analyze());
 
 /**
+ * The sampler's findings, the batch path's, and a `contrast batch`
+ * finding as well when the per-element path, run on the same page after
+ * it, finds anything else, record for record (row 14's equivalence).
+ */
+const contrastBothWays = async (page: Page): Promise<Finding[]> => {
+  const results = await axeFor(page).analyze();
+  const batched = await incompleteContrastFindings(page, results);
+  const alone = await incompleteContrastFindings(page, results, false, { batch: false });
+  const records = (each: readonly Finding[]) => each.map((finding) => JSON.stringify(finding));
+  const [a, b] = [records(batched), records(alone)];
+  return a.join('\n') === b.join('\n')
+    ? batched
+    : [
+        ...batched,
+        {
+          gate: 'contrast',
+          rule: 'batch',
+          actual: `the batch path found ${a.join(' | ') || 'nothing'}, and each element on its own ${b.join(' | ') || 'nothing'}`,
+        },
+      ];
+};
+
+/** How many round trips to the page, and how many screenshots, the sampler may take for `elements` incomplete ones in one viewport. */
+const tripsFor = (elements: number) => Math.ceil(elements / 2) + 20;
+
+/**
+ * The sampler's findings, and a `contrast round-trips` finding when it
+ * takes more round trips to the page (evaluates, and a locator's
+ * evaluates and scrolls), or more screenshots, than tripsFor() allows:
+ * the per-element cost that ran Schematic's cells past their limit (row
+ * 14), about fifteen round trips and three shots an element.
+ */
+const contrastTrips = async (page: Page): Promise<Finding[]> => {
+  const results = await axeFor(page).analyze();
+  let trips = 0;
+  let shots = 0;
+  const counted = <T extends object>(target: T, calls: readonly string[]): T =>
+    new Proxy(target, {
+      get(of, name) {
+        const value = Reflect.get(of, name, of) as unknown;
+        if (typeof value !== 'function') return value;
+        return (...args: unknown[]) => {
+          if (calls.includes(String(name))) trips++;
+          if (name === 'screenshot') shots++;
+          const out = (value as (...a: unknown[]) => unknown).apply(of, args);
+          // A locator's first() is a locator too.
+          return name === 'locator' || name === 'first'
+            ? counted(out as object, ['evaluate', 'scrollIntoViewIfNeeded'])
+            : out;
+        };
+      },
+    });
+  const findings = await incompleteContrastFindings(counted(page, ['evaluate']), results);
+  const elements = results.incomplete
+    .filter((rule) => rule.id === CONTRAST_RULE)
+    .reduce((sum, rule) => sum + rule.nodes.length, 0);
+  const over = [
+    ...(trips > tripsFor(elements) ? [`${trips} round trips to the page`] : []),
+    ...(shots > tripsFor(elements) ? [`${shots} screenshots`] : []),
+  ];
+  return over.length === 0
+    ? findings
+    : [
+        ...findings,
+        {
+          gate: 'contrast',
+          rule: 'round-trips',
+          actual: `${over.join(' and ')} for ${elements} elements in one viewport, over ${tripsFor(elements)}`,
+        },
+      ];
+};
+
+/** `count` short texts on a near-white gradient, in one 1440x900 viewport, far apart. */
+const manyTexts = (count: number) =>
+  built(
+    'Many texts on a gradient',
+    'main { display: grid; grid-template-columns: repeat(5, 1fr); gap: 24px 48px; } p { margin: 0; font: 16px/1.5 Arial, sans-serif; color: #444; background: linear-gradient(90deg, #fff, #fafafa); }',
+    Array.from({ length: count }, (_, at) => `<p>Text number ${at + 1}.</p>`).join(''),
+  );
+
+/**
  * A row's axe pass and its sampler, as run-cell.ts's audit() runs them on
  * `rowId`: the contrast rules' violations, color-contrast-enhanced's among
  * them where the page renders high contrast, and the incomplete items
@@ -1995,6 +2076,27 @@ export const A11Y_CASES: readonly MetaCase[] = [
   bad('neighbour-faint', 'contrast-neighbour-faint.html', 'contrast', 'text', contrast, {
     colorScheme: 'dark',
   }),
+  // The batch path (row 14): two texts in one viewport whose marks reach each other's box never
+  // share a batch, so the one whose neighbour's currentColor border is its background still fails
+  // over it, and the batch path finds what each element on its own does, record for record.
+  {
+    id: 'contrast/batch-neighbours',
+    gate: 'contrast',
+    input: 'tests/quality/fixtures/a11y/contrast-batch-neighbours.html',
+    expect: 'fail',
+    reason: /^contrast text: 1\.\d\d:1 against its worst background pixel$/,
+    browser: true,
+    run: () => onPage('contrast-batch-neighbours.html', contrastBothWays),
+  },
+  // And forty far-apart texts in one viewport cost a few round trips and shots, not fifteen and three each.
+  {
+    id: 'contrast/batch-round-trips',
+    gate: 'contrast',
+    input: `forty texts on a gradient in one 1440x900 viewport, within ${tripsFor(40)} round trips and as many screenshots`,
+    expect: 'pass',
+    browser: true,
+    run: () => onPage(manyTexts(40), contrastTrips),
+  },
   // High contrast holds text to thresholds.json's highContrast ratio, 7, by the element's own
   // boundary (a tuple cell's, here on the default row) or by prefers-contrast: more: axe's
   // color-contrast-enhanced on a solid surface, and the sampler over a gradient.

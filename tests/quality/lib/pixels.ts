@@ -20,6 +20,13 @@ export function decodePng(png: Uint8Array): Image {
   return { width, height, data };
 }
 
+/** Encodes RGBA as a PNG that decodePng() reads back pixel for pixel. */
+export function encodePng({ width, height, data }: Image): Uint8Array {
+  const image = new PNG({ width, height });
+  image.data.set(data);
+  return PNG.sync.write(image);
+}
+
 /** The pixel at index `i`, alpha dropped (screenshots are opaque). */
 export const pixel = (image: Image, i: number): Rgb => [
   image.data[i * 4]!,

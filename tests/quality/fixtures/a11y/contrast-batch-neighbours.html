@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Two texts in one viewport whose marks reach each other, known-bad</title>
+    <!--
+      The batch path's planted neighbours (row 14): texts on a near-white
+      gradient axe leaves to the sampler, all in one viewport. Most sit far
+      apart and pass. Two touch: .from's right border, in its currentColor,
+      runs a pixel into .to's box, and .to's first glyph sits within HALO
+      of it. On its own, .to is sampled with .from's text hidden by fill,
+      as a neighbour's is, and its border still painted, so the border is
+      .to's background and .to fails, at 1.00:1. Hidden by color as a
+      batch member, .from would take its border with it, and .to would
+      pass: so the two must never share a batch, and the batch path's
+      findings must be the per-element path's, record for record.
+    -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        color: #595959;
+      }
+      main {
+        padding: 24px;
+      }
+      .over {
+        background: linear-gradient(90deg, #fff, #fafafa);
+      }
+      .row {
+        display: flex;
+        gap: 48px;
+        margin-block: 32px;
+      }
+      .pair span {
+        display: inline-block;
+      }
+      .from {
+        padding-right: 2px;
+        border-right: 2px solid currentColor;
+      }
+      .to {
+        margin-left: -3px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Planted neighbours</h1>
+      <div class="row">
+        <p class="over">Far apart, first.</p>
+        <p class="over">Far apart, second.</p>
+        <p class="over">Far apart, third.</p>
+      </div>
+      <p class="over pair"><span class="from">2019</span><span class="to">2021</span></p>
+      <div class="row">
+        <p class="over">Below, first.</p>
+        <p class="over">Below, second.</p>
+      </div>
+    </main>
+  </body>
+</html>
