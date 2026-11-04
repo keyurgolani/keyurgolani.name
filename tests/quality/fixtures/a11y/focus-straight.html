@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A straight ring at a sub-pixel position, known-good</title>
+    <!--
+      A plate link on a dark stage, placed as Kinetic Cosmos places its
+      plates: absolutely, moved a sub-pixel distance by a translate (which
+      Chromium doesn't snap to the pixel grid, as it snaps a layout offset),
+      0.633px, at a fractional height (46.891px), so its straight 2px ring,
+      set out 2px, in a focus
+      colour just over 3:1 on the stage (4.6:1), straddles three rows on
+      each horizontal side. The middle row draws the ring at full colour,
+      and its neighbours antialias under 3:1, so the pixels count short of
+      a 2px ring's need though the ring is whole. It passes held to its
+      centre line, as a rounded ring is. The known-bad twins (a11y-cases.ts)
+      add a square plate a box clips along its right side, one 1px, one
+      under 3:1, and a square one a neighbour covers along its top.
+    -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #2b241c;
+        color: #e6dccb;
+      }
+      .stage {
+        position: relative;
+        height: 56rem;
+      }
+      .plate {
+        position: absolute;
+        left: 80px;
+        display: grid;
+        align-content: center;
+        width: 256px;
+        height: 46.891px;
+        translate: 0 0.633px;
+        color: inherit;
+        text-decoration: none;
+      }
+      .plate:focus-visible {
+        outline: 2px solid rgb(197 123 84);
+        outline-offset: 2px;
+      }
+      .plate.square {
+        width: 120px;
+        height: 120.891px;
+      }
+      .plate.thin:focus-visible {
+        outline-width: 1px;
+      }
+      .plate.faint:focus-visible {
+        outline-color: rgb(112 92 72);
+      }
+      .clip {
+        position: absolute;
+        left: 40px;
+        top: 300px;
+        width: 161px;
+        height: 200px;
+        overflow: clip;
+      }
+      .clip .plate {
+        left: 40px;
+      }
+      .cover {
+        position: absolute;
+        left: 70px;
+        z-index: 1;
+        width: 140px;
+        height: 8px;
+        background: #2b241c;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Plates</h1>
+      <div class="stage">
+        <a class="plate" id="straight" href="#straight" style="top: 100px">Work, 2 projects</a>
+        <!-- twin -->
+      </div>
+    </main>
+  </body>
+</html>

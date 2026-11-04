@@ -42,15 +42,19 @@ export interface Active {
   readonly sides?: { readonly width: number; readonly height: number };
   /** Its line boxes, when it wraps onto more than one, which a ring goes round one by one. */
   readonly fragments?: readonly Box[];
-  /** Its ring's rounding, when its border-radius is above 0: see Rounding. */
+  /**
+   * Its ring's rounding, when its border-radius is above 0 or its ring is an outline, its corners
+   * then all 0 (a straight ring): see Rounding.
+   */
   readonly rounding?: Rounding;
 }
 
 /**
- * A rounded focus target: each corner's border radius, horizontal and
- * vertical, in CSS px (top-left, top-right, bottom-right, bottom-left), as
- * computed, before CSS scales radii that overlap, the outline's offset,
- * which an outline adds to each corner's radius, and its width.
+ * A rounded focus target, or a straight one whose ring is an outline: each
+ * corner's border radius, horizontal and vertical, in CSS px (top-left,
+ * top-right, bottom-right, bottom-left), as computed, before CSS scales radii
+ * that overlap (all 0 for a straight one), the outline's offset, which an
+ * outline adds to each rounded corner's radius, and its width.
  */
 export interface Rounding {
   readonly corners: readonly (readonly [number, number])[];
@@ -393,16 +397,17 @@ function probe(request: ProbeRequest): unknown {
             : Number.parseFloat(value) || 0;
         return [px(h, box.width), px(v, box.height)] as [number, number];
       });
-      const rounding = corners.some(([h, v]) => h > 0 && v > 0)
-        ? {
-            corners,
-            offset: Number.parseFloat(cs.outlineOffset) || 0,
-            width: cs.outlineStyle === 'none' ? 0 : Number.parseFloat(cs.outlineWidth) || 0,
-          }
-        : null;
+      // A straight outline is read too, its corners 0, so its ring can be held to its centre line
+      // as a rounded one's is (item 17): a box-shadow ring round a square box is held to its pixels.
+      const outline = cs.outlineStyle === 'none' ? 0 : Number.parseFloat(cs.outlineWidth) || 0;
+      const rounding =
+        corners.some(([h, v]) => h > 0 && v > 0) || outline > 0
+          ? { corners, offset: Number.parseFloat(cs.outlineOffset) || 0, width: outline }
+          : null;
       return {
         ...(sides ? { sides } : {}),
-        // A rotated stop is held to its own sides; the rounded path is for an upright one.
+        // A rotated stop is held to its own sides; the rounded path and the centre line are for an
+        // upright one.
         ...(rounding && !sides && fragments.length <= 1 ? { rounding } : {}),
         ...(fragments.length > 1 ? { fragments } : {}),
         none: false,

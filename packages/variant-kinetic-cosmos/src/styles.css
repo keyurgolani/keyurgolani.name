@@ -22,6 +22,13 @@
   --layout-motion-feedback: 200ms;
   --layout-motion-scene: 800ms;
   --layout-motion-ambient: 60s;
+  /* The ground a part sits on: the canvas here, a stage's inside the stages (below). */
+  --layout-ground: var(--color-canvas);
+  /*
+   * A focus ring's reach past its box (the kit's offset plus its width) and one ring's width of
+   * ground beyond it: the margin a part over decoration keeps, so its ring sits on the ground.
+   */
+  --layout-focus-halo: max(0px, var(--ui-focus-offset) + 2 * var(--ui-focus-width));
 
   display: block;
   overflow-wrap: break-word;
@@ -36,6 +43,7 @@
   --layout-ink-quiet: color-mix(in oklab, var(--color-text-inverse) 76%, var(--color-text-primary));
   --layout-ink-line: color-mix(in oklab, var(--color-text-inverse) 26%, var(--color-text-primary));
   --layout-ink-faint: color-mix(in oklab, var(--color-text-inverse) 48%, var(--color-text-primary));
+  --layout-ground: var(--color-text-primary);
 
   color: var(--layout-ink);
   background-color: var(--color-text-primary);
@@ -669,7 +677,12 @@
   container-type: inline-size;
 }
 
-[data-variant='kinetic-cosmos'] .kc-signature-label {
+/*
+ * The spot places the label on the map and is the stacking context its ground paints in, so the
+ * ground (z-index -1) sits behind the pill's own border and ground. Inside the pill itself it
+ * would paint over both: a negative z-index child paints above its stacking context's own box.
+ */
+[data-variant='kinetic-cosmos'] .kc-signature-spot {
   --layout-clip: calc(100cqi + 2 * var(--layout-stage-pad));
 
   position: absolute;
@@ -678,14 +691,21 @@
   );
   inset-block-start: calc(var(--layout-clip) * 0.4634 * var(--layout-y));
   max-inline-size: 10em;
+  /* Whole pixels, so its focus ring paints on its own box; the first line is for a browser without round(). */
   translate: calc(-100% - var(--space-xs)) -50%;
+  translate: round(calc(-100% - var(--space-xs)), 1px) round(-50%, 1px);
+  font-size: var(--type-label-font-size);
+  text-align: end;
+  isolation: isolate;
+}
+
+[data-variant='kinetic-cosmos'] .kc-signature-label {
+  display: block;
   padding-block: var(--space-3xs);
   padding-inline: var(--space-xs);
   color: var(--layout-ink);
-  font-size: var(--type-label-font-size);
   font-weight: var(--type-label-font-weight);
   line-height: var(--type-label-line-height);
-  text-align: end;
   text-decoration: none;
   background-color: var(--color-text-primary);
   border: var(--ui-border-control);
@@ -693,12 +713,27 @@
   border-radius: var(--ui-radius-control);
 }
 
+/*
+ * A margin of the stage's ground past a focus ring, behind the label: the map's lines stop short
+ * of it, so its ring always sits on the stage. A real element, not a pseudo-element, so axe reads
+ * the ground behind the label's words. It's set round the label's border box (the spot's box), a
+ * focus halo wide. Forced colors paint it Canvas, so the ring sits on Canvas there too.
+ */
+[data-variant='kinetic-cosmos'] .kc-signature-label__ground {
+  position: absolute;
+  inset: calc(-1 * var(--layout-focus-halo));
+  z-index: -1;
+  background-color: var(--layout-ground);
+  border-radius: var(--ui-radius-control);
+  pointer-events: none;
+}
+
 [data-variant='kinetic-cosmos'] .kc-signature-label:hover {
   border-color: var(--layout-ink-quiet);
 }
 
 @media (min-width: 64rem) {
-  [data-variant='kinetic-cosmos'] .kc-signature-label {
+  [data-variant='kinetic-cosmos'] .kc-signature-spot {
     inset-inline-start: calc(100cqi * var(--layout-x));
     inset-block-start: calc(100cqi * 0.2932 * var(--layout-y));
   }
@@ -706,24 +741,26 @@
 
 /* On a phone the body sits near the crop's left edge, so the plate hangs under it, clear of the core above. */
 @media (max-width: 47.99rem) {
-  [data-variant='kinetic-cosmos'] .kc-signature-label {
+  [data-variant='kinetic-cosmos'] .kc-signature-spot {
     translate: -30% var(--space-xs);
+    translate: round(-30%, 1px) round(var(--space-xs), 1px);
     text-align: start;
   }
 }
 
 @media (min-width: 80rem) {
-  [data-variant='kinetic-cosmos'] .kc-signature-label {
+  [data-variant='kinetic-cosmos'] .kc-signature-spot {
     max-inline-size: none;
     translate: -50% calc(-100% - var(--space-s));
+    translate: round(-50%, 1px) round(calc(-100% - var(--space-s)), 1px);
     white-space: nowrap;
   }
 }
 
 /*
  * 64 to 80rem the plates' rows are too close for a summary on two lines, so
- * each plate takes the width its words need on one line, on the stage's
- * ground, and its leader comes out from under its right edge.
+ * each plate takes the width its words need on one line, and its leader comes
+ * out from under its right edge.
  */
 @media (min-width: 64rem) and (max-width: 79.99rem) {
   [data-variant='kinetic-cosmos'] .kc-plate {
@@ -734,7 +771,6 @@
   [data-variant='kinetic-cosmos'] .kc-plate__link {
     padding-inline-end: var(--space-xs);
     white-space: nowrap;
-    background-color: var(--color-text-primary);
   }
 }
 
@@ -866,20 +902,16 @@
 }
 
 /*
- * Held still, there's nothing to pause, so the control goes and "Held still"
- * stays (KC-S8). These come after the outlined control and name its slot, so
- * they outrank its display (design re-review r2).
+ * Held still, there's nothing to pause: the control stays, the kit's disabled
+ * one, quiet beside "Held still", which says why (12b; KC-S8 took it away, and
+ * the page's controls are the same under reduced motion as without it). Quiet
+ * by its ink, the stage's quiet one, not by the primitive's fade, so its word
+ * still reads at 4.5:1.
  */
-@media (prefers-reduced-motion: reduce) {
-  [data-variant='kinetic-cosmos'] .kc-pause__control :is(button, [data-ui-slot='action']) {
-    display: none;
-  }
-}
-
-[data-variant='kinetic-cosmos']:is([data-motion='reduced'], [data-motion='static'])
-  .kc-pause__control
-  :is(button, [data-ui-slot='action']) {
-  display: none;
+[data-variant='kinetic-cosmos'] .kc-pause__control [data-ui-slot='action']:disabled {
+  color: var(--layout-ink-quiet);
+  cursor: default;
+  opacity: 1;
 }
 
 /* With no script nothing turns, so there's nothing to pause, and no status to give. */
@@ -954,6 +986,14 @@
   [data-variant='kinetic-cosmos'] .kc-plates__list {
     display: block;
     padding: 0;
+  }
+
+  /*
+   * Over the map, the words sit on the stage's own ground: the far stars
+   * drift behind the caption and the plates, never through their words.
+   */
+  [data-variant='kinetic-cosmos'] :is(.kc-plates__caption, .kc-plate__link) {
+    background-color: var(--color-text-primary);
   }
 
   /* Two lines across the top left, clear of the first plate below and the halo's upper arc beside it. */
@@ -1144,14 +1184,18 @@
     display: flex;
     flex-direction: column-reverse;
     align-items: center;
-    gap: var(--space-3xs);
+    /* A focus ring's halo clear of the dot, so the arc's line never runs under a stop's ring. */
+    gap: calc(var(--space-3xs) + var(--layout-focus-halo));
+    /* Whole pixels, so a stop's focus ring paints on its own box; the first line is for a browser without round(). */
     translate: -50% calc(-100% + var(--space-3xs));
+    translate: round(-50%, 1px) round(calc(-100% + var(--space-3xs)), 1px);
     white-space: nowrap;
   }
 
   [data-variant='kinetic-cosmos'] .kc-arc__stop[data-tier='1'] {
     flex-direction: column;
     translate: -50% calc(-1 * var(--space-3xs));
+    translate: round(-50%, 1px) round(calc(-1 * var(--space-3xs)), 1px);
   }
 
   [data-variant='kinetic-cosmos'] .kc-arc__stop::before {
@@ -3057,9 +3101,11 @@
   font-size: var(--type-label-font-size);
 }
 
+/* The stops stand apart by more than a focus ring's reach, so a ring never lands on the current stop's ground. */
 [data-variant='kinetic-cosmos'] .kc-dock__stops {
   display: none;
   align-items: center;
+  gap: var(--space-2xs);
 }
 
 [data-variant='kinetic-cosmos'] .kc-dock__stop {
@@ -3432,8 +3478,10 @@
 }
 
 @media (min-width: 64rem) {
+  /* A halo of headroom over the arc, so a lifted stop's focus ring at the apex stays on the stage. */
   [data-variant='kinetic-cosmos'] .kc-ring__opener {
     margin-inline: var(--space-s);
+    padding-block-start: calc(var(--space-l) + var(--layout-focus-halo));
   }
 }
 
@@ -4266,7 +4314,7 @@
    * Print drops the decoration and keeps the navigation: the orrery and the orbit lines go,
    * and the System's plates and each arc's stops stay, set as plain lists in the flow.
    */
-  [data-variant='kinetic-cosmos'] :is(.kc-map__clip, .kc-signature-label),
+  [data-variant='kinetic-cosmos'] :is(.kc-map__clip, .kc-signature-spot),
   [data-variant='kinetic-cosmos'] .kc-arc :is(.kc-arc__line, .kc-arc__trail, .kc-arc__body) {
     display: none;
   }

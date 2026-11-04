@@ -734,6 +734,59 @@ const WRAPPED_HALF = withFixture(
 );
 
 /**
+ * focus-straight.html with a second plate at the same sub-pixel offset, whose straight ring fails
+ * however it's measured: a square one a box clips along its right side, or an opaque neighbour
+ * in the stage's colour covers along its top (each a quarter of its ring, so its pixels reach a
+ * 1px ring's and it's held to its centre line, which refuses it); one 1px (held to its pixels);
+ * or one whose colour is under 3:1 (2.4:1).
+ */
+const straightTwin = (html: string) => withFixture('focus-straight.html', '<!-- twin -->', html);
+const STRAIGHT_CLIPPED = straightTwin(
+  '<div class="clip"><a class="plate square" id="clipped" href="#clipped" style="top: 20px">Writing</a></div>',
+);
+const STRAIGHT_THIN = straightTwin(
+  '<a class="plate thin" id="thin" href="#thin" style="top: 300px">Record, 12 years</a>',
+);
+const STRAIGHT_FAINT = straightTwin(
+  '<a class="plate faint" id="faint" href="#faint" style="top: 300px">Personal, now</a>',
+);
+const STRAIGHT_COVERED = straightTwin(
+  '<a class="plate square" id="covered" href="#covered" style="top: 600px">Personal</a><div class="cover" style="top: 594px"></div>',
+);
+
+/**
+ * An underlined inline link at a 1px offset, as Obsidian Atelier's links under Primer: the ring's
+ * inner bottom row lies on the underline, and changes from it under 3:1 (2.37:1), so the ring is
+ * one row thick there. The centre line, 2px out, reads that row, or the outer one, and must not
+ * pass it (the lead's ruling, 3 Nov 2026).
+ */
+const STRAIGHT_UNDERLINED = built(
+  'An underlined link at a 1px offset',
+  `body { margin: 0; padding: 2rem; font: 16px/1.5 Arial, 'Liberation Sans', Helvetica, sans-serif; background: #f0e7d6; color: #2b241c; }
+  p { margin: 0 0 2rem; }
+  a { color: #2b241c; text-decoration-line: underline; text-decoration-thickness: 1px; text-underline-offset: 0.3em; }
+  a:focus-visible { outline: 2px solid #8e4d2b; outline-offset: 1px; }`,
+  '<p><a id="underlined" href="#underlined">An underlined link, its underline at 0.3em</a></p>',
+);
+
+/**
+ * A ring whose bottom edge the next line's box paints over, as Obsidian Atelier's episode title
+ * in forced colours: an opaque box in the ground's colour, a quarter px into the ring's outer
+ * row, so that row shows a quarter of the ring and the inner one all of it. The stop sits at whole
+ * px (fixed), as the case measures it, so the outline's own snapping doesn't move the rows. The centre line,
+ * crediting the inner row, must not pass it.
+ */
+const STRAIGHT_LIDDED = built(
+  "A ring the next line's box covers",
+  `body { margin: 0; padding: 2rem; font: 16px/1.5 Arial, 'Liberation Sans', Helvetica, sans-serif; background: #fff; color: #000; }
+  .holder { position: fixed; top: 200px; left: 80px; display: inline-flex; }
+  .holder a { display: inline-block; height: 18px; line-height: 18px; color: #000; text-decoration: none; }
+  .holder a:focus-visible { outline: 2px solid #37336d; outline-offset: 1px; }
+  .lid { position: absolute; left: -8px; right: -8px; top: calc(100% + 2px); translate: 0 0.25px; height: 18px; background: #fff; }`,
+  '<p><span class="holder"><a id="lidded" href="#lidded">A link the next line covers</a><span class="lid"></span></span></p>',
+);
+
+/**
  * focus-only-shown.html with a menu open only on :focus-within, whose items have no ring: the
  * blur hides each item with the list that holds it.
  */
@@ -1025,6 +1078,63 @@ export const A11Y_CASES: readonly MetaCase[] = [
     WRAPPED_HALF,
     /^focus (?:perimeter|contrast): /,
     focus,
+  ),
+  // A straight 2px ring at a sub-pixel place, whole at its colour, its horizontal sides
+  // antialiased across three rows, passes along its centre line, as a rounded ring does. One a
+  // box clips on a side, one 1px (held to its pixels), one under 3:1, and one a neighbour covers
+  // still fail, one finding each on its own stop.
+  goodFile('straight-sub-pixel', 'focus-straight.html', 'focus', focus),
+  builtCase(
+    'straight-clipped',
+    'focus',
+    'tests/quality/fixtures/a11y/focus-straight.html, with a square plate a box clips along its right side',
+    STRAIGHT_CLIPPED,
+    /^focus perimeter: \d+ of \d+ points/,
+    onePerStop(focus, ['#clipped']),
+  ),
+  builtCase(
+    'straight-thin',
+    'focus',
+    'tests/quality/fixtures/a11y/focus-straight.html, with a second plate whose straight ring is 1px',
+    STRAIGHT_THIN,
+    /^focus (?:perimeter|contrast): /,
+    onePerStop(focus, ['#thin']),
+  ),
+  builtCase(
+    'straight-faint',
+    'focus',
+    'tests/quality/fixtures/a11y/focus-straight.html, with a second plate whose straight ring is 2.4:1 on the stage',
+    STRAIGHT_FAINT,
+    /^focus (?:perimeter|contrast): /,
+    onePerStop(focus, ['#faint']),
+  ),
+  builtCase(
+    'straight-covered',
+    'focus',
+    'tests/quality/fixtures/a11y/focus-straight.html, with a square plate an opaque neighbour covers along its top',
+    STRAIGHT_COVERED,
+    /^focus perimeter: \d+ of \d+ points/,
+    onePerStop(focus, ['#covered']),
+  ),
+  // A straight ring the centre line reads across its whole width: one whose inner row lies on its
+  // link's underline, and one whose outer row the next line's box covers, fail, whichever row
+  // the line or its one-px credit reads (the lead's ruling, 3 Nov 2026). The sub-pixel case above
+  // still passes: its partial rows are the ring blended over one ground.
+  builtCase(
+    'straight-underlined',
+    'focus',
+    "a page of its own: an underlined link at a 1px offset, its ring's inner bottom row on the underline",
+    STRAIGHT_UNDERLINED,
+    /^focus perimeter: \d+ of \d+ points/,
+    onePerStop(focus, ['#underlined']),
+  ),
+  builtCase(
+    'straight-lidded',
+    'focus',
+    "a page of its own: a ring whose outer bottom row the next line's box covers three quarters of",
+    STRAIGHT_LIDDED,
+    /^focus perimeter: \d+ of \d+ points/,
+    onePerStop(focus, ['#lidded']),
   ),
   // A skip link shown only while it has focus isn't focused again after the blur, and the walk
   // goes on from it: no trap, every stop reached, every ring whole.
