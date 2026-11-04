@@ -625,6 +625,14 @@ export function startFrameChannel(win: Window, options: FrameChannelOptions): ((
         return;
       }
       case 'motion':
+        // Only a Compare grid plate takes `motion` (each one on its ready): it shows one
+        // viewport of the page, so its offscreen parts are held out of rendering first, and a
+        // flip of its motion recalculates what it shows, not the whole page (holdOffscreenParts, below).
+        // The message is the plate's marker: `motion` is SAMPLE_ONLY, dropped above for a
+        // grant's or a local frame, and Demo Studio sends it to grid plates alone, never the
+        // single preview (demo-frame.tsx's plateMotion; sample-channel.test.ts and
+        // frame-channel.test.ts hold both ends of that, and the Compare e2e the single preview).
+        holdOffscreenParts(win);
         // Never raised past a held document, the site's policy, or the reader's own setting: a
         // `full` they hold or reduce is dropped, with nothing on the boundary changed.
         if (!setSampleMotion(win, selection, renderedMotion, message.payload.motion)) {
@@ -966,4 +974,132 @@ export function showAppearance(
     // A switch that never happened takes its new sheets with it.
     for (const { added } of swaps) added?.remove();
   };
+}
+
+// The plate hold: a Compare grid plate's offscreen parts, held out of rendering (the lead's go, 11-03): a plate
+// shows one viewport of its frame's page, scaled, and a `motion` message switching the boundary's
+// data-motion changes inherited motion tokens on the boundary, which recalculates the style of
+// every element under it, the whole page. On CI's runner that was about 160 ms a hand-off, the
+// raised plate's and the lowered plate's in one rendering update (run 41647354283: 7 long tasks).
+//
+// So a frame Studio's grid drives, the only kind that takes `motion` (demo-frame.tsx sends one on
+// each plate's ready, and the single preview none), gives every part that starts a whole viewport
+// below its viewport's foot `content-visibility: auto` with its own measured size as
+// `contain-intrinsic-size`: Chromium skips style and layout for those while they're offscreen,
+// so a flip recalculates what the plate shows and the viewport under it, and the page keeps its
+// scroll height. What shows doesn't change, to the pixel: nothing in the viewport, reaching into
+// it, or in the viewport below it is touched, and a part is held only whole. Not nearer: a held
+// part's paint containment, just under the foot, changed how Chromium painted Editorial
+// Evidence's Pl. 1 pins above it (their discs' edges, by 1-2/255, the pins unmoved; `contain:
+// paint` alone did it, layout, style, and isolation didn't), and a viewport's distance left them
+// as they were (round2-0bbd53e80/pins).
+
+/** The attribute a held part carries. */
+export const PLATE_HELD = 'data-plate-held';
+
+/** The documents already held: once each, and the boundary's own attributes left as rendered. */
+const heldDocuments = new WeakSet<Document>();
+
+/** The boxes content-visibility applies to, and which a part keeps its place as. */
+const BLOCKS: ReadonlySet<string> = new Set(['block', 'flow-root', 'flex', 'grid', 'list-item']);
+
+/** A part's box, read before anything is held, so holding one doesn't move the next. */
+interface Held {
+  readonly element: HTMLElement;
+  readonly width: number;
+  readonly height: number;
+  /** Its border box's top and height before the hold, which a hold must leave where they were. */
+  readonly top: number;
+  readonly outer: number;
+}
+
+const px = (value: string) => Number.parseFloat(value) || 0;
+
+/**
+ * Holds `win`'s offscreen parts, once per document: walks down from the presentation boundary
+ * through the parts that cross the line a viewport below the viewport's foot, and holds each part
+ * that starts below that line, whole, a block, in flow or not, neither fixed nor sticky (which
+ * would leave the viewport with it). Every box is read first and every hold written after, so the
+ * walk lays the page out once. Returns how many parts it held.
+ */
+export function holdOffscreenParts(win: Window): number {
+  const doc = win.document;
+  if (heldDocuments.has(doc)) return 0;
+  heldDocuments.add(doc);
+  // A window with no layout to read (no element class, no computed style) holds nothing. The
+  // frame's own HTMLElement, since an element of its document isn't one of this realm's.
+  const Html = (win as Window & { readonly HTMLElement?: typeof HTMLElement }).HTMLElement;
+  if (typeof Html !== 'function' || typeof win.getComputedStyle !== 'function') return 0;
+  const boundary = doc.querySelector('[data-variant]');
+  if (!boundary) return 0;
+  // A viewport below the viewport's foot: see above for why not the foot itself.
+  const line = 2 * win.innerHeight;
+  const held: Held[] = [];
+  const visit = (parent: Element) => {
+    for (const child of Array.from(parent.children)) {
+      if (!(child instanceof Html)) continue;
+      const style = win.getComputedStyle(child);
+      if (style.display === 'contents') {
+        visit(child);
+        continue;
+      }
+      if (style.position === 'fixed' || style.position === 'sticky') continue;
+      const box = child.getBoundingClientRect();
+      if (box.width === 0 && box.height === 0) continue;
+      if (box.top >= line) {
+        if (!BLOCKS.has(style.display)) continue;
+        held.push({
+          element: child,
+          top: box.top,
+          outer: box.height,
+          // The content box: contain-intrinsic-size stands in for the content, under the
+          // part's own padding and border.
+          width: Math.max(
+            0,
+            box.width -
+              px(style.paddingLeft) -
+              px(style.paddingRight) -
+              px(style.borderLeftWidth) -
+              px(style.borderRightWidth),
+          ),
+          height: Math.max(
+            0,
+            box.height -
+              px(style.paddingTop) -
+              px(style.paddingBottom) -
+              px(style.borderTopWidth) -
+              px(style.borderBottomWidth),
+          ),
+        });
+      } else if (box.bottom > line) {
+        visit(child);
+      }
+    }
+  };
+  visit(boundary);
+  for (const { element, width, height } of held) {
+    element.style.setProperty('contain-intrinsic-size', `auto ${width}px auto ${height}px`);
+    element.style.setProperty('content-visibility', 'auto');
+    element.setAttribute(PLATE_HELD, '');
+  }
+  // The hold keeps the page's geometry: a part it moved goes back as it was, read again after the
+  // writes, until none moves (a pass or two). Size containment can move a part: a held box has no
+  // baseline, so one its row aligns by baseline shifts (Editorial Evidence's plate index, 7px up,
+  // which put it between the line and the viewport's foot), and its own margins stop collapsing
+  // through it. Released whole, it lays out as it did.
+  let kept = held;
+  for (let pass = 0; pass < 3; pass += 1) {
+    const moved = kept.filter(({ element, top, outer }) => {
+      const now = element.getBoundingClientRect();
+      return Math.abs(now.top - top) > 0.5 || Math.abs(now.height - outer) > 0.5;
+    });
+    if (moved.length === 0) break;
+    for (const { element } of moved) {
+      element.style.removeProperty('content-visibility');
+      element.style.removeProperty('contain-intrinsic-size');
+      element.removeAttribute(PLATE_HELD);
+    }
+    kept = kept.filter((part) => !moved.includes(part));
+  }
+  return kept.length;
 }

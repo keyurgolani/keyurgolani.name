@@ -128,6 +128,9 @@ test(
   { annotation: [STUDIO, DEMO] },
   async ({ page }) => {
     await open(page);
+    // The single preview holds nothing out of rendering: only a grid plate takes `motion`.
+    await expect(frames(page).contentFrame().locator('[data-variant]').first()).toBeAttached();
+    expect(await frames(page).contentFrame().locator('[data-plate-held]').count()).toBe(0);
     const compositions = picker(page, 'Composition');
     await reveal(compositions);
     // A's composition, by the name its card shows.
@@ -246,6 +249,58 @@ test(
       'the slot moved with no frame loading again',
     ).toBe(loads);
     expect(await page.locator('iframe').count()).toBeLessThanOrEqual(4);
+    // Each plate holds the parts below its viewport out of rendering (frame-channel.ts's holdOffscreenParts), so a flip
+    // of its motion restyles what it shows, not the whole page: those parts, and only those,
+    // carry content-visibility: auto. A fragment inside one scrolls to its real place, not to
+    // a placeholder's estimate.
+    for (let at = 0; at < 4; at++) {
+      const inside = await (await plates.nth(at).locator('iframe').elementHandle())!.contentFrame();
+      const held = await inside!.evaluate(() => {
+        const parts = [...document.querySelectorAll<HTMLElement>('[data-plate-held]')];
+        return {
+          count: parts.length,
+          // A viewport below the foot, where the hold measured it: a part the hold moves is let
+          // go, so none sits nearer (in viewports, the highest held part's top).
+          below: Math.min(...parts.map((each) => each.getBoundingClientRect().top)) / innerHeight,
+          auto: parts.every((each) => getComputedStyle(each).contentVisibility === 'auto'),
+        };
+      });
+      expect(held.count, `plate ${at + 1} holds its offscreen parts`).toBeGreaterThan(0);
+      expect(
+        held.below,
+        `plate ${at + 1} holds nothing within a viewport of what it shows`,
+      ).toBeGreaterThanOrEqual(2);
+      expect(held.auto, `plate ${at + 1}`).toBe(true);
+    }
+    const inside = await (await plates.nth(0).locator('iframe').elementHandle())!.contentFrame();
+    const landed = await inside!.evaluate(async () => {
+      // A target inside a held part, far enough from the page's foot to reach the top.
+      const room = document.documentElement.scrollHeight - 2 * innerHeight;
+      const target = [
+        ...document.querySelectorAll<HTMLElement>('[data-plate-held] [id], [data-plate-held][id]'),
+      ].find((each) => {
+        if (each.getClientRects().length === 0) return false;
+        if (each.getBoundingClientRect().top + scrollY >= room) return false;
+        // One the page's own scroll brings to its top: not in a sticky or fixed box, which
+        // a scroll doesn't move, nor in a scroller of its own.
+        for (let up: Element | null = each; up && up !== document.body; up = up.parentElement) {
+          const style = getComputedStyle(up);
+          if (style.position === 'sticky' || style.position === 'fixed') return false;
+          if (up !== each && !['visible', 'clip'].includes(style.overflowY)) return false;
+        }
+        return true;
+      });
+      if (!target) return null;
+      location.hash = `#${target.id}`;
+      await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+      const margin = Number.parseFloat(getComputedStyle(target).scrollMarginTop) || 0;
+      return { id: target.id, top: target.getBoundingClientRect().top, margin };
+    });
+    expect(landed, 'a target inside a held part').not.toBeNull();
+    expect(
+      Math.abs(landed!.top - landed!.margin),
+      `#${landed!.id} lands at its scroll margin`,
+    ).toBeLessThanOrEqual(1);
     // The schemes page by Next 3, never "+30", with where the page is beside it, which
     // describes it; its name is what it shows (M3, WCAG 2.5.3).
     const position = page.locator('.studio-compare__position');

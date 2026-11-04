@@ -2,7 +2,7 @@ import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { setTimeout as wait } from 'node:timers/promises';
 import type { MotionPolicy } from '@portfolio/schema';
-import { envelope, type PreviewDrop } from './protocol';
+import { envelope, SAMPLE_ONLY, type PreviewDrop } from './protocol';
 import {
   registeredAppearance,
   sampleDestination,
@@ -582,6 +582,56 @@ test("sampleDestination sets only the keys the link's query holds, keeps their o
 });
 
 // Motion in place (kgn-e/compare-perf): the Compare grid's heavy slot moves with no document load.
+
+/** A laid-out part for the plate hold (holdOffscreenParts): a block at `top`, 300px tall. */
+class LaidOutPart {
+  readonly children: LaidOutPart[] = [];
+  readonly attributes = new Map<string, string>();
+  readonly properties = new Map<string, string>();
+  readonly style = {
+    setProperty: (name: string, value: string) => this.properties.set(name, value),
+  };
+  constructor(readonly top: number) {}
+  getBoundingClientRect() {
+    return { top: this.top, bottom: this.top + 300, width: 1440, height: 300 };
+  }
+  setAttribute(name: string, value: string) {
+    this.attributes.set(name, value);
+  }
+}
+
+/** Gives the stand-in window a 900px viewport and its boundary a part in it and one a viewport below it. */
+function layOut(win: FakeSampleWindow) {
+  const shown = new LaidOutPart(0);
+  const below = new LaidOutPart(2000);
+  Object.assign(win, {
+    innerHeight: 900,
+    HTMLElement: LaidOutPart,
+    getComputedStyle: () => ({ display: 'block', position: 'static' }),
+  });
+  Object.assign(win.page.boundary, { children: [shown, below] });
+  return { shown, below };
+}
+
+test("a sample frame's first motion, which only a Compare grid plate is sent, holds the parts below its viewport out of rendering, and nothing else on the page moves", async (t) => {
+  // The plate's marker is the message: `motion` is a sample frame's alone (SAMPLE_ONLY), and
+  // Demo Studio sends it to grid plates alone, so a frame that takes one is a plate.
+  assert.ok(SAMPLE_ONLY.has('motion'));
+  const { win, drops, received, connect, send } = setup(t, REGISTERED, { rendered: 'reduced' });
+  const { shown, below } = layOut(win);
+  await until(() => win.parent.posted.length > 0, 'the hello');
+  const port = connect();
+  await until(() => received.length > 0, 'ready');
+  const before = win.page.snapshot();
+  assert.equal(below.properties.size, 0, 'nothing held before a motion');
+  send(port, 'motion', { motion: 'reduced' });
+  await until(() => below.attributes.has('data-plate-held'), 'the hold');
+  assert.equal(below.properties.get('content-visibility'), 'auto');
+  assert.equal(below.properties.get('contain-intrinsic-size'), 'auto 1440px auto 300px');
+  assert.equal(shown.properties.size, 0, 'what the plate shows is never held');
+  assert.deepEqual(win.page.snapshot(), before, 'the boundary and the sheets as rendered');
+  assert.deepEqual(drops, []);
+});
 
 test("a motion over its port sets the boundary's data-motion in place, full and back to how the server rendered it held, with nothing else moved and no load", async (t) => {
   const { win, drops, received, connect, send } = setup(t, REGISTERED, { rendered: 'reduced' });
