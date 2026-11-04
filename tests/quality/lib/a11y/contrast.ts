@@ -60,10 +60,10 @@
 import { randomBytes } from 'node:crypto';
 import type { Page } from '@playwright/test';
 import { loadThresholds } from '../../../../quality/thresholds';
-import { blend, contrast, decodePng, parseCssColor, pixel, type Image } from '../pixels';
+import { blend, contrast, decodePng, encodePng, parseCssColor, pixel, type Image } from '../pixels';
 import type { AxeResults } from '../records';
 import { nodeSelector } from '../records';
-import { clearOfStuckCovers } from './covers';
+import { clearOfStuckCovers, stuckCoverScript } from './covers';
 import type { Finding } from './interaction';
 
 const thresholds = loadThresholds();
@@ -348,6 +348,188 @@ interface Sample {
 }
 
 /**
+ * Reads `el` for its sample, once it holds still, and marks its glyphs
+ * with `key` (data-quality-glyphs): its color, its mode, its font, its
+ * content box in the viewport (a rotated one's quad and the quad's
+ * bounds), and the other texts near the box, whose nodes the page keeps
+ * under `near` for neighbourTexts() to pick from. Runs in the browser.
+ */
+export function sampleScript(
+  el: Element,
+  {
+    key,
+    near,
+    query,
+    boundary,
+  }: {
+    readonly key: string;
+    readonly near: string;
+    readonly query: string;
+    readonly boundary: string;
+  },
+): Sample {
+  const style = getComputedStyle(el);
+  const high =
+    window.matchMedia(query).matches ||
+    el.closest('[data-appearance-boundary]')?.matches(boundary) === true;
+  // The 2D map its transforms and its ancestors' put it through: CSS
+  // applies translate, rotate, scale, then transform, and each
+  // ancestor's after its child's. Only rotation and skew matter here,
+  // as they take the box off the axes; a 3D one can't be sampled.
+  let matrix = new DOMMatrix();
+  let flat = true;
+  for (let up: Element | null = el; up; up = up.parentElement) {
+    const s = getComputedStyle(up);
+    let own = new DOMMatrix(s.transform === 'none' ? undefined : s.transform);
+    if (s.scale && s.scale !== 'none') {
+      const [sx = 1, sy = sx, sz = 1] = s.scale.split(/\s+/).map(Number);
+      if (sz !== 1) flat = false;
+      own = new DOMMatrix().scale(sx, sy).multiply(own);
+    }
+    if (s.rotate && s.rotate !== 'none') {
+      const parts = s.rotate.trim().split(/\s+/);
+      const angle = parts.pop()!;
+      const axis = parts.join(' ');
+      const value = Number.parseFloat(angle);
+      const deg = angle.endsWith('grad')
+        ? value * 0.9
+        : angle.endsWith('rad')
+          ? (value * 180) / Math.PI
+          : angle.endsWith('turn')
+            ? value * 360
+            : value;
+      if (axis && axis !== 'z' && axis !== '0 0 1') flat = false;
+      own = new DOMMatrix().rotate(deg).multiply(own);
+    }
+    if (!own.is2D) flat = false;
+    matrix = own.multiply(matrix);
+  }
+  const turned = Math.abs(matrix.b) > 1e-6 || Math.abs(matrix.c) > 1e-6;
+  const r = el.getBoundingClientRect();
+  const fill = style.webkitTextFillColor;
+  const x = Math.max(
+    0,
+    r.x +
+      (Number.parseFloat(style.borderLeftWidth) || 0) +
+      (Number.parseFloat(style.paddingLeft) || 0),
+  );
+  const y = Math.max(
+    0,
+    r.y +
+      (Number.parseFloat(style.borderTopWidth) || 0) +
+      (Number.parseFloat(style.paddingTop) || 0),
+  );
+  const right = Math.min(
+    innerWidth,
+    r.right -
+      (Number.parseFloat(style.borderRightWidth) || 0) -
+      (Number.parseFloat(style.paddingRight) || 0),
+  );
+  const bottom = Math.min(
+    innerHeight,
+    r.bottom -
+      (Number.parseFloat(style.borderBottomWidth) || 0) -
+      (Number.parseFloat(style.paddingBottom) || 0),
+  );
+  el.setAttribute('data-quality-glyphs', key);
+  // The other texts whose parent's box comes near this one, with their line boxes and
+  // whether an ancestor the element doesn't share takes them out of flow, which
+  // neighbourTexts() picks from; the page keeps them for the next call.
+  const nodes: Text[] = [];
+  const texts: {
+    rects: { x: number; y: number; width: number; height: number }[];
+    outOfFlow: boolean;
+  }[] = [];
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const text = node as Text;
+    if (!text.data.trim() || el.contains(text) || !text.parentElement) continue;
+    const parent = text.parentElement.getBoundingClientRect();
+    const empty = parent.width === 0 && parent.height === 0;
+    if (
+      !empty &&
+      (parent.right < x - 8 ||
+        parent.left > right + 8 ||
+        parent.bottom < y - 8 ||
+        parent.top > bottom + 8)
+    ) {
+      continue;
+    }
+    let outOfFlow = false;
+    for (
+      let up: Element | null = text.parentElement;
+      up && !up.contains(el);
+      up = up.parentElement
+    ) {
+      const position = getComputedStyle(up).position;
+      if (position === 'absolute' || position === 'fixed') outOfFlow = true;
+    }
+    const range = document.createRange();
+    range.selectNodeContents(text);
+    nodes.push(text);
+    texts.push({
+      rects: [...range.getClientRects()].map((rect) => ({
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+      })),
+      outOfFlow,
+    });
+  }
+  (window as unknown as Record<string, Text[]>)[near] = nodes;
+  // A rotated or skewed box: its own content box, through the map, about its
+  // center, which the map keeps at its bounding box's center; the clip is that
+  // quad's bounds, and only the pixels inside it count. An inline box split
+  // across lines has no one quad.
+  let quad: Quad | null = null;
+  let box = { x, y, width: right - x, height: bottom - y };
+  if (turned && el instanceof HTMLElement && el.getClientRects().length === 1) {
+    const [w, h] = [el.offsetWidth / 2, el.offsetHeight / 2];
+    const side = (name: string) =>
+      (Number.parseFloat(style.getPropertyValue(`border-${name}-width`)) || 0) +
+      (Number.parseFloat(style.getPropertyValue(`padding-${name}`)) || 0);
+    quad = {
+      cx: r.x + r.width / 2,
+      cy: r.y + r.height / 2,
+      a: matrix.a,
+      b: matrix.b,
+      c: matrix.c,
+      d: matrix.d,
+      left: -w + side('left'),
+      right: w - side('right'),
+      top: -h + side('top'),
+      bottom: h - side('bottom'),
+    };
+    const corners = [
+      [quad.left, quad.top],
+      [quad.right, quad.top],
+      [quad.right, quad.bottom],
+      [quad.left, quad.bottom],
+    ].map(([u, v]) => [
+      quad!.cx + quad!.a * u! + quad!.c * v!,
+      quad!.cy + quad!.b * u! + quad!.d * v!,
+    ]);
+    const qx = Math.max(0, Math.floor(Math.min(...corners.map((p) => p[0]!))));
+    const qy = Math.max(0, Math.floor(Math.min(...corners.map((p) => p[1]!))));
+    const qr = Math.min(innerWidth, Math.ceil(Math.max(...corners.map((p) => p[0]!))));
+    const qb = Math.min(innerHeight, Math.ceil(Math.max(...corners.map((p) => p[1]!))));
+    box = { x: qx, y: qy, width: qr - qx, height: qb - qy };
+  }
+  return {
+    mode: high ? ('high-contrast' as const) : ('normal' as const),
+    color: fill && fill !== style.color && !/^rgba?\(0, 0, 0, 0\)$/.test(fill) ? fill : style.color,
+    fontSize: Number.parseFloat(style.fontSize) || 0,
+    fontWeight: Number(style.fontWeight) || 400,
+    box,
+    texts,
+    flat,
+    turned,
+    quad,
+  };
+}
+
+/**
  * The worst ratio of `color` over the background in the PNG `shot`, or
  * null for an empty one. With `inside`, only the pixels it keeps, by column
  * and row in the image, count; null when it keeps none.
@@ -586,6 +768,60 @@ export async function highContrastViolations<T extends Pick<AxeResults, 'violati
 }
 
 /**
+ * What a sampled element's three shots say: null when its color reaches
+ * the ratio its mode needs against every background pixel round its
+ * glyphs, else its finding, a ratio short of it or why it's unresolved.
+ * Both the per-element path and the batch path judge by it.
+ */
+export function judged(
+  selector: string,
+  sample: Sample,
+  shot: Uint8Array,
+  black: Uint8Array,
+  white: Uint8Array,
+): Finding | null {
+  const unresolved = (actual: string): Finding => ({
+    gate: 'contrast',
+    rule: 'text',
+    path: selector,
+    expected: 'a contrast measured against its worst background pixel',
+    actual,
+  });
+  const halo = glyphHalo(black, white, sample.box);
+  if (!halo || halo.glyphs === 0) {
+    return unresolved(
+      halo
+        ? 'unresolved: none of its glyphs paints inside its box, so there is no halo round them to sample'
+        : "unresolved: its glyphs' shots and its background's aren't the same size",
+    );
+  }
+  const quad = sample.quad ? insideQuad(sample.quad, sample.box) : undefined;
+  const worst = worstRatio(
+    shot,
+    sample.color,
+    (column, row, image) => halo.inside(column, row, image) && (!quad || quad(column, row, image)),
+  );
+  const need = neededRatio(sample.fontSize, sample.fontWeight, sample.mode);
+  if (worst === null)
+    return unresolved(
+      !parseCssColor(sample.color)
+        ? `its color ${sample.color} isn't one the sampler reads`
+        : sample.quad
+          ? 'unresolved: its rotated content box holds no whole pixel round its glyphs to sample'
+          : "unresolved: its background's shot holds no pixel round its glyphs",
+    );
+  if (worst < need.ratio)
+    return {
+      gate: 'contrast',
+      rule: need.rule,
+      path: selector,
+      expected: `${need.ratio}:1`,
+      actual: `${worst.toFixed(2)}:1 against its worst background pixel`,
+    };
+  return null;
+}
+
+/**
  * The incomplete contrast items, color-contrast's and color-contrast-
  * enhanced's, each element once, by its target: the sampler holds each to
  * the ratios its own mode needs, whichever rule named it.
@@ -614,17 +850,1029 @@ export function framedItems(results: Pick<AxeResults, 'incomplete'>): number {
   return incompleteContrastNodes(results).filter(inFrame).length;
 }
 
+/** Why a still element is unresolved: what still moves it, as stillnessScript() says. */
+export function stillUnresolved(motion: NonNullable<Motion>): string {
+  return motion.kind === 'infinite'
+    ? `unresolved: an infinite animation, ${motion.name}, moves or repaints it, so its glyphs never hold still to sample`
+    : motion.kind === 'scrolling'
+      ? `unresolved: a scroll-driven animation, ${motion.name}, that moves or repaints it was still changing after ${NODE_LIMIT_MS / 1000} s, so its glyphs never held still to sample`
+      : motion.kind === 'unholdable'
+        ? `unresolved: it rests part-way through a scroll-driven animation, ${motion.name}, and the shots can't hold it where it rests`
+        : motion.kind === 'failed'
+          ? `unresolved: the wait for what moves it to come to rest failed (${motion.name}), so it was never seen at rest to sample`
+          : `unresolved: an animation, ${motion.name}, that moves or repaints it was still running after ${NODE_LIMIT_MS / 1000} s, so its glyphs never held still to sample`;
+}
+
+// The batch path (row 14): an element costs the per-element path about
+// fifteen round trips and three shots, and a page with hundreds of them,
+// such as Schematic's, whose texts sit on its field's grid paper, ran past
+// its cell's limit on CI. So the elements that share a viewport are read
+// together, and measure exactly what each would on its own: the same
+// clip, the same three shots, and the same marks in the clip.
+//
+// At each scroll stop, the call's first scroll position and then stops
+// down the page, one evaluate (batchPlanScript) reads every element left
+// that is wholly in the viewport, inside every box that clips it, and
+// clear of stuck covers, waits for each to hold still, STILL_TOGETHER at
+// a time, and reads each as the per-element path does (sampleScript).
+// Each waits by
+// stillnessScript() with that path's NODE_LIMIT_MS, MOVES and PAINTS, its
+// pins taken off by releaseScript(), and one that comes back with a Motion
+// is unresolved, saying which, as on that path. Each is checked again by
+// the wait's own rule, with no wait (restlessScript()), right before it's
+// read and before each of its batch's shots, since the waits after its own
+// and the batches before take time: one something has started moving
+// since takes the per-element path. One that rests on a
+// scroll-driven animation's pin, is rotated or skewed, has no box, is
+// covered, is clipped, or isn't wholly in any viewport takes the
+// per-element path, unchanged, and so does one whose selector a shadow
+// tree matches too, as a locator searches those as well. Away from the first
+// stop, so does one by a fixed or sticky box, a fixed background, or a
+// scroll-driven animation's target, whose paint the scroll moves against
+// it, and one in, round, or by anything the page has changed as it
+// scrolled (an IntersectionObserver's aria-current, a class, a text): the
+// per-element path reads it where its own scroll puts it.
+//
+// The rest are split into batches no two of whose members can reach each
+// other's clip (batches()): a member's glyph mark hides its own text by
+// color, and so its currentColor borders and icons too, and its
+// neighbours' marks hide theirs by fill, and either, painted where another
+// member's clip is, would change what that one's shots hold. So each
+// member's marks' paint, its subtree's boxes and its shadows and outline
+// (markReachScript), must stay BATCH_GAP clear of every other member's
+// box, unless it's a neighbour both hide by fill; one whose paint can't be
+// bounded, a filter's or an out-of-flow pseudo-element's, or one under a
+// backdrop filter, has a batch to itself. A batch sets its members' marks
+// at once, takes each member's ground shot, then fills every member's
+// glyphs black and takes each one's, then white, and judges each by its
+// own three shots (judged()), as the per-element path does. Each member's
+// shot is the pixels page.screenshot({ clip }) gives its box, cut from one
+// shot of the batch (cutShots()), checked against a member's own shot for
+// each way their origins round; a cut that differs gives every member its
+// own shot.
+
+/** How the sampler reads the incomplete elements: in batches, by default, or each on its own. */
+export interface SamplerOptions {
+  /** Batch the elements that share a viewport; false reads every one on its own. */
+  readonly batch?: boolean;
+}
+
+/**
+ * How far round a batch member's box another member's marks must keep
+ * their paint, in CSS pixels, and how far a fixed or sticky box must be
+ * from it, away from the first stop.
+ */
+export const BATCH_GAP = 8;
+
+/** The most elements a mark's subtree may hold for its paint to be read from their boxes; past it, its reach is unbounded. */
+export const MARK_SUBTREE_LIMIT = 400;
+
+/**
+ * How many of a stop's elements wait to hold still at once: one, so the
+ * waits are taken in turn, as the per-element path takes them. Each wait
+ * reads the page's animations every frame, and under a 12x CPU throttle
+ * Schematic's 230, all at once, left 207 with no frame within
+ * NODE_LIMIT_MS, and four at a time still left 32 (2026-11-03).
+ */
+export const STILL_TOGETHER = 1;
+
+/** The most scroll stops one call makes; the elements still left then take the per-element path. */
+export const BATCH_STOPS = 200;
+
+/** A mark a batch member sets, and where its paint can reach. */
+export interface MarkReach {
+  /** The marked element, by its index in the call's registry: one element, one id. */
+  readonly id: number;
+  /** The member's own element, its glyphs hidden by color, or a neighbour text's parent, hidden by fill. */
+  readonly role: 'glyphs' | 'fill';
+  /** Where its paint can reach in the viewport, its shadows and outline included; null when that can't be bounded. */
+  readonly extent: Box | null;
+}
+
+/** A batch candidate: its content box, its marks, and whether it needs a batch to itself. */
+export interface BatchCandidate {
+  readonly box: Box;
+  readonly marks: readonly MarkReach[];
+  readonly alone: boolean;
+}
+
+/** `box` grown by `by` on every side. */
+export const grown = (box: Box, by: number): Box => ({
+  x: box.x - by,
+  y: box.y - by,
+  width: box.width + 2 * by,
+  height: box.height + 2 * by,
+});
+
+/** Whether two boxes share any area. */
+export const overlaps = (a: Box, b: Box): boolean =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+/**
+ * Whether `a` and `b` can't share a batch: either needs one to itself, or
+ * a mark of one can paint within BATCH_GAP of the other's box, other than
+ * a neighbour both hide by fill, which each one's own path hides as well.
+ */
+export function batchConflict(a: BatchCandidate, b: BatchCandidate): boolean {
+  if (a.alone || b.alone) return true;
+  const reach = (from: BatchCandidate, onto: BatchCandidate) =>
+    from.marks.some(
+      (mark) =>
+        !(
+          mark.role === 'fill' &&
+          onto.marks.some((each) => each.id === mark.id && each.role === 'fill')
+        ) &&
+        (mark.extent === null || overlaps(mark.extent, grown(onto.box, BATCH_GAP))),
+    );
+  return reach(a, b) || reach(b, a);
+}
+
+/** The candidates, by index, in batches no two of whose members conflict: each in the first that takes it, in order. */
+export function batches(candidates: readonly BatchCandidate[]): number[][] {
+  const out: number[][] = [];
+  for (const [at, candidate] of candidates.entries()) {
+    const home = out.find((batch) =>
+      batch.every((other) => !batchConflict(candidate, candidates[other]!)),
+    );
+    if (home) home.push(at);
+    else out.push([at]);
+  }
+  return out;
+}
+
+/** What the plan says of one element at a scroll stop, by its index among the call's items. */
+export type PlanEntry =
+  | {
+      readonly at: number;
+      /** Not wholly in the viewport here: a later stop may take it. */
+      readonly state: 'away';
+      /** Its top and bottom in the page, for the next stop. */
+      readonly top: number;
+      readonly bottom: number;
+    }
+  | {
+      readonly at: number;
+      /** It takes the per-element path, for `why`. */
+      readonly state: 'own';
+      readonly why: string;
+    }
+  | {
+      readonly at: number;
+      /** Something still moves it at the limit: unresolved, as on its own path. */
+      readonly state: 'motion';
+      readonly motion: NonNullable<Motion>;
+    }
+  | {
+      readonly at: number;
+      /** Still, sampled, and marked for nothing yet. */
+      readonly state: 'ready';
+      readonly sample: Sample;
+      /** Under a backdrop filter, which reads what's behind it from round its box: it has a batch to itself. */
+      readonly alone: boolean;
+    };
+
+/** One element the batch path reads: its index among the call's items, and its selector. */
+interface BatchItem {
+  readonly at: number;
+  readonly selector: string;
+}
+
+/** The scripts batchPlanScript() calls in the page, installed once per call under `__qualityBatch_<key>`. */
+interface BatchHelpers {
+  readonly still: typeof stillnessScript;
+  readonly release: typeof releaseScript;
+  readonly cover: typeof stuckCoverScript;
+  readonly sample: typeof sampleScript;
+  readonly restless: typeof restlessScript;
+}
+
+/**
+ * What moves `el` now, after its wait came back at rest, by the wait's own
+ * rule (stillnessScript()): an animation whose target is `el`, an ancestor
+ * or a descendant, animating a property in `moves`, or in `paints` on `el`
+ * itself, that's running (neither finished nor idle) or scroll-driven (a
+ * member at rest held none, or it would have pinned it). Its name, or null.
+ * One pass, no wait: the batch path checks each member again with it right
+ * before it reads it and before each of its batch's shots, since the waits
+ * and the batches before can take seconds, and something can start moving
+ * it meanwhile (C's review of row 14). Runs in the browser.
+ */
+export function restlessScript(
+  el: Element,
+  { moves, paints }: { readonly moves: string; readonly paints: string },
+): string | null {
+  const [moving, painting] = [new RegExp(moves), new RegExp(paints)];
+  const Scrolling = (globalThis as unknown as { ScrollTimeline?: abstract new () => object })
+    .ScrollTimeline;
+  for (const animation of document.getAnimations()) {
+    const effect = animation.effect;
+    if (!(effect instanceof KeyframeEffect) || !effect.target) continue;
+    const target = effect.target;
+    if (target !== el && !target.contains(el) && !el.contains(target)) continue;
+    const counts = effect
+      .getKeyframes()
+      .some((keyframe) =>
+        Object.keys(keyframe).some(
+          (property) => moving.test(property) || (target === el && painting.test(property)),
+        ),
+      );
+    if (!counts) continue;
+    const name =
+      (animation as CSSAnimation).animationName ??
+      ((animation as CSSTransition).transitionProperty
+        ? `a transition of ${(animation as CSSTransition).transitionProperty}`
+        : animation.id || 'unnamed');
+    if (Scrolling && animation.timeline instanceof Scrolling) return name;
+    if (animation.playState !== 'finished' && animation.playState !== 'idle') return name;
+  }
+  return null;
+}
+
+/**
+ * The batch path's plan at one scroll stop (`first`: the call's own
+ * scroll position): for each of `items`, by its index, whether it's away,
+ * takes its own path and why, is moved for good, or is ready, sampled,
+ * once every candidate has come to rest. The elements it samples it keeps
+ * under `__qualityBatchEls_<key>`, by index, and their near texts under
+ * `<near>_<index>`, and it takes their glyph marks off again. Runs in the
+ * browser.
+ */
+export async function batchPlanScript({
+  key,
+  near,
+  items,
+  first,
+  limit,
+  moves,
+  paints,
+  query,
+  boundary,
+  gap,
+  subtree,
+  together,
+}: {
+  readonly key: string;
+  readonly near: string;
+  readonly items: readonly BatchItem[];
+  readonly first: boolean;
+  readonly together: number;
+  readonly limit: number;
+  readonly moves: string;
+  readonly paints: string;
+  readonly query: string;
+  readonly boundary: string;
+  readonly gap: number;
+  readonly subtree: number;
+}): Promise<PlanEntry[]> {
+  const w = window as unknown as Record<string, unknown>;
+  const helpers = w[`__qualityBatch_${key}`] as BatchHelpers;
+  const els = (w[`__qualityBatchEls_${key}`] ??= []) as (Element | undefined)[];
+  const out: PlanEntry[] = [];
+  const own = (at: number, why: string) => out.push({ at, state: 'own', why });
+  type Area = { x: number; y: number; width: number; height: number };
+  const areaOf = (r: DOMRect): Area => ({ x: r.x, y: r.y, width: r.width, height: r.height });
+  const meets = (a: Area, b: Area) =>
+    a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+  const around = (a: Area, by: number): Area => ({
+    x: a.x - by,
+    y: a.y - by,
+    width: a.width + 2 * by,
+    height: a.height + 2 * by,
+  });
+  const whole: Area = { x: 0, y: 0, width: innerWidth, height: innerHeight };
+  // What an element's subtree paints over, by its boxes, or the whole viewport past `subtree` elements.
+  const spread = (el: Element): Area => {
+    const all = [el, ...el.querySelectorAll('*')];
+    if (all.length > subtree) return whole;
+    let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
+    for (const each of all) {
+      const r = each.getBoundingClientRect();
+      if (r.width <= 0 && r.height <= 0) continue;
+      [x0, y0, x1, y1] = [
+        Math.min(x0, r.left),
+        Math.min(y0, r.top),
+        Math.max(x1, r.right),
+        Math.max(y1, r.bottom),
+      ];
+    }
+    return x0 === Infinity
+      ? { x: 0, y: 0, width: 0, height: 0 }
+      : { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+  };
+  // One read of every element: what paints by the viewport rather than the page, and what reads
+  // its backdrop.
+  const variant: Area[] = [];
+  const backdrops: Area[] = [];
+  // Every element, in shadow trees too, and the open shadow roots, which a locator searches as
+  // well as the document (Next's route announcer keeps one on every page).
+  const every: Element[] = [...document.querySelectorAll('*')];
+  const shadows: ShadowRoot[] = [];
+  for (let at = 0; at < every.length; at++) {
+    const shadow = every[at]!.shadowRoot;
+    if (shadow) {
+      shadows.push(shadow);
+      every.push(...shadow.querySelectorAll('*'));
+    }
+  }
+  for (const el of every) {
+    // One that renders nothing (display: none, its own or an ancestor's) paints nowhere.
+    if (el.getClientRects().length === 0) continue;
+    const s = getComputedStyle(el);
+    if (
+      !first &&
+      (s.position === 'fixed' ||
+        s.position === 'sticky' ||
+        /\bfixed\b/.test(s.backgroundAttachment))
+    )
+      variant.push(spread(el));
+    const backdrop =
+      s.backdropFilter || (s as unknown as { webkitBackdropFilter?: string }).webkitBackdropFilter;
+    if (backdrop && backdrop !== 'none') backdrops.push(areaOf(el.getBoundingClientRect()));
+  }
+  if (!first) {
+    const Scrolling = (globalThis as unknown as { ScrollTimeline?: abstract new () => object })
+      .ScrollTimeline;
+    for (const animation of document.getAnimations()) {
+      const target = (animation.effect as KeyframeEffect | null)?.target;
+      if (Scrolling && animation.timeline instanceof Scrolling && target)
+        variant.push(spread(target));
+    }
+  }
+  const live: { at: number; el: Element }[] = [];
+  for (const { at, selector } of items) {
+    let found: NodeListOf<Element>;
+    try {
+      found = document.querySelectorAll(selector);
+    } catch {
+      own(at, 'its selector isn’t one querySelector reads');
+      continue;
+    }
+    // The one element a locator would find: none in a shadow tree, which it searches too.
+    if (found.length !== 1 || shadows.some((shadow) => shadow.querySelector(selector) !== null)) {
+      own(
+        at,
+        'its selector names more than one element, or none, in the page and its shadow trees',
+      );
+      continue;
+    }
+    const el = found[0]!;
+    const r = el.getBoundingClientRect();
+    if (!(r.width > 0 && r.height > 0)) {
+      own(at, 'it has no box');
+      continue;
+    }
+    // Inside every box that clips it, as a locator's scroll into view, which then does nothing, reads it.
+    let clipped = false;
+    for (
+      let up = el.parentElement;
+      up && up !== document.body && up !== document.documentElement;
+      up = up.parentElement
+    ) {
+      const s = getComputedStyle(up);
+      if (s.overflowX === 'visible' && s.overflowY === 'visible') continue;
+      const u = up.getBoundingClientRect();
+      if (
+        r.left < u.left + (Number.parseFloat(s.borderLeftWidth) || 0) ||
+        r.top < u.top + (Number.parseFloat(s.borderTopWidth) || 0) ||
+        r.right > u.right - (Number.parseFloat(s.borderRightWidth) || 0) ||
+        r.bottom > u.bottom - (Number.parseFloat(s.borderBottomWidth) || 0)
+      )
+        clipped = true;
+    }
+    if (clipped) {
+      own(at, 'a box that clips it, or scrolls it, holds only part of it');
+      continue;
+    }
+    if (r.left < 0 || r.right > innerWidth || r.height > innerHeight) {
+      own(at, 'no vertical scroll stop holds all of it');
+      continue;
+    }
+    if (r.top < 0 || r.bottom > innerHeight) {
+      out.push({ at, state: 'away', top: r.top + scrollY, bottom: r.bottom + scrollY });
+      continue;
+    }
+    if (helpers.cover(el, 0)) {
+      own(at, 'a stuck cover sits over it');
+      continue;
+    }
+    live.push({ at, el });
+  }
+  // Every candidate's wait at once, each under its own key; each one's pins come off, the last to
+  // pin first, so a target two of them pinned gets its own style back.
+  let done = 0;
+  const settled: { at: number; el: Element; motion: Motion; order: number; frames: number }[] = [];
+  // Frames since the call's page began counting, to tell a wait that saw none of its own.
+  let frames = 0;
+  let counting = true;
+  const tick = () => {
+    frames++;
+    if (counting) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  // `together` waits at a time: each looks over the page's animations every frame, and hundreds
+  // at once on a throttled page starve the frames they wait for.
+  for (let from = 0; from < live.length; from += together) {
+    settled.push(
+      ...(await Promise.all(
+        live.slice(from, from + together).map(({ at, el }) => {
+          const began = frames;
+          // A wait that fails is that node's own Motion, `failed`, as on its own path.
+          return Promise.resolve()
+            .then(() => helpers.still(el, { limit, moves, paints, key: `${key}_${at}` }))
+            .catch((error: unknown): Motion => ({
+              kind: 'failed',
+              name: String(error instanceof Error ? error.message : error)
+                .split('\n')[0]!
+                .slice(0, 160),
+            }))
+            .then((motion) => ({ at, el, motion, order: done++, frames: frames - began }));
+        }),
+      )),
+    );
+  }
+  counting = false;
+  const pinned = new Set<number>();
+  for (const { at } of [...settled].sort((a, b) => b.order - a.order)) {
+    const held = w[`__qualityHeld_${key}_${at}`] as unknown[] | undefined;
+    if (held && held.length > 0) pinned.add(at);
+    helpers.release(`${key}_${at}`);
+  }
+  // What the page has changed since the call began, as it scrolled (an IntersectionObserver's
+  // aria-current, a class, a text): every element whose attribute differs from its first old
+  // value, other than the sampler's own marks, or whose text or children changed, kept for the call.
+  const seen = w[`__qualityBatchSeen_${key}`] as
+    { observer: MutationObserver; records: MutationRecord[]; touched: Element[] } | undefined;
+  if (seen) {
+    const records = [...seen.records, ...seen.observer.takeRecords()];
+    seen.records.length = 0;
+    const first = new Map<string, { el: Element; name: string; old: string | null }>();
+    const ids = new Map<Element, number>();
+    const idOf = (el: Element) => {
+      if (!ids.has(el)) ids.set(el, ids.size);
+      return ids.get(el)!;
+    };
+    for (const record of records) {
+      if (record.type === 'attributes') {
+        const name = record.attributeName ?? '';
+        if (name.startsWith('data-quality-') || !(record.target instanceof Element)) continue;
+        const id = `${idOf(record.target)} ${name}`;
+        if (!first.has(id)) first.set(id, { el: record.target, name, old: record.oldValue });
+      } else {
+        const el = record.target instanceof Element ? record.target : record.target.parentElement;
+        if (el && !seen.touched.includes(el)) seen.touched.push(el);
+      }
+    }
+    for (const { el, name, old } of first.values()) {
+      if ((el.getAttribute(name) ?? '') !== (old ?? '') && !seen.touched.includes(el))
+        seen.touched.push(el);
+    }
+  }
+  const touched = (seen?.touched ?? []).map((el) => ({ el, area: spread(el) }));
+  const named = (el: Element) =>
+    `<${el.localName}${el.id ? `#${el.id}` : ''}${[...el.classList]
+      .slice(0, 2)
+      .map((c) => `.${c}`)
+      .join('')}>`;
+  for (const { at, el, motion, frames: seenFrames } of settled) {
+    // A wait that ran out with fewer than the two frames it waits before it looks never looked:
+    // a throttled page's frame outlasted it. Its own path waits again.
+    if (motion?.kind === 'running' && seenFrames < 2) {
+      own(at, `its wait saw ${seenFrames} frame(s) before NODE_LIMIT_MS ran out`);
+      continue;
+    }
+    // What still moves it at the limit leaves it unresolved, as on its own path.
+    if (motion) {
+      out.push({ at, state: 'motion', motion });
+      continue;
+    }
+    // At rest on a scroll-driven animation, its own path holds the pin through its shots.
+    if (pinned.has(at)) {
+      own(at, 'it rests on a scroll-driven animation, which its own path pins for its shots');
+      continue;
+    }
+    // Checked again, as the waits after its own took time: what started moving it since takes it
+    // to its own path, which waits for that too.
+    const restless = helpers.restless(el, { moves, paints });
+    if (restless) {
+      own(at, `${restless} started moving it after its wait`);
+      continue;
+    }
+    const sample = helpers.sample(el, { key, near: `${near}_${at}`, query, boundary });
+    // Its mark comes off at once, as no other element's is on while its own path reads one: a
+    // marked ancestor's transparent color is what a descendant read after it would inherit.
+    el.removeAttribute('data-quality-glyphs');
+    els[at] = el;
+    const zone = around(sample.box, gap);
+    if (!first && variant.some((area) => meets(area, zone))) {
+      own(
+        at,
+        'a fixed or sticky box, a fixed background, or a scroll-driven animation paints by it',
+      );
+      continue;
+    }
+    const changed = first
+      ? undefined
+      : touched.find(
+          (each) => each.el.contains(el) || el.contains(each.el) || meets(each.area, zone),
+        );
+    if (changed) {
+      own(at, `the page changed ${named(changed.el)}, in, round or by it, as it scrolled`);
+      continue;
+    }
+    out.push({ at, state: 'ready', sample, alone: backdrops.some((area) => meets(area, zone)) });
+  }
+  // A batch sets its own members' glyph marks.
+  for (const el of document.querySelectorAll(`[data-quality-glyphs="${key}"]:not(style)`))
+    el.removeAttribute('data-quality-glyphs');
+  return out;
+}
+
+/**
+ * Each member's marks, `members` by index with the near texts it hides
+ * (neighbourTexts()'s indices), and where each mark's paint can reach:
+ * its own element's subtree, or a hidden text's parent's, by every box
+ * and text line in it, grown by the largest shadow, outline, and a
+ * quarter of the font size for its glyphs' ink. A subtree past `subtree`
+ * elements, one under a filter or holding one, or with an out-of-flow
+ * pseudo-element, can't be bounded. Runs in the browser.
+ */
+export function markReachScript({
+  key,
+  near,
+  members,
+  subtree,
+}: {
+  readonly key: string;
+  readonly near: string;
+  readonly members: readonly { readonly at: number; readonly hide: readonly number[] }[];
+  readonly subtree: number;
+}): MarkReach[][] {
+  const w = window as unknown as Record<string, unknown>;
+  const els = w[`__qualityBatchEls_${key}`] as Element[];
+  const registry = (w[`__qualityBatchMarks_${key}`] ??= []) as Element[];
+  const idOf = (el: Element) => {
+    const known = registry.indexOf(el);
+    return known >= 0 ? known : registry.push(el) - 1;
+  };
+  // The farthest a shadow list's shadow reaches: its offsets, blur and spread, in px, added up.
+  const shadow = (value: string) =>
+    !value || value === 'none'
+      ? 0
+      : Math.max(
+          0,
+          ...value
+            .split(/,(?![^(]*\))/)
+            .map((one) =>
+              (one.match(/-?[\d.]+px/g) ?? []).reduce(
+                (sum, n) => sum + Math.abs(Number.parseFloat(n)),
+                0,
+              ),
+            ),
+        );
+  const extentOf = (el: Element): Box | null => {
+    for (let up = el.parentElement; up; up = up.parentElement) {
+      if (getComputedStyle(up).filter !== 'none') return null;
+    }
+    const all = [el, ...el.querySelectorAll('*')];
+    if (all.length > subtree) return null;
+    let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
+    const take = (r: DOMRect, by: number) => {
+      if (r.width <= 0 && r.height <= 0) return;
+      [x0, y0, x1, y1] = [
+        Math.min(x0, r.left - by),
+        Math.min(y0, r.top - by),
+        Math.max(x1, r.right + by),
+        Math.max(y1, r.bottom + by),
+      ];
+    };
+    for (const each of all) {
+      const s = getComputedStyle(each);
+      if (s.filter !== 'none') return null;
+      let by = Math.max(
+        shadow(s.textShadow),
+        shadow(s.boxShadow),
+        s.outlineStyle !== 'none'
+          ? (Number.parseFloat(s.outlineWidth) || 0) +
+              Math.abs(Number.parseFloat(s.outlineOffset) || 0)
+          : 0,
+      );
+      // An outside list marker paints to the left of its item's box.
+      if (s.display.includes('list-item') && s.listStylePosition === 'outside')
+        by = Math.max(by, 2 * (Number.parseFloat(s.fontSize) || 0));
+      for (const pseudo of ['::before', '::after']) {
+        const p = getComputedStyle(each, pseudo);
+        if (p.content === 'none' || p.content === 'normal') continue;
+        if (p.position === 'absolute' || p.position === 'fixed') return null;
+        by = Math.max(by, shadow(p.textShadow), shadow(p.boxShadow));
+      }
+      for (const r of each.getClientRects()) take(r, by);
+      take(each.getBoundingClientRect(), by);
+    }
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+      const parent = (text as Text).parentElement;
+      const s = parent ? getComputedStyle(parent) : null;
+      const by =
+        0.25 * (Number.parseFloat(s?.fontSize ?? '') || 0) + (s ? shadow(s.textShadow) : 0);
+      const range = document.createRange();
+      range.selectNodeContents(text);
+      for (const r of range.getClientRects()) take(r, by);
+    }
+    return x0 === Infinity
+      ? { x: 0, y: 0, width: 0, height: 0 }
+      : { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+  };
+  return members.map(({ at, hide }) => {
+    const el = els[at]!;
+    const texts = (w[`${near}_${at}`] as Text[] | undefined) ?? [];
+    const marks: MarkReach[] = [{ id: idOf(el), role: 'glyphs', extent: extentOf(el) }];
+    for (const index of hide) {
+      const parent = texts[index]?.parentElement;
+      if (parent) marks.push({ id: idOf(parent), role: 'fill', extent: extentOf(parent) });
+    }
+    return marks;
+  });
+}
+
+/** Takes a batch's marks off, its members' masks too, but never the call's style element. Runs in the browser. */
+export function unmarkBatchScript(key: string): void {
+  for (const el of document.querySelectorAll(
+    `[data-quality-glyphs="${key}"]:not(style), [data-quality-neighbours="${key}"]`,
+  )) {
+    if (el.getAttribute('data-quality-glyphs') === key) {
+      el.removeAttribute('data-quality-glyphs');
+      el.removeAttribute('data-quality-mask');
+    }
+    if (el.getAttribute('data-quality-neighbours') === key)
+      el.removeAttribute('data-quality-neighbours');
+  }
+}
+
+/**
+ * How a batch shoots its boxes: `cut`, each cut from one page.screenshot()
+ * of all of them (cutShots()), or `screenshot`, page.screenshot() for each,
+ * as the per-element path does.
+ */
+const BATCH_CAMERA: 'cut' | 'screenshot' = 'cut';
+
+/**
+ * Where and how big page.screenshot({ clip: box }) shoots `box`, as
+ * Playwright 1.58 sends Chromium the clip: trimmed to `viewport`, its size
+ * floored; Chromium renders a clip from its origin rounded to the pixel, so
+ * that shot is the pixels from there, the whole-pixel `x` and `y` here.
+ */
+export function shotRect(
+  box: Box,
+  viewport: { readonly width: number; readonly height: number },
+): { x: number; y: number; width: number; height: number } {
+  const x = Math.max(0, Math.min(box.x, viewport.width));
+  const y = Math.max(0, Math.min(box.y, viewport.height));
+  const right = Math.max(0, Math.min(box.x + box.width, viewport.width));
+  const bottom = Math.max(0, Math.min(box.y + box.height, viewport.height));
+  return {
+    x: Math.round(x),
+    y: Math.round(y),
+    width: Math.floor(right - x + 1e-3),
+    height: Math.floor(bottom - y + 1e-3),
+  };
+}
+
+/** `rect` of `image`, or null when it isn't wholly inside it. */
+export function cutImage(
+  image: Image,
+  rect: { x: number; y: number; width: number; height: number },
+): Image | null {
+  const { x, y, width, height } = rect;
+  if (x < 0 || y < 0 || x + width > image.width || y + height > image.height) return null;
+  const data = new Uint8Array(width * height * 4);
+  for (let row = 0; row < height; row++)
+    data.set(
+      image.data.subarray(
+        ((y + row) * image.width + x) * 4,
+        ((y + row) * image.width + x + width) * 4,
+      ),
+      row * width * 4,
+    );
+  return { width, height, data };
+}
+
+/** Whether two images hold the same pixels. */
+export const samePixels = (a: Image, b: Image): boolean =>
+  a.width === b.width && a.height === b.height && a.data.every((value, at) => value === b.data[at]);
+
+/**
+ * Each box's shot, as page.screenshot({ clip: box }) takes it, cut from
+ * one page.screenshot() of every box on whole pixels (shotRect()): the
+ * same render, as nothing changes between the shots. It's checked, each
+ * time: for each way the boxes' origins round (a fraction under or over a
+ * half, across and down), one box is shot on its own, and if any cut
+ * isn't its own shot, pixel for pixel, every box gets its own shot.
+ */
+export async function cutShots(
+  page: Pick<Page, 'screenshot'>,
+  viewport: { readonly width: number; readonly height: number },
+  boxes: readonly Box[],
+): Promise<Uint8Array[]> {
+  const own = (clip: Box) => page.screenshot({ clip, animations: 'disabled', caret: 'hide' });
+  if (boxes.length === 0) return [];
+  if (boxes.length === 1) return [await own(boxes[0]!)];
+  const rects = boxes.map((box) => shotRect(box, viewport));
+  const ux = Math.min(...rects.map((rect) => rect.x));
+  const uy = Math.min(...rects.map((rect) => rect.y));
+  const union = decodePng(
+    await own({
+      x: ux,
+      y: uy,
+      width: Math.max(...rects.map((rect) => rect.x + rect.width)) - ux,
+      height: Math.max(...rects.map((rect) => rect.y + rect.height)) - uy,
+    }),
+  );
+  const cuts = rects.map((rect) => cutImage(union, { ...rect, x: rect.x - ux, y: rect.y - uy }));
+  const out: (Uint8Array | undefined)[] = [];
+  const checked = new Set<string>();
+  let same = cuts.every((cut) => cut !== null);
+  for (const [at, box] of boxes.entries()) {
+    if (!same) break;
+    const way = `${box.x - Math.floor(box.x) >= 0.5} ${box.y - Math.floor(box.y) >= 0.5}`;
+    if (checked.has(way)) continue;
+    checked.add(way);
+    out[at] = await own(box);
+    same = samePixels(decodePng(out[at]!), cuts[at]!);
+  }
+  const shots: Uint8Array[] = [];
+  for (const [at, box] of boxes.entries())
+    shots.push(out[at] ?? (same ? encodePng(cuts[at]!) : await own(box)));
+  return shots;
+}
+
+/** A batch's camera: `take` shoots each box as page.screenshot() would. */
+interface Camera {
+  readonly take: (boxes: readonly Box[]) => Promise<Uint8Array[]>;
+}
+
+/** The batch path's camera for `page`, by BATCH_CAMERA. */
+async function shotsFor(page: Page): Promise<Camera> {
+  const viewport =
+    page.viewportSize() ??
+    (await page.evaluate(() => ({ width: innerWidth, height: innerHeight })));
+  return {
+    take: async (boxes) => {
+      if (BATCH_CAMERA === 'cut') return cutShots(page, viewport, boxes);
+      const out: Uint8Array[] = [];
+      for (const clip of boxes)
+        out.push(await page.screenshot({ clip, animations: 'disabled', caret: 'hide' }));
+      return out;
+    },
+  };
+}
+
+/**
+ * The batch path (see above): the findings of every element it reads,
+ * by its index in `nodes`; every element it leaves out takes the
+ * per-element path. On a page it can't plan in, such as a stand-in, it
+ * reads none. It puts the page back where it was.
+ */
+export async function batchFindings(
+  page: Page,
+  nodes: AxeResults['incomplete'][number]['nodes'],
+  key: string,
+  near: string,
+): Promise<Map<number, Finding[]>> {
+  const done = new Map<number, Finding[]>();
+  const items: BatchItem[] = nodes.flatMap((node, at) => {
+    const selector = nodeSelector(node);
+    return selector ? [{ at, selector }] : [];
+  });
+  if (items.length === 0 || typeof page.screenshot !== 'function') return done;
+  const selectors = new Map(items.map(({ at, selector }) => [at, selector]));
+  const installed = await page
+    .evaluate(
+      `globalThis[${JSON.stringify(`__qualityBatch_${key}`)}] = { still: ${stillnessScript}, release: ${releaseScript}, cover: ${stuckCoverScript}, sample: ${sampleScript}, restless: ${restlessScript} }, true`,
+    )
+    .catch(() => false);
+  if (installed !== true) return done;
+  // What the page changes as the batch path scrolls it, which batchPlanScript() reads.
+  const origin = await page
+    .evaluate((key) => {
+      const records: MutationRecord[] = [];
+      const observer = new MutationObserver((list) => records.push(...list));
+      observer.observe(document.documentElement, {
+        subtree: true,
+        attributes: true,
+        attributeOldValue: true,
+        characterData: true,
+        childList: true,
+      });
+      (window as unknown as Record<string, unknown>)[`__qualityBatchSeen_${key}`] = {
+        observer,
+        records,
+        touched: [],
+      };
+      return [scrollX, scrollY, innerHeight] as const;
+    }, key)
+    .catch(() => null);
+  if (!Array.isArray(origin)) return done;
+  const [left, top, height] = origin;
+  const camera = await shotsFor(page);
+  const visited = new Set<number>([top]);
+  let pending = items;
+  try {
+    for (let stop = 0; stop < BATCH_STOPS && pending.length > 0; stop++) {
+      const plan = await page
+        .evaluate(batchPlanScript, {
+          key,
+          near,
+          items: pending,
+          first: stop === 0,
+          limit: NODE_LIMIT_MS,
+          moves: MOVES.source,
+          paints: PAINTS.source,
+          query: MORE_CONTRAST,
+          boundary: HIGH_CONTRAST_BOUNDARY,
+          gap: BATCH_GAP,
+          subtree: MARK_SUBTREE_LIMIT,
+          together: STILL_TOGETHER,
+        })
+        .catch(() => null);
+      if (!Array.isArray(plan)) break;
+      const ready: Extract<PlanEntry, { state: 'ready' }>[] = [];
+      const away: Extract<PlanEntry, { state: 'away' }>[] = [];
+      for (const entry of plan) {
+        if (entry.state === 'motion')
+          done.set(entry.at, [
+            {
+              gate: 'contrast',
+              rule: 'text',
+              path: selectors.get(entry.at),
+              expected: 'a contrast measured against its worst background pixel',
+              actual: stillUnresolved(entry.motion),
+            },
+          ]);
+        else if (entry.state === 'away') away.push(entry);
+        // One the per-element path would call box-less or rotated takes it, to say so its own way.
+        else if (
+          entry.state === 'ready' &&
+          entry.sample.box.width >= 1 &&
+          entry.sample.box.height >= 1 &&
+          entry.sample.flat &&
+          !entry.sample.turned
+        )
+          ready.push(entry);
+      }
+      if (ready.length > 0) {
+        const hides = ready.map((entry) => neighbourTexts(entry.sample.texts, entry.sample.box));
+        const reaches = await page
+          .evaluate(markReachScript, {
+            key,
+            near,
+            members: ready.map((entry, k) => ({ at: entry.at, hide: hides[k]! })),
+            subtree: MARK_SUBTREE_LIMIT,
+          })
+          .catch(() => null);
+        if (Array.isArray(reaches) && reaches.length === ready.length) {
+          const candidates = ready.map((entry, k) => ({
+            box: entry.sample.box,
+            marks: reaches[k]!,
+            alone: entry.alone,
+          }));
+          for (const batch of batches(candidates)) {
+            let members = batch.map((k) => ({ entry: ready[k]!, hide: hides[k]! }));
+            // Right before each of the batch's shots, each member is checked again
+            // (restlessScript()); one something has started moving leaves the batch, unmarked
+            // and unmasked from then, for its own path, which waits for that too. The rest are
+            // marked, or masked `fill`, in the same pass.
+            const settle = async (fill: 'black' | 'white' | null) => {
+              const moved = await page.evaluate(
+                ({ key, near, marks, moves, paints, fill }) => {
+                  const w = window as unknown as Record<string, unknown>;
+                  const els = w[`__qualityBatchEls_${key}`] as Element[];
+                  const helpers = w[`__qualityBatch_${key}`] as BatchHelpers;
+                  const out: number[] = [];
+                  for (const { at, hide } of marks) {
+                    const el = els[at]!;
+                    if (helpers.restless(el, { moves, paints })) {
+                      out.push(at);
+                      continue;
+                    }
+                    if (fill) {
+                      el.setAttribute('data-quality-mask', fill);
+                      continue;
+                    }
+                    el.setAttribute('data-quality-glyphs', key);
+                    const texts = (w[`${near}_${at}`] as Text[] | undefined) ?? [];
+                    for (const index of hide)
+                      texts[index]?.parentElement?.setAttribute('data-quality-neighbours', key);
+                  }
+                  return out;
+                },
+                {
+                  key,
+                  near,
+                  marks: members.map(({ entry, hide }) => ({ at: entry.at, hide })),
+                  moves: MOVES.source,
+                  paints: PAINTS.source,
+                  fill,
+                },
+              );
+              members = members.filter(({ entry }) => !moved.includes(entry.at));
+            };
+            const shoot = async () => {
+              const taken = await camera.take(members.map(({ entry }) => entry.sample.box));
+              return new Map(members.map(({ entry }, k) => [entry.at, taken[k]!]));
+            };
+            await settle(null);
+            const shots = await shoot();
+            await settle('black');
+            const blacks = await shoot();
+            await settle('white');
+            const whites = await shoot();
+            await page.evaluate(unmarkBatchScript, key);
+            for (const { entry } of members) {
+              const found = judged(
+                selectors.get(entry.at)!,
+                entry.sample,
+                shots.get(entry.at)!,
+                blacks.get(entry.at)!,
+                whites.get(entry.at)!,
+              );
+              done.set(entry.at, found ? [found] : []);
+            }
+          }
+        }
+      }
+      // The next stop: the highest element left, a quarter of the viewport down, or as far as it fits.
+      pending = pending.filter(({ at }) => away.some((entry) => entry.at === at));
+      if (pending.length === 0) break;
+      const highest = away.reduce((a, b) => (b.top < a.top ? b : a));
+      const room = Math.max(
+        0,
+        Math.min(Math.floor(height / 4), Math.floor(height - (highest.bottom - highest.top)) - 1),
+      );
+      const next = Math.max(0, Math.floor(highest.top) - room);
+      const reached = await page
+        .evaluate(
+          ([x, y]) =>
+            new Promise<number>((resolve) => {
+              scrollTo({ left: x, top: y, behavior: 'instant' });
+              // Two frames, for the scroll to paint before anything reads it.
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve(scrollY)));
+            }),
+          [left, next] as const,
+        )
+        .catch(() => null);
+      if (typeof reached !== 'number' || visited.has(reached)) break;
+      visited.add(reached);
+    }
+  } finally {
+    await page
+      .evaluate(
+        ({ key, near, left, top, count }) => {
+          const w = window as unknown as Record<string, unknown>;
+          for (const el of document.querySelectorAll(
+            `[data-quality-glyphs="${key}"]:not(style), [data-quality-neighbours="${key}"]`,
+          )) {
+            if (el.getAttribute('data-quality-glyphs') === key) {
+              el.removeAttribute('data-quality-glyphs');
+              el.removeAttribute('data-quality-mask');
+            }
+            if (el.getAttribute('data-quality-neighbours') === key)
+              el.removeAttribute('data-quality-neighbours');
+          }
+          (
+            w[`__qualityBatchSeen_${key}`] as { observer?: MutationObserver } | undefined
+          )?.observer?.disconnect();
+          for (const name of [
+            `__qualityBatch_${key}`,
+            `__qualityBatchEls_${key}`,
+            `__qualityBatchMarks_${key}`,
+            `__qualityBatchSeen_${key}`,
+          ])
+            delete w[name];
+          for (let at = 0; at < count; at++) delete w[`${near}_${at}`];
+          scrollTo({ left, top, behavior: 'instant' });
+        },
+        { key, near, left, top, count: nodes.length },
+      )
+      .catch(() => undefined);
+  }
+  return done;
+}
+
 /**
  * Each incomplete contrast element resolved against its worst background
  * pixel, at the ratios its own mode needs. With `framed`, for a surface
  * whose frame's document other cells cover, the items inside a frame are
  * left out first, before anything samples; every item in the page itself
- * stays.
+ * stays. The elements the batch path can take (batchFindings()) are read
+ * there, viewport by viewport, unless `batch` is false; every other one,
+ * and every one with it off, is read on its own, as each was before it,
+ * and the findings come in the items' order either way.
  */
 export async function incompleteContrastFindings(
   page: Page,
   results: Pick<AxeResults, 'incomplete'>,
   framed = false,
+  { batch = true }: SamplerOptions = {},
 ): Promise<Finding[]> {
   const incomplete = incompleteContrastNodes(results);
   const nodes = framed ? incomplete.filter((node) => !inFrame(node)) : incomplete;
@@ -655,7 +1903,14 @@ export async function incompleteContrastFindings(
       { key, near },
     );
   try {
-    for (const node of nodes) {
+    // The batch path's findings, by item, settled before any element takes its own path.
+    const batched = batch ? await batchFindings(page, nodes, key, near) : new Map();
+    for (const [index, node] of nodes.entries()) {
+      const settled = batched.get(index);
+      if (settled) {
+        findings.push(...settled);
+        continue;
+      }
       const selector = nodeSelector(node);
       const unresolved = (actual: string) =>
         findings.push({
@@ -700,185 +1955,12 @@ export async function incompleteContrastFindings(
               .slice(0, 160),
           }));
         if (motion && typeof motion === 'object' && 'kind' in motion) {
-          unresolved(
-            motion.kind === 'infinite'
-              ? `unresolved: an infinite animation, ${motion.name}, moves or repaints it, so its glyphs never hold still to sample`
-              : motion.kind === 'scrolling'
-                ? `unresolved: a scroll-driven animation, ${motion.name}, that moves or repaints it was still changing after ${NODE_LIMIT_MS / 1000} s, so its glyphs never held still to sample`
-                : motion.kind === 'unholdable'
-                  ? `unresolved: it rests part-way through a scroll-driven animation, ${motion.name}, and the shots can't hold it where it rests`
-                  : motion.kind === 'failed'
-                    ? `unresolved: the wait for what moves it to come to rest failed (${motion.name}), so it was never seen at rest to sample`
-                    : `unresolved: an animation, ${motion.name}, that moves or repaints it was still running after ${NODE_LIMIT_MS / 1000} s, so its glyphs never held still to sample`,
-          );
+          unresolved(stillUnresolved(motion));
           continue;
         }
         const sample = await locator
           .evaluate(
-            (el, { key, near, query, boundary }) => {
-              const style = getComputedStyle(el);
-              const high =
-                window.matchMedia(query).matches ||
-                el.closest('[data-appearance-boundary]')?.matches(boundary) === true;
-              // The 2D map its transforms and its ancestors' put it through: CSS
-              // applies translate, rotate, scale, then transform, and each
-              // ancestor's after its child's. Only rotation and skew matter here,
-              // as they take the box off the axes; a 3D one can't be sampled.
-              let matrix = new DOMMatrix();
-              let flat = true;
-              for (let up: Element | null = el; up; up = up.parentElement) {
-                const s = getComputedStyle(up);
-                let own = new DOMMatrix(s.transform === 'none' ? undefined : s.transform);
-                if (s.scale && s.scale !== 'none') {
-                  const [sx = 1, sy = sx, sz = 1] = s.scale.split(/\s+/).map(Number);
-                  if (sz !== 1) flat = false;
-                  own = new DOMMatrix().scale(sx, sy).multiply(own);
-                }
-                if (s.rotate && s.rotate !== 'none') {
-                  const parts = s.rotate.trim().split(/\s+/);
-                  const angle = parts.pop()!;
-                  const axis = parts.join(' ');
-                  const value = Number.parseFloat(angle);
-                  const deg = angle.endsWith('grad')
-                    ? value * 0.9
-                    : angle.endsWith('rad')
-                      ? (value * 180) / Math.PI
-                      : angle.endsWith('turn')
-                        ? value * 360
-                        : value;
-                  if (axis && axis !== 'z' && axis !== '0 0 1') flat = false;
-                  own = new DOMMatrix().rotate(deg).multiply(own);
-                }
-                if (!own.is2D) flat = false;
-                matrix = own.multiply(matrix);
-              }
-              const turned = Math.abs(matrix.b) > 1e-6 || Math.abs(matrix.c) > 1e-6;
-              const r = el.getBoundingClientRect();
-              const fill = style.webkitTextFillColor;
-              const x = Math.max(
-                0,
-                r.x +
-                  (Number.parseFloat(style.borderLeftWidth) || 0) +
-                  (Number.parseFloat(style.paddingLeft) || 0),
-              );
-              const y = Math.max(
-                0,
-                r.y +
-                  (Number.parseFloat(style.borderTopWidth) || 0) +
-                  (Number.parseFloat(style.paddingTop) || 0),
-              );
-              const right = Math.min(
-                innerWidth,
-                r.right -
-                  (Number.parseFloat(style.borderRightWidth) || 0) -
-                  (Number.parseFloat(style.paddingRight) || 0),
-              );
-              const bottom = Math.min(
-                innerHeight,
-                r.bottom -
-                  (Number.parseFloat(style.borderBottomWidth) || 0) -
-                  (Number.parseFloat(style.paddingBottom) || 0),
-              );
-              el.setAttribute('data-quality-glyphs', key);
-              // The other texts whose parent's box comes near this one, with their line boxes and
-              // whether an ancestor the element doesn't share takes them out of flow, which
-              // neighbourTexts() picks from; the page keeps them for the next call.
-              const nodes: Text[] = [];
-              const texts: {
-                rects: { x: number; y: number; width: number; height: number }[];
-                outOfFlow: boolean;
-              }[] = [];
-              const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-              for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-                const text = node as Text;
-                if (!text.data.trim() || el.contains(text) || !text.parentElement) continue;
-                const parent = text.parentElement.getBoundingClientRect();
-                const empty = parent.width === 0 && parent.height === 0;
-                if (
-                  !empty &&
-                  (parent.right < x - 8 ||
-                    parent.left > right + 8 ||
-                    parent.bottom < y - 8 ||
-                    parent.top > bottom + 8)
-                ) {
-                  continue;
-                }
-                let outOfFlow = false;
-                for (
-                  let up: Element | null = text.parentElement;
-                  up && !up.contains(el);
-                  up = up.parentElement
-                ) {
-                  const position = getComputedStyle(up).position;
-                  if (position === 'absolute' || position === 'fixed') outOfFlow = true;
-                }
-                const range = document.createRange();
-                range.selectNodeContents(text);
-                nodes.push(text);
-                texts.push({
-                  rects: [...range.getClientRects()].map((rect) => ({
-                    x: rect.x,
-                    y: rect.y,
-                    width: rect.width,
-                    height: rect.height,
-                  })),
-                  outOfFlow,
-                });
-              }
-              (window as unknown as Record<string, Text[]>)[near] = nodes;
-              // A rotated or skewed box: its own content box, through the map, about its
-              // center, which the map keeps at its bounding box's center; the clip is that
-              // quad's bounds, and only the pixels inside it count. An inline box split
-              // across lines has no one quad.
-              let quad: Quad | null = null;
-              let box = { x, y, width: right - x, height: bottom - y };
-              if (turned && el instanceof HTMLElement && el.getClientRects().length === 1) {
-                const [w, h] = [el.offsetWidth / 2, el.offsetHeight / 2];
-                const side = (name: string) =>
-                  (Number.parseFloat(style.getPropertyValue(`border-${name}-width`)) || 0) +
-                  (Number.parseFloat(style.getPropertyValue(`padding-${name}`)) || 0);
-                quad = {
-                  cx: r.x + r.width / 2,
-                  cy: r.y + r.height / 2,
-                  a: matrix.a,
-                  b: matrix.b,
-                  c: matrix.c,
-                  d: matrix.d,
-                  left: -w + side('left'),
-                  right: w - side('right'),
-                  top: -h + side('top'),
-                  bottom: h - side('bottom'),
-                };
-                const corners = [
-                  [quad.left, quad.top],
-                  [quad.right, quad.top],
-                  [quad.right, quad.bottom],
-                  [quad.left, quad.bottom],
-                ].map(([u, v]) => [
-                  quad!.cx + quad!.a * u! + quad!.c * v!,
-                  quad!.cy + quad!.b * u! + quad!.d * v!,
-                ]);
-                const qx = Math.max(0, Math.floor(Math.min(...corners.map((p) => p[0]!))));
-                const qy = Math.max(0, Math.floor(Math.min(...corners.map((p) => p[1]!))));
-                const qr = Math.min(innerWidth, Math.ceil(Math.max(...corners.map((p) => p[0]!))));
-                const qb = Math.min(innerHeight, Math.ceil(Math.max(...corners.map((p) => p[1]!))));
-                box = { x: qx, y: qy, width: qr - qx, height: qb - qy };
-              }
-              return {
-                mode: high ? ('high-contrast' as const) : ('normal' as const),
-                color:
-                  fill && fill !== style.color && !/^rgba?\(0, 0, 0, 0\)$/.test(fill)
-                    ? fill
-                    : style.color,
-                fontSize: Number.parseFloat(style.fontSize) || 0,
-                fontWeight: Number(style.fontWeight) || 400,
-                box,
-                texts,
-                flat,
-                turned,
-                quad,
-              };
-            },
+            sampleScript,
             { key, near, query: MORE_CONTRAST, boundary: HIGH_CONTRAST_BOUNDARY },
             { timeout: NODE_LIMIT_MS },
           )
@@ -924,40 +2006,8 @@ export async function incompleteContrastFindings(
           .catch(() => undefined);
         await unmark();
         await unmarkNeighbours();
-        const halo = glyphHalo(black, white, sample.box);
-        if (!halo || halo.glyphs === 0) {
-          unresolved(
-            halo
-              ? 'unresolved: none of its glyphs paints inside its box, so there is no halo round them to sample'
-              : "unresolved: its glyphs' shots and its background's aren't the same size",
-          );
-          continue;
-        }
-        const quad = sample.quad ? insideQuad(sample.quad, sample.box) : undefined;
-        const worst = worstRatio(
-          shot,
-          sample.color,
-          (column, row, image) =>
-            halo.inside(column, row, image) && (!quad || quad(column, row, image)),
-        );
-        const need = neededRatio(sample.fontSize, sample.fontWeight, sample.mode);
-        if (worst === null)
-          unresolved(
-            !parseCssColor(sample.color)
-              ? `its color ${sample.color} isn't one the sampler reads`
-              : sample.quad
-                ? 'unresolved: its rotated content box holds no whole pixel round its glyphs to sample'
-                : "unresolved: its background's shot holds no pixel round its glyphs",
-          );
-        else if (worst < need.ratio) {
-          findings.push({
-            gate: 'contrast',
-            rule: need.rule,
-            path: selector,
-            expected: `${need.ratio}:1`,
-            actual: `${worst.toFixed(2)}:1 against its worst background pixel`,
-          });
-        }
+        const found = judged(selector, sample, shot, black, white);
+        if (found) findings.push(found);
       } finally {
         // What the wait pinned for the shots comes off, whatever happened since.
         await page.evaluate(releaseScript, key).catch(() => undefined);

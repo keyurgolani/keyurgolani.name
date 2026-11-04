@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A batch member whose holder moves after its wait, known-good</title>
+    <!--
+      The batch path's late motion (row 14, C's review): two texts on a
+      near-white gradient axe leaves to the sampler, far apart in one
+      viewport, A first. As B's wait to hold still begins, the sampler's
+      third frame here (its style is on, so this counts its waits alone), A's
+      holder starts a 1.5 s slide out and back, and B a 1 s one of its own.
+      On its own path A is read and shot before that, at rest; B waits its
+      slide out. In a batch A is read after B's wait, mid-slide, a few
+      hundred pixels off, and shot at the slide's end, back where it began:
+      no glyph of it is in the box it read.
+      So A must be checked again before it's read and shot, and take its own
+      path, which waits the slide out and measures it where it rests, the
+      same place. Both pass: dark text, far over 4.5:1.
+    -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        color: #333;
+      }
+      main {
+        padding: 24px;
+        display: flex;
+        gap: 240px;
+      }
+      p {
+        background: linear-gradient(90deg, #fff, #f2f2f2);
+      }
+      @keyframes slide {
+        50% {
+          transform: translateX(400px);
+        }
+      }
+      .moving {
+        animation: slide 1.5s linear;
+      }
+      .entering {
+        animation: slide 1s linear;
+      }
+    </style>
+    <script>
+      // The sampler's waits read this frame source when it's set (contrast.ts stillnessScript).
+      let waits = 0;
+      window.__qualityRaf = (callback) => {
+        if (document.querySelector('style[data-quality-glyphs]') && ++waits === 3) {
+          document.getElementById('a-holder').classList.add('moving');
+          document.getElementById('b').classList.add('entering');
+        }
+        return requestAnimationFrame(callback);
+      };
+    </script>
+  </head>
+  <body>
+    <main>
+      <div id="a-holder"><p id="a">A text that reads at rest.</p></div>
+      <p id="b">B text that enters late.</p>
+    </main>
+  </body>
+</html>
