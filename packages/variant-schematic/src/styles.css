@@ -718,6 +718,24 @@
   }
   [data-variant='schematic'] .sx-cover__tb {
     margin-block-start: var(--space-s);
+    container: sx-cover-tb / inline-size;
+  }
+  /* The cover's block here is half the cover: about 28.5rem at 1024 and 41rem at 1440, but
+     under 200% text about 13rem and 20rem, where a quarter of it can't hold Index with a
+     language's control padding (material-3's 1.5rem a side ran it 7 px past the window at
+     1024, the quality cells' root-text reflow), nor a drawing number or a field's name
+     without breaking inside its words. Under 26rem the block is one column, a cell a row, so
+     each holds its words whole (two columns left a field's name 6.9 px to spare at 1024 with
+     CI's fonts, and a half cell empty). Only in this two-column cover: on a phone the block
+     is under 26rem at 100% text and keeps its own rules. The query is the block's holder's,
+     so the block's own columns can follow it. */
+  @container sx-cover-tb (max-width: 26rem) {
+    [data-variant='schematic'] .sx-tb[data-at='cover'] {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    [data-variant='schematic'] .sx-tb[data-at='cover'] > .sx-tb__cell {
+      grid-column: 1 / -1;
+    }
   }
 }
 
