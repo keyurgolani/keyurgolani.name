@@ -107,10 +107,12 @@ export const PAINTS = /^(?:color|background(?:[A-Z]\w*)?)$/;
  * What still moves an element once the sampler gives up, or null once it
  * holds still: an infinite time-based animation, one still running or a
  * scroll-driven one still changing at the limit, or a scroll-driven one at
- * rest whose values its inline pin can't hold for the shots.
+ * rest whose values its inline pin can't hold for the shots; or the wait
+ * itself failing (the element detached, its context gone), which fails
+ * closed: a node the wait couldn't see come to rest is never sampled.
  */
 export type Motion = {
-  readonly kind: 'infinite' | 'running' | 'scrolling' | 'unholdable';
+  readonly kind: 'infinite' | 'running' | 'scrolling' | 'unholdable' | 'failed';
   readonly name: string;
 } | null;
 
@@ -252,7 +254,10 @@ export function stillnessScript(
 /**
  * Takes off what stillnessScript() pinned under `key`: each target's style
  * attribute as it was, byte for byte, or none if it had none. Runs in the
- * browser.
+ * browser. A write the page itself makes to the same style attribute while
+ * the pins hold (a layout custom property a script sets, say) is overwritten
+ * too: the hold lasts the three shots, a few milliseconds, and only the test's
+ * page sees it.
  */
 export function releaseScript(key: string): void {
   const name = `__qualityHeld_${key}`;
@@ -688,7 +693,12 @@ export async function incompleteContrastFindings(
             { limit: NODE_LIMIT_MS, moves: MOVES.source, paints: PAINTS.source, key },
             { timeout: NODE_LIMIT_MS },
           )
-          .catch(() => null);
+          .catch((error: unknown): Motion => ({
+            kind: 'failed',
+            name: String(error instanceof Error ? error.message : error)
+              .split('\n')[0]!
+              .slice(0, 160),
+          }));
         if (motion && typeof motion === 'object' && 'kind' in motion) {
           unresolved(
             motion.kind === 'infinite'
@@ -697,7 +707,9 @@ export async function incompleteContrastFindings(
                 ? `unresolved: a scroll-driven animation, ${motion.name}, that moves or repaints it was still changing after ${NODE_LIMIT_MS / 1000} s, so its glyphs never held still to sample`
                 : motion.kind === 'unholdable'
                   ? `unresolved: it rests part-way through a scroll-driven animation, ${motion.name}, and the shots can't hold it where it rests`
-                  : `unresolved: an animation, ${motion.name}, that moves or repaints it was still running after ${NODE_LIMIT_MS / 1000} s, so its glyphs never held still to sample`,
+                  : motion.kind === 'failed'
+                    ? `unresolved: the wait for what moves it to come to rest failed (${motion.name}), so it was never seen at rest to sample`
+                    : `unresolved: an animation, ${motion.name}, that moves or repaints it was still running after ${NODE_LIMIT_MS / 1000} s, so its glyphs never held still to sample`,
           );
           continue;
         }
