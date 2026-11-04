@@ -2,6 +2,7 @@
 
 import { createElement, useCallback, useEffect, useState } from 'react';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
+import { enhancementSettled } from '@portfolio/variant-contract/settle';
 
 // Aurora Glass's one enhancement (brief §5.2, step 9), adding to a page
 // that already works: with no script the capsule's links, the Index (a
@@ -26,6 +27,11 @@ import type { VariantRenderInput } from '@portfolio/variant-contract';
 //    Without popovers the no-script Index stays.
 // 4. A fragment link that lands inside a closed fold opens it.
 // 5. Print opens every fold, and afterwards closes the ones it opened.
+// 6. Once all that has run and each observer has made its first delivery,
+//    the first pass is done, and the sky's settle signal comes off
+//    (data-enhancement-pending, @portfolio/variant-contract/settle), so a
+//    screenshot or a quality read sees the page live. Inside a plate,
+//    where nothing attaches, it comes off at once.
 // No frame loop, no timer, no scroll listener.
 
 /**
@@ -271,8 +277,17 @@ function attach(root: HTMLElement, prefix: string): () => void {
     off.push(() => target.removeEventListener(type, listener));
   };
 
-  // 1. Where the reader is.
+  // 6. The first pass: attach, then each observer's first delivery (below).
   const bands = [...root.querySelectorAll<HTMLElement>('.ag-band[data-band]')];
+  const opening = root.querySelector('.ag-opening');
+  let firstDeliveries = (bands.length > 0 ? 1 : 0) + (opening ? 1 : 0);
+  const settled = () => enhancementSettled(root.querySelector('.ag-sky'), 'sky');
+  const delivered = (first: boolean) => {
+    if (first && --firstDeliveries === 0) settled();
+  };
+
+  // 1. Where the reader is.
+  let spied = false;
   const seen = new Set<Element>();
   const mark = () => {
     const here = bands.filter((band) => seen.has(band)).at(-1)?.dataset.band;
@@ -288,6 +303,8 @@ function attach(root: HTMLElement, prefix: string): () => void {
         else seen.delete(entry.target);
       }
       mark();
+      delivered(!spied);
+      spied = true;
     },
     { rootMargin: '0px 0px -60% 0px' },
   );
@@ -297,7 +314,6 @@ function attach(root: HTMLElement, prefix: string): () => void {
   // 2. The sky.
   // Pause is in the ornament and, below 75rem, in the capsule: one control, kept in step.
   const pauses = [...root.querySelectorAll<HTMLButtonElement>('[data-ag-pause]')];
-  const opening = root.querySelector('.ag-opening');
   const boundary = root.closest<HTMLElement>('[data-variant]');
   const queries = [
     '(prefers-reduced-motion: reduce)',
@@ -372,7 +388,13 @@ function attach(root: HTMLElement, prefix: string): () => void {
   if (curtains) on(curtains, 'animationiteration', () => ((done ||= ++halves >= CYCLES), sync()));
   if (lens) on(lens, 'animationiteration', () => ((done ||= ++breaths >= BREATHS), sync()));
   if (opening) {
-    const watch = new IntersectionObserver(([entry]) => ((away = !entry?.isIntersecting), sync()));
+    let watched = false;
+    const watch = new IntersectionObserver(([entry]) => {
+      away = !entry?.isIntersecting;
+      sync();
+      delivered(!watched);
+      watched = true;
+    });
     watch.observe(opening);
     off.push(() => watch.disconnect());
   }
@@ -441,6 +463,9 @@ function attach(root: HTMLElement, prefix: string): () => void {
     window.removeEventListener('afterprint', closeAgain);
   });
 
+  // 6. With no observer to wait for, the first pass is done here.
+  if (firstDeliveries === 0) settled();
+
   return () => {
     off.forEach((undo) => undo());
     delete root.dataset.agSky;
@@ -456,8 +481,12 @@ export default function SkyEnhancement({ input }: { readonly input: VariantRende
     [],
   );
   useEffect(() => {
-    // Inside a plate (an inert boundary) nothing attaches.
-    if (!root || root.closest('[inert]')) return undefined;
+    if (!root) return undefined;
+    // Inside a plate (an inert boundary) nothing attaches, so nothing waits on its first pass.
+    if (root.closest('[inert]')) {
+      enhancementSettled(root.querySelector('.ag-sky'), 'sky');
+      return undefined;
+    }
     return attach(root, prefix);
   }, [root, prefix]);
   return createElement('span', { ref: anchor, hidden: true });
