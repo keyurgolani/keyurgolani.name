@@ -267,6 +267,38 @@ test(
 );
 
 test(
+  'a full-page capture never re-creates the draw-on: no dim is display:none at a width the capture evaluates for a moment',
+  { annotation },
+  async ({ page }) => {
+    // Chromium's captureBeyondViewport, which every full-page screenshot uses, evaluates the
+    // phone query for a moment on a desktop page. A dim hidden there with display: none goes
+    // out and back, so its draw-on is re-created in its delay, blank, and a capture can catch it
+    // so (CI run 41647354283's two attempts differ there). The draw-on runs out first, then
+    // each animation left is known, then a full-page capture: nothing new may appear.
+    await page.goto('/', { waitUntil: 'networkidle' });
+    await expect
+      .poll(() => page.evaluate(() => document.getAnimations().length), { timeout: 5000 })
+      .toBe(0);
+    await page.evaluate(() => {
+      (window as unknown as { __sxSeen: Animation[] }).__sxSeen = document.getAnimations();
+    });
+    await page.screenshot({ fullPage: true });
+    const recreated = await page.evaluate(() => {
+      const seen = new Set((window as unknown as { __sxSeen: Animation[] }).__sxSeen);
+      return document
+        .getAnimations()
+        .filter((a) => !seen.has(a))
+        .map((a) => {
+          const effect = a.effect as KeyframeEffect;
+          const el = effect.target as Element;
+          return `${el.className}${effect.pseudoElement ?? ''}`;
+        });
+    });
+    expect(recreated, 'draw-on animations a full-page capture re-created').toEqual([]);
+  },
+);
+
+test(
   'every focus stop clears the running marker, and a fragment target opens above it (K-12)',
   { annotation },
   async ({ page }) => {
@@ -812,6 +844,47 @@ test.describe('with no script', () => {
 
 test.describe('on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 } });
+
+  test(
+    'the name’s height and the depth’s count are hidden, with no box, scroll or hit target, at 390 and 320',
+    { annotation },
+    async ({ page }) => {
+      let checked = 0;
+      for (const width of [390, 320]) {
+        await page.setViewportSize({ width, height: 844 });
+        await page.goto('/', { waitUntil: 'networkidle' });
+        for (const selector of ['.sx-elev__h', '.sx-depth__inner > .sx-dim']) {
+          const dim = page.locator(selector);
+          await expect(dim, `${width}: ${selector}`).toHaveCount(1);
+          await expect(dim, `${width}: ${selector}`).toBeHidden();
+          await expect(dim, `${width}: ${selector}`).toHaveAttribute('aria-hidden', 'true');
+          const box = await dim.evaluate((el) => {
+            const r = el.getBoundingClientRect();
+            const s = getComputedStyle(el);
+            return {
+              w: r.width,
+              h: r.height,
+              events: s.pointerEvents,
+              focusable: el.matches('a[href], button, [tabindex]'),
+            };
+          });
+          expect(box, `${width}: ${selector}`).toEqual({
+            w: 0,
+            h: 0,
+            events: 'none',
+            focusable: false,
+          });
+          checked++;
+        }
+        const scroll = await page.evaluate(() => ({
+          scroll: document.documentElement.scrollWidth,
+          client: document.documentElement.clientWidth,
+        }));
+        expect(scroll.scroll, `${width}: no sideways scroll`).toBe(scroll.client);
+      }
+      expect(checked).toBe(4);
+    },
+  );
 
   test(
     'a reader who scrolls before the enhancement loads keeps their place on a fresh fragment visit',

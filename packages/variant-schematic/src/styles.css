@@ -1956,8 +1956,18 @@
   [data-variant='schematic'] .sx-elev {
     grid-template-columns: minmax(0, 1fr);
   }
+  /* The name's height isn't drawn on a phone. It's hidden without display: none, which would
+     cancel its draw-on: a full-page capture (Chromium's captureBeyondViewport) evaluates this
+     query for a moment on a desktop page too, and a display round trip re-creates the animation
+     in its delay, blank, at the capture. Out of flow, no size, clipped, hidden, no hit target:
+     on a phone nothing of it shows or takes room, as before. */
   [data-variant='schematic'] .sx-elev__h {
-    display: none;
+    position: absolute;
+    inline-size: 0;
+    block-size: 0;
+    overflow: clip;
+    visibility: hidden;
+    pointer-events: none;
   }
   [data-variant='schematic'] .sx-elev__name {
     font-size: var(--layout-type-display);
@@ -2439,8 +2449,16 @@
   [data-variant='schematic'] .sx-depth__fold[open] > .sx-depth__sum {
     margin-block-end: var(--space-xs);
   }
+  /* The depth's count dimension: hidden as the name's height is (above), never display: none. */
   [data-variant='schematic'] .sx-depth__inner > .sx-dim {
-    display: none;
+    position: absolute;
+    inline-size: 0;
+    block-size: 0;
+    padding: 0;
+    border: 0;
+    overflow: clip;
+    visibility: hidden;
+    pointer-events: none;
   }
   /* The cover's title block on a phone is its sheets and Index: the footer's holds the rest. */
   [data-variant='schematic'] .sx-tb[data-at='cover'] > :not(.sx-tb__nav, .sx-tb__here) {
