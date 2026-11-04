@@ -1167,3 +1167,21 @@ test("the floor's words are all the primary ink, which the floor holds at 4.5:1 
   assert.doesNotMatch(markup, /<td><\/td><td class="oa-checktable__when"><\/td>/);
   assert.doesNotMatch(markup, /<td class="oa-checktable__when"><\/td><\/tr>/);
 });
+
+test('under forced colors a caption keeps its title link’s ring whole: its title is raised over the date while it has focus', () => {
+  // Every line of text there stands on a backplate of the canvas, and the date, the caption’s next line, painted over
+  // the foot of the title link’s ring (Episode title, in every language). The link is stretched over its work by its
+  // ::after, so it stays unpositioned; its title, a grid item, takes the z-index.
+  const forced = CSS.slice(CSS.indexOf('@media (forced-colors: active) {'));
+  const block = forced.slice(0, forced.indexOf('\n}\n'));
+  assert.match(
+    block,
+    /\[data-variant='obsidian-atelier'\] \.oa-caption__title:has\(> :focus-visible\) \{\s*z-index: 1;\s*\}/,
+  );
+  assert.match(
+    CSS,
+    /\.oa-caption__link::after \{\s*content: '';\s*position: absolute;\s*inset: 0;/,
+  );
+  assert.match(CSS, /\.oa-caption \{[^}]*display: grid;/);
+  assert.doesNotMatch(CSS, /\.oa-caption__title \{[^}]*position:/);
+});
