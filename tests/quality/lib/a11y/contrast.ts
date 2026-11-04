@@ -878,7 +878,11 @@ export function stillUnresolved(motion: NonNullable<Motion>): string {
 // Each waits by
 // stillnessScript() with that path's NODE_LIMIT_MS, MOVES and PAINTS, its
 // pins taken off by releaseScript(), and one that comes back with a Motion
-// is unresolved, saying which, as on that path. One that rests on a
+// is unresolved, saying which, as on that path. Each is checked again by
+// the wait's own rule, with no wait (restlessScript()), right before it's
+// read and before each of its batch's shots, since the waits after its own
+// and the batches before take time: one something has started moving
+// since takes the per-element path. One that rests on a
 // scroll-driven animation's pin, is rotated or skewed, has no box, is
 // covered, is clipped, or isn't wholly in any viewport takes the
 // per-element path, unchanged, and so does one whose selector a shadow
@@ -1039,6 +1043,49 @@ interface BatchHelpers {
   readonly release: typeof releaseScript;
   readonly cover: typeof stuckCoverScript;
   readonly sample: typeof sampleScript;
+  readonly restless: typeof restlessScript;
+}
+
+/**
+ * What moves `el` now, after its wait came back at rest, by the wait's own
+ * rule (stillnessScript()): an animation whose target is `el`, an ancestor
+ * or a descendant, animating a property in `moves`, or in `paints` on `el`
+ * itself, that's running (neither finished nor idle) or scroll-driven (a
+ * member at rest held none, or it would have pinned it). Its name, or null.
+ * One pass, no wait: the batch path checks each member again with it right
+ * before it reads it and before each of its batch's shots, since the waits
+ * and the batches before can take seconds, and something can start moving
+ * it meanwhile (C's review of row 14). Runs in the browser.
+ */
+export function restlessScript(
+  el: Element,
+  { moves, paints }: { readonly moves: string; readonly paints: string },
+): string | null {
+  const [moving, painting] = [new RegExp(moves), new RegExp(paints)];
+  const Scrolling = (globalThis as unknown as { ScrollTimeline?: abstract new () => object })
+    .ScrollTimeline;
+  for (const animation of document.getAnimations()) {
+    const effect = animation.effect;
+    if (!(effect instanceof KeyframeEffect) || !effect.target) continue;
+    const target = effect.target;
+    if (target !== el && !target.contains(el) && !el.contains(target)) continue;
+    const counts = effect
+      .getKeyframes()
+      .some((keyframe) =>
+        Object.keys(keyframe).some(
+          (property) => moving.test(property) || (target === el && painting.test(property)),
+        ),
+      );
+    if (!counts) continue;
+    const name =
+      (animation as CSSAnimation).animationName ??
+      ((animation as CSSTransition).transitionProperty
+        ? `a transition of ${(animation as CSSTransition).transitionProperty}`
+        : animation.id || 'unnamed');
+    if (Scrolling && animation.timeline instanceof Scrolling) return name;
+    if (animation.playState !== 'finished' && animation.playState !== 'idle') return name;
+  }
+  return null;
 }
 
 /**
@@ -1303,6 +1350,13 @@ export async function batchPlanScript({
       own(at, 'it rests on a scroll-driven animation, which its own path pins for its shots');
       continue;
     }
+    // Checked again, as the waits after its own took time: what started moving it since takes it
+    // to its own path, which waits for that too.
+    const restless = helpers.restless(el, { moves, paints });
+    if (restless) {
+      own(at, `${restless} started moving it after its wait`);
+      continue;
+    }
     const sample = helpers.sample(el, { key, near: `${near}_${at}`, query, boundary });
     // Its mark comes off at once, as no other element's is on while its own path reads one: a
     // marked ancestor's transparent color is what a descendant read after it would inherit.
@@ -1520,6 +1574,7 @@ export async function cutShots(
   boxes: readonly Box[],
 ): Promise<Uint8Array[]> {
   const own = (clip: Box) => page.screenshot({ clip, animations: 'disabled', caret: 'hide' });
+  if (boxes.length === 0) return [];
   if (boxes.length === 1) return [await own(boxes[0]!)];
   const rects = boxes.map((box) => shotRect(box, viewport));
   const ux = Math.min(...rects.map((rect) => rect.x));
@@ -1592,7 +1647,7 @@ export async function batchFindings(
   const selectors = new Map(items.map(({ at, selector }) => [at, selector]));
   const installed = await page
     .evaluate(
-      `globalThis[${JSON.stringify(`__qualityBatch_${key}`)}] = { still: ${stillnessScript}, release: ${releaseScript}, cover: ${stuckCoverScript}, sample: ${sampleScript} }, true`,
+      `globalThis[${JSON.stringify(`__qualityBatch_${key}`)}] = { still: ${stillnessScript}, release: ${releaseScript}, cover: ${stuckCoverScript}, sample: ${sampleScript}, restless: ${restlessScript} }, true`,
     )
     .catch(() => false);
   if (installed !== true) return done;
@@ -1681,44 +1736,64 @@ export async function batchFindings(
             alone: entry.alone,
           }));
           for (const batch of batches(candidates)) {
-            const members = batch.map((k) => ({ entry: ready[k]!, hide: hides[k]! }));
-            await page.evaluate(
-              ({ key, near, marks }) => {
-                const w = window as unknown as Record<string, unknown>;
-                const els = w[`__qualityBatchEls_${key}`] as Element[];
-                for (const { at, hide } of marks) {
-                  els[at]!.setAttribute('data-quality-glyphs', key);
-                  const texts = (w[`${near}_${at}`] as Text[] | undefined) ?? [];
-                  for (const index of hide)
-                    texts[index]?.parentElement?.setAttribute('data-quality-neighbours', key);
-                }
-              },
-              { key, near, marks: members.map(({ entry, hide }) => ({ at: entry.at, hide })) },
-            );
-            const masked = (fill: 'black' | 'white') =>
-              page.evaluate(
-                ({ key, ats, fill }) => {
-                  const els = (window as unknown as Record<string, Element[]>)[
-                    `__qualityBatchEls_${key}`
-                  ]!;
-                  for (const at of ats) els[at]!.setAttribute('data-quality-mask', fill);
+            let members = batch.map((k) => ({ entry: ready[k]!, hide: hides[k]! }));
+            // Right before each of the batch's shots, each member is checked again
+            // (restlessScript()); one something has started moving leaves the batch, unmarked
+            // and unmasked from then, for its own path, which waits for that too. The rest are
+            // marked, or masked `fill`, in the same pass.
+            const settle = async (fill: 'black' | 'white' | null) => {
+              const moved = await page.evaluate(
+                ({ key, near, marks, moves, paints, fill }) => {
+                  const w = window as unknown as Record<string, unknown>;
+                  const els = w[`__qualityBatchEls_${key}`] as Element[];
+                  const helpers = w[`__qualityBatch_${key}`] as BatchHelpers;
+                  const out: number[] = [];
+                  for (const { at, hide } of marks) {
+                    const el = els[at]!;
+                    if (helpers.restless(el, { moves, paints })) {
+                      out.push(at);
+                      continue;
+                    }
+                    if (fill) {
+                      el.setAttribute('data-quality-mask', fill);
+                      continue;
+                    }
+                    el.setAttribute('data-quality-glyphs', key);
+                    const texts = (w[`${near}_${at}`] as Text[] | undefined) ?? [];
+                    for (const index of hide)
+                      texts[index]?.parentElement?.setAttribute('data-quality-neighbours', key);
+                  }
+                  return out;
                 },
-                { key, ats: members.map(({ entry }) => entry.at), fill },
+                {
+                  key,
+                  near,
+                  marks: members.map(({ entry, hide }) => ({ at: entry.at, hide })),
+                  moves: MOVES.source,
+                  paints: PAINTS.source,
+                  fill,
+                },
               );
-            const boxes = members.map(({ entry }) => entry.sample.box);
-            const shots = await camera.take(boxes);
-            await masked('black');
-            const blacks = await camera.take(boxes);
-            await masked('white');
-            const whites = await camera.take(boxes);
+              members = members.filter(({ entry }) => !moved.includes(entry.at));
+            };
+            const shoot = async () => {
+              const taken = await camera.take(members.map(({ entry }) => entry.sample.box));
+              return new Map(members.map(({ entry }, k) => [entry.at, taken[k]!]));
+            };
+            await settle(null);
+            const shots = await shoot();
+            await settle('black');
+            const blacks = await shoot();
+            await settle('white');
+            const whites = await shoot();
             await page.evaluate(unmarkBatchScript, key);
-            for (const [k, { entry }] of members.entries()) {
+            for (const { entry } of members) {
               const found = judged(
                 selectors.get(entry.at)!,
                 entry.sample,
-                shots[k]!,
-                blacks[k]!,
-                whites[k]!,
+                shots.get(entry.at)!,
+                blacks.get(entry.at)!,
+                whites.get(entry.at)!,
               );
               done.set(entry.at, found ? [found] : []);
             }

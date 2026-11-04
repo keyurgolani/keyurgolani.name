@@ -2088,6 +2088,9 @@ export const A11Y_CASES: readonly MetaCase[] = [
     browser: true,
     run: () => onPage('contrast-batch-neighbours.html', contrastBothWays),
   },
+  // A member something starts moving after its wait, as a later member waits, is checked again
+  // before it's read and shot, and takes its own path: it's measured at rest, as on its own.
+  goodFile('batch-late', 'contrast-batch-late.html', 'contrast', contrastBothWays),
   // And forty far-apart texts in one viewport cost a few round trips and shots, not fifteen and three each.
   {
     id: 'contrast/batch-round-trips',
