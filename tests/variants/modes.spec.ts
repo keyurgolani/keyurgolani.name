@@ -11,6 +11,7 @@ import {
   expectReadable,
   failEveryEnhancement,
   loadImages,
+  settle,
 } from './modes';
 
 // The modes' own checks (#12), each on a page that stands in for a
@@ -18,7 +19,9 @@ import {
 // the throw-switch check with an enhancement that mounts after the page goes
 // idle, on a page that stays busy before it does, and the floor `complete`
 // sets; the readable and print checks, and what each leaves out; the
-// screenshot's wait for lazy images and for one that never loads, and for an
+// settle before the shot, which waits out a finite entrance, is held by no
+// animation that doesn't end or move on its own, and fails closed at its
+// bound; the screenshot's wait for lazy images and for one that never loads, and for an
 // enhancement's chunk, which a lazy <Enhancement> starts after the page
 // loads, and for one that never lands, and for a first pass the page marks
 // pending, and one that never runs; and the stand-in host, which lets
@@ -421,6 +424,87 @@ test.describe('the print check', () => {
 <div style="display: none"><div style="position: sticky; top: 0">S</div></div></main>`,
     );
     await expectNothingFixed(page);
+  });
+});
+
+test.describe('the settle before the shot', () => {
+  /**
+   * Finite animations on the document timeline still running, waiting out a
+   * delay included, as the shot would find them: Playwright's `animations:
+   * 'disabled'` finishes each one, which a later shot of the same page
+   * doesn't match.
+   */
+  const runningFinite = (page: Page) =>
+    page.evaluate(
+      () =>
+        document
+          .getAnimations()
+          .filter(
+            (animation) =>
+              animation.playState === 'running' &&
+              animation.timeline === document.timeline &&
+              Number.isFinite(Number(animation.effect?.getComputedTiming().endTime)),
+          ).length,
+    );
+
+  test('waits for a 1 s entrance running at load to end', async ({ page }) => {
+    // Terra Field's opening in miniature (terra-field-rise-s on the hero's
+    // actions): finite, from a delay, with a backwards fill, still running
+    // about 60 ms in when the page had loaded, its fonts were in and two
+    // frames were drawn (C's probe, 2026-11-04).
+    await open(
+      page,
+      `<style>
+  @keyframes rise { from { opacity: 0; translate: 0 16px; } }
+  .acts { animation: rise 1s 120ms backwards; }
+  .acts a { display: inline-block; padding: 12px 16px; border-radius: 999px; background: #f6eddc; }
+</style>
+<main><h1>Name: a line long enough to wrap</h1><p class="acts"><a href="#">Get in touch</a></p></main>`,
+    );
+    await settle(page, true);
+    expect(await runningFinite(page), 'finite animations running at the shot').toBe(0);
+  });
+
+  test('is not held by an infinite animation, a scroll or view timeline, a paused one, or one on a target that does not render', async ({
+    page,
+  }) => {
+    await open(
+      page,
+      `<style>
+  @keyframes spin { to { rotate: 1turn; } }
+  @keyframes deepen { to { scale: 1 1.04; } }
+  .loop { animation: spin 2s linear infinite; }
+  .arc { animation: deepen linear both; animation-timeline: scroll(root); }
+  .reveal { animation: deepen linear both; animation-timeline: view(); }
+  .held { animation: deepen 10s paused; }
+</style>
+<main><h1 class="loop">Name</h1><p class="held">Held</p><div class="arc" style="height: 3000px"></div><p class="reveal">Revealed</p><p hidden id="unrendered">Hidden</p></main>
+<script>document.getElementById('unrendered').animate({ opacity: [0, 1] }, 10000);</script>`,
+    );
+    expect(
+      await page.evaluate(() => document.getAnimations().length),
+      'animations on the page',
+    ).toBe(5);
+    const started = Date.now();
+    await settle(page, true);
+    expect(Date.now() - started).toBeLessThan(1_000);
+  });
+
+  test('fails closed, naming it, when a finite animation still runs at the bound', async ({
+    page,
+  }) => {
+    await open(
+      page,
+      `<style>
+  @keyframes rise { from { opacity: 0; } }
+  h1 { animation: rise 10s; }
+</style>
+<main><h1 class="name">Stand-in</h1></main>`,
+    );
+    const started = Date.now();
+    expect(await failure(settle(page, true))).toContain('"rise on h1.name"');
+    expect(Date.now() - started).toBeGreaterThanOrEqual(2_900);
+    expect(Date.now() - started).toBeLessThan(6_000);
   });
 });
 
