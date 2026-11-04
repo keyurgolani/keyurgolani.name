@@ -6,15 +6,17 @@
 // the check's own, so a page that breaks some other rule doesn't count.
 // The compiled-CSS audit needs no browser.
 
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { BrowserContextOptions, CDPSession, Page } from '@playwright/test';
+import type { BrowserContextOptions, CDPSession, Page, TestInfo } from '@playwright/test';
+import { defaultTuple, type Cell } from '../cells';
 import { axeFor } from '../lib/axe';
 import { checkEmulation } from '../lib/emulation';
-import { PREFERENCE_ROWS } from '../lib/matrix';
+import { DEFAULT_ROW, PREFERENCE_ROWS, VIEWPORTS } from '../lib/matrix';
 import {
   enhancementFindings,
   failureStateFindings,
@@ -42,7 +44,7 @@ import {
 } from '../lib/a11y/interaction';
 import { killSwitches, MOTION_SAMPLER, motionFindings, osWinsFindings } from '../lib/a11y/motion';
 import { inPage, type Active } from '../lib/a11y/probe';
-import { applyRow, audit, loadForPass } from '../lib/run-cell';
+import { applyRow, audit, loadForPass, runPass } from '../lib/run-cell';
 import type { MetaCase, MetaOutcome } from './cases';
 
 const FIXTURES = fileURLToPath(new URL('../fixtures/a11y/', import.meta.url));
@@ -310,7 +312,7 @@ const REVEAL = {
   body: "setTimeout(() => { for (const el of document.querySelectorAll('[data-lazy]')) el.hidden = false; }, 400);",
 };
 
-/** `check` once the lazy enhancement has revealed its control, as the cell reads its baseline after its other checks. */
+/** `check` once the lazy enhancement has revealed its control, as the cell reads its baseline once axe has run. */
 const revealed =
   (check: (page: Page) => Promise<Finding[]>) =>
   async (page: Page): Promise<Finding[]> => {
@@ -668,6 +670,112 @@ const HALO_FAINT = withFixture(
   '<p class="plate faint">Eris</p>',
 );
 
+/** contrast-animated.html with text over a gradient that pulses for good. */
+const ARRIVAL_PULSING = withFixture(
+  'contrast-animated.html',
+  '<!-- infinite -->',
+  '<p class="band pulse">Text over a gradient that pulses for good.</p>',
+);
+
+/** contrast-animated.html with a figure a scroll-driven animation slides in as it comes into view. */
+const ARRIVAL_SCROLL_DRIVEN = withFixture(
+  'contrast-animated.html',
+  '<!-- scroll-driven -->',
+  '<figure class="arrives later"><p class="band">Text whose figure slides in as it scrolls into view.</p></figure>',
+);
+
+/** contrast-animated.html with a block whose outline and --x pulse for good, beside a spinning sibling. */
+const ARRIVAL_UNRELATED = withFixture(
+  'contrast-animated.html',
+  '<!-- unrelated -->',
+  '<div class="glow"><p class="band">Text in a block whose outline pulses for good.</p><span class="spinner" aria-hidden="true"></span></div>',
+);
+
+/** contrast-animated.html with faint text whose figure, `figure`, rests part-way through a scroll-driven slide. */
+const RESTING_FIGURE =
+  '<figure class="rests later"><p class="ramp">Faint text whose figure rests part-way in.</p></figure>';
+const ARRIVAL_RESTING = withFixture('contrast-animated.html', '<!-- resting -->', RESTING_FIGURE);
+
+/**
+ * The contrast sampler on ARRIVAL_RESTING, held to three more things: the
+ * figure's style attribute is as it was, byte for byte, once the sampler is
+ * done, absent when it had none, and its own when it had one; its scroll-driven animation is still attached and follows the
+ * scroll; and the ratio is exactly the one its static twin reads, the same
+ * page with the figure's resting transform written plainly and no
+ * animation. Each that fails adds a finding no case's reason matches.
+ */
+const restingContrast = async (page: Page): Promise<Finding[]> => {
+  const figure = 'figure.rests';
+  const style = () =>
+    page.evaluate((selector) => document.querySelector(selector)!.getAttribute('style'), figure);
+  const meta: Finding[] = [];
+  const restored = (before: string | null, after: string | null) => {
+    if (after !== before) {
+      meta.push({
+        gate: 'meta',
+        rule: 'restore',
+        actual: `its style attribute reads ${JSON.stringify(after)}, not ${JSON.stringify(before)}`,
+      });
+    }
+  };
+  // With no style attribute, then with one of its own, oddly spaced, in a fresh load.
+  const before = await style();
+  const findings = await contrast(page);
+  restored(before, await style());
+  await page.reload({ waitUntil: 'load' });
+  const own = '--seed:1 ;  outline: 0px  solid transparent';
+  await page.evaluate(
+    ([selector, value]) => document.querySelector(selector)!.setAttribute('style', value),
+    [figure, own] as const,
+  );
+  await frames(page);
+  await contrast(page);
+  restored(own, await style());
+  // At rest in view, as the sampler had it, then scrolled back a little: its progress must move.
+  await page.locator(`${figure} p`).scrollIntoViewIfNeeded();
+  await frames(page, 200);
+  const rest = await page.evaluate(async (selector) => {
+    const el = document.querySelector(selector)!;
+    const animation = el.getAnimations()[0];
+    const progress = () => animation?.effect?.getComputedTiming().progress ?? null;
+    const at = progress();
+    const transform = getComputedStyle(el).transform;
+    scrollBy({ top: -120, behavior: 'instant' });
+    await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+    return { attached: animation !== undefined, at, moved: progress(), transform };
+  }, figure);
+  if (!rest.attached || rest.at === rest.moved) {
+    meta.push({
+      gate: 'meta',
+      rule: 'tracking',
+      actual: rest.attached
+        ? `its progress held at ${rest.at} as the page scrolled`
+        : 'its animation is gone',
+    });
+  }
+  await page.setContent(
+    withFixture(
+      'contrast-animated.html',
+      '<!-- resting -->',
+      RESTING_FIGURE.replace(
+        'class="rests later"',
+        `class="later" style="transform: ${rest.transform}"`,
+      ),
+    ),
+  );
+  await frames(page);
+  const twin = await contrast(page);
+  const said = (each: readonly Finding[]) => JSON.stringify(each.map((one) => one.actual));
+  if (said(findings) !== said(twin)) {
+    meta.push({
+      gate: 'meta',
+      rule: 'twin',
+      actual: `it read ${said(findings)}, and its static twin, at ${rest.transform}, ${said(twin)}`,
+    });
+  }
+  return [...findings, ...meta];
+};
+
 /** Text a fixed header covers on a page too short to scroll it out from under. */
 const STUCK_FOR_GOOD = built(
   'Under a fixed header',
@@ -936,6 +1044,64 @@ const printAfterScroll = async (page: Page): Promise<Finding[]> => {
   await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
   await frames(page, 100);
   return inventoryFindings(page, '/', before, ['print']);
+};
+
+/** The checks whose failures defaultPassContent() keeps: the content conditions', and the runner's. */
+const CONTENT_GATES = new Set(['inventory', 'enhancement', 'runner']);
+
+/**
+ * The stand-in's page as a cell's default row at 1440x900 runs it, through
+ * run-cell.ts's own runPass(), in its order: the load, axe and the contrast
+ * sampler, then the suites, the inventory's conditions and failed
+ * enhancement among them. Its findings are what those conditions and the
+ * runner record. What the pass writes goes to a folder of its own, gone
+ * once it has run.
+ */
+const defaultPassContent = async (page: Page): Promise<Finding[]> => {
+  const out = mkdtempSync(path.join(tmpdir(), 'quality-meta-pass-'));
+  try {
+    const testInfo = {
+      outputPath: (name: string) => path.join(out, name),
+      attach: async () => undefined,
+    } as unknown as TestInfo;
+    const cell: Cell = {
+      id: 'surface:meta-stand-in / meta-stand-in/platform-neutral/warm-parchment/humanist-ui/system',
+      kind: 'surface',
+      target: 'meta-stand-in',
+      owner: '#11',
+      profile: 'read-only',
+      performanceTier: 'light',
+      tuple: defaultTuple('meta-stand-in', 'system'),
+      path: '/',
+      route: '/',
+      state: 'complete',
+      expectedStatus: 200,
+      source: 'complete',
+      sentinel: true,
+      fixture: true,
+    };
+    const pass = await runPass(
+      {
+        page,
+        cell,
+        viewport: VIEWPORTS[0]!,
+        row: DEFAULT_ROW,
+        conditions: true,
+        testInfo,
+        expect: undefined as never,
+      },
+      { reemulate: false },
+    );
+    return pass.suiteFailures
+      .filter((failure) => CONTENT_GATES.has(failure.check))
+      .map((failure) => ({
+        gate: failure.check,
+        rule: failure.rule,
+        actual: String(failure.actual),
+      }));
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
 };
 
 const TRANSPARENCY = [
@@ -1321,6 +1487,18 @@ export const A11Y_CASES: readonly MetaCase[] = [
     browser: true,
     run: () => onPage('inventory-running-head.html', printAfterScroll),
   },
+  // The cell's baseline is read before the contrast sampler moves the page, not after: a live
+  // status that names the panel a strip rests on, which the sampler scrolls to its far end, says
+  // there what each condition's reload says.
+  {
+    id: 'inventory/scroll-status',
+    gate: 'inventory',
+    input:
+      "tests/quality/fixtures/a11y/inventory-scroll-status.html, through runPass()'s default row at 1440x900",
+    expect: 'pass',
+    browser: true,
+    run: () => onPage('inventory-scroll-status.html', defaultPassContent),
+  },
   // A reload reads the page once its enhancements have mounted or failed: a button a lazy
   // chunk reveals after load is there under each condition, as it was for the baseline.
   {
@@ -1671,6 +1849,49 @@ export const A11Y_CASES: readonly MetaCase[] = [
     'text a fixed header covers on a page too short to scroll it clear',
     STUCK_FOR_GOOD,
     /^contrast text: unresolved: /,
+    contrast,
+  ),
+  // Text an on-scroll entrance slides into place is read once the slide has ended, where its
+  // glyphs paint, and passes.
+  goodFile('arrival', 'contrast-arrival.html', 'contrast', contrast),
+  // So is text whose ancestor a scroll-driven animation slides in, once its progress holds.
+  {
+    id: 'contrast/arrival-scroll-driven',
+    gate: 'contrast',
+    input:
+      'tests/quality/fixtures/a11y/contrast-animated.html, with a figure a scroll-driven animation slides in as it comes into view',
+    expect: 'pass',
+    browser: true,
+    run: () => onPage(ARRIVAL_SCROLL_DRIVEN, contrast),
+  },
+  // Faint text whose figure rests part-way through a scroll-driven slide, which the shots would
+  // cancel, is pinned where it rests for them, then let go: its ratio is its static twin's.
+  builtCase(
+    'resting-scroll-driven',
+    'contrast',
+    'tests/quality/fixtures/a11y/contrast-animated.html, with faint text whose figure rests part-way through a scroll-driven slide',
+    ARRIVAL_RESTING,
+    /^contrast text: \d\.\d\d:1 against its worst background pixel$/,
+    restingContrast,
+  ),
+  // An ancestor's animation that moves nothing, an outline's color and --x, for good, and a
+  // sibling's spin don't hold the text up: it's sampled, and passes.
+  {
+    id: 'contrast/animated-unrelated',
+    gate: 'contrast',
+    input:
+      'tests/quality/fixtures/a11y/contrast-animated.html, with a block whose outline and --x pulse for good beside a spinning sibling',
+    expect: 'pass',
+    browser: true,
+    run: () => onPage(ARRIVAL_UNRELATED, contrast),
+  },
+  // And text that animates for good never holds still: it's unresolved, saying so.
+  builtCase(
+    'animated-for-good',
+    'contrast',
+    'tests/quality/fixtures/a11y/contrast-animated.html, with text over a gradient that pulses for good',
+    ARRIVAL_PULSING,
+    /^contrast text: unresolved: an infinite animation, pulse, moves or repaints it, /,
     contrast,
   ),
   // Nor is a rotated sticker's border round its line: sampled inside its own quad, it passes.

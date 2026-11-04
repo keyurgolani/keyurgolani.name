@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Text that slides in on scroll, known-good</title>
+    <!--
+      An on-scroll entrance, as a composition's scene arrives: text over a
+      gradient, so axe leaves it to the contrast sampler, held 4rem below
+      its place until it's scrolled into view, then sliding up to it over
+      1.2 s. The sampler scrolls it into view, which starts the slide, and
+      its shots end every finite animation, so a box read mid-slide is 4rem
+      or so off where its glyphs then paint. Read once the slide has ended,
+      it passes at about 15:1.
+    -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #fff;
+        color: #222;
+      }
+      main {
+        padding: 1rem 1rem 50vh;
+      }
+      .band {
+        background: linear-gradient(90deg, #fff, #f6f6f6);
+        color: #222;
+      }
+      .later {
+        margin-top: 150vh;
+      }
+      .arrive {
+        transform: translateY(4rem);
+      }
+      .arrive.in {
+        animation: arrive 1.2s linear forwards;
+      }
+      @keyframes arrive {
+        to {
+          transform: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Arrivals</h1>
+      <p class="band">Text at rest over a gradient.</p>
+      <p class="band arrive later" id="arrival">Text that slides into place once it is in view.</p>
+    </main>
+    <script>
+      const arrivals = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          entry.target.classList.add('in');
+          arrivals.unobserve(entry.target);
+        }
+      });
+      for (const el of document.querySelectorAll('.arrive')) arrivals.observe(el);
+    </script>
+  </body>
+</html>

@@ -27,6 +27,7 @@ import {
   neededRatio,
   neighbourTexts,
   reaches,
+  stillnessScript,
   worstRatio,
 } from './lib/a11y/contrast';
 import { stuckCoverScript } from './lib/a11y/covers';
@@ -332,7 +333,7 @@ test("on a framed surface, the sampler leaves out only the incomplete items axe 
   } as unknown as Parameters<typeof incompleteContrastFindings>[1];
   assert.deepEqual([top, framed].map(inFrame), [false, true]);
   assert.equal(framedItems(results), 1);
-  // A page whose every element has no box, recording what the sampler looked up.
+  // A page whose every element has no box (though it holds still), recording what the sampler looked up.
   const looked: string[] = [];
   const page = {
     evaluate: async () => undefined,
@@ -340,7 +341,8 @@ test("on a framed surface, the sampler leaves out only the incomplete items axe 
       looked.push(selector);
       const element = {
         scrollIntoViewIfNeeded: async () => undefined,
-        evaluate: async () => {
+        evaluate: async (script: { name: string }) => {
+          if (script.name === stillnessScript.name) return null;
           throw new Error('no element');
         },
       };
@@ -362,6 +364,42 @@ test("on a framed surface, the sampler leaves out only the incomplete items axe 
     ['main .studio-content p'],
   );
   assert.deepEqual(looked, ['main .studio-content p'], 'nothing samples the frame item');
+});
+
+test('the sampler fails closed when its wait for an element to come to rest fails: the element is unresolved, never sampled', async () => {
+  const results = {
+    incomplete: [{ id: 'color-contrast', nodes: [{ target: ['main p'] }] }],
+  } as unknown as Parameters<typeof incompleteContrastFindings>[1];
+  let sampled = false;
+  const page = {
+    evaluate: async () => undefined,
+    screenshot: async () => {
+      sampled = true;
+      throw new Error('no shot');
+    },
+    locator: () => {
+      const element = {
+        scrollIntoViewIfNeeded: async () => undefined,
+        // Nothing covers it, and the wait itself throws, as when the element is detached mid-wait.
+        evaluate: async (script: { name: string }) => {
+          if (script.name === stillnessScript.name) throw new Error('detached');
+          return null;
+        },
+      };
+      return { first: () => element };
+    },
+  } as unknown as Parameters<typeof incompleteContrastFindings>[0];
+  const findings = await incompleteContrastFindings(page, results);
+  assert.deepEqual(
+    findings.map(({ path, actual }) => [path, actual]),
+    [
+      [
+        'main p',
+        'unresolved: the wait for what moves it to come to rest failed (detached), so it was never seen at rest to sample',
+      ],
+    ],
+  );
+  assert.equal(sampled, false, 'a node the wait never saw at rest is not shot');
 });
 
 /** A white `width` by `height` image, as a blurred clip, with `ink` painted black, as its focused one. */

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A live status that follows a strip, known-good</title>
+    <!--
+      Horizontal Cinema's strip: panels side by side in a scroller of their
+      own, and a live status a script keeps in step with the panel in view,
+      once the strip has rested. Every reload, under every condition, reads
+      "Panel 1 of 3". The last panel's text is over a gradient, so axe leaves
+      it to the contrast sampler, which scrolls the strip to it; the window
+      itself never moves. The cell's baseline is read before the sampler
+      moves anything, so the status reads "Panel 1 of 3" there too, and no
+      condition finds it missing.
+    -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        color: #222;
+        background: #fff;
+      }
+      main {
+        padding: 1rem;
+      }
+      :focus-visible {
+        outline: 2px solid #000;
+        outline-offset: 2px;
+      }
+      .skip:not(:focus) {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+      }
+      .strip {
+        display: flex;
+        overflow-x: auto;
+        overflow-y: hidden;
+      }
+      .strip section {
+        flex: 0 0 100%;
+        box-sizing: border-box;
+        padding: 1rem;
+      }
+      .band {
+        background: linear-gradient(90deg, #fff, #f6f6f6);
+        color: #222;
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <main id="main" tabindex="-1">
+      <h1>The strip</h1>
+      <p role="status" id="status">Panel 1 of 3</p>
+      <div class="strip" id="strip" tabindex="0" role="region" aria-label="Panels">
+        <section><h2>One</h2></section>
+        <section><h2>Two</h2></section>
+        <section>
+          <h2>Three</h2>
+          <p class="band">Text over a gradient, at the strip's far end.</p>
+        </section>
+      </div>
+    </main>
+    <script>
+      const strip = document.getElementById('strip');
+      const status = document.getElementById('status');
+      let rest;
+      strip.addEventListener(
+        'scroll',
+        () => {
+          clearTimeout(rest);
+          rest = setTimeout(() => {
+            const at = Math.round(strip.scrollLeft / strip.clientWidth) + 1;
+            status.textContent = `Panel ${at} of 3`;
+          }, 150);
+        },
+        { passive: true },
+      );
+    </script>
+  </body>
+</html>
