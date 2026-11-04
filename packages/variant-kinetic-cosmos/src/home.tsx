@@ -355,11 +355,11 @@ function SignatureLabel({
   const work = id ? input.portfolio.works.find((each) => each.id === id) : undefined;
   const orbit = orbitGeometry(counts)[0];
   if (!work || !orbit || !anchorSection(work, input)) return null;
+  // The spot places the label and holds its ground behind it: the ground, first, under the pill's own
+  // border and ground (a negative z-index inside the pill itself would paint over both).
   return (
-    <a
-      className="kc-signature-label"
-      href={`#${input.ids.prefix}${work.id}`}
-      lang={work.lang}
+    <span
+      className="kc-signature-spot"
       style={
         {
           '--layout-x': (orbit.anchor.x / MAP_WIDTH).toFixed(4),
@@ -368,8 +368,10 @@ function SignatureLabel({
       }
     >
       <span className="kc-signature-label__ground" aria-hidden="true" />
-      {work.title}
-    </a>
+      <a className="kc-signature-label" href={`#${input.ids.prefix}${work.id}`} lang={work.lang}>
+        {work.title}
+      </a>
+    </span>
   );
 }
 
