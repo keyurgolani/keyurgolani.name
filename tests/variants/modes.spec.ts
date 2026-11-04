@@ -1,8 +1,10 @@
 import { stripVTControlCharacters } from 'node:util';
 import { expect, test, type Page, type Route, type TestInfo } from '@playwright/test';
+import { BUSY_LIMIT_MS, STILL_ENHANCING, watchEnhancements } from '../quality/lib/a11y/conditions';
 import {
   checkMode,
   enhancementFloor,
+  expectEnhancementsSettled,
   expectEveryEnhancementFailed,
   expectNothingFixed,
   expectReadable,
@@ -15,8 +17,10 @@ import {
 // the throw-switch check with an enhancement that mounts after the page goes
 // idle, on a page that stays busy before it does, and the floor `complete`
 // sets; the readable and print checks, and what each leaves out; the
-// screenshot's wait for lazy images and for one that never loads; and the
-// stand-in host, which lets nothing out.
+// screenshot's wait for lazy images and for one that never loads, and for an
+// enhancement's chunk, which a lazy <Enhancement> starts after the page
+// loads, and for one that never lands; and the stand-in host, which lets
+// nothing out.
 
 const ORIGIN = 'https://modes.test';
 /** A 1x1 PNG. */
@@ -25,15 +29,26 @@ const PNG = Buffer.from(
   'base64',
 );
 
+/** A script the stand-in host serves at its path, `after` ms late. */
+interface StandInScript {
+  readonly body: string;
+  readonly after: number;
+}
+
 /**
- * Serves `body` as the page at ORIGIN/, and a PNG for every image but
- * `stalled`, which never answers. A catch-all registered first refuses
- * every other request and every WebSocket. Playwright tries the route
- * registered last first, so the stand-in host's own route answers ahead
- * of it, and nothing the page asks for leaves the machine. Returns the
- * URLs the catch-all refused.
+ * Serves `body` as the page at ORIGIN/, each of `scripts` at its path, and a
+ * PNG for every image but `stalled`, which never answers. A catch-all
+ * registered first refuses every other request and every WebSocket.
+ * Playwright tries the route registered last first, so the stand-in host's
+ * own route answers ahead of it, and nothing the page asks for leaves the
+ * machine. Returns the URLs the catch-all refused.
  */
-async function open(page: Page, body: string, stalled?: string): Promise<string[]> {
+async function open(
+  page: Page,
+  body: string,
+  stalled?: string,
+  scripts: Readonly<Record<string, StandInScript>> = {},
+): Promise<string[]> {
   const refused: string[] = [];
   await page.route('**/*', (route) => {
     refused.push(route.request().url());
@@ -43,7 +58,7 @@ async function open(page: Page, body: string, stalled?: string): Promise<string[
     refused.push(socket.url());
     return socket.close();
   });
-  await page.route(`${ORIGIN}/**`, (route: Route) => {
+  await page.route(`${ORIGIN}/**`, async (route: Route) => {
     const { pathname } = new URL(route.request().url());
     if (pathname === '/') {
       return route.fulfill({
@@ -52,6 +67,11 @@ async function open(page: Page, body: string, stalled?: string): Promise<string[
       });
     }
     if (pathname === stalled) return new Promise<void>(() => {});
+    const script = scripts[pathname];
+    if (script) {
+      await new Promise((resolve) => setTimeout(resolve, script.after));
+      return route.fulfill({ contentType: 'text/javascript', body: script.body });
+    }
     return route.fulfill({ contentType: 'image/png', body: PNG });
   });
   await page.goto(`${ORIGIN}/`);
@@ -427,6 +447,56 @@ test.describe('the screenshot image wait', () => {
     expect(await failure(loadImages(page))).toContain(`${ORIGIN}/stalled.png`);
     expect(Date.now() - started).toBeGreaterThanOrEqual(9_500);
     await page.unrouteAll({ behavior: 'ignoreErrors' });
+  });
+});
+
+test.describe('the screenshot enhancement wait', () => {
+  /**
+   * A page that starts an enhancement's chunk as it loads, as a lazy
+   * <Enhancement> does once the page hydrates, and whose chunk, once it
+   * lands, hides the no-script contents list, as Aurora Glass's sky does
+   * when it marks the page live (the capture race, 2026-11-03).
+   */
+  const lazy = (chunk: string) => `<main><h1>Stand-in</h1><nav id="contents">Index</nav></main>
+<script>
+  addEventListener('load', () => {
+    const script = document.createElement('script');
+    script.src = '${ORIGIN}${chunk}';
+    document.head.append(script);
+  });
+</script>`;
+  const LIVE = "document.getElementById('contents').hidden = true;";
+  const listed = (page: Page) => page.evaluate(() => !document.getElementById('contents')!.hidden);
+
+  test('waits for an enhancement chunk that lands after the page loaded, so the shot is the page it made', async ({
+    page,
+  }) => {
+    const watch = watchEnhancements(page);
+    try {
+      await open(page, lazy('/chunk.js'), undefined, { '/chunk.js': { body: LIVE, after: 1_500 } });
+      // Loaded, fonts in and two frames drawn, as settle() leaves it: the chunk is still on its way.
+      await page.evaluate(
+        () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+      );
+      expect(await listed(page), 'the contents list before the chunk lands').toBe(true);
+      await expectEnhancementsSettled(watch);
+      expect(await listed(page), 'the contents list once the chunk has run').toBe(false);
+    } finally {
+      watch.stop();
+    }
+  });
+
+  test('fails, saying so, when an enhancement chunk never lands', async ({ page }) => {
+    const watch = watchEnhancements(page);
+    try {
+      await open(page, lazy('/stalled.js'), '/stalled.js');
+      const started = Date.now();
+      expect(await failure(expectEnhancementsSettled(watch))).toContain(STILL_ENHANCING);
+      expect(Date.now() - started).toBeGreaterThanOrEqual(BUSY_LIMIT_MS - 100);
+    } finally {
+      watch.stop();
+      await page.unrouteAll({ behavior: 'ignoreErrors' });
+    }
   });
 });
 

@@ -4,7 +4,8 @@
 // wider than the window, every internal link resolves, each section's
 // data-renderer matches the manifest's renderedKinds and no kind it leaves
 // out renders, and no console error. Desktop and mobile take a screenshot of
-// the whole page, every image on it loaded. Without JavaScript, in print, and
+// the whole page, once its enhancements have mounted or failed and every
+// image on it has loaded. Without JavaScript, in print, and
 // with its enhancements failing, the page stays readable: the h1, the
 // navigation, and each visible section's heading have a box, opacity, and
 // visibility. Print also has nothing fixed or sticky. Under reduced motion
@@ -20,6 +21,11 @@ import {
 } from '@playwright/test';
 import type { ContractFixtureName } from '../../packages/variant-contract/src/node/fixtures';
 import { runningAnimations } from '../harness/motion';
+import {
+  STILL_ENHANCING,
+  watchEnhancements,
+  type EnhancementWatch,
+} from '../quality/lib/a11y/conditions';
 import {
   pendingAnnotation,
   readPendingList,
@@ -501,16 +507,32 @@ export async function loadImages(page: Page): Promise<void> {
 const PENDING = readPendingList() as PendingList;
 
 /**
- * The whole page's screenshot, every image on it loaded, attached to the
- * report, and compared against its baseline for the platform's own variants
- * in the pinned image.
+ * That the page's enhancements have mounted or failed, by the quality
+ * cells' own rule (watchEnhancements(), imported so the two can't drift): no
+ * script chunk in flight or started and no island changing across an idle
+ * period and two frames, within its BUSY_LIMIT_MS. A variant's lazy
+ * <Enhancement> loads its chunk after hydration, and a shot taken before it
+ * runs captures the page as it is without script (the capture race,
+ * 2026-11-03). `watch` started before the page loaded, so it saw the chunk
+ * start.
+ */
+export async function expectEnhancementsSettled(watch: EnhancementWatch): Promise<void> {
+  expect(await watch.settled(), STILL_ENHANCING).toBe(true);
+}
+
+/**
+ * The whole page's screenshot, once its enhancements have mounted or failed
+ * and every image on it has loaded, attached to the report, and compared
+ * against its baseline for the platform's own variants in the pinned image.
  */
 async function screenshot(
   page: Page,
   testInfo: TestInfo,
   variant: RegisteredVariant,
   name: string,
+  watch: EnhancementWatch,
 ): Promise<void> {
+  await expectEnhancementsSettled(watch);
   await loadImages(page);
   const options = { animations: 'disabled', caret: 'hide', fullPage: true } as const;
   await testInfo.attach(`${name}.png`, {
@@ -589,14 +611,15 @@ async function checkPage(check: ModeCheck, page: Page, run?: FailedRun): Promise
     });
   }
   const failed = run === 'throw-switch' ? await failEveryEnhancement(page) : undefined;
+  // The shot waits for the enhancements, so its watch starts before the page loads.
+  const shot = takesShot(mode);
+  const watch = shot ? watchEnhancements(page) : undefined;
   try {
     await check.go(page);
     await settle(page, mode !== 'no-javascript' && run !== 'blocked-chunks');
     // Before the keyboard checks, which focus main and scroll to it: the
     // page as a visitor first sees it.
-    if (takesShot(mode)) {
-      await screenshot(page, check.testInfo, check.variant, check.shot);
-    }
+    if (watch) await screenshot(page, check.testInfo, check.variant, check.shot, watch);
     await expectEveryMode(page, check.request, check.variant, errors);
     if (run === 'blocked-chunks') expectScriptsAlone(blocked, sheets());
     const floor = enhancementFloor(check.variant.manifest, check.fixture);
@@ -609,6 +632,7 @@ async function checkPage(check: ModeCheck, page: Page, run?: FailedRun): Promise
     if (mode === 'print') await expectNothingFixed(page);
     if (mode === 'reduced-motion') await expectStill(page);
   } finally {
+    watch?.stop();
     if (run === 'blocked-chunks') await context.unroute(CHUNKS);
   }
 }
