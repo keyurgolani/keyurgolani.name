@@ -55,6 +55,8 @@ for (const mode of MODES) {
       { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
       async ({ page, context, request }, testInfo) => {
         const { variant, fixture } = projectTarget(testInfo);
+        if (!fixture)
+          throw new Error(`The project ${testInfo.project.name} names no contract fixture`);
         await checkMode({
           mode: mode.name,
           page,
