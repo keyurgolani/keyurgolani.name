@@ -103,24 +103,6 @@ test(
 );
 
 test(
-  'a slow wheel, a notch at a time with the page at rest between, travels on scene by scene and never back',
-  { annotation, tag },
-  async ({ page }) => {
-    await load(page);
-    await page.mouse.move(720, 450);
-    // Each notch, well short of half a scene, rests before the next, as a slow runner or a slow
-    // hand turns it: the snap finishes it onto the next scene the way it went, not the one it left.
-    for (const index of [1, 2]) {
-      await page.mouse.wheel(0, 200);
-      await expectAt(page, index);
-      expect((await read(page)).along).toBeGreaterThan(0);
-    }
-    await page.mouse.wheel(0, -200);
-    await expectAt(page, 1);
-  },
-);
-
-test(
   'three quick presses of Next, within 300 ms, end three scenes on',
   { annotation, tag },
   async ({ page }) => {

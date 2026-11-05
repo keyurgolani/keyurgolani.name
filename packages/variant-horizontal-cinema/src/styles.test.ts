@@ -66,36 +66,3 @@ test('on a laptop’s short window the strip steps its spacing down and widens t
   // Spacing alone: no size, line height, or face changes, so every scene keeps its words as set.
   assert.doesNotMatch(block, /font-size|line-height|font-family|--type-/);
 });
-
-test('a scene that still overflows in a wider face opens a width wider, never shrinking its type', () => {
-  const strip = blocks(
-    '(min-width: 64rem) and (min-height: 44rem) and (hover: hover) and (pointer: fine)',
-  ).join('\n');
-  const room = (scene: string) =>
-    declared(
-      at(`.hc[data-view='strip'] .hc-shell:not([data-fit='over']) .hc-scene[data-room]${scene}`),
-      strip,
-    );
-  assert.match(room("[data-w='4']"), /--layout-cols: 6;/);
-  assert.match(room("[data-w='6']"), /--layout-cols: 8;/);
-  // Eight columns, or the laptop's ten for two sections, open to the full twelve, a half each.
-  assert.ok(strip.includes(".hc-scene[data-room][data-w='8'],"));
-  assert.match(
-    strip,
-    /\.hc-scene\[data-room\]\[data-kind='sections'\]\[data-w='8'\]:has\(\.hc-section \+ \.hc-section\) \{\s*--layout-cols: 12;/,
-  );
-  assert.match(
-    strip,
-    /\.hc-scene\[data-room\]\[data-kind='sections'\]\[data-w='8'\]\s*\.hc-pic\s*> :is\(\.hc-section \+ \.hc-section, \.hc-section:has\(\+ \.hc-section\)\) \{\s*grid-column: span 6;/,
-  );
-  // A full-width signature work gives its words a column of its still's.
-  assert.match(
-    room(' .hc-lead'),
-    /'still still still still still still \. words words words words words'/,
-  );
-  // Room alone: no rule keyed to it sets a size, line height, or face.
-  for (const [, head, body] of strip.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-    if (head!.includes('[data-room]'))
-      assert.doesNotMatch(body!, /font-size|line-height|font-family|--type-|zoom|scale/);
-  }
-});

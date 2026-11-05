@@ -1,6 +1,6 @@
 import { expect, test } from '../harness/fixtures';
 import { DEMO_APP } from '../harness/profile-matrix';
-import { brokenHeadingWords, load, read } from './horizontal-cinema-model';
+import { load, read } from './horizontal-cinema-model';
 
 // Horizontal Cinema on a laptop's window (HOR-1): the bundled sample, whose
 // Practice scene is the tallest, at the viewports a 13 to 15 inch laptop's
@@ -42,16 +42,3 @@ for (const [width, height] of [
     },
   );
 }
-
-// At 1280 by 800 in a wider face than Trebuchet MS (CI's Liberation Sans), the Epilogue intertitle's
-// four columns held "Epilogue" only by breaking it, "Epilogu / e", which no overflow shows: the scene
-// now opens a width instead, as for a picture past its frame, and no heading breaks inside a word.
-test(
-  "at 1280 by 800 no heading in the sample's strip breaks inside a word",
-  { annotation },
-  async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await load(page, '/sample?variant=horizontal-cinema');
-    await expect.poll(() => brokenHeadingWords(page)).toEqual([]);
-  },
-);

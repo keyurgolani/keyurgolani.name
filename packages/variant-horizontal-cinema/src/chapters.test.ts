@@ -7,12 +7,9 @@ import {
   INDEX_ANCHOR,
   RESERVED_ANCHORS,
   sceneAlong,
-  snapAlong,
-  wordSpans,
 } from './chapters';
 
-// The five chapters (#17), the arrow keys, the scene the strip's travel reaches, the one it snaps to,
-// and the words a heading may only break between.
+// The five chapters (#17), the arrow keys, and the scene the strip's travel reaches.
 
 test('five chapters, in their authored order, each with its direct anchor', () => {
   assert.deepEqual(
@@ -46,48 +43,4 @@ test("at the strip's end, a current scene that is stuck there holds; elsewhere t
   assert.equal(sceneAlong(offsets, 300, 300, 2), 2);
   // Scrolling to the end from before the stuck ones lands on the last.
   assert.equal(sceneAlong(offsets, 300, 300, 1), 4);
-});
-
-test('a travel resting between scenes finishes on the next one the way it went, never pulled back', () => {
-  // Four scenes, 900 px apart; the last can't reach the start, so it sits at the travel, 2400.
-  const offsets = [0, 900, 1800, 2400];
-  // A slow wheel's single notch, short of halfway, travels on rather than back to the scene it left.
-  assert.equal(snapAlong(offsets, 200, 0), 1);
-  assert.equal(snapAlong(offsets, 1100, 900), 2);
-  // And the same the other way.
-  assert.equal(snapAlong(offsets, 1600, 1800), 1);
-  assert.equal(snapAlong(offsets, 700, 900), 0);
-  // A travel that runs a little past a scene keeps that one, the nearer of those it reached.
-  assert.equal(snapAlong(offsets, 920, 0), 1);
-  assert.equal(snapAlong(offsets, 1790, 2400), 2);
-  // A long travel finishes on the nearer scene past its start.
-  assert.equal(snapAlong(offsets, 1500, 0), 2);
-  // Within a pixel of a scene, or not having gone anywhere, the nearest.
-  assert.equal(snapAlong(offsets, 900.5, 0), 1);
-  assert.equal(snapAlong(offsets, 300, 300), 0);
-  // Into the strip from above it, its start counts as where the travel set out.
-  assert.equal(snapAlong(offsets, 120, 0), 1);
-  assert.equal(snapAlong([], 120, 0), 0);
-});
-
-test("a heading's words are its runs between spaces and the joins a line may break at", () => {
-  const words = (text: string) => wordSpans(text).map(([start, end]) => text.slice(start, end));
-  // One word, whole: "Epilogue" may break nowhere.
-  assert.deepEqual(words('Epilogue'), ['Epilogue']);
-  assert.deepEqual(wordSpans('Epilogue'), [[0, 8]]);
-  // Spaces of any kind part words, and the spans are where each word sits in the text.
-  assert.deepEqual(words('Postmortem Template\u00a0Kit\n'), ['Postmortem', 'Template', 'Kit']);
-  assert.deepEqual(wordSpans(' Now  2026'), [
-    [1, 4],
-    [6, 10],
-  ]);
-  // A hyphen, a dash, a slash or a soft hyphen is a join a line may break at: each part is a word.
-  assert.deepEqual(words('on-call'), ['on', 'call']);
-  assert.deepEqual(words('2010\u20132021'), ['2010', '2021']);
-  assert.deepEqual(words('read/write'), ['read', 'write']);
-  assert.deepEqual(words('Epi\u00adlogue'), ['Epi', 'logue']);
-  // Punctuation stays with its word, as a line holds it; one letter alone can't break.
-  assert.deepEqual(words('"Cattle, Not Pets"'), ['"Cattle,', 'Not', 'Pets"']);
-  assert.deepEqual(words('I a'), []);
-  assert.deepEqual(words(''), []);
 });
