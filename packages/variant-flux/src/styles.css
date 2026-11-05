@@ -23,7 +23,12 @@
   /* One field unit: 1vw from 64rem, and the larger of 1vmin and 0.6vmax below (the spec's units). */
   --layout-fx-u: max(1vmin, 0.6vmax);
   --layout-bar: calc(var(--ui-control-height) + 2 * var(--space-xs));
-  --layout-sticky-offset: calc(var(--layout-bar) + var(--space-s));
+  /* The bar's own box: its row, at least --layout-bar, and the padding round it, which the row's
+     min-block-size doesn't include. What clears the bar, sticky at the top or docked at the foot,
+     clears this; at --layout-bar alone a focused control stopped 2 * space-xs short. */
+  --layout-fx-bar-pad: var(--space-xs);
+  --layout-fx-bar-box: calc(var(--layout-bar) + 2 * var(--layout-fx-bar-pad));
+  --layout-sticky-offset: calc(var(--layout-fx-bar-box) + var(--space-s));
   --layout-round: 50%;
   --layout-line-hair: 1px solid
     color-mix(in oklab, var(--color-border-default) 55%, var(--color-surface-default));
@@ -428,7 +433,7 @@
   /* Where the bar wraps, its rows no nearer than a focus ring reaches, as the tools sit. */
   row-gap: max(var(--space-2xs), calc(var(--ui-focus-offset) + var(--ui-focus-width)));
   min-block-size: var(--layout-bar);
-  padding-block: var(--space-xs);
+  padding-block: var(--layout-fx-bar-pad);
   padding-inline: calc(var(--layout-fx-edge) - var(--space-s));
 }
 
@@ -509,8 +514,63 @@
   align-items: center;
   /* Never closer than a focus ring reaches, so no tool's box lies over its neighbour's ring. */
   gap: max(var(--space-2xs), calc(var(--ui-focus-offset) + var(--ui-focus-width)));
+  /* The ground reaches past the tools as far as a focus ring does, and no further (a wrapped
+     bar's rows are that far apart), with the layout unmoved: the end tool's ring otherwise ran
+     onto the liquid where it reaches the bar, 1.35:1 there (quality-pr, 1440: Appearance's ring
+     with the Linux fonts). */
+  --layout-fx-ring-reach: calc(var(--ui-focus-offset) + var(--ui-focus-width));
+  padding: var(--layout-fx-ring-reach);
+  margin: calc(-1 * var(--layout-fx-ring-reach));
   border-radius: var(--ui-radius-badge);
   background-color: var(--color-canvas);
+}
+
+/* Focused, Appearance, the bar's end tool and the one the liquid reaches, keeps its ring apart
+   from the liquid all the way round, shut or open: behind it, a ground of canvas in its own shape,
+   a ring's reach and the smallest space step past its box, so it rounds with the ring. It sits
+   under everything else the bar draws (z-index -1 in the bar's own stacking), so it shows only
+   over the liquid and the page, never over a neighbouring tool or the row above a wrapped bar.
+   In the dark the ring and the liquid are near one colour, and a ring flush with the liquid read
+   as joined to it. Only while the ring shows, so the bar at rest is as it was; and not on the
+   phone's dock, which has no canvas ground. It's the tool's own ::before where the browser anchors
+   the panel (fixed, so the tool can be its ground's box); elsewhere the panel hangs from the bar,
+   and the summary's ::before, which is the drip once open, carries it while the panel is shut. */
+@media (min-width: 40rem) {
+  @supports (anchor-name: --a) {
+    [data-variant='flux'] .fx-bar__appearance {
+      position: relative;
+    }
+
+    [data-variant='flux']
+      .fx-bar__appearance:has([data-ui-slot='disclosure.summary']:focus-visible)::before {
+      content: '';
+      position: absolute;
+      inset: calc(-1 * (var(--layout-fx-ring-reach) + var(--space-3xs)));
+      z-index: -1;
+      border-radius: var(--ui-radius-badge);
+      background-color: var(--color-canvas);
+      pointer-events: none;
+    }
+  }
+
+  @supports not (anchor-name: --a) {
+    [data-variant='flux'] .fx-bar__appearance [data-ui-slot='disclosure.summary'] {
+      position: relative;
+    }
+
+    [data-variant='flux']
+      .fx-bar__appearance
+      [data-ui-slot='disclosure']:not([open])
+      > [data-ui-slot='disclosure.summary']:focus-visible::before {
+      content: '';
+      position: absolute;
+      inset: calc(-1 * (var(--layout-fx-ring-reach) + var(--space-3xs)));
+      z-index: -1;
+      border-radius: var(--ui-radius-badge);
+      background-color: var(--color-canvas);
+      pointer-events: none;
+    }
+  }
 }
 
 /* The visitor's Appearance in the bar: one more tool, unruled, its chevron saying it opens (on a
@@ -1423,6 +1483,14 @@
   list-style: none;
 }
 
+/* A focused fold's ring is painted over the folds after it: the next fold's hairline runs within a
+   ring's reach of this one's foot, and a later box paints over an earlier one's outline, so the
+   ring's foot lost a row to it (quality-pr, 390: #talks, the talks fold over the next one's line). */
+[data-variant='flux'] .fx-fold__summary:focus-visible {
+  position: relative;
+  z-index: 1;
+}
+
 [data-variant='flux'] .fx-fold__summary::-webkit-details-marker {
   display: none;
 }
@@ -2100,6 +2168,10 @@
 [data-variant='flux'] .fx-close__address a {
   text-decoration-color: var(--layout-fx-ink);
   text-decoration-thickness: 0.08em;
+  /* The underline ends inside the link's box, clear of its focus ring: at the links' 0.18em it ran
+     about 0.04em past the box's foot, under the ring's inner row, where the ring read 1.46:1 on
+     the ink (quality-pr, 1440 and 1024: the address's ring short by a row along its foot). */
+  text-underline-offset: 0.08em;
 }
 
 [data-variant='flux'] .fx-close__copy {
@@ -2580,8 +2652,11 @@
     padding-block-end: calc(var(--layout-bar) + var(--space-2xl));
   }
 
+  /* Clear of the whole dock (--layout-fx-bar-box): at --layout-bar alone a control Tab brought up
+     from below stopped its last few pixels under the dock, and its ring's foot with them
+     (quality-pr, 390: a stats fold, 5.8px under). */
   [data-variant='flux'] :is(a, button, summary) {
-    scroll-margin-block-end: calc(var(--layout-bar) + var(--space-s));
+    scroll-margin-block-end: calc(var(--layout-fx-bar-box) + var(--space-s));
   }
 
   [data-variant='flux'] .fx-opening-frame {
