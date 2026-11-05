@@ -1944,6 +1944,14 @@ export const A11Y_CASES: readonly MetaCase[] = [
   // once more where it turned, so its color and its background come from one state of the page,
   // never dark ink read before over the dark drop shot after (row 25; Flux's .fx-tab__word).
   goodFile('script-turn', 'contrast-script-turn.html', 'contrast', contrast),
+  // So is one a timeout turns at 60 % of a drop's 1.2 s transition under it, as Flux's tabs do:
+  // the shots end the transition, and the timeout, on the transition's own clock, comes after
+  // them, so its color is read again only once the time the transition had left has passed.
+  goodFile('timed-turn', 'contrast-timed-turn.html', 'contrast', contrast),
+  // And links at rest that transition their own color, as Kinetic Cosmos's arc stops do: the
+  // sampler's own mark and its removal set the transition off, so a link read again part-way back
+  // to its ink is read at the transition's end, never called turned (row 25).
+  goodFile('own-transition', 'contrast-own-transition.html', 'contrast', contrast),
   // A word whose color a script changes every frame never shows one state twice: unresolved,
   // a record that fails the gate, never a pass (row 25).
   {

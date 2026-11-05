@@ -125,9 +125,11 @@ export const PAINTS = /^(?:color|background(?:[A-Z]\w*)?)$/;
  *
  * Ending them can move the page on, though, past the color read before: a
  * script that turns the text's color as a transition goes, by a timeout or
- * on its end, turns it while the shots are taken (Flux's drop, row 25). So
- * the color is read again once the shots are taken (inkScript()), and one
- * that turned is read once more, or unresolved (inkUnresolved()).
+ * on its end, turns it while the shots are taken, or after, when the
+ * transition would have ended (Flux's drop, row 25). So the color is read
+ * again once the shots are taken and that time has passed (inkScript(),
+ * shotEndsScript()), and one that turned is read once more, the page at rest
+ * first (pageRestScript()), or unresolved (inkUnresolved()).
  */
 export const INHERITED_PAINTS = /^color$/;
 
@@ -915,12 +917,136 @@ export function stillUnresolved(motion: NonNullable<Motion>): string {
  * background from the shots; the two are of one state of the page only if
  * this is still the color sampleScript() read (row 25: Flux's tab words,
  * whose ink a timeout turns as the drop's transition, which the shots end,
- * passes them). Runs in the browser.
+ * passes them). A color transition still running where its ink comes from,
+ * on it or on an element whose color it inherits, is read at its end, as the
+ * shots read every finite animation: taking its marks off sets one off on an
+ * element that transitions its color (Kinetic Cosmos's links, from the marks'
+ * transparent back to their ink), and a page's own is heading to the state
+ * the shots showed. Runs in the browser.
  */
 export function inkScript(el: Element): string {
   const style = getComputedStyle(el);
-  const fill = style.webkitTextFillColor;
-  return fill && fill !== style.color && !/^rgba?\(0, 0, 0, 0\)$/.test(fill) ? fill : style.color;
+  const ending = (property: 'color' | 'webkitTextFillColor'): string | null => {
+    for (let node: Element | null = el; node; node = node.parentElement) {
+      for (const animation of node.getAnimations()) {
+        const effect = animation.effect;
+        if (animation.playState !== 'running' || !(effect instanceof KeyframeEffect)) continue;
+        if (effect.pseudoElement) continue;
+        const frames = effect.getKeyframes();
+        const end = frames[frames.length - 1]?.[property];
+        if (typeof end === 'string') return end;
+      }
+      // Up only while it inherits: an element that sets its own value stops the walk.
+      const parent: Element | null = node.parentElement;
+      if (!parent || getComputedStyle(node)[property] !== getComputedStyle(parent)[property]) break;
+    }
+    return null;
+  };
+  // A fill of its own, as sampleScript() has it: one that isn't its current color (a currentcolor
+  // fill follows the color part-way through a transition), and paints.
+  const [now, fillNow] = [style.color, style.webkitTextFillColor];
+  const ownFill = !!fillNow && fillNow !== now && !/^rgba?\(0, 0, 0, 0\)$/.test(fillNow);
+  return ownFill ? (ending('webkitTextFillColor') ?? fillNow) : (ending('color') ?? now);
+}
+
+/**
+ * Whether two colors read off the page are one: the same string, or exactly
+ * the same channels and alpha, however the page serialized them (an interpolated
+ * color reads `rgba(r, g, b, 1)` where the same color at rest reads
+ * `rgb(r, g, b)`). An unreadable one is never the same.
+ */
+export function sameInk(a: string, b: string | null): boolean {
+  if (b === null) return false;
+  if (a === b) return true;
+  const [x, y] = [parseCssColor(a), parseCssColor(b)];
+  if (!x || !y) return false;
+  return x.rgb.every((channel, i) => channel === y.rgb[i]) && x.alpha === y.alpha;
+}
+
+/**
+ * Right before a shot: until when, on the page's clock (performance.now()),
+ * the running finite animations on the document's timeline would have run,
+ * which the shot ends early (animations: 'disabled'), kept on the window as
+ * the latest such time any shot of the call has ended, and how long from now
+ * that is, in ms. A page that times its own changes to a transition (Flux
+ * turns each tab's ink by a timeout as the drop's clip passes it) makes them
+ * on the transition's clock, not the shots': a shot shows the transition's
+ * end at once, and the ink it set off comes as late as the transition would
+ * have ended, after this element's read or the next one's. So the color is
+ * read again only once that time has passed (shotSettleScript()). Each
+ * animation counts for `limit` ms at most (NODE_LIMIT_MS), so a long one a
+ * shot ended doesn't hold every later element's read past the wait's limit.
+ * Runs in the browser.
+ */
+export function shotEndsScript({ key, limit }: { key: string; limit: number }): number {
+  const w = window as unknown as Record<string, number | undefined>;
+  const now = performance.now();
+  let until = w[`__qualityShotUntil_${key}`] ?? now;
+  // The sampler's own: a transition of a property its marks set (glyph color, fill, decoration,
+  // shadow) inside an element it marked, which a page's timers can't be keyed to.
+  const marked = `[data-quality-glyphs="${key}"], [data-quality-neighbours="${key}"], [data-quality-mask]`;
+  const own = /^(?:color|webkitTextFillColor|textDecorationColor|textShadow|fill)$/;
+  const ours = (animation: Animation) => {
+    const effect = animation.effect;
+    if (!(effect instanceof KeyframeEffect) || !effect.target?.closest(marked)) return false;
+    const properties = effect
+      .getKeyframes()
+      .flatMap((frame) => Object.keys(frame))
+      .filter((p) => !['offset', 'easing', 'composite', 'computedOffset'].includes(p));
+    return properties.length > 0 && properties.every((p) => own.test(p));
+  };
+  for (const animation of document.getAnimations()) {
+    if (animation.playState !== 'running' || animation.timeline !== document.timeline) continue;
+    if (ours(animation)) continue;
+    const timing = animation.effect?.getComputedTiming();
+    if (!timing || typeof timing.localTime !== 'number') continue;
+    const end = Number(timing.endTime);
+    if (!Number.isFinite(end)) continue;
+    const left = (end - timing.localTime) / (Math.abs(animation.playbackRate) || 1);
+    until = Math.max(until, now + Math.min(left, limit));
+  }
+  w[`__qualityShotUntil_${key}`] = until;
+  return Math.max(0, until - now);
+}
+
+/**
+ * Waits `ms` (shotEndsScript()'s, held to NODE_LIMIT_MS by the caller), then
+ * two frames, so what the page set off by then has painted. Runs in the browser.
+ */
+export function shotSettleScript(ms: number): Promise<true> {
+  const frame =
+    (window as unknown as { __qualityRaf?: typeof requestAnimationFrame }).__qualityRaf ??
+    requestAnimationFrame;
+  return new Promise((done) => setTimeout(() => frame(() => frame(() => done(true))), ms));
+}
+
+/**
+ * Waits, up to `limit` ms, for no finite animation on the document's
+ * timeline to be running for two frames together: the page at rest, as a
+ * visitor sees it once its motion ends, before an element whose color turned
+ * is read once more. True at rest, false at the limit. Runs in the browser.
+ */
+export function pageRestScript(limit: number): Promise<boolean> {
+  const frame =
+    (window as unknown as { __qualityRaf?: typeof requestAnimationFrame }).__qualityRaf ??
+    requestAnimationFrame;
+  const running = () =>
+    document.getAnimations().some((animation) => {
+      if (animation.playState !== 'running' || animation.timeline !== document.timeline)
+        return false;
+      return Number.isFinite(Number(animation.effect?.getComputedTiming().endTime));
+    });
+  return new Promise((done) => {
+    const began = performance.now();
+    let quiet = 0;
+    const look = () => {
+      quiet = running() ? 0 : quiet + 1;
+      if (quiet >= 2) done(true);
+      else if (performance.now() - began >= limit) done(false);
+      else frame(look);
+    };
+    frame(look);
+  });
 }
 
 /**
@@ -1865,7 +1991,12 @@ export async function batchFindings(
               );
               members = members.filter(({ entry }) => !moved.includes(entry.at));
             };
+            // Each shot first notes what it ends (shotEndsScript()), as on the per-element path.
+            const ends: { left: number | null } = { left: 0 };
             const shoot = async () => {
+              ends.left = await page
+                .evaluate(shotEndsScript, { key, limit: NODE_LIMIT_MS })
+                .catch(() => null);
               const taken = await camera.take(members.map(({ entry }) => entry.sample.box));
               return new Map(members.map(({ entry }, k) => [entry.at, taken[k]!]));
             };
@@ -1876,9 +2007,13 @@ export async function batchFindings(
             await settle('white');
             const whites = await shoot();
             await page.evaluate(unmarkBatchScript, key);
-            // Each member's color read again once the shots are taken (inkScript()): one the page
-            // turned meanwhile leaves the batch for its own path, which reads it once more, or
-            // says it never came from one state (row 25).
+            if (ends.left !== 0)
+              await page
+                .evaluate(shotSettleScript, Math.min(ends.left ?? NODE_LIMIT_MS, NODE_LIMIT_MS))
+                .catch(() => undefined);
+            // Each member's color read again once the shots are taken and what they ended has had
+            // its time (inkScript()): one the page turned meanwhile leaves the batch for its own
+            // path, which reads it once more, or says it never came from one state (row 25).
             const inks = await page
               .evaluate(
                 ({ key, ats }) => {
@@ -1891,7 +2026,7 @@ export async function batchFindings(
               )
               .catch(() => null);
             for (const [k, { entry }] of members.entries()) {
-              if (!Array.isArray(inks) || inks[k] !== entry.sample.color) continue;
+              if (!Array.isArray(inks) || !sameInk(entry.sample.color, inks[k] ?? null)) continue;
               const found = judged(
                 selectors.get(entry.at)!,
                 entry.sample,
@@ -2045,13 +2180,17 @@ export async function incompleteContrastFindings(
           );
           continue;
         }
-        // One read, or why it can't be read: what moves it comes to rest before its box is read,
-        // then its sample, its three shots, and its color read again (inkScript()) once they're
-        // taken and its marks are off.
-        const read = async (): Promise<
+        // One read, or why it can't be read: what moves it comes to rest before its box is read
+        // (and, `again`, the whole page, pageRestScript()), then its sample, its three shots, and
+        // its color read again (inkScript()) once they're taken, its marks are off, and the time
+        // the transitions its shots ended had left has passed (shotEndsScript()).
+        const read = async (
+          again: boolean,
+        ): Promise<
           | string
           | { sample: Sample; shot: Buffer; black: Buffer; white: Buffer; after: string | null }
         > => {
+          if (again) await page.evaluate(pageRestScript, NODE_LIMIT_MS).catch(() => false);
           const motion = await locator
             .evaluate(
               stillnessScript,
@@ -2095,8 +2234,15 @@ export async function incompleteContrastFindings(
             },
             { key, near, hide: neighbourTexts(sample.texts, sample.box) },
           );
-          const capture = () =>
-            page.screenshot({ clip: sample.box, animations: 'disabled', caret: 'hide' });
+          // Each shot first notes what it ends (shotEndsScript()); `left`, after the last, is how
+          // long the wait for what those ends set off takes. One unknown takes the whole limit.
+          const ends: { left: number | null } = { left: 0 };
+          const capture = async () => {
+            ends.left = await page
+              .evaluate(shotEndsScript, { key, limit: NODE_LIMIT_MS })
+              .catch(() => null);
+            return page.screenshot({ clip: sample.box, animations: 'disabled', caret: 'hide' });
+          };
           const shot = await capture();
           // Its glyphs alone, filled black and then white over the same background, for their mask.
           const masked = async (fill: 'black' | 'white') => {
@@ -2110,6 +2256,10 @@ export async function incompleteContrastFindings(
             .catch(() => undefined);
           await unmark();
           await unmarkNeighbours();
+          if (ends.left !== 0)
+            await page
+              .evaluate(shotSettleScript, Math.min(ends.left ?? NODE_LIMIT_MS, NODE_LIMIT_MS))
+              .catch(() => undefined);
           const after = await locator
             .evaluate(inkScript, undefined, { timeout: NODE_LIMIT_MS })
             .catch(() => null);
@@ -2117,23 +2267,25 @@ export async function incompleteContrastFindings(
         };
         // Its color and its background from one state of the page (row 25). Its color is read
         // outside the shots, and the page can turn it in between (a script's class as the
-        // sampler's scroll moved the page, a timeout a transition the shots end sets off): one
-        // whose color isn't the same once its shots are taken is read once more, its pins off and
-        // its wait run again, and one that turns again is unresolved, never judged from two states.
-        let taken = await read();
+        // sampler's scroll moved the page, a timeout a transition the shots end sets off, even
+        // one an earlier element's shots ended): one whose color isn't the same once its shots
+        // are taken and what they ended has had its time is read once more, its pins off, its
+        // wait run again and the page at rest, and one that turns again is unresolved, never
+        // judged from two states.
+        let taken = await read(false);
         if (typeof taken === 'string') {
           unresolved(taken);
           continue;
         }
-        if (taken.after !== taken.sample.color) {
+        if (!sameInk(taken.sample.color, taken.after)) {
           const turned = [taken.sample.color, taken.after] as const;
           await page.evaluate(releaseScript, key).catch(() => undefined);
-          taken = await read();
+          taken = await read(true);
           if (typeof taken === 'string') {
             unresolved(taken);
             continue;
           }
-          if (taken.after !== taken.sample.color) {
+          if (!sameInk(taken.sample.color, taken.after)) {
             unresolved(inkUnresolved(turned, [taken.sample.color, taken.after]));
             continue;
           }
@@ -2165,6 +2317,7 @@ export async function incompleteContrastFindings(
             el.removeAttribute('data-quality-neighbours');
         }
         delete (window as unknown as Record<string, unknown>)[near];
+        delete (window as unknown as Record<string, unknown>)[`__qualityShotUntil_${key}`];
       },
       { key, near },
     );
