@@ -467,6 +467,14 @@ test("the visitor's Appearance floats over the page, in Flux's ink: under its ow
   // between the insets, or the foot runs past the window, out of reach (640x360).
   assert.match(anchored, /max-block-size: stretch;/);
   assert.doesNotMatch(anchored, /max-block-size: none;/);
+  // Firefox from 147 anchors but parses neither keyword, so a calc comes first for it; the
+  // keywords after it stay the last word where they parse.
+  assert.deepEqual(
+    [...anchored.matchAll(/max-block-size: ([^;]+);/g)].map(
+      (match) => (match[1] ?? '').split('(')[0],
+    ),
+    ['calc', '-webkit-fill-available', 'stretch'],
+  );
   assert.equal(valueOf(anchored, 'position-try-fallbacks'), 'flip-inline');
   // On a phone it rises over the dock: its foot above the bar, never off the bottom of the window.
   const phone = rulesFor(PANEL, onPhones)[0]?.body ?? '';

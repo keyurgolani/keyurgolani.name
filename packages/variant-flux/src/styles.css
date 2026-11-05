@@ -644,13 +644,16 @@
        form, short of the window's foot. A block fit-content is the form's own height however
        short the window, so the cap is the room between the insets (stretch), and the panel
        scrolls inside it: at 640x360 (a 1280x720 laptop at 200%) its foot ran 100px past the
-       window, out of reach, and no fallback fit, so flip-inline never ran either. */
+       window, out of reach, and no fallback fit, so flip-inline never ran either. A browser that
+       anchors but parses neither keyword (Firefox from 147) takes the calc before them: the
+       window less two bar rows and the inset, so a bar of up to two rows leaves the foot inside. */
     [data-variant='flux'] .fx-bar__appearance [data-ui-slot='disclosure.content'] {
       position: fixed;
       position-anchor: --fx-appearance;
       inset-block: calc(anchor(end) + var(--space-xs)) var(--space-m);
       inset-inline: auto anchor(end);
       block-size: fit-content;
+      max-block-size: calc(100dvh - 2 * var(--layout-bar) - var(--space-m));
       max-block-size: -webkit-fill-available;
       max-block-size: stretch;
       position-try-fallbacks: flip-inline;
