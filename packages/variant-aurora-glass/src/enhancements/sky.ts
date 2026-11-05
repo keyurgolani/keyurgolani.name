@@ -2,7 +2,6 @@
 
 import { createElement, useCallback, useEffect, useState } from 'react';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
-import { enhancementSettled } from '@portfolio/variant-contract/settle';
 
 // Aurora Glass's one enhancement (brief §5.2, step 9), adding to a page
 // that already works: with no script the capsule's links, the Index (a
@@ -205,6 +204,27 @@ export function holdFocus(index: FocusTrap | null, active: () => unknown): () =>
 }
 
 /** The document as followFocus reads it: its focus events, the focused element, and the body. */
+/** The settle signal's attribute (@portfolio/variant-contract/settle's ENHANCEMENT_PENDING). */
+const PENDING = 'data-enhancement-pending';
+
+/**
+ * Takes the sky's id off the pending list on `.ag-sky` in `root`, and the
+ * attribute with the last id: @portfolio/variant-contract/settle's
+ * enhancementSettled() for the sky's own hold, written here so this chunk
+ * imports nothing new. Importing it put settle.ts in a second copy of the
+ * sky's chunk, for the loaders whose page ships no kit runtime, and the
+ * enhancement budget counts both copies (5662 B of 4096, against 2674
+ * before the hold). sky.test.ts holds the two to the same result.
+ */
+export function settleSky(root: ParentNode): void {
+  const sky = root.querySelector('.ag-sky');
+  const value = sky?.getAttribute(PENDING);
+  if (!sky || value === null || value === undefined) return;
+  const rest = value.split(/\s+/).filter((id) => id !== '' && id !== 'sky');
+  if (rest.length > 0) sky.setAttribute(PENDING, rest.join(' '));
+  else sky.removeAttribute(PENDING);
+}
+
 export interface FocusDocument {
   addEventListener(type: 'focusin' | 'focusout', listener: (event: Event) => void): void;
   removeEventListener(type: 'focusin' | 'focusout', listener: (event: Event) => void): void;
@@ -281,7 +301,7 @@ function attach(root: HTMLElement, prefix: string): () => void {
   const bands = [...root.querySelectorAll<HTMLElement>('.ag-band[data-band]')];
   const opening = root.querySelector('.ag-opening');
   let firstDeliveries = (bands.length > 0 ? 1 : 0) + (opening ? 1 : 0);
-  const settled = () => enhancementSettled(root.querySelector('.ag-sky'), 'sky');
+  const settled = () => settleSky(root);
   const delivered = (first: boolean) => {
     if (first && --firstDeliveries === 0) settled();
   };
@@ -484,7 +504,7 @@ export default function SkyEnhancement({ input }: { readonly input: VariantRende
     if (!root) return undefined;
     // Inside a plate (an inert boundary) nothing attaches, so nothing waits on its first pass.
     if (root.closest('[inert]')) {
-      enhancementSettled(root.querySelector('.ag-sky'), 'sky');
+      settleSky(root);
       return undefined;
     }
     return attach(root, prefix);
