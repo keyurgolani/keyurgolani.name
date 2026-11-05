@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A word a script turns as a transition beside it ends, known-good</title>
+    <!--
+      A tab bar whose state a script changes as it comes into view, as
+      Flux's does (row 25): a cue beside the tab fades in over 2 s, and when
+      its fade ends the script lands the drop under the tab and turns the
+      tab's ink, by one class, at once, with no transition of either. A
+      visitor sees dark ink on the bar's light gradient, then light ink on
+      the dark drop: about 15:1 both ways. The sampler scrolls the bar into
+      view, which starts the fade, and reads the word's color straight
+      after: dark. Its shots end the fade (animations: 'disabled'), so the
+      script lands the drop as they're taken: the dark ink read before,
+      over the dark drop shot after, is about 1:1, from two states of the
+      page that never meet. Read again once it holds still, the word is
+      light on the drop, and passes.
+    -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #fff;
+        color: #222;
+      }
+      main {
+        padding: 1rem 1rem 50vh;
+      }
+      .band {
+        background: linear-gradient(90deg, #fff, #f6f6f6);
+        color: #222;
+      }
+      .bar {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 2rem;
+        margin-top: 150vh;
+        padding: 0.25rem;
+        background: linear-gradient(90deg, #fff, #f6f6f6);
+      }
+      .drop {
+        position: absolute;
+        inset-block: 0.25rem;
+        inset-inline-start: 0.25rem;
+        inline-size: 6rem;
+        background: #222;
+        visibility: hidden;
+      }
+      .tab {
+        position: relative;
+        display: inline-block;
+        inline-size: 4rem;
+        padding: 0.5rem 1rem;
+        color: #222;
+        text-decoration: none;
+      }
+      .bar.here .drop {
+        visibility: visible;
+      }
+      .bar.here .tab {
+        color: #fbfbfb;
+      }
+      .cue {
+        inline-size: 1rem;
+        block-size: 1rem;
+        border-radius: 50%;
+        background: #222;
+        opacity: 0.2;
+        transition: opacity 2s linear;
+      }
+      .bar.arriving .cue {
+        opacity: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Tabs</h1>
+      <p class="band">Text at rest over a gradient.</p>
+      <nav class="bar" id="bar">
+        <span class="drop"></span>
+        <a class="tab" href="#bar"><span class="word">Work</span></a>
+        <span class="cue"></span>
+      </nav>
+    </main>
+    <script>
+      const bar = document.getElementById('bar');
+      bar.querySelector('.cue').addEventListener('transitionend', () => bar.classList.add('here'), {
+        once: true,
+      });
+      const arrive = new IntersectionObserver((entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        bar.classList.add('arriving');
+        arrive.disconnect();
+      });
+      arrive.observe(bar);
+    </script>
+  </body>
+</html>

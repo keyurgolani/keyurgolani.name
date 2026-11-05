@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A word a timeout turns as a drop's transition passes it, known-good</title>
+    <!--
+      A tab bar as Flux's (row 25): as the bar comes into view, a dark drop's
+      clip opens under the tab over 1.2 s, and a timeout turns the tab's ink
+      light at 60 % of that, as the clip's edge passes the word's centre; out
+      of view, both go back at once. A visitor sees dark ink on the bar's
+      light gradient, then light ink on the dark drop: about 15:1 both ways.
+      The sampler scrolls the bar into view, which starts the drop, and reads
+      the word's color straight after: dark. Its shots end the drop's
+      transition (animations: 'disabled'), so the drop is under the word, and
+      the timeout, on the transition's own clock, is still to come when the
+      shots are done: the dark ink read before, over the dark drop shot after,
+      is about 1:1, even read again at once. Read again once the transition's
+      time has passed, the word is light, and read once more, it passes.
+    -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #fff;
+        color: #222;
+      }
+      main {
+        padding: 1rem 1rem 50vh;
+      }
+      .band {
+        background: linear-gradient(90deg, #fff, #f6f6f6);
+        color: #222;
+      }
+      .bar {
+        position: relative;
+        display: flex;
+        align-items: center;
+        margin-top: 150vh;
+        padding: 0.25rem;
+        background: linear-gradient(90deg, #fff, #f6f6f6);
+      }
+      .drop {
+        position: absolute;
+        inset-block: 0.25rem;
+        inset-inline-start: 0.25rem;
+        inline-size: 6rem;
+        background: #222;
+        clip-path: inset(0 100% 0 0);
+        transition: clip-path 1.2s linear;
+      }
+      .bar.here .drop {
+        clip-path: inset(0 0 0 0);
+      }
+      .bar.reset .drop {
+        transition: none;
+      }
+      .tab {
+        position: relative;
+        display: inline-block;
+        inline-size: 4rem;
+        padding: 0.5rem 1rem;
+        color: #222;
+        text-decoration: none;
+      }
+      .tab.under {
+        color: #fbfbfb;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Tabs</h1>
+      <p class="band">Text at rest over a gradient.</p>
+      <nav class="bar" id="bar">
+        <span class="drop"></span>
+        <a class="tab" id="tab" href="#bar"><span class="word">Work</span></a>
+      </nav>
+    </main>
+    <script>
+      const bar = document.getElementById('bar');
+      const tab = document.getElementById('tab');
+      let turn;
+      new IntersectionObserver((entries) => {
+        const seen = entries.some((entry) => entry.isIntersecting);
+        clearTimeout(turn);
+        if (seen) {
+          bar.classList.add('here');
+          // As the drop's edge passes the word's centre: 60 % of its 1.2 s.
+          turn = setTimeout(() => tab.classList.add('under'), 720);
+          return;
+        }
+        // Out of view, both go back at once.
+        bar.classList.add('reset');
+        bar.classList.remove('here');
+        tab.classList.remove('under');
+        void bar.offsetWidth;
+        bar.classList.remove('reset');
+      }).observe(bar);
+    </script>
+  </body>
+</html>

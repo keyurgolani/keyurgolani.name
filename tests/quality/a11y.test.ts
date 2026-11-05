@@ -27,6 +27,8 @@ import {
   incompleteContrastFindings,
   incompleteContrastNodes,
   inFrame,
+  inkScript,
+  inkUnresolved,
   insideQuad,
   NEIGHBOUR_MARGIN,
   neededRatio,
@@ -1066,21 +1068,23 @@ test("color-contrast-enhanced's incomplete items reach the sampler with color-co
       locator: () => {
         const element = {
           scrollIntoViewIfNeeded: async () => undefined,
-          // Nothing stuck covers it, and it's on the axes.
+          // Nothing stuck covers it, it's on the axes, and its color holds through its shots.
           evaluate: async (script: { name: string }) =>
             script.name === stuckCoverScript.name
               ? null
-              : {
-                  mode,
-                  color: 'rgb(105, 105, 105)',
-                  fontSize: 16,
-                  fontWeight: 400,
-                  box: { x: 0, y: 0, width: 10, height: 10 },
-                  texts: [],
-                  flat: true,
-                  turned: false,
-                  quad: null,
-                },
+              : script.name === inkScript.name
+                ? 'rgb(105, 105, 105)'
+                : {
+                    mode,
+                    color: 'rgb(105, 105, 105)',
+                    fontSize: 16,
+                    fontWeight: 400,
+                    box: { x: 0, y: 0, width: 10, height: 10 },
+                    texts: [],
+                    flat: true,
+                    turned: false,
+                    quad: null,
+                  },
         };
         return { first: () => element };
       },
@@ -1095,6 +1099,87 @@ test("color-contrast-enhanced's incomplete items reach the sampler with color-co
       ['high-contrast-text', 'main p.enhanced', '7:1', '5.49:1 against its worst background pixel'],
     ],
   );
+});
+
+test('a color that turns while its shots are taken is read once more, and one that turns again is unresolved, never judged (row 25)', async () => {
+  const results = {
+    incomplete: [{ id: CONTRAST_RULE, nodes: [{ target: ['main p.tab'] }] }],
+  } as unknown as Parameters<typeof incompleteContrastFindings>[1];
+  // Dark text, #222, over white: about 15.9:1 once its color and its background agree.
+  const white = png([[[255, 255, 255]]]);
+  const shots = [white, png([[[0, 0, 0]]]), white];
+  // `inks`: the color each read after the shots gives, in turn; `colors`, each sample's.
+  const page = (colors: readonly string[], inks: readonly (string | null)[]) => {
+    let shot = 0;
+    let sample = 0;
+    let ink = 0;
+    const calls: string[] = [];
+    const element = {
+      scrollIntoViewIfNeeded: async () => undefined,
+      evaluate: async (script: { name: string }) => {
+        if (script.name === stuckCoverScript.name) return null;
+        if (script.name === stillnessScript.name) return (calls.push('wait'), null);
+        if (script.name === inkScript.name) {
+          calls.push('ink');
+          const read = inks[ink++];
+          if (read === null) throw new Error('detached');
+          return read;
+        }
+        if (script.name !== 'sampleScript') return undefined;
+        calls.push('sample');
+        return {
+          mode: 'normal',
+          color: colors[sample++]!,
+          fontSize: 16,
+          fontWeight: 400,
+          box: { x: 0, y: 0, width: 10, height: 10 },
+          texts: [],
+          flat: true,
+          turned: false,
+          quad: null,
+        };
+      },
+    };
+    return {
+      calls,
+      page: {
+        evaluate: async () => undefined,
+        screenshot: async () => shots[shot++ % shots.length]!,
+        locator: () => ({ first: () => element }),
+      } as unknown as Parameters<typeof incompleteContrastFindings>[0],
+    };
+  };
+  // Held through its shots: read once, and passes.
+  const held = page(['rgb(34, 34, 34)'], ['rgb(34, 34, 34)']);
+  assert.deepEqual(await incompleteContrastFindings(held.page, results), []);
+  assert.deepEqual(held.calls, ['wait', 'sample', 'ink']);
+  // Turned once (a script's class as the shots end a transition): waited for and read again,
+  // and judged from the second read alone, which holds.
+  const once = page(
+    ['rgb(34, 34, 34)', 'rgb(250, 250, 250)'],
+    ['rgb(250, 250, 250)', 'rgb(250, 250, 250)'],
+  );
+  const judged = await incompleteContrastFindings(once.page, results);
+  assert.deepEqual(once.calls, ['wait', 'sample', 'ink', 'wait', 'sample', 'ink']);
+  assert.deepEqual(
+    judged.map(({ actual }) => actual),
+    ['1.04:1 against its worst background pixel'],
+  );
+  // Turned both times, or unreadable after the shots: unresolved, a record, never a pass.
+  const turns: readonly (readonly [string | null, string | null])[] = [
+    ['rgb(1, 0, 0)', 'rgb(3, 0, 0)'],
+    [null, null],
+  ];
+  for (const inks of turns) {
+    const restless = page(['rgb(0, 0, 0)', 'rgb(2, 0, 0)'], inks);
+    assert.deepEqual(
+      (await incompleteContrastFindings(restless.page, results)).map(({ rule, actual }) => [
+        rule,
+        actual,
+      ]),
+      [['text', inkUnresolved(['rgb(0, 0, 0)', inks[0]], ['rgb(2, 0, 0)', inks[1]])]],
+    );
+  }
 });
 
 test("the batch path splits the elements it reads so no member's marks paint within BATCH_GAP of another's box, but a neighbour both hide by fill doesn't split them", () => {

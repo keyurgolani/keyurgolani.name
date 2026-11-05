@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A word whose color a script changes every frame, known-bad</title>
+    <!--
+      A word over a gradient whose color a script sets every frame, through
+      a run of dark colors that each pass against the gradient: no
+      animation or transition the sampler's wait could see, and no state the
+      page settles in. Its color read once its shots are taken is never the
+      one read before them, the second time either, so its color and its
+      background never come from one state of the page: unresolved, a
+      record, never a pass (row 25).
+    -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #fff;
+        color: #222;
+      }
+      main {
+        padding: 1rem;
+      }
+      .band {
+        background: linear-gradient(90deg, #fff, #f6f6f6);
+        color: #222;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Ink</h1>
+      <p class="band"><span id="ink">A word whose color never rests.</span></p>
+    </main>
+    <script>
+      // Each frame one step on: 4096 dark colors, so two reads a few frames apart never match.
+      const ink = document.getElementById('ink');
+      let step = 0;
+      const turn = () => {
+        step = (step + 1) % 4096;
+        ink.style.color = `rgb(${step % 64}, 0, ${step >> 6})`;
+        requestAnimationFrame(turn);
+      };
+      requestAnimationFrame(turn);
+    </script>
+  </body>
+</html>

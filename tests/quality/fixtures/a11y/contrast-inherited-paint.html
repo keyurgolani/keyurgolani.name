@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A word whose tab's color is still moving, known-good</title>
+    <!--
+      A tab whose state changes as it comes into view, as a composition's
+      tab bar marks the current one: its color moves from its ground's own
+      color to dark over 600 ms, by a transition on the tab, which the word
+      inside it inherits and doesn't set. The ground is a gradient, so axe
+      leaves the word to the contrast sampler. The sampler scrolls it into
+      view, which changes the state; read straight after, the word's glyphs
+      are its ground's color (about 1:1) or part-way; read once the tab's
+      transition has ended, the word passes at about 15:1.
+    -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #fff;
+        color: #222;
+      }
+      main {
+        padding: 1rem 1rem 50vh;
+      }
+      .band {
+        background: linear-gradient(90deg, #fff, #f6f6f6);
+        color: #222;
+      }
+      .later {
+        margin-top: 150vh;
+      }
+      .tab {
+        display: inline-block;
+        padding: 0.5rem 1rem;
+        color: #fbfbfb;
+        text-decoration: none;
+        transition: color 600ms linear;
+      }
+      .tab.current {
+        color: #222;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Tabs</h1>
+      <p class="band">Text at rest over a gradient.</p>
+      <nav class="band later">
+        <a class="tab" id="tab" href="#tab"><span class="word">Writing</span></a>
+      </nav>
+    </main>
+    <script>
+      const tabs = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          entry.target.classList.add('current');
+          tabs.unobserve(entry.target);
+        }
+      });
+      tabs.observe(document.getElementById('tab'));
+    </script>
+  </body>
+</html>

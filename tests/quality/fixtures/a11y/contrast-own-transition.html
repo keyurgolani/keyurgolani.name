@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Links that transition their color, at rest, known-good</title>
+    <!--
+      Links over a gradient that transition their own color over 300 ms, as
+      Kinetic Cosmos's arc stops do, and are at rest: nothing on the page
+      moves or turns. The sampler's glyph mark (color: transparent) and its
+      removal set off that transition on each link; read again once its
+      shots are taken, a link is part-way back to its ink, or the same color
+      serialized as rgba(r, g, b, 1). That's the sampler's own doing, not a
+      turn of the page's: each link is read at the transition's end, and
+      passes at about 15:1 (row 25).
+    -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #fff;
+        color: #222;
+      }
+      main {
+        padding: 1rem;
+      }
+      .band {
+        display: flex;
+        gap: 2rem;
+        padding: 0.5rem;
+        background: linear-gradient(90deg, #fff, #f6f6f6);
+      }
+      .band a {
+        color: #222;
+        text-decoration: none;
+        transition: color 300ms linear;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Stops</h1>
+      <nav class="band">
+        <a href="#one">One</a>
+        <a href="#two">Two</a>
+        <a href="#three">Three</a>
+      </nav>
+    </main>
+  </body>
+</html>

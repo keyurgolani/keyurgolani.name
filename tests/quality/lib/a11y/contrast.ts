@@ -50,8 +50,9 @@
 // or on an ancestor, time-based or scroll-driven, would otherwise move it
 // between its box's read and its shots, which end every finite animation
 // and cancel the rest, and its glyphs would paint off the box. Only an
-// animation that can move or repaint it counts (MOVES, and PAINTS on the
-// node itself). NODE_LIMIT_MS at most: one with an infinite time-based
+// animation that can move or repaint it counts (MOVES, PAINTS on the node
+// itself, and INHERITED_PAINTS on an ancestor whose value reaches it).
+// NODE_LIMIT_MS at most: one with an infinite time-based
 // animation, or one still moving then, is unresolved, saying which. At rest,
 // a counted scroll-driven animation's guarded values are pinned inline for
 // the shots, which would cancel it, and its target's style attribute is put
@@ -104,6 +105,35 @@ export const MOVES =
 export const PAINTS = /^(?:color|background(?:[A-Z]\w*)?)$/;
 
 /**
+ * The inherited paint properties: an ancestor's animation of one repaints the
+ * element's glyphs when it reaches them, that is when the element's own value
+ * is the ancestor's, inherited down every element between (none sets its own).
+ * The sampler reads the text's color from its computed style when it reads the
+ * element (sampleScript(), the `color` it returns), outside the shots, so a
+ * tab's color transition its word inherits, read part-way, puts the word near
+ * its ground's color (Flux's .fx-tab__word, 1.00:1); hence the wait.
+ * stillnessScript() and restlessScript() carry the same pattern inline, since
+ * each runs in the page on its own; both paths call them, so they agree.
+ *
+ * The ground needs no wait: it's read off shots taken with animations
+ * disabled, which end every finite animation and transition, so an ancestor's
+ * background moving between two states is shot at its end, as a visitor sees
+ * it at rest. What still doesn't count is an ancestor's animation of a
+ * property that neither moves the glyphs (MOVES) nor paints them (the
+ * element's own PAINTS, and the inherited color here), such as an outline's
+ * color or a custom property, which can't change the sampled pixels.
+ *
+ * Ending them can move the page on, though, past the color read before: a
+ * script that turns the text's color as a transition goes, by a timeout or
+ * on its end, turns it while the shots are taken, or after, when the
+ * transition would have ended (Flux's drop, row 25). So the color is read
+ * again once the shots are taken and that time has passed (inkScript(),
+ * shotEndsScript()), and one that turned is read once more, the page at rest
+ * first (pageRestScript()), or unresolved (inkUnresolved()).
+ */
+export const INHERITED_PAINTS = /^color$/;
+
+/**
  * What still moves an element once the sampler gives up, or null once it
  * holds still: an infinite time-based animation, one still running or a
  * scroll-driven one still changing at the limit, or a scroll-driven one at
@@ -126,8 +156,9 @@ export type Motion = {
  * finishes while its element rests part-way through its range. It counts
  * the animations whose target is `el`, an ancestor, or a descendant (a
  * pseudo-element's by its owner), that animate a property in `moves`, or
- * in `paints` on `el` itself; an ancestor's on anything else, or a
- * sibling's, doesn't count.
+ * in `paints` on `el` itself, or an inherited paint (INHERITED_PAINTS) on an
+ * ancestor whose value reaches `el`, inherited down every element between;
+ * an ancestor's on anything else, or a sibling's, doesn't count.
  *
  * At rest, it pins each counted scroll-driven animation's guarded
  * properties (those its keyframes name that count) inline, !important, at
@@ -167,6 +198,18 @@ export function stillnessScript(
     ((animation as CSSTransition).transitionProperty
       ? `a transition of ${(animation as CSSTransition).transitionProperty}`
       : animation.id || 'unnamed');
+  // INHERITED_PAINTS, inline: this runs in the page on its own.
+  const inheriting = /^color$/;
+  // Whether an ancestor's value of an inherited paint reaches `el`: every element from `el` up to
+  // it computes its parent's color, so none between sets its own. A pseudo-element's doesn't.
+  const reaches = (effect: KeyframeEffect, target: Element): boolean => {
+    if (effect.pseudoElement || target === el || !target.contains(el)) return false;
+    for (let node: Element = el; node !== target; node = node.parentElement!) {
+      if (getComputedStyle(node).color !== getComputedStyle(node.parentElement!).color)
+        return false;
+    }
+    return true;
+  };
   // The properties of `animation` that count for `el`, as getKeyframes() names them.
   const guarded = (animation: Animation): string[] => {
     const effect = animation.effect;
@@ -176,7 +219,11 @@ export function stillnessScript(
     const properties = new Set<string>();
     for (const keyframe of effect.getKeyframes()) {
       for (const property of Object.keys(keyframe)) {
-        if (moving.test(property) || (target === el && painting.test(property)))
+        if (
+          moving.test(property) ||
+          (target === el && painting.test(property)) ||
+          (inheriting.test(property) && reaches(effect, target))
+        )
           properties.add(property);
       }
     }
@@ -863,6 +910,159 @@ export function stillUnresolved(motion: NonNullable<Motion>): string {
           : `unresolved: an animation, ${motion.name}, that moves or repaints it was still running after ${NODE_LIMIT_MS / 1000} s, so its glyphs never held still to sample`;
 }
 
+/**
+ * `el`'s text color as sampleScript() reads it (its text fill where that
+ * paints instead), read again once its shots are taken and its marks are
+ * off. Its color comes from its computed style, outside the shots, and its
+ * background from the shots; the two are of one state of the page only if
+ * this is still the color sampleScript() read (row 25: Flux's tab words,
+ * whose ink a timeout turns as the drop's transition, which the shots end,
+ * passes them). A color transition still running where its ink comes from,
+ * on it or on an element whose color it inherits, is read at its end, as the
+ * shots read every finite animation: taking its marks off sets one off on an
+ * element that transitions its color (Kinetic Cosmos's links, from the marks'
+ * transparent back to their ink), and a page's own is heading to the state
+ * the shots showed. Runs in the browser.
+ */
+export function inkScript(el: Element): string {
+  const style = getComputedStyle(el);
+  const ending = (property: 'color' | 'webkitTextFillColor'): string | null => {
+    for (let node: Element | null = el; node; node = node.parentElement) {
+      for (const animation of node.getAnimations()) {
+        const effect = animation.effect;
+        if (animation.playState !== 'running' || !(effect instanceof KeyframeEffect)) continue;
+        if (effect.pseudoElement) continue;
+        const frames = effect.getKeyframes();
+        const end = frames[frames.length - 1]?.[property];
+        if (typeof end === 'string') return end;
+      }
+      // Up only while it inherits: an element that sets its own value stops the walk.
+      const parent: Element | null = node.parentElement;
+      if (!parent || getComputedStyle(node)[property] !== getComputedStyle(parent)[property]) break;
+    }
+    return null;
+  };
+  // A fill of its own, as sampleScript() has it: one that isn't its current color (a currentcolor
+  // fill follows the color part-way through a transition), and paints.
+  const [now, fillNow] = [style.color, style.webkitTextFillColor];
+  const ownFill = !!fillNow && fillNow !== now && !/^rgba?\(0, 0, 0, 0\)$/.test(fillNow);
+  return ownFill ? (ending('webkitTextFillColor') ?? fillNow) : (ending('color') ?? now);
+}
+
+/**
+ * Whether two colors read off the page are one: the same string, or exactly
+ * the same channels and alpha, however the page serialized them (an interpolated
+ * color reads `rgba(r, g, b, 1)` where the same color at rest reads
+ * `rgb(r, g, b)`). An unreadable one is never the same.
+ */
+export function sameInk(a: string, b: string | null): boolean {
+  if (b === null) return false;
+  if (a === b) return true;
+  const [x, y] = [parseCssColor(a), parseCssColor(b)];
+  if (!x || !y) return false;
+  return x.rgb.every((channel, i) => channel === y.rgb[i]) && x.alpha === y.alpha;
+}
+
+/**
+ * Right before a shot: until when, on the page's clock (performance.now()),
+ * the running finite animations on the document's timeline would have run,
+ * which the shot ends early (animations: 'disabled'), kept on the window as
+ * the latest such time any shot of the call has ended, and how long from now
+ * that is, in ms. A page that times its own changes to a transition (Flux
+ * turns each tab's ink by a timeout as the drop's clip passes it) makes them
+ * on the transition's clock, not the shots': a shot shows the transition's
+ * end at once, and the ink it set off comes as late as the transition would
+ * have ended, after this element's read or the next one's. So the color is
+ * read again only once that time has passed (shotSettleScript()). Each
+ * animation counts for `limit` ms at most (NODE_LIMIT_MS), so a long one a
+ * shot ended doesn't hold every later element's read past the wait's limit.
+ * Runs in the browser.
+ */
+export function shotEndsScript({ key, limit }: { key: string; limit: number }): number {
+  const w = window as unknown as Record<string, number | undefined>;
+  const now = performance.now();
+  let until = w[`__qualityShotUntil_${key}`] ?? now;
+  // The sampler's own: a transition of a property its marks set (glyph color, fill, decoration,
+  // shadow) inside an element it marked, which a page's timers can't be keyed to.
+  const marked = `[data-quality-glyphs="${key}"], [data-quality-neighbours="${key}"], [data-quality-mask]`;
+  const own = /^(?:color|webkitTextFillColor|textDecorationColor|textShadow|fill)$/;
+  const ours = (animation: Animation) => {
+    const effect = animation.effect;
+    if (!(effect instanceof KeyframeEffect) || !effect.target?.closest(marked)) return false;
+    const properties = effect
+      .getKeyframes()
+      .flatMap((frame) => Object.keys(frame))
+      .filter((p) => !['offset', 'easing', 'composite', 'computedOffset'].includes(p));
+    return properties.length > 0 && properties.every((p) => own.test(p));
+  };
+  for (const animation of document.getAnimations()) {
+    if (animation.playState !== 'running' || animation.timeline !== document.timeline) continue;
+    if (ours(animation)) continue;
+    const timing = animation.effect?.getComputedTiming();
+    if (!timing || typeof timing.localTime !== 'number') continue;
+    const end = Number(timing.endTime);
+    if (!Number.isFinite(end)) continue;
+    const left = (end - timing.localTime) / (Math.abs(animation.playbackRate) || 1);
+    until = Math.max(until, now + Math.min(left, limit));
+  }
+  w[`__qualityShotUntil_${key}`] = until;
+  return Math.max(0, until - now);
+}
+
+/**
+ * Waits `ms` (shotEndsScript()'s, held to NODE_LIMIT_MS by the caller), then
+ * two frames, so what the page set off by then has painted. Runs in the browser.
+ */
+export function shotSettleScript(ms: number): Promise<true> {
+  const frame =
+    (window as unknown as { __qualityRaf?: typeof requestAnimationFrame }).__qualityRaf ??
+    requestAnimationFrame;
+  return new Promise((done) => setTimeout(() => frame(() => frame(() => done(true))), ms));
+}
+
+/**
+ * Waits, up to `limit` ms, for no finite animation on the document's
+ * timeline to be running for two frames together: the page at rest, as a
+ * visitor sees it once its motion ends, before an element whose color turned
+ * is read once more. True at rest, false at the limit. Runs in the browser.
+ */
+export function pageRestScript(limit: number): Promise<boolean> {
+  const frame =
+    (window as unknown as { __qualityRaf?: typeof requestAnimationFrame }).__qualityRaf ??
+    requestAnimationFrame;
+  const running = () =>
+    document.getAnimations().some((animation) => {
+      if (animation.playState !== 'running' || animation.timeline !== document.timeline)
+        return false;
+      return Number.isFinite(Number(animation.effect?.getComputedTiming().endTime));
+    });
+  return new Promise((done) => {
+    const began = performance.now();
+    let quiet = 0;
+    const look = () => {
+      quiet = running() ? 0 : quiet + 1;
+      if (quiet >= 2) done(true);
+      else if (performance.now() - began >= limit) done(false);
+      else frame(look);
+    };
+    frame(look);
+  });
+}
+
+/**
+ * Why an element whose color turned while its shots were taken, both times
+ * it was read, is unresolved: each read's color, then the color once its
+ * shots were taken (null where the page couldn't say).
+ */
+export function inkUnresolved(
+  first: readonly [string, string | null],
+  second: readonly [string, string | null],
+): string {
+  const turn = ([from, to]: readonly [string, string | null]) =>
+    `${from} to ${to ?? 'a color it could not read'}`;
+  return `unresolved: its color turned while its background was shot, ${turn(first)}, and again once it held still, ${turn(second)}, so its color and its background never came from one state of the page`;
+}
+
 // The batch path (row 14): an element costs the per-element path about
 // fifteen round trips and three shots, and a page with hundreds of them,
 // such as Schematic's, whose texts sit on its field's grid paper, ran past
@@ -1044,13 +1244,15 @@ interface BatchHelpers {
   readonly cover: typeof stuckCoverScript;
   readonly sample: typeof sampleScript;
   readonly restless: typeof restlessScript;
+  readonly ink: typeof inkScript;
 }
 
 /**
  * What moves `el` now, after its wait came back at rest, by the wait's own
  * rule (stillnessScript()): an animation whose target is `el`, an ancestor
  * or a descendant, animating a property in `moves`, or in `paints` on `el`
- * itself, that's running (neither finished nor idle) or scroll-driven (a
+ * itself, or an inherited paint on an ancestor whose value reaches `el`,
+ * that's running (neither finished nor idle) or scroll-driven (a
  * member at rest held none, or it would have pinned it). Its name, or null.
  * One pass, no wait: the batch path checks each member again with it right
  * before it reads it and before each of its batch's shots, since the waits
@@ -1062,6 +1264,16 @@ export function restlessScript(
   { moves, paints }: { readonly moves: string; readonly paints: string },
 ): string | null {
   const [moving, painting] = [new RegExp(moves), new RegExp(paints)];
+  // INHERITED_PAINTS and stillnessScript()'s reaches(), inline: this runs in the page on its own.
+  const inheriting = /^color$/;
+  const reaches = (effect: KeyframeEffect, target: Element): boolean => {
+    if (effect.pseudoElement || target === el || !target.contains(el)) return false;
+    for (let node: Element = el; node !== target; node = node.parentElement!) {
+      if (getComputedStyle(node).color !== getComputedStyle(node.parentElement!).color)
+        return false;
+    }
+    return true;
+  };
   const Scrolling = (globalThis as unknown as { ScrollTimeline?: abstract new () => object })
     .ScrollTimeline;
   for (const animation of document.getAnimations()) {
@@ -1073,7 +1285,10 @@ export function restlessScript(
       .getKeyframes()
       .some((keyframe) =>
         Object.keys(keyframe).some(
-          (property) => moving.test(property) || (target === el && painting.test(property)),
+          (property) =>
+            moving.test(property) ||
+            (target === el && painting.test(property)) ||
+            (inheriting.test(property) && reaches(effect, target)),
         ),
       );
     if (!counts) continue;
@@ -1647,7 +1862,7 @@ export async function batchFindings(
   const selectors = new Map(items.map(({ at, selector }) => [at, selector]));
   const installed = await page
     .evaluate(
-      `globalThis[${JSON.stringify(`__qualityBatch_${key}`)}] = { still: ${stillnessScript}, release: ${releaseScript}, cover: ${stuckCoverScript}, sample: ${sampleScript}, restless: ${restlessScript} }, true`,
+      `globalThis[${JSON.stringify(`__qualityBatch_${key}`)}] = { still: ${stillnessScript}, release: ${releaseScript}, cover: ${stuckCoverScript}, sample: ${sampleScript}, restless: ${restlessScript}, ink: ${inkScript} }, true`,
     )
     .catch(() => false);
   if (installed !== true) return done;
@@ -1776,7 +1991,12 @@ export async function batchFindings(
               );
               members = members.filter(({ entry }) => !moved.includes(entry.at));
             };
+            // Each shot first notes what it ends (shotEndsScript()), as on the per-element path.
+            const ends: { left: number | null } = { left: 0 };
             const shoot = async () => {
+              ends.left = await page
+                .evaluate(shotEndsScript, { key, limit: NODE_LIMIT_MS })
+                .catch(() => null);
               const taken = await camera.take(members.map(({ entry }) => entry.sample.box));
               return new Map(members.map(({ entry }, k) => [entry.at, taken[k]!]));
             };
@@ -1787,7 +2007,26 @@ export async function batchFindings(
             await settle('white');
             const whites = await shoot();
             await page.evaluate(unmarkBatchScript, key);
-            for (const { entry } of members) {
+            if (ends.left !== 0)
+              await page
+                .evaluate(shotSettleScript, Math.min(ends.left ?? NODE_LIMIT_MS, NODE_LIMIT_MS))
+                .catch(() => undefined);
+            // Each member's color read again once the shots are taken and what they ended has had
+            // its time (inkScript()): one the page turned meanwhile leaves the batch for its own
+            // path, which reads it once more, or says it never came from one state (row 25).
+            const inks = await page
+              .evaluate(
+                ({ key, ats }) => {
+                  const w = window as unknown as Record<string, unknown>;
+                  const els = w[`__qualityBatchEls_${key}`] as Element[];
+                  const helpers = w[`__qualityBatch_${key}`] as BatchHelpers;
+                  return ats.map((at) => helpers.ink(els[at]!));
+                },
+                { key, ats: members.map(({ entry }) => entry.at) },
+              )
+              .catch(() => null);
+            for (const [k, { entry }] of members.entries()) {
+              if (!Array.isArray(inks) || !sameInk(entry.sample.color, inks[k] ?? null)) continue;
               const found = judged(
                 selectors.get(entry.at)!,
                 entry.sample,
@@ -1941,72 +2180,117 @@ export async function incompleteContrastFindings(
           );
           continue;
         }
-        // What moves it comes to rest before its box is read, or it's unresolved, saying which.
-        const motion = await locator
-          .evaluate(
-            stillnessScript,
-            { limit: NODE_LIMIT_MS, moves: MOVES.source, paints: PAINTS.source, key },
-            { timeout: NODE_LIMIT_MS },
-          )
-          .catch((error: unknown): Motion => ({
-            kind: 'failed',
-            name: String(error instanceof Error ? error.message : error)
-              .split('\n')[0]!
-              .slice(0, 160),
-          }));
-        if (motion && typeof motion === 'object' && 'kind' in motion) {
-          unresolved(stillUnresolved(motion));
-          continue;
-        }
-        const sample = await locator
-          .evaluate(
-            sampleScript,
-            { key, near, query: MORE_CONTRAST, boundary: HIGH_CONTRAST_BOUNDARY },
-            { timeout: NODE_LIMIT_MS },
-          )
-          .catch(() => null as Sample | null);
-        if (!sample || sample.box.width < 1 || sample.box.height < 1) {
-          await unmark();
-          await unmarkNeighbours();
-          unresolved('it has no box in the viewport to sample');
-          continue;
-        }
-        // An axis-aligned clip of a rotated box takes in what's round it at the corners.
-        if (!sample.flat || (sample.turned && !sample.quad)) {
-          await unmark();
-          await unmarkNeighbours();
-          unresolved(
-            sample.flat
+        // One read, or why it can't be read: what moves it comes to rest before its box is read
+        // (and, `again`, the whole page, pageRestScript()), then its sample, its three shots, and
+        // its color read again (inkScript()) once they're taken, its marks are off, and the time
+        // the transitions its shots ended had left has passed (shotEndsScript()).
+        const read = async (
+          again: boolean,
+        ): Promise<
+          | string
+          | { sample: Sample; shot: Buffer; black: Buffer; white: Buffer; after: string | null }
+        > => {
+          if (again) await page.evaluate(pageRestScript, NODE_LIMIT_MS).catch(() => false);
+          const motion = await locator
+            .evaluate(
+              stillnessScript,
+              { limit: NODE_LIMIT_MS, moves: MOVES.source, paints: PAINTS.source, key },
+              { timeout: NODE_LIMIT_MS },
+            )
+            .catch((error: unknown): Motion => ({
+              kind: 'failed',
+              name: String(error instanceof Error ? error.message : error)
+                .split('\n')[0]!
+                .slice(0, 160),
+            }));
+          if (motion && typeof motion === 'object' && 'kind' in motion)
+            return stillUnresolved(motion);
+          const sample = await locator
+            .evaluate(
+              sampleScript,
+              { key, near, query: MORE_CONTRAST, boundary: HIGH_CONTRAST_BOUNDARY },
+              { timeout: NODE_LIMIT_MS },
+            )
+            .catch(() => null as Sample | null);
+          if (!sample || sample.box.width < 1 || sample.box.height < 1) {
+            await unmark();
+            await unmarkNeighbours();
+            return 'it has no box in the viewport to sample';
+          }
+          // An axis-aligned clip of a rotated box takes in what's round it at the corners.
+          if (!sample.flat || (sample.turned && !sample.quad)) {
+            await unmark();
+            await unmarkNeighbours();
+            return sample.flat
               ? 'unresolved: it is rotated or skewed across more than one line box, so it has no one quad to sample inside'
-              : 'unresolved: it is transformed in 3D, so its box on screen has no 2D quad to sample inside',
+              : 'unresolved: it is transformed in 3D, so its box on screen has no 2D quad to sample inside';
+          }
+          // Hide the neighbours' glyphs at the box's edge, by their fill, so no layout moves.
+          await page.evaluate(
+            ({ key, near, hide }) => {
+              const nodes = (window as unknown as Record<string, Text[] | undefined>)[near] ?? [];
+              for (const at of hide)
+                nodes[at]?.parentElement?.setAttribute('data-quality-neighbours', key);
+            },
+            { key, near, hide: neighbourTexts(sample.texts, sample.box) },
           );
+          // Each shot first notes what it ends (shotEndsScript()); `left`, after the last, is how
+          // long the wait for what those ends set off takes. One unknown takes the whole limit.
+          const ends: { left: number | null } = { left: 0 };
+          const capture = async () => {
+            ends.left = await page
+              .evaluate(shotEndsScript, { key, limit: NODE_LIMIT_MS })
+              .catch(() => null);
+            return page.screenshot({ clip: sample.box, animations: 'disabled', caret: 'hide' });
+          };
+          const shot = await capture();
+          // Its glyphs alone, filled black and then white over the same background, for their mask.
+          const masked = async (fill: 'black' | 'white') => {
+            await locator.evaluate((el, fill) => el.setAttribute('data-quality-mask', fill), fill);
+            return capture();
+          };
+          const black = await masked('black');
+          const white = await masked('white');
+          await locator
+            .evaluate((el) => el.removeAttribute('data-quality-mask'))
+            .catch(() => undefined);
+          await unmark();
+          await unmarkNeighbours();
+          if (ends.left !== 0)
+            await page
+              .evaluate(shotSettleScript, Math.min(ends.left ?? NODE_LIMIT_MS, NODE_LIMIT_MS))
+              .catch(() => undefined);
+          const after = await locator
+            .evaluate(inkScript, undefined, { timeout: NODE_LIMIT_MS })
+            .catch(() => null);
+          return { sample, shot, black, white, after };
+        };
+        // Its color and its background from one state of the page (row 25). Its color is read
+        // outside the shots, and the page can turn it in between (a script's class as the
+        // sampler's scroll moved the page, a timeout a transition the shots end sets off, even
+        // one an earlier element's shots ended): one whose color isn't the same once its shots
+        // are taken and what they ended has had its time is read once more, its pins off, its
+        // wait run again and the page at rest, and one that turns again is unresolved, never
+        // judged from two states.
+        let taken = await read(false);
+        if (typeof taken === 'string') {
+          unresolved(taken);
           continue;
         }
-        // Hide the neighbours' glyphs at the box's edge, by their fill, so no layout moves.
-        await page.evaluate(
-          ({ key, near, hide }) => {
-            const nodes = (window as unknown as Record<string, Text[] | undefined>)[near] ?? [];
-            for (const at of hide)
-              nodes[at]?.parentElement?.setAttribute('data-quality-neighbours', key);
-          },
-          { key, near, hide: neighbourTexts(sample.texts, sample.box) },
-        );
-        const capture = () =>
-          page.screenshot({ clip: sample.box, animations: 'disabled', caret: 'hide' });
-        const shot = await capture();
-        // Its glyphs alone, filled black and then white over the same background, for their mask.
-        const masked = async (fill: 'black' | 'white') => {
-          await locator.evaluate((el, fill) => el.setAttribute('data-quality-mask', fill), fill);
-          return capture();
-        };
-        const black = await masked('black');
-        const white = await masked('white');
-        await locator
-          .evaluate((el) => el.removeAttribute('data-quality-mask'))
-          .catch(() => undefined);
-        await unmark();
-        await unmarkNeighbours();
-        const found = judged(selector, sample, shot, black, white);
+        if (!sameInk(taken.sample.color, taken.after)) {
+          const turned = [taken.sample.color, taken.after] as const;
+          await page.evaluate(releaseScript, key).catch(() => undefined);
+          taken = await read(true);
+          if (typeof taken === 'string') {
+            unresolved(taken);
+            continue;
+          }
+          if (!sameInk(taken.sample.color, taken.after)) {
+            unresolved(inkUnresolved(turned, [taken.sample.color, taken.after]));
+            continue;
+          }
+        }
+        const found = judged(selector, taken.sample, taken.shot, taken.black, taken.white);
         if (found) findings.push(found);
       } finally {
         // What the wait pinned for the shots comes off, whatever happened since.
@@ -2033,6 +2317,7 @@ export async function incompleteContrastFindings(
             el.removeAttribute('data-quality-neighbours');
         }
         delete (window as unknown as Record<string, unknown>)[near];
+        delete (window as unknown as Record<string, unknown>)[`__qualityShotUntil_${key}`];
       },
       { key, near },
     );
