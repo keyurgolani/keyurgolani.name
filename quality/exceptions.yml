@@ -45,106 +45,17 @@ exceptions:
     gate: focus
     rule: perimeter
     owner: keyurgolani
-    rationale: "Pending the post-Sun platform focus target (lead's ruling 2026-10-31): the 390 ring findings move between elements with sub-pixel position; see _execution/notes/kgn-e-flux-p2-ring-ruling.md."
-    affectedUsers: Keyboard users on a phone meet whole 2px rings at 3.69:1 whose antialiased edge pixels read under 3:1 at some sub-pixel positions, so the pixel count falls short on one control or another (the talks summary, then a stats disclosure).
-    fallback: Every ring is drawn whole, 2px, at 3.69:1 against the canvas where it covers a pixel; each control keeps its own text and hover cues.
+    rationale: "Pending row 23, the platform's root scroll-padding hook beside --layout-sticky-offset (B), which Flux then sets at the dock: Tab doesn't scroll a stats disclosure that's already partly in the window, so its scroll margin never applies and its ring's foot stays under the dock (the 390 Tab walk, _execution/artifacts/kgn-e-flux-rings-shots/walk-28d49eeed). The talks summary's finding this entry also waived is fixed in flux-rings; this one waits for row 23."
+    affectedUsers: Keyboard users on a phone who Tab to the stats' second disclosure meet its whole 2px ring at 3.69:1 with its foot under the dock, so the pixel count falls short.
+    fallback: The ring is drawn whole, 2px, at 3.69:1 against the canvas; scrolling the page a little shows it whole, and the disclosure keeps its own text and hover cues.
     trackingIssue: '#11'
     created: '2026-10-31'
     expires: '2027-01-29'
+    selector: '#stats > div:nth-child(2) > div:nth-child(1) > details:nth-child(2) > summary:nth-child(1)'
     scope:
       surface: flux
       route: /
       tuple: platform-neutral/warm-parchment/humanist-ui/system
       viewport: 390x844
       preferenceMode: default
-  - id: flux-appearance-summary-perimeter-1024
-    kind: above-aa
-    gate: focus
-    rule: perimeter
-    owner: keyurgolani
-    rationale: "Pending the post-Sun platform focus target (lead's ruling 2026-10-31); see _execution/notes/kgn-e-flux-p2-ring-ruling.md."
-    affectedUsers: Keyboard users focusing the visitor's Appearance control meet a whole 2px ring at 3.69:1 whose antialiased edge pixels read under 3:1, so the pixel count falls short of the ring's area.
-    fallback: The ring is drawn whole, 2px, at 3.69:1 against the canvas where it covers a pixel; the element keeps its own text and hover cues.
-    trackingIssue: '#11'
-    created: '2026-10-31'
-    expires: '2027-01-29'
-    selector: '#appearance > summary:nth-child(1)'
-    scope:
-      surface: flux
-      route: /
-      tuple: platform-neutral/warm-parchment/humanist-ui/system
-      viewport: 1024x768
-      preferenceMode: default
-  - id: flux-contact-email-perimeter-1024
-    kind: above-aa
-    gate: focus
-    rule: perimeter
-    owner: keyurgolani
-    rationale: "Pending the post-Sun platform focus target (lead's ruling 2026-10-31); see _execution/notes/kgn-e-flux-p2-ring-ruling.md."
-    affectedUsers: Keyboard users focusing the contact address meet a whole 2px ring at 3.69:1 whose antialiased edge pixels read under 3:1, so the pixel count falls short of the ring's area.
-    fallback: The ring is drawn whole, 2px, at 3.69:1 against the canvas where it covers a pixel; the element keeps its own text and hover cues.
-    trackingIssue: '#11'
-    created: '2026-10-31'
-    expires: '2027-01-29'
-    selector: '#contact > div:nth-child(2) > div:nth-child(1) > div:nth-child(1) > p:nth-child(1) > a:nth-child(1)'
-    scope:
-      surface: flux
-      route: /
-      tuple: platform-neutral/warm-parchment/humanist-ui/system
-      viewport: 1024x768
-      preferenceMode: default
-  - id: flux-contact-email-perimeter-1440
-    kind: above-aa
-    gate: focus
-    rule: perimeter
-    owner: keyurgolani
-    rationale: "Pending the post-Sun platform focus target (lead's ruling 2026-10-31); see _execution/notes/kgn-e-flux-p2-ring-ruling.md."
-    affectedUsers: Keyboard users focusing the contact address meet a whole 2px ring at 3.69:1 whose antialiased edge pixels read under 3:1, so the pixel count falls short of the ring's area.
-    fallback: The ring is drawn whole, 2px, at 3.69:1 against the canvas where it covers a pixel; the element keeps its own text and hover cues.
-    trackingIssue: '#11'
-    created: '2026-10-31'
-    expires: '2027-01-29'
-    selector: '#contact > div:nth-child(2) > div:nth-child(1) > div:nth-child(1) > p:nth-child(1) > a:nth-child(1)'
-    scope:
-      surface: flux
-      route: /
-      tuple: platform-neutral/warm-parchment/humanist-ui/system
-      viewport: 1440x900
-      preferenceMode: default
-  - id: flux-contact-email-perimeter-1440-forced-colors
-    kind: above-aa
-    gate: focus
-    rule: perimeter
-    owner: keyurgolani
-    rationale: "Pending the post-Sun platform focus target (lead's ruling 2026-10-31); see _execution/notes/kgn-e-flux-p2-ring-ruling.md. Under forced-colors the ring is drawn whole around every line fragment of the link, wrapped or not (the lead's check, 2026-11-01): _execution/artifacts/kgn-e-flux-p2-mail-ring/."
-    affectedUsers: Keyboard users focusing the contact address meet a whole 2px ring, in the mode's own colour, whose antialiased edge pixels read under 3:1, so the pixel count falls short of the ring's area.
-    fallback: The ring is drawn whole, 2px, around every line fragment of the link; the element keeps its own text and hover cues.
-    trackingIssue: '#11'
-    created: '2026-11-01'
-    expires: '2027-01-29'
-    selector: '#contact > div:nth-child(2) > div:nth-child(1) > div:nth-child(1) > p:nth-child(1) > a:nth-child(1)'
-    scope:
-      surface: flux
-      route: /
-      tuple: platform-neutral/warm-parchment/humanist-ui/system
-      viewport: 1440x900
-      preferenceMode: forced-colors
-  - id: flux-contact-email-perimeter-1440-contrast-more
-    kind: above-aa
-    gate: focus
-    rule: perimeter
-    owner: keyurgolani
-    rationale: "Pending the post-Sun platform focus target (lead's ruling 2026-10-31); see _execution/notes/kgn-e-flux-p2-ring-ruling.md. Under contrast-more the ring is drawn whole around every line fragment of the link, wrapped or not (the lead's check, 2026-11-01): _execution/artifacts/kgn-e-flux-p2-mail-ring/."
-    affectedUsers: Keyboard users focusing the contact address meet a whole 2px ring, in the mode's own colour, whose antialiased edge pixels read under 3:1, so the pixel count falls short of the ring's area.
-    fallback: The ring is drawn whole, 2px, around every line fragment of the link; the element keeps its own text and hover cues.
-    trackingIssue: '#11'
-    created: '2026-11-01'
-    expires: '2027-01-29'
-    selector: '#contact > div:nth-child(2) > div:nth-child(1) > div:nth-child(1) > p:nth-child(1) > a:nth-child(1)'
-    scope:
-      surface: flux
-      route: /
-      tuple: platform-neutral/warm-parchment/humanist-ui/system
-      viewport: 1440x900
-      preferenceMode: contrast-more
 falsePositives: []
