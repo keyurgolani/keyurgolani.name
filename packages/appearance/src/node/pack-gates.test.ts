@@ -298,3 +298,25 @@ test('boundary-isolation: its own layer, scope, attribute, and files, and nothin
     gates(edited(language, (css) => `@import url(x.css);\n${css}`)).includes('boundary-isolation'),
   );
 });
+
+test("boundary-isolation: a language's derived raised-shadow reach is its own, a length in px (#11, row 17)", () => {
+  const language = SHIPPED[0]!;
+  assert.deepEqual(gates(language), []);
+  assert.match(
+    new TextDecoder().decode(language.stylesheet!.bytes),
+    /--ui-shadow-raised-reach: 0px;/,
+  );
+  only(
+    edited(language, (css) =>
+      css.replace('--ui-shadow-raised-reach: 0px;', '--ui-shadow-raised-reach: 100%;'),
+    ),
+    'boundary-isolation',
+  );
+  // A scheme never sets it: it's the language's.
+  only(
+    edited(SHIPPED[1]!, (css) =>
+      css.replace(/(--color-canvas: [^;]+;)/, '$1\n  --ui-shadow-raised-reach: 0px;'),
+    ),
+    'boundary-isolation',
+  );
+});

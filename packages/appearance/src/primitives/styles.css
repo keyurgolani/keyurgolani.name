@@ -735,8 +735,10 @@
    * Shown with its action as the source, it sits above the action, or below
    * when there's no room. Without anchor positioning it keeps its own place
    * in the flow, just after the action. It stands off the action by at least
-   * the focus ring's reach, so it never covers the ring of the action it
-   * describes (#11).
+   * the focus ring's reach plus its own raised shadow's hard edge (the
+   * compiler's --ui-shadow-raised-reach, such as paper-tactile's offset
+   * sheet), so neither it nor its shadow covers the ring of the action it
+   * describes (#11, row 17).
    */
   [data-ui-slot='tooltip'] {
     position-area: block-start span-inline-end;
@@ -747,7 +749,7 @@
     margin: 0;
     margin-block-end: max(
       calc(var(--ui-space-control-block) / 2),
-      calc(var(--ui-focus-width) + var(--ui-focus-offset))
+      calc(var(--ui-focus-width) + var(--ui-focus-offset) + var(--ui-shadow-raised-reach, 0px))
     );
     padding-block: calc(var(--ui-space-control-block) / 2);
     padding-inline: var(--ui-space-control-block);

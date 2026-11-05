@@ -159,6 +159,13 @@ export const LAYOUT_PREFIX = '--layout-';
 
 export const colorProperty = (role: ColorRole) => `--color-${role}` as const;
 export const languageProperty = (key: LanguageKey) => `--ui-${key}` as const;
+/**
+ * What the compiler derives from a language's shadow-raised and writes beside its tokens, in px:
+ * how far that shadow's hard edge paints past its object's block edges (gate.ts's
+ * shadowEdgeReach()), so a part shown over a raised one's neighbour, a tooltip over the action it
+ * describes, stands off by it too (#11, row 17). No manifest sets it: it's never a language key.
+ */
+export const SHADOW_RAISED_REACH = '--ui-shadow-raised-reach';
 export const typographyProperty = (role: TypographyRole, field: TypographyField) =>
   `--type-${role}-${field}` as const;
 export const measureProperty = (measure: TypographyMeasure) => `--type-measure-${measure}` as const;

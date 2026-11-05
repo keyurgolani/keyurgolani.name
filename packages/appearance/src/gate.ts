@@ -496,6 +496,36 @@ export function shadowKey(
 }
 
 /**
+ * How far a shadow's hard edge paints past its object's block-start or
+ * block-end edge, in CSS px: of its outer layers with no blur (an edge, such
+ * as paper-tactile's second sheet, `4px 4px 0 -1px`, or neobrutalist's
+ * `8px 8px 0` block), the furthest its y offset plus its spread reaches up
+ * or down; 0 when none reaches past. A blurred layer is a translucent tail
+ * that fades from its object (as shadowKey() models it), not a sheet that
+ * covers what's under it; an inset one paints inside. Null when a layer's
+ * lengths can't be read, which the grammar's shadow rule never lets through.
+ */
+export function shadowEdgeReach(value: string): number | null {
+  const shadow = normalTexture(value);
+  if (shadow === 'none') return 0;
+  let reach = 0;
+  for (const layer of topLevel(shadow, ',')) {
+    const words = topLevel(layer, ' ');
+    if (words.includes('inset')) continue;
+    const lengths: number[] = [];
+    for (const word of words) {
+      const length = pixels(word, true);
+      if (length !== null) lengths.push(length);
+    }
+    if (lengths.length < 2 || lengths.length > 4) return null;
+    const [, y = 0, blur = 0, spread = 0] = lengths;
+    if (blur > 0) continue;
+    reach = Math.max(reach, y + spread, -y + spread);
+  }
+  return reach;
+}
+
+/**
  * What the gate reads from a language's tokens, or why it can't: a value
  * it can't compute fails the gate rather than passing unchecked.
  */

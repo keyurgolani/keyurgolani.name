@@ -34,7 +34,9 @@
 //   over Liberation Sans and "... DejaVu Fallback" over DejaVu Sans, sized to
 //   that family's faces and limited to the code points it draws, so they're
 //   used only where it's missing.
-// - A design language gets its tokens, and its stylesheet inside
+// - A design language gets its tokens, and beside them
+//   --ui-shadow-raised-reach, how far its shadow-raised's hard edge paints
+//   past its object (shadowEdgeReach()), and its stylesheet inside
 //   @scope ([data-design-language="<id>"]) to ([data-appearance-boundary]),
 //   written from what readLanguageStylesheet() read. Its --ui-motion-*
 //   tokens go on the document root's ::view-transition too (K-4 (a)), for
@@ -46,6 +48,7 @@ import path from 'node:path';
 import type { DisplayMode } from '@portfolio/schema';
 import type { PackKind } from '../axes';
 import { withDerivedRoles } from '../derived-roles';
+import { shadowEdgeReach } from '../gate';
 import { LENGTH_KEYS } from '../language-grammar';
 import { LAYER_ORDER } from '../layers';
 import { BODY_ASPECT, MEASURE_SCALE, sizeAdjustProperty } from '../scales';
@@ -64,6 +67,7 @@ import {
 import {
   COLOR_ROLES,
   LANGUAGE_KEYS,
+  SHADOW_RAISED_REACH,
   TYPOGRAPHY_FIELDS,
   TYPOGRAPHY_MEASURES,
   TYPOGRAPHY_ROLES,
@@ -1053,7 +1057,23 @@ function compileLanguage(manifest: DesignLanguageManifest, dir: string): Compile
   // A one-length token's bare 0 is written 0px, so it stays valid inside calc() (#11).
   const value = (key: LanguageKey) =>
     LENGTH_KEYS.has(key) && manifest.tokens[key].trim() === '0' ? '0px' : manifest.tokens[key];
-  const tokens = LANGUAGE_KEYS.map((key) => `  --ui-${key}: ${value(key)};\n`).join('');
+  // How far its raised shadow's hard edge reaches, which a tooltip stands off by too (#11, row 17).
+  const reach = shadowEdgeReach(manifest.tokens['shadow-raised']);
+  if (reach === null) {
+    return {
+      ok: false,
+      problems: [
+        {
+          file: 'manifest.json',
+          pointer: '/tokens/shadow-raised',
+          message: "shadow-raised has a layer whose lengths the compiler can't read.",
+          remedy:
+            'Write each layer as two to four px or rem lengths and one color, optionally inset.',
+        },
+      ],
+    };
+  }
+  const tokens = `${LANGUAGE_KEYS.map((key) => `  --ui-${key}: ${value(key)};\n`).join('')}  ${SHADOW_RAISED_REACH}: ${reach}px;\n`;
   // K-4 (a): the motion tokens on the document root's view-transition tree, which hangs from the root.
   const motion = LANGUAGE_KEYS.filter((key) => key.startsWith('motion-'))
     .map((key) => `  --ui-${key}: ${value(key)};\n`)

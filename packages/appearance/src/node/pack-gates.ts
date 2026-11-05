@@ -34,6 +34,7 @@ import type { ColorSchemeManifest, DesignLanguageManifest, TypographyManifest } 
 import {
   COLOR_ROLES,
   LANGUAGE_KEYS,
+  SHADOW_RAISED_REACH,
   TYPOGRAPHY_FIELDS,
   TYPOGRAPHY_MEASURES,
   TYPOGRAPHY_ROLES,
@@ -183,9 +184,14 @@ function contractTokens(kind: PackKind): readonly string[] {
   return LANGUAGE_KEYS.map((key) => `--ui-${key}`);
 }
 
-/** The custom properties an axis's tokens may also set, none of them required: a typography role's own size-adjust, and the body face's aspect. */
+/**
+ * The custom properties an axis's tokens may also set, none of them required: a typography role's
+ * own size-adjust, and the body face's aspect; a language's raised-shadow reach, which the compiler
+ * derives.
+ */
 function optionalTokens(kind: PackKind): readonly string[] {
-  return kind === 'typography' ? [...TYPOGRAPHY_ROLES.map(sizeAdjustProperty), BODY_ASPECT] : [];
+  if (kind === 'typography') return [...TYPOGRAPHY_ROLES.map(sizeAdjustProperty), BODY_ASPECT];
+  return kind === 'design-language' ? [SHADOW_RAISED_REACH] : [];
 }
 
 const TOKEN_PREFIX: Readonly<Record<PackKind, string>> = {
@@ -368,9 +374,19 @@ export function gatePack(pack: GatedPack, options: PackGateOptions = {}): PackGa
     }
     // A role's own aspect stays within the range its manifest field allows,
     // and the body face's is a plain number between 0 and 1, as an x-height per em is.
+    // A language's raised-shadow reach is a length in px, 0 or more.
     for (const declaration of block.declarations) {
       if (!optional.includes(property(declaration))) continue;
       const value = declaration.slice(declaration.indexOf(':') + 1).trim();
+      if (property(declaration) === SHADOW_RAISED_REACH) {
+        if (!/^\d*\.?\d+px$/.test(value)) {
+          fail(
+            'boundary-isolation',
+            `${block.prelude.split('\n')[0]} sets ${SHADOW_RAISED_REACH} to ${value}, which isn't a length in px, 0 or more.`,
+          );
+        }
+        continue;
+      }
       const aspect = /^\d*\.?\d+$/.test(value) ? Number(value) : Number.NaN;
       if (property(declaration) === BODY_ASPECT) {
         if (!(aspect > 0 && aspect < 1)) {

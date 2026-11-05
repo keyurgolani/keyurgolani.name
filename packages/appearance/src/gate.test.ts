@@ -15,6 +15,7 @@ import {
   SMALL_SIGNATURE,
   MARK_MAX_PX,
   SHADOW_KEY_PEAK,
+  shadowEdgeReach,
   shadowKey,
   textureLayers,
   type GateLanguage,
@@ -839,4 +840,27 @@ test("gateLanguage, the draft-save gate's runtime read, reads every shipping lan
       );
     }
   }
+});
+
+test("a raised shadow's hard edge is how far its unblurred layers reach past its object's block edges, up or down (#11, row 17)", () => {
+  // paper-tactile's second sheet, under its soft 0 1px 2px: the sheet's 4px, not the blur's 3px.
+  assert.equal(
+    shadowEdgeReach(
+      '0 1px 2px color-mix(in srgb, var(--color-shadow) 18%, transparent), 4px 4px 0 -1px var(--color-surface-default), 4px 4px 0 0 color-mix(in srgb, var(--color-shadow) 18%, transparent)',
+    ),
+    4,
+  );
+  // A spread ring reaches its spread both ways; a block offset up reaches up.
+  assert.equal(shadowEdgeReach('0 0 0 3px var(--color-border-strong)'), 3);
+  assert.equal(shadowEdgeReach('-2px -6px 0 var(--color-border-strong)'), 6);
+  assert.equal(shadowEdgeReach('0.25rem 0.5rem 0 var(--color-shadow)'), 8);
+  // A blurred layer fades, an inset one paints inside, and none is none.
+  assert.equal(
+    shadowEdgeReach('0 10px 28px color-mix(in srgb, var(--color-text-primary) 16%, transparent)'),
+    0,
+  );
+  assert.equal(shadowEdgeReach('inset 0 0 0 4px var(--color-accent)'), 0);
+  assert.equal(shadowEdgeReach('none'), 0);
+  // A layer it can't read fails closed.
+  assert.equal(shadowEdgeReach('4px var(--color-shadow)'), null);
 });
