@@ -2961,6 +2961,72 @@
 }
 
 /*
+ * Room for a scene whose picture still runs past its frame in the faces the
+ * page renders, a platform without the profile's first family, say, where a
+ * wider fallback sets every line longer. The controller marks it, and it
+ * opens one width wider, as an authored scene that says more would: four
+ * columns to six, six to eight, eight (or the laptop's ten) to twelve, its
+ * two sections a half each. A full-width signature work gives its words a
+ * column of its still's. Its words never shrink or clip; only a scene that
+ * still overflows sends the shell top to bottom.
+ */
+@media (min-width: 64rem) and (min-height: 44rem) and (hover: hover) and (pointer: fine) {
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-scene[data-room][data-w='4'] {
+    --layout-cols: 6;
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-scene[data-room][data-w='6'] {
+    --layout-cols: 8;
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-scene[data-room][data-w='8'],
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-scene[data-room][data-kind='sections'][data-w='8']:has(.hc-section + .hc-section) {
+    --layout-cols: 12;
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-scene[data-room][data-kind='sections'][data-w='8']
+    .hc-pic
+    > :is(.hc-section + .hc-section, .hc-section:has(+ .hc-section)) {
+    grid-column: span 6;
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-scene[data-room]
+    .hc-lead {
+    grid-template-areas:
+      'still still still still still still . words words words words words'
+      'press press press press press press . words words words words words';
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-scene[data-room]
+    .hc-lead[data-media='none'] {
+    grid-template-areas:
+      'press press press press press press . words words words words words'
+      'press press press press press press . words words words words words';
+  }
+}
+
+/*
  * The pin, which the controller turns on while the strip shows: the shell
  * is as tall as the strip is long, and its frame sticks under the top line,
  * so the page's own scroll travels the strip and then goes on to the

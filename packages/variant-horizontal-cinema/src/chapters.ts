@@ -1,5 +1,7 @@
 // Horizontal Cinema's five chapters (#17; redesign), their anchors, which
-// way an arrow key steps, and which scene the strip's travel has reached.
+// way an arrow key steps, which scene the strip's travel has reached,
+// which one a travel that rests between two finishes on, and the words a
+// heading may only break between.
 // Pure and browser-safe: the server render, the controller, and the tests
 // all read them from here.
 
@@ -61,4 +63,48 @@ export function sceneAlong(
   if (along >= travel - 1 && current < found && (offsets[current] ?? 0) >= travel - 1)
     return current;
   return found;
+}
+
+/**
+ * The scene a travel that came to rest between scenes finishes on, from
+ * where each scene starts on the strip, where the travel rests (`at`), and
+ * where it set out from (`from`): of the scenes past its start the way it
+ * went, the nearer, as a wheel or a key snaps. So a slow wheel, a notch at a
+ * time with the page at rest between, travels on rather than being pulled
+ * back to the scene it left, and a travel that runs a little past a scene
+ * keeps that one. Within a pixel of a scene, or not having gone anywhere,
+ * the nearest.
+ */
+export function snapAlong(offsets: readonly number[], at: number, from: number): number {
+  const nearestOf = (indices: readonly number[]): number =>
+    indices.reduce(
+      (best, index) =>
+        Math.abs(offsets[index]! - at) < Math.abs(offsets[best]! - at) ? index : best,
+      indices[0] ?? 0,
+    );
+  const all = offsets.map((_, index) => index);
+  const nearest = nearestOf(all);
+  if (all.length === 0 || Math.abs(offsets[nearest]! - at) <= 1 || Math.abs(at - from) <= 1)
+    return nearest;
+  const ahead = all.filter((index) =>
+    at > from ? offsets[index]! > from + 1 : offsets[index]! < from - 1,
+  );
+  return ahead.length > 0 ? nearestOf(ahead) : nearest;
+}
+
+/**
+ * The words of a heading's text, as [start, end) spans: the runs a line may
+ * not break inside. Spaces of any kind part them, and so do the joins a line
+ * may break at, a hyphen, a dash, a slash and a soft hyphen; punctuation stays
+ * with its word, as a line holds it. A single letter can't break, so it isn't
+ * one. The fit check reads each span's boxes: a word in two boxes broke
+ * inside itself, a heading that doesn't fit its scene. `WORD` is the pattern, for a reader in the page.
+ */
+export const WORD = /[^\s\u00ad\-\u2010-\u2015/]{2,}/gu;
+
+export function wordSpans(text: string): Array<[number, number]> {
+  return [...text.matchAll(new RegExp(WORD))].map((match) => [
+    match.index,
+    match.index + match[0].length,
+  ]);
 }
