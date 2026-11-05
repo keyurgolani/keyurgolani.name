@@ -1,13 +1,17 @@
 import { stripVTControlCharacters } from 'node:util';
 import { expect, test, type Page, type Route, type TestInfo } from '@playwright/test';
+import { ENHANCEMENT_PENDING } from '../../packages/variant-contract/src/settle';
+import { BUSY_LIMIT_MS, STILL_ENHANCING, watchEnhancements } from '../quality/lib/a11y/conditions';
 import {
   checkMode,
   enhancementFloor,
+  expectEnhancementsSettled,
   expectEveryEnhancementFailed,
   expectNothingFixed,
   expectReadable,
   failEveryEnhancement,
   loadImages,
+  settle,
 } from './modes';
 
 // The modes' own checks (#12), each on a page that stands in for a
@@ -15,8 +19,13 @@ import {
 // the throw-switch check with an enhancement that mounts after the page goes
 // idle, on a page that stays busy before it does, and the floor `complete`
 // sets; the readable and print checks, and what each leaves out; the
-// screenshot's wait for lazy images and for one that never loads; and the
-// stand-in host, which lets nothing out.
+// settle before the shot, which waits out a finite entrance, is held by no
+// animation that doesn't end or move on its own, and fails closed at its
+// bound; the screenshot's wait for lazy images and for one that never loads, and for an
+// enhancement's chunk, which a lazy <Enhancement> starts after the page
+// loads, and for one that never lands, and for a first pass the page marks
+// pending, and one that never runs; and the stand-in host, which lets
+// nothing out.
 
 const ORIGIN = 'https://modes.test';
 /** A 1x1 PNG. */
@@ -25,15 +34,26 @@ const PNG = Buffer.from(
   'base64',
 );
 
+/** A script the stand-in host serves at its path, `after` ms late. */
+interface StandInScript {
+  readonly body: string;
+  readonly after: number;
+}
+
 /**
- * Serves `body` as the page at ORIGIN/, and a PNG for every image but
- * `stalled`, which never answers. A catch-all registered first refuses
- * every other request and every WebSocket. Playwright tries the route
- * registered last first, so the stand-in host's own route answers ahead
- * of it, and nothing the page asks for leaves the machine. Returns the
- * URLs the catch-all refused.
+ * Serves `body` as the page at ORIGIN/, each of `scripts` at its path, and a
+ * PNG for every image but `stalled`, which never answers. A catch-all
+ * registered first refuses every other request and every WebSocket.
+ * Playwright tries the route registered last first, so the stand-in host's
+ * own route answers ahead of it, and nothing the page asks for leaves the
+ * machine. Returns the URLs the catch-all refused.
  */
-async function open(page: Page, body: string, stalled?: string): Promise<string[]> {
+async function open(
+  page: Page,
+  body: string,
+  stalled?: string,
+  scripts: Readonly<Record<string, StandInScript>> = {},
+): Promise<string[]> {
   const refused: string[] = [];
   await page.route('**/*', (route) => {
     refused.push(route.request().url());
@@ -43,7 +63,7 @@ async function open(page: Page, body: string, stalled?: string): Promise<string[
     refused.push(socket.url());
     return socket.close();
   });
-  await page.route(`${ORIGIN}/**`, (route: Route) => {
+  await page.route(`${ORIGIN}/**`, async (route: Route) => {
     const { pathname } = new URL(route.request().url());
     if (pathname === '/') {
       return route.fulfill({
@@ -52,6 +72,11 @@ async function open(page: Page, body: string, stalled?: string): Promise<string[
       });
     }
     if (pathname === stalled) return new Promise<void>(() => {});
+    const script = scripts[pathname];
+    if (script) {
+      await new Promise((resolve) => setTimeout(resolve, script.after));
+      return route.fulfill({ contentType: 'text/javascript', body: script.body });
+    }
     return route.fulfill({ contentType: 'image/png', body: PNG });
   });
   await page.goto(`${ORIGIN}/`);
@@ -402,6 +427,87 @@ test.describe('the print check', () => {
   });
 });
 
+test.describe('the settle before the shot', () => {
+  /**
+   * Finite animations on the document timeline still running, waiting out a
+   * delay included, as the shot would find them: Playwright's `animations:
+   * 'disabled'` finishes each one, which a later shot of the same page
+   * doesn't match.
+   */
+  const runningFinite = (page: Page) =>
+    page.evaluate(
+      () =>
+        document
+          .getAnimations()
+          .filter(
+            (animation) =>
+              animation.playState === 'running' &&
+              animation.timeline === document.timeline &&
+              Number.isFinite(Number(animation.effect?.getComputedTiming().endTime)),
+          ).length,
+    );
+
+  test('waits for a 1 s entrance running at load to end', async ({ page }) => {
+    // Terra Field's opening in miniature (terra-field-rise-s on the hero's
+    // actions): finite, from a delay, with a backwards fill, still running
+    // about 60 ms in when the page had loaded, its fonts were in and two
+    // frames were drawn (C's probe, 2026-11-04).
+    await open(
+      page,
+      `<style>
+  @keyframes rise { from { opacity: 0; translate: 0 16px; } }
+  .acts { animation: rise 1s 120ms backwards; }
+  .acts a { display: inline-block; padding: 12px 16px; border-radius: 999px; background: #f6eddc; }
+</style>
+<main><h1>Name: a line long enough to wrap</h1><p class="acts"><a href="#">Get in touch</a></p></main>`,
+    );
+    await settle(page, true);
+    expect(await runningFinite(page), 'finite animations running at the shot').toBe(0);
+  });
+
+  test('is not held by an infinite animation, a scroll or view timeline, a paused one, or one on a target that does not render', async ({
+    page,
+  }) => {
+    await open(
+      page,
+      `<style>
+  @keyframes spin { to { rotate: 1turn; } }
+  @keyframes deepen { to { scale: 1 1.04; } }
+  .loop { animation: spin 2s linear infinite; }
+  .arc { animation: deepen linear both; animation-timeline: scroll(root); }
+  .reveal { animation: deepen linear both; animation-timeline: view(); }
+  .held { animation: deepen 10s paused; }
+</style>
+<main><h1 class="loop">Name</h1><p class="held">Held</p><div class="arc" style="height: 3000px"></div><p class="reveal">Revealed</p><p hidden id="unrendered">Hidden</p></main>
+<script>document.getElementById('unrendered').animate({ opacity: [0, 1] }, 10000);</script>`,
+    );
+    expect(
+      await page.evaluate(() => document.getAnimations().length),
+      'animations on the page',
+    ).toBe(5);
+    const started = Date.now();
+    await settle(page, true);
+    expect(Date.now() - started).toBeLessThan(1_000);
+  });
+
+  test('fails closed, naming it, when a finite animation still runs at the bound', async ({
+    page,
+  }) => {
+    await open(
+      page,
+      `<style>
+  @keyframes rise { from { opacity: 0; } }
+  h1 { animation: rise 10s; }
+</style>
+<main><h1 class="name">Stand-in</h1></main>`,
+    );
+    const started = Date.now();
+    expect(await failure(settle(page, true))).toContain('"rise on h1.name"');
+    expect(Date.now() - started).toBeGreaterThanOrEqual(2_900);
+    expect(Date.now() - started).toBeLessThan(6_000);
+  });
+});
+
 test.describe('the screenshot image wait', () => {
   /** Images below the fold, which a lazy load leaves alone until the window nears them. */
   const below = (...names: string[]) =>
@@ -427,6 +533,100 @@ test.describe('the screenshot image wait', () => {
     expect(await failure(loadImages(page))).toContain(`${ORIGIN}/stalled.png`);
     expect(Date.now() - started).toBeGreaterThanOrEqual(9_500);
     await page.unrouteAll({ behavior: 'ignoreErrors' });
+  });
+});
+
+test.describe('the screenshot enhancement wait', () => {
+  /**
+   * A page that starts an enhancement's chunk as it loads, as a lazy
+   * <Enhancement> does once the page hydrates, and whose chunk, once it
+   * lands, hides the no-script contents list, as Aurora Glass's sky does
+   * when it marks the page live (the capture race, 2026-11-03).
+   */
+  const lazy = (chunk: string) => `<main><h1>Stand-in</h1><nav id="contents">Index</nav></main>
+<script>
+  addEventListener('load', () => {
+    const script = document.createElement('script');
+    script.src = '${ORIGIN}${chunk}';
+    document.head.append(script);
+  });
+</script>`;
+  const LIVE = "document.getElementById('contents').hidden = true;";
+  const listed = (page: Page) => page.evaluate(() => !document.getElementById('contents')!.hidden);
+
+  test('waits for an enhancement chunk that lands after the page loaded, so the shot is the page it made', async ({
+    page,
+  }) => {
+    const watch = watchEnhancements(page);
+    try {
+      await open(page, lazy('/chunk.js'), undefined, { '/chunk.js': { body: LIVE, after: 1_500 } });
+      // Loaded, fonts in and two frames drawn, as settle() leaves it: the chunk is still on its way.
+      await page.evaluate(
+        () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+      );
+      expect(await listed(page), 'the contents list before the chunk lands').toBe(true);
+      await expectEnhancementsSettled(watch);
+      expect(await listed(page), 'the contents list once the chunk has run').toBe(false);
+    } finally {
+      watch.stop();
+    }
+  });
+
+  /**
+   * A page whose enhancement's first pass changes it a while after load with
+   * no chunk or island to show it, as Aurora Glass's sky marks the page live
+   * after hydration: it marks its own markup pending
+   * (@portfolio/variant-contract/settle) until then, and `clears` says
+   * whether it ever does.
+   */
+  const marked = (clears: boolean) => `<main><h1>Stand-in</h1>
+<nav id="contents" ${ENHANCEMENT_PENDING}="stand-in">Index</nav></main>
+<script>
+  addEventListener('load', () => setTimeout(() => {
+    if (!${clears}) return;
+    const contents = document.getElementById('contents');
+    contents.hidden = true;
+    contents.removeAttribute('${ENHANCEMENT_PENDING}');
+  }, 1500));
+</script>`;
+
+  test('waits for a first pass its markup marks pending, which no chunk or island shows', async ({
+    page,
+  }) => {
+    const watch = watchEnhancements(page);
+    try {
+      await open(page, marked(true));
+      expect(await listed(page), 'the contents list before the first pass').toBe(true);
+      await expectEnhancementsSettled(watch);
+      expect(await listed(page), 'the contents list once the first pass has run').toBe(false);
+    } finally {
+      watch.stop();
+    }
+  });
+
+  test('fails, saying so, when a first pass marked pending never runs', async ({ page }) => {
+    const watch = watchEnhancements(page);
+    try {
+      await open(page, marked(false));
+      const started = Date.now();
+      expect(await failure(expectEnhancementsSettled(watch))).toContain(STILL_ENHANCING);
+      expect(Date.now() - started).toBeGreaterThanOrEqual(BUSY_LIMIT_MS - 100);
+    } finally {
+      watch.stop();
+    }
+  });
+
+  test('fails, saying so, when an enhancement chunk never lands', async ({ page }) => {
+    const watch = watchEnhancements(page);
+    try {
+      await open(page, lazy('/stalled.js'), '/stalled.js');
+      const started = Date.now();
+      expect(await failure(expectEnhancementsSettled(watch))).toContain(STILL_ENHANCING);
+      expect(Date.now() - started).toBeGreaterThanOrEqual(BUSY_LIMIT_MS - 100);
+    } finally {
+      watch.stop();
+      await page.unrouteAll({ behavior: 'ignoreErrors' });
+    }
   });
 });
 

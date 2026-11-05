@@ -11,6 +11,7 @@
     "./fixture-names": "./src/fixture-names.ts",
     "./node": "./src/node/index.ts",
     "./segments": "./src/segments.ts",
+    "./settle": "./src/settle.ts",
     "./status": "./src/status.ts",
     "./studio-catalog": "./src/studio-catalog.ts"
   },

@@ -1,5 +1,6 @@
 import { MediaBackdrop } from '@portfolio/kit/sections';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
+import { enhancementPending } from '@portfolio/variant-contract/settle';
 import { backdropOf, controlsOf, ownerSkyOf } from './model';
 import { Img, readyImage } from './parts';
 
@@ -28,6 +29,12 @@ import { Img, readyImage } from './parts';
 // `backdropMedia` media ref, one decorative <img> from the kit's
 // MediaBackdrop over WebP renditions up to 1600w; a stale ref renders as
 // none, and then `backdrop` decides, as it always did.
+//
+// The root also carries the sky enhancement's settle signal
+// (@portfolio/variant-contract/settle): `data-enhancement-pending="sky"`
+// until the enhancement's first pass has marked the page live, started the
+// loops and had each observer's first delivery (enhancements/sky.ts), or the
+// kit has failed it. It styles nothing.
 
 /** The backdrop layer's root: one per page, `[data-ag-backdrop]`, holding every layer of the sky. */
 export function Sky({ input }: { input: VariantRenderInput }) {
@@ -41,6 +48,7 @@ export function Sky({ input }: { input: VariantRenderInput }) {
       aria-hidden="true"
       data-ag-backdrop=""
       data-ag-drift={controlsOf(input).drift ? 'on' : 'off'}
+      {...enhancementPending('sky')}
     >
       <div className="ag-sky__base" />
       {owner ? (

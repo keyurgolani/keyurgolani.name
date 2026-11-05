@@ -4,6 +4,8 @@ import { fixtureSiteSelecting } from '../../packages/variant-contract/src/contra
 import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
 import { PNG } from 'pngjs';
 import { expect, test } from '../harness/fixtures';
+import { ENHANCEMENT_PENDING } from '../../packages/variant-contract/src/settle';
+import { watchEnhancements } from '../quality/lib/a11y/conditions';
 
 // Aurora Glass's checks in a browser (variants-10 brief §5.2, step 11): one
 // Pause the sky stops both loops, the curtains' drift and the bead's breath
@@ -584,4 +586,110 @@ test.describe('on a phone', () => {
       await expect(page.locator('.ag-capsule__dest')).toBeHidden();
     },
   );
+});
+
+// The settle signal (the capture race, 2026-11-03; @portfolio/variant-contract/settle): the kit's
+// <Enhancement> renders an inert <template data-enhancement-pending="sky"> in its place until the
+// enhancement has attached, and the sky holds its own, data-enhancement-pending="sky" on .ag-sky, until
+// its observers' first deliveries. Both come off once the first pass has run, or once the kit has
+// failed the enhancement, so a variant shot or a quality read waits on them (watchEnhancements()) and
+// never hangs on them.
+test.describe("the sky's settle signal", () => {
+  const PENDING = `[${ENHANCEMENT_PENDING}]`;
+  const live = (page: import('@playwright/test').Page) =>
+    page.locator('.ag').evaluate((el) => el.hasAttribute('data-ag-live'));
+
+  test(
+    'the server renders the kit’s and the sky’s, and both come off once the page is live, with no hydration mismatch',
+    { annotation },
+    async ({ page, request }) => {
+      const html = await (await request.get('/')).text();
+      expect(html).toContain('<template data-enhancement-pending="sky"></template>');
+      expect(html).toMatch(/class="ag-sky"[^>]*data-enhancement-pending="sky"/);
+      const errors: string[] = [];
+      page.on('console', (message) => {
+        if (message.type() === 'error') errors.push(message.text());
+      });
+      page.on('pageerror', (error) => errors.push(error.message));
+      const watch = watchEnhancements(page);
+      try {
+        await page.goto('/');
+        expect(await watch.settled(), 'the watch settles').toBe(true);
+        await expect(page.locator(PENDING)).toHaveCount(0);
+        // Off only once the first pass has run: the page is live, Pause is shown, the loops run.
+        expect(await live(page)).toBe(true);
+        await expect(page.getByRole('button', { name: 'Pause the sky' })).toBeVisible();
+        // React reports a hydration mismatch as a console error (#418, #423 or #425 in production).
+        expect(errors.filter((text) => /hydrat|#41[89]|#42[35]/i.test(text))).toEqual([]);
+      } finally {
+        watch.stop();
+      }
+    },
+  );
+
+  test(
+    'with the enhancement’s chunk failing, the kit takes it off, so a capture never waits on it',
+    { annotation },
+    async ({ page, request }) => {
+      // As failed enhancement takes the optional chunks away: every script chunk the HTML doesn't
+      // load itself, the sky's among them.
+      const html = await (await request.get('/')).text();
+      const own = new Set(
+        [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map(
+          (match) => new URL(match[1]!, 'http://app.test').pathname,
+        ),
+      );
+      let blocked = 0;
+      await page.route('**/_next/static/chunks/**', (route) => {
+        const asked = new URL(route.request().url()).pathname;
+        if (route.request().resourceType() !== 'script' || own.has(asked)) return route.fallback();
+        blocked += 1;
+        return route.abort('blockedbyclient');
+      });
+      const watch = watchEnhancements(page);
+      try {
+        await page.goto('/');
+        expect(await watch.settled(), 'the watch settles on a failed chunk').toBe(true);
+        expect(blocked, 'optional chunks blocked').toBeGreaterThan(0);
+        await expect(page.locator(PENDING)).toHaveCount(0);
+        // Nothing ran: the page is the no-script one.
+        expect(await live(page)).toBe(false);
+      } finally {
+        watch.stop();
+      }
+    },
+  );
+
+  test.describe('under reduced motion', () => {
+    test('it comes off too, with the sky still', { annotation }, async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      const watch = watchEnhancements(page);
+      try {
+        await page.goto('/');
+        expect(await watch.settled()).toBe(true);
+        await expect(page.locator(PENDING)).toHaveCount(0);
+        expect(await live(page)).toBe(true);
+        await expect.poll(() => page.evaluate(loops)).toEqual([]);
+      } finally {
+        watch.stop();
+      }
+    });
+  });
+
+  test.describe('with JavaScript off', () => {
+    test.use({ javaScriptEnabled: false });
+    test('it stays in the markup, and nothing waits on it', { annotation }, async ({ page }) => {
+      const watch = watchEnhancements(page);
+      try {
+        await page.goto('/');
+        // The kit's template and the sky's hold.
+        await expect(page.locator(PENDING)).toHaveCount(2);
+        const started = Date.now();
+        expect(await watch.settled()).toBe(true);
+        expect(Date.now() - started).toBeLessThan(1_000);
+      } finally {
+        watch.stop();
+      }
+    });
+  });
 });

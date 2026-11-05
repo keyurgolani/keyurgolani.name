@@ -9,10 +9,12 @@ import {
   firstArrival,
   landsOnFold,
   liveIndex,
+  settleSky,
   supportsPopover,
   type FocusDocument,
   type FocusTrap,
 } from './sky';
+import { ENHANCEMENT_PENDING, enhancementSettled } from '@portfolio/variant-contract/settle';
 
 // The Index goes live only where the browser has popovers (Safari 17,
 // Firefox 125 on). Elsewhere the popover button would do nothing, so the
@@ -279,4 +281,35 @@ test('a still Pause says why it holds: the reason in the ornament, the word in t
   assert.equal(heldNote('touch', 'ornament'), 'held: touch screen');
   assert.equal(heldNote('reduced', 'capsule'), 'held');
   assert.equal(heldNote('touch', 'capsule'), 'held');
+});
+
+// The sky takes its own hold off with settleSky(), the contract's enhancementSettled() written in
+// the enhancement, so its chunk imports nothing new (the sky's enhancement budget, 2026-11-05).
+// The two must leave the same attribute, whatever the list names.
+test('settleSky() leaves .ag-sky as enhancementSettled(…, "sky") does', () => {
+  const element = (value: string | null) => {
+    const attributes = new Map<string, string>();
+    if (value !== null) attributes.set(ENHANCEMENT_PENDING, value);
+    return {
+      attributes,
+      getAttribute: (name: string) => attributes.get(name) ?? null,
+      setAttribute: (name: string, next: string) => void attributes.set(name, next),
+      removeAttribute: (name: string) => void attributes.delete(name),
+    };
+  };
+  for (const value of ['sky', 'sky other', 'other sky', '  sky  ', 'other', '', null]) {
+    const ours = element(value);
+    const theirs = element(value);
+    settleSky({
+      querySelector: (selector: string) => (selector === '.ag-sky' ? ours : null),
+    } as unknown as ParentNode);
+    enhancementSettled(theirs, 'sky');
+    assert.deepEqual(
+      [...ours.attributes],
+      [...theirs.attributes],
+      `pending ${JSON.stringify(value)}`,
+    );
+  }
+  // No sky in the root: nothing to take off, and no throw.
+  settleSky({ querySelector: () => null } as unknown as ParentNode);
 });

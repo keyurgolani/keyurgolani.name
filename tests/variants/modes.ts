@@ -4,13 +4,15 @@
 // wider than the window, every internal link resolves, each section's
 // data-renderer matches the manifest's renderedKinds and no kind it leaves
 // out renders, and no console error. Desktop and mobile take a screenshot of
-// the whole page, every image on it loaded. Without JavaScript, in print, and
-// with its enhancements failing, the page stays readable: the h1, the
-// navigation, and each visible section's heading have a box, opacity, and
-// visibility. Print also has nothing fixed or sticky. Under reduced motion
-// nothing runs once the page settles. A failed enhancement runs twice: with
-// every script chunk blocked while the stylesheets load, and with the kit's
-// throw switch on, which fails every enhancement the kit mounted on the page.
+// the whole page, once no finite entrance runs, its enhancements have
+// mounted or failed, and every image on it has loaded. Without JavaScript,
+// in print, and with its enhancements failing, the page stays readable: the
+// h1, the navigation, and each visible section's heading have a box,
+// opacity, and visibility. Print also has nothing fixed or sticky. Under
+// reduced motion nothing runs once the page settles. A failed enhancement
+// runs twice: with every script chunk blocked while the stylesheets load, and
+// with the kit's throw switch on, which fails every enhancement the kit
+// mounted on the page.
 import {
   expect,
   type APIRequestContext,
@@ -20,6 +22,11 @@ import {
 } from '@playwright/test';
 import type { ContractFixtureName } from '../../packages/variant-contract/src/node/fixtures';
 import { runningAnimations } from '../harness/motion';
+import {
+  STILL_ENHANCING,
+  watchEnhancements,
+  type EnhancementWatch,
+} from '../quality/lib/a11y/conditions';
 import {
   pendingAnnotation,
   readPendingList,
@@ -108,14 +115,70 @@ function consoleErrors(
       .map(({ text, url }) => (url ? `${text} (${url})` : text));
 }
 
-/** The page's settled state: loaded, its fonts in, and two frames drawn. */
-async function settle(page: Page, javaScript: boolean): Promise<void> {
+/**
+ * The longest the readable check waits for an entrance animation to finish,
+ * and settle() for every finite one.
+ */
+const ENTRANCE_WAIT_MS = 3_000;
+/** How often each looks again while one runs. */
+const ENTRANCE_POLL_MS = 100;
+
+/**
+ * The finite animations still running on the document timeline, each as
+ * `<name> on <target>`. Not one that repeats forever, which never ends; one
+ * a scroll or view timeline drives, which moves only as the page scrolls;
+ * one paused or pending, which doesn't move on its own; or one on a target
+ * that doesn't render. Self-contained, for page.evaluate().
+ */
+function finiteRunning(): string[] {
+  return document.getAnimations().flatMap((animation) => {
+    if (animation.playState !== 'running' || animation.pending) return [];
+    if (animation.timeline !== document.timeline) return [];
+    const effect = animation.effect as KeyframeEffect | null;
+    if (!Number.isFinite(Number(effect?.getComputedTiming().endTime))) return [];
+    const target = effect?.target ?? null;
+    if (target && !(target.isConnected && target.checkVisibility())) return [];
+    const name =
+      animation instanceof CSSAnimation
+        ? animation.animationName
+        : animation instanceof CSSTransition
+          ? `transition ${animation.transitionProperty}`
+          : animation.id || 'script animation';
+    const on = target
+      ? `${[target.tagName.toLowerCase(), ...target.classList].join('.')}${effect?.pseudoElement ?? ''}`
+      : 'no target';
+    return [`${name} on ${on}`];
+  });
+}
+
+/**
+ * The page's settled state: loaded, its fonts in, two frames drawn, and,
+ * with JavaScript, no finite animation running, then two frames more. A
+ * shot taken while an entrance runs gets it finished by Playwright's
+ * `animations: 'disabled'`, a raster the page draws once it ends on its own
+ * doesn't match (Terra Field's hero, 2026-11-04). The wait is bounded by
+ * ENTRANCE_WAIT_MS, and fails closed: one still running at the bound fails
+ * the test, naming it, before any shot.
+ */
+export async function settle(page: Page, javaScript: boolean): Promise<void> {
   await page.waitForLoadState('load');
   if (!javaScript) return;
   await page.evaluate(async () => {
     await document.fonts.ready;
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   });
+  const until = Date.now() + ENTRANCE_WAIT_MS;
+  let running = await page.evaluate(finiteRunning);
+  while (running.length > 0 && Date.now() < until) {
+    await page.waitForTimeout(ENTRANCE_POLL_MS);
+    running = await page.evaluate(finiteRunning);
+  }
+  expect(running, `finite animations still running ${ENTRANCE_WAIT_MS} ms after settle`).toEqual(
+    [],
+  );
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
 }
 
 /** Links already checked, by URL, so each mode doesn't fetch them again. */
@@ -198,11 +261,6 @@ export async function expectEveryMode(
 
   expect(errors(), 'console errors').toEqual([]);
 }
-
-/** The longest the readable check waits for an entrance animation to finish. */
-const ENTRANCE_WAIT_MS = 3_000;
-/** How often it looks again while one runs. */
-const ENTRANCE_POLL_MS = 100;
 
 /**
  * What the readable check reads in the page, synchronously, since a page
@@ -501,16 +559,32 @@ export async function loadImages(page: Page): Promise<void> {
 const PENDING = readPendingList() as PendingList;
 
 /**
- * The whole page's screenshot, every image on it loaded, attached to the
- * report, and compared against its baseline for the platform's own variants
- * in the pinned image.
+ * That the page's enhancements have mounted or failed, by the quality
+ * cells' own rule (watchEnhancements(), imported so the two can't drift): no
+ * script chunk in flight or started and no island changing across an idle
+ * period and two frames, within its BUSY_LIMIT_MS. A variant's lazy
+ * <Enhancement> loads its chunk after hydration, and a shot taken before it
+ * runs captures the page as it is without script (the capture race,
+ * 2026-11-03). `watch` started before the page loaded, so it saw the chunk
+ * start.
+ */
+export async function expectEnhancementsSettled(watch: EnhancementWatch): Promise<void> {
+  expect(await watch.settled(), STILL_ENHANCING).toBe(true);
+}
+
+/**
+ * The whole page's screenshot, once its enhancements have mounted or failed
+ * and every image on it has loaded, attached to the report, and compared
+ * against its baseline for the platform's own variants in the pinned image.
  */
 async function screenshot(
   page: Page,
   testInfo: TestInfo,
   variant: RegisteredVariant,
   name: string,
+  watch: EnhancementWatch,
 ): Promise<void> {
+  await expectEnhancementsSettled(watch);
   await loadImages(page);
   const options = { animations: 'disabled', caret: 'hide', fullPage: true } as const;
   await testInfo.attach(`${name}.png`, {
@@ -589,14 +663,15 @@ async function checkPage(check: ModeCheck, page: Page, run?: FailedRun): Promise
     });
   }
   const failed = run === 'throw-switch' ? await failEveryEnhancement(page) : undefined;
+  // The shot waits for the enhancements, so its watch starts before the page loads.
+  const shot = takesShot(mode);
+  const watch = shot ? watchEnhancements(page) : undefined;
   try {
     await check.go(page);
     await settle(page, mode !== 'no-javascript' && run !== 'blocked-chunks');
     // Before the keyboard checks, which focus main and scroll to it: the
     // page as a visitor first sees it.
-    if (takesShot(mode)) {
-      await screenshot(page, check.testInfo, check.variant, check.shot);
-    }
+    if (watch) await screenshot(page, check.testInfo, check.variant, check.shot, watch);
     await expectEveryMode(page, check.request, check.variant, errors);
     if (run === 'blocked-chunks') expectScriptsAlone(blocked, sheets());
     const floor = enhancementFloor(check.variant.manifest, check.fixture);
@@ -609,6 +684,7 @@ async function checkPage(check: ModeCheck, page: Page, run?: FailedRun): Promise
     if (mode === 'print') await expectNothingFixed(page);
     if (mode === 'reduced-motion') await expectStill(page);
   } finally {
+    watch?.stop();
     if (run === 'blocked-chunks') await context.unroute(CHUNKS);
   }
 }

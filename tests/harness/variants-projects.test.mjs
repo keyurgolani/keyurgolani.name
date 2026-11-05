@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PLAYWRIGHT = createRequire(import.meta.url).resolve('@playwright/test/cli');
 /** The tests in tests/variants/modes.spec.ts. */
-const MODES_TESTS = 25;
+const MODES_TESTS = 32;
 
 /** `playwright test --list` for the modes project, with `env` over this process's. */
 function listModes(t, env) {
