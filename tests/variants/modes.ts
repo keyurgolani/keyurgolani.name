@@ -20,6 +20,12 @@ import {
 } from '@playwright/test';
 import type { ContractFixtureName } from '../../packages/variant-contract/src/node/fixtures';
 import { runningAnimations } from '../harness/motion';
+import {
+  pendingAnnotation,
+  readPendingList,
+  takesShot,
+  type PendingList,
+} from './baseline-pending';
 import { COMPARE_SCREENSHOTS, firstParty, type RegisteredVariant } from './target';
 
 export type ModeName =
@@ -491,6 +497,9 @@ export async function loadImages(page: Page): Promise<void> {
   expect(loading, 'images still loading at the screenshot').toEqual([]);
 }
 
+/** The compositions whose baselines are pending (baseline-pending.ts). */
+const PENDING = readPendingList() as PendingList;
+
 /**
  * The whole page's screenshot, every image on it loaded, attached to the
  * report, and compared against its baseline for the platform's own variants
@@ -509,7 +518,18 @@ async function screenshot(
     contentType: 'image/png',
   });
   if (COMPARE_SCREENSHOTS && firstParty(variant)) {
-    await expect(page).toHaveScreenshot(`${name}.png`, options);
+    // A composition baseline-pending.json lists has no baselines yet: its
+    // shot is attached above, and the test names the fix that will commit
+    // them. baseline-pending.test.ts holds the list to the committed files.
+    const pending = PENDING[variant.manifest.id];
+    if (pending) {
+      testInfo.annotations.push({
+        type: 'baseline-pending',
+        description: pendingAnnotation(pending),
+      });
+    } else {
+      await expect(page).toHaveScreenshot(`${name}.png`, options);
+    }
   }
 }
 
@@ -574,7 +594,7 @@ async function checkPage(check: ModeCheck, page: Page, run?: FailedRun): Promise
     await settle(page, mode !== 'no-javascript' && run !== 'blocked-chunks');
     // Before the keyboard checks, which focus main and scroll to it: the
     // page as a visitor first sees it.
-    if (mode === 'desktop' || mode === 'mobile') {
+    if (takesShot(mode)) {
       await screenshot(page, check.testInfo, check.variant, check.shot);
     }
     await expectEveryMode(page, check.request, check.variant, errors);

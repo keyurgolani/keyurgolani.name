@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from '../harness/fixtures';
+import { sampleShot } from './baseline-pending';
 import { checkMode, MODES } from './modes';
 import { DEMO, FIXED_TIME, projectTarget, SAMPLE_SELECTION } from './target';
 
@@ -78,7 +79,7 @@ for (const mode of MODES) {
           testInfo,
           go: (target) =>
             target.goto(id === SAMPLE_SELECTION ? '/sample' : `/sample?variant=${id}`),
-          shot: `${id}-sample-${mode.name}`,
+          shot: sampleShot(id, mode.name),
           fixture: undefined,
         });
       },
