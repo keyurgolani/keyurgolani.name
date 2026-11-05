@@ -1,4 +1,5 @@
 import type { Frame, Page } from '@playwright/test';
+import { WORD } from '../../packages/variant-horizontal-cinema/src/chapters';
 import { expect } from '../harness/fixtures';
 
 // Horizontal Cinema's scene model and the readers its browser specs share
@@ -141,3 +142,34 @@ export async function watchKeys(scope: Scope): Promise<void> {
 
 export const keys = (scope: Scope) =>
   scope.evaluate(() => (window as Window & { __keys?: boolean[] }).__keys ?? []);
+
+/**
+ * Every heading word in the strip's scenes that sits on more than one line:
+ * the word, as the fit check reads it (chapters' WORD), in two boxes. A
+ * heading broken inside a word doesn't fit its scene.
+ */
+export const brokenHeadingWords = (scope: Scope) =>
+  scope.evaluate(
+    ([source, flags]) => {
+      const broken: string[] = [];
+      const range = document.createRange();
+      for (const heading of document.querySelectorAll('.hc-track .hc-scene :is(h1, h2, h3, h4)')) {
+        const scene = heading.closest('.hc-scene')!.id;
+        const texts = document.createTreeWalker(heading, NodeFilter.SHOW_TEXT);
+        for (let node = texts.nextNode(); node; node = texts.nextNode()) {
+          for (const match of (node.textContent ?? '').matchAll(new RegExp(source, flags))) {
+            range.setStart(node, match.index);
+            range.setEnd(node, match.index + match[0].length);
+            const lines = new Set(
+              [...range.getClientRects()]
+                .filter((box) => box.width > 0)
+                .map((box) => Math.round(box.top)),
+            );
+            if (lines.size > 1) broken.push(`${scene}: ${match[0]}`);
+          }
+        }
+      }
+      return broken;
+    },
+    [WORD.source, WORD.flags] as const,
+  );
