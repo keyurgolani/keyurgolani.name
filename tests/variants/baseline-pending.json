@@ -1,0 +1,52 @@
+{
+  "aurora-glass": {
+    "owner": "D",
+    "release": "rc.1",
+    "fix": "Aurora's capture stack (the settle signal and the finite-animation wait), then two byte-identical captures of the RC1 commit in CI's variants job"
+  },
+  "chapters": {
+    "owner": "A",
+    "release": "rc.1",
+    "fix": "Commit 18: two byte-identical captures of the RC1 commit in CI's variants job"
+  },
+  "flux": {
+    "owner": "A",
+    "release": "rc.2",
+    "fix": "Flux's capture fix: one ink pair with its pose set per width, so a full-page capture re-creates nothing; its baselines land with it"
+  },
+  "mission-control": {
+    "owner": "A",
+    "release": "rc.1",
+    "fix": "Commit 18: two byte-identical captures of the RC1 commit in CI's variants job"
+  },
+  "raw-grid": {
+    "owner": "A",
+    "release": "rc.1",
+    "fix": "Commit 18: two byte-identical captures of the RC1 commit in CI's variants job"
+  },
+  "schematic": {
+    "owner": "A",
+    "release": "rc.1",
+    "fix": "Commit 18: two byte-identical captures of the RC1 commit in CI's variants job"
+  },
+  "shell": {
+    "owner": "A",
+    "release": "rc.1",
+    "fix": "Commit 18: two byte-identical captures of the RC1 commit in CI's variants job"
+  },
+  "singular": {
+    "owner": "C",
+    "release": "rc.1",
+    "fix": "C's no-room-window fix and Aurora's watchEnhancements, then two byte-identical captures of the RC1 commit in CI's variants job"
+  },
+  "swiss-signal": {
+    "owner": "A",
+    "release": "rc.1",
+    "fix": "Commit 18: two byte-identical captures of the RC1 commit in CI's variants job, with the sample's baseline after Aurora's stack"
+  },
+  "terra-field": {
+    "owner": "D",
+    "release": "rc.1",
+    "fix": "Aurora's finite-animation wait (the hero entrances still running at settle), then two byte-identical captures of the RC1 commit in CI's variants job"
+  }
+}

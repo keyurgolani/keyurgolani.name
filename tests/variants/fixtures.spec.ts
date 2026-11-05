@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from '../harness/fixtures';
+import { fixtureShot } from './baseline-pending';
 import { checkMode, MODES } from './modes';
 import { FIXED_TIME, projectTarget, READ_ONLY } from './target';
 
@@ -54,6 +55,8 @@ for (const mode of MODES) {
       { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
       async ({ page, context, request }, testInfo) => {
         const { variant, fixture } = projectTarget(testInfo);
+        if (!fixture)
+          throw new Error(`The project ${testInfo.project.name} names no contract fixture`);
         await checkMode({
           mode: mode.name,
           page,
@@ -62,7 +65,7 @@ for (const mode of MODES) {
           variant,
           testInfo,
           go: (target) => target.goto('/'),
-          shot: `${variant.manifest.id}-${fixture}-${mode.name}`,
+          shot: fixtureShot(variant.manifest.id, fixture, mode.name),
           fixture,
         });
       },

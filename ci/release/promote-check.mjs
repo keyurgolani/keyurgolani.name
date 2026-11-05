@@ -2,7 +2,10 @@
 // Promotion's first check: a final tag vX.Y.Z promotes only the newest
 // release candidate for X.Y.Z, only when that candidate is on the same
 // commit, and only when its release run passed its scan and its quality
-// gate and tagged its digest (docs/releasing.md).
+// gate and tagged its digest (docs/releasing.md). It refuses, too, while
+// tests/variants/baseline-pending.json names any composition: a final
+// release compares every first-party composition's screenshots against its
+// baselines, so it waits until the last of them is committed.
 //
 //   GITHUB_TOKEN=... GITHUB_REPOSITORY=owner/repo TAG=v1.2.0 SHA=<commit> \
 //     node ci/release/promote-check.mjs
@@ -14,7 +17,7 @@
 //
 // Pure Node with no dependencies, so the job that runs it needs no install.
 import { execFileSync } from 'node:child_process';
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { githubGet, repository } from './github.mjs';
@@ -25,6 +28,17 @@ export const RELEASE_WORKFLOW = '.github/workflows/release.yml';
 export const REQUIRED_RC_JOBS = ['rc-scan', 'rc-quality-verdict', 'rc-tag'];
 export const TAG_REF_FORMAT = '%(refname:strip=2) %(objectname) %(*objectname)';
 const SHA = /^[0-9a-f]{40}$/;
+/** The compositions whose screenshot baselines are pending (tests/variants/baseline-pending.ts). */
+export const BASELINE_PENDING_FILE = 'tests/variants/baseline-pending.json';
+
+/** The ids `tests/variants/baseline-pending.json`'s text lists, sorted. Throws on text that isn't a JSON object. */
+export function pendingBaselines(text) {
+  const list = JSON.parse(String(text));
+  if (typeof list !== 'object' || list === null || Array.isArray(list)) {
+    throw new Error(`${BASELINE_PENDING_FILE} is not an object keyed by composition id`);
+  }
+  return Object.keys(list).sort();
+}
 
 /**
  * `git for-each-ref refs/tags --format=TAG_REF_FORMAT` as [{ tag, commit }].
@@ -70,9 +84,12 @@ export function passedRuns(rcTag, sha, runs, jobsByRun) {
 /**
  * The verdict for a final tag: { ok, reasons, candidate, targets }.
  *
- * @param {{ tag: string, sha: string, tagRefs: {tag: string, commit: string}[], runs: object[], jobsByRun: Record<string, object[]> }} input
+ * `pending` is the compositions whose baselines are pending on this commit
+ * (pendingBaselines). Any refuses: a final release needs the list empty.
+ *
+ * @param {{ tag: string, sha: string, tagRefs: {tag: string, commit: string}[], runs: object[], jobsByRun: Record<string, object[]>, pending: string[] }} input
  */
-export function evaluatePromotion({ tag, sha, tagRefs, runs, jobsByRun }) {
+export function evaluatePromotion({ tag, sha, tagRefs, runs, jobsByRun, pending }) {
   const release = parseReleaseTag(tag);
   if (!release || release.kind !== 'final') {
     return { ok: false, reasons: [`${tag} is not a vX.Y.Z tag`], candidate: null, targets: [] };
@@ -96,6 +113,13 @@ export function evaluatePromotion({ tag, sha, tagRefs, runs, jobsByRun }) {
   } else if (passedRuns(newest.tag, sha, runs, jobsByRun).length === 0) {
     reasons.push(
       `${newest.tag} has no passed release run on ${sha}: its scan and its image tag (${REQUIRED_RC_JOBS.join(', ')}) must have succeeded`,
+    );
+  }
+  if (!Array.isArray(pending)) {
+    reasons.push(`the baseline-pending list on ${sha} wasn't read`);
+  } else if (pending.length > 0) {
+    reasons.push(
+      `${BASELINE_PENDING_FILE} on ${sha} still lists ${pending.length} composition${pending.length === 1 ? '' : 's'} with no screenshot baselines (${pending.join(', ')}). Commit their baselines and empty the list, then cut a new candidate`,
     );
   }
   const finals = tagRefs.map((ref) => ref.tag);
@@ -127,7 +151,9 @@ async function main() {
     const jobs = await githubGet(`${base}/actions/runs/${run.id}/jobs?filter=latest&per_page=100`);
     jobsByRun[String(run.id)] = jobs.jobs ?? [];
   }
-  const verdict = evaluatePromotion({ tag, sha, tagRefs, runs, jobsByRun });
+  // The checkout is this tag's commit, the candidate's own.
+  const pending = pendingBaselines(readFileSync(BASELINE_PENDING_FILE, 'utf8'));
+  const verdict = evaluatePromotion({ tag, sha, tagRefs, runs, jobsByRun, pending });
   const summary = verdict.ok
     ? `### ${tag}: promotes ${verdict.candidate}\n\nMoves ${verdict.targets.map((t) => `\`${t}\``).join(', ')}.\n`
     : `### ${tag}: refused\n\n${verdict.reasons.map((reason) => `- ${reason}.`).join('\n')}\n`;

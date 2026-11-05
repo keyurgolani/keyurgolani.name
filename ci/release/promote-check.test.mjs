@@ -8,6 +8,8 @@ import {
   evaluatePromotion,
   parseTagRefs,
   passedRuns,
+  pendingBaselines,
+  BASELINE_PENDING_FILE,
   REQUIRED_RC_JOBS,
 } from './promote-check.mjs';
 
@@ -33,6 +35,7 @@ const input = (overrides = {}) => ({
   tagRefs: parseTagRefs(REFS),
   runs: RUNS,
   jobsByRun: { 202: PASSED },
+  pending: [],
   ...overrides,
 });
 
@@ -140,4 +143,34 @@ test("each way the candidate's run can miss refuses promotion on its own", () =>
     assert.equal(verdict.ok, false, label);
     assert.match(verdict.reasons.join(), /has no passed release run/, label);
   }
+});
+
+test('promotion is refused while the baseline-pending list names any composition', () => {
+  const verdict = evaluatePromotion(input({ pending: ['flux', 'singular'] }));
+  assert.equal(verdict.ok, false);
+  assert.match(
+    verdict.reasons.join(),
+    /baseline-pending\.json on 1{40} still lists 2 compositions with no screenshot baselines \(flux, singular\)/,
+  );
+  assert.deepEqual(verdict.targets, []);
+  assert.match(
+    evaluatePromotion(input({ pending: ['flux'] })).reasons.join(),
+    /lists 1 composition with/,
+  );
+  assert.match(evaluatePromotion(input({ pending: undefined })).reasons.join(), /wasn't read/);
+  assert.equal(evaluatePromotion(input({ pending: [] })).ok, true);
+});
+
+test("the baseline-pending list's ids are read sorted, and only from an object", () => {
+  assert.deepEqual(pendingBaselines('{"singular": {}, "flux": {}}'), ['flux', 'singular']);
+  assert.deepEqual(pendingBaselines('{}'), []);
+  assert.throws(() => pendingBaselines('[]'), /not an object/);
+  assert.throws(() => pendingBaselines('null'), /not an object/);
+  assert.throws(() => pendingBaselines('{'));
+});
+
+test('the baseline-pending list is where the release reads it, an object keyed by composition id', () => {
+  // tests/variants/baseline-pending.ts reads the same path; a move breaks this.
+  const text = readFileSync(new URL(`../../${BASELINE_PENDING_FILE}`, import.meta.url), 'utf8');
+  assert.ok(Array.isArray(pendingBaselines(text)));
 });
