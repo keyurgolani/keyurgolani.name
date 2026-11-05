@@ -5,14 +5,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MARKDOWN_MAX_LENGTH, markdownOverLimit, validatePublicationUnit } from '@portfolio/schema';
 import { renderInlineMarkdown, renderMarkdown } from './markdown';
-import { searchMarkdown, table } from './test-support/markdown-search';
+import { searchField, searchMarkdown, table } from './test-support/markdown-search';
 
 // The Markdown cap (#10) from the renderer's side: the slowest field an
 // adversarial search finds within the limits renders fast through both
-// functions, so does a field over them that skipped validation, marked never
-// nests past the renderer's ceiling, a 1 MiB document of the field slowest
-// for its size renders within a bound of a benign one, and every field a
-// renderer reads as Markdown is capped.
+// functions, the emphasis closer search's work grows with a field's length
+// alone, a field over the limits that skipped validation renders fast too,
+// marked never nests past the renderer's ceiling, a 1 MiB document of the
+// field slowest for its size renders within a bound of a benign one, and
+// every field a renderer reads as Markdown is capped.
 
 const SITE = [
   'schemaVersion: 2',
@@ -115,6 +116,61 @@ test('the slowest field the adversarial search finds within the limits renders t
         `${name}: ${mode} ${time.toFixed(1)} ms against ${bound(base).toFixed(1)} ms (benign ${base.toFixed(1)} ms)`,
       );
     }
+  }
+});
+
+/**
+ * The code units the global and sticky expressions step over while `render`
+ * renders `text`: from where each exec starts to the end of its match, or to
+ * the end of the text when it finds none. A count of the work, not a time,
+ * so no machine's speed moves it.
+ */
+function steps(render: (source: string) => string, text: string): number {
+  const exec = RegExp.prototype.exec;
+  let units = 0;
+  RegExp.prototype.exec = function (this: RegExp, input: string) {
+    const scans = this.global || this.sticky;
+    const from = scans ? this.lastIndex : 0;
+    const match = exec.call(this, input);
+    if (scans) units += (match ? match.index + match[0].length : String(input).length) - from;
+    return match;
+  };
+  try {
+    render(text);
+  } finally {
+    RegExp.prototype.exec = exec;
+  }
+  return units;
+}
+
+test("the emphasis closer search reads a field a bounded number of times: the search's emphasis field with CJK filler steps the expressions over at most 16 code units a character, at 2,048, 4,096 and 8,192 characters, through both renderers", (t) => {
+  // marked looks for each opener's closer by running one expression from the
+  // opener to the end of the text, so a field of unclosed openers had it read
+  // the rest of the field once an opener: the openers times the length, which
+  // the cap lets grow as the length to the power 1.5. CJK text makes each of
+  // those reads about twice as slow again, so this field was the search's
+  // slowest, and a shared runner took 57 times a benign field to render it.
+  const lengths = [MARKDOWN_MAX_LENGTH / 4, MARKDOWN_MAX_LENGTH / 2, MARKDOWN_MAX_LENGTH];
+  for (const mode of ['block', 'inline'] as const) {
+    const counts = lengths.map((length) => {
+      const text = searchField('quotes 0, lists 0, item lines 0', 'emphasis', 'cjk', length);
+      assert.ok(text, `a field of ${length} characters`);
+      assert.equal(markdownOverLimit(text), null, `${length}: it keeps to every limit`);
+      assert.equal(markdownOverLimit(text, 'inline'), null, `${length}: and inline`);
+      assert.ok(!RENDER[mode](text).includes('<em>'), `${length}: no opener closes`);
+      return { length: text.length, units: steps(RENDER[mode], text) };
+    });
+    t.diagnostic(
+      `${mode}: ${counts.map(({ length, units }) => `${units} code units at ${length} (${(units / length).toFixed(1)} a character)`).join(', ')}`,
+    );
+    for (const { length, units } of counts) {
+      assert.ok(units <= 16 * length, `${mode}: ${units} code units at ${length} characters`);
+    }
+    const growth = counts[2]!.units / counts[0]!.units;
+    assert.ok(
+      growth < 5,
+      `${mode}: four times the length steps ${growth.toFixed(1)} times the code units`,
+    );
   }
 });
 
