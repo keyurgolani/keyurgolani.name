@@ -11,7 +11,7 @@ import {
 } from 'react';
 import { Action } from '@portfolio/appearance/primitives';
 import { useBoundary } from '@portfolio/appearance/react';
-import { arrowStep, sceneAlong, snapAlong } from './chapters';
+import { arrowStep, sceneAlong, snapAlong, wordSpans } from './chapters';
 import { numeralOf, SceneTitle, Words, type TitleMark } from './parts';
 import { Runtime } from './runtime';
 
@@ -36,8 +36,9 @@ import { Runtime } from './runtime';
 // it writes no history, and in a plate it never starts.
 //
 // Every scene fits the stage by construction, and the controller checks:
-// where a scene's picture still overflows, at this viewport and in these
-// faces, that scene opens a width wider, and where one overflows even so,
+// where a scene's picture still overflows, or one of its headings breaks
+// inside a word, at this viewport and in these faces, that scene opens a
+// width wider (its type never shrinks), and where one doesn't fit even so,
 // the shell falls back to the same scenes top to bottom, so nothing is
 // ever clipped under the snap. Top to bottom, a chapter control on the
 // top edge says where the reader is and opens the five chapters.
@@ -655,10 +656,35 @@ function LiveStage(props: StageProps) {
       }
     };
 
-    /** The pictures that run past their frame, at this viewport and in these faces. */
+    /**
+     * Whether a heading in this picture breaks inside a word: the root's
+     * overflow-wrap lets a word wider than its column break rather than run
+     * out, so it never overflows, yet a heading's word in two lines doesn't fit.
+     * Read from each word's own boxes: one box per line it sits on.
+     */
+    const breaksAWord = (pic: HTMLElement) => {
+      const range = document.createRange();
+      for (const heading of pic.querySelectorAll(':is(h1, h2, h3, h4)')) {
+        const words = document.createTreeWalker(heading, NodeFilter.SHOW_TEXT);
+        for (let node = words.nextNode(); node; node = words.nextNode()) {
+          for (const [start, end] of wordSpans(node.textContent ?? '')) {
+            range.setStart(node, start);
+            range.setEnd(node, end);
+            const lines = new Set(
+              [...range.getClientRects()]
+                .filter((box) => box.width > 0)
+                .map((box) => Math.round(box.top)),
+            );
+            if (lines.size > 1) return true;
+          }
+        }
+      }
+      return false;
+    };
+    /** The pictures that don't fit their frame, at this viewport and in these faces: past it, or a heading broken inside a word. */
     const overflowing = () =>
       [...stageElement.querySelectorAll<HTMLElement>('.hc-pic')].filter(
-        (pic) => pic.scrollHeight > pic.clientHeight + 1,
+        (pic) => pic.scrollHeight > pic.clientHeight + 1 || breaksAWord(pic),
       );
     /** Every scene back at its authored width. */
     const unroom = () => {
@@ -667,7 +693,8 @@ function LiveStage(props: StageProps) {
     };
     /**
      * Whether every scene's picture fits the stage. A scene whose picture
-     * doesn't, in a wider face than the one it was sized for, first opens a
+     * doesn't (past its frame, or a heading broken inside a word), in a wider
+     * face than the one it was sized for, first opens a
      * width wider; where one still doesn't, the shell reads top to bottom
      * until the viewport changes, so nothing is clipped under the snap.
      */
