@@ -23,7 +23,12 @@
   /* One field unit: 1vw from 64rem, and the larger of 1vmin and 0.6vmax below (the spec's units). */
   --layout-fx-u: max(1vmin, 0.6vmax);
   --layout-bar: calc(var(--ui-control-height) + 2 * var(--space-xs));
-  --layout-sticky-offset: calc(var(--layout-bar) + var(--space-s));
+  /* The bar's own box: its row, at least --layout-bar, and the padding round it, which the row's
+     min-block-size doesn't include. What clears the bar, sticky at the top or docked at the foot,
+     clears this; at --layout-bar alone a focused control stopped 2 * space-xs short. */
+  --layout-fx-bar-pad: var(--space-xs);
+  --layout-fx-bar-box: calc(var(--layout-bar) + 2 * var(--layout-fx-bar-pad));
+  --layout-sticky-offset: calc(var(--layout-fx-bar-box) + var(--space-s));
   --layout-round: 50%;
   --layout-line-hair: 1px solid
     color-mix(in oklab, var(--color-border-default) 55%, var(--color-surface-default));
@@ -428,7 +433,7 @@
   /* Where the bar wraps, its rows no nearer than a focus ring reaches, as the tools sit. */
   row-gap: max(var(--space-2xs), calc(var(--ui-focus-offset) + var(--ui-focus-width)));
   min-block-size: var(--layout-bar);
-  padding-block: var(--space-xs);
+  padding-block: var(--layout-fx-bar-pad);
   padding-inline: calc(var(--layout-fx-edge) - var(--space-s));
 }
 
@@ -2599,12 +2604,11 @@
     padding-block-end: calc(var(--layout-bar) + var(--space-2xl));
   }
 
-  /* Clear of the whole dock: its row (at least --layout-bar) and the padding round it, which the
-     row's min-block-size doesn't include. At --layout-bar alone a control Tab brought up from
-     below stopped its last few pixels under the dock, and its ring's foot with them (quality-pr,
-     390: a stats fold, 5.8px under). */
+  /* Clear of the whole dock (--layout-fx-bar-box): at --layout-bar alone a control Tab brought up
+     from below stopped its last few pixels under the dock, and its ring's foot with them
+     (quality-pr, 390: a stats fold, 5.8px under). */
   [data-variant='flux'] :is(a, button, summary) {
-    scroll-margin-block-end: calc(var(--layout-bar) + 2 * var(--space-xs) + var(--space-s));
+    scroll-margin-block-end: calc(var(--layout-fx-bar-box) + var(--space-s));
   }
 
   [data-variant='flux'] .fx-opening-frame {
