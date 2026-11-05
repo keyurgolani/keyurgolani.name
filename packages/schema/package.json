@@ -20,11 +20,11 @@
     "test": "tsx --test 'src/**/*.test.ts'"
   },
   "dependencies": {
-    "zod": "^3.24.1",
-    "yaml": "^2.6.1"
+    "zod": "^4.6.7",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
-    "esbuild": "0.27.7",
-    "typescript": "^5.7.2"
+    "esbuild": "0.28.2",
+    "typescript": "^7.0.2"
   }
 }
