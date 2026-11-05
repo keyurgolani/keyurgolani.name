@@ -2,6 +2,7 @@ import { Marked, Tokenizer, type MarkedToken, type Token, type Tokens } from 'ma
 import { isAllowedUrl, markdownOverLimit } from '@portfolio/schema';
 import { escapeHtml } from './html-escape';
 import { decodeReferences } from './html-references';
+import { emStrong } from './markdown-emphasis';
 import { lexBlocks } from './markdown-lexer';
 
 // Markdown from the content, as HTML that RichText injects with
@@ -33,6 +34,11 @@ import { lexBlocks } from './markdown-lexer';
 // - When a lazy line makes marked lex a quote's content again, the inline
 //   text of the first lexing isn't lexed as well (markdown-lexer.ts), so a
 //   field's marks cost the same however deep its quotes.
+// - An emphasis opener's search for its closer walks the text's runs of * and
+//   _, matched once a text, rather than reading the rest of the text again
+//   for each opener (markdown-emphasis.ts), so openers that never close cost
+//   their count squared, which the cap bounds, and not their count times the
+//   field's length.
 //
 // No Node API and no DOM: #7's preview frame and #9's browser render call it.
 
@@ -62,6 +68,7 @@ markdown.use({
     list(src) {
       return nested(() => Tokenizer.prototype.list.call(this, src));
     },
+    emStrong,
   },
 });
 

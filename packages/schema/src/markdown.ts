@@ -138,6 +138,10 @@ export const MARKDOWN_MAX_DEFINITIONS = 32;
  * take 11, and 1,024 take 41. `x ` and 40,000 `*` take 2.8 s; 8 KiB of `!`,
  * 39 ms. Prose closes its marks as it goes, so a 2,500-character case study
  * with inline code and emphasis (156 marks) costs what plain text does.
+ * The kit's renderer looks for closers by walking the marks alone
+ * (packages/kit/src/markdown-emphasis.ts), without the scan of the rest, so
+ * the times here are marked's own; the walk still costs the square of the
+ * count, which is what this limit bounds.
  *
  * Text costs its length and these marks the square of their count, so the
  * marks a field may hold grow with the square root of its length: eight

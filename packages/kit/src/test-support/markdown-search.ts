@@ -242,6 +242,24 @@ function field(
   return null;
 }
 
+/**
+ * The field the search builds for a structure, openers, and filler, by
+ * their names in the search, at most `length` long, or null.
+ */
+export function searchField(
+  structureName: string,
+  openersName: string,
+  fillerName: string,
+  length = L,
+): string | null {
+  const structure = structures()[structureName];
+  const openers = OPENERS[openersName];
+  const filler = FILLERS[fillerName];
+  if (!structure || !openers || !filler)
+    throw new Error(`no ${structureName}; ${openersName}; ${fillerName}`);
+  return field(structure, openers, filler, length);
+}
+
 /** Milliseconds a render of `text` takes, over as many renders as make the length limit's worth. */
 function time(render: (source: string) => string, text: string): number {
   const renders = Math.max(1, Math.round(L / Math.max(text.length, 1)));
