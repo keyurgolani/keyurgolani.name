@@ -525,6 +525,54 @@
   background-color: var(--color-canvas);
 }
 
+/* Focused, Appearance, the bar's end tool and the one the liquid reaches, keeps its ring apart
+   from the liquid all the way round, shut or open: behind it, a ground of canvas in its own shape,
+   a ring's reach and the smallest space step past its box, so it rounds with the ring. It sits
+   under everything else the bar draws (z-index -1 in the bar's own stacking), so it shows only
+   over the liquid and the page, never over a neighbouring tool or the row above a wrapped bar.
+   In the dark the ring and the liquid are near one colour, and a ring flush with the liquid read
+   as joined to it. Only while the ring shows, so the bar at rest is as it was; and not on the
+   phone's dock, which has no canvas ground. It's the tool's own ::before where the browser anchors
+   the panel (fixed, so the tool can be its ground's box); elsewhere the panel hangs from the bar,
+   and the summary's ::before, which is the drip once open, carries it while the panel is shut. */
+@media (min-width: 40rem) {
+  @supports (anchor-name: --a) {
+    [data-variant='flux'] .fx-bar__appearance {
+      position: relative;
+    }
+
+    [data-variant='flux']
+      .fx-bar__appearance:has([data-ui-slot='disclosure.summary']:focus-visible)::before {
+      content: '';
+      position: absolute;
+      inset: calc(-1 * (var(--layout-fx-ring-reach) + var(--space-3xs)));
+      z-index: -1;
+      border-radius: var(--ui-radius-badge);
+      background-color: var(--color-canvas);
+      pointer-events: none;
+    }
+  }
+
+  @supports not (anchor-name: --a) {
+    [data-variant='flux'] .fx-bar__appearance [data-ui-slot='disclosure.summary'] {
+      position: relative;
+    }
+
+    [data-variant='flux']
+      .fx-bar__appearance
+      [data-ui-slot='disclosure']:not([open])
+      > [data-ui-slot='disclosure.summary']:focus-visible::before {
+      content: '';
+      position: absolute;
+      inset: calc(-1 * (var(--layout-fx-ring-reach) + var(--space-3xs)));
+      z-index: -1;
+      border-radius: var(--ui-radius-badge);
+      background-color: var(--color-canvas);
+      pointer-events: none;
+    }
+  }
+}
+
 /* The visitor's Appearance in the bar: one more tool, unruled, its chevron saying it opens (on a
    phone its mark alone, below). Open, it takes the bar's drop, as the place being read does, and
    its panel hangs from it on the page's own ground: the Index rows' vocabulary, a lip of the
