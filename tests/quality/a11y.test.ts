@@ -37,7 +37,7 @@ import {
   stillnessScript,
   worstRatio,
 } from './lib/a11y/contrast';
-import { ownWords } from './lib/a11y/conditions';
+import { ownWords, showsThrough } from './lib/a11y/conditions';
 import { stuckCoverScript } from './lib/a11y/covers';
 import {
   centreLineChange,
@@ -1417,4 +1417,32 @@ test("an inventory field's own words: a link's and a control's name, any other f
   ] as const) {
     assert.equal(ownWords(item), words, item);
   }
+});
+
+test("the see-through check counts a pixel only when every channel moves the fills' way between them, down to 254 of 255 opaque", () => {
+  const one = (rgb: readonly [number, number, number]) => decodePng(png([[rgb]]));
+  // 254/255 of #f6eddc over magenta, then over green: a level the fills' way, every channel.
+  assert.equal(showsThrough(one([246, 236, 220]), one([245, 237, 219])), true);
+  // Half see-through: far the fills' way.
+  assert.equal(showsThrough(one([250, 118, 237]), one([123, 246, 110])), true);
+  // An antialiased edge rastered a few levels apart, every channel down (KC's offer card): not the fill.
+  assert.equal(showsThrough(one([197, 123, 84]), one([190, 118, 81])), false);
+  // The same pixel, and one with a channel still: not the fill.
+  assert.equal(showsThrough(one([197, 123, 84]), one([197, 123, 84])), false);
+  assert.equal(showsThrough(one([198, 123, 85]), one([197, 124, 85])), false);
+  // Clips of two sizes can't be compared: fail closed.
+  assert.equal(
+    showsThrough(
+      one([1, 2, 3]),
+      decodePng(
+        png([
+          [
+            [1, 2, 3],
+            [1, 2, 3],
+          ],
+        ]),
+      ),
+    ),
+    true,
+  );
 });

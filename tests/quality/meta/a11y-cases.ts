@@ -2908,6 +2908,55 @@ export const A11Y_CASES: readonly MetaCase[] = [
     transparencyFindings,
     { features: TRANSPARENCY },
   ),
+  // An opaque surface whose ring's edge reads a few levels apart under the two fills, every
+  // channel down, against the fills' own direction: an antialiased pixel rastered apart, as KC's
+  // offer card and index dialog do now and then, isn't the fill showing through (round 3).
+  goodFile('edge-jitter', 'transparency-edge-jitter.html', 'transparency', transparencyFindings, {
+    features: TRANSPARENCY,
+  }),
+  // The same ring beside a text field in the surface, as the primitives page's decision dialog
+  // and Kinetic Cosmos's index have them: a screenshot that hides the caret by writing a style on
+  // every input mustn't pass for the surface moving, so it settles, inside one fill's settle time
+  // (5 s; never settling waits out two), and the sign rule, not the fail-closed any-pixel one,
+  // reads the ring's edge (see-through round 3b).
+  {
+    id: 'transparency/input-settles',
+    gate: 'transparency',
+    input: 'tests/quality/fixtures/a11y/transparency-input-jitter.html',
+    expect: 'pass',
+    browser: true,
+    run: () =>
+      onPage(
+        'transparency-input-jitter.html',
+        async (page) => {
+          const started = Date.now();
+          const findings = await transparencyFindings(page);
+          const ms = Date.now() - started;
+          return ms < 5_000
+            ? findings
+            : [
+                ...findings,
+                {
+                  gate: 'transparency',
+                  rule: 'settle-time',
+                  expected: "the check inside one fill's settle time (5 s)",
+                  actual: `${ms} ms`,
+                },
+              ];
+        },
+        { features: TRANSPARENCY },
+      ),
+  },
+  // And a surface at 99.8% opacity, the most opaque that lets anything through, still fails:
+  // its pixels move a level or two the fills' way, every channel (round 3's no-loosening guard).
+  bad(
+    'near-opaque',
+    'transparency-near-opaque.html',
+    'transparency',
+    'opaque',
+    transparencyFindings,
+    { features: TRANSPARENCY },
+  ),
   // A ring that never holds still: the finding says so, so a flaky verdict is traceable.
   {
     id: 'transparency/ring-restless',

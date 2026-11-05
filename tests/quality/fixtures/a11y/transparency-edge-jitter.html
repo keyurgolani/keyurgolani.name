@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>
+      An opaque surface whose ring's edge reads a few levels apart under the two fills, known-good
+    </title>
+    <!--
+      A dialog-like surface, opaque, with its Close button focused, as Kinetic Cosmos's offer
+      cards and its index dialog are. Their rings' antialiased edges now and then raster a pixel
+      a few levels apart from one shot to the next (197,123,84 against 190,118,81: every channel
+      down, see-through round 3). Here a script does it on purpose: whenever the see-through
+      check's fill under the surface is the second one, the ring is a few levels darker. That
+      pixel differs between the fills, but it moves against the fills' own direction in green
+      (magenta to green is red down, green up, blue down; it goes every channel down). Nothing
+      under the surface shows through, so the check passes.
+    -->
+    <style>
+      body {
+        margin: 0;
+        background: linear-gradient(135deg, #234, #789);
+      }
+      [data-ui-slot='surface'] {
+        position: fixed;
+        top: 120px;
+        left: 120px;
+        width: 480px;
+        padding: 24px;
+        background: #f6eddc;
+        color: #2b241c;
+        border-radius: 12px;
+      }
+      button {
+        font: inherit;
+        padding: 6px 12px;
+        border: 1px solid #2b241c;
+        border-radius: 6px;
+        background: #f6eddc;
+        color: #2b241c;
+      }
+      button:focus-visible {
+        outline: 2px solid var(--ring-color, #c57b54);
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section data-ui-slot="surface" aria-labelledby="offer">
+        <h1 id="offer">An offer, in a surface that stays opaque</h1>
+        <p>Its control's ring reads a few levels darker under the second fill.</p>
+        <button type="button" id="close">Close</button>
+      </section>
+    </main>
+    <script>
+      // The ring a few levels darker, every channel, whenever the page's fill style names the
+      // second fill (rgb(0, 255, 0)); as it was otherwise.
+      const close = document.getElementById('close');
+      close.focus({ focusVisible: true });
+      const answer = () => {
+        const fill = [...document.querySelectorAll('style')].some((s) =>
+          (s.textContent || '').includes('rgb(0, 255, 0)'),
+        );
+        close.style.setProperty('--ring-color', fill ? 'rgb(190 118 81)' : '#c57b54');
+      };
+      new MutationObserver(answer).observe(document.head, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+      });
+    </script>
+  </body>
+</html>

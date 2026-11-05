@@ -222,6 +222,9 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     // holds still says so (lead, 3 Nov 2026, the ring-settling case's 2-in-10 flake under load).
     'transparency/ring-script-settling',
     'transparency/ring-restless',
+    // A field in the surface: the caret hidden without a style on every input at each shot, so
+    // it settles and the sign rule reads it (see-through round 3b).
+    'transparency/input-settles',
     'occlusion/grain-overlay',
     // 11-4: what only a sharded run's shards together show.
     'merged-verdict/whole-run',

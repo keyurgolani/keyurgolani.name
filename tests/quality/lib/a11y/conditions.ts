@@ -51,7 +51,7 @@ import type { CDPSession, Page, Request, Response } from '@playwright/test';
 import { loadThresholds, viewportSize } from '../../../../quality/thresholds';
 import { axeFor } from '../axe';
 import { frames, type Finding } from './interaction';
-import { decodePng } from '../pixels';
+import { decodePng, parseCssColor, type Image } from '../pixels';
 import { inPage } from './probe';
 import { ENHANCEMENT_PENDING } from '../../../../packages/variant-contract/src/settle';
 
@@ -1206,8 +1206,34 @@ export async function reflowFindings(
   return findings;
 }
 
-/** The two fills put under a surface: a pixel inside it that changes between them is see-through. */
+/** The two fills put under a surface: a pixel inside it that changes between them, their way, is see-through. */
 const UNDER = ['rgb(255, 0, 255)', 'rgb(0, 255, 0)'];
+
+/** The fills' own direction, channel by channel: the sign of the first fill's red, green and blue less the second's. */
+const UNDER_WAY = (() => {
+  const [first, second] = UNDER.map((fill) => parseCssColor(fill)!.rgb);
+  return [0, 1, 2].map((channel) => Math.sign(first![channel]! - second![channel]!));
+})();
+
+/**
+ * Whether a pixel of `a`, the surface's clip under the first fill, and the
+ * same pixel of `b`, under the second, shows what's under the surface: every
+ * channel moved the fills' own way between them (UNDER_WAY), strictly, as a
+ * surface any short of solid blends them in, down to 254 of 255 opaque, a
+ * level or two. A pixel that moves against them in any channel isn't the
+ * fill: an antialiased edge rastered a few levels apart from one shot to the
+ * next (Kinetic Cosmos's offer card, every channel down, see-through round 3).
+ */
+export function showsThrough(a: Image, b: Image): boolean {
+  if (a.width !== b.width || a.height !== b.height) return true;
+  for (let i = 0; i < a.width * a.height; i++) {
+    let way = true;
+    for (let channel = 0; channel < 3 && way; channel++)
+      way = Math.sign(a.data[i * 4 + channel]! - b.data[i * 4 + channel]!) === UNDER_WAY[channel];
+    if (way) return true;
+  }
+  return false;
+}
 
 /** How long a fill's shot may wait for the surface to hold still: a ring still settling, say. */
 const SETTLE_MS = 5_000;
@@ -1224,9 +1250,35 @@ const SETTLE_MS = 5_000;
  * It reads the surface's own clip, for the same reason. Both fills are read off a settled frame, so
  * what moves on its own, such as a focused control's ring still settling (KC's offer dialog under
  * reduced transparency), never passes for the fill showing through. Nothing is blurred or hidden:
- * the state under test stays as it is.
+ * the state under test stays as it is, but for the caret, which every shot hides anyway. One sheet
+ * of its own hides it, put in before the mutations are counted and taken out once they no longer
+ * are, and the shots leave the caret be: Playwright's own hiding writes a style on every input at
+ * each shot and clears it after, which the count would read as the surface moving, so a surface
+ * with a field in it never held still (the primitives page's decision dialog, 290 such writes in
+ * 291 shots, and Kinetic Cosmos's index, each waiting out both fills' settle time; see-through
+ * round 3b). The sheet reaches no shadow root.
  */
 async function settledShot(
+  page: Page,
+  clip: { x: number; y: number; width: number; height: number },
+  path: string,
+): Promise<{ shot: Buffer; settled: boolean }> {
+  await page.evaluate(() => {
+    const sheet = document.createElement('style');
+    sheet.dataset.qualityCaret = '';
+    sheet.textContent = '* { caret-color: transparent !important; }';
+    document.head.append(sheet);
+  });
+  try {
+    return await stillShot(page, clip, path);
+  } finally {
+    // stillShot()'s count has stopped (its own finally), so taking the sheet out isn't counted.
+    await page.evaluate(() => document.querySelector('style[data-quality-caret]')?.remove());
+  }
+}
+
+/** settledShot()'s wait and shots, with the caret already hidden by a sheet of its own. */
+async function stillShot(
   page: Page,
   clip: { x: number; y: number; width: number; height: number },
   path: string,
@@ -1283,7 +1335,8 @@ async function settledShot(
       scope.__qualityMoved = 0;
       return count;
     });
-  const shoot = () => page.screenshot({ clip, animations: 'disabled', caret: 'hide' });
+  // caret: 'initial': settledShot()'s sheet hides it, and nothing is written on the inputs.
+  const shoot = () => page.screenshot({ clip, animations: 'disabled', caret: 'initial' });
   try {
     await frames(page);
     const until = Date.now() + SETTLE_MS;
@@ -1372,7 +1425,12 @@ async function seeThrough(
     }
   });
   const [a, b] = shots.map(decodePng);
-  return { through: a!.data.some((value, i) => value !== b!.data[i]), settled };
+  // Off a settled frame, a pixel counts only the fills' way (showsThrough()). A surface that never
+  // held still fails closed, as before: any pixel that differs at all counts.
+  return {
+    through: settled ? showsThrough(a!, b!) : a!.data.some((value, i) => value !== b!.data[i]),
+    settled,
+  };
 }
 
 interface Transparency {

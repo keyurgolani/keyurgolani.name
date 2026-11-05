@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>
+      An opaque surface holding a text field, its ring's edge a few levels apart under the two
+      fills, known-good
+    </title>
+    <!--
+      transparency-edge-jitter.html's surface with a field in it, as the primitives page's
+      decision dialog has its reply field and Kinetic Cosmos's index its display-mode radios.
+      Playwright's caret: 'hide' writes a style on every input at each screenshot and clears it
+      after, so a check that counts the surface's mutations to know it holds still mustn't take
+      its shots that way, or this surface never holds still: each fill waits out its whole
+      settle time, and the pair is read the fail-closed way, any pixel that differs counting, so
+      the ring's edge, a few levels darker under the second fill and every channel down (against
+      the fills' own direction), reads as what's under it showing through (see-through round
+      3b). Settled, the sign rule reads that pixel for what it is, and the check passes, well
+      inside one fill's settle time.
+    -->
+    <style>
+      body {
+        margin: 0;
+        background: linear-gradient(135deg, #234, #789);
+      }
+      [data-ui-slot='surface'] {
+        position: fixed;
+        top: 120px;
+        left: 120px;
+        width: 480px;
+        padding: 24px;
+        background: #f6eddc;
+        color: #2b241c;
+        border-radius: 12px;
+      }
+      button,
+      input {
+        font: inherit;
+        padding: 6px 12px;
+        border: 1px solid #2b241c;
+        border-radius: 6px;
+        background: #f6eddc;
+        color: #2b241c;
+      }
+      label {
+        display: block;
+        margin-bottom: 12px;
+      }
+      button:focus-visible {
+        outline: 2px solid var(--ring-color, #c57b54);
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section data-ui-slot="surface" aria-labelledby="note">
+        <h1 id="note">A decision note, in a surface that stays opaque</h1>
+        <label>Reply <input type="text" id="reply" /></label>
+        <button type="button" id="close">Close</button>
+      </section>
+    </main>
+    <script>
+      // The ring a few levels darker, every channel, whenever the page's fill style names the
+      // second fill (rgb(0, 255, 0)); as it was otherwise.
+      const close = document.getElementById('close');
+      close.focus({ focusVisible: true });
+      const answer = () => {
+        const fill = [...document.querySelectorAll('style')].some((s) =>
+          (s.textContent || '').includes('rgb(0, 255, 0)'),
+        );
+        close.style.setProperty('--ring-color', fill ? 'rgb(190 118 81)' : '#c57b54');
+      };
+      new MutationObserver(answer).observe(document.head, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+      });
+    </script>
+  </body>
+</html>

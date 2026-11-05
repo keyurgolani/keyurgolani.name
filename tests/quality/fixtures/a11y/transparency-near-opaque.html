@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A surface at 99.8% opacity, known-bad</title>
+    <!--
+      A dialog-like surface whose ground is 99.8% opaque, 254 of 255, the most opaque a
+      surface can be and still let anything through (at 99.9% its alpha rounds to 255). Under
+      the two fills, its pixels move a level or two in the fills' own direction, every
+      channel: the see-through check fails it, as it must at any opacity short of solid.
+    -->
+    <style>
+      body {
+        margin: 0;
+        background: linear-gradient(135deg, #234, #789);
+      }
+      [data-ui-slot='surface'] {
+        position: fixed;
+        top: 120px;
+        left: 120px;
+        width: 480px;
+        padding: 24px;
+        background: rgba(246, 237, 220, 0.998);
+        color: #2b241c;
+        border-radius: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section data-ui-slot="surface" aria-labelledby="offer">
+        <h1 id="offer">An offer, in a surface almost solid</h1>
+        <p>What is under it shows through by a level or two.</p>
+      </section>
+    </main>
+  </body>
+</html>
