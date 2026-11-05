@@ -122,6 +122,12 @@ export const PAINTS = /^(?:color|background(?:[A-Z]\w*)?)$/;
  * property that neither moves the glyphs (MOVES) nor paints them (the
  * element's own PAINTS, and the inherited color here), such as an outline's
  * color or a custom property, which can't change the sampled pixels.
+ *
+ * Ending them can move the page on, though, past the color read before: a
+ * script that turns the text's color as a transition goes, by a timeout or
+ * on its end, turns it while the shots are taken (Flux's drop, row 25). So
+ * the color is read again once the shots are taken (inkScript()), and one
+ * that turned is read once more, or unresolved (inkUnresolved()).
  */
 export const INHERITED_PAINTS = /^color$/;
 
@@ -902,6 +908,35 @@ export function stillUnresolved(motion: NonNullable<Motion>): string {
           : `unresolved: an animation, ${motion.name}, that moves or repaints it was still running after ${NODE_LIMIT_MS / 1000} s, so its glyphs never held still to sample`;
 }
 
+/**
+ * `el`'s text color as sampleScript() reads it (its text fill where that
+ * paints instead), read again once its shots are taken and its marks are
+ * off. Its color comes from its computed style, outside the shots, and its
+ * background from the shots; the two are of one state of the page only if
+ * this is still the color sampleScript() read (row 25: Flux's tab words,
+ * whose ink a timeout turns as the drop's transition, which the shots end,
+ * passes them). Runs in the browser.
+ */
+export function inkScript(el: Element): string {
+  const style = getComputedStyle(el);
+  const fill = style.webkitTextFillColor;
+  return fill && fill !== style.color && !/^rgba?\(0, 0, 0, 0\)$/.test(fill) ? fill : style.color;
+}
+
+/**
+ * Why an element whose color turned while its shots were taken, both times
+ * it was read, is unresolved: each read's color, then the color once its
+ * shots were taken (null where the page couldn't say).
+ */
+export function inkUnresolved(
+  first: readonly [string, string | null],
+  second: readonly [string, string | null],
+): string {
+  const turn = ([from, to]: readonly [string, string | null]) =>
+    `${from} to ${to ?? 'a color it could not read'}`;
+  return `unresolved: its color turned while its background was shot, ${turn(first)}, and again once it held still, ${turn(second)}, so its color and its background never came from one state of the page`;
+}
+
 // The batch path (row 14): an element costs the per-element path about
 // fifteen round trips and three shots, and a page with hundreds of them,
 // such as Schematic's, whose texts sit on its field's grid paper, ran past
@@ -1083,6 +1118,7 @@ interface BatchHelpers {
   readonly cover: typeof stuckCoverScript;
   readonly sample: typeof sampleScript;
   readonly restless: typeof restlessScript;
+  readonly ink: typeof inkScript;
 }
 
 /**
@@ -1700,7 +1736,7 @@ export async function batchFindings(
   const selectors = new Map(items.map(({ at, selector }) => [at, selector]));
   const installed = await page
     .evaluate(
-      `globalThis[${JSON.stringify(`__qualityBatch_${key}`)}] = { still: ${stillnessScript}, release: ${releaseScript}, cover: ${stuckCoverScript}, sample: ${sampleScript}, restless: ${restlessScript} }, true`,
+      `globalThis[${JSON.stringify(`__qualityBatch_${key}`)}] = { still: ${stillnessScript}, release: ${releaseScript}, cover: ${stuckCoverScript}, sample: ${sampleScript}, restless: ${restlessScript}, ink: ${inkScript} }, true`,
     )
     .catch(() => false);
   if (installed !== true) return done;
@@ -1840,7 +1876,22 @@ export async function batchFindings(
             await settle('white');
             const whites = await shoot();
             await page.evaluate(unmarkBatchScript, key);
-            for (const { entry } of members) {
+            // Each member's color read again once the shots are taken (inkScript()): one the page
+            // turned meanwhile leaves the batch for its own path, which reads it once more, or
+            // says it never came from one state (row 25).
+            const inks = await page
+              .evaluate(
+                ({ key, ats }) => {
+                  const w = window as unknown as Record<string, unknown>;
+                  const els = w[`__qualityBatchEls_${key}`] as Element[];
+                  const helpers = w[`__qualityBatch_${key}`] as BatchHelpers;
+                  return ats.map((at) => helpers.ink(els[at]!));
+                },
+                { key, ats: members.map(({ entry }) => entry.at) },
+              )
+              .catch(() => null);
+            for (const [k, { entry }] of members.entries()) {
+              if (!Array.isArray(inks) || inks[k] !== entry.sample.color) continue;
               const found = judged(
                 selectors.get(entry.at)!,
                 entry.sample,
@@ -1994,72 +2045,100 @@ export async function incompleteContrastFindings(
           );
           continue;
         }
-        // What moves it comes to rest before its box is read, or it's unresolved, saying which.
-        const motion = await locator
-          .evaluate(
-            stillnessScript,
-            { limit: NODE_LIMIT_MS, moves: MOVES.source, paints: PAINTS.source, key },
-            { timeout: NODE_LIMIT_MS },
-          )
-          .catch((error: unknown): Motion => ({
-            kind: 'failed',
-            name: String(error instanceof Error ? error.message : error)
-              .split('\n')[0]!
-              .slice(0, 160),
-          }));
-        if (motion && typeof motion === 'object' && 'kind' in motion) {
-          unresolved(stillUnresolved(motion));
-          continue;
-        }
-        const sample = await locator
-          .evaluate(
-            sampleScript,
-            { key, near, query: MORE_CONTRAST, boundary: HIGH_CONTRAST_BOUNDARY },
-            { timeout: NODE_LIMIT_MS },
-          )
-          .catch(() => null as Sample | null);
-        if (!sample || sample.box.width < 1 || sample.box.height < 1) {
-          await unmark();
-          await unmarkNeighbours();
-          unresolved('it has no box in the viewport to sample');
-          continue;
-        }
-        // An axis-aligned clip of a rotated box takes in what's round it at the corners.
-        if (!sample.flat || (sample.turned && !sample.quad)) {
-          await unmark();
-          await unmarkNeighbours();
-          unresolved(
-            sample.flat
+        // One read, or why it can't be read: what moves it comes to rest before its box is read,
+        // then its sample, its three shots, and its color read again (inkScript()) once they're
+        // taken and its marks are off.
+        const read = async (): Promise<
+          | string
+          | { sample: Sample; shot: Buffer; black: Buffer; white: Buffer; after: string | null }
+        > => {
+          const motion = await locator
+            .evaluate(
+              stillnessScript,
+              { limit: NODE_LIMIT_MS, moves: MOVES.source, paints: PAINTS.source, key },
+              { timeout: NODE_LIMIT_MS },
+            )
+            .catch((error: unknown): Motion => ({
+              kind: 'failed',
+              name: String(error instanceof Error ? error.message : error)
+                .split('\n')[0]!
+                .slice(0, 160),
+            }));
+          if (motion && typeof motion === 'object' && 'kind' in motion)
+            return stillUnresolved(motion);
+          const sample = await locator
+            .evaluate(
+              sampleScript,
+              { key, near, query: MORE_CONTRAST, boundary: HIGH_CONTRAST_BOUNDARY },
+              { timeout: NODE_LIMIT_MS },
+            )
+            .catch(() => null as Sample | null);
+          if (!sample || sample.box.width < 1 || sample.box.height < 1) {
+            await unmark();
+            await unmarkNeighbours();
+            return 'it has no box in the viewport to sample';
+          }
+          // An axis-aligned clip of a rotated box takes in what's round it at the corners.
+          if (!sample.flat || (sample.turned && !sample.quad)) {
+            await unmark();
+            await unmarkNeighbours();
+            return sample.flat
               ? 'unresolved: it is rotated or skewed across more than one line box, so it has no one quad to sample inside'
-              : 'unresolved: it is transformed in 3D, so its box on screen has no 2D quad to sample inside',
+              : 'unresolved: it is transformed in 3D, so its box on screen has no 2D quad to sample inside';
+          }
+          // Hide the neighbours' glyphs at the box's edge, by their fill, so no layout moves.
+          await page.evaluate(
+            ({ key, near, hide }) => {
+              const nodes = (window as unknown as Record<string, Text[] | undefined>)[near] ?? [];
+              for (const at of hide)
+                nodes[at]?.parentElement?.setAttribute('data-quality-neighbours', key);
+            },
+            { key, near, hide: neighbourTexts(sample.texts, sample.box) },
           );
+          const capture = () =>
+            page.screenshot({ clip: sample.box, animations: 'disabled', caret: 'hide' });
+          const shot = await capture();
+          // Its glyphs alone, filled black and then white over the same background, for their mask.
+          const masked = async (fill: 'black' | 'white') => {
+            await locator.evaluate((el, fill) => el.setAttribute('data-quality-mask', fill), fill);
+            return capture();
+          };
+          const black = await masked('black');
+          const white = await masked('white');
+          await locator
+            .evaluate((el) => el.removeAttribute('data-quality-mask'))
+            .catch(() => undefined);
+          await unmark();
+          await unmarkNeighbours();
+          const after = await locator
+            .evaluate(inkScript, undefined, { timeout: NODE_LIMIT_MS })
+            .catch(() => null);
+          return { sample, shot, black, white, after };
+        };
+        // Its color and its background from one state of the page (row 25). Its color is read
+        // outside the shots, and the page can turn it in between (a script's class as the
+        // sampler's scroll moved the page, a timeout a transition the shots end sets off): one
+        // whose color isn't the same once its shots are taken is read once more, its pins off and
+        // its wait run again, and one that turns again is unresolved, never judged from two states.
+        let taken = await read();
+        if (typeof taken === 'string') {
+          unresolved(taken);
           continue;
         }
-        // Hide the neighbours' glyphs at the box's edge, by their fill, so no layout moves.
-        await page.evaluate(
-          ({ key, near, hide }) => {
-            const nodes = (window as unknown as Record<string, Text[] | undefined>)[near] ?? [];
-            for (const at of hide)
-              nodes[at]?.parentElement?.setAttribute('data-quality-neighbours', key);
-          },
-          { key, near, hide: neighbourTexts(sample.texts, sample.box) },
-        );
-        const capture = () =>
-          page.screenshot({ clip: sample.box, animations: 'disabled', caret: 'hide' });
-        const shot = await capture();
-        // Its glyphs alone, filled black and then white over the same background, for their mask.
-        const masked = async (fill: 'black' | 'white') => {
-          await locator.evaluate((el, fill) => el.setAttribute('data-quality-mask', fill), fill);
-          return capture();
-        };
-        const black = await masked('black');
-        const white = await masked('white');
-        await locator
-          .evaluate((el) => el.removeAttribute('data-quality-mask'))
-          .catch(() => undefined);
-        await unmark();
-        await unmarkNeighbours();
-        const found = judged(selector, sample, shot, black, white);
+        if (taken.after !== taken.sample.color) {
+          const turned = [taken.sample.color, taken.after] as const;
+          await page.evaluate(releaseScript, key).catch(() => undefined);
+          taken = await read();
+          if (typeof taken === 'string') {
+            unresolved(taken);
+            continue;
+          }
+          if (taken.after !== taken.sample.color) {
+            unresolved(inkUnresolved(turned, [taken.sample.color, taken.after]));
+            continue;
+          }
+        }
+        const found = judged(selector, taken.sample, taken.shot, taken.black, taken.white);
         if (found) findings.push(found);
       } finally {
         // What the wait pinned for the shots comes off, whatever happened since.

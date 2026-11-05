@@ -200,7 +200,12 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'contrast/neighbour-faint',
     'contrast/backdrop-numeral',
     // An ancestor's inherited color transition reaching a word: read once it ends (Flux's tabs).
-    'contrast/inherited-paint', // High contrast at thresholds.json's 7:1: 5.5:1 text fails there and passes in normal mode.
+    'contrast/inherited-paint',
+    // Row 25: a color a script turns as the shots end a transition, read from one state of the
+    // page; and one that never settles, unresolved, a record, never a pass.
+    'contrast/script-turn',
+    'contrast/restless-ink',
+    // High contrast at thresholds.json's 7:1: 5.5:1 text fails there and passes in normal mode.
     'axe/high-contrast-solid-5-5',
     'contrast/high-contrast-gradient-5-5',
     'contrast/contrast-more-5-5',

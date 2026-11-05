@@ -1938,7 +1938,25 @@ export const A11Y_CASES: readonly MetaCase[] = [
   // So is a word whose tab's color, which it inherits, a state change moves over 600 ms as it comes
   // into view: read once the tab's transition has ended, not part-way at its ground's color
   // (INHERITED_PAINTS; Flux's .fx-tab__word read at 1.00:1).
-  goodFile('inherited-paint', 'contrast-inherited-paint.html', 'contrast', contrast), // So is text whose ancestor a scroll-driven animation slides in, once its progress holds.
+  goodFile('inherited-paint', 'contrast-inherited-paint.html', 'contrast', contrast),
+  // And a word whose ink a script turns, with no transition, as the shots end a fade beside it,
+  // landing a drop under it at once: its color is read again once its shots are taken, and read
+  // once more where it turned, so its color and its background come from one state of the page,
+  // never dark ink read before over the dark drop shot after (row 25; Flux's .fx-tab__word).
+  goodFile('script-turn', 'contrast-script-turn.html', 'contrast', contrast),
+  // A word whose color a script changes every frame never shows one state twice: unresolved,
+  // a record that fails the gate, never a pass (row 25).
+  {
+    id: 'contrast/restless-ink',
+    gate: 'contrast',
+    input: 'tests/quality/fixtures/a11y/contrast-restless-ink.html',
+    expect: 'fail',
+    reason:
+      /^contrast text: unresolved: its color turned while its background was shot, .+, and again once it held still, .+, so its color and its background never came from one state of the page$/,
+    browser: true,
+    run: () => onPage('contrast-restless-ink.html', contrast),
+  },
+  // So is text whose ancestor a scroll-driven animation slides in, once its progress holds.
   {
     id: 'contrast/arrival-scroll-driven',
     gate: 'contrast',
