@@ -1935,7 +1935,10 @@ export const A11Y_CASES: readonly MetaCase[] = [
   // Text an on-scroll entrance slides into place is read once the slide has ended, where its
   // glyphs paint, and passes.
   goodFile('arrival', 'contrast-arrival.html', 'contrast', contrast),
-  // So is text whose ancestor a scroll-driven animation slides in, once its progress holds.
+  // So is a word whose tab's color, which it inherits, a state change moves over 600 ms as it comes
+  // into view: read once the tab's transition has ended, not part-way at its ground's color
+  // (INHERITED_PAINTS; Flux's .fx-tab__word read at 1.00:1).
+  goodFile('inherited-paint', 'contrast-inherited-paint.html', 'contrast', contrast), // So is text whose ancestor a scroll-driven animation slides in, once its progress holds.
   {
     id: 'contrast/arrival-scroll-driven',
     gate: 'contrast',

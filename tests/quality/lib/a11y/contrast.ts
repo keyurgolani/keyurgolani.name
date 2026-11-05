@@ -50,8 +50,9 @@
 // or on an ancestor, time-based or scroll-driven, would otherwise move it
 // between its box's read and its shots, which end every finite animation
 // and cancel the rest, and its glyphs would paint off the box. Only an
-// animation that can move or repaint it counts (MOVES, and PAINTS on the
-// node itself). NODE_LIMIT_MS at most: one with an infinite time-based
+// animation that can move or repaint it counts (MOVES, PAINTS on the node
+// itself, and INHERITED_PAINTS on an ancestor whose value reaches it).
+// NODE_LIMIT_MS at most: one with an infinite time-based
 // animation, or one still moving then, is unresolved, saying which. At rest,
 // a counted scroll-driven animation's guarded values are pinned inline for
 // the shots, which would cancel it, and its target's style attribute is put
@@ -104,6 +105,27 @@ export const MOVES =
 export const PAINTS = /^(?:color|background(?:[A-Z]\w*)?)$/;
 
 /**
+ * The inherited paint properties: an ancestor's animation of one repaints the
+ * element's glyphs when it reaches them, that is when the element's own value
+ * is the ancestor's, inherited down every element between (none sets its own).
+ * The sampler reads the text's color from its computed style when it reads the
+ * element (sampleScript(), the `color` it returns), outside the shots, so a
+ * tab's color transition its word inherits, read part-way, puts the word near
+ * its ground's color (Flux's .fx-tab__word, 1.00:1); hence the wait.
+ * stillnessScript() and restlessScript() carry the same pattern inline, since
+ * each runs in the page on its own; both paths call them, so they agree.
+ *
+ * The ground needs no wait: it's read off shots taken with animations
+ * disabled, which end every finite animation and transition, so an ancestor's
+ * background moving between two states is shot at its end, as a visitor sees
+ * it at rest. What still doesn't count is an ancestor's animation of a
+ * property that neither moves the glyphs (MOVES) nor paints them (the
+ * element's own PAINTS, and the inherited color here), such as an outline's
+ * color or a custom property, which can't change the sampled pixels.
+ */
+export const INHERITED_PAINTS = /^color$/;
+
+/**
  * What still moves an element once the sampler gives up, or null once it
  * holds still: an infinite time-based animation, one still running or a
  * scroll-driven one still changing at the limit, or a scroll-driven one at
@@ -126,8 +148,9 @@ export type Motion = {
  * finishes while its element rests part-way through its range. It counts
  * the animations whose target is `el`, an ancestor, or a descendant (a
  * pseudo-element's by its owner), that animate a property in `moves`, or
- * in `paints` on `el` itself; an ancestor's on anything else, or a
- * sibling's, doesn't count.
+ * in `paints` on `el` itself, or an inherited paint (INHERITED_PAINTS) on an
+ * ancestor whose value reaches `el`, inherited down every element between;
+ * an ancestor's on anything else, or a sibling's, doesn't count.
  *
  * At rest, it pins each counted scroll-driven animation's guarded
  * properties (those its keyframes name that count) inline, !important, at
@@ -167,6 +190,18 @@ export function stillnessScript(
     ((animation as CSSTransition).transitionProperty
       ? `a transition of ${(animation as CSSTransition).transitionProperty}`
       : animation.id || 'unnamed');
+  // INHERITED_PAINTS, inline: this runs in the page on its own.
+  const inheriting = /^color$/;
+  // Whether an ancestor's value of an inherited paint reaches `el`: every element from `el` up to
+  // it computes its parent's color, so none between sets its own. A pseudo-element's doesn't.
+  const reaches = (effect: KeyframeEffect, target: Element): boolean => {
+    if (effect.pseudoElement || target === el || !target.contains(el)) return false;
+    for (let node: Element = el; node !== target; node = node.parentElement!) {
+      if (getComputedStyle(node).color !== getComputedStyle(node.parentElement!).color)
+        return false;
+    }
+    return true;
+  };
   // The properties of `animation` that count for `el`, as getKeyframes() names them.
   const guarded = (animation: Animation): string[] => {
     const effect = animation.effect;
@@ -176,7 +211,11 @@ export function stillnessScript(
     const properties = new Set<string>();
     for (const keyframe of effect.getKeyframes()) {
       for (const property of Object.keys(keyframe)) {
-        if (moving.test(property) || (target === el && painting.test(property)))
+        if (
+          moving.test(property) ||
+          (target === el && painting.test(property)) ||
+          (inheriting.test(property) && reaches(effect, target))
+        )
           properties.add(property);
       }
     }
@@ -1050,7 +1089,8 @@ interface BatchHelpers {
  * What moves `el` now, after its wait came back at rest, by the wait's own
  * rule (stillnessScript()): an animation whose target is `el`, an ancestor
  * or a descendant, animating a property in `moves`, or in `paints` on `el`
- * itself, that's running (neither finished nor idle) or scroll-driven (a
+ * itself, or an inherited paint on an ancestor whose value reaches `el`,
+ * that's running (neither finished nor idle) or scroll-driven (a
  * member at rest held none, or it would have pinned it). Its name, or null.
  * One pass, no wait: the batch path checks each member again with it right
  * before it reads it and before each of its batch's shots, since the waits
@@ -1062,6 +1102,16 @@ export function restlessScript(
   { moves, paints }: { readonly moves: string; readonly paints: string },
 ): string | null {
   const [moving, painting] = [new RegExp(moves), new RegExp(paints)];
+  // INHERITED_PAINTS and stillnessScript()'s reaches(), inline: this runs in the page on its own.
+  const inheriting = /^color$/;
+  const reaches = (effect: KeyframeEffect, target: Element): boolean => {
+    if (effect.pseudoElement || target === el || !target.contains(el)) return false;
+    for (let node: Element = el; node !== target; node = node.parentElement!) {
+      if (getComputedStyle(node).color !== getComputedStyle(node.parentElement!).color)
+        return false;
+    }
+    return true;
+  };
   const Scrolling = (globalThis as unknown as { ScrollTimeline?: abstract new () => object })
     .ScrollTimeline;
   for (const animation of document.getAnimations()) {
@@ -1073,7 +1123,10 @@ export function restlessScript(
       .getKeyframes()
       .some((keyframe) =>
         Object.keys(keyframe).some(
-          (property) => moving.test(property) || (target === el && painting.test(property)),
+          (property) =>
+            moving.test(property) ||
+            (target === el && painting.test(property)) ||
+            (inheriting.test(property) && reaches(effect, target)),
         ),
       );
     if (!counts) continue;
