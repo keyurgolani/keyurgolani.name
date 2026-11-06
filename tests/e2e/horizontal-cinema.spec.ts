@@ -4,6 +4,7 @@ import { fixtureSiteSelecting } from '../../packages/variant-contract/src/contra
 import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
 import { expect, test } from '../harness/fixtures';
 import {
+  crowdRail,
   expectAnnounced,
   expectAt,
   keys,
@@ -282,6 +283,21 @@ test(
     await load(page);
     expect(await read(page)).toMatchObject({ layout: 'horizontal', pinned: true, fit: null });
     expect(await railClashes(page)).toEqual([]);
+  },
+);
+
+test(
+  "a rail that can't hold its labels stacks the strip top to bottom",
+  { annotation },
+  async ({ page }) => {
+    await crowdRail(page);
+    await load(page);
+    await expect
+      .poll(async () => {
+        const { layout, pinned, fit } = await read(page);
+        return { layout, pinned, fit };
+      })
+      .toEqual({ layout: 'vertical', pinned: false, fit: 'over' });
   },
 );
 
