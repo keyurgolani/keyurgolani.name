@@ -48,10 +48,11 @@
     "wordSpacing": 0.16
   },
   "reducedMotion": {
-    "description": "While motion is reduced, static, hidden, or offscreen: no animated transform, scale, rotate, or position; opacity and color transitions up to transitionMs; and at most rafCallbacks requestAnimationFrame callbacks from rafWindowMs[0] to rafWindowMs[1] after load.",
+    "description": "While motion is reduced, static, hidden, or offscreen: no animated transform, scale, rotate, or position; opacity and color transitions up to transitionMs; and no frame loop from rafWindowMs[0] to rafWindowMs[1] after load. A frame loop is page requestAnimationFrame callbacks sustained over many frames, not one late frame: the reduced-motion cells allow at most rafFrames frames with callbacks in the window (a one-shot repaint, a double rAF included, that lands late is no loop), and the perf probe's static mode at most rafCallbacks callbacks.",
     "transitionMs": 200,
     "rafWindowMs": [1000, 4000],
-    "rafCallbacks": 0
+    "rafCallbacks": 0,
+    "rafFrames": 2
   },
   "vitals": {
     "description": "Lab vitals, for every tier. TBT stands in for INP. A canvas-led cell, with a canvas in the first viewport, makes a server-rendered poster image or headline text its LCP element within lcpMs, covering at least canvasLcpMinShare of the viewport by the LCP entry's size. A missing LCP entry fails.",

@@ -119,6 +119,7 @@ export const ThresholdsSchema = z
         transitionMs: Milliseconds,
         rafWindowMs: Window,
         rafCallbacks: z.number().int().nonnegative(),
+        rafFrames: z.number().int().nonnegative(),
       })
       .strict(),
     vitals: z
