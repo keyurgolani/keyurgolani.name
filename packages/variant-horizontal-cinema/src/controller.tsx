@@ -1085,6 +1085,7 @@ function LiveStage(props: StageProps) {
     let refit: ReturnType<typeof setTimeout> | undefined;
     /** The strip laid out again for the viewport and the text size now in force: the fit check, room, and pin. */
     const refitNow = () => {
+      if (disposed) return;
       delete rootElement.dataset.fit;
       unroom();
       invalidate();
@@ -1213,6 +1214,7 @@ function LiveStage(props: StageProps) {
       window.removeEventListener('beforeprint', beforePrint);
       window.removeEventListener('afterprint', afterPrint);
       delete rootElement.dataset.pin;
+      delete rootElement.dataset.fit;
       rootElement.style.removeProperty('--layout-pin-length');
       rootElement.querySelector<HTMLElement>('.hc-card')?.style.removeProperty('--layout-card-fit');
       unroom();
