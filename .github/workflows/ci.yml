@@ -252,10 +252,13 @@ jobs:
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
 
-  # The browser suite in two shards, split by spec file on measured
-  # durations (ci/shards.mjs). Each shard builds, then runs its files.
+  # The browser suite in three shards, split by spec file on measured
+  # durations (ci/shards.mjs). Each shard builds, then runs its files, inside
+  # the job's 20 minutes: two shards ran 18 to 20 minutes on every push and were
+  # cancelled at the limit (row 54), so the suite takes a third, not a longer
+  # limit. ci/workflows.test.mjs pins the three, the limit, and SUITES.browser.
   browser:
-    name: browser (${{ matrix.shard }}/2)
+    name: browser (${{ matrix.shard }}/3)
     needs: [changes]
     if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'browser') }}
     runs-on: ubuntu-24.04
@@ -263,7 +266,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     # Browsers come baked into the image, at the version @playwright/test pins.
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
@@ -297,10 +300,10 @@ jobs:
         run: echo "Next build cache restored for these build inputs"
       - name: pnpm ci:build
         run: pnpm ci:build
-      - name: pnpm test:shard browser ${{ matrix.shard }}/2
+      - name: pnpm test:shard browser ${{ matrix.shard }}/3
         env:
-          SHARD: ${{ matrix.shard }}/2
-          CI_REPRO_COMMAND: pnpm test:shard browser ${{ matrix.shard }}/2
+          SHARD: ${{ matrix.shard }}/3
+          CI_REPRO_COMMAND: pnpm test:shard browser ${{ matrix.shard }}/3
         run: node ci/run.mjs browser -- node ci/shards.mjs run browser "$SHARD"
       - name: Failure summary
         if: ${{ always() }}
