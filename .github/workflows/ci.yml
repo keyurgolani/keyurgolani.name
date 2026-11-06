@@ -730,17 +730,16 @@ jobs:
           QUALITY_CHANGED_DIFF: ${{ steps.base.outputs.diff }}
         run: pnpm exec tsx tests/quality/pr-count.ts
 
+  # Row 53 evidence only, not for merge: one job, no matrix and no plan, running HC's 1440x900
+  # reduced-motion quality cell, the one whose motion/frame-loop record CI read on main's base
+  # 1dc6bf162 (run 42217082243), 10 times with no retry, in the same container, image, install
+  # and quality host build as quality-pr.
   quality-pr:
-    name: quality-pr (${{ matrix.shard }}/${{ needs.quality-pr-plan.outputs.count }})
-    needs: [changes, quality-pr-plan]
+    name: quality-pr (row 53 frame-loop repeat)
+    needs: [changes]
     if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'quality-pr') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      max-parallel: ${{ fromJSON(needs.quality-pr-plan.outputs.parallel) }}
-      matrix:
-        shard: ${{ fromJSON(needs.quality-pr-plan.outputs.shards) }}
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
       options: --user 1001 --ipc=host --init
@@ -760,22 +759,34 @@ jobs:
       - name: pnpm store cache hit
         if: ${{ steps.install.outputs.store-hit == 'true' }}
         run: echo "pnpm store restored under this lockfile's hash"
-      # quality-pr-plan's base: a commit is fetched here too, and one that can't be fails the shard,
-      # which can't plan the plan's set without it.
-      - name: The quality-pr base
+      # The one cell by its tuple and row (Playwright's grep reads the titles joined by spaces),
+      # planned from HC's three source files as the row 53 cells were, 10 times, no retry. The log
+      # prints the count --list gives against 10 asked, then each repeat's frame-loop records.
+      - name: HC 1440x900 reduced-motion cell, 10 times
+        shell: bash
         env:
-          PLAN_BASE: ${{ needs.quality-pr-plan.outputs.base }}
-          PLAN_DIFF: ${{ needs.quality-pr-plan.outputs.diff }}
-        run: node ci/quality-base.mjs --from-plan
-      - name: pnpm ci:quality-pr --shard=${{ matrix.shard }}/${{ needs.quality-pr-plan.outputs.count }}
-        run: pnpm ci:quality-pr "--shard=$SHARD"
-        env:
-          SHARD: ${{ matrix.shard }}/${{ needs.quality-pr-plan.outputs.count }}
-          CI_REPRO_COMMAND: pnpm ci:quality-pr --shard=${{ matrix.shard }}/${{ needs.quality-pr-plan.outputs.count }}
+          CELL: 'composition:horizontal-cinema complete / horizontal-cinema/platform-neutral/warm-parchment/humanist-ui/system 1440x900 reduced-motion '
+          QUALITY_CHANGED_FILES: '["packages/variant-horizontal-cinema/src/styles.css","packages/variant-horizontal-cinema/src/controller.tsx","packages/variant-horizontal-cinema/src/scene.tsx"]'
+          CI_REPRO_COMMAND: pnpm quality:pr -- --grep '<the cell>' --repeat-each=10 --retries=0
           QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
           QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
-          QUALITY_CHANGED_BASE: ${{ needs.quality-pr-plan.outputs.base }}
-          QUALITY_CHANGED_DIFF: ${{ needs.quality-pr-plan.outputs.diff }}
+        run: |
+          set -o pipefail
+          mkdir -p reports
+          pnpm quality:pr -- --grep "$CELL" --repeat-each=10 --retries=0 --list 2>&1 | tee reports/row53-list.txt
+          asked=$(grep -oE '^Total: [0-9]+ test' reports/row53-list.txt | grep -oE '[0-9]+' || true)
+          echo "row 53: ${asked:-0} test(s) listed, 10 asked"
+          status=0
+          node ci/run.mjs quality-pr -- pnpm quality:pr -- --grep "$CELL" --repeat-each=10 --retries=0 --workers=1 2>&1 | tee reports/row53-run.txt || status=$?
+          runs=0; loops=0
+          for f in reports/quality/results/*reduced-motion*/quality-records.json; do
+            [ -f "$f" ] || continue
+            n=$(node -e 'const r=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));console.log((Array.isArray(r)?r:[]).filter((x)=>x.rule==="frame-loop").length)' "$f")
+            echo "row 53: $(basename "$(dirname "$f")"): frame-loop records ${n}"
+            runs=$((runs + 1)); [ "$n" = 0 ] || loops=$((loops + 1))
+          done
+          echo "row 53: ${loops} of ${runs} repeat(s) with a frame-loop record (${asked:-0} listed); quality exit ${status}"
+          exit "$status"
       # The reports upload only when this succeeds: it deletes what it can't
       # read, and fails when it did, or when the canary is still in any.
       - name: Scrub reports
@@ -792,7 +803,7 @@ jobs:
         if: ${{ always() && steps.scrub.outcome == 'success' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: reports-quality-pr-shard-${{ matrix.shard }}
+          name: reports-quality-pr-row53-frameloop
           path: reports/
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
