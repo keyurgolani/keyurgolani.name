@@ -510,6 +510,31 @@ function missingItems(
   }));
 }
 
+// ROW44 PROBE (evidence only, kgn-e/row44-probe, dropped before landing): on a horizontal-cinema
+// page, one log line a reading of the pointer media and HC's pin, so CI's log shows whether
+// touch's teardown leaves a mouse cell without (hover: hover) and (pointer: fine). Logs only:
+// no finding, no record, no assertion.
+async function row44Probe(page: Page, phase: string, path: string): Promise<void> {
+  const reading = await page.evaluate(() => {
+    const shell = document.querySelector('.hc-shell');
+    if (!shell) return null;
+    const out: string[] = [];
+    for (const [name, query] of [
+      ['hover', '(hover: hover)'],
+      ['pointer', '(pointer: fine)'],
+      ['any-hover', '(any-hover: hover)'],
+      ['any-pointer', '(any-pointer: fine)'],
+    ] as const)
+      out.push(`${name}=${matchMedia(query).matches}`);
+    out.push(
+      `pin=${shell.hasAttribute('data-pin') ? (shell.getAttribute('data-pin') ?? '') || 'present' : 'absent'}`,
+    );
+    out.push(`viewport=${innerWidth}x${innerHeight}`);
+    return out.join(' ');
+  });
+  if (reading) console.log(`ROW44 ${phase} path=${path} ${reading}`);
+}
+
 /** The inventory under each condition, against `baseline`, the page's own. Leaves the page as the cell loaded it. */
 export async function inventoryFindings(
   page: Page,
@@ -519,6 +544,7 @@ export async function inventoryFindings(
   scriptRequired = false,
 ): Promise<Finding[]> {
   const findings: Finding[] = [];
+  await row44Probe(page, '1-after-load', path);
   const cdp = await page.context().newCDPSession(page);
   try {
     for (const condition of conditions().filter((each) => !only || only.includes(each.id))) {
@@ -527,6 +553,7 @@ export async function inventoryFindings(
         if (condition.reload) {
           const expected = { baseline, ignore: condition.ignore };
           findings.push(...(await reload(page, path, condition.id, expected)));
+          if (condition.id === 'reduced-motion') await row44Probe(page, '3-reduced-motion', path);
         }
         // A condition read on the page as it stands, such as print, reads it from the top, where
         // the baseline was read: text a script keeps in step with the scroll, such as a running
@@ -534,6 +561,7 @@ export async function inventoryFindings(
         if (!condition.reload) {
           await page.evaluate(() => scrollTo({ left: 0, top: 0, behavior: 'instant' }));
           await frames(page, 50);
+          if (condition.id === 'grayscale') await row44Probe(page, '4-grayscale', path);
         }
         const problem = await condition.verify(page);
         if (problem) {
@@ -576,6 +604,7 @@ export async function inventoryFindings(
         );
       } finally {
         await condition.teardown(page, cdp);
+        if (condition.id === 'touch') await row44Probe(page, '2-after-touch-teardown', path);
       }
     }
   } finally {

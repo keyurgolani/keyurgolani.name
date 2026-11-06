@@ -486,6 +486,39 @@ const mainPassContrast = async (page: Page): Promise<Finding[]> => {
   ];
 };
 
+/**
+ * Row 44: a page whose one link shows only where a mouse is, as Horizontal Cinema pins its chrome
+ * (its styles.css: `(hover: hover) and (pointer: fine)`), at 1440x900 with no touch.
+ */
+const POINTER_PINNED = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Pinned</title>
+<style>.pinned { display: none } @media (hover: hover) and (pointer: fine) { .pinned { display: block } }</style>
+</head><body><main><h1>Pinned under a mouse</h1><p>Words every condition keeps.</p>
+<nav class="pinned" aria-label="Pinned"><a href="#chapter-2">Pinned chapter link</a></nav>
+<h2 id="chapter-2">Chapter 2</h2></main></body></html>`;
+
+/**
+ * Touch, then grayscale, on POINTER_PINNED: the mouse page's own pointer media holds again once
+ * touch is torn down, so the link touch takes away is back under grayscale. Touch's own losses are
+ * the touch condition's, a design question (row 43), and left aside here. With the link absent at
+ * load (no fine pointer to start with) the case proves nothing, so that's a finding too.
+ */
+const pointerAfterTouch = async (page: Page): Promise<Finding[]> => {
+  const before = await baseline(page);
+  const precondition: Finding[] = before.some((item) => item.includes('Pinned chapter link'))
+    ? []
+    : [
+        {
+          gate: 'inventory',
+          rule: 'content',
+          expected:
+            'the pinned link in the page as it loaded, under (hover: hover) and (pointer: fine)',
+          actual: 'absent at load: the browser has no fine pointer to start with',
+        },
+      ];
+  const found = await inventoryFindings(page, '/', before, ['touch', 'grayscale']);
+  return [...precondition, ...found.filter((each) => each.expected !== 'present under touch')];
+};
+
 /** The touch condition alone on a page whose enhancement's chunk never comes. */
 const touchInventory = async (page: Page) =>
   inventoryFindings(page, '/', await baseline(page), ['touch']);
@@ -1595,6 +1628,17 @@ export const A11Y_CASES: readonly MetaCase[] = [
         revealed(inventory),
         { chunk: REVEAL },
       ),
+  },
+  // Row 44: after the touch condition, a mouse cell's later conditions render under its own
+  // pointer media, so what only a mouse shows (HC's pinned chrome) is still there under grayscale.
+  {
+    id: 'inventory/pointer-after-touch',
+    gate: 'inventory',
+    input:
+      'a link shown only under (hover: hover) and (pointer: fine), at 1440x900, under touch then grayscale',
+    expect: 'pass',
+    browser: true,
+    run: () => onPage(POINTER_PINNED, pointerAfterTouch),
   },
   // And one whose chunk never comes is no read: past BUSY_LIMIT_MS the cell fails, saying so.
   builtCase(

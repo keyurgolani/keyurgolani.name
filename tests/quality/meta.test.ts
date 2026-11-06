@@ -241,6 +241,8 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     // A condition's reload waits for a lazy enhancement to mount or fail (lead, 31 Oct 2026),
     // and failed enhancement lets a button that submits nothing wait for it, and nothing else.
     'inventory/lazy-reveal',
+    // A mouse cell's conditions after touch keep its pointer media (row 44).
+    'inventory/pointer-after-touch',
     'runner/lazy-never',
     'enhancement/lazy-button',
     'enhancement/lazy-link',
