@@ -120,3 +120,29 @@ test('a scene’s words arrive by moving alone, never dimmed, so a frame off scr
   assert.match(body, /transform: translateX\(var\(--layout-arrive\)\);/);
   assert.doesNotMatch(body, /opacity|filter/);
 });
+
+test('a touch screen in the strip’s room shows the strip’s bar in flow and Strip | List, by size and pointer both (row 43)', () => {
+  const ROOM = '(min-width: 64rem) and (min-height: 44rem)';
+  const TOUCH = `${ROOM} and (not ((hover: hover) and (pointer: fine)))`;
+  const BAR = at(".hc[data-view='strip'] .hc-shell:not([data-fit='over']) .hc-scrub");
+  const touch = blocks(TOUCH);
+  assert.equal(touch.length, 1);
+  const bar = declared(BAR, touch[0]!);
+  for (const rule of [/display: flex;/, /flex-wrap: wrap;/]) assert.match(bar, rule);
+  // In flow: the bar lies at the end of the scenes, so nothing it covers, on screen or on paper.
+  assert.doesNotMatch(bar, /position:|inset-|z-index:/);
+  assert.match(
+    declared(at(".hc[data-view='strip'] .hc-chrome__views"), touch[0]!),
+    /display: inline-flex;/,
+  );
+  // Nothing else shows the bar or sticks it, so a phone, a short landscape window, the mouse strip,
+  // and the fallback a face too wide sends top to bottom keep what they had.
+  assert.doesNotMatch(CSS, /\.hc-scrub \{[^}]*position: sticky/);
+  assert.equal(
+    [...CSS.matchAll(/@media ([^{]+) \{/g)].filter(
+      ([, query]) =>
+        /not \(\(hover: hover\) and \(pointer: fine\)\)/.test(query!) && !query!.includes(ROOM),
+    ).length,
+    0,
+  );
+});
