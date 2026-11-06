@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fixtureSiteSelecting } from '../../packages/variant-contract/src/contract-fixtures';
 import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
 import { expect, test } from '../harness/fixtures';
-import { crowdRail, load, railClashes, read } from './horizontal-cinema-model';
+import { load, railClashes, read } from './horizontal-cinema-model';
 
 // Horizontal Cinema right to left: the mixed contract fixture (Arabic, dir=rtl). The fit check measures
 // the rail under the stage in the bar's own inline direction, so a right-to-left rail that holds its
