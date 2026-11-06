@@ -364,6 +364,29 @@ test("a record of another page or viewport than its test's own keys apart: the p
   assert.deepEqual(verdict(both, [...listed, entry(failureOf(primitives, OWN))]).failures, []);
 });
 
+test("rc-quality judges a listed record whose check its test didn't owe as passed: full mode owes every condition, so only rc-verify holds it", () => {
+  const reflow = { check: 'reflow', rule: 'overflow', target: `@320x568 ${LEDE}` };
+  const owed = FAILED.owed.filter((check) => check !== 'reflow');
+  const failed = judge({
+    plan: PLAN,
+    engines: ['chromium'],
+    summary: summary([
+      cellTest(RUNS, { ...FAILED, failures: FAILURES, owed, checks: owed }),
+      cellTest(ALSO_RUNS),
+      PROBE,
+    ]),
+    missingBrowsers: [],
+    canary: { before: [HELD], after: [] },
+    listed: [...LISTED, entry(reflow)],
+  });
+  assert.ok(
+    failed.failures.some(
+      (each) => each.rule === 'listed-passed' && /reflow overflow/.test(each.message),
+    ),
+    failed.failures.map((each) => `${each.rule} ${each.message}`).join(' | '),
+  );
+});
+
 test('a listed record that no longer fails fails the gate, since a fixed record leaves the list', () => {
   const passed = verdict('passed', LISTED);
   assert.equal(passed.ok, false);

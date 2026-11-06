@@ -169,6 +169,36 @@ test('a strict entry whose test passes still blocks, beside a flaky one', () => 
   );
 });
 
+test("with owedOnly, a flaky or strict entry whose check its test didn't owe is not judged; without it, rc-quality's judging stands", () => {
+  const reflow = (entry) => ({ ...entry, check: 'reflow', rule: 'overflow' });
+  const passing = cellTest('passed');
+  // Owed only status and focus: a reflow entry's check never ran there.
+  const strictReflow = reflow(strict('#r'));
+  const flakyReflow = reflow(flaky('#r'));
+  const read = judgeListed([passing], [strictReflow, flakyReflow], { owedOnly: true });
+  assert.deepEqual(read.passed, []);
+  assert.deepEqual(
+    read.notJudged.map(({ entry }) => entry),
+    [strictReflow],
+  );
+  assert.deepEqual(
+    read.flaky.map(({ outcome }) => outcome),
+    ['not judged'],
+  );
+  // rc-quality's call, without owedOnly: passed, as before.
+  const full = judgeListed([passing], [strictReflow, flakyReflow]);
+  assert.deepEqual(full.passed, [strictReflow]);
+  assert.deepEqual(full.notJudged, []);
+  assert.deepEqual(
+    full.flaky.map(({ outcome }) => outcome),
+    ['passed'],
+  );
+  // An entry whose check was owed is judged either way.
+  assert.deepEqual(judgeListed([passing], [strict('#a')], { owedOnly: true }).passed, [
+    strict('#a'),
+  ]);
+});
+
 test("a flaky entry's failing test must fail on exactly its record: any other record in it blocks", () => {
   const judged = judgeListed([cellTest(['#a', '#c'])], [flaky('#a')]);
   assert.deepEqual(

@@ -20,6 +20,7 @@ import {
   downloadProblem,
   evaluateRc,
   GATE_NEEDS,
+  notJudgedLines,
   otherJobsRed,
   QPR_ARTIFACT,
   QPR_JOBS,
@@ -319,6 +320,57 @@ test('a listed test that also failed on anything no record names blocks the tag:
       ? [`${label}: ${reason || 'accepted'}`]
       : [];
   });
+  assert.deepEqual(open, []);
+});
+
+test("an entry whose check its test didn't owe on the push run is not judged: a note, never 'take its entry out', while a missing or malformed owed list judges it as before", () => {
+  // A condition record a sentinel's push-run test never runs: reflow isn't among its owed checks.
+  const REFLOW = { check: 'reflow', rule: 'overflow', target: '@320x568 #main > p:nth-child(3)' };
+  const withReflow = [...LISTED, entry(REFLOW)];
+  // The red path: quality-pr red on FOCUS and AXE alone, the reflow entry beside them.
+  const red = evaluateRc(input({ listed: withReflow }));
+  assert.deepEqual(red.reasons, []);
+  assert.equal(red.ok, true);
+  assert.deepEqual(red.notJudged, [
+    { entry: entry(REFLOW), why: "its test didn't owe its reflow check on this run" },
+  ]);
+  assert.deepEqual(notJudgedLines(red.notJudged), [
+    `- not judged: ${CELL} at 1440x900, default, on chromium: reflow overflow on @320x568 #main > p:nth-child(3) (its test didn't owe its reflow check on this run; owner lane C, row 5)`,
+  ]);
+  // Owed, and gone: it's passed, and the tag is refused, as any listed record that no longer fails.
+  const owed = ['status', 'axe', 'keyboard', 'focus', 'reflow'];
+  const ranReflow = {
+    ...qprSummary([FOCUS, AXE]),
+    tests: [cellTest([FOCUS, AXE], { owed, checks: owed })],
+  };
+  assert.match(
+    refusal(evaluateRc(input({ listed: withReflow, summary: ranReflow }))),
+    /reflow overflow on @320x568 #main > p:nth-child\(3\) no longer fails: take its entry out/,
+  );
+  // The green path: the listed test passed without owing reflow; the reflow entry alone is listed.
+  const green = { run: GREEN, jobList: jobs({}, { red: false }), artifacts: [artifact(GREEN)] };
+  const notOwed = evaluateRc(
+    input({ ...green, listed: [entry(REFLOW)], summary: qprSummary('passed') }),
+  );
+  assert.deepEqual(notOwed.reasons, []);
+  assert.equal(notOwed.ok, true);
+  assert.deepEqual(
+    notOwed.notJudged.map(({ entry: each }) => each.check),
+    ['reflow'],
+  );
+  // A missing or malformed owed list keeps today's judging: passed, so refused.
+  const open = [];
+  for (const [label, owedList] of [
+    ['no owed list', undefined],
+    ['an empty owed list', []],
+    ['an owed list holding a number', ['status', 7]],
+    ['an owed list that is a string', 'status axe'],
+  ]) {
+    const summary = { ...qprSummary('passed'), tests: [cellTest('passed', { owed: owedList })] };
+    const verdict = evaluateRc(input({ ...green, listed: [entry(REFLOW)], summary }));
+    if (verdict.ok || !/passed in ci run 202's quality-pr/.test(verdict.reasons.join(' | ')))
+      open.push(`${label}: ${verdict.reasons.join(' | ') || 'accepted'}`);
+  }
   assert.deepEqual(open, []);
 });
 

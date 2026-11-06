@@ -265,12 +265,18 @@ export function uncovered(test) {
  * - passed: each strict entry whose test ran here (not skipped) and whose failure it no longer has.
  *   An uncovered test is held: what it failed on says nothing of its records (it may have timed
  *   out before it wrote any, or skipped the check behind one), so no entry of it is passed;
+ * - notJudged: with `owedOnly` (rc-verify's read of a push run), each strict entry that would be
+ *   passed but whose test, by its well-formed `owed` list, didn't owe the entry's check on this
+ *   run (a quality-pr sentinel owes no reflow, inventory or enhancement), with why. An entry
+ *   counts as passed only where its check ran. A missing or malformed `owed` keeps the entry
+ *   judged, as passed. rc-quality never sets it: full mode owes every condition;
  * - flaky: each flaky entry and how it came out here: `failed` (its record failed), `passed` (its
- *   test ran without it), `not judged` (its test is held), or `not run`. A flaky entry is never
- *   `passed` above; its test's other failures are unlisted all the same.
+ *   test ran without it), `not judged` (its test is held, or with `owedOnly` didn't owe its
+ *   check), or `not run`. A flaky entry is never `passed` above; its test's other failures are
+ *   unlisted all the same.
  * Entries whose test didn't run here are the caller's to judge.
  */
-export function judgeListed(tests, listed) {
+export function judgeListed(tests, listed, { owedOnly = false } = {}) {
   const keys = new Set((listed ?? []).map(recordKey));
   const unlisted = [];
   const unrecorded = [];
@@ -278,6 +284,8 @@ export function judgeListed(tests, listed) {
   const covered = [];
   const ran = new Map();
   const held = new Set();
+  // Each test's owed checks, when its list is well formed: a non-empty list of names.
+  const owedBy = new Map();
   for (const test of tests ?? []) {
     if (test?.kind !== 'cell' || test.outcome === 'skipped') continue;
     const why = test.outcome === 'unexpected' ? uncovered(test) : null;
@@ -288,6 +296,15 @@ export function judgeListed(tests, listed) {
     const own = ran.get(testKey) ?? new Set();
     for (const failure of failing) own.add(recordKey(failure));
     ran.set(testKey, own);
+    const owed = test.owed;
+    owedBy.set(
+      testKey,
+      Array.isArray(owed) &&
+        owed.length > 0 &&
+        owed.every((check) => typeof check === 'string' && check !== '')
+        ? new Set(owed)
+        : null,
+    );
     if (test.outcome !== 'unexpected') continue;
     if (why !== null) {
       unrecorded.push({ test, why });
@@ -308,12 +325,22 @@ export function judgeListed(tests, listed) {
   }
   const keyOf = (entry) => JSON.stringify([entry.cell, entry.viewport, entry.row, entry.engine]);
   const ownOf = (entry) => ran.get(keyOf(entry));
-  const passed = (listed ?? []).filter((entry) => {
+  // With owedOnly, an entry whose test's well-formed owed list lacks its check, whose check never
+  // ran there: a missing or malformed list judges it as before.
+  const unowed = (entry) => {
+    const owed = owedBy.get(keyOf(entry));
+    return owedOnly && owed !== undefined && owed !== null && !owed.has(entry.check);
+  };
+  const gone = (listed ?? []).filter((entry) => {
     const own = ownOf(entry);
     return (
       !isFlaky(entry) && own !== undefined && !held.has(keyOf(entry)) && !own.has(recordKey(entry))
     );
   });
+  const passed = gone.filter((entry) => !unowed(entry));
+  const notJudged = gone
+    .filter(unowed)
+    .map((entry) => ({ entry, why: `its test didn't owe its ${entry.check} check on this run` }));
   const flaky = (listed ?? []).filter(isFlaky).map((entry) => {
     const own = ownOf(entry);
     return {
@@ -323,10 +350,10 @@ export function judgeListed(tests, listed) {
           ? 'not run'
           : own.has(recordKey(entry))
             ? 'failed'
-            : held.has(keyOf(entry))
+            : held.has(keyOf(entry)) || unowed(entry)
               ? 'not judged'
               : 'passed',
     };
   });
-  return { unlisted, unrecorded, repeated, covered, passed, flaky };
+  return { unlisted, unrecorded, repeated, covered, passed, notJudged, flaky };
 }
