@@ -102,12 +102,15 @@ export function snapAlong(offsets: readonly number[], at: number, from: number):
 /**
  * The words of a heading's text, as [start, end) spans: the runs a line may
  * not break inside. Spaces of any kind part them, and so do the joins a line
- * may break at, a hyphen, a dash, a slash and a soft hyphen; punctuation stays
- * with its word, as a line holds it. A single letter can't break, so it isn't
- * one. The fit check reads each span's boxes: a word in two boxes broke
+ * may break at, a hyphen, a dash, a slash, a soft hyphen and a zero-width
+ * space; punctuation stays with its word, as a line holds it. A single letter
+ * can't break, so it isn't one, and nor is a run of a script a line may break
+ * inside (Han, kana, Hangul, Bopomofo, and Thai, Lao, Khmer and Myanmar at their
+ * word boundaries), by Script_Extensions, so ー and 々 stay with theirs. The fit check reads each span's boxes: a word in two boxes broke
  * inside itself, a heading that doesn't fit its scene. `WORD` is the pattern, for a reader in the page.
  */
-export const WORD = /[^\s\u00ad\-\u2010-\u2015/]{2,}/gu;
+export const WORD =
+  /[^\s\u00ad\u200b\-\u2010-\u2015/\p{scx=Hani}\p{scx=Hira}\p{scx=Kana}\p{scx=Hang}\p{scx=Bopo}\p{scx=Thai}\p{scx=Laoo}\p{scx=Khmr}\p{scx=Mymr}]{2,}/gu;
 
 export function wordSpans(text: string): Array<[number, number]> {
   return [...text.matchAll(new RegExp(WORD))].map((match) => [
