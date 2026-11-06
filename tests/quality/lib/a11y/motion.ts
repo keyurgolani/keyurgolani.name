@@ -1,11 +1,15 @@
 // Reduced motion (#11, Slice 2, item 10, and the owner's [31]).
 //
 // - motionFindings(): under reduced motion, an init script counts
-//   requestAnimationFrame callbacks and samples document.getAnimations()
+//   the frames requestAnimationFrame callbacks run in and samples document.getAnimations()
 //   from navigation start. Nothing animates transform, scale, rotate, or
 //   position (animation); nothing else runs past 200 ms or forever
-//   (animation); and no frame callback runs from 1 s to 4 s after load
-//   (frame-loop), as quality/thresholds.json sets them. Without
+//   (animation); and no frame loop runs from 1 s to 4 s after load
+//   (frame-loop), as quality/thresholds.json sets them. A frame loop is
+//   page requestAnimationFrame callbacks sustained over many frames: more
+//   than rafFrames frames with a callback in the window. One late frame,
+//   such as a one-shot repaint (or a double rAF) a loaded shard delays,
+//   isn't one. Without
 //   JavaScript, where no init script runs, the animations are sampled from
 //   outside instead.
 // - osWins(): the boundary told motion is full and enhancement is on (what
@@ -38,7 +42,8 @@ export const MOTION_SAMPLER = `(() => {
   const raf = window.requestAnimationFrame.bind(window);
   // The harness's own frames go through the original, so only the page's count.
   Object.defineProperty(window, '__qualityRaf', { value: raf });
-  window.requestAnimationFrame = (callback) => raf((time) => { state.frames.push(performance.now()); return callback(time); });
+  // Each callback's frame timestamp, which every callback in one frame shares: the frames are what count.
+  window.requestAnimationFrame = (callback) => raf((time) => { state.frames.push(time); return callback(time); });
   const sample = () => {
     for (const animation of document.getAnimations()) {
       const effect = animation.effect;
@@ -139,15 +144,20 @@ export async function motionFindings(page: Page): Promise<Finding[]> {
   for (const each of [...Object.values(state?.animations ?? {}), ...outside])
     seen.set(`${each.name} ${each.properties.join(',')}`, each);
   const findings = animationFindings([...seen.values()]);
+  // A frame loop is callbacks sustained over many frames, not one late frame: the distinct frames
+  // with a page callback in the window count, so a one-shot repaint (a double rAF included) that
+  // lands late under load is no loop, and a real loop fills dozens of frames in 3 s (row 65).
   const callbacks = (state?.frames ?? []).filter(
     (time) => time >= load + from && time <= load + to,
-  ).length;
-  if (callbacks > thresholds.reducedMotion.rafCallbacks) {
+  );
+  const frames = new Set(callbacks).size;
+  const most = thresholds.reducedMotion.rafFrames;
+  if (frames > most) {
     findings.push({
       gate: 'motion',
       rule: 'frame-loop',
-      expected: `${thresholds.reducedMotion.rafCallbacks} requestAnimationFrame callbacks from ${from} ms to ${to} ms after load`,
-      actual: `${callbacks}`,
+      expected: `no frame loop: at most ${most} frames with requestAnimationFrame callbacks from ${from} ms to ${to} ms after load (a frame loop is callbacks sustained over many frames, not one late frame)`,
+      actual: `a frame loop: ${frames} frames with callbacks (${callbacks.length} callbacks)`,
     });
   }
   return findings;
