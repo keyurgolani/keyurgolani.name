@@ -1,8 +1,9 @@
 // A small GitHub REST client for the release checks: GET only, with the
 // job's own token (contents: read, actions: read), JSON or, for an artifact,
-// bytes. The checks' decisions are
-// pure functions over what it returns, tested on fixture responses
-// (ci/release/fixtures/), so nothing here is called by a test.
+// bytes, and a list read whole, page by page. The checks' decisions are pure
+// functions over what it returns, tested on fixture responses
+// (ci/release/fixtures/); githubList() is tested on a stand-in getter, and
+// nothing here reaches the network in a test.
 //
 // Pure Node with no dependencies.
 
@@ -25,6 +26,32 @@ export async function githubGet(route, { token = process.env.GITHUB_TOKEN, missi
   if (response.status === 404 && missing === null) return null;
   if (!response.ok) throw new Error(`GET ${route} answered HTTP ${response.status}`);
   return response.json();
+}
+
+/** A list call's page size: the API's largest. */
+export const PAGE_SIZE = 100;
+/** The most pages a list call reads: past them it refuses, rather than read part of the list. */
+export const MAX_PAGES = 20;
+
+/**
+ * Every item of the GET list `route` (a path with its query, without per_page or page) under
+ * `key` (jobs, artifacts, workflow_runs), page by page, PAGE_SIZE a page, until a page comes back
+ * short. A page with no `key` list, or a list past `maxPages` pages, throws: a check never
+ * decides on part of a list. `get` is githubGet, or a test's stand-in.
+ */
+export async function githubList(route, key, { get = githubGet, maxPages = MAX_PAGES } = {}) {
+  const items = [];
+  const join = route.includes('?') ? '&' : '?';
+  for (let page = 1; page <= maxPages; page += 1) {
+    const body = await get(`${route}${join}per_page=${PAGE_SIZE}&page=${page}`);
+    const found = body?.[key];
+    if (!Array.isArray(found)) throw new Error(`GET ${route} answered no ${key} list`);
+    items.push(...found);
+    if (found.length < PAGE_SIZE) return items;
+  }
+  throw new Error(
+    `GET ${route} lists more than ${maxPages * PAGE_SIZE} ${key}, so it isn't read in part`,
+  );
 }
 
 /**

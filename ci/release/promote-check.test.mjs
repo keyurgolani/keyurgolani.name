@@ -12,8 +12,10 @@ import {
   passedRuns,
   pendingBaselines,
   BASELINE_PENDING_FILE,
+  releaseJobs,
   REQUIRED_RC_JOBS,
 } from './promote-check.mjs';
+import { githubList, MAX_PAGES, PAGE_SIZE } from './github.mjs';
 
 const fixture = (name) =>
   JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url), 'utf8'));
@@ -200,4 +202,54 @@ test('the baseline-pending list is where the release reads it, an object keyed b
   // tests/variants/baseline-pending.ts reads the same path; a move breaks this.
   const text = readFileSync(new URL(`../../${BASELINE_PENDING_FILE}`, import.meta.url), 'utf8');
   assert.ok(Array.isArray(pendingBaselines(text)));
+});
+
+/** A stand-in GET for a list of `items` under `key`, served PAGE_SIZE a page, recording each route. */
+function pagedGet(items, key, routes = []) {
+  return async (route) => {
+    routes.push(route);
+    const page = Number(new URL(route, 'https://api.test').searchParams.get('page'));
+    return {
+      total_count: items.length,
+      [key]: items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    };
+  };
+}
+
+test("a release run's jobs are read whole, every page: 150 jobs, rc-tag and the quality gate on page 2, still promote", async () => {
+  // A release run at RC1's shards: 140 rc-quality shards first, the gate's jobs created last.
+  const shards = Array.from({ length: 140 }, (_, at) => ({
+    name: `rc-quality (${at + 1}/140)`,
+    conclusion: 'success',
+  }));
+  const jobs = [...shards, ...PASSED, { name: 'rc-smoke (amd64)', conclusion: 'success' }];
+  const routes = [];
+  const jobsByRun = await releaseJobs(
+    '/repos/o/r',
+    RUNS.filter((run) => run.id === 202),
+    pagedGet(jobs, 'jobs', routes),
+  );
+  assert.deepEqual(routes, [
+    '/repos/o/r/actions/runs/202/jobs?filter=latest&per_page=100&page=1',
+    '/repos/o/r/actions/runs/202/jobs?filter=latest&per_page=100&page=2',
+  ]);
+  assert.equal(jobsByRun[202].length, jobs.length);
+  for (const name of REQUIRED_RC_JOBS)
+    assert.ok(jobs.findIndex((job) => job.name === name) >= PAGE_SIZE, name);
+  const verdict = evaluatePromotion(input({ jobsByRun }));
+  assert.deepEqual(verdict.reasons, []);
+  assert.equal(verdict.ok, true);
+  // A list of exactly one full page reads one more, empty; one past the last page refuses.
+  const full = Array.from({ length: PAGE_SIZE }, (_, at) => ({ id: at }));
+  assert.equal((await githubList('/x', 'jobs', { get: pagedGet(full, 'jobs') })).length, PAGE_SIZE);
+  const past = Array.from({ length: PAGE_SIZE * MAX_PAGES + 1 }, (_, at) => ({ id: at }));
+  await assert.rejects(
+    githubList('/x', 'jobs', { get: pagedGet(past, 'jobs') }),
+    /lists more than 2000 jobs, so it isn't read in part/,
+  );
+  // A page with no list throws, never reads as empty.
+  await assert.rejects(
+    githubList('/x', 'jobs', { get: async () => ({}) }),
+    /answered no jobs list/,
+  );
 });

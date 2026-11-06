@@ -23,7 +23,7 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { githubGet, repository } from './github.mjs';
+import { githubGet, githubList, repository } from './github.mjs';
 import { parseReleaseTag, promotionTargets, rcImageTag } from './tags.mjs';
 import { finalScopeRefusal, readScope } from './verify-scope.mjs';
 
@@ -139,6 +139,22 @@ export function evaluatePromotion({ tag, sha, tagRefs, runs, jobsByRun, pending,
   };
 }
 
+/**
+ * The latest attempt's jobs of each of `runs` that succeeded, by run id, every page of each
+ * listing: a release run at RC1's shards lists more than one page, its rc-tag among the last.
+ */
+export async function releaseJobs(base, runs, get = githubGet) {
+  const jobsByRun = {};
+  for (const run of (runs ?? []).filter((each) => each?.conclusion === 'success')) {
+    jobsByRun[String(run.id)] = await githubList(
+      `${base}/actions/runs/${run.id}/jobs?filter=latest`,
+      'jobs',
+      { get },
+    );
+  }
+  return jobsByRun;
+}
+
 async function main() {
   const tag = process.env.TAG ?? '';
   const sha = process.env.SHA ?? '';
@@ -150,15 +166,11 @@ async function main() {
   );
   const [owner, repo] = repository();
   const base = `/repos/${owner}/${repo}`;
-  const listed = await githubGet(
-    `${base}/actions/workflows/release.yml/runs?event=push&head_sha=${sha}&status=completed&per_page=100`,
+  const runs = await githubList(
+    `${base}/actions/workflows/release.yml/runs?event=push&head_sha=${sha}&status=completed`,
+    'workflow_runs',
   );
-  const runs = listed.workflow_runs ?? [];
-  const jobsByRun = {};
-  for (const run of runs.filter((r) => r.conclusion === 'success')) {
-    const jobs = await githubGet(`${base}/actions/runs/${run.id}/jobs?filter=latest&per_page=100`);
-    jobsByRun[String(run.id)] = jobs.jobs ?? [];
-  }
+  const jobsByRun = await releaseJobs(base, runs);
   // The checkout is this tag's commit, the candidate's own.
   const pending = pendingBaselines(readFileSync(BASELINE_PENDING_FILE, 'utf8'));
   let quality = null;

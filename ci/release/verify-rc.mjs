@@ -40,7 +40,7 @@ import { createHash } from 'node:crypto';
 import { appendFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { githubGet, githubGetBytes, repository } from './github.mjs';
+import { githubGet, githubGetBytes, githubList, repository } from './github.mjs';
 import { judgeListed, recordsProblems } from './release-records.mjs';
 import { parseReleaseTag } from './tags.mjs';
 import { readScope } from './verify-scope.mjs';
@@ -533,10 +533,10 @@ export function flakyLines(flaky) {
 async function qualityPrSummary(base, run, sha, jobs) {
   let artifacts = [];
   try {
-    const listed = await githubGet(
-      `${base}/actions/runs/${run.id}/artifacts?name=${QPR_ARTIFACT}&per_page=100`,
+    artifacts = await githubList(
+      `${base}/actions/runs/${run.id}/artifacts?name=${QPR_ARTIFACT}`,
+      'artifacts',
     );
-    artifacts = Array.isArray(listed?.artifacts) ? listed.artifacts : [];
     const { artifact, reason } = bindArtifact(artifacts, run, sha, qprJobsProof(jobs).verdict);
     if (reason) throw new Error(reason);
     const zip = await githubGetBytes(`${base}/actions/artifacts/${artifact.id}/zip`, {
@@ -559,14 +559,16 @@ async function main() {
   const [owner, repo] = repository();
   const base = `/repos/${owner}/${repo}`;
   const compare = await githubGet(`${base}/compare/${sha}...heads/main`);
-  const listed = await githubGet(
-    `${base}/actions/workflows/ci.yml/runs?branch=main&event=push&head_sha=${sha}&status=completed&per_page=100`,
+  const runs = await githubList(
+    `${base}/actions/workflows/ci.yml/runs?branch=main&event=push&head_sha=${sha}&status=completed`,
+    'workflow_runs',
   );
-  const runs = listed.workflow_runs ?? [];
   const jobsByRun = {};
   for (const run of [...candidateRuns(sha, runs), ...redRuns(sha, runs)]) {
-    const jobs = await githubGet(`${base}/actions/runs/${run.id}/jobs?filter=latest&per_page=100`);
-    jobsByRun[String(run.id)] = jobs.jobs ?? [];
+    jobsByRun[String(run.id)] = await githubList(
+      `${base}/actions/runs/${run.id}/jobs?filter=latest`,
+      'jobs',
+    );
   }
   // The candidate's records list, from the checkout (the tag's commit), validated as rc-quality's
   // is; then each red run's quality-pr summary, only if no run is green.
