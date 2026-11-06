@@ -70,6 +70,17 @@ test('a travel resting between scenes finishes on the next one the way it went, 
   assert.equal(snapAlong([], 120, 0), 0);
 });
 
+test('a nudge of up to 3 px returns to its scene, and a notch past that still travels on', () => {
+  const offsets = [0, 900, 1800, 2400];
+  // A 2 or 3 px nudge from rest on a scene isn't a travel: it finishes on that scene again.
+  assert.equal(snapAlong(offsets, 902, 900), 1);
+  assert.equal(snapAlong(offsets, 903, 900), 1);
+  assert.equal(snapAlong(offsets, 897, 900), 1);
+  // A slow notch of 4 px, macOS's least, still travels on to the next scene the way it went.
+  assert.equal(snapAlong(offsets, 904, 900), 2);
+  assert.equal(snapAlong(offsets, 896, 900), 0);
+});
+
 test("a heading's words are its runs between spaces and the joins a line may break at", () => {
   const words = (text: string) => wordSpans(text).map(([start, end]) => text.slice(start, end));
   // One word, whole: "Epilogue" may break nowhere.
