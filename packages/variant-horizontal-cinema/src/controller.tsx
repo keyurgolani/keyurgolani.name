@@ -192,7 +192,11 @@ function Scrubber({
           </Action>
         </div>
       ) : null}
-      <MapTag className="hc-minimap" aria-label={plate ? undefined : 'Chapters'} style={style}>
+      <MapTag
+        className="hc-minimap"
+        aria-label={plate ? undefined : 'Scenes by chapter'}
+        style={style}
+      >
         <ol role="list">
           {chapters.map((chapter, position) => {
             const own = scenes.filter((scene) => scene.chapter === position);

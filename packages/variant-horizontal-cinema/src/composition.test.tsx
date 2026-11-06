@@ -293,6 +293,17 @@ test('in a plate it renders the scenes with no runtime hook, no control, no land
   assert.match(stage, /class="hc-scrub"[^>]*inert/);
 });
 
+test("the bar's map of the strip is Scenes by chapter, a landmark apart from the chapter sheet's", () => {
+  const markup = html(inputOf(pairOf('complete'), { route: 'home' }));
+  const labels = [...markup.matchAll(/<nav[^>]*\saria-label="([^"]+)"/g)].map(([, label]) => label);
+  assert.equal(
+    labels.filter((label) => label === 'Scenes by chapter').length,
+    1,
+    labels.join(' | '),
+  );
+  assert.equal(labels.filter((label) => label === 'Chapters').length, 1, labels.join(' | '));
+});
+
 test('the words it adds are marked English in a portfolio in another language', () => {
   const markup = html(inputOf(pairOf('academic')));
   assert.notEqual(inputOf(pairOf('academic')).portfolio.locale.slice(0, 2), 'en');
