@@ -235,7 +235,7 @@ test('a listed test fails the gate when anything no record names failed too: a b
       /it hit server-egress, which no records list may name/,
     ],
     [
-      'a body timeout, before any soft expectation failed',
+      "status timedOut, the status rule alone (Playwright gives it only when a timeout is the test's first failure)",
       { status: 'timedOut' },
       /it ended timedOut/,
     ],

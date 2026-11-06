@@ -217,7 +217,8 @@ function pagedGet(items, key, routes = []) {
 }
 
 test("a release run's jobs are read whole, every page: 150 jobs, rc-tag and the quality gate on page 2, still promote", async () => {
-  // A release run at RC1's shards: 142 rc-quality shards first, the gate's jobs created last.
+  // A release run of 142 rc-quality shards, 150 jobs in all: the shards first, the gate's jobs
+  // created last.
   const shards = Array.from({ length: 142 }, (_, at) => ({
     name: `rc-quality (${at + 1}/142)`,
     conclusion: 'success',

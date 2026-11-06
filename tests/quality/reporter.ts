@@ -67,7 +67,8 @@ export interface SummaryTest {
   /**
    * A failed test's failure records that no exception waived, each by what names it alone: its
    * check, rule, and element (failureTarget), qualified by page and viewport when they aren't the
-   * test's own, with no measurement, and a repeat of one record once. A release candidate's
+   * test's own, with no measurement, and a repeat of one record by selector once
+   * (unwaivedRecords()). A release candidate's
    * records list is matched on these (ci/release/release-records.mjs). Empty for a test that
    * didn't fail.
    */
@@ -146,13 +147,10 @@ function attachment(test: TestCase, name: string): unknown {
 }
 
 /**
- * One test as summary.json lists it. A failed cell test's failures are its unwaived records, each
- * keyed under the test's own surface and viewport (failureOf), so a record of the primitives page
- * or of the landscape pass is told apart from the cell page's own. A record that repeats one kept
- * already, by the failure records' own key (failureKey: the same rule on the same element in the
- * same cell, such as reflow's re-probe with a disclosure toggled), is one record, as
- * writeCellFailures writes it once; only when it names its element by selector, so an aria-only
- * or elementless repeat stays repeated until RC2's per-element key.
+ * A failed cell test's unwaived records, a repeat of one kept already (failureKey: the same rule
+ * on the same element in the same cell, such as reflow's re-probe with a disclosure toggled)
+ * dropped when it names its element by selector, as writeCellFailures writes it once. An
+ * aria-only or elementless repeat stays, until RC2's per-element key.
  */
 function unwaivedRecords(records: readonly CellFailure[]): CellFailure[] {
   const kept = new Set<string>();
@@ -168,7 +166,9 @@ function unwaivedRecords(records: readonly CellFailure[]): CellFailure[] {
 
 /**
  * One test as summary.json lists it: its fields, and a failed cell test's unwaived records as its
- * failures (unwaivedRecords()).
+ * failures (unwaivedRecords()), each keyed under the test's own surface and viewport (failureOf),
+ * so a record of the primitives page or of the landscape pass is told apart from the cell page's
+ * own.
  */
 export function summaryTest(test: TestCase): SummaryTest {
   const last = test.results.at(-1);

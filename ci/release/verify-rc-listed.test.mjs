@@ -613,6 +613,11 @@ test("the summary is the one artifact this attempt made: a re-run, two artifacts
 
 test('a green run with entries listed is held to its summary: a strict entry whose test passed there refuses the tag', () => {
   const green = { run: GREEN, jobList: jobs({}, { red: false }), artifacts: [artifact(GREEN)] };
+  // A green summary whose one test passed on another cell than the listed one's.
+  const OTHER_CELL = qprSummary('passed', {
+    tests: [cellTest('passed', { cell: 'another cell' })],
+  });
+  assert.deepEqual(evaluateRc(input({ ...green, summary: OTHER_CELL })).reasons, []);
   // Its summary: the listed test passed in quality-pr.
   const passed = evaluateRc(input({ ...green, summary: qprSummary('passed') }));
   assert.match(refusal(passed), /passed in ci run 202's quality-pr, so it's no failing record/);
@@ -640,7 +645,7 @@ test('a green run with entries listed is held to its summary: a strict entry who
       /1 cell test\(s\) of quality-pr's summary don't name their cell, viewport, row, engine/,
     ],
     ['a red verdict', qprSummary([FOCUS, AXE]), /its verdict failed, though gate passed/],
-    // Item 3's own class: a summary whose cell tests can't be found holds none to judge.
+    // The shape guard's own class: a summary whose cell tests can't be found holds none to judge.
     ['no tests', qprSummary('passed', { tests: [] }), /holds no cell test/],
     [
       'kind dropped from every test',
@@ -650,15 +655,28 @@ test('a green run with entries listed is held to its summary: a strict entry who
       },
       /holds no cell test/,
     ],
+    // On a passing test of another cell, so no listed entry runs and nothing else refuses.
     [
       'a verdict not ok with no failures',
-      qprSummary([FOCUS, AXE], { verdict: { ok: false, failures: [] } }),
+      { ...OTHER_CELL, verdict: { ok: false, failures: [] } },
       /its verdict failed, though gate passed/,
     ],
     [
       'a verdict ok with a failure',
-      qprSummary([FOCUS, AXE], { verdict: { ok: true, failures: [{ rule: 'tests-failed' }] } }),
+      { ...OTHER_CELL, verdict: { ok: true, failures: [{ rule: 'tests-failed' }] } },
       /its verdict failed, though gate passed/,
+    ],
+    // A green verdict over a failed test contradicts itself: a held test's entries aren't
+    // judged, so nothing else would refuse it.
+    [
+      'a failed test before any record, under a green verdict',
+      { ...qprSummary('passed'), tests: [cellTest([], { status: 'timedOut', checks: [] })] },
+      /holds a failed test, though gate passed/,
+    ],
+    [
+      'a failed test on its listed records, under a green verdict',
+      { ...qprSummary('passed'), tests: [cellTest([FOCUS, AXE])] },
+      /holds a failed test, though gate passed/,
     ],
     ...['cell', 'viewport', 'row', 'engine'].flatMap((field) => [
       [
@@ -689,7 +707,7 @@ test('a green run with entries listed is held to its summary: a strict entry who
           run: second,
           jobList: jobs({ 'quality-pr-verdict': { run_attempt: 2 } }, { red: false }),
           artifacts: [artifact(second)],
-          summary: qprSummary([FOCUS, AXE]),
+          summary: OTHER_CELL,
         }),
       ),
     ),
@@ -1058,6 +1076,51 @@ function zipOf(files, { method = 8, bit3 = false, flags = 0, eocd = {}, names = 
   end.writeUInt32LE(offset, 16);
   return Buffer.concat([...locals, directory, end]);
 }
+/** An extra field of id `id` holding `data`. */
+const extraField = (id, data) => {
+  const head = Buffer.alloc(4);
+  head.writeUInt16LE(id, 0);
+  head.writeUInt16LE(data.length, 2);
+  return Buffer.concat([head, data]);
+};
+/** An Info-ZIP Unicode Path field: version 1, the CRC-32 of the entry's raw name, then `path`. */
+const unicodePath = (rawName, path) => {
+  const data = Buffer.alloc(5);
+  data.writeUInt8(1, 0);
+  data.writeUInt32LE(crc32(Buffer.from(rawName)), 1);
+  return extraField(0x7075, Buffer.concat([data, Buffer.from(path)]));
+};
+/** `zip` with `fields` as the extra of its central entry at `index` (0-based). */
+function withCentralExtra(zip, index, fields) {
+  const extra = Buffer.concat(fields);
+  let at = zip.readUInt32LE(zip.length - 22 + 16);
+  for (let n = 0; n < index; n += 1)
+    at += 46 + zip.readUInt16LE(at + 28) + zip.readUInt16LE(at + 30) + zip.readUInt16LE(at + 32);
+  const nameEnd = at + 46 + zip.readUInt16LE(at + 28);
+  const copy = Buffer.concat([zip.subarray(0, nameEnd), extra, zip.subarray(nameEnd)]);
+  copy.writeUInt16LE(extra.length, at + 30);
+  const end = copy.length - 22;
+  copy.writeUInt32LE(copy.readUInt32LE(end + 12) + extra.length, end + 12);
+  return copy;
+}
+/** `zip` with `fields` as the extra of its last local header, the directory moved past them. */
+function withLastLocalExtra(zip, fields) {
+  const extra = Buffer.concat(fields);
+  const end = zip.length - 22;
+  const start = zip.readUInt32LE(end + 16);
+  // The last central entry's local offset.
+  let at = start;
+  let local = 0;
+  for (let n = 0; n < zip.readUInt16LE(end + 10); n += 1) {
+    local = zip.readUInt32LE(at + 42);
+    at += 46 + zip.readUInt16LE(at + 28) + zip.readUInt16LE(at + 30) + zip.readUInt16LE(at + 32);
+  }
+  const nameEnd = local + 30 + zip.readUInt16LE(local + 26);
+  const copy = Buffer.concat([zip.subarray(0, nameEnd), extra, zip.subarray(nameEnd)]);
+  copy.writeUInt16LE(extra.length, local + 28);
+  copy.writeUInt32LE(start + extra.length, copy.length - 22 + 16);
+  return copy;
+}
 /** `zip` with its first central entry's 32-bit field at `at` (from the entry's start) set to `value`. */
 function centralAt(zip, at, value) {
   const copy = Buffer.from(zip);
@@ -1209,24 +1272,66 @@ test("the artifact's summary is read out of its zip, and a malformed, oversized,
     ],
     [
       'a Unicode Path field naming another file',
-      (() => {
-        // decoy.json, whose 0x7075 field other readers take as quality/summary.json.
-        const one = zipOf({ 'decoy.json': summary, [QPR_SUMMARY]: summary });
-        const end = one.length - 22;
-        const start = one.readUInt32LE(end + 16);
-        const field = Buffer.alloc(4 + 5 + QPR_SUMMARY.length);
-        field.writeUInt16LE(0x7075, 0);
-        field.writeUInt16LE(5 + QPR_SUMMARY.length, 2);
-        field.write(QPR_SUMMARY, 9);
-        const nameEnd = start + 46 + one.readUInt16LE(start + 28);
-        const copy = Buffer.concat([one.subarray(0, nameEnd), field, one.subarray(nameEnd)]);
-        copy.writeUInt16LE(field.length, start + 30);
-        const at = copy.length - 22;
-        copy.writeUInt32LE(copy.readUInt32LE(at + 12) + field.length, at + 12);
-        return copy;
-      })(),
-      /central entry 1 carries a Unicode Path field/,
+      // decoy.json, after the summary, whose version-1 0x7075 field, over its raw name's CRC-32 as
+      // Info-ZIP writes it, other readers take as quality/summary.json.
+      withCentralExtra(zipOf({ [QPR_SUMMARY]: summary, 'decoy.json': summary }), 1, [
+        unicodePath('decoy.json', QPR_SUMMARY),
+      ]),
+      /central entry 2 carries a Unicode Path field/,
     ],
+    [
+      'a Unicode Path field second, after a timestamp',
+      withCentralExtra(zipOf({ [QPR_SUMMARY]: summary, 'decoy.json': summary }), 1, [
+        extraField(0x5455, Buffer.from([1, 0, 0, 0, 0])),
+        unicodePath('decoy.json', QPR_SUMMARY),
+      ]),
+      /central entry 2 carries a Unicode Path field/,
+    ],
+    [
+      'an extra field too short for its own header',
+      withCentralExtra(zipOf({ [QPR_SUMMARY]: summary, 'decoy.json': summary }), 1, [
+        Buffer.from([0x55, 0x54]),
+      ]),
+      /central entry 2's extra field is malformed/,
+    ],
+    [
+      'a decoy whose local header names the summary',
+      zipOf(
+        { [QPR_SUMMARY]: summary, 'decoy.jsonX': summary },
+        { names: { 'decoy.jsonX': QPR_SUMMARY.padEnd('decoy.jsonX'.length, 'X') } },
+      ),
+      /decoy\.jsonX's local header names another file/,
+    ],
+    [
+      'a decoy whose local header carries a Unicode Path field',
+      withLastLocalExtra(zipOf({ [QPR_SUMMARY]: summary, 'decoy.json': summary }), [
+        unicodePath('decoy.json', QPR_SUMMARY),
+      ]),
+      /decoy\.json's local header carries a Unicode Path field/,
+    ],
+    [
+      'a local header of another method than its central entry',
+      (() => {
+        const stored = zipOf({ [QPR_SUMMARY]: summary, 'other.json': summary }, { method: 0 });
+        // The other entry's local header says deflate; its central entry says stored.
+        const second = stored.readUInt32LE(
+          stored.readUInt32LE(stored.length - 22 + 16) + 46 + QPR_SUMMARY.length + 42,
+        );
+        stored.writeUInt16LE(8, second + 8);
+        return stored;
+      })(),
+      /other\.json's local header names another compression method/,
+    ],
+    ...[
+      '/quality/summary.json',
+      './quality/summary.json',
+      'quality//summary.json',
+      'quality/../quality/summary.json',
+    ].map((path) => [
+      `a name that isn't a plain relative path: ${path}`,
+      zipOf({ [QPR_SUMMARY]: summary, [path]: summary }),
+      /central entry 2's name isn't a plain relative path/,
+    ]),
     [
       'data that runs into the central directory',
       (() => {
@@ -1294,4 +1399,19 @@ test("rc-verify's artifact read: a listing that fails is kept as its own error, 
   });
   assert.equal(read.artifacts.length, 1);
   assert.equal(read.summary.tests.length, 143);
+});
+
+test("docs/releasing.md's dry run runs both of rc-verify's checks and tags on the words verify-rc.mjs prints", () => {
+  const doc = readFileSync(new URL('../../docs/releasing.md', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('./verify-rc.mjs', import.meta.url), 'utf8');
+  const dry = doc.slice(doc.indexOf('dry-run `rc-verify`'), doc.indexOf('## Promotion'));
+  assert.ok(dry.length > 0);
+  // Both of the rc-verify job's steps, on the checkout's own commit.
+  assert.match(dry, /TAG=v1\.0\.0-rc\.1 node ci\/release\/verify-scope\.mjs &&/);
+  assert.match(dry, /SHA="\$\(git rev-parse HEAD\)"[^`]*node ci\/release\/verify-rc\.mjs/);
+  assert.match(dry, /`contents: read` and `actions: read`/);
+  // The words it tags on are the summary's own.
+  const [, listed, green] = /prints `([^`]+)` \(or, on a green run, `([^`]+)`\)/.exec(dry);
+  assert.ok(source.includes(`? \`### \${tag}: ${listed}\\n\\n`), listed);
+  assert.ok(source.includes(`: \`### \${tag}: ${green}\\n\\n`), green);
 });

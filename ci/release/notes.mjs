@@ -45,7 +45,7 @@ export function renderNotes({
       : []),
     final
       ? `Promotes ${candidate} to ${release.version}, with no rebuild: the same digest, scanned again and with its attestation verified first.`
-      : `Release candidate ${release.rc} for ${release.version}, built once from ${sha} on main after rc-verify accepted its ci push run on main.`,
+      : `Release candidate ${release.rc} for ${release.version}, built once from ${sha}, a commit of main, after rc-verify accepted its ci push run on main.`,
     '',
     '## Pull',
     '',

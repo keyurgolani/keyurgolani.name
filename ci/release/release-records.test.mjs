@@ -142,6 +142,22 @@ test('a flaky entry whose test passes is accepted, and reported as passed', () =
     judgeListed([], [flaky('#a')]).flaky.map(({ outcome }) => outcome),
     ['not run'],
   );
+  // Its test held (unrecorded), it's not judged; its record failed all the same, it's failed.
+  for (const held of [
+    { ...cellTest(['#c']), status: 'timedOut' },
+    { ...cellTest([]), errors: ["Slice 2's suites"] },
+  ]) {
+    assert.deepEqual(
+      judgeListed([held], [flaky('#a')]).flaky.map(({ outcome }) => outcome),
+      ['not judged'],
+    );
+  }
+  assert.deepEqual(
+    judgeListed([{ ...cellTest(['#a']), status: 'timedOut' }], [flaky('#a')]).flaky.map(
+      ({ outcome }) => outcome,
+    ),
+    ['failed'],
+  );
 });
 
 test('a strict entry whose test passes still blocks, beside a flaky one', () => {

@@ -2,11 +2,12 @@
 // rc-verify needs no install. The archive is untrusted: every offset and size is bounds-checked,
 // the central directory is walked whole (its entry count agreeing with itself, the walk ending
 // exactly at its stated size and at the end record, no name twice, none holding a NUL or a
-// backslash or carrying a Unicode Path field another reader would name it by), only stored and
-// deflated entries are read, a ZIP64 (its classic fields saturated, or its locator before the end
-// record), encrypted, or multi-disk archive is refused, the entry's local header must name it,
-// its data must end before the directory, its CRC-32 and size must match, and nothing is ever
-// written to disk.
+// backslash, none but a plain relative path, none carrying a Unicode Path field another reader
+// would name it by), every entry's local header is held to its central entry (its exact name
+// bytes, its method, no Unicode Path field), only stored and deflated entries are read, a ZIP64
+// (its classic fields saturated, or its locator before the end record), encrypted, or multi-disk
+// archive is refused, the entry's data must end before the directory, its CRC-32 and size must
+// match, and nothing is ever written to disk.
 //
 // Pure Node with no dependencies.
 import * as zlib from 'node:zlib';
@@ -62,11 +63,21 @@ export function zipEntry(zip, name, { maxBytes = 64 * 1024 * 1024 } = {}) {
   if (eocd >= 20 && u32(eocd - 20) === ZIP64_LOCATOR) fail('a ZIP64 archive, by its locator');
   if (start + size > eocd) fail('the central directory runs past its end record');
   // The whole directory first: every entry's name, once, and nothing past the count. A name twice
-  // is refused, so no reader can be handed one copy while another reads the other, and so is a
-  // directory with more in it than its count says.
+  // byte for byte is refused, and so are the names extractors map onto another path (a NUL, a
+  // backslash, a path that isn't plain and relative) and a directory with more in it than its
+  // count says.
   let at = start;
   let found = null;
   const names = new Set();
+  const entries = [];
+  // A field list of `length` bytes at `from` holding no Unicode Path field, or why not.
+  const extras = (from, length, what) => {
+    for (let field = from; field < from + length;) {
+      if (field + 4 > from + length) fail(`${what}'s extra field is malformed`);
+      if (u16(field) === UNICODE_PATH) fail(`${what} carries a Unicode Path field, another name`);
+      field += 4 + u16(field + 2);
+    }
+  };
   for (let entry = 0; entry < count; entry += 1) {
     if (u32(at) !== CENTRAL) fail(`central entry ${entry + 1} has no signature`);
     const nameLength = u16(at + 28);
@@ -78,15 +89,22 @@ export function zipEntry(zip, name, { maxBytes = 64 * 1024 * 1024 } = {}) {
     // A name another reader cuts at a NUL or reads as a path by its backslash names another file.
     if (/[\u0000\\]/.test(entryName))
       fail(`central entry ${entry + 1}'s name holds a NUL or a backslash`);
-    for (let field = at + 46 + nameLength; field < at + 46 + nameLength + extra;) {
-      if (field + 4 > at + 46 + nameLength + extra)
-        fail(`central entry ${entry + 1}'s extra field is malformed`);
-      if (u16(field) === UNICODE_PATH)
-        fail(`central entry ${entry + 1} carries a Unicode Path field, another name`);
-      field += 4 + u16(field + 2);
-    }
+    // A path an extractor writes elsewhere than it reads: absolute, or with an empty, `.` or `..`
+    // segment. A directory's own trailing `/` is plain.
+    const plain = `central entry ${entry + 1}'s name isn't a plain relative path`;
+    if (entryName.startsWith('/')) fail(plain);
+    if (entryName.includes('//')) fail(plain);
+    if (/(^|\/)\.(\/|$)/.test(entryName)) fail(plain);
+    if (/(^|\/)\.\.(\/|$)/.test(entryName)) fail(plain);
+    extras(at + 46 + nameLength, extra, `central entry ${entry + 1}`);
     if (names.has(entryName)) fail(`${entryName} is in the archive twice`);
     names.add(entryName);
+    entries.push({
+      name: entryName,
+      raw: zip.subarray(at + 46, at + 46 + nameLength),
+      method: u16(at + 10),
+      local: u32(at + 42),
+    });
     if (entryName === name) {
       found = {
         flags: u16(at + 8),
@@ -102,16 +120,27 @@ export function zipEntry(zip, name, { maxBytes = 64 * 1024 * 1024 } = {}) {
   if (at !== start + size) fail("the central directory doesn't end at its stated size");
   // Other readers find the directory at the end record less its size: it must end there.
   if (at !== eocd) fail("the central directory doesn't end at the end record");
+  // Every entry's local header, not only the asked one's: a reader that walks the local headers
+  // names each entry by its own, so each must name its entry byte for byte, by the same method,
+  // with no Unicode Path field, and end before the directory.
+  for (const entry of entries) {
+    const { local } = entry;
+    if (u32(local) !== LOCAL) fail(`${entry.name}'s local header has no signature`);
+    const localName = local + 30 + u16(local + 26);
+    if (localName > zip.length) fail(`${entry.name}'s local header runs past the end`);
+    if (!zip.subarray(local + 30, localName).equals(entry.raw))
+      fail(`${entry.name}'s local header names another file`);
+    if (u16(local + 8) !== entry.method)
+      fail(`${entry.name}'s local header names another compression method`);
+    if (localName + u16(local + 28) > start)
+      fail(`${entry.name}'s local header runs into the central directory`);
+    extras(localName, u16(local + 28), `${entry.name}'s local header`);
+  }
   if (found === null) return null;
   const { flags, method, crc, packed, unpacked, local } = found;
   if (flags & 0x1) fail(`${name} is encrypted`);
   if (packed === 0xffffffff || unpacked === 0xffffffff) fail(`${name} is a ZIP64 entry`);
   if (unpacked > maxBytes) fail(`${name} is ${unpacked} bytes, over ${maxBytes}`);
-  if (u32(local) !== LOCAL) fail(`${name}'s local header has no signature`);
-  const localName = local + 30 + u16(local + 26);
-  if (localName > zip.length) fail(`${name}'s local header runs past the end`);
-  if (zip.toString('utf8', local + 30, localName) !== name)
-    fail(`${name}'s local header names another file`);
   // The sizes come from the central directory: an entry written with bit 3 set (as
   // upload-artifact's are) leaves the local header's sizes and CRC zero.
   const data = local + 30 + u16(local + 26) + u16(local + 28);

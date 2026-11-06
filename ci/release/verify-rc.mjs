@@ -25,15 +25,16 @@
 // verdict uses (ci/release/release-records.mjs): no other failing test, no
 // verdict rule but tests-failed (and shard-job beside it), no listed record
 // that ran and no longer fails. A green run with a non-empty list is held to
-// the last of those too, its summary a green verdict. Either way the summary
-// must have the shape both read (summaryProblem). The artifact is the one live
-// one the run's latest quality-pr-verdict job, of the run's own attempt,
-// uploaded, its size and digest checked, read with the job's actions: read
-// and parsed as untrusted: anything missing, malformed, too big, or from
-// another attempt refuses the tag. ci.yml's own gate is untouched and stays
-// strict. A list that's empty, as a final release's must be, leaves only the
-// green run. Text from the artifact is stripped of control characters before
-// it reaches the log or the job summary, and escaped in a workflow command.
+// the last of those too, its summary a green verdict over no failed test.
+// Either way the summary must have the shape both read (summaryProblem). The
+// artifact is the one live one the run's latest quality-pr-verdict job, of the
+// run's own attempt, uploaded, its size checked, and its digest when the API
+// gives one, read with the job's actions: read and parsed as untrusted:
+// anything missing, malformed, too big, or from another attempt refuses the
+// tag. ci.yml's own gate is untouched and stays strict. A list that's empty,
+// as a final release's must be, leaves only the green run. Text from the
+// artifact is stripped of control characters before it reaches the log or the
+// job summary, and escaped in a workflow command.
 //
 // Pure Node with no dependencies, so the job that runs it needs no install.
 import { createHash } from 'node:crypto';
@@ -476,7 +477,10 @@ export function evaluateRc({ tag, sha, compare, runs, jobsByRun, quality, counts
       summaryProblem(read.summary) ??
       (read.summary?.verdict?.ok === true && read.summary.verdict.failures?.length === 0
         ? null
-        : "quality-pr's summary says its verdict failed, though gate passed");
+        : "quality-pr's summary says its verdict failed, though gate passed") ??
+      (read.summary.tests.some((test) => test?.outcome === 'unexpected')
+        ? "quality-pr's summary holds a failed test, though gate passed"
+        : null);
     if (why) {
       reasons.push(`${sha}'s green ci run ${run.id} can't be held to the records list: ${why}`);
       return { ok: false, reasons, run: null, listed: false, flaky: [] };
@@ -538,10 +542,10 @@ export function flakyLines(flaky) {
 
 /**
  * The artifact listing of `run`, and its quality-pr summary read from the artifact its latest
- * verdict job made (bindArtifact()), its download held to its size and digest; an Error in place
- * of the summary when it can't be read, and in place of the listing too when that's what failed,
- * so the refusal names the listing, not an empty one. `get` and `getBytes` are githubGet and
- * githubGetBytes, or a test's stand-ins.
+ * verdict job made (bindArtifact()), its download held to its size, and to its digest when the
+ * API gives one; an Error in place of the summary when it can't be read, and in place of the
+ * listing too when that's what failed, so the refusal names the listing, not an empty one. `get`
+ * and `getBytes` are githubGet and githubGetBytes, or a test's stand-ins.
  */
 export async function qualityPrSummary(
   base,

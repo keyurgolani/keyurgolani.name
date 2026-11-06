@@ -57,7 +57,10 @@ export interface ListedRecord {
   readonly check: string;
   /** The rule within the check that failed, such as color-contrast. */
   readonly rule: string;
-  /** The element (failureTarget), or null for a record with none. */
+  /**
+   * The element (failureTarget), qualified as `<surface> >> `, `@<viewport> ` or both when the
+   * record's page or viewport isn't the test's own (failureOf), or null for a record with none.
+   */
   readonly target: string | null;
   /** Who fixes it: a lane or a person. */
   readonly owner: string;
