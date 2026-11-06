@@ -1124,7 +1124,21 @@ function LiveStage(props: StageProps) {
     // has brought it into view, so the snap never carries the strip off what the Tab reached. The step
     // is a cut, as the browser's own focus scroll is: a glide would carry what has focus on under the
     // reader's eye, out of the place it was shown, and the move settles, status and all, at once.
+    // A pointer's press focuses what it lands on as it goes down, a link in Chrome, before its click
+    // lands as it comes up: a step there would carry what was pressed out from under the pointer and
+    // the click would miss. So focus a press gives steps nothing. The flag clears a frame after the
+    // press ends anywhere in the window, since a press can end outside the stage.
+    let pressing = false;
+    const onPress = () => {
+      pressing = true;
+    };
+    const onRelease = () => {
+      requestAnimationFrame(() => {
+        pressing = false;
+      });
+    };
     const onFocusIn = (event: FocusEvent) => {
+      if (pressing) return;
       const target = event.target as Element;
       const at = elements.findIndex(
         (element) => element !== null && element !== target && element.contains(target),
@@ -1140,6 +1154,9 @@ function LiveStage(props: StageProps) {
         }
       });
     };
+    stageElement.addEventListener('pointerdown', onPress, { capture: true });
+    window.addEventListener('pointerup', onRelease, { capture: true });
+    window.addEventListener('pointercancel', onRelease, { capture: true });
     stageElement.addEventListener('focusin', onFocusIn);
 
     rootElement.addEventListener('keydown', onKey);
@@ -1205,6 +1222,9 @@ function LiveStage(props: StageProps) {
       window.removeEventListener('hashchange', onHash);
       stageElement.removeEventListener('scroll', onStageScroll);
       stageElement.removeEventListener('focusin', onFocusIn);
+      stageElement.removeEventListener('pointerdown', onPress, { capture: true });
+      window.removeEventListener('pointerup', onRelease, { capture: true });
+      window.removeEventListener('pointercancel', onRelease, { capture: true });
       textSize?.disconnect();
       delete rootElement.dataset.rail;
       window.removeEventListener('scroll', onPageScroll);

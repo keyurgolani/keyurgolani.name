@@ -462,6 +462,63 @@ for (const [width, height] of [
   );
 }
 
+test(
+  "a pointer's click on a link in a later scene already in view lands on that link: the strip holds still under it",
+  { annotation, tag },
+  async ({ page }) => {
+    await load(page);
+    const { scenes } = await read(page);
+    // Step on until the current scene is four columns wide and the next one shows a link wholly in
+    // the stage: the scene a press lands in is then a later one, in view, as a reader sees it.
+    await page.locator('.hc-stage').focus();
+    let found: { at: number; id: string; nth: number } | null = null;
+    for (let at = 1; at < scenes.length - 1 && !found; at++) {
+      await page.keyboard.press('ArrowRight');
+      await expectAt(page, at);
+      await page.waitForTimeout(300);
+      found = await page.evaluate(
+        ([here, next, index]) => {
+          if (document.getElementById(here!)?.dataset.w !== '4') return null;
+          const stage = document.querySelector('.hc-stage')!.getBoundingClientRect();
+          const links = [...document.querySelectorAll<HTMLElement>(`#${next} a[href]`)];
+          const nth = links.findIndex((link) => {
+            const box = link.getBoundingClientRect();
+            return (
+              box.width > 0 &&
+              box.left >= stage.left &&
+              box.right <= stage.right &&
+              box.top >= stage.top &&
+              box.bottom <= stage.bottom
+            );
+          });
+          return nth < 0 ? null : { at: index as number, id: next!, nth };
+        },
+        [scenes[at], scenes[at + 1], at] as const,
+      );
+    }
+    expect(found, "a four-column scene with a later scene's link in view").not.toBeNull();
+    const { at, id, nth } = found!;
+    const link = page.locator(`#${id} a[href]`).nth(nth);
+    await link.evaluate((element) => {
+      element.addEventListener(
+        'click',
+        (event) => {
+          event.preventDefault();
+          (window as unknown as { clicked?: boolean }).clicked = true;
+        },
+        { once: true },
+      );
+    });
+    // A real press: down, held 120 ms, up, as a hand clicks. Chromium focuses the link as it goes down.
+    await link.click({ delay: 120 });
+    expect(await page.evaluate(() => (window as unknown as { clicked?: boolean }).clicked)).toBe(
+      true,
+    );
+    await page.waitForTimeout(500);
+    expect((await read(page)).current).toBe(at);
+  },
+);
+
 test.describe('reduced motion', () => {
   test(
     'the strip stays, and every step is a cut onto its scene',
