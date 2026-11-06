@@ -924,7 +924,10 @@ function LiveStage(props: StageProps) {
         }
         const progress = window.scrollY - pinStart();
         if (progress > 0 && progress < travel() - 1) {
-          const from = Math.min(travel(), Math.max(0, rest - pinStart()));
+          // Where it set out, inside the strip; past its end it stays past it, so coming back up
+          // from the credits a stop inside the end reads as a step back to the end, not past it.
+          const set = rest - pinStart();
+          const from = set > travel() ? set : Math.max(0, set);
           const nearest = snapAlong(geometry().offsets, progress, from);
           const top = pinStart() + offsetOf(nearest);
           if (Math.abs(window.scrollY - top) > 1) {
