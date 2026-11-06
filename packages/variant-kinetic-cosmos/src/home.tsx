@@ -28,6 +28,7 @@ import {
   type Ring,
 } from './model';
 import { Orrery } from './orrery';
+import { NoScriptMark } from './parts';
 import { RENDERERS } from './renderers';
 import { OrbitStage, StageMotionControl } from './stage';
 import { IndexClose, IndexLink, IndexTrigger } from './system-index';
@@ -709,6 +710,7 @@ export function HomePage({ input, outline }: HomePageProps) {
       <Masthead input={input} home={outline.home} id={topId} indexId={indexId} uiLang={uiLang} />
       {/* Focusable, so the host's skip link moves focus here, not only the view. */}
       <main id={ids.main} className="kc-main" tabIndex={-1}>
+        <NoScriptMark />
         <OrbitStage className="kc-opening" id={stageId}>
           <div className="kc-map">
             <div className="kc-map__clip">

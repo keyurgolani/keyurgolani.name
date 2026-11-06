@@ -938,11 +938,14 @@
   opacity: 1;
 }
 
-/* With no script nothing turns, so there's nothing to pause, and no status to give. */
-@media (scripting: none) {
-  [data-variant='kinetic-cosmos'] .kc-pause {
-    display: none;
-  }
+/*
+ * With no script nothing turns, so there's nothing to pause, and no status to give. Read with no
+ * script, main's noscript mark is an element (NoScriptMark, parts.tsx), which the parser makes it
+ * only then; the no-script rules key on it, never on a scripting query, which the quality
+ * runner's no-JavaScript rows would flip with script on.
+ */
+[data-variant='kinetic-cosmos']:has([data-kc-nojs]) .kc-pause {
+  display: none;
 }
 
 [data-variant='kinetic-cosmos'] .kc-pause__control [role='status'] {
@@ -3806,7 +3809,29 @@
  * offer, as the object would show it, in the page's ink (M1: a printed page
  * holds the whole record).
  */
-@media (scripting: none), print {
+[data-variant='kinetic-cosmos']:has([data-kc-nojs]) .kc-talk-dialog {
+  --layout-ink: var(--color-text-primary);
+  --layout-ink-quiet: var(--color-text-secondary);
+  --layout-ink-line: var(--color-border-default);
+  --layout-ink-faint: var(--color-border-strong);
+
+  display: grid;
+  gap: var(--space-s);
+  position: static;
+  inline-size: auto;
+  margin: 0;
+  padding: 0;
+  color: inherit;
+  background: none;
+  border: 0;
+  box-shadow: none;
+}
+
+[data-variant='kinetic-cosmos']:has([data-kc-nojs]) :is(.kc-talk-dialog__head, .kc-object__more) {
+  display: none;
+}
+
+@media print {
   [data-variant='kinetic-cosmos'] .kc-talk-dialog {
     --layout-ink: var(--color-text-primary);
     --layout-ink-quiet: var(--color-text-secondary);
@@ -4300,19 +4325,17 @@
  * the island would open it, and focus and anchors stop clear of the dock,
  * as the island's scroll padding does.
  */
-@media (scripting: none) {
-  [data-variant='kinetic-cosmos'] :target > details.kc-fold > :not(summary) {
-    display: block;
-  }
+[data-variant='kinetic-cosmos']:has([data-kc-nojs]) :target > details.kc-fold > :not(summary) {
+  display: block;
+}
 
-  [data-variant='kinetic-cosmos'] :target > details.kc-fold::details-content {
-    content-visibility: visible;
-    block-size: auto;
-  }
+[data-variant='kinetic-cosmos']:has([data-kc-nojs]) :target > details.kc-fold::details-content {
+  content-visibility: visible;
+  block-size: auto;
+}
 
-  [data-variant='kinetic-cosmos'] .kc-orbitals :is(a, button, summary, [id]) {
-    scroll-margin-block-end: calc(var(--ui-control-height) + var(--space-s));
-  }
+[data-variant='kinetic-cosmos']:has([data-kc-nojs]) .kc-orbitals :is(a, button, summary, [id]) {
+  scroll-margin-block-end: calc(var(--ui-control-height) + var(--space-s));
 }
 
 @media print {
