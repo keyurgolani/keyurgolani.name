@@ -102,3 +102,16 @@ test("a heading's words are its runs between spaces and the joins a line may bre
   assert.deepEqual(words('I a'), []);
   assert.deepEqual(words(''), []);
 });
+
+test('a heading in a script a line may break inside has no words to break, and a zero-width space parts two', () => {
+  const words = (text: string) => wordSpans(text).map(([start, end]) => text.slice(start, end));
+  // Japanese, Thai and Korean lines break between characters (Thai at its word boundaries), so a
+  // run of them can't break inside a word: no span, so the fit check never reads a break there.
+  assert.deepEqual(words('\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u306e\u7d39\u4ecb'), []);
+  assert.deepEqual(words('\u0e1b\u0e23\u0e30\u0e2a\u0e1a\u0e01\u0e32\u0e23\u0e13\u0e4c'), []);
+  assert.deepEqual(words('\ubd84\uc0b0\uc2dc\uc2a4\ud15c\uc124\uacc4'), []);
+  // A zero-width space is a place a line may break: it parts the words either side.
+  assert.deepEqual(words('long\u200bcompound'), ['long', 'compound']);
+  // A Latin word beside them is still one word.
+  assert.deepEqual(words('Rowan \u30d7\u30ed\u30b8\u30a7\u30af\u30c8'), ['Rowan']);
+});
