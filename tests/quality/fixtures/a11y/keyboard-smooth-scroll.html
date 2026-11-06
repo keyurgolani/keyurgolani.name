@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Smooth scroll-into-view without script, known-good</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+      }
+      :focus-visible {
+        outline: 2px solid #000;
+        outline-offset: 2px;
+      }
+      /* A scroller of the page's own that glides, with no script, to what focus lands on. */
+      .scroller {
+        overflow-x: auto;
+        scroll-behavior: smooth;
+        width: 100vw;
+      }
+      .track {
+        position: relative;
+        width: 8000px;
+        height: 200px;
+      }
+      .track a {
+        position: absolute;
+        top: 80px;
+      }
+      #near {
+        left: 40px;
+      }
+      /* Far past the viewport: Tab lands on it, and the scroller glides it into view. */
+      #far {
+        left: 7000px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A scroller that glides to focus</h1>
+      <div class="scroller">
+        <div class="track">
+          <a id="near" href="#near">Near</a>
+          <a id="far" href="#far">Far</a>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

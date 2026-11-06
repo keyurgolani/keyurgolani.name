@@ -41,6 +41,7 @@ import {
   keyboardFindings,
   overlayFindings,
   type Finding,
+  type SettleRecord,
 } from '../lib/a11y/interaction';
 import { killSwitches, MOTION_SAMPLER, motionFindings, osWinsFindings } from '../lib/a11y/motion';
 import { inPage, type Active } from '../lib/a11y/probe';
@@ -217,6 +218,32 @@ function goodFile(
 const settled = async (page: Page): Promise<Finding[]> =>
   (await notBusy(page)) ? [] : [{ gate: 'runner', rule: 'settled', actual: STILL_BUSY }];
 const keyboard = (page: Page) => keyboardFindings(page);
+/** The settle logs of the no-JavaScript walk cases, by case id, for a reader of a run (row 48). */
+export const SETTLE_LOGS = new Map<string, readonly SettleRecord[]>();
+/**
+ * The walk on a page without script, which must be seen reading the scroll: a Tab whose polls
+ * found it moving, then held, or the case fails with a finding of its own (row 48). Its log is
+ * kept in SETTLE_LOGS under `id`.
+ */
+const scriptlessKeyboard =
+  (id: string) =>
+  async (page: Page): Promise<Finding[]> => {
+    const settleLog: SettleRecord[] = [];
+    const findings = await keyboardFindings(page, { settleLog });
+    SETTLE_LOGS.set(id, settleLog);
+    const glided = settleLog.some(
+      ({ settled, polls }) =>
+        settled && new Set(polls.map((poll) => JSON.stringify(poll.scroll))).size > 1,
+    );
+    if (!glided) {
+      findings.push({
+        gate: 'runner',
+        rule: 'settle-unread',
+        actual: `no Tab of ${settleLog.length} was read gliding and then at rest`,
+      });
+    }
+    return findings;
+  };
 /** A page whose script didn't arrive, as failed enhancement reads it; axe has cases of its own. */
 const failureState = (page: Page) => failureStateFindings(page, { axe: false });
 /** A page that needs JavaScript, as the no-JavaScript checks read it; axe has cases of its own. */
@@ -1348,6 +1375,23 @@ export const A11Y_CASES: readonly MetaCase[] = [
   // A closed fold's own summary is a stop; what it folds away, nested summaries, a closed
   // dialog's or popover's controls, and hidden and inert ones, isn't owed.
   goodFile('folded', 'keyboard-folded.html', 'keyboard', keyboard),
+  // Without script, a smooth scroll-into-view still glides after Tab: the walk reads each stop
+  // where the scroll comes to rest (row 48), and one that rests out of view still fails.
+  goodFile(
+    'no-js-smooth-scroll',
+    'keyboard-smooth-scroll.html',
+    'keyboard',
+    scriptlessKeyboard('keyboard/no-js-smooth-scroll'),
+    { noScript: true },
+  ),
+  bad(
+    'no-js-smooth-scroll-out',
+    'keyboard-smooth-scroll-out.html',
+    'keyboard',
+    'hidden-focusable',
+    scriptlessKeyboard('keyboard/no-js-smooth-scroll-out'),
+    { noScript: true },
+  ),
   builtCase(
     'summary-skipped',
     'keyboard',

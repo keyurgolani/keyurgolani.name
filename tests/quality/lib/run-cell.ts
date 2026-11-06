@@ -95,6 +95,7 @@ import {
   keyboardFindings,
   overlayFindings,
   type Finding,
+  type SettleRecord,
 } from './a11y/interaction';
 import { MOTION_SAMPLER, motionFindings } from './a11y/motion';
 import { inPage } from './a11y/probe';
@@ -256,6 +257,8 @@ interface SuiteRun {
   readonly scriptRequired: boolean;
   /** A surface whose frame's document its composition cells cover: the walk takes the frame as one stop. */
   readonly framed?: boolean;
+  /** Where the keyboard walk logs each Tab's settle on a page without script (walk-settle.json). */
+  readonly settleLog?: SettleRecord[];
 }
 
 /** Slice 2's suites on the page `run.at` names, as `run.owed` says. Motion runs before axe, in runCell. */
@@ -275,6 +278,7 @@ async function suites(run: SuiteRun): Promise<Finding[]> {
         focus: does('focus'),
         occlusion: does('occlusion'),
         framed: run.framed ?? false,
+        ...(run.settleLog ? { settleLog: run.settleLog } : {}),
       })),
     );
     ran.add('keyboard');
@@ -619,7 +623,9 @@ export async function runPass(
   // The no-JavaScript row on a surface that needs it reads its notice too.
   const noticeRow = cell.requiresScript !== undefined && row.id === 'no-javascript';
   if (noticeRow) ran.add(NOTICE_CHECK);
-  // The page's own suites, then the primitives under the cell's tuple.
+  // The page's own suites, then the primitives under the cell's tuple. On a page without script,
+  // the walk's settle after each Tab, every poll, is kept as walk-settle.json.
+  const settleLog: SettleRecord[] = [];
   const own = [
     ...motion,
     ...contrast,
@@ -634,6 +640,7 @@ export async function runPass(
       baseline: inventory,
       scriptRequired: cell.requiresScript !== undefined,
       framed: cell.framed !== undefined,
+      settleLog,
     })),
     // The no-JavaScript row on a surface that needs it: its honest state, axe having run above.
     ...(noticeRow
@@ -642,6 +649,7 @@ export async function runPass(
         })
       : []),
   ];
+  if (settleLog.length > 0) await keep('walk-settle.json', settleLog);
   ran.add('contrast');
   if (printRow) {
     // The print row's inventory: the page in print against the page on screen.
