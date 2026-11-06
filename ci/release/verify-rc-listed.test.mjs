@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { deflateRawSync } from 'node:zlib';
 import { parse } from 'yaml';
-import { judgeListed, listEntry, testFailures } from './release-records.mjs';
+import { failureOf, judgeListed, listEntry, testFailures } from './release-records.mjs';
 import {
   BROWSER_SHARDS,
   bindArtifact,
@@ -210,6 +210,36 @@ test('a listed record that now passes blocks the tag', () => {
   assert.match(
     refusal(evaluateRc(input({ summary: qprSummary([FOCUS]) }))),
     /axe color-contrast on #main > p:nth-child\(3\) no longer fails/,
+  );
+});
+
+test("a record of the primitives page or the landscape pass keys apart from the cell page's: it's unlisted, and the cell page's entry passed", () => {
+  const own = { surface: 'horizontal-cinema', viewport: '1440x900' };
+  const record = {
+    check: 'focus',
+    rule: 'contrast',
+    surface: 'horizontal-cinema',
+    viewport: '1440x900',
+    element: { selector: NAV },
+  };
+  assert.deepEqual(failureOf(record, own), FOCUS);
+  const primitives = failureOf({ ...record, surface: 'primitives' }, own);
+  const landscape = failureOf({ ...record, viewport: '900x1440' }, own);
+  assert.equal(primitives.target, `primitives >> ${NAV}`);
+  assert.equal(landscape.target, `@900x1440 ${NAV}`);
+  for (const moved of [primitives, landscape]) {
+    const reason = refusal(evaluateRc(input({ summary: qprSummary([moved, AXE]) })));
+    assert.ok(
+      reason.includes(`focus contrast failed, and the records list doesn't name it. To list it: `),
+      reason,
+    );
+    assert.match(reason, /focus contrast on html > body.* no longer fails: take its entry out/);
+  }
+  // The same element failing on both pages is two records, each its own entry.
+  const both = qprSummary([FOCUS, primitives, AXE]);
+  assert.deepEqual(
+    evaluateRc(input({ summary: both, listed: [...LISTED, entry(primitives)] })).reasons,
+    [],
   );
 });
 

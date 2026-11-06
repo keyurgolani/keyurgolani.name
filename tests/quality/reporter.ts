@@ -143,6 +143,54 @@ function attachment(test: TestCase, name: string): unknown {
   }
 }
 
+/**
+ * One test as summary.json lists it. A failed cell test's failures are its unwaived records, each
+ * keyed under the test's own surface and viewport (failureOf), so a record of the primitives page
+ * or of the landscape pass is told apart from the cell page's own.
+ */
+export function summaryTest(test: TestCase): SummaryTest {
+  const last = test.results.at(-1);
+  const status = last?.status ?? 'not run';
+  const skipped = test.outcome() === 'skipped';
+  const records = testRecords(test);
+  const soft = annotation(test, SOFT_FAILURES_ANNOTATION);
+  const owed = annotation(test, OWED_ANNOTATION);
+  const target = annotation(test, 'target');
+  const viewport = annotation(test, 'viewport');
+  const own = { surface: target?.slice(target.indexOf(':') + 1), viewport };
+  return {
+    title: test.titlePath().slice(3).join(' > ') || test.title,
+    file: path.relative(REPO_ROOT, test.location.file),
+    line: test.location.line,
+    project: test.parent.project()?.name ?? '',
+    engine: (test.parent.project()?.use as { browserName?: string } | undefined)?.browserName,
+    kind: annotation(test, KIND_ANNOTATION),
+    cell: annotation(test, 'cell'),
+    target,
+    route: annotation(test, 'route'),
+    viewport,
+    row: annotation(test, 'row'),
+    outcome: test.outcome(),
+    expectedStatus: test.expectedStatus,
+    status,
+    skipReason: skipped ? (annotation(test, 'skip') ?? annotation(test, 'fixme') ?? null) : null,
+    checks: annotation(test, CHECKS_ANNOTATION)?.split(' ').filter(Boolean) ?? [],
+    canaryProbe: annotation(test, 'quality-canary-probe') !== undefined,
+    errors: (last?.errors ?? []).map((error) => plain(error.message ?? error.value)),
+    records: records.length,
+    failures:
+      test.outcome() === 'unexpected'
+        ? records
+            .filter((record) => record.exceptionId === undefined)
+            .map((record) => failureOf(record, own) as SummaryFailure)
+        : [],
+    ...(soft !== undefined && /^\d+$/.test(soft) ? { softFailures: Number(soft) } : {}),
+    ...(owed !== undefined ? { owed: owed.split(' ').filter(Boolean) } : {}),
+    vitals: attachment(test, 'vitals.json'),
+    perf: attachment(test, 'perf.json'),
+  };
+}
+
 export default class QualityReporter implements Reporter {
   private config?: FullConfig;
   private suite?: Suite;
@@ -158,47 +206,7 @@ export default class QualityReporter implements Reporter {
   }
 
   async onEnd(result: FullResult) {
-    const tests = (this.suite?.allTests() ?? []).map((test): SummaryTest => {
-      const last = test.results.at(-1);
-      const status = last?.status ?? 'not run';
-      const skipped = test.outcome() === 'skipped';
-      const records = testRecords(test);
-      const soft = annotation(test, SOFT_FAILURES_ANNOTATION);
-      const owed = annotation(test, OWED_ANNOTATION);
-      return {
-        title: test.titlePath().slice(3).join(' > ') || test.title,
-        file: path.relative(REPO_ROOT, test.location.file),
-        line: test.location.line,
-        project: test.parent.project()?.name ?? '',
-        engine: (test.parent.project()?.use as { browserName?: string } | undefined)?.browserName,
-        kind: annotation(test, KIND_ANNOTATION),
-        cell: annotation(test, 'cell'),
-        target: annotation(test, 'target'),
-        route: annotation(test, 'route'),
-        viewport: annotation(test, 'viewport'),
-        row: annotation(test, 'row'),
-        outcome: test.outcome(),
-        expectedStatus: test.expectedStatus,
-        status,
-        skipReason: skipped
-          ? (annotation(test, 'skip') ?? annotation(test, 'fixme') ?? null)
-          : null,
-        checks: annotation(test, CHECKS_ANNOTATION)?.split(' ').filter(Boolean) ?? [],
-        canaryProbe: annotation(test, 'quality-canary-probe') !== undefined,
-        errors: (last?.errors ?? []).map((error) => plain(error.message ?? error.value)),
-        records: records.length,
-        failures:
-          test.outcome() === 'unexpected'
-            ? records
-                .filter((record) => record.exceptionId === undefined)
-                .map((record) => failureOf(record) as SummaryFailure)
-            : [],
-        ...(soft !== undefined && /^\d+$/.test(soft) ? { softFailures: Number(soft) } : {}),
-        ...(owed !== undefined ? { owed: owed.split(' ').filter(Boolean) } : {}),
-        vitals: attachment(test, 'vitals.json'),
-        perf: attachment(test, 'perf.json'),
-      };
-    });
+    const tests = (this.suite?.allTests() ?? []).map(summaryTest);
     // run.ts's own shard (lib/pr-shards.ts, lib/full-shards.ts), or Playwright's, given some other way.
     const shard = this.config?.shard;
     const summary: Summary = {

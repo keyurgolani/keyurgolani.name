@@ -54,9 +54,11 @@ const focusFailure = (measured: string, selector = NAV, rule = 'contrast'): Cell
   actual: measured,
   threshold: 185,
 });
+/** RUNS's test's own surface and viewport, as the reporter keys its records under them. */
+const OWN = { surface: 'fallback', viewport: '1440x900' };
 /** The two failures RUNS's test fails on: the nav link's focus ring, and the lede's axe contrast. */
 const FAILURES: readonly SummaryFailure[] = [
-  failureOf(focusFailure('0 of 486 changed pixels reach 3:1')),
+  failureOf(focusFailure('0 of 486 changed pixels reach 3:1'), OWN),
   { check: 'axe', rule: 'color-contrast', target: LEDE },
 ];
 
@@ -253,18 +255,18 @@ test('a listed test fails the gate when anything no record names failed too: a b
 });
 
 test("a record's key is its cell, rule and target from its own fields: a new measurement still matches, and another target or rule doesn't", () => {
-  const listed = [entry(failureOf(focusFailure('0 of 486 changed pixels reach 3:1')))];
+  const listed = [entry(failureOf(focusFailure('0 of 486 changed pixels reach 3:1'), OWN))];
   // The next run measures the same failure differently: it's still the listed record.
-  const remeasured = failureOf({
-    ...focusFailure('1 of 12279 changed pixels reach 3:1'),
-    threshold: 2880,
-  });
+  const remeasured = failureOf(
+    { ...focusFailure('1 of 12279 changed pixels reach 3:1'), threshold: 2880 },
+    OWN,
+  );
   assert.equal(recordKey(entry(remeasured)), recordKey(listed[0]!));
   assert.deepEqual(verdict([remeasured], listed).failures, []);
   // Another element, or another rule on the same one, is a record of its own.
   for (const other of [
-    failureOf(focusFailure('0 of 486 changed pixels reach 3:1', `${NAV} + a`)),
-    failureOf(focusFailure('0 of 486 changed pixels reach 3:1', NAV, 'perimeter')),
+    failureOf(focusFailure('0 of 486 changed pixels reach 3:1', `${NAV} + a`), OWN),
+    failureOf(focusFailure('0 of 486 changed pixels reach 3:1', NAV, 'perimeter'), OWN),
   ]) {
     assert.notEqual(recordKey(entry(other)), recordKey(listed[0]!));
     assert.deepEqual(rules(verdict([other], listed).failures), [
@@ -279,8 +281,44 @@ test("a record's key is its cell, rule and target from its own fields: a new mea
     ...focusFailure('x'),
     element: { semanticRole: 'link', accessibleName: 'Writing', uiSlot: 'nav-link' },
   };
-  assert.equal(failureOf(framed).target, 'aria:link|Writing|nav-link');
-  assert.equal(failureOf({ ...focusFailure('x'), element: undefined }).target, null);
+  assert.equal(failureOf(framed, OWN).target, 'aria:link|Writing|nav-link');
+  assert.equal(failureOf({ ...focusFailure('x'), element: undefined }, OWN).target, null);
+});
+
+test("a record of another page or viewport than its test's own keys apart: the primitives page and the landscape pass never match the cell page's entry", () => {
+  const own = focusFailure('0 of 486 changed pixels reach 3:1');
+  // The primitives page an appearance cell also audits, and the landscape occlusion pass.
+  const primitives = {
+    ...own,
+    surface: 'primitives',
+    composition: false,
+    route: '/_fixtures/appearance',
+  };
+  const landscape = { ...own, check: 'occlusion', rule: 'obscured', viewport: '900x1440' };
+  assert.equal(failureOf(primitives, OWN).target, `primitives >> ${NAV}`);
+  assert.equal(failureOf(landscape, OWN).target, `@900x1440 ${NAV}`);
+  assert.equal(
+    failureOf({ ...primitives, viewport: '900x1440' }, OWN).target,
+    `@900x1440 primitives >> ${NAV}`,
+  );
+  // The cell page's record is listed; it's fixed, and the same element fails on the other page or
+  // in the other pass: unlisted, and the listed entry passed.
+  const listed = [entry(failureOf(own, OWN)), LISTED[1]!];
+  for (const [label, moved] of [
+    ['the primitives page', primitives],
+    ['the landscape pass', { ...own, viewport: '900x1440' }],
+  ] as const) {
+    const failed = verdict([failureOf(moved, OWN), FAILURES[1]!], listed);
+    assert.deepEqual(
+      rules(failed.failures),
+      ['listed-passed', 'tests-failed', 'unlisted-failure'],
+      label,
+    );
+  }
+  // Both pages failing on one selector are two records, so each can be listed.
+  const both = [failureOf(own, OWN), failureOf(primitives, OWN), FAILURES[1]!];
+  assert.deepEqual(rules(verdict(both, listed).failures), ['tests-failed', 'unlisted-failure']);
+  assert.deepEqual(verdict(both, [...listed, entry(failureOf(primitives, OWN))]).failures, []);
 });
 
 test('a listed record that no longer fails fails the gate, since a fixed record leaves the list', () => {

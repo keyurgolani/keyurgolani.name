@@ -4,9 +4,11 @@
 // tests/quality/lib/release-scope.ts) and rc-verify's push-gate check (ci/release/verify-rc.mjs).
 //
 // An entry is one failure record: one rule failing on one element in one cell test. Its key is
-// [cell, viewport, row, engine, check, rule, target], each from the record's own fields, never
-// from its message, so a measurement that moves from run to run (an element count, a pixel count,
-// a ratio) never moves the key. quality/release/SCHEMA.md documents the file.
+// [cell, viewport, row, engine, check, rule, target]: the test's cell, viewport, row and engine,
+// and the record's own check, rule and element (its target qualified by page and viewport when
+// those aren't the test's own: failureOf), never its message, so a measurement that moves from
+// run to run (an element count, a pixel count, a ratio) never moves the key.
+// quality/release/SCHEMA.md documents the file.
 //
 // An entry is strict by default: its record must still fail wherever its test runs. One marked
 // `"flaky": true` was seen failing and passing on one commit (`seen` names the commit and both
@@ -65,12 +67,22 @@ export function failureTarget(element) {
 /**
  * A failure record (a cell test's CellFailure) as a summary test lists it: its check, rule and
  * target, from its own fields. Its measurements (expected, actual, threshold) and message stay out.
+ * `own` is the test's own surface and viewport. A record of another page or viewport under the
+ * same test (the primitives page an appearance cell also audits, the landscape occlusion pass at
+ * the test's viewport turned) has its target qualified by where it is, `<surface> >> <target>` and
+ * `@<viewport> <target>`, so it never keys like the cell page's own record at the test's viewport.
+ * A record with no element keeps a null target, which no list names.
  */
-export const failureOf = (record) => ({
-  check: record.check,
-  rule: record.rule,
-  target: failureTarget(record.element),
-});
+export function failureOf(record, own) {
+  const target = failureTarget(record.element);
+  const page = record.surface === own?.surface ? '' : `${String(record.surface)} >> `;
+  const at = record.viewport === own?.viewport ? '' : `@${String(record.viewport)} `;
+  return {
+    check: record.check,
+    rule: record.rule,
+    target: target === null ? null : `${at}${page}${target}`,
+  };
+}
 
 /** An entry's key, or a failure's under its test: the fields that name the record, in order. */
 export const recordKey = (each) => JSON.stringify(KEY_FIELDS.map((field) => each?.[field] ?? null));
