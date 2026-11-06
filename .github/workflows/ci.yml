@@ -773,7 +773,7 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p reports
-          pnpm quality:pr -- --grep "$CELL" --repeat-each=10 --retries=0 --list 2>&1 | tee reports/row53-list.txt
+          { pnpm quality:pr -- --grep "$CELL" --repeat-each=10 --retries=0 --list 2>&1 || true; } | tee reports/row53-list.txt
           asked=$(grep -oE '^Total: [0-9]+ test' reports/row53-list.txt | grep -oE '[0-9]+' || true)
           echo "row 53: ${asked:-0} test(s) listed, 10 asked"
           status=0
