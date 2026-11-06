@@ -64,6 +64,8 @@ const NATIVE_KEYS = [
     (role) => `[role="${role}"]`,
   ),
 ].join(', ');
+/** What a Space presses rather than scrolls the page with. */
+const PRESSABLE = 'button, summary, [role="button"], [role="checkbox"], [role="switch"]';
 
 /** One scene, as the scrubber draws it and the controller finds it. */
 export interface SceneMark extends TitleMark {
@@ -449,6 +451,15 @@ function LiveStage(props: StageProps) {
     let moved = false;
     /** Where the page last came to rest, so the pin's snap knows which way a travel went from there. */
     let rest = window.scrollY;
+    /**
+     * Where the pin's snap is gliding to and which way, from when it sets out until it gets there
+     * or past it; and which way the visitor's own input (the wheel, a touch, a scrolling key) last
+     * moved the page since it set out, 0 for none. Read from the input, not the page's place: the
+     * browser's own scroll can step back a little as it takes a glide over.
+     */
+    let snapTo: { top: number; way: number } | null = null;
+    let told = 0;
+    let snapFrame: number | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let frame: number | undefined;
 
@@ -785,6 +796,61 @@ function LiveStage(props: StageProps) {
     };
     const arrived = (index: number): boolean => distanceTo(index) <= 1;
 
+    /** The snap got to its scene, or past it: that scene is where the next travel sets out from. */
+    const arrive = (): boolean => {
+      if (!snapTo) return false;
+      const y = window.scrollY;
+      if (snapTo.way > 0 ? y < snapTo.top - 1 : y > snapTo.top + 1) return false;
+      rest = snapTo.top;
+      snapTo = null;
+      return true;
+    };
+    /**
+     * Arrival read every frame while the snap glides, not only in the scroll handler: one scroll
+     * event can come after the page has reached the scene and a notch has already moved it on.
+     */
+    const watchSnap = () => {
+      snapFrame = undefined;
+      if (disposed || !snapTo || arrive()) return;
+      snapFrame = requestAnimationFrame(watchSnap);
+    };
+    /** The way the visitor's own input moves the page, 1 on and -1 back, while the snap glides. */
+    const tell = (way: number) => {
+      if (snapTo && way !== 0) told = way;
+    };
+    const onWheel = (event: WheelEvent) => {
+      // Shift and the wheel, or a sideways swipe, moves the strip, which the page follows (lead):
+      // right to left, a scroll to the right goes back.
+      const sideways = event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY);
+      tell(Math.sign(sideways ? (event.deltaX || event.deltaY) * (rtl() ? -1 : 1) : event.deltaY));
+    };
+    let touchAt: { x: number; y: number } | undefined;
+    const onTouchStart = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      touchAt = touch ? { x: touch.clientX, y: touch.clientY } : undefined;
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      if (!touch || !touchAt) return;
+      const dx = touchAt.x - touch.clientX;
+      const dy = touchAt.y - touch.clientY;
+      touchAt = { x: touch.clientX, y: touch.clientY };
+      // A finger moving up moves the page on; one moving across moves the strip on the way it reads.
+      tell(Math.abs(dx) > Math.abs(dy) ? Math.sign(dx) * (rtl() ? -1 : 1) : Math.sign(dy));
+    };
+    // The keys that scroll the page. The arrows across, and Home and End where they have a scene to
+    // go to, are the controller's own steps (onKey), which take a snap over as any move does.
+    const onPageKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      if (event.target instanceof Element && event.target.closest(NATIVE_KEYS)) return;
+      const space =
+        event.key === ' ' && !(event.target instanceof Element && event.target.closest(PRESSABLE));
+      if (['ArrowDown', 'PageDown', 'End'].includes(event.key) || (space && !event.shiftKey))
+        tell(1);
+      else if (['ArrowUp', 'PageUp', 'Home'].includes(event.key) || (space && event.shiftKey))
+        tell(-1);
+    };
+
     const settle = () => {
       timer = undefined;
       if (aligning !== null && !arrived(aligning)) {
@@ -823,15 +889,25 @@ function LiveStage(props: StageProps) {
       // The pin's snap: a travel that comes to rest between scenes finishes onto the next one the
       // way it went from where the page last rested, so a slow wheel's notch is never pulled back.
       if (pinned && aligning === null && !reduced()) {
+        // A snap that stopped short of its scene. The visitor's own input on the way it glided
+        // took it over, so the travel finishes ahead, from where it set out. Input against it, or
+        // none (the scroll bar, find in page, a link, the browser's own scroll), reads as before:
+        // from the scene it glided to, as though it got there.
+        if (snapTo) {
+          if (told !== snapTo.way) rest = snapTo.top;
+          snapTo = null;
+        }
         const progress = window.scrollY - pinStart();
         if (progress > 0 && progress < travel() - 1) {
           const from = Math.min(travel(), Math.max(0, rest - pinStart()));
           const nearest = snapAlong(geometry().offsets, progress, from);
           const top = pinStart() + offsetOf(nearest);
           if (Math.abs(window.scrollY - top) > 1) {
-            // The scene it finishes on is where the next turn sets out from, even one that comes
-            // as the snap closes, so that turn travels on from it rather than being pulled back.
-            rest = top;
+            // The scene it finishes on is where the next travel sets out from once the glide gets
+            // there, even a notch that comes as the snap closes, so that one travels on from it.
+            snapTo = { top, way: Math.sign(top - window.scrollY) };
+            told = 0;
+            if (snapFrame === undefined) snapFrame = requestAnimationFrame(watchSnap);
             window.scrollTo({ top, behavior: behavior() });
             return;
           }
@@ -839,6 +915,7 @@ function LiveStage(props: StageProps) {
       }
       aligning = null;
       rest = window.scrollY;
+      snapTo = null;
       // The move is over: its limit no longer runs.
       if (overdueTimer !== undefined) clearTimeout(overdueTimer);
       overdueTimer = undefined;
@@ -903,6 +980,7 @@ function LiveStage(props: StageProps) {
       timer = setTimeout(settle, SETTLE_MS);
     };
     const onPageScroll = () => {
+      arrive();
       follow();
       onScroll();
     };
@@ -1160,6 +1238,10 @@ function LiveStage(props: StageProps) {
     stageElement.addEventListener('focusin', onFocusIn);
 
     rootElement.addEventListener('keydown', onKey);
+    window.addEventListener('keydown', onPageKey);
+    window.addEventListener('wheel', onWheel, { passive: true });
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
     window.addEventListener('hashchange', onHash);
     stageElement.addEventListener('scroll', onStageScroll, { passive: true });
     window.addEventListener('scroll', onPageScroll, { passive: true });
@@ -1217,8 +1299,13 @@ function LiveStage(props: StageProps) {
       if (timer !== undefined) clearTimeout(timer);
       if (refit !== undefined) clearTimeout(refit);
       if (frame !== undefined) cancelAnimationFrame(frame);
+      if (snapFrame !== undefined) cancelAnimationFrame(snapFrame);
       step.current = () => {};
       rootElement.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onPageKey);
+      window.removeEventListener('wheel', onWheel);
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('hashchange', onHash);
       stageElement.removeEventListener('scroll', onStageScroll);
       stageElement.removeEventListener('focusin', onFocusIn);
