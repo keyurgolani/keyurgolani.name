@@ -243,6 +243,7 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'inventory/lazy-reveal',
     // A mouse cell's conditions after touch keep its pointer media (row 44).
     'inventory/pointer-after-touch',
+    'inventory/pointer-after-conditions',
     'runner/lazy-never',
     'enhancement/lazy-button',
     'enhancement/lazy-link',

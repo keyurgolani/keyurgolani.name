@@ -519,6 +519,58 @@ const pointerAfterTouch = async (page: Page): Promise<Finding[]> => {
   return [...precondition, ...found.filter((each) => each.expected !== 'present under touch')];
 };
 
+/**
+ * Touch, then grayscale, then a load of its own after them, as a full cell loads its primitives
+ * page once its conditions are done: that load still reads (hover: hover) and (pointer: fine),
+ * and still shows the link only a mouse shows (row 44: touch's state outlived touch).
+ */
+const pointerAfterConditions = async (page: Page): Promise<Finding[]> => {
+  const before = await baseline(page);
+  const found = await inventoryFindings(page, '/', before, ['touch', 'grayscale']);
+  await page.goto('/', { waitUntil: 'load' });
+  const mouse = await page.evaluate(
+    () => matchMedia('(hover: hover)').matches && matchMedia('(pointer: fine)').matches,
+  );
+  const shown = (await baseline(page)).some((item) => item.includes('Pinned chapter link'));
+  const after: Finding[] = [
+    ...(mouse
+      ? []
+      : [
+          {
+            gate: 'inventory',
+            rule: 'content',
+            expected: 'a load after the conditions reads (hover: hover) and (pointer: fine)',
+            actual: "it doesn't: the touch condition's pointer media outlived it",
+          },
+        ]),
+    ...(shown
+      ? []
+      : [
+          {
+            gate: 'inventory',
+            rule: 'content',
+            expected: 'the pinned link in a load after the conditions',
+            actual: 'absent: the page loaded as if without a mouse',
+          },
+        ]),
+  ];
+  return [
+    ...(before.some((item) => item.includes('Pinned chapter link'))
+      ? []
+      : [
+          {
+            gate: 'inventory',
+            rule: 'content',
+            expected:
+              'the pinned link in the page as it loaded, under (hover: hover) and (pointer: fine)',
+            actual: 'absent at load: the browser has no fine pointer to start with',
+          },
+        ]),
+    ...found.filter((each) => each.expected !== 'present under touch'),
+    ...after,
+  ];
+};
+
 /** The touch condition alone on a page whose enhancement's chunk never comes. */
 const touchInventory = async (page: Page) =>
   inventoryFindings(page, '/', await baseline(page), ['touch']);
@@ -1639,6 +1691,16 @@ export const A11Y_CASES: readonly MetaCase[] = [
     expect: 'pass',
     browser: true,
     run: () => onPage(POINTER_PINNED, pointerAfterTouch),
+  },
+  // And a load of its own after the conditions, as a full cell's primitives page, keeps it too.
+  {
+    id: 'inventory/pointer-after-conditions',
+    gate: 'inventory',
+    input:
+      'a link shown only under (hover: hover) and (pointer: fine), at 1440x900, loaded again after touch then grayscale',
+    expect: 'pass',
+    browser: true,
+    run: () => onPage(POINTER_PINNED, pointerAfterConditions),
   },
   // And one whose chunk never comes is no read: past BUSY_LIMIT_MS the cell fails, saying so.
   builtCase(

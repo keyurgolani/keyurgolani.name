@@ -66,7 +66,9 @@ import { readVitals } from './vitals';
 import {
   enhancementFindings,
   notBusy,
+  pointerHeld,
   pointerMedia,
+  type PointerMedia,
   PRINT_IGNORE,
   revealNoscript,
   scriptRequiredFindings,
@@ -255,6 +257,8 @@ interface SuiteRun {
   readonly scriptRequired: boolean;
   /** A surface whose frame's document its composition cells cover: the walk takes the frame as one stop. */
   readonly framed?: boolean;
+  /** The cell's pointer media as it loaded, which the conditions after touch render under (row 44). */
+  readonly pointer?: PointerMedia;
 }
 
 /** Slice 2's suites on the page `run.at` names, as `run.owed` says. Motion runs before axe, in runCell. */
@@ -298,12 +302,7 @@ async function suites(run: SuiteRun): Promise<Finding[]> {
     await page.goto(at, { waitUntil: 'load' });
     await frames(page);
   }
-  // The cell's pointer media as it loaded, before any condition: the conditions after touch render
-  // under it again (row 44).
-  const pointer =
-    run.conditions && (does('inventory') || does('enhancement'))
-      ? await pointerMedia(page)
-      : undefined;
+  const { pointer } = run;
   if (does('reflow')) {
     const disclosures = run.interactions.filter((each) => each.kind === 'disclosure');
     findings.push(
@@ -629,6 +628,9 @@ export async function runPass(
   const noticeRow = cell.requiresScript !== undefined && row.id === 'no-javascript';
   if (noticeRow) ran.add(NOTICE_CHECK);
   // The page's own suites, then the primitives under the cell's tuple.
+  // The cell's pointer media as it loaded, before any condition: the conditions after touch, and
+  // the primitives page after them, render under it again (row 44).
+  const pointer = contentRow ? await pointerMedia(page) : undefined;
   const own = [
     ...motion,
     ...contrast,
@@ -643,6 +645,7 @@ export async function runPass(
       baseline: inventory,
       scriptRequired: cell.requiresScript !== undefined,
       framed: cell.framed !== undefined,
+      pointer,
     })),
     // The no-JavaScript row on a surface that needs it: its honest state, axe having run above.
     ...(noticeRow
@@ -686,6 +689,8 @@ export async function runPass(
       const problems = await checkEmulation(page, row);
       for (const problem of problems)
         findings.push({ gate: 'runner', rule: 'media-emulation', actual: problem });
+      // After the conditions, the primitives read under the cell's own pointer media too.
+      if (pointer) findings.push(...(await pointerHeld(page, pointer, 'the primitives page')));
       findings.push(...(owed.has('motion') ? await motionFindings(page) : []));
       const { results: axe, contrast: resampled } = await audit(page, row);
       const primitiveTokens: ResolvedTokens = await page.evaluate(resolvedTokensScript, [

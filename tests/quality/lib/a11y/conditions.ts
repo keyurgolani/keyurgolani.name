@@ -176,23 +176,42 @@ async function pinPointer(
   });
 }
 
-/** A finding when the page no longer renders under the cell's pointer media, else none. */
-async function pointerHeld(
+/**
+ * A finding when the page no longer renders under the cell's pointer media, else none. `what`
+ * names what was read: a condition ("the reduced-motion condition"), the page after the
+ * conditions, or the primitives page.
+ */
+export async function pointerHeld(
   page: Page,
   pointer: PointerMedia,
-  condition: string,
+  what: string,
 ): Promise<Finding[]> {
   const now = await pointerMedia(page);
   if (describePointer(now) === describePointer(pointer)) return [];
-  // Slice 1's fail-closed rule: a condition read on a page that lost the cell's mouse proves nothing.
+  // Slice 1's fail-closed rule: a page read without the cell's mouse proves nothing.
   return [
     {
       gate: 'runner',
       rule: 'media-emulation',
-      expected: `the ${condition} condition keeps the cell's pointer media, ${describePointer(pointer)}`,
-      actual: `${condition}: ${describePointer(now)}: the pointer pin was ignored`,
+      expected: `${what} keeps the cell's pointer media, ${describePointer(pointer)}`,
+      actual: `${what}: ${describePointer(now)}: the pointer pin was ignored`,
     },
   ];
+}
+
+/** The session that holds each page's pointer pin for the rest of its cell, once touch is done. */
+const heldPointer = new WeakMap<Page, CDPSession>();
+
+/**
+ * Pins the cell's pointer media on a session of the page's own that stays for the rest of the
+ * cell (row 44): touch's state outlives touch on headless Linux, so what reads the page after
+ * the conditions (failed enhancement, the primitives page) reads it under the cell's own
+ * pointer media too. Never while touch runs: the touch condition owns its pointer.
+ */
+export async function holdPointer(page: Page, pointer: PointerMedia): Promise<void> {
+  const cdp = heldPointer.get(page) ?? (await page.context().newCDPSession(page));
+  heldPointer.set(page, cdp);
+  await pinPointer(cdp, pointer);
 }
 
 const matches = (query: string) => async (page: Page) =>
@@ -691,7 +710,7 @@ export async function inventoryFindings(
           continue;
         }
         if (!condition.ownsPointer) {
-          const lost = await pointerHeld(page, own, condition.id);
+          const lost = await pointerHeld(page, own, `the ${condition.id} condition`);
           if (lost.length > 0) {
             findings.push(...lost);
             continue;
@@ -733,8 +752,12 @@ export async function inventoryFindings(
   } finally {
     await cdp.detach();
   }
+  // The conditions' session is gone, and its pins with it: the cell's pointer media holds from
+  // here on, on a session of the page's own.
+  await holdPointer(page, own);
   if (!(await load(page, path)).settled)
     findings.push(stillBusy('the reload after the conditions'));
+  findings.push(...(await pointerHeld(page, own, 'the page after the conditions')));
   return findings;
 }
 
@@ -945,7 +968,7 @@ export async function enhancementFindings(
     findings.push(...(await reload(page, path, 'failed enhancement', expected)));
     // A page that lost the cell's mouse proves nothing: the reads below wait for one that kept it.
     reads: {
-      const lost = await pointerHeld(page, mouse, 'failed enhancement');
+      const lost = await pointerHeld(page, mouse, 'the failed enhancement condition');
       if (lost.length > 0) {
         findings.push(...lost);
         break reads;
