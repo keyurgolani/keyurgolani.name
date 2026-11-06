@@ -11,7 +11,12 @@
 // the merge base, so a base branch that has moved on adds nothing, and a
 // rename as its old path and its new one, so a file moved out of a variant
 // still directs it. CI's quality-pr job sets the base to HEAD^1, the base
-// branch's tip under the PR's merge commit, its own merge base. With neither set, nothing is change-directed and the plan is the
+// branch's tip under the PR's merge commit, its own merge base; on a push,
+// ci/quality-base.mjs sets it to the branch's tip before the push, fetched
+// alone, with QUALITY_CHANGED_DIFF=tree: the checkout's history stops at
+// HEAD^1, so there's no merge base to find, and the diff is tree to tree
+// (`git diff <base> HEAD`), which for a push that only adds commits names
+// the same paths. With neither set, nothing is change-directed and the plan is the
 // sentinels alone. A base git can't read fails the plan, so a run that was
 // asked for change-directed cells never quietly runs without them.
 //
@@ -21,7 +26,8 @@
 // runs. Declared cost and modes are checked against what the pack ships by
 // check:appearance (pack-gates.ts, validate-pack.ts), and the registry reads
 // a scheme's modes from its sets. Every other key, and a manifest new at the
-// merge base or unreadable there, still directs the pack.
+// base (the merge base on a pull request, before on a push) or unreadable
+// there, still directs the pack.
 //
 // A path maps by package: a file under a registered variant's package maps
 // to that variant, a file under a pack's own directory (`packs/<dir>/`,
@@ -77,9 +83,15 @@ export function changedFiles(
   }
   const base = env.QUALITY_CHANGED_BASE;
   if (!base) return null;
+  const diff = env.QUALITY_CHANGED_DIFF ?? '';
+  if (!['', 'merge-base', 'tree'].includes(diff)) {
+    throw new Error(`QUALITY_CHANGED_DIFF is ${diff}, not merge-base or tree.`);
+  }
+  const range = diff === 'tree' ? [base, 'HEAD'] : [`${base}...HEAD`];
+  const shown = diff === 'tree' ? `${base} HEAD` : `${base}...HEAD`;
   let out: string;
   try {
-    out = execFileSync('git', ['diff', '--name-only', '--no-renames', '-z', `${base}...HEAD`], {
+    out = execFileSync('git', ['diff', '--name-only', '--no-renames', '-z', ...range], {
       cwd: root,
       encoding: 'utf8',
       maxBuffer: 64 << 20,
@@ -88,12 +100,13 @@ export function changedFiles(
   } catch (error) {
     const stderr = String((error as { stderr?: unknown }).stderr ?? '').trim();
     throw new Error(
-      `QUALITY_CHANGED_BASE is ${base}, and git can't diff it against HEAD${stderr ? `: ${stderr.split('\n')[0]}` : ''}. Fetch it (CI's quality-pr checks out with fetch-depth: 2), or unset it to plan the sentinels alone.`,
+      `QUALITY_CHANGED_BASE is ${base}, and git can't diff it against HEAD${stderr ? `: ${stderr.split('\n')[0]}` : ''}. ${diff === 'tree' ? `Fetch it (git fetch --no-tags --depth=1 origin ${base}, as ci/quality-base.mjs does)` : "Fetch it (CI's quality-pr checks out with fetch-depth: 2)"}, or unset it to plan the sentinels alone.`,
     );
   }
   const files = out.split('\0').filter((file) => file !== '');
-  const metadata = unchangedForCells(files, base, root, PACK_MANIFEST, renderedKeys);
-  const versions = unchangedForCells(files, base, root, WORKSPACE_PACKAGE, keysButVersion);
+  const tree = diff === 'tree';
+  const metadata = unchangedForCells(files, base, root, PACK_MANIFEST, renderedKeys, tree);
+  const versions = unchangedForCells(files, base, root, WORKSPACE_PACKAGE, keysButVersion, tree);
   const less = [
     metadata.length > 0 ? `${metadata.length} manifest(s) whose change is metadata alone` : '',
     versions.length > 0
@@ -101,7 +114,7 @@ export function changedFiles(
       : '',
   ].filter(Boolean);
   return {
-    source: `git diff ${base}...HEAD${less.length > 0 ? `, less ${less.join(' and ')}` : ''}`,
+    source: `git diff ${shown}${less.length > 0 ? `, less ${less.join(' and ')}` : ''}`,
     files: files.filter((file) => !metadata.includes(file) && !versions.includes(file)),
   };
 }
@@ -168,8 +181,9 @@ export function keysButVersion(text: string): string | null {
 }
 
 /**
- * The files among `files` matching `pattern` whose change from the merge base
- * leaves `keys` the same: a pack manifest's metadata, or a package's version.
+ * The files among `files` matching `pattern` whose change from the base (the
+ * merge base on a pull request, before itself on a push's tree diff) leaves
+ * `keys` the same: a pack manifest's metadata, or a package's version.
  */
 function unchangedForCells(
   files: readonly string[],
@@ -177,6 +191,8 @@ function unchangedForCells(
   root: string,
   pattern: RegExp,
   keys: (text: string) => string | null,
+  /** A tree diff compares with the base itself, not with a merge base. */
+  tree = false,
 ): string[] {
   const candidates = files.filter((file) => pattern.test(file));
   if (candidates.length === 0) return [];
@@ -192,7 +208,7 @@ function unchangedForCells(
       return null;
     }
   };
-  const mergeBase = git('merge-base', base, 'HEAD')?.trim();
+  const mergeBase = tree ? base : git('merge-base', base, 'HEAD')?.trim();
   if (!mergeBase) return [];
   return candidates.filter((file) => {
     const before = git('show', `${mergeBase}:${file}`);

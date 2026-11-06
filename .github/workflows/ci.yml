@@ -657,15 +657,18 @@ jobs:
   # scrubbed of cookies, Authorization, and CSRF values however the run
   # ended, the run fails if its canary is left in any, and they upload only
   # when the scrub step succeeds. Nothing in the checkout is built. The PR
-  # set adds the cells the owner's [37] rule directs from the paths the
-  # merge changes (tests/quality/lib/changes.ts): the checkout keeps the
-  # merge commit's first parent, the base tip, which QUALITY_CHANGED_BASE
-  # names. It runs in the shards quality-pr-plan counts, each planning the
+  # set adds the cells the owner's [37] rule directs from the paths the run
+  # changes since its base (tests/quality/lib/changes.ts): the merge base on a
+  # pull request, whose checkout keeps the merge commit's first parent, the base
+  # tip; github.event.before on a push, the branch's tip before it
+  # (quality-pr-plan's base step, ci/quality-base.mjs). QUALITY_CHANGED_BASE names
+  # it. It runs in the shards quality-pr-plan counts, each planning the
   # whole PR set and running the test groups tests/quality/lib/pr-shards.ts
   # gives it by measured duration; quality-pr-verdict judges them whole.
   #
   # quality-pr-plan, which every rule that selects quality-pr selects, plans the same PR set from the
-  # registry the quality host builds and the paths the merge changes, and
+  # registry the quality host builds and the paths the run changes since its
+  # base (the merge base on a pull request, before on a push), and
   # picks the fewest shards that keep each within about 5 minutes
   # (tests/quality/pr-count.ts), whatever the plan, up to 48. Needing more
   # fails, naming the heaviest group. It also says how many run at once,
@@ -681,6 +684,8 @@ jobs:
       count: ${{ steps.count.outputs.count }}
       shards: ${{ steps.count.outputs.shards }}
       parallel: ${{ steps.count.outputs.parallel }}
+      base: ${{ steps.base.outputs.base }}
+      diff: ${{ steps.base.outputs.diff }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -700,11 +705,25 @@ jobs:
           QUALITY_FIXTURES: '1'
           APPEARANCE_FIXTURES: '1'
           BUDGET_FIXTURES: '1'
+      # The base the [37] rule diffs against (ci/quality-base.mjs), chosen here once for the plan
+      # and every shard: on a push, github.event.before, the branch's tip before it, fetched alone
+      # and diffed tree to tree, so every commit the push brings directs its cells; on a pull
+      # request, or when before is all zeros or can't be fetched, HEAD^1. It says which, and why,
+      # in the log and the step summary. before comes in through env alone, and the script refuses
+      # anything but a commit's 40 hex digits.
+      - name: The quality-pr base
+        id: base
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_BEFORE: ${{ github.event.before }}
+          EVENT_FORCED: ${{ github.event.forced }}
+        run: node ci/quality-base.mjs
       - name: Count the shards
         id: count
         env:
           QUALITY_WEB: apps/web
-          QUALITY_CHANGED_BASE: HEAD^1
+          QUALITY_CHANGED_BASE: ${{ steps.base.outputs.base }}
+          QUALITY_CHANGED_DIFF: ${{ steps.base.outputs.diff }}
         run: pnpm exec tsx tests/quality/pr-count.ts
 
   quality-pr:
@@ -737,6 +756,13 @@ jobs:
       - name: pnpm store cache hit
         if: ${{ steps.install.outputs.store-hit == 'true' }}
         run: echo "pnpm store restored under this lockfile's hash"
+      # quality-pr-plan's base: a commit is fetched here too, and one that can't be fails the shard,
+      # which can't plan the plan's set without it.
+      - name: The quality-pr base
+        env:
+          PLAN_BASE: ${{ needs.quality-pr-plan.outputs.base }}
+          PLAN_DIFF: ${{ needs.quality-pr-plan.outputs.diff }}
+        run: node ci/quality-base.mjs --from-plan
       - name: pnpm ci:quality-pr --shard=${{ matrix.shard }}/${{ needs.quality-pr-plan.outputs.count }}
         run: pnpm ci:quality-pr "--shard=$SHARD"
         env:
@@ -744,7 +770,8 @@ jobs:
           CI_REPRO_COMMAND: pnpm ci:quality-pr --shard=${{ matrix.shard }}/${{ needs.quality-pr-plan.outputs.count }}
           QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
           QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
-          QUALITY_CHANGED_BASE: HEAD^1
+          QUALITY_CHANGED_BASE: ${{ needs.quality-pr-plan.outputs.base }}
+          QUALITY_CHANGED_DIFF: ${{ needs.quality-pr-plan.outputs.diff }}
       # The reports upload only when this succeeds: it deletes what it can't
       # read, and fails when it did, or when the canary is still in any.
       - name: Scrub reports

@@ -182,12 +182,44 @@ test('quality-verdict judges every shard whole, however they ended, from their o
   assert.ok((SCHEDULED.jobs.report?.['timeout-minutes'] ?? 0) >= 15);
 });
 
-test("quality-pr keeps the merge's base tip and names it, so the PR set takes the [37] rule's cells", () => {
+test("quality-pr takes quality-pr-plan's base and fetches it before the run, so the PR set takes the [37] rule's cells", () => {
   const job = CI.jobs['quality-pr']!;
   const checkout = step(job, (each) => /^actions\/checkout@/.test(each.uses ?? ''), 'checkout');
   assert.equal(checkout.with?.['fetch-depth'], 2);
   const run = step(job, (each) => /pnpm ci:quality-pr /.test(each.run ?? ''), 'the run step');
-  assert.equal(run.env?.QUALITY_CHANGED_BASE, 'HEAD^1');
+  // quality-pr-plan's base, so the plan and every shard plan one set: HEAD^1 on a pull request, the
+  // branch's tip before a push (ci/quality-base.mjs, which the shard runs too, to fetch it).
+  assert.equal(run.env?.QUALITY_CHANGED_BASE, '${{ needs.quality-pr-plan.outputs.base }}');
+  assert.equal(run.env?.QUALITY_CHANGED_DIFF, '${{ needs.quality-pr-plan.outputs.diff }}');
+  const fetch = step(
+    job,
+    (each) => each.run === 'node ci/quality-base.mjs --from-plan',
+    'the base step',
+  );
+  assert.ok(job.steps!.indexOf(fetch) < job.steps!.indexOf(run), 'the base fetched before the run');
+  assert.deepEqual(fetch.env, {
+    PLAN_BASE: '${{ needs.quality-pr-plan.outputs.base }}',
+    PLAN_DIFF: '${{ needs.quality-pr-plan.outputs.diff }}',
+  });
+});
+
+test('quality-pr-plan chooses the base: github.event.before on a push, through env alone, and HEAD^1 otherwise', () => {
+  const job = CI.jobs['quality-pr-plan']!;
+  const base = step(job, (each) => each.id === 'base', 'the base step');
+  assert.equal(base.run, 'node ci/quality-base.mjs');
+  // The event's before goes in through env, never interpolated into the run: line; the script
+  // refuses anything but 40 hex digits (changes.test.ts).
+  assert.deepEqual(base.env, {
+    EVENT_NAME: '${{ github.event_name }}',
+    EVENT_BEFORE: '${{ github.event.before }}',
+    EVENT_FORCED: '${{ github.event.forced }}',
+  });
+  for (const id of ['quality-pr-plan', 'quality-pr']) {
+    for (const each of CI.jobs[id]!.steps ?? []) {
+      assert.doesNotMatch(each.run ?? '', /\$\{\{/, `${id}: ${each.name ?? each.run}`);
+    }
+    assert.equal(CI.jobs[id]!.permissions, undefined, `${id} keeps the workflow's contents: read`);
+  }
 });
 
 test('quality-pr shards quality:pr in the pinned image, scrubs however it ended, and uploads only a clean scrub', () => {

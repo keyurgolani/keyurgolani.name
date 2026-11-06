@@ -787,11 +787,17 @@ test('quality-pr-plan emits the count, and the matrix, the verdict, gate, and se
   assert.deepEqual(plan.needs, ['changes']);
   const step = plan.steps?.find((each) => each.id === 'count');
   assert.match(step?.run ?? '', /tsx tests\/quality\/pr-count\.ts$/);
-  assert.equal(step?.env?.QUALITY_CHANGED_BASE, 'HEAD^1');
+  // The base the plan diffs against is the base step's (ci/quality-base.mjs), chosen before it.
+  const base = plan.steps?.find((each) => each.id === 'base');
+  assert.ok(base && plan.steps!.indexOf(base) < plan.steps!.indexOf(step!), 'the base step, first');
+  assert.equal(step?.env?.QUALITY_CHANGED_BASE, '${{ steps.base.outputs.base }}');
+  assert.equal(step?.env?.QUALITY_CHANGED_DIFF, '${{ steps.base.outputs.diff }}');
   assert.deepEqual(plan.outputs, {
     count: '${{ steps.count.outputs.count }}',
     shards: '${{ steps.count.outputs.shards }}',
     parallel: '${{ steps.count.outputs.parallel }}',
+    base: '${{ steps.base.outputs.base }}',
+    diff: '${{ steps.base.outputs.diff }}',
   });
   const count = '${{ needs.quality-pr-plan.outputs.count }}';
   const pr = jobs['quality-pr']!;

@@ -1,10 +1,19 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { parse } from 'yaml';
 import type { MetaPack } from '../../packages/appearance/src/index';
 import { changePairs, planCells, readBuildMeta, type BuildMeta } from './cells';
 import { tupleKey } from './coverage';
@@ -20,6 +29,7 @@ import { PREFERENCE_ROWS, VIEWPORTS } from './lib/matrix';
 import { loadRegistrations, type Registrations } from './lib/registration';
 import { changeDiagnostic, changeFields } from './lib/records';
 import { fallbackPacks } from './plan-fixtures';
+import { chooseBase, FIRST_PARENT, gitIn, planBase, stepFiles } from '../../ci/quality-base.mjs';
 
 // The owner's [37] change-directed rule (#11, 11-4): a changed variant runs
 // against every stable design language, a changed language against every
@@ -27,6 +37,40 @@ import { fallbackPacks } from './plan-fixtures';
 // resolved.
 
 const WEB = fileURLToPath(new URL('../../apps/web/', import.meta.url));
+
+// Every git this file spawns, its fixtures' and the code's under test, runs in a temp repo of its
+// own with a clean environment: no GIT_* variable from the caller (a hook's GIT_DIR or
+// GIT_INDEX_FILE would point a fixture's git init or add at the checkout's own .git), and no
+// system or global config (whose hooks path or settings a fixture repo must not take).
+/** `env` with every GIT_* variable taken out, in place, and only the two config ones set. */
+export function stripGitEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  for (const name of Object.keys(env)) if (name.startsWith('GIT_')) delete env[name];
+  env.GIT_CONFIG_NOSYSTEM = '1';
+  env.GIT_CONFIG_GLOBAL = '/dev/null';
+  return env;
+}
+stripGitEnv(process.env);
+
+/** git, the user named, in `cwd`, under this file's clean environment, its output trimmed. */
+const gitAt =
+  (cwd: string) =>
+  (...args: string[]): string =>
+    execFileSync(
+      'git',
+      ['-c', 'user.name=Quality Test', '-c', 'user.email=quality@example.test', ...args],
+      { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    ).trim();
+
+/** A temp repo with one commit, for a read that needs a git base and no history. */
+function oneCommitRepo(): string {
+  const repo = mkdtempSync(path.join(tmpdir(), 'quality-changes-one-'));
+  const git = gitAt(repo);
+  git('init', '-q', '-b', 'main');
+  writeFileSync(path.join(repo, 'README.md'), 'one\n');
+  git('add', '-A');
+  git('commit', '-q', '-m', 'one');
+  return repo;
+}
 
 function checkoutMeta(): BuildMeta {
   const file = path.join(WEB, 'src', 'lib', 'generated', 'registry.meta.ts');
@@ -328,11 +372,17 @@ test('the changed paths come from QUALITY_CHANGED_FILES, else a git base, else n
   for (const bad of ['{"a":1}', 'not json', '[1]']) {
     assert.throws(() => changedFiles({ QUALITY_CHANGED_FILES: bad }), /JSON array of paths/);
   }
-  assert.deepEqual(changedFiles({ QUALITY_CHANGED_BASE: 'HEAD' })?.files, []);
-  assert.throws(
-    () => changedFiles({ QUALITY_CHANGED_BASE: 'refs/heads/no-such-base-for-quality' }),
-    /QUALITY_CHANGED_BASE is refs\/heads\/no-such-base-for-quality, and git can't diff it against HEAD/,
-  );
+  // A git base read in a fixture repo of its own, never the checkout.
+  const repo = oneCommitRepo();
+  try {
+    assert.deepEqual(changedFiles({ QUALITY_CHANGED_BASE: 'HEAD' }, repo)?.files, []);
+    assert.throws(
+      () => changedFiles({ QUALITY_CHANGED_BASE: 'refs/heads/no-such-base-for-quality' }, repo),
+      /QUALITY_CHANGED_BASE is refs\/heads\/no-such-base-for-quality, and git can't diff it against HEAD/,
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
   const set = readChanges(checkoutMeta(), {
     QUALITY_CHANGED_FILES: JSON.stringify(['packages/fallback-composition/src/x.ts']),
   });
@@ -561,4 +611,486 @@ test("a change-directed cell's failures name the axis, and its diagnostic the to
   assert.match(text, /--token-0: #000000.*and 2 more/);
   assert.match(text, /primitives-resolved-tokens\.json/);
   assert.equal(changeDiagnostic({ ...cell, changed: undefined }, []), null);
+});
+
+// Push CI's base (ci/quality-base.mjs): on a push, the branch's tip before it, fetched alone into
+// the two-commit checkout and diffed tree to tree, so every commit the push brings directs its
+// cells; HEAD^1 for a pull request, a new branch, or a before that can't be fetched.
+
+const QUALITY_BASE = fileURLToPath(new URL('../../ci/quality-base.mjs', import.meta.url));
+interface WorkflowStep {
+  readonly id?: string;
+  readonly run?: string;
+  readonly env?: Record<string, string>;
+}
+const WORKFLOW = parse(
+  readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8'),
+) as { jobs: Record<string, { steps: readonly WorkflowStep[] }> };
+const PACK = 'packages/appearance-schemes/packs/arctic-aurora/manifest.json';
+const PACK_TEXT = readFileSync(new URL(`../../${PACK}`, import.meta.url), 'utf8');
+
+/**
+ * A remote whose history is a seed, `before` (the branch's tip before the push), a composition
+ * change and a docs-only head, in a temp root of its own. With `filters`, before also holds the
+ * variant's package.json and a real pack manifest, and the composition commit changes the version
+ * alone and the manifest's name alone. With `amend`, origin's tip is then amended with its tree
+ * kept, and `before` is the tip before the amend.
+ */
+function pushRepos({ filters = false, amend = false } = {}) {
+  const root = mkdtempSync(path.join(tmpdir(), 'quality-push-base-'));
+  const origin = path.join(root, 'origin');
+  mkdirSync(origin);
+  const git = gitAt(origin);
+  const write = (file: string, text: string) => {
+    mkdirSync(path.dirname(path.join(origin, file)), { recursive: true });
+    writeFileSync(path.join(origin, file), text);
+  };
+  git('init', '-q', '-b', 'main');
+  // GitHub serves any commit by its id; a local remote does once it's allowed to.
+  git('config', 'uploadpack.allowAnySHA1InWant', 'true');
+  // A seed under before, so a two-deep clone is cut short of it, as CI's checkout is.
+  write('README.md', 'the seed\n');
+  git('add', '-A');
+  git('commit', '-q', '-m', 'a seed');
+  write('docs/guide.md', 'one\n');
+  write('packages/fallback-composition/src/x.ts', 'export const x = 1;\n');
+  if (filters) {
+    write('packages/fallback-composition/package.json', '{"name":"x","version":"1.0.0"}\n');
+    write(PACK, PACK_TEXT);
+  }
+  git('add', '-A');
+  git('commit', '-q', '-m', 'before the push');
+  let before = git('rev-parse', 'HEAD');
+  write('packages/fallback-composition/src/x.ts', 'export const x = 2;\n');
+  if (filters) {
+    write('packages/fallback-composition/package.json', '{"name":"x","version":"1.0.1"}\n');
+    write(PACK, JSON.stringify({ ...JSON.parse(PACK_TEXT), name: 'Arctic Aurora, renamed' }));
+  }
+  git('add', '-A');
+  git('commit', '-q', '-m', 'the push: a composition change');
+  write('docs/guide.md', 'two\n');
+  git('commit', '-q', '-am', 'the push: docs alone');
+  if (amend) {
+    before = git('rev-parse', 'HEAD');
+    git('commit', '-q', '--amend', '-m', 'the push: docs alone, reworded');
+  }
+  return { root, origin, before };
+}
+
+/** A fresh two-deep clone of `origin` at `root/name`, as CI's checkout is. */
+function shallowClone(root: string, origin: string, name: string): string {
+  const clone = path.join(root, name);
+  execFileSync('git', ['clone', '-q', '--depth', '2', `file://${origin}`, clone], {
+    cwd: root,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  return clone;
+}
+
+/** Whether `sha` is a commit `clone` holds. */
+function holds(clone: string, sha: string): boolean {
+  try {
+    gitAt(clone)('cat-file', '-e', `${sha}^{commit}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+test("a two-commit push whose last commit is docs alone still directs the first commit's composition, from a before chooseBase fetches", () => {
+  const { root, origin, before } = pushRepos();
+  try {
+    const clone = shallowClone(root, origin, 'plan');
+    assert.equal(gitAt(clone)('rev-parse', '--is-shallow-repository'), 'true');
+    // HEAD^1, main's base on a push until now, sees the docs alone, and directs nothing.
+    const last = changedFiles({ QUALITY_CHANGED_BASE: 'HEAD^1' }, clone);
+    assert.deepEqual(last?.files, ['docs/guide.md']);
+    assert.deepEqual(mapChanges(last!.files, checkoutMeta()), []);
+    // before isn't in the two-deep checkout until chooseBase fetches it.
+    assert.equal(holds(clone, before), false, 'before, before chooseBase');
+    const chosen = chooseBase({ event: 'push', before }, gitIn(clone));
+    assert.equal(holds(clone, before), true, 'before, after chooseBase');
+    assert.deepEqual(
+      { base: chosen.base, diff: chosen.diff, fallback: chosen.fallback },
+      { base: before, diff: 'tree', fallback: false },
+      chosen.reason,
+    );
+    assert.match(
+      chosen.reason,
+      /^push: github\.event\.before [0-9a-f]{40}, the branch's tip before the push, diffed tree to tree$/,
+    );
+    // From before there's no merge base in a two-commit checkout: hence the tree diff.
+    assert.throws(() => changedFiles({ QUALITY_CHANGED_BASE: before }, clone), /no merge base/);
+    const pushed = changedFiles(
+      { QUALITY_CHANGED_BASE: chosen.base, QUALITY_CHANGED_DIFF: chosen.diff },
+      clone,
+    );
+    assert.deepEqual(pushed, {
+      source: `git diff ${before} HEAD`,
+      files: ['docs/guide.md', 'packages/fallback-composition/src/x.ts'],
+    });
+    assert.deepEqual(
+      mapChanges(pushed!.files, checkoutMeta()).map(({ axis, id }) => `${axis} ${id}`),
+      ['variant fallback'],
+    );
+    // A shard, in a fresh clone of its own, fetches the plan's base too.
+    const shard = shallowClone(root, origin, 'shard');
+    assert.equal(holds(shard, before), false, 'before, before planBase');
+    assert.equal(planBase({ base: chosen.base, diff: chosen.diff }, gitIn(shard)).base, before);
+    assert.equal(holds(shard, before), true, 'before, after planBase');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('chooseBase and planBase fetch before alone, then confirm it, and chooseBase tries the fetch twice', () => {
+  const sha = 'b'.repeat(40);
+  const calls: string[][] = [];
+  const recording = (...args: string[]) => {
+    calls.push(args);
+    return '';
+  };
+  const fetched = [
+    ['fetch', '--no-tags', '--depth=1', 'origin', sha],
+    ['cat-file', '-e', `${sha}^{commit}`],
+  ];
+  assert.equal(chooseBase({ event: 'push', before: sha }, recording).base, sha);
+  assert.deepEqual(calls, fetched);
+  calls.length = 0;
+  assert.equal(planBase({ base: sha, diff: 'tree' }, recording).base, sha);
+  assert.deepEqual(calls, fetched);
+  // A forced push says so, and its base is the same.
+  const forced = chooseBase({ event: 'push', before: sha, forced: true }, recording);
+  assert.deepEqual({ base: forced.base, diff: forced.diff }, { base: sha, diff: 'tree' });
+  assert.equal(
+    forced.reason,
+    `push (forced): github.event.before ${sha}, the old tip, diffed tree to tree from it`,
+  );
+  // A first fetch that fails is tried once more, and a second that works takes before.
+  calls.length = 0;
+  let fails = 1;
+  const flaky = (...args: string[]) => {
+    calls.push(args);
+    if (args[0] === 'fetch' && fails-- > 0) throw new Error('the network blinked');
+    return '';
+  };
+  assert.equal(chooseBase({ event: 'push', before: sha }, flaky).base, sha);
+  assert.deepEqual(calls, [fetched[0], ...fetched]);
+});
+
+test('a push whose before is all zeros, a new branch, falls back to HEAD^1 and says so', () => {
+  const calls: string[][] = [];
+  const chosen = chooseBase({ event: 'push', before: '0'.repeat(40) }, (...args: string[]) => {
+    calls.push(args);
+    return '';
+  });
+  assert.deepEqual(
+    { base: chosen.base, diff: chosen.diff, fallback: chosen.fallback },
+    { base: FIRST_PARENT, diff: 'merge-base', fallback: true },
+  );
+  assert.match(chosen.reason, /all zeros \(a new branch\)/);
+  assert.deepEqual(calls, [], 'nothing fetched');
+  assert.match(
+    stepFiles(chosen).summary,
+    /\*\*quality-pr base:\*\* `HEAD\^1` \(merge-base diff\)\. push: /,
+  );
+});
+
+test("a push whose before can't be fetched falls back to HEAD^1 and says why; a shard refuses the plan's base it can't fetch", () => {
+  const { root, origin } = pushRepos();
+  try {
+    const clone = shallowClone(root, origin, 'plan');
+    const missing = 'f'.repeat(40);
+    const chosen = chooseBase({ event: 'push', before: missing }, gitIn(clone));
+    assert.deepEqual(
+      { base: chosen.base, diff: chosen.diff, fallback: chosen.fallback },
+      { base: FIRST_PARENT, diff: 'merge-base', fallback: true },
+    );
+    assert.match(
+      chosen.reason,
+      new RegExp(
+        `github\\.event\\.before ${missing} couldn't be fetched in 2 tries \\(.+\\), so HEAD\\^1`,
+      ),
+    );
+    // And the fallback plans: HEAD^1 is in the two-commit checkout.
+    assert.deepEqual(
+      changedFiles({ QUALITY_CHANGED_BASE: chosen.base, QUALITY_CHANGED_DIFF: chosen.diff }, clone)
+        ?.files,
+      ['docs/guide.md'],
+    );
+    assert.throws(
+      () => planBase({ base: missing, diff: 'tree' }, gitIn(clone)),
+      /couldn't be fetched here .*so this shard can't plan its set/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('the base refuses an empty event and a before that is no commit id, a pull request keeps HEAD^1, and an unknown diff fails the plan', () => {
+  const never = () => {
+    throw new Error('git ran');
+  };
+  for (const event of ['', undefined]) {
+    assert.throws(
+      () => chooseBase({ event, before: 'a'.repeat(40) }, never),
+      /EVENT_NAME is empty, so the event is unknown: refusing to choose a base/,
+    );
+  }
+  for (const before of [
+    '',
+    'HEAD',
+    'f'.repeat(39),
+    'F'.repeat(40),
+    `${'a'.repeat(40)}\n`,
+    '$(id)',
+    'a'.repeat(41),
+  ]) {
+    assert.throws(
+      () => chooseBase({ event: 'push', before }, never),
+      /not a commit's 40 hex digits: refusing it/,
+      JSON.stringify(before),
+    );
+  }
+  // A pull request doesn't read before at all, and never fetches.
+  for (const event of ['pull_request', 'workflow_dispatch']) {
+    const chosen = chooseBase({ event, before: 'anything' }, never);
+    assert.deepEqual(
+      { base: chosen.base, diff: chosen.diff, fallback: chosen.fallback },
+      { base: FIRST_PARENT, diff: 'merge-base', fallback: false },
+    );
+    assert.match(chosen.reason, /HEAD\^1, the merge commit's first parent/);
+  }
+  for (const plan of [
+    { base: 'HEAD^1', diff: 'tree' },
+    { base: 'HEAD', diff: 'merge-base' },
+    { base: '0'.repeat(40), diff: 'tree' },
+    { base: 'a'.repeat(40), diff: 'merge-base' },
+    { base: undefined, diff: undefined },
+  ]) {
+    assert.throws(() => planBase(plan, never), /refusing it/, JSON.stringify(plan));
+  }
+  assert.equal(planBase({ base: 'HEAD^1', diff: 'merge-base' }, never).base, 'HEAD^1');
+  const repo = oneCommitRepo();
+  try {
+    assert.throws(
+      () => changedFiles({ QUALITY_CHANGED_BASE: 'HEAD', QUALITY_CHANGED_DIFF: 'two-dot' }, repo),
+      /QUALITY_CHANGED_DIFF is two-dot, not merge-base or tree/,
+    );
+    assert.deepEqual(
+      changedFiles({ QUALITY_CHANGED_BASE: 'HEAD', QUALITY_CHANGED_DIFF: 'tree' }, repo)?.files,
+      [],
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test("a push's tree diff leaves out a version-only package.json and a metadata-only pack manifest, compared with before itself", () => {
+  const { root, origin, before } = pushRepos({ filters: true });
+  try {
+    const clone = shallowClone(root, origin, 'plan');
+    const chosen = chooseBase({ event: 'push', before }, gitIn(clone));
+    const pushed = changedFiles(
+      { QUALITY_CHANGED_BASE: chosen.base, QUALITY_CHANGED_DIFF: chosen.diff },
+      clone,
+    );
+    assert.deepEqual(pushed, {
+      source: `git diff ${before} HEAD, less 1 manifest(s) whose change is metadata alone and 1 package.json(s) whose change is the version alone`,
+      files: ['docs/guide.md', 'packages/fallback-composition/src/x.ts'],
+    });
+    assert.deepEqual(
+      mapChanges(pushed!.files, checkoutMeta()).map(({ axis, id }) => `${axis} ${id}`),
+      ['variant fallback'],
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a forced push that keeps the tree names nothing from the old tip, which its own push run covered; HEAD^1 would name the amended commit's paths", () => {
+  // Documenting, not red: push runs are never cancelled, so the old tip's tree had a run of its own.
+  const { root, origin, before } = pushRepos({ amend: true });
+  try {
+    const clone = shallowClone(root, origin, 'plan');
+    const chosen = chooseBase({ event: 'push', before, forced: true }, gitIn(clone));
+    assert.equal(chosen.base, before);
+    assert.match(chosen.reason, /^push \(forced\): /);
+    assert.deepEqual(
+      changedFiles({ QUALITY_CHANGED_BASE: chosen.base, QUALITY_CHANGED_DIFF: chosen.diff }, clone)
+        ?.files,
+      [],
+    );
+    assert.deepEqual(changedFiles({ QUALITY_CHANGED_BASE: 'HEAD^1' }, clone)?.files, [
+      'docs/guide.md',
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+/** The env key whose value in `step` is `value`, as ci.yml writes it. */
+function keyOf(step: WorkflowStep | undefined, value: string): string {
+  const key = Object.entries(step?.env ?? {}).find(([, each]) => each === value)?.[0];
+  assert.ok(key, `ci.yml sets ${value}`);
+  return key;
+}
+
+test('ci/quality-base.mjs runs as ci.yml runs it, with the env names ci.yml sets, and writes, prints and refuses what it should', () => {
+  const plan = WORKFLOW.jobs['quality-pr-plan']!.steps.find((step) => step.id === 'base');
+  const shard = WORKFLOW.jobs['quality-pr']!.steps.find((step) =>
+    step.run?.startsWith('node ci/quality-base.mjs --from-plan'),
+  );
+  assert.equal(plan?.run, 'node ci/quality-base.mjs');
+  assert.equal(shard?.run, 'node ci/quality-base.mjs --from-plan');
+  const EVENT = keyOf(plan, '${{ github.event_name }}');
+  const BEFORE = keyOf(plan, '${{ github.event.before }}');
+  const FORCED = keyOf(plan, '${{ github.event.forced }}');
+  const PLAN_BASE = keyOf(shard, '${{ needs.quality-pr-plan.outputs.base }}');
+  const PLAN_DIFF = keyOf(shard, '${{ needs.quality-pr-plan.outputs.diff }}');
+  const { root, origin, before } = pushRepos();
+  // The parent's env, less anything the script reads, and outside Actions, so a refusal goes to stderr.
+  const parent = Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([name]) =>
+        ![EVENT, BEFORE, FORCED, PLAN_BASE, PLAN_DIFF].includes(name) &&
+        !/^(?:GITHUB_|CI$)/.test(name),
+    ),
+  );
+  let runs = 0;
+  const run = (clone: string, env: Record<string, string>, args: string[] = []) => {
+    runs += 1;
+    const output = path.join(root, `output-${runs}`);
+    const summary = path.join(root, `summary-${runs}`);
+    writeFileSync(output, '');
+    writeFileSync(summary, '');
+    const result = spawnSync(process.execPath, [QUALITY_BASE, ...args], {
+      cwd: clone,
+      env: { ...parent, GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: summary, ...env },
+      encoding: 'utf8',
+    });
+    return {
+      status: result.status,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      output: readFileSync(output, 'utf8'),
+      summary: readFileSync(summary, 'utf8'),
+    };
+  };
+  try {
+    // A push: before, fetched, diffed tree to tree, said in the log and the summary.
+    const pushClone = shallowClone(root, origin, 'push');
+    const push = run(pushClone, { [EVENT]: 'push', [BEFORE]: before, [FORCED]: 'false' });
+    assert.equal(push.status, 0, push.stderr);
+    assert.equal(push.output, `base=${before}\ndiff=tree\n`);
+    assert.ok(
+      push.stdout.includes(
+        `[quality-base] ${before} (tree diff): push: github.event.before ${before}, the branch's tip before the push`,
+      ),
+      push.stdout,
+    );
+    assert.doesNotMatch(push.stdout, /::warning/);
+    assert.equal(
+      push.summary,
+      `**quality-pr base:** \`${before}\` (tree diff). push: github.event.before ${before}, the branch's tip before the push, diffed tree to tree.\n`,
+    );
+    // A pull request with a real before: HEAD^1, and before is never fetched.
+    const prClone = shallowClone(root, origin, 'pull-request');
+    const pr = run(prClone, { [EVENT]: 'pull_request', [BEFORE]: before });
+    assert.equal(pr.status, 0, pr.stderr);
+    assert.equal(pr.output, 'base=HEAD^1\ndiff=merge-base\n');
+    assert.equal(holds(prClone, before), false, 'a pull request never fetches before');
+    // A new branch: the fallback, said, with a warning.
+    const zero = run(prClone, { [EVENT]: 'push', [BEFORE]: '0'.repeat(40) });
+    assert.equal(zero.status, 0, zero.stderr);
+    assert.equal(zero.output, 'base=HEAD^1\ndiff=merge-base\n');
+    assert.match(zero.stdout, /all zeros \(a new branch\)/);
+    assert.match(
+      zero.stdout,
+      /^::warning title=quality-pr base::push: github\.event\.before is all zeros/m,
+    );
+    // An unfetchable before: two tries, the fallback, and the warning.
+    const missing = run(prClone, { [EVENT]: 'push', [BEFORE]: 'f'.repeat(40) });
+    assert.equal(missing.status, 0, missing.stderr);
+    assert.equal(missing.output, 'base=HEAD^1\ndiff=merge-base\n');
+    assert.match(
+      missing.stdout,
+      /^::warning title=quality-pr base::push: github\.event\.before f{40} couldn't be fetched in 2 tries/m,
+    );
+    // A before that's no commit id: exit 1, the refusal on stderr, nothing written.
+    const injected = run(prClone, { [EVENT]: 'push', [BEFORE]: '$(id)' });
+    assert.equal(injected.status, 1);
+    assert.match(
+      injected.stderr,
+      /\[quality-base\] github\.event\.before is "\$\(id\)", not a commit's 40 hex digits: refusing it/,
+    );
+    assert.equal(injected.output, '');
+    // An unset event: exit 1, never taken for a pull request.
+    const unset = run(prClone, { [BEFORE]: before });
+    assert.equal(unset.status, 1);
+    assert.match(unset.stderr, /EVENT_NAME is empty/);
+    assert.equal(unset.output, '');
+    // A shard, in a fresh clone: the plan's base fetched, nothing written to the outputs.
+    const shardClone = shallowClone(root, origin, 'shard');
+    const fromPlan = run(shardClone, { [PLAN_BASE]: before, [PLAN_DIFF]: 'tree' }, ['--from-plan']);
+    assert.equal(fromPlan.status, 0, fromPlan.stderr);
+    assert.equal(holds(shardClone, before), true, "the shard fetched the plan's base");
+    assert.equal(fromPlan.output, '');
+    const empty = run(shardClone, { [PLAN_BASE]: '', [PLAN_DIFF]: '' }, ['--from-plan']);
+    assert.equal(empty.status, 1);
+    assert.match(empty.stderr, /refusing it/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("this file's git runs with no caller GIT_* variable, and no system or global config", () => {
+  // The strip, on a made-up map: every GIT_* goes, the rest stays, and only the two config ones are set.
+  assert.deepEqual(
+    stripGitEnv({
+      GIT_DIR: '/made/up/.git',
+      GIT_WORK_TREE: '/made/up',
+      GIT_INDEX_FILE: '/made/up/index',
+      GIT_EDITOR: 'true',
+      PATH: '/usr/bin',
+      HOME: '/made/up/home',
+    }),
+    {
+      PATH: '/usr/bin',
+      HOME: '/made/up/home',
+      GIT_CONFIG_NOSYSTEM: '1',
+      GIT_CONFIG_GLOBAL: '/dev/null',
+    },
+  );
+  // And this process's own environment, stripped at load.
+  assert.deepEqual(
+    Object.keys(process.env)
+      .filter((name) => name.startsWith('GIT_'))
+      .sort(),
+    ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM'],
+  );
+  assert.equal(process.env.GIT_CONFIG_GLOBAL, '/dev/null');
+  const { root, origin } = pushRepos();
+  try {
+    const clone = shallowClone(root, origin, 'plan');
+    const git = gitAt(clone);
+    // A fixture repo is its own: its git dir is its own .git, which --show-toplevel can't tell.
+    assert.equal(git('rev-parse', '--absolute-git-dir'), path.join(realpathSync(clone), '.git'));
+    assert.equal(git('rev-parse', '--show-toplevel'), realpathSync(clone));
+    assert.throws(() => git('config', '--get', 'core.hooksPath'), { status: 1 }, 'no hooks path');
+    // Why --absolute-git-dir: a child told another git dir by `--git-dir`, a temp repo of this
+    // test's, still reports the clone as its top level, and only its git dir shows the difference.
+    const other = path.join(root, 'other');
+    mkdirSync(other);
+    gitAt(other)('init', '-q');
+    const peek = (flag: string) =>
+      execFileSync('git', ['--git-dir', path.join(other, '.git'), 'rev-parse', flag], {
+        cwd: clone,
+        encoding: 'utf8',
+      }).trim();
+    assert.equal(peek('--show-toplevel'), realpathSync(clone));
+    assert.notEqual(peek('--absolute-git-dir'), path.join(realpathSync(clone), '.git'));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

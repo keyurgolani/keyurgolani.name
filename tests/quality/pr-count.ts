@@ -1,8 +1,9 @@
 // `tsx tests/quality/pr-count.ts` (#11): how many shards CI's quality-pr runs
 // this PR in. It plans the PR set as each shard will, from the registry the
 // quality host builds (QUALITY_FIXTURES, APPEARANCE_FIXTURES, and
-// BUDGET_FIXTURES, generated with --modules-only) and the paths the merge
-// changes (QUALITY_CHANGED_BASE or QUALITY_CHANGED_FILES), and picks the
+// BUDGET_FIXTURES, generated with --modules-only) and the paths the run
+// changes since its base (QUALITY_CHANGED_BASE, the merge base on a pull
+// request and before on a push, or QUALITY_CHANGED_FILES), and picks the
 // fewest shards that keep every one within the ceiling (lib/pr-shards.ts's
 // pickShardCount), whatever the plan. It prints the count and each shard's
 // estimate, and under GitHub Actions writes `count`, `shards` (a JSON list,
