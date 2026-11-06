@@ -14,6 +14,7 @@ import {
   parseShard,
   plan,
   specFiles,
+  SUITES,
   unitItems,
   workspacePackages,
 } from './shards.mjs';
@@ -121,6 +122,19 @@ test('the browser shards split every spec file in tests/e2e', () => {
       Array.from({ length: count }, (_, i) => plan('browser', `${i + 1}/${count}`, items).mine),
       items,
     );
+  }
+});
+
+test("CI's browser shards, three (row 54), cover every spec file exactly once, none of them empty", () => {
+  const items = specFiles('tests/e2e');
+  assert.equal(SUITES.browser.count, 3);
+  const shards = Array.from(
+    { length: SUITES.browser.count },
+    (_, i) => plan('browser', `${i + 1}/${SUITES.browser.count}`, items).mine,
+  );
+  partitions(shards, items);
+  for (const [index, shard] of shards.entries()) {
+    assert.ok(shard.items.length > 0, `browser ${index + 1}/3 runs something`);
   }
 });
 

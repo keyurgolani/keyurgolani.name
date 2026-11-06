@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 import { passedRuns, RELEASE_WORKFLOW, REQUIRED_RC_JOBS } from './release/promote-check.mjs';
+import { SUITES } from './shards.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => parse(readFileSync(path.join(ROOT, file), 'utf8'));
@@ -665,4 +666,37 @@ test("only release.yml's and rc-preflight.yml's quality jobs name a release scop
     Object.entries(scripts).filter(([, run]) => run.includes('QUALITY_RELEASE_SCOPE')),
     [],
   );
+});
+
+test('each sharded suite runs as many shards as ci/shards.mjs splits it into, and the browser suite in three within 20 minutes (row 54)', () => {
+  for (const suite of ['unit', 'browser', 'variants']) {
+    const job = CI.jobs[suite];
+    const { count } = SUITES[suite];
+    assert.deepEqual(
+      job.strategy.matrix.shard,
+      Array.from({ length: count }, (_, i) => i + 1),
+      `${suite}: the matrix is 1 to ${count}`,
+    );
+    assert.equal(job.name, `${suite} (\${{ matrix.shard }}/${count})`, suite);
+    const shardSteps = job.steps.filter((step) => step.env?.SHARD);
+    assert.equal(shardSteps.length, 1, `${suite}: one step runs the shard`);
+    assert.equal(shardSteps[0].env.SHARD, `\${{ matrix.shard }}/${count}`, suite);
+    assert.match(
+      shardSteps[0].name,
+      new RegExp(` \\$\\{\\{ matrix\\.shard \\}\\}/${count}$`),
+      suite,
+    );
+  }
+  // Three browser shards, the limit unchanged: a slow suite is split, never given longer.
+  const browser = CI.jobs.browser;
+  assert.deepEqual(browser.strategy.matrix.shard, [1, 2, 3]);
+  assert.equal(browser['timeout-minutes'], 20);
+  assert.equal(browser.strategy['fail-fast'], false);
+  // A plain literal, so rc-verify can read the count from a tag commit's own ci.yml.
+  const source = readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8');
+  const start = source.indexOf('\n  browser:\n');
+  const next = source.slice(start + 1).search(/\n {2}[a-z][\w-]*:\n/);
+  const block = source.slice(start, start + 1 + next);
+  assert.ok(start >= 0 && next > 0, 'the browser job in ci.yml');
+  assert.match(block, /\n {8}shard: \[1, 2, 3\]\n/);
 });
