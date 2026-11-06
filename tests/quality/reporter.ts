@@ -66,8 +66,10 @@ export interface SummaryTest {
   readonly records: number;
   /**
    * A failed test's failure records that no exception waived, each by what names it alone: its
-   * check, rule, and element (failureTarget), with no measurement. A release candidate's records
-   * list is matched on these (ci/release/release-records.mjs). Empty for a test that didn't fail.
+   * check, rule, and element (failureTarget), qualified by page and viewport when they aren't the
+   * test's own, with no measurement, and a repeat of one record once. A release candidate's
+   * records list is matched on these (ci/release/release-records.mjs). Empty for a test that
+   * didn't fail.
    */
   readonly failures?: readonly SummaryFailure[];
   /**

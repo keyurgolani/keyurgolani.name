@@ -527,7 +527,7 @@ export function evaluateRc({ tag, sha, compare, runs, jobsByRun, quality, counts
 
 /**
  * The summary's lines for each flaky entry and how it came out in the run rc-verify read: failed
- * (on its record), passed, not run, or not read (a green run, whose summary rc-verify doesn't read).
+ * (on its record), passed, not judged (its test unrecorded, so held), or not run.
  */
 export function flakyLines(flaky) {
   return (flaky ?? []).map(
@@ -596,7 +596,7 @@ async function main() {
     );
   }
   // The candidate's records list, from the checkout (the tag's commit), validated as rc-quality's
-  // is; then each red run's quality-pr summary, only if no run is green.
+  // is; then the quality-pr summaries it's held to.
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
   const { scope, records } = readScope(root);
   const problems = recordsProblems(records, scope);

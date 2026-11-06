@@ -933,8 +933,8 @@ test("main's real red push run, 42161399250: its jobs prove quality-pr's red, it
     summary.verdict.failures.map((each) => each.rule),
     ['shard-job', 'tests-failed'],
   );
-  // The summary predates the reporter's failures, soft count and owed checks: given them from
-  // the shard's own records, as a reporter of this commit writes them.
+  // The summary predates the reporter's failures, soft count and owed checks: its failing tests
+  // are given them from the shard's own records, and from the fixture's errors and checks.
   const tests = summary.tests.map((each) =>
     each.outcome === 'unexpected'
       ? {

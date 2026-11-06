@@ -4,14 +4,15 @@
 # quality-gate verdict on that commit before spending a candidate number on
 # it: a release tag can't be moved or deleted, so a candidate rc-verify
 # refuses is gone. A green preflight is that verdict alone: it leaves out
-# rc-verify's green ci push run, the image build and attestation, both
-# scans, the rehearsal, and promotion's empty baseline-pending list, and the
+# rc-verify's read of the commit's ci push run, the image build and
+# attestation, rc-smoke's start of the digest on each platform, both scans,
+# the rehearsal, and promotion's empty baseline-pending list, and the
 # candidate measures timing again.
 #
 # preflight-verify refuses an id that isn't a full commit id, a dispatch
 # from anywhere but main, a commit that isn't on main, and a commit whose
 # own release.yml differs from the one at this run's commit (GITHUB_SHA).
-# It doesn't ask for a green ci run, as rc-verify does: that's what a
+# It doesn't read the commit's ci push run, as rc-verify does: that's what a
 # preflight is for. preflight-plan, preflight-quality, and preflight-verdict
 # are release.yml's rc-quality-plan, rc-quality, and rc-quality-verdict,
 # step for step: main's current gate, from this file at GITHUB_SHA, on the

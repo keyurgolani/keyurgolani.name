@@ -125,8 +125,6 @@ interface WorkerFixtures {
   app: App;
 }
 
-// Playwright's fixture callback is conventionally named `use`; it is `provide`
-// here because the React Hooks lint rule mistakes `use(...)` for React's use().
 /** serverEgress's error, for the server's attempts to reach outside the app during one test. */
 export function serverEgressMessage(attempts: readonly string[]): string {
   return [
@@ -137,6 +135,8 @@ export function serverEgressMessage(attempts: readonly string[]): string {
   ].join('\n');
 }
 
+// Playwright's fixture callback is conventionally named `use`; it is `provide`
+// here because the React Hooks lint rule mistakes `use(...)` for React's use().
 export const test = base.extend<TestFixtures, WorkerFixtures>({
   appOptions: [{}, { scope: 'worker', option: true }],
   blockedHosts: [[], { option: true }],

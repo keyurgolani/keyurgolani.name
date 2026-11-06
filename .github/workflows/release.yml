@@ -2,7 +2,8 @@
 # starts a release, and there is no manual trigger.
 #
 # A release candidate, vX.Y.Z-rc.N: rc-verify refuses a commit that isn't on
-# main or has no green complete ci run, or whose quality scope file
+# main or has no green complete ci run, unless its one red is quality-pr's on
+# the records list's entries, or whose quality scope file
 # (quality/release/scope.json) is another release's. rc-quality runs #11's
 # full quality matrix on the commit, cut to that scope, in the shards
 # rc-quality-plan counts, 10 at a time, and rc-quality-verdict judges them

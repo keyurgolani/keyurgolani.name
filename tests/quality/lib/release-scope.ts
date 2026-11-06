@@ -44,7 +44,9 @@ export interface ReleaseScope {
 
 /**
  * One failure record a candidate ships with: one rule failing on one element in one cell test,
- * keyed by the record's own fields, its owner and routed row beside (ci/release/release-records.mjs).
+ * keyed by the test's cell, viewport, row and engine and the record's check, rule and target,
+ * qualified by page and viewport when they aren't the test's own, its owner and routed row beside
+ * (ci/release/release-records.mjs).
  */
 export interface ListedRecord {
   readonly cell: string;
