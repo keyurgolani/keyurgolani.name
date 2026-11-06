@@ -586,3 +586,55 @@ export async function resizeWith(
   await page.setViewportSize(size);
   await page.evaluate(() => (window as unknown as { __hcRefitted: Promise<void> }).__hcRefitted);
 }
+
+/**
+ * Stacked by touch in the strip's room, the bar's Next from the first scene to the last and Previous
+ * back: after each press the status names the scene stepped to, and the minimap marks its chapter.
+ * Returns the scenes it stepped through, for the caller to check the count. The bar lies in flow
+ * after the scenes, so each press is the button's own click, with no scroll to the bar first: a tap
+ * there would scroll the page to the bar, and the scene in view at the bar would be the one named.
+ */
+export async function stepAcrossStacked(page: Page): Promise<number> {
+  const total = await page.locator('.hc-track .hc-scene').count();
+  const perChapter = await page
+    .locator('.hc-minimap__chapter')
+    .evaluateAll((chapters) =>
+      chapters.map((chapter) => chapter.querySelectorAll('.hc-minimap__blocks i').length),
+    );
+  const chapterOf = (index: number) => {
+    let left = index;
+    for (const [chapter, count] of perChapter.entries()) {
+      if (left < count) return chapter;
+      left -= count;
+    }
+    return perChapter.length - 1;
+  };
+  const status = page.locator('.hc-scrub__status');
+  const current = page.locator('.hc-minimap__chapter a[aria-current="location"]');
+  const press = (name: string) => page.getByRole('button', { name }).dispatchEvent('click');
+  const check = async (index: number) => {
+    await expect(status).toHaveText(new RegExp(`(?<!\\d)${index + 1} of ${total}$`));
+    await expect(current).toHaveCount(1);
+    expect(
+      await page
+        .locator('.hc-minimap__chapter')
+        .evaluateAll((chapters) =>
+          chapters.findIndex((chapter) => chapter.querySelector('a[aria-current="location"]')),
+        ),
+    ).toBe(chapterOf(index));
+  };
+  await check(0);
+  let stepped = 0;
+  for (let index = 1; index < total; index++) {
+    await press('Next scene');
+    await check(index);
+    stepped += 1;
+  }
+  await expect(page.getByRole('button', { name: 'Next scene' })).toBeDisabled();
+  for (let index = total - 2; index >= 0; index--) {
+    await press('Previous scene');
+    await check(index);
+    stepped += 1;
+  }
+  return stepped;
+}
