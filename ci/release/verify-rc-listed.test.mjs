@@ -907,13 +907,15 @@ test("main's real red push run, 42161399250: its jobs prove quality-pr's red, it
 });
 
 /** A zip of `files` ({ name: Buffer }), each deflated or stored, its local header as `local` says. */
-function zipOf(files, { method = 8, bit3 = false, flags = 0, eocd = {} } = {}) {
+function zipOf(files, { method = 8, bit3 = false, flags = 0, eocd = {}, names = {} } = {}) {
   const locals = [];
   const centrals = [];
   let offset = 0;
   for (const [name, data] of Object.entries(files)) {
     const packed = method === 8 ? deflateRawSync(data) : data;
     const nameBytes = Buffer.from(name);
+    // The local header's own name, when `names` gives it another.
+    const localName = Buffer.from(names[name] ?? name);
     const local = Buffer.alloc(30);
     local.writeUInt32LE(0x04034b50, 0);
     local.writeUInt16LE(flags | (bit3 ? 0x8 : 0), 6);
@@ -923,7 +925,7 @@ function zipOf(files, { method = 8, bit3 = false, flags = 0, eocd = {} } = {}) {
       local.writeUInt32LE(packed.length, 18);
       local.writeUInt32LE(data.length, 22);
     }
-    local.writeUInt16LE(nameBytes.length, 26);
+    local.writeUInt16LE(localName.length, 26);
     const central = Buffer.alloc(46);
     central.writeUInt32LE(0x02014b50, 0);
     central.writeUInt16LE(flags | (bit3 ? 0x8 : 0), 8);
@@ -933,15 +935,15 @@ function zipOf(files, { method = 8, bit3 = false, flags = 0, eocd = {} } = {}) {
     central.writeUInt32LE(data.length, 24);
     central.writeUInt16LE(nameBytes.length, 28);
     central.writeUInt32LE(offset, 42);
-    locals.push(local, nameBytes, packed);
+    locals.push(local, localName, packed);
     centrals.push(central, nameBytes);
-    offset += 30 + nameBytes.length + packed.length;
+    offset += 30 + localName.length + packed.length;
   }
   const directory = Buffer.concat(centrals);
   const end = Buffer.alloc(22);
   end.writeUInt32LE(0x06054b50, 0);
   end.writeUInt16LE(eocd.disk ?? 0, 4);
-  end.writeUInt16LE(Object.keys(files).length, 8);
+  end.writeUInt16LE(eocd.diskCount ?? eocd.count ?? Object.keys(files).length, 8);
   end.writeUInt16LE(eocd.count ?? Object.keys(files).length, 10);
   end.writeUInt32LE(directory.length, 12);
   end.writeUInt32LE(offset, 16);
@@ -1013,7 +1015,45 @@ test("the artifact's summary is read out of its zip, and a malformed, oversized,
     [
       'a bad local signature',
       centralAt(zipOf({ [QPR_SUMMARY]: summary }), 42, 7),
-      /local header has no signature|runs past the end/,
+      /local header has no signature/,
+    ],
+    [
+      'a local header that names another file than its central entry',
+      zipOf({ [QPR_SUMMARY]: summary }, { names: { [QPR_SUMMARY]: 'quality/summary.jsoX' } }),
+      /local header names another file/,
+    ],
+    [
+      'a same-name pair, the end record counting one',
+      (() => {
+        const two = zipOf(
+          { 'quality/summary.jsoX': summary, [QPR_SUMMARY]: summary },
+          { eocd: { count: 1 } },
+        );
+        const at = two.indexOf(
+          Buffer.from('quality/summary.jsoX'),
+          two.readUInt32LE(two.length - 22 + 16),
+        );
+        two.write(QPR_SUMMARY, at);
+        return two;
+      })(),
+      /doesn't end at its stated size/,
+    ],
+    [
+      "an end record whose two counts don't agree",
+      zipOf(
+        { [QPR_SUMMARY]: summary, 'quality/other.json': summary },
+        { eocd: { count: 1, diskCount: 2 } },
+      ),
+      /two entry counts don't agree/,
+    ],
+    [
+      'a central directory longer than its stated size',
+      (() => {
+        const copy = zipOf({ [QPR_SUMMARY]: summary });
+        copy.writeUInt32LE(copy.readUInt32LE(copy.length - 22 + 12) - 1, copy.length - 22 + 12);
+        return copy;
+      })(),
+      /doesn't end at its stated size/,
     ],
     [
       'data past the end',
@@ -1024,11 +1064,11 @@ test("the artifact's summary is read out of its zip, and a malformed, oversized,
     const options = label === 'over the bound' ? { maxBytes: 10 } : undefined;
     assert.throws(() => zipEntry(bad, QPR_SUMMARY, options), why, label);
   }
-  // A small archive that inflates past the bound stops at it: the zip bomb's bound.
-  const bomb = zipOf({ [QPR_SUMMARY]: Buffer.alloc(4 * 1024 * 1024) });
+  // An archive that inflates one byte past the bound stops at it: the zip bomb's bound, zlib's
+  // own cut-off. Any looser bound inflates it whole, and then it's refused as "inflates to".
+  const bomb = zipOf({ [QPR_SUMMARY]: Buffer.alloc(2049) });
   assert.throws(
     () => zipEntry(centralAt(bomb, 24, 1024), QPR_SUMMARY, { maxBytes: 2048 }),
-    // Cut off at the bound by zlib itself, not read whole and then found long.
     /doesn't inflate/,
   );
   // The real artifact, from main's push run 42161399250: bit 3 set on every entry.

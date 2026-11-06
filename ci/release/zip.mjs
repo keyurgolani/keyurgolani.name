@@ -1,7 +1,9 @@
 // One file out of a zip archive, as GitHub serves an Actions artifact, read with Node alone so
 // rc-verify needs no install. The archive is untrusted: every offset and size is bounds-checked,
-// only stored and deflated entries are read, a ZIP64, encrypted, or multi-disk archive is refused,
-// the entry's CRC-32 and size must match, and nothing is ever written to disk.
+// the central directory is walked whole (its entry count agreeing with itself, the walk ending
+// exactly at its stated size, no name twice), only stored and deflated entries are read, a ZIP64,
+// encrypted, or multi-disk archive is refused, the entry's local header must name it, its CRC-32
+// and size must match, and nothing is ever written to disk.
 //
 // Pure Node with no dependencies.
 import * as zlib from 'node:zlib';
@@ -47,12 +49,14 @@ export function zipEntry(zip, name, { maxBytes = 64 * 1024 * 1024 } = {}) {
   if (eocd < 0) fail('no end-of-central-directory record');
   if (u16(eocd + 4) !== 0 || u16(eocd + 6) !== 0) fail('a multi-disk archive');
   const count = u16(eocd + 10);
+  if (u16(eocd + 8) !== count) fail("the end record's two entry counts don't agree");
   const size = u32(eocd + 12);
   const start = u32(eocd + 16);
   if (count === 0xffff || size === 0xffffffff || start === 0xffffffff) fail('a ZIP64 archive');
   if (start + size > eocd) fail('the central directory runs past its end record');
-  // The whole directory first: every entry's name, once. A name twice is refused, so no reader
-  // can be handed one copy while another reads the other.
+  // The whole directory first: every entry's name, once, and nothing past the count. A name twice
+  // is refused, so no reader can be handed one copy while another reads the other, and so is a
+  // directory with more in it than its count says.
   let at = start;
   let found = null;
   const names = new Set();
@@ -78,13 +82,17 @@ export function zipEntry(zip, name, { maxBytes = 64 * 1024 * 1024 } = {}) {
     }
     at += 46 + nameLength + extra + comment;
   }
-  if (at > start + size) fail('the central directory runs past its stated size');
+  if (at !== start + size) fail("the central directory doesn't end at its stated size");
   if (found === null) return null;
   const { flags, method, crc, packed, unpacked, local } = found;
   if (flags & 0x1) fail(`${name} is encrypted`);
   if (packed === 0xffffffff || unpacked === 0xffffffff) fail(`${name} is a ZIP64 entry`);
   if (unpacked > maxBytes) fail(`${name} is ${unpacked} bytes, over ${maxBytes}`);
   if (u32(local) !== LOCAL) fail(`${name}'s local header has no signature`);
+  const localName = local + 30 + u16(local + 26);
+  if (localName > zip.length) fail(`${name}'s local header runs past the end`);
+  if (zip.toString('utf8', local + 30, localName) !== name)
+    fail(`${name}'s local header names another file`);
   // The sizes come from the central directory: an entry written with bit 3 set (as
   // upload-artifact's are) leaves the local header's sizes and CRC zero.
   const data = local + 30 + u16(local + 26) + u16(local + 28);
