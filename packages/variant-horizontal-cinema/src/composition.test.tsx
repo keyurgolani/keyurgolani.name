@@ -354,7 +354,7 @@ test('the controller never takes over the wheel or a touch (it reads their way, 
 test('torn down, the controller refits nothing and leaves none of its attributes on the shell', () => {
   const source = readFileSync(new URL('./controller.tsx', import.meta.url), 'utf8');
   // A refit the text-size sentinel or a late frame calls after teardown does nothing.
-  assert.match(source, /const refitNow = \(\) => \{\s*if \(disposed\) return;/);
+  assert.match(source, /const refitNow = \([^)]*\) => \{\s*if \(disposed\) return;/);
   // Its cleanup takes off every attribute it sets on the shell: the pin, the rail's and the fit's.
   const cleanup = source.slice(source.indexOf('disposed = true;'));
   for (const name of ['pin', 'rail', 'fit'])
