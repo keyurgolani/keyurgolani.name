@@ -301,17 +301,47 @@ test('the words it adds are marked English in a portfolio in another language', 
   assert.match(markup, /<span lang="en" dir="ltr">Credits and index<\/span>/);
 });
 
-test('the controller never handles the wheel or a touch, writes no history entry of its own, and none in a frame', () => {
+test('the controller never takes over the wheel or a touch (it reads their way, passively), writes no history entry of its own, and none in a frame', () => {
   const source = readFileSync(new URL('./controller.tsx', import.meta.url), 'utf8');
   assert.match(source, /^'use client';/);
-  assert.doesNotMatch(
-    source,
-    /['"](?:wheel|mousewheel|touchstart|touchmove|touchend|pointermove)['"]/,
-  );
-  // Every scroll it listens to is passive.
-  for (const [line] of source.matchAll(/addEventListener\('scroll'[^\n]*/g)) {
+  assert.doesNotMatch(source, /['"`](?:mousewheel|touchend|pointermove)['"`]/);
+  // No way in for the wheel or a touch but a listener: no JSX handler, no property handler, and
+  // every 'wheel', 'touchstart' and 'touchmove' it names is one a listener call names, so none
+  // comes in through a variable or a loop.
+  assert.doesNotMatch(source, /\bon(?:Wheel|TouchStart|TouchMove|TouchEnd|PointerMove)=\{/);
+  assert.doesNotMatch(source, /\.on(?:wheel|touchstart|touchmove|touchend|pointermove)\s*=[^=]/);
+  const named = source.match(/['"`](?:wheel|touchstart|touchmove)['"`]/g)?.length ?? 0;
+  const listened =
+    source.match(/(?:add|remove)EventListener\(\s*['"`](?:wheel|touchstart|touchmove)['"`]/g)
+      ?.length ?? 0;
+  assert.equal(named, listened);
+  // Every scroll, wheel and touch it listens to is passive, so none can be cancelled.
+  for (const [line] of source.matchAll(
+    /addEventListener\(\s*['"`](?:scroll|wheel|touchstart|touchmove)['"`][^\n]*/g,
+  )) {
     assert.match(line, /passive: true/, line);
   }
+  // The wheel and touch handlers only read which way the visitor went and tell it: they call
+  // nothing but tell, rtl and Math's sign and abs, and nothing in them or in tell moves the page.
+  const bodyOf = (name: string) => {
+    const start = source.indexOf(`const ${name} = `);
+    assert.notEqual(start, -1, name);
+    return source.slice(start, source.indexOf('\n    };\n', start)).replace(/\/\/[^\n]*/g, '');
+  };
+  const writes = /scrollTo|scrollBy|scrollIntoView|preventDefault|setAlong|scroll(?:Top|Left)\s*=/;
+  const handlers = [
+    ...source.matchAll(/addEventListener\(\s*['"`](?:wheel|touchstart|touchmove)['"`],\s*(\w+)/g),
+  ].map(([, name]) => name!);
+  for (const name of handlers) {
+    const body = bodyOf(name);
+    assert.doesNotMatch(body, writes, name);
+    for (const [, call] of body.slice(body.indexOf('=>')).matchAll(/([\w.]+)\s*\(/g))
+      assert.ok(
+        ['if', 'tell', 'rtl', 'Math.sign', 'Math.abs'].includes(call!),
+        `${name} calls ${call}`,
+      );
+  }
+  if (handlers.length > 0) assert.doesNotMatch(bodyOf('tell'), writes, 'tell');
   // It calls preventDefault for an arrow step and for Home or End alone.
   assert.equal(source.match(/preventDefault\(\)/g)?.length, 2);
   assert.doesNotMatch(source, /pushState|location\.(?:assign|replace)\(|location\.hash\s*=/);
