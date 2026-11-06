@@ -538,6 +538,17 @@ test('rc-smoke starts the merged digest on each platform, natively, with read ac
     ],
   );
   const smoke = job.steps.find((each) => each.run === 'pnpm ci:image');
+  // Neither leg is optional: the smoke runs on each, unconditioned, and only the reports'
+  // steps run always().
+  assert.equal(smoke.if, undefined);
+  assert.equal(job['continue-on-error'], undefined);
+  assert.deepEqual(
+    job.steps.filter((each) => each.if !== undefined).map((each) => [each.name, each.if]),
+    [
+      ['Failure summary', '${{ always() }}'],
+      ['Upload reports', '${{ always() }}'],
+    ],
+  );
   assert.equal(
     smoke.env.SMOKE_IMAGE,
     '${{ needs.classify.outputs.image }}@${{ needs.rc-merge.outputs.digest }}',
@@ -546,4 +557,21 @@ test('rc-smoke starts the merged digest on each platform, natively, with read ac
   assert.ok(JOBS['rc-tag'].needs.includes('rc-smoke'), 'no candidate is tagged unstarted on arm64');
   // ci.yml's publish-smoke, which a red push run skips, is the same check on main.
   assert.ok(JSON.stringify(JOBS['rc-smoke'].steps).includes('docker/login-action@'));
+});
+
+test("no job or step of a candidate's or a final's run sets continue-on-error, so no check of the tag path can fail quietly", () => {
+  const quiet = [...RC_JOBS, ...FINAL_JOBS].flatMap((id) => [
+    ...(JOBS[id]['continue-on-error'] === undefined ? [] : [`${id}: continue-on-error`]),
+    ...stepsOf(id)
+      .filter((each) => each['continue-on-error'] !== undefined)
+      .map((each) => `${id}, ${each.name ?? each.uses ?? each.run}: continue-on-error`),
+  ]);
+  assert.deepEqual(quiet, []);
+  // Every job of the file is one of the lists, so none escapes the check.
+  assert.deepEqual(
+    Object.keys(JOBS).filter(
+      (id) => ![...RC_JOBS, ...FINAL_JOBS, ...DRY_RUN_JOBS, 'classify'].includes(id),
+    ),
+    [],
+  );
 });
