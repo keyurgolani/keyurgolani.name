@@ -321,6 +321,16 @@ test('the controller never handles the wheel or a touch, writes no history entry
   assert.match(source, /const framed = window\.self !== window\.top;/);
 });
 
+test('torn down, the controller refits nothing and leaves none of its attributes on the shell', () => {
+  const source = readFileSync(new URL('./controller.tsx', import.meta.url), 'utf8');
+  // A refit the text-size sentinel or a late frame calls after teardown does nothing.
+  assert.match(source, /const refitNow = \(\) => \{\s*if \(disposed\) return;/);
+  // Its cleanup takes off every attribute it sets on the shell: the pin, the rail's and the fit's.
+  const cleanup = source.slice(source.indexOf('disposed = true;'));
+  for (const name of ['pin', 'rail', 'fit'])
+    assert.match(cleanup, new RegExp(`delete rootElement\\.dataset\\.${name};`), name);
+});
+
 test("a work whose title repeats its section's still links to its own address", () => {
   const pair = pairOf('complete');
   const works = pair.portfolio.works ?? [];
