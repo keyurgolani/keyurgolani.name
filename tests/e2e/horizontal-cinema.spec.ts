@@ -688,6 +688,47 @@ test(
   },
 );
 
+test(
+  "coming back up from the credits, a stop just inside the strip's end keeps the end in view",
+  { annotation, tag },
+  async ({ page }) => {
+    await load(page);
+    await page.locator('.hc-stage').focus();
+    await page.keyboard.press('End');
+    await expect.poll(async () => (await read(page)).atEnd).toBe(true);
+    await page.waitForTimeout(400);
+    const end = (await read(page)).scrollY;
+    // Into the credits, at rest there, then back up to 100 px inside the strip's end.
+    await page.evaluate((top) => window.scrollTo({ top, behavior: 'instant' }), end + 300);
+    await page.waitForTimeout(300);
+    await page.evaluate((top) => window.scrollTo({ top, behavior: 'instant' }), end - 100);
+    await expect.poll(async () => (await read(page)).atEnd).toBe(true);
+    for (let wait = 0; wait < 1000; wait += 100) {
+      await page.waitForTimeout(100);
+      expect((await read(page)).atEnd).toBe(true);
+    }
+  },
+);
+
+test(
+  "with a block above the strip, a first wheel notch from the page's top still travels on to scene 1",
+  { annotation, tag },
+  async ({ page }) => {
+    // The strip then starts 24 px down the page: a notch from the top sets out from above it.
+    await page.addInitScript(() => {
+      document.addEventListener('DOMContentLoaded', () => {
+        const block = document.createElement('div');
+        block.style.blockSize = '24px';
+        document.body.prepend(block);
+      });
+    });
+    await load(page);
+    await page.mouse.move(720, 450);
+    await page.mouse.wheel(0, 400);
+    await expectAt(page, 1);
+  },
+);
+
 test.describe('reduced motion', () => {
   test(
     'the strip stays, and every step is a cut onto its scene',
