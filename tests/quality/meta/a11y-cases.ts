@@ -583,6 +583,19 @@ const mainPassContrast = async (page: Page): Promise<Finding[]> => {
   ];
 };
 
+/**
+ * A page that paints once, 1.5 s after load: `depth` requestAnimationFrame calls nested in each other
+ * (1, a single one-shot; 2, the double rAF), then nothing, as a font-ready repaint that lands late.
+ */
+const lateFrames = (depth: number) => `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>One late repaint</title></head><body><main><h1>Painted once</h1><p id="painted">no</p></main>
+<script>
+  const paint = () => { document.getElementById('painted').textContent = 'yes'; };
+  let left = ${depth};
+  const step = () => { left -= 1; if (left > 0) requestAnimationFrame(step); else paint(); };
+  addEventListener('load', () => setTimeout(() => requestAnimationFrame(step), 1500));
+</script></body></html>`;
+
 /** The touch condition alone on a page whose enhancement's chunk never comes. */
 const touchInventory = async (page: Page) =>
   inventoryFindings(page, '/', await baseline(page), ['touch']);
@@ -1981,6 +1994,26 @@ export const A11Y_CASES: readonly MetaCase[] = [
     ...REDUCED,
     init: MOTION_SAMPLER,
   }),
+  // Row 65: a frame loop is callbacks sustained over many frames, not one late frame. A one-shot
+  // repaint that a loaded shard delays into the window passes, as a single rAF and as the common
+  // double rAF; the loop above stays red.
+  {
+    id: 'motion/one-late-frame',
+    gate: 'motion',
+    input: 'one requestAnimationFrame, 1.5 s after load, under reduced motion',
+    expect: 'pass',
+    browser: true,
+    run: () => onPage(lateFrames(1), motionFindings, { ...REDUCED, init: MOTION_SAMPLER }),
+  },
+  {
+    id: 'motion/double-raf-once',
+    gate: 'motion',
+    input:
+      'a double requestAnimationFrame (rAF inside rAF), once, 1.5 s after load, under reduced motion',
+    expect: 'pass',
+    browser: true,
+    run: () => onPage(lateFrames(2), motionFindings, { ...REDUCED, init: MOTION_SAMPLER }),
+  },
   good('motion', motionFindings, { ...REDUCED, init: MOTION_SAMPLER }),
   // Each OS-wins signal alone: the tokens, and the hover transform.
   bad('tokens-over-os', 'os-wins-tokens.html', 'motion', 'os-wins', osWinsFindings, {
