@@ -781,7 +781,7 @@ jobs:
           runs=0; loops=0
           for f in reports/quality/results/*reduced-motion*/quality-records.json; do
             [ -f "$f" ] || continue
-            n=$(node -e 'const r=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));console.log((Array.isArray(r)?r:[]).filter((x)=>x.rule==="frame-loop").length)' "$f")
+            n=$(node -e 'const r=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));console.log((Array.isArray(r)?r:[]).filter((x)=>x.rule==="frame-loop").length)' "$f" 2>/dev/null) || n=parse-error
             echo "row 53: $(basename "$(dirname "$f")"): frame-loop records ${n}"
             runs=$((runs + 1)); [ "$n" = 0 ] || loops=$((loops + 1))
           done
