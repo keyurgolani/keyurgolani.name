@@ -209,6 +209,30 @@ export async function attachEgressRecord(
   return record;
 }
 
+/**
+ * An egress fixture's teardown, once the test reached outside the app: `file` (the attempts, a
+ * line each), then the cell test's own egress record (attachEgressRecord), then the throw with
+ * `message`. Both egress fixtures end through this, so neither can drop the record.
+ */
+export async function failEgress(
+  testInfo: EgressTestInfo,
+  viewports: readonly Pick<Viewport, 'id' | 'inputMode'>[],
+  egress: {
+    readonly file: string;
+    readonly attempts: readonly string[];
+    readonly rule: string;
+    readonly actual: string;
+    readonly message: string;
+  },
+): Promise<never> {
+  await testInfo.attach(egress.file, {
+    body: `${egress.attempts.join('\n')}\n`,
+    contentType: 'text/plain',
+  });
+  await attachEgressRecord(testInfo, viewports, egress.rule, egress.actual);
+  throw new Error(egress.message);
+}
+
 /** The boundaries a page resolved, as probes.ts's resolvedTokensScript reads them. */
 export interface ResolvedTokens {
   readonly boundaries: readonly {

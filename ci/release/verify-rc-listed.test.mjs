@@ -25,6 +25,7 @@ import {
   QPR_JOBS,
   QPR_SUMMARY,
   qprJobsProof,
+  qualityPrSummary,
   qualityPrUnlisted,
   SHARD_COUNTS,
   summaryProblem,
@@ -289,6 +290,18 @@ test('a listed test that also failed on anything no record names blocks the tag:
       'an owed check it never ran',
       { checks: ['status', 'axe', 'focus'] },
       /it didn't run its keyboard check\(s\)/,
+    ],
+    // A held test's entries aren't judged: nothing it failed on says its records passed.
+    [
+      'a timeout before it wrote any record',
+      { status: 'timedOut', failures: [], checks: [] },
+      /it ended timedOut, not failed/,
+    ],
+    ['a failure before any record', { failures: [] }, /it failed with no failure record/],
+    [
+      'a skipped owed check, its record absent with it',
+      { failures: [FOCUS], checks: ['status', 'keyboard', 'focus'] },
+      /it didn't run its axe check\(s\)/,
     ],
     [
       'no count of its soft expectations',
@@ -556,6 +569,11 @@ test("the summary is the one artifact this attempt made: a re-run, two artifacts
       /another run's, or not main's/,
     ],
     [
+      'a verdict job that names no attempt',
+      { jobList: jobs({ 'quality-pr-verdict': { run_attempt: undefined } }) },
+      /quality-pr-verdict's job is attempt undefined, not the run's 1/,
+    ],
+    [
       "a verdict job of another attempt than the run's",
       { jobList: jobs({ 'quality-pr-verdict': { run_attempt: 2 } }) },
       /quality-pr-verdict's job is attempt 2, not the run's 1/,
@@ -571,6 +589,15 @@ test("the summary is the one artifact this attempt made: a re-run, two artifacts
     assert.match(refusal(evaluateRc(input(options))), why, label);
   }
   assert.deepEqual(bindArtifact([artifact()], RED, SHA, verdictJob(true)).reason, null);
+  // A listing that failed is refused by its own error, not as an empty listing.
+  const listing = refusal(
+    evaluateRc(input({ artifacts: new Error('GET /artifacts answered HTTP 502') })),
+  );
+  assert.match(
+    listing,
+    /run 201's artifacts couldn't be listed: GET \/artifacts answered HTTP 502/,
+  );
+  assert.doesNotMatch(listing, /has 0 live/);
   // The download is held to its size and its digest.
   const zip = readFileSync(fixture('reports-quality-pr-verdict-42161399250.zip'));
   assert.equal(downloadProblem(zip, artifact()), null);
@@ -613,6 +640,38 @@ test('a green run with entries listed is held to its summary: a strict entry who
       /1 cell test\(s\) of quality-pr's summary don't name their cell, viewport, row, engine/,
     ],
     ['a red verdict', qprSummary([FOCUS, AXE]), /its verdict failed, though gate passed/],
+    // Item 3's own class: a summary whose cell tests can't be found holds none to judge.
+    ['no tests', qprSummary('passed', { tests: [] }), /holds no cell test/],
+    [
+      'kind dropped from every test',
+      {
+        ...qprSummary('passed'),
+        tests: qprSummary('passed').tests.map(({ kind, ...rest }) => ({ ...rest, type: kind })),
+      },
+      /holds no cell test/,
+    ],
+    [
+      'a verdict not ok with no failures',
+      qprSummary([FOCUS, AXE], { verdict: { ok: false, failures: [] } }),
+      /its verdict failed, though gate passed/,
+    ],
+    [
+      'a verdict ok with a failure',
+      qprSummary([FOCUS, AXE], { verdict: { ok: true, failures: [{ rule: 'tests-failed' }] } }),
+      /its verdict failed, though gate passed/,
+    ],
+    ...['cell', 'viewport', 'row', 'engine'].flatMap((field) => [
+      [
+        `a cell test with no ${field}`,
+        { ...qprSummary('passed'), tests: [cellTest('passed', { [field]: undefined })] },
+        /don't name their cell, viewport, row, engine/,
+      ],
+      [
+        `a cell test whose ${field} is empty`,
+        { ...qprSummary('passed'), tests: [cellTest('passed', { [field]: '' })] },
+        /don't name their cell, viewport, row, engine/,
+      ],
+    ]),
   ]) {
     const verdict = evaluateRc(input({ ...green, summary }));
     const reason = verdict.reasons.join(' | ');
@@ -620,6 +679,22 @@ test('a green run with entries listed is held to its summary: a strict entry who
       open.push(`${label}: ${reason || 'accepted'}`);
   }
   assert.deepEqual(open, []);
+  // A green run counts only on its first attempt while the list names any entry, its verdict
+  // job's attempt with it.
+  const second = { ...GREEN, run_attempt: 2 };
+  assert.match(
+    refusal(
+      evaluateRc(
+        input({
+          run: second,
+          jobList: jobs({ 'quality-pr-verdict': { run_attempt: 2 } }, { red: false }),
+          artifacts: [artifact(second)],
+          summary: qprSummary([FOCUS, AXE]),
+        }),
+      ),
+    ),
+    /can't be held to the records list: run 202 is attempt 2, and only a first attempt counts/,
+  );
   // With an empty list, the green run counts as it always did, unread.
   const empty = evaluateRc(input({ ...green, listed: [], artifacts: [], summary: undefined }));
   assert.equal(empty.ok, true);
@@ -677,6 +752,14 @@ test("quality-pr's summary is untrusted: anything missing, malformed, or beyond 
         tests: [cellTest([FOCUS, AXE], { errors: [], softFailures: 0 })],
       },
       /counts no failed soft expectation/,
+    ],
+    [
+      'a failing test with fewer errors than its soft count',
+      {
+        ...qprSummary([FOCUS, AXE]),
+        tests: [cellTest([FOCUS, AXE], { errors: ["Slice 2's suites"], softFailures: 2 })],
+      },
+      /ended with 1 error\(s\), not the 2 soft expectation\(s\)/,
     ],
     [
       'a failing test owing nothing',
@@ -791,6 +874,9 @@ test("SHARD_COUNTS is ci.yml's: each matrix job gate needs but quality-pr's runs
     ci.jobs.gate.needs
       .filter((need) => !QPR_JOBS.has(need) && ci.jobs[need].strategy?.matrix?.shard)
       .map((need) => {
+        // Its matrix is the shard key alone: a second key, or include or exclude, would run each
+        // shard more than once, and otherJobsRed would refuse every red run.
+        assert.deepEqual(Object.keys(ci.jobs[need].strategy.matrix), ['shard'], need);
         const shards = ci.jobs[need].strategy.matrix.shard;
         assert.deepEqual(
           shards,
@@ -913,6 +999,12 @@ test("main's real red push run, 42161399250: its jobs prove quality-pr's red, it
   const accepted = evaluateRc(realInput(browserGreen));
   assert.deepEqual(accepted.reasons, []);
   assert.equal(accepted.ok, true);
+  // The counts it's judged at are evaluateRc's argument: at browser 3, the run's two browser
+  // shards are refused.
+  assert.match(
+    refusal(evaluateRc(realInput(browserGreen, { ...RUN_COUNTS, browser: 3 }))),
+    /not its shards of 3/,
+  );
   // At this commit's counts, it counts only while they're the run's own.
   assert.equal(
     evaluateRc(realInput(browserGreen, SHARD_COUNTS)).ok,
@@ -1064,6 +1156,86 @@ test("the artifact's summary is read out of its zip, and a malformed, oversized,
       /two entry counts don't agree/,
     ],
     [
+      'a directory that ends short of its end record',
+      (() => {
+        // The directory, then a second copy of its entry before the end record, which other
+        // readers find there by the end record less its size.
+        const one = zipOf({ [QPR_SUMMARY]: summary });
+        const end = one.length - 22;
+        const start = one.readUInt32LE(end + 16);
+        const size = one.readUInt32LE(end + 12);
+        return Buffer.concat([
+          one.subarray(0, end),
+          one.subarray(start, start + size),
+          one.subarray(end),
+        ]);
+      })(),
+      /doesn't end at the end record/,
+    ],
+    [
+      'a ZIP64 locator before the end record',
+      (() => {
+        const one = zipOf({ [QPR_SUMMARY]: summary });
+        const end = one.length - 22;
+        const locator = Buffer.alloc(20);
+        locator.writeUInt32LE(0x07064b50, 0);
+        // Inside the last central entry's comment, so the walk still ends at the end record.
+        const start = one.readUInt32LE(end + 16);
+        const copy = Buffer.concat([one.subarray(0, end), locator, one.subarray(end)]);
+        copy.writeUInt16LE(20, start + 32);
+        copy.writeUInt32LE(one.readUInt32LE(end + 12) + 20, end + 20 + 12);
+        return copy;
+      })(),
+      /a ZIP64 archive, by its locator/,
+    ],
+    [
+      'a central directory past its end record',
+      (() => {
+        const copy = zipOf({ [QPR_SUMMARY]: summary });
+        copy.writeUInt32LE(copy.readUInt32LE(copy.length - 22 + 12) + 1, copy.length - 22 + 12);
+        return copy;
+      })(),
+      /the central directory runs past its end record/,
+    ],
+    [
+      'a name holding a NUL',
+      zipOf({ [`${QPR_SUMMARY}\u0000`]: summary, [QPR_SUMMARY]: summary }),
+      /central entry 1's name holds a NUL or a backslash/,
+    ],
+    [
+      'a name holding a backslash',
+      zipOf({ 'quality\\summary.json': summary, [QPR_SUMMARY]: summary }),
+      /central entry 1's name holds a NUL or a backslash/,
+    ],
+    [
+      'a Unicode Path field naming another file',
+      (() => {
+        // decoy.json, whose 0x7075 field other readers take as quality/summary.json.
+        const one = zipOf({ 'decoy.json': summary, [QPR_SUMMARY]: summary });
+        const end = one.length - 22;
+        const start = one.readUInt32LE(end + 16);
+        const field = Buffer.alloc(4 + 5 + QPR_SUMMARY.length);
+        field.writeUInt16LE(0x7075, 0);
+        field.writeUInt16LE(5 + QPR_SUMMARY.length, 2);
+        field.write(QPR_SUMMARY, 9);
+        const nameEnd = start + 46 + one.readUInt16LE(start + 28);
+        const copy = Buffer.concat([one.subarray(0, nameEnd), field, one.subarray(nameEnd)]);
+        copy.writeUInt16LE(field.length, start + 30);
+        const at = copy.length - 22;
+        copy.writeUInt32LE(copy.readUInt32LE(at + 12) + field.length, at + 12);
+        return copy;
+      })(),
+      /central entry 1 carries a Unicode Path field/,
+    ],
+    [
+      'data that runs into the central directory',
+      (() => {
+        const stored = zipOf({ [QPR_SUMMARY]: summary }, { method: 0 });
+        return centralAt(stored, 20, summary.length + 10);
+      })(),
+      /data runs into the central directory/,
+    ],
+    [
       'a central directory longer than its stated size',
       (() => {
         const copy = zipOf({ [QPR_SUMMARY]: summary });
@@ -1093,4 +1265,33 @@ test("the artifact's summary is read out of its zip, and a malformed, oversized,
   const read = JSON.parse(zipEntry(real, QPR_SUMMARY).toString('utf8'));
   assert.equal(read.tests.length, 143);
   assert.equal(read.tests.filter((each) => each.outcome === 'unexpected').length, 3);
+});
+
+test("rc-verify's artifact read: a listing that fails is kept as its own error, for the refusal to name", async () => {
+  const failed = await qualityPrSummary('/repos/o/r', RED, SHA, jobs(), {
+    get: async () => {
+      throw new Error('GET /repos/o/r/actions/runs/201/artifacts answered HTTP 502');
+    },
+    getBytes: async () => assert.fail('no download without a listing'),
+  });
+  assert.ok(failed.artifacts instanceof Error);
+  assert.equal(failed.summary, failed.artifacts);
+  const reason = refusal(
+    evaluateRc(input({ artifacts: failed.artifacts, summary: failed.summary })),
+  );
+  assert.match(reason, /run 201's artifacts couldn't be listed: GET .* answered HTTP 502/);
+  // A listing that reads is bound and downloaded as before.
+  const zip = readFileSync(fixture('reports-quality-pr-verdict-42161399250.zip'));
+  const real = JSON.parse(readFileSync(fixture('ci-jobs-run-42161399250.json'), 'utf8')).jobs;
+  const run = { ...RED, id: 42161399250 };
+  const read = await qualityPrSummary('/repos/o/r', run, SHA, real, {
+    get: async () => ({
+      artifacts: [
+        artifact(run, { workflow_run: { id: run.id, head_sha: SHA, head_branch: 'main' } }),
+      ],
+    }),
+    getBytes: async () => zip,
+  });
+  assert.equal(read.artifacts.length, 1);
+  assert.equal(read.summary.tests.length, 143);
 });

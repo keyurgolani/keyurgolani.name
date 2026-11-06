@@ -217,9 +217,9 @@ function pagedGet(items, key, routes = []) {
 }
 
 test("a release run's jobs are read whole, every page: 150 jobs, rc-tag and the quality gate on page 2, still promote", async () => {
-  // A release run at RC1's shards: 140 rc-quality shards first, the gate's jobs created last.
-  const shards = Array.from({ length: 140 }, (_, at) => ({
-    name: `rc-quality (${at + 1}/140)`,
+  // A release run at RC1's shards: 142 rc-quality shards first, the gate's jobs created last.
+  const shards = Array.from({ length: 142 }, (_, at) => ({
+    name: `rc-quality (${at + 1}/142)`,
     conclusion: 'success',
   }));
   const jobs = [...shards, ...PASSED, { name: 'rc-smoke (amd64)', conclusion: 'success' }];
@@ -233,6 +233,7 @@ test("a release run's jobs are read whole, every page: 150 jobs, rc-tag and the 
     '/repos/o/r/actions/runs/202/jobs?filter=latest&per_page=100&page=1',
     '/repos/o/r/actions/runs/202/jobs?filter=latest&per_page=100&page=2',
   ]);
+  assert.equal(jobs.length, 150);
   assert.equal(jobsByRun[202].length, jobs.length);
   for (const name of REQUIRED_RC_JOBS)
     assert.ok(jobs.findIndex((job) => job.name === name) >= PAGE_SIZE, name);
@@ -252,4 +253,12 @@ test("a release run's jobs are read whole, every page: 150 jobs, rc-tag and the 
     githubList('/x', 'jobs', { get: async () => ({}) }),
     /answered no jobs list/,
   );
+});
+
+test('no list call of rc-verify or promote-check reads one page: each runs, jobs and artifacts listing goes through githubList', () => {
+  for (const file of ['verify-rc.mjs', 'promote-check.mjs']) {
+    const source = readFileSync(new URL(`./${file}`, import.meta.url), 'utf8');
+    assert.doesNotMatch(source, /githubGet\(\s*`[^`]*\/actions\/(runs|workflows)\//, file);
+    assert.match(source, /githubList\(/, file);
+  }
 });

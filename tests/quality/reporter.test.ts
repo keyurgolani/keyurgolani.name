@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import type { TestCase } from '@playwright/test/reporter';
@@ -13,7 +14,7 @@ import {
 } from './lib/checks';
 import type { CellFailure } from './lib/failure-records';
 import { VIEWPORTS } from './lib/matrix';
-import { attachEgressRecord, egressRecord, RECORDS_ATTACHMENT } from './lib/records';
+import { attachEgressRecord, egressRecord, failEgress, RECORDS_ATTACHMENT } from './lib/records';
 import { summaryTest } from './reporter';
 
 // The reporter's summary.json entry for one test (summaryTest): what a release candidate's records
@@ -244,5 +245,76 @@ test("an egress fixture's record names the cell test's own fields, and a listed 
     );
     // Its listed record still failed: its entry didn't pass.
     assert.deepEqual(judged.passed, []);
+  }
+});
+
+test('a record that repeats one kept already, the same rule on the same element in the same cell, is one failure; an aria-only or elementless repeat stays repeated', () => {
+  // Reflow's re-probe with a disclosure toggled: one element overflows both times.
+  const reflow = (actual: string, element: CellFailure['element']) =>
+    record({ check: 'reflow', rule: 'overflow', viewport: '320x568', actual, element });
+  const entry = summaryTest(
+    finished({
+      attached: [
+        [
+          reflow('12px past the edge', { selector: NAV }),
+          reflow('14px past the edge, with the disclosure open', { selector: NAV }),
+          reflow('a', { semanticRole: 'link', accessibleName: 'Writing' }),
+          reflow('b', { semanticRole: 'link', accessibleName: 'Writing' }),
+          { ...reflow('c', undefined), check: 'runner', rule: 'status' },
+          { ...reflow('d', undefined), check: 'runner', rule: 'status' },
+        ],
+      ],
+    }),
+  );
+  assert.deepEqual(entry.failures, [
+    { check: 'reflow', rule: 'overflow', target: `@320x568 ${NAV}` },
+    { check: 'reflow', rule: 'overflow', target: '@320x568 aria:link|Writing|' },
+    { check: 'reflow', rule: 'overflow', target: '@320x568 aria:link|Writing|' },
+    { check: 'runner', rule: 'status', target: null },
+    { check: 'runner', rule: 'status', target: null },
+  ]);
+  // Records counts every record the test attached, as before.
+  assert.equal(entry.records, 6);
+});
+
+test("an egress fixture's teardown attaches its attempts, then its record, then throws, and both fixtures end through it", async () => {
+  const calls: string[] = [];
+  const testInfo = {
+    annotations: CELL_ANNOTATIONS,
+    attach: async (name: string, options: { body: string }) => {
+      calls.push(`${name}: ${options.body.trim()}`);
+    },
+  };
+  await assert.rejects(
+    failEgress(testInfo, VIEWPORTS, {
+      file: 'server-egress.txt',
+      attempts: ['x.test:443'],
+      rule: 'server-egress',
+      actual: 'The server tried to reach 1 host(s) outside the app: x.test:443',
+      message: serverEgressMessage(['x.test:443']),
+    }),
+    (error: Error) => error.message === serverEgressMessage(['x.test:443']),
+  );
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0], 'server-egress.txt: x.test:443');
+  assert.ok(
+    calls[1]!.startsWith(`${RECORDS_ATTACHMENT}: [{"check":"runner","rule":"server-egress"`),
+  );
+  // Each egress fixture ends through failEgress, with its own rule.
+  const fixtures = readFileSync(new URL('./fixtures.ts', import.meta.url), 'utf8');
+  for (const [fixture, rule] of [
+    ['blockedRequests', 'browser-egress'],
+    ['serverEgress', 'server-egress'],
+  ]) {
+    const start = fixtures.indexOf(`\n  ${fixture}: async`);
+    assert.ok(start >= 0, fixture);
+    const body = fixtures.slice(start, fixtures.indexOf('\n  },', start));
+    assert.match(
+      body,
+      new RegExp(`await failEgress\\(testInfo, VIEWPORTS, \\{[^}]*rule: '${rule}'`),
+      fixture,
+    );
+    // It throws only through failEgress, after both attaches.
+    assert.doesNotMatch(body, /\bthrow\b/, fixture);
   }
 });

@@ -262,11 +262,12 @@ export function uncovered(test) {
  *   check it didn't run, a malformed record; no entry can name it;
  * - repeated: each failing cell test whose failures repeat a key, so no one entry names one record;
  * - covered: the failing cell tests whose every failure an entry names, and nothing else failed;
- * - passed: each strict entry whose test ran here (not skipped) and whose failure it no longer has
- *   (an uncovered test's records count as failing: its entries on them aren't passed);
+ * - passed: each strict entry whose test ran here (not skipped) and whose failure it no longer has.
+ *   An uncovered test is held: what it failed on says nothing of its records (it may have timed
+ *   out before it wrote any, or skipped the check behind one), so no entry of it is passed;
  * - flaky: each flaky entry and how it came out here: `failed` (its record failed), `passed` (its
- *   test ran without it), or `not run`. A flaky entry is never `passed` above; its test's other
- *   failures are unlisted all the same.
+ *   test ran without it), `not judged` (its test is held), or `not run`. A flaky entry is never
+ *   `passed` above; its test's other failures are unlisted all the same.
  * Entries whose test didn't run here are the caller's to judge.
  */
 export function judgeListed(tests, listed) {
@@ -276,6 +277,7 @@ export function judgeListed(tests, listed) {
   const repeated = [];
   const covered = [];
   const ran = new Map();
+  const held = new Set();
   for (const test of tests ?? []) {
     if (test?.kind !== 'cell' || test.outcome === 'skipped') continue;
     const why = test.outcome === 'unexpected' ? uncovered(test) : null;
@@ -289,6 +291,7 @@ export function judgeListed(tests, listed) {
     if (test.outcome !== 'unexpected') continue;
     if (why !== null) {
       unrecorded.push({ test, why });
+      held.add(testKey);
       continue;
     }
     const seen = new Set();
@@ -303,17 +306,26 @@ export function judgeListed(tests, listed) {
     for (const failure of mine) unlisted.push({ test, failure, entry: listEntry(failure) });
     if (mine.length === 0 && twice.length === 0) covered.push(test);
   }
-  const ownOf = (entry) =>
-    ran.get(JSON.stringify([entry.cell, entry.viewport, entry.row, entry.engine]));
+  const keyOf = (entry) => JSON.stringify([entry.cell, entry.viewport, entry.row, entry.engine]);
+  const ownOf = (entry) => ran.get(keyOf(entry));
   const passed = (listed ?? []).filter((entry) => {
     const own = ownOf(entry);
-    return !isFlaky(entry) && own !== undefined && !own.has(recordKey(entry));
+    return (
+      !isFlaky(entry) && own !== undefined && !held.has(keyOf(entry)) && !own.has(recordKey(entry))
+    );
   });
   const flaky = (listed ?? []).filter(isFlaky).map((entry) => {
     const own = ownOf(entry);
     return {
       entry,
-      outcome: own === undefined ? 'not run' : own.has(recordKey(entry)) ? 'failed' : 'passed',
+      outcome:
+        own === undefined
+          ? 'not run'
+          : own.has(recordKey(entry))
+            ? 'failed'
+            : held.has(keyOf(entry))
+              ? 'not judged'
+              : 'passed',
     };
   });
   return { unlisted, unrecorded, repeated, covered, passed, flaky };

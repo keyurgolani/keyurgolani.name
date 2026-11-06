@@ -266,7 +266,7 @@ export function bindArtifact(artifacts, run, sha, verdict) {
       artifact: null,
       reason: `quality-pr-verdict's job is attempt ${clean(verdict?.run_attempt)}, not the run's ${clean(run.run_attempt)}`,
     };
-  const live = (artifacts ?? []).filter(
+  const live = (Array.isArray(artifacts) ? artifacts : []).filter(
     (each) => each?.name === QPR_ARTIFACT && each.expired === false,
   );
   if (live.length !== 1)
@@ -314,8 +314,9 @@ const CELL_KEY = ['cell', 'viewport', 'row', 'engine'];
 /**
  * Why the quality-pr summary `summary` (its verdict's quality/summary.json, parsed, untrusted)
  * isn't one a records list can be held to, or null when it is: an object of schemaVersion 1, with
- * a tests list, a verdict with a failures list, and every cell test naming its cell, viewport, row
- * and engine as text. Both paths read it through this, so a summary whose shape drifts refuses.
+ * a tests list holding at least one cell test, a verdict with a failures list, and every cell test
+ * naming its cell, viewport, row and engine as non-empty text. Both paths read it through this, so
+ * a summary whose shape drifts refuses: a summary whose tests lost their kind holds no cell test.
  */
 export function summaryProblem(summary) {
   if (!summary || typeof summary !== 'object' || Array.isArray(summary))
@@ -326,8 +327,12 @@ export function summaryProblem(summary) {
     return "quality-pr's summary has no verdict";
   if (summary.schemaVersion !== 1)
     return `quality-pr's summary is schemaVersion ${clean(JSON.stringify(summary.schemaVersion))}, not 1`;
+  if (!summary.tests.some((test) => test?.kind === 'cell'))
+    return "quality-pr's summary holds no cell test, so no entry can be judged by it";
   const unnamed = summary.tests.filter(
-    (test) => test?.kind === 'cell' && !CELL_KEY.every((field) => typeof test[field] === 'string'),
+    (test) =>
+      test?.kind === 'cell' &&
+      !CELL_KEY.every((field) => typeof test[field] === 'string' && test[field] !== ''),
   );
   if (unnamed.length > 0)
     return `${unnamed.length} cell test(s) of quality-pr's summary don't name their ${CELL_KEY.join(', ')}`;
@@ -440,7 +445,13 @@ export function evaluateRc({ tag, sha, compare, runs, jobsByRun, quality, counts
         summary: null,
         why: `run ${run.id} is attempt ${clean(run.run_attempt)}, and only a first attempt counts`,
       };
-    const bound = bindArtifact(quality?.artifacts?.[String(run.id)], run, sha, verdict);
+    const listing = quality?.artifacts?.[String(run.id)];
+    if (listing instanceof Error)
+      return {
+        summary: null,
+        why: `run ${run.id}'s artifacts couldn't be listed: ${clean(listing.message)}`,
+      };
+    const bound = bindArtifact(listing, run, sha, verdict);
     if (bound.reason) return { summary: null, why: bound.reason };
     const summary = quality?.summaries?.[String(run.id)];
     if (summary instanceof Error || summary === undefined)
@@ -528,18 +539,32 @@ export function flakyLines(flaky) {
 /**
  * The artifact listing of `run`, and its quality-pr summary read from the artifact its latest
  * verdict job made (bindArtifact()), its download held to its size and digest; an Error in place
- * of the summary when it can't be read.
+ * of the summary when it can't be read, and in place of the listing too when that's what failed,
+ * so the refusal names the listing, not an empty one. `get` and `getBytes` are githubGet and
+ * githubGetBytes, or a test's stand-ins.
  */
-async function qualityPrSummary(base, run, sha, jobs) {
+export async function qualityPrSummary(
+  base,
+  run,
+  sha,
+  jobs,
+  { get = githubGet, getBytes = githubGetBytes } = {},
+) {
   let artifacts = [];
   try {
     artifacts = await githubList(
       `${base}/actions/runs/${run.id}/artifacts?name=${QPR_ARTIFACT}`,
       'artifacts',
+      { get },
     );
+  } catch (error) {
+    const failed = error instanceof Error ? error : new Error(String(error));
+    return { artifacts: failed, summary: failed };
+  }
+  try {
     const { artifact, reason } = bindArtifact(artifacts, run, sha, qprJobsProof(jobs).verdict);
     if (reason) throw new Error(reason);
-    const zip = await githubGetBytes(`${base}/actions/artifacts/${artifact.id}/zip`, {
+    const zip = await getBytes(`${base}/actions/artifacts/${artifact.id}/zip`, {
       maxBytes: 512 * 1024 * 1024,
     });
     const problem = downloadProblem(zip, artifact);

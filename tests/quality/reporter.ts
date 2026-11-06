@@ -21,7 +21,7 @@ import type {
 } from '@playwright/test/reporter';
 import { currentGate, REPO_ROOT, reportsDir, writeFailureRecord } from '../../ci/lib/reports.mjs';
 import { runShard } from './lib/env';
-import { writeCellFailures, type CellFailure } from './lib/failure-records';
+import { failureKey, writeCellFailures, type CellFailure } from './lib/failure-records';
 import { RECORDS_ATTACHMENT } from './lib/records';
 import { failureOf } from '../../ci/release/release-records.mjs';
 import {
@@ -146,7 +146,27 @@ function attachment(test: TestCase, name: string): unknown {
 /**
  * One test as summary.json lists it. A failed cell test's failures are its unwaived records, each
  * keyed under the test's own surface and viewport (failureOf), so a record of the primitives page
- * or of the landscape pass is told apart from the cell page's own.
+ * or of the landscape pass is told apart from the cell page's own. A record that repeats one kept
+ * already, by the failure records' own key (failureKey: the same rule on the same element in the
+ * same cell, such as reflow's re-probe with a disclosure toggled), is one record, as
+ * writeCellFailures writes it once; only when it names its element by selector, so an aria-only
+ * or elementless repeat stays repeated until RC2's per-element key.
+ */
+function unwaivedRecords(records: readonly CellFailure[]): CellFailure[] {
+  const kept = new Set<string>();
+  return records.filter((record) => {
+    if (record.exceptionId !== undefined) return false;
+    if (!record.element?.selector) return true;
+    const key = failureKey(record);
+    if (kept.has(key)) return false;
+    kept.add(key);
+    return true;
+  });
+}
+
+/**
+ * One test as summary.json lists it: its fields, and a failed cell test's unwaived records as its
+ * failures (unwaivedRecords()).
  */
 export function summaryTest(test: TestCase): SummaryTest {
   const last = test.results.at(-1);
@@ -180,9 +200,7 @@ export function summaryTest(test: TestCase): SummaryTest {
     records: records.length,
     failures:
       test.outcome() === 'unexpected'
-        ? records
-            .filter((record) => record.exceptionId === undefined)
-            .map((record) => failureOf(record, own) as SummaryFailure)
+        ? unwaivedRecords(records).map((record) => failureOf(record, own) as SummaryFailure)
         : [],
     ...(soft !== undefined && /^\d+$/.test(soft) ? { softFailures: Number(soft) } : {}),
     ...(owed !== undefined ? { owed: owed.split(' ').filter(Boolean) } : {}),

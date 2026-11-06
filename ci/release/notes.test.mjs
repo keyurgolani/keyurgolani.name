@@ -14,6 +14,8 @@ const base = {
 test('candidate notes name the pull source by digest, the GHCR login, and verification', () => {
   const notes = renderNotes({ ...base, tag: 'v1.2.0-rc.3' });
   assert.match(notes, /Release candidate 3 for 1\.2\.0/);
+  // True on either path rc-verify accepts: a green push run, or one red on listed records alone.
+  assert.match(notes, /after rc-verify accepted its ci push run on main\./);
   assert.ok(notes.includes(`docker pull ghcr.io/owner/repo@${DIGEST}`));
   assert.match(notes, /private for now, so pulling needs a login/);
   assert.ok(

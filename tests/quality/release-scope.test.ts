@@ -166,13 +166,9 @@ test("a failure record outside the records list fails the gate, printing a ready
   const half = verdict(FAILURES, [LISTED[0]!]);
   assert.deepEqual(rules(half.failures), ['tests-failed', 'unlisted-failure']);
   assert.match(half.failures[1]!.message, /axe color-contrast on #main > p:nth-child\(3\) failed/);
-  // A failing test with no record can't be listed: it fails whatever the list says.
-  assert.deepEqual(rules(verdict([], LISTED).failures), [
-    'listed-passed',
-    'listed-passed',
-    'tests-failed',
-    'unlisted-failure',
-  ]);
+  // A failing test with no record can't be listed: it fails whatever the list says, and it's
+  // held, so its entries read as neither failing nor passed.
+  assert.deepEqual(rules(verdict([], LISTED).failures), ['tests-failed', 'unlisted-failure']);
   // A run with no scope file has no list: the failure fails as tests-failed, as before.
   assert.deepEqual(rules(verdict(FAILURES, undefined).failures), ['tests-failed']);
 });
@@ -238,7 +234,28 @@ test('a listed test fails the gate when anything no record names failed too: a b
       },
       /it hit server-egress, which no records list may name/,
     ],
-    ['a teardown timeout as Playwright ends it', { status: 'timedOut' }, /it ended timedOut/],
+    [
+      'a body timeout, before any soft expectation failed',
+      { status: 'timedOut' },
+      /it ended timedOut/,
+    ],
+    // A held test's entries aren't judged: nothing it failed on says its records passed.
+    [
+      'a timeout before it wrote any record',
+      { status: 'timedOut', failures: [], checks: [] },
+      /it ended timedOut, not failed/,
+    ],
+    ['a failure before any record', { failures: [] }, /it failed with no failure record/],
+    [
+      'a skipped owed check, its record absent with it',
+      { failures: [FAILURES[0]!], checks: FAILED.owed.filter((check) => check !== 'axe') },
+      /it didn't run its axe check\(s\)/,
+    ],
+    [
+      'fewer errors than its soft count',
+      { errors: [FAILED.errors[0]] },
+      /ended with 1 error\(s\), not the 2 soft expectation\(s\)/,
+    ],
     [
       'an owed check it never ran',
       { checks: FAILED.owed.filter((check) => check !== 'keyboard') },

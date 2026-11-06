@@ -35,7 +35,7 @@ import {
   serverEgressFailure,
 } from './lib/egress';
 import { VIEWPORTS } from './lib/matrix';
-import { attachEgressRecord } from './lib/records';
+import { failEgress } from './lib/records';
 import { appOptionsFor, type CellServer } from './lib/server';
 import { createAuthSession, recordSessionSecrets, type Session } from './lib/session';
 import { recordVitals } from './lib/vitals';
@@ -139,14 +139,15 @@ export const test = base.extend<QualityTestFixtures, QualityWorkerFixtures>({
     const blocked = await installBrowserPolicy(context, app.origin);
     await provide(blocked);
     const failure = egressFailure(blocked);
+    // A cell test's egress is a record of its own, which no records list may name.
     if (failure) {
-      await testInfo.attach('blocked-requests.txt', {
-        body: `${blocked.join('\n')}\n`,
-        contentType: 'text/plain',
+      await failEgress(testInfo, VIEWPORTS, {
+        file: 'blocked-requests.txt',
+        attempts: blocked,
+        rule: 'browser-egress',
+        actual: failure,
+        message: failure,
       });
-      // A cell test's egress is a record of its own, which no records list may name.
-      await attachEgressRecord(testInfo, VIEWPORTS, 'browser-egress', failure);
-      throw new Error(failure);
     }
   },
 
@@ -158,13 +159,14 @@ export const test = base.extend<QualityTestFixtures, QualityWorkerFixtures>({
     await provide();
     const attempts = app.egress().slice(before);
     if (attempts.length > 0) {
-      await testInfo.attach('server-egress.txt', {
-        body: `${attempts.join('\n')}\n`,
-        contentType: 'text/plain',
-      });
       const message = serverEgressMessage(attempts);
-      await attachEgressRecord(testInfo, VIEWPORTS, 'server-egress', message.split('\n')[0]!);
-      throw new Error(message);
+      await failEgress(testInfo, VIEWPORTS, {
+        file: 'server-egress.txt',
+        attempts,
+        rule: 'server-egress',
+        actual: message.split('\n')[0]!,
+        message,
+      });
     }
   },
 });

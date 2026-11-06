@@ -537,7 +537,10 @@ test('rc-smoke starts the merged digest on each platform, natively, with read ac
       ['arm64', 'ubuntu-24.04-arm'],
     ],
   );
+  // Natively: each leg on its own platform's runner.
+  assert.equal(job['runs-on'], '${{ matrix.runner }}');
   const smoke = job.steps.find((each) => each.run === 'pnpm ci:image');
+  assert.ok(smoke, 'rc-smoke runs pnpm ci:image as a step of its own');
   // Neither leg is optional: the smoke runs on each, unconditioned, and only the reports'
   // steps run always().
   assert.equal(smoke.if, undefined);
@@ -560,7 +563,7 @@ test('rc-smoke starts the merged digest on each platform, natively, with read ac
 });
 
 test("no job or step of a candidate's or a final's run sets continue-on-error, so no check of the tag path can fail quietly", () => {
-  const quiet = [...RC_JOBS, ...FINAL_JOBS].flatMap((id) => [
+  const quiet = [...RC_JOBS, ...FINAL_JOBS, 'classify'].flatMap((id) => [
     ...(JOBS[id]['continue-on-error'] === undefined ? [] : [`${id}: continue-on-error`]),
     ...stepsOf(id)
       .filter((each) => each['continue-on-error'] !== undefined)
@@ -574,4 +577,42 @@ test("no job or step of a candidate's or a final's run sets continue-on-error, s
     ),
     [],
   );
+});
+
+test("rc-verify's two checks run unconditioned, and every step if: on a candidate's or a final's run is one of these", () => {
+  assert.deepEqual(
+    stepsOf('rc-verify')
+      .filter((each) => each.run !== undefined)
+      .map((each) => [each.run, each.if]),
+    [
+      ['node ci/release/verify-scope.mjs', undefined],
+      ['node ci/release/verify-rc.mjs', undefined],
+    ],
+  );
+  // The only step conditions of the tag path: the reports' and the scans' own.
+  const conditioned = [...RC_JOBS, ...FINAL_JOBS, 'classify'].flatMap((id) =>
+    stepsOf(id)
+      .filter((each) => each.if !== undefined)
+      .map((each) => [id, each.name ?? each.uses ?? each.run, each.if]),
+  );
+  assert.deepEqual(conditioned, [
+    ['rc-quality', 'Scrub reports', '${{ always() }}'],
+    ['rc-quality', 'Failure summary', '${{ always() }}'],
+    ['rc-quality', 'Upload reports', "${{ always() && steps.scrub.outcome == 'success' }}"],
+    ['rc-quality-verdict', 'Failure summary', '${{ always() }}'],
+    ['rc-quality-verdict', 'Upload reports', '${{ always() }}'],
+    ['rc-rehearsal', 'Upload reports', '${{ always() }}'],
+    ['rc-scan', 'Install Grype', '${{ !cancelled() }}'],
+    ['rc-scan', 'Find the dependency baseline', '${{ !cancelled() }}'],
+    [
+      'rc-scan',
+      'Scan the production dependencies against the previous release',
+      "${{ !cancelled() && steps.baseline.outcome == 'success' }}",
+    ],
+    ['rc-scan', 'Upload reports', '${{ always() }}'],
+    ['rc-scan', 'Upload the inventory', '${{ always() }}'],
+    ['rc-smoke', 'Failure summary', '${{ always() }}'],
+    ['rc-smoke', 'Upload reports', '${{ always() }}'],
+    ['promote-scan', 'Upload reports', '${{ always() }}'],
+  ]);
 });

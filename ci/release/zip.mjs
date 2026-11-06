@@ -1,9 +1,12 @@
 // One file out of a zip archive, as GitHub serves an Actions artifact, read with Node alone so
 // rc-verify needs no install. The archive is untrusted: every offset and size is bounds-checked,
 // the central directory is walked whole (its entry count agreeing with itself, the walk ending
-// exactly at its stated size, no name twice), only stored and deflated entries are read, a ZIP64,
-// encrypted, or multi-disk archive is refused, the entry's local header must name it, its CRC-32
-// and size must match, and nothing is ever written to disk.
+// exactly at its stated size and at the end record, no name twice, none holding a NUL or a
+// backslash or carrying a Unicode Path field another reader would name it by), only stored and
+// deflated entries are read, a ZIP64 (its classic fields saturated, or its locator before the end
+// record), encrypted, or multi-disk archive is refused, the entry's local header must name it,
+// its data must end before the directory, its CRC-32 and size must match, and nothing is ever
+// written to disk.
 //
 // Pure Node with no dependencies.
 import * as zlib from 'node:zlib';
@@ -24,6 +27,9 @@ export function crc32(bytes) {
 const EOCD = 0x06054b50;
 const CENTRAL = 0x02014b50;
 const LOCAL = 0x04034b50;
+const ZIP64_LOCATOR = 0x07064b50;
+/** The Info-ZIP Unicode Path extra field, which other readers take as the entry's name. */
+const UNICODE_PATH = 0x7075;
 
 /**
  * The bytes of `name` in `zip` (a Buffer), or null when the archive has no such entry. Throws,
@@ -53,6 +59,7 @@ export function zipEntry(zip, name, { maxBytes = 64 * 1024 * 1024 } = {}) {
   const size = u32(eocd + 12);
   const start = u32(eocd + 16);
   if (count === 0xffff || size === 0xffffffff || start === 0xffffffff) fail('a ZIP64 archive');
+  if (eocd >= 20 && u32(eocd - 20) === ZIP64_LOCATOR) fail('a ZIP64 archive, by its locator');
   if (start + size > eocd) fail('the central directory runs past its end record');
   // The whole directory first: every entry's name, once, and nothing past the count. A name twice
   // is refused, so no reader can be handed one copy while another reads the other, and so is a
@@ -68,6 +75,16 @@ export function zipEntry(zip, name, { maxBytes = 64 * 1024 * 1024 } = {}) {
     if (at + 46 + nameLength > zip.length)
       fail(`central entry ${entry + 1}'s name runs past the end`);
     const entryName = zip.toString('utf8', at + 46, at + 46 + nameLength);
+    // A name another reader cuts at a NUL or reads as a path by its backslash names another file.
+    if (/[\u0000\\]/.test(entryName))
+      fail(`central entry ${entry + 1}'s name holds a NUL or a backslash`);
+    for (let field = at + 46 + nameLength; field < at + 46 + nameLength + extra;) {
+      if (field + 4 > at + 46 + nameLength + extra)
+        fail(`central entry ${entry + 1}'s extra field is malformed`);
+      if (u16(field) === UNICODE_PATH)
+        fail(`central entry ${entry + 1} carries a Unicode Path field, another name`);
+      field += 4 + u16(field + 2);
+    }
     if (names.has(entryName)) fail(`${entryName} is in the archive twice`);
     names.add(entryName);
     if (entryName === name) {
@@ -83,6 +100,8 @@ export function zipEntry(zip, name, { maxBytes = 64 * 1024 * 1024 } = {}) {
     at += 46 + nameLength + extra + comment;
   }
   if (at !== start + size) fail("the central directory doesn't end at its stated size");
+  // Other readers find the directory at the end record less its size: it must end there.
+  if (at !== eocd) fail("the central directory doesn't end at the end record");
   if (found === null) return null;
   const { flags, method, crc, packed, unpacked, local } = found;
   if (flags & 0x1) fail(`${name} is encrypted`);
@@ -97,6 +116,7 @@ export function zipEntry(zip, name, { maxBytes = 64 * 1024 * 1024 } = {}) {
   // upload-artifact's are) leaves the local header's sizes and CRC zero.
   const data = local + 30 + u16(local + 26) + u16(local + 28);
   if (data + packed > zip.length) fail(`${name}'s data runs past the end`);
+  if (data + packed > start) fail(`${name}'s data runs into the central directory`);
   const raw = zip.subarray(data, data + packed);
   let bytes;
   if (method === 0) bytes = Buffer.from(raw);

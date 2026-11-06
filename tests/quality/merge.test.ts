@@ -201,6 +201,12 @@ test("quality:merge writes the shards' joined summary.json: every shard's tests,
       summary.tests.map((test) => test.title),
       [...SHARD_1.tests, ...SHARD_2.tests, ...WITHIN.tests].map((test) => test.title),
     );
+    // Each test as its shard wrote it, every field kept: rc-verify reads kind, cell, viewport, row
+    // and engine from here.
+    assert.deepEqual(
+      summary.tests,
+      JSON.parse(JSON.stringify([...SHARD_1.tests, ...SHARD_2.tests, ...WITHIN.tests])),
+    );
     assert.equal(summary.verdict.ok, true);
     assert.equal(summary.timing.tests.length, 1, "the trend reads shard 2's perf test");
   });
