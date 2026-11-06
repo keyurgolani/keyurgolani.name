@@ -3558,4 +3558,10 @@
   [data-variant='horizontal-cinema'] .hc-board__map {
     position: static;
   }
+
+  /* The text-size sentinel stays out of the flow and keeps its 1rem, so printing reads no change of
+     text size, but it isn't fixed: a fixed box is placed again on every printed page. */
+  [data-variant='horizontal-cinema'] .hc-shell__em {
+    position: absolute;
+  }
 }
