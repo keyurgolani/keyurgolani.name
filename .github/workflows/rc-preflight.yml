@@ -1,0 +1,231 @@
+# The release candidate's quality gate on demand (docs/releasing.md). The
+# owner dispatches it from main with a commit on main, gh workflow run
+# rc-preflight.yml -f sha=<full commit id>, to see the candidate's
+# quality-gate verdict on that commit before spending a candidate number on
+# it: a release tag can't be moved or deleted, so a candidate rc-verify
+# refuses is gone. A green preflight is that verdict alone: it leaves out
+# rc-verify's green ci push run, the image build and attestation, both
+# scans, the rehearsal, and promotion's empty baseline-pending list, and the
+# candidate measures timing again.
+#
+# preflight-verify refuses an id that isn't a full commit id, a dispatch
+# from anywhere but main, a commit that isn't on main, and a commit whose
+# own release.yml differs from the one at this run's commit (GITHUB_SHA).
+# It doesn't ask for a green ci run, as rc-verify does: that's what a
+# preflight is for. preflight-plan, preflight-quality, and preflight-verdict
+# are release.yml's rc-quality-plan, rc-quality, and rc-quality-verdict,
+# step for step: main's current gate, from this file at GITHUB_SHA, on the
+# commit's code. #11's complete quality matrix, every cell, in the shards
+# the plan counts, 16 at a time, then the release gates over every shard's
+# reports (pnpm quality:release). ci/workflows.test.mjs holds the three to
+# release.yml's.
+#
+# It never tags, builds an image, or publishes, and its verdict never counts
+# for promotion: promote-verify reads only the tag's own release.yml run
+# (ci/release/promote-check.mjs). It holds contents: read and no secret, its
+# reports keep one day, and no job reads or writes a cache: setup-node runs
+# with its cache off and the installs are fresh, as in release.yml.
+name: rc-preflight
+# Display only: find a preflight by this title or its summary. Its checks
+# sit on main's tip at dispatch, never on the commit it tests.
+run-name: rc-preflight of ${{ inputs.sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: The full id of a commit on main
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # One preflight at a time, whatever the commit: each takes 16 of the
+  # account's 20 job slots. A second dispatch waits, and the running one is
+  # never cancelled; a third replaces the one waiting. Don't dispatch one
+  # while a candidate runs (docs/releasing.md).
+  group: rc-preflight
+  cancel-in-progress: false
+
+env:
+  # release.yml's.
+  NODE_VERSION: 22.23.4
+  TZ: UTC
+
+jobs:
+  # The commit has to be on main, as a candidate's must, and its own
+  # release.yml has to be the one this run copies from: the jobs below are
+  # main's current gate, read from this file at GITHUB_SHA, run on the
+  # commit's code, so a commit whose release.yml differs would be judged by
+  # a gate a tag on it wouldn't get.
+  preflight-verify:
+    name: preflight-verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.verify.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: main
+          # main's whole history, to find the commit in.
+          fetch-depth: 0
+      - name: Refuse anything but a commit on main with main's release.yml
+        id: verify
+        env:
+          SHA: ${{ inputs.sha }}
+        run: |
+          # The input never reaches the log until it's a commit id.
+          if ! [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::sha is not a full 40-character lowercase commit id (git rev-parse <commit>)"
+            exit 1
+          fi
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::dispatch the preflight from main, not $GITHUB_REF"
+            exit 1
+          fi
+          if [ "$(git cat-file -t "$SHA" 2>/dev/null)" != commit ]; then
+            echo "::error::$SHA is not a commit"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$SHA" refs/remotes/origin/main 2>/dev/null; then
+            echo "::error::$SHA is not on main"
+            exit 1
+          fi
+          if ! git diff --quiet "$GITHUB_SHA" "$SHA" -- .github/workflows/release.yml; then
+            echo "::error::$SHA's release.yml differs from $GITHUB_SHA's, whose gate this run copies: a tag on $SHA would get its own"
+            exit 1
+          fi
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Release preflight of \`$SHA\`"
+            echo
+            echo "The candidate's quality gate, with no tag, from rc-preflight.yml at \`$GITHUB_SHA\` on main. Its verdict doesn't count for promotion."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # release.yml's rc-quality-plan, on the commit.
+  preflight-plan:
+    name: preflight-plan
+    needs: [preflight-verify]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      count: ${{ steps.count.outputs.count }}
+      shards: ${{ steps.count.outputs.shards }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.preflight-verify.outputs.sha }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install, with no cache
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: Count the release plan's shards
+        id: count
+        run: pnpm exec tsx tests/quality/full-plan.ts
+
+  # release.yml's rc-quality, on the commit: 16 shards at a time, as a
+  # candidate runs them, so PR CI keeps the other 4 job slots. Each shard's
+  # reports are scrubbed however the run ended, and upload only when that
+  # scrub succeeds, for one day.
+  preflight-quality:
+    name: preflight-quality (${{ matrix.shard }}/${{ needs.preflight-plan.outputs.count }})
+    needs: [preflight-verify, preflight-plan]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        shard: ${{ fromJSON(needs.preflight-plan.outputs.shards) }}
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      # The image this job runs in, so the visual cells know they're in it.
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.preflight-verify.outputs.sha }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install, with no cache
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: pnpm ci:quality-full --shard=${{ matrix.shard }}/${{ needs.preflight-plan.outputs.count }}
+        env:
+          SHARD: ${{ matrix.shard }}/${{ needs.preflight-plan.outputs.count }}
+          CI_REPRO_COMMAND: pnpm ci:quality-full --shard=${{ matrix.shard }}/${{ needs.preflight-plan.outputs.count }}
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+        run: pnpm ci:quality-full "--shard=$SHARD"
+      # The reports upload only when this succeeds: it deletes what it can't
+      # read, and fails when it did, or when the canary is still in any.
+      - name: Scrub reports
+        id: scrub
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-quality-preflight-${{ matrix.shard }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 1
+
+  # release.yml's rc-quality-verdict: the merged verdict over every shard
+  # preflight-plan counted, then the release-only gates. It runs only when
+  # every shard passed.
+  preflight-verdict:
+    name: preflight-verdict
+    needs: [preflight-verify, preflight-plan, preflight-quality]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.preflight-verify.outputs.sha }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install, with no cache
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: Download the shards' reports
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: reports-quality-preflight-*
+          path: ${{ runner.temp }}/quality-shards
+      - name: pnpm ci:quality-release --merged
+        env:
+          SHARDS: ${{ runner.temp }}/quality-shards
+          SHARD_COUNT: ${{ needs.preflight-plan.outputs.count }}
+        run: pnpm ci:quality-release --merged "$SHARDS" --shards "$SHARD_COUNT"
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-quality-preflight-verdict
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 1

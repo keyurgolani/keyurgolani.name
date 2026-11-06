@@ -7,12 +7,15 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
+import { passedRuns, RELEASE_WORKFLOW, REQUIRED_RC_JOBS } from './release/promote-check.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => parse(readFileSync(path.join(ROOT, file), 'utf8'));
 const CI = read('.github/workflows/ci.yml');
 const SCHEDULED = read('.github/workflows/scheduled.yml');
 const INSTALL = read('.github/actions/install/action.yml');
+const RELEASE = read('.github/workflows/release.yml');
+const PREFLIGHT = read('.github/workflows/rc-preflight.yml');
 
 const CACHE_ACTIONS = /^actions\/cache(\/restore|\/save)?@/;
 const usesCache = (step) =>
@@ -302,19 +305,25 @@ test('catalog-provenance runs weekly with links, reads only, and report expects 
   );
 });
 
-test('no workflow has a manual trigger', () => {
-  for (const workflow of [CI, SCHEDULED]) {
-    assert.ok(!('workflow_dispatch' in workflow.on));
-  }
+test('no workflow has a manual trigger but rc-preflight.yml, which has nothing else', () => {
+  const files = readdirSync(path.join(ROOT, '.github/workflows')).filter((f) => /\.ya?ml$/.test(f));
+  assert.ok(files.includes('rc-preflight.yml'));
+  // By its name anywhere in the file, so no form of on: hides one.
+  const manual = files.filter((file) =>
+    /workflow_dispatch/.test(readFileSync(path.join(ROOT, '.github/workflows', file), 'utf8')),
+  );
+  assert.deepEqual(manual, ['rc-preflight.yml']);
+  assert.deepEqual(Object.keys(PREFLIGHT.on), ['workflow_dispatch']);
+  assert.deepEqual(Object.keys(CI.on), ['pull_request', 'push']);
 });
 
 test('every job runs on a pinned GitHub-hosted Ubuntu, and arm64 only where a leg runs it natively', () => {
-  const RELEASE = read('.github/workflows/release.yml');
   const legs = [];
   for (const [file, workflow] of [
     ['ci.yml', CI],
     ['scheduled.yml', SCHEDULED],
     ['release.yml', RELEASE],
+    ['rc-preflight.yml', PREFLIGHT],
   ]) {
     for (const [id, job] of Object.entries(workflow.jobs)) {
       if (job['runs-on'] === '${{ matrix.runner }}') {
@@ -435,4 +444,183 @@ test('fresh-clone reads no cache, installs nothing itself, holds no token, and r
   for (const control of ['gate', 'selected']) {
     assert.ok(CI.jobs[control].needs.includes('fresh-clone'), control);
   }
+});
+
+// rc-preflight.yml's jobs, and the release.yml job each one runs as.
+const PREFLIGHT_OF = {
+  'preflight-plan': 'rc-quality-plan',
+  'preflight-quality': 'rc-quality',
+  'preflight-verdict': 'rc-quality-verdict',
+};
+const PREFLIGHT_SHA = '${{ needs.preflight-verify.outputs.sha }}';
+
+/** The release.yml job `id` as rc-preflight.yml runs it: on the verified commit, under its own names. */
+function asPreflight(id) {
+  let text = JSON.stringify(RELEASE.jobs[id]);
+  for (const [own, release] of Object.entries(PREFLIGHT_OF)) {
+    text = text.replaceAll(`needs.${release}.`, `needs.${own}.`);
+  }
+  text = text.replaceAll('reports-quality-release-', 'reports-quality-preflight-');
+  const job = JSON.parse(text);
+  // Its own needs, and no tag to wait for.
+  delete job.needs;
+  delete job.if;
+  // Nothing left reads the event, so the copy runs the same on a dispatch.
+  assert.doesNotMatch(JSON.stringify(job), /\bgithub\./, id);
+  const own = Object.keys(PREFLIGHT_OF).find((key) => PREFLIGHT_OF[key] === id);
+  job.name = job.name.replace(id, own);
+  for (const step of job.steps) {
+    if (/^actions\/checkout@/.test(step.uses ?? ''))
+      step.with = { ...step.with, ref: PREFLIGHT_SHA };
+  }
+  return job;
+}
+
+test("rc-preflight runs release.yml's quality gate step for step, on the commit it was given", () => {
+  assert.deepEqual(Object.keys(PREFLIGHT.jobs), ['preflight-verify', ...Object.keys(PREFLIGHT_OF)]);
+  for (const [own, release] of Object.entries(PREFLIGHT_OF)) {
+    const { needs, ...job } = PREFLIGHT.jobs[own];
+    assert.deepEqual(job, asPreflight(release), `${own} is release.yml's ${release}`);
+    assert.ok(needs.includes('preflight-verify'), own);
+  }
+  assert.deepEqual(PREFLIGHT.jobs['preflight-plan'].needs, ['preflight-verify']);
+  assert.deepEqual(PREFLIGHT.jobs['preflight-quality'].needs, [
+    'preflight-verify',
+    'preflight-plan',
+  ]);
+  assert.deepEqual(PREFLIGHT.jobs['preflight-verdict'].needs, [
+    'preflight-verify',
+    'preflight-plan',
+    'preflight-quality',
+  ]);
+  // The verdict runs only when every shard passed, as the release's does.
+  assert.equal(PREFLIGHT.jobs['preflight-verdict'].if, undefined);
+  // The workflow around them is release.yml's too, but the platforms it builds.
+  const { PLATFORMS, ...shared } = RELEASE.env;
+  assert.ok(PLATFORMS);
+  assert.deepEqual(PREFLIGHT.env, shared);
+  assert.deepEqual(Object.keys(PREFLIGHT), [
+    'name',
+    'run-name',
+    'on',
+    'permissions',
+    'concurrency',
+    'env',
+    'jobs',
+  ]);
+  assert.equal(RELEASE.defaults, undefined);
+  assert.equal(PREFLIGHT.defaults, undefined);
+});
+
+test('rc-preflight takes a commit id on dispatch from main, refuses one off main or with another release.yml, and runs one at a time', () => {
+  const { sha, ...rest } = PREFLIGHT.on.workflow_dispatch.inputs;
+  assert.deepEqual(rest, {});
+  assert.equal(sha.required, true);
+  assert.equal(sha.type, 'string');
+  // Display only: the title names the commit, since the run's checks sit on main's tip.
+  assert.equal(PREFLIGHT['run-name'], 'rc-preflight of ${{ inputs.sha }}');
+  // One preflight at a time, whatever the commit, and none cancelled.
+  assert.deepEqual(PREFLIGHT.concurrency, {
+    group: 'rc-preflight',
+    'cancel-in-progress': false,
+  });
+  const verify = PREFLIGHT.jobs['preflight-verify'];
+  assert.deepEqual(verify.outputs, { sha: '${{ steps.verify.outputs.sha }}' });
+  const [checkout, step] = verify.steps;
+  assert.match(checkout.uses, /^actions\/checkout@[0-9a-f]{40}$/);
+  assert.deepEqual(checkout.with, { 'persist-credentials': false, ref: 'main', 'fetch-depth': 0 });
+  assert.equal(step.id, 'verify');
+  // The input reaches the shell through env: only, and is a full id before anything else.
+  assert.deepEqual(step.env, { SHA: '${{ inputs.sha }}' });
+  const checks = [
+    /\[\[ "\$SHA" =~ \^\[0-9a-f\]\{40\}\$ \]\]/,
+    // The jobs are this file at GITHUB_SHA, so it has to be main's.
+    /if \[ "\$GITHUB_REF" != refs\/heads\/main \]; then/,
+    // A tag object's id is 40 hex digits too.
+    /if \[ "\$\(git cat-file -t "\$SHA" 2>\/dev\/null\)" != commit \]; then/,
+    /if ! git merge-base --is-ancestor "\$SHA" refs\/remotes\/origin\/main 2>\/dev\/null; then/,
+    // The gate main's tip runs is the one a tag on the commit would get.
+    /if ! git diff --quiet "\$GITHUB_SHA" "\$SHA" -- \.github\/workflows\/release\.yml; then/,
+    /^\s*echo "sha=\$SHA" >> "\$GITHUB_OUTPUT"$/m,
+  ];
+  const at = checks.map((check) => {
+    const match = check.exec(step.run);
+    assert.ok(match, String(check));
+    return match.index;
+  });
+  assert.deepEqual(
+    at,
+    [...at].sort((a, b) => a - b),
+    'each check runs in turn, and the output is last',
+  );
+  // Each refusal exits, and only the one line writes the output, which every later checkout reads.
+  assert.equal(step.run.match(/exit 1/g).length, checks.length - 1);
+  assert.equal(step.run.match(/GITHUB_OUTPUT/g).length, 1);
+  // The summary names the commit the gate came from.
+  assert.match(step.run, /echo "[^\n]*\$GITHUB_SHA[^\n]*"\n\s*\} >> "\$GITHUB_STEP_SUMMARY"$/m);
+  // Every later checkout takes the commit verify passed on, and nothing else names the input.
+  for (const [id, job] of Object.entries(PREFLIGHT.jobs)) {
+    for (const s of job.steps) {
+      if (s.run) assert.doesNotMatch(s.run, /\$\{\{/, `${id}: ${s.name}`);
+      if (/^actions\/checkout@/.test(s.uses ?? '')) {
+        assert.equal(s.with['persist-credentials'], false, id);
+        if (id !== 'preflight-verify') assert.equal(s.with.ref, PREFLIGHT_SHA, id);
+      }
+    }
+    if (id !== 'preflight-verify') assert.doesNotMatch(JSON.stringify(job), /inputs\./, id);
+  }
+});
+
+test('rc-preflight reads only, holds no secret, reads no cache, keeps reports a day, builds no image, and never tags or publishes', () => {
+  assert.deepEqual(PREFLIGHT.permissions, { contents: 'read' });
+  const text = readFileSync(path.join(ROOT, '.github/workflows/rc-preflight.yml'), 'utf8');
+  const jobs = JSON.stringify(PREFLIGHT.jobs);
+  assert.doesNotMatch(jobs, /secrets\.|github\.token|GITHUB_TOKEN|GH_TOKEN/);
+  assert.doesNotMatch(
+    jobs,
+    /docker |buildx|build-push-action|login-action|attest|imagetools|retag|merge-index|git (tag|push)|gh release|ghcr/i,
+  );
+  const uploads = [];
+  for (const [id, job] of Object.entries(PREFLIGHT.jobs)) {
+    assert.equal(job.permissions, undefined, `${id} keeps the workflow's contents: read`);
+    assert.equal(job['runs-on'], 'ubuntu-24.04', id);
+    assert.ok(Number.isInteger(job['timeout-minutes']) && job['timeout-minutes'] > 0, id);
+    assert.deepEqual(
+      job.steps.filter(usesCache).map((s) => s.name ?? s.uses),
+      [],
+      id,
+    );
+    for (const step of job.steps) {
+      if (/^actions\/upload-artifact@/.test(step.uses ?? '')) uploads.push(step.with);
+      if (/pnpm install/.test(step.run ?? '')) {
+        assert.equal(step.run, 'corepack enable && pnpm install --frozen-lockfile', id);
+      }
+    }
+  }
+  assert.deepEqual(
+    uploads.map((u) => u.name),
+    ['reports-quality-preflight-${{ matrix.shard }}', 'reports-quality-preflight-verdict'],
+  );
+  for (const upload of uploads) {
+    assert.equal(upload.path, 'reports/');
+    assert.equal(upload['retention-days'], 1, upload.name);
+  }
+  // Its verdict never counts for promotion: promote-verify takes only a
+  // pushed release.yml run on the tag, and none of the jobs it names is one of these.
+  assert.match(text, /^name: rc-preflight$/m);
+  assert.equal(RELEASE_WORKFLOW, '.github/workflows/release.yml');
+  const names = Object.values(PREFLIGHT.jobs).map((job) => job.name.split(' ')[0]);
+  for (const name of REQUIRED_RC_JOBS) assert.ok(!names.includes(name), name);
+  const sha = 'a'.repeat(40);
+  const run = {
+    id: 1,
+    path: '.github/workflows/rc-preflight.yml',
+    event: 'workflow_dispatch',
+    head_branch: 'main',
+    head_sha: sha,
+    status: 'completed',
+    conclusion: 'success',
+  };
+  const runJobs = { 1: REQUIRED_RC_JOBS.map((name) => ({ name, conclusion: 'success' })) };
+  assert.deepEqual(passedRuns('v1.0.0-rc.1', sha, [run], runJobs), []);
 });

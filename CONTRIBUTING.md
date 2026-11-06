@@ -199,6 +199,8 @@ Tests use Node's built-in `node:test`, through `tsx` for TypeScript. A single fi
 
 <!-- release-check-names:end -->
 
+`rc-preflight.yml` isn't a PR check. The owner dispatches it from `main` with a commit of `main`, `gh workflow run rc-preflight.yml -f sha=<sha>`, to run a release candidate's quality gate on that commit, `release.yml`'s `rc-quality-plan`, `rc-quality`, and `rc-quality-verdict`, with no tag. It builds no image, publishes nothing, and its verdict is the candidate's quality-gate verdict alone, which doesn't count for promotion ([docs/releasing.md](docs/releasing.md#a-preflight)).
+
 **Shards.** `unit`, `browser`, and `variants` split by measured duration (`ci/shards.mjs`): by workspace package and root test script, by spec file, and by Playwright project. Items are read from the tree when the shard runs, so a new one is never left out, and `pnpm test:shard <suite> <i>/<n>` runs one shard locally. `ci/shard-durations.json` holds the durations, and its `source` says where they came from; refresh it with `node ci/shards.mjs measure <suite> <log>...` from `gh run view --job <id> --log` output, which updates the items those logs measured and keeps the rest.
 
 **Caches.** Each check job installs through `.github/actions/install`, which restores and saves the pnpm store under the lockfile's hash. `build` also caches `apps/web/.next/cache` under the lockfile and a hash of the build inputs, and `browser` and `variants` restore it without writing it. Nothing caches `node_modules` or a generated registry, and `publish` installs without either cache.

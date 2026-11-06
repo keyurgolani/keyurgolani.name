@@ -1,6 +1,6 @@
 # Releasing
 
-A release is two tags on one commit of `main`: a release candidate, `vX.Y.Z-rc.N`, which builds, attests, and scans the image, and a final tag, `vX.Y.Z`, which promotes that same image with no rebuild. Both run in [`.github/workflows/release.yml`](../.github/workflows/release.yml). Nothing else publishes a release, and the workflow has no manual trigger.
+A release is two tags on one commit of `main`: a release candidate, `vX.Y.Z-rc.N`, which builds, attests, and scans the image, and a final tag, `vX.Y.Z`, which promotes that same image with no rebuild. Both run in [`.github/workflows/release.yml`](../.github/workflows/release.yml). Nothing else publishes a release, and the workflow has no manual trigger. [`rc-preflight.yml`](../.github/workflows/rc-preflight.yml) runs a candidate's quality gate on demand with no tag, builds no image, and publishes nothing ([A preflight](#a-preflight)).
 
 Pushes to `main` keep publishing `sha-<short>` images after `gate` (the `publish` jobs in [`ci.yml`](../.github/workflows/ci.yml)). They build each platform natively, as `rc-build` does, merge the two with the same helper as `rc-merge`, smoke-test both platforms from the merged digest, and tag only that digest. Those are builds, not releases: they never move a version tag or `latest`, and they carry no provenance or SBOM. The merge says so with `--unattested --purpose sha-publish`, which only `ci.yml`'s run for a push to `main` of this repository may pass, by its exact `GITHUB_WORKFLOW_REF`, and the merged index must hold one image manifest for each platform and nothing else.
 
@@ -26,6 +26,21 @@ Pushing `vX.Y.Z-rc.N` runs these jobs in order (the quality gate and the rehears
 7. **rc-rehearsal** runs beside the build, after `rc-verify`: the upgrade rehearsal ([The rehearsal](#the-rehearsal)), on an image of the tagged commit it builds itself with no cache and never pushes, so nothing comes from GHCR.
 8. **rc-tag** tags the scanned digest `X.Y.Z-rc.N` on GHCR once `rc-scan`, `rc-quality-verdict`, and `rc-rehearsal` all passed, and checks the tag resolves to it.
 9. **rc-release** creates the GitHub pre-release, with notes that name the pull source by digest and the two SBOMs attached.
+
+## A preflight
+
+[`rc-preflight.yml`](../.github/workflows/rc-preflight.yml) runs a candidate's quality gate on a commit of `main` with no tag, so the candidate's quality-gate verdict on that commit is known before it costs a candidate number. A release tag can't be moved or deleted, so a candidate that `rc-verify` refuses, say while `main`'s `gate` is red, is gone, and the next one is `rc.<N+1>`. A green preflight is that verdict alone. It doesn't cover `rc-verify`'s green `ci` push run on exactly that commit, the image build and attestation, both scans, the rehearsal, or promotion's empty baseline-pending list, and the candidate measures timing again. So preflight `main`'s tip, or a commit `main` was pushed at whose `ci` push run is green. Dispatch it from `main` with the commit's full id:
+
+```sh
+gh workflow run rc-preflight.yml -f sha=<sha>
+```
+
+The run's title is `rc-preflight of <sha>`. Find a preflight by its title or its summary, never by `--commit`: its checks sit on `main`'s tip at dispatch, not on the commit it tests.
+
+1. **preflight-verify** refuses anything but a full 40-character lowercase commit id (`git rev-parse <commit>`), a dispatch from anywhere but `main`, an id that names a tag object or anything else but a commit, a commit that isn't on `main` (it checks out `main`'s whole history and runs `git merge-base --is-ancestor` against it), and a commit whose own `release.yml` differs from the one at the run's commit, `$GITHUB_SHA`, which the summary names. It doesn't ask for a green `ci` run, as `rc-verify` does; that's what the preflight is for.
+2. **preflight-plan**, **preflight-quality**, and **preflight-verdict** are `rc-quality-plan`, `rc-quality`, and `rc-quality-verdict`, step for step, and [`ci/workflows.test.mjs`](../ci/workflows.test.mjs) holds them to `release.yml`'s: the same shard count from the plan, 16 at a time in the pinned Playwright image, the same timeouts, and the same verdict, `pnpm ci:quality-release --merged "$SHARDS" --shards "$SHARD_COUNT"`. A dispatch reads `rc-preflight.yml` at `main`'s tip and checks out the commit, so the preflight runs `main`'s current gate on the commit's code, and refuses when the commit's own `release.yml` differs, since a tag on it would get that one instead. The reports upload as `reports-quality-preflight-*`, kept for one day.
+
+Dispatch one preflight at a time, and not while a candidate runs: each takes 16 of the account's 20 job slots. One preflight runs at a time whatever its commit; a second dispatch waits, the running one is never cancelled, and a third replaces the one waiting, as GitHub's concurrency groups do. A failed shard can't be re-run to green, since the timing gate counts only a first attempt, so dispatch again. It holds `contents: read` and no secret, reads no cache, and never tags, builds an image, or publishes. Its verdict never counts for promotion: promote-verify reads only the tag's own `release.yml` run, so a commit that passed its preflight still needs a candidate whose run passes. Dispatch it outside the nightly too.
 
 ## Promotion
 
@@ -119,6 +134,8 @@ exceptions:
 An entry matches a finding by its id, or one of the aliases Grype lists, in the named package. It needs all five fields, and `expires` is a date no more than 90 days out. Once that date passes, the entry fails every scan, and the unit tests too, whether or not the finding is still there, so an exception is renewed with a reason or removed. It never quietly outlives its reason.
 
 ## Owner steps
+
+- **Preflight, if you want the quality gate's verdict first.** `gh workflow run rc-preflight.yml -f sha=<sha>` on the commit you mean to tag, `main`'s tip or a commit `main` was pushed at whose `ci` push run is green ([A preflight](#a-preflight)). A green preflight is the candidate's quality-gate verdict alone, not the release's.
 
 - **Push the tags.** From an up-to-date `main`, once its `ci` run has passed:
 
