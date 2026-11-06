@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -389,6 +390,8 @@ function LiveStage(props: StageProps) {
   const emRef = useRef<HTMLSpanElement | null>(null);
   const animate = useRef(false);
   const step = useRef<(by: 1 | -1) => void>(() => {});
+  /** The controller's refit, for the layout effect that runs it once the live bar is in the page. */
+  const refit = useRef<((landing?: boolean) => void) | null>(null);
 
   useEffect(() => {
     animate.current = state === 'active';
@@ -1160,9 +1163,9 @@ function LiveStage(props: StageProps) {
     fold(true);
     setHydrated(true);
 
-    let refit: ReturnType<typeof setTimeout> | undefined;
+    let refitTimer: ReturnType<typeof setTimeout> | undefined;
     /** The strip laid out again for the viewport and the text size now in force: the fit check, room, and pin. */
-    const refitNow = () => {
+    const refitNow = (landing = false) => {
       if (disposed) return;
       delete rootElement.dataset.fit;
       unroom();
@@ -1172,18 +1175,19 @@ function LiveStage(props: StageProps) {
         pinned && window.scrollY >= pinStart() && window.scrollY <= pinStart() + travel();
       const held = position;
       fitName();
-      fit(false);
+      fit(landing);
       pin();
       // A reader inside the strip keeps their scene; one above or below it stays where they are.
       if (inside && pinned)
         window.scrollTo({ top: pinStart() + offsetOf(held), behavior: 'instant' });
       paint();
     };
+    refit.current = refitNow;
     const onResize = () => {
-      if (refit !== undefined) clearTimeout(refit);
-      refit = setTimeout(() => {
-        refit = undefined;
-        requestAnimationFrame(refitNow);
+      if (refitTimer !== undefined) clearTimeout(refitTimer);
+      refitTimer = setTimeout(() => {
+        refitTimer = undefined;
+        requestAnimationFrame(() => refitNow());
       }, SETTLE_MS);
       if (frame === undefined) frame = requestAnimationFrame(paint);
     };
@@ -1297,9 +1301,10 @@ function LiveStage(props: StageProps) {
       if (quietTimer !== undefined) clearTimeout(quietTimer);
       if (overdueTimer !== undefined) clearTimeout(overdueTimer);
       if (timer !== undefined) clearTimeout(timer);
-      if (refit !== undefined) clearTimeout(refit);
+      if (refitTimer !== undefined) clearTimeout(refitTimer);
       if (frame !== undefined) cancelAnimationFrame(frame);
       if (snapFrame !== undefined) cancelAnimationFrame(snapFrame);
+      refit.current = null;
       step.current = () => {};
       rootElement.removeEventListener('keydown', onKey);
       window.removeEventListener('keydown', onPageKey);
@@ -1327,6 +1332,13 @@ function LiveStage(props: StageProps) {
       unroom();
     };
   }, [scenes]);
+
+  // The bar the server sends has no transport or live status, so its rail has more room than the
+  // visitor's: the fit measured before they render passes a rail the live bar can't hold. Once the
+  // live bar is in the page, and before it paints, the strip is fitted again on it.
+  useLayoutEffect(() => {
+    if (hydrated) refit.current?.(true);
+  }, [hydrated]);
 
   const onStep = useCallback((by: 1 | -1) => step.current(by), []);
   const live = useMemo<Live>(
