@@ -90,6 +90,109 @@ export interface Condition {
   /** Why it didn't take, or null when it did. */
   verify(page: Page): Promise<string | null>;
   teardown(page: Page, cdp: CDPSession): Promise<void>;
+  /** Its own CDP media features (feature()'s), which the cell's pointer pin keeps beside it. */
+  readonly features?: readonly MediaFeature[];
+  /** Its media type (print's), which the pin keeps. */
+  readonly media?: string;
+  /** It sets the pointer media itself (touch), so the cell's pin stays off under it. */
+  readonly ownsPointer?: boolean;
+}
+
+/** A media feature, as Emulation.setEmulatedMedia takes it. */
+interface MediaFeature {
+  readonly name: string;
+  readonly value: string;
+}
+
+/**
+ * A cell's pointer media, as matchMedia reads it (row 44). The touch condition runs first, and
+ * its teardown only turns touch emulation off; on headless Linux that doesn't give a mouse cell
+ * back its (hover: hover) and (pointer: fine), so every later condition rendered as a page
+ * without a mouse (Horizontal Cinema's pinned chrome gone, CI run 42196108099). The cell's own
+ * reading, before any condition, is what each later one renders under.
+ */
+export interface PointerMedia {
+  readonly hover: string;
+  readonly pointer: string;
+  readonly anyHover: string;
+  readonly anyPointer: string;
+}
+
+const POINTER_VALUES: [string, string[]][] = [
+  ['hover', ['hover', 'none']],
+  ['pointer', ['fine', 'coarse', 'none']],
+  ['any-hover', ['hover', 'none']],
+  ['any-pointer', ['fine', 'coarse', 'none']],
+];
+
+/** The page's pointer media now: each feature's value that matches, or 'unknown'. */
+export async function pointerMedia(page: Page): Promise<PointerMedia> {
+  // No named inner function: tsx's keepNames would wrap it in a __name the page doesn't have.
+  const [hover, pointer, anyHover, anyPointer] = await page.evaluate((values) => {
+    const found: string[] = [];
+    for (const [name, options] of values) {
+      let value = 'unknown';
+      for (const each of options) {
+        if (matchMedia(`(${name}: ${each})`).matches) {
+          value = each;
+          break;
+        }
+      }
+      found.push(value);
+    }
+    return found;
+  }, POINTER_VALUES);
+  return {
+    hover: hover ?? 'unknown',
+    pointer: pointer ?? 'unknown',
+    anyHover: anyHover ?? 'unknown',
+    anyPointer: anyPointer ?? 'unknown',
+  };
+}
+
+const describePointer = ({ hover, pointer, anyHover, anyPointer }: PointerMedia) =>
+  `hover ${hover}, pointer ${pointer}, any-hover ${anyHover}, any-pointer ${anyPointer}`;
+
+/**
+ * Pins `pointer` on the conditions' session, beside the condition's own features and media type:
+ * a feature the condition sets itself is its own, not the pin's. Each session's features are its
+ * own, so the row's (run-cell.ts's featureSessions) and Playwright's (emulateMedia) stay as set.
+ */
+async function pinPointer(
+  cdp: CDPSession,
+  pointer: PointerMedia,
+  own: readonly MediaFeature[] = [],
+  media = '',
+): Promise<void> {
+  const pinned: MediaFeature[] = [
+    { name: 'hover', value: pointer.hover },
+    { name: 'pointer', value: pointer.pointer },
+    { name: 'any-hover', value: pointer.anyHover },
+    { name: 'any-pointer', value: pointer.anyPointer },
+  ].filter(({ name, value }) => value !== 'unknown' && !own.some((each) => each.name === name));
+  await cdp.send('Emulation.setEmulatedMedia', {
+    media,
+    features: [...BASE_FEATURES, ...pinned, ...own],
+  });
+}
+
+/** A finding when the page no longer renders under the cell's pointer media, else none. */
+async function pointerHeld(
+  page: Page,
+  pointer: PointerMedia,
+  condition: string,
+): Promise<Finding[]> {
+  const now = await pointerMedia(page);
+  if (describePointer(now) === describePointer(pointer)) return [];
+  // Slice 1's fail-closed rule: a condition read on a page that lost the cell's mouse proves nothing.
+  return [
+    {
+      gate: 'runner',
+      rule: 'media-emulation',
+      expected: `the ${condition} condition keeps the cell's pointer media, ${describePointer(pointer)}`,
+      actual: `${condition}: ${describePointer(now)}: the pointer pin was ignored`,
+    },
+  ];
 }
 
 const matches = (query: string) => async (page: Page) =>
@@ -104,6 +207,7 @@ function feature(
   return {
     id,
     reload: true,
+    features,
     setup: async (_page, cdp) => {
       await cdp.send('Emulation.setEmulatedMedia', {
         media: '',
@@ -172,6 +276,7 @@ export function conditions(): Condition[] {
       // Touch: no hover and no pointer precision, as Chromium's touch emulation reports them.
       id: 'touch',
       reload: true,
+      ownsPointer: true,
       setup: async (_page, cdp) => {
         await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
       },
@@ -227,6 +332,7 @@ export function conditions(): Condition[] {
     {
       id: 'print',
       reload: false,
+      media: 'print',
       ignore: PRINT_IGNORE,
       setup: (page) => page.emulateMedia({ media: 'print' }),
       verify: matches('print'),
@@ -542,13 +648,23 @@ export async function inventoryFindings(
   baseline: readonly string[],
   only?: readonly string[],
   scriptRequired = false,
+  pointer?: PointerMedia,
 ): Promise<Finding[]> {
   const findings: Finding[] = [];
   await row44Probe(page, '1-after-load', path);
+  // The cell's pointer media, as it loaded: what every condition but touch renders under.
+  const own = pointer ?? (await pointerMedia(page));
   const cdp = await page.context().newCDPSession(page);
   try {
     for (const condition of conditions().filter((each) => !only || only.includes(each.id))) {
+      // Touch sets its own: no pin of this session's under it.
+      if (condition.ownsPointer) {
+        await cdp.send('Emulation.setEmulatedMedia', { media: '', features: BASE_FEATURES });
+      }
       await condition.setup(page, cdp);
+      // Every other condition gets the cell's pointer media pinned again, whatever the one before
+      // left: touch's teardown doesn't bring a mouse back on headless Linux (row 44).
+      if (!condition.ownsPointer) await pinPointer(cdp, own, condition.features, condition.media);
       try {
         if (condition.reload) {
           const expected = { baseline, ignore: condition.ignore };
@@ -573,6 +689,13 @@ export async function inventoryFindings(
             actual: `${condition.id}: ${problem}: the emulation was ignored`,
           });
           continue;
+        }
+        if (!condition.ownsPointer) {
+          const lost = await pointerHeld(page, own, condition.id);
+          if (lost.length > 0) {
+            findings.push(...lost);
+            continue;
+          }
         }
         // Without JavaScript, and in print over that page, a page that needs it says so instead.
         if (scriptRequired && condition.id === 'no-javascript') {
@@ -791,9 +914,14 @@ export async function enhancementFindings(
   baseline: readonly string[],
   scripts: readonly string[],
   scriptRequired = false,
+  pointer?: PointerMedia,
 ): Promise<Finding[]> {
+  // The cell's pointer media, as it loaded (run-cell.ts reads it before any condition), pinned
+  // again here: the inventory's touch condition ran before this (row 44).
+  const mouse = pointer ?? (await pointerMedia(page));
   const cdp = await page.context().newCDPSession(page);
   const own = new Set(scripts);
+  await pinPointer(cdp, mouse);
   await cdp.send('Page.enable');
   const { identifier } = await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
     source: NO_CANVAS,
@@ -815,60 +943,68 @@ export async function enhancementFindings(
     // soon as its chunks have failed.
     const expected = { baseline: scriptRequired ? [] : baseline, ignore: NO_SCRIPT_IGNORE };
     findings.push(...(await reload(page, path, 'failed enhancement', expected)));
-    const structure = await inPage<Structure>(page, { kind: 'structure' });
-    const missing = async () =>
-      missingItems(
-        'semantics',
-        'enhancement',
-        'failed enhancement',
-        baseline,
-        await inPage<string[]>(page, { kind: 'inventory' }),
-        NO_SCRIPT_IGNORE,
-      );
-    // A page that needs the script it lost works without it, or shows its failure state in
-    // place of the content it couldn't load. It's read as it loaded, before the skip link is
-    // followed, which may change it: Studio's first fragment link opens its Content task.
-    let read: Finding[] | null = null;
-    if (scriptRequired) {
-      const lost = await missing();
-      read = lost.length > 0 ? await failureStateFindings(page) : [];
+    // A page that lost the cell's mouse proves nothing: the reads below wait for one that kept it.
+    reads: {
+      const lost = await pointerHeld(page, mouse, 'failed enhancement');
+      if (lost.length > 0) {
+        findings.push(...lost);
+        break reads;
+      }
+      const structure = await inPage<Structure>(page, { kind: 'structure' });
+      const missing = async () =>
+        missingItems(
+          'semantics',
+          'enhancement',
+          'failed enhancement',
+          baseline,
+          await inPage<string[]>(page, { kind: 'inventory' }),
+          NO_SCRIPT_IGNORE,
+        );
+      // A page that needs the script it lost works without it, or shows its failure state in
+      // place of the content it couldn't load. It's read as it loaded, before the skip link is
+      // followed, which may change it: Studio's first fragment link opens its Content task.
+      let read: Finding[] | null = null;
+      if (scriptRequired) {
+        const lost = await missing();
+        read = lost.length > 0 ? await failureStateFindings(page) : [];
+      }
+      const semantics = (actual: string) =>
+        findings.push({
+          gate: 'enhancement',
+          rule: 'semantics',
+          expected: 'one main and an h1, without the enhancements',
+          actual,
+        });
+      if (structure.mains !== 1) semantics(`${structure.mains} main landmarks`);
+      if (structure.h1s === 0) semantics('no h1');
+      const navigation = (actual: string, at?: string) =>
+        findings.push({
+          gate: 'enhancement',
+          rule: 'navigation',
+          path: at,
+          expected: 'links and the skip link work without the enhancements',
+          actual,
+        });
+      for (const fragment of structure.fragments.filter((each) => !each.found)) {
+        navigation(`${fragment.href} names no element`, fragment.path);
+      }
+      if (structure.skip && structure.skipTarget) {
+        await page.keyboard.press('Tab');
+        await page.evaluate(
+          (at) => (document.querySelector(at) as HTMLElement | null)?.focus(),
+          structure.skip,
+        );
+        await page.keyboard.press('Enter');
+        await frames(page);
+        const landed = await page.evaluate(
+          (target) => Boolean(document.querySelector(target)?.contains(document.activeElement)),
+          structure.skipTarget,
+        );
+        if (!landed)
+          navigation(`the skip link leaves focus outside ${structure.skipTarget}`, structure.skip);
+      }
+      findings.push(...(read ?? (await missing())));
     }
-    const semantics = (actual: string) =>
-      findings.push({
-        gate: 'enhancement',
-        rule: 'semantics',
-        expected: 'one main and an h1, without the enhancements',
-        actual,
-      });
-    if (structure.mains !== 1) semantics(`${structure.mains} main landmarks`);
-    if (structure.h1s === 0) semantics('no h1');
-    const navigation = (actual: string, at?: string) =>
-      findings.push({
-        gate: 'enhancement',
-        rule: 'navigation',
-        path: at,
-        expected: 'links and the skip link work without the enhancements',
-        actual,
-      });
-    for (const fragment of structure.fragments.filter((each) => !each.found)) {
-      navigation(`${fragment.href} names no element`, fragment.path);
-    }
-    if (structure.skip && structure.skipTarget) {
-      await page.keyboard.press('Tab');
-      await page.evaluate(
-        (at) => (document.querySelector(at) as HTMLElement | null)?.focus(),
-        structure.skip,
-      );
-      await page.keyboard.press('Enter');
-      await frames(page);
-      const landed = await page.evaluate(
-        (target) => Boolean(document.querySelector(target)?.contains(document.activeElement)),
-        structure.skipTarget,
-      );
-      if (!landed)
-        navigation(`the skip link leaves focus outside ${structure.skipTarget}`, structure.skip);
-    }
-    findings.push(...(read ?? (await missing())));
   } finally {
     await page.unrouteAll({ behavior: 'wait' });
     await cdp.send('Page.removeScriptToEvaluateOnNewDocument', { identifier });

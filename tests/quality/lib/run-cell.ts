@@ -66,6 +66,7 @@ import { readVitals } from './vitals';
 import {
   enhancementFindings,
   notBusy,
+  pointerMedia,
   PRINT_IGNORE,
   revealNoscript,
   scriptRequiredFindings,
@@ -297,6 +298,12 @@ async function suites(run: SuiteRun): Promise<Finding[]> {
     await page.goto(at, { waitUntil: 'load' });
     await frames(page);
   }
+  // The cell's pointer media as it loaded, before any condition: the conditions after touch render
+  // under it again (row 44).
+  const pointer =
+    run.conditions && (does('inventory') || does('enhancement'))
+      ? await pointerMedia(page)
+      : undefined;
   if (does('reflow')) {
     const disclosures = run.interactions.filter((each) => each.kind === 'disclosure');
     findings.push(
@@ -308,12 +315,16 @@ async function suites(run: SuiteRun): Promise<Finding[]> {
     );
   }
   if (run.conditions && does('inventory')) {
-    findings.push(...(await inventoryFindings(page, at, baseline, undefined, run.scriptRequired)));
+    findings.push(
+      ...(await inventoryFindings(page, at, baseline, undefined, run.scriptRequired, pointer)),
+    );
     // Its no-JavaScript and print conditions read the notice in place of the content.
     if (run.scriptRequired) ran.add(NOTICE_CHECK);
   }
   if (run.conditions && does('enhancement')) {
-    findings.push(...(await enhancementFindings(page, at, baseline, scripts, run.scriptRequired)));
+    findings.push(
+      ...(await enhancementFindings(page, at, baseline, scripts, run.scriptRequired, pointer)),
+    );
   }
   return findings;
 }
