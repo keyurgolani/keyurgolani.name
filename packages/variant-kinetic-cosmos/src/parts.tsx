@@ -15,6 +15,22 @@ import {
 // and an address shown as its own text. No middle dots, no arrows, no
 // eyebrow labels: facts read as a sentence or as labelled rows.
 
+/**
+ * Main's first child: an empty mark inside <noscript>. The parser makes it an element only when
+ * it reads the page with scripting off; with scripting on it's the noscript's text. The
+ * stylesheet's no-script rules key on it, never on a scripting query: the quality runner's
+ * no-JavaScript rows audit with script on for axe, which such a query would flip (Terra Field's,
+ * Shell's and Obsidian Atelier's NoScriptMark). Main lays out as a block, so the empty inline is
+ * never a box: its line has no height, and nothing hides it.
+ */
+export function NoScriptMark() {
+  return (
+    <noscript>
+      <i data-kc-nojs="" />
+    </noscript>
+  );
+}
+
 /** Whether a part of a line has something to show: blank text and false don't. */
 function shows(part: ReactNode): boolean {
   if (part === null || part === undefined || part === false || part === true) return false;

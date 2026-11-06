@@ -23,7 +23,7 @@ import { Dock, type DockStop } from './dock';
 import { FACT_PARTS, FlightArc, STOP_WORDS } from './flight-rail';
 import { Colophon, Masthead, sectionsById, SystemIndex } from './home';
 import { cosmosModel, type CosmosModel, type Ring } from './model';
-import { LinkTo } from './parts';
+import { LinkTo, NoScriptMark } from './parts';
 import { SignatureSystem } from './renderers/works';
 
 // A work's own page in Kinetic Cosmos, /work/<slug> (redesign, stream E,
@@ -337,6 +337,7 @@ export function CaseStudyPage({ input, work, outline }: CaseStudyPageProps) {
         lang={work.lang}
         data-work-id={work.id}
       >
+        <NoScriptMark />
         <div className="kc-opening kc-case-stage" id={stageId} data-ui-surface="inverse">
           <nav className="kc-crumbs" aria-label="Breadcrumb">
             <ol role="list">

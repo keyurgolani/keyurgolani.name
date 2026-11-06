@@ -5,6 +5,7 @@ import { fixtureSiteSelecting } from '../../packages/variant-contract/src/contra
 import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
 import { expect, test } from '../harness/fixtures';
 import { loadHome, runningAnimations } from '../harness/motion';
+import { scriptingMediaFindings } from '../quality/lib/a11y/conditions';
 
 // Kinetic Cosmos's orrery (redesign, stream E), on #6's runtime, on the
 // complete contract fixture: while the runtime is active the two orbit
@@ -415,5 +416,42 @@ test(
     );
     expect(clicked?.scrolled).toBe(0);
     expect(clicked?.hit).toBe(true);
+  },
+);
+
+// The no-script styles key on main's noscript mark, an element only the parser makes, and only
+// when it reads the page with scripting off (NoScriptMark), never on a scripting query, which the
+// quality runner's no-JavaScript rows flip by auditing with script on for axe (their
+// media-emulation record). Read with no script the mark is there and the no-script styles apply;
+// with script it never is, so they never do.
+test(
+  "the no-script styles apply only where main's noscript mark is, and no stylesheet reads a scripting query",
+  { annotation },
+  async ({ page, browser }) => {
+    await page.goto('/', { waitUntil: 'networkidle' });
+    // The no-JavaScript row's own check, on the live page's stylesheets.
+    expect(await scriptingMediaFindings(page)).toEqual([]);
+    await expect(page.locator('[data-kc-nojs]')).toHaveCount(0);
+    await expect(page.locator('.kc-pause')).toBeVisible();
+    const context = await browser.newContext({
+      javaScriptEnabled: false,
+      baseURL: page.url(),
+      viewport: { width: 1280, height: 800 },
+    });
+    try {
+      const still = await context.newPage();
+      await still.goto('/', { waitUntil: 'load' });
+      await expect(still.locator('main.kc-main > noscript > [data-kc-nojs]')).toHaveCount(1);
+      // Nothing turns, so there's nothing to pause.
+      await expect(still.locator('.kc-pause')).toBeHidden();
+      // The mark is never a box: main's first block starts where it did with script.
+      const top = async (target: typeof page) =>
+        target
+          .locator('main.kc-main > .kc-opening')
+          .evaluate((el) => el.getBoundingClientRect().top);
+      expect(await top(still)).toBe(await top(page));
+    } finally {
+      await context.close();
+    }
   },
 );

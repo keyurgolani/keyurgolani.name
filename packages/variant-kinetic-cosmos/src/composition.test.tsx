@@ -628,20 +628,56 @@ test("a work's own page is the composition's: its title the one h1, its stops in
 
 test('with no script a section link shows only its own fold, and print and no script read every dialog inline', () => {
   // The child combinator: a link to #main targets an ancestor of every fold and must open none (T1).
-  const noScript = CSS.slice(CSS.indexOf('@media (scripting: none) {'));
-  assert.match(noScript, /:target > details\.kc-fold > :not\(summary\)\s*\{\s*display: block;/);
-  assert.match(noScript, /:target > details\.kc-fold::details-content\s*\{/);
+  const NOJS = "[data-variant='kinetic-cosmos']:has([data-kc-nojs])";
+  assert.ok(CSS.includes(`${NOJS} :target > details.kc-fold > :not(summary) {\n  display: block;`));
+  assert.ok(CSS.includes(`${NOJS} :target > details.kc-fold::details-content {`));
   assert.doesNotMatch(CSS, /:target\s+details\.kc-fold|:target\s+:is\(/);
-  // A printed page holds the whole record: a dialog's content too (M1).
-  const inline =
-    /@media \(scripting: none\), print \{\s*\[data-variant='kinetic-cosmos'\] \.kc-talk-dialog \{([^}]*)\}/.exec(
-      CSS,
-    );
-  assert.ok(inline, 'one rule for no script and print');
-  assert.match(inline[1]!, /display: grid;/);
-  assert.match(inline[1]!, /position: static;/);
+  // A printed page holds the whole record: a dialog's content too (M1), and so does a page read
+  // with no script, by the same declarations.
+  const printed =
+    /@media print \{\s*\[data-variant='kinetic-cosmos'\] \.kc-talk-dialog \{([^}]*)\}/.exec(CSS);
+  const unscripted = new RegExp(
+    `${NOJS.replace(/[[\]().:'-]/g, '\\$&')} \\.kc-talk-dialog \\{([^}]*)\\}`,
+  ).exec(CSS);
+  assert.ok(printed, 'the print rule');
+  assert.ok(unscripted, 'the no-script rule');
+  assert.equal(unscripted[1]!.replace(/\s+/g, ' ').trim(), printed[1]!.replace(/\s+/g, ' ').trim());
+  assert.match(printed[1]!, /display: grid;/);
+  assert.match(printed[1]!, /position: static;/);
   // In the page's ink, so its text and its focus ring read on the page, not the stage (L2).
-  assert.match(inline[1]!, /--layout-ink: var\(--color-text-primary\);/);
+  assert.match(printed[1]!, /--layout-ink: var\(--color-text-primary\);/);
+});
+
+test("with no script the stylesheet keys on main's noscript mark, never on a scripting query", () => {
+  // The quality runner's no-JavaScript rows audit with script on for axe, which a scripting query
+  // would flip (its media-emulation record): the page says it was read with no script by an
+  // element only the parser makes, inside <noscript>, main's first child.
+  assert.doesNotMatch(CSS, /@media[^{]*\bscripting\b/);
+  const read = readPair(contractFixture('complete').files);
+  assert.ok(read.ok);
+  const view = resolvePortfolioView(read.pair, {}, { mediaBase: '/media' });
+  const work = view.portfolio.works.find((each) => each.caseStudy !== undefined && each.slug);
+  assert.ok(work?.slug, 'a work with its own page');
+  const pages = { home: html(inputOf(read.pair)), work: html(workInput(read.pair, work.slug)) };
+  for (const [name, markup] of Object.entries(pages)) {
+    assert.match(
+      markup,
+      /<main [^>]*class="kc-main[^"]*"[^>]*><noscript><i data-kc-nojs=""><\/i><\/noscript>/,
+      `${name}: main's first child is the no-script mark`,
+    );
+    assert.equal(count(markup, /data-kc-nojs/g), 1, `${name}: one mark`);
+  }
+  // Each no-script rule is the mark's: no Pause with nothing turning, a link's fold open, focus
+  // clear of the dock.
+  const NOJS = "[data-variant='kinetic-cosmos']:has([data-kc-nojs])";
+  for (const rule of [
+    `${NOJS} .kc-pause {\n  display: none;`,
+    `${NOJS} :target > details.kc-fold > :not(summary) {`,
+    `${NOJS} .kc-orbitals :is(a, button, summary, [id]) {\n  scroll-margin-block-end:`,
+    `${NOJS} .kc-talk-dialog {`,
+    `${NOJS} :is(.kc-talk-dialog__head, .kc-object__more) {\n  display: none;`,
+  ])
+    assert.ok(CSS.includes(rule), rule);
 });
 
 test('the dock is at the stop under its line, else the last passed; a row of stops is one place, the named one or its first (review M1)', () => {
