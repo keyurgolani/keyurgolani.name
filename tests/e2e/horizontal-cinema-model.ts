@@ -192,8 +192,10 @@ export async function crowdRail(page: Page): Promise<void> {
  * What on the bar under the stage overlaps or runs out of its box, by the boxes the page draws: a
  * chapter label's text past the bar's inner box, over the next label, or over the bar's other
  * parts (the transport, the position text, the credits), and the position text or the credits past
- * the bar. A chapter's contents, shown only on hover or focus, don't count. Empty where the bar
- * isn't shown.
+ * the bar. A label counts only the text a visitor sees: a part clipped away, the years a short rail
+ * hides (kept for assistive technology), doesn't. The position text and the credits count by their
+ * own boxes, since the position text keeps one width as its title changes. A chapter's contents,
+ * shown only on hover or focus, don't count. Empty where the bar isn't shown.
  */
 export function railClashes(scope: Scope) {
   return scope.evaluate(() => {
@@ -204,9 +206,37 @@ export function railClashes(scope: Scope) {
     const left = outer.left + (Number.parseFloat(style.paddingLeft) || 0);
     const right = outer.right - (Number.parseFloat(style.paddingRight) || 0);
     const drawn = (element: Element) => {
+      if (element.matches('.hc-scrub__status, .hc-scrub__credits'))
+        return element.getBoundingClientRect();
       const range = document.createRange();
       range.selectNodeContents(element);
       return range.getBoundingClientRect();
+    };
+    // A label's text as it shows: the rects of its text, less any inside an element clipped away.
+    // A range's rects ignore a clip, so the hidden years would otherwise count at their full width.
+    const shown = (label: Element): DOMRect => {
+      const hidden = (node: Node) => {
+        for (let at = node.parentElement; at && at !== label.parentElement; at = at.parentElement)
+          if (getComputedStyle(at).clipPath !== 'none') return true;
+        return false;
+      };
+      const rects: DOMRect[] = [];
+      const walker = document.createTreeWalker(label, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!node.textContent?.trim() || hidden(node)) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        rects.push(...[...range.getClientRects()].filter((box) => box.width > 0));
+      }
+      if (rects.length === 0) return new DOMRect();
+      const l = Math.min(...rects.map((box) => box.left));
+      const t = Math.min(...rects.map((box) => box.top));
+      return new DOMRect(
+        l,
+        t,
+        Math.max(...rects.map((box) => box.right)) - l,
+        Math.max(...rects.map((box) => box.bottom)) - t,
+      );
     };
     const meet = (a: DOMRect, b: DOMRect) =>
       a.left < b.right - 0.5 &&
@@ -224,9 +254,9 @@ export function railClashes(scope: Scope) {
     const inlineEnd = (box: DOMRect) => (rtl ? -box.left : box.right);
     labels.forEach((label, index) => {
       const text = label.textContent ?? '';
-      const at = drawn(label);
+      const at = shown(label);
       if (at.left < left - 0.5 || at.right > right + 0.5) clashes.push(`${text} past the bar`);
-      if (index > 0 && inlineStart(at) < inlineEnd(drawn(labels[index - 1]!)) - 0.5)
+      if (index > 0 && inlineStart(at) < inlineEnd(shown(labels[index - 1]!)) - 0.5)
         clashes.push(`${text} over the label before it`);
       for (const end of ends)
         if (meet(at, drawn(end))) clashes.push(`${text} over ${end.className}`);
@@ -238,4 +268,18 @@ export function railClashes(scope: Scope) {
     }
     return [...new Set(clashes)];
   });
+}
+
+/**
+ * Widens only the rail's years, as a wider face would, before the controller's first fit, by
+ * `spacing` of letter-spacing: how far a fixture's own years must go to crowd its rail.
+ */
+export async function widenRailYears(page: Page, spacing = '1.5em'): Promise<void> {
+  await page.addInitScript((spacing) => {
+    document.addEventListener('DOMContentLoaded', () => {
+      const style = document.createElement('style');
+      style.textContent = `.hc-minimap__years { letter-spacing: ${spacing}; }`;
+      document.head.append(style);
+    });
+  }, spacing);
 }
