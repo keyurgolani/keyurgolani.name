@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Smooth scroll that settles out of view, known-bad</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+      }
+      :focus-visible {
+        outline: 2px solid #000;
+        outline-offset: 2px;
+      }
+      /* A clip that isn't a scroller: nothing scrolls what it cuts off back into view. */
+      .clip {
+        position: relative;
+        width: 100vw;
+        height: 400px;
+        overflow: clip;
+      }
+      /* A smooth scroller placed past the viewport's right edge, inside the clip: it glides, and comes to rest off the page. */
+      .scroller {
+        position: absolute;
+        top: 120px;
+        left: 1600px;
+        width: 600px;
+        overflow-x: auto;
+        scroll-behavior: smooth;
+      }
+      .track {
+        position: relative;
+        width: 8000px;
+        height: 200px;
+      }
+      .track a {
+        position: absolute;
+        top: 80px;
+      }
+      #near {
+        left: 40px;
+      }
+      #far {
+        left: 7000px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A scroller that comes to rest out of view</h1>
+      <div class="clip">
+        <div class="scroller">
+          <div class="track">
+            <a id="near" href="#near">Near</a>
+            <a id="far" href="#far">Far</a>
+          </div>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>
