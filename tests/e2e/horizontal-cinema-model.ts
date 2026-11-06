@@ -175,6 +175,20 @@ export const brokenHeadingWords = (scope: Scope) =>
   );
 
 /**
+ * A rail that can't hold its labels, for the fallback's own tests: before the page's first script, a
+ * style that spaces every chapter label's letters far apart, so even its short form runs past its share.
+ */
+export async function crowdRail(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    document.addEventListener('DOMContentLoaded', () => {
+      const style = document.createElement('style');
+      style.textContent = '.hc-minimap__label { letter-spacing: 3em; }';
+      document.head.append(style);
+    });
+  });
+}
+
+/**
  * What on the bar under the stage overlaps or runs out of its box, by the boxes the page draws: a
  * chapter label's text past the bar's inner box, over the next label, or over the bar's other
  * parts (the transport, the position text, the credits), and the position text or the credits past
@@ -204,11 +218,15 @@ export function railClashes(scope: Scope) {
       ...bar.querySelectorAll('.hc-scrub__transport, .hc-scrub__status, .hc-scrub__credits'),
     ];
     const labels = [...bar.querySelectorAll('.hc-minimap__label')];
+    // The labels run in the bar's inline direction: right to left, each one's start is its right edge.
+    const rtl = getComputedStyle(bar).direction === 'rtl';
+    const inlineStart = (box: DOMRect) => (rtl ? -box.right : box.left);
+    const inlineEnd = (box: DOMRect) => (rtl ? -box.left : box.right);
     labels.forEach((label, index) => {
       const text = label.textContent ?? '';
       const at = drawn(label);
       if (at.left < left - 0.5 || at.right > right + 0.5) clashes.push(`${text} past the bar`);
-      if (index > 0 && at.left < drawn(labels[index - 1]!).right - 0.5)
+      if (index > 0 && inlineStart(at) < inlineEnd(drawn(labels[index - 1]!)) - 0.5)
         clashes.push(`${text} over the label before it`);
       for (const end of ends)
         if (meet(at, drawn(end))) clashes.push(`${text} over ${end.className}`);
