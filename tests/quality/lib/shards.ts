@@ -295,6 +295,19 @@ export function mergeShards(
   } = {},
 ): MergedVerdict {
   const failures: Failure[] = [];
+  // A records list is a release's: a full run judged whole. Handed to any other merge, it's
+  // refused, and the run is judged with none, as the everyday gate judges it.
+  const releaseList =
+    options.listed !== undefined && options.mode === 'full' && options.whole === true
+      ? options.listed
+      : undefined;
+  if (options.listed !== undefined && releaseList === undefined) {
+    failures.push({
+      rule: 'release-scope',
+      message:
+        "A records list is a release's, judged on the whole full plan, and this merge isn't one.",
+    });
+  }
   const fail = (rule: string, message: string) => failures.push({ rule, message });
   // The shard jobs' own result, as `needs` gives it: a shard whose job
   // failed, was cancelled, or was skipped fails the run, whatever its
@@ -436,7 +449,7 @@ export function mergeShards(
       before: shards.flatMap((shard) => shard.verdict?.canary.before ?? []),
       after: shards.flatMap((shard) => shard.verdict?.canary.after ?? []),
     },
-    ...(options.listed !== undefined ? { listed: options.listed } : {}),
+    ...(releaseList !== undefined ? { listed: releaseList } : {}),
   });
   failures.push(...judged.failures);
   const unique = failures.filter(

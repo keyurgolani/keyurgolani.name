@@ -7,21 +7,24 @@
 # full quality matrix on the commit, cut to that scope, in the shards
 # rc-quality-plan counts, 10 at a time, and rc-quality-verdict judges them
 # whole with the release gates (pnpm quality:release), the scope's records
-# list naming the failing cells the candidate ships with, each with its
+# list naming the failure records the candidate ships with, each with its
 # owner and routed row; a final keeps the full matrix and an empty list
-# (tests/quality/lib/release-scope.ts). rc-build builds amd64 and arm64 once
+# (tests/quality/lib/release-scope.ts), so v1.0.0 waits on RC2's sizing item,
+# which fits the full matrix into the 256-shard matrix. rc-smoke starts the
+# merged digest on both platforms. rc-build builds amd64 and arm64 once
 # each, natively on its own runner, with BuildKit provenance (mode=max) and
 # an SBOM, and pushes each platform's index to GHCR by digest with no tag.
 # rc-merge merges the two into one index, pushes that by digest with no tag,
 # checks it, and attests it, and rc-scan runs Grype on that digest and on
 # the production dependencies. rc-rehearsal rehearses the upgrade on an image
 # of the same commit (ci/rehearsal.mjs). Only when the scan, the quality
-# verdict, and the rehearsal pass does rc-tag tag the digest X.Y.Z-rc.N and
+# verdict, the smoke test, and the rehearsal pass does rc-tag tag the digest X.Y.Z-rc.N and
 # rc-release write the pre-release notes.
 #
 # A final release, vX.Y.Z on the newest candidate's commit: promote-verify
 # refuses unless that candidate's release run passed its scan and its
-# quality scope is full with an empty records list, promote-scan
+# quality scope is full with an empty records list (which the full matrix
+# reaches only after RC2's sizing item), promote-scan
 # verifies the candidate digest's attestation and scans it again, and
 # promote points X.Y.Z (and X.Y, X, and latest, unless a newer release holds
 # them) at the same digest with no rebuild. promote is the only job that
@@ -341,8 +344,10 @@ jobs:
           SHA: ${{ github.sha }}
         run: node ci/release/verify-rc.mjs
 
-  # How many shards #11's release plan runs in: the fewest, up to 256, that
-  # keep each within the release ceiling (releaseFor,
+  # How many shards #11's release plan runs in: the plan of the candidate's
+  # scope (quality/release/scope.json, QUALITY_RELEASE_SCOPE), the fewest
+  # shards, up to 256, that keep each within the release ceiling by the sum of
+  # its tests' per-key p90 weights (releaseFor, releaseDurations,
   # tests/quality/lib/full-shards.ts), from the plan of a worktree with the
   # reference variant installed and its registry generated with the quality
   # flags, as each shard plans (tests/quality/full-plan.ts). A plan past 256,
@@ -374,17 +379,19 @@ jobs:
           QUALITY_RELEASE_SCOPE: quality/release/scope.json
         run: pnpm exec tsx tests/quality/full-plan.ts
 
-  # #11's release plan: quality:full over every cell, against a worktree
-  # with the reference variant installed from its tarball, in as many shards
-  # as rc-quality-plan counts, by measured weight (each key's p90, releaseDurations).
+  # #11's release plan: quality:full over every cell of the candidate's scope
+  # (quality/release/scope.json), against a worktree with the reference
+  # variant installed from its tarball, in as many shards as rc-quality-plan
+  # counts, each sized by the sum of its tests' per-key p90 weights
+  # (releaseDurations).
   # They run 10 at a time, the release's cap (RELEASE_PARALLEL), so in waves,
   # and PR CI keeps the other 10 of the account's 20 job slots. The timeout is releaseTimeoutMinutes(), the release
   # ceiling with its margin, and each shard fails before any test when the
   # plan leaves a shard over that ceiling, naming its heaviest group. It
   # installs fresh, with no cache, in the pinned Playwright image, and holds
   # contents: read and no secret. Each shard's reports are scrubbed however
-  # the run ended, and upload only when that scrub succeeds, for one day,
-  # as every reports upload here does.
+  # the run ended, and upload only when that scrub succeeds, for three days,
+  # so the first wave's outlast the last wave's timeout.
   rc-quality:
     name: rc-quality (${{ matrix.shard }}/${{ needs.rc-quality-plan.outputs.count }})
     needs: [classify, rc-quality-plan]
@@ -439,7 +446,10 @@ jobs:
           name: reports-quality-release-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
-          retention-days: 1
+          # Three days, not one: at 10 at a time, the first wave's reports must outlast the
+          # last wave's timeout before the verdict downloads them (past about 121 shards at
+          # 120 minutes, a day is too short).
+          retention-days: 3
 
   # The release's quality gate over every shard's reports: the merged
   # verdict, which must be the whole plan, not a night's slice, then the

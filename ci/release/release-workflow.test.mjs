@@ -355,7 +355,11 @@ test('scan findings upload for one day only, and the logs get counts from scan-g
     'reports-release-scan',
     'reports-release-smoke-${{ matrix.arch }}',
   ]);
-  for (const upload of reports) assert.equal(upload['retention-days'], 1, upload.name);
+  for (const upload of reports) {
+    // The quality shards' reports keep three days, to outlast every wave before the verdict reads them.
+    const days = upload.name === 'reports-quality-release-${{ matrix.shard }}' ? 3 : 1;
+    assert.equal(upload['retention-days'], days, upload.name);
+  }
   // Nothing else uploads the reports directory, where Grype's JSON goes.
   for (const upload of uploads) {
     if (upload.path !== 'reports/') assert.doesNotMatch(upload.path, /^reports/, upload.name);

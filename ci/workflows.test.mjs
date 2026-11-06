@@ -604,7 +604,8 @@ test('rc-preflight reads only, holds no secret, reads no cache, keeps reports a 
   );
   for (const upload of uploads) {
     assert.equal(upload.path, 'reports/');
-    assert.equal(upload['retention-days'], 1, upload.name);
+    // The shards' reports outlast every wave of a long release; the verdict's keep one day.
+    assert.equal(upload['retention-days'], upload.name.endsWith('-verdict') ? 1 : 3, upload.name);
   }
   // Its verdict never counts for promotion: promote-verify takes only a
   // pushed release.yml run on the tag, and none of the jobs it names is one of these.
@@ -624,4 +625,22 @@ test('rc-preflight reads only, holds no secret, reads no cache, keeps reports a 
   };
   const runJobs = { 1: REQUIRED_RC_JOBS.map((name) => ({ name, conclusion: 'success' })) };
   assert.deepEqual(passedRuns('v1.0.0-rc.1', sha, [run], runJobs), []);
+});
+
+test("only release.yml's and rc-preflight.yml's quality jobs name a release scope: every other workflow's gate stays strict", () => {
+  const dir = new URL('../.github/workflows/', import.meta.url);
+  const naming = readdirSync(dir)
+    .filter((file) => /\.ya?ml$/.test(file))
+    .filter((file) => readFileSync(new URL(file, dir), 'utf8').includes('QUALITY_RELEASE_SCOPE'))
+    .sort();
+  assert.deepEqual(naming, ['rc-preflight.yml', 'release.yml']);
+  for (const workflow of [RELEASE, PREFLIGHT]) {
+    for (const [id, job] of Object.entries(workflow.jobs)) {
+      for (const step of job.steps ?? []) {
+        if (step.env?.QUALITY_RELEASE_SCOPE === undefined) continue;
+        assert.equal(step.env.QUALITY_RELEASE_SCOPE, 'quality/release/scope.json', id);
+        assert.match(step.run ?? '', /full-plan\.ts|ci:quality-full|ci:quality-release/, id);
+      }
+    }
+  }
 });

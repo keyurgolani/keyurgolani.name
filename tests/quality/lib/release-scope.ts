@@ -150,6 +150,26 @@ export function loadReleaseScope(env: NodeJS.ProcessEnv = process.env): LoadedSc
   return { file, scope, records };
 }
 
+/**
+ * The scope a run of `mode` may judge by: the one `env` names, or null without one. Throws when
+ * the run can't take one: a release scope is quality:full's, judged whole (`whole`, as
+ * quality:release merges and as a full run on one machine plans), never a PR run's or a night's
+ * slice, so the everyday gate stays strict however its env is set.
+ */
+export function releaseScopeFor(
+  mode: string | undefined,
+  whole: boolean,
+  env: NodeJS.ProcessEnv = process.env,
+): LoadedScope | null {
+  const loaded = loadReleaseScope(env);
+  if (!loaded) return null;
+  if (mode !== 'full')
+    throw new Error(`a release scope is quality:full's, and this run is quality:${mode ?? 'pr'}`);
+  if (!whole)
+    throw new Error("a release scope judges the whole plan, and this run isn't the whole plan");
+  return loaded;
+}
+
 const packKey = (tuple: Plan['cells'][number]['tuple']) =>
   `${tuple.designLanguage}/${tuple.colorScheme}/${tuple.typography}`;
 

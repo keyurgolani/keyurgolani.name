@@ -5,9 +5,9 @@
 //
 // The caps. A night holds no more than FULL_SHARDS of the account's 20 job
 // slots at once, and a release candidate no more than RELEASE_PARALLEL
-// (max-parallel), so PR CI keeps the rest: 12 a night, and 4 while a
-// candidate runs, which the owner accepted to get a candidate through in
-// about half the time.
+// (max-parallel), so PR CI keeps the rest: 12 a night, and 10 while a
+// candidate runs, so PR CI stays usable through a candidate's longer run at
+// its measured weights.
 //
 // The nightly rotation. The complete plan is more than one night of
 // FULL_SHARDS shards can run, so it runs over a cycle of N nights, the
@@ -31,7 +31,7 @@
 // between runs. A plan that needs more than
 // MAX_NIGHTS fails every run before any test, naming its heaviest night.
 //
-// The release plan. Before a release, every group runs, in the fewest
+// The release plan. Before a release, every group of the scope's plan runs, in the fewest
 // shards that keep each within RELEASE_CEILING (releaseFor), RELEASE_PARALLEL
 // at a time, so in waves; rc-quality's timeout is sized from that ceiling
 // (releaseTimeoutMinutes). release.yml's rc-quality-plan works the count out
@@ -112,7 +112,8 @@ export const releaseTimeoutMinutes = () => timeoutMinutes(RELEASE_CEILING);
 /**
  * The weights the release plan sizes its shards by: `durations` with its `release` block over
  * `conditions`, `pack` and `perf`, the p90 of each key as a release candidate's preflight measured
- * it (shard-durations.json). With every key at its p90, a shard's estimate is its p90 total, which
+ * it (shard-durations.json). With every key at its p90, a shard's estimate is the sum of its tests'
+ * per-key p90 weights (not the p90 of the shard's span), which
  * the release ceiling holds to two-thirds of rc-quality's timeout (TIMEOUT_MARGIN). The nightly
  * keeps the PR weights.
  */

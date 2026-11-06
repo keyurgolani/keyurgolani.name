@@ -192,7 +192,10 @@ jobs:
           name: reports-quality-preflight-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
-          retention-days: 1
+          # Three days, not one: at 10 at a time, the first wave's reports must outlast the
+          # last wave's timeout before the verdict downloads them (past about 121 shards at
+          # 120 minutes, a day is too short).
+          retention-days: 3
 
   # release.yml's rc-quality-verdict: the merged verdict over every shard
   # preflight-plan counted, then the release-only gates. It runs only when

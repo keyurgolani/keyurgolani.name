@@ -1393,11 +1393,11 @@ test("full-plan.ts writes the plan's own release count, matrix, and cycle to GIT
     releaseSummary(85),
     'rc-quality: 85 shards, 10 at a time, at most 10200 runner-minutes at the 120-minute timeout',
   );
-  // Each release shard's p90 total, to read the run's real times against.
+  // Each release shard's sum of per-key p90 weights, to read the run's real times against.
   for (const shard of shards) {
     assert.ok(
       lines.includes(
-        `[quality-full-plan] release shard ${shard.index}/${count}: p90 total about ${Math.round(fullEstimate(shard))}s, ${shard.groups.reduce((sum, group) => sum + group.tests.length, 0)} cell test(s)`,
+        `[quality-full-plan] release shard ${shard.index}/${count}: sum of p90 weights about ${Math.round(fullEstimate(shard))}s, ${shard.groups.reduce((sum, group) => sum + group.tests.length, 0)} cell test(s)`,
       ),
       lines.join('\n'),
     );

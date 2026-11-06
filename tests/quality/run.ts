@@ -76,7 +76,7 @@ import {
   type FullShard,
 } from './lib/full-shards';
 import { judge, type Failure, type Verdict } from './lib/verdict';
-import { loadReleaseScope, type LoadedScope } from './lib/release-scope';
+import { releaseScopeFor, type LoadedScope } from './lib/release-scope';
 import { writeObservedFonts } from './lib/visual';
 import { budgetResults } from './lib/perf/budgets';
 import { plannedPerf } from './lib/perf/plan';
@@ -217,7 +217,7 @@ function printFull(full: FullShard, options: RunOptions): void {
     );
   }
   console.log(
-    `[quality] ${options.shard ? `shard ${options.shard}` : 'every shard here'}: ${shard.groups.length} test group(s), ${slice ? 'about' : 'its p90 total about'} ${Math.round(fullEstimate(shard))}s`,
+    `[quality] ${options.shard ? `shard ${options.shard}` : 'every shard here'}: ${shard.groups.length} test group(s), ${slice ? 'about' : 'its sum of p90 weights about'} ${Math.round(fullEstimate(shard))}s`,
   );
   for (const group of shard.groups) {
     console.log(
@@ -336,10 +336,8 @@ async function main(argv: readonly string[]): Promise<number> {
   // the plan below is cut to the scope, and the verdict holds the run to the list.
   let releaseScope: LoadedScope | null = null;
   try {
-    releaseScope = loadReleaseScope();
-    if (releaseScope && options.mode !== 'full') {
-      throw new Error(`a release scope is quality:full's, and this run is quality:${options.mode}`);
-    }
+    // A shard of the release plan is the whole plan's part: its merge judges the whole.
+    releaseScope = releaseScopeFor(options.mode, options.night === null);
   } catch (error) {
     releaseScope = null;
     setup.push({ rule: 'release-scope', message: (error as Error).message.split('\n')[0]! });

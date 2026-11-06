@@ -51,7 +51,7 @@ export function releaseSummary(count: number): string {
 /**
  * The release plan of `plan`, as rc-quality-plan counts it and each rc-quality shard plans it: by
  * the release's measured weights, each key at its p90 (releaseDurations()), so each shard's
- * estimate is its p90 total, within RELEASE_CEILING.
+ * estimate is the sum of its tests' per-key p90 weights, within RELEASE_CEILING.
  */
 export function releaseOf(plan: Parameters<typeof fullGroups>[0]) {
   const weights = releaseDurations();
@@ -92,10 +92,11 @@ export async function runFullPlan({
     log(
       `[quality-full-plan] ${plan.tests.length} tests, about ${seconds}s: the release in ${release.count} shards, the slowest about ${Math.round(release.slowest)}s of ${RELEASE_CEILING}s; the nightly a ${rotation.nights}-night cycle of ${FULL_SHARDS} shards, the slowest about ${Math.round(rotation.slowest)}s of ${NIGHTLY_CEILING}s`,
     );
-    // Each release shard's estimate, its p90 total, for the run's real times to be read against.
+    // Each release shard's estimate, the sum of its tests' per-key p90 weights, for the run's real
+    // times to be read against.
     for (const shard of release.shards) {
       log(
-        `[quality-full-plan] release shard ${shard.index}/${release.count}: p90 total about ${Math.round(fullEstimate(shard))}s, ${shard.groups.reduce((sum, group) => sum + group.tests.length, 0)} cell test(s)`,
+        `[quality-full-plan] release shard ${shard.index}/${release.count}: sum of p90 weights about ${Math.round(fullEstimate(shard))}s, ${shard.groups.reduce((sum, group) => sum + group.tests.length, 0)} cell test(s)`,
       );
     }
     const summary = releaseSummary(release.count);

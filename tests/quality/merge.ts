@@ -29,7 +29,7 @@ import { fileURLToPath } from 'node:url';
 import { currentGate, reportError, reportsDir, writeFailureRecord } from '../../ci/lib/reports.mjs';
 import { RECORD_VERSION } from './lib/failure-records';
 import { rotationReport, type RotationReport } from './lib/full-shards';
-import { loadReleaseScope } from './lib/release-scope';
+import { releaseScopeFor } from './lib/release-scope';
 import { timingTrend } from './lib/perf/timing';
 import type { RunMode } from './cells';
 import {
@@ -110,10 +110,18 @@ export function mergeRun(
 ) {
   let shards: ShardReport[] = [];
   let verdict: MergedVerdict;
+  // A release candidate's scope file names its records list (lib/release-scope.ts): only a full
+  // run judged whole takes it, so a PR merge or a night's stays strict, env or no env: one that
+  // names a scope fails release-scope, judged with no list.
+  let scope: ReturnType<typeof releaseScopeFor> = null;
+  let refused: { rule: string; message: string } | null = null;
+  try {
+    scope = releaseScopeFor(mode, whole === true);
+  } catch (error) {
+    refused = { rule: 'release-scope', message: (error as Error).message.split('\n')[0]! };
+  }
   try {
     shards = readShards(dir);
-    // A release candidate's scope file names its records list (lib/release-scope.ts).
-    const scope = loadReleaseScope();
     verdict = mergeShards(shards, {
       expected,
       mode,
@@ -121,6 +129,7 @@ export function mergeRun(
       whole,
       ...(scope ? { listed: scope.records } : {}),
     });
+    if (refused) verdict = { ...verdict, ok: false, failures: [refused, ...verdict.failures] };
   } catch (error) {
     // Whatever the reports hold, the merge says so and fails, with its record.
     shards = [];

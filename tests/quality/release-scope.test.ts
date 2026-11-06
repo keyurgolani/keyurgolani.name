@@ -15,11 +15,13 @@ import {
   recordsProblems,
   ROUTED_PLACEHOLDER,
   SCOPE_ENV,
+  releaseScopeFor,
   scopePlan,
   scopeProblems,
   type ListedRecord,
 } from './lib/release-scope';
 import { mergeShards, readShards } from './lib/shards';
+import { mergeRun } from './merge';
 import { judge, type VerdictInput } from './lib/verdict';
 import { requiredChecks } from './lib/checks';
 import type { SummaryFailure, SummaryTest } from './reporter';
@@ -314,7 +316,7 @@ test("the merge judges a release's shards against the list, as a single run's ve
       },
       SHARD_2,
     ]);
-    return mergeShards(readShards(dir), { expected: 2, listed });
+    return mergeShards(readShards(dir), { expected: 2, mode: 'full', whole: true, listed });
   };
   assert.deepEqual(merged('passed', []).failures, []);
   assert.deepEqual(merged(FAILURES, LISTED).failures, []);
@@ -324,6 +326,57 @@ test("the merge judges a release's shards against the list, as a single run's ve
     'unlisted-failure',
   ]);
   assert.deepEqual(rules(merged('passed', LISTED).failures), ['listed-passed', 'listed-passed']);
+  // A list handed to any merge but a full run's, judged whole, is refused, and the run judged
+  // strictly, as the everyday gate judges it.
+  const dir = mkdtempSync(path.join(root, 'pr-'));
+  writeShards(dir, [
+    { ...SHARD_1, tests: [cellTest(RUNS, { ...FAILED, failures: FAILURES }), PROBE] },
+    SHARD_2,
+  ]);
+  for (const options of [
+    { mode: 'pr' },
+    { mode: 'full' },
+    { mode: 'full', whole: false },
+  ] as const) {
+    const strict = mergeShards(readShards(dir), { expected: 2, ...options, listed: LISTED });
+    assert.ok(rules(strict.failures).includes('release-scope'), JSON.stringify(options));
+    assert.ok(rules(strict.failures).includes('tests-failed'), JSON.stringify(options));
+  }
+});
+
+test('only quality:full judged whole takes a release scope: a PR run, a night, or a merge of either refuses one, by rule', (t) => {
+  const named = { [SCOPE_ENV]: SCOPE_FILE };
+  assert.equal(releaseScopeFor('full', true, named)?.scope.release, '1.0.0-rc.1');
+  assert.equal(releaseScopeFor('pr', false, {}), null);
+  assert.throws(
+    () => releaseScopeFor('pr', true, named),
+    /a release scope is quality:full's, and this run is quality:pr/,
+  );
+  assert.throws(() => releaseScopeFor('full', false, named), /judges the whole plan/);
+  // mergeRun, with the env naming one, on a PR merge: release-scope, and judged with no list.
+  const reports = mkdtempSync(path.join(tmpdir(), 'quality-release-mergerun-'));
+  const shards = mkdtempSync(path.join(tmpdir(), 'quality-release-mergerun-shards-'));
+  t.after(() => {
+    rmSync(reports, { recursive: true, force: true });
+    rmSync(shards, { recursive: true, force: true });
+  });
+  writeShards(shards, [SHARD_1, SHARD_2]);
+  const saved = { reports: process.env.CI_REPORTS_DIR, scope: process.env[SCOPE_ENV] };
+  process.env.CI_REPORTS_DIR = reports;
+  process.env[SCOPE_ENV] = SCOPE_FILE;
+  try {
+    const verdict = mergeRun(shards, 2, 'quality-pr merged verdict', 'pr', 'success');
+    assert.equal(verdict.ok, false);
+    assert.equal(verdict.failures[0]!.rule, 'release-scope');
+  } finally {
+    for (const [key, value] of [
+      ['CI_REPORTS_DIR', saved.reports],
+      [SCOPE_ENV, saved.scope],
+    ] as const) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
 });
 
 test('a records entry names its cell, viewport, row, engine, check, rule and target, an owner, and a routed row: a blank or placeholder owner or row is refused', () => {
