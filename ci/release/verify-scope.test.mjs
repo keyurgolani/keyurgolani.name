@@ -2,8 +2,10 @@
 // scope file and records list, never another release's.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { SCOPE_FILE, scopeMismatch } from './verify-scope.mjs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { readScope, SCOPE_FILE, scopeMismatch } from './verify-scope.mjs';
 
 const scope = (release) => ({ release, scope: 'default-packs', records: 'records.json' });
 
@@ -28,6 +30,21 @@ test("a candidate tag whose scope file is another release's, or names none, is r
   assert.match(scopeMismatch('v1.0.0-rc.1', null), /names no release/);
 });
 
+test('readScope reads the one records list beside the scope file, by its one name', (t) => {
+  const root = mkdtempSync(path.join(tmpdir(), 'verify-scope-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(path.join(root, path.dirname(SCOPE_FILE)), { recursive: true });
+  const write = (records) =>
+    writeFileSync(path.join(root, SCOPE_FILE), JSON.stringify({ ...scope('1.0.0-rc.1'), records }));
+  writeFileSync(path.join(root, path.dirname(SCOPE_FILE), 'records.json'), '[]');
+  write('records.json');
+  assert.deepEqual(readScope(root).records, []);
+  for (const records of ['lenient.json', '../records.json', undefined]) {
+    write(records);
+    assert.throws(() => readScope(root), /names .*, not records\.json$/, String(records));
+  }
+});
+
 test('a tag that is not a release candidate is refused', () => {
   for (const tag of ['v1.0.0', '1.0.0-rc.1', 'v1.0.0-rc.0', 'main', '']) {
     assert.match(scopeMismatch(tag, scope('1.0.0-rc.1')), /is not a release candidate tag$/, tag);
@@ -45,8 +62,9 @@ test("rc-verify's scripts import only what its sparse checkout holds: ci/release
     if (seen.has(file)) return;
     seen.add(file);
     const text = read(file, 'utf8');
+    // `import x from 'y'`, `export ... from 'y'`, and a bare `import 'y'`.
     for (const [, spec] of text.matchAll(
-      /^\s*(?:import|export)\s[^'"]*?from\s+['"]([^'"]+)['"]/gm,
+      /^\s*(?:(?:import|export)\s[^'"]*?from\s+|import\s+)['"]([^'"]+)['"]/gm,
     )) {
       if (spec.startsWith('node:')) continue;
       assert.ok(spec.startsWith('./'), `${path.relative(root, file)} imports ${spec}`);

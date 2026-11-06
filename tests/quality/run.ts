@@ -76,7 +76,7 @@ import {
   type FullShard,
 } from './lib/full-shards';
 import { judge, type Failure, type Verdict } from './lib/verdict';
-import { releaseScopeFor, type LoadedScope } from './lib/release-scope';
+import { runReleaseScope } from './lib/release-scope';
 import { writeObservedFonts } from './lib/visual';
 import { budgetResults } from './lib/perf/budgets';
 import { plannedPerf } from './lib/perf/plan';
@@ -334,14 +334,8 @@ async function main(argv: readonly string[]): Promise<number> {
   const setup: Failure[] = [];
   // A release candidate's scope and records list, when its job names them (lib/release-scope.ts):
   // the plan below is cut to the scope, and the verdict holds the run to the list.
-  let releaseScope: LoadedScope | null = null;
-  try {
-    // A shard of the release plan is the whole plan's part: its merge judges the whole.
-    releaseScope = releaseScopeFor(options.mode, options.night === null);
-  } catch (error) {
-    releaseScope = null;
-    setup.push({ rule: 'release-scope', message: (error as Error).message.split('\n')[0]! });
-  }
+  const { scope: releaseScope, refused } = runReleaseScope(options.mode, options.night);
+  if (refused) setup.push(refused);
   if (releaseScope) {
     const { scope, records, file } = releaseScope;
     console.log(

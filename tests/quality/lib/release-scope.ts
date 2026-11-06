@@ -170,6 +170,31 @@ export function releaseScopeFor(
   return loaded;
 }
 
+/**
+ * run.ts's release scope for a run of `mode` on `night` (null for the whole plan, as a release
+ * shard and a full run on one machine plan it): the scope, or the setup failure that refuses the
+ * run, by rule release-scope. A PR run or a night's slice whose env names a scope is refused, and
+ * judged with no list.
+ */
+export function runReleaseScope(
+  mode: string | undefined,
+  night: string | null,
+  env: NodeJS.ProcessEnv = process.env,
+): {
+  readonly scope: LoadedScope | null;
+  readonly refused: { rule: string; message: string } | null;
+} {
+  try {
+    // A shard of the release plan is the whole plan's part: its merge judges the whole.
+    return { scope: releaseScopeFor(mode, night === null, env), refused: null };
+  } catch (error) {
+    return {
+      scope: null,
+      refused: { rule: 'release-scope', message: (error as Error).message.split('\n')[0]! },
+    };
+  }
+}
+
 const packKey = (tuple: Plan['cells'][number]['tuple']) =>
   `${tuple.designLanguage}/${tuple.colorScheme}/${tuple.typography}`;
 

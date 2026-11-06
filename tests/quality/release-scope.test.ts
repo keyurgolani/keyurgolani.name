@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -16,6 +16,7 @@ import {
   ROUTED_PLACEHOLDER,
   SCOPE_ENV,
   releaseScopeFor,
+  runReleaseScope,
   scopePlan,
   scopeProblems,
   type ListedRecord,
@@ -430,7 +431,11 @@ test('only quality:full judged whole takes a release scope: a PR run, a night, o
   try {
     const verdict = mergeRun(shards, 2, 'quality-pr merged verdict', 'pr', 'success');
     assert.equal(verdict.ok, false);
-    assert.equal(verdict.failures[0]!.rule, 'release-scope');
+    // mergeRun's own refusal, not mergeShards' (which no list reaches here).
+    assert.deepEqual(verdict.failures[0], {
+      rule: 'release-scope',
+      message: "a release scope is quality:full's, and this run is quality:pr",
+    });
   } finally {
     for (const [key, value] of [
       ['CI_REPORTS_DIR', saved.reports],
@@ -440,6 +445,75 @@ test('only quality:full judged whole takes a release scope: a PR run, a night, o
       else process.env[key] = value;
     }
   }
+});
+
+test("mergeRun hands a whole full run's merge its scope's records list: the listed failures pass, an unlisted one fails", (t) => {
+  const root = mkdtempSync(path.join(tmpdir(), 'quality-release-handoff-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const scopeDir = path.join(root, 'release');
+  const shards = path.join(root, 'shards');
+  const reports = path.join(root, 'reports');
+  for (const dir of [scopeDir, shards, reports]) mkdirSync(dir);
+  writeFileSync(
+    path.join(scopeDir, 'scope.json'),
+    JSON.stringify({ ...CANDIDATE, unswept: 'the other packs', records: 'records.json' }),
+  );
+  const own = verdict(FAILURES, LISTED);
+  writeShards(shards, [
+    {
+      ...SHARD_1,
+      tests: [cellTest(RUNS, { ...FAILED, failures: FAILURES }), PROBE],
+      verdict: { ...SHARD_1.verdict, ok: own.ok, failures: own.failures },
+    },
+    SHARD_2,
+  ]);
+  const saved = { reports: process.env.CI_REPORTS_DIR, scope: process.env[SCOPE_ENV] };
+  process.env.CI_REPORTS_DIR = reports;
+  process.env[SCOPE_ENV] = path.join(scopeDir, 'scope.json');
+  const merge = (listed: readonly ListedRecord[]) => {
+    writeFileSync(path.join(scopeDir, 'records.json'), JSON.stringify(listed));
+    return mergeRun(shards, 2, 'quality:release merged verdict', 'full', 'success', true);
+  };
+  try {
+    assert.deepEqual(merge(LISTED).failures, []);
+    const half = merge([LISTED[0]!]);
+    assert.equal(half.ok, false);
+    assert.deepEqual(rules(half.failures), ['tests-failed', 'unlisted-failure']);
+    assert.match(
+      half.failures[1]!.message,
+      /axe color-contrast on #main > p:nth-child\(3\) failed/,
+    );
+  } finally {
+    for (const [key, value] of [
+      ['CI_REPORTS_DIR', saved.reports],
+      [SCOPE_ENV, saved.scope],
+    ] as const) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
+test("run.ts's scope: a whole full run takes the one its env names; a PR run or a night's slice is refused by rule, with none", () => {
+  const named = { [SCOPE_ENV]: SCOPE_FILE };
+  assert.deepEqual(runReleaseScope('pr', null, {}), { scope: null, refused: null });
+  const whole = runReleaseScope('full', null, named);
+  assert.equal(whole.refused, null);
+  assert.equal(whole.scope?.scope.release, '1.0.0-rc.1');
+  assert.deepEqual(runReleaseScope('pr', null, named), {
+    scope: null,
+    refused: {
+      rule: 'release-scope',
+      message: "a release scope is quality:full's, and this run is quality:pr",
+    },
+  });
+  assert.deepEqual(runReleaseScope('full', '2026-11-06', named), {
+    scope: null,
+    refused: {
+      rule: 'release-scope',
+      message: "a release scope judges the whole plan, and this run isn't the whole plan",
+    },
+  });
 });
 
 test('a records entry names its cell, viewport, row, engine, check, rule and target, an owner, and a routed row: a blank or placeholder owner or row is refused', () => {
@@ -482,6 +556,10 @@ test('a records entry names its cell, viewport, row, engine, check, rule and tar
     ['owner', 'Unknown', 'owner is "Unknown", not a lane or person'],
     ['owner', 'NOBODY', 'owner is "NOBODY", not a lane or person'],
     ['owner', 'owner', 'owner is "owner", not a lane or person'],
+    ['owner', 'TBA', 'owner is "TBA", not a lane or person'],
+    ['owner', 'none', 'owner is "none", not a lane or person'],
+    ['owner', 'Unowned', 'owner is "Unowned", not a lane or person'],
+    ['owner', 'TBD ', 'owner is "TBD ", not a lane or person'],
     ['note', 'x'.repeat(301), 'note is not text of at most 300 characters'],
     ['measured', '155 element(s)', 'measured is not a field'],
   ] as const) {
@@ -540,6 +618,15 @@ test('a scope file names its release, scope, what it leaves unswept, and its lis
   assert.throws(
     () => loadReleaseScope({ [SCOPE_ENV]: path.join(dir, 'scope.json') }),
     /records\.json: entry 1: owner is "", not a lane or person$/,
+  );
+  // An entry on an engine no release run launches names a test no run has.
+  writeFileSync(
+    path.join(dir, 'records.json'),
+    JSON.stringify([{ ...LISTED[0], engine: 'firefox' }]),
+  );
+  assert.throws(
+    () => loadReleaseScope({ [SCOPE_ENV]: path.join(dir, 'scope.json') }),
+    /records\.json: entry 1: engine is "firefox", not one of chromium$/,
   );
   writeFileSync(path.join(dir, 'scope.json'), JSON.stringify({ ...good, scope: 'none' }));
   assert.throws(

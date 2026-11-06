@@ -635,7 +635,10 @@ test("only release.yml's and rc-preflight.yml's quality jobs name a release scop
     .sort();
   assert.deepEqual(naming, ['rc-preflight.yml', 'release.yml']);
   for (const workflow of [RELEASE, PREFLIGHT]) {
+    // Never for a whole workflow or job: only on the steps that plan, run or judge the release.
+    assert.equal(workflow.env?.QUALITY_RELEASE_SCOPE, undefined);
     for (const [id, job] of Object.entries(workflow.jobs)) {
+      assert.equal(job.env?.QUALITY_RELEASE_SCOPE, undefined, id);
       for (const step of job.steps ?? []) {
         if (step.env?.QUALITY_RELEASE_SCOPE === undefined) continue;
         assert.equal(step.env.QUALITY_RELEASE_SCOPE, 'quality/release/scope.json', id);
@@ -643,4 +646,23 @@ test("only release.yml's and rc-preflight.yml's quality jobs name a release scop
       }
     }
   }
+  // Nor an action every job runs, nor a package script.
+  const actions = new URL('../.github/actions/', import.meta.url);
+  const actionFiles = readdirSync(actions, { recursive: true }).filter((file) =>
+    /\.ya?ml$/.test(String(file)),
+  );
+  assert.ok(actionFiles.length > 0);
+  for (const file of actionFiles)
+    assert.doesNotMatch(
+      readFileSync(new URL(String(file), actions), 'utf8'),
+      /QUALITY_RELEASE_SCOPE/,
+      String(file),
+    );
+  const scripts = JSON.parse(
+    readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+  ).scripts;
+  assert.deepEqual(
+    Object.entries(scripts).filter(([, run]) => run.includes('QUALITY_RELEASE_SCOPE')),
+    [],
+  );
 });

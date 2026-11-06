@@ -385,6 +385,23 @@ test("shard-job counts only beside tests-failed, and only when quality-pr's jobs
     assert.match(reason, why, label);
     assert.match(reason, /shard-job, and its jobs don't show/, label);
   }
+  // The verdict job itself: exactly one, red only on its own step, or the proof refuses.
+  for (const [label, jobList, why] of [
+    ['two verdict jobs', [...jobs(), verdictJob(true)], /quality-pr-verdict ran 2 times, not once/],
+    [
+      'no verdict job',
+      jobs().filter((job) => job.name !== 'quality-pr-verdict'),
+      /quality-pr-verdict ran 0 times, not once/,
+    ],
+    [
+      'a cancelled verdict',
+      jobs({ 'quality-pr-verdict': { conclusion: 'cancelled' } }),
+      /quality-pr-verdict ended cancelled/,
+    ],
+  ]) {
+    assert.match(qprJobsProof(jobList).reasons.join(' | '), why, label);
+    assert.match(refusal(evaluateRc(input({ jobList }))), why, label);
+  }
   // tests-failed alone needs no proof; shard-job alone is never the quality runs' own.
   assert.deepEqual(
     qualityPrUnlisted(
