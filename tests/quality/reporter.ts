@@ -109,7 +109,6 @@ function annotation(test: TestCase, type: string): string | undefined {
     ?.description;
 }
 
-/** A JSON attachment of the test's last result, from its body or its file. */
 /** Every attachment named `name` of the test's last result, each parsed; one that won't parse is skipped. */
 function attachments(test: TestCase, name: string): unknown[] {
   return (test.results.at(-1)?.attachments ?? [])
@@ -132,6 +131,7 @@ export function testRecords(test: TestCase): CellFailure[] {
   );
 }
 
+/** A JSON attachment of the test's last result, from its body or its file. */
 function attachment(test: TestCase, name: string): unknown {
   const found = test.results.at(-1)?.attachments.find((each) => each.name === name);
   if (!found) return undefined;

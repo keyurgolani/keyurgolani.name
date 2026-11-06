@@ -244,29 +244,36 @@ test("a record of the primitives page or the landscape pass keys apart from the 
 });
 
 test('a listed test that also failed on anything no record names blocks the tag: egress, a teardown error, a timeout, a check it owed and skipped', () => {
-  for (const [label, extra, why] of [
+  const SOFT = ['axe, WCAG 2.2 AA', "Slice 2's suites"];
+  const rows = [
+    // First, each row whose rule is the only guard against it.
     [
-      'a blocked request, as its own runner record',
+      "a server-egress error from the worker's late check, which attaches no record",
+      { errors: [...SOFT, 'The app server requested 1 URL(s) outside the app'] },
+      /ended with 3 error\(s\), not the 2 soft expectation\(s\) behind its records/,
+    ],
+    [
+      'a teardown timeout: failed, with one error past its soft count',
       {
-        failures: [FOCUS, AXE, { check: 'runner', rule: 'browser-egress', target: null }],
-        errors: [
-          'axe, WCAG 2.2 AA',
-          "Slice 2's suites",
-          'The page requested 1 URL(s) outside the app',
-        ],
+        errors: [...SOFT, 'Test timeout of 600000ms exceeded while tearing down "context".'],
       },
       /ended with 3 error\(s\), not the 2 soft expectation\(s\) behind its records/,
     ],
     [
-      'a server-egress error past its soft expectations',
+      'a blocked request, as its own runner record',
       {
-        errors: [
-          'axe, WCAG 2.2 AA',
-          "Slice 2's suites",
-          'The app server requested 1 URL(s) outside the app',
-        ],
+        failures: [FOCUS, AXE, { check: 'runner', rule: 'browser-egress', target: null }],
+        errors: [...SOFT, 'The page requested 1 URL(s) outside the app'],
       },
-      /ended with 3 error\(s\), not the 2 soft expectation\(s\) behind its records/,
+      /it hit browser-egress, which no records list may name/,
+    ],
+    [
+      "a server-egress record, the test's own serverEgress fixture's",
+      {
+        failures: [FOCUS, AXE, { check: 'runner', rule: 'server-egress', target: null }],
+        errors: [...SOFT, 'The server tried to reach 1 host(s) outside the app: x.test'],
+      },
+      /it hit server-egress, which no records list may name/,
     ],
     ['a timeout', { status: 'timedOut' }, /it ended timedOut, not failed/],
     [
@@ -279,10 +286,18 @@ test('a listed test that also failed on anything no record names blocks the tag:
       { softFailures: undefined },
       /no count of runCell's soft expectations/,
     ],
-  ]) {
+  ];
+  // Every row's outcome, asserted once, so a mutant's log shows each row it opens.
+  const open = rows.flatMap(([label, extra, why]) => {
     const summary = { ...qprSummary([FOCUS, AXE]), tests: [cellTest([FOCUS, AXE], extra)] };
-    assert.match(refusal(evaluateRc(input({ summary }))), why, label);
-  }
+    const verdict = evaluateRc(input({ summary }));
+    const reason = verdict.reasons.join(' | ');
+    // Its records still failed: neither entry reads as passed.
+    return verdict.ok || !why.test(reason) || /take its entry out/.test(reason)
+      ? [`${label}: ${reason || 'accepted'}`]
+      : [];
+  });
+  assert.deepEqual(open, []);
 });
 
 test('any other job gate needs that is not green blocks the tag, whatever the list says, browser included', () => {
@@ -458,6 +473,7 @@ test('a green run with entries listed is held to its summary: a strict entry who
 });
 
 test("quality-pr's summary is untrusted: anything missing, malformed, or beyond a listed cell failure blocks the tag", () => {
+  const open = [];
   for (const [label, summary, why] of [
     ['an Error', new Error('HTTP 410'), /summary couldn't be read: HTTP 410/],
     ['nothing', undefined, /summary couldn't be read: not fetched/],
@@ -480,6 +496,39 @@ test("quality-pr's summary is untrusted: anything missing, malformed, or beyond 
     ],
     ['a failing test with no record', qprSummary([]), /failed with no failure record/],
     [
+      'a failing test with no errors list',
+      { ...qprSummary([FOCUS, AXE]), tests: [cellTest([FOCUS, AXE], { errors: undefined })] },
+      /it lists no errors/,
+    ],
+    [
+      'a failing test whose errors are no list',
+      { ...qprSummary([FOCUS, AXE]), tests: [cellTest([FOCUS, AXE], { errors: 'x, y' })] },
+      /it lists no errors/,
+    ],
+    [
+      'a failing test counting no soft expectation',
+      {
+        ...qprSummary([FOCUS, AXE]),
+        tests: [cellTest([FOCUS, AXE], { errors: [], softFailures: 0 })],
+      },
+      /counts no failed soft expectation/,
+    ],
+    [
+      'a failing test owing nothing',
+      { ...qprSummary([FOCUS, AXE]), tests: [cellTest([FOCUS, AXE], { owed: [] })] },
+      /names no checks it owed/,
+    ],
+    [
+      'a failing test with no owed list',
+      { ...qprSummary([FOCUS, AXE]), tests: [cellTest([FOCUS, AXE], { owed: undefined })] },
+      /names no checks it owed/,
+    ],
+    [
+      'a failing test owing a check that is no name',
+      { ...qprSummary([FOCUS, AXE]), tests: [cellTest([FOCUS, AXE], { owed: ['status', 7] })] },
+      /names no checks it owed/,
+    ],
+    [
       'a record whose check is no string',
       qprSummary([{ ...FOCUS, check: 7 }]),
       /a failure record of it is malformed/,
@@ -501,8 +550,11 @@ test("quality-pr's summary is untrusted: anything missing, malformed, or beyond 
       ...base,
       quality: { ...base.quality, summaries: { 201: summary } },
     });
-    assert.match(refusal(verdict), why, label);
+    const reason = verdict.reasons.join(' | ');
+    if (verdict.ok || !why.test(reason)) open.push(`${label}: ${reason || 'accepted'}`);
   }
+  // Every row's outcome, asserted once, so a mutant's log shows each row it opens.
+  assert.deepEqual(open, []);
   // With no list read at all, a red run never counts.
   assert.match(refusal(evaluateRc({ ...input(), quality: undefined })), /no records list was read/);
   assert.deepEqual(qualityPrUnlisted(qprSummary([FOCUS, AXE]), LISTED, { jobsProven: true }), []);

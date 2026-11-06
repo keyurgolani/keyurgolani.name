@@ -3,9 +3,17 @@ import path from 'node:path';
 import test from 'node:test';
 import type { TestCase } from '@playwright/test/reporter';
 import { REPO_ROOT } from '../../ci/lib/reports.mjs';
-import { KIND_ANNOTATION } from './lib/checks';
+import { judgeListed, uncovered } from '../../ci/release/release-records.mjs';
+import { serverEgressMessage } from '../harness/fixtures';
+import {
+  KIND_ANNOTATION,
+  OWED_ANNOTATION,
+  CHECKS_ANNOTATION,
+  SOFT_FAILURES_ANNOTATION,
+} from './lib/checks';
 import type { CellFailure } from './lib/failure-records';
-import { RECORDS_ATTACHMENT } from './lib/records';
+import { VIEWPORTS } from './lib/matrix';
+import { attachEgressRecord, egressRecord, RECORDS_ATTACHMENT } from './lib/records';
 import { summaryTest } from './reporter';
 
 // The reporter's summary.json entry for one test (summaryTest): what a release candidate's records
@@ -29,6 +37,17 @@ const record = (extra: Partial<CellFailure> = {}): CellFailure => ({
   actual: '0 of 486 changed pixels reach 3:1',
   ...extra,
 });
+
+/** The annotations cells.spec.ts gives HC's 1440x900 default cell test. */
+const CELL_ANNOTATIONS = [
+  { type: KIND_ANNOTATION, description: 'cell' },
+  { type: 'route', description: '/' },
+  { type: 'profile', description: 'default' },
+  { type: 'cell', description: 'composition:horizontal-cinema complete' },
+  { type: 'target', description: 'composition:horizontal-cinema' },
+  { type: 'viewport', description: '1440x900' },
+  { type: 'row', description: 'default' },
+];
 
 /**
  * A finished cell test of HC at 1440x900, default, as the reporter sees it: its annotations, the
@@ -56,14 +75,7 @@ function finished({
     location: { file: path.join(REPO_ROOT, 'tests/quality/cells.spec.ts'), line: 1 },
     parent: { project: () => ({ name: 'chromium', use: { browserName: 'chromium' } }) },
     expectedStatus: 'passed',
-    annotations: [
-      { type: KIND_ANNOTATION, description: 'cell' },
-      { type: 'route', description: '/' },
-      { type: 'cell', description: 'composition:horizontal-cinema complete' },
-      { type: 'target', description: 'composition:horizontal-cinema' },
-      { type: 'viewport', description: '1440x900' },
-      { type: 'row', description: 'default' },
-    ],
+    annotations: CELL_ANNOTATIONS,
     outcome: () => outcome,
     results: [
       {
@@ -108,4 +120,129 @@ test("a failed cell test's failures are its records keyed under its own surface 
     [],
   );
   assert.deepEqual(summaryTest(finished({ outcome: 'expected', errors: [] })).failures, []);
+});
+
+test("a failed cell test's summary entry: failures from every records attachment, its soft count and owed checks as runCell annotated them, not its errors or ran", () => {
+  const egress = { ...record(), check: 'runner', rule: 'server-egress', element: undefined };
+  const entry = summaryTest(
+    finished({
+      // runCell's attachment, then an egress fixture's own.
+      attached: [[record(), record({ rule: 'perimeter' })], [egress]],
+      errors: ['axe, WCAG 2.2 AA', "Slice 2's suites", 'The server tried to reach 1 host(s)'],
+      resultAnnotations: [
+        { type: CHECKS_ANNOTATION, description: 'status axe focus' },
+        { type: OWED_ANNOTATION, description: 'status axe keyboard focus' },
+        { type: SOFT_FAILURES_ANNOTATION, description: '2' },
+      ],
+    }),
+  );
+  assert.deepEqual(entry.failures, [
+    { check: 'focus', rule: 'contrast', target: NAV },
+    { check: 'focus', rule: 'perimeter', target: NAV },
+    { check: 'runner', rule: 'server-egress', target: null },
+  ]);
+  assert.equal(entry.records, 3);
+  assert.equal(entry.errors.length, 3);
+  assert.equal(entry.softFailures, 2);
+  assert.deepEqual(entry.checks, ['status', 'axe', 'focus']);
+  assert.deepEqual(entry.owed, ['status', 'axe', 'keyboard', 'focus']);
+  // So the matcher holds it uncovered: it hit egress, past its soft count, short an owed check.
+  assert.equal(uncovered(entry), 'it hit server-egress, which no records list may name');
+  const quiet = summaryTest(
+    finished({
+      attached: [[record()]],
+      errors: ['axe, WCAG 2.2 AA', 'Test timeout of 600000ms exceeded while tearing down "app".'],
+      resultAnnotations: [
+        { type: CHECKS_ANNOTATION, description: 'status focus' },
+        { type: OWED_ANNOTATION, description: 'status focus' },
+        { type: SOFT_FAILURES_ANNOTATION, description: '1' },
+      ],
+    }),
+  );
+  assert.equal(
+    uncovered(quiet),
+    'it ended with 2 error(s), not the 1 soft expectation(s) behind its records',
+  );
+  // With no annotations, nothing is counted or owed, and the matcher refuses it.
+  const bare = summaryTest(finished());
+  assert.equal(bare.softFailures, undefined);
+  assert.equal(bare.owed, undefined);
+  assert.match(uncovered(bare)!, /no count of runCell's soft expectations/);
+});
+
+test("an egress fixture's record names the cell test's own fields, and a listed test with one is unrecorded, naming egress", async () => {
+  const attached: { name: string; body: string }[] = [];
+  const testInfo = {
+    annotations: CELL_ANNOTATIONS,
+    attach: async (name: string, options: { body: string }) => {
+      attached.push({ name, body: options.body });
+    },
+  };
+  const message = serverEgressMessage(['x.test:443']);
+  const made = await attachEgressRecord(
+    testInfo,
+    VIEWPORTS,
+    'server-egress',
+    message.split('\n')[0]!,
+  );
+  assert.deepEqual(made, {
+    check: 'runner',
+    rule: 'server-egress',
+    surface: 'horizontal-cinema',
+    composition: true,
+    route: '/',
+    viewport: '1440x900',
+    inputMode: VIEWPORTS.find((each) => each.id === '1440x900')!.inputMode,
+    preferenceMode: 'default',
+    profile: 'default',
+    actual: 'The server tried to reach 1 host(s) outside the app: x.test:443',
+  });
+  assert.deepEqual(
+    attached.map((each) => [each.name, JSON.parse(each.body)]),
+    [[RECORDS_ATTACHMENT, [made]]],
+  );
+  // A test that isn't a cell test gets none.
+  assert.equal(
+    egressRecord(
+      CELL_ANNOTATIONS.filter((each) => each.type !== KIND_ANNOTATION),
+      VIEWPORTS,
+      'browser-egress',
+      'x',
+    ),
+    null,
+  );
+  // Through the reporter and the matcher: the listed records are named, and still it's refused.
+  for (const rule of ['browser-egress', 'server-egress']) {
+    const entry = summaryTest(
+      finished({
+        attached: [[record()], [{ ...made!, rule }]],
+        errors: ["Slice 2's suites", message],
+        resultAnnotations: [
+          { type: CHECKS_ANNOTATION, description: 'status focus' },
+          { type: OWED_ANNOTATION, description: 'status focus' },
+          { type: SOFT_FAILURES_ANNOTATION, description: '1' },
+        ],
+      }),
+    );
+    const listed = [
+      {
+        cell: 'composition:horizontal-cinema complete',
+        viewport: '1440x900',
+        row: 'default',
+        engine: 'chromium',
+        check: 'focus',
+        rule: 'contrast',
+        target: NAV,
+        owner: 'lane C',
+        routed: 'row 5',
+      },
+    ];
+    const judged = judgeListed([entry], listed);
+    assert.deepEqual(
+      judged.unrecorded.map(({ why }) => why),
+      [`it hit ${rule}, which no records list may name`],
+    );
+    // Its listed record still failed: its entry didn't pass.
+    assert.deepEqual(judged.passed, []);
+  }
 });

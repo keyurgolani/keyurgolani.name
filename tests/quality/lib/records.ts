@@ -9,6 +9,7 @@
 
 import type { AxeBuilder } from '@axe-core/playwright';
 import type { Cell } from '../cells';
+import { KIND_ANNOTATION } from './checks';
 import type { CellFailure } from './failure-records';
 import type { PreferenceRow, Viewport } from './matrix';
 import type { ColorProperty, ElementDetails } from './probes';
@@ -166,7 +167,7 @@ export function egressRecord(
   const viewport = viewports.find((each) => each.id === of('viewport'));
   const route = of('route');
   const row = of('row');
-  if (of('quality-kind') !== 'cell' || !target || !viewport || !route || !row) return null;
+  if (of(KIND_ANNOTATION) !== 'cell' || !target || !viewport || !route || !row) return null;
   const [kind, surface] = target.split(':');
   return {
     check: RUNNER_CHECK,
@@ -180,6 +181,32 @@ export function egressRecord(
     ...(of('profile') ? { profile: of('profile') } : {}),
     actual,
   };
+}
+
+/** What an egress fixture's TestInfo gives: the test's annotations, and attach. */
+export interface EgressTestInfo {
+  readonly annotations: readonly { readonly type: string; readonly description?: string }[];
+  attach(name: string, options: { body: string; contentType: string }): Promise<void>;
+}
+
+/**
+ * A cell test's egress record (egressRecord), attached as a records attachment of its own, before
+ * the egress fixture throws; the record, or null for a test that isn't a cell test.
+ */
+export async function attachEgressRecord(
+  testInfo: EgressTestInfo,
+  viewports: readonly Pick<Viewport, 'id' | 'inputMode'>[],
+  rule: string,
+  actual: string,
+): Promise<CellFailure | null> {
+  const record = egressRecord(testInfo.annotations, viewports, rule, actual);
+  if (record) {
+    await testInfo.attach(RECORDS_ATTACHMENT, {
+      body: `${JSON.stringify([record])}\n`,
+      contentType: 'application/json',
+    });
+  }
+  return record;
 }
 
 /** The boundaries a page resolved, as probes.ts's resolvedTokensScript reads them. */

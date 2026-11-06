@@ -207,9 +207,13 @@ export function recordsProblems(records, scope) {
 
 /**
  * Why a failing cell test can't count as its records alone, or null when it can: it ended
- * `failed` (not timed out or interrupted), with no error beyond the soft expectations runCell
- * annotated (`softFailures`; a fixture's throw, such as egress, is one more), every check it owed
- * (`owed`) among those it ran, and every failure well-formed, with no key twice.
+ * `failed` (not timed out or interrupted), hit no egress (an egress fixture's own runner record),
+ * with no error beyond the soft expectations runCell annotated (`softFailures`, at least the one a
+ * listable record fails; a fixture's throw is one more), every check it owed (`owed`, a non-empty
+ * list) among those it ran, and every failure well-formed, with no key twice. The summary is
+ * untrusted: a missing or odd field counts against the test, as a producer that drops one would.
+ * A late server-egress check, the worker's as it stops, attaches no record: its error blocks the
+ * test by the count alone.
  */
 export function uncovered(test) {
   if (test.status !== 'failed') return `it ended ${String(test.status)}, not failed`;
@@ -225,12 +229,24 @@ export function uncovered(test) {
       (failure.target !== null && (typeof failure.target !== 'string' || failure.target === '')),
   );
   if (malformed) return 'a failure record of it is malformed';
+  const egress = failures.find(
+    (failure) => failure.check === 'runner' && EGRESS_RULES.includes(failure.rule),
+  );
+  if (egress) return `it hit ${egress.rule}, which no records list may name`;
   if (typeof test.softFailures !== 'number' || !Number.isInteger(test.softFailures))
     return "it has no count of runCell's soft expectations, so an error beyond them can't be told";
-  const errors = Array.isArray(test.errors) ? test.errors.length : 0;
-  if (errors !== test.softFailures)
-    return `it ended with ${errors} error(s), not the ${test.softFailures} soft expectation(s) behind its records`;
-  if (!Array.isArray(test.owed)) return 'it names no checks it owed';
+  if (test.softFailures < 1)
+    return "it counts no failed soft expectation, though every listable record fails one of runCell's";
+  if (!Array.isArray(test.errors))
+    return "it lists no errors, so an error beyond its soft expectations can't be told";
+  if (test.errors.length !== test.softFailures)
+    return `it ended with ${test.errors.length} error(s), not the ${test.softFailures} soft expectation(s) behind its records`;
+  if (
+    !Array.isArray(test.owed) ||
+    test.owed.length === 0 ||
+    test.owed.some((check) => typeof check !== 'string' || check === '')
+  )
+    return 'it names no checks it owed';
   const ran = Array.isArray(test.checks) ? test.checks : [];
   const missing = test.owed.filter((check) => !ran.includes(check));
   if (missing.length > 0) return `it didn't run its ${missing.join(', ')} check(s)`;
@@ -246,7 +262,8 @@ export function uncovered(test) {
  *   check it didn't run, a malformed record; no entry can name it;
  * - repeated: each failing cell test whose failures repeat a key, so no one entry names one record;
  * - covered: the failing cell tests whose every failure an entry names, and nothing else failed;
- * - passed: each strict entry whose test ran here (not skipped) and whose failure it no longer has;
+ * - passed: each strict entry whose test ran here (not skipped) and whose failure it no longer has
+ *   (an uncovered test's records count as failing: its entries on them aren't passed);
  * - flaky: each flaky entry and how it came out here: `failed` (its record failed), `passed` (its
  *   test ran without it), or `not run`. A flaky entry is never `passed` above; its test's other
  *   failures are unlisted all the same.
@@ -262,7 +279,9 @@ export function judgeListed(tests, listed) {
   for (const test of tests ?? []) {
     if (test?.kind !== 'cell' || test.outcome === 'skipped') continue;
     const why = test.outcome === 'unexpected' ? uncovered(test) : null;
-    const failing = test.outcome === 'unexpected' && why === null ? testFailures(test) : [];
+    const failing = test.outcome === 'unexpected' ? testFailures(test) : [];
+    // An uncovered test's records still failed: its entries on them didn't pass, whatever else
+    // it failed on.
     const testKey = JSON.stringify([test.cell, test.viewport, test.row, test.engine]);
     const own = ran.get(testKey) ?? new Set();
     for (const failure of failing) own.add(recordKey(failure));

@@ -7,7 +7,14 @@ import { isDeepStrictEqual } from 'node:util';
 import { parse, stringify } from 'yaml';
 import { parseSelection } from '../../packages/appearance/src/index';
 import { cellAnnotations, planCells, type BuildMeta, type Cell, type Plan } from './cells';
-import { CHECKS_ANNOTATION, requiredChecks, sweepCheck, sweepRowChecks } from './lib/checks';
+import {
+  CHECKS_ANNOTATION,
+  OWED_ANNOTATION,
+  requiredChecks,
+  SOFT_FAILURES_ANNOTATION,
+  sweepCheck,
+  sweepRowChecks,
+} from './lib/checks';
 import { FIXED_TIME } from './lib/clock';
 import { PREFERENCE_ROWS, VIEWPORTS } from './lib/matrix';
 import {
@@ -689,4 +696,50 @@ test("each swept row's pass answers whether its page settled, and a cell's annot
   rmSync(run.dir, { recursive: true, force: true });
   assert.deepEqual(run.testInfo.annotations, cellAnnotations(scripted));
   assert.ok(run.testInfo.annotations.length > 0);
+});
+
+test('runCell counts its own failed soft expectations, not an error the test already had, and annotates the checks its row owes, not the ones it ran', async () => {
+  const plan = planCells({ meta: twoPacks(), registrations, mode: 'pr', changes: CHANGES });
+  const cell = plan.cells.find((each) => !each.sweep)!;
+  const planned = plan.tests.find((each) => each.cell === cell)!;
+  const { dir, testInfo, page } = stubRun(null);
+  // As Playwright's: an error before runCell's soft expectations (a hook's, say), and every soft
+  // expectation that fails pushed onto the same list.
+  const errors: { message: string }[] = [{ message: 'an error before the soft expectations' }];
+  const failed = (message: string) => void errors.push({ message });
+  const expect = {
+    soft: (value: unknown, message: string) => ({
+      toBe: (wanted: unknown) => void (value === wanted || failed(message)),
+      toEqual: (wanted: unknown) => void (isDeepStrictEqual(value, wanted) || failed(message)),
+      toBeNull: () => void (value === null || failed(message)),
+    }),
+  };
+  const owed = requiredChecks(planned.row.id, planned.viewport.id, planned.conditions, false);
+  // The page didn't settle, and the pass skipped one check its row owes.
+  const short: typeof runPass = async (run, options) => ({
+    ...(await stubPass(run, options)),
+    settled: false,
+    ran: new Set(owed.filter((check) => check !== 'focus')),
+  });
+  await runCell(
+    {
+      page: page as never,
+      cell,
+      viewport: planned.viewport,
+      row: planned.row,
+      conditions: planned.conditions,
+      testInfo: Object.assign(testInfo, { errors }) as never,
+      expect: expect as never,
+      origin: 'http://127.0.0.1:3000',
+    },
+    short,
+  );
+  rmSync(dir, { recursive: true, force: true });
+  const annotated = (type: string) =>
+    testInfo.annotations.find((each) => each.type === type)?.description;
+  assert.equal(errors.length, 2);
+  assert.equal(annotated(SOFT_FAILURES_ANNOTATION), '1');
+  assert.ok(owed.includes('focus'));
+  assert.equal(annotated(OWED_ANNOTATION), owed.join(' '));
+  assert.ok(!annotated(CHECKS_ANNOTATION)!.split(' ').includes('focus'));
 });

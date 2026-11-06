@@ -2,9 +2,10 @@
 // 11), on the harness's (tests/harness/fixtures.ts):
 //
 // - `app` runs the cell's server from the quality build (lib/server.ts). Its
-//   egress trap and socket guard catch every attempt the server makes; the
-//   harness's serverEgress fails the test it happens in, and an attempt
-//   still on its way after the last test fails the worker as it stops.
+//   egress trap and socket guard catch every attempt the server makes;
+//   serverEgress fails the test it happens in, a cell test with a record of
+//   it, and an attempt still on its way after the last test fails the
+//   worker as it stops.
 // - The browser reaches nothing but the app: every other request is
 //   aborted and logged, and any one fails the test, with no allowlist. A
 //   redirect hop counts, and the request fixture follows no redirect.
@@ -22,7 +23,7 @@
 //   secrets go to the scrub's list before any test runs with them.
 
 import path from 'node:path';
-import { test as base } from '../harness/fixtures';
+import { test as base, serverEgressMessage } from '../harness/fixtures';
 import { startApp } from '../harness/app-server.mjs';
 import { canaryPassword } from './lib/artifacts.mjs';
 import { pinPageClock } from './lib/clock';
@@ -34,7 +35,7 @@ import {
   serverEgressFailure,
 } from './lib/egress';
 import { VIEWPORTS } from './lib/matrix';
-import { egressRecord, RECORDS_ATTACHMENT } from './lib/records';
+import { attachEgressRecord } from './lib/records';
 import { appOptionsFor, type CellServer } from './lib/server';
 import { createAuthSession, recordSessionSecrets, type Session } from './lib/session';
 import { recordVitals } from './lib/vitals';
@@ -144,14 +145,26 @@ export const test = base.extend<QualityTestFixtures, QualityWorkerFixtures>({
         contentType: 'text/plain',
       });
       // A cell test's egress is a record of its own, which no records list may name.
-      const record = egressRecord(testInfo.annotations, VIEWPORTS, 'browser-egress', failure);
-      if (record) {
-        await testInfo.attach(RECORDS_ATTACHMENT, {
-          body: `${JSON.stringify([record])}\n`,
-          contentType: 'application/json',
-        });
-      }
+      await attachEgressRecord(testInfo, VIEWPORTS, 'browser-egress', failure);
       throw new Error(failure);
+    }
+  },
+
+  // The harness's own is auto, and so is this, which replaces it: a cell test's server egress is
+  // a record of its own too, as its browser's is. The app fixture's late check, as the worker
+  // stops, has no test to attach one to: its error blocks a listed test by the count alone.
+  serverEgress: async ({ app }, provide, testInfo) => {
+    const before = app.egress().length;
+    await provide();
+    const attempts = app.egress().slice(before);
+    if (attempts.length > 0) {
+      await testInfo.attach('server-egress.txt', {
+        body: `${attempts.join('\n')}\n`,
+        contentType: 'text/plain',
+      });
+      const message = serverEgressMessage(attempts);
+      await attachEgressRecord(testInfo, VIEWPORTS, 'server-egress', message.split('\n')[0]!);
+      throw new Error(message);
     }
   },
 });

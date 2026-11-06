@@ -127,6 +127,16 @@ interface WorkerFixtures {
 
 // Playwright's fixture callback is conventionally named `use`; it is `provide`
 // here because the React Hooks lint rule mistakes `use(...)` for React's use().
+/** serverEgress's error, for the server's attempts to reach outside the app during one test. */
+export function serverEgressMessage(attempts: readonly string[]): string {
+  return [
+    `The server tried to reach ${attempts.length} host(s) outside the app: ${[...new Set(attempts)].join(', ')}`,
+    '',
+    'Expected: no outbound request from the server under test',
+    `Received: ${attempts.join(', ')}`,
+  ].join('\n');
+}
+
 export const test = base.extend<TestFixtures, WorkerFixtures>({
   appOptions: [{}, { scope: 'worker', option: true }],
   blockedHosts: [[], { option: true }],
@@ -236,14 +246,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
           body: `${attempts.join('\n')}\n`,
           contentType: 'text/plain',
         });
-        throw new Error(
-          [
-            `The server tried to reach ${attempts.length} host(s) outside the app: ${[...new Set(attempts)].join(', ')}`,
-            '',
-            'Expected: no outbound request from the server under test',
-            `Received: ${attempts.join(', ')}`,
-          ].join('\n'),
-        );
+        throw new Error(serverEgressMessage(attempts));
       }
     },
     { auto: true },

@@ -204,39 +204,64 @@ function failingWith(extra: Partial<SummaryTest>, listed: VerdictInput['listed']
 test('a listed test fails the gate when anything no record names failed too: a blocked request, a server-egress error, a timeout, a check it owed and skipped', () => {
   // Its listed records alone: covered.
   assert.deepEqual(failingWith({}).failures, []);
-  for (const [label, extra, why] of [
+  const rows = [
+    // First, each row whose rule is the only guard against it.
+    [
+      "a server-egress error from the worker's late check, which attaches no record",
+      { errors: [...FAILED.errors, 'The app server requested 1 URL(s) outside the app'] },
+      /ended with 3 error\(s\), not the 2 soft expectation\(s\)/,
+    ],
+    [
+      'a teardown timeout: failed, with one error past its soft count',
+      {
+        errors: [
+          ...FAILED.errors,
+          'Test timeout of 600000ms exceeded while tearing down "context".',
+        ],
+      },
+      /ended with 3 error\(s\), not the 2 soft expectation\(s\)/,
+    ],
     [
       "a blocked request: the egress fixture's own record, and its error",
       {
         failures: [...FAILURES, { check: 'runner', rule: 'browser-egress', target: null }],
         errors: [...FAILED.errors, 'The page requested 1 URL(s) outside the app'],
       },
-      /ended with 3 error\(s\), not the 2 soft expectation\(s\) behind its records/,
+      /it hit browser-egress, which no records list may name/,
     ],
     [
-      'a server-egress error from the worker fixture, on this test',
-      { errors: [...FAILED.errors, 'The app server requested 1 URL(s) outside the app'] },
-      /ended with 3 error\(s\), not the 2 soft expectation\(s\)/,
+      "a server-egress record, the test's own serverEgress fixture's, and its error",
+      {
+        failures: [...FAILURES, { check: 'runner', rule: 'server-egress', target: null }],
+        errors: [...FAILED.errors, 'The server tried to reach 1 host(s) outside the app'],
+      },
+      /it hit server-egress, which no records list may name/,
     ],
-    ['a teardown timeout', { status: 'timedOut' }, /it ended timedOut, not failed/],
+    ['a teardown timeout as Playwright ends it', { status: 'timedOut' }, /it ended timedOut/],
     [
       'an owed check it never ran',
       { checks: FAILED.owed.filter((check) => check !== 'keyboard') },
       /it didn't run its keyboard check\(s\)/,
     ],
-  ] as const) {
+  ] as const;
+  // Every row's outcome, asserted once, so a mutant's log shows each row it opens.
+  const open = rows.flatMap(([label, extra, why]) => {
     const failed = failingWith(extra as Partial<SummaryTest>);
-    assert.ok(rules(failed.failures).includes('tests-failed'), label);
-    assert.ok(
-      failed.failures.some((each) => each.rule === 'unlisted-failure' && why.test(each.message)),
-      `${label}: ${failed.failures.map((each) => each.message).join(' | ')}`,
-    );
-  }
-  // An egress record with nothing else wrong is unlisted, and no entry can name it.
+    const blocked =
+      rules(failed.failures).includes('tests-failed') &&
+      failed.failures.some((each) => each.rule === 'unlisted-failure' && why.test(each.message));
+    // Its records still failed: neither entry reads as listed-passed.
+    const passed = failed.failures.some((each) => each.rule === 'listed-passed');
+    return blocked && !passed
+      ? []
+      : [`${label}: ${failed.failures.map((each) => `${each.rule} ${each.message}`).join(' | ')}`];
+  });
+  assert.deepEqual(open, []);
+  // An egress record with nothing else wrong blocks by itself, and no entry can name it.
   const egress = failingWith({
     failures: [...FAILURES, { check: 'runner', rule: 'browser-egress', target: null }],
   });
-  assert.ok(egress.failures.some((each) => /runner browser-egress failed/.test(each.message)));
+  assert.ok(egress.failures.some((each) => /it hit browser-egress/.test(each.message)));
   assert.match(
     recordsProblems(
       [{ ...LISTED[0]!, check: 'runner', rule: 'browser-egress', target: '#x' }],

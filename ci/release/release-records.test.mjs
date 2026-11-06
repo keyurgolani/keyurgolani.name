@@ -41,7 +41,10 @@ const flaky = (target, viewport = '1440x900') => ({
   flaky: true,
   seen: SEEN,
 });
-/** A summary cell test at `viewport`, failing on records at `targets`, or passing. */
+/**
+ * A summary cell test at `viewport`, failing on records at `targets`, or passing, as the reporter
+ * writes one: a failed test's one soft expectation an error and counted, its owed checks run.
+ */
 const cellTest = (targets, viewport = '1440x900') => ({
   title: `${CELL} › ${viewport} default`,
   kind: 'cell',
@@ -51,10 +54,10 @@ const cellTest = (targets, viewport = '1440x900') => ({
   engine: 'chromium',
   outcome: targets === 'passed' ? 'expected' : 'unexpected',
   status: targets === 'passed' ? 'passed' : 'failed',
-  checks: [],
-  owed: [],
-  errors: [],
-  softFailures: 0,
+  checks: ['status', 'focus'],
+  owed: ['status', 'focus'],
+  errors: targets === 'passed' ? [] : ["Slice 2's suites"],
+  softFailures: targets === 'passed' ? 0 : 1,
   failures:
     targets === 'passed'
       ? []
