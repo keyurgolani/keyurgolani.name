@@ -8,6 +8,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { isDeepStrictEqual } from 'node:util';
 import { deflateRawSync } from 'node:zlib';
 import { parse } from 'yaml';
 import { failureOf, judgeListed, listEntry, testFailures } from './release-records.mjs';
@@ -26,6 +27,7 @@ import {
   qprJobsProof,
   qualityPrUnlisted,
   SHARD_COUNTS,
+  summaryProblem,
 } from './verify-rc.mjs';
 import { crc32, zipEntry } from './zip.mjs';
 
@@ -50,7 +52,13 @@ const RED = {
 };
 const GREEN = { ...RED, id: 202, conclusion: 'success' };
 const VERDICT_WINDOW = { started_at: '2026-11-06T05:24:29Z', completed_at: '2026-11-06T05:25:09Z' };
-const MATRIX = { unit: 3, browser: 2, variants: 4, 'quality-pr': 2 };
+/** Each matrix job's shard count, as this commit's ci.yml runs them, and quality-pr's two here. */
+const MATRIX = { ...SHARD_COUNTS, 'quality-pr': 2 };
+/** The browser shards' names at this commit's count. */
+const BROWSER = Array.from(
+  { length: BROWSER_SHARDS },
+  (_, at) => `browser (${at + 1}/${BROWSER_SHARDS})`,
+);
 const ok = (name) => ({ name, conclusion: 'success' });
 /** A quality-pr shard's job, as GitHub lists it: red only on its own ci:quality-pr step when `red`. */
 const shardJob = (k, n, red) => ({
@@ -71,6 +79,7 @@ const shardJob = (k, n, red) => ({
 const verdictJob = (red) => ({
   name: 'quality-pr-verdict',
   conclusion: red ? 'failure' : 'success',
+  run_attempt: 1,
   ...VERDICT_WINDOW,
   steps: [
     ok('Set up job'),
@@ -302,8 +311,8 @@ test('a listed test that also failed on anything no record names blocks the tag:
 
 test('any other job gate needs that is not green blocks the tag, whatever the list says, browser included', () => {
   for (const [name, change] of [
-    ['browser (1/2)', { conclusion: 'failure' }],
-    ['browser (2/2)', { conclusion: 'cancelled' }],
+    [BROWSER[0], { conclusion: 'failure' }],
+    [BROWSER.at(-1), { conclusion: 'cancelled' }],
     ['unit (2/3)', { conclusion: 'failure' }],
     ['docs', { conclusion: 'cancelled' }],
     ['quality-pr-plan', { conclusion: 'failure' }],
@@ -356,7 +365,7 @@ test("shard-job counts only beside tests-failed, and only when quality-pr's jobs
     [
       'a missing shard',
       jobs().filter((job) => job.name !== 'quality-pr (1/2)'),
-      /quality-pr ran 1 of its 2 shards/,
+      /quality-pr ran shards 2 of 1\.\.2, not each once/,
     ],
     [
       'a verdict red on its download',
@@ -392,6 +401,88 @@ test("shard-job counts only beside tests-failed, and only when quality-pr's jobs
     ).join(),
     /shard-job, and its jobs don't show/,
   );
+});
+
+test("quality-pr's and every matrix job's shards are exactly 1..n, each once, written as plain counts: the jobs alone refuse any other set", () => {
+  const qpr = (names) => [
+    ...jobs().filter((job) => !job.name.startsWith('quality-pr (')),
+    ...names.map(([k, n]) => shardJob(k, n, false)),
+  ];
+  const open = [];
+  for (const [label, names, why] of [
+    [
+      'a k past n',
+      [
+        ['1', '2'],
+        ['3', '2'],
+      ],
+      /quality-pr ran shards 1, 3 of 1\.\.2, not each once/,
+    ],
+    [
+      'a k of 0',
+      [
+        ['0', '2'],
+        ['1', '2'],
+      ],
+      /quality-pr ran shards 0, 1 of 1\.\.2, not each once/,
+    ],
+    [
+      'a k twice',
+      [
+        ['1', '3'],
+        ['2', '3'],
+        ['2', '3'],
+      ],
+      /quality-pr ran shards 1, 2, 2 of 1\.\.3, not each once/,
+    ],
+    [
+      'a leading zero',
+      [
+        ['02', '2'],
+        ['2', '2'],
+      ],
+      /quality-pr ran shards 02, 2 of 1\.\.2, not each once/,
+    ],
+    [
+      'an n with a leading zero',
+      [
+        ['1', '02'],
+        ['2', '02'],
+      ],
+      /don't agree on their count/,
+    ],
+    [
+      'two counts',
+      [
+        ['1', '2'],
+        ['2', '3'],
+      ],
+      /don't agree on their count/,
+    ],
+  ]) {
+    // A summary that holds no shard-mismatch: the jobs alone must refuse.
+    const reasons = qprJobsProof(qpr(names)).reasons.join(' | ');
+    if (!why.test(reasons)) open.push(`${label}: ${reasons || 'accepted'}`);
+  }
+  for (const [label, names, why] of [
+    [
+      'browser with a leading zero',
+      ['browser (01/2)', 'browser (2/2)'],
+      /browser ran shards 01, 2 of 1\.\.2, not each once/,
+    ],
+    [
+      'browser of n 02',
+      ['browser (1/2)', 'browser (2/02)'],
+      /browser \(2\/02\), not its shards of 2/,
+    ],
+  ]) {
+    const list = [...jobs().filter((job) => !job.name.startsWith('browser (')), ...names.map(ok)];
+    const reasons = otherJobsRed(list, { ...SHARD_COUNTS, browser: 2 }).join(' | ');
+    if (!why.test(reasons)) open.push(`${label}: ${reasons || 'accepted'}`);
+  }
+  // Every row's outcome, asserted once.
+  assert.deepEqual(open, []);
+  assert.deepEqual(qprJobsProof(jobs()).reasons, []);
 });
 
 test("the summary is the one artifact this attempt made: a re-run, two artifacts, another run's, or one made outside the verdict job refuses the tag", () => {
@@ -434,6 +525,26 @@ test("the summary is the one artifact this attempt made: a re-run, two artifacts
       /wasn't made while this attempt's quality-pr-verdict ran/,
     ],
     [
+      'made after the verdict job ended',
+      { artifacts: [artifact(RED, { created_at: '2026-11-06T05:40:00Z' })] },
+      /wasn't made while this attempt's quality-pr-verdict ran/,
+    ],
+    [
+      'another branch',
+      {
+        artifacts: [
+          artifact(RED, { workflow_run: { id: 201, head_sha: SHA, head_branch: 'next' } }),
+        ],
+      },
+      /another run's, or not main's/,
+    ],
+    [
+      "a verdict job of another attempt than the run's",
+      { jobList: jobs({ 'quality-pr-verdict': { run_attempt: 2 } }) },
+      /quality-pr-verdict's job is attempt 2, not the run's 1/,
+    ],
+    ['no size', { artifacts: [artifact(RED, { size_in_bytes: 0 })] }, /names no size/],
+    [
       'an id past safe integers',
       { artifacts: [artifact(RED, { id: 2 ** 60 })] },
       /not an artifact id/,
@@ -466,6 +577,32 @@ test('a green run with entries listed is held to its summary: a strict entry who
     refusal(evaluateRc(input({ ...green, artifacts: [], summary: qprSummary('passed') }))),
     /can't be held to the records list: run 202 has 0 live/,
   );
+  // A summary that can't be held to the list, or whose verdict failed, refuses on a green run too.
+  const open = [];
+  for (const [label, summary, why] of [
+    ['an empty object', {}, /has no tests/],
+    ['tests null', { tests: null }, /has no tests/],
+    ['a string', 'x', /is no object/],
+    ['null', null, /is no object/],
+    ['a number', 42, /is no object/],
+    ['a list', [], /is no object/],
+    ['another schema', qprSummary('passed', { schemaVersion: 2 }), /schemaVersion 2, not 1/],
+    [
+      'a cell test whose cell field is renamed',
+      {
+        ...qprSummary('passed'),
+        tests: [{ ...cellTest('passed', { cell: undefined }), cellId: CELL }],
+      },
+      /1 cell test\(s\) of quality-pr's summary don't name their cell, viewport, row, engine/,
+    ],
+    ['a red verdict', qprSummary([FOCUS, AXE]), /its verdict failed, though gate passed/],
+  ]) {
+    const verdict = evaluateRc(input({ ...green, summary }));
+    const reason = verdict.reasons.join(' | ');
+    if (verdict.ok || !/can't be held to the records list/.test(reason) || !why.test(reason))
+      open.push(`${label}: ${reason || 'accepted'}`);
+  }
+  assert.deepEqual(open, []);
   // With an empty list, the green run counts as it always did, unread.
   const empty = evaluateRc(input({ ...green, listed: [], artifacts: [], summary: undefined }));
   assert.equal(empty.ok, true);
@@ -479,6 +616,17 @@ test("quality-pr's summary is untrusted: anything missing, malformed, or beyond 
     ['nothing', undefined, /summary couldn't be read: not fetched/],
     ['no tests', { verdict: { failures: [] } }, /has no tests/],
     ['no verdict', { tests: [] }, /has no verdict/],
+    ['another schema', qprSummary([FOCUS, AXE], { schemaVersion: 2 }), /schemaVersion 2, not 1/],
+    [
+      'no schema',
+      qprSummary([FOCUS, AXE], { schemaVersion: undefined }),
+      /schemaVersion undefined/,
+    ],
+    [
+      'a cell test with no engine',
+      { ...qprSummary([FOCUS, AXE]), tests: [cellTest([FOCUS, AXE], { engine: 7 })] },
+      /don't name their cell, viewport, row, engine/,
+    ],
     [
       'another verdict rule',
       qprSummary([FOCUS, AXE], {
@@ -614,9 +762,8 @@ test("the browser shard count is exact: each of 1..N once, succeeded, of N's cou
     red(['browser (1/3)', 'browser (2/3)', 'browser (2/3)', 'browser (3/3)']).join(),
     /not each once/,
   );
-  // With today's count, ci.yml's: two shards, both green.
-  assert.equal(BROWSER_SHARDS, 2);
-  assert.deepEqual(red(['browser (1/2)', 'browser (2/2)'], SHARD_COUNTS), []);
+  // With this commit's count, ci.yml's: its shards, all green.
+  assert.deepEqual(red(BROWSER, SHARD_COUNTS), []);
 });
 
 test("SHARD_COUNTS is ci.yml's: each matrix job gate needs but quality-pr's runs shards 1..N, named (k/N)", () => {
@@ -639,6 +786,13 @@ test("SHARD_COUNTS is ci.yml's: each matrix job gate needs but quality-pr's runs
   );
   assert.deepEqual(SHARD_COUNTS, matrixed);
   assert.equal(SHARD_COUNTS.browser, BROWSER_SHARDS);
+  // No other job gate needs has a matrix of any kind: otherJobsRed would refuse its legs.
+  assert.deepEqual(
+    ci.jobs.gate.needs.filter(
+      (need) => !QPR_JOBS.has(need) && !(need in SHARD_COUNTS) && ci.jobs[need].strategy?.matrix,
+    ),
+    [],
+  );
 });
 
 test("GATE_NEEDS is ci.yml's gate's needs, quality-pr's two jobs among them, and each job's name is the need's", () => {
@@ -710,7 +864,10 @@ test("main's real red push run, 42161399250: its jobs prove quality-pr's red, it
     id: 42161399250,
     head_sha: '1dc6bf1624fc7ee31b565417c2ddb8b34738ef7f',
   };
-  const realInput = (jobList) => ({
+  // The shard counts of the ci.yml that ran it, whatever this commit's are.
+  const RUN_COUNTS = { unit: 3, browser: 2, variants: 4 };
+  const realInput = (jobList, counts = RUN_COUNTS) => ({
+    counts,
     tag: 'v1.0.0-rc.1',
     sha: run.head_sha,
     compare: { status: 'identical', merge_base_commit: { sha: run.head_sha } },
@@ -739,6 +896,14 @@ test("main's real red push run, 42161399250: its jobs prove quality-pr's red, it
   const accepted = evaluateRc(realInput(browserGreen));
   assert.deepEqual(accepted.reasons, []);
   assert.equal(accepted.ok, true);
+  // At this commit's counts, it counts only while they're the run's own.
+  assert.equal(
+    evaluateRc(realInput(browserGreen, SHARD_COUNTS)).ok,
+    isDeepStrictEqual(SHARD_COUNTS, RUN_COUNTS),
+  );
+  // Every cell test of the real summary has the shape both paths hold it to.
+  assert.equal(summaryProblem(summary), null);
+  assert.equal(summary.tests.filter((each) => each.kind === 'cell').length > 100, true);
 });
 
 /** A zip of `files` ({ name: Buffer }), each deflated or stored, its local header as `local` says. */

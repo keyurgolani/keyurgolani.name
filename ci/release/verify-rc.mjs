@@ -25,14 +25,15 @@
 // verdict uses (ci/release/release-records.mjs): no other failing test, no
 // verdict rule but tests-failed (and shard-job beside it), no listed record
 // that ran and no longer fails. A green run with a non-empty list is held to
-// the last of those too. The artifact is the one live one the run's latest
-// quality-pr-verdict job uploaded, its size and digest checked, read with the
-// job's actions: read and parsed as untrusted: anything missing, malformed,
-// too big, or from another attempt refuses the tag. ci.yml's own gate is
-// untouched and stays strict. A list that's empty, as a final release's must
-// be, leaves only the green run. Text from the artifact is stripped of control
-// characters before it reaches the log or the job summary, and escaped in a
-// workflow command.
+// the last of those too, its summary a green verdict. Either way the summary
+// must have the shape both read (summaryProblem). The artifact is the one live
+// one the run's latest quality-pr-verdict job, of the run's own attempt,
+// uploaded, its size and digest checked, read with the job's actions: read
+// and parsed as untrusted: anything missing, malformed, too big, or from
+// another attempt refuses the tag. ci.yml's own gate is untouched and stays
+// strict. A list that's empty, as a final release's must be, leaves only the
+// green run. Text from the artifact is stripped of control characters before
+// it reaches the log or the job summary, and escaped in a workflow command.
 //
 // Pure Node with no dependencies, so the job that runs it needs no install.
 import { createHash } from 'node:crypto';
@@ -81,7 +82,7 @@ export const QPR_SUMMARY = 'quality/summary.json';
 
 /**
  * The jobs ci.yml's gate needs, by the name each runs under: a matrix job's shards are
- * `<name> (<k>/<n>)`. ci/release/verify-rc.test.mjs holds the list to ci.yml's gate.
+ * `<name> (<k>/<n>)`. ci/release/verify-rc-listed.test.mjs holds the list to ci.yml's gate.
  */
 export const GATE_NEEDS = [
   'changes',
@@ -120,10 +121,23 @@ export const BROWSER_SHARDS = 2;
 export const SHARD_COUNTS = { unit: 3, browser: BROWSER_SHARDS, variants: 4 };
 
 /**
+ * Why the shard indexes `ks` (each k of a `<job> (k/n)` name, as written) aren't exactly 1..`total`,
+ * each once, or null when they are: a 0, a leading zero, a gap, or a k twice is refused, the
+ * reason naming the ks.
+ */
+export function shardsProblem(job, ks, total) {
+  const wanted = Array.from({ length: total }, (_, at) => String(at + 1));
+  const sorted = [...ks].sort((a, b) => Number(a) - Number(b) || (a < b ? -1 : 1));
+  if (sorted.length === total && sorted.every((k, at) => k === wanted[at])) return null;
+  return `${job} ran shards ${sorted.map(clean).join(', ') || 'none'} of 1..${total}, not each once`;
+}
+
+/**
  * Why `jobs` (GET runs/{id}/jobs) don't show every job gate needs but quality-pr's green, one
  * reason a job; none when they do. A matrix job needs exactly its shards 1..N by `counts`, each
- * once and succeeded: fewer, one twice, one of another count, or one cancelled or skipped is
- * refused. Any other job runs once, by its own name, succeeded.
+ * once and succeeded: fewer, one twice, one of another count, a k or n written otherwise than as a
+ * plain count, or one cancelled or skipped is refused. Any other job runs once, by its own name,
+ * succeeded.
  */
 export function otherJobsRed(jobs, counts = SHARD_COUNTS) {
   const reasons = [];
@@ -148,17 +162,17 @@ export function otherJobsRed(jobs, counts = SHARD_COUNTS) {
     }
     const shard = new RegExp(`^${need} \\((\\d+)/(\\d+)\\)$`);
     const parsed = own.map((job) => shard.exec(job.name));
-    const off = own.filter((_, at) => parsed[at] === null || Number(parsed[at][2]) !== total);
+    const off = own.filter((_, at) => parsed[at] === null || parsed[at][2] !== String(total));
     if (off.length > 0)
       reasons.push(
         `${need} ran ${off.map((job) => job.name).join(', ')}, not its shards of ${total}`,
       );
-    const ks = parsed.filter((match) => match !== null).map((match) => Number(match[1]));
-    const wanted = Array.from({ length: total }, (_, at) => at + 1);
-    if (ks.length !== total || new Set(ks).size !== total || !wanted.every((k) => ks.includes(k)))
-      reasons.push(
-        `${need} ran shards ${ks.sort((x, y) => x - y).join(', ') || 'none'} of 1..${total}, not each once`,
-      );
+    const problem = shardsProblem(
+      need,
+      parsed.filter((match) => match !== null).map((match) => match[1]),
+      total,
+    );
+    if (problem) reasons.push(problem);
   }
   return reasons;
 }
@@ -174,6 +188,8 @@ export function commandText(text) {
 }
 
 const QPR_SHARD = /^quality-pr \((\d+)\/(\d+)\)$/;
+/** A shard count or index as ci.yml writes one: 1 or more, no leading zero. */
+const COUNT = /^[1-9]\d*$/;
 const OK_STEP = new Set(['success', 'skipped']);
 
 /**
@@ -188,14 +204,17 @@ export function qprJobsProof(jobs) {
   const reasons = [];
   const shards = (jobs ?? []).filter((job) => QPR_SHARD.test(String(job?.name)));
   const totals = new Set(shards.map((job) => QPR_SHARD.exec(job.name)[2]));
-  const total = Number([...totals][0]);
+  const [total] = totals;
   if (shards.length === 0) reasons.push('quality-pr ran no shard');
-  else if (totals.size !== 1 || !(total > 0))
+  else if (totals.size !== 1 || !COUNT.test(total))
     reasons.push("quality-pr's shards don't agree on their count");
   else {
-    const seen = new Set(shards.map((job) => QPR_SHARD.exec(job.name)[1]));
-    if (seen.size !== total || shards.length !== total)
-      reasons.push(`quality-pr ran ${shards.length} of its ${total} shards`);
+    const problem = shardsProblem(
+      'quality-pr',
+      shards.map((job) => QPR_SHARD.exec(job.name)[1]),
+      Number(total),
+    );
+    if (problem) reasons.push(problem);
   }
   const step = (job, name) => (job?.steps ?? []).find((each) => each?.name === name);
   const onlyRed = (job, own, needed) => {
@@ -236,11 +255,17 @@ export function qprJobsProof(jobs) {
 
 /**
  * The one live reports-quality-pr-verdict artifact of `run` that its latest attempt's verdict job
- * (`verdict`, a job of the listing for that attempt) uploaded, or why not: exactly one live one by
- * that name, its id a safe integer, its workflow_run this run on main at `sha`, and made within
- * that job's start and end. An artifact another job made first, or a past attempt's, is refused.
+ * (`verdict`, a job of the listing for that attempt, of the run's own attempt) uploaded, or why
+ * not: exactly one live one by that name, its id a safe integer, its workflow_run this run on main
+ * at `sha`, and made within that job's start and end. An artifact another job made first, or a
+ * past attempt's, is refused.
  */
 export function bindArtifact(artifacts, run, sha, verdict) {
+  if (verdict?.run_attempt !== run.run_attempt)
+    return {
+      artifact: null,
+      reason: `quality-pr-verdict's job is attempt ${clean(verdict?.run_attempt)}, not the run's ${clean(run.run_attempt)}`,
+    };
   const live = (artifacts ?? []).filter(
     (each) => each?.name === QPR_ARTIFACT && each.expired === false,
   );
@@ -283,6 +308,32 @@ export function downloadProblem(bytes, artifact) {
   return null;
 }
 
+/** The fields every cell test of a summary names its key by. */
+const CELL_KEY = ['cell', 'viewport', 'row', 'engine'];
+
+/**
+ * Why the quality-pr summary `summary` (its verdict's quality/summary.json, parsed, untrusted)
+ * isn't one a records list can be held to, or null when it is: an object of schemaVersion 1, with
+ * a tests list, a verdict with a failures list, and every cell test naming its cell, viewport, row
+ * and engine as text. Both paths read it through this, so a summary whose shape drifts refuses.
+ */
+export function summaryProblem(summary) {
+  if (!summary || typeof summary !== 'object' || Array.isArray(summary))
+    return "quality-pr's summary is no object";
+  if (!Array.isArray(summary.tests)) return "quality-pr's summary has no tests";
+  const verdict = summary.verdict;
+  if (!verdict || typeof verdict !== 'object' || !Array.isArray(verdict.failures))
+    return "quality-pr's summary has no verdict";
+  if (summary.schemaVersion !== 1)
+    return `quality-pr's summary is schemaVersion ${clean(JSON.stringify(summary.schemaVersion))}, not 1`;
+  const unnamed = summary.tests.filter(
+    (test) => test?.kind === 'cell' && !CELL_KEY.every((field) => typeof test[field] === 'string'),
+  );
+  if (unnamed.length > 0)
+    return `${unnamed.length} cell test(s) of quality-pr's summary don't name their ${CELL_KEY.join(', ')}`;
+  return null;
+}
+
 /**
  * Why the quality-pr summary `summary` (its verdict's quality/summary.json, parsed, untrusted)
  * doesn't show quality-pr's red as the records list `listed` names it, one reason a line; none
@@ -290,10 +341,9 @@ export function downloadProblem(bytes, artifact) {
  * failure record of each listed, and no listed record whose test ran gone from it.
  */
 export function qualityPrUnlisted(summary, listed, { jobsProven = false } = {}) {
-  if (!summary || typeof summary !== 'object' || !Array.isArray(summary.tests))
-    return ["quality-pr's summary has no tests"];
-  const failures = summary.verdict?.failures;
-  if (!Array.isArray(failures)) return ["quality-pr's summary has no verdict"];
+  const shape = summaryProblem(summary);
+  if (shape) return [shape];
+  const failures = summary.verdict.failures;
   const reasons = [];
   const rules = failures.map((failure) => failure?.rule);
   for (const rule of rules) {
@@ -364,9 +414,12 @@ export function redRuns(sha, runs) {
  * quality runs' own, its artifact is the one its verdict job made, and its summary's every
  * failure is listed (`listed: true` then).
  *
- * @param {{ tag: string, sha: string, compare: object, runs: object[], jobsByRun: Record<string, object[]>, quality?: { listed: object[], summaries: Record<string, unknown>, artifacts?: Record<string, object[]> } }} input
+ * `counts` are the shard counts of the ci.yml that ran the runs, SHARD_COUNTS (this commit's) by
+ * default: a test on a run from before a change to a matrix passes its own.
+ *
+ * @param {{ tag: string, sha: string, compare: object, runs: object[], jobsByRun: Record<string, object[]>, quality?: { listed: object[], summaries: Record<string, unknown>, artifacts?: Record<string, object[]> }, counts?: Record<string, number> }} input
  */
-export function evaluateRc({ tag, sha, compare, runs, jobsByRun, quality }) {
+export function evaluateRc({ tag, sha, compare, runs, jobsByRun, quality, counts = SHARD_COUNTS }) {
   const reasons = [];
   const release = parseReleaseTag(tag);
   if (!release || release.kind !== 'rc') reasons.push(`${tag} is not a vX.Y.Z-rc.N tag`);
@@ -406,12 +459,18 @@ export function evaluateRc({ tag, sha, compare, runs, jobsByRun, quality }) {
     if (listed.length === 0)
       return { ok: reasons.length === 0, reasons, run, listed: false, flaky: [] };
     const { verdict } = qprJobsProof(jobsByRun?.[String(run.id)]);
-    const { summary, why } = summaryOf(run, verdict);
+    const read = summaryOf(run, verdict);
+    const why =
+      read.why ??
+      summaryProblem(read.summary) ??
+      (read.summary?.verdict?.ok === true && read.summary.verdict.failures?.length === 0
+        ? null
+        : "quality-pr's summary says its verdict failed, though gate passed");
     if (why) {
       reasons.push(`${sha}'s green ci run ${run.id} can't be held to the records list: ${why}`);
       return { ok: false, reasons, run: null, listed: false, flaky: [] };
     }
-    const judged = judgeListed(Array.isArray(summary?.tests) ? summary.tests : [], listed);
+    const judged = judgeListed(read.summary.tests ?? [], listed);
     for (const entry of judged.passed)
       reasons.push(
         `${entry.cell} at ${entry.viewport}, ${entry.row}: ${entry.check} ${entry.rule} on ${String(entry.target)} passed in ci run ${run.id}'s quality-pr, so it's no failing record: take its entry out`,
@@ -428,7 +487,7 @@ export function evaluateRc({ tag, sha, compare, runs, jobsByRun, quality }) {
   const why = [];
   for (const red of redRuns(sha, runs)) {
     const jobs = jobsByRun?.[String(red.id)];
-    const others = otherJobsRed(jobs);
+    const others = otherJobsRed(jobs, counts);
     const proof = qprJobsProof(jobs);
     const read =
       quality === undefined
