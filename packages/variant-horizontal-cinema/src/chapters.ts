@@ -72,9 +72,12 @@ export function sceneAlong(
  * went, the nearer, as a wheel or a key snaps. So a slow wheel, a notch at a
  * time with the page at rest between, travels on rather than being pulled
  * back to the scene it left, and a travel that runs a little past a scene
- * keeps that one. Within a pixel of a scene, or not having gone anywhere,
- * the nearest.
+ * keeps that one. Within a pixel of a scene, or not having gone anywhere
+ * (a nudge of up to TRAVEL_FLOOR px from where it set out), the nearest.
  */
+/** How far a travel must go from where it set out to count as one: a 2 or 3 px nudge returns to its scene, a 4 px notch travels. */
+export const TRAVEL_FLOOR = 3;
+
 export function snapAlong(offsets: readonly number[], at: number, from: number): number {
   const nearestOf = (indices: readonly number[]): number =>
     indices.reduce(
@@ -84,7 +87,11 @@ export function snapAlong(offsets: readonly number[], at: number, from: number):
     );
   const all = offsets.map((_, index) => index);
   const nearest = nearestOf(all);
-  if (all.length === 0 || Math.abs(offsets[nearest]! - at) <= 1 || Math.abs(at - from) <= 1)
+  if (
+    all.length === 0 ||
+    Math.abs(offsets[nearest]! - at) <= 1 ||
+    Math.abs(at - from) <= TRAVEL_FLOOR
+  )
     return nearest;
   const ahead = all.filter((index) =>
     at > from ? offsets[index]! > from + 1 : offsets[index]! < from - 1,
