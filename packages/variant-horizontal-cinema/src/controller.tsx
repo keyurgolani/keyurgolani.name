@@ -715,11 +715,16 @@ function LiveStage(props: StageProps) {
         .filter((part) => !part.querySelector('.hc-minimap__label'))
         .map(drawn)
         .filter((box) => box.width > 0 && box.height > 0);
+      // The labels run in the bar's inline direction: right to left, each one starts at its right
+      // edge, so a label clears the one before it where it starts past that one's end.
+      const rtl = style.direction === 'rtl';
+      const inlineStart = (box: DOMRect) => (rtl ? -box.right : box.left);
+      const inlineEnd = (box: DOMRect) => (rtl ? -box.left : box.right);
       return labels.some(
         (label, index) =>
           label.left < left - 0.5 ||
           label.right > right + 0.5 ||
-          (index > 0 && label.left < labels[index - 1]!.right - 0.5) ||
+          (index > 0 && inlineStart(label) < inlineEnd(labels[index - 1]!) - 0.5) ||
           parts.some((part) => meet(label, part)),
       );
     };
