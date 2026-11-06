@@ -1939,6 +1939,11 @@
   font-weight: 650;
 }
 
+/* The rail's fit measures every label at the current one's weight, so reaching any chapter keeps it. */
+[data-variant='horizontal-cinema'] .hc-shell[data-rail-measure] .hc-minimap__label {
+  font-weight: 650;
+}
+
 [data-variant='horizontal-cinema'] .hc-minimap__years {
   font-variant-numeric: tabular-nums;
 }

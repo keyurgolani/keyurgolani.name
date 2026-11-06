@@ -724,7 +724,29 @@ function LiveStage(props: StageProps) {
         b.left < a.right - 0.5 &&
         a.top < b.bottom - 0.5 &&
         b.top < a.bottom - 0.5;
-      const labels = [...bar.querySelectorAll('.hc-minimap__label')].map(drawn);
+      // A label as it shows: shortened, its years are hidden (kept for assistive technology), so
+      // only the words outside them count.
+      const shown = (label: Element): DOMRect => {
+        if (rootElement.dataset.rail !== 'short') return drawn(label);
+        const boxes = [...label.childNodes]
+          .filter((node) => !(node instanceof Element && node.matches('.hc-minimap__years')))
+          .map((node) => {
+            const range = doc.createRange();
+            range.selectNodeContents(node);
+            return range.getBoundingClientRect();
+          })
+          .filter((box) => box.width > 0 || box.height > 0);
+        if (boxes.length === 0) return drawn(label);
+        const l = Math.min(...boxes.map((box) => box.left));
+        const t = Math.min(...boxes.map((box) => box.top));
+        const r = Math.max(...boxes.map((box) => box.right));
+        const b = Math.max(...boxes.map((box) => box.bottom));
+        return new DOMRect(l, t, r - l, b - t);
+      };
+      // Every label at the current one's weight, as each is once the reader reaches its chapter.
+      rootElement.dataset.railMeasure = '';
+      const labels = [...bar.querySelectorAll('.hc-minimap__label')].map(shown);
+      delete rootElement.dataset.railMeasure;
       const parts = [...bar.children]
         .filter((part) => !part.querySelector('.hc-minimap__label'))
         .map(drawn)

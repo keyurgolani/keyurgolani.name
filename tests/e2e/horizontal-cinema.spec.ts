@@ -12,6 +12,7 @@ import {
   load,
   railClashes,
   read,
+  widenRailYears,
   watchKeys,
 } from './horizontal-cinema-model';
 
@@ -458,6 +459,48 @@ for (const [width, height] of [
       await page.setViewportSize({ width, height });
       await load(page);
       expect(await railClashes(page)).toEqual([]);
+    },
+  );
+}
+
+test(
+  "at 1440 by 900, a rail whose years don't fit shortens them and keeps the strip pinned, its labels clear",
+  { annotation },
+  async ({ page }) => {
+    await widenRailYears(page);
+    await load(page);
+    await expect
+      .poll(async () => {
+        const { layout, pinned, fit } = await read(page);
+        const rail = await page.locator('.hc-shell').getAttribute('data-rail');
+        return { layout, pinned, fit, rail };
+      })
+      .toEqual({ layout: 'horizontal', pinned: true, fit: null, rail: 'short' });
+    expect(await railClashes(page)).toEqual([]);
+  },
+);
+
+for (const [width, height] of [
+  [1024, 768],
+  [1152, 864],
+  [1280, 800],
+  [1366, 768],
+] as const) {
+  test(
+    `at ${width} by ${height} a resize that changes nothing leaves the fit and the rail as they were`,
+    { annotation },
+    async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await load(page);
+      const marks = () =>
+        page.evaluate(() => {
+          const shell = document.querySelector('.hc-shell')!;
+          return { fit: shell.getAttribute('data-fit'), rail: shell.getAttribute('data-rail') };
+        });
+      const before = await marks();
+      await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+      await page.waitForTimeout(600);
+      expect(await marks()).toEqual(before);
     },
   );
 }
