@@ -29,6 +29,7 @@ import { fileURLToPath } from 'node:url';
 import { currentGate, reportError, reportsDir, writeFailureRecord } from '../../ci/lib/reports.mjs';
 import { RECORD_VERSION } from './lib/failure-records';
 import { rotationReport, type RotationReport } from './lib/full-shards';
+import { loadReleaseScope } from './lib/release-scope';
 import { timingTrend } from './lib/perf/timing';
 import type { RunMode } from './cells';
 import {
@@ -111,7 +112,15 @@ export function mergeRun(
   let verdict: MergedVerdict;
   try {
     shards = readShards(dir);
-    verdict = mergeShards(shards, { expected, mode, jobs, whole });
+    // A release candidate's scope file names its records list (lib/release-scope.ts).
+    const scope = loadReleaseScope();
+    verdict = mergeShards(shards, {
+      expected,
+      mode,
+      jobs,
+      whole,
+      ...(scope ? { listed: scope.records } : {}),
+    });
   } catch (error) {
     // Whatever the reports hold, the merge says so and fails, with its record.
     shards = [];

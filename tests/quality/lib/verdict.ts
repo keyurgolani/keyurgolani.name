@@ -30,7 +30,14 @@
 //   kind runs, a cell test every check its row and viewport owe
 //   (checks.ts's requiredChecks), a swept cell's the sweep's.
 // - tests-failed, run-errors: a test failed, or something outside a test
-//   did (a load error, a worker's late egress).
+//   did (a load error, a worker's late egress). With a release candidate's
+//   records list (lib/release-scope.ts), a failing cell test the list names
+//   doesn't count here.
+// - unlisted-failure: a release run's failing cell test that its records
+//   list doesn't name, each with a ready-to-paste entry whose owner and
+//   routed row are placeholders the list refuses until they're filled.
+// - listed-passed: a listed cell test ran and passed, so its entry goes.
+// - listed-unplanned: a whole run's listed entry names no planned test.
 // - canary-leaked: an artifact holds the run's canary after the scrub.
 // - canary-unproven: the canary probe ran, but no artifact held the canary
 //   before the scrub, so the scan proved nothing.
@@ -52,6 +59,7 @@ import {
   type TestKind,
 } from './checks';
 import type { Summary, SummaryTest } from '../reporter';
+import { listEntry, recordKey, testRecordKey, type ListedRecord } from './release-scope';
 import { VISUAL_SKIP, type PlannedVisual } from './visual';
 
 /** The harness's own skip reasons, which only its own tests may skip with. */
@@ -97,6 +105,11 @@ export interface VerdictInput {
     readonly before: readonly ArtifactHit[];
     readonly after: readonly ArtifactHit[];
   } | null;
+  /**
+   * A release candidate's records list (lib/release-scope.ts), when the run has a scope file:
+   * the failing cell tests it ships with. None for any other run, which no failure passes.
+   */
+  readonly listed?: readonly ListedRecord[];
 }
 
 export interface Failure {
@@ -131,7 +144,14 @@ function ownReasons(test: SummaryTest, planned: VerdictTest | undefined): string
   return [...HARNESS_SKIPS];
 }
 
-export function judge({ plan, engines, summary, missingBrowsers, canary }: VerdictInput): Verdict {
+export function judge({
+  plan,
+  engines,
+  summary,
+  missingBrowsers,
+  canary,
+  listed,
+}: VerdictInput): Verdict {
   const failures: Failure[] = [];
   const fail = (rule: string, message: string) => failures.push({ rule, message });
 
@@ -258,12 +278,47 @@ export function judge({ plan, engines, summary, missingBrowsers, canary }: Verdi
     }
   }
 
-  const failed = tests.filter((test) => test.outcome === 'unexpected');
+  // A release candidate's listed cell tests: failing is what the list says they do.
+  const listedKeys = new Set((listed ?? []).map(recordKey));
+  const isListed = (test: SummaryTest) =>
+    test.kind === 'cell' && listedKeys.has(testRecordKey(test));
+  const failed = tests.filter((test) => test.outcome === 'unexpected' && !isListed(test));
   if (failed.length > 0) {
     fail(
       'tests-failed',
       `${failed.length} test(s) failed: ${failed.map((test) => test.title).join('; ')}`,
     );
+  }
+  if (listed !== undefined) {
+    for (const test of failed.filter((each) => each.kind === 'cell')) {
+      fail(
+        'unlisted-failure',
+        `${test.title} failed, and the records list doesn't name it. To list it, fill in its owner and routed row: ${listEntry(test)}`,
+      );
+    }
+    for (const test of tests.filter(
+      (each) => isListed(each) && (each.outcome === 'expected' || each.outcome === 'flaky'),
+    )) {
+      fail(
+        'listed-passed',
+        `${test.title} passed, and the records list names it: take its entry out (${listEntry(test)})`,
+      );
+    }
+    if (!sharded) {
+      const plannedKeys = new Set(
+        plan.tests.flatMap((test) =>
+          engines.map((engine) =>
+            recordKey({ cell: test.cell.id, viewport: test.viewport.id, row: test.row.id, engine }),
+          ),
+        ),
+      );
+      for (const entry of listed.filter((each) => !plannedKeys.has(recordKey(each)))) {
+        fail(
+          'listed-unplanned',
+          `The records list names ${entry.cell} at ${entry.viewport}, ${entry.row}, on ${entry.engine}, which the plan doesn't have.`,
+        );
+      }
+    }
   }
   for (const error of summary.errors) fail('run-errors', error.split('\n')[0]!);
 

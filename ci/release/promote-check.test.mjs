@@ -3,6 +3,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { readScope } from './verify-scope.mjs';
 import {
   candidatesFor,
   evaluatePromotion,
@@ -36,6 +38,10 @@ const input = (overrides = {}) => ({
   runs: RUNS,
   jobsByRun: { 202: PASSED },
   pending: [],
+  quality: {
+    scope: { release: '1.2.0-rc.2', scope: 'full', records: 'records.json' },
+    records: [],
+  },
   ...overrides,
 });
 
@@ -159,6 +165,27 @@ test('promotion is refused while the baseline-pending list names any composition
   );
   assert.match(evaluatePromotion(input({ pending: undefined })).reasons.join(), /wasn't read/);
   assert.equal(evaluatePromotion(input({ pending: [] })).ok, true);
+});
+
+test("promotion is refused while the candidate's quality scope is narrowed or its records list names a failure", () => {
+  const scope = { release: '1.2.0-rc.2', scope: 'default-packs', records: 'records.json' };
+  const narrowed = evaluatePromotion(input({ quality: { scope, records: [] } }));
+  assert.equal(narrowed.ok, false);
+  assert.deepEqual(narrowed.targets, []);
+  assert.equal(
+    narrowed.reasons.join(),
+    `quality/release/scope.json keeps the candidate from a final release: its scope is "default-packs", not full. A final needs the full matrix clean: scope full and an empty list, then a new candidate (on ${SHA})`,
+  );
+  const listed = evaluatePromotion(
+    input({ quality: { scope: { ...scope, scope: 'full' }, records: [{ cell: 'a' }] } }),
+  );
+  assert.match(listed.reasons.join(), /its records list names 1 failing cell test\./);
+  const both = evaluatePromotion(input({ quality: { scope, records: [{}, {}] } }));
+  assert.match(both.reasons.join(), /not full, and its records list names 2 failing cell tests\./);
+  assert.match(evaluatePromotion(input({ quality: null })).reasons.join(), /wasn't read/);
+  // The checked-in RC1 scope, on its default packs, can't promote to 1.0.0.
+  const checkedIn = readScope(fileURLToPath(new URL('../../', import.meta.url)));
+  assert.equal(evaluatePromotion(input({ quality: checkedIn })).ok, false);
 });
 
 test("the baseline-pending list's ids are read sorted, and only from an object", () => {

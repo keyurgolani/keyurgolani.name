@@ -23,10 +23,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   FULL_SHARDS,
+  fullEstimate,
   fullGroups,
   NIGHTLY_CEILING,
   RELEASE_CEILING,
   RELEASE_PARALLEL,
+  releaseDurations,
   releaseFor,
   releaseTimeoutMinutes,
   rotationFor,
@@ -44,6 +46,17 @@ import { externalVariantHost } from './run';
 export function releaseSummary(count: number): string {
   const timeout = releaseTimeoutMinutes();
   return `rc-quality: ${count} shards, ${RELEASE_PARALLEL} at a time, at most ${count * timeout} runner-minutes at the ${timeout}-minute timeout`;
+}
+
+/**
+ * The release plan of `plan`, as rc-quality-plan counts it and each rc-quality shard plans it: by
+ * the release's measured weights, each key at its p90 (releaseDurations()), so each shard's
+ * estimate is its p90 total, within RELEASE_CEILING.
+ */
+export function releaseOf(plan: Parameters<typeof fullGroups>[0]) {
+  const weights = releaseDurations();
+  const groups = fullGroups(plan, RUN_ENGINES.full, weights);
+  return { groups, ...releaseFor(groups, weights) };
 }
 
 /** What GITHUB_OUTPUT gets: the release shard count, its matrix list, and the cycle's nights. */
@@ -71,13 +84,20 @@ export async function runFullPlan({
 } = {}): Promise<number> {
   try {
     const plan = await loadPlan({ ...env, QUALITY_WEB: host.web, QUALITY_MODE: 'full' });
+    // The release sizes its shards by its own measured weights (releaseOf); the nightly by the PR's.
+    const release = releaseOf(plan);
     const groups = fullGroups(plan, RUN_ENGINES.full);
-    const seconds = Math.round(groups.reduce((sum, group) => sum + group.weight, 0));
-    const release = releaseFor(groups);
+    const seconds = Math.round(release.groups.reduce((sum, group) => sum + group.weight, 0));
     const rotation = rotationFor(groups);
     log(
       `[quality-full-plan] ${plan.tests.length} tests, about ${seconds}s: the release in ${release.count} shards, the slowest about ${Math.round(release.slowest)}s of ${RELEASE_CEILING}s; the nightly a ${rotation.nights}-night cycle of ${FULL_SHARDS} shards, the slowest about ${Math.round(rotation.slowest)}s of ${NIGHTLY_CEILING}s`,
     );
+    // Each release shard's estimate, its p90 total, for the run's real times to be read against.
+    for (const shard of release.shards) {
+      log(
+        `[quality-full-plan] release shard ${shard.index}/${release.count}: p90 total about ${Math.round(fullEstimate(shard))}s, ${shard.groups.reduce((sum, group) => sum + group.tests.length, 0)} cell test(s)`,
+      );
+    }
     const summary = releaseSummary(release.count);
     log(`[quality-full-plan] ${summary}`);
     if (env.GITHUB_STEP_SUMMARY) appendFileSync(env.GITHUB_STEP_SUMMARY, `${summary}\n`);

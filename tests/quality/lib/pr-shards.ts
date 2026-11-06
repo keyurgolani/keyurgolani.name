@@ -124,6 +124,17 @@ export interface ShardDurations {
    * sweep server without the reload conditions, by `<viewport> <row>`.
    */
   readonly sweep: Readonly<Record<string, number>>;
+  /**
+   * The release plan's own weights (lib/full-shards.ts's releaseDurations()), measured from a
+   * release candidate's preflight shards: each key's p90 plus the per-test overhead, by
+   * `<viewport> <row>`, over `conditions` and `pack`, and the perf tests'. A key it leaves out
+   * keeps the weight above.
+   */
+  readonly release?: {
+    readonly conditions: Readonly<Record<string, number>>;
+    readonly pack: Readonly<Record<string, number>>;
+    readonly perf: number;
+  };
 }
 
 /** Whether a cell's tuple names a pack other than the platform default on any axis. */

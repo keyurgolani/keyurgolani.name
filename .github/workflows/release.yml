@@ -2,11 +2,14 @@
 # starts a release, and there is no manual trigger.
 #
 # A release candidate, vX.Y.Z-rc.N: rc-verify refuses a commit that isn't on
-# main or has no green complete ci run. rc-quality runs #11's complete
-# quality matrix on the commit, every cell, in the shards rc-quality-plan
-# counts, 16 at a time, and
-# rc-quality-verdict judges them whole with the release gates
-# (pnpm quality:release). rc-build builds amd64 and arm64 once
+# main or has no green complete ci run, or whose quality scope file
+# (quality/release/scope.json) is another release's. rc-quality runs #11's
+# full quality matrix on the commit, cut to that scope, in the shards
+# rc-quality-plan counts, 10 at a time, and rc-quality-verdict judges them
+# whole with the release gates (pnpm quality:release), the scope's records
+# list naming the failing cells the candidate ships with, each with its
+# owner and routed row; a final keeps the full matrix and an empty list
+# (tests/quality/lib/release-scope.ts). rc-build builds amd64 and arm64 once
 # each, natively on its own runner, with BuildKit provenance (mode=max) and
 # an SBOM, and pushes each platform's index to GHCR by digest with no tag.
 # rc-merge merges the two into one index, pushes that by digest with no tag,
@@ -17,7 +20,8 @@
 # rc-release write the pre-release notes.
 #
 # A final release, vX.Y.Z on the newest candidate's commit: promote-verify
-# refuses unless that candidate's release run passed its scan, promote-scan
+# refuses unless that candidate's release run passed its scan and its
+# quality scope is full with an empty records list, promote-scan
 # verifies the candidate digest's attestation and scans it again, and
 # promote points X.Y.Z (and X.Y, X, and latest, unless a newer release holds
 # them) at the same digest with no rebuild. promote is the only job that
@@ -320,7 +324,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: ci/release/
+          sparse-checkout: |
+            ci/release/
+            quality/release/
+      - name: Refuse a tag whose quality scope is another release's
+        env:
+          TAG: ${{ github.ref_name }}
+        run: node ci/release/verify-scope.mjs
       - name: Refuse a commit off main or without a green complete ci run
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -356,13 +366,16 @@ jobs:
         run: corepack enable && pnpm install --frozen-lockfile
       - name: Count the release plan's shards
         id: count
+        env:
+          # The candidate's scope and records list (tests/quality/lib/release-scope.ts).
+          QUALITY_RELEASE_SCOPE: quality/release/scope.json
         run: pnpm exec tsx tests/quality/full-plan.ts
 
   # #11's release plan: quality:full over every cell, against a worktree
   # with the reference variant installed from its tarball, in as many shards
-  # as rc-quality-plan counts, by measured weight. They run 16 at a time,
-  # the release's cap (RELEASE_PARALLEL), so in waves, and PR CI keeps the
-  # other 4 of the account's 20 job slots. The timeout is releaseTimeoutMinutes(), the release
+  # as rc-quality-plan counts, by measured weight (each key's p90, releaseDurations).
+  # They run 10 at a time, the release's cap (RELEASE_PARALLEL), so in waves,
+  # and PR CI keeps the other 10 of the account's 20 job slots. The timeout is releaseTimeoutMinutes(), the release
   # ceiling with its margin, and each shard fails before any test when the
   # plan leaves a shard over that ceiling, naming its heaviest group. It
   # installs fresh, with no cache, in the pinned Playwright image, and holds
@@ -377,7 +390,7 @@ jobs:
     timeout-minutes: 120
     strategy:
       fail-fast: false
-      max-parallel: 16
+      max-parallel: 10
       matrix:
         shard: ${{ fromJSON(needs.rc-quality-plan.outputs.shards) }}
     container:
@@ -402,6 +415,7 @@ jobs:
           CI_REPRO_COMMAND: pnpm ci:quality-full --shard=${{ matrix.shard }}/${{ needs.rc-quality-plan.outputs.count }}
           QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
           QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+          QUALITY_RELEASE_SCOPE: quality/release/scope.json
         run: pnpm ci:quality-full "--shard=$SHARD"
       # The reports upload only when this succeeds: it deletes what it can't
       # read, and fails when it did, or when the canary is still in any.
@@ -454,6 +468,7 @@ jobs:
         env:
           SHARDS: ${{ runner.temp }}/quality-shards
           SHARD_COUNT: ${{ needs.rc-quality-plan.outputs.count }}
+          QUALITY_RELEASE_SCOPE: quality/release/scope.json
         run: pnpm ci:quality-release --merged "$SHARDS" --shards "$SHARD_COUNT"
       - name: Failure summary
         if: ${{ always() }}

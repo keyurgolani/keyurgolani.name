@@ -32,6 +32,7 @@ import {
   planFingerprint,
   RELEASE_CEILING,
   RELEASE_PARALLEL,
+  releaseDurations,
   releaseFloor,
   releaseFor,
   releasePlan,
@@ -67,13 +68,14 @@ import {
   type ShardGroup,
 } from './lib/pr-shards';
 import { loadRegistrations, type Registrations } from './lib/registration';
+import { loadReleaseScope, SCOPE_ENV, scopePlan } from './lib/release-scope';
 import { mergeShards, planRecord, readShards } from './lib/shards';
 import { plannedVisual, VISUAL_IMAGE, writeObservedFonts } from './lib/visual';
 import { ALSO_RUNS, CELL, cellTest } from './meta/runner-cases';
 import { SHARD_1, SHARD_2, writeShards } from './meta/shard-cases';
 import { checkoutMeta, clone, withTierPacks } from './plan-fixtures';
 import { externalVariantHost, planFullRun, runsPlaywright, type ReferenceSteps } from './run';
-import { fullOutputs, releaseSummary, runFullPlan } from './full-plan';
+import { fullOutputs, releaseOf, releaseSummary, runFullPlan } from './full-plan';
 import { loadPlan } from './plan';
 import { QUALITY_BUILD_ENV } from './lib/build.mjs';
 import { PLATFORM_DEFAULTS, type MetaPack } from '../../packages/appearance/src/index';
@@ -229,9 +231,15 @@ function shippingCounts(meta: BuildMeta): Record<string, number> {
   return counts;
 }
 
-/** The model's cycle and release shard count. */
+/** The model's cycle, and its release shard count in the checked-in release scope. */
 const CATALOG_NIGHTS = 28;
-const CATALOG_SHARDS = 85;
+const CATALOG_SHARDS = 39;
+
+/** The scope file release.yml's and rc-preflight.yml's quality jobs name, and the env that names it. */
+const SCOPE_FILE = 'quality/release/scope.json';
+const SCOPE = { [SCOPE_ENV]: SCOPE_FILE };
+/** The checked-in release scope, which the release's shards plan by. */
+const scoped = (each: Plan): Plan => scopePlan(each, loadReleaseScope(SCOPE)!.scope);
 
 /**
  * The first cycle, and a release shard count, which the synthetic plans here
@@ -402,12 +410,12 @@ function testNights(
 /** The salts the balance test rolls the nights with: the plan's own, the empty one, and 49 more. */
 const SALTS = ['', ...Array.from({ length: 49 }, (_, at) => `salt-${at + 1}:`)];
 
-test('the caps: eight shard jobs at once a night, 16 at release, and the release in as many waves of them as rc-quality-plan counts', () => {
+test('the caps: eight shard jobs at once a night, 10 at release, and the release in as many waves of them as rc-quality-plan counts', () => {
   assert.equal(FULL_SHARDS, 8, 'PR CI keeps 12 of the account’s 20 job slots a night');
   assert.equal(
     RELEASE_PARALLEL,
-    16,
-    'PR CI keeps 4 of the account’s 20 job slots while a candidate runs',
+    10,
+    'PR CI keeps 10 of the account’s 20 job slots while a candidate runs',
   );
   assert.deepEqual(NIGHT_COUNTS, [7, 14, 28, 56]);
   assert.equal(MAX_RELEASE_SHARDS, 256);
@@ -460,6 +468,19 @@ test('the caps: eight shard jobs at once a night, 16 at release, and the release
   );
   assert.equal(release.run, 'pnpm ci:quality-release --merged "$SHARDS" --shards "$SHARD_COUNT"');
   assert.equal(release.env?.SHARD_COUNT, count);
+  // The count, every shard, and the verdict plan and judge by the one checked-in scope file.
+  const ran = step(
+    RELEASE['rc-quality']!,
+    (each) => /pnpm ci:quality-full/.test(each.run ?? ''),
+    'run',
+  );
+  for (const [where, each] of [
+    ['the count', counted],
+    ['the shard', ran],
+    ['the release merge', release],
+  ] as const) {
+    assert.equal(each.env?.[SCOPE_ENV], SCOPE_FILE, where);
+  }
   assert.deepEqual(RELEASE['rc-quality-verdict']!.needs, [
     'classify',
     'rc-quality-plan',
@@ -560,23 +581,25 @@ test("the #20 model is a fixed input: CATALOG's shipping packs, the platform def
   assert.deepEqual(ids(catalogMeta(shipped)), ids(model));
 });
 
-test("the release plan fits rc-quality's timeout in the fewest shards that do: the registry's own count, and 85 for #20's model, under the most, every group once", (t) => {
-  // #20's whole catalog leaves headroom: its count is under the most the plan takes.
+test(`the release plan fits rc-quality's timeout in the fewest shards that do, at the release's weights in its checked-in scope: the registry's own count, and ${CATALOG_SHARDS} for #20's model, under the most, every group once`, (t) => {
+  // #20's catalog in the scope leaves headroom: its count is under the most the plan takes.
   assert.ok(CATALOG_SHARDS < MAX_RELEASE_SHARDS);
   const job = RELEASE['rc-quality']!;
   assert.equal(job['timeout-minutes'], releaseTimeoutMinutes());
   assert.equal(releaseTimeoutMinutes(), timeoutMinutes(RELEASE_CEILING));
   assert.ok(releaseTimeoutMinutes() <= JOB_LIMIT_MINUTES);
-  for (const [name, each] of [
+  const weights = releaseDurations();
+  for (const [name, unscoped] of [
     ['this checkout', plan],
     ['the model', catalog],
   ] as const) {
-    const groups = fullGroups(each, ENGINES);
-    const { count, shards, slowest } = fewestShards(groups);
+    const each = scoped(unscoped);
+    const groups = fullGroups(each, ENGINES, weights);
+    const { count, shards, slowest } = fewestShards(groups, weights);
     t.diagnostic(
       `${name}: ${count} shards, the slowest about ${Math.round(slowest)}s of ${RELEASE_CEILING}s, ${Math.round(RELEASE_CEILING - slowest)}s to spare`,
     );
-    if (each === catalog) assert.equal(count, CATALOG_SHARDS);
+    if (unscoped === catalog) assert.equal(count, CATALOG_SHARDS);
     // Every planned test once, and every harness, perf, and visual group once.
     assert.deepEqual(
       shards.flatMap((shard) => shard.groups.flatMap((group) => group.tests)).sort(),
@@ -620,6 +643,63 @@ test("the release plan fits rc-quality's timeout in the fewest shards that do: t
   );
   assert.equal(download.with?.pattern, 'reports-quality-release-*');
   assert.equal(upload.with?.name, 'reports-quality-release-${{ matrix.shard }}');
+});
+
+/**
+ * `shard`'s estimate with each of its groups weighed by `weights`' groups of the same plan: a cell
+ * group's tests each at their cost there, any other group at its weight there.
+ */
+function weighedAgain(shard: Pick<PrShard, 'groups'>, weights: readonly ShardGroup[]): number {
+  const cost = new Map<string, number>();
+  const whole = new Map<string, number>();
+  for (const group of weights) {
+    if (group.file === CELL_SPEC) {
+      group.tests.forEach((key, at) => cost.set(`${group.project} ${key}`, group.costs![at]!));
+    } else whole.set(`${group.project} ${group.file}`, group.weight);
+  }
+  const group = loadDurations().group;
+  return fullEstimate({
+    groups: shard.groups.map((each) => ({
+      ...each,
+      weight:
+        each.file === CELL_SPEC
+          ? each.tests.reduce((sum, key) => sum + cost.get(`${each.project} ${key}`)!, group)
+          : whole.get(`${each.project} ${each.file}`)!,
+    })),
+  });
+}
+
+test("today's weights size the release past rc-quality's timeout at its measured p90s, and the release's own weights keep every shard's p90 total within the ceiling", (t) => {
+  const timeout = releaseTimeoutMinutes() * 60;
+  const weights = releaseDurations();
+  for (const [name, whole] of [
+    ['this checkout', plan],
+    ['the model', catalog],
+  ] as const) {
+    const each = scoped(whole);
+    const measured = fullGroups(each, ENGINES, weights);
+    // Today's: the PR weights, each key at its mean of quality:pr's runs.
+    const today = releaseFor(fullGroups(each, ENGINES, loadDurations()), loadDurations());
+    const todayP90 = today.shards.map((shard) => weighedAgain(shard, measured));
+    t.diagnostic(
+      `${name}, today's weights: ${today.count} shards, estimated slowest ${Math.round(today.slowest)}s, its p90 total ${Math.round(Math.max(...todayP90))}s, ${todayP90.filter((seconds) => seconds > timeout).length} over the ${timeout}s timeout`,
+    );
+    assert.ok(
+      Math.max(...todayP90) > timeout,
+      `${name}: today's sizing keeps every shard within the timeout at its p90s`,
+    );
+    // The release's, as rc-quality-plan counts it and each shard plans it.
+    const release = releaseOf(each);
+    const p90 = release.shards.map((shard) => weighedAgain(shard, measured));
+    t.diagnostic(
+      `${name}, the release's weights: ${release.count} shards, p90 totals ${Math.round(Math.min(...p90))}s to ${Math.round(Math.max(...p90))}s, ${Math.round(timeout - Math.max(...p90))}s under the ${timeout}s timeout`,
+    );
+    for (const [at, seconds] of p90.entries()) {
+      assert.ok(seconds <= RELEASE_CEILING, `${name}: shard ${at + 1} at ${Math.round(seconds)}s`);
+    }
+    const first = fullShard(each, ENGINES, `1/${release.count}`, null);
+    assert.deepEqual(first.shard, release.shards[0], name);
+  }
 });
 
 test('a cycle of N nights runs every test of every cell exactly once, a cell on at most BUCKETS nights, and the harness and perf cells every night', () => {
@@ -1285,16 +1365,16 @@ test("full-plan.ts writes the plan's own release count, matrix, and cycle to GIT
   const lines: string[] = [];
   const status = await runFullPlan({
     host: { web, remove: () => (removed += 1) },
-    env: { GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: summary },
+    env: { GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: summary, ...SCOPE },
     log: (line) => lines.push(line),
     fail: (line) => lines.push(line),
   });
   assert.equal(status, 0, lines.join('\n'));
   assert.equal(removed, 1);
   // What this checkout's plan gives, worked out here on its own.
-  const groups = fullGroups(await loadPlan({ QUALITY_WEB: web, QUALITY_MODE: 'full' }), ENGINES);
-  const { count } = releaseFor(groups);
-  const { nights } = rotationFor(groups);
+  const own = await loadPlan({ QUALITY_WEB: web, QUALITY_MODE: 'full', ...SCOPE });
+  const { count, shards } = releaseOf(own);
+  const { nights } = rotationFor(fullGroups(own, ENGINES));
   assert.equal(
     readFileSync(output, 'utf8'),
     `count=${count}\nshards=${JSON.stringify(Array.from({ length: count }, (_, at) => at + 1))}\nnights=${nights}\n`,
@@ -1311,8 +1391,17 @@ test("full-plan.ts writes the plan's own release count, matrix, and cycle to GIT
   );
   assert.equal(
     releaseSummary(85),
-    'rc-quality: 85 shards, 16 at a time, at most 10200 runner-minutes at the 120-minute timeout',
+    'rc-quality: 85 shards, 10 at a time, at most 10200 runner-minutes at the 120-minute timeout',
   );
+  // Each release shard's p90 total, to read the run's real times against.
+  for (const shard of shards) {
+    assert.ok(
+      lines.includes(
+        `[quality-full-plan] release shard ${shard.index}/${count}: p90 total about ${Math.round(fullEstimate(shard))}s, ${shard.groups.reduce((sum, group) => sum + group.tests.length, 0)} cell test(s)`,
+      ),
+      lines.join('\n'),
+    );
+  }
   assert.ok(lines.includes(`[quality-full-plan] ${releaseSummary(count)}`), lines.join('\n'));
   assert.equal(readFileSync(summary, 'utf8'), `${releaseSummary(count)}\n`);
   // A host it can't plan from fails, writes nothing, and is still removed.
@@ -1330,13 +1419,14 @@ test("full-plan.ts writes the plan's own release count, matrix, and cycle to GIT
 
 test("a release shard runs the count it's handed, and a count too small for the ceiling fails rather than taking another", () => {
   // The count rc-quality-plan worked out is the one each shard plans with.
-  const { count } = releaseFor(fullGroups(plan, ENGINES));
-  const handed = fullShard(plan, ENGINES, `1/${count}`, null);
+  const own = scoped(plan);
+  const { count } = releaseOf(own);
+  const handed = fullShard(own, ENGINES, `1/${count}`, null);
   assert.equal(handed.shard.count, count);
   assert.equal(runProjects([handed.shard]).size > 0, true);
   // Two shards can't hold today's plan within the ceiling: the shard fails, naming its heaviest group.
   assert.throws(
-    () => fullShard(plan, ENGINES, '1/2', null),
+    () => fullShard(own, ENGINES, '1/2', null),
     /^Error: The release plan in 2 shards leaves a shard at about \d+s, over the 4800s ceiling\. Its heaviest group is /,
   );
 });

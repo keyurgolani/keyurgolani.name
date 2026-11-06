@@ -69,14 +69,14 @@ export const VISUAL_SPEC = 'visual.spec.ts';
 /** The nightly's cap: the most shard jobs of a night at once, and the nightly's shard count. */
 export const FULL_SHARDS = 8;
 /** The release's cap: the most rc-quality shard jobs at once, rc-quality's max-parallel. */
-export const RELEASE_PARALLEL = 16;
+export const RELEASE_PARALLEL = 10;
 /** The cycle lengths the rotation takes, the smallest that fits: a week, doubled each time. */
 export const NIGHT_COUNTS: readonly number[] = [7, 14, 28, 56];
 /** The longest cycle: past eight weeks, the nightly needs more shards or a longer night instead. */
 export const MAX_NIGHTS = NIGHT_COUNTS.at(-1)!;
 /** How many buckets a server's cell tests are split into, each with a night of its own. */
 export const BUCKETS = 4;
-/** The most release shards: the most jobs a GitHub matrix makes, 16 waves of RELEASE_PARALLEL. */
+/** The most release shards: the most jobs a GitHub matrix makes. */
 export const MAX_RELEASE_SHARDS = 256;
 /**
  * A full shard job's fixed part, in seconds: quality-pr's (SHARD_FIXED, 95 s)
@@ -108,6 +108,24 @@ export const RELEASE_CEILING = 4800;
 export const timeoutMinutes = (ceiling: number) => Math.ceil((ceiling * TIMEOUT_MARGIN) / 60);
 /** rc-quality's timeout-minutes. */
 export const releaseTimeoutMinutes = () => timeoutMinutes(RELEASE_CEILING);
+
+/**
+ * The weights the release plan sizes its shards by: `durations` with its `release` block over
+ * `conditions`, `pack` and `perf`, the p90 of each key as a release candidate's preflight measured
+ * it (shard-durations.json). With every key at its p90, a shard's estimate is its p90 total, which
+ * the release ceiling holds to two-thirds of rc-quality's timeout (TIMEOUT_MARGIN). The nightly
+ * keeps the PR weights.
+ */
+export function releaseDurations(durations: ShardDurations = loadDurations()): ShardDurations {
+  const release = durations.release;
+  if (!release) return durations;
+  return {
+    ...durations,
+    conditions: { ...durations.conditions, ...release.conditions },
+    pack: { ...durations.pack, ...release.pack },
+    perf: release.perf,
+  };
+}
 
 /** About how long a full shard job takes, in seconds: its fixed part, and its groups on its workers. */
 export const fullEstimate = (shard: Pick<PrShard, 'groups'>) =>
@@ -499,17 +517,21 @@ export interface FullShard {
  * The shard `shard` (<n>/<m>, or null for all of them on one machine) of the
  * full plan on `engines`: the night's slice's with `night`, in m shards,
  * else the release plan's, in m shards. Each throws when its plan is over
- * its budget.
+ * its budget. With no `durations`, a release shard sizes by releaseDurations(),
+ * a night by the PR weights.
  */
 export function fullShard(
   plan: Pick<Plan, 'cells' | 'tests' | 'targets' | 'mode'>,
   engines: readonly Engine[],
   shard: string | null,
   night: string | null,
-  durations: ShardDurations = loadDurations(),
+  durations?: ShardDurations,
 ): FullShard {
   const parsed = shard ? (parseShard(shard) as { index: number; count: number }) : null;
-  const groups = fullGroups(plan, engines, durations);
+  // A release shard plans by the release's measured weights (releaseDurations()), a night by the
+  // PR's, unless the caller hands it its own.
+  const weights = durations ?? (night === null ? releaseDurations() : loadDurations());
+  const groups = fullGroups(plan, engines, weights);
   const pick = (shards: readonly PrShard[]): PrShard =>
     parsed
       ? shards[parsed.index - 1]!
@@ -522,8 +544,8 @@ export function fullShard(
   if (night === null) {
     // A shard of the count rc-quality-plan worked out, or on one machine, the count that fits.
     const release = parsed
-      ? releasePlan(groups, durations, parsed.count)
-      : releaseFor(groups, durations);
+      ? releasePlan(groups, weights, parsed.count)
+      : releaseFor(groups, weights);
     return {
       shard: pick(release.shards),
       projects: runProjects(release.shards),
@@ -532,7 +554,7 @@ export function fullShard(
       slowest: release.slowest,
     };
   }
-  const rotation = rotationFor(groups, durations, parsed?.count ?? FULL_SHARDS);
+  const rotation = rotationFor(groups, weights, parsed?.count ?? FULL_SHARDS);
   const at = nightSlice(night, rotation.nights);
   const slice = rotation.slices[at]!;
   const cells = sliceCellIds(slice);

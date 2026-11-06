@@ -5,7 +5,10 @@
 // gate and tagged its digest (docs/releasing.md). It refuses, too, while
 // tests/variants/baseline-pending.json names any composition: a final
 // release compares every first-party composition's screenshots against its
-// baselines, so it waits until the last of them is committed.
+// baselines, so it waits until the last of them is committed. And it refuses
+// while the commit's quality scope (quality/release/scope.json,
+// verify-scope.mjs) is narrowed or its records list names a failing cell: a
+// final release keeps the full matrix clean.
 //
 //   GITHUB_TOKEN=... GITHUB_REPOSITORY=owner/repo TAG=v1.2.0 SHA=<commit> \
 //     node ci/release/promote-check.mjs
@@ -22,6 +25,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { githubGet, repository } from './github.mjs';
 import { parseReleaseTag, promotionTargets, rcImageTag } from './tags.mjs';
+import { finalScopeRefusal, readScope } from './verify-scope.mjs';
 
 export const RELEASE_WORKFLOW = '.github/workflows/release.yml';
 /** The candidate's jobs that must have succeeded: its scan, its quality gate, and the image tag it got after. */
@@ -86,10 +90,12 @@ export function passedRuns(rcTag, sha, runs, jobsByRun) {
  *
  * `pending` is the compositions whose baselines are pending on this commit
  * (pendingBaselines). Any refuses: a final release needs the list empty.
+ * `quality` is the commit's quality scope file and records list (verify-scope.mjs's readScope):
+ * a narrowed scope or a listed failure refuses, since a final keeps the full matrix clean.
  *
- * @param {{ tag: string, sha: string, tagRefs: {tag: string, commit: string}[], runs: object[], jobsByRun: Record<string, object[]>, pending: string[] }} input
+ * @param {{ tag: string, sha: string, tagRefs: {tag: string, commit: string}[], runs: object[], jobsByRun: Record<string, object[]>, pending: string[], quality: { scope: object, records: object[] } | null }} input
  */
-export function evaluatePromotion({ tag, sha, tagRefs, runs, jobsByRun, pending }) {
+export function evaluatePromotion({ tag, sha, tagRefs, runs, jobsByRun, pending, quality }) {
   const release = parseReleaseTag(tag);
   if (!release || release.kind !== 'final') {
     return { ok: false, reasons: [`${tag} is not a vX.Y.Z tag`], candidate: null, targets: [] };
@@ -122,6 +128,8 @@ export function evaluatePromotion({ tag, sha, tagRefs, runs, jobsByRun, pending 
       `${BASELINE_PENDING_FILE} on ${sha} still lists ${pending.length} composition${pending.length === 1 ? '' : 's'} with no screenshot baselines (${pending.join(', ')}). Commit their baselines and empty the list, then cut a new candidate`,
     );
   }
+  const scoped = finalScopeRefusal(quality?.scope, quality?.records);
+  if (scoped) reasons.push(`${scoped} (on ${sha})`);
   const finals = tagRefs.map((ref) => ref.tag);
   return {
     ok: reasons.length === 0,
@@ -153,7 +161,13 @@ async function main() {
   }
   // The checkout is this tag's commit, the candidate's own.
   const pending = pendingBaselines(readFileSync(BASELINE_PENDING_FILE, 'utf8'));
-  const verdict = evaluatePromotion({ tag, sha, tagRefs, runs, jobsByRun, pending });
+  let quality = null;
+  try {
+    quality = readScope(process.cwd());
+  } catch {
+    quality = null;
+  }
+  const verdict = evaluatePromotion({ tag, sha, tagRefs, runs, jobsByRun, pending, quality });
   const summary = verdict.ok
     ? `### ${tag}: promotes ${verdict.candidate}\n\nMoves ${verdict.targets.map((t) => `\`${t}\``).join(', ')}.\n`
     : `### ${tag}: refused\n\n${verdict.reasons.map((reason) => `- ${reason}.`).join('\n')}\n`;

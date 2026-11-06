@@ -15,9 +15,10 @@
 # preflight is for. preflight-plan, preflight-quality, and preflight-verdict
 # are release.yml's rc-quality-plan, rc-quality, and rc-quality-verdict,
 # step for step: main's current gate, from this file at GITHUB_SHA, on the
-# commit's code. #11's complete quality matrix, every cell, in the shards
-# the plan counts, 16 at a time, then the release gates over every shard's
-# reports (pnpm quality:release). ci/workflows.test.mjs holds the three to
+# commit's code. #11's quality matrix, cut to the candidate's scope
+# (quality/release/scope.json), in the shards the plan counts, 10 at a
+# time, then the release gates over every shard's reports (pnpm
+# quality:release) and the scope's records list. ci/workflows.test.mjs holds the three to
 # release.yml's.
 #
 # It never tags, builds an image, or publishes, and its verdict never counts
@@ -42,7 +43,7 @@ permissions:
   contents: read
 
 concurrency:
-  # One preflight at a time, whatever the commit: each takes 16 of the
+  # One preflight at a time, whatever the commit: each takes 10 of the
   # account's 20 job slots. A second dispatch waits, and the running one is
   # never cancelled; a third replaces the one waiting. Don't dispatch one
   # while a candidate runs (docs/releasing.md).
@@ -128,10 +129,13 @@ jobs:
         run: corepack enable && pnpm install --frozen-lockfile
       - name: Count the release plan's shards
         id: count
+        env:
+          # The candidate's scope and records list (tests/quality/lib/release-scope.ts).
+          QUALITY_RELEASE_SCOPE: quality/release/scope.json
         run: pnpm exec tsx tests/quality/full-plan.ts
 
-  # release.yml's rc-quality, on the commit: 16 shards at a time, as a
-  # candidate runs them, so PR CI keeps the other 4 job slots. Each shard's
+  # release.yml's rc-quality, on the commit: 10 shards at a time, as a
+  # candidate runs them, so PR CI keeps the other 10 job slots. Each shard's
   # reports are scrubbed however the run ended, and upload only when that
   # scrub succeeds, for one day.
   preflight-quality:
@@ -141,7 +145,7 @@ jobs:
     timeout-minutes: 120
     strategy:
       fail-fast: false
-      max-parallel: 16
+      max-parallel: 10
       matrix:
         shard: ${{ fromJSON(needs.preflight-plan.outputs.shards) }}
     container:
@@ -167,6 +171,7 @@ jobs:
           CI_REPRO_COMMAND: pnpm ci:quality-full --shard=${{ matrix.shard }}/${{ needs.preflight-plan.outputs.count }}
           QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
           QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+          QUALITY_RELEASE_SCOPE: quality/release/scope.json
         run: pnpm ci:quality-full "--shard=$SHARD"
       # The reports upload only when this succeeds: it deletes what it can't
       # read, and fails when it did, or when the canary is still in any.
@@ -217,6 +222,7 @@ jobs:
         env:
           SHARDS: ${{ runner.temp }}/quality-shards
           SHARD_COUNT: ${{ needs.preflight-plan.outputs.count }}
+          QUALITY_RELEASE_SCOPE: quality/release/scope.json
         run: pnpm ci:quality-release --merged "$SHARDS" --shards "$SHARD_COUNT"
       - name: Failure summary
         if: ${{ always() }}

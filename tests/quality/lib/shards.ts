@@ -35,6 +35,7 @@ import type { Plan, RunMode } from '../cells';
 import type { Summary } from '../reporter';
 import type { NightSlice } from './full-shards';
 import { plannedPerf } from './perf/plan';
+import type { ListedRecord } from './release-scope';
 import { plannedVisual, type PlannedVisual } from './visual';
 import {
   judge,
@@ -231,6 +232,8 @@ const REJUDGED = new Set([
   'target-without-results',
   'unchecked-cell',
   'tests-failed',
+  'unlisted-failure',
+  'listed-passed',
   'run-errors',
   'canary-leaked',
   'perf-coverage',
@@ -287,6 +290,8 @@ export function mergeShards(
     readonly jobs?: string;
     /** The run must be the whole plan, as a release's is: a night's slice fails it. */
     readonly whole?: boolean;
+    /** A release candidate's records list (lib/release-scope.ts), which the verdict holds the run to. */
+    readonly listed?: readonly ListedRecord[];
   } = {},
 ): MergedVerdict {
   const failures: Failure[] = [];
@@ -431,6 +436,7 @@ export function mergeShards(
       before: shards.flatMap((shard) => shard.verdict?.canary.before ?? []),
       after: shards.flatMap((shard) => shard.verdict?.canary.after ?? []),
     },
+    ...(options.listed !== undefined ? { listed: options.listed } : {}),
   });
   failures.push(...judged.failures);
   const unique = failures.filter(
