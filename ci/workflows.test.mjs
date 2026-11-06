@@ -347,6 +347,7 @@ test('every job runs on a pinned GitHub-hosted Ubuntu, and arm64 only where a le
     'ci.yml:publish-smoke',
     'release.yml:dry-run-build',
     'release.yml:rc-build',
+    'release.yml:rc-smoke',
   ]);
   // Nor does any step reach binfmt or QEMU some other way.
   const source = readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8');

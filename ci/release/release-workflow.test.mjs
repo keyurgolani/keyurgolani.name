@@ -24,6 +24,7 @@ const RC_JOBS = [
   'rc-build',
   'rc-merge',
   'rc-scan',
+  'rc-smoke',
   'rc-tag',
   'rc-release',
 ];
@@ -285,12 +286,14 @@ test('each step waits on the one before it', () => {
   assert.deepEqual(needs('rc-quality'), ['classify', 'rc-quality-plan']);
   assert.deepEqual(needs('rc-quality-verdict'), ['classify', 'rc-quality', 'rc-quality-plan']);
   assert.deepEqual(needs('rc-rehearsal'), ['classify', 'rc-verify']);
+  assert.deepEqual(needs('rc-smoke'), ['classify', 'rc-merge']);
   assert.deepEqual(needs('rc-tag'), [
     'classify',
     'rc-merge',
     'rc-quality-verdict',
     'rc-rehearsal',
     'rc-scan',
+    'rc-smoke',
   ]);
   assert.deepEqual(needs('rc-release'), ['classify', 'rc-merge', 'rc-scan', 'rc-tag']);
   assert.deepEqual(needs('dry-run'), ['dry-run-build']);
@@ -350,6 +353,7 @@ test('scan findings upload for one day only, and the logs get counts from scan-g
     'reports-release-promote-scan',
     'reports-release-rehearsal',
     'reports-release-scan',
+    'reports-release-smoke-${{ matrix.arch }}',
   ]);
   for (const upload of reports) assert.equal(upload['retention-days'], 1, upload.name);
   // Nothing else uploads the reports directory, where Grype's JSON goes.
@@ -516,4 +520,26 @@ test("rc-rehearsal's checks catch a push or a second build", () => {
     'docker build --no-cache --pull --platform linux/amd64 -t "$REHEARSAL_IMAGE" .',
     PUSHES,
   );
+});
+
+test('rc-smoke starts the merged digest on each platform, natively, with read access only, and rc-tag waits on it', () => {
+  const job = JOBS['rc-smoke'];
+  assert.deepEqual(job.permissions, { contents: 'read', packages: 'read' });
+  assert.equal(job.strategy['fail-fast'], false);
+  assert.deepEqual(
+    job.strategy.matrix.include.map((leg) => [leg.arch, leg.runner]),
+    [
+      ['amd64', 'ubuntu-24.04'],
+      ['arm64', 'ubuntu-24.04-arm'],
+    ],
+  );
+  const smoke = job.steps.find((each) => each.run === 'pnpm ci:image');
+  assert.equal(
+    smoke.env.SMOKE_IMAGE,
+    '${{ needs.classify.outputs.image }}@${{ needs.rc-merge.outputs.digest }}',
+  );
+  assert.equal(smoke.env.IMAGE_PLATFORM, 'linux/${{ matrix.arch }}');
+  assert.ok(JOBS['rc-tag'].needs.includes('rc-smoke'), 'no candidate is tagged unstarted on arm64');
+  // ci.yml's publish-smoke, which a red push run skips, is the same check on main.
+  assert.ok(JSON.stringify(JOBS['rc-smoke'].steps).includes('docker/login-action@'));
 });

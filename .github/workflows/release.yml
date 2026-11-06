@@ -762,9 +762,68 @@ jobs:
 
   # The scanned digest gets its candidate tag, X.Y.Z-rc.N, once the quality
   # gate and the rehearsal passed too.
+  # The merged digest, started on each platform natively, as ci.yml's
+  # publish-smoke starts main's: a candidate whose push run on main is red only
+  # on its listed quality-pr records (ci/release/verify-rc.mjs) never ran
+  # publish-smoke, and the gate's image job and rc-rehearsal start amd64
+  # alone, so without this no job would start the arm64 image the release
+  # ships. rc-tag waits on both legs.
+  rc-smoke:
+    name: rc-smoke (${{ matrix.arch }})
+    needs: [classify, rc-merge]
+    if: ${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' }}
+    strategy:
+      # Both legs report, even when one fails.
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read # check out the commit
+      packages: read # pull the merged index from GHCR while the package is private
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: pnpm ci:image (merged digest)
+        env:
+          SMOKE_IMAGE: ${{ needs.classify.outputs.image }}@${{ needs.rc-merge.outputs.digest }}
+          IMAGE_PLATFORM: linux/${{ matrix.arch }}
+        run: pnpm ci:image
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-release-smoke-${{ matrix.arch }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 1
+
   rc-tag:
     name: rc-tag
-    needs: [classify, rc-merge, rc-scan, rc-quality-verdict, rc-rehearsal]
+    needs: [classify, rc-merge, rc-scan, rc-smoke, rc-quality-verdict, rc-rehearsal]
     if: ${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
