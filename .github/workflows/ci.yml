@@ -258,16 +258,16 @@ jobs:
   # cancelled at the limit (row 54), and of three, two ran over 15 minutes
   # (16.1 and 15.5, #175), so the suite takes a fourth, not a longer limit.
   # ci/workflows.test.mjs pins the four, the limit, and SUITES.browser.
+  # Row 60 evidence only, not for merge: one job, no matrix, running the one
+  # test that timed out on main's push run 42300433204 (browser 4/4, at
+  # tests/harness/motion.ts:145), 20 times with no retry, in the same
+  # container, image, install, build and server start as the browser suite.
   browser:
-    name: browser (${{ matrix.shard }}/4)
+    name: browser (row 60 repeat)
     needs: [changes]
     if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'browser') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
     # Browsers come baked into the image, at the version @playwright/test pins.
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
@@ -301,11 +301,32 @@ jobs:
         run: echo "Next build cache restored for these build inputs"
       - name: pnpm ci:build
         run: pnpm ci:build
-      - name: pnpm test:shard browser ${{ matrix.shard }}/4
+      # The one test by file:line and its exact title (Playwright's grep reads the project,
+      # file and titles joined by spaces, so the title is anchored at the end), 20 times, no
+      # retry, trace on failure as the config keeps it. The log prints the count asked, from
+      # --list, and the count that ran, from the list reporter's summary.
+      - name: motion-contract.spec.ts:100, 20 times
+        shell: bash
         env:
-          SHARD: ${{ matrix.shard }}/4
-          CI_REPRO_COMMAND: pnpm test:shard browser ${{ matrix.shard }}/4
-        run: node ci/run.mjs browser -- node ci/shards.mjs run browser "$SHARD"
+          SPEC: 'tests/e2e/motion-contract\.spec\.ts:100'
+          TITLE: 'kinetic-cosmos, under respect-os, when the visitor asks for reduced motion nothing runs once the page has settled$'
+          CI_REPRO_COMMAND: pnpm exec playwright test 'tests/e2e/motion-contract.spec.ts:100' --repeat-each=20 --retries=0
+        run: |
+          set -o pipefail
+          mkdir -p reports/browser
+          node_modules/.bin/playwright test "$SPEC" -g "$TITLE" --repeat-each=20 --retries=0 --list | tee reports/browser/row60-list.txt
+          asked=$(grep -oE '^Total: [0-9]+ test' reports/browser/row60-list.txt | grep -oE '[0-9]+' || true)
+          echo "row 60: ${asked:-0} test(s) listed, 20 asked"
+          status=0
+          node ci/run.mjs browser -- node_modules/.bin/playwright test "$SPEC" -g "$TITLE" --repeat-each=20 --retries=0 2>&1 | tee reports/browser/row60-run.txt || status=$?
+          ran=0
+          for kind in passed failed flaky skipped interrupted 'did not run'; do
+            n=$(sed 's/\x1b\[[0-9;]*m//g' reports/browser/row60-run.txt | grep -oE "^ +[0-9]+ $kind" | tail -1 | grep -oE '[0-9]+' || true)
+            echo "row 60: $kind ${n:-0}"
+            [ "$kind" = skipped ] || [ "$kind" = 'did not run' ] || ran=$((ran + ${n:-0}))
+          done
+          echo "row 60: ${ran} test(s) ran of 20 asked (${asked:-0} listed); playwright exit ${status}"
+          exit "$status"
       - name: Failure summary
         if: ${{ always() }}
         run: node ci/summarize.mjs
@@ -313,7 +334,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: reports-browser-${{ matrix.shard }}
+          name: reports-browser-row60-repeat
           path: reports/
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
