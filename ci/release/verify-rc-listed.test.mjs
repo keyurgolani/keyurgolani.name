@@ -781,7 +781,8 @@ test("the artifact's summary is read out of its zip, and a malformed, oversized,
   const bomb = zipOf({ [QPR_SUMMARY]: Buffer.alloc(4 * 1024 * 1024) });
   assert.throws(
     () => zipEntry(centralAt(bomb, 24, 1024), QPR_SUMMARY, { maxBytes: 2048 }),
-    /doesn't inflate|inflates to/,
+    // Cut off at the bound by zlib itself, not read whole and then found long.
+    /doesn't inflate/,
   );
   // The real artifact, from main's push run 42161399250: bit 3 set on every entry.
   const real = readFileSync(fixture('reports-quality-pr-verdict-42161399250.zip'));
