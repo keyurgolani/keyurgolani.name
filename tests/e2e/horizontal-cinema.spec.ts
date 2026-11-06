@@ -519,6 +519,105 @@ test(
   },
 );
 
+// The pin's snap, taken over. Seen from the page, its glide eases in over its first 70 to 80 ms, a
+// fifth of the way at most, then reaches its scene in one frame (a probe at 1440 by 900, row 53 r2),
+// so a visitor's hand takes it over inside those first frames. What finishes the travel is the way
+// their own input went, never the page's place: the browser's own scroll can step back a little as
+// it takes a glide over, and an instant scroll by script is folded into the glide, not a stop.
+
+/** Waits until the snap has set out from `from` the way `way` goes, `by` px: inside its first frames. */
+async function glideSetOut(page: Page, from: number, way: 1 | -1, by = 8): Promise<void> {
+  await page.waitForFunction(
+    ([from, way, by]) => (way > 0 ? window.scrollY >= from + by : window.scrollY <= from - by),
+    [from, way, by] as const,
+    { polling: 'raf' },
+  );
+}
+
+/** Scene `index` is current and on screen, and still is a second later: nothing carries it on or back. */
+async function expectRestsOn(page: Page, index: number): Promise<void> {
+  await expectAt(page, index);
+  for (let wait = 0; wait < 1000; wait += 100) {
+    await page.waitForTimeout(100);
+    expect((await read(page)).current).toBe(index);
+  }
+}
+
+/** From rest at the strip's start, a 200 px notch; the snap then glides on toward scene 1. */
+async function snapFromStart(page: Page): Promise<void> {
+  await load(page);
+  await page.locator('.hc-stage').focus();
+  await page.mouse.move(720, 450);
+  await page.mouse.wheel(0, 200);
+  await page.waitForFunction(() => window.scrollY >= 200, undefined, { polling: 'raf' });
+  await glideSetOut(page, 200, 1);
+}
+
+test(
+  "the pin's snap, taken over by a key's scroll inside its glide, finishes on the scene ahead",
+  { annotation, tag },
+  async ({ page }) => {
+    await snapFromStart(page);
+    await page.keyboard.press('ArrowDown');
+    await expectRestsOn(page, 1);
+  },
+);
+
+test(
+  "the pin's snap, taken over by a wheel notch the way it glides, finishes on the scene ahead",
+  { annotation, tag },
+  async ({ page }) => {
+    await snapFromStart(page);
+    await page.mouse.wheel(0, 40);
+    await expectRestsOn(page, 1);
+  },
+);
+
+test(
+  "the pin's snap, turned back by a wheel notch inside its glide, finishes on the scene it left",
+  { annotation, tag },
+  async ({ page }) => {
+    await snapFromStart(page);
+    await page.mouse.wheel(0, -40);
+    await expectRestsOn(page, 0);
+  },
+);
+
+test(
+  "the pin's snap, moved by a script's scroll inside its glide and by no input, finishes where it glided",
+  { annotation, tag },
+  async ({ page }) => {
+    // As the scroll bar, find in page or a link move the page: no input of the visitor's says which
+    // way, so the glide's own scene stands.
+    await snapFromStart(page);
+    await page.evaluate(() => window.scrollTo({ top: window.scrollY + 60, behavior: 'instant' }));
+    await expectRestsOn(page, 1);
+  },
+);
+
+test(
+  "the pin's snap, a notch that comes as it arrives back on a scene travels on from that scene",
+  { annotation, tag },
+  async ({ page }) => {
+    await load(page);
+    await page.locator('.hc-stage').focus();
+    for (const at of [1, 2, 3]) {
+      await page.keyboard.press('ArrowRight');
+      await expectAt(page, at);
+    }
+    await page.waitForTimeout(400);
+    const three = (await read(page)).scrollY;
+    // Back a notch from scene 3: the snap glides back to scene 2. A notch on, sent 100 px into that
+    // glide, comes as it reaches scene 2 (its last eased frame or the one after), and travels on to 3.
+    await page.mouse.move(720, 450);
+    await page.mouse.wheel(0, -300);
+    await page.waitForFunction((y) => window.scrollY <= y + 1, three - 300, { polling: 'raf' });
+    await glideSetOut(page, three - 300, -1, 100);
+    await page.mouse.wheel(0, 40);
+    await expectRestsOn(page, 3);
+  },
+);
+
 test.describe('reduced motion', () => {
   test(
     'the strip stays, and every step is a cut onto its scene',
