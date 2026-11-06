@@ -18,3 +18,6 @@ import { HomePage } from './home';
 // as panels with the decisions as a numbered log, and the way on.
 
 export default composePages({ HomePage, CaseStudyPage });
+
+// Row 44 evidence only, drop before landing: this line makes quality:pr change-direct Mission Control, so its
+// 1440 default cells take the reload conditions on the evidence PR.
