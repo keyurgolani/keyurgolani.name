@@ -111,7 +111,7 @@ export const GATE_NEEDS = [
 export const QPR_JOBS = new Set(['quality-pr', 'quality-pr-verdict']);
 
 /** browser's shard count in ci.yml (its matrix, and `browser (k/N)` in its name). */
-export const BROWSER_SHARDS = 3;
+export const BROWSER_SHARDS = 4;
 /**
  * The shard count of each matrix job gate needs but quality-pr's, as ci.yml runs them: each job's
  * matrix of shards 1..N, named `<job> (k/N)`. A unit test (verify-rc-listed.test.mjs) parses the

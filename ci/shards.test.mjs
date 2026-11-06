@@ -117,7 +117,7 @@ test("the tree's unit items cover every package with tests and the root test scr
 test('the browser shards split every spec file in tests/e2e', () => {
   const items = specFiles('tests/e2e');
   assert.ok(items.length > 10 && items.every((f) => /^tests\/e2e\/.+\.spec\.ts$/.test(f)));
-  for (const count of [1, 2, 3]) {
+  for (const count of [1, 2, 3, 4]) {
     partitions(
       Array.from({ length: count }, (_, i) => plan('browser', `${i + 1}/${count}`, items).mine),
       items,
@@ -125,16 +125,16 @@ test('the browser shards split every spec file in tests/e2e', () => {
   }
 });
 
-test("CI's browser shards, three (row 54), cover every spec file exactly once, none of them empty", () => {
+test("CI's browser shards, four (row 54, #175), cover every spec file exactly once, none of them empty", () => {
   const items = specFiles('tests/e2e');
-  assert.equal(SUITES.browser.count, 3);
+  assert.equal(SUITES.browser.count, 4);
   const shards = Array.from(
     { length: SUITES.browser.count },
     (_, i) => plan('browser', `${i + 1}/${SUITES.browser.count}`, items).mine,
   );
   partitions(shards, items);
   for (const [index, shard] of shards.entries()) {
-    assert.ok(shard.items.length > 0, `browser ${index + 1}/3 runs something`);
+    assert.ok(shard.items.length > 0, `browser ${index + 1}/4 runs something`);
   }
 });
 

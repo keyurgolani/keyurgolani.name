@@ -668,7 +668,7 @@ test("only release.yml's and rc-preflight.yml's quality jobs name a release scop
   );
 });
 
-test('each sharded suite runs as many shards as ci/shards.mjs splits it into, and the browser suite in three within 20 minutes (row 54)', () => {
+test('each sharded suite runs as many shards as ci/shards.mjs splits it into, and the browser suite in four within 20 minutes (row 54, #175)', () => {
   for (const suite of ['unit', 'browser', 'variants']) {
     const job = CI.jobs[suite];
     const { count } = SUITES[suite];
@@ -687,9 +687,9 @@ test('each sharded suite runs as many shards as ci/shards.mjs splits it into, an
       suite,
     );
   }
-  // Three browser shards, the limit unchanged: a slow suite is split, never given longer.
+  // Four browser shards, the limit unchanged: a slow suite is split, never given longer.
   const browser = CI.jobs.browser;
-  assert.deepEqual(browser.strategy.matrix.shard, [1, 2, 3]);
+  assert.deepEqual(browser.strategy.matrix.shard, [1, 2, 3, 4]);
   assert.equal(browser['timeout-minutes'], 20);
   assert.equal(browser.strategy['fail-fast'], false);
   // A plain literal, so rc-verify can read the count from a tag commit's own ci.yml.
@@ -698,5 +698,5 @@ test('each sharded suite runs as many shards as ci/shards.mjs splits it into, an
   const next = source.slice(start + 1).search(/\n {2}[a-z][\w-]*:\n/);
   const block = source.slice(start, start + 1 + next);
   assert.ok(start >= 0 && next > 0, 'the browser job in ci.yml');
-  assert.match(block, /\n {8}shard: \[1, 2, 3\]\n/);
+  assert.match(block, /\n {8}shard: \[1, 2, 3, 4\]\n/);
 });
