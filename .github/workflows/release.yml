@@ -10,16 +10,17 @@
 # list naming the failure records the candidate ships with, each with its
 # owner and routed row; a final keeps the full matrix and an empty list
 # (tests/quality/lib/release-scope.ts), so v1.0.0 waits on RC2's sizing item,
-# which fits the full matrix into the 256-shard matrix. rc-smoke starts the
-# merged digest on both platforms. rc-build builds amd64 and arm64 once
-# each, natively on its own runner, with BuildKit provenance (mode=max) and
-# an SBOM, and pushes each platform's index to GHCR by digest with no tag.
-# rc-merge merges the two into one index, pushes that by digest with no tag,
-# checks it, and attests it, and rc-scan runs Grype on that digest and on
-# the production dependencies. rc-rehearsal rehearses the upgrade on an image
-# of the same commit (ci/rehearsal.mjs). Only when the scan, the quality
-# verdict, the smoke test, and the rehearsal pass does rc-tag tag the digest X.Y.Z-rc.N and
-# rc-release write the pre-release notes.
+# which fits the full matrix into the 256-shard matrix. rc-build builds amd64
+# and arm64 once each, natively on its own runner, with BuildKit provenance
+# (mode=max) and an SBOM, and pushes each platform's index to GHCR by digest
+# with no tag. rc-merge merges the two into one index, pushes that by digest
+# with no tag, checks it, and attests it, and rc-scan runs Grype on that
+# digest and on the production dependencies. rc-smoke pulls the same digest
+# and starts it natively on each platform, the one job that starts the image
+# the release ships. rc-rehearsal rehearses the upgrade on an image of the
+# same commit (ci/rehearsal.mjs). Only when the scan, the quality verdict,
+# the smoke test, and the rehearsal pass does rc-tag tag the digest
+# X.Y.Z-rc.N and rc-release write the pre-release notes.
 #
 # A final release, vX.Y.Z on the newest candidate's commit: promote-verify
 # refuses unless that candidate's release run passed its scan and its
@@ -770,14 +771,14 @@ jobs:
           if-no-files-found: ignore
           retention-days: 90
 
-  # The scanned digest gets its candidate tag, X.Y.Z-rc.N, once the quality
-  # gate and the rehearsal passed too.
-  # The merged digest, started on each platform natively, as ci.yml's
-  # publish-smoke starts main's: a candidate whose push run on main is red only
-  # on its listed quality-pr records (ci/release/verify-rc.mjs) never ran
-  # publish-smoke, and the gate's image job and rc-rehearsal start amd64
-  # alone, so without this no job would start the arm64 image the release
-  # ships. rc-tag waits on both legs.
+  # The merged digest, the one the release ships, pulled and started natively
+  # on each platform, as ci.yml's publish-smoke starts its own build of main's
+  # commit. This is the one job that starts that digest: publish-smoke starts
+  # another build (a rebuild gets another digest, docs/releasing.md), and a
+  # push run on main red only on its listed quality-pr records, which
+  # rc-verify can accept (ci/release/verify-rc.mjs), skips it; the gate's image
+  # job and rc-rehearsal start amd64 images of their own. rc-tag waits on both
+  # legs.
   rc-smoke:
     name: rc-smoke (${{ matrix.arch }})
     needs: [classify, rc-merge]
@@ -831,6 +832,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 1
 
+  # The scanned digest gets its candidate tag, X.Y.Z-rc.N, once it started on
+  # both platforms (rc-smoke) and the quality gate and the rehearsal passed too.
   rc-tag:
     name: rc-tag
     needs: [classify, rc-merge, rc-scan, rc-smoke, rc-quality-verdict, rc-rehearsal]

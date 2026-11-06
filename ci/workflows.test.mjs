@@ -572,7 +572,7 @@ test('rc-preflight takes a commit id on dispatch from main, refuses one off main
   }
 });
 
-test('rc-preflight reads only, holds no secret, reads no cache, keeps reports a day, builds no image, and never tags or publishes', () => {
+test('rc-preflight reads only, holds no secret, reads no cache, keeps shard reports three days and the verdict one, builds no image, and never tags or publishes', () => {
   assert.deepEqual(PREFLIGHT.permissions, { contents: 'read' });
   const text = readFileSync(path.join(ROOT, '.github/workflows/rc-preflight.yml'), 'utf8');
   const jobs = JSON.stringify(PREFLIGHT.jobs);

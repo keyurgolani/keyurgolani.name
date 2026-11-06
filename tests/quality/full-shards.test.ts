@@ -669,7 +669,7 @@ function weighedAgain(shard: Pick<PrShard, 'groups'>, weights: readonly ShardGro
   });
 }
 
-test("today's weights size the release past rc-quality's timeout at its measured p90s, and the release's own weights keep every shard's p90 total within the ceiling", (t) => {
+test("today's weights size the release past rc-quality's timeout at its measured p90s, and the release's own weights keep every shard's sum of p90 weights within the ceiling", (t) => {
   const timeout = releaseTimeoutMinutes() * 60;
   const weights = releaseDurations();
   for (const [name, whole] of [
@@ -682,7 +682,7 @@ test("today's weights size the release past rc-quality's timeout at its measured
     const today = releaseFor(fullGroups(each, ENGINES, loadDurations()), loadDurations());
     const todayP90 = today.shards.map((shard) => weighedAgain(shard, measured));
     t.diagnostic(
-      `${name}, today's weights: ${today.count} shards, estimated slowest ${Math.round(today.slowest)}s, its p90 total ${Math.round(Math.max(...todayP90))}s, ${todayP90.filter((seconds) => seconds > timeout).length} over the ${timeout}s timeout`,
+      `${name}, today's weights: ${today.count} shards, estimated slowest ${Math.round(today.slowest)}s, its sum of p90 weights ${Math.round(Math.max(...todayP90))}s, ${todayP90.filter((seconds) => seconds > timeout).length} over the ${timeout}s timeout`,
     );
     assert.ok(
       Math.max(...todayP90) > timeout,
@@ -692,7 +692,7 @@ test("today's weights size the release past rc-quality's timeout at its measured
     const release = releaseOf(each);
     const p90 = release.shards.map((shard) => weighedAgain(shard, measured));
     t.diagnostic(
-      `${name}, the release's weights: ${release.count} shards, p90 totals ${Math.round(Math.min(...p90))}s to ${Math.round(Math.max(...p90))}s, ${Math.round(timeout - Math.max(...p90))}s under the ${timeout}s timeout`,
+      `${name}, the release's weights: ${release.count} shards, sums of p90 weights ${Math.round(Math.min(...p90))}s to ${Math.round(Math.max(...p90))}s, ${Math.round(timeout - Math.max(...p90))}s under the ${timeout}s timeout`,
     );
     for (const [at, seconds] of p90.entries()) {
       assert.ok(seconds <= RELEASE_CEILING, `${name}: shard ${at + 1} at ${Math.round(seconds)}s`);

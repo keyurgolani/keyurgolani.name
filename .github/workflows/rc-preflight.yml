@@ -24,8 +24,9 @@
 # It never tags, builds an image, or publishes, and its verdict never counts
 # for promotion: promote-verify reads only the tag's own release.yml run
 # (ci/release/promote-check.mjs). It holds contents: read and no secret, its
-# reports keep one day, and no job reads or writes a cache: setup-node runs
-# with its cache off and the installs are fresh, as in release.yml.
+# shards' reports keep three days and its verdict's one, and no job reads or
+# writes a cache: setup-node runs with its cache off and the installs are
+# fresh, as in release.yml.
 name: rc-preflight
 # Display only: find a preflight by this title or its summary. Its checks
 # sit on main's tip at dispatch, never on the commit it tests.
@@ -137,7 +138,7 @@ jobs:
   # release.yml's rc-quality, on the commit: 10 shards at a time, as a
   # candidate runs them, so PR CI keeps the other 10 job slots. Each shard's
   # reports are scrubbed however the run ended, and upload only when that
-  # scrub succeeds, for one day.
+  # scrub succeeds, for three days.
   preflight-quality:
     name: preflight-quality (${{ matrix.shard }}/${{ needs.preflight-plan.outputs.count }})
     needs: [preflight-verify, preflight-plan]

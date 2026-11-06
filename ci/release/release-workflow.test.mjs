@@ -345,7 +345,7 @@ test('scan findings upload for one day only, and the logs get counts from scan-g
       .map((s) => ({ id, ...s.with })),
   );
   const reports = uploads.filter((u) => u.path === 'reports/');
-  // The quality gate's shards and verdict, which keep the release's one day too.
+  // The quality gate's shards and verdict among them: the shards keep three days, the rest one.
   assert.deepEqual(reports.map((u) => u.name).sort(), [
     'reports-quality-release-${{ matrix.shard }}',
     'reports-quality-release-verdict',
