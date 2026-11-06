@@ -264,8 +264,13 @@ export function judge({
   if (plan.perf) failures.push(...perfCoverage(plan.perf, plan.targets, engines, summary));
   if (plan.visual) failures.push(...visualCoverage(plan.visual, engines, summary));
 
+  // A release candidate's records list (lib/release-scope.ts): a failing cell test whose every
+  // failure record is listed, and that failed on nothing else (judgeListed's covered), fails what
+  // the list says it does. It owes its checks as a passed test does.
+  const judged = listed === undefined ? null : judgeListed(tests, listed);
+  const covered = new Set<SummaryTest>(judged?.covered ?? []);
   for (const test of tests) {
-    if (!test.kind || test.status !== 'passed') continue;
+    if (!test.kind || (test.status !== 'passed' && !covered.has(test))) continue;
     const owed =
       test.kind === 'cell' && test.row && test.viewport
         ? requiredChecks(
@@ -277,24 +282,13 @@ export function judge({
         : KIND_CHECKS[test.kind as TestKind];
     const missing = owed.filter((check) => !test.checks.includes(check));
     if (missing.length > 0) {
-      fail('unchecked-cell', `${test.title} passed without its ${missing.join(', ')} check(s).`);
+      fail(
+        'unchecked-cell',
+        `${test.title} ${covered.has(test) ? 'failed on its listed records' : 'passed'} without its ${missing.join(', ')} check(s).`,
+      );
     }
   }
 
-  // A release candidate's records list (lib/release-scope.ts): a failing cell test whose every
-  // failure record is listed fails what the list says it does, and nothing more here.
-  const judged = listed === undefined ? null : judgeListed(tests, listed);
-  const covered = new Set(
-    judged === null
-      ? []
-      : tests.filter(
-          (test) =>
-            test.kind === 'cell' &&
-            test.outcome === 'unexpected' &&
-            !judged.unrecorded.includes(test) &&
-            !judged.unlisted.some((each) => each.test === test),
-        ),
-  );
   const failed = tests.filter((test) => test.outcome === 'unexpected' && !covered.has(test));
   if (failed.length > 0) {
     fail(
@@ -309,10 +303,16 @@ export function judge({
         `${test.title}: ${failure.check} ${failure.rule}${failure.target === null ? '' : ` on ${failure.target}`} failed, and the records list doesn't name it. To list it, fill in its owner and routed row: ${entry}`,
       );
     }
-    for (const test of judged.unrecorded) {
+    for (const { test, why } of judged.unrecorded) {
       fail(
         'unlisted-failure',
-        `${test.title} failed with no failure record, which no records list entry can name: it fails the release until it passes or fails on a record.`,
+        `${test.title} failed, and not on its records alone (${why}), which no records list entry can name: it fails the release until it passes or fails on its records only.`,
+      );
+    }
+    for (const { test, failure } of judged.repeated) {
+      fail(
+        'unlisted-failure',
+        `${test.title}: ${failure.check} ${failure.rule}${failure.target === null ? '' : ` on ${failure.target}`} failed more than once under one key, so no one entry can name one record: it fails the release until its records can be told apart.`,
       );
     }
     for (const entry of judged.passed) {

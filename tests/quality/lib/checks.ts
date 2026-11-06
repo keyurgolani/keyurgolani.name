@@ -133,6 +133,13 @@ export function requiredChecks(
 
 /** The annotation a test lists the checks it ran in. */
 export const CHECKS_ANNOTATION = 'quality-checks';
+/** The annotation a cell test names the checks it owed in (requiredChecks()), space-joined. */
+export const OWED_ANNOTATION = 'quality-owed';
+/**
+ * The annotation runCell counts its failed soft expectations in, once it has made them all: each
+ * stands on the test's records, so an error beyond them is one no record names.
+ */
+export const SOFT_FAILURES_ANNOTATION = 'quality-soft-failures';
 
 /**
  * The check a page that requires script takes in place of its content

@@ -27,6 +27,7 @@ import path from 'node:path';
 import { REPO_ROOT } from '../../../ci/lib/reports.mjs';
 import { isRelease, recordsProblems } from '../../../ci/release/release-records.mjs';
 import type { Plan } from '../cells';
+import { RUN_ENGINES } from './matrix';
 
 export const SCOPES = ['full', 'default-packs'] as const;
 export type ReleaseScopeKind = (typeof SCOPES)[number];
@@ -81,6 +82,10 @@ export {
   testFailures,
 } from '../../../ci/release/release-records.mjs';
 
+/** The scope file's fields, and the records list it names: the one file beside it, by one name. */
+const SCOPE_FIELDS = ['release', 'scope', 'unswept', 'records'];
+export const RECORDS_FILE = 'records.json';
+
 /** The env variable a release job names its scope file in. */
 export const SCOPE_ENV = 'QUALITY_RELEASE_SCOPE';
 
@@ -88,15 +93,21 @@ export const SCOPE_ENV = 'QUALITY_RELEASE_SCOPE';
 export function scopeProblems(scope: unknown): string[] {
   const problems: string[] = [];
   const value = scope as Partial<ReleaseScope> | null;
-  if (!value || typeof value !== 'object') return ['the scope file is not an object'];
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return ['the scope file is not an object'];
+  for (const field of Object.keys(value)) {
+    if (!SCOPE_FIELDS.includes(field)) problems.push(`${field} is not a field`);
+  }
   if (!isRelease(value.release))
     problems.push(`release is ${JSON.stringify(value.release)}, not X.Y.Z or X.Y.Z-rc.N`);
   if (!SCOPES.includes(value.scope as ReleaseScopeKind))
     problems.push(`scope is ${JSON.stringify(value.scope)}, not one of ${SCOPES.join(', ')}`);
   if (typeof value.unswept !== 'string' || (value.scope !== 'full' && value.unswept.trim() === ''))
     problems.push('unswept must say, in words, what a narrowed scope leaves out');
-  if (typeof value.records !== 'string' || value.records.trim() === '')
-    problems.push('records must name the records list');
+  if (value.records !== RECORDS_FILE)
+    problems.push(
+      `records is ${JSON.stringify(value.records)}, not ${JSON.stringify(RECORDS_FILE)}`,
+    );
   return problems;
 }
 
@@ -119,9 +130,21 @@ export function loadReleaseScope(env: NodeJS.ProcessEnv = process.env): LoadedSc
   const scope = JSON.parse(readFileSync(file, 'utf8')) as ReleaseScope;
   const problems = scopeProblems(scope);
   if (problems.length > 0) throw new Error(`${named}: ${problems.join('; ')}`);
-  const listFile = path.resolve(path.dirname(file), scope.records);
+  // Beside the scope file, as rc-verify's readScope (ci/release/verify-scope.mjs) finds it.
+  const listFile = path.join(path.dirname(file), RECORDS_FILE);
   const records = JSON.parse(readFileSync(listFile, 'utf8')) as ListedRecord[];
-  const listed = recordsProblems(records, scope);
+  const listed = [
+    ...recordsProblems(records, scope),
+    // The engines a release run launches: an entry on any other names a test no run has.
+    ...(Array.isArray(records) ? records : []).flatMap((entry, at) =>
+      typeof entry?.engine === 'string' &&
+      !(RUN_ENGINES.full as readonly string[]).includes(entry.engine)
+        ? [
+            `entry ${at + 1}: engine is ${JSON.stringify(entry.engine)}, not one of ${RUN_ENGINES.full.join(', ')}`,
+          ]
+        : [],
+    ),
+  ];
   if (listed.length > 0)
     throw new Error(`${path.relative(REPO_ROOT, listFile)}: ${listed.join('; ')}`);
   return { file, scope, records };

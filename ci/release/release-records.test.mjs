@@ -1,18 +1,30 @@
 // The records list's flaky entries (release-records.mjs): one seen failing and passing on one
 // commit, both runs named, may pass where its test runs; when its test fails, it fails on exactly
-// its record. A strict entry still has to fail. At most MAX_FLAKY entries are flaky.
+// its record. A strict entry still has to fail. At most MAX_FLAKY entries are flaky. Until RC2's
+// evidence check reads the runs, a list takes no flaky entry at all (FLAKY_HELD): the matcher's
+// flaky rules below stand for then.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isFlaky, judgeListed, MAX_FLAKY, recordsProblems } from './release-records.mjs';
+import {
+  FLAKY_HELD,
+  isFlaky,
+  judgeListed,
+  MAX_FLAKY,
+  recordsProblems,
+} from './release-records.mjs';
 
 const CANDIDATE = { release: '1.0.0-rc.1', scope: 'default-packs' };
 const CELL =
   'composition:horizontal-cinema complete / horizontal-cinema/platform-neutral/warm-parchment/humanist-ui/system';
+// Obviously synthetic: two runs on one commit, neither a real run's id.
 const SEEN = {
-  commit: '1dc6bf1624fc7ee31b565417c2ddb8b34738ef7f',
-  failed: '42161399250',
-  passed: '42124251637',
+  commit: 'a'.repeat(40),
+  failed: '100000001',
+  passed: '100000002',
 };
+/** recordsProblems() without RC1's flaky hold, for the shape and cap rules RC2 keeps. */
+const shapeProblems = (records, scope) =>
+  recordsProblems(records, scope).filter((each) => !each.endsWith(FLAKY_HELD));
 const strict = (target, viewport = '1440x900') => ({
   cell: CELL,
   viewport,
@@ -38,6 +50,11 @@ const cellTest = (targets, viewport = '1440x900') => ({
   row: 'default',
   engine: 'chromium',
   outcome: targets === 'passed' ? 'expected' : 'unexpected',
+  status: targets === 'passed' ? 'passed' : 'failed',
+  checks: [],
+  owed: [],
+  errors: [],
+  softFailures: 0,
   failures:
     targets === 'passed'
       ? []
@@ -45,7 +62,7 @@ const cellTest = (targets, viewport = '1440x900') => ({
 });
 
 test('a flaky entry names the commit it was seen on and both runs, its failing and its passing one, or it is refused', () => {
-  assert.deepEqual(recordsProblems([flaky('#a')], CANDIDATE), []);
+  assert.deepEqual(shapeProblems([flaky('#a')], CANDIDATE), []);
   assert.equal(isFlaky(flaky('#a')), true);
   assert.equal(isFlaky(strict('#a')), false);
   const bare = { ...flaky('#a') };
@@ -97,10 +114,10 @@ test('a flaky entry names the commit it was seen on and both runs, its failing a
       'entry 1: flaky is undefined; a flaky entry says "flaky": true',
     ],
   ]) {
-    assert.deepEqual(recordsProblems([entry], CANDIDATE), [problem], label);
+    assert.deepEqual(shapeProblems([entry], CANDIDATE), [problem], label);
   }
   // Its owner and routed row are held as a strict entry's are.
-  assert.deepEqual(recordsProblems([{ ...flaky('#a'), owner: '' }], CANDIDATE), [
+  assert.deepEqual(shapeProblems([{ ...flaky('#a'), owner: '' }], CANDIDATE), [
     'entry 1: owner is "", not a lane or person',
   ]);
 });
@@ -148,11 +165,17 @@ test("a flaky entry's failing test must fail on exactly its record: any other re
 test(`at most ${MAX_FLAKY} flaky entries: a sixth is refused, and a final release takes none`, () => {
   const five = Array.from({ length: MAX_FLAKY }, (_, at) => flaky(`#f${at}`));
   assert.equal(MAX_FLAKY, 5);
-  assert.deepEqual(recordsProblems([...five, strict('#s1'), strict('#s2')], CANDIDATE), []);
-  assert.deepEqual(recordsProblems([...five, flaky('#f5')], CANDIDATE), [
+  assert.deepEqual(shapeProblems([...five, strict('#s1'), strict('#s2')], CANDIDATE), []);
+  assert.deepEqual(shapeProblems([...five, flaky('#f5')], CANDIDATE), [
     "6 flaky entries, over the 5 a list holds without the coordinator's word",
   ]);
-  assert.deepEqual(recordsProblems([flaky('#a')], { release: '1.0.0', scope: 'full' }), [
+  assert.deepEqual(shapeProblems([flaky('#a')], { release: '1.0.0', scope: 'full' }), [
     '1.0.0 is a final release: its records list must be empty',
   ]);
+});
+
+test("RC1 holds every flaky entry back: until RC2's evidence check reads its runs, a list takes strict entries alone", () => {
+  assert.deepEqual(recordsProblems([flaky('#a')], CANDIDATE), [`entry 1: ${FLAKY_HELD}`]);
+  assert.deepEqual(recordsProblems([strict('#a')], CANDIDATE), []);
+  assert.match(FLAKY_HELD, /RC2's evidence check/);
 });

@@ -25,6 +25,16 @@ const ROUTED = /^row [1-9]\d*[a-z]?$/;
 const NOTE_MAX = 300;
 const COMMIT = /^[0-9a-f]{40}$/;
 const RUN_ID = /^[1-9]\d*$/;
+/** The runner's egress rules: a failure no records list may name (recordsProblems refuses them). */
+export const EGRESS_RULES = ['browser-egress', 'server-egress'];
+/** Owners that name no one, in any case: refused like a blank one. */
+const NO_OWNER = new Set(['tbd', 'tba', 'none', 'unknown', 'unowned', 'nobody', 'owner']);
+/**
+ * Until RC2's evidence check reads the runs a flaky entry names, a list takes no flaky entry: its
+ * `seen` is checked for shape only (RC1's interim guard).
+ */
+export const FLAKY_HELD =
+  "flaky entries wait on RC2's evidence check, which reads the runs seen names; until it lands, seen is checked for shape only, so a list holds strict entries alone";
 /** The most flaky entries a list holds: more need the coordinator's word, and a change here. */
 export const MAX_FLAKY = 5;
 
@@ -105,10 +115,26 @@ export function recordsProblems(records, scope) {
     for (const field of ['cell', 'viewport', 'row', 'engine', 'check', 'rule']) {
       if (typeof entry[field] !== 'string' || entry[field].trim() === '')
         problems.push(`${where}: ${field} is missing`);
+      else if (entry[field] !== entry[field].trim())
+        problems.push(`${where}: ${field} has space at its start or end, which no record has`);
     }
-    if (entry.target !== null && (typeof entry.target !== 'string' || entry.target.trim() === ''))
-      problems.push(`${where}: target is ${JSON.stringify(entry.target)}, not a selector or null`);
-    if (typeof entry.owner !== 'string' || !OWNER.test(entry.owner))
+    if (entry.target === null)
+      problems.push(
+        `${where}: target is null; a record with no element (a runner record, or an axe node in a frame or a shadow root) shares its key with every other of its rule in the test until RC2's per-element key, so RC1's list names elements only`,
+      );
+    else if (typeof entry.target !== 'string' || entry.target.trim() === '')
+      problems.push(`${where}: target is ${JSON.stringify(entry.target)}, not a selector`);
+    else if (entry.target !== entry.target.trim())
+      problems.push(`${where}: target has space at its start or end, which no record has`);
+    if (entry.check === 'runner' && EGRESS_RULES.includes(entry.rule))
+      problems.push(
+        `${where}: ${entry.rule} is egress, which no records list may name: it fails the release however it's listed`,
+      );
+    if (
+      typeof entry.owner !== 'string' ||
+      !OWNER.test(entry.owner) ||
+      NO_OWNER.has(entry.owner.trim().toLowerCase())
+    )
       problems.push(`${where}: owner is ${JSON.stringify(entry.owner)}, not a lane or person`);
     if (typeof entry.routed !== 'string' || !ROUTED.test(entry.routed))
       problems.push(`${where}: routed is ${JSON.stringify(entry.routed)}, not "row <n>"`);
@@ -117,6 +143,7 @@ export function recordsProblems(records, scope) {
       (typeof entry.note !== 'string' || entry.note.length > NOTE_MAX)
     )
       problems.push(`${where}: note is not text of at most ${NOTE_MAX} characters`);
+    if (entry.flaky === true) problems.push(`${where}: ${FLAKY_HELD}`);
     if (entry.flaky !== undefined || entry.seen !== undefined) {
       const evidence = entry.seen;
       if (entry.flaky !== true)
@@ -167,10 +194,46 @@ export function recordsProblems(records, scope) {
 }
 
 /**
+ * Why a failing cell test can't count as its records alone, or null when it can: it ended
+ * `failed` (not timed out or interrupted), with no error beyond the soft expectations runCell
+ * annotated (`softFailures`; a fixture's throw, such as egress, is one more), every check it owed
+ * (`owed`) among those it ran, and every failure well-formed, with no key twice.
+ */
+export function uncovered(test) {
+  if (test.status !== 'failed') return `it ended ${String(test.status)}, not failed`;
+  const failures = Array.isArray(test.failures) ? test.failures : [];
+  if (failures.length === 0) return 'it failed with no failure record';
+  const malformed = failures.some(
+    (failure) =>
+      !failure ||
+      typeof failure.check !== 'string' ||
+      failure.check === '' ||
+      typeof failure.rule !== 'string' ||
+      failure.rule === '' ||
+      (failure.target !== null && (typeof failure.target !== 'string' || failure.target === '')),
+  );
+  if (malformed) return 'a failure record of it is malformed';
+  if (typeof test.softFailures !== 'number' || !Number.isInteger(test.softFailures))
+    return "it has no count of runCell's soft expectations, so an error beyond them can't be told";
+  const errors = Array.isArray(test.errors) ? test.errors.length : 0;
+  if (errors !== test.softFailures)
+    return `it ended with ${errors} error(s), not the ${test.softFailures} soft expectation(s) behind its records`;
+  if (!Array.isArray(test.owed)) return 'it names no checks it owed';
+  const ran = Array.isArray(test.checks) ? test.checks : [];
+  const missing = test.owed.filter((check) => !ran.includes(check));
+  if (missing.length > 0) return `it didn't run its ${missing.join(', ')} check(s)`;
+  return null;
+}
+
+/**
  * A run's summary tests held to `listed`: every failing cell test's failures named, and every
  * entry whose test ran still failing. Returns
  * - unlisted: each failure of a failing cell test that no entry names, with its printed entry;
- * - unrecorded: each failing cell test with no failure records, which no entry can name;
+ * - unrecorded: each failing cell test that can't count as its records alone (uncovered()), with
+ *   why: no record, a status other than failed, an error beyond its soft expectations, an owed
+ *   check it didn't run, a malformed record; no entry can name it;
+ * - repeated: each failing cell test whose failures repeat a key, so no one entry names one record;
+ * - covered: the failing cell tests whose every failure an entry names, and nothing else failed;
  * - passed: each strict entry whose test ran here (not skipped) and whose failure it no longer has;
  * - flaky: each flaky entry and how it came out here: `failed` (its record failed), `passed` (its
  *   test ran without it), or `not run`. A flaky entry is never `passed` above; its test's other
@@ -181,20 +244,33 @@ export function judgeListed(tests, listed) {
   const keys = new Set((listed ?? []).map(recordKey));
   const unlisted = [];
   const unrecorded = [];
+  const repeated = [];
+  const covered = [];
   const ran = new Map();
   for (const test of tests ?? []) {
     if (test?.kind !== 'cell' || test.outcome === 'skipped') continue;
-    const failing = test.outcome === 'unexpected' ? testFailures(test) : [];
+    const why = test.outcome === 'unexpected' ? uncovered(test) : null;
+    const failing = test.outcome === 'unexpected' && why === null ? testFailures(test) : [];
     const testKey = JSON.stringify([test.cell, test.viewport, test.row, test.engine]);
     const own = ran.get(testKey) ?? new Set();
     for (const failure of failing) own.add(recordKey(failure));
     ran.set(testKey, own);
     if (test.outcome !== 'unexpected') continue;
-    if (failing.length === 0) unrecorded.push(test);
-    for (const failure of failing) {
-      if (!keys.has(recordKey(failure)))
-        unlisted.push({ test, failure, entry: listEntry(failure) });
+    if (why !== null) {
+      unrecorded.push({ test, why });
+      continue;
     }
+    const seen = new Set();
+    const twice = failing.filter((failure) => {
+      const key = recordKey(failure);
+      const again = seen.has(key);
+      seen.add(key);
+      return again;
+    });
+    if (twice.length > 0) repeated.push({ test, failure: twice[0] });
+    const mine = failing.filter((failure) => !keys.has(recordKey(failure)));
+    for (const failure of mine) unlisted.push({ test, failure, entry: listEntry(failure) });
+    if (mine.length === 0 && twice.length === 0) covered.push(test);
   }
   const ownOf = (entry) =>
     ran.get(JSON.stringify([entry.cell, entry.viewport, entry.row, entry.engine]));
@@ -209,5 +285,5 @@ export function judgeListed(tests, listed) {
       outcome: own === undefined ? 'not run' : own.has(recordKey(entry)) ? 'failed' : 'passed',
     };
   });
-  return { unlisted, unrecorded, passed, flaky };
+  return { unlisted, unrecorded, repeated, covered, passed, flaky };
 }

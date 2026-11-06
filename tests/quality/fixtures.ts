@@ -33,6 +33,8 @@ import {
   installBrowserPolicy,
   serverEgressFailure,
 } from './lib/egress';
+import { VIEWPORTS } from './lib/matrix';
+import { egressRecord, RECORDS_ATTACHMENT } from './lib/records';
 import { appOptionsFor, type CellServer } from './lib/server';
 import { createAuthSession, recordSessionSecrets, type Session } from './lib/session';
 import { recordVitals } from './lib/vitals';
@@ -141,6 +143,14 @@ export const test = base.extend<QualityTestFixtures, QualityWorkerFixtures>({
         body: `${blocked.join('\n')}\n`,
         contentType: 'text/plain',
       });
+      // A cell test's egress is a record of its own, which no records list may name.
+      const record = egressRecord(testInfo.annotations, VIEWPORTS, 'browser-egress', failure);
+      if (record) {
+        await testInfo.attach(RECORDS_ATTACHMENT, {
+          body: `${JSON.stringify([record])}\n`,
+          contentType: 'application/json',
+        });
+      }
       throw new Error(failure);
     }
   },

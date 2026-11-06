@@ -21,7 +21,8 @@ import {
 } from './lib/release-scope';
 import { mergeShards, readShards } from './lib/shards';
 import { judge, type VerdictInput } from './lib/verdict';
-import type { SummaryFailure } from './reporter';
+import { requiredChecks } from './lib/checks';
+import type { SummaryFailure, SummaryTest } from './reporter';
 import { ALSO_RUNS, CELL, cellTest, HELD, PLAN, PROBE, RUNS, summary } from './meta/runner-cases';
 import { SHARD_1, SHARD_2, writeShards } from './meta/shard-cases';
 import { checkoutMeta, withTierPacks } from './plan-fixtures';
@@ -69,7 +70,18 @@ const entry = (failure: SummaryFailure): ListedRecord => ({
 });
 const LISTED = FAILURES.map(entry);
 
-const FAILED = { outcome: 'unexpected', status: 'failed', expectedStatus: 'passed' } as const;
+/**
+ * A failed cell test as the reporter writes one: its soft expectations each an error and counted
+ * (softFailures), and the checks it owed among those it ran.
+ */
+const FAILED = {
+  outcome: 'unexpected',
+  status: 'failed',
+  expectedStatus: 'passed',
+  errors: ['axe, WCAG 2.2 AA', "Slice 2's suites"],
+  softFailures: 2,
+  owed: requiredChecks('default', '1440x900'),
+} as const;
 
 /** A release run's verdict on PLAN: RUNS's test passes, or fails on `failures`; the rest pass. */
 function verdict(failures: readonly SummaryFailure[] | 'passed', listed: VerdictInput['listed']) {
@@ -160,6 +172,84 @@ test("a failure record outside the records list fails the gate, printing a ready
   assert.deepEqual(rules(verdict(FAILURES, undefined).failures), ['tests-failed']);
 });
 
+/** A release run's verdict on PLAN with RUNS's test failing on FAILURES and `extra` besides. */
+function failingWith(extra: Partial<SummaryTest>, listed: VerdictInput['listed'] = LISTED) {
+  return judge({
+    plan: PLAN,
+    engines: ['chromium'],
+    summary: summary([
+      cellTest(RUNS, { ...FAILED, failures: FAILURES, ...extra }),
+      cellTest(ALSO_RUNS),
+      cellTest(
+        { ...RUNS, viewport: { id: '390x844' } },
+        {
+          outcome: 'skipped',
+          status: 'skipped',
+          expectedStatus: 'skipped',
+          skipReason: 'Stand-in until #1 and #3 can make a revision unavailable on demand.',
+        },
+      ),
+      PROBE,
+    ]),
+    missingBrowsers: [],
+    canary: { before: [HELD], after: [] },
+    listed,
+  });
+}
+
+test('a listed test fails the gate when anything no record names failed too: a blocked request, a server-egress error, a timeout, a check it owed and skipped', () => {
+  // Its listed records alone: covered.
+  assert.deepEqual(failingWith({}).failures, []);
+  for (const [label, extra, why] of [
+    [
+      "a blocked request: the egress fixture's own record, and its error",
+      {
+        failures: [...FAILURES, { check: 'runner', rule: 'browser-egress', target: null }],
+        errors: [...FAILED.errors, 'The page requested 1 URL(s) outside the app'],
+      },
+      /ended with 3 error\(s\), not the 2 soft expectation\(s\) behind its records/,
+    ],
+    [
+      'a server-egress error from the worker fixture, on this test',
+      { errors: [...FAILED.errors, 'The app server requested 1 URL(s) outside the app'] },
+      /ended with 3 error\(s\), not the 2 soft expectation\(s\)/,
+    ],
+    ['a teardown timeout', { status: 'timedOut' }, /it ended timedOut, not failed/],
+    [
+      'an owed check it never ran',
+      { checks: FAILED.owed.filter((check) => check !== 'keyboard') },
+      /it didn't run its keyboard check\(s\)/,
+    ],
+  ] as const) {
+    const failed = failingWith(extra as Partial<SummaryTest>);
+    assert.ok(rules(failed.failures).includes('tests-failed'), label);
+    assert.ok(
+      failed.failures.some((each) => each.rule === 'unlisted-failure' && why.test(each.message)),
+      `${label}: ${failed.failures.map((each) => each.message).join(' | ')}`,
+    );
+  }
+  // An egress record with nothing else wrong is unlisted, and no entry can name it.
+  const egress = failingWith({
+    failures: [...FAILURES, { check: 'runner', rule: 'browser-egress', target: null }],
+  });
+  assert.ok(egress.failures.some((each) => /runner browser-egress failed/.test(each.message)));
+  assert.match(
+    recordsProblems(
+      [{ ...LISTED[0]!, check: 'runner', rule: 'browser-egress', target: '#x' }],
+      CANDIDATE,
+    ).join(),
+    /browser-egress is egress, which no records list may name/,
+  );
+  // A covered test owes the plan's checks as a passed test does, whatever it says it owed.
+  const short = requiredChecks('default', '1440x900').filter((check) => check !== 'focus');
+  const unchecked = failingWith({ checks: short, owed: short });
+  assert.deepEqual(rules(unchecked.failures), ['unchecked-cell']);
+  assert.match(
+    unchecked.failures[0]!.message,
+    /failed on its listed records without its focus check/,
+  );
+});
+
 test("a record's key is its cell, rule and target from its own fields: a new measurement still matches, and another target or rule doesn't", () => {
   const listed = [entry(failureOf(focusFailure('0 of 486 changed pixels reach 3:1')))];
   // The next run measures the same failure differently: it's still the listed record.
@@ -239,10 +329,7 @@ test("the merge judges a release's shards against the list, as a single run's ve
 test('a records entry names its cell, viewport, row, engine, check, rule and target, an owner, and a routed row: a blank or placeholder owner or row is refused', () => {
   const good = LISTED[0]!;
   assert.deepEqual(recordsProblems([good], CANDIDATE), []);
-  assert.deepEqual(
-    recordsProblems([{ ...good, target: null, note: 'runner record' }], CANDIDATE),
-    [],
-  );
+  assert.deepEqual(recordsProblems([{ ...good, note: 'nav link ring' }], CANDIDATE), []);
   for (const [field, value, problem] of [
     ['owner', '', 'owner is "", not a lane or person'],
     ['owner', '   ', 'owner is "   ", not a lane or person'],
@@ -266,8 +353,19 @@ test('a records entry names its cell, viewport, row, engine, check, rule and tar
     ['engine', undefined, 'engine is missing'],
     ['check', ' ', 'check is missing'],
     ['rule', undefined, 'rule is missing'],
-    ['target', '', 'target is "", not a selector or null'],
-    ['target', undefined, 'target is undefined, not a selector or null'],
+    ['target', '', 'target is "", not a selector'],
+    ['target', undefined, 'target is undefined, not a selector'],
+    [
+      'target',
+      null,
+      "target is null; a record with no element (a runner record, or an axe node in a frame or a shadow root) shares its key with every other of its rule in the test until RC2's per-element key, so RC1's list names elements only",
+    ],
+    ['target', ` ${NAV}`, 'target has space at its start or end, which no record has'],
+    ['cell', `${CELL} `, 'cell has space at its start or end, which no record has'],
+    ['owner', 'tbd', 'owner is "tbd", not a lane or person'],
+    ['owner', 'Unknown', 'owner is "Unknown", not a lane or person'],
+    ['owner', 'NOBODY', 'owner is "NOBODY", not a lane or person'],
+    ['owner', 'owner', 'owner is "owner", not a lane or person'],
     ['note', 'x'.repeat(301), 'note is not text of at most 300 characters'],
     ['measured', '155 element(s)', 'measured is not a field'],
   ] as const) {
@@ -314,7 +412,11 @@ test('a scope file names its release, scope, what it leaves unswept, and its lis
   assert.deepEqual(scopeProblems({ ...good, unswept: ' ' }), [
     'unswept must say, in words, what a narrowed scope leaves out',
   ]);
-  assert.deepEqual(scopeProblems({ ...good, records: '' }), ['records must name the records list']);
+  assert.deepEqual(scopeProblems({ ...good, records: '' }), ['records is "", not "records.json"']);
+  assert.deepEqual(scopeProblems({ ...good, records: '../records.json' }), [
+    'records is "../records.json", not "records.json"',
+  ]);
+  assert.deepEqual(scopeProblems({ ...good, owner: 'x' }), ['owner is not a field']);
   const dir = mkdtempSync(path.join(tmpdir(), 'quality-release-scope-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   writeFileSync(path.join(dir, 'scope.json'), JSON.stringify(good));

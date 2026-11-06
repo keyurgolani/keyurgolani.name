@@ -28,7 +28,9 @@ import { AXE_TAGS, axeFor } from './axe';
 import {
   CHECKS_ANNOTATION,
   NOTICE_CHECK,
+  OWED_ANNOTATION,
   requiredChecks,
+  SOFT_FAILURES_ANNOTATION,
   SWEEP_ISOLATION_CHECK,
   sweepCheck,
   SWEEP_PACK_CHECK,
@@ -806,6 +808,15 @@ export async function runCell(run: CellRun, pass: typeof runPass = runPass) {
     [...pass.ran].map((check) => (cell.sweep ? sweepCheck(pass.row.id, check) : check)),
   );
   testInfo.annotations.push({ type: CHECKS_ANNOTATION, description: ran.join(' ') });
+  testInfo.annotations.push({
+    type: OWED_ANNOTATION,
+    description: requiredChecks(
+      run.row.id,
+      run.viewport.id,
+      run.conditions,
+      cell.sweep === true,
+    ).join(' '),
+  });
   // A cell that leaves its frame out of the contrast sampler says how many items, and why.
   if (cell.framed !== undefined) {
     const leftOut = passes.reduce((sum, each) => sum + (each.framedLeftOut ?? 0), 0);
@@ -819,6 +830,11 @@ export async function runCell(run: CellRun, pass: typeof runPass = runPass) {
   if (diagnostic) testInfo.annotations.push({ type: 'changed', description: diagnostic });
   const about = (what: string) => (diagnostic ? `${what}. ${diagnostic}` : what);
 
+  // From here, runCell's soft expectations, each standing on the records above: their failures
+  // are counted once they're all made (SOFT_FAILURES_ANNOTATION), so the verdict can tell an error
+  // beyond them, which no record names.
+  // A stand-in TestInfo (the units') may have no errors list: none failed, then.
+  const softBefore = (testInfo.errors ?? []).length;
   expect
     .soft(
       broken.map((failure) => `${failure.preferenceMode}: ${failure.actual}`),
@@ -869,4 +885,8 @@ export async function runCell(run: CellRun, pass: typeof runPass = runPass) {
       )
       .toEqual([]);
   }
+  testInfo.annotations.push({
+    type: SOFT_FAILURES_ANNOTATION,
+    description: String((testInfo.errors ?? []).length - softBefore),
+  });
 }

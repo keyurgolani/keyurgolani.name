@@ -13,26 +13,34 @@
 // draft's selected run can never count, and a PR's run never counts either,
 // since its gate checked a merge commit, not this one.
 //
-// A red push run counts only when every job gate needs but quality-pr's
-// shards and verdict succeeded (every shard of a matrix job), and the
-// quality-pr verdict's own summary (its reports-quality-pr-verdict artifact,
-// quality/summary.json) shows its every failure to be a failure record of a
-// cell test that the candidate's records list (quality/release/records.json)
-// names, by the same matcher rc-quality's verdict uses
-// (ci/release/release-records.mjs): no other failing test, no other verdict
-// rule, no listed record that ran and no longer fails. ci.yml's own gate is
-// untouched and stays strict. The artifact is read with the job's actions:
-// read and parsed as untrusted: anything missing, malformed, or too big
-// refuses the tag. A list that's empty, as a final release's must be, leaves
-// only the green run. A flaky entry (release-records.mjs) may pass or fail on
-// its record, and the job summary prints how each came out.
+// A red push run counts only on its first attempt, when every job gate needs
+// but quality-pr's shards and verdict succeeded (every shard of a matrix
+// job), the quality-pr jobs show their red is the quality runs' own (each
+// failed shard failed only its `pnpm ci:quality-pr` step, with its reports
+// scrubbed and uploaded; the verdict failed only `pnpm ci:quality-pr-verdict`,
+// with its reports uploaded), and the quality-pr verdict's own summary (its
+// reports-quality-pr-verdict artifact, quality/summary.json) shows its every
+// failure to be a failure record of a cell test that the candidate's records
+// list (quality/release/records.json) names, by the same matcher rc-quality's
+// verdict uses (ci/release/release-records.mjs): no other failing test, no
+// verdict rule but tests-failed (and shard-job beside it), no listed record
+// that ran and no longer fails. A green run with a non-empty list is held to
+// the last of those too. The artifact is the one live one the run's latest
+// quality-pr-verdict job uploaded, its size and digest checked, read with the
+// job's actions: read and parsed as untrusted: anything missing, malformed,
+// too big, or from another attempt refuses the tag. ci.yml's own gate is
+// untouched and stays strict. A list that's empty, as a final release's must
+// be, leaves only the green run. Text from the artifact is stripped of control
+// characters before it reaches the log or the job summary, and escaped in a
+// workflow command.
 //
 // Pure Node with no dependencies, so the job that runs it needs no install.
+import { createHash } from 'node:crypto';
 import { appendFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { githubGet, githubGetBytes, repository } from './github.mjs';
-import { isFlaky, judgeListed, recordsProblems } from './release-records.mjs';
+import { judgeListed, recordsProblems } from './release-records.mjs';
 import { parseReleaseTag } from './tags.mjs';
 import { readScope } from './verify-scope.mjs';
 import { zipEntry } from './zip.mjs';
@@ -101,11 +109,23 @@ export const GATE_NEEDS = [
 /** The gate's quality-pr jobs, whose red a records list can explain. */
 export const QPR_JOBS = new Set(['quality-pr', 'quality-pr-verdict']);
 
+/** browser's shard count in ci.yml (its matrix, and `browser (k/N)` in its name). */
+export const BROWSER_SHARDS = 2;
+/**
+ * The shard count of each matrix job gate needs but quality-pr's, as ci.yml runs them: each job's
+ * matrix of shards 1..N, named `<job> (k/N)`. A unit test (verify-rc-listed.test.mjs) parses the
+ * repository's ci.yml and holds these to it, so a change to a matrix changes them in the same
+ * commit. Every other job gate needs runs once, by its own name.
+ */
+export const SHARD_COUNTS = { unit: 3, browser: BROWSER_SHARDS, variants: 4 };
+
 /**
  * Why `jobs` (GET runs/{id}/jobs) don't show every job gate needs but quality-pr's green, one
- * reason a job; none when they do. A matrix job needs each of its n shards, each succeeded.
+ * reason a job; none when they do. A matrix job needs exactly its shards 1..N by `counts`, each
+ * once and succeeded: fewer, one twice, one of another count, or one cancelled or skipped is
+ * refused. Any other job runs once, by its own name, succeeded.
  */
-export function otherJobsRed(jobs) {
+export function otherJobsRed(jobs, counts = SHARD_COUNTS) {
   const reasons = [];
   for (const need of GATE_NEEDS.filter((each) => !QPR_JOBS.has(each))) {
     const own = (jobs ?? []).filter(
@@ -118,18 +138,149 @@ export function otherJobsRed(jobs) {
     }
     for (const job of own.filter((each) => each.conclusion !== 'success'))
       reasons.push(`${job.name} ended ${job.conclusion ?? job.status ?? 'unknown'}`);
-    const shards = own.map((job) => /\((\d+)\/(\d+)\)$/.exec(job.name));
-    if (shards.some((match) => match !== null)) {
-      const totals = new Set(shards.map((match) => match?.[2]));
-      const seen = new Set(shards.map((match) => match?.[1]));
-      const total = Number([...totals][0]);
-      if (totals.size !== 1 || shards.some((match) => match === null) || !(total > 0))
-        reasons.push(`${need}'s shards don't agree on their count`);
-      else if (seen.size !== total || own.length !== total)
-        reasons.push(`${need} ran ${own.length} of its ${total} shards`);
+    const total = counts[need];
+    if (total === undefined) {
+      if (own.length !== 1 || own[0].name !== need)
+        reasons.push(
+          `${need} ran as ${own.map((job) => job.name).join(', ')}, not once by its name`,
+        );
+      continue;
     }
+    const shard = new RegExp(`^${need} \\((\\d+)/(\\d+)\\)$`);
+    const parsed = own.map((job) => shard.exec(job.name));
+    const off = own.filter((_, at) => parsed[at] === null || Number(parsed[at][2]) !== total);
+    if (off.length > 0)
+      reasons.push(
+        `${need} ran ${off.map((job) => job.name).join(', ')}, not its shards of ${total}`,
+      );
+    const ks = parsed.filter((match) => match !== null).map((match) => Number(match[1]));
+    const wanted = Array.from({ length: total }, (_, at) => at + 1);
+    if (ks.length !== total || new Set(ks).size !== total || !wanted.every((k) => ks.includes(k)))
+      reasons.push(
+        `${need} ran shards ${ks.sort((x, y) => x - y).join(', ') || 'none'} of 1..${total}, not each once`,
+      );
   }
   return reasons;
+}
+
+/** `text` from an artifact with its control characters (CR and LF among them) made spaces. */
+export function clean(text) {
+  return String(text).replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ');
+}
+
+/** `text` as a workflow command's message: % as %25, CR as %0D, LF as %0A. */
+export function commandText(text) {
+  return String(text).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+}
+
+const QPR_SHARD = /^quality-pr \((\d+)\/(\d+)\)$/;
+const OK_STEP = new Set(['success', 'skipped']);
+
+/**
+ * Why `jobs` (the run's latest attempt's GET runs/{id}/jobs) don't show quality-pr's red as the
+ * quality runs' own, one reason a line, with the verdict job; none when they do: every
+ * `quality-pr (k/n)` shard, for one n, ran and concluded success or failure; a failed shard's one
+ * step not success or skipped is its `pnpm ci:quality-pr --shard=k/n`, with Scrub reports, Failure
+ * summary and Upload reports successful; quality-pr-verdict's, its `pnpm ci:quality-pr-verdict`,
+ * with Upload reports successful. otherJobsRed() skips these jobs, so this reads them.
+ */
+export function qprJobsProof(jobs) {
+  const reasons = [];
+  const shards = (jobs ?? []).filter((job) => QPR_SHARD.test(String(job?.name)));
+  const totals = new Set(shards.map((job) => QPR_SHARD.exec(job.name)[2]));
+  const total = Number([...totals][0]);
+  if (shards.length === 0) reasons.push('quality-pr ran no shard');
+  else if (totals.size !== 1 || !(total > 0))
+    reasons.push("quality-pr's shards don't agree on their count");
+  else {
+    const seen = new Set(shards.map((job) => QPR_SHARD.exec(job.name)[1]));
+    if (seen.size !== total || shards.length !== total)
+      reasons.push(`quality-pr ran ${shards.length} of its ${total} shards`);
+  }
+  const step = (job, name) => (job?.steps ?? []).find((each) => each?.name === name);
+  const onlyRed = (job, own, needed) => {
+    const red = (job?.steps ?? []).filter((each) => !OK_STEP.has(each?.conclusion));
+    if (red.length !== 1 || red[0].name !== own)
+      reasons.push(
+        `${job.name} failed on ${red.map((each) => clean(each?.name)).join(', ') || 'no step'}, not on ${own} alone`,
+      );
+    for (const name of needed) {
+      if (step(job, name)?.conclusion !== 'success')
+        reasons.push(`${job.name}'s ${name} step didn't succeed`);
+    }
+  };
+  for (const job of shards) {
+    const [, k, n] = QPR_SHARD.exec(job.name);
+    if (job.conclusion === 'success') continue;
+    if (job.conclusion !== 'failure') {
+      reasons.push(`${job.name} ended ${clean(job.conclusion ?? job.status ?? 'unknown')}`);
+      continue;
+    }
+    onlyRed(job, `pnpm ci:quality-pr --shard=${k}/${n}`, [
+      'Scrub reports',
+      'Failure summary',
+      'Upload reports',
+    ]);
+  }
+  const verdicts = (jobs ?? []).filter((job) => job?.name === 'quality-pr-verdict');
+  const verdict = verdicts.length === 1 ? verdicts[0] : null;
+  if (!verdict) reasons.push(`quality-pr-verdict ran ${verdicts.length} times, not once`);
+  else if (verdict.conclusion === 'failure')
+    onlyRed(verdict, 'pnpm ci:quality-pr-verdict', ['Upload reports']);
+  else if (verdict.conclusion !== 'success')
+    reasons.push(`quality-pr-verdict ended ${clean(verdict.conclusion ?? 'unknown')}`);
+  else if (step(verdict, 'Upload reports')?.conclusion !== 'success')
+    reasons.push("quality-pr-verdict's Upload reports step didn't succeed");
+  return { reasons, verdict };
+}
+
+/**
+ * The one live reports-quality-pr-verdict artifact of `run` that its latest attempt's verdict job
+ * (`verdict`, a job of the listing for that attempt) uploaded, or why not: exactly one live one by
+ * that name, its id a safe integer, its workflow_run this run on main at `sha`, and made within
+ * that job's start and end. An artifact another job made first, or a past attempt's, is refused.
+ */
+export function bindArtifact(artifacts, run, sha, verdict) {
+  const live = (artifacts ?? []).filter(
+    (each) => each?.name === QPR_ARTIFACT && each.expired === false,
+  );
+  if (live.length !== 1)
+    return {
+      artifact: null,
+      reason: `run ${run.id} has ${live.length} live ${QPR_ARTIFACT} artifacts, not one`,
+    };
+  const [artifact] = live;
+  if (!Number.isSafeInteger(artifact.id) || artifact.id <= 0)
+    return {
+      artifact: null,
+      reason: `${QPR_ARTIFACT}'s id is ${clean(artifact.id)}, not an artifact id`,
+    };
+  const from = artifact.workflow_run ?? {};
+  if (from.id !== run.id || from.head_sha !== sha || from.head_branch !== 'main')
+    return { artifact: null, reason: `${QPR_ARTIFACT} is another run's, or not main's at ${sha}` };
+  const made = Date.parse(artifact.created_at);
+  const start = Date.parse(verdict?.started_at);
+  const end = Date.parse(verdict?.completed_at);
+  if (!(made >= start && made <= end))
+    return {
+      artifact: null,
+      reason: `${QPR_ARTIFACT} wasn't made while this attempt's quality-pr-verdict ran`,
+    };
+  if (!Number.isSafeInteger(artifact.size_in_bytes) || artifact.size_in_bytes <= 0)
+    return { artifact: null, reason: `${QPR_ARTIFACT} names no size` };
+  return { artifact, reason: null };
+}
+
+/** Why `bytes` aren't `artifact`'s download: its size, and its sha256 digest when the API gives one. */
+export function downloadProblem(bytes, artifact) {
+  if (bytes.length !== artifact.size_in_bytes)
+    return `${QPR_ARTIFACT} downloaded ${bytes.length} bytes, not its ${artifact.size_in_bytes}`;
+  if (typeof artifact.digest === 'string' && artifact.digest !== '') {
+    const [kind, value] = artifact.digest.split(':');
+    if (kind !== 'sha256' || createHash('sha256').update(bytes).digest('hex') !== value)
+      return `${QPR_ARTIFACT}'s download doesn't match its digest`;
+  }
+  return null;
 }
 
 /**
@@ -138,26 +289,40 @@ export function otherJobsRed(jobs) {
  * when it does: its verdict failed on tests-failed alone, every failing test a cell test, every
  * failure record of each listed, and no listed record whose test ran gone from it.
  */
-export function qualityPrUnlisted(summary, listed) {
+export function qualityPrUnlisted(summary, listed, { jobsProven = false } = {}) {
   if (!summary || typeof summary !== 'object' || !Array.isArray(summary.tests))
     return ["quality-pr's summary has no tests"];
   const failures = summary.verdict?.failures;
   if (!Array.isArray(failures)) return ["quality-pr's summary has no verdict"];
   const reasons = [];
-  for (const failure of failures) {
-    if (failure?.rule !== 'tests-failed')
-      reasons.push(`quality-pr failed ${String(failure?.rule)}, which no records list can name`);
+  const rules = failures.map((failure) => failure?.rule);
+  for (const rule of rules) {
+    // A shard that failed on its cell tests ends its job red, so the merge says shard-job beside
+    // tests-failed: that pair alone is quality-pr's own red, once the jobs show it (qprJobsProof).
+    if (rule === 'tests-failed') continue;
+    if (rule === 'shard-job' && rules.includes('tests-failed') && jobsProven) continue;
+    reasons.push(
+      rule === 'shard-job'
+        ? "quality-pr failed shard-job, and its jobs don't show that a shard failed on its cell tests alone"
+        : `quality-pr failed ${clean(rule)}, which no records list can name`,
+    );
   }
   const tests = summary.tests;
   for (const test of tests.filter((each) => each?.outcome === 'unexpected' && each.kind !== 'cell'))
-    reasons.push(`${String(test.title)} failed, and it isn't a cell test`);
+    reasons.push(`${clean(test.title)} failed, and it isn't a cell test`);
   const judged = judgeListed(tests, listed);
   for (const { test, failure, entry } of judged.unlisted)
     reasons.push(
-      `${String(test.title)}: ${failure.check} ${failure.rule} failed, and the records list doesn't name it. To list it: ${entry}`,
+      `${clean(test.title)}: ${clean(failure.check)} ${clean(failure.rule)} failed, and the records list doesn't name it. To list it: ${clean(entry)}`,
     );
-  for (const test of judged.unrecorded)
-    reasons.push(`${String(test.title)} failed with no failure record, which no entry can name`);
+  for (const { test, why } of judged.unrecorded)
+    reasons.push(
+      `${clean(test.title)} failed, and not on its records alone (${clean(why)}), which no entry can name`,
+    );
+  for (const { test, failure } of judged.repeated)
+    reasons.push(
+      `${clean(test.title)}: ${clean(failure.check)} ${clean(failure.rule)} failed more than once under one key, so no one entry names one record`,
+    );
   for (const entry of judged.passed)
     reasons.push(
       `${entry.cell} at ${entry.viewport}, ${entry.row}: ${entry.check} ${entry.rule} on ${String(entry.target)} no longer fails: take its entry out`,
@@ -190,12 +355,16 @@ export function redRuns(sha, runs) {
 }
 
 /**
- * The verdict for one tag: { ok, reasons, run, listed }. `quality`, when given, holds the
- * candidate's records list (`listed`, already validated) and each red run's quality-pr summary by
- * run id (`summaries`; an Error for one that couldn't be read): a red run counts when every other
- * job gate needs succeeded and its summary's every failure is listed (`listed: true` then).
+ * The verdict for one tag: { ok, reasons, run, listed, flaky }. `quality`, when given, holds the
+ * candidate's records list (`listed`, already validated) and, by run id, each read run's
+ * artifact listing (`artifacts`) and its quality-pr summary (`summaries`; an Error for one that
+ * couldn't be read). A green run counts as before; with a non-empty list, only on its first
+ * attempt, its summary showing no strict entry's test passing. A red run counts on its first
+ * attempt when every other job gate needs succeeded, its quality-pr jobs show their red is the
+ * quality runs' own, its artifact is the one its verdict job made, and its summary's every
+ * failure is listed (`listed: true` then).
  *
- * @param {{ tag: string, sha: string, compare: object, runs: object[], jobsByRun: Record<string, object[]>, quality?: { listed: object[], summaries: Record<string, unknown> } }} input
+ * @param {{ tag: string, sha: string, compare: object, runs: object[], jobsByRun: Record<string, object[]>, quality?: { listed: object[], summaries: Record<string, unknown>, artifacts?: Record<string, object[]> } }} input
  */
 export function evaluateRc({ tag, sha, compare, runs, jobsByRun, quality }) {
   const reasons = [];
@@ -210,40 +379,80 @@ export function evaluateRc({ tag, sha, compare, runs, jobsByRun, quality }) {
       `${sha} is not on main (compare says ${compare?.status ?? 'nothing'}). Tag a commit that is on main`,
     );
   }
+  const listed = quality?.listed ?? [];
+  // A run's summary, read from the artifact its latest verdict job made, or why it can't be used.
+  const summaryOf = (run, verdict) => {
+    if (run.run_attempt !== 1)
+      return {
+        summary: null,
+        why: `run ${run.id} is attempt ${clean(run.run_attempt)}, and only a first attempt counts`,
+      };
+    const bound = bindArtifact(quality?.artifacts?.[String(run.id)], run, sha, verdict);
+    if (bound.reason) return { summary: null, why: bound.reason };
+    const summary = quality?.summaries?.[String(run.id)];
+    if (summary instanceof Error || summary === undefined)
+      return {
+        summary: null,
+        why: `quality-pr's summary couldn't be read: ${clean(summary?.message ?? 'not fetched')}`,
+      };
+    return { summary, why: null };
+  };
   const run = candidateRuns(sha, runs).find((candidate) =>
     gatePassed(jobsByRun?.[String(candidate.id)]),
   );
-  // A green run: its flaky entries' summary wasn't read, since nothing failed.
-  const unread = (quality?.listed ?? [])
-    .filter(isFlaky)
-    .map((entry) => ({ entry, outcome: 'not read' }));
-  if (run) return { ok: reasons.length === 0, reasons, run, listed: false, flaky: unread };
+  if (run) {
+    // With entries listed, quality-pr's summary on the green run too: a strict entry whose test
+    // passed there is a record that doesn't fail, whatever rc-quality sees later.
+    if (listed.length === 0)
+      return { ok: reasons.length === 0, reasons, run, listed: false, flaky: [] };
+    const { verdict } = qprJobsProof(jobsByRun?.[String(run.id)]);
+    const { summary, why } = summaryOf(run, verdict);
+    if (why) {
+      reasons.push(`${sha}'s green ci run ${run.id} can't be held to the records list: ${why}`);
+      return { ok: false, reasons, run: null, listed: false, flaky: [] };
+    }
+    const judged = judgeListed(Array.isArray(summary?.tests) ? summary.tests : [], listed);
+    for (const entry of judged.passed)
+      reasons.push(
+        `${entry.cell} at ${entry.viewport}, ${entry.row}: ${entry.check} ${entry.rule} on ${String(entry.target)} passed in ci run ${run.id}'s quality-pr, so it's no failing record: take its entry out`,
+      );
+    return {
+      ok: reasons.length === 0,
+      reasons,
+      run: reasons.length === 0 ? run : null,
+      listed: false,
+      flaky: judged.flaky,
+    };
+  }
   // No green run: a red one counts only when quality-pr's is its one red, all of it listed.
   const why = [];
   for (const red of redRuns(sha, runs)) {
-    const others = otherJobsRed(jobsByRun?.[String(red.id)]);
-    const summary = quality?.summaries?.[String(red.id)];
-    const qpr =
+    const jobs = jobsByRun?.[String(red.id)];
+    const others = otherJobsRed(jobs);
+    const proof = qprJobsProof(jobs);
+    const read =
       quality === undefined
-        ? ['no records list was read']
-        : summary instanceof Error || summary === undefined
-          ? [`quality-pr's summary couldn't be read: ${summary?.message ?? 'not fetched'}`]
-          : qualityPrUnlisted(summary, quality.listed);
-    if (others.length === 0 && qpr.length === 0) {
+        ? { summary: null, why: 'no records list was read' }
+        : summaryOf(red, proof.verdict);
+    const qpr = read.why
+      ? [read.why]
+      : qualityPrUnlisted(read.summary, listed, { jobsProven: proof.reasons.length === 0 });
+    const all = [...others, ...proof.reasons, ...qpr];
+    if (all.length === 0) {
       return {
         ok: reasons.length === 0,
         reasons,
         run: red,
         listed: true,
-        flaky: judgeListed(summary.tests, quality.listed).flaky,
+        flaky: judgeListed(read.summary.tests, listed).flaky,
       };
     }
-    why.push(`run ${red.id}: ${[...others, ...qpr].join('; ')}`);
+    why.push(`run ${red.id}: ${all.join('; ')}`);
   }
   reasons.push(
     `${sha} has no green complete ci run: no ci.yml push run on main for this commit concluded success with gate passing${why.length > 0 ? `, and no red one is red on listed records alone (${why.join(' | ')})` : ''}`,
   );
-  return { ok: false, reasons, run: null, listed: false, flaky: unread };
+  return { ok: false, reasons, run: null, listed: false, flaky: [] };
 }
 
 /**
@@ -257,27 +466,30 @@ export function flakyLines(flaky) {
   );
 }
 
-/** The quality-pr summary of `run`, read from its verdict's artifact; an Error when it can't be. */
-async function qualityPrSummary(base, run) {
+/**
+ * The artifact listing of `run`, and its quality-pr summary read from the artifact its latest
+ * verdict job made (bindArtifact()), its download held to its size and digest; an Error in place
+ * of the summary when it can't be read.
+ */
+async function qualityPrSummary(base, run, sha, jobs) {
+  let artifacts = [];
   try {
     const listed = await githubGet(
       `${base}/actions/runs/${run.id}/artifacts?name=${QPR_ARTIFACT}&per_page=100`,
     );
-    const artifacts = (listed?.artifacts ?? []).filter(
-      (each) => each?.name === QPR_ARTIFACT && each.expired === false,
-    );
-    if (artifacts.length !== 1)
-      throw new Error(
-        `run ${run.id} has ${artifacts.length} live ${QPR_ARTIFACT} artifacts, not one`,
-      );
-    const zip = await githubGetBytes(`${base}/actions/artifacts/${artifacts[0].id}/zip`, {
+    artifacts = Array.isArray(listed?.artifacts) ? listed.artifacts : [];
+    const { artifact, reason } = bindArtifact(artifacts, run, sha, qprJobsProof(jobs).verdict);
+    if (reason) throw new Error(reason);
+    const zip = await githubGetBytes(`${base}/actions/artifacts/${artifact.id}/zip`, {
       maxBytes: 512 * 1024 * 1024,
     });
+    const problem = downloadProblem(zip, artifact);
+    if (problem) throw new Error(problem);
     const bytes = zipEntry(zip, QPR_SUMMARY);
     if (bytes === null) throw new Error(`${QPR_ARTIFACT} holds no ${QPR_SUMMARY}`);
-    return JSON.parse(bytes.toString('utf8'));
+    return { artifacts, summary: JSON.parse(bytes.toString('utf8')) };
   } catch (error) {
-    return error instanceof Error ? error : new Error(String(error));
+    return { artifacts, summary: error instanceof Error ? error : new Error(String(error)) };
   }
 }
 
@@ -303,13 +515,15 @@ async function main() {
   const { scope, records } = readScope(root);
   const problems = recordsProblems(records, scope);
   if (problems.length > 0) throw new Error(`the records list is invalid: ${problems.join('; ')}`);
-  let quality = { listed: records, summaries: {} };
-  const green = candidateRuns(sha, runs).some((run) => gatePassed(jobsByRun[String(run.id)]));
-  if (!green && redRuns(sha, runs).length > 0) {
-    const summaries = {};
-    for (const run of redRuns(sha, runs))
-      summaries[String(run.id)] = await qualityPrSummary(base, run);
-    quality = { listed: records, summaries };
+  // Each red run's quality-pr summary when no run is green; the green run's when the list names
+  // any entry.
+  const quality = { listed: records, summaries: {}, artifacts: {} };
+  const green = candidateRuns(sha, runs).find((run) => gatePassed(jobsByRun[String(run.id)]));
+  const read = green ? (records.length > 0 ? [green] : []) : redRuns(sha, runs);
+  for (const run of read) {
+    const got = await qualityPrSummary(base, run, sha, jobsByRun[String(run.id)]);
+    quality.summaries[String(run.id)] = got.summary;
+    quality.artifacts[String(run.id)] = got.artifacts;
   }
   const verdict = evaluateRc({ tag, sha, compare, runs, jobsByRun, quality });
   let summary = verdict.ok
@@ -321,7 +535,8 @@ async function main() {
   if (flaky.length > 0) summary += `\nFlaky entries in the records list:\n\n${flaky.join('\n')}\n`;
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
   console.log(summary);
-  for (const reason of verdict.reasons) console.log(`::error title=release candidate::${reason}`);
+  for (const reason of verdict.reasons)
+    console.log(`::error title=release candidate::${commandText(clean(reason))}`);
   return verdict.ok ? 0 : 1;
 }
 
@@ -329,7 +544,7 @@ if (path.resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
   main().then(
     (code) => process.exit(code),
     (error) => {
-      console.log(`::error title=release candidate::${error.message}`);
+      console.log(`::error title=release candidate::${commandText(clean(error.message))}`);
       process.exit(1);
     },
   );

@@ -148,6 +148,40 @@ export function runnerFailure(context: CellContext, rule: string, actual: string
   return { ...cellFields(context), check: RUNNER_CHECK, rule, actual };
 }
 
+/**
+ * A cell test's egress failure as a record of its own (check runner, rule `rule`, no element),
+ * from the test's annotations, which cells.spec.ts gives every cell test: the egress fixture
+ * attaches it before it throws, so the reporter lists it among the test's failures and a records
+ * list, which refuses any egress entry (ci/release/release-records.mjs), never covers the test.
+ * Null for a test that isn't a cell test.
+ */
+export function egressRecord(
+  annotations: readonly { readonly type: string; readonly description?: string }[],
+  viewports: readonly Pick<Viewport, 'id' | 'inputMode'>[],
+  rule: string,
+  actual: string,
+): CellFailure | null {
+  const of = (type: string) => annotations.find((each) => each.type === type)?.description;
+  const target = of('target');
+  const viewport = viewports.find((each) => each.id === of('viewport'));
+  const route = of('route');
+  const row = of('row');
+  if (of('quality-kind') !== 'cell' || !target || !viewport || !route || !row) return null;
+  const [kind, surface] = target.split(':');
+  return {
+    check: RUNNER_CHECK,
+    rule,
+    surface: surface ?? target,
+    composition: kind === 'composition',
+    route,
+    viewport: viewport.id,
+    inputMode: viewport.inputMode,
+    preferenceMode: row as CellFailure['preferenceMode'],
+    ...(of('profile') ? { profile: of('profile') } : {}),
+    actual,
+  };
+}
+
 /** The boundaries a page resolved, as probes.ts's resolvedTokensScript reads them. */
 export interface ResolvedTokens {
   readonly boundaries: readonly {

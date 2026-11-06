@@ -1,0 +1,942 @@
+{
+  "note": "HC platform-neutral default cells' unwaived failure records (check, rule, target) in run 42161399250's shard 12, from its quality-records.json attachments",
+  "records": {
+    "1440x900": [
+      ["axe", "color-contrast", "#about > .hc-prose.pf-rich-text > p"],
+      [
+        "axe",
+        "color-contrast",
+        "#about > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      ["axe", "color-contrast", "#about > .hc-reel__head > h2 > span[data-type-role=\"label\"]"],
+      [
+        "axe",
+        "color-contrast",
+        "#chapter-epilogue > .hc-pic > .hc-intertitle__years[dir=\"ltr\"][data-type-role=\"display\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#chapter-journey > .hc-pic > .hc-intertitle__years[dir=\"ltr\"][data-type-role=\"display\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#chapter-origins > .hc-pic > .hc-intertitle__years[dir=\"ltr\"][data-type-role=\"display\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#contact > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#contact > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"
+      ],
+      ["axe", "color-contrast", "#contact > .hc-words__lead[data-type-role=\"title\"]"],
+      [
+        "axe",
+        "color-contrast",
+        "#cta > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      ["axe", "color-contrast", "#cta > .hc-words__lead[data-type-role=\"title\"]"],
+      ["axe", "color-contrast", "#custom > .hc-prose.pf-rich-text > p"],
+      [
+        "axe",
+        "color-contrast",
+        "#custom > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#custom > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#episode-title > .hc-work__words > .hc-work__body.pf-rich-text > p"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#episode-title > .hc-work__words > .hc-work__facts > span:nth-child(1)"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#episode-title > .hc-work__words > .hc-work__facts > span:nth-child(3)"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#episode-title > .hc-work__words > .hc-work__links[data-type-role=\"body-compact\"] > .hc-work__go > a[data-platform=\"web\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#episode-title > .hc-work__words > .hc-work__title > span[data-type-role=\"headline\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#focus > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      ["axe", "color-contrast", "#focus > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"],
+      ["axe", "color-contrast", "#focus > .hc-words__rows.hc-rules > li[data-type-role=\"title\"]"],
+      [
+        "axe",
+        "color-contrast",
+        "#fun-facts > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#fun-facts > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#fun-facts > .hc-words__rows.hc-rules > li[data-type-role=\"title\"]"
+      ],
+      ["axe", "color-contrast", "#hc--contents-craft"],
+      ["axe", "color-contrast", "#hc--contents-epilogue"],
+      ["axe", "color-contrast", "#hc--contents-journey"],
+      ["axe", "color-contrast", "#hc--contents-origins"],
+      ["axe", "color-contrast", "#hc--timeline-caption"],
+      [
+        "axe",
+        "color-contrast",
+        "#now > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      ["axe", "color-contrast", "#now > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"],
+      [
+        "axe",
+        "color-contrast",
+        "#object-title > .hc-work__words > .hc-work__body.pf-rich-text > p"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#object-title > .hc-work__words > .hc-work__title > span[data-type-role=\"title\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#quote > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#release-title > .hc-work__words > .hc-work__body.pf-rich-text > p"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#release-title > .hc-work__words > .hc-work__links[data-type-role=\"body-compact\"] > .hc-work__go > a[data-platform=\"web\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#release-title > .hc-work__words > .hc-work__title > span[data-type-role=\"headline\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#scene-10 > .hc-pic > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"title\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#scene-10 > .hc-pic > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#scene-11 > .hc-pic > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"title\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#scene-11 > .hc-pic > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#scene-12 > .hc-pic > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"title\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#scene-12 > .hc-pic > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#scene-8 > .hc-pic > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"title\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#scene-8 > .hc-pic > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#scene-9 > .hc-pic > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"title\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#scene-9 > .hc-pic > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#services > .hc-practice > .hc-practice__row > .hc-practice__name > span[data-type-role=\"label\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#services > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#services > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"
+      ],
+      ["axe", "color-contrast", "#stat-label > dd"],
+      ["axe", "color-contrast", "#stat-label > dt > .pf-rich-text"],
+      ["axe", "color-contrast", "#stat-label-two > dt > .pf-rich-text"],
+      [
+        "axe",
+        "color-contrast",
+        "#stats > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      ["axe", "color-contrast", "#stats > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"],
+      [
+        "axe",
+        "color-contrast",
+        "#tenure > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#tenure > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"
+      ],
+      ["axe", "color-contrast", "#tenure-years > dd"],
+      ["axe", "color-contrast", "#tenure-years > dt > .pf-rich-text"],
+      ["axe", "color-contrast", "#testimonial-author > blockquote > .pf-rich-text > p"],
+      [
+        "axe",
+        "color-contrast",
+        "#testimonials > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#testimonials > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#thesis > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      ["axe", "color-contrast", "#thesis > .hc-reel__head > h2 > span[data-type-role=\"label\"]"],
+      [
+        "axe",
+        "color-contrast",
+        "#writing-title > .hc-work__words > .hc-work__body.pf-rich-text > p"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#writing-title > .hc-work__words > .hc-work__facts > span:nth-child(1)"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#writing-title > .hc-work__words > .hc-work__facts > span:nth-child(3)"
+      ],
+      ["axe", "color-contrast", ".hc-cap__where"],
+      ["axe", "color-contrast", ".hc-practice__pricing"],
+      ["axe", "color-contrast", ".hc-practice__rest > p"],
+      ["axe", "color-contrast", ".hc-practice__thesis > .pf-rich-text > p"],
+      ["axe", "color-contrast", ".hc-quotes__who"],
+      ["axe", "color-contrast", ".hc-timeline-figure__axis > li:nth-child(1)"],
+      ["axe", "color-contrast", ".hc-timeline-figure__axis > li:nth-child(10)"],
+      ["axe", "color-contrast", ".hc-timeline-figure__axis > li:nth-child(2)"],
+      ["axe", "color-contrast", ".hc-timeline-figure__axis > li:nth-child(3)"],
+      ["axe", "color-contrast", ".hc-timeline-figure__axis > li:nth-child(4)"],
+      ["axe", "color-contrast", ".hc-timeline-figure__axis > li:nth-child(5)"],
+      ["axe", "color-contrast", ".hc-timeline-figure__axis > li:nth-child(6)"],
+      ["axe", "color-contrast", ".hc-timeline-figure__axis > li:nth-child(7)"],
+      ["axe", "color-contrast", ".hc-timeline-figure__axis > li:nth-child(8)"],
+      ["axe", "color-contrast", ".hc-timeline-figure__axis > li:nth-child(9)"],
+      ["axe", "color-contrast", ".hc-timeline-figure__later"],
+      [
+        "axe",
+        "color-contrast",
+        ".hc-timeline-figure__years > .pf-period > time[datetime=\"2012\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        ".hc-timeline-figure__years > .pf-period > time[datetime=\"2016\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        ".hc-timeline-figure__years > .pf-period > time[datetime=\"2019-06\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        ".hc-timeline-figure__years > .pf-period > time[datetime=\"2021-03\"]"
+      ],
+      ["axe", "color-contrast", ".hc-tracks__length"],
+      ["axe", "color-contrast", ".hc-words__as-of"],
+      ["axe", "color-contrast", ".hc-words__lead[data-type-role=\"title\"] > .pf-rich-text > p"],
+      ["axe", "color-contrast", ".hc-words__more"],
+      ["axe", "color-contrast", ".hc-words__quote > figcaption"],
+      ["axe", "color-contrast", ".hc-words__ways > div > dt"],
+      ["axe", "color-contrast", ".hc-work__by[data-type-role=\"body-compact\"] > span > a"],
+      ["axe", "color-contrast", ".hc-work__excerpt > .pf-rich-text > p"],
+      ["axe", "color-contrast", ".hc-work__links[data-type-role=\"body-compact\"] > .hc-work__by"],
+      ["axe", "color-contrast", ".hc-work__note > a[href$=\"#scene-2\"]"],
+      ["axe", "color-contrast", ".hc-work__note"],
+      ["axe", "color-contrast", ".pf-caption"],
+      ["axe", "color-contrast", "a[href$=\"#scene-10\"] > .hc-intertitle__entry"],
+      [
+        "axe",
+        "color-contrast",
+        "a[href$=\"#scene-10\"] > .hc-intertitle__number[data-type-role=\"numeric\"]"
+      ],
+      ["axe", "color-contrast", "a[href$=\"#scene-11\"] > .hc-intertitle__entry"],
+      [
+        "axe",
+        "color-contrast",
+        "a[href$=\"#scene-11\"] > .hc-intertitle__number[data-type-role=\"numeric\"]"
+      ],
+      ["axe", "color-contrast", "a[href$=\"#scene-12\"] > .hc-intertitle__entry"],
+      [
+        "axe",
+        "color-contrast",
+        "a[href$=\"#scene-12\"] > .hc-intertitle__number[data-type-role=\"numeric\"]"
+      ],
+      ["axe", "color-contrast", "a[href$=\"#scene-14\"] > .hc-intertitle__entry"],
+      [
+        "axe",
+        "color-contrast",
+        "a[href$=\"#scene-14\"] > .hc-intertitle__number[data-type-role=\"numeric\"]"
+      ],
+      ["axe", "color-contrast", "a[href$=\"#scene-15\"] > .hc-intertitle__entry"],
+      [
+        "axe",
+        "color-contrast",
+        "a[href$=\"#scene-15\"] > .hc-intertitle__number[data-type-role=\"numeric\"]"
+      ],
+      ["axe", "color-contrast", "a[href$=\"#scene-16\"] > .hc-intertitle__entry"],
+      [
+        "axe",
+        "color-contrast",
+        "a[href$=\"#scene-16\"] > .hc-intertitle__number[data-type-role=\"numeric\"]"
+      ],
+      ["axe", "color-contrast", "a[href$=\"#scene-17\"] > .hc-intertitle__entry"],
+      [
+        "axe",
+        "color-contrast",
+        "a[href$=\"#scene-17\"] > .hc-intertitle__number[data-type-role=\"numeric\"]"
+      ],
+      ["axe", "color-contrast", "a[href$=\"#scene-19\"] > .hc-intertitle__entry"],
+      [
+        "axe",
+        "color-contrast",
+        "a[href$=\"#scene-19\"] > .hc-intertitle__number[data-type-role=\"numeric\"]"
+      ],
+      ["axe", "color-contrast", "a[href$=\"#scene-20\"] > .hc-intertitle__entry"],
+      [
+        "axe",
+        "color-contrast",
+        "a[href$=\"#scene-20\"] > .hc-intertitle__number[data-type-role=\"numeric\"]"
+      ],
+      ["axe", "color-contrast", "a[href$=\"#scene-21\"] > .hc-intertitle__entry"],
+      [
+        "axe",
+        "color-contrast",
+        "a[href$=\"#scene-21\"] > .hc-intertitle__number[data-type-role=\"numeric\"]"
+      ],
+      ["axe", "color-contrast", "a[href$=\"#scene-5\"] > .hc-intertitle__entry"],
+      ["axe", "color-contrast", "a[href$=\"#scene-6\"] > .hc-intertitle__entry"],
+      ["axe", "color-contrast", "a[href$=\"#scene-8\"] > .hc-intertitle__entry"],
+      ["axe", "color-contrast", "a[href$=\"#scene-9\"] > .hc-intertitle__entry"],
+      ["axe", "color-contrast", "a[href$=\"item\"]"],
+      [
+        "axe",
+        "color-contrast",
+        "a[href$=\"mailto:hire@rowan.test\"] > span[data-ui-slot=\"action.label\"]"
+      ],
+      ["axe", "color-contrast", "a[href$=\"mailto:rowan@rowan.test\"] > span"],
+      ["axe", "color-contrast", "a[href$=\"track\"]"],
+      ["axe", "color-contrast", "a[href=\"https://pod.rowan.test/12.mp3\"]"],
+      ["axe", "color-contrast", "a[href=\"https://pod.rowan.test/12\"]"],
+      ["axe", "color-contrast", "cite > a"],
+      [
+        "axe",
+        "color-contrast",
+        "figure[data-media-asset=\"custom-item-image\"] > .pf-media-box[data-media-state=\"unavailable\"][data-media-reason=\"processing\"] > .pf-media-box__label"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "figure[data-media-asset=\"gallery-photo\"] > .pf-media-box[data-media-state=\"unavailable\"][data-media-reason=\"processing\"] > .pf-media-box__label"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "figure[data-media-asset=\"gallery-photo\"] > figcaption > .hc-cap > .hc-cap__words"
+      ],
+      ["axe", "color-contrast", "figure[data-media-asset=\"gallery-photo\"] > figcaption > small"],
+      [
+        "axe",
+        "color-contrast",
+        "figure[data-media-asset=\"release-cover\"] > .pf-media-box[data-media-state=\"unavailable\"][data-media-reason=\"processing\"] > .pf-media-box__label"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "figure[data-media-asset=\"release-cover\"] > figcaption > .hc-cap > .hc-cap__words > strong"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "figure[data-media-asset=\"release-cover\"] > figcaption > .hc-cap > span:nth-child(2)"
+      ],
+      ["axe", "color-contrast", "h3 > span[data-type-role=\"label\"]"],
+      ["axe", "color-contrast", "h5 > span[data-type-role=\"title\"] > a"],
+      ["axe", "color-contrast", "li > .hc-practice__description[data-type-role=\"body-compact\"]"],
+      ["axe", "color-contrast", "li > .hc-work__body.pf-rich-text > p"],
+      ["axe", "color-contrast", "li > .hc-work__title > span[data-type-role=\"title\"]"],
+      [
+        "axe",
+        "color-contrast",
+        "li:nth-child(1) > .hc-timeline-figure__bars > li > a[data-type-role=\"caption\"] > .hc-timeline-figure__label > .hc-timeline-figure__title"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "li:nth-child(1) > .hc-timeline-figure__thread[data-type-role=\"label\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "li:nth-child(2) > .hc-timeline-figure__bars > li:nth-child(1) > a[data-type-role=\"caption\"] > .hc-timeline-figure__label > .hc-timeline-figure__title"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "li:nth-child(2) > .hc-timeline-figure__thread[data-type-role=\"label\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "li:nth-child(3) > .hc-timeline-figure__thread[data-type-role=\"label\"]"
+      ],
+      ["axe", "color-contrast", "span[data-type-role=\"display\"]"],
+      ["axe", "color-contrast", "span[data-type-role=\"title\"] > a[href$=\"tide\"]"],
+      ["axe", "color-contrast", "time[datetime=\"2022-10\"]"],
+      ["axe", "color-contrast", "time[datetime=\"2024-02-03\"]"],
+      ["axe", "color-contrast", "time[datetime=\"2025-08-30\"]"],
+      ["axe", "color-contrast", "time[datetime=\"2026-02-01\"]"],
+      ["axe", "color-contrast", "time[datetime=\"2026-09\"]"],
+      ["focus", "contrast", "#main > div:nth-child(1) > div:nth-child(2) > div:nth-child(1)"],
+      [
+        "focus",
+        "contrast",
+        "html > body:nth-child(2) > div:nth-child(2) > div:nth-child(2) > header:nth-child(2) > nav:nth-child(2) > span:nth-child(1) > a:nth-child(1)"
+      ],
+      [
+        "focus",
+        "contrast",
+        "html > body:nth-child(2) > div:nth-child(2) > div:nth-child(2) > header:nth-child(2) > nav:nth-child(2) > span:nth-child(1) > a:nth-child(2)"
+      ],
+      ["focus", "perimeter", "#scene-15 > div:nth-child(4) > a:nth-child(2)"],
+      [
+        "focus",
+        "perimeter",
+        "#scene-5 > details:nth-child(3) > div:nth-child(2) > figure:nth-child(1) > div:nth-child(2) > ul:nth-child(3) > li:nth-child(2) > ul:nth-child(2) > li:nth-child(1) > a:nth-child(1)"
+      ]
+    ],
+    "1024x768": [
+      ["axe", "color-contrast", "#about > .hc-prose.pf-rich-text > p"],
+      [
+        "axe",
+        "color-contrast",
+        "#about > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      ["axe", "color-contrast", "#about > .hc-reel__head > h2 > span[data-type-role=\"label\"]"],
+      [
+        "axe",
+        "color-contrast",
+        "#chapter-epilogue > .hc-pic > .hc-intertitle__years[dir=\"ltr\"][data-type-role=\"display\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#chapter-journey > .hc-pic > .hc-intertitle__years[dir=\"ltr\"][data-type-role=\"display\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#chapter-origins > .hc-pic > .hc-intertitle__years[dir=\"ltr\"][data-type-role=\"display\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#contact > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#contact > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"
+      ],
+      ["axe", "color-contrast", "#contact > .hc-words__lead[data-type-role=\"title\"]"],
+      [
+        "axe",
+        "color-contrast",
+        "#cta > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      ["axe", "color-contrast", "#cta > .hc-words__lead[data-type-role=\"title\"]"],
+      ["axe", "color-contrast", "#custom > .hc-prose.pf-rich-text > p"],
+      [
+        "axe",
+        "color-contrast",
+        "#custom > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#custom > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#episode-title > .hc-work__words > .hc-work__body.pf-rich-text > p"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#episode-title > .hc-work__words > .hc-work__facts > span:nth-child(1)"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#episode-title > .hc-work__words > .hc-work__facts > span:nth-child(3)"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#episode-title > .hc-work__words > .hc-work__links[data-type-role=\"body-compact\"] > .hc-work__go > a[data-platform=\"web\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#episode-title > .hc-work__words > .hc-work__title > span[data-type-role=\"headline\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#focus > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      ["axe", "color-contrast", "#focus > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"],
+      ["axe", "color-contrast", "#focus > .hc-words__rows.hc-rules > li[data-type-role=\"title\"]"],
+      [
+        "axe",
+        "color-contrast",
+        "#fun-facts > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#fun-facts > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#fun-facts > .hc-words__rows.hc-rules > li[data-type-role=\"title\"]"
+      ],
+      ["axe", "color-contrast", "#hc--contents-craft"],
+      ["axe", "color-contrast", "#hc--contents-epilogue"],
+      ["axe", "color-contrast", "#hc--contents-journey"],
+      ["axe", "color-contrast", "#hc--contents-origins"],
+      ["axe", "color-contrast", "#hc--timeline-caption"],
+      [
+        "axe",
+        "color-contrast",
+        "#now > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      ["axe", "color-contrast", "#now > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"],
+      [
+        "axe",
+        "color-contrast",
+        "#object-title > .hc-work__words > .hc-work__body.pf-rich-text > p"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#object-title > .hc-work__words > .hc-work__title > span[data-type-role=\"title\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#quote > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#release-title > .hc-work__words > .hc-work__body.pf-rich-text > p"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#release-title > .hc-work__words > .hc-work__links[data-type-role=\"body-compact\"] > .hc-work__go > a[data-platform=\"web\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#release-title > .hc-work__words > .hc-work__title > span[data-type-role=\"headline\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#scene-10 > .hc-pic > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"title\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#scene-10 > .hc-pic > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#scene-11 > .hc-pic > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"title\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#scene-11 > .hc-pic > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#scene-12 > .hc-pic > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"title\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#scene-12 > .hc-pic > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#scene-8 > .hc-pic > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"title\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#scene-8 > .hc-pic > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#scene-9 > .hc-pic > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"title\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#scene-9 > .hc-pic > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#services > .hc-practice > .hc-practice__row > .hc-practice__name > span[data-type-role=\"label\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#services > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#services > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"
+      ],
+      ["axe", "color-contrast", "#stat-label > dd"],
+      ["axe", "color-contrast", "#stat-label > dt > .pf-rich-text"],
+      ["axe", "color-contrast", "#stat-label-two > dt > .pf-rich-text"],
+      [
+        "axe",
+        "color-contrast",
+        "#stats > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      ["axe", "color-contrast", "#stats > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"],
+      [
+        "axe",
+        "color-contrast",
+        "#tenure > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#tenure > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"
+      ],
+      ["axe", "color-contrast", "#tenure-years > dd"],
+      ["axe", "color-contrast", "#tenure-years > dt > .pf-rich-text"],
+      ["axe", "color-contrast", "#testimonial-author > blockquote > .pf-rich-text > p"],
+      [
+        "axe",
+        "color-contrast",
+        "#testimonials > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#testimonials > .hc-reel__head > h3 > span[data-type-role=\"headline\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#thesis > .hc-reel__head > .hc-reel__subtitle[data-type-role=\"body\"]"
+      ],
+      ["axe", "color-contrast", "#thesis > .hc-reel__head > h2 > span[data-type-role=\"label\"]"],
+      [
+        "axe",
+        "color-contrast",
+        "#writing-title > .hc-work__words > .hc-work__body.pf-rich-text > p"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#writing-title > .hc-work__words > .hc-work__facts > span:nth-child(1)"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "#writing-title > .hc-work__words > .hc-work__facts > span:nth-child(3)"
+      ],
+      ["axe", "color-contrast", ".hc-cap__where"],
+      ["axe", "color-contrast", ".hc-practice__pricing"],
+      ["axe", "color-contrast", ".hc-practice__rest > p"],
+      ["axe", "color-contrast", ".hc-practice__thesis > .pf-rich-text > p"],
+      ["axe", "color-contrast", ".hc-quotes__who"],
+      ["axe", "color-contrast", ".hc-timeline-figure__axis > li:nth-child(1)"],
+      ["axe", "color-contrast", ".hc-timeline-figure__axis > li:nth-child(10)"],
+      ["axe", "color-contrast", ".hc-timeline-figure__axis > li:nth-child(2)"],
+      ["axe", "color-contrast", ".hc-timeline-figure__axis > li:nth-child(3)"],
+      ["axe", "color-contrast", ".hc-timeline-figure__axis > li:nth-child(4)"],
+      ["axe", "color-contrast", ".hc-timeline-figure__axis > li:nth-child(5)"],
+      ["axe", "color-contrast", ".hc-timeline-figure__axis > li:nth-child(6)"],
+      ["axe", "color-contrast", ".hc-timeline-figure__axis > li:nth-child(7)"],
+      ["axe", "color-contrast", ".hc-timeline-figure__axis > li:nth-child(8)"],
+      ["axe", "color-contrast", ".hc-timeline-figure__axis > li:nth-child(9)"],
+      ["axe", "color-contrast", ".hc-timeline-figure__later"],
+      [
+        "axe",
+        "color-contrast",
+        ".hc-timeline-figure__years > .pf-period > time[datetime=\"2012\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        ".hc-timeline-figure__years > .pf-period > time[datetime=\"2016\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        ".hc-timeline-figure__years > .pf-period > time[datetime=\"2019-06\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        ".hc-timeline-figure__years > .pf-period > time[datetime=\"2021-03\"]"
+      ],
+      ["axe", "color-contrast", ".hc-words__as-of"],
+      ["axe", "color-contrast", ".hc-words__lead[data-type-role=\"title\"] > .pf-rich-text > p"],
+      ["axe", "color-contrast", ".hc-words__more"],
+      ["axe", "color-contrast", ".hc-words__quote > figcaption"],
+      ["axe", "color-contrast", ".hc-words__ways > div > dt"],
+      ["axe", "color-contrast", ".hc-work__by[data-type-role=\"body-compact\"] > span > a"],
+      ["axe", "color-contrast", ".hc-work__excerpt > .pf-rich-text > p"],
+      ["axe", "color-contrast", ".hc-work__links[data-type-role=\"body-compact\"] > .hc-work__by"],
+      ["axe", "color-contrast", ".hc-work__note > a[href$=\"#scene-2\"]"],
+      ["axe", "color-contrast", ".hc-work__note"],
+      ["axe", "color-contrast", ".pf-caption"],
+      ["axe", "color-contrast", "a[href$=\"#scene-10\"] > .hc-intertitle__entry"],
+      ["axe", "color-contrast", "a[href$=\"#scene-11\"] > .hc-intertitle__entry"],
+      ["axe", "color-contrast", "a[href$=\"#scene-12\"] > .hc-intertitle__entry"],
+      ["axe", "color-contrast", "a[href$=\"#scene-14\"] > .hc-intertitle__entry"],
+      ["axe", "color-contrast", "a[href$=\"#scene-15\"] > .hc-intertitle__entry"],
+      ["axe", "color-contrast", "a[href$=\"#scene-16\"] > .hc-intertitle__entry"],
+      ["axe", "color-contrast", "a[href$=\"#scene-17\"] > .hc-intertitle__entry"],
+      ["axe", "color-contrast", "a[href$=\"#scene-19\"] > .hc-intertitle__entry"],
+      ["axe", "color-contrast", "a[href$=\"#scene-20\"] > .hc-intertitle__entry"],
+      ["axe", "color-contrast", "a[href$=\"#scene-21\"] > .hc-intertitle__entry"],
+      ["axe", "color-contrast", "a[href$=\"#scene-5\"] > .hc-intertitle__entry"],
+      ["axe", "color-contrast", "a[href$=\"#scene-6\"] > .hc-intertitle__entry"],
+      ["axe", "color-contrast", "a[href$=\"#scene-8\"] > .hc-intertitle__entry"],
+      ["axe", "color-contrast", "a[href$=\"#scene-9\"] > .hc-intertitle__entry"],
+      ["axe", "color-contrast", "a[href$=\"item\"]"],
+      [
+        "axe",
+        "color-contrast",
+        "a[href$=\"mailto:hire@rowan.test\"] > span[data-ui-slot=\"action.label\"]"
+      ],
+      ["axe", "color-contrast", "a[href$=\"mailto:rowan@rowan.test\"] > span"],
+      ["axe", "color-contrast", "a[href$=\"track\"]"],
+      ["axe", "color-contrast", "a[href=\"https://pod.rowan.test/12.mp3\"]"],
+      ["axe", "color-contrast", "a[href=\"https://pod.rowan.test/12\"]"],
+      ["axe", "color-contrast", "cite > a"],
+      [
+        "axe",
+        "color-contrast",
+        "figure[data-media-asset=\"custom-item-image\"] > .pf-media-box[data-media-state=\"unavailable\"][data-media-reason=\"processing\"] > .pf-media-box__label"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "figure[data-media-asset=\"gallery-photo\"] > .pf-media-box[data-media-state=\"unavailable\"][data-media-reason=\"processing\"] > .pf-media-box__label"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "figure[data-media-asset=\"gallery-photo\"] > figcaption > .hc-cap > .hc-cap__words"
+      ],
+      ["axe", "color-contrast", "figure[data-media-asset=\"gallery-photo\"] > figcaption > small"],
+      [
+        "axe",
+        "color-contrast",
+        "figure[data-media-asset=\"release-cover\"] > .pf-media-box[data-media-state=\"unavailable\"][data-media-reason=\"processing\"] > .pf-media-box__label"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "figure[data-media-asset=\"release-cover\"] > figcaption > .hc-cap > .hc-cap__words > strong"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "figure[data-media-asset=\"release-cover\"] > figcaption > .hc-cap > span:nth-child(2)"
+      ],
+      ["axe", "color-contrast", "h3 > span[data-type-role=\"label\"]"],
+      ["axe", "color-contrast", "h5 > span[data-type-role=\"title\"] > a"],
+      ["axe", "color-contrast", "li > .hc-practice__description[data-type-role=\"body-compact\"]"],
+      ["axe", "color-contrast", "li > .hc-work__body.pf-rich-text > p"],
+      ["axe", "color-contrast", "li > .hc-work__title > span[data-type-role=\"title\"]"],
+      [
+        "axe",
+        "color-contrast",
+        "li:nth-child(1) > .hc-timeline-figure__bars > li > a[data-type-role=\"caption\"] > .hc-timeline-figure__label > .hc-timeline-figure__title"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "li:nth-child(1) > .hc-timeline-figure__thread[data-type-role=\"label\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "li:nth-child(2) > .hc-timeline-figure__bars > li:nth-child(1) > a[data-type-role=\"caption\"] > .hc-timeline-figure__label > .hc-timeline-figure__title"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "li:nth-child(2) > .hc-timeline-figure__thread[data-type-role=\"label\"]"
+      ],
+      [
+        "axe",
+        "color-contrast",
+        "li:nth-child(3) > .hc-timeline-figure__thread[data-type-role=\"label\"]"
+      ],
+      ["axe", "color-contrast", "span[data-type-role=\"display\"]"],
+      ["axe", "color-contrast", "span[data-type-role=\"title\"] > a[href$=\"tide\"]"],
+      ["axe", "color-contrast", "time[datetime=\"2022-10\"]"],
+      ["axe", "color-contrast", "time[datetime=\"2024-02-03\"]"],
+      ["axe", "color-contrast", "time[datetime=\"2025-08-30\"]"],
+      ["axe", "color-contrast", "time[datetime=\"2026-02-01\"]"],
+      ["axe", "color-contrast", "time[datetime=\"2026-09\"]"],
+      ["contrast", "text", ".hc-scrub__status"],
+      ["focus", "contrast", "#chapter-epilogue > div:nth-child(4) > a:nth-child(2)"],
+      ["focus", "contrast", "#chapter-origins > div:nth-child(4) > a:nth-child(2)"],
+      ["focus", "contrast", "#main > div:nth-child(1) > div:nth-child(2) > div:nth-child(1)"],
+      [
+        "focus",
+        "contrast",
+        "#quote > figure:nth-child(2) > figcaption:nth-child(2) > cite:nth-child(1) > a:nth-child(1)"
+      ],
+      ["focus", "contrast", "#scene-15 > div:nth-child(4) > a:nth-child(2)"],
+      ["focus", "contrast", "#scene-21 > div:nth-child(4) > a:nth-child(2)"],
+      [
+        "focus",
+        "contrast",
+        "html > body:nth-child(2) > div:nth-child(2) > div:nth-child(2) > header:nth-child(2) > nav:nth-child(2) > span:nth-child(1) > a:nth-child(1)"
+      ],
+      [
+        "focus",
+        "contrast",
+        "html > body:nth-child(2) > div:nth-child(2) > div:nth-child(2) > header:nth-child(2) > nav:nth-child(2) > span:nth-child(1) > a:nth-child(2)"
+      ],
+      ["focus", "perimeter", "#chapter-craft > div:nth-child(4) > a:nth-child(2)"],
+      [
+        "focus",
+        "perimeter",
+        "#chapter-epilogue > div:nth-child(3) > nav:nth-child(3) > ol:nth-child(2) > li:nth-child(1) > a:nth-child(1)"
+      ],
+      [
+        "focus",
+        "perimeter",
+        "#chapter-epilogue > div:nth-child(3) > nav:nth-child(3) > ol:nth-child(2) > li:nth-child(2) > a:nth-child(1)"
+      ],
+      [
+        "focus",
+        "perimeter",
+        "#chapter-epilogue > div:nth-child(3) > nav:nth-child(3) > ol:nth-child(2) > li:nth-child(3) > a:nth-child(1)"
+      ],
+      ["focus", "perimeter", "#chapter-journey > div:nth-child(4) > a:nth-child(2)"],
+      [
+        "focus",
+        "perimeter",
+        "#chapter-origins > div:nth-child(3) > nav:nth-child(4) > ol:nth-child(2) > li:nth-child(1) > a:nth-child(1)"
+      ],
+      [
+        "focus",
+        "perimeter",
+        "#chapter-origins > div:nth-child(3) > nav:nth-child(4) > ol:nth-child(2) > li:nth-child(2) > a:nth-child(1)"
+      ],
+      ["focus", "perimeter", "#scene-10 > div:nth-child(4) > a:nth-child(2)"],
+      ["focus", "perimeter", "#scene-11 > div:nth-child(4) > a:nth-child(2)"],
+      ["focus", "perimeter", "#scene-12 > div:nth-child(4) > a:nth-child(2)"],
+      ["focus", "perimeter", "#scene-14 > div:nth-child(4) > a:nth-child(2)"],
+      ["focus", "perimeter", "#scene-16 > div:nth-child(4) > a:nth-child(2)"],
+      ["focus", "perimeter", "#scene-17 > div:nth-child(4) > a:nth-child(2)"],
+      ["focus", "perimeter", "#scene-19 > div:nth-child(4) > a:nth-child(2)"],
+      ["focus", "perimeter", "#scene-2 > div:nth-child(4) > a:nth-child(2)"],
+      ["focus", "perimeter", "#scene-20 > div:nth-child(4) > a:nth-child(2)"],
+      ["focus", "perimeter", "#scene-3 > div:nth-child(4) > a:nth-child(2)"],
+      ["focus", "perimeter", "#scene-5 > div:nth-child(4) > a:nth-child(2)"],
+      ["focus", "perimeter", "#scene-6 > div:nth-child(4) > a:nth-child(2)"],
+      ["focus", "perimeter", "#scene-8 > div:nth-child(4) > a:nth-child(2)"],
+      ["focus", "perimeter", "#scene-9 > div:nth-child(4) > a:nth-child(2)"]
+    ],
+    "390x844": [
+      ["focus", "contrast", "#scene-15 > details:nth-child(3) > summary:nth-child(1)"],
+      ["focus", "contrast", "#scene-5 > details:nth-child(3) > summary:nth-child(1)"],
+      ["focus", "contrast", "#scene-6 > details:nth-child(3) > summary:nth-child(1)"],
+      ["focus", "visible", "#main > div:nth-child(1) > div:nth-child(2) > div:nth-child(1)"],
+      [
+        "keyboard",
+        "containment",
+        "#main > div:nth-child(1) > div:nth-child(1) > button:nth-child(1)"
+      ]
+    ]
+  }
+}

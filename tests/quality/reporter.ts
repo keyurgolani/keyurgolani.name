@@ -24,7 +24,12 @@ import { runShard } from './lib/env';
 import { writeCellFailures, type CellFailure } from './lib/failure-records';
 import { RECORDS_ATTACHMENT } from './lib/records';
 import { failureOf } from '../../ci/release/release-records.mjs';
-import { CHECKS_ANNOTATION, KIND_ANNOTATION } from './lib/checks';
+import {
+  CHECKS_ANNOTATION,
+  KIND_ANNOTATION,
+  OWED_ANNOTATION,
+  SOFT_FAILURES_ANNOTATION,
+} from './lib/checks';
 
 // Playwright colors its messages; summaries and records hold plain text.
 const ANSI = /\u001b\[[0-9;]*m/g;
@@ -65,6 +70,14 @@ export interface SummaryTest {
    * list is matched on these (ci/release/release-records.mjs). Empty for a test that didn't fail.
    */
   readonly failures?: readonly SummaryFailure[];
+  /**
+   * How many of runCell's soft expectations failed (SOFT_FAILURES_ANNOTATION): each stands on
+   * records, so an error beyond them is something no record names (a fixture's throw, egress, a
+   * timeout). Absent when runCell didn't reach them.
+   */
+  readonly softFailures?: number;
+  /** The checks the cell test owed (OWED_ANNOTATION), which a covered test must have run. */
+  readonly owed?: readonly string[];
   readonly vitals?: unknown;
   /** A perf test's perf.json: its loads, deterministic findings, and timing medians (#11, 11-3). */
   readonly perf?: unknown;
@@ -97,6 +110,28 @@ function annotation(test: TestCase, type: string): string | undefined {
 }
 
 /** A JSON attachment of the test's last result, from its body or its file. */
+/** Every attachment named `name` of the test's last result, each parsed; one that won't parse is skipped. */
+function attachments(test: TestCase, name: string): unknown[] {
+  return (test.results.at(-1)?.attachments ?? [])
+    .filter((each) => each.name === name)
+    .flatMap((found) => {
+      try {
+        return [
+          JSON.parse(found.body ? found.body.toString('utf8') : readFileSync(found.path!, 'utf8')),
+        ];
+      } catch {
+        return [];
+      }
+    });
+}
+
+/** Every failure record the test attached: runCell's, and an egress fixture's, each its own attachment. */
+export function testRecords(test: TestCase): CellFailure[] {
+  return attachments(test, RECORDS_ATTACHMENT).flatMap((each) =>
+    Array.isArray(each) ? (each as CellFailure[]) : [],
+  );
+}
+
 function attachment(test: TestCase, name: string): unknown {
   const found = test.results.at(-1)?.attachments.find((each) => each.name === name);
   if (!found) return undefined;
@@ -127,7 +162,9 @@ export default class QualityReporter implements Reporter {
       const last = test.results.at(-1);
       const status = last?.status ?? 'not run';
       const skipped = test.outcome() === 'skipped';
-      const records = (attachment(test, RECORDS_ATTACHMENT) as CellFailure[] | undefined) ?? [];
+      const records = testRecords(test);
+      const soft = annotation(test, SOFT_FAILURES_ANNOTATION);
+      const owed = annotation(test, OWED_ANNOTATION);
       return {
         title: test.titlePath().slice(3).join(' > ') || test.title,
         file: path.relative(REPO_ROOT, test.location.file),
@@ -156,6 +193,8 @@ export default class QualityReporter implements Reporter {
                 .filter((record) => record.exceptionId === undefined)
                 .map((record) => failureOf(record) as SummaryFailure)
             : [],
+        ...(soft !== undefined && /^\d+$/.test(soft) ? { softFailures: Number(soft) } : {}),
+        ...(owed !== undefined ? { owed: owed.split(' ').filter(Boolean) } : {}),
         vitals: attachment(test, 'vitals.json'),
         perf: attachment(test, 'perf.json'),
       };
@@ -201,7 +240,7 @@ export async function writeTestRecords(
     const artifacts = (last?.attachments ?? [])
       .filter((each) => each.path)
       .map((each) => path.relative(reportsDir(), each.path!));
-    const records = (attachment(test, RECORDS_ATTACHMENT) as CellFailure[] | undefined) ?? [];
+    const records = testRecords(test);
     const reproCommand = `${gate.reproCommand} ${file}:${test.location.line}`;
     // What an exception waived, whatever the outcome; what failed, for a test that failed. A
     // test that passed (or passed on a retry) failed nothing.

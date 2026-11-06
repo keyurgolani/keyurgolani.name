@@ -1,0 +1,2611 @@
+{
+  "note": "GET runs/42161399250/jobs?filter=latest, main push run on 1dc6bf162, trimmed to the fields rc-verify reads",
+  "jobs": [
+    {
+      "name": "changes",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:15:17Z",
+      "completed_at": "2026-11-06T04:15:24Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Select jobs",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "trace",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:15:26Z",
+      "completed_at": "2026-11-06T04:48:48Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:budgets",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload traces",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "unit (3/3)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:15:25Z",
+      "completed_at": "2026-11-06T04:25:55Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm test:shard unit 3/3",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "static",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:15:26Z",
+      "completed_at": "2026-11-06T04:22:01Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install workflow linters",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:format",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:lint",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:typecheck",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:skills",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:registry",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:appearance",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:deps",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:pins",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:workflows",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "browser (2/2)",
+      "status": "completed",
+      "conclusion": "cancelled",
+      "started_at": "2026-11-06T04:15:48Z",
+      "completed_at": "2026-11-06T04:35:56Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "Restore the Next build cache",
+          "conclusion": "success"
+        },
+        {
+          "name": "Next build cache hit",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "pnpm ci:build",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm test:shard browser 2/2",
+          "conclusion": "cancelled"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "unit (2/3)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:15:26Z",
+      "completed_at": "2026-11-06T04:24:42Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm test:shard unit 2/3",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "image",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:15:26Z",
+      "completed_at": "2026-11-06T04:18:38Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:image",
+          "conclusion": "success"
+        },
+        {
+          "name": "Save the image for profiles",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload the image for profiles",
+          "conclusion": "success"
+        },
+        {
+          "name": "Mark the image saved",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:proxy",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:security-proxy",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:demo-origin",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "quality-pr-plan",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:15:26Z",
+      "completed_at": "2026-11-06T04:15:45Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "The quality host's registry",
+          "conclusion": "success"
+        },
+        {
+          "name": "Count the shards",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "appearance-browser",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:15:26Z",
+      "completed_at": "2026-11-06T04:18:58Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:appearance-browser",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "browser (1/2)",
+      "status": "completed",
+      "conclusion": "cancelled",
+      "started_at": "2026-11-06T04:15:26Z",
+      "completed_at": "2026-11-06T04:35:30Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "Restore the Next build cache",
+          "conclusion": "success"
+        },
+        {
+          "name": "Next build cache hit",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "pnpm ci:build",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm test:shard browser 1/2",
+          "conclusion": "failure"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "quality-meta",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:15:26Z",
+      "completed_at": "2026-11-06T04:24:55Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:quality-meta",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "external-variant",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:15:26Z",
+      "completed_at": "2026-11-06T04:20:24Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:external-variant",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "build",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:18:05Z",
+      "completed_at": "2026-11-06T04:19:08Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "Restore the Next build cache",
+          "conclusion": "success"
+        },
+        {
+          "name": "Next build cache hit",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "pnpm ci:build",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:source-maps",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:standalone",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:markdown-pass",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:catalog-build",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:studio-chunks",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Restore the Next build cache",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "preview-fixtures-browser",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:16:35Z",
+      "completed_at": "2026-11-06T04:18:52Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:preview-fixtures-browser",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "fresh-clone",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:15:26Z",
+      "completed_at": "2026-11-06T04:18:56Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Enable pnpm",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:fresh-clone",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "routes",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:18:39Z",
+      "completed_at": "2026-11-06T04:21:22Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:routes",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "unit (1/3)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:19:10Z",
+      "completed_at": "2026-11-06T04:25:44Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm test:shard unit 1/3",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "docs",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:18:58Z",
+      "completed_at": "2026-11-06T04:19:09Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:docs",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "variants (2/4)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:15:26Z",
+      "completed_at": "2026-11-06T04:32:53Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "Restore the Next build cache",
+          "conclusion": "success"
+        },
+        {
+          "name": "Next build cache hit",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "pnpm ci:build",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm test:shard variants 2/4",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:pack-distinct-schemes",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "pnpm ci:pack-distinct-type",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload screenshots",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "variants (4/4)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:15:26Z",
+      "completed_at": "2026-11-06T04:28:53Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "Restore the Next build cache",
+          "conclusion": "success"
+        },
+        {
+          "name": "Next build cache hit",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "pnpm ci:build",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm test:shard variants 4/4",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:pack-distinct-schemes",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "pnpm ci:pack-distinct-type",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload screenshots",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "variants (3/4)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:15:26Z",
+      "completed_at": "2026-11-06T04:28:29Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "Restore the Next build cache",
+          "conclusion": "success"
+        },
+        {
+          "name": "Next build cache hit",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "pnpm ci:build",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm test:shard variants 3/4",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:pack-distinct-schemes",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "pnpm ci:pack-distinct-type",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload screenshots",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "check-variants",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:17:54Z",
+      "completed_at": "2026-11-06T04:18:22Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:check-variants",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "variants (1/4)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:18:59Z",
+      "completed_at": "2026-11-06T04:31:37Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "Restore the Next build cache",
+          "conclusion": "success"
+        },
+        {
+          "name": "Next build cache hit",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "pnpm ci:build",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm test:shard variants 1/4",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:pack-distinct-schemes",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:pack-distinct-type",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload screenshots",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "quality-pr (5/15)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:22:02Z",
+      "completed_at": "2026-11-06T04:28:45Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:quality-pr --shard=5/15",
+          "conclusion": "success"
+        },
+        {
+          "name": "Scrub reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "quality-pr (11/15)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:46:44Z",
+      "completed_at": "2026-11-06T04:53:58Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:quality-pr --shard=11/15",
+          "conclusion": "success"
+        },
+        {
+          "name": "Scrub reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "quality-pr (8/15)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:20:29Z",
+      "completed_at": "2026-11-06T04:30:10Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:quality-pr --shard=8/15",
+          "conclusion": "success"
+        },
+        {
+          "name": "Scrub reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "quality-pr (4/15)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:20:26Z",
+      "completed_at": "2026-11-06T04:30:33Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:quality-pr --shard=4/15",
+          "conclusion": "success"
+        },
+        {
+          "name": "Scrub reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "quality-pr (15/15)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T05:01:44Z",
+      "completed_at": "2026-11-06T05:13:23Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:quality-pr --shard=15/15",
+          "conclusion": "success"
+        },
+        {
+          "name": "Scrub reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "quality-pr (14/15)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:59:28Z",
+      "completed_at": "2026-11-06T05:04:43Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:quality-pr --shard=14/15",
+          "conclusion": "success"
+        },
+        {
+          "name": "Scrub reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "quality-pr (13/15)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:53:59Z",
+      "completed_at": "2026-11-06T05:00:55Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:quality-pr --shard=13/15",
+          "conclusion": "success"
+        },
+        {
+          "name": "Scrub reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "quality-pr (6/15)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:25:45Z",
+      "completed_at": "2026-11-06T04:35:05Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:quality-pr --shard=6/15",
+          "conclusion": "success"
+        },
+        {
+          "name": "Scrub reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "quality-pr (1/15)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:30:34Z",
+      "completed_at": "2026-11-06T04:41:52Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:quality-pr --shard=1/15",
+          "conclusion": "success"
+        },
+        {
+          "name": "Scrub reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "quality-pr (12/15)",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-11-06T04:48:54Z",
+      "completed_at": "2026-11-06T04:59:26Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:quality-pr --shard=12/15",
+          "conclusion": "failure"
+        },
+        {
+          "name": "Scrub reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "quality-pr (10/15)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:28:31Z",
+      "completed_at": "2026-11-06T04:36:10Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:quality-pr --shard=10/15",
+          "conclusion": "success"
+        },
+        {
+          "name": "Scrub reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "quality-pr (7/15)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:31:01Z",
+      "completed_at": "2026-11-06T04:43:13Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:quality-pr --shard=7/15",
+          "conclusion": "success"
+        },
+        {
+          "name": "Scrub reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "quality-pr (9/15)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:32:46Z",
+      "completed_at": "2026-11-06T04:40:19Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:quality-pr --shard=9/15",
+          "conclusion": "success"
+        },
+        {
+          "name": "Scrub reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "quality-pr (2/15)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:31:39Z",
+      "completed_at": "2026-11-06T04:39:44Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:quality-pr --shard=2/15",
+          "conclusion": "success"
+        },
+        {
+          "name": "Scrub reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "quality-pr (3/15)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:24:56Z",
+      "completed_at": "2026-11-06T04:31:00Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:quality-pr --shard=3/15",
+          "conclusion": "success"
+        },
+        {
+          "name": "Scrub reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "rehearsal",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:37:12Z",
+      "completed_at": "2026-11-06T04:40:02Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "Download the image",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:rehearsal",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "profiles",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-06T04:40:21Z",
+      "completed_at": "2026-11-06T04:42:04Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm store cache hit",
+          "conclusion": "success"
+        },
+        {
+          "name": "Download the image",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:profiles",
+          "conclusion": "success"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "quality-pr-verdict",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-11-06T05:24:29Z",
+      "completed_at": "2026-11-06T05:25:09Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Download the shards' reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "pnpm ci:quality-pr-verdict",
+          "conclusion": "failure"
+        },
+        {
+          "name": "Failure summary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload reports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Install",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "gate",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-11-06T05:48:01Z",
+      "completed_at": "2026-11-06T05:48:06Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Require a complete run where every needed job succeeded",
+          "conclusion": "failure"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "selected",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-11-06T05:48:08Z",
+      "completed_at": "2026-11-06T05:48:15Z",
+      "run_attempt": 1,
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Require every selected job to succeed",
+          "conclusion": "failure"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "publish-build (${{ matrix.arch }})",
+      "status": "completed",
+      "conclusion": "skipped",
+      "started_at": "2026-11-06T05:48:07Z",
+      "completed_at": "2026-11-06T05:48:07Z",
+      "run_attempt": 1,
+      "steps": []
+    },
+    {
+      "name": "publish-merge",
+      "status": "completed",
+      "conclusion": "skipped",
+      "started_at": "2026-11-06T05:48:07Z",
+      "completed_at": "2026-11-06T05:48:07Z",
+      "run_attempt": 1,
+      "steps": []
+    },
+    {
+      "name": "publish-smoke (${{ matrix.arch }})",
+      "status": "completed",
+      "conclusion": "skipped",
+      "started_at": "2026-11-06T05:48:07Z",
+      "completed_at": "2026-11-06T05:48:07Z",
+      "run_attempt": 1,
+      "steps": []
+    },
+    {
+      "name": "publish",
+      "status": "completed",
+      "conclusion": "skipped",
+      "started_at": "2026-11-06T05:48:07Z",
+      "completed_at": "2026-11-06T05:48:07Z",
+      "run_attempt": 1,
+      "steps": []
+    }
+  ]
+}

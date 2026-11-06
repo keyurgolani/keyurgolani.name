@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { parseReleaseTag } from './tags.mjs';
 
 export const SCOPE_FILE = 'quality/release/scope.json';
+export const RECORDS_FILE = 'records.json';
 
 /** Why `scope` (the parsed file) isn't `tag`'s, or null when it is. */
 export function scopeMismatch(tag, scope) {
@@ -42,14 +43,17 @@ export function finalScopeRefusal(scope, records) {
     );
   return problems.length === 0
     ? null
-    : `${SCOPE_FILE} keeps the candidate from a final release: ${problems.join(', and ')}. A final needs the full matrix clean: scope full and an empty list, then a new candidate`;
+    : `${SCOPE_FILE} keeps the candidate from a final release: ${problems.join(', and ')}. A final needs the full matrix clean: scope full and an empty list, then a new candidate. The full matrix fits the release's 256-shard matrix only once RC2's sizing item (per-test cost, then splitting the release matrix across jobs) lands, so v1.0.0 waits on it`;
 }
 
 /** The scope file and its records list at `root`, parsed; throws when either can't be read. */
 export function readScope(root) {
   const scope = JSON.parse(readFileSync(path.join(root, SCOPE_FILE), 'utf8'));
+  // One records list, beside the scope file by one name, as rc-quality's loader finds it.
+  if (scope?.records !== RECORDS_FILE)
+    throw new Error(`${SCOPE_FILE} names ${JSON.stringify(scope?.records)}, not ${RECORDS_FILE}`);
   const records = JSON.parse(
-    readFileSync(path.join(root, path.dirname(SCOPE_FILE), String(scope.records)), 'utf8'),
+    readFileSync(path.join(root, path.dirname(SCOPE_FILE), RECORDS_FILE), 'utf8'),
   );
   return { scope, records };
 }

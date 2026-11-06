@@ -51,43 +51,55 @@ export function zipEntry(zip, name, { maxBytes = 64 * 1024 * 1024 } = {}) {
   const start = u32(eocd + 16);
   if (count === 0xffff || size === 0xffffffff || start === 0xffffffff) fail('a ZIP64 archive');
   if (start + size > eocd) fail('the central directory runs past its end record');
+  // The whole directory first: every entry's name, once. A name twice is refused, so no reader
+  // can be handed one copy while another reads the other.
   let at = start;
+  let found = null;
+  const names = new Set();
   for (let entry = 0; entry < count; entry += 1) {
     if (u32(at) !== CENTRAL) fail(`central entry ${entry + 1} has no signature`);
-    const flags = u16(at + 8);
-    const method = u16(at + 10);
-    const crc = u32(at + 16);
-    const packed = u32(at + 20);
-    const unpacked = u32(at + 24);
     const nameLength = u16(at + 28);
     const extra = u16(at + 30);
     const comment = u16(at + 32);
-    const local = u32(at + 42);
     if (at + 46 + nameLength > zip.length)
       fail(`central entry ${entry + 1}'s name runs past the end`);
     const entryName = zip.toString('utf8', at + 46, at + 46 + nameLength);
+    if (names.has(entryName)) fail(`${entryName} is in the archive twice`);
+    names.add(entryName);
+    if (entryName === name) {
+      found = {
+        flags: u16(at + 8),
+        method: u16(at + 10),
+        crc: u32(at + 16),
+        packed: u32(at + 20),
+        unpacked: u32(at + 24),
+        local: u32(at + 42),
+      };
+    }
     at += 46 + nameLength + extra + comment;
-    if (entryName !== name) continue;
-    if (flags & 0x1) fail(`${name} is encrypted`);
-    if (packed === 0xffffffff || unpacked === 0xffffffff) fail(`${name} is a ZIP64 entry`);
-    if (unpacked > maxBytes) fail(`${name} is ${unpacked} bytes, over ${maxBytes}`);
-    if (u32(local) !== LOCAL) fail(`${name}'s local header has no signature`);
-    const data = local + 30 + u16(local + 26) + u16(local + 28);
-    if (data + packed > zip.length) fail(`${name}'s data runs past the end`);
-    const raw = zip.subarray(data, data + packed);
-    let bytes;
-    if (method === 0) bytes = Buffer.from(raw);
-    else if (method === 8) {
-      try {
-        bytes = zlib.inflateRawSync(raw, { maxOutputLength: maxBytes });
-      } catch (error) {
-        fail(`${name} doesn't inflate: ${error.message}`);
-      }
-    } else fail(`${name} uses compression method ${method}`);
-    if (bytes.length !== unpacked)
-      fail(`${name} inflates to ${bytes.length} bytes, not ${unpacked}`);
-    if (crc32(bytes) !== crc) fail(`${name}'s CRC-32 doesn't match`);
-    return bytes;
   }
-  return null;
+  if (at > start + size) fail('the central directory runs past its stated size');
+  if (found === null) return null;
+  const { flags, method, crc, packed, unpacked, local } = found;
+  if (flags & 0x1) fail(`${name} is encrypted`);
+  if (packed === 0xffffffff || unpacked === 0xffffffff) fail(`${name} is a ZIP64 entry`);
+  if (unpacked > maxBytes) fail(`${name} is ${unpacked} bytes, over ${maxBytes}`);
+  if (u32(local) !== LOCAL) fail(`${name}'s local header has no signature`);
+  // The sizes come from the central directory: an entry written with bit 3 set (as
+  // upload-artifact's are) leaves the local header's sizes and CRC zero.
+  const data = local + 30 + u16(local + 26) + u16(local + 28);
+  if (data + packed > zip.length) fail(`${name}'s data runs past the end`);
+  const raw = zip.subarray(data, data + packed);
+  let bytes;
+  if (method === 0) bytes = Buffer.from(raw);
+  else if (method === 8) {
+    try {
+      bytes = zlib.inflateRawSync(raw, { maxOutputLength: maxBytes });
+    } catch (error) {
+      fail(`${name} doesn't inflate: ${error.message}`);
+    }
+  } else fail(`${name} uses compression method ${method}`);
+  if (bytes.length !== unpacked) fail(`${name} inflates to ${bytes.length} bytes, not ${unpacked}`);
+  if (crc32(bytes) !== crc) fail(`${name}'s CRC-32 doesn't match`);
+  return bytes;
 }
