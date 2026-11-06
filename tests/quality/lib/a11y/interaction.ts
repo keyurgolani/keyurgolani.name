@@ -11,7 +11,10 @@
 //   FRAME_PRESSES presses inside it), with no ring measured there,
 //   and each stop is shown in the viewport while it has focus
 //   (hidden-focusable), so the skip link passes and a pixel-clipped link
-//   fails.
+//   fails. On a page without script, each stop is read once the scroll,
+//   the page's and its scrollers', holds still after Tab (scriptlessSettle()),
+//   so a smooth scroll-into-view still gliding doesn't read as out of view,
+//   and one still moving at SETTLE_LIMIT_MS is unresolved (row 48).
 // - focus: at each stop, the focused clip (4 px around the control) against
 //   the blurred one. Some pixel changes (visible), some by 3:1 (contrast),
 //   and the 3:1 change covers the area of a 2 px ring round the control
@@ -676,6 +679,76 @@ export interface KeyboardOptions {
    * fails at once rather than running on.
    */
   readonly pressCeiling?: number;
+  /**
+   * Where the walk logs, on a page without script, each Tab's settle: every poll of the scroll
+   * and the focused element's box, until the scroll held (scriptlessSettle()). The cell keeps it
+   * as walk-settle.json.
+   */
+  readonly settleLog?: SettleRecord[];
+}
+
+/** How often the walk reads a page without script after a Tab, from here, while it may still scroll. */
+export const SETTLE_POLL_MS = 50;
+/** The reads in a row, that far apart, that must find the scroll unmoved. */
+export const SETTLE_HELD_POLLS = 3;
+/** How long the walk waits for them; a page still moving then leaves the stop unresolved. */
+export const SETTLE_LIMIT_MS = 2_000;
+
+/** One read of a page without script after a Tab: when, the scroll, and the focused element's box. */
+export interface SettlePoll {
+  /** Milliseconds since the Tab. */
+  readonly at: number;
+  /** The page's scroll, then each scrolling ancestor's of the focused element, innermost first: [left, top] each. */
+  readonly scroll: readonly (readonly [number, number])[];
+  /** The focused element's box, for the log: where the scroll has it. */
+  readonly x: number;
+  readonly y: number;
+}
+
+/** One Tab's settle on a page without script, as the walk logs it. */
+export interface SettleRecord {
+  readonly press: number;
+  readonly settled: boolean;
+  readonly polls: readonly SettlePoll[];
+}
+
+/**
+ * Waits, on a page without script, up to `limit` ms after a Tab, until the scroll has read the
+ * same `held` times running, `poll` ms apart: the page's, and that of every ancestor of the
+ * focused element that scrolls, since a smooth scroll-into-view glides a scroller of the page's
+ * own as well as the page, in the compositor, for a few hundred ms after focus, with no script to
+ * wait on. So the walk reads the stop where the scroll comes to rest, never mid-glide (row 48).
+ * Only the scroll counts: a control the page animates in place is read as before. The page runs
+ * no frame or timer callback, so every read is a synchronous evaluate from here, as the walk's
+ * other reads of such a page are, and the waiting is here too, as frames() does. Settled once it
+ * holds; not, with every poll, if it still moves at the limit.
+ */
+export async function scriptlessSettle(
+  page: Page,
+  { poll = SETTLE_POLL_MS, held = SETTLE_HELD_POLLS, limit = SETTLE_LIMIT_MS } = {},
+): Promise<{ readonly settled: boolean; readonly polls: readonly SettlePoll[] }> {
+  const start = Date.now();
+  const polls: SettlePoll[] = [];
+  let same = 0;
+  for (;;) {
+    const read = await page.evaluate(() => {
+      const focused = document.activeElement;
+      const scroll: [number, number][] = [];
+      for (let at = focused?.parentElement ?? null; at; at = at.parentElement) {
+        if (at.scrollWidth > at.clientWidth || at.scrollHeight > at.clientHeight)
+          scroll.push([at.scrollLeft, at.scrollTop]);
+      }
+      const box =
+        focused && focused !== document.body ? focused.getBoundingClientRect() : { x: 0, y: 0 };
+      return { scroll: [[scrollX, scrollY] as [number, number], ...scroll], x: box.x, y: box.y };
+    });
+    const last = polls.at(-1);
+    polls.push({ at: Date.now() - start, ...read });
+    same = last && JSON.stringify(last.scroll) === JSON.stringify(read.scroll) ? same + 1 : 0;
+    if (same >= held - 1) return { settled: true, polls };
+    if (Date.now() - start >= limit) return { settled: false, polls };
+    await page.waitForTimeout(poll);
+  }
 }
 
 /** A pixel channel that moves more than this when the layers go is the layers' doing. */
@@ -751,6 +824,8 @@ export async function keyboardFindings(
       document.head.append(style);
     });
   }
+  // A page without script scrolls focus into view with no script to wait on (scriptlessSettle()).
+  const scriptless = await page.evaluate(() => matchMedia('(scripting: none)').matches);
   const stops: Active[] = [];
   let ended = false;
   // Presses inside a frame on a framed page, which don't count against the page's own.
@@ -768,6 +843,9 @@ export async function keyboardFindings(
       break;
     }
     await page.keyboard.press('Tab');
+    // On a page without script, where focus comes to rest: a smooth scroll-into-view glides on.
+    const settle = scriptless ? await scriptlessSettle(page) : null;
+    if (settle) options.settleLog?.push({ press, ...settle });
     // Frames for what focus scrolls to, and for what that scroll shows, such as a footer.
     if (options.occlusion) await frames(page, 50);
     const active = await inPage<Active>(page, { kind: 'active' });
@@ -806,6 +884,16 @@ export async function keyboardFindings(
       break;
     }
     stops.push(active);
+    if (settle && !settle.settled) {
+      findings.push({
+        gate: 'keyboard',
+        rule: 'hidden-focusable',
+        path: active.path,
+        expected: 'shown in the viewport while it has focus, once the page comes to rest',
+        actual: `unresolved: the page still scrolls ${SETTLE_LIMIT_MS} ms after Tab, so where it rests is unknown`,
+      });
+      continue;
+    }
     if (!active.shown || !active.inView) {
       findings.push({
         gate: 'keyboard',

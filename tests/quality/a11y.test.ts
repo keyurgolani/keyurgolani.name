@@ -46,6 +46,10 @@ import {
   ringFindings,
   ringLength,
   roundedRingLength,
+  scriptlessSettle,
+  SETTLE_HELD_POLLS,
+  SETTLE_LIMIT_MS,
+  SETTLE_POLL_MS,
 } from './lib/a11y/interaction';
 import { animationFindings, killSwitches } from './lib/a11y/motion';
 import { requiredChecks } from './lib/checks';
@@ -1273,5 +1277,68 @@ test("a batch's shots are cut from one shot of its boxes on whole pixels, each w
     skewed.asked.length,
     1 + 1 + boxes.length - 1,
     'its first check fails, and every box is shot on its own',
+  );
+});
+
+/**
+ * A page without script, as scriptlessSettle() reads it: each read the next of `scrolls`, the last
+ * one for good, or, given a function, its value at that read.
+ */
+function scrolling(scrolls: readonly number[] | ((read: number) => number)) {
+  let read = 0;
+  const waits: number[] = [];
+  const page = {
+    evaluate: async () => {
+      const left =
+        typeof scrolls === 'function'
+          ? scrolls(read)
+          : scrolls[Math.min(read, scrolls.length - 1)]!;
+      read += 1;
+      return {
+        scroll: [
+          [0, 0],
+          [left, 0],
+        ],
+        x: 7000 - left,
+        y: 160,
+      };
+    },
+    waitForTimeout: async (ms: number) => {
+      waits.push(ms);
+    },
+  };
+  return {
+    page: page as unknown as Parameters<typeof scriptlessSettle>[0],
+    waits,
+    reads: () => read,
+  };
+}
+
+test("without script, the walk reads a stop once the scroll, the page's and its scrollers', holds for three polls, and a glide still going at the limit is unsettled (row 48)", async () => {
+  assert.deepEqual([SETTLE_POLL_MS, SETTLE_HELD_POLLS, SETTLE_LIMIT_MS], [50, 3, 2_000]);
+  // A glide: it moves, then holds; settled on the third read in a row that's the same.
+  const glide = scrolling([0, 22, 99, 293, 622, 709, 709, 709, 709]);
+  const settled = await scriptlessSettle(glide.page);
+  assert.equal(settled.settled, true);
+  assert.deepEqual(
+    settled.polls.map((poll) => poll.scroll[1]![0]),
+    [0, 22, 99, 293, 622, 709, 709, 709],
+  );
+  assert.ok(glide.waits.every((ms) => ms === SETTLE_POLL_MS));
+  // Still from the first read: three reads, two waits.
+  const still = scrolling([0]);
+  assert.equal((await scriptlessSettle(still.page)).polls.length, 3);
+  assert.deepEqual(still.waits, [SETTLE_POLL_MS, SETTLE_POLL_MS]);
+  // A scroll that never holds is unsettled at the limit, with every poll it read.
+  const endless = scrolling((read) => read);
+  const over = await scriptlessSettle(endless.page, { limit: 30 });
+  assert.equal(over.settled, false);
+  assert.equal(over.polls.length, endless.reads());
+  // Two reads the same then a move start the count over.
+  const restart = scrolling([5, 5, 6, 6, 6]);
+  const again = await scriptlessSettle(restart.page);
+  assert.deepEqual(
+    again.polls.map((poll) => poll.scroll[1]![0]),
+    [5, 5, 6, 6, 6],
   );
 });
