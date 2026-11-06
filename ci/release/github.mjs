@@ -1,5 +1,6 @@
 // A small GitHub REST client for the release checks: GET only, with the
-// job's own token (contents: read, actions: read). The checks' decisions are
+// job's own token (contents: read, actions: read), JSON or, for an artifact,
+// bytes. The checks' decisions are
 // pure functions over what it returns, tested on fixture responses
 // (ci/release/fixtures/), so nothing here is called by a test.
 //
@@ -24,6 +25,33 @@ export async function githubGet(route, { token = process.env.GITHUB_TOKEN, missi
   if (response.status === 404 && missing === null) return null;
   if (!response.ok) throw new Error(`GET ${route} answered HTTP ${response.status}`);
   return response.json();
+}
+
+/**
+ * GET `route` and read its body as bytes, following GitHub's redirect to its storage (fetch drops
+ * the token on a redirect to another origin). Throws past `maxBytes`, whatever the length header says.
+ */
+export async function githubGetBytes(route, { token = process.env.GITHUB_TOKEN, maxBytes } = {}) {
+  if (!token) throw new Error('GITHUB_TOKEN is not set');
+  if (!(maxBytes > 0)) throw new Error('githubGetBytes needs a maxBytes');
+  const response = await fetch(`${API}${route}`, {
+    headers: {
+      accept: 'application/vnd.github+json',
+      authorization: `Bearer ${token}`,
+      'x-github-api-version': '2022-11-28',
+    },
+    redirect: 'follow',
+    signal: AbortSignal.timeout(120_000),
+  });
+  if (!response.ok) throw new Error(`GET ${route} answered HTTP ${response.status}`);
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of response.body) {
+    size += chunk.length;
+    if (size > maxBytes) throw new Error(`GET ${route} is over ${maxBytes} bytes`);
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
 }
 
 /** The repository the job runs in, as [owner, repo], from GITHUB_REPOSITORY. */

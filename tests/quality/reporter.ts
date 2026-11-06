@@ -23,6 +23,7 @@ import { currentGate, REPO_ROOT, reportsDir, writeFailureRecord } from '../../ci
 import { runShard } from './lib/env';
 import { writeCellFailures, type CellFailure } from './lib/failure-records';
 import { RECORDS_ATTACHMENT } from './lib/records';
+import { failureOf } from '../../ci/release/release-records.mjs';
 import { CHECKS_ANNOTATION, KIND_ANNOTATION } from './lib/checks';
 
 // Playwright colors its messages; summaries and records hold plain text.
@@ -58,9 +59,22 @@ export interface SummaryTest {
   readonly canaryProbe: boolean;
   readonly errors: readonly string[];
   readonly records: number;
+  /**
+   * A failed test's failure records that no exception waived, each by what names it alone: its
+   * check, rule, and element (failureTarget), with no measurement. A release candidate's records
+   * list is matched on these (ci/release/release-records.mjs). Empty for a test that didn't fail.
+   */
+  readonly failures?: readonly SummaryFailure[];
   readonly vitals?: unknown;
   /** A perf test's perf.json: its loads, deterministic findings, and timing medians (#11, 11-3). */
   readonly perf?: unknown;
+}
+
+/** A failure record, as a records list names it. */
+export interface SummaryFailure {
+  readonly check: string;
+  readonly rule: string;
+  readonly target: string | null;
 }
 
 export interface Summary {
@@ -136,6 +150,12 @@ export default class QualityReporter implements Reporter {
         canaryProbe: annotation(test, 'quality-canary-probe') !== undefined,
         errors: (last?.errors ?? []).map((error) => plain(error.message ?? error.value)),
         records: records.length,
+        failures:
+          test.outcome() === 'unexpected'
+            ? records
+                .filter((record) => record.exceptionId === undefined)
+                .map((record) => failureOf(record) as SummaryFailure)
+            : [],
         vitals: attachment(test, 'vitals.json'),
         perf: attachment(test, 'perf.json'),
       };

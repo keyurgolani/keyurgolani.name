@@ -11,11 +11,13 @@
 //   typography its sentinel cell renders, the ones quality:pr runs); every other pack, the tier
 //   packs and the fixture packs are out of scope, named unswept in the file.
 //
-// The records list (quality/release/records.json) holds one entry a failing cell test: its cell,
-// viewport, row and engine, as the run's summary names it, its `owner`, and the `routed` row that
-// fixes it ("row 33"). The gate (lib/verdict.ts) fails on a failing cell test the list doesn't
-// name, and on a listed one that ran and passed, since a fixed record leaves the list. A final
-// release keeps the full matrix's rule: scope `full` and an empty list.
+// The records list (quality/release/records.json) holds one entry a failure record: its cell,
+// viewport, row and engine, as the run's summary names its test, the record's check, rule and
+// target element, its `owner`, and the `routed` row that fixes it ("row 33"); the key and its
+// matcher are ci/release/release-records.mjs's, which rc-verify uses too. The gate
+// (lib/verdict.ts) fails on a failure the list doesn't name, and on a listed one that's gone from
+// a test that ran, since a fixed record leaves the list. A final release keeps the full matrix's
+// rule: scope `full` and an empty list.
 //
 // release.yml's and rc-preflight.yml's quality jobs name the file in QUALITY_RELEASE_SCOPE; with
 // no such variable, quality:full plans the whole matrix and the list is empty, as before.
@@ -23,8 +25,8 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { REPO_ROOT } from '../../../ci/lib/reports.mjs';
+import { isRelease, recordsProblems } from '../../../ci/release/release-records.mjs';
 import type { Plan } from '../cells';
-import type { SummaryTest } from '../reporter';
 
 export const SCOPES = ['full', 'default-packs'] as const;
 export type ReleaseScopeKind = (typeof SCOPES)[number];
@@ -39,25 +41,39 @@ export interface ReleaseScope {
   readonly records: string;
 }
 
-/** One failing cell test a candidate ships with. */
+/**
+ * One failure record a candidate ships with: one rule failing on one element in one cell test,
+ * keyed by the record's own fields, its owner and routed row beside (ci/release/release-records.mjs).
+ */
 export interface ListedRecord {
   readonly cell: string;
   readonly viewport: string;
   readonly row: string;
   readonly engine: string;
+  /** The failure record's check: axe, focus, contrast, and the rest. */
+  readonly check: string;
+  /** The rule within the check that failed, such as color-contrast. */
+  readonly rule: string;
+  /** The element (failureTarget), or null for a record with none. */
+  readonly target: string | null;
   /** Who fixes it: a lane or a person. */
   readonly owner: string;
   /** The routed row that fixes it before the final release: "row <n>", such as row 33 or row 22b. */
   readonly routed: string;
+  /** For readers; never matched. */
+  readonly note?: string;
 }
 
-/** What a printed entry holds for its owner and row until someone fills them: validation refuses both. */
-export const OWNER_PLACEHOLDER = '<owner: the lane or person who fixes it>';
-export const ROUTED_PLACEHOLDER = '<routed: the row that fixes it, as row <n>>';
-
-const RELEASE = /^\d+\.\d+\.\d+(?:-rc\.[1-9]\d*)?$/;
-const OWNER = /^[A-Za-z][A-Za-z0-9 ._-]{0,63}$/;
-const ROUTED = /^row [1-9]\d*[a-z]?$/;
+export {
+  failureTarget,
+  judgeListed,
+  listEntry,
+  OWNER_PLACEHOLDER,
+  recordKey,
+  recordsProblems,
+  ROUTED_PLACEHOLDER,
+  testFailures,
+} from '../../../ci/release/release-records.mjs';
 
 /** The env variable a release job names its scope file in. */
 export const SCOPE_ENV = 'QUALITY_RELEASE_SCOPE';
@@ -67,7 +83,7 @@ export function scopeProblems(scope: unknown): string[] {
   const problems: string[] = [];
   const value = scope as Partial<ReleaseScope> | null;
   if (!value || typeof value !== 'object') return ['the scope file is not an object'];
-  if (typeof value.release !== 'string' || !RELEASE.test(value.release))
+  if (!isRelease(value.release))
     problems.push(`release is ${JSON.stringify(value.release)}, not X.Y.Z or X.Y.Z-rc.N`);
   if (!SCOPES.includes(value.scope as ReleaseScopeKind))
     problems.push(`scope is ${JSON.stringify(value.scope)}, not one of ${SCOPES.join(', ')}`);
@@ -77,50 +93,6 @@ export function scopeProblems(scope: unknown): string[] {
     problems.push('records must name the records list');
   return problems;
 }
-
-/** Why `records` isn't a valid list for `scope`, one problem a line; none when it is. */
-export function recordsProblems(
-  records: unknown,
-  scope: Pick<ReleaseScope, 'release' | 'scope'>,
-): string[] {
-  const problems: string[] = [];
-  if (!Array.isArray(records)) return ['the records list is not an array'];
-  const seen = new Set<string>();
-  records.forEach((entry: Partial<ListedRecord>, at) => {
-    const where = `entry ${at + 1}`;
-    for (const field of ['cell', 'viewport', 'row', 'engine'] as const) {
-      if (typeof entry?.[field] !== 'string' || entry[field]!.trim() === '')
-        problems.push(`${where}: ${field} is missing`);
-    }
-    if (typeof entry?.owner !== 'string' || !OWNER.test(entry.owner))
-      problems.push(`${where}: owner is ${JSON.stringify(entry?.owner)}, not a lane or person`);
-    if (typeof entry?.routed !== 'string' || !ROUTED.test(entry.routed))
-      problems.push(`${where}: routed is ${JSON.stringify(entry?.routed)}, not "row <n>"`);
-    const key = recordKey(entry as ListedRecord);
-    if (seen.has(key)) problems.push(`${where}: listed twice`);
-    seen.add(key);
-  });
-  // A final release keeps the full matrix's rule: every cell, and none failing.
-  if (!scope.release.includes('-rc.')) {
-    if (scope.scope !== 'full')
-      problems.push(`${scope.release} is a final release: its scope must be full`);
-    if (records.length > 0)
-      problems.push(`${scope.release} is a final release: its records list must be empty`);
-  }
-  return problems;
-}
-
-/** A listed record's key, and a summary test's, to match them by. */
-export const recordKey = (each: Pick<ListedRecord, 'cell' | 'viewport' | 'row' | 'engine'>) =>
-  JSON.stringify([each.cell, each.viewport, each.row, each.engine]);
-
-export const testRecordKey = (test: Pick<SummaryTest, 'cell' | 'viewport' | 'row' | 'engine'>) =>
-  recordKey({
-    cell: test.cell ?? '',
-    viewport: test.viewport ?? '',
-    row: test.row ?? '',
-    engine: test.engine ?? '',
-  });
 
 /** A loaded scope file and its list, or why they can't be read: a release job fails on either. */
 export interface LoadedScope {
@@ -177,20 +149,4 @@ export function scopePlan<P extends Pick<Plan, 'cells' | 'tests'>>(
   );
   const ids = new Set(cells.map((cell) => cell.id));
   return { ...plan, cells, tests: plan.tests.filter((test) => ids.has(test.cell.id)) };
-}
-
-/**
- * A ready-to-paste list entry for a failing cell test the list doesn't name: its cell, viewport,
- * row and engine, and placeholders for its owner and routed row, which the list's validation
- * refuses until someone fills them, so an entry pasted as printed fails the gate.
- */
-export function listEntry(test: Pick<SummaryTest, 'cell' | 'viewport' | 'row' | 'engine'>): string {
-  return JSON.stringify({
-    cell: test.cell ?? '',
-    viewport: test.viewport ?? '',
-    row: test.row ?? '',
-    engine: test.engine ?? '',
-    owner: OWNER_PLACEHOLDER,
-    routed: ROUTED_PLACEHOLDER,
-  });
 }

@@ -331,6 +331,9 @@ jobs:
         env:
           TAG: ${{ github.ref_name }}
         run: node ci/release/verify-scope.mjs
+      # A red push run counts only when quality-pr is its one red, on records
+      # the candidate's records list names (ci/release/verify-rc.mjs), read from
+      # the run's quality-pr-verdict artifact with this job's actions: read.
       - name: Refuse a commit off main or without a green complete ci run
         env:
           GITHUB_TOKEN: ${{ github.token }}

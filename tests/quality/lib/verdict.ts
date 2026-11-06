@@ -31,12 +31,15 @@
 //   (checks.ts's requiredChecks), a swept cell's the sweep's.
 // - tests-failed, run-errors: a test failed, or something outside a test
 //   did (a load error, a worker's late egress). With a release candidate's
-//   records list (lib/release-scope.ts), a failing cell test the list names
-//   doesn't count here.
-// - unlisted-failure: a release run's failing cell test that its records
-//   list doesn't name, each with a ready-to-paste entry whose owner and
-//   routed row are placeholders the list refuses until they're filled.
-// - listed-passed: a listed cell test ran and passed, so its entry goes.
+//   records list (lib/release-scope.ts), a failing cell test whose every
+//   failure record the list names doesn't count here.
+// - unlisted-failure: a release run's failure record (one rule on one
+//   element in a failing cell test) that its records list doesn't name,
+//   each with a ready-to-paste entry whose owner and routed row are
+//   placeholders the list refuses until they're filled; and a failing cell
+//   test with no failure record, which no entry can name.
+// - listed-passed: a listed record's test ran and no longer has it, so its
+//   entry goes.
 // - listed-unplanned: a whole run's listed entry names no planned test.
 // - canary-leaked: an artifact holds the run's canary after the scrub.
 // - canary-unproven: the canary probe ran, but no artifact held the canary
@@ -59,7 +62,7 @@ import {
   type TestKind,
 } from './checks';
 import type { Summary, SummaryTest } from '../reporter';
-import { listEntry, recordKey, testRecordKey, type ListedRecord } from './release-scope';
+import { judgeListed, recordKey, type ListedRecord } from './release-scope';
 import { VISUAL_SKIP, type PlannedVisual } from './visual';
 
 /** The harness's own skip reasons, which only its own tests may skip with. */
@@ -278,41 +281,58 @@ export function judge({
     }
   }
 
-  // A release candidate's listed cell tests: failing is what the list says they do.
-  const listedKeys = new Set((listed ?? []).map(recordKey));
-  const isListed = (test: SummaryTest) =>
-    test.kind === 'cell' && listedKeys.has(testRecordKey(test));
-  const failed = tests.filter((test) => test.outcome === 'unexpected' && !isListed(test));
+  // A release candidate's records list (lib/release-scope.ts): a failing cell test whose every
+  // failure record is listed fails what the list says it does, and nothing more here.
+  const judged = listed === undefined ? null : judgeListed(tests, listed);
+  const covered = new Set(
+    judged === null
+      ? []
+      : tests.filter(
+          (test) =>
+            test.kind === 'cell' &&
+            test.outcome === 'unexpected' &&
+            !judged.unrecorded.includes(test) &&
+            !judged.unlisted.some((each) => each.test === test),
+        ),
+  );
+  const failed = tests.filter((test) => test.outcome === 'unexpected' && !covered.has(test));
   if (failed.length > 0) {
     fail(
       'tests-failed',
       `${failed.length} test(s) failed: ${failed.map((test) => test.title).join('; ')}`,
     );
   }
-  if (listed !== undefined) {
-    for (const test of failed.filter((each) => each.kind === 'cell')) {
+  if (judged !== null && listed !== undefined) {
+    for (const { test, failure, entry } of judged.unlisted) {
       fail(
         'unlisted-failure',
-        `${test.title} failed, and the records list doesn't name it. To list it, fill in its owner and routed row: ${listEntry(test)}`,
+        `${test.title}: ${failure.check} ${failure.rule}${failure.target === null ? '' : ` on ${failure.target}`} failed, and the records list doesn't name it. To list it, fill in its owner and routed row: ${entry}`,
       );
     }
-    for (const test of tests.filter(
-      (each) => isListed(each) && (each.outcome === 'expected' || each.outcome === 'flaky'),
-    )) {
+    for (const test of judged.unrecorded) {
+      fail(
+        'unlisted-failure',
+        `${test.title} failed with no failure record, which no records list entry can name: it fails the release until it passes or fails on a record.`,
+      );
+    }
+    for (const entry of judged.passed) {
       fail(
         'listed-passed',
-        `${test.title} passed, and the records list names it: take its entry out (${listEntry(test)})`,
+        `${entry.cell} at ${entry.viewport}, ${entry.row}, on ${entry.engine}: ${entry.check} ${entry.rule}${entry.target === null ? '' : ` on ${entry.target}`} no longer fails, and the records list names it: take its entry out (${recordKey(entry)})`,
       );
     }
     if (!sharded) {
       const plannedKeys = new Set(
         plan.tests.flatMap((test) =>
           engines.map((engine) =>
-            recordKey({ cell: test.cell.id, viewport: test.viewport.id, row: test.row.id, engine }),
+            JSON.stringify([test.cell.id, test.viewport.id, test.row.id, engine]),
           ),
         ),
       );
-      for (const entry of listed.filter((each) => !plannedKeys.has(recordKey(each)))) {
+      for (const entry of listed.filter(
+        (each) =>
+          !plannedKeys.has(JSON.stringify([each.cell, each.viewport, each.row, each.engine])),
+      )) {
         fail(
           'listed-unplanned',
           `The records list names ${entry.cell} at ${entry.viewport}, ${entry.row}, on ${entry.engine}, which the plan doesn't have.`,

@@ -3,13 +3,15 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { failureOf } from '../../ci/release/release-records.mjs';
 import { planCells, type Plan } from './cells';
+import type { CellFailure } from './lib/failure-records';
 import { RUN_ENGINES } from './lib/matrix';
 import { loadRegistrations } from './lib/registration';
 import {
-  listEntry,
   loadReleaseScope,
   OWNER_PLACEHOLDER,
+  recordKey,
   recordsProblems,
   ROUTED_PLACEHOLDER,
   SCOPE_ENV,
@@ -19,35 +21,63 @@ import {
 } from './lib/release-scope';
 import { mergeShards, readShards } from './lib/shards';
 import { judge, type VerdictInput } from './lib/verdict';
+import type { SummaryFailure } from './reporter';
 import { ALSO_RUNS, CELL, cellTest, HELD, PLAN, PROBE, RUNS, summary } from './meta/runner-cases';
 import { SHARD_1, SHARD_2, writeShards } from './meta/shard-cases';
 import { checkoutMeta, withTierPacks } from './plan-fixtures';
 
-// A release candidate's quality scope and records list (lib/release-scope.ts): the file's rules,
-// the scope's cut of the full plan, and the gate the verdict holds a release run to with it.
+// A release candidate's quality scope and records list (lib/release-scope.ts, the matcher in
+// ci/release/release-records.mjs): the file's rules, the scope's cut of the full plan, and the gate
+// the verdict holds a release run to with it, one failure record (one rule on one element) at a time.
 
 const SCOPE_FILE = 'quality/release/scope.json';
 const CANDIDATE = { release: '1.0.0-rc.1', scope: 'default-packs' } as const;
 
-/** A filled entry for RUNS's test, the fallback cell at 1440x900, default, on Chromium. */
-const LISTED: ListedRecord = {
+const NAV = 'html > body:nth-child(2) > header:nth-child(2) > nav:nth-child(2) > a:nth-child(1)';
+const LEDE = '#main > p:nth-child(3)';
+
+/** A focus-contrast failure on the nav link of RUNS's cell, as run-cell attaches it, with `measured`. */
+const focusFailure = (measured: string, selector = NAV, rule = 'contrast'): CellFailure => ({
+  check: 'focus',
+  rule,
+  surface: 'fallback',
+  composition: true,
+  route: '/',
+  viewport: '1440x900',
+  inputMode: 'keyboard',
+  preferenceMode: 'default',
+  element: { semanticRole: 'link', accessibleName: 'Writing', selector },
+  expected: '3:1',
+  actual: measured,
+  threshold: 185,
+});
+/** The two failures RUNS's test fails on: the nav link's focus ring, and the lede's axe contrast. */
+const FAILURES: readonly SummaryFailure[] = [
+  failureOf(focusFailure('0 of 486 changed pixels reach 3:1')),
+  { check: 'axe', rule: 'color-contrast', target: LEDE },
+];
+
+/** A filled entry for each of RUNS's failures: the fallback cell at 1440x900, default, on Chromium. */
+const entry = (failure: SummaryFailure): ListedRecord => ({
   cell: CELL,
   viewport: RUNS.viewport.id,
   row: RUNS.row.id,
   engine: 'chromium',
-  owner: 'lane E',
-  routed: 'row 33',
-};
+  ...failure,
+  owner: 'lane C',
+  routed: 'row 5',
+});
+const LISTED = FAILURES.map(entry);
 
 const FAILED = { outcome: 'unexpected', status: 'failed', expectedStatus: 'passed' } as const;
 
-/** A release run's verdict on PLAN: both cell tests run, RUNS's as `runs` says. */
-function verdict(runs: 'passed' | 'failed', listed: VerdictInput['listed']) {
+/** A release run's verdict on PLAN: RUNS's test passes, or fails on `failures`; the rest pass. */
+function verdict(failures: readonly SummaryFailure[] | 'passed', listed: VerdictInput['listed']) {
   return judge({
     plan: PLAN,
     engines: ['chromium'],
     summary: summary([
-      cellTest(RUNS, runs === 'failed' ? FAILED : {}),
+      cellTest(RUNS, failures === 'passed' ? {} : { ...FAILED, failures }),
       cellTest(ALSO_RUNS),
       cellTest(
         { ...RUNS, viewport: { id: '390x844' } },
@@ -83,56 +113,113 @@ test('an empty records list with a clean matrix passes the gate', () => {
   assert.equal(clean.ok, true);
 });
 
-test("a failing cell outside the records list fails the gate, printing a ready-to-paste entry the list refuses until it's filled", () => {
-  const failed = verdict('failed', []);
+test("a failure record outside the records list fails the gate, printing a ready-to-paste entry the list refuses until it's filled", () => {
+  const failed = verdict(FAILURES, []);
   assert.equal(failed.ok, false);
-  assert.deepEqual(rules(failed.failures), ['tests-failed', 'unlisted-failure']);
-  const message = failed.failures.find((each) => each.rule === 'unlisted-failure')!.message;
-  const printed = JSON.parse(message.slice(message.indexOf('{'))) as ListedRecord;
-  assert.deepEqual(printed, { ...LISTED, owner: OWNER_PLACEHOLDER, routed: ROUTED_PLACEHOLDER });
-  assert.equal(
-    message,
-    `${cellTest(RUNS).title} failed, and the records list doesn't name it. To list it, fill in its owner and routed row: ${listEntry(cellTest(RUNS))}`,
+  assert.deepEqual(rules(failed.failures), [
+    'tests-failed',
+    'unlisted-failure',
+    'unlisted-failure',
+  ]);
+  const printed = failed.failures
+    .filter((each) => each.rule === 'unlisted-failure')
+    .map((each) => JSON.parse(each.message.slice(each.message.indexOf('{'))) as ListedRecord);
+  assert.deepEqual(
+    printed,
+    LISTED.map((each) => ({ ...each, owner: OWNER_PLACEHOLDER, routed: ROUTED_PLACEHOLDER })),
   );
-  // Pasted as printed, it's refused by its owner and routed row alone.
-  assert.deepEqual(recordsProblems([printed], CANDIDATE), [
+  assert.match(
+    failed.failures.find((each) => each.rule === 'unlisted-failure')!.message,
+    new RegExp(
+      `^${cellTest(RUNS).title}: focus contrast on html > body.* failed, and the records list doesn't name it\\. To list it, fill in its owner and routed row: \\{`,
+    ),
+  );
+  // Pasted as printed, each is refused by its owner and routed row alone.
+  assert.deepEqual(recordsProblems(printed, CANDIDATE), [
     `entry 1: owner is ${JSON.stringify(OWNER_PLACEHOLDER)}, not a lane or person`,
     `entry 1: routed is ${JSON.stringify(ROUTED_PLACEHOLDER)}, not "row <n>"`,
+    `entry 2: owner is ${JSON.stringify(OWNER_PLACEHOLDER)}, not a lane or person`,
+    `entry 2: routed is ${JSON.stringify(ROUTED_PLACEHOLDER)}, not "row <n>"`,
   ]);
-  // Filled, it lists the failure, and the gate passes.
-  assert.deepEqual(
-    recordsProblems([{ ...printed, owner: 'lane E', routed: 'row 33' }], CANDIDATE),
-    [],
-  );
-  assert.deepEqual(verdict('failed', [LISTED]).failures, []);
+  // Filled, they list the failures, and the gate passes.
+  const filled = printed.map((each) => ({ ...each, owner: 'lane C', routed: 'row 5' }));
+  assert.deepEqual(recordsProblems(filled, CANDIDATE), []);
+  assert.deepEqual(verdict(FAILURES, filled).failures, []);
+  // One record of the two listed: the other fails the gate, by itself.
+  const half = verdict(FAILURES, [LISTED[0]!]);
+  assert.deepEqual(rules(half.failures), ['tests-failed', 'unlisted-failure']);
+  assert.match(half.failures[1]!.message, /axe color-contrast on #main > p:nth-child\(3\) failed/);
+  // A failing test with no record can't be listed: it fails whatever the list says.
+  assert.deepEqual(rules(verdict([], LISTED).failures), [
+    'listed-passed',
+    'listed-passed',
+    'tests-failed',
+    'unlisted-failure',
+  ]);
   // A run with no scope file has no list: the failure fails as tests-failed, as before.
-  assert.deepEqual(rules(verdict('failed', undefined).failures), ['tests-failed']);
+  assert.deepEqual(rules(verdict(FAILURES, undefined).failures), ['tests-failed']);
 });
 
-test('a listed cell that passes fails the gate, since a fixed record leaves the list', () => {
-  const passed = verdict('passed', [LISTED]);
+test("a record's key is its cell, rule and target from its own fields: a new measurement still matches, and another target or rule doesn't", () => {
+  const listed = [entry(failureOf(focusFailure('0 of 486 changed pixels reach 3:1')))];
+  // The next run measures the same failure differently: it's still the listed record.
+  const remeasured = failureOf({
+    ...focusFailure('1 of 12279 changed pixels reach 3:1'),
+    threshold: 2880,
+  });
+  assert.equal(recordKey(entry(remeasured)), recordKey(listed[0]!));
+  assert.deepEqual(verdict([remeasured], listed).failures, []);
+  // Another element, or another rule on the same one, is a record of its own.
+  for (const other of [
+    failureOf(focusFailure('0 of 486 changed pixels reach 3:1', `${NAV} + a`)),
+    failureOf(focusFailure('0 of 486 changed pixels reach 3:1', NAV, 'perimeter')),
+  ]) {
+    assert.notEqual(recordKey(entry(other)), recordKey(listed[0]!));
+    assert.deepEqual(rules(verdict([other], listed).failures), [
+      'listed-passed',
+      'tests-failed',
+      'unlisted-failure',
+    ]);
+  }
+  // An element with no page selector (in a frame or a shadow root) is named by its role, name
+  // and slot; a record with no element at all, by its cell, check and rule.
+  const framed = {
+    ...focusFailure('x'),
+    element: { semanticRole: 'link', accessibleName: 'Writing', uiSlot: 'nav-link' },
+  };
+  assert.equal(failureOf(framed).target, 'aria:link|Writing|nav-link');
+  assert.equal(failureOf({ ...focusFailure('x'), element: undefined }).target, null);
+});
+
+test('a listed record that no longer fails fails the gate, since a fixed record leaves the list', () => {
+  const passed = verdict('passed', LISTED);
   assert.equal(passed.ok, false);
-  assert.deepEqual(rules(passed.failures), ['listed-passed']);
+  assert.deepEqual(rules(passed.failures), ['listed-passed', 'listed-passed']);
   assert.match(
     passed.failures[0]!.message,
-    /passed, and the records list names it: take its entry out/,
+    /no longer fails, and the records list names it: take its entry out/,
   );
+  // The test still fails on the other record: the fixed one's entry goes all the same.
+  assert.deepEqual(rules(verdict([FAILURES[1]!], LISTED).failures), ['listed-passed']);
   // A listed entry the whole run doesn't plan fails too, so a stale entry can't linger.
-  const stale = verdict('passed', [{ ...LISTED, viewport: '1280x800' }]);
+  const stale = verdict('passed', [{ ...LISTED[0]!, viewport: '1280x800' }]);
   assert.deepEqual(rules(stale.failures), ['listed-unplanned']);
 });
 
 test("the merge judges a release's shards against the list, as a single run's verdict does", (t) => {
   const root = mkdtempSync(path.join(tmpdir(), 'quality-release-merge-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  const merged = (runs: 'passed' | 'failed', listed: readonly ListedRecord[]) => {
+  const merged = (
+    failures: readonly SummaryFailure[] | 'passed',
+    listed: readonly ListedRecord[],
+  ) => {
     const dir = mkdtempSync(path.join(root, 'run-'));
     // Shard 1 judged itself against the list, as rc-quality's shards do.
-    const own = verdict(runs, listed);
+    const own = verdict(failures, listed);
     writeShards(dir, [
       {
         ...SHARD_1,
-        tests: [cellTest(RUNS, runs === 'failed' ? FAILED : {}), PROBE],
+        tests: [cellTest(RUNS, failures === 'passed' ? {} : { ...FAILED, failures }), PROBE],
         verdict: { ...SHARD_1.verdict, ok: own.ok, failures: own.failures },
       },
       SHARD_2,
@@ -140,13 +227,22 @@ test("the merge judges a release's shards against the list, as a single run's ve
     return mergeShards(readShards(dir), { expected: 2, listed });
   };
   assert.deepEqual(merged('passed', []).failures, []);
-  assert.deepEqual(merged('failed', [LISTED]).failures, []);
-  assert.deepEqual(rules(merged('failed', []).failures), ['tests-failed', 'unlisted-failure']);
-  assert.deepEqual(rules(merged('passed', [LISTED]).failures), ['listed-passed']);
+  assert.deepEqual(merged(FAILURES, LISTED).failures, []);
+  assert.deepEqual(rules(merged(FAILURES, []).failures), [
+    'tests-failed',
+    'unlisted-failure',
+    'unlisted-failure',
+  ]);
+  assert.deepEqual(rules(merged('passed', LISTED).failures), ['listed-passed', 'listed-passed']);
 });
 
-test('a records entry names its cell, viewport, row and engine, an owner, and a routed row: a blank or placeholder owner or row is refused', () => {
-  assert.deepEqual(recordsProblems([LISTED], CANDIDATE), []);
+test('a records entry names its cell, viewport, row, engine, check, rule and target, an owner, and a routed row: a blank or placeholder owner or row is refused', () => {
+  const good = LISTED[0]!;
+  assert.deepEqual(recordsProblems([good], CANDIDATE), []);
+  assert.deepEqual(
+    recordsProblems([{ ...good, target: null, note: 'runner record' }], CANDIDATE),
+    [],
+  );
   for (const [field, value, problem] of [
     ['owner', '', 'owner is "", not a lane or person'],
     ['owner', '   ', 'owner is "   ", not a lane or person'],
@@ -168,16 +264,25 @@ test('a records entry names its cell, viewport, row and engine, an owner, and a 
     ],
     ['cell', '', 'cell is missing'],
     ['engine', undefined, 'engine is missing'],
+    ['check', ' ', 'check is missing'],
+    ['rule', undefined, 'rule is missing'],
+    ['target', '', 'target is "", not a selector or null'],
+    ['target', undefined, 'target is undefined, not a selector or null'],
+    ['note', 'x'.repeat(301), 'note is not text of at most 300 characters'],
+    ['measured', '155 element(s)', 'measured is not a field'],
   ] as const) {
-    const entry = { ...LISTED, [field]: value };
+    const each = { ...good, [field]: value };
+    if (value === undefined) delete (each as Record<string, unknown>)[field];
     assert.deepEqual(
-      recordsProblems([entry], CANDIDATE),
+      recordsProblems([each], CANDIDATE),
       [`entry 1: ${problem}`],
       `${field} ${String(value)}`,
     );
   }
-  assert.deepEqual(recordsProblems([{ ...LISTED, routed: 'row 22b' }], CANDIDATE), []);
-  assert.deepEqual(recordsProblems([LISTED, LISTED], CANDIDATE), ['entry 2: listed twice']);
+  assert.deepEqual(recordsProblems([{ ...good, routed: 'row 22b' }], CANDIDATE), []);
+  assert.deepEqual(recordsProblems([good, { ...good, note: 'again' }], CANDIDATE), [
+    'entry 2: listed twice',
+  ]);
   assert.deepEqual(recordsProblems({}, CANDIDATE), ['the records list is not an array']);
 });
 
@@ -186,7 +291,7 @@ test('a final release keeps the full matrix: scope full and an empty records lis
   assert.deepEqual(recordsProblems([], { release: '1.0.0', scope: 'default-packs' }), [
     '1.0.0 is a final release: its scope must be full',
   ]);
-  assert.deepEqual(recordsProblems([LISTED], { release: '1.0.0', scope: 'full' }), [
+  assert.deepEqual(recordsProblems(LISTED, { release: '1.0.0', scope: 'full' }), [
     '1.0.0 is a final release: its records list must be empty',
   ]);
 });
@@ -213,7 +318,7 @@ test('a scope file names its release, scope, what it leaves unswept, and its lis
   const dir = mkdtempSync(path.join(tmpdir(), 'quality-release-scope-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   writeFileSync(path.join(dir, 'scope.json'), JSON.stringify(good));
-  writeFileSync(path.join(dir, 'records.json'), JSON.stringify([{ ...LISTED, owner: '' }]));
+  writeFileSync(path.join(dir, 'records.json'), JSON.stringify([{ ...LISTED[0], owner: '' }]));
   assert.throws(
     () => loadReleaseScope({ [SCOPE_ENV]: path.join(dir, 'scope.json') }),
     /records\.json: entry 1: owner is "", not a lane or person$/,
