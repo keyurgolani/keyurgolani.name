@@ -23,8 +23,9 @@ export interface EnhancementProps {
  * the browser as JSON. On the server and while the page hydrates it renders
  * only its settle signal, an inert `<template data-enhancement-pending>`
  * (@portfolio/variant-contract/settle), then lazy-loads the module the host
- * registered for it through registerHostModules(), and drops the signal one
- * frame after the enhancement's first commit, once it has attached. If that module fails to load or throws, the variant
+ * registered for it through registerHostModules(), and drops the signal at
+ * the task boundary after the enhancement's first commit, once it has
+ * attached: a task boundary, not a frame and not a time. If that module fails to load or throws, the variant
  * declares no such enhancement, or globalThis.__portfolioFailEnhancements is
  * set, it renders nothing, its signal with it, and the page stays as it
  * was; it also takes its id off any hold the variant's own markup renders

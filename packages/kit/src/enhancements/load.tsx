@@ -12,7 +12,6 @@ import {
 } from 'react';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
 import { enhancementPending } from '@portfolio/variant-contract/settle';
-import { afterNextFrame } from '../runtime/use-frame-loop';
 import { settleHolds } from './holds';
 import { hostModules, type EnhancementComponent } from '../sections/host-modules';
 
@@ -111,14 +110,30 @@ export function PendingMarker({ id }: { id: string }) {
 }
 
 /**
- * Calls `settled` one animation frame after its first commit. Rendered after
- * the enhancement, so it commits with it: an enhancement that attaches in
- * its first effect has attached by then, and so has one that attaches on
+ * Calls `callback` once, at the next task, and never again: one
+ * MessageChannel message, which spends no animation frame, so the kit's
+ * frame loops stay the only frames a page asks for, under any motion
+ * setting. Returns the cancel, which closes the channel.
+ */
+function afterThisTask(callback: () => void): () => void {
+  const channel = new MessageChannel();
+  channel.port1.onmessage = () => {
+    channel.port1.close();
+    callback();
+  };
+  channel.port2.postMessage(null);
+  return () => channel.port1.close();
+}
+
+/**
+ * Calls `settled` at the task boundary after its first commit. Rendered
+ * after the enhancement, so it commits with it: an enhancement that attaches
+ * in its first effect has attached by then, and so has one that attaches on
  * the commit its own ref's setState makes, which React renders and flushes,
- * effects too, in the same task. A frame boundary, not a time.
+ * effects too, in the same task. A task boundary, not a frame and not a time.
  */
 function AfterFirstPass({ settled }: { settled: () => void }) {
-  useEffect(() => afterNextFrame(settled), [settled]);
+  useEffect(() => afterThisTask(settled), [settled]);
   return null;
 }
 
