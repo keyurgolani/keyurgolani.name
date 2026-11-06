@@ -178,10 +178,10 @@ function HomePage({ input }: HomePageProps) {
           <nav className="hc-chrome__nav" aria-label="Site">
             {list !== undefined ? (
               <span className="hc-chrome__views" role="group" aria-label="View">
-                <a href={home} aria-current={listing ? undefined : 'true'} data-type-role="label">
+                <a href={home} aria-current={listing ? undefined : 'page'} data-type-role="label">
                   <Words lang={lang}>Strip</Words>
                 </a>
-                <a href={list} aria-current={listing ? 'true' : undefined} data-type-role="label">
+                <a href={list} aria-current={listing ? 'page' : undefined} data-type-role="label">
                   <Words lang={lang}>List</Words>
                 </a>
               </span>
