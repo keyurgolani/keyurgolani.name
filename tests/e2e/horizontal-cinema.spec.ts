@@ -463,6 +463,33 @@ for (const [width, height] of [
 }
 
 test(
+  "at 1024 by 768 the rail is fitted on the bar the visitor gets, before the page's load comes",
+  { annotation },
+  async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    // A picture that answers only after 3 s holds the page's load, so nothing measured at load can
+    // stand in for the fit the controller makes as it starts.
+    await page.route('**/__held-load.png', async (route) => {
+      await new Promise((done) => setTimeout(done, 3000));
+      await route.fulfill({ status: 404, body: '' });
+    });
+    await page.addInitScript(() => {
+      document.addEventListener('DOMContentLoaded', () => {
+        const held = new Image();
+        held.src = '/__held-load.png';
+        document.body.append(held);
+      });
+    });
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('.hc-scrub[data-live]')).toHaveCount(1);
+    await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => done(null))));
+    expect(await page.evaluate(() => document.readyState)).not.toBe('complete');
+    // The live bar, its transport and status in, holds its rail, or the strip has stacked.
+    expect(await railClashes(page)).toEqual([]);
+  },
+);
+
+test(
   "a pointer's click on a link in a later scene already in view lands on that link: the strip holds still under it",
   { annotation, tag },
   async ({ page }) => {
