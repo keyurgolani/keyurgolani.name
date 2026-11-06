@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fixtureSiteSelecting } from '../../packages/variant-contract/src/contract-fixtures';
 import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
 import { expect, test } from '../harness/fixtures';
-import { crowdRail, load, railClashes, read } from './horizontal-cinema-model';
+import { crowdRail, expectSnapped, load, railClashes, read } from './horizontal-cinema-model';
 
 // Horizontal Cinema right to left: the rtl contract fixture (Hebrew, dir=rtl). The fit check measures
 // the rail under the stage in the bar's own inline direction, so a right-to-left rail that holds its
@@ -53,5 +53,32 @@ test(
         return { layout, pinned, fit };
       })
       .toEqual({ layout: 'vertical', pinned: false, fit: 'over' });
+  },
+);
+
+test(
+  'right to left, a wheel that stops between scenes finishes onto one',
+  { annotation },
+  async ({ page }) => {
+    await load(page);
+    await page.mouse.move(720, 450);
+    await page.mouse.wheel(0, 200);
+    await expect.poll(async () => (await read(page)).onScreen).toBe(1);
+    const from = (await read(page)).scrollY;
+    await page.mouse.wheel(0, 300);
+    await expectSnapped(page, from);
+  },
+);
+
+test(
+  'right to left, a scroll the page makes into a scene rests where it lands',
+  { annotation },
+  async ({ page }) => {
+    await load(page);
+    const far = page.locator('.hc-track .hc-scene').nth(3).locator('h2, h3').last();
+    await far.scrollIntoViewIfNeeded();
+    const box = await far.boundingBox();
+    await page.waitForTimeout(1000);
+    expect(await far.boundingBox()).toEqual(box);
   },
 );

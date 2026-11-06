@@ -24,8 +24,9 @@ import { Runtime } from './runtime';
 // the same scene index; scrolling by hand, a trackpad or Shift and the
 // wheel, lands there too once it settles. The index goes to the URL once a
 // move settles, by replaceState, and to the live status once. A step past
-// either end does nothing. Nothing handles the wheel or a touch: the
-// vertical wheel scrolls the page, and the stage scrolls natively.
+// either end does nothing. Nothing cancels the wheel or a touch; the page
+// scrolls natively, and the controller only notes a reader's gesture to
+// decide whether to snap.
 //
 // The layout is the stylesheet's alone: a wide, tall screen with a fine
 // pointer shows the strip, anything else and the List view the same scenes
@@ -42,6 +43,30 @@ import { Runtime } from './runtime';
 // the shell falls back to the same scenes top to bottom, so nothing is
 // ever clipped under the snap. Top to bottom, a chapter control on the
 // top edge says where the reader is and opens the five chapters.
+
+/** The keys that scroll a page, whose scroll is the reader's: the pin's snap follows it. */
+const SCROLL_KEYS: ReadonlySet<string> = new Set([
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'PageUp',
+  'PageDown',
+  'Home',
+  'End',
+  ' ',
+]);
+
+/** Where a press or a touch ends: one that made no scroll by then is over. */
+const GESTURE_ENDS = ['pointerup', 'pointercancel', 'touchend', 'touchcancel'] as const;
+
+/** The keys that scroll a page toward its end (Shift and Space toward its start), and those toward its start. */
+const DOWN_KEYS: ReadonlySet<string> = new Set(['ArrowDown', 'PageDown', 'End', ' ']);
+const UP_KEYS: ReadonlySet<string> = new Set(['ArrowUp', 'PageUp', 'Home']);
+
+/** What a press or a key works rather than scrolls: a control, or a field to type in. */
+const CONTROL =
+  'a[href], button, summary, input, select, textarea, label, [contenteditable]:not([contenteditable="false"])';
 
 /** How long scrolling has to stop before the controller reads where it settled. */
 const SETTLE_MS = 150;
@@ -460,6 +485,17 @@ function LiveStage(props: StageProps) {
     let quiet = false;
     let quietTimer: ReturnType<typeof setTimeout> | undefined;
     let restConfirmed = false;
+    /**
+     * Whether the reader's own gesture is moving the page: a wheel, a touch, a press on the scroller or
+     * its scrollbar, or a scrolling key, marked as it starts and held until the next scrollend. Only a
+     * scroll made under that mark is the reader's; a scroll the page makes (scrollIntoView, a
+     * find-in-page match, assistive technology bringing its target into view) is not.
+     */
+    let gesture = false;
+    /** Whether a scroll has come since the gesture began: one that made none ends with it. */
+    let scrolledSinceGesture = false;
+    /** Whether a scroll since the page last rested was the reader's, as the pin's snap reads it then. */
+    let readerScrolled = false;
     /** The two-frame rest check's pending frames, and whether the controller has been torn down. */
     let restFrames: number[] = [];
     let disposed = false;
@@ -468,6 +504,14 @@ function LiveStage(props: StageProps) {
      * at the top until the reader scrolls on a real distance. Never one the controller named itself.
      */
     let landed: number | undefined;
+    /**
+     * The scene a load's URL names on the strip, cut to once when the load's own scrolls are over:
+     * the browser's scroll to the fragment, smooth on the stage until the pin takes it, can come to
+     * rest a few px past where the controller put the page. Given up at the reader's first gesture,
+     * at the first settle, or two frames after the load if nothing scrolls by then.
+     */
+    let landingCut: number | undefined;
+    let scrolledSinceLanding = false;
     let landedAt = 0;
     const land = (index: number | undefined) => {
       landed = index;
@@ -484,9 +528,11 @@ function LiveStage(props: StageProps) {
     // its frame sticks under the top line while the page scrolls through
     // it, so a wheel, a trackpad, the scroll bar, Page Down, or the space
     // bar move the strip at the speed they move the page, then go on to the
-    // credits. Nothing handles the wheel: it's the page's native scroll.
-    // With reduced motion the strip cuts from scene to scene as the page
-    // passes each one's share of the length, instead of travelling.
+    // credits. Nothing cancels the wheel or a touch; the page scrolls
+    // natively, and the controller only notes a reader's gesture to decide
+    // whether to snap. With reduced motion the strip cuts from scene to
+    // scene as the page passes each one's share of the length, instead of
+    // travelling.
     let pinned = false;
     /**
      * The strip's geometry, read once and kept until the layout changes (a
@@ -814,6 +860,19 @@ function LiveStage(props: StageProps) {
 
     const settle = () => {
       timer = undefined;
+      // The load's landing, once, before anything else this settle reads: off the named scene's start
+      // and with no move of the controller's or the reader's under way, it's cut there.
+      if (landingCut !== undefined) {
+        const to = landingCut;
+        landingCut = undefined;
+        if (aligning === null && !gesture && strip() && !arrived(to)) {
+          aligning = to;
+          position = to;
+          setCurrent(to);
+          align(to, 'instant');
+          return;
+        }
+      }
       if (aligning !== null && !arrived(aligning)) {
         // A move is on its way until it arrives, however late or janky its frames: only a scroll away
         // from its scene takes it over, which onScroll reads. This only ends one the browser dropped.
@@ -849,7 +908,12 @@ function LiveStage(props: StageProps) {
       wrote = {};
       // The pin's snap: a travel that comes to rest between scenes finishes onto the next one the
       // way it went from where the page last rested, so a slow wheel's notch is never pulled back.
-      if (pinned && aligning === null && !reduced()) {
+      // Only after the reader's own scroll: one the page made rests where it lands, as focus moved
+      // into a scene does, so what it brought into view stays there. The attribution is taken once
+      // here, so the next move starts unattributed.
+      const reader = readerScrolled;
+      readerScrolled = false;
+      if (pinned && aligning === null && !reduced() && reader) {
         const progress = window.scrollY - pinStart();
         if (progress > 0 && progress < travel() - 1) {
           const from = Math.min(travel(), Math.max(0, rest - pinStart()));
@@ -909,6 +973,13 @@ function LiveStage(props: StageProps) {
     };
 
     const onScroll = () => {
+      // Sticky until the page rests: the stage's scroll that follow() derives can land after the
+      // window's scrollend has cleared the mark, and mustn't take the reader's scroll back.
+      if (gesture) {
+        readerScrolled = true;
+        scrolledSinceGesture = true;
+      }
+      scrolledSinceLanding = true;
       moved = true;
       quiet = false;
       if (quietTimer !== undefined) clearTimeout(quietTimer);
@@ -1170,6 +1241,63 @@ function LiveStage(props: StageProps) {
 
     rootElement.addEventListener('keydown', onKey);
     window.addEventListener('hashchange', onHash);
+    // The reader's gestures, marked as they start and held until the scroll they make ends.
+    const mark = () => {
+      gesture = true;
+      scrolledSinceGesture = false;
+      // A reader who moves during the load keeps their place.
+      landingCut = undefined;
+    };
+    // A press or a touch on a control works the control: it's no gesture of scrolling.
+    const onControl = (event: Event) =>
+      event.target instanceof Element && event.target.closest(CONTROL) !== null;
+    const onGesture = (event: Event) => {
+      if (!onControl(event)) mark();
+    };
+    /** Whether the page can still move toward its end (`down`) or its start. */
+    const canMove = (down: boolean) =>
+      down
+        ? window.scrollY + window.innerHeight < doc.documentElement.scrollHeight - 1
+        : window.scrollY > 0;
+    // A wheel marks only where it can move the page: not a zoom, and not at the end it turns toward.
+    const onWheel = (event: WheelEvent) => {
+      if (event.ctrlKey || event.metaKey) return;
+      if (event.deltaY !== 0 && !canMove(event.deltaY > 0)) return;
+      if (event.deltaY !== 0 || event.deltaX !== 0) mark();
+    };
+    // A scrolling key marks only where it scrolls the page: not on a control or a field, which the key
+    // works (a button's Space, a field's arrows), and only toward an end the page isn't at (the side
+    // arrows move this page nowhere). Its mark is held until the next scrollend, however late its
+    // scroll starts.
+    const onScrollKey = (event: KeyboardEvent) => {
+      if (!SCROLL_KEYS.has(event.key) || onControl(event)) return;
+      const back = event.key === ' ' && event.shiftKey;
+      const down = DOWN_KEYS.has(event.key) && !back;
+      const up = UP_KEYS.has(event.key) || back;
+      if ((down && canMove(true)) || (up && canMove(false))) mark();
+    };
+    // A press or a touch off the controls that has made no scroll by its own end and the two frames
+    // after it was no scroll: a click on words, a tap. Its mark ends there; one that scrolled keeps it
+    // until scrollend.
+    const onGestureEnd = () => {
+      if (scrolledSinceGesture) return;
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          if (!disposed && !scrolledSinceGesture) gesture = false;
+        }),
+      );
+    };
+    const onScrollEnd = () => {
+      gesture = false;
+    };
+    for (const type of ['touchstart', 'pointerdown'] as const)
+      window.addEventListener(type, onGesture, { capture: true, passive: true });
+    window.addEventListener('wheel', onWheel, { capture: true, passive: true });
+    window.addEventListener('keydown', onScrollKey, { capture: true });
+    for (const type of GESTURE_ENDS)
+      window.addEventListener(type, onGestureEnd, { capture: true, passive: true });
+    window.addEventListener('scrollend', onScrollEnd);
+    stageElement.addEventListener('scrollend', onScrollEnd);
     stageElement.addEventListener('scroll', onStageScroll, { passive: true });
     window.addEventListener('scroll', onPageScroll, { passive: true });
     window.addEventListener('resize', onResize, { passive: true });
@@ -1197,6 +1325,17 @@ function LiveStage(props: StageProps) {
         window.scrollTo({ top: pinStart() + offsetOf(start), behavior: 'instant' });
         follow();
       } else setAlong(offsetOf(start));
+      landingCut = start;
+      scrolledSinceLanding = false;
+      // Nothing scrolling two frames after the load: the page is where it was put, so nothing to cut.
+      const idle = () =>
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            if (!disposed && !scrolledSinceLanding) landingCut = undefined;
+          }),
+        );
+      if (doc.readyState === 'complete') idle();
+      else window.addEventListener('load', idle, { once: true });
     }
     // Against the layout in force, after the fit check and the pin: top to bottom, the scene a
     // fresh load names keeps the page while it's at the top.
@@ -1234,6 +1373,14 @@ function LiveStage(props: StageProps) {
       textSize?.disconnect();
       delete rootElement.dataset.rail;
       window.removeEventListener('scroll', onPageScroll);
+      for (const type of ['touchstart', 'pointerdown'] as const)
+        window.removeEventListener(type, onGesture, { capture: true });
+      window.removeEventListener('wheel', onWheel, { capture: true });
+      window.removeEventListener('keydown', onScrollKey, { capture: true });
+      for (const type of GESTURE_ENDS)
+        window.removeEventListener(type, onGestureEnd, { capture: true });
+      window.removeEventListener('scrollend', onScrollEnd);
+      stageElement.removeEventListener('scrollend', onScrollEnd);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('load', relayout);
       phone.removeEventListener('change', onPhone);

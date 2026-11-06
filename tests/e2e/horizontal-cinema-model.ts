@@ -62,6 +62,14 @@ export function read(scope: Scope, { landed = false }: { landed?: boolean } = {}
         scrollY + innerHeight >= document.documentElement.scrollHeight - 2 && at.top < innerHeight;
       return (named < across && at.top <= line) || (named > across && foot) ? named : across;
     };
+    // The scene across the stage's start line: the one sitting at it, or, where the page rests
+    // mid-scene (a scroll the page made rests where it lands), the one the line runs through.
+    const across = !horizontal
+      ? -1
+      : scenes.findIndex((scene) => {
+          const from = start(scene) - inset;
+          return from <= 1 && from + scene.getBoundingClientRect().width > 1;
+        });
     const onScreen = !horizontal
       ? reading()
       : atStart >= 0
@@ -73,6 +81,7 @@ export function read(scope: Scope, { landed = false }: { landed?: boolean } = {}
       scenes: scenes.map((scene) => scene.id),
       current,
       onScreen,
+      across,
       atEnd,
       hash: location.hash,
       history: history.length,
@@ -173,6 +182,28 @@ export const brokenHeadingWords = (scope: Scope) =>
     },
     [WORD.source, WORD.flags] as const,
   );
+
+/**
+ * Whether the pinned strip rests on a scene's start, after the scroll that just ran: the page holds still
+ * over two reads and a scene sits at the stage's start (or the strip is past its end).
+ */
+export async function expectSnapped(page: Page, from: number): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const a = await read(page);
+        await page.waitForTimeout(150);
+        const b = await read(page);
+        return {
+          moved: b.scrollY !== from,
+          still: a.scrollY === b.scrollY,
+          onScene: b.onScreen >= 0,
+        };
+      },
+      { timeout: 5000 },
+    )
+    .toEqual({ moved: true, still: true, onScene: true });
+}
 
 /**
  * A rail that can't hold its labels, for the fallback's own tests: before the page's first script, a

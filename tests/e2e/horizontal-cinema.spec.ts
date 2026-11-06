@@ -171,17 +171,27 @@ test(
     // a programmatic smooth scroll on to its target through a wheel turn, so a wheel can't stand in.
     await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(0);
     await page.evaluate(() => window.scrollBy({ top: 2400, behavior: 'instant' }));
-    // Soon after it rests, not once a stalled step's safety net gives up, the scene the page
-    // rests on is the one marked current.
+    // Soon after it rests, not once a stalled step's safety net gives up, the scene the page rests
+    // in is the one marked current, and the URL and the status name it. A script's scroll rests where
+    // it lands, so that's the scene across the stage's start line, not one sitting at it.
     await expect
       .poll(
         async () => {
-          const state = await read(page);
-          return state.onScreen > 1 && state.current === state.onScreen;
+          const a = await read(page);
+          const b = await read(page);
+          return (
+            a.scrollY === b.scrollY &&
+            b.current > 1 &&
+            b.current === b.across &&
+            b.hash === `#${b.scenes[b.current]}` &&
+            b.status.includes(`${b.current + 1} of ${b.scenes.length}`)
+          );
         },
         { timeout: 2000 },
       )
       .toBe(true);
+    // The step, to scene 1, gave way to it.
+    expect((await read(page)).current).not.toBe(1);
   },
 );
 
@@ -205,6 +215,59 @@ test(
     // Back returns to the chapter the link opened.
     await page.goBack();
     await expect.poll(async () => (await read(page)).hash).toBe('#chapter-craft');
+  },
+);
+
+test(
+  'a reload with no scene in the URL keeps the place the browser restores',
+  { annotation, tag },
+  async ({ page }) => {
+    await load(page);
+    // Past the strip, in the credits, the URL names no scene.
+    await page.evaluate(() =>
+      window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }),
+    );
+    await page.waitForTimeout(1000);
+    const before = await read(page);
+    expect(before.hash).toBe('');
+    await page.reload({ waitUntil: 'load' });
+    await page.waitForTimeout(1000);
+    const after = await read(page);
+    expect({ hash: after.hash, scrollY: after.scrollY }).toEqual({
+      hash: '',
+      scrollY: before.scrollY,
+    });
+  },
+);
+
+test(
+  "a reader's scroll as the page loads on a direct link keeps their place: the landing isn't cut back",
+  { annotation, tag },
+  async ({ page }) => {
+    await load(page);
+    const { scenes } = await read(page);
+    // As soon as the controller is on the page: a wheel, and the scroll it makes, three scenes on.
+    await page.addInitScript(() => {
+      const go = () => {
+        const stage = document.querySelector('.hc-stage');
+        if (!document.querySelector('.hc-scrub[data-live]') || !stage) {
+          requestAnimationFrame(go);
+          return;
+        }
+        stage.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 100 }));
+        window.scrollBy({ top: 3000, behavior: 'instant' });
+      };
+      requestAnimationFrame(go);
+    });
+    // A load of its own, not a hash change on the page already open.
+    await page.goto('about:blank');
+    await page.goto(`/#${scenes[4]}`, { waitUntil: 'load' });
+    await expect
+      .poll(async () => {
+        const state = await read(page);
+        return state.current > 4 && state.onScreen === state.current;
+      })
+      .toBe(true);
   },
 );
 
@@ -440,6 +503,36 @@ test.describe('without JavaScript', () => {
       }));
       expect(state.scenes).toBeGreaterThan(5);
       expect(state).toMatchObject({ pinned: false, live: 0, scroller: 'auto' });
+    },
+  );
+
+  test(
+    "a link to a later scene glides the native scroller there, the stage's own smooth scroll",
+    { annotation, tag },
+    async ({ page }) => {
+      await page.goto('/', { waitUntil: 'load' });
+      expect(await page.evaluate(() => document.querySelector('.hc-stage')!.scrollLeft)).toBe(0);
+      // A link to a scene far along the strip, as a contents link or a typed fragment follows it.
+      await page.evaluate(() => {
+        const scenes = document.querySelectorAll('.hc-track .hc-scene');
+        location.hash = `#${scenes[scenes.length - 2]!.id}`;
+      });
+      // Sampled as it goes: a glide passes through places between, a jump lands in one step.
+      const seen = new Set<number>();
+      for (let sample = 0; sample < 40; sample++) {
+        seen.add(
+          Math.round(await page.evaluate(() => document.querySelector('.hc-stage')!.scrollLeft)),
+        );
+      }
+      await page.waitForTimeout(1500);
+      const end = Math.round(
+        await page.evaluate(() => document.querySelector('.hc-stage')!.scrollLeft),
+      );
+      expect(end).toBeGreaterThan(0);
+      const between = [...seen].filter((at) => at > 0 && at < end);
+      expect(between.length, `stage scrollLeft samples: ${[...seen].join(', ')}`).toBeGreaterThan(
+        1,
+      );
     },
   );
 });

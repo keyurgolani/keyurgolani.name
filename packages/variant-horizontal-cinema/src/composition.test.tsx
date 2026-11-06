@@ -301,13 +301,30 @@ test('the words it adds are marked English in a portfolio in another language', 
   assert.match(markup, /<span lang="en" dir="ltr">Credits and index<\/span>/);
 });
 
-test('the controller never handles the wheel or a touch, writes no history entry of its own, and none in a frame', () => {
+test('the controller never cancels the wheel or a touch (it only notes that the reader is moving the page), writes no history entry of its own, and none in a frame', () => {
   const source = readFileSync(new URL('./controller.tsx', import.meta.url), 'utf8');
   assert.match(source, /^'use client';/);
-  assert.doesNotMatch(
+  // It never listens to a move.
+  assert.doesNotMatch(source, /['"](?:mousewheel|touchmove|pointermove)['"]/);
+  // It only notes that the reader is moving the page: every listener for the wheel or a touch is
+  // passive, so none can cancel one.
+  for (const [line] of source.matchAll(
+    /addEventListener\('(?:wheel|touchstart|touchend|touchcancel)'[^\n]*/g,
+  )) {
+    assert.match(line, /passive: true/, line);
+  }
+  // The gesture marks' two loops, the touch or press that starts one and the ends (a touch's among them).
+  assert.match(
     source,
-    /['"](?:wheel|mousewheel|touchstart|touchmove|touchend|pointermove)['"]/,
+    /for \(const type of \['touchstart', 'pointerdown'\] as const\)\s*window\.addEventListener\(type, onGesture, \{[^}]*passive: true/,
   );
+  assert.match(
+    source,
+    /for \(const type of GESTURE_ENDS\)\s*window\.addEventListener\(type, onGestureEnd, \{[^}]*passive: true/,
+  );
+  // Those are the only places the wheel or a touch is named: the start loop and its removal, GESTURE_ENDS,
+  // and the wheel's own listener and its removal.
+  assert.equal(source.match(/['"](?:wheel|touchstart|touchend|touchcancel)['"]/g)?.length, 6);
   // Every scroll it listens to is passive.
   for (const [line] of source.matchAll(/addEventListener\('scroll'[^\n]*/g)) {
     assert.match(line, /passive: true/, line);
