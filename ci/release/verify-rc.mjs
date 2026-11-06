@@ -24,14 +24,15 @@
 // untouched and stays strict. The artifact is read with the job's actions:
 // read and parsed as untrusted: anything missing, malformed, or too big
 // refuses the tag. A list that's empty, as a final release's must be, leaves
-// only the green run.
+// only the green run. A flaky entry (release-records.mjs) may pass or fail on
+// its record, and the job summary prints how each came out.
 //
 // Pure Node with no dependencies, so the job that runs it needs no install.
 import { appendFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { githubGet, githubGetBytes, repository } from './github.mjs';
-import { judgeListed, recordsProblems } from './release-records.mjs';
+import { isFlaky, judgeListed, recordsProblems } from './release-records.mjs';
 import { parseReleaseTag } from './tags.mjs';
 import { readScope } from './verify-scope.mjs';
 import { zipEntry } from './zip.mjs';
@@ -212,7 +213,11 @@ export function evaluateRc({ tag, sha, compare, runs, jobsByRun, quality }) {
   const run = candidateRuns(sha, runs).find((candidate) =>
     gatePassed(jobsByRun?.[String(candidate.id)]),
   );
-  if (run) return { ok: reasons.length === 0, reasons, run, listed: false };
+  // A green run: its flaky entries' summary wasn't read, since nothing failed.
+  const unread = (quality?.listed ?? [])
+    .filter(isFlaky)
+    .map((entry) => ({ entry, outcome: 'not read' }));
+  if (run) return { ok: reasons.length === 0, reasons, run, listed: false, flaky: unread };
   // No green run: a red one counts only when quality-pr's is its one red, all of it listed.
   const why = [];
   for (const red of redRuns(sha, runs)) {
@@ -225,14 +230,31 @@ export function evaluateRc({ tag, sha, compare, runs, jobsByRun, quality }) {
           ? [`quality-pr's summary couldn't be read: ${summary?.message ?? 'not fetched'}`]
           : qualityPrUnlisted(summary, quality.listed);
     if (others.length === 0 && qpr.length === 0) {
-      return { ok: reasons.length === 0, reasons, run: red, listed: true };
+      return {
+        ok: reasons.length === 0,
+        reasons,
+        run: red,
+        listed: true,
+        flaky: judgeListed(summary.tests, quality.listed).flaky,
+      };
     }
     why.push(`run ${red.id}: ${[...others, ...qpr].join('; ')}`);
   }
   reasons.push(
     `${sha} has no green complete ci run: no ci.yml push run on main for this commit concluded success with gate passing${why.length > 0 ? `, and no red one is red on listed records alone (${why.join(' | ')})` : ''}`,
   );
-  return { ok: false, reasons, run: null, listed: false };
+  return { ok: false, reasons, run: null, listed: false, flaky: unread };
+}
+
+/**
+ * The summary's lines for each flaky entry and how it came out in the run rc-verify read: failed
+ * (on its record), passed, not run, or not read (a green run, whose summary rc-verify doesn't read).
+ */
+export function flakyLines(flaky) {
+  return (flaky ?? []).map(
+    ({ entry, outcome }) =>
+      `- flaky, ${outcome}: ${entry.cell} at ${entry.viewport}, ${entry.row}, on ${entry.engine}: ${entry.check} ${entry.rule}${entry.target === null ? '' : ` on ${entry.target}`} (owner ${entry.owner}, ${entry.routed}; seen failing in run ${entry.seen?.failed} and passing in run ${entry.seen?.passed} on ${entry.seen?.commit})`,
+  );
 }
 
 /** The quality-pr summary of `run`, read from its verdict's artifact; an Error when it can't be. */
@@ -277,24 +299,26 @@ async function main() {
   }
   // The candidate's records list, from the checkout (the tag's commit), validated as rc-quality's
   // is; then each red run's quality-pr summary, only if no run is green.
-  let quality;
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const { scope, records } = readScope(root);
+  const problems = recordsProblems(records, scope);
+  if (problems.length > 0) throw new Error(`the records list is invalid: ${problems.join('; ')}`);
+  let quality = { listed: records, summaries: {} };
   const green = candidateRuns(sha, runs).some((run) => gatePassed(jobsByRun[String(run.id)]));
   if (!green && redRuns(sha, runs).length > 0) {
-    const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-    const { scope, records } = readScope(root);
-    const problems = recordsProblems(records, scope);
-    if (problems.length > 0) throw new Error(`the records list is invalid: ${problems.join('; ')}`);
     const summaries = {};
     for (const run of redRuns(sha, runs))
       summaries[String(run.id)] = await qualityPrSummary(base, run);
     quality = { listed: records, summaries };
   }
   const verdict = evaluateRc({ tag, sha, compare, runs, jobsByRun, quality });
-  const summary = verdict.ok
+  let summary = verdict.ok
     ? verdict.listed
       ? `### ${tag}: eligible on its records list\n\n${sha} is on main, and ci run [${verdict.run.id}](${verdict.run.html_url}) failed only quality-pr, on records quality/release/records.json names.\n`
       : `### ${tag}: eligible\n\n${sha} is on main, and ci run [${verdict.run.id}](${verdict.run.html_url}) passed gate on it.\n`
     : `### ${tag}: refused\n\n${verdict.reasons.map((reason) => `- ${reason}.`).join('\n')}\n`;
+  const flaky = flakyLines(verdict.flaky);
+  if (flaky.length > 0) summary += `\nFlaky entries in the records list:\n\n${flaky.join('\n')}\n`;
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
   console.log(summary);
   for (const reason of verdict.reasons) console.log(`::error title=release candidate::${reason}`);

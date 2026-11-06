@@ -6,7 +6,12 @@
 // An entry is one failure record: one rule failing on one element in one cell test. Its key is
 // [cell, viewport, row, engine, check, rule, target], each from the record's own fields, never
 // from its message, so a measurement that moves from run to run (an element count, a pixel count,
-// a ratio) never moves the key.
+// a ratio) never moves the key. quality/release/SCHEMA.md documents the file.
+//
+// An entry is strict by default: its record must still fail wherever its test runs. One marked
+// `"flaky": true` was seen failing and passing on one commit (`seen` names the commit and both
+// runs), so its test may pass; when it fails, it must still fail on exactly that record. At most
+// MAX_FLAKY entries are flaky without the coordinator's word.
 //
 // Pure Node with no dependencies, so rc-verify's sparse checkout runs it with no install.
 
@@ -18,10 +23,18 @@ const RELEASE = /^\d+\.\d+\.\d+(?:-rc\.[1-9]\d*)?$/;
 const OWNER = /^[A-Za-z][A-Za-z0-9 ._-]{0,63}$/;
 const ROUTED = /^row [1-9]\d*[a-z]?$/;
 const NOTE_MAX = 300;
+const COMMIT = /^[0-9a-f]{40}$/;
+const RUN_ID = /^[1-9]\d*$/;
+/** The most flaky entries a list holds: more need the coordinator's word, and a change here. */
+export const MAX_FLAKY = 5;
 
 /** The fields that name a record, in key order. */
 export const KEY_FIELDS = ['cell', 'viewport', 'row', 'engine', 'check', 'rule', 'target'];
-const ENTRY_FIELDS = new Set([...KEY_FIELDS, 'owner', 'routed', 'note']);
+const ENTRY_FIELDS = new Set([...KEY_FIELDS, 'owner', 'routed', 'note', 'flaky', 'seen']);
+const SEEN_FIELDS = ['commit', 'failed', 'passed'];
+
+/** Whether `entry` is a flaky one (validated: `flaky` is true, with its `seen` evidence). */
+export const isFlaky = (entry) => entry?.flaky === true;
 
 /** Whether `release` is X.Y.Z or X.Y.Z-rc.N. */
 export const isRelease = (release) => typeof release === 'string' && RELEASE.test(release);
@@ -104,11 +117,46 @@ export function recordsProblems(records, scope) {
       (typeof entry.note !== 'string' || entry.note.length > NOTE_MAX)
     )
       problems.push(`${where}: note is not text of at most ${NOTE_MAX} characters`);
+    if (entry.flaky !== undefined || entry.seen !== undefined) {
+      const evidence = entry.seen;
+      if (entry.flaky !== true)
+        problems.push(
+          `${where}: flaky is ${JSON.stringify(entry.flaky)}; a flaky entry says "flaky": true`,
+        );
+      if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) {
+        problems.push(
+          `${where}: a flaky entry needs "seen": {"commit": <sha>, "failed": <run id>, "passed": <run id>}`,
+        );
+      } else {
+        for (const field of Object.keys(evidence)) {
+          if (!SEEN_FIELDS.includes(field)) problems.push(`${where}: seen.${field} is not a field`);
+        }
+        if (typeof evidence.commit !== 'string' || !COMMIT.test(evidence.commit))
+          problems.push(
+            `${where}: seen.commit is ${JSON.stringify(evidence.commit)}, not a full commit sha`,
+          );
+        for (const field of ['failed', 'passed']) {
+          if (typeof evidence[field] !== 'string' || !RUN_ID.test(evidence[field]))
+            problems.push(
+              `${where}: seen.${field} is ${JSON.stringify(evidence[field])}, not a run id`,
+            );
+        }
+        if (typeof evidence.failed === 'string' && evidence.failed === evidence.passed)
+          problems.push(
+            `${where}: seen.failed and seen.passed are one run; a flaky entry needs two`,
+          );
+      }
+    }
     const key = recordKey(entry);
     if (seen.has(key)) problems.push(`${where}: listed twice`);
     seen.add(key);
   });
-  // A final release keeps the full matrix's rule: every cell, and none failing.
+  const flaky = records.filter((entry) => entry?.flaky === true).length;
+  if (flaky > MAX_FLAKY)
+    problems.push(
+      `${flaky} flaky entries, over the ${MAX_FLAKY} a list holds without the coordinator's word`,
+    );
+  // A final release keeps the full matrix's rule: every cell, and none failing, flaky or not.
   if (isRelease(scope?.release) && !scope.release.includes('-rc.')) {
     if (scope.scope !== 'full')
       problems.push(`${scope.release} is a final release: its scope must be full`);
@@ -123,7 +171,10 @@ export function recordsProblems(records, scope) {
  * entry whose test ran still failing. Returns
  * - unlisted: each failure of a failing cell test that no entry names, with its printed entry;
  * - unrecorded: each failing cell test with no failure records, which no entry can name;
- * - passed: each entry whose test ran here (not skipped) and whose failure it no longer has.
+ * - passed: each strict entry whose test ran here (not skipped) and whose failure it no longer has;
+ * - flaky: each flaky entry and how it came out here: `failed` (its record failed), `passed` (its
+ *   test ran without it), or `not run`. A flaky entry is never `passed` above; its test's other
+ *   failures are unlisted all the same.
  * Entries whose test didn't run here are the caller's to judge.
  */
 export function judgeListed(tests, listed) {
@@ -145,9 +196,18 @@ export function judgeListed(tests, listed) {
         unlisted.push({ test, failure, entry: listEntry(failure) });
     }
   }
+  const ownOf = (entry) =>
+    ran.get(JSON.stringify([entry.cell, entry.viewport, entry.row, entry.engine]));
   const passed = (listed ?? []).filter((entry) => {
-    const own = ran.get(JSON.stringify([entry.cell, entry.viewport, entry.row, entry.engine]));
-    return own !== undefined && !own.has(recordKey(entry));
+    const own = ownOf(entry);
+    return !isFlaky(entry) && own !== undefined && !own.has(recordKey(entry));
   });
-  return { unlisted, unrecorded, passed };
+  const flaky = (listed ?? []).filter(isFlaky).map((entry) => {
+    const own = ownOf(entry);
+    return {
+      entry,
+      outcome: own === undefined ? 'not run' : own.has(recordKey(entry)) ? 'failed' : 'passed',
+    };
+  });
+  return { unlisted, unrecorded, passed, flaky };
 }

@@ -277,3 +277,34 @@ test("the artifact's summary is read out of its zip, and a malformed, oversized,
     /compression method 12/,
   );
 });
+
+test("a red run's flaky entry may pass or fail on its record, and the summary says which", async () => {
+  const { flakyLines } = await import('./verify-rc.mjs');
+  const seen = { commit: SHA, failed: '301', passed: '302' };
+  const flakyAxe = { ...entry(AXE), flaky: true, seen };
+  // The axe record passed this time; the focus one still fails, listed strict.
+  const passed = evaluateRc(
+    input({ summary: qprSummary([FOCUS]), listed: [entry(FOCUS), flakyAxe] }),
+  );
+  assert.deepEqual(passed.reasons, []);
+  assert.equal(passed.ok, true);
+  assert.deepEqual(
+    passed.flaky.map(({ outcome }) => outcome),
+    ['passed'],
+  );
+  assert.match(
+    flakyLines(passed.flaky)[0],
+    /^- flaky, passed: .*axe color-contrast on #main > p:nth-child\(3\) \(owner lane C, row 5; seen failing in run 301 and passing in run 302 on 1{40}\)$/,
+  );
+  const failed = evaluateRc(input({ listed: [entry(FOCUS), flakyAxe] }));
+  assert.equal(failed.ok, true);
+  assert.deepEqual(
+    failed.flaky.map(({ outcome }) => outcome),
+    ['failed'],
+  );
+  // A strict entry that passed still blocks.
+  assert.equal(
+    evaluateRc(input({ summary: qprSummary([AXE]), listed: [entry(FOCUS), flakyAxe] })).ok,
+    false,
+  );
+});

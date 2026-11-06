@@ -62,10 +62,16 @@ export interface ListedRecord {
   readonly routed: string;
   /** For readers; never matched. */
   readonly note?: string;
+  /** Seen failing and passing on one commit: its test may pass (quality/release/SCHEMA.md). */
+  readonly flaky?: true;
+  /** A flaky entry's evidence: the commit, and a run where it failed and one where it passed. */
+  readonly seen?: { readonly commit: string; readonly failed: string; readonly passed: string };
 }
 
 export {
   failureTarget,
+  isFlaky,
+  MAX_FLAKY,
   judgeListed,
   listEntry,
   OWNER_PLACEHOLDER,
