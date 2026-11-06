@@ -2114,11 +2114,21 @@
 }
 
 @media print {
-  /* Only the chrome's own controls go: the phone bar, the markers and the
-     dialog. The cover's Index prints, a reference to the drawing index the
-     footer prints; a call to action prints, its address beside it, and every
-     disclosure's content prints. */
-  [data-variant='schematic'] :is(.sx-phone, .sx-run, .sx-dialog) {
+  /* Only the dialog goes, a control with nothing to print. The phone bar and the
+     running markers print where the screen shows them, in place and unstuck (row
+     24): each holds an Index link, a reference to the drawing index the footer
+     prints, so the bar's "Sheet: Cover sheet" heads the page under 48rem, and a
+     marker sits on its sheet's title block. The bar's name, a link to the sheet
+     itself, doesn't print. The cover's Index prints, a call to action prints with
+     its address beside it, and every disclosure's content prints. Nothing is
+     fixed or sticky on paper. */
+  [data-variant='schematic'] .sx-dialog {
+    display: none;
+  }
+  [data-variant='schematic'] :is(.sx-phone, .sx-run) {
+    position: static;
+  }
+  [data-variant='schematic'] .sx-phone__name {
     display: none;
   }
   [data-variant='schematic']
