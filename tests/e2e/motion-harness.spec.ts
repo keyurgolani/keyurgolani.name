@@ -1,11 +1,14 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import {
   frameLoops,
+  loadHome,
+  MOTION_STALL_RERUN,
   nextFrames,
   runningAnimations,
   scrollThrough,
   scrollTops,
   watchFrames,
+  withStallRerun,
 } from '../harness/motion';
 
 // The motion contract's checks (tests/e2e/motion-contract.spec.ts) against
@@ -151,4 +154,133 @@ test('a requestAnimationFrame loop is one frameLoops() sees, and a double frame 
     requestAnimationFrame(tick);
   });
   expect(await frameLoops(page, 1_000)).toBeGreaterThan(20);
+});
+
+// Row 60: a page whose frames stop, or whose main thread blocks, once a scroll
+// reaches a point. Either gets one rerun of the whole check from its start, in
+// a fresh context, as the test's annotation; a stall on both runs fails.
+
+/** How a stub page stalls: its frames stop, or its main thread blocks, past 700 px. */
+type Stall = 'frames' | 'block';
+
+/**
+ * http://stall.test/: six screens of sections that stall as `stall` says
+ * once a scroll passes 700 px, on its first load alone (`once`) or on every
+ * one. Serves it to the test's context and to each fresh one `fresh` opens,
+ * which reaches nothing else, as the test's own doesn't, and counts the loads.
+ */
+async function stallSite(browser: Browser, page: Page, stall: Stall, once: boolean) {
+  const served = { loads: 0 };
+  const serve = (context: BrowserContext) =>
+    context.route('http://stall.test/**', (route) => {
+      served.loads++;
+      const stalls = !once || served.loads === 1;
+      // A frame stall: the harness's own requestAnimationFrame never calls back, and the main
+      // thread stays free. A block: the scroll event's handler runs 9 s, past the bound and probe.
+      const trap =
+        stall === 'frames'
+          ? 'window.__motionFrames.frame = () => 0;'
+          : 'const end = Date.now() + 9000; while (Date.now() < end) {}';
+      const script = stalls
+        ? `<script>let trapped = false; addEventListener('scroll', () => {
+            if (trapped || scrollY < 700) return; trapped = true; ${trap}
+          });</script>`
+        : '';
+      return route.fulfill({
+        contentType: 'text/html',
+        body: `<!doctype html><html><head><style>body { margin: 0 }</style></head><body>
+<div data-variant="probe"><main id="main">${SECTIONS}</main></div>${script}</body></html>`,
+      });
+    });
+  await serve(page.context());
+  const fresh = async () => {
+    const context = await browser.newContext();
+    await context.route('**/*', (route) => route.abort('blockedbyclient'));
+    await serve(context);
+    return context.newPage();
+  };
+  return { served, fresh };
+}
+
+/** The whole check on a stub page, from its load: counts its runs, and keeps the pages and steps. */
+function counted() {
+  const record = { runs: 0, pages: [] as Page[], steps: [] as string[] };
+  const run = async (page: Page) => {
+    record.runs++;
+    record.pages.push(page);
+    await loadHome(page, 'http://stall.test/');
+    expect(await scrollThrough(page)).toEqual([]);
+    record.steps = await page.evaluate(
+      () => (window as Window & { __motionSteps?: string[] }).__motionSteps ?? [],
+    );
+  };
+  return { record, run };
+}
+
+/** The test's reruns, by their annotations' descriptions. */
+const reruns = () =>
+  test
+    .info()
+    .annotations.filter(({ type }) => type === MOTION_STALL_RERUN)
+    .map(({ description }) => description);
+
+/** Every rerun annotation's fixed shape, which later runs are counted by. */
+const SHAPE =
+  /^kind=(frame-stall|main-thread-block) scroller=(\d+|none) step=(\d+|none) call=(mark-scrollers|scroll|next-frames|running-animations)$/;
+
+test('a scroll whose frames stop fails within its bound, naming the kind, the scroller, the step and the call', async ({
+  browser,
+  page,
+}) => {
+  // Under the test's own timeout: an unbounded call would run into it instead.
+  test.setTimeout(20_000);
+  const { run } = counted();
+  await stallSite(browser, page, 'frames', false);
+  await expect(run(page)).rejects.toThrow(
+    'frame-stall at scroller 0, step 3: next-frames gave no answer in 5000 ms, and evaluate(() => 1) answered',
+  );
+});
+
+test('a frame stall gets one rerun of the whole check, from its start, in a fresh context, as an annotation', async ({
+  browser,
+  page,
+}) => {
+  const { served, fresh } = await stallSite(browser, page, 'frames', true);
+  const { record, run } = counted();
+  await withStallRerun(page, run, fresh);
+  expect(served.loads).toBe(2);
+  expect(record.runs).toBe(2);
+  // The rerun's page is a fresh context's, and the stalled one is closed.
+  expect(record.pages[1]!.context()).not.toBe(page.context());
+  expect(page.isClosed()).toBe(true);
+  // It scrolled every step from the first, not from the step that hung.
+  expect(record.steps.length).toBeGreaterThan(4);
+  expect(record.steps).toEqual(record.steps.map((_, at) => `0:${at}`));
+  expect(reruns()).toEqual(['kind=frame-stall scroller=0 step=3 call=next-frames']);
+  expect(reruns()[0]).toMatch(SHAPE);
+});
+
+test('a main-thread block gets the same one rerun, named as a block', async ({ browser, page }) => {
+  const { served, fresh } = await stallSite(browser, page, 'block', true);
+  const { record, run } = counted();
+  await withStallRerun(page, run, fresh);
+  expect(served.loads).toBe(2);
+  expect(record.runs).toBe(2);
+  expect(record.pages[1]!.context()).not.toBe(page.context());
+  expect(reruns()).toEqual(['kind=main-thread-block scroller=0 step=2 call=next-frames']);
+  expect(reruns()[0]).toMatch(SHAPE);
+});
+
+test('a stall on both runs fails, naming both kinds, after one rerun', async ({
+  browser,
+  page,
+}) => {
+  const { served, fresh } = await stallSite(browser, page, 'frames', false);
+  const { record, run } = counted();
+  await expect(withStallRerun(page, run, fresh)).rejects.toThrow(
+    'The test stalled on both runs: first frame-stall at scroller 0, step 3: next-frames gave no answer in 5000 ms, and evaluate(() => 1) answered; then, in a fresh context, frame-stall at scroller 0, step 3:',
+  );
+  expect(served.loads).toBe(2);
+  expect(record.runs).toBe(2);
+  expect(reruns()).toEqual(['kind=frame-stall scroller=0 step=3 call=next-frames']);
 });

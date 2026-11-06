@@ -4,7 +4,7 @@
 // can't hide one. A loop a script drives frame by frame shows up as frame
 // callbacks asking for the next frame, which watchFrames() counts. A canvas
 // drawn without requestAnimationFrame doesn't show here.
-import { expect, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 export interface RunningAnimation {
   /** `css <name>`, `transition <property>`, or `script <properties>`. */
@@ -116,6 +116,140 @@ export async function loadHome(page: Page, url = '/'): Promise<void> {
 }
 
 /**
+ * How long one of scrollThrough()'s calls into the page may take before it
+ * counts as a stall. A healthy call takes 1 to 35 ms, on CI too (row 60's
+ * traces: every evaluate and frame pair before the hang); 5 s is over 100
+ * times the slowest of them. The longest path, a stall and its probe
+ * (5 + 2 s), the stalled page's close (bounded the same), and a second stall
+ * and its probe (5 + 2 s), past the test body's own few seconds twice, is
+ * about 25 s at most, inside a test's 30 s, so the failure names the stalls,
+ * not the test's timeout.
+ */
+export const MOTION_CALL_MS = 5_000;
+
+/** How long the probe after a stall waits for the page's main thread to answer. */
+export const MOTION_PROBE_MS = 2_000;
+
+/**
+ * The annotation a test carries for the one rerun a stall took: its type, and
+ * its description's fixed shape, `kind=<kind> scroller=<n> step=<k> call=<call>`,
+ * which later runs are counted by (row 60's only data, RC2's flake list).
+ */
+export const MOTION_STALL_RERUN = 'motion-stall-rerun';
+
+/** The page call in scrollThrough() that hung, by its name in the annotation. */
+export type MotionCall = 'mark-scrollers' | 'scroll' | 'next-frames' | 'running-animations';
+
+/**
+ * A call into the page that never answered (row 60). The probe after it, a
+ * trivial evaluate, names the kind: one that answers means the page's main
+ * thread was free and only its frames stopped, `frame-stall`; one that
+ * doesn't means the main thread was blocked, by a script or by layout,
+ * `main-thread-block`.
+ */
+export class MotionStall extends Error {
+  readonly kind: 'frame-stall' | 'main-thread-block';
+
+  constructor(
+    readonly scroller: number | null,
+    readonly step: number | null,
+    readonly call: MotionCall,
+    blocked: boolean,
+  ) {
+    const kind = blocked ? 'main-thread-block' : 'frame-stall';
+    super(
+      `${kind} at ${scroller === null ? 'the start' : `scroller ${scroller}, step ${step}`}: ${call} gave no answer in ${MOTION_CALL_MS} ms, and evaluate(() => 1) ${
+        blocked ? `didn't answer in ${MOTION_PROBE_MS / 1000} s` : 'answered'
+      }`,
+    );
+    this.kind = kind;
+    this.name = 'MotionStall';
+  }
+
+  /** MOTION_STALL_RERUN's description: `kind=<kind> scroller=<n> step=<k> call=<call>`. */
+  get annotation(): string {
+    return `kind=${this.kind} scroller=${this.scroller ?? 'none'} step=${this.step ?? 'none'} call=${this.call}`;
+  }
+}
+
+const UNANSWERED = Symbol('unanswered');
+
+/** `work`, or UNANSWERED after `ms`; a call left behind rejects once its page closes, quietly. */
+async function within<T>(work: Promise<T>, ms: number): Promise<T | typeof UNANSWERED> {
+  work.catch(() => {});
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<typeof UNANSWERED>((resolve) => {
+    timer = setTimeout(() => resolve(UNANSWERED), ms);
+  });
+  try {
+    return await Promise.race([work, late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Whether the page's main thread is blocked: a trivial evaluate gives no answer in MOTION_PROBE_MS. */
+async function blocked(page: Page): Promise<boolean> {
+  const answer = await within(
+    page.evaluate(() => 1),
+    MOTION_PROBE_MS,
+  ).catch(() => UNANSWERED);
+  return answer !== 1;
+}
+
+/** `run()`'s answer, or a MotionStall after MOTION_CALL_MS, of the kind the probe finds. */
+async function bounded<T>(
+  page: Page,
+  where: { scroller: number | null; step: number | null; call: MotionCall },
+  run: () => Promise<T>,
+): Promise<T> {
+  const answer = await within(run(), MOTION_CALL_MS);
+  if (answer !== UNANSWERED) return answer;
+  throw new MotionStall(where.scroller, where.step, where.call, await blocked(page));
+}
+
+/**
+ * Runs `run`, the test's whole body from its first load, on `page`. On a
+ * stall of either kind in it (a MotionStall), closes the page and runs the
+ * whole body once more, from its start, on the page `fresh` gives: a new
+ * page in a fresh browser context, so a new renderer, since a wedged one may
+ * not recover on a reload of the same page, while a loop of the page's own
+ * comes back on the fresh one and fails there. The rerun is the test's
+ * MOTION_STALL_RERUN annotation, naming the stall's kind, where it hung, and
+ * the call.
+ * A stall on both runs fails, naming both kinds; any other failure is the
+ * body's own. Closes the fresh page's context when the rerun ends.
+ */
+export async function withStallRerun(
+  page: Page,
+  run: (page: Page) => Promise<void>,
+  fresh: () => Promise<Page>,
+): Promise<void> {
+  let first: MotionStall;
+  try {
+    await run(page);
+    return;
+  } catch (error) {
+    if (!(error instanceof MotionStall)) throw error;
+    first = error;
+  }
+  test.info().annotations.push({ type: MOTION_STALL_RERUN, description: first.annotation });
+  // A wedged renderer may not close in time; the test's own teardown closes its context.
+  await within(page.close(), MOTION_CALL_MS).catch(() => {});
+  const again = await fresh();
+  try {
+    await run(again);
+  } catch (error) {
+    if (!(error instanceof MotionStall)) throw error;
+    throw new Error(
+      `The test stalled on both runs: first ${first.message}; then, in a fresh context, ${error.message}.`,
+    );
+  } finally {
+    await again.context().close();
+  }
+}
+
+/**
  * Scrolls every scroll container on the page, the document's first, from
  * top to bottom a screen at a time, as a visitor reading it would, and lists
  * each endless animation running at any step: one an IntersectionObserver
@@ -124,41 +258,60 @@ export async function loadHome(page: Page, url = '/'): Promise<void> {
  */
 export async function scrollThrough(page: Page): Promise<RunningAnimation[]> {
   const seen = new Map<string, RunningAnimation>();
-  const scrollers = await page.evaluate(() => {
-    const candidates = [
-      ...new Set([document.scrollingElement, ...document.querySelectorAll('*')]),
-    ].filter((element): element is Element => element !== null);
-    const marked: number[] = [];
-    candidates.forEach((element, index) => {
-      const scrolls =
-        element === document.scrollingElement ||
-        ['auto', 'scroll', 'overlay'].includes(getComputedStyle(element).overflowY);
-      if (scrolls && element.scrollHeight > element.clientHeight + 1) {
-        element.setAttribute('data-motion-scroller', String(index));
-        marked.push(index);
-      }
-    });
-    return marked;
-  });
+  const scrollers = await bounded(
+    page,
+    { scroller: null, step: null, call: 'mark-scrollers' },
+    () =>
+      page.evaluate(() => {
+        const candidates = [
+          ...new Set([document.scrollingElement, ...document.querySelectorAll('*')]),
+        ].filter((element): element is Element => element !== null);
+        const marked: number[] = [];
+        candidates.forEach((element, index) => {
+          const scrolls =
+            element === document.scrollingElement ||
+            ['auto', 'scroll', 'overlay'].includes(getComputedStyle(element).overflowY);
+          if (scrolls && element.scrollHeight > element.clientHeight + 1) {
+            element.setAttribute('data-motion-scroller', String(index));
+            marked.push(index);
+          }
+        });
+        // Each step this pass scrolls to, in order, which motion-harness.spec.ts reads.
+        (window as Window & StepRecord).__motionSteps = [];
+        return marked;
+      }),
+  );
   for (const scroller of scrollers) {
     for (let step = 0; ; step++) {
-      const more = await page.evaluate(
-        ([which, at]) => {
-          const element = document.querySelector(`[data-motion-scroller="${which}"]`)!;
-          const top = Math.min(at * element.clientHeight * 0.8, element.scrollHeight);
-          element.scrollTo({ top, behavior: 'instant' });
-          return top < element.scrollHeight - element.clientHeight;
-        },
-        [scroller, step] as const,
+      const where = { scroller, step };
+      const more = await bounded(page, { ...where, call: 'scroll' }, () =>
+        page.evaluate(
+          ([which, at]) => {
+            const element = document.querySelector(`[data-motion-scroller="${which}"]`)!;
+            const top = Math.min(at * element.clientHeight * 0.8, element.scrollHeight);
+            element.scrollTo({ top, behavior: 'instant' });
+            (window as Window & StepRecord).__motionSteps?.push(`${which}:${at}`);
+            return top < element.scrollHeight - element.clientHeight;
+          },
+          [scroller, step] as const,
+        ),
       );
-      await nextFrames(page);
-      for (const animation of await runningAnimations(page)) {
+      await bounded(page, { ...where, call: 'next-frames' }, () => nextFrames(page));
+      const running = await bounded(page, { ...where, call: 'running-animations' }, () =>
+        runningAnimations(page),
+      );
+      for (const animation of running) {
         if (animation.endless) seen.set(`${animation.kind} ${animation.target}`, animation);
       }
       if (!more) break;
     }
   }
   return [...seen.values()];
+}
+
+/** What scrollThrough() keeps in the page: each `scroller:step` its current pass scrolled to. */
+interface StepRecord {
+  __motionSteps?: string[];
 }
 
 export interface ScrollTops {

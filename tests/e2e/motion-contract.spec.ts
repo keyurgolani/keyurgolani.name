@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { expect, test } from '@playwright/test';
+import { expect, test, type BrowserContext } from '@playwright/test';
 import { DEFAULT_PORTFOLIO, startApp } from '../harness/app-server.mjs';
 import {
   frameLoops,
@@ -8,6 +8,7 @@ import {
   runningAnimations,
   scrollThrough,
   scrollTops,
+  withStallRerun,
 } from '../harness/motion';
 import { FALLBACK_ID, VARIANTS } from '../harness/registry';
 
@@ -86,50 +87,74 @@ for (const { manifest } of VARIANTS) {
       test.afterAll(async () => {
         await app?.stop();
       });
-      test.beforeEach(async ({ context }) => {
-        await context.route('**/*', (route) =>
+      /** The browser reaches the server alone: every context's routes, the fixture's and a rerun's. */
+      const guard = (context: BrowserContext) =>
+        context.route('**/*', (route) =>
           new URL(route.request().url()).origin === app.origin
             ? route.continue()
             : route.abort('blockedbyclient'),
         );
+      test.beforeEach(async ({ context }) => {
+        await guard(context);
       });
       test.afterEach(() => {
         expect(app.egress(), 'hosts the server tried to reach').toEqual([]);
       });
 
-      test('nothing runs once the page has settled', { annotation }, async ({ page }) => {
-        await loadHome(page, `${app.origin}/`);
-        const root = page.locator('[data-variant]');
-        await expect(root).toHaveAttribute('data-variant', manifest.id);
-        // The document boundary's motion: reduced under the site's reduce, else full (#19, Slice 4).
-        await expect(root).toHaveAttribute('data-motion', policy === 'reduce' ? 'reduced' : 'full');
-        if (fallback) await expect(root).toHaveAttribute('data-requested-variant', UNREGISTERED);
-        const endless = (await runningAnimations(page)).filter((animation) => animation.endless);
-        expect(endless).toEqual([]);
-        await expect.poll(() => runningAnimations(page), { timeout: 5_000 }).toEqual([]);
-        // No script keeps asking for frames.
-        expect(await frameLoops(page)).toBeLessThan(5);
-        // Nothing starts as each part of the page comes into view, and what
-        // a scroll set off has stopped once it's done.
-        expect(await scrollThrough(page)).toEqual([]);
-        await expect.poll(() => runningAnimations(page), { timeout: 5_000 }).toEqual([]);
+      test('nothing runs once the page has settled', { annotation }, async ({ page, browser }) => {
+        // The whole test, from its load, once more from the start on a stall of either kind (row
+        // 60), in a fresh context: browser.newContext() takes this test's own options (its viewport
+        // and reducedMotion) from Playwright's fixtures, as the context fixture does, and guard()
+        // gives it the same routes.
+        const fresh = async () => {
+          const context = await browser.newContext();
+          await guard(context);
+          return context.newPage();
+        };
+        await withStallRerun(
+          page,
+          async (page) => {
+            await loadHome(page, `${app.origin}/`);
+            const root = page.locator('[data-variant]');
+            await expect(root).toHaveAttribute('data-variant', manifest.id);
+            // The document boundary's motion: reduced under the site's reduce, else full (#19, Slice 4).
+            await expect(root).toHaveAttribute(
+              'data-motion',
+              policy === 'reduce' ? 'reduced' : 'full',
+            );
+            if (fallback)
+              await expect(root).toHaveAttribute('data-requested-variant', UNREGISTERED);
+            const endless = (await runningAnimations(page)).filter(
+              (animation) => animation.endless,
+            );
+            expect(endless).toEqual([]);
+            await expect.poll(() => runningAnimations(page), { timeout: 5_000 }).toEqual([]);
+            // No script keeps asking for frames.
+            expect(await frameLoops(page)).toBeLessThan(5);
+            // Nothing starts as each part of the page comes into view, and what
+            // a scroll set off has stopped once it's done.
+            expect(await scrollThrough(page)).toEqual([]);
+            await expect.poll(() => runningAnimations(page), { timeout: 5_000 }).toEqual([]);
 
-        // The controls: an endless animation and a frame loop the page starts
-        // are ones the checks see.
-        await page.evaluate(() => {
-          document.querySelector('main')!.animate([{ opacity: 1 }, { opacity: 0.99 }], {
-            duration: 1_000,
-            iterations: Infinity,
-          });
-          const tick = () => requestAnimationFrame(tick);
-          requestAnimationFrame(tick);
-        });
-        expect(await runningAnimations(page)).toContainEqual({
-          kind: 'script opacity',
-          target: expect.stringMatching(/^main\b/),
-          endless: true,
-        });
-        expect(await frameLoops(page)).toBeGreaterThan(20);
+            // The controls: an endless animation and a frame loop the page starts
+            // are ones the checks see.
+            await page.evaluate(() => {
+              document.querySelector('main')!.animate([{ opacity: 1 }, { opacity: 0.99 }], {
+                duration: 1_000,
+                iterations: Infinity,
+              });
+              const tick = () => requestAnimationFrame(tick);
+              requestAnimationFrame(tick);
+            });
+            expect(await runningAnimations(page)).toContainEqual({
+              kind: 'script opacity',
+              target: expect.stringMatching(/^main\b/),
+              endless: true,
+            });
+            expect(await frameLoops(page)).toBeGreaterThan(20);
+          },
+          fresh,
+        );
       });
 
       test('a navigation link jumps to its section', { annotation }, async ({ page }) => {
