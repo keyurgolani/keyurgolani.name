@@ -434,6 +434,39 @@ test("a refit keeps the reader where they were: top to bottom it moves the page 
   assert.match(bodyOf('refitNow'), /const at = kept \?\? reading\(\);\s*kept = undefined;/);
 });
 
+test("the phone's turn, inside a resize's burst, drops the kept reading once it has brought the reader's scene to the top, so the burst's refit doesn't move them on again (row 53 r2, 1b)", () => {
+  const source = readFileSync(new URL('./controller.tsx', import.meta.url), 'utf8');
+  const start = source.indexOf('const onPhone = ');
+  assert.notEqual(start, -1);
+  const body = source.slice(start, source.indexOf('\n    };\n', start));
+  // After its own scroll and landing, not before: a turn with nothing to scroll keeps the reading.
+  assert.match(
+    body,
+    /scrollIntoView\(\{ block: 'start', behavior: 'instant' \}\);[^}]*land\(held\);\s*kept = undefined;\s*\}/,
+  );
+});
+
+test("every move of the controller's own to a scene inside a resize's burst drops the kept reading: a step, a link, and a relayout's hold (row 53 r2, 1b)", () => {
+  const source = readFileSync(new URL('./controller.tsx', import.meta.url), 'utf8');
+  const bodyOf = (name: string) => {
+    const start = source.indexOf(`const ${name} = `);
+    assert.notEqual(start, -1, name);
+    return source.slice(start, source.indexOf('\n    };\n', start)).replace(/\/\/[^\n]*/g, '');
+  };
+  // A step: every key, Next, a focus that moves into a scene, and a link on the strip go through align.
+  assert.match(bodyOf('align'), /if \(!element\) return;\s*kept = undefined;/);
+  // A link top to bottom lands by scrolling what it names into view, not by align.
+  assert.match(bodyOf('onHash'), /^const onHash = \(\) => \{\s*kept = undefined;/);
+  // A face or a late picture that turns the pin over holds the reader itself.
+  assert.match(
+    bodyOf('relayout'),
+    /if \(pinned !== was\) \{\s*hold\(at\);\s*kept = undefined;\s*\}/,
+  );
+  // Only those, the refit that takes it, and the resize that sets it touch it.
+  assert.equal(source.match(/\bkept = undefined;/g)?.length, 5);
+  assert.equal(source.match(/\bkept \?\?= reading\(\);/g)?.length, 1);
+});
+
 test("a work whose title repeats its section's still links to its own address", () => {
   const pair = pairOf('complete');
   const works = pair.portfolio.works ?? [];
