@@ -97,7 +97,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   COMPOSITION_SETTABLE,
-  COMPOSITION_SETTABLE_RULE,
   compositionSettableProblem,
   isPlatformToken,
   MOTION_SLOT,
@@ -142,7 +141,8 @@ export const SOURCE_AUDIT_REMEDIES: Readonly<Record<SourceAuditRule, string>> = 
   blur: "Use the design language's blur, var(--ui-backdrop-blur).",
   timing: 'Take durations from the design language: var(--ui-motion-fast), -standard, or -slow.',
   'legacy-property': "The v1 properties are gone: read #19's --color-, --ui-, and --type- tokens.",
-  'custom-property': `A variant declares --layout-* properties, and ${COMPOSITION_SETTABLE_RULE.replace(/^a composition may/, 'may')} Read the --color-, --ui-, and --type- tokens for the rest.`,
+  'custom-property':
+    'A variant declares --layout-* properties alone: read the --color-, --ui-, and --type- tokens for the rest.',
   'motion-gate':
     "Give the loop animation-play-state: var(--motion-ambient-state), after its last animation shorthand, so reduced motion, static, print, and the runtime's pause stop it, under the kit runtime's [data-kit-runtime] gate too.",
   'layout-line':

@@ -993,10 +993,10 @@ test('row 73: a variant stylesheet sets --color-focus and --ui-focus-offset in t
       assert.deepEqual(rulesIn(at(selector, css)), [], `${selector} { ${css} }`);
     }
   }
-  // The remedy says what a composition may set, and how.
-  assert.match(
+  // Today's refusal text stands, for every other value and property (the coordinator, row 73).
+  assert.equal(
     SOURCE_AUDIT_REMEDIES['custom-property'],
-    /--color-focus only as var\(--color-on-scrim\), var\(--color-focus-inverse\), var\(--color-text-primary\), var\(--color-on-accent\), or var\(--color-on-emphasis\)/,
+    'A variant declares --layout-* properties alone: read the --color-, --ui-, and --type- tokens for the rest.',
   );
 });
 
