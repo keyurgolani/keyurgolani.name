@@ -334,10 +334,25 @@ addEventListener('load', () => setTimeout(() => {
  * The chunk lazyReveal() loads: it shows what its island's markup holds
  * hidden, 400 ms after it lands, on a timer, as React's Suspense throttle
  * reveals a lazy enhancement a while after its chunk, the page idle between.
+ * At the same time it changes what [data-later] elements, shown in the
+ * server's markup, name: a role (data-role), the data-script-only mark
+ * (data-mark), or where they sit (data-move-into, a selector they move into).
  */
 const REVEAL = {
-  body: "setTimeout(() => { for (const el of document.querySelectorAll('[data-lazy]')) { if (el.dataset.words) el.textContent = el.dataset.words; if (el.dataset.html) el.innerHTML = el.dataset.html; el.hidden = false; } }, 400);",
+  body: "setTimeout(() => { for (const el of document.querySelectorAll('[data-later]')) { if (el.dataset.role) el.setAttribute('role', el.dataset.role); if ('mark' in el.dataset) el.setAttribute('data-script-only', ''); if (el.dataset.moveInto) document.querySelector(el.dataset.moveInto).append(el); } for (const el of document.querySelectorAll('[data-lazy]')) { if (el.dataset.words) el.textContent = el.dataset.words; if (el.dataset.html) el.innerHTML = el.dataset.html; el.hidden = false; } }, 400);",
 };
+
+/**
+ * What a lazy chunk reveals that no condition misses, a button that submits nothing alone in its
+ * block, so a page whose other fields the server shows has something to wait for.
+ */
+const LATER_ANCHOR = '<p><button type="button" hidden data-lazy>Next scene</button></p>';
+
+/** The one script-only-text record a case's `words` give. */
+const scriptOnlyText = (words: string) =>
+  new RegExp(
+    `^inventory script-only-text: 1 element\\(s\\) with script-only words without JavaScript, here "${escaped(words)}"$`,
+  );
 
 /** `check` once the lazy enhancement has revealed its control, as the cell reads its baseline once axe has run. */
 const revealed =
@@ -1864,7 +1879,8 @@ export const A11Y_CASES: readonly MetaCase[] = [
   ),
   // The mark can't excuse the server's own words (the coordinator, 6 Nov 2026): a live status
   // marked data-script-only that holds words without JavaScript is a finding of its own, by name,
-  // though nothing is missing under any condition.
+  // though nothing is missing under any condition. One record, though the words are also a
+  // script-only field the page shows (below): one per element.
   builtCase(
     'script-only-server-words',
     'inventory',
@@ -1874,9 +1890,45 @@ export const A11Y_CASES: readonly MetaCase[] = [
       '<p role="status" data-script-only data-lazy>Opening, 1 of 21</p>',
       PRINT_HIDES,
     ),
-    /^inventory script-only-text: 1 marked status\(es\) with words without JavaScript, here "Opening, 1 of 21"$/,
+    scriptOnlyText('Opening, 1 of 21'),
     revealed(scriptlessInventory),
     { chunk: REVEAL },
+  ),
+  // Judged against the page with its script (the coordinator, 7 Nov 2026, F1): a `script-only:`
+  // field of the baseline that the page without JavaScript still shows, as any kind, is the
+  // server's words, whatever the server's markup marks. So it holds words a script makes a live
+  // status, marks, or moves into a marked status, each one record.
+  ...(
+    [
+      [
+        'script-only-role-by-script',
+        'Server words, marked, that the script makes a status (role added after mount)',
+        '<p data-script-only data-later data-role="status">Scenes run left to right.</p>',
+        'Scenes run left to right.',
+      ],
+      [
+        'script-only-mark-by-script',
+        'A server status whose words the script marks data-script-only',
+        '<p role="status" data-later data-mark>Opening, 1 of 21</p>',
+        'Opening, 1 of 21',
+      ],
+      [
+        'script-only-moved',
+        'Server words the script moves into an empty marked status',
+        '<div role="status" data-script-only id="position"></div><p data-later data-move-into="#position">Opening, 1 of 21</p>',
+        'Opening, 1 of 21',
+      ],
+    ] as const
+  ).map(([id, what, html, words]) =>
+    builtCase(
+      id,
+      'inventory',
+      `${what}, ${html}, without JavaScript and in print`,
+      lazyReveal(what, `${html}${LATER_ANCHOR}`, PRINT_HIDES),
+      scriptOnlyText(words),
+      revealed(scriptlessInventory),
+      { chunk: REVEAL },
+    ),
   ),
   // A page that declares nothing is read after its skip link is followed, as a visitor has it.
   bad('skip-changes', 'enhancement-skip-changes.html', 'enhancement', 'semantics', enhancement),
