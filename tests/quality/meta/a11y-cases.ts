@@ -1438,6 +1438,25 @@ const auditOutcome = (css: string): MetaOutcome => {
   };
 };
 
+// Harness push 2's follow-up (item 9, row 65): a requestAnimationFrame loop re-armed every 250 ms,
+// so about 12 frames with callbacks in the window, past rafFrames: a loop, however slow.
+const loopEvery250 = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>A slow loop</title></head><body><main><h1>A slow loop</h1><p id="tick">0</p></main>
+<script>
+  const tick = () => {
+    document.getElementById('tick').textContent = String(Date.now());
+    setTimeout(() => requestAnimationFrame(tick), 250);
+  };
+  addEventListener('load', () => requestAnimationFrame(tick));
+</script></body></html>`;
+
+/**
+ * Harness push 2's follow-up (INV-N1): a marked status the script alone fills, beside the same
+ * words as another field, which the page without JavaScript still shows.
+ */
+const filledStatus =
+  '<div role="status" data-script-only><p hidden data-lazy data-words="Opening, 1 of 21"></p></div>';
+
 export const A11Y_CASES: readonly MetaCase[] = [
   bad('trap', 'keyboard-trap.html', 'keyboard', 'trap|reachable', keyboard),
   {
@@ -1997,7 +2016,7 @@ export const A11Y_CASES: readonly MetaCase[] = [
     'A live region marked data-script-only whose words the server renders, without JavaScript and in print',
     lazyReveal(
       'A script-only live region',
-      '<p aria-live="polite" data-script-only data-lazy>Opening, 1 of 21</p>',
+      '<p aria-live="polite" data-script-only data-lazy hidden>Opening, 1 of 21</p>',
       PRINT_HIDES,
     ),
     scriptOnlyText('Opening, 1 of 21'),
@@ -2608,4 +2627,47 @@ export const A11Y_CASES: readonly MetaCase[] = [
     browser: true,
     run: () => onPage('busy-specimen.html', settled),
   },
+  // Harness push 2's follow-up, in a block of its own (push 3 edits this table too).
+  // Row 65 (item 9): a loop re-armed every 250 ms fails as a frame loop, at rafFrames 2.
+  {
+    id: 'motion/loop-every-250ms',
+    gate: 'motion',
+    input: 'a requestAnimationFrame loop re-armed every 250 ms, under reduced motion',
+    expect: 'fail',
+    reason: /^motion (?:frame-loop): /,
+    browser: true,
+    run: () => onPage(loopEvery250, motionFindings, { ...REDUCED, init: MOTION_SAMPLER }),
+  },
+  // INV-N1: a script-only field's words that the page without JavaScript shows as another field,
+  // matched by that field's own words: a link's and a control's name, not its target or its kind.
+  ...(
+    [
+      ['script-only-as-link', 'a bare link', '<div><a href="/scenes/1">Opening, 1 of 21</a></div>'],
+      [
+        'script-only-as-submit',
+        'a bare submit button',
+        '<form action="/scenes"><button>Opening, 1 of 21</button></form>',
+      ],
+      ['script-only-as-heading', 'a heading', '<h2>Opening, 1 of 21</h2>'],
+      [
+        'script-only-as-image-alt',
+        "an image's alt",
+        '<img alt="Opening, 1 of 21" width="40" height="40" src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22/%3E">',
+      ],
+    ] as const
+  ).map(([id, what, html]) =>
+    builtCase(
+      id,
+      'inventory',
+      `A status marked data-script-only that only the script fills, its words also ${what} the server renders, without JavaScript and in print`,
+      lazyReveal(
+        `Script-only words as ${what}`,
+        `${filledStatus}${html}${LATER_ANCHOR}`,
+        PRINT_HIDES,
+      ),
+      scriptOnlyText('Opening, 1 of 21'),
+      revealed(scriptlessInventory),
+      { chunk: REVEAL },
+    ),
+  ),
 ];

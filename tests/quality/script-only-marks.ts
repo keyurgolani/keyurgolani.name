@@ -8,8 +8,10 @@
 // names no mark any more.
 //
 // An entry is { file, marks, reason }: the file's path from the repository root; how many times
-// the file's text holds "data-script-only", comments included; and a sentence saying what the
-// marked element is and why its words are live script's alone. For example:
+// the file's text holds "data-script-only" or writes `dataset.scriptOnly` (markCount), comments
+// included; and a sentence saying what the marked element is and why its words are live script's
+// alone. An entry covers every element its file renders with the mark, so a file whose one mark
+// sits in a component rendered many times is one entry. For example:
 //   {
 //     file: 'packages/variant-horizontal-cinema/src/controller.tsx',
 //     marks: 1,
@@ -31,6 +33,12 @@ export const SCRIPT_ONLY_MARKS: readonly ScriptOnlyMark[] = [];
 
 /** The mark's name, as a file's text holds it. */
 export const MARK = 'data-script-only';
+/** The mark as a script writes it on an element's dataset, which names it as much. */
+export const DATASET_MARK = 'dataset.scriptOnly';
+
+/** How many times `text` names the mark: as an attribute, or as a dataset write. */
+export const markCount = (text: string): number =>
+  text.split(MARK).length - 1 + (text.split(DATASET_MARK).length - 1);
 
 /** A file that may name the mark unlisted: the harness, the docs, and tests, which read it. */
 export function markExempt(file: string): boolean {

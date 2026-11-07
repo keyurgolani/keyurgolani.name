@@ -4,7 +4,14 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { MARK, markExempt, markProblems, SCRIPT_ONLY_MARKS } from './script-only-marks';
+import {
+  DATASET_MARK,
+  MARK,
+  markCount,
+  markExempt,
+  markProblems,
+  SCRIPT_ONLY_MARKS,
+} from './script-only-marks';
 
 // Every data-script-only use outside the harness, the docs and the tests is listed, with a
 // reason (script-only-marks.ts; the coordinator, 7 Nov 2026, inventory addendum F5).
@@ -13,12 +20,15 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 
 /** Every tracked file that names the mark, with how many times. */
 function marksInTheRepository(): Map<string, number> {
-  const listed = execFileSync('git', ['grep', '-l', '-F', MARK], { cwd: ROOT, encoding: 'utf8' });
+  const listed = execFileSync('git', ['grep', '-l', '-F', '-e', MARK, '-e', DATASET_MARK], {
+    cwd: ROOT,
+    encoding: 'utf8',
+  });
   return new Map(
     listed
       .split('\n')
       .filter(Boolean)
-      .map((file) => [file, readFileSync(path.join(ROOT, file), 'utf8').split(MARK).length - 1]),
+      .map((file) => [file, markCount(readFileSync(path.join(ROOT, file), 'utf8'))]),
   );
 }
 
@@ -60,4 +70,15 @@ test('only the harness, the docs and tests may name the mark unlisted', () => {
   ]) {
     assert.equal(markExempt(file), true, file);
   }
+});
+
+// Harness push 2's follow-up (INV-N3): a script that sets the mark on an element's dataset names it.
+test('a dataset.scriptOnly write is a use of the mark as much as the attribute', () => {
+  assert.equal(markCount("el.dataset.scriptOnly = '';"), 1);
+  assert.equal(markCount('<p data-script-only role="status"></p>'), 1);
+  assert.equal(markCount("<p data-script-only></p> el.dataset.scriptOnly = '';"), 2);
+  const file = 'packages/variant-horizontal-cinema/src/controller.tsx';
+  assert.deepEqual(markProblems(new Map([[file, markCount("el.dataset.scriptOnly = '';")]]), []), [
+    `${file}: names data-script-only 1 time(s), and isn't listed`,
+  ]);
 });

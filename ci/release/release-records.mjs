@@ -287,8 +287,8 @@ export function uncovered(test) {
  *   entry judged, as passed. rc-quality never sets it: full mode owes every condition;
  * - flaky: each flaky entry and how it came out here: `failed` (its record failed), `passed` (its
  *   test ran without it), `not judged` (its test is held, or with `owedOnly` is a condition its
- *   test neither owed nor ran), or `not run`. A flaky entry is never `passed` above; its test's other failures are
- *   unlisted all the same.
+ *   test neither owed nor ran), or `not run`. A flaky entry is never `passed` above; its test's
+ *   other failures are unlisted all the same.
  * Entries whose test didn't run here are the caller's to judge.
  */
 export function judgeListed(tests, listed, { owedOnly = false } = {}) {

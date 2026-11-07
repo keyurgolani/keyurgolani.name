@@ -37,11 +37,13 @@ import {
   stillnessScript,
   worstRatio,
 } from './lib/a11y/contrast';
+import { ownWords } from './lib/a11y/conditions';
 import { stuckCoverScript } from './lib/a11y/covers';
 import {
   centreLineChange,
   clipAround,
   fragmentsLength,
+  keyboardFindings,
   ringCentreLine,
   ringFindings,
   ringLength,
@@ -1341,4 +1343,78 @@ test("without script, the walk reads a stop once the scroll, the page's and its 
     again.polls.map((poll) => poll.scroll[1]![0]),
     [5, 5, 6, 6, 6],
   );
+});
+
+// Harness push 2's follow-up (item 9): row 48's walk on a page whose scroll never holds.
+test('without script, a stop whose scroll never holds is an unresolved hidden-focusable record, never read where it happens to be (row 48)', async () => {
+  let reads = 0;
+  const active = {
+    none: false,
+    path: 'html > body > main > a',
+    tag: 'a',
+    shown: true,
+    inView: false,
+    hitsItself: true,
+  };
+  let presses = 0;
+  const page = {
+    mouse: { move: async () => {} },
+    keyboard: { press: async () => void (presses += 1) },
+    waitForTimeout: async (ms: number) => new Promise((done) => setTimeout(done, ms)),
+    evaluate: async (fn: unknown) => {
+      if (typeof fn === 'string') {
+        if (fn.includes('"kind":"tabbables"')) return [active.path];
+        // One stop, then focus leaves for the document.
+        if (fn.includes('"kind":"active"')) return presses === 1 ? active : { none: true };
+        throw new Error(`unexpected probe ${fn.slice(-40)}`);
+      }
+      const source = String(fn);
+      if (source.includes('matchMedia')) return true;
+      // The scroll read: it moves on every read, so it never holds.
+      if (source.includes('activeElement') && source.includes('scrollWidth')) {
+        reads += 1;
+        // At the one stop it moves on every read, so it never holds; once focus leaves, it holds.
+        const top = presses === 1 ? reads : 0;
+        return { scroll: [[0, top]], x: 0, y: 900 + top };
+      }
+      return undefined;
+    },
+  } as unknown as Parameters<typeof keyboardFindings>[0];
+  const settleLog: { settled: boolean }[] = [];
+  const findings = await keyboardFindings(page, { settleLog } as Parameters<
+    typeof keyboardFindings
+  >[1]);
+  assert.deepEqual(
+    findings.map(({ rule, actual }) => [rule, actual]),
+    [
+      [
+        'hidden-focusable',
+        `unresolved: the page still scrolls ${SETTLE_LIMIT_MS} ms after Tab, so where it rests is unknown`,
+      ],
+    ],
+  );
+  assert.deepEqual(
+    settleLog.map(({ settled }) => settled),
+    [false, true],
+  );
+  assert.ok(reads > 3, `the walk read the scroll ${reads} times`);
+});
+
+// Harness push 2's follow-up (INV-N1), in a block of its own: a script-only field's words are
+// matched against each inventory field's own words, a link's and a control's name, so a bare link
+// or a submit button that shows them without JavaScript is a field that shows them.
+test("an inventory field's own words: a link's and a control's name, any other field's text (INV-N1)", () => {
+  for (const [item, words] of [
+    ['link: /scenes/1 Opening, 1 of 21', 'Opening, 1 of 21'],
+    ['control: button:submit Opening, 1 of 21', 'Opening, 1 of 21'],
+    ['control: input Opening, 1 of 21', 'Opening, 1 of 21'],
+    ['control: skip-link #main Skip to content', 'Skip to content'],
+    ['heading: Opening, 1 of 21', 'Opening, 1 of 21'],
+    ['image: Opening, 1 of 21', 'Opening, 1 of 21'],
+    ['text: Opening, 1 of 21', 'Opening, 1 of 21'],
+    ['control label: This page Back to the top', 'This page Back to the top'],
+    ['button label: Copy email', 'Copy email'],
+  ] as const) {
+    assert.equal(ownWords(item), words, item);
+  }
 });

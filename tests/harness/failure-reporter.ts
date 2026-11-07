@@ -32,8 +32,13 @@ export default class FailureRecordReporter implements Reporter {
 
   onEnd() {
     if (!this.suite) return;
-    // Every row 60 rerun, whatever its outcome, so a rerun that passed still shows (R60-2).
-    reportStallReruns(this.suite.allTests());
+    // Every row 60 rerun, whatever its outcome, so a rerun that passed still shows (R60-2). A
+    // failure to report them is a warning: the failure records below are written all the same.
+    try {
+      reportStallReruns(this.suite.allTests());
+    } catch (error) {
+      console.log(`warning: the stall reruns weren't reported: ${(error as Error).message}`);
+    }
     const gate = currentGate();
     if (!gate) return;
     for (const test of this.suite.allTests()) {

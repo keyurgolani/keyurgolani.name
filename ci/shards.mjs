@@ -387,9 +387,9 @@ export function measure(suite, text) {
       }
       if (/^\[ci\] \S+ (passed|failed)/.test(line)) end(time);
     }
-    // An item the log never closes, by the next item's start or the runner's [ci] line, ran on
-    // when the job stopped (cancelled at its limit, or ended by a failure): its time is cut short,
-    // so it isn't measured, and keeps the weight it has.
+    // An item still open when the log ends, closed by neither the next item's start nor the
+    // runner's [ci] line, was cut short when its job stopped, cancelled at its limit or ended by a
+    // failure. Its time isn't measured, and it keeps the weight it has.
     return out;
   }
   for (const { text: line } of lines) {
