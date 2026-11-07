@@ -54,7 +54,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      jobs: ${{ steps.select.outputs.jobs }}
+      # Row 61's evidence branch, never merged: the selection's jobs kept to
+      # quality-pr's three and variants (ci/evidence/row61/keep-jobs.mjs), so
+      # quality-pr plans and runs Kinetic Cosmos's directed cells as the
+      # selection has them; every other check job is emptied. complete stays
+      # the selection's.
+      jobs: ${{ steps.keep.outputs.jobs }}
       complete: ${{ steps.select.outputs.complete }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -67,6 +72,11 @@ jobs:
           PR_DRAFT: ${{ github.event.pull_request.draft }}
           BASE_REF: ${{ github.base_ref }}
         run: node ci/select-jobs.mjs --github
+      - name: Keep the evidence branch's jobs
+        id: keep
+        env:
+          SELECTED: ${{ steps.select.outputs.jobs }}
+        run: node ci/evidence/row61/keep-jobs.mjs
 
   static:
     name: static
@@ -890,6 +900,63 @@ jobs:
   # it names exists. Pure Node, so no install. The scheduled workflow checks
   # external links weekly. It writes its own job summary, since the failure
   # summary needs the install this job skips.
+  # Row 61's CI Linux evidence, on a branch that never merges (kgn-e/row61-ci):
+  # tests/e2e/kinetic-motion.spec.ts, the two new pins among it, in the browser
+  # suite's pinned image, user, options, install, Next cache and build. Each step
+  # goes through ci/run.mjs under a gate name of its own, prints exact counts and
+  # exits nonzero only when its bar is missed; every step runs, whatever the one
+  # before did.
+  row61-evidence:
+    name: row61-evidence (Kinetic Cosmos's no-script dock pins on CI Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Restore the Next build cache
+        id: next-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/web/.next/cache
+          key: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/src/**', 'apps/web/scripts/**', 'apps/web/public/**', 'apps/web/*.ts', 'apps/web/*.json', 'packages/*/src/**', 'packages/*/packs/**', 'packages/*/*.json', 'package.json', 'tsconfig.base.json', 'pnpm-workspace.yaml', '.npmrc', '*.example.yml', 'example-media/**', 'snapshots/**') }}
+          restore-keys: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      - name: pnpm ci:build
+        run: pnpm ci:build
+      # The whole spec once, no retry: every listed test passes.
+      - name: kinetic-motion.spec.ts once, --retries=0
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          KC_MOTION_OUT: reports/row61
+        run: node ci/run.mjs row61-kc-motion -- sh ci/evidence/row61/kc-motion.sh spec
+      # The two new pins, 5 times each, no retry: 2 listed, 10 passed.
+      - name: the two no-script dock pins x 5, --retries=0
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          KC_MOTION_OUT: reports/row61
+        run: node ci/run.mjs row61-kc-pins -- sh ci/evidence/row61/kc-motion.sh pins
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-row61-evidence
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
   docs:
     name: docs
     needs: [changes]
