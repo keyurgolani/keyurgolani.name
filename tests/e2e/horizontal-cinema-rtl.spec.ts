@@ -57,6 +57,35 @@ test(
 );
 
 test(
+  'right to left, a label over the one before it, inside the bar and clear of its other parts, still stacks the strip',
+  { annotation },
+  async ({ page }) => {
+    // Only the label-over-label check can catch this rail. The fixture's five chapters each take
+    // 221.9 px of the bar's 50..1390, 15 px apart, read from the right: Prologue's text ends
+    // (on its left) near 1152, and Origins' label starts (on its right) at 973.1. Moved 230 px to
+    // the right, a transform the fit's boxes read but nothing lays out, Origins starts at 1203.1:
+    // about 50 px into Prologue, still 67 px short of the transport (1270..1390), and nowhere near
+    // the position text and credits (50..424) or the bar's ends. Its years hidden, the words
+    // still start there, so the short rail doesn't hold it either.
+    await page.addInitScript(() => {
+      document.addEventListener('DOMContentLoaded', () => {
+        const style = document.createElement('style');
+        style.textContent =
+          '.hc-minimap__chapter:nth-child(2) .hc-minimap__label { transform: translateX(230px); }';
+        document.head.append(style);
+      });
+    });
+    await load(page);
+    await expect
+      .poll(async () => {
+        const { layout, pinned, fit } = await read(page);
+        return { layout, pinned, fit };
+      })
+      .toEqual({ layout: 'vertical', pinned: false, fit: 'over' });
+  },
+);
+
+test(
   "right to left at 1440 by 900, a rail whose years don't fit shortens them and keeps the strip pinned, its labels clear",
   { annotation },
   async ({ page }) => {
