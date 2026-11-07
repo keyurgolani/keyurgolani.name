@@ -521,10 +521,35 @@ const SCRIPT_GUARDS = [
     scriptless: ['text: Opening, 1 of 21'],
     print: ['text: Opening, 1 of 21'],
   })),
+  // The mark is what counts (the coordinator, 7 Nov 2026, F3): a live status, unmarked, and an
+  // unmarked live region, still count their words; and so do a status inside a marked element
+  // that isn't one, and a marked element inside a live region, since the mark and the liveness
+  // are read on the one element.
   {
     id: 'unmarked-status',
     what: 'The same status, unmarked',
-    html: '<p hidden data-lazy>Opening, 1 of 21</p>',
+    html: '<p role="status" hidden data-lazy data-words="Opening, 1 of 21"></p>',
+    scriptless: ['text: Opening, 1 of 21'],
+    print: ['text: Opening, 1 of 21'],
+  },
+  {
+    id: 'unmarked-live',
+    what: 'The same live region, unmarked',
+    html: '<p aria-live="polite" hidden data-lazy data-words="Opening, 1 of 21"></p>',
+    scriptless: ['text: Opening, 1 of 21'],
+    print: ['text: Opening, 1 of 21'],
+  },
+  {
+    id: 'script-only-outer-mark',
+    what: 'A status inside a marked element that is no status',
+    html: '<div data-script-only><p role="status" hidden data-lazy data-words="Opening, 1 of 21"></p></div>',
+    scriptless: ['text: Opening, 1 of 21'],
+    print: ['text: Opening, 1 of 21'],
+  },
+  {
+    id: 'script-only-inner-mark',
+    what: 'A marked element, no status, inside a live region',
+    html: '<div aria-live="polite"><p data-script-only hidden data-lazy data-words="Opening, 1 of 21"></p></div>',
     scriptless: ['text: Opening, 1 of 21'],
     print: ['text: Opening, 1 of 21'],
   },
@@ -1920,6 +1945,20 @@ export const A11Y_CASES: readonly MetaCase[] = [
     lazyReveal(
       'A script-only status',
       '<p role="status" data-script-only data-lazy>Opening, 1 of 21</p>',
+      PRINT_HIDES,
+    ),
+    scriptOnlyText('Opening, 1 of 21'),
+    revealed(scriptlessInventory),
+    { chunk: REVEAL },
+  ),
+  // The same on a marked aria-live region (the coordinator, 7 Nov 2026, F3).
+  builtCase(
+    'script-only-live-server-words',
+    'inventory',
+    'A live region marked data-script-only whose words the server renders, without JavaScript and in print',
+    lazyReveal(
+      'A script-only live region',
+      '<p aria-live="polite" data-script-only data-lazy>Opening, 1 of 21</p>',
       PRINT_HIDES,
     ),
     scriptOnlyText('Opening, 1 of 21'),

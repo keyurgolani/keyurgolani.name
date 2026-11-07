@@ -287,6 +287,17 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'enhancement/script-only-live',
     'inventory/unmarked-status',
     'enhancement/unmarked-status',
+    // The mark is what counts, on the live element itself (the coordinator, 7 Nov 2026, F3): an
+    // unmarked live region, a status inside a marked element that isn't one, and a marked
+    // element inside a live region still count; a marked live region's server words are a
+    // finding too.
+    'inventory/unmarked-live',
+    'enhancement/unmarked-live',
+    'inventory/script-only-outer-mark',
+    'enhancement/script-only-outer-mark',
+    'inventory/script-only-inner-mark',
+    'enhancement/script-only-inner-mark',
+    'inventory/script-only-live-server-words',
     'inventory/script-only-ordinary',
     'enhancement/script-only-ordinary',
     'inventory/script-only-live-off',
