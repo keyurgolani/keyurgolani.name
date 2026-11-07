@@ -54,8 +54,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      jobs: ${{ steps.select.outputs.jobs }}
-      complete: ${{ steps.select.outputs.complete }}
+      # Row 63's evidence branch, never merged: no check job runs, so a
+      # ci.yml change doesn't start the complete product and quality-pr's
+      # matrix. row63-qpr-5x runs alone. The selection still runs below, and
+      # its summary shows what it would have picked.
+      jobs: '[]'
+      complete: 'false'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -795,6 +799,131 @@ jobs:
           name: reports-quality-pr-shard-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # Row 63's proof, on an evidence branch that never merges: aurora-glass's
+  # sentinel cell, complete / at 1440x900, default, five times, as quality-pr
+  # runs it (pnpm ci:quality-pr, pr mode, quality-pr's base from
+  # ci/quality-base.mjs, its env), in quality-pr's pinned image, user and
+  # options. It lists first and stops unless exactly five are listed; then
+  # it runs them, --repeat-each=5 --retries=0, reads each repeat's duration,
+  # axe's incomplete color-contrast count and, where a trace was kept, the
+  # resample's time (_ci-evidence/row63-repeats.py, read-only), and uploads
+  # the five results folders scrubbed. The run's verdict fails by design,
+  # since the plan's other tests have no result.
+  # Playwright greps the title path joined by spaces (no "›"), tags after
+  # each level, so the grep names each level and ends at a space or the end:
+  # /work/project-name and the other viewports and rows don't match.
+  row63-qpr-5x:
+    name: row63-qpr-5x (aurora-glass 1440x900 default, pr mode, 5 repeats)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      # The image this job runs in, so the visual cells know they're in it.
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      ROW63_GREP: 'cells\.spec\.ts composition:aurora-glass complete / aurora-glass/platform-neutral/warm-parchment/humanist-ui/system( @[^ ]+)* 1440x900 default( @[^ ]+)* aurora-glass complete / at 1440x900, default( |$)'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      # quality-pr-plan's base step, as it runs there: the base and diff the
+      # shards' [37] rule reads (QUALITY_CHANGED_BASE, QUALITY_CHANGED_DIFF).
+      - name: The quality-pr base
+        id: base
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_BEFORE: ${{ github.event.before }}
+          EVENT_FORCED: ${{ github.event.forced }}
+        run: node ci/quality-base.mjs
+      # The listing's own verdict fails (no test ran), hence || true; the
+      # count decides. Its error annotations are the listing's, not the test's.
+      - name: List the five repeats, and require exactly 5
+        shell: bash
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+          QUALITY_CHANGED_BASE: ${{ steps.base.outputs.base }}
+          QUALITY_CHANGED_DIFF: ${{ steps.base.outputs.diff }}
+          LIST_FILE: ${{ runner.temp }}/row63-list.txt
+        run: |
+          pnpm ci:quality-pr "--grep=$ROW63_GREP" --repeat-each=5 --retries=0 --list > "$LIST_FILE" 2>&1 || true
+          cat "$LIST_FILE"
+          total=$(awk '/^Total: [0-9]+ tests? in /{n=$2} END{print n+0}' "$LIST_FILE")
+          lines=$(awk '/^  \[[a-z]+ [0-9a-f]+\] /{n++} END{print n+0}' "$LIST_FILE")
+          echo "[row63] listed $total test(s), $lines list line(s); want exactly 5"
+          if [ "$total" != 5 ] || [ "$lines" != 5 ]; then
+            echo "::error::row63-qpr-5x's grep listed $total test(s), not exactly 5"
+            exit 1
+          fi
+      # The run's verdict fails by design (the plan's other tests have no
+      # result), so its exit is kept and the step fails with it, after the
+      # log is printed; the next steps run anyway.
+      - name: pnpm ci:quality-pr, the cell five times, no retry
+        shell: bash
+        env:
+          CI_REPRO_COMMAND: 'pnpm ci:quality-pr "--grep=$ROW63_GREP" --repeat-each=5 --retries=0 (ROW63_GREP is row63-qpr-5x''s, in ci.yml; QUALITY_CHANGED_BASE and QUALITY_CHANGED_DIFF from ci/quality-base.mjs)'
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+          QUALITY_CHANGED_BASE: ${{ steps.base.outputs.base }}
+          QUALITY_CHANGED_DIFF: ${{ steps.base.outputs.diff }}
+          RUN_LOG: ${{ runner.temp }}/row63-run.txt
+        run: |
+          rc=0
+          pnpm ci:quality-pr "--grep=$ROW63_GREP" --repeat-each=5 --retries=0 > "$RUN_LOG" 2>&1 || rc=$?
+          cat "$RUN_LOG"
+          echo "[row63] the run exited $rc"
+          exit "$rc"
+      # Each repeat's duration against the 240 s cap, axe's incomplete
+      # color-contrast count, and the resample time where a trace was kept,
+      # read from what the run left (read-only).
+      - name: The five repeats, read back
+        if: ${{ always() }}
+        shell: bash
+        env:
+          RUN_LOG: ${{ runner.temp }}/row63-run.txt
+        run: |
+          if ! command -v python3 > /dev/null; then
+            echo "::error::python3 isn't in this image: the five repeats aren't read here; row63-qpr-5x's artifact holds them"
+            exit 1
+          fi
+          python3 -I _ci-evidence/row63-repeats.py "$RUN_LOG" reports/quality/results
+      # The records upload only when this succeeds: it deletes what it can't
+      # read, and fails when it did, or when the canary is still in any.
+      - name: Scrub reports
+        id: scrub
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      # The five results folders (axe.json, vitals.json, quality-records.json,
+      # and trace.zip and error-context.md for a repeat that failed), with the
+      # run's summary and verdict.
+      - name: Upload the five repeats' records
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: row63-qpr-5x
+          path: |
+            reports/quality/results/
+            reports/quality/summary.json
+            reports/quality/verdict.json
+          if-no-files-found: error
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
 
   # quality-pr's shards judged whole (tests/quality/lib/shards.ts): zero
