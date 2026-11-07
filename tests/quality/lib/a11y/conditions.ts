@@ -448,22 +448,26 @@ interface Loaded {
  * Loads `path`, and answers whether it settled. With `expected` it waits for
  * the enhancements too, as a condition's read does, BUSY_LIMIT_MS in all:
  * their chunks and islands (enhancementsSettled()), then what the baseline
- * shows (baselineShown()). With script off nothing mounts, so neither waits.
+ * shows (baselineShown()). With `enhancements` and no `expected`, as each
+ * reflow condition reads, it waits for the first alone: what the page's
+ * enhancements put on it is there to reflow, and there's no baseline to
+ * compare it with. With script off nothing mounts, so neither waits.
  */
-async function load(page: Page, path: string, expected?: Expected): Promise<Loaded> {
-  const scripts = expected ? watchScripts(page) : null;
+async function load(
+  page: Page,
+  path: string,
+  expected?: Expected,
+  { enhancements = expected !== undefined }: { readonly enhancements?: boolean } = {},
+): Promise<Loaded> {
+  const scripts = enhancements ? watchScripts(page) : null;
   try {
     await page.goto(path, { waitUntil: 'load' });
     const settled = await notBusy(page);
     let enhanced = true;
-    if (
-      scripts &&
-      expected &&
-      !(await page.evaluate(() => matchMedia('(scripting: none)').matches))
-    ) {
+    if (scripts && !(await page.evaluate(() => matchMedia('(scripting: none)').matches))) {
       const end = Date.now() + BUSY_LIMIT_MS;
       enhanced = await enhancementsSettled(page, scripts, end);
-      if (enhanced) await baselineShown(page, expected, end);
+      if (enhanced && expected) await baselineShown(page, expected, end);
     }
     await frames(page);
     return { settled, enhanced };
@@ -958,7 +962,12 @@ export async function reflowFindings(
         deviceScaleFactor: condition.scale,
         mobile: false,
       });
-      if (!(await load(page, path)).settled) findings.push(stillBusy(condition.rule));
+      // Read once the page's enhancements have mounted or failed (push 3): a lazy one, such as
+      // Spatial Bento's live stage, would otherwise mount after the probe, or after the root-text
+      // switch, and go unread. One that never does is STILL_ENHANCING, read as it stands.
+      const loaded = await load(page, path, undefined, { enhancements: true });
+      if (!loaded.settled) findings.push(stillBusy(condition.rule));
+      if (!loaded.enhanced) findings.push(stillEnhancing(condition.rule));
       if (condition.text !== 1) {
         await page.evaluate(
           (scale) =>
