@@ -490,3 +490,53 @@ export async function widenRailYears(page: Page, spacing = '1.5em'): Promise<voi
     });
   }, spacing);
 }
+
+/** Two frames drawn: what a settle waits for after the fonts are in. */
+export const frames = (scope: Scope) =>
+  scope.evaluate(
+    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+  );
+
+/**
+ * Sets the window to `size` and waits for the strip's refit on it: the controller refits a frame
+ * after its own settle (150 ms) from the last resize. The page's wait is a timer set in a resize
+ * listener added after the controller's, so it's set after the controller's own on every resize and
+ * can only fire after it, and two frames after that the refit has run: an order, not a race.
+ */
+export async function resizeTo(page: Page, size: { width: number; height: number }) {
+  const was = page.viewportSize();
+  if (was && was.width === size.width && was.height === size.height)
+    throw new Error(`the window is already ${size.width} by ${size.height}`);
+  await page.evaluate(() => {
+    const w = window as unknown as { __hcRefitted?: Promise<void> };
+    w.__hcRefitted = new Promise<void>((done) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      window.addEventListener('resize', () => {
+        clearTimeout(timer);
+        timer = setTimeout(
+          () => requestAnimationFrame(() => requestAnimationFrame(() => done())),
+          400,
+        );
+      });
+    });
+  });
+  await page.setViewportSize(size);
+  await page.evaluate(() => (window as unknown as { __hcRefitted: Promise<void> }).__hcRefitted);
+}
+
+/**
+ * Scene `index`'s offset where the reader holds it: pinned, its start from the stage's start, inset
+ * and all; top to bottom, its top from the window's.
+ */
+export function sceneOffset(scope: Scope, index: number): Promise<number> {
+  return scope.evaluate((index) => {
+    const stage = document.querySelector<HTMLElement>('.hc-stage')!;
+    const scene = document.querySelectorAll<HTMLElement>('.hc-track .hc-scene')[index]!;
+    const at = scene.getBoundingClientRect();
+    if (!['auto', 'scroll'].includes(getComputedStyle(stage).overflowX)) return at.top;
+    const box = stage.getBoundingClientRect();
+    const rtl = getComputedStyle(stage).direction === 'rtl';
+    const inset = Number.parseFloat(getComputedStyle(stage).scrollPaddingInlineStart) || 0;
+    return (rtl ? box.right - at.right : at.left - box.left) - inset;
+  }, index);
+}
