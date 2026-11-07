@@ -3142,14 +3142,14 @@
   }
 }
 
+/* A scene's words arrive by moving alone, at full strength: a frame not yet on screen reads at its
+   own contrast, and only the stage's fade at its end dims the peek. */
 @keyframes horizontal-cinema-arrive {
   from {
-    opacity: 0.4;
     transform: translateX(var(--layout-arrive));
   }
 
   to {
-    opacity: 1;
     transform: none;
   }
 }
