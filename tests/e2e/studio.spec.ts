@@ -1,6 +1,7 @@
 import type { APIResponse, Page, Route } from '@playwright/test';
 import { expect, test } from '../harness/fixtures';
 import { ownerSecret } from '../harness/owner-secret.mjs';
+import { signIn } from '../harness/preview-grants';
 import { ownerApp } from '../harness/profile-matrix';
 import { headerProblems, STUDIO_CSP } from '../harness/route-headers.mjs';
 
@@ -407,6 +408,8 @@ test(
     const second = await context.newPage();
     await second.goto('/studio');
     await expect(second.getByText('Signed in')).toBeVisible();
+    // Live, not only painted: the state lines come once the shell has loaded, so it hears the channel.
+    await expect(second.locator('.studio-state__lines')).toBeAttached();
 
     const logout = first.waitForResponse((response) =>
       response.url().endsWith('/api/studio/auth.logout'),
@@ -423,5 +426,55 @@ test(
     // And the session is over: /studio sends the next visit to sign-in.
     await second.goto('/studio');
     await expect(second).toHaveURL(/\/studio\/sign-in/);
+  },
+);
+
+test(
+  'after logout the old session cookie gets 401 from draft.getWorking, live.get, and preview.grant.mint, and /studio sends it to sign-in as an ended session (row 88)',
+  { annotation: [STUDIO, { type: 'route', description: '/api/studio/[name]' }] },
+  async ({ page, app, request }) => {
+    const csrf = await signIn(page, app, secret.password);
+    const old = (await page.context().cookies()).find((each) => /studio_session$/.test(each.name));
+    expect(old, 'the session cookie').toBeTruthy();
+    // Studio's own requests stop, so none answers the browser's cookie away under this test.
+    await page.goto('about:blank');
+    // The old cookie, sent as it is, whatever the browser holds by then.
+    const cookie = { cookie: `${old!.name}=${old!.value}` };
+    const command = { ...cookie, origin: app.origin, 'x-csrf-token': csrf };
+    const out = await request.post(`${app.origin}/api/studio/auth.logout`, {
+      headers: command,
+      data: {},
+    });
+    expect(out.status()).toBe(200);
+    // What a tab still showing Studio sends next (row 88's trace), with the cookie it had.
+    for (const [name, sent] of [
+      [
+        'draft.getWorking',
+        () => request.get(`${app.origin}/api/studio/draft.getWorking`, { headers: cookie }),
+      ],
+      ['live.get', () => request.get(`${app.origin}/api/studio/live.get`, { headers: cookie })],
+      // Refused at the session, before any input is read.
+      [
+        'preview.grant.mint',
+        () =>
+          request.post(`${app.origin}/api/studio/preview.grant.mint`, {
+            headers: command,
+            data: {},
+          }),
+      ],
+    ] as const) {
+      const response = await sent();
+      expect(response.status(), name).toBe(401);
+      expect(((await response.json()) as { error?: { code?: string } }).error?.code, name).toBe(
+        'authentication_required',
+      );
+      expect(response.headers()['set-cookie'] ?? '', `${name} clears the cookie`).toMatch(
+        /studio_session=;.*Max-Age=0/,
+      );
+    }
+    // A Studio page with the old cookie lands on sign-in, as a session that ended.
+    await page.context().addCookies([old!]);
+    await page.goto('/studio');
+    await expect(page).toHaveURL(`${app.origin}/studio/sign-in?state=session_ended`);
   },
 );

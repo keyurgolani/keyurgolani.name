@@ -314,6 +314,20 @@ test(
 );
 
 test(
+  'a draft grant minted before logout no longer opens its frame after it: the status document, at the next request (row 88)',
+  { annotation: [GRANT] },
+  async ({ page, app, request }) => {
+    const csrf = await signIn(page, app, secret.password);
+    const grant = await mintDraft(page, csrf, await seedDraft(app, 'Leaving Person'));
+    const frameLoad = () => request.get(`/preview/${grant}`, { headers: asFrame, maxRedirects: 0 });
+    expect((await frameLoad()).status()).toBe(200);
+    const out = await command(page, csrf, 'auth.logout', {});
+    expect(out.status).toBe(200);
+    await expectStatusDocument(await frameLoad(), 'a draft grant after logout');
+  },
+);
+
+test(
   'a draft version with blocks-preview findings gets no grant, only how many there are (#7)',
   { annotation: [GRANT] },
   async ({ page, app }) => {
