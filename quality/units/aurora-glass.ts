@@ -11,8 +11,9 @@
 // The tester checks both from the template's "None registered" item.
 // Aurora's own checks (brief §5.2, step 11) run where a unit can't export
 // them: Pause stops both loops, the drift stops once the opening scrolls
-// away, and no text sits on the sky, in tests/e2e/aurora-glass.spec.ts; the
-// glass ruling, the blur count and the loops' gates in
+// away, and no text sits on the sky, in tests/e2e/aurora-glass.spec.ts; every
+// word off the chrome on a solid backing, in both modes, in
+// tests/e2e/aurora-glass-backing.spec.ts (row 63); the glass ruling, the blur count and the loops' gates in
 // packages/variant-aurora-glass/src/__tests__/composition.test.tsx.
 import type { NotApplicable } from '../../tests/quality/lib/registration';
 

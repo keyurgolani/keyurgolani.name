@@ -6,7 +6,8 @@
  * The frost is the design language's own pane surface, a surface role at
  * --ui-surface-opacity over --ui-surface-material, never a fill painted
  * translucent here (the glass ruling): the language's floor holds, reduced
- * transparency makes it opaque, and an opaque language makes it plain.
+ * transparency makes it opaque, and an opaque language makes it plain. A
+ * surface that holds running text paints the role solid (row 63).
  * Every colour is a role or an opaque mix of two, every size a step, every
  * space a step, every duration a motion token. The sky's layers are
  * opaque roles shaped by masks. Logical properties throughout.
@@ -148,10 +149,17 @@
 
 /* ── the vocabulary: pane (frost), sheet (solid), lite (a pane's cell) ── */
 
+/*
+ * A pane or a lite holds running text, so it paints its frost's own tint solid, the language's
+ * surface role, with no image and no transparency under the words (row 63): a reader resolves every
+ * word's background from the page, axe included, and no word reads through to the sky. The sky shows
+ * in the mullions between lites and round the bands; the chrome (the capsule, the ornament, the
+ * visitor's control) keeps the language's surface stack (--layout-surface), and the frost's blur.
+ */
 [data-variant='aurora-glass'] :is(.ag-pane, .ag-lite) {
   color: var(--color-text-primary);
-  background-color: transparent;
-  background-image: var(--layout-surface);
+  background-color: var(--color-surface-default);
+  background-image: none;
 }
 
 [data-variant='aurora-glass'] .ag-pane {
@@ -1264,6 +1272,7 @@
 
 /* A split lite: its head is a lite, its body brings its own lites or sheets into the mullions. */
 [data-variant='aurora-glass'] .ag-sec--split {
+  background-color: transparent;
   background-image: none;
   padding: 0;
   row-gap: var(--layout-mullion);
@@ -1273,7 +1282,7 @@
 [data-variant='aurora-glass'] .ag-sec--split > .ag-sec__head {
   grid-column: 1 / -1;
   padding: var(--space-m) var(--layout-inset);
-  background-image: var(--layout-surface);
+  background-color: var(--color-surface-default);
 }
 
 [data-variant='aurora-glass'] .ag-sec--split > .ag-sec__body {
@@ -1863,7 +1872,7 @@
   padding: var(--space-xl);
   border: var(--ui-border-card) var(--color-border-subtle);
   border-radius: var(--ui-radius-overlay);
-  background-image: var(--layout-surface);
+  background-color: var(--color-surface-default);
   box-shadow: var(--ui-shadow-card);
 }
 
@@ -2211,6 +2220,7 @@
   grid-template-columns: minmax(0, 1fr);
   padding-block-start: 0;
   row-gap: 0;
+  background-color: transparent;
   background-image: none;
 }
 
@@ -2549,7 +2559,7 @@
     padding: var(--space-l);
     border: var(--ui-border-card) var(--color-border-subtle);
     border-radius: var(--ui-radius-overlay);
-    background-image: var(--layout-surface);
+    background-color: var(--color-surface-default);
     box-shadow: var(--ui-shadow-card);
   }
 }
@@ -3152,6 +3162,11 @@
     ) {
     box-shadow: none;
     background-image: none;
+  }
+
+  /* The reading surfaces' solid tint stays off the paper, as their image does. */
+  [data-variant='aurora-glass'] :is(.ag-pane, .ag-lite, .ag-call) {
+    background-color: transparent;
   }
 
   /* Every fold prints open, where ::details-content exists; the enhancement's beforeprint opens them elsewhere. */

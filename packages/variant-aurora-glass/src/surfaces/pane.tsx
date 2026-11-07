@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
 
-// The pane (brief §5.2, the vocabulary): frost, holding reading. It's
-// painted with the design language's own pane surface, a surface role at
-// --ui-surface-opacity over --ui-surface-material (the glass ruling), so
-// it never falls below the language's floor. Only the capsule, the
-// identity pane and its stat tiles blur (AG-M6): `frost` marks those.
+// The pane (brief §5.2, the vocabulary): frost, holding reading. It holds
+// running text, so it's painted with the design language's own surface
+// role, solid, with no image or transparency under the words (row 63): it
+// never falls below the language's floor, and every word's background
+// resolves. Only the capsule, the identity pane and its stat tiles blur
+// (AG-M6): `frost` marks those.
 
 export type SurfaceTag =
   | 'div'
