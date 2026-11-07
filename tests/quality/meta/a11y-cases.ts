@@ -422,7 +422,7 @@ const LATE_OCCLUDER_CHUNK = {
 };
 
 /** What the late-overflow case's enhancement mounts. */
-const LATE_WIDE_WHAT = 'A 1400 px wide block';
+const LATE_WIDE_WHAT = 'A block 1100 x 16 / root px wide';
 
 /**
  * A page whose lazy enhancement, an island that goes live once the page has loaded and loads its
@@ -440,9 +440,14 @@ addEventListener('load', () => setTimeout(() => {
 }));
 </script></body></html>`;
 
-/** The late-overflow case's chunk: it mounts the block at once, as it runs. */
+/**
+ * The late-overflow case's chunk: it mounts the block at once, as it runs, sized from the root font
+ * as it mounts, 1100 x 16 / the root's px. At 16 px that's 1100 px, wider than every reflow
+ * viewport; mounted after the 200% root-text switch, 550 px, which 1024 holds. So only a mount
+ * before the switch overflows at root-text.
+ */
 const LATE_WIDE_CHUNK = {
-  body: "{ const wide = document.createElement('p'); wide.id = 'late-wide'; wide.style.width = '1400px'; wide.textContent = 'A late block, wider than any reflow viewport.'; document.querySelector('[data-enhancement-island]').append(wide); }",
+  body: "{ const root = parseFloat(getComputedStyle(document.documentElement).fontSize); const wide = document.createElement('p'); wide.id = 'late-wide'; wide.style.width = `${(1100 * 16) / root}px`; wide.textContent = 'A late block, wider than any reflow viewport at 16 px root text.'; document.querySelector('[data-enhancement-island]').append(wide); }",
 };
 
 /**
@@ -518,16 +523,6 @@ const NEVER_ENHANCED = lazyReveal(
 /** A page whose status says it's busy for good, and no enhancement. */
 const ALWAYS_BUSY =
   '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Busy for good</title></head><body><main><h1>Busy for good</h1><p aria-busy="true">Loading the draft…</p></main></body></html>';
-
-/** `check`'s findings, and one more if none of them names `path`: the record must name the element. */
-const naming =
-  (path: string, check: (page: Page) => Promise<Finding[]>) =>
-  async (page: Page): Promise<Finding[]> => {
-    const findings = await check(page);
-    return findings.some((each) => each.path === path)
-      ? findings
-      : [...findings, { gate: 'meta', rule: 'element', actual: `no record names ${path}` }];
-  };
 
 /** Hides the lazy enhancement in print too, as Flux's print sheet hides Copy email, and styles .button as one (shown only, so hidden still hides it). */
 const PRINT_HIDES =
@@ -1914,18 +1909,19 @@ export const A11Y_CASES: readonly MetaCase[] = [
     reflowFindings(page, '/'),
   ),
   good('reflow', (page) => reflowFindings(page, '/')),
-  // Each reflow condition's reload reads the page once its enhancements have mounted or failed
-  // (the coordinator, 7 Nov 2026, push 3, for row 50's race): a lazy enhancement that lands about
-  // a second after load and puts a 1400 px block on the page scrolls it sideways at 320, at 200%
-  // zoom and at 200% root text, and the record names the block. Read at the load event, as it
-  // was, the block isn't there yet and the page passes.
+  // Each reflow condition's reload reads the page once its enhancements have mounted or failed,
+  // and only then switches the root text (the coordinator, 7 Nov 2026, push 3, for row 50's
+  // race): a lazy enhancement that lands 750 ms after load and puts an 1100 px block on the page
+  // (sized from the root font as it mounts) scrolls it sideways at 320, at 200% zoom and at 200%
+  // root text, and a record names the block under each. Read at the load event, as it was, the
+  // block isn't there yet; mounted after the root-text switch, it's 550 px, which 1024 holds.
   builtCase(
     'late-overflow',
     'reflow',
     `${LATE_WIDE_WHAT}, which a lazy chunk mounts ${LAZY_DELAY_MS} ms after load, under each reflow condition`,
     LATE_WIDE,
     /^reflow (?:reflow|zoom|root-text): /,
-    naming('#late-wide', (page) => reflowFindings(page, '/')),
+    namingUnder('#late-wide', ['reflow', 'zoom', 'root-text'], (page) => reflowFindings(page, '/')),
     { chunk: LATE_WIDE_CHUNK },
   ),
   // A page whose enhancements never settle is no skip (push 3 r2, F2 and F4): each reflow
