@@ -411,6 +411,29 @@ test('torn down, the controller refits nothing and leaves none of its attributes
     assert.match(cleanup, new RegExp(`delete rootElement\\.dataset\\.${name};`), name);
 });
 
+test("a refit keeps the reader where they were: top to bottom it moves the page by what the relayout moved their scene, never scrolls a scene into view, and a resize's settle uses the scene its burst's first resize read (row 53 r2, 1b)", () => {
+  const source = readFileSync(new URL('./controller.tsx', import.meta.url), 'utf8');
+  const bodyOf = (name: string) => {
+    const start = source.indexOf(`const ${name} = `);
+    assert.notEqual(start, -1, name);
+    return source.slice(start, source.indexOf('\n    };\n', start)).replace(/\/\/[^\n]*/g, '');
+  };
+  // The reading takes the held scene's top, so the hold can keep it.
+  assert.match(bodyOf('reading'), /top: elements\[held\]\?\.getBoundingClientRect\(\)\.top/);
+  const hold = bodyOf('hold');
+  // Top to bottom, the page moves by the scene's own move, not the scene to the window's top: a
+  // scene scrolled into view takes Chromium's keyboard starting point with it. The one
+  // scrollIntoView left is the focused element's own, brought into view where focus already is.
+  assert.match(hold, /window\.scrollBy\(\{ top: moved, behavior: 'instant' \}\)/);
+  assert.doesNotMatch(hold, /elements\[held\]\??\.scrollIntoView/);
+  assert.equal(hold.match(/scrollIntoView/g)?.length, 1);
+  assert.match(hold, /active\.scrollIntoView\(\{ block: 'nearest', behavior: 'instant' \}\)/);
+  // A resize keeps the first reading of its burst, before its own paint reads the page on the new
+  // layout; the refit takes it, or reads now when no resize came (a text size, a late face).
+  assert.match(bodyOf('onResize'), /^const onResize = \(\) => \{\s*kept \?\?= reading\(\);/);
+  assert.match(bodyOf('refitNow'), /const at = kept \?\? reading\(\);\s*kept = undefined;/);
+});
+
 test("a work whose title repeats its section's still links to its own address", () => {
   const pair = pairOf('complete');
   const works = pair.portfolio.works ?? [];
