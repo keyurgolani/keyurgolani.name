@@ -278,3 +278,6 @@ function HomePage({ input }: HomePageProps) {
 }
 
 export default composePages({ HomePage, CaseStudyPage });
+
+// HC evidence only, not for merge (row 43): this line makes quality:pr and the browser shards change-direct
+// Horizontal Cinema, so CI Linux times the stacked walk's pieces and reads HC's cells on the evidence PR.
