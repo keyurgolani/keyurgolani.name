@@ -467,6 +467,35 @@ test("every move of the controller's own to a scene inside a resize's burst drop
   assert.equal(source.match(/\bkept \?\?= reading\(\);/g)?.length, 1);
 });
 
+test('a refit brings the strip into step only after the page is back where the reader was; every other pin still follows at once (row 53 r2, 1c)', () => {
+  const source = readFileSync(new URL('./controller.tsx', import.meta.url), 'utf8');
+  const bodyOf = (name: string) => {
+    const start = source.indexOf(`const ${name} = `);
+    assert.notEqual(start, -1, name);
+    return source.slice(start, source.indexOf('\n    };\n', start)).replace(/\/\/[^\n]*/g, '');
+  };
+  // pin() follows unless it's told not to.
+  assert.match(bodyOf('pin'), /^const pin = \(andFollow = true\) => \{/);
+  assert.match(bodyOf('pin'), /invalidate\(\);\s*if \(andFollow\) follow\(\);\s*$/);
+  // The refit pins without following, holds the reader, then follows once, before it paints.
+  const refit = bodyOf('refitNow');
+  const order = ['pin(false);', 'hold(at);', 'follow();', 'paint();'].map((step) =>
+    refit.indexOf(step),
+  );
+  assert.ok(
+    order.every((at) => at >= 0),
+    String(order),
+  );
+  assert.deepEqual(
+    [...order].sort((a, b) => a - b),
+    order,
+  );
+  assert.equal(refit.match(/\bfollow\(\);/g)?.length, 1);
+  // Only the refit pins without following: the first pin, a relayout's and the fit's own follow at once.
+  assert.equal(source.match(/\bpin\(false\);/g)?.length, 1);
+  assert.equal(source.match(/\bpin\(\);/g)?.length, 3);
+});
+
 test("a work whose title repeats its section's still links to its own address", () => {
   const pair = pairOf('complete');
   const works = pair.portfolio.works ?? [];
