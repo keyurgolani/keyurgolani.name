@@ -1227,6 +1227,15 @@ test('logout, revocation, eviction, and revoke-sessions each end the session on 
   assert.match(out.headers.get('set-cookie') ?? '', /^__Host-studio_session=; Path=\/; Max-Age=0/);
   assert.equal(out.headers.get('clear-site-data'), '"cache"');
   assert.equal((await send(studio('auth.session', leaving))).status, 401);
+  // What a tab that signed out elsewhere still sends with the old cookie (row 88's
+  // trace): each is refused at the session, before its input is read, and the
+  // answer clears the cookie.
+  for (const name of ['draft.getWorking', 'live.get', 'preview.grant.mint']) {
+    const stale = await send(studio(name, leaving));
+    assert.equal(stale.status, 401, name);
+    assert.equal(await errorCode(stale), 'authentication_required', name);
+    assert.deepEqual(stale.headers.getSetCookie(), [CLEARED], name);
+  }
 
   // Revoking one session by its ref ends that one only.
   const keeper = await signIn();

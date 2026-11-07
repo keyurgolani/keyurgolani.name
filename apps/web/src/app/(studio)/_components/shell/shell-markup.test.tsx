@@ -100,6 +100,24 @@ test("the owner shell's and Appearance workspace's markup is the snapshot's, so 
   assert.equal(now, readFileSync(SNAPSHOT, 'utf8'));
 });
 
+const signOut = (html: string) => /<button[^>]*>Sign out<\/button>/.exec(html)?.[0] ?? '';
+
+test('Sign out renders aria-disabled before any script runs, so a click before the shell hydrates is never lost (row 88)', async () => {
+  const { StudioShell } = await import('./studio-shell');
+  const shell = renderToStaticMarkup(
+    <StudioShell csrfToken="csrf-token" policy={OWNER} appearance={CATALOG} preview={null} />,
+  );
+  const button = signOut(shell);
+  assert.notEqual(button, '', 'the shell renders Sign out');
+  // Studio styles only [aria-disabled='true'], the busy look, and the button keeps its place in the
+  // focus order; its click guard holds until the shell has hydrated.
+  assert.ok(button.includes('aria-disabled="true"'), button);
+  assert.ok(
+    !/\sdisabled[=\s>]/.test(button),
+    'never natively disabled, which Studio has no look for',
+  );
+});
+
 /** The Appearance workspace's form alone, as a session with no preview has it. */
 async function workspaceWith(options: { dirty: boolean; content: boolean }): Promise<string> {
   const { AppearanceWorkspace } = await import('./appearance-workspace');
