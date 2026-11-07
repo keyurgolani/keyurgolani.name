@@ -396,6 +396,20 @@ test(
   async ({ page }) => {
     await load(page);
     expect(await read(page)).toMatchObject({ layout: 'horizontal', pinned: true });
+    // The reader is on scene 6, a link in it focused: the change keeps them there, both ways.
+    const next = page.getByRole('button', { name: 'Next scene' });
+    for (let at = 1; at <= 6; at++) {
+      await next.click();
+      await expectAt(page, at);
+    }
+    const { scenes } = await read(page);
+    const link = page.locator(`#${scenes[6]} a[href]`).first();
+    await link.focus();
+    const keeps = async () => {
+      await expect.poll(async () => (await read(page)).current, { timeout: 1000 }).toBe(6);
+      await expect(link).toBeFocused();
+      await expect(link).toBeInViewport();
+    };
     // The root's text doubled, as a reader's own setting does, with no resize of the window.
     await page.evaluate(() =>
       document.documentElement.style.setProperty('font-size', '200%', 'important'),
@@ -409,6 +423,13 @@ test(
         { timeout: 1000 },
       )
       .toEqual({ layout: 'vertical', pinned: false, fit: 'over' });
+    // Top to bottom, scene 6 is at the top, still current, and the focused link is on screen.
+    await keeps();
+    const top = await page
+      .locator(`#${scenes[6]}`)
+      .evaluate((scene) => scene.getBoundingClientRect().top);
+    expect(top).toBeGreaterThanOrEqual(-1);
+    expect(top).toBeLessThanOrEqual(await page.evaluate(() => window.innerHeight * 0.3));
     // And back: at its own size the strip shows and pins again.
     await page.evaluate(() => document.documentElement.style.removeProperty('font-size'));
     await expect
@@ -420,6 +441,9 @@ test(
         { timeout: 1000 },
       )
       .toEqual({ layout: 'horizontal', pinned: true, fit: null });
+    // Pinned again on scene 6, the link still focused and on screen.
+    await expectAt(page, 6);
+    await keeps();
   },
 );
 
