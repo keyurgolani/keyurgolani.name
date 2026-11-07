@@ -4361,11 +4361,13 @@
     display: none;
   }
 
+  /* The caption leaves the stage's ground with the stage's ink, as the plate links do (#197). */
   [data-variant='kinetic-cosmos'] :is(.kc-plates, .kc-plate, .kc-plates__caption) {
     position: static;
     inline-size: auto;
     max-inline-size: none;
     translate: none;
+    background-color: transparent;
   }
 
   [data-variant='kinetic-cosmos'] .kc-plates__list {
