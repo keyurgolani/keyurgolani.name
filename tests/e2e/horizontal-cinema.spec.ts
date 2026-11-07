@@ -9,6 +9,7 @@ import {
   crowdRail,
   expectAnnounced,
   expectAt,
+  expectLayout,
   keys,
   load,
   railClashes,
@@ -415,6 +416,41 @@ test(
         return { layout, pinned, fit };
       })
       .toEqual({ layout: 'vertical', pinned: false, fit: 'over' });
+  },
+);
+
+test(
+  "stacked, the chapter sheet takes focus to the reader's chapter as it opens, Tab goes round its links, and Escape gives focus back",
+  { annotation, tag },
+  async ({ page }) => {
+    // A crowded rail stacks the strip at 1440 by 900 on macOS and on CI Linux alike, and stacked
+    // the chapter control shows on the top edge.
+    await crowdRail(page);
+    await load(page);
+    await expectLayout(page, 'stacked');
+    const button = page.locator('.hc-jump__button');
+    const sheet = page.locator('.hc-jump__sheet');
+    const links = sheet.locator('a[href]');
+    await button.focus();
+    await page.keyboard.press('Enter');
+    await expect(sheet).toBeVisible();
+    // Focus is in the sheet, on the chapter the reader is in.
+    await expect(sheet.locator('a[aria-current]')).toBeFocused();
+    // Shift+Tab from its first link goes to its last, and Tab from its last to its first.
+    await links.first().focus();
+    await page.keyboard.press('Shift+Tab');
+    await expect(links.last()).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(links.first()).toBeFocused();
+    // A Tab for every link and one more never leaves the sheet.
+    const total = await links.count();
+    for (let press = 0; press <= total; press++) {
+      await page.keyboard.press('Tab');
+      expect(await sheet.evaluate((open) => open.contains(document.activeElement))).toBe(true);
+    }
+    await page.keyboard.press('Escape');
+    await expect(sheet).toBeHidden();
+    await expect(button).toBeFocused();
   },
 );
 
