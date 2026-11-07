@@ -91,6 +91,61 @@ for (const [width, height] of [
   );
 
   test(
+    `stacked by touch at ${width} by ${height}, a fresh load at the last scene's link names it in the status, before any press`,
+    { annotation, tag },
+    async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await load(page);
+      const id = await page.locator('.hc-track .hc-scene').last().getAttribute('id');
+      expect(id).toBeTruthy();
+      // A fresh document at the link, as a shared link opens: the status says where the page is.
+      await page.goto('about:blank');
+      await load(page, `/#${id}`);
+      await expect(page.locator('.hc-scrub__status')).toHaveText(at(SCENES));
+    },
+  );
+
+  // Guards, green on the parent too: a fragment no scene holds moves nothing, so the status names the
+  // first scene, where the page is, never a scene read from the fragment; and a fragment change after load
+  // still reaches the status through the settle, which the mount's write leaves alone.
+  test(
+    `stacked by touch at ${width} by ${height}, a fresh load at a fragment no scene holds stays at the top and its status names the first scene`,
+    { annotation, tag },
+    async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await page.goto('about:blank');
+      await load(page, '/#scene-99');
+      expect(await page.evaluate(() => window.scrollY)).toBe(0);
+      await expect(page.locator('.hc-scrub__status')).toHaveText(at(1));
+    },
+  );
+
+  test(
+    `stacked by touch at ${width} by ${height}, a fragment change after load moves the status with the page`,
+    { annotation, tag },
+    async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await load(page);
+      const status = page.locator('.hc-scrub__status');
+      await expect(status).toHaveText(at(1));
+      const ids = await page
+        .locator('.hc-track .hc-scene')
+        .evaluateAll((scenes) => scenes.map((scene) => scene.id));
+      await page.evaluate(
+        (id) => {
+          window.location.hash = id;
+        },
+        ids[SCENES - 1]!,
+      );
+      await expect(status).toHaveText(at(SCENES));
+      await page.evaluate((id) => {
+        window.location.hash = id;
+      }, ids[9]!);
+      await expect(status).toHaveText(at(10));
+    },
+  );
+
+  test(
     `stacked by touch at ${width} by ${height}, the bar's Next steps from the first scene to the last and Previous back`,
     { annotation, tag },
     async ({ page }) => {
