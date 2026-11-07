@@ -1075,6 +1075,25 @@ test.describe('reduced motion', () => {
       }
     },
   );
+
+  test(
+    'the title card’s name holds still from the first paint: no rise, no move',
+    { annotation, tag },
+    async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto('/', { waitUntil: 'load' });
+      const name = page.locator('h1.hc-card__name');
+      const still = () =>
+        name.evaluate((element) => ({
+          animations: element.getAnimations().length,
+          transform: getComputedStyle(element).transform,
+          opacity: getComputedStyle(element).opacity,
+        }));
+      expect(await still()).toEqual({ animations: 0, transform: 'none', opacity: '1' });
+      await page.waitForTimeout(600);
+      expect(await still()).toEqual({ animations: 0, transform: 'none', opacity: '1' });
+    },
+  );
 });
 
 test.describe('without JavaScript', () => {
@@ -1093,6 +1112,36 @@ test.describe('without JavaScript', () => {
       }));
       expect(state.scenes).toBeGreaterThan(5);
       expect(state).toMatchObject({ pinned: false, live: 0, scroller: 'auto' });
+    },
+  );
+
+  test(
+    'the title card’s name is there to read from the first paint, all through its rise',
+    { annotation, tag },
+    async ({ page }) => {
+      await page.goto('/', { waitUntil: 'load' });
+      // The rise, held at its start, through its delay, and halfway: the page's one heading shows at
+      // every point, as a visitor reading at once, or a check reading the page, finds it.
+      const seen = await page.evaluate(() => {
+        const name = document.querySelector<HTMLElement>('h1.hc-card__name')!;
+        const [rise] = name.getAnimations();
+        if (!rise) return { animated: false, shown: [] as boolean[] };
+        const timing = rise.effect!.getComputedTiming();
+        const delay = Number(timing.delay ?? 0);
+        const duration = Number(timing.duration ?? 0);
+        rise.pause();
+        return {
+          animated: true,
+          shown: [0, delay / 2, delay, delay + duration / 2].map((at) => {
+            rise.currentTime = at;
+            return (
+              name.checkVisibility({ opacityProperty: true, visibilityProperty: true }) &&
+              getComputedStyle(name).opacity === '1'
+            );
+          }),
+        };
+      });
+      expect(seen).toEqual({ animated: true, shown: [true, true, true, true] });
     },
   );
 });

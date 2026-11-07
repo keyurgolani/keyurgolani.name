@@ -158,3 +158,11 @@ test('on paper the skip link stays in the page, off it by its own move as on scr
     /position: absolute;[\s\S]*transform: translateY\(-200%\);/,
   );
 });
+
+test('the title card’s name rises into place at full strength, never from transparent, with or without a script', () => {
+  const rise = CSS.slice(CSS.indexOf('@keyframes horizontal-cinema-rise'));
+  const body = rise.slice(0, rise.indexOf('\n}\n'));
+  assert.match(body, /transform: translateY\(0\.12em\);/);
+  assert.doesNotMatch(body, /opacity|filter/);
+  assert.match(CSS, /\.hc-card__name \{\n\s+animation: horizontal-cinema-rise /);
+});
