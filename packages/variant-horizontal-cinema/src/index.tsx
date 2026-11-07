@@ -178,10 +178,10 @@ function HomePage({ input }: HomePageProps) {
           <nav className="hc-chrome__nav" aria-label="Site">
             {list !== undefined ? (
               <span className="hc-chrome__views" role="group" aria-label="View">
-                <a href={home} aria-current={listing ? undefined : 'true'} data-type-role="label">
+                <a href={home} aria-current={listing ? undefined : 'page'} data-type-role="label">
                   <Words lang={lang}>Strip</Words>
                 </a>
-                <a href={list} aria-current={listing ? 'true' : undefined} data-type-role="label">
+                <a href={list} aria-current={listing ? 'page' : undefined} data-type-role="label">
                   <Words lang={lang}>List</Words>
                 </a>
               </span>
@@ -278,3 +278,6 @@ function HomePage({ input }: HomePageProps) {
 }
 
 export default composePages({ HomePage, CaseStudyPage });
+
+// HC evidence only, not for merge (row 43): this line makes quality:pr and the browser shards change-direct
+// Horizontal Cinema, so CI Linux times the stacked walk's pieces and reads HC's cells on the evidence PR.

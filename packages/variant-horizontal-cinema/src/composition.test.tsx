@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
@@ -293,6 +293,17 @@ test('in a plate it renders the scenes with no runtime hook, no control, no land
   assert.match(stage, /class="hc-scrub"[^>]*inert/);
 });
 
+test("the bar's map of the strip is Scenes by chapter, a landmark apart from the chapter sheet's", () => {
+  const markup = html(inputOf(pairOf('complete'), { route: 'home' }));
+  const labels = [...markup.matchAll(/<nav[^>]*\saria-label="([^"]+)"/g)].map(([, label]) => label);
+  assert.equal(
+    labels.filter((label) => label === 'Scenes by chapter').length,
+    1,
+    labels.join(' | '),
+  );
+  assert.equal(labels.filter((label) => label === 'Chapters').length, 1, labels.join(' | '));
+});
+
 test('the words it adds are marked English in a portfolio in another language', () => {
   const markup = html(inputOf(pairOf('academic')));
   assert.notEqual(inputOf(pairOf('academic')).portfolio.locale.slice(0, 2), 'en');
@@ -301,24 +312,114 @@ test('the words it adds are marked English in a portfolio in another language', 
   assert.match(markup, /<span lang="en" dir="ltr">Credits and index<\/span>/);
 });
 
-test('the controller never handles the wheel or a touch, writes no history entry of its own, and none in a frame', () => {
+test('the controller never takes over the wheel or a touch (it reads their way, passively), writes no history entry of its own, and none in a frame', () => {
   const source = readFileSync(new URL('./controller.tsx', import.meta.url), 'utf8');
   assert.match(source, /^'use client';/);
-  assert.doesNotMatch(
-    source,
-    /['"](?:wheel|mousewheel|touchstart|touchmove|touchend|pointermove)['"]/,
-  );
-  // Every scroll it listens to is passive.
-  for (const [line] of source.matchAll(/addEventListener\('scroll'[^\n]*/g)) {
+  assert.doesNotMatch(source, /['"`](?:mousewheel|touchend|pointermove)['"`]/);
+  // No way in for the wheel or a touch but a listener: no JSX handler, no property handler, and
+  // every 'wheel', 'touchstart' and 'touchmove' it names is one a listener call names, so none
+  // comes in through a variable or a loop.
+  assert.doesNotMatch(source, /\bon(?:Wheel|TouchStart|TouchMove|TouchEnd|PointerMove)=\{/);
+  assert.doesNotMatch(source, /\.on(?:wheel|touchstart|touchmove|touchend|pointermove)\s*=[^=]/);
+  const named = source.match(/['"`](?:wheel|touchstart|touchmove)['"`]/g)?.length ?? 0;
+  const listened =
+    source.match(/(?:add|remove)EventListener\(\s*['"`](?:wheel|touchstart|touchmove)['"`]/g)
+      ?.length ?? 0;
+  assert.equal(named, listened);
+  // Every scroll, wheel and touch it listens to is passive, so none can be cancelled.
+  for (const [line] of source.matchAll(
+    /addEventListener\(\s*['"`](?:scroll|wheel|touchstart|touchmove)['"`][^\n]*/g,
+  )) {
     assert.match(line, /passive: true/, line);
   }
-  // It calls preventDefault for an arrow step and for Home or End alone.
-  assert.equal(source.match(/preventDefault\(\)/g)?.length, 2);
+  // The wheel and touch handlers only read which way the visitor went and tell it: they call
+  // nothing but tell, rtl and Math's sign and abs, and nothing in them or in tell moves the page.
+  const bodyOf = (name: string) => {
+    const start = source.indexOf(`const ${name} = `);
+    assert.notEqual(start, -1, name);
+    return source.slice(start, source.indexOf('\n    };\n', start)).replace(/\/\/[^\n]*/g, '');
+  };
+  const writes = /scrollTo|scrollBy|scrollIntoView|preventDefault|setAlong|scroll(?:Top|Left)\s*=/;
+  const handlers = [
+    ...source.matchAll(/addEventListener\(\s*['"`](?:wheel|touchstart|touchmove)['"`],\s*(\w+)/g),
+  ].map(([, name]) => name!);
+  for (const name of handlers) {
+    const body = bodyOf(name);
+    assert.doesNotMatch(body, writes, name);
+    for (const [, call] of body.slice(body.indexOf('=>')).matchAll(/([\w.]+)\s*\(/g))
+      assert.ok(
+        ['if', 'tell', 'rtl', 'Math.sign', 'Math.abs'].includes(call!),
+        `${name} calls ${call}`,
+      );
+  }
+  if (handlers.length > 0) assert.doesNotMatch(bodyOf('tell'), writes, 'tell');
+  // Its preventDefault calls are keydown handlers' alone, three in all: the test below names each.
   assert.doesNotMatch(source, /pushState|location\.(?:assign|replace)\(|location\.hash\s*=/);
   assert.equal(source.match(/history\.replaceState/g)?.length, 1);
   // It names a scene in the URL only while one is being read, and never over a fragment inside that scene.
   assert.match(source, /if \(!framed && readsScene\(\) && !namesWithin\(position\)\)/);
   assert.match(source, /const framed = window\.self !== window\.top;/);
+});
+
+test("every preventDefault the controller calls is a named keydown handler's own, three in all: the arrow step and Home or End in onKey, and the open chapter sheet's Tab, only where it wraps", () => {
+  const source = readFileSync(new URL('./controller.tsx', import.meta.url), 'utf8');
+  // A handler's body: from its own opening line to the closing line at that line's indentation. A
+  // listener is `const <name> = (...) => {`; a React handler is `on<Event>={(event) => {`.
+  const opening =
+    /^( *)(?:const (\w+) = \([^)]*\)(?:: \w+)? => \{|(on[A-Z]\w*)=\{\([^)]*\) => \{)$/gm;
+  const handlers = [...source.matchAll(opening)].map((open) => {
+    const start = open.index!;
+    const end = source.indexOf(`\n${open[1]}}`, start);
+    assert.notEqual(end, -1, open[0]);
+    return { name: open[2] ?? open[3]!, start, end };
+  });
+  // The innermost handler holding each call.
+  const holder = (at: number) =>
+    handlers
+      .filter((handler) => handler.start < at && at < handler.end)
+      .sort((a, b) => b.start - a.start)[0]?.name;
+  const calls = [...source.matchAll(/preventDefault\(\)/g)].map((call) => holder(call.index!));
+  assert.equal(calls.length, 3);
+  assert.deepEqual(calls, ['onKeyDown', 'onKey', 'onKey']);
+  // onKey is the shell's keydown listener, and listens to nothing else.
+  assert.deepEqual(
+    [...source.matchAll(/addEventListener\(\s*['"`](\w+)['"`],\s*onKey\b/g)].map(
+      ([, type]) => type,
+    ),
+    ['keydown'],
+  );
+  assert.match(source, /rootElement\.removeEventListener\('keydown', onKey\);/);
+  // The other onKeyDown is the chapter sheet's, inside Jump, and its one call comes only once a Tab
+  // has an end to wrap from: past `if (!to) return;`, never before it.
+  const jump = source.indexOf('function Jump(');
+  const sheet = handlers.find((handler) => handler.name === 'onKeyDown')!;
+  assert.ok(
+    jump !== -1 && jump < sheet.start && sheet.end < source.indexOf('\nfunction ', jump + 1),
+  );
+  const body = source.slice(sheet.start, sheet.end);
+  assert.match(
+    body,
+    /if \(event\.key !== 'Tab' \|\| event\.altKey \|\| event\.ctrlKey \|\| event\.metaKey\) return;/,
+  );
+  assert.match(body, /if \(!to\) return;\s*event\.preventDefault\(\);\s*to\.focus\(\);/);
+  assert.equal(body.indexOf('preventDefault'), body.lastIndexOf('preventDefault'));
+  // No other listener calls it, whatever its event: wheel, touch, scroll, focus, pointer or the page's keys.
+  for (const [, type, name] of source.matchAll(/addEventListener\(\s*['"`](\w+)['"`],\s*(\w+)/g)) {
+    if (name === 'onKey') continue;
+    const own = handlers.find((handler) => handler.name === name);
+    if (own)
+      assert.doesNotMatch(source.slice(own.start, own.end), /preventDefault/, `${type} ${name}`);
+  }
+});
+
+test('torn down, the controller refits nothing and leaves none of its attributes on the shell', () => {
+  const source = readFileSync(new URL('./controller.tsx', import.meta.url), 'utf8');
+  // A refit the text-size sentinel or a late frame calls after teardown does nothing.
+  assert.match(source, /const refitNow = \([^)]*\) => \{\s*if \(disposed\) return;/);
+  // Its cleanup takes off every attribute it sets on the shell: the pin, the rail's and the fit's.
+  const cleanup = source.slice(source.indexOf('disposed = true;'));
+  for (const name of ['pin', 'rail', 'fit'])
+    assert.match(cleanup, new RegExp(`delete rootElement\\.dataset\\.${name};`), name);
 });
 
 test("a work whose title repeats its section's still links to its own address", () => {
@@ -370,3 +471,18 @@ for (const { name } of CONTRACT_FIXTURES) {
     }
   });
 }
+
+test('only the live position status is marked script-only, the one text no page without script has', () => {
+  const dir = new URL('./', import.meta.url);
+  const marked = readdirSync(dir)
+    .filter((name) => /\.tsx?$/.test(name) && !/\.test\./.test(name))
+    .flatMap((name) =>
+      [...readFileSync(new URL(name, dir), 'utf8').matchAll(/data-script-only/g)].map(() => name),
+    );
+  assert.deepEqual(marked, ['controller.tsx']);
+  const source = readFileSync(new URL('./controller.tsx', import.meta.url), 'utf8');
+  assert.match(
+    source,
+    /<p\s+className="hc-scrub__status"\s+role="status"\s+data-type-role="label"\s+data-script-only=""\s*>/,
+  );
+});

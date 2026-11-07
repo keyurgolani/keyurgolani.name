@@ -176,6 +176,17 @@
   container-type: inline-size;
 }
 
+/* The controller's 1rem sentinel: its size says the text size changed. Out of the flow, unseen. */
+[data-variant='horizontal-cinema'] .hc-shell__em {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  inline-size: 1rem;
+  block-size: 1rem;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 [data-variant='horizontal-cinema'] .hc-stage {
   position: relative;
   background-color: var(--color-surface-default);
@@ -183,6 +194,20 @@
 
 [data-variant='horizontal-cinema'] .hc-stage:focus-visible {
   outline-offset: calc(var(--ui-focus-width) * -1);
+}
+
+/*
+ * Top to bottom the stage is the page's height and its scenes cover its own ring, the platform's
+ * outline inset at its edges, so focus changed nothing on screen. There a ring in the focus colour
+ * lies over the scenes at the stage's edges while it has focus. The pinned strip keeps its own.
+ */
+[data-variant='horizontal-cinema'] .hc-shell[data-fit='over'] .hc-stage:focus-visible::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  border: var(--ui-focus-width) solid var(--color-focus);
+  pointer-events: none;
 }
 
 [data-variant='horizontal-cinema'] .hc-track {
@@ -1928,8 +1953,23 @@
   font-weight: 650;
 }
 
+/* The rail's fit measures every label at the current one's weight, so reaching any chapter keeps it. */
+[data-variant='horizontal-cinema'] .hc-shell[data-rail-measure] .hc-minimap__label {
+  font-weight: 650;
+}
+
 [data-variant='horizontal-cinema'] .hc-minimap__years {
   font-variant-numeric: tabular-nums;
+}
+
+/* Where the rail's labels don't fit their chapters, the controller shortens them: the years go, kept for assistive technology. */
+[data-variant='horizontal-cinema'] .hc-shell[data-rail='short'] .hc-minimap__years {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 [data-variant='horizontal-cinema'] .hc-minimap__blocks {
@@ -2877,6 +2917,61 @@
 }
 
 /*
+ * The strip's bar and Strip | List where a touch screen stacks the scenes in the strip's own room
+ * (64rem by 44rem and up, by size, whatever the pointer): the bar shows, in flow at the end of the
+ * scenes, wrapping as it needs, so every scene, the status and the credits link are there by touch
+ * as by mouse. A phone and a short landscape window keep the chapter sheet alone, and the mouse
+ * strip and the fallback a face too wide sends top to bottom don't change. A screen's only: on paper
+ * the bar stays hidden, as it is by mouse.
+ */
+@media screen and (min-width: 64rem) and (min-height: 44rem) and (not ((hover: hover) and (pointer: fine))) {
+  [data-variant='horizontal-cinema'] .hc[data-view='strip'] .hc-chrome__views {
+    display: inline-flex;
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-scrub {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-xs) var(--space-xl);
+    padding-block: var(--space-xs);
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-minimap {
+    flex: 1 1 24rem;
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    :is(.hc-scrub__status, .hc-minimap__label) {
+    inline-size: auto;
+    white-space: normal;
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-minimap__window {
+    display: none;
+  }
+
+  /* What a link or focus lands on keeps a bar's height clear below it, as it clears the chapter control on top. */
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    :is(.hc-scene, [id]) {
+    scroll-margin-block-end: calc(var(--layout-scrub) + var(--space-l));
+  }
+}
+
+/*
  * The strip on a laptop's short window (HOR-1): 768 to 896 px tall, where a
  * 1440 by 800 or 1366 by 768 browser leaves the stage 120 to 200 px less
  * than at 900. Every scene keeps its words; the bars, the top line, the
@@ -2886,7 +2981,10 @@
  * still fits its frame, and the fit check keeps the strip.
  */
 @media (min-width: 64rem) and (min-height: 44rem) and (max-height: 56rem) and (hover: hover) and (pointer: fine) {
-  [data-variant='horizontal-cinema'] .hc[data-view='strip'] {
+  /* Only while the strip shows: a shell that falls back top to bottom keeps the top line's and the
+     bars' full height, so the visitor control's ring clears the page's top edge and each bar's Next
+     keeps its ring inside the scene that clips it. */
+  [data-variant='horizontal-cinema'] .hc[data-view='strip']:not(:has(.hc-shell[data-fit='over'])) {
     --layout-chrome: calc(var(--space-s) * 2);
     --layout-scrub: calc(var(--space-s) * 3);
     --layout-bar: calc(var(--space-s) * 1.4);
@@ -2961,6 +3059,72 @@
 }
 
 /*
+ * Room for a scene whose picture still runs past its frame in the faces the
+ * page renders, a platform without the profile's first family, say, where a
+ * wider fallback sets every line longer. The controller marks it, and it
+ * opens one width wider, as an authored scene that says more would: four
+ * columns to six, six to eight, eight (or the laptop's ten) to twelve, its
+ * two sections a half each. A full-width signature work gives its words a
+ * column of its still's. Its words never shrink or clip; only a scene that
+ * still overflows sends the shell top to bottom.
+ */
+@media (min-width: 64rem) and (min-height: 44rem) and (hover: hover) and (pointer: fine) {
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-scene[data-room][data-w='4'] {
+    --layout-cols: 6;
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-scene[data-room][data-w='6'] {
+    --layout-cols: 8;
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-scene[data-room][data-w='8'],
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-scene[data-room][data-kind='sections'][data-w='8']:has(.hc-section + .hc-section) {
+    --layout-cols: 12;
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-scene[data-room][data-kind='sections'][data-w='8']
+    .hc-pic
+    > :is(.hc-section + .hc-section, .hc-section:has(+ .hc-section)) {
+    grid-column: span 6;
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-scene[data-room]
+    .hc-lead {
+    grid-template-areas:
+      'still still still still still still . words words words words words'
+      'press press press press press press . words words words words words';
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-scene[data-room]
+    .hc-lead[data-media='none'] {
+    grid-template-areas:
+      'press press press press press press . words words words words words'
+      'press press press press press press . words words words words words';
+  }
+}
+
+/*
  * The pin, which the controller turns on while the strip shows: the shell
  * is as tall as the strip is long, and its frame sticks under the top line,
  * so the page's own scroll travels the strip and then goes on to the
@@ -3017,9 +3181,10 @@
 }
 
 /*
- * The one orchestrated moment: the title card's picture opens from a slit, then the name fades up.
- * On screen only: on paper neither runs, so the picture prints whole and the name at full opacity.
- * Without a script the fade still plays, as CSS, from the first paint, so it never flashes.
+ * The one orchestrated moment: the title card's picture opens from a slit, then the name rises into
+ * place. It rises at full strength, never from transparent, so the page's one heading is there to read
+ * from the first paint, with or without a script, the rise playing as CSS either way.
+ * On screen only: on paper neither runs, so the picture prints whole.
  */
 @media screen and (prefers-reduced-motion: no-preference) {
   [data-variant='horizontal-cinema']:not([data-motion='reduced'], [data-motion='static']) .hc-card {
@@ -3028,19 +3193,19 @@
 
   [data-variant='horizontal-cinema']:not([data-motion='reduced'], [data-motion='static'])
     .hc-card__name {
-    animation: horizontal-cinema-fade var(--motion-scene) var(--motion-curve) backwards;
+    animation: horizontal-cinema-rise var(--motion-scene) var(--motion-curve) backwards;
     animation-delay: calc(var(--motion-scene) * 0.4);
   }
 }
 
+/* A scene's words arrive by moving alone, at full strength: a frame not yet on screen reads at its
+   own contrast, and only the stage's fade at its end dims the peek. */
 @keyframes horizontal-cinema-arrive {
   from {
-    opacity: 0.4;
     transform: translateX(var(--layout-arrive));
   }
 
   to {
-    opacity: 1;
     transform: none;
   }
 }
@@ -3055,9 +3220,8 @@
   }
 }
 
-@keyframes horizontal-cinema-fade {
+@keyframes horizontal-cinema-rise {
   from {
-    opacity: 0;
     transform: translateY(0.12em);
   }
 }
@@ -3448,7 +3612,6 @@
 
 @media print {
   [data-variant='horizontal-cinema'] .hc-scrub,
-  [data-variant='horizontal-cinema'] .hc-skip,
   [data-variant='horizontal-cinema'] .hc-fold__state {
     display: none;
   }
@@ -3470,5 +3633,11 @@
   [data-variant='horizontal-cinema'] .hc-jump,
   [data-variant='horizontal-cinema'] .hc-board__map {
     position: static;
+  }
+
+  /* The text-size sentinel stays out of the flow and keeps its 1rem, so printing reads no change of
+     text size, but it isn't fixed: a fixed box is placed again on every printed page. */
+  [data-variant='horizontal-cinema'] .hc-shell__em {
+    position: absolute;
   }
 }

@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -11,7 +12,7 @@ import {
 } from 'react';
 import { Action } from '@portfolio/appearance/primitives';
 import { useBoundary } from '@portfolio/appearance/react';
-import { arrowStep, sceneAlong } from './chapters';
+import { arrowStep, sceneAlong, snapAlong, wordSpans } from './chapters';
 import { numeralOf, SceneTitle, Words, type TitleMark } from './parts';
 import { Runtime } from './runtime';
 
@@ -36,9 +37,11 @@ import { Runtime } from './runtime';
 // it writes no history, and in a plate it never starts.
 //
 // Every scene fits the stage by construction, and the controller checks:
-// where a scene's picture still overflows, at this viewport and in these
-// faces, the shell falls back to the same scenes top to bottom, so nothing
-// is ever clipped under the snap. Top to bottom, a chapter control on the
+// where a scene's picture still overflows, or one of its headings breaks
+// inside a word, at this viewport and in these faces, that scene opens a
+// width wider (its type never shrinks), and where one doesn't fit even so,
+// the shell falls back to the same scenes top to bottom, so nothing is
+// ever clipped under the snap. Top to bottom, a chapter control on the
 // top edge says where the reader is and opens the five chapters.
 
 /** How long scrolling has to stop before the controller reads where it settled. */
@@ -62,6 +65,8 @@ const NATIVE_KEYS = [
     (role) => `[role="${role}"]`,
   ),
 ].join(', ');
+/** What a Space presses rather than scrolls the page with. */
+const PRESSABLE = 'button, summary, [role="button"], [role="checkbox"], [role="switch"]';
 
 /** One scene, as the scrubber draws it and the controller finds it. */
 export interface SceneMark extends TitleMark {
@@ -187,7 +192,11 @@ function Scrubber({
           </Action>
         </div>
       ) : null}
-      <MapTag className="hc-minimap" aria-label={plate ? undefined : 'Chapters'} style={style}>
+      <MapTag
+        className="hc-minimap"
+        aria-label={plate ? undefined : 'Scenes by chapter'}
+        style={style}
+      >
         <ol role="list">
           {chapters.map((chapter, position) => {
             const own = scenes.filter((scene) => scene.chapter === position);
@@ -237,7 +246,9 @@ function Scrubber({
       </MapTag>
       <div className="hc-scrub__end">
         {live ? (
-          <p className="hc-scrub__status" role="status" data-type-role="label">
+          // Only the live script sets the position, and a static one would be wrong wherever the
+          // reader is, so the page without it, and on paper, has none: its words are script-only.
+          <p className="hc-scrub__status" role="status" data-type-role="label" data-script-only="">
             {scenes[live.status.number - 1] ? (
               <SceneTitle mark={scenes[live.status.number - 1]!} lang={lang} />
             ) : (
@@ -261,6 +272,11 @@ function Scrubber({
  * chapter and scene the reader is in, and a sheet of the five chapters.
  * The sheet is a native popover, so it opens and closes with no script.
  */
+/** The chapter sheet's links, in order: what its focus goes round. */
+const sheetLinks = (sheet: HTMLElement): HTMLAnchorElement[] => [
+  ...sheet.querySelectorAll<HTMLAnchorElement>('a[href]'),
+];
+
 function Jump({
   scenes,
   chapters,
@@ -304,6 +320,28 @@ function Jump({
         aria-label="Chapters"
         onClick={(event) => {
           if ((event.target as Element).closest('a')) event.currentTarget.hidePopover();
+        }}
+        // Opened, the sheet takes focus to the chapter the reader is in, and Tab and Shift and Tab go
+        // round its links until Escape or a link closes it, when the popover gives focus back.
+        onToggle={(event) => {
+          if (event.newState !== 'open') return;
+          const links = sheetLinks(event.currentTarget);
+          (links.find((link) => link.hasAttribute('aria-current')) ?? links[0])?.focus();
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== 'Tab' || event.altKey || event.ctrlKey || event.metaKey) return;
+          const links = sheetLinks(event.currentTarget);
+          const at = links.indexOf(event.target as HTMLAnchorElement);
+          const to = event.shiftKey
+            ? at <= 0
+              ? links.at(-1)
+              : undefined
+            : at === links.length - 1
+              ? links[0]
+              : undefined;
+          if (!to) return;
+          event.preventDefault();
+          to.focus();
         }}
       >
         <ol role="list">
@@ -373,7 +411,8 @@ function LiveStage(props: StageProps) {
   const { scenes } = props;
   const { attachRoot, state } = Runtime.useEnhancementRuntime();
   const [current, setCurrent] = useState(0);
-  // What the status says once a move settles; it starts on the first scene, unannounced.
+  // What the status says once a move settles. It starts on the scene the page loads on, the first or a
+  // link's, set before the status first shows, so it's the status's own words and never news.
   const [status, setStatus] = useState(() => ({ title: scenes[0]?.title ?? '', number: 1 }));
   const [window_, setWindow] = useState({ start: 0, size: 0 });
   // The transport and the live status appear once the controller runs: the
@@ -382,8 +421,11 @@ function LiveStage(props: StageProps) {
   const root = useRef<HTMLDivElement | null>(null);
   const stage = useRef<HTMLDivElement | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
+  const emRef = useRef<HTMLSpanElement | null>(null);
   const animate = useRef(false);
   const step = useRef<(by: 1 | -1) => void>(() => {});
+  /** The controller's refit, for the layout effect that runs it once the live bar is in the page. */
+  const refit = useRef<((landing?: boolean) => void) | null>(null);
 
   useEffect(() => {
     animate.current = state === 'active';
@@ -444,6 +486,24 @@ function LiveStage(props: StageProps) {
       landedAt = window.scrollY;
     };
     let moved = false;
+    /** Where the page last came to rest, so the pin's snap knows which way a travel went from there. */
+    let rest = window.scrollY;
+    /**
+     * Where the pin's snap is gliding to and which way, from when it sets out until it gets there
+     * or past it; and which way the visitor's own input (the wheel, a touch, a scrolling key) last
+     * moved the page since it set out, 0 for none. Read from the input, not the page's place: the
+     * browser's own scroll can step back a little as it takes a glide over.
+     */
+    let snapTo: { top: number; way: number } | null = null;
+    let told = 0;
+    /**
+     * While the snap glides, where the page last was and which way its last step went, 1 on and -1
+     * back, 0 for none since it set out: what a move with no input of the visitor's says, such as
+     * the scroll bar, find in page or a link stopping the glide short.
+     */
+    let lastY = window.scrollY;
+    let lastStep = 0;
+    let snapFrame: number | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let frame: number | undefined;
 
@@ -653,16 +713,129 @@ function LiveStage(props: StageProps) {
     };
 
     /**
-     * Whether every scene's picture fits the stage. Where one doesn't, the
-     * shell reads top to bottom until the viewport changes, so nothing is
-     * clipped under the snap.
+     * Whether a heading in this picture breaks inside a word: the root's
+     * overflow-wrap lets a word wider than its column break rather than run
+     * out, so it never overflows, yet a heading's word in two lines doesn't fit.
+     * Read from each word's own boxes: one box per line it sits on.
+     */
+    const breaksAWord = (pic: HTMLElement) => {
+      const range = document.createRange();
+      for (const heading of pic.querySelectorAll(':is(h1, h2, h3, h4)')) {
+        const words = document.createTreeWalker(heading, NodeFilter.SHOW_TEXT);
+        for (let node = words.nextNode(); node; node = words.nextNode()) {
+          for (const [start, end] of wordSpans(node.textContent ?? '')) {
+            range.setStart(node, start);
+            range.setEnd(node, end);
+            const lines = new Set(
+              [...range.getClientRects()]
+                .filter((box) => box.width > 0)
+                .map((box) => Math.round(box.top)),
+            );
+            if (lines.size > 1) return true;
+          }
+        }
+      }
+      return false;
+    };
+    /** The pictures that don't fit their frame, at this viewport and in these faces: past it, or a heading broken inside a word. */
+    const overflowing = () =>
+      [...stageElement.querySelectorAll<HTMLElement>('.hc-pic')].filter(
+        (pic) => pic.scrollHeight > pic.clientHeight + 1 || breaksAWord(pic),
+      );
+    /**
+     * Whether the bar under the stage holds its own content at this width: each chapter label's
+     * text, as drawn, inside the bar's inner box, clear of the next label, and clear of the bar's
+     * other parts, the transport and the position text with the credits. A chapter's contents,
+     * shown only on hover or focus, aren't measured.
+     */
+    const railOver = (): boolean => {
+      const bar = rootElement.querySelector<HTMLElement>('.hc-scrub');
+      if (!bar || bar.offsetParent === null) return false;
+      const outer = bar.getBoundingClientRect();
+      const style = getComputedStyle(bar);
+      const left = outer.left + (Number.parseFloat(style.paddingLeft) || 0);
+      const right = outer.right - (Number.parseFloat(style.paddingRight) || 0);
+      const drawn = (element: Element): DOMRect => {
+        const range = doc.createRange();
+        range.selectNodeContents(element);
+        return range.getBoundingClientRect();
+      };
+      const meet = (a: DOMRect, b: DOMRect) =>
+        a.left < b.right - 0.5 &&
+        b.left < a.right - 0.5 &&
+        a.top < b.bottom - 0.5 &&
+        b.top < a.bottom - 0.5;
+      // A label as it shows: shortened, its years are hidden (kept for assistive technology), so
+      // only the words outside them count.
+      const shown = (label: Element): DOMRect => {
+        if (rootElement.dataset.rail !== 'short') return drawn(label);
+        const boxes = [...label.childNodes]
+          .filter((node) => !(node instanceof Element && node.matches('.hc-minimap__years')))
+          .map((node) => {
+            const range = doc.createRange();
+            range.selectNodeContents(node);
+            return range.getBoundingClientRect();
+          })
+          .filter((box) => box.width > 0 || box.height > 0);
+        if (boxes.length === 0) return drawn(label);
+        const l = Math.min(...boxes.map((box) => box.left));
+        const t = Math.min(...boxes.map((box) => box.top));
+        const r = Math.max(...boxes.map((box) => box.right));
+        const b = Math.max(...boxes.map((box) => box.bottom));
+        return new DOMRect(l, t, r - l, b - t);
+      };
+      // Every label at the current one's weight, as each is once the reader reaches its chapter.
+      rootElement.dataset.railMeasure = '';
+      const labels = [...bar.querySelectorAll('.hc-minimap__label')].map(shown);
+      delete rootElement.dataset.railMeasure;
+      const parts = [...bar.children]
+        .filter((part) => !part.querySelector('.hc-minimap__label'))
+        .map(drawn)
+        .filter((box) => box.width > 0 && box.height > 0);
+      // The labels run in the bar's inline direction: right to left, each one starts at its right
+      // edge, so a label clears the one before it where it starts past that one's end.
+      const rtl = style.direction === 'rtl';
+      const inlineStart = (box: DOMRect) => (rtl ? -box.right : box.left);
+      const inlineEnd = (box: DOMRect) => (rtl ? -box.left : box.right);
+      return labels.some(
+        (label, index) =>
+          label.left < left - 0.5 ||
+          label.right > right + 0.5 ||
+          (index > 0 && inlineStart(label) < inlineEnd(labels[index - 1]!) - 0.5) ||
+          parts.some((part) => meet(label, part)),
+      );
+    };
+    /** Every scene back at its authored width. */
+    const unroom = () => {
+      for (const scene of stageElement.querySelectorAll<HTMLElement>('.hc-scene[data-room]'))
+        delete scene.dataset.room;
+    };
+    /**
+     * Whether every scene's picture fits the stage. A scene whose picture
+     * doesn't (past its frame, or a heading broken inside a word), in a wider
+     * face than the one it was sized for, first opens a
+     * width wider; where one still doesn't, the shell reads top to bottom
+     * until the viewport changes, so nothing is clipped under the snap.
      */
     const fit = (landing = true) => {
       if (!strip()) return;
-      const over = [...stageElement.querySelectorAll('.hc-pic')].some(
-        (pic) => pic.scrollHeight > pic.clientHeight + 1,
-      );
+      // Sized afresh in the faces now in force: a scene that needed room in the fallback may not now.
+      unroom();
+      for (const pic of overflowing()) {
+        const scene = pic.closest<HTMLElement>('.hc-scene');
+        if (scene) scene.dataset.room = '';
+      }
+      // The rail under the stage: where a chapter's label runs past its share, its years go first,
+      // the full label kept for assistive technology; where even that doesn't fit, top to bottom.
+      delete rootElement.dataset.rail;
+      let over = overflowing().length > 0;
+      if (!over && railOver()) {
+        rootElement.dataset.rail = 'short';
+        over = railOver();
+      }
       if (over) {
+        unroom();
+        delete rootElement.dataset.rail;
         rootElement.dataset.fit = 'over';
         invalidate();
         pin();
@@ -688,6 +861,61 @@ function LiveStage(props: StageProps) {
       return 0;
     };
     const arrived = (index: number): boolean => distanceTo(index) <= 1;
+
+    /** The snap got to its scene, or past it: that scene is where the next travel sets out from. */
+    const arrive = (): boolean => {
+      if (!snapTo) return false;
+      const y = window.scrollY;
+      if (snapTo.way > 0 ? y < snapTo.top - 1 : y > snapTo.top + 1) return false;
+      rest = snapTo.top;
+      snapTo = null;
+      return true;
+    };
+    /**
+     * Arrival read every frame while the snap glides, not only in the scroll handler: one scroll
+     * event can come after the page has reached the scene and a notch has already moved it on.
+     */
+    const watchSnap = () => {
+      snapFrame = undefined;
+      if (disposed || !snapTo || arrive()) return;
+      snapFrame = requestAnimationFrame(watchSnap);
+    };
+    /** The way the visitor's own input moves the page, 1 on and -1 back, while the snap glides. */
+    const tell = (way: number) => {
+      if (snapTo && way !== 0) told = way;
+    };
+    const onWheel = (event: WheelEvent) => {
+      // Shift and the wheel, or a sideways swipe, moves the strip, which the page follows (lead):
+      // right to left, a scroll to the right goes back.
+      const sideways = event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY);
+      tell(Math.sign(sideways ? (event.deltaX || event.deltaY) * (rtl() ? -1 : 1) : event.deltaY));
+    };
+    let touchAt: { x: number; y: number } | undefined;
+    const onTouchStart = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      touchAt = touch ? { x: touch.clientX, y: touch.clientY } : undefined;
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      if (!touch || !touchAt) return;
+      const dx = touchAt.x - touch.clientX;
+      const dy = touchAt.y - touch.clientY;
+      touchAt = { x: touch.clientX, y: touch.clientY };
+      // A finger moving up moves the page on; one moving across moves the strip on the way it reads.
+      tell(Math.abs(dx) > Math.abs(dy) ? Math.sign(dx) * (rtl() ? -1 : 1) : Math.sign(dy));
+    };
+    // The keys that scroll the page. The arrows across, and Home and End where they have a scene to
+    // go to, are the controller's own steps (onKey), which take a snap over as any move does.
+    const onPageKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      if (event.target instanceof Element && event.target.closest(NATIVE_KEYS)) return;
+      const space =
+        event.key === ' ' && !(event.target instanceof Element && event.target.closest(PRESSABLE));
+      if (['ArrowDown', 'PageDown', 'End'].includes(event.key) || (space && !event.shiftKey))
+        tell(1);
+      else if (['ArrowUp', 'PageUp', 'Home'].includes(event.key) || (space && event.shiftKey))
+        tell(-1);
+    };
 
     const settle = () => {
       timer = undefined;
@@ -724,23 +952,42 @@ function LiveStage(props: StageProps) {
       }
       restConfirmed = false;
       wrote = {};
-      // The pin's snap: a travel that comes to rest between scenes finishes onto the nearer one.
+      // The pin's snap: a travel that comes to rest between scenes finishes onto the next one the
+      // way it went from where the page last rested, so a slow wheel's notch is never pulled back.
       if (pinned && aligning === null && !reduced()) {
+        // A snap that stopped short of its scene. The way the visitor's own input went, where
+        // there's any, says how it finishes; with none (the scroll bar, find in page, a link), the
+        // way the page's last step went. On the way it glided, the travel finishes ahead, from
+        // where it set out; against it, from the scene it glided to, as though it got there.
+        if (snapTo) {
+          const way = told || lastStep;
+          if (way !== snapTo.way) rest = snapTo.top;
+          snapTo = null;
+        }
         const progress = window.scrollY - pinStart();
         if (progress > 0 && progress < travel() - 1) {
-          let nearest = 0;
-          elements.forEach((_, index) => {
-            if (Math.abs(offsetOf(index) - progress) < Math.abs(offsetOf(nearest) - progress))
-              nearest = index;
-          });
+          // Where it set out, inside the strip; past its end it stays past it, so coming back up
+          // from the credits a stop inside the end reads as a step back to the end, not past it.
+          const set = rest - pinStart();
+          const from = set > travel() ? set : Math.max(0, set);
+          const nearest = snapAlong(geometry().offsets, progress, from);
           const top = pinStart() + offsetOf(nearest);
           if (Math.abs(window.scrollY - top) > 1) {
+            // The scene it finishes on is where the next travel sets out from once the glide gets
+            // there, even a notch that comes as the snap closes, so that one travels on from it.
+            snapTo = { top, way: Math.sign(top - window.scrollY) };
+            told = 0;
+            lastY = window.scrollY;
+            lastStep = 0;
+            if (snapFrame === undefined) snapFrame = requestAnimationFrame(watchSnap);
             window.scrollTo({ top, behavior: behavior() });
             return;
           }
         }
       }
       aligning = null;
+      rest = window.scrollY;
+      snapTo = null;
       // The move is over: its limit no longer runs.
       if (overdueTimer !== undefined) clearTimeout(overdueTimer);
       overdueTimer = undefined;
@@ -805,6 +1052,12 @@ function LiveStage(props: StageProps) {
       timer = setTimeout(settle, SETTLE_MS);
     };
     const onPageScroll = () => {
+      if (snapTo) {
+        const y = window.scrollY;
+        if (y !== lastY) lastStep = Math.sign(y - lastY);
+        lastY = y;
+      }
+      arrive();
       follow();
       onScroll();
     };
@@ -984,31 +1237,120 @@ function LiveStage(props: StageProps) {
     fold(true);
     setHydrated(true);
 
-    let refit: ReturnType<typeof setTimeout> | undefined;
+    let refitTimer: ReturnType<typeof setTimeout> | undefined;
+    /** The strip laid out again for the viewport and the text size now in force: the fit check, room, and pin. */
+    /**
+     * The scene the reader is on, as the layout is about to change under them: whether they're
+     * reading one at all (inside the pin, or one across the reading line top to bottom, or focus in
+     * one), and which: the one holding focus, else the current one. Read before anything moves.
+     */
+    const reading = (): { inside: boolean; held: number } => {
+      const active = doc.activeElement;
+      const holding = active
+        ? elements.findIndex((element) => element !== null && element.contains(active))
+        : -1;
+      return { inside: holding >= 0 || readsScene(), held: holding >= 0 ? holding : position };
+    };
+    /**
+     * That scene brought back on the layout now in force: pinned, the page at its share of the
+     * strip; top to bottom, at the top. What has focus comes with it: focus left on the bar, which
+     * top to bottom isn't shown, goes to the scene, and focus in a scene is brought into view.
+     */
+    const hold = ({ inside, held }: { inside: boolean; held: number }) => {
+      if (!inside) return;
+      if (pinned) window.scrollTo({ top: pinStart() + offsetOf(held), behavior: 'instant' });
+      else if (!strip()) {
+        elements[held]?.scrollIntoView({ block: 'start', behavior: 'instant' });
+        land(held);
+      }
+      const active = doc.activeElement;
+      if (!(active instanceof HTMLElement)) return;
+      const bar = active.closest<HTMLElement>('.hc-scrub');
+      if (bar && bar.offsetParent === null) elements[held]?.focus({ preventScroll: true });
+      else if (!strip() && elements[held]?.contains(active))
+        active.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+    };
+    const refitNow = (landing = false) => {
+      if (disposed) return;
+      // Where the reader is, before the pin's length or the layout changes under them.
+      const at = reading();
+      delete rootElement.dataset.fit;
+      unroom();
+      invalidate();
+      fitName();
+      fit(landing);
+      pin();
+      // A reader in the strip keeps their scene and focus; one above or below it stays where they
+      // are. As the page loads, the scene the URL names is landed by the fit itself.
+      if (!landing) hold(at);
+      else if (at.inside && pinned)
+        window.scrollTo({ top: pinStart() + offsetOf(at.held), behavior: 'instant' });
+      paint();
+    };
+    refit.current = refitNow;
     const onResize = () => {
-      if (refit !== undefined) clearTimeout(refit);
-      refit = setTimeout(() => {
-        refit = undefined;
-        delete rootElement.dataset.fit;
-        invalidate();
-        requestAnimationFrame(() => {
-          // Where the page was in the pin, as a scene, before the pin's length changes under it.
-          const inside =
-            pinned && window.scrollY >= pinStart() && window.scrollY <= pinStart() + travel();
-          const held = position;
-          fitName();
-          fit(false);
-          pin();
-          // A reader inside the strip keeps their scene; one above or below it stays where they are.
-          if (inside && pinned)
-            window.scrollTo({ top: pinStart() + offsetOf(held), behavior: 'instant' });
-          paint();
-        });
+      if (refitTimer !== undefined) clearTimeout(refitTimer);
+      refitTimer = setTimeout(() => {
+        refitTimer = undefined;
+        requestAnimationFrame(() => refitNow());
       }, SETTLE_MS);
       if (frame === undefined) frame = requestAnimationFrame(paint);
     };
+    // A change of text size, the root's font size or a reader's own, moves no edge of the window, so
+    // no resize comes: a sentinel 1rem square says it, and the strip is fitted again at once.
+    let sized = false;
+    const textSize =
+      typeof ResizeObserver === 'undefined'
+        ? undefined
+        : new ResizeObserver(() => {
+            if (sized && !disposed) refitNow();
+            sized = true;
+          });
+    if (emRef.current) textSize?.observe(emRef.current);
+    // Focus that moves into another scene, a Tab's say, steps the strip to that scene once the browser
+    // has brought it into view, so the snap never carries the strip off what the Tab reached. The step
+    // is a cut, as the browser's own focus scroll is: a glide would carry what has focus on under the
+    // reader's eye, out of the place it was shown, and the move settles, status and all, at once.
+    // A pointer's press focuses what it lands on as it goes down, a link in Chrome, before its click
+    // lands as it comes up: a step there would carry what was pressed out from under the pointer and
+    // the click would miss. So focus a press gives steps nothing. The flag clears a frame after the
+    // press ends anywhere in the window, since a press can end outside the stage.
+    let pressing = false;
+    const onPress = () => {
+      pressing = true;
+    };
+    const onRelease = () => {
+      requestAnimationFrame(() => {
+        pressing = false;
+      });
+    };
+    const onFocusIn = (event: FocusEvent) => {
+      if (pressing) return;
+      const target = event.target as Element;
+      const at = elements.findIndex(
+        (element) => element !== null && element !== target && element.contains(target),
+      );
+      if (at < 0) return;
+      requestAnimationFrame(() => {
+        if (disposed || !strip() || doc.activeElement !== target) return;
+        if (at !== (aligning ?? position) || !arrived(at)) {
+          aligning = at;
+          position = at;
+          setCurrent(at);
+          align(at, 'instant');
+        }
+      });
+    };
+    stageElement.addEventListener('pointerdown', onPress, { capture: true });
+    window.addEventListener('pointerup', onRelease, { capture: true });
+    window.addEventListener('pointercancel', onRelease, { capture: true });
+    stageElement.addEventListener('focusin', onFocusIn);
 
     rootElement.addEventListener('keydown', onKey);
+    window.addEventListener('keydown', onPageKey);
+    window.addEventListener('wheel', onWheel, { passive: true });
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
     window.addEventListener('hashchange', onHash);
     stageElement.addEventListener('scroll', onStageScroll, { passive: true });
     window.addEventListener('scroll', onPageScroll, { passive: true });
@@ -1017,10 +1359,15 @@ function LiveStage(props: StageProps) {
     fit();
     pin();
     const relayout = () => {
+      // The faces or a late picture can stack the strip or unstack it too: the reader keeps their
+      // scene then. Short of that, the page stays where the reader has it.
+      const at = reading();
+      const was = pinned;
       invalidate();
       fitName();
       fit();
       pin();
+      if (pinned !== was) hold(at);
       // The faces or a late picture moved the scenes with no scroll: read where the page is again.
       if (frame === undefined) frame = requestAnimationFrame(paint);
     };
@@ -1057,6 +1404,14 @@ function LiveStage(props: StageProps) {
     const scope: HTMLElement = rootElement.closest<HTMLElement>('.hc') ?? rootElement;
     scope.addEventListener('click', onLink);
     paint();
+    // A fresh load on a link's scene, or anywhere the browser restored, names that scene from the
+    // start. Set with the transport's own first render (the same effect as setHydrated), so the status
+    // appears saying it rather than changing to it: nothing is announced at load. No scroll comes after
+    // the listeners attach on such a load, so no settle would ever write it.
+    if (position !== 0) {
+      const scene = scenes[position]!;
+      setStatus({ title: scene.title, number: scene.number });
+    }
     return () => {
       scope.removeEventListener('click', onLink);
       disposed = true;
@@ -1064,12 +1419,24 @@ function LiveStage(props: StageProps) {
       if (quietTimer !== undefined) clearTimeout(quietTimer);
       if (overdueTimer !== undefined) clearTimeout(overdueTimer);
       if (timer !== undefined) clearTimeout(timer);
-      if (refit !== undefined) clearTimeout(refit);
+      if (refitTimer !== undefined) clearTimeout(refitTimer);
       if (frame !== undefined) cancelAnimationFrame(frame);
+      if (snapFrame !== undefined) cancelAnimationFrame(snapFrame);
+      refit.current = null;
       step.current = () => {};
       rootElement.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onPageKey);
+      window.removeEventListener('wheel', onWheel);
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('hashchange', onHash);
       stageElement.removeEventListener('scroll', onStageScroll);
+      stageElement.removeEventListener('focusin', onFocusIn);
+      stageElement.removeEventListener('pointerdown', onPress, { capture: true });
+      window.removeEventListener('pointerup', onRelease, { capture: true });
+      window.removeEventListener('pointercancel', onRelease, { capture: true });
+      textSize?.disconnect();
+      delete rootElement.dataset.rail;
       window.removeEventListener('scroll', onPageScroll);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('load', relayout);
@@ -1077,10 +1444,19 @@ function LiveStage(props: StageProps) {
       window.removeEventListener('beforeprint', beforePrint);
       window.removeEventListener('afterprint', afterPrint);
       delete rootElement.dataset.pin;
+      delete rootElement.dataset.fit;
       rootElement.style.removeProperty('--layout-pin-length');
       rootElement.querySelector<HTMLElement>('.hc-card')?.style.removeProperty('--layout-card-fit');
+      unroom();
     };
   }, [scenes]);
+
+  // The bar the server sends has no transport or live status, so its rail has more room than the
+  // visitor's: the fit measured before they render passes a rail the live bar can't hold. Once the
+  // live bar is in the page, and before it paints, the strip is fitted again on it.
+  useLayoutEffect(() => {
+    if (hydrated) refit.current?.(true);
+  }, [hydrated]);
 
   const onStep = useCallback((by: 1 | -1) => step.current(by), []);
   const live = useMemo<Live>(
@@ -1090,6 +1466,7 @@ function LiveStage(props: StageProps) {
   return (
     <div ref={setRoot} className="hc-shell" data-runtime={state === 'static' ? undefined : state}>
       <Jump {...props} current={current} />
+      <span ref={emRef} className="hc-shell__em" aria-hidden="true" />
       <div ref={frameRef} className="hc-frame">
         <div ref={stage} className="hc-stage" role="region" aria-label={props.label} tabIndex={0}>
           <div className="hc-track">{props.children}</div>

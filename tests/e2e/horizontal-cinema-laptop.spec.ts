@@ -1,12 +1,19 @@
 import { expect, test } from '../harness/fixtures';
 import { DEMO_APP } from '../harness/profile-matrix';
-import { load, read } from './horizontal-cinema-model';
+import {
+  brokenHeadingWords,
+  expectLayout,
+  load,
+  railClashes,
+  read,
+} from './horizontal-cinema-model';
 
 // Horizontal Cinema on a laptop's window (HOR-1): the bundled sample, whose
 // Practice scene is the tallest, at the viewports a 13 to 15 inch laptop's
-// browser leaves, 1440 by 800 and 1366 by 768. Every scene's picture fits
-// the stage there, so the fit check never falls back to the vertical
-// stack, and the strip is pinned to the page's scroll as at 1440 by 900.
+// browser leaves, 1440 by 800, 1366 by 768 and 1280 by 800. Every scene's
+// picture fits the stage there, its essays reel opening a width at 1280,
+// so the fit check never falls back to the vertical stack, and the strip
+// is pinned to the page's scroll as at 1440 by 900.
 
 const DEMO = { type: 'profile', description: 'demo' };
 const annotation = [{ type: 'route', description: '/sample' }, DEMO];
@@ -16,6 +23,7 @@ test.use({ appOptions: DEMO_APP });
 for (const [width, height] of [
   [1440, 800],
   [1366, 768],
+  [1280, 800],
 ] as const) {
   test(
     `at ${width} by ${height} the sample's strip fits and pins, with no scene over the stage`,
@@ -39,6 +47,40 @@ for (const [width, height] of [
           .map((scene) => scene.id),
       );
       expect(over).toEqual([]);
+    },
+  );
+}
+
+// At 1280 by 800 in a wider face than Trebuchet MS (CI's Liberation Sans), the Epilogue intertitle's
+// four columns held "Epilogue" only by breaking it, "Epilogu / e", which no overflow shows: the scene
+// now opens a width instead, as for a picture past its frame, and no heading breaks inside a word.
+// The sample pins at 1280 by 800 in both faces, macOS's and CI Linux's, so the check reads the
+// pinned strip: stacked, every heading has the page's width and none can break.
+test(
+  "at 1280 by 800 no heading in the sample's strip breaks inside a word",
+  { annotation },
+  async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await load(page, '/sample?variant=horizontal-cinema');
+    await expectLayout(page, 'pinned');
+    await expect.poll(() => brokenHeadingWords(page)).toEqual([]);
+  },
+);
+
+for (const [width, height] of [
+  [1366, 768],
+  [1280, 800],
+] as const) {
+  test(
+    `at ${width} by ${height} nothing on the sample's rail under the stage overlaps or runs out of its bar`,
+    { annotation },
+    async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await load(page, '/sample?variant=horizontal-cinema');
+      // The sample pins at both sizes on macOS and on CI Linux, so its rail shows: stacked, the bar
+      // isn't drawn and nothing on it could clash.
+      await expectLayout(page, 'pinned');
+      expect(await railClashes(page)).toEqual([]);
     },
   );
 }
