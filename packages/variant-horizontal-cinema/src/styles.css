@@ -2912,7 +2912,10 @@
  * still fits its frame, and the fit check keeps the strip.
  */
 @media (min-width: 64rem) and (min-height: 44rem) and (max-height: 56rem) and (hover: hover) and (pointer: fine) {
-  [data-variant='horizontal-cinema'] .hc[data-view='strip'] {
+  /* Only while the strip shows: a shell that falls back top to bottom keeps the top line's and the
+     bars' full height, so the visitor control's ring clears the page's top edge and each bar's Next
+     keeps its ring inside the scene that clips it. */
+  [data-variant='horizontal-cinema'] .hc[data-view='strip']:not(:has(.hc-shell[data-fit='over'])) {
     --layout-chrome: calc(var(--space-s) * 2);
     --layout-scrub: calc(var(--space-s) * 3);
     --layout-bar: calc(var(--space-s) * 1.4);
