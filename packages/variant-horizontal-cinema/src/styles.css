@@ -3472,3 +3472,5 @@
     position: static;
   }
 }
+
+/* evidence (not for merge): a no-op so the [37] rule directs HC qpr on a pre-r2 tree */

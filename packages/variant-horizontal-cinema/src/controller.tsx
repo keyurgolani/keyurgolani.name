@@ -1119,3 +1119,5 @@ export function Stage(props: StageProps) {
     </div>
   );
 }
+
+// evidence (not for merge): a no-op so the [37] rule directs HC qpr on a pre-r2 tree
