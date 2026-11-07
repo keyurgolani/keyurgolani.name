@@ -723,13 +723,13 @@ export async function runPass(
     // the test's viewport, as the landscape pass records them (push 3 r3, item 4).
     const {
       response: answer,
-      settled,
-      enhanced,
+      settled: primitivesSettled,
+      enhanced: primitivesEnhanced,
       served: primitivesServed,
     } = await loadForPass(page, route);
     const surface = { id: PRIMITIVES_SURFACE, route: PRIMITIVES_ROUTE };
     const findings: Finding[] = [];
-    if (!settled) {
+    if (!primitivesSettled) {
       findings.push({
         gate: 'runner',
         rule: 'settled',
@@ -737,7 +737,7 @@ export async function runPass(
         actual: STILL_BUSY,
       });
     }
-    if (!enhanced) {
+    if (!primitivesEnhanced) {
       findings.push({
         gate: 'runner',
         rule: 'enhanced',
