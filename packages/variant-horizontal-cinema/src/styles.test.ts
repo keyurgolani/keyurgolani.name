@@ -113,3 +113,10 @@ test('top to bottom the stage rings its edges over its scenes while it has focus
   // The pinned strip draws none of its own: the rule names the stacked shell alone.
   assert.equal(declared(at('.hc-stage:focus-visible::after'), CSS), '');
 });
+
+test('a scene’s words arrive by moving alone, never dimmed, so a frame off screen keeps its contrast', () => {
+  const arrive = CSS.slice(CSS.indexOf('@keyframes horizontal-cinema-arrive'));
+  const body = arrive.slice(0, arrive.indexOf('\n}\n'));
+  assert.match(body, /transform: translateX\(var\(--layout-arrive\)\);/);
+  assert.doesNotMatch(body, /opacity|filter/);
+});
