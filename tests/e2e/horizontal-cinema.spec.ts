@@ -5,6 +5,7 @@ import { fixtureSiteSelecting } from '../../packages/variant-contract/src/contra
 import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
 import { expect, test } from '../harness/fixtures';
 import {
+  arrivedAt,
   crowdRail,
   expectAnnounced,
   expectAt,
@@ -122,13 +123,16 @@ test(
     await page.mouse.move(720, 450);
     // Each notch, well short of half a scene, rests before the next, as a slow runner or a slow
     // hand turns it: the snap finishes it onto the next scene the way it went, not the one it left.
+    // The next notch goes the moment the snap arrives, read in the page frame by frame, before the
+    // controller's own settle there (150 ms) could take the arrival as a rest: only where the snap
+    // itself sets out from the scene it reaches does that notch travel on rather than come back.
     for (const index of [1, 2]) {
       await page.mouse.wheel(0, 200);
-      await expectAt(page, index);
-      expect((await read(page)).along).toBeGreaterThan(0);
+      expect(await arrivedAt(page, index), `the snap reaches scene ${index}`).toBe(true);
     }
     await page.mouse.wheel(0, -200);
     await expectAt(page, 1);
+    expect((await read(page)).along).toBeGreaterThan(0);
   },
 );
 
