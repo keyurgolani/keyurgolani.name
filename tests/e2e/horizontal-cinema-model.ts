@@ -175,8 +175,10 @@ export const brokenHeadingWords = (scope: Scope) =>
   );
 
 /**
- * A rail that can't hold its labels, for the fallback's own tests: before the page's first script, a
- * style that spaces every chapter label's letters far apart, so even its short form runs past its share.
+ * A rail that can't hold its labels, for the fallback's own tests: a style that spaces every chapter
+ * label's letters far apart, so even its short form runs past its share. It goes in at
+ * DOMContentLoaded, after the page's deferred scripts have run, not before its first script, so the
+ * strip stacks from a fit that measures once it's in: the load relayout at the latest.
  */
 export async function crowdRail(page: Page): Promise<void> {
   await page.addInitScript(() => {
@@ -271,8 +273,9 @@ export function railClashes(scope: Scope) {
 }
 
 /**
- * Widens only the rail's years, as a wider face would, before the controller's first fit, by
- * `spacing` of letter-spacing: how far a fixture's own years must go to crowd its rail.
+ * Widens only the rail's years, as a wider face would, by `spacing` of letter-spacing: how far a
+ * fixture's own years must go to crowd its rail. As with crowdRail, the style goes in at
+ * DOMContentLoaded, so a fit that measures once it's in, the load relayout at the latest, reads it.
  */
 export async function widenRailYears(page: Page, spacing = '1.5em'): Promise<void> {
   await page.addInitScript((spacing) => {
