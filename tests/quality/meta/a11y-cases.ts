@@ -576,6 +576,30 @@ const SCRIPT_GUARDS = [
     scriptless: ['heading: Opening'],
     print: ['heading: Opening'],
   },
+  // Text only, whatever the kind (the coordinator, 7 Nov 2026, F4): a block holding an image, a
+  // submit button or a focusable span inside a marked status still counts, words and all.
+  {
+    id: 'script-only-image',
+    what: 'A script-only status whose words hold an image',
+    html: '<div role="status" data-script-only hidden data-lazy data-html="<p>Map <img alt=&quot;Route map&quot; width=&quot;16&quot; height=&quot;16&quot; src=&quot;data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7&quot;></p>"></div>',
+    scriptless: ['text: Map', 'image: Route map'],
+    print: ['text: Map', 'image: Route map'],
+  },
+  {
+    id: 'script-only-submit',
+    what: 'A script-only status whose words hold a submit button',
+    html: '<div role="status" data-script-only hidden data-lazy data-html="<form action=&quot;/&quot;><p>Saved. <button type=&quot;submit&quot;>Undo</button></p></form>"></div>',
+    // Print counts no control, so the button is missing without JavaScript alone.
+    scriptless: ['text: Saved. Undo', 'control: button:submit Undo'],
+    print: ['text: Saved. Undo'],
+  },
+  {
+    id: 'script-only-tabindex',
+    what: 'A script-only status whose words hold a focusable span',
+    html: '<div role="status" data-script-only hidden data-lazy data-html="<p>Step <span tabindex=&quot;0&quot;>two</span></p>"></div>',
+    scriptless: ['text: Step two'],
+    print: ['text: Step two'],
+  },
   {
     id: 'script-only-control',
     what: 'A control inside a script-only status',
