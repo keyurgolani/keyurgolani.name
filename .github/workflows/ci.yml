@@ -797,6 +797,314 @@ jobs:
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
 
+  # Push 3 r4's evidence only, never merged: Spatial Bento's cells in RC1's plan on CI Linux, as
+  # rc-quality runs them (the coordinator, 11-07), on r4's final head:
+  #   QUALITY_RELEASE_SCOPE=quality/release/scope.json pnpm ci:quality-full --grep=spatial-bento --retries=0
+  # in quality-pr's pinned image, user and options, after install and ci:build. No `--` before the
+  # grep: pnpm passes a `--` through, and ci:quality-full's own script ends in
+  # `-- --external-variant`, so a second `--` would reach Playwright, which takes what follows it
+  # as file filters (probed on pnpm 10.33.0). The runner's and Playwright's argv are printed from
+  # /proc while the run is up, so the log shows --external-variant and the grep reached both. Its log prints the
+  # summary counts (listed, expected, skipped, unexpected), each unexpected test's title with its
+  # records, and each root-text record's target and width (_ci-evidence/sb-rc1-read.py, python3 -I,
+  # read only). The run's own verdict fails by design (a grep of the plan is judged against all of
+  # it), so its exit is printed and kept apart; the job fails only if a step can't run.
+  sb-rc1-evidence:
+    name: sb-rc1-evidence (Spatial Bento's RC1 cells, full mode, release scope)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      # The image this job runs in, so the visual cells know they're in it.
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      QUALITY_RELEASE_SCOPE: quality/release/scope.json
+      CI_REPORTS_DIR: reports/sb-rc1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: pnpm ci:build
+        run: pnpm ci:build
+      # The listing's own verdict fails (no test ran), hence || true. The count decides: exactly
+      # 675 SB tests, on Playwright's Total line and in its list lines, or the job fails here,
+      # before the run.
+      - name: List Spatial Bento's RC1 cells
+        id: list
+        shell: bash
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary-sb-list
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets-sb-list
+          LIST_FILE: ${{ runner.temp }}/sb-rc1-list.txt
+        run: |
+          pnpm ci:quality-full --grep=spatial-bento --retries=0 --list > "$LIST_FILE" 2>&1 || true
+          cat "$LIST_FILE"
+          total=$(awk '/^Total: [0-9]+ tests? in /{n=$2} END{if (n == "") print "unread"; else print n}' "$LIST_FILE")
+          lines=$(awk '/^  \[[a-z]+ [0-9a-f]+\] / && /spatial-bento/{n++} END{print n+0}' "$LIST_FILE")
+          echo "[sb-rc1] listed $total test(s), $lines SB list line(s); want exactly 675"
+          echo "listed=$total" >> "$GITHUB_OUTPUT"
+          if [ "$total" != 675 ] || [ "$lines" != 675 ]; then
+            echo "[sb-rc1] FAIL: the grep listed $total test(s) and $lines SB list line(s), not exactly 675"
+            exit 1
+          fi
+      # The run's verdict fails by design (a grep run exits 1), so its exit is data, printed. The
+      # step fails only on the argv checks: the runner's argv holds --external-variant and
+      # --grep=spatial-bento; Playwright's holds --grep=spatial-bento and --retries=0, with no `--`
+      # anywhere; and both were seen.
+      - name: pnpm ci:quality-full --grep=spatial-bento --retries=0
+        id: run
+        if: ${{ !cancelled() && steps.list.outcome == 'success' }}
+        shell: bash
+        env:
+          CI_REPRO_COMMAND: 'QUALITY_RELEASE_SCOPE=quality/release/scope.json pnpm ci:quality-full --grep=spatial-bento --retries=0'
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary-sb
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets-sb
+          RUN_LOG: ${{ runner.temp }}/sb-rc1-run.txt
+        run: |
+          pnpm ci:quality-full --grep=spatial-bento --retries=0 > "$RUN_LOG" 2>&1 &
+          pid=$!
+          # The final argv of the runner (tests/quality/run.ts) and of Playwright, each once, from /proc.
+          runner=''
+          playwright=''
+          while kill -0 "$pid" 2> /dev/null && [ -z "$playwright" ]; do
+            for f in /proc/[0-9]*/cmdline; do
+              a=$(tr '\0' ' ' < "$f" 2> /dev/null || true)
+              case "$a" in
+                *'tests/quality/run.ts full'*) [ -n "$runner" ] || { runner=$a; echo "[sb-rc1] runner argv: $a"; } ;;
+                *'@playwright/test/cli'*' test --config '*) [ -n "$playwright" ] || { playwright=$a; echo "[sb-rc1] playwright argv: $a"; } ;;
+              esac
+            done
+            sleep 1
+          done
+          rc=0
+          wait "$pid" || rc=$?
+          [ -n "$runner" ] || echo "[sb-rc1] runner argv: not seen"
+          [ -n "$playwright" ] || echo "[sb-rc1] playwright argv: not seen"
+          cat "$RUN_LOG"
+          echo "[sb-rc1] the run exited $rc (data: a grep of the plan is judged against all of it)"
+          fail=''
+          if [ -z "$runner" ]; then
+            fail="$fail; the runner's argv was not seen"
+          else
+            case " $runner " in *' --external-variant '*) ;; *) fail="$fail; the runner's argv lacks --external-variant" ;; esac
+            case " $runner " in *' --grep=spatial-bento '*) ;; *) fail="$fail; the runner's argv lacks --grep=spatial-bento" ;; esac
+          fi
+          if [ -z "$playwright" ]; then
+            fail="$fail; Playwright's argv was not seen"
+          else
+            case " $playwright " in *' --grep=spatial-bento '*) ;; *) fail="$fail; Playwright's argv lacks --grep=spatial-bento" ;; esac
+            case " $playwright " in *' --retries=0 '*) ;; *) fail="$fail; Playwright's argv lacks --retries=0" ;; esac
+            case " $playwright " in *' -- '*) fail="$fail; Playwright's argv holds a --, so what follows it is file filters" ;; esac
+          fi
+          if [ -n "$fail" ]; then
+            echo "[sb-rc1] FAIL: ${fail#; }"
+            exit 1
+          fi
+          echo "[sb-rc1] argv checks: passed"
+      - name: Spatial Bento's RC1 cells, read back
+        if: ${{ always() && steps.run.outcome != 'skipped' }}
+        shell: bash
+        env:
+          LISTED: ${{ steps.list.outputs.listed }}
+        run: |
+          if ! command -v python3 > /dev/null; then
+            echo "::error::python3 isn't in this image: the cells aren't read here; sb-rc1's artifact holds them"
+            exit 1
+          fi
+          python3 -I _ci-evidence/sb-rc1-read.py reports/sb-rc1/quality "$LISTED"
+      # The reports upload only when this succeeds: it deletes what it can't read, and fails when
+      # it did, or when the canary is still in any.
+      - name: Scrub its reports
+        id: scrub
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary-sb
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets-sb
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload Spatial Bento's RC1 cells
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sb-rc1
+          path: |
+            reports/sb-rc1/quality/results/
+            reports/sb-rc1/quality/summary.json
+            reports/sb-rc1/quality/verdict.json
+          if-no-files-found: error
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # Push 3 r5's evidence only, never merged (the coordinator, r5 item 1b): r4 makes failed
+  # enhancement real on what ships, so RC1's default-row tests, the ones that owe it, read on CI
+  # Linux at the base and at r4's final head, as rc-quality runs them:
+  #   QUALITY_RELEASE_SCOPE=quality/release/scope.json pnpm ci:quality-full --grep=<FE_GREP> --retries=0
+  # FE_GREP is the default row's leaf title (", default", tags allowed after it). Two sides, a
+  # matrix, each with its own listing, run, read-back, scrub and artifact (fe-rc1-base, fe-rc1-head):
+  # - base: origin/main 3fdb2d6bd, checked out in base/ and installed there;
+  # - head: this branch's tree.
+  # The barred key-compare runs on the two artifacts in E's CI read (ci_read_r4.py, the lead's
+  # key-compare.py): every head-only key attributed, by design and listed, or a product row with an
+  # owner. The run's verdict fails by design (a grep of the plan); its exit is data. The job fails
+  # on a listing it can't read, or whose Total and list lines differ; on the argv checks, as
+  # sb-rc1-evidence's; and, in the read-back, unless exactly FE_OWING (333) tests ran owing failed
+  # enhancement on its side, as sb-rc1 holds 675 (the coordinator, r5). A different count on Linux
+  # or under --external-variant is a finding, reported, and the bar stays.
+  fe-rc1-evidence:
+    name: fe-rc1-evidence (${{ matrix.side }}; RC1's default-row tests, full mode, release scope)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        side: [base, head]
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      # The image this job runs in, so the visual cells know they're in it.
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      QUALITY_RELEASE_SCOPE: quality/release/scope.json
+      CI_REPORTS_DIR: reports/fe-rc1-${{ matrix.side }}
+      FE_GREP: ', default( @[^ ]+)*$'
+      FE_OWING: '333'
+      SIDE_DIR: ${{ matrix.side == 'base' && 'base' || '.' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ matrix.side == 'base' }}
+        with:
+          persist-credentials: false
+          ref: 3fdb2d6bde251f31d75fc1f87671fe2c272108e5
+          path: base
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: Install the base
+        if: ${{ matrix.side == 'base' }}
+        working-directory: base
+        run: pnpm install --frozen-lockfile
+      - name: pnpm ci:build
+        working-directory: ${{ env.SIDE_DIR }}
+        run: pnpm ci:build
+      # The listing's own verdict fails (no test ran), hence || true. Its count is printed for the
+      # read, which holds the two sides to one count; none, or none read, fails here.
+      - name: List RC1's default-row tests
+        id: list
+        working-directory: ${{ env.SIDE_DIR }}
+        shell: bash
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary-fe-list
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets-fe-list
+          LIST_FILE: ${{ runner.temp }}/fe-rc1-list.txt
+          SIDE: ${{ matrix.side }}
+        run: |
+          pnpm ci:quality-full "--grep=$FE_GREP" --retries=0 --list > "$LIST_FILE" 2>&1 || true
+          cat "$LIST_FILE"
+          total=$(awk '/^Total: [0-9]+ tests? in /{n=$2} END{if (n == "") print "unread"; else print n}' "$LIST_FILE")
+          lines=$(awk '/^  \[[a-z]+ [0-9a-f]+\] /{n++} END{print n+0}' "$LIST_FILE")
+          echo "[fe-rc1 $SIDE] listed $total test(s), $lines list line(s)"
+          echo "listed=$total" >> "$GITHUB_OUTPUT"
+          if [ "$total" = unread ] || [ "$total" = 0 ] || [ "$total" != "$lines" ]; then
+            echo "[fe-rc1 $SIDE] FAIL: the grep listed $total test(s) and $lines list line(s)"
+            exit 1
+          fi
+      - name: pnpm ci:quality-full, RC1's default-row tests, no retry
+        id: run
+        if: ${{ !cancelled() && steps.list.outcome == 'success' }}
+        working-directory: ${{ env.SIDE_DIR }}
+        shell: bash
+        env:
+          CI_REPRO_COMMAND: 'QUALITY_RELEASE_SCOPE=quality/release/scope.json pnpm ci:quality-full "--grep=$FE_GREP" --retries=0 (FE_GREP is fe-rc1-evidence''s, in ci.yml)'
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary-fe
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets-fe
+          RUN_LOG: ${{ runner.temp }}/fe-rc1-run.txt
+          SIDE: ${{ matrix.side }}
+        run: |
+          pnpm ci:quality-full "--grep=$FE_GREP" --retries=0 > "$RUN_LOG" 2>&1 &
+          pid=$!
+          runner=''
+          playwright=''
+          while kill -0 "$pid" 2> /dev/null && [ -z "$playwright" ]; do
+            for f in /proc/[0-9]*/cmdline; do
+              a=$(tr '\0' ' ' < "$f" 2> /dev/null || true)
+              case "$a" in
+                *'tests/quality/run.ts full'*) [ -n "$runner" ] || { runner=$a; echo "[fe-rc1 $SIDE] runner argv: $a"; } ;;
+                *'@playwright/test/cli'*' test --config '*) [ -n "$playwright" ] || { playwright=$a; echo "[fe-rc1 $SIDE] playwright argv: $a"; } ;;
+              esac
+            done
+            sleep 1
+          done
+          rc=0
+          wait "$pid" || rc=$?
+          cat "$RUN_LOG"
+          echo "[fe-rc1 $SIDE] the run exited $rc (data: a grep of the plan is judged against all of it)"
+          fail=''
+          case " $runner " in *' --external-variant '*) ;; *) fail="$fail; the runner's argv lacks --external-variant" ;; esac
+          case " $runner " in *' --grep='*) ;; *) fail="$fail; the runner's argv lacks the grep" ;; esac
+          case " $playwright " in *' --grep='*) ;; *) fail="$fail; Playwright's argv lacks the grep" ;; esac
+          case " $playwright " in *' --retries=0 '*) ;; *) fail="$fail; Playwright's argv lacks --retries=0" ;; esac
+          case " $playwright " in *' -- '*) fail="$fail; Playwright's argv holds a --" ;; esac
+          if [ -n "$fail" ]; then
+            echo "[fe-rc1 $SIDE] FAIL: ${fail#; }"
+            exit 1
+          fi
+          echo "[fe-rc1 $SIDE] argv checks: passed"
+      - name: RC1's default-row tests, read back
+        if: ${{ always() && steps.run.outcome != 'skipped' }}
+        shell: bash
+        env:
+          LISTED: ${{ steps.list.outputs.listed }}
+          SIDE: ${{ matrix.side }}
+        run: |
+          if ! command -v python3 > /dev/null; then
+            echo "::error::python3 isn't in this image: the tests aren't read here; the artifact holds them"
+            exit 1
+          fi
+          python3 -I _ci-evidence/fe-rc1-read.py "$SIDE" "$SIDE_DIR/reports/fe-rc1-$SIDE/quality" "$LISTED" "$FE_OWING"
+      - name: Scrub its reports
+        id: scrub
+        if: ${{ always() }}
+        working-directory: ${{ env.SIDE_DIR }}
+        run: node tests/quality/scrub.mjs
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary-fe
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets-fe
+      - name: Failure summary
+        if: ${{ always() }}
+        working-directory: ${{ env.SIDE_DIR }}
+        run: node ci/summarize.mjs
+      - name: Upload the side's tests
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fe-rc1-${{ matrix.side }}
+          path: |
+            ${{ env.SIDE_DIR }}/reports/fe-rc1-${{ matrix.side }}/quality/results/
+            ${{ env.SIDE_DIR }}/reports/fe-rc1-${{ matrix.side }}/quality/summary.json
+            ${{ env.SIDE_DIR }}/reports/fe-rc1-${{ matrix.side }}/quality/verdict.json
+          if-no-files-found: error
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
   # quality-pr's shards judged whole (tests/quality/lib/shards.ts): zero
   # tests, the plan's coverage, perf coverage, empty projects, the canary
   # probe, and targets with no result, across every shard together. A shard
