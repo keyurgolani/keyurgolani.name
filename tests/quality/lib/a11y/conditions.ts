@@ -22,7 +22,9 @@
 //   loaded a while after it lands, until the page shows what the baseline
 //   had, all within BUSY_LIMIT_MS. Chunks or islands still at it then fail
 //   the cell with STILL_ENHANCING; a field still missing is the read's own
-//   finding. Either way the page is read as it stands.
+//   finding. Either way the page is read as it stands. A reflow condition's
+//   reload takes the first phase only, the enhancements, since it has no
+//   baseline to show; then its fonts, and only then its root text.
 // - reflow: at 320x568, at 200% zoom (640x400 at deviceScaleFactor 2), and
 //   at 200% root text (1024x768), nothing scrolls sideways, and no text or
 //   control leaves the viewport or a box that clips it, but inside a
