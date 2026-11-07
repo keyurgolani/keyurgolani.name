@@ -296,12 +296,22 @@ export const STILL_ENHANCING = `the page's enhancements were still loading, a sc
 interface ScriptWatch {
   readonly started: () => number;
   readonly pending: () => number;
+  /** When each script request it saw finish did, by URL, the latest last. */
+  readonly finished: () => readonly { readonly url: string; readonly at: number }[];
   readonly stop: () => void;
 }
+
+/**
+ * An optional enhancement's chunk: a script under /_next/static/chunks/ that the page's HTML
+ * doesn't load itself (`own`), as failed enhancement tells them apart.
+ */
+const optionalChunk = (url: string, own: ReadonlySet<string>) =>
+  /\/_next\/static\/chunks\//.test(url) && !own.has(url);
 
 /** Counts `page`'s script requests from now: a lazy enhancement's chunk is one, as failed enhancement blocks it. */
 function watchScripts(page: Page): ScriptWatch {
   const inFlight = new Set<Request>();
+  const done: { url: string; at: number }[] = [];
   let started = 0;
   const onRequest = (request: Request) => {
     if (request.resourceType() !== 'script') return;
@@ -309,7 +319,7 @@ function watchScripts(page: Page): ScriptWatch {
     started += 1;
   };
   const onDone = (request: Request) => {
-    inFlight.delete(request);
+    if (inFlight.delete(request)) done.push({ url: request.url(), at: Date.now() });
   };
   page.on('request', onRequest);
   page.on('requestfinished', onDone);
@@ -317,6 +327,7 @@ function watchScripts(page: Page): ScriptWatch {
   return {
     started: () => started,
     pending: () => inFlight.size,
+    finished: () => done,
     stop: () => {
       page.off('request', onRequest);
       page.off('requestfinished', onDone);
@@ -382,9 +393,19 @@ async function enhancementsSettled(
   const pending = () =>
     page.evaluate((marker) => document.querySelectorAll(`[${marker}]`).length, ENHANCEMENT_PENDING);
   let before: string | null = null;
-  // The page's scripts and islands as the wait began, and when it last saw one of them change.
+  // The page's scripts and islands as the wait began, and when it last saw one of them change:
+  // a request in flight now, or else the end of the last optional chunk that finished before
+  // the wait began (push 3 r3), since a chunk from cache can land before the wait and commit after.
   let seen = `${scripts.started()} ${await islands()}`;
-  let changed: number | null = scripts.pending() > 0 ? Date.now() : null;
+  const own = new Set(
+    await page.evaluate(() => [...document.scripts].map((script) => script.src).filter(Boolean)),
+  );
+  const early = scripts
+    .finished()
+    .filter(({ url }) => optionalChunk(url, own))
+    .map(({ at }) => at);
+  let changed: number | null =
+    scripts.pending() > 0 ? Date.now() : early.length > 0 ? Math.max(...early) : null;
   while (Date.now() < end) {
     if (scripts.pending() > 0) {
       before = null;
@@ -891,10 +912,7 @@ export async function enhancementFindings(
   });
   await page.route('**/*', (route) => {
     const request = route.request();
-    const optional =
-      request.resourceType() === 'script' &&
-      /\/_next\/static\/chunks\//.test(request.url()) &&
-      !own.has(request.url());
+    const optional = request.resourceType() === 'script' && optionalChunk(request.url(), own);
     return optional || request.resourceType() === 'font'
       ? route.abort('blockedbyclient')
       : route.fallback();
