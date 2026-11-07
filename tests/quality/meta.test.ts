@@ -303,6 +303,11 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'inventory/script-only-control',
     'enhancement/script-only-control',
     'inventory/script-only-server-words',
+    // Judged against the page with its script: server words a script makes live, marks, or moves
+    // into a marked status are a finding too (the coordinator, 7 Nov 2026, F1).
+    'inventory/script-only-role-by-script',
+    'inventory/script-only-mark-by-script',
+    'inventory/script-only-moved',
     // A row's main pass audits the page once its enhancements have mounted or failed (lead,
     // 1 Nov 2026): a pale plain link a late chunk hides passes, a pale live button it shows fails.
     'contrast/pre-live-node',
