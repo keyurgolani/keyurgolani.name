@@ -666,8 +666,10 @@ test(
   },
 );
 
+// A guard, not a pin: the snap before the rework passes it too, 10 of 10, so it keeps the rework from
+// turning back a notch the way the glide goes; it doesn't prove the rework.
 test(
-  "the pin's snap, taken over by a wheel notch the way it glides, finishes on the scene ahead",
+  "the pin's snap, taken over by a wheel notch the way it glides, still finishes on the scene ahead",
   { annotation, tag },
   async ({ page }) => {
     await snapFromStart(page);
