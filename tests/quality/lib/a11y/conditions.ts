@@ -706,8 +706,19 @@ export async function inventoryFindings(
 ): Promise<Finding[]> {
   const findings: Finding[] = [];
   const cdp = await page.context().newCDPSession(page);
+  // Whether the page in hand is the one no JavaScript's reload left, which never hydrated.
+  let scriptless = false;
   try {
     for (const condition of conditions().filter((each) => !only || only.includes(each.id))) {
+      // A condition read on the page as it stands, print, reads the live page, as the print row
+      // does (row 92, the coordinator, 7 Nov 2026): after no JavaScript's reload, the live page
+      // loads again first, its enhancements in, and what that load owes is print's. A page that
+      // needs its script reads print over its no-JavaScript page on purpose, below.
+      if (!condition.reload && scriptless && !scriptRequired) {
+        const live = { baseline, ignore: condition.ignore };
+        findings.push(...(await reload(page, path, condition.id, live)));
+        scriptless = false;
+      }
       await condition.setup(page, cdp);
       try {
         if (condition.reload) {
@@ -767,6 +778,7 @@ export async function inventoryFindings(
           findings.push(...(await scriptOnlyTextFindings(page, baseline)));
       } finally {
         await condition.teardown(page, cdp);
+        if (condition.reload) scriptless = condition.id === 'no-javascript';
       }
     }
   } finally {
