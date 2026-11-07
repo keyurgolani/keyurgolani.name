@@ -35,9 +35,10 @@ function LoadSignOut({ csrfToken, pressed }: { csrfToken: string; pressed: () =>
     const store = storage();
     // Before the request, as the shell's: a discard leaves no tab's text behind.
     if (store && !keep) clearJournal(store);
-    if (await signOutWith(studioFetch, csrfToken, keep ? 'keep' : 'discard')) {
+    const answered = await signOutWith(studioFetch, csrfToken, keep ? 'keep' : 'discard');
+    if (answered) {
       document.title = NEUTRAL_TITLE;
-      window.location.assign(signedOutLocation('ended'));
+      window.location.assign(signedOutLocation(answered));
       return;
     }
     busy.current = false;

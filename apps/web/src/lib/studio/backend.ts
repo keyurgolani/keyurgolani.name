@@ -142,8 +142,13 @@ export interface StudioBackend {
       readonly value?: unknown;
     }[];
   }): Promise<SaveResult>;
-  /** Ends the session, telling the other tabs the owner's choice for the journal. True when the server ended it. */
-  signOut(choice: 'keep' | 'discard'): Promise<boolean>;
+  /**
+   * Ends the session, telling the other tabs the owner's choice for the
+   * journal: 'ended' when the server ended it, 'store_failed' when it signed
+   * this browser out but its store couldn't end the session, and false when
+   * it didn't sign out.
+   */
+  signOut(choice: 'keep' | 'discard'): Promise<'ended' | 'store_failed' | false>;
 }
 
 /**
