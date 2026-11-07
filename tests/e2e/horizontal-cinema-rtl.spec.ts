@@ -5,7 +5,9 @@ import { contractFixture } from '../../packages/variant-contract/src/node/fixtur
 import { expect, test } from '../harness/fixtures';
 import type { Page } from '@playwright/test';
 import {
+  arrivedAt,
   crowdRail,
+  expectAt,
   load,
   railClashes,
   read,
@@ -149,5 +151,23 @@ test(
     await load(page);
     const from = await linkedScenes(page, true);
     expect(await tabIntoLaterScenes(page, { back: true, from })).toBeGreaterThanOrEqual(2);
+  },
+);
+
+test(
+  'right to left, a slow wheel, a notch at a time with the page at rest between, travels on scene by scene and never back',
+  { annotation, tag },
+  async ({ page }) => {
+    await load(page);
+    await page.mouse.move(720, 450);
+    // As left to right: the next notch goes the moment the snap arrives, read in the page, and the
+    // page's scroll down travels the strip on the way it reads, here to the left.
+    for (const index of [1, 2]) {
+      await page.mouse.wheel(0, 200);
+      expect(await arrivedAt(page, index), `the snap reaches scene ${index}`).toBe(true);
+    }
+    await page.mouse.wheel(0, -200);
+    await expectAt(page, 1);
+    expect((await read(page)).along).toBeGreaterThan(0);
   },
 );
