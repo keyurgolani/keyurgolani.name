@@ -615,7 +615,7 @@ function CaseStudyPage({ input, work, outline }: CaseStudyPageProps) {
         </article>
       </main>
       <Footer input={input} />
-      <IndexDialog input={input} bands={bands} />
+      {bands.length > 0 ? <IndexDialog input={input} bands={bands} /> : null}
       <Enhancement input={input} id="sky" />
     </div>
   );

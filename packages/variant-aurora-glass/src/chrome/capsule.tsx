@@ -46,9 +46,12 @@ export function Chrome({ input, bands }: { input: VariantRenderInput; bands: rea
             ))}
           </ul>
         ) : null}
-        <IndexButton input={input}>
-          <MenuWord lang={lang} />
-        </IndexButton>
+        {/* The Index lists the bands: with none, there's nothing to open (row 62). */}
+        {bands.length > 0 ? (
+          <IndexButton input={input}>
+            <MenuWord lang={lang} />
+          </IndexButton>
+        ) : null}
         {contact ? (
           <a
             className="ag-capsule__cta"

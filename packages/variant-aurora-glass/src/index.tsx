@@ -150,8 +150,9 @@ function HomePage({ input, outline }: HomePageProps) {
       </main>
       <Footer input={input} />
       {/* Last, after the footer: with no script it's the contents list, and when the page goes live
-          and it leaves the flow for the top layer, nothing it sat above moves. */}
-      <IndexDialog input={input} bands={bands} />
+          and it leaves the flow for the top layer, nothing it sat above moves. With no band to
+          list there's no Index at all (row 62). */}
+      {bands.length > 0 ? <IndexDialog input={input} bands={bands} /> : null}
       <Enhancement input={input} id="sky" />
     </div>
   );
