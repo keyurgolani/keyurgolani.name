@@ -19,12 +19,12 @@
 //   included, is read once its enhancements have mounted or failed, as the
 //   cell's own read is (its first phase): no script chunk still loading, no
 //   island's data-island still changing, and nothing marked pending, and the
-//   wait then holds 500 ms past the last chunk or island change, React's
-//   retry delay and a margin; and then, as React may reveal what a chunk
-//   loaded a while after it lands, until the page shows what the baseline
-//   had, all within BUSY_LIMIT_MS. The same wait serves the main pass, the
-//   landscape pass, the variant shots (tests/variants/modes.ts) and the e2e
-//   watches (watchEnhancements()). Chunks or islands still at it then fail
+//   wait then holds 500 ms past the last optional chunk or island change,
+//   React's retry delay and a margin; and then, as React may reveal what a
+//   chunk loaded a while after it lands, until the page shows what the
+//   baseline had, all within BUSY_LIMIT_MS. The same wait serves the main
+//   pass, the primitives page, the landscape pass, the variant shots
+//   (tests/variants/modes.ts) and the e2e watches (watchEnhancements()). Chunks or islands still at it then fail
 //   the cell with STILL_ENHANCING; a field still missing is the read's own
 //   finding. Either way the page is read as it stands. A reflow condition's
 //   reload takes the first phase only, the enhancements, since it has no
