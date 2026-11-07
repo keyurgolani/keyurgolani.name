@@ -54,8 +54,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      jobs: ${{ steps.select.outputs.jobs }}
-      complete: ${{ steps.select.outputs.complete }}
+      # Main's red perimeter evidence branch, never merged: no check job runs,
+      # so a ci.yml change doesn't start the complete product and quality-pr's
+      # matrix. perimeter-evidence runs alone. The selection still runs below,
+      # and its summary shows what it would have picked.
+      jobs: '[]'
+      complete: 'false'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -795,6 +799,238 @@ jobs:
           name: reports-quality-pr-shard-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # Main's red on 6c246c594 (push run 42349001278), on an evidence branch that
+  # never merges: the ten aurora-glass cells that left focus records there,
+  # route /, the default row, on paper-tactile, carbon-inspired and
+  # fluent-2-inspired at 390x844, 1024x768 and 1440x900, and glassmorphism at
+  # 390x844, each <pack>/warm-parchment/humanist-ui/system, as quality-pr runs
+  # them (pnpm ci:quality-pr, pr mode), in quality-pr's pinned image, user and
+  # options. Two runs, each with its own listing (exactly 10), exit, reports
+  # directory, canary, scrub, records read-back and artifact, so a red in one
+  # never hides the other:
+  # - base: 62af1e18b, main before rows 62 and 63, checked out in base/ and
+  #   installed there from the same store (the same lockfile);
+  # - head: this branch's tree, 6c246c594 and this ci.yml.
+  # The [37] rule directs both alike: both get QUALITY_CHANGED_FILES, the same
+  # list, the push run's own (git diff 62af1e18b 6c246c594, 14 paths; the push
+  # planned from that tree diff), so aurora-glass is the changed variant on
+  # both sides and the same packs are planned.
+  # Each run's verdict fails by design, since the plan's other tests have no
+  # result; the cells' own outcomes are in their records.
+  # Playwright greps the title path joined by spaces (no "›"), with tags after
+  # each level, so the grep names each level and ends at a space or the end.
+  perimeter-evidence:
+    name: perimeter-evidence (aurora-glass, 10 cells, pr mode; base 62af1e18b and head)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      # The image this job runs in, so the visual cells know they're in it.
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      PERIMETER_GREP: 'cells\.spec\.ts composition:aurora-glass complete / aurora-glass/((paper-tactile|carbon-inspired|fluent-2-inspired)/warm-parchment/humanist-ui/system( @[^ ]+)* (390x844|1024x768|1440x900)|glassmorphism/warm-parchment/humanist-ui/system( @[^ ]+)* 390x844) default( @[^ ]+)* aurora-glass complete / at (390x844|1024x768|1440x900), default( |$)'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      # The base: main before rows 62 and 63.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: 62af1e18bcd58e862195bd17dd31fe44a1bf0782
+          path: base
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      # The same lockfile as the head (rows 62 and 63 change none), so the
+      # store the install restored serves it.
+      - name: Install the base
+        working-directory: base
+        run: pnpm install --frozen-lockfile
+      # The [37] rule's direction, the same for both sides: the paths the push
+      # run planned from, git diff 62af1e18b 6c246c594, fetched alone, as one
+      # JSON list. It stops unless there are the push's 14.
+      - name: The changed paths, as the push planned them
+        id: changed
+        shell: bash
+        env:
+          PATHS_FILE: ${{ runner.temp }}/perimeter-paths.txt
+        run: |
+          git fetch --no-tags --depth=1 origin 62af1e18bcd58e862195bd17dd31fe44a1bf0782 6c246c5948585398fca846dca26fcbcceb305c80
+          git diff --name-only --no-renames -z 62af1e18bcd58e862195bd17dd31fe44a1bf0782 6c246c5948585398fca846dca26fcbcceb305c80 > "$PATHS_FILE"
+          files=$(node -e 'const p=require("fs").readFileSync(process.argv[1],"utf8").split("\0").filter(Boolean); console.log(JSON.stringify(p))' "$PATHS_FILE")
+          count=$(node -e 'console.log(JSON.parse(process.argv[1]).length)' "$files")
+          echo "[perimeter] $count changed path(s), the push run's direction: $files"
+          if [ "$count" != 14 ]; then
+            echo "::error::git diff 62af1e18b 6c246c594 names $count path(s), not the push run's 14"
+            exit 1
+          fi
+          echo "files=$files" >> "$GITHUB_OUTPUT"
+      # The base's listing. Its own verdict fails (no test ran), hence || true;
+      # the count decides.
+      - name: Base, list the 10 cells, and require exactly 10
+        id: listbase
+        working-directory: base
+        shell: bash
+        env:
+          CI_REPORTS_DIR: reports/perimeter-base-10
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary-base
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets-base
+          QUALITY_CHANGED_FILES: ${{ steps.changed.outputs.files }}
+          LIST_FILE: ${{ runner.temp }}/perimeter-base-list.txt
+        run: |
+          pnpm ci:quality-pr "--grep=$PERIMETER_GREP" --retries=0 --list > "$LIST_FILE" 2>&1 || true
+          cat "$LIST_FILE"
+          total=$(awk '/^Total: [0-9]+ tests? in /{n=$2} END{print n+0}' "$LIST_FILE")
+          lines=$(awk '/^  \[[a-z]+ [0-9a-f]+\] /{n++} END{print n+0}' "$LIST_FILE")
+          echo "[perimeter base] listed $total test(s), $lines list line(s); want exactly 10"
+          if [ "$total" != 10 ] || [ "$lines" != 10 ]; then
+            echo "::error::the perimeter grep listed $total test(s) on the base, not exactly 10"
+            exit 1
+          fi
+      # The run's verdict fails by design, so its exit is kept and the step
+      # fails with it, after the log is printed; the next steps run anyway.
+      - name: Base, pnpm ci:quality-pr, the 10 cells, no retry
+        id: runbase
+        if: ${{ !cancelled() && steps.listbase.outcome == 'success' }}
+        working-directory: base
+        shell: bash
+        env:
+          CI_REPRO_COMMAND: 'pnpm ci:quality-pr "--grep=$PERIMETER_GREP" --retries=0 on 62af1e18b (PERIMETER_GREP is perimeter-evidence''s, in ci.yml; QUALITY_CHANGED_FILES is git diff 62af1e18b 6c246c594)'
+          CI_REPORTS_DIR: reports/perimeter-base-10
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary-base
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets-base
+          QUALITY_CHANGED_FILES: ${{ steps.changed.outputs.files }}
+          RUN_LOG: ${{ runner.temp }}/perimeter-base-run.txt
+        run: |
+          rc=0
+          pnpm ci:quality-pr "--grep=$PERIMETER_GREP" --retries=0 > "$RUN_LOG" 2>&1 || rc=$?
+          cat "$RUN_LOG"
+          echo "[perimeter base] the run exited $rc"
+          exit "$rc"
+      - name: Base, the 10 cells' focus records, read back
+        if: ${{ always() && steps.runbase.outcome != 'skipped' }}
+        shell: bash
+        run: |
+          if ! command -v python3 > /dev/null; then
+            echo "::error::python3 isn't in this image: the records aren't read here; perimeter-base-10's artifact holds them"
+            exit 1
+          fi
+          python3 -I _ci-evidence/perimeter-records.py base base/reports/perimeter-base-10/quality/results 10 base/reports/perimeter-base-10/perimeter-records-base.json
+      # The head, after the base whatever its outcome. Its listing's own
+      # verdict fails, hence || true; the count decides.
+      - name: Head, list the 10 cells, and require exactly 10
+        id: listhead
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          CI_REPORTS_DIR: reports/perimeter-head-10
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary-head
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets-head
+          QUALITY_CHANGED_FILES: ${{ steps.changed.outputs.files }}
+          LIST_FILE: ${{ runner.temp }}/perimeter-head-list.txt
+        run: |
+          pnpm ci:quality-pr "--grep=$PERIMETER_GREP" --retries=0 --list > "$LIST_FILE" 2>&1 || true
+          cat "$LIST_FILE"
+          total=$(awk '/^Total: [0-9]+ tests? in /{n=$2} END{print n+0}' "$LIST_FILE")
+          lines=$(awk '/^  \[[a-z]+ [0-9a-f]+\] /{n++} END{print n+0}' "$LIST_FILE")
+          echo "[perimeter head] listed $total test(s), $lines list line(s); want exactly 10"
+          if [ "$total" != 10 ] || [ "$lines" != 10 ]; then
+            echo "::error::the perimeter grep listed $total test(s) on the head, not exactly 10"
+            exit 1
+          fi
+      - name: Head, pnpm ci:quality-pr, the 10 cells, no retry
+        id: runhead
+        if: ${{ !cancelled() && steps.listhead.outcome == 'success' }}
+        shell: bash
+        env:
+          CI_REPRO_COMMAND: 'pnpm ci:quality-pr "--grep=$PERIMETER_GREP" --retries=0 (PERIMETER_GREP is perimeter-evidence''s, in ci.yml; QUALITY_CHANGED_FILES is git diff 62af1e18b 6c246c594)'
+          CI_REPORTS_DIR: reports/perimeter-head-10
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary-head
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets-head
+          QUALITY_CHANGED_FILES: ${{ steps.changed.outputs.files }}
+          RUN_LOG: ${{ runner.temp }}/perimeter-head-run.txt
+        run: |
+          rc=0
+          pnpm ci:quality-pr "--grep=$PERIMETER_GREP" --retries=0 > "$RUN_LOG" 2>&1 || rc=$?
+          cat "$RUN_LOG"
+          echo "[perimeter head] the run exited $rc"
+          exit "$rc"
+      - name: Head, the 10 cells' focus records, read back
+        if: ${{ always() && steps.runhead.outcome != 'skipped' }}
+        shell: bash
+        run: |
+          if ! command -v python3 > /dev/null; then
+            echo "::error::python3 isn't in this image: the records aren't read here; perimeter-head-10's artifact holds them"
+            exit 1
+          fi
+          python3 -I _ci-evidence/perimeter-records.py head reports/perimeter-head-10/quality/results 10 reports/perimeter-head-10/perimeter-records-head.json
+      # Each run's records upload only when its own scrub succeeds: it deletes
+      # what it can't read, and fails when it did, or when that run's canary
+      # is still in any.
+      - name: Base, scrub its reports
+        id: scrubbase
+        if: ${{ always() }}
+        working-directory: base
+        run: node tests/quality/scrub.mjs
+        env:
+          CI_REPORTS_DIR: reports/perimeter-base-10
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary-base
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets-base
+      - name: Head, scrub its reports
+        id: scrubhead
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          CI_REPORTS_DIR: reports/perimeter-head-10
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary-head
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets-head
+      - name: Base, failure summary
+        if: ${{ always() }}
+        working-directory: base
+        run: node ci/summarize.mjs
+        env:
+          CI_REPORTS_DIR: reports/perimeter-base-10
+      - name: Head, failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+        env:
+          CI_REPORTS_DIR: reports/perimeter-head-10
+      # The 10 results folders (quality-records.json, axe.json, vitals.json,
+      # and trace.zip and error-context.md for a cell that failed), the run's
+      # summary and verdict, and the focus records' key fields as JSON.
+      - name: Upload the base's 10 cells
+        if: ${{ always() && steps.scrubbase.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: perimeter-base-10
+          path: |
+            base/reports/perimeter-base-10/quality/results/
+            base/reports/perimeter-base-10/quality/summary.json
+            base/reports/perimeter-base-10/quality/verdict.json
+            base/reports/perimeter-base-10/perimeter-records-base.json
+          if-no-files-found: error
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+      - name: Upload the head's 10 cells
+        if: ${{ always() && steps.scrubhead.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: perimeter-head-10
+          path: |
+            reports/perimeter-head-10/quality/results/
+            reports/perimeter-head-10/quality/summary.json
+            reports/perimeter-head-10/quality/verdict.json
+            reports/perimeter-head-10/perimeter-records-head.json
+          if-no-files-found: error
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
 
   # quality-pr's shards judged whole (tests/quality/lib/shards.ts): zero
