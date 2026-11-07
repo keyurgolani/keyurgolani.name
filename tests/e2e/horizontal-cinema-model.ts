@@ -109,6 +109,32 @@ export async function expectAt(
     .toEqual({ current: index, shows: true });
 }
 
+/**
+ * Waits in the page, frame by frame, for scene `index` (from 0) to reach the stage's start, within
+ * 1 px, and resolves at once, at most `ms` on: the moment a snap arrives, before the controller's
+ * own settle, which a poll from outside the page samples only now and then. False if it never does.
+ */
+export function arrivedAt(scope: Scope, index: number, ms = 5000): Promise<boolean> {
+  return scope.evaluate(
+    async ([index, ms]) => {
+      const stage = document.querySelector<HTMLElement>('.hc-stage')!;
+      const scene = document.querySelectorAll<HTMLElement>('.hc-track .hc-scene')[index];
+      if (!scene) return false;
+      const rtl = getComputedStyle(stage).direction === 'rtl';
+      const inset = Number.parseFloat(getComputedStyle(stage).scrollPaddingInlineStart) || 0;
+      const end = performance.now() + ms;
+      while (performance.now() < end) {
+        const box = stage.getBoundingClientRect();
+        const at = scene.getBoundingClientRect();
+        if (Math.abs((rtl ? box.right - at.right : at.left - box.left) - inset) <= 1) return true;
+        await new Promise((done) => requestAnimationFrame(done));
+      }
+      return false;
+    },
+    [index, ms] as const,
+  );
+}
+
 /** Waits for the live status to name scene `index` (from 0) of `total`. */
 export async function expectAnnounced(scope: Scope, index: number, total: number): Promise<void> {
   await expect
