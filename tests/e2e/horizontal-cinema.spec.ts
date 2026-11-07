@@ -705,6 +705,18 @@ test(
   },
 );
 
+// A guard, not a pin: base turns back here too. It keeps a snap with no input from reading every
+// stop short as one the way it glided: a move against the glide turns it back.
+test(
+  "the pin's snap, moved back by a script's scroll inside its glide and by no input, as the scroll bar drags it, finishes on the scene it left",
+  { annotation, tag },
+  async ({ page }) => {
+    await snapFromStart(page);
+    await page.evaluate(() => window.scrollTo({ top: window.scrollY - 60, behavior: 'instant' }));
+    await expectRestsOn(page, 0);
+  },
+);
+
 test(
   "the pin's snap, a notch that comes as it arrives back on a scene travels on from that scene",
   { annotation, tag },
