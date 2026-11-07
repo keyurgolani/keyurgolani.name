@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Page } from '@playwright/test';
-import { load, reflowFindings } from './lib/a11y/conditions';
+import {
+  enhancementFindings,
+  load,
+  reflowFindings,
+  watchEnhancements,
+} from './lib/a11y/conditions';
 
 // Each reflow reload awaits document.fonts.ready before its frames (push 3 r2, item 4), as the
 // main pass and the landscape pass do, since the reflow probe measures text boxes. Driven with a
@@ -160,21 +165,38 @@ test('a page busy for good gives reflowFindings one STILL_BUSY a condition, each
  * wait began, its tag kept in the live page as Turbopack leaves it; nothing else happens on it.
  * Every waitForTimeout it's asked for is kept, and run.
  */
-function servedChunkPage() {
-  const CHUNK = 'http://app.test/_next/static/chunks/main.js';
+/** A document the fake page loads: its URL and its HTML, or a body that can't be read, or never comes. */
+interface FakeDocument {
+  readonly url: string;
+  readonly html: string | 'unreadable' | 'never';
+}
+
+const MAIN_HTML =
+  '<!doctype html><html><head><script src="/_next/static/chunks/main.js" async=""></script></head><body><main><h1>A page</h1></main></body></html>';
+
+function servedChunkPage({
+  documents = [{ url: 'http://app.test/', html: MAIN_HTML }],
+  chunkPath = '/_next/static/chunks/main.js',
+}: { readonly documents?: readonly FakeDocument[]; readonly chunkPath?: string } = {}) {
+  const CHUNK = `http://app.test${chunkPath}`;
   const handlers = new Map<string, Set<(value: unknown) => void>>();
   const emit = (event: string, value: unknown) => {
     for (const handler of handlers.get(event) ?? []) handler(value);
   };
   const waits: number[] = [];
   const chunk = { resourceType: () => 'script', url: () => CHUNK };
-  const served = {
-    url: () => 'http://app.test/',
+  const responses = documents.map(({ url, html }) => ({
+    url: () => url,
     status: () => 200,
     request: () => ({ resourceType: () => 'document' }),
-    text: async () =>
-      '<!doctype html><html><head><script src="/_next/static/chunks/main.js" async=""></script></head><body><main><h1>A page</h1></main></body></html>',
-  };
+    text: () =>
+      html === 'never'
+        ? new Promise<string>(() => undefined)
+        : html === 'unreadable'
+          ? Promise.reject(new Error('No resource with given identifier found'))
+          : Promise.resolve(html),
+  }));
+  const state = { readStarted: false };
   const page = {
     on: (event: string, handler: (value: unknown) => void) => {
       if (!handlers.has(event)) handlers.set(event, new Set());
@@ -183,8 +205,17 @@ function servedChunkPage() {
     off: (event: string, handler: (value: unknown) => void) => {
       handlers.get(event)?.delete(handler);
     },
+    // Failed enhancement's read starts at its CDP session: noted, and refused.
+    context: () => {
+      state.readStarted = true;
+      return {
+        newCDPSession: async () => {
+          throw new Error('the read of the page went ahead');
+        },
+      };
+    },
     goto: async () => {
-      emit('response', served);
+      for (const response of responses) emit('response', response);
       emit('request', chunk);
       emit('requestfinished', chunk);
       return null;
@@ -206,7 +237,7 @@ function servedChunkPage() {
       return 0;
     },
   };
-  return { page: page as unknown as Page, waits };
+  return { page: page as unknown as Page, waits, state };
 }
 
 test("a chunk the page's HTML names as served, finished just before the wait, asks for no wait of 400 ms or more", async () => {
@@ -221,4 +252,89 @@ test("a chunk the page's HTML names as served, finished just before the wait, as
     'no waitForTimeout of 400 ms or more',
   );
   assert.ok(took < 400, `load() returns in under 400 ms, not ${took}`);
+});
+
+// own() reads every frame's document (push 3 r5, item 4): a chunk an iframe's HTML names is the
+// page's own, so one that finished just before the wait asks for no floor.
+test("a chunk an iframe's HTML names as served, finished just before the wait, asks for no wait of 400 ms or more", async () => {
+  const { page, waits } = servedChunkPage({
+    documents: [
+      {
+        url: 'http://app.test/',
+        html: '<!doctype html><html><body><iframe src="/frame"></iframe></body></html>',
+      },
+      {
+        url: 'http://app.test/frame',
+        html: '<!doctype html><html><head><script src="/_next/static/chunks/frame.js"></script></head><body></body></html>',
+      },
+    ],
+    chunkPath: '/_next/static/chunks/frame.js',
+  });
+  await load(page, '/', undefined, { enhancements: true });
+  assert.deepEqual(
+    waits.filter((ms) => ms >= 400),
+    [],
+    'no waitForTimeout of 400 ms or more',
+  );
+});
+
+// A src that won't parse as a URL is skipped, and the HTML's other scripts still count (push 3 r5,
+// item 4).
+test("a script src that won't parse is skipped, and the HTML's other scripts still count as its own", async () => {
+  const { page, waits } = servedChunkPage({
+    documents: [
+      {
+        url: 'http://app.test/',
+        html: '<!doctype html><html><head><script src="http://[::1"></script><script src="/_next/static/chunks/main.js"></script></head><body></body></html>',
+      },
+    ],
+  });
+  const loaded = await load(page, '/', undefined, { enhancements: true });
+  assert.deepEqual(loaded, { settled: true, enhanced: true });
+  assert.deepEqual(
+    waits.filter((ms) => ms >= 400),
+    [],
+    'no waitForTimeout of 400 ms or more',
+  );
+});
+
+// own() is bounded by the wait's end (push 3 r5, item 4): a document whose body never comes
+// doesn't hold the read past it; it fails closed.
+test(
+  "a document body that never comes holds load() no longer than the wait's end",
+  { timeout: 30_000 },
+  async () => {
+    const { page } = servedChunkPage({ documents: [{ url: 'http://app.test/', html: 'never' }] });
+    const started = Date.now();
+    await load(page, '/', undefined, { enhancements: true });
+    assert.ok(
+      Date.now() - started < 15_000,
+      `load() returns by the wait's end, not after ${Date.now() - started} ms`,
+    );
+  },
+);
+
+// When own() fails closed, failed enhancement doesn't read a page with every chunk blocked: it
+// records a runner finding that the page's own scripts couldn't be told from its lazy ones (push 3
+// r5, item 4).
+test("failed enhancement on a page whose own scripts can't be told apart records a runner finding, and reads nothing", async () => {
+  const { page, state } = servedChunkPage({
+    documents: [{ url: 'http://app.test/', html: 'unreadable' }],
+  });
+  const watch = watchEnhancements(page);
+  await page.goto('/');
+  const own = await watch.own();
+  watch.stop();
+  let findings: Awaited<ReturnType<typeof enhancementFindings>> = [];
+  try {
+    findings = await enhancementFindings(page, '/', [], own as never);
+  } catch {
+    // The read went ahead, and the fake refused it.
+  }
+  assert.equal(state.readStarted, false, 'no read of a page with every chunk blocked');
+  assert.deepEqual(
+    findings.map((each) => [each.gate, each.rule]),
+    [['runner', 'own-scripts']],
+    'one runner finding, own-scripts',
+  );
 });

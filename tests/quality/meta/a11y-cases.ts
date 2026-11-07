@@ -73,12 +73,19 @@ interface PageOptions extends BrowserContextOptions {
    * page can ask for the chunk twice, each on its own schedule (push 3 r4).
    */
   readonly chunk?: { readonly body: string; readonly delayMs?: number } | 'never';
+  /**
+   * The page's own chunk, which its HTML names in a <script src>, served at once at OWN_CHUNK
+   * (push 3 r5, item 4): failed enhancement must let it through.
+   */
+  readonly own?: { readonly body: string };
 }
 
 /** Where a lazy enhancement's chunk is served: a chunk the page's HTML doesn't name, which failed enhancement blocks. */
 const LAZY_CHUNK = '/_next/static/chunks/lazy-reveal.js';
 /** How long the stand-in takes to serve it: longer than a read that doesn't wait for it takes. */
 const LAZY_DELAY_MS = 750;
+/** Where the page's own chunk is served: one its HTML names, which failed enhancement lets through. */
+const OWN_CHUNK = '/_next/static/chunks/own-main.js';
 
 /** The CDP session that turned script off on a fixture's page, when one did. */
 const scriptless = new WeakMap<Page, CDPSession>();
@@ -95,13 +102,27 @@ async function onPage(
 ): Promise<MetaOutcome> {
   // A fixture's name, or a page built here.
   const html = file.startsWith('<') ? file : readFileSync(path.join(FIXTURES, file), 'utf8');
-  const { init, at, features, media, noScript, chunk, ...context } = options;
+  const { init, at, features, media, noScript, chunk, own, ...context } = options;
+  // The URLs asked for once already: a lazy chunk's request whose query names `fail` fails the
+  // first time it's asked for, a 404, and is served the next (push 3 r5, item 4).
+  const asked = new Set<string>();
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? '/', 'http://stand-in');
-    const asked = url.pathname;
-    if (chunk && asked === LAZY_CHUNK) {
+    const first = !asked.has(url.href);
+    asked.add(url.href);
+    if (own && url.pathname === OWN_CHUNK) {
+      response.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
+      response.end(own.body);
+      return;
+    }
+    if (chunk && url.pathname === LAZY_CHUNK) {
       // One that never comes holds its request open until the page goes.
       if (chunk === 'never') return;
+      if (url.searchParams.has('fail') && first) {
+        response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+        response.end('Not found');
+        return;
+      }
       setTimeout(
         () => {
           response.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
@@ -111,7 +132,7 @@ async function onPage(
       );
       return;
     }
-    const found = asked === '/';
+    const found = url.pathname === '/';
     response.writeHead(found ? 200 : 404, { 'content-type': 'text/html; charset=utf-8' });
     response.end(found ? html : 'Not found');
   });
@@ -545,6 +566,94 @@ for (const query of ['first', 'second&delay=400']) {
 const TWO_EARLY_CHUNK = {
   delayMs: 0,
   body: "if (document.currentScript.src.includes('second')) setTimeout(() => { const wide = document.createElement('p'); wide.id = 'early-second'; wide.style.width = '1400px'; wide.textContent = 'A block React commits on its retry, from the later of two chunks that landed before the wait.'; document.getElementById('early-host').append(wide); }, 300);",
+};
+
+/**
+ * A page whose lazy chunk, asked for as it parses, fails (the stand-in's first answer is a 404)
+ * before the load event, so before the enhancements' wait begins; as Turbopack's runtime does,
+ * the page drops the element and asks again, here `retryMs` later (the runtime's retry falls 200 to
+ * 600 ms after a failure: push 3 r5, item 4). The retried chunk commits its block 300 ms after it
+ * runs, on React's schedule. Nothing on the page is marked pending.
+ */
+const failedRetry = (retryMs: number) =>
+  `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>A failed chunk, retried</title></head><body><a href="#main">Skip to content</a><main id="main" tabindex="-1"><h1>A failed chunk, retried</h1><div id="early-host"><p>The page reads without its enhancement.</p></div></main><script>
+const src = '${LAZY_CHUNK}?fail';
+const chunk = document.createElement('script');
+chunk.src = src;
+chunk.onerror = () => {
+  chunk.remove();
+  setTimeout(() => { const again = document.createElement('script'); again.src = src; document.head.append(again); }, ${retryMs});
+};
+document.head.append(chunk);
+</script></body></html>`;
+
+/** failedRetry()'s chunk, served at once the second time: it commits a 1400 px block 300 ms after it runs. */
+const FAILED_RETRY_CHUNK = {
+  delayMs: 0,
+  body: "setTimeout(() => { const wide = document.createElement('p'); wide.id = 'failed-retry'; wide.style.width = '1400px'; wide.textContent = 'A block React commits on its retry, from a chunk the runtime asked for again.'; document.getElementById('early-host').append(wide); }, 300);",
+};
+
+/**
+ * A page whose HTML names its own chunk (OWN_CHUNK, in a <script src>), which renders its link,
+ * and loads a lazy one once it has loaded, which reveals a button (push 3 r5, item 4). Failed
+ * enhancement blocks the lazy chunk alone: the own chunk runs, so its link is there.
+ */
+const OWN_AND_LAZY = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>An own chunk and a lazy one</title><script src="${OWN_CHUNK}"></script></head><body><a href="#main">Skip to content</a><main id="main" tabindex="-1"><h1>An own chunk and a lazy one</h1><div id="own-host"></div><button type="button" hidden data-lazy>jump</button></main><script>
+addEventListener('load', () => setTimeout(() => {
+  const chunk = document.createElement('script');
+  chunk.src = '${LAZY_CHUNK}';
+  chunk.onerror = () => chunk.remove();
+  document.head.append(chunk);
+}));
+</script></body></html>`;
+
+/** OWN_AND_LAZY's own chunk: it renders the page's link as it runs, before the page parses on. */
+const OWN_MAIN = {
+  body: "addEventListener('DOMContentLoaded', () => { const link = document.createElement('a'); link.href = '/elsewhere'; link.textContent = 'Elsewhere, from the own chunk'; document.getElementById('own-host').append(link); });",
+};
+
+/** OWN_AND_LAZY's lazy chunk: it reveals the button. */
+const OWN_LAZY_CHUNK = {
+  delayMs: 0,
+  body: "document.querySelector('[data-lazy]').hidden = false;",
+};
+
+/**
+ * Failed enhancement on OWN_AND_LAZY, as `enhancement` reads it (its inventory finds the own
+ * chunk's link missing if that chunk is blocked), and a meta finding unless the script requests it
+ * blocked are the lazy chunk's alone.
+ */
+const ownChunkThrough = async (page: Page): Promise<Finding[]> => {
+  const blocked: string[] = [];
+  const onFailed = (request: import('@playwright/test').Request) => {
+    if (
+      request.resourceType() === 'script' &&
+      /BLOCKED_BY_CLIENT/.test(request.failure()?.errorText ?? '')
+    )
+      blocked.push(new URL(request.url()).pathname);
+  };
+  page.on('requestfailed', onFailed);
+  let findings: Finding[];
+  try {
+    const { served } = await loadForPass(page, '/');
+    const before = await baseline(page);
+    findings = await enhancementFindings(page, '/', before, served);
+  } finally {
+    page.off('requestfailed', onFailed);
+  }
+  const wrong = [...new Set(blocked)].filter((each) => each !== LAZY_CHUNK);
+  return [
+    ...findings,
+    ...(wrong.length > 0 || !blocked.includes(LAZY_CHUNK)
+      ? [
+          {
+            gate: 'meta',
+            rule: 'own-chunk',
+            actual: `failed enhancement blocked ${JSON.stringify(blocked)}, not the lazy chunk alone`,
+          },
+        ]
+      : []),
+  ];
 };
 
 /**
@@ -2174,6 +2283,23 @@ export const A11Y_CASES: readonly MetaCase[] = [
     ),
     { chunk: EARLY_RETRY_CHUNK },
   ),
+  // And a chunk that failed before the wait (push 3 r5, item 4): Turbopack's runtime asks for it
+  // again 200 to 600 ms later, so a failed chunk's floor holds past the runtime's longest retry and
+  // the commit margin, and the block the retried chunk commits 300 ms after it runs is read under
+  // each reflow condition: asked again at +250, and at +590, near the runtime's longest.
+  ...([250, 590] as const).map((retryMs) =>
+    builtCase(
+      `suspense-retry-failed-${retryMs}`,
+      'reflow',
+      `A 1400 px block a lazy chunk commits 300 ms after it runs, the chunk having failed before the wait and been asked for again ${retryMs} ms later, under each reflow condition`,
+      failedRetry(retryMs),
+      /^reflow (?:reflow|zoom|root-text): /,
+      namingUnder('#failed-retry', ['reflow', 'zoom', 'root-text'], (page) =>
+        reflowFindings(page, '/'),
+      ),
+      { chunk: FAILED_RETRY_CHUNK },
+    ),
+  ),
   // And two chunks in before the wait (push 3 r4, item 1): the floor starts from the later, so
   // the block it commits 300 ms after it runs is read under each reflow condition.
   builtCase(
@@ -2264,6 +2390,18 @@ export const A11Y_CASES: readonly MetaCase[] = [
   ),
   bad('needs-canvas', 'enhancement.html', 'enhancement', 'semantics|navigation', enhancement),
   good('enhancement', enhancement),
+  // Failed enhancement lets the page's own chunks through (push 3 r5, item 4): its HTML names
+  // OWN_CHUNK, which renders a link, and a lazy chunk reveals a button after load. Only the lazy
+  // chunk is blocked, the own chunk's link is there, and the button may wait for its script.
+  {
+    id: 'enhancement/own-chunk',
+    gate: 'enhancement',
+    input:
+      'a page whose HTML names its own chunk (a link it renders) and loads a lazy one (a button it reveals), under failed enhancement',
+    expect: 'pass',
+    browser: true,
+    run: () => onPage(OWN_AND_LAZY, ownChunkThrough, { own: OWN_MAIN, chunk: OWN_LAZY_CHUNK }),
+  },
   // Under failed enhancement a button that submits nothing may wait for its script, as
   // without JavaScript: Shell's jump buttons, hidden until the palette mounts.
   {
