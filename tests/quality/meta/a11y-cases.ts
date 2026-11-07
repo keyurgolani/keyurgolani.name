@@ -3526,6 +3526,34 @@ export const A11Y_CASES: readonly MetaCase[] = [
       { chunk: REVEAL },
     ),
   ),
+  // A page that needs its script (Studio, Demo Studio: #11's registration contract) is read in
+  // print over its no-JavaScript page, where its notice stands in for its content, as before row
+  // 92. Its live page isn't loaded again for print: that load would read nothing print judges
+  // there and only count the live page's own load twice. Here the live page's enhancement never
+  // mounts, which the cell's main pass reports; print, after no JavaScript, still passes.
+  {
+    id: 'inventory/requires-script-print-reads-notice',
+    gate: 'inventory',
+    input:
+      'A page that needs JavaScript, and says so, whose live enhancement never mounts, without JavaScript then in print',
+    expect: 'pass',
+    browser: true,
+    run: () =>
+      onPage(
+        `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>A page that needs JavaScript</title></head><body><a href="#content">Skip to the task</a><h1>Portfolio Studio</h1><main><div id="content" tabindex="-1"><noscript><p>Studio needs JavaScript. Turn it on, then reload.</p></noscript><div data-enhancement-island="workspace" data-island="markup"></div></div></main><script>
+addEventListener('load', () => setTimeout(() => {
+  const island = document.querySelector('[data-enhancement-island]');
+  island.setAttribute('data-island', 'live');
+  const chunk = document.createElement('script');
+  chunk.src = '${LAZY_CHUNK}';
+  document.head.append(chunk);
+}));
+</script></body></html>`,
+        async (page) =>
+          inventoryFindings(page, '/', await baseline(page), ['no-javascript', 'print'], true),
+        { chunk: 'never' },
+      ),
+  },
   // Item 2: a key hint's words the server sent are refused without JavaScript, whatever control
   // it names, since the mark lets go only words live script sets.
   builtCase(

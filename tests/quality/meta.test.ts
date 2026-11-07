@@ -448,6 +448,7 @@ test("row 92's cases are in the table: print reads the live page, and the key hi
     'inventory/key-hint-mark-on-text',
     'inventory/key-hint-mark-on-wrapper',
     'inventory/key-hint-server-words',
+    'inventory/requires-script-print-reads-notice',
   ]) {
     assert.ok(ids.includes(id), id);
   }
