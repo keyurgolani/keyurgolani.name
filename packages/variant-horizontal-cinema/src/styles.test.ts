@@ -166,3 +166,11 @@ test('the title card’s name rises into place at full strength, never from tran
   assert.doesNotMatch(body, /opacity|filter/);
   assert.match(CSS, /\.hc-card__name \{\n\s+animation: horizontal-cinema-rise /);
 });
+
+test('on the matte’s bands a focus ring is the band’s ink, through the focus color the platform’s ring reads', () => {
+  // The platform draws every ring from --color-focus in a later layer than this stylesheet, so a
+  // band sets the color it inherits, and no outline color of its own, which would lose to it.
+  for (const band of ['.hc-chrome', '.hc-bar', '.hc-scene[data-matte]'])
+    assert.match(declared(at(band), CSS), /--color-focus: var\(--color-on-scrim\);/, band);
+  assert.doesNotMatch(CSS, /outline-color/);
+});
