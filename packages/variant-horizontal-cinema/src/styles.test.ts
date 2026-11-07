@@ -174,3 +174,20 @@ test('on the matte’s bands a focus ring is the band’s ink, through the focus
     assert.match(declared(at(band), CSS), /--color-focus: var\(--color-on-scrim\);/, band);
   assert.doesNotMatch(CSS, /outline-color/);
 });
+
+test('a ring is shaped through the focus tokens alone: no outline of its own, and the stage and a scene ring inside their edges', () => {
+  // An outline here loses to the platform's ring, a later layer, so the stylesheet sets none.
+  assert.doesNotMatch(CSS, /(^|[\s;{])outline(-[a-z]+)?\s*:/m);
+  for (const part of ['.hc-stage:focus-visible', '.hc-scene:focus-visible'])
+    assert.match(
+      declared(at(part), CSS),
+      /--ui-focus-offset: calc\(var\(--ui-focus-width\) \* -1\);/,
+      part,
+    );
+  for (const part of [
+    '.hc-minimap__chapter a:focus-visible',
+    '.hc-board__map a:focus-visible',
+    '.hc-record__item:focus-within > .hc-record__summary:focus-visible',
+  ])
+    assert.match(declared(at(part), CSS), /--ui-focus-offset: var\(--space-3xs\);/, part);
+});
