@@ -278,3 +278,5 @@ function HomePage({ input }: HomePageProps) {
 }
 
 export default composePages({ HomePage, CaseStudyPage });
+
+// HC evidence only, not for merge (row 53 r2): quality:pr change-directs Horizontal Cinema.
