@@ -2,6 +2,8 @@ import 'server-only';
 import {
   browserFamily,
   csrfToken,
+  isSessionToken,
+  sessionDigest,
   sessionRef,
   sourcePrefix,
   type AuditSink,
@@ -213,20 +215,34 @@ export function authHandlers(tools: AuthCommandTools): Readonly<Record<string, H
       assertAuthorized(authorized, 'auth.session');
       // Always signed out: the cookie cleared and the cache too, whether a
       // session resolved, ended before or during the request, or the store
-      // couldn't be read. A session that resolved ends. One the store can't
-      // end is logged, and ends at its idle limit, with no cookie left to
+      // couldn't be read. A session that resolved ends. With none, the one
+      // well-formed cookie the request carried ends too, as when the store
+      // couldn't be read at the request's start and can now; two cookies
+      // end nothing, as neither is known to be the owner's. This runs past
+      // the same exact-Origin check every sign-out passes. One the store
+      // can't end is logged and ended in this process (row 88b), and the
+      // answer says so: it lapses at its idle limit, with no cookie left to
       // carry it.
-      const { requestId } = context;
+      const { requestId, request } = context;
       const entry = current(context);
-      if (entry) {
+      const sent = entry ? [] : readCookies(request, cookie.name);
+      const only = sent.length === 1 ? sent[0] : undefined;
+      const digest = entry
+        ? entry.record.digest
+        : isSessionToken(only)
+          ? sessionDigest(only)
+          : null;
+      let storeFailed = false;
+      if (digest !== null) {
         try {
-          await sessions.end(entry.record.digest, 'logout', { requestId });
+          await sessions.end(digest, 'logout', { requestId });
         } catch {
           log({ level: 'error', event: 'logout.store_failed', requestId });
+          storeFailed = true;
         }
       }
       return dataResult(
-        { signedOut: true },
+        storeFailed ? { signedOut: true, reason: 'store_failed' } : { signedOut: true },
         { headers: [...cleared(), ['clear-site-data', '"cache"']] },
       );
     },

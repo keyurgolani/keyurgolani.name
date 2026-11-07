@@ -14,6 +14,11 @@ import { isSessionToken, newSessionToken, sessionDigest, sessionRef } from './to
 // onSessionEnded(digest), for #7. Only a Studio command or a Studio page the
 // owner opens slides the idle limit, so a page on a sibling origin, which
 // the browser sends the owner's cookie from, can't keep a session alive.
+// An end the store can't finish, its record left on disk, still ends the
+// session in this process (row 88b): it's announced, audited as a failure,
+// and refused from then on, each read trying the delete again, until one
+// works. A restart forgets that, and the record then counts until its idle
+// limit; revoke-sessions ends it.
 
 recordOwnerModule('core/auth/sessions');
 
@@ -215,12 +220,16 @@ export interface Sessions {
     readonly replacing?: string | null | readonly string[];
     readonly context?: AuditContext;
   }): Promise<Issued>;
-  /** The session a cookie's token carries. One that no longer counts is deleted. */
+  /**
+   * The session a cookie's token carries. One that no longer counts is
+   * deleted. One whose end the store couldn't finish is ended, and its
+   * delete is tried again.
+   */
   resolve(token: string | null | undefined): Promise<Resolution>;
   /**
    * The session `digest` names, read as resolve() reads a token's, and
-   * deleted the same way once it no longer counts. It never slides the
-   * session. #7's preview grants keep the digest of the session they were
+   * deleted the same way once it no longer counts, or ended when its end
+   * couldn't be finished, as resolve() does. It never slides the session. #7's preview grants keep the digest of the session they were
    * minted under, never its token, and check it on every request.
    */
   resolveDigest(digest: string): Promise<DigestResolution>;
@@ -248,16 +257,25 @@ export interface Sessions {
    * once a minute at most, or at once for auth.session.extend. Any other
    * activity leaves the record as it is, unread. A failed write is logged,
    * and the request goes on with the record it had. A session ended
-   * meanwhile is never written back, and answers null.
+   * meanwhile is never written back, and answers null, as one whose end the
+   * store couldn't finish does.
    */
   touch(record: SessionRecord, activity: Activity): Promise<SessionRecord | null>;
-  /** Ends one session, as logout or as a revocation. Returns whether it was there. */
+  /**
+   * Ends one session, as logout or as a revocation. Returns whether it was
+   * there. When the store can't delete it, the session still ends in this
+   * process: it's announced, audited as a failure, and refused from then on,
+   * and the store's error is thrown.
+   */
   end(digest: string, reason: 'logout' | 'revoked', context?: AuditContext): Promise<boolean>;
   /** Ends every session. Returns how many there were. */
   revokeAll(context?: AuditContext): Promise<number>;
   /** The sessions that count, most recently seen first. */
   list(): Promise<SessionRecord[]>;
-  /** Called with the digest of each session that ends in this process. Returns an unsubscribe. */
+  /**
+   * Called with the digest of each session that ends in this process, once,
+   * an end the store couldn't finish included. Returns an unsubscribe.
+   */
   onSessionEnded(listener: (digest: string) => void): () => void;
   /** When the session ends if nothing slides it, and when it ends regardless. */
   expiry(record: SessionRecord): {
@@ -328,6 +346,11 @@ export function createSessions({
   const idleMs = lifetime.idleMinutes * 60_000;
   const maxMs = lifetime.maxHours * 3_600_000;
   const listeners = new Set<(digest: string) => void>();
+  /**
+   * Sessions whose end the store couldn't finish (row 88b): ended in this
+   * process though their records are still there, until a delete works.
+   */
+  const failedEnds = new Set<string>();
   const run = serializer();
 
   // A record keeps the limit it was issued with, and a lower setting applies
@@ -364,11 +387,29 @@ export function createSessions({
   }
   const drop = (digest: string) => run(digest, () => dropHeld(digest));
 
-  /** The records that count, deleting the rest. */
+  /**
+   * Whether `digest` is a session whose end the store couldn't finish,
+   * holding its key already. Each time it is, the delete is tried again, and
+   * once one works it no longer is; it was announced when it ended. Never
+   * throws: a store that still refuses leaves it ended.
+   */
+  async function endedEarlier(digest: string): Promise<boolean> {
+    if (!failedEnds.has(digest)) return false;
+    try {
+      await store.delete(digest);
+      failedEnds.delete(digest);
+    } catch {
+      log({ level: 'warn', event: 'session.end_retry_failed' });
+    }
+    return true;
+  }
+
+  /** The records that count, deleting the rest. One whose end failed is left out, and left alone. */
   async function live(at: number): Promise<SessionRecord[]> {
     const revokedBefore = await store.revokedBefore();
     const kept: SessionRecord[] = [];
     for (const record of await store.list()) {
+      if (failedEnds.has(record.digest)) continue;
       if (problem(record, revokedBefore, at)) await drop(record.digest);
       else kept.push(record);
     }
@@ -412,6 +453,7 @@ export function createSessions({
       if (!isSessionToken(token)) return ended('malformed');
       const digest = sessionDigest(token);
       return run(digest, async () => {
+        if (await endedEarlier(digest)) return ended('unknown');
         try {
           const record = await store.get(digest);
           if (!record) return ended('unknown');
@@ -431,6 +473,7 @@ export function createSessions({
     async resolveDigest(digest) {
       if (typeof digest !== 'string' || !DIGEST.test(digest)) return ended('malformed');
       return run(digest, async (): Promise<DigestResolution> => {
+        if (await endedEarlier(digest)) return ended('unknown');
         try {
           const record = await store.get(digest);
           if (!record) return ended('unknown');
@@ -465,6 +508,7 @@ export function createSessions({
           | Exclude<Holding<T>, { readonly status: 'valid' }>
           | { readonly status: 'held'; readonly record: SessionRecord; settled: Promise<Settled> }
         > => {
+          if (await endedEarlier(digest)) return ended('unknown');
           let record: SessionRecord | null;
           try {
             record = await store.get(digest);
@@ -520,6 +564,7 @@ export function createSessions({
       if (!slides(activity)) return Promise.resolve(record);
       const force = activity.kind === 'command' && activity.extend === true;
       return run(record.digest, async () => {
+        if (await endedEarlier(record.digest)) return null;
         try {
           const current = await store.get(record.digest);
           if (!current) return null;
@@ -540,14 +585,22 @@ export function createSessions({
 
     end(digest, reason, context) {
       return run(digest, async () => {
-        const existed = await dropHeld(digest);
+        const type = reason === 'logout' ? 'logout' : 'session_revoked';
+        const refs = { sessionRef: sessionRef(digest), requestId: context?.requestId };
+        let existed: boolean;
+        try {
+          existed = await store.delete(digest);
+        } catch (error) {
+          // The record is still there, and still reads: refuse it here all
+          // the same, tell the listeners, so #7's grants end, and say so.
+          failedEnds.add(digest);
+          announce(digest);
+          await audit.record({ type, actor: 'owner', outcome: 'failure', refs });
+          throw error;
+        }
         if (existed) {
-          await audit.record({
-            type: reason === 'logout' ? 'logout' : 'session_revoked',
-            actor: 'owner',
-            outcome: 'success',
-            refs: { sessionRef: sessionRef(digest), requestId: context?.requestId },
-          });
+          announce(digest);
+          await audit.record({ type, actor: 'owner', outcome: 'success', refs });
         }
         return existed;
       });
@@ -564,6 +617,8 @@ export function createSessions({
           () => store.revokeAll(now()),
         );
         const digests = await revoke();
+        // Every record is gone, and revoked-before refuses any written back.
+        failedEnds.clear();
         for (const digest of digests) announce(digest);
         await audit.record({
           type: 'sessions_revoked_all',

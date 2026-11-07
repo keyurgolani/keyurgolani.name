@@ -269,7 +269,7 @@ Every Studio page but sign-in needs a session. A request for one with no session
 
 A session ends at sign-out, when it's revoked, when it expires, when the password hash changes, and when `revoke-sessions` runs.
 
-Signing out, `/api/studio/auth.logout`, always answers as signed out. It clears the cookie and sends `Clear-Site-Data: "cache"` whether the session still counted, had ended, or the store couldn't be read, and ends the session if it counted. When the store can't end it, the server logs `logout.store_failed`, and the session ends at its idle limit, with no cookie left to carry it. It needs an `Origin` exactly equal to `PORTFOLIO_ORIGIN`, and with a session that counts, that session's CSRF token.
+Signing out, `/api/studio/auth.logout`, always answers as signed out. It clears the cookie and sends `Clear-Site-Data: "cache"` whether the session still counted, had ended, or the store couldn't be read, and ends the session if it counted. When no session counted and the request carried exactly one well-formed session cookie, as when the store couldn't be read as the request began, it ends that cookie's session too; two cookies end nothing. When the store can't end the session, the server logs `logout.store_failed` and answers `{"signedOut": true, "reason": "store_failed"}`, and Studio says this browser is signed out and the session lapses within the idle limit, `PORTFOLIO_AUTH_SESSION_IDLE_MINUTES`. Until then the server refuses the session itself, its preview grants included, and tries the delete again at each of its requests; a restart forgets that, and the record then counts until its idle limit, with no cookie left to carry it. Once the data directory is writable again, `revoke-sessions` ([Revoking sessions](#revoking-sessions)) ends it at once. Signing out never slides the session. It needs an `Origin` exactly equal to `PORTFOLIO_ORIGIN`, and with a session that counts, that session's CSRF token.
 
 ### Revoking sessions
 
@@ -549,7 +549,8 @@ Next writes its own lines to the same streams, as plain text: its startup banner
 | `session.listener_failed`    | `owner`: something told of an ended session failed. The session ended anyway.                                                 |
 | `audit.write_failed`         | `owner`: an audit line couldn't be written. `code` is its type. No decision changes.                                          |
 | `login.store_failed`         | `owner`: a sign-in's session couldn't be stored. It gets 503 `unavailable`, or a form post `state=error`, and no cookie.      |
-| `logout.store_failed`        | `owner`: a sign-out couldn't end its session. The browser is signed out, and the session ends at its idle limit.              |
+| `logout.store_failed`        | `owner`: a sign-out couldn't end its session. The browser is signed out; the server refuses the session until a restart.      |
+| `session.end_retry_failed`   | `owner`: a session whose end the store couldn't finish still couldn't be deleted. It stays refused.                           |
 | `store.publish.committed`    | `owner`: a publish moved the live pointer, with `revisionId`, `seq`, and `durationMs`. Rollback and recover log their own.    |
 | `store.publish.failed`       | `owner`: a publish didn't move it: `stage` is where it stopped and `code` why. Rollback and recover log their own.            |
 | `store.catalog.degraded`     | `owner`: the live revision can't be served, so `servingRevisionId`, the last known good, is. `code` says why.                 |

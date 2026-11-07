@@ -1,3 +1,4 @@
+import { requireDeploymentConfig } from '~/server/config-store';
 import { servedPage } from '~/server/page-guard';
 import { safeReturnTo, signInStateOf } from '~/server/return-to';
 import { PruneJournal } from '../../_components/prune-journal';
@@ -7,7 +8,8 @@ import { SignInForm } from '../../_components/sign-in-form';
 // route table gives it auth.session, which only owner has, so demo and
 // read-only answer the unknown-route 404. It renders the state its URL names
 // before any script runs, and keeps where the owner was going in the form's
-// own returnTo field.
+// own returnTo field. A sign-out whose session the store couldn't end names
+// the deployment's own idle limit, never a fixed one (row 88b).
 
 export const metadata = { title: 'Sign in · Portfolio Studio' };
 
@@ -32,6 +34,7 @@ async function SignIn({ searchParams }: { searchParams: Query }) {
         state={state}
         returnTo={safeReturnTo(one(query.returnTo))}
         retryAfter={state === 'rate_limited' ? seconds(one(query.retryAfter)) : null}
+        idleMinutes={requireDeploymentConfig().sessionLifetime?.idleMinutes ?? null}
       />
       <PruneJournal />
     </main>
