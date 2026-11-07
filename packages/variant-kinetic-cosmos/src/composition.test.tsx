@@ -728,6 +728,29 @@ function ruleBody(selector: string, within = CSS): string | undefined {
   return undefined;
 }
 
+test("in print, the caption and plates the map grounds on the stage's dark take the page's ground, as their ink does (#197's print reds)", () => {
+  // From 64rem the caption and each plate sit over the map on the stage's own ground, the
+  // scheme's text-primary. Print sets the stage's ink to the page's (text-primary and
+  // text-secondary) on a transparent stage, so each part grounded there must go transparent too,
+  // or its page ink sits on the stage's dark: the hero tagline's text-secondary at 1.81:1 in every
+  // [37] pack's print cell.
+  const over = ruleBody(
+    "[data-variant='kinetic-cosmos'] :is(.kc-plates__caption, .kc-plate__link)",
+  );
+  assert.ok(over, 'the rule that grounds the caption and the plates over the map');
+  assert.match(over, /background-color: var\(--color-text-primary\);/);
+  const print = CSS.slice(CSS.indexOf('@media print {'));
+  const grounded = ['kc-plates__caption', 'kc-plate__link'];
+  for (const part of grounded) {
+    const reset = [...print.matchAll(/([^{}]+)\{([^{}]*)\}/g)].some(
+      ([, head, body]) =>
+        new RegExp(`\\.${part}(?![\\w-])`).test(head!) &&
+        /background-color: transparent;/.test(body!),
+    );
+    assert.ok(reset, `.${part} takes the page's ground in print`);
+  }
+});
+
 test("an offer's What it includes sits at its terms' start, not centred across the column (KIN-8)", () => {
   const body = ruleBody("[data-variant='kinetic-cosmos'] .kc-offer .kc-object__more");
   assert.ok(body, 'a rule for the offer’s button');
