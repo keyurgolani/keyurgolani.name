@@ -420,7 +420,14 @@ test(
     await page.goto('/', { waitUntil: 'networkidle' });
     await page.emulateMedia({ media: 'print' });
     await expect(page.locator('.sx-actions a').first()).toBeVisible();
-    await expect(page.locator('.sx-run').first()).toBeHidden();
+    // A sheet's running marker prints in place and unstuck (row 24): its Index link is a
+    // reference to the footer's drawing index, which the paper keeps.
+    const marker = page.locator('.sx-run').first();
+    await expect(marker).toBeVisible();
+    expect(await marker.evaluate((el) => getComputedStyle(el).position)).not.toMatch(
+      /^(?:fixed|sticky)$/,
+    );
+    await expect(marker.locator('a[data-sx-open]')).toBeVisible();
     // The cover's Index prints as what it is, a reference to the footer's drawing index.
     const index = page.locator('.sx-sheet--cover a[data-sx-open]');
     await expect(index).toBeVisible();
