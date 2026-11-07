@@ -107,7 +107,9 @@ function recordFirstTab(): void {
               tabIndex: skip.tabIndex,
               visible: skip.checkVisibility(),
               inert: skip.closest('[inert]') !== null,
-              rect: Object.values(skip.getBoundingClientRect().toJSON()).map(Math.round),
+              rect: (({ x, y, width, height }) => [x, y, width, height].map(Math.round))(
+                skip.getBoundingClientRect(),
+              ),
             }
           : null,
         firstFive: [...document.querySelectorAll<HTMLElement>(sel)]
