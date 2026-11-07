@@ -200,11 +200,13 @@ test(
     expect(craft).toBeGreaterThan(0);
     await expectAt(page, craft);
     expect((await read(page)).hash).toBe('#chapter-craft');
-    // A direct link to a scene loads on it, and a reload keeps it.
+    // A direct link to a scene loads on it, and a reload keeps it; the status names it from the start.
     await load(page, `/#${scenes[4]}`);
     await expectAt(page, 4);
+    await expectAnnounced(page, 4, scenes.length);
     await page.reload({ waitUntil: 'load' });
     await expectAt(page, 4);
+    await expectAnnounced(page, 4, scenes.length);
     // Back returns to the chapter the link opened.
     await page.goBack();
     await expect.poll(async () => (await read(page)).hash).toBe('#chapter-craft');
