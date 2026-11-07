@@ -54,7 +54,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      jobs: ${{ steps.select.outputs.jobs }}
+      # Harness push 2's follow-up evidence branch, never merged: the
+      # selection emptied (ci/evidence/followup/keep-jobs.mjs), so
+      # followup-evidence runs alone. complete stays the selection's.
+      jobs: ${{ steps.keep.outputs.jobs }}
       complete: ${{ steps.select.outputs.complete }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -67,6 +70,11 @@ jobs:
           PR_DRAFT: ${{ github.event.pull_request.draft }}
           BASE_REF: ${{ github.base_ref }}
         run: node ci/select-jobs.mjs --github
+      - name: Keep the evidence branch's jobs
+        id: keep
+        env:
+          SELECTED: ${{ steps.select.outputs.jobs }}
+        run: node ci/evidence/followup/keep-jobs.mjs
 
   static:
     name: static
@@ -1137,6 +1145,54 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: reports-fresh-clone
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # Harness push 2's follow-up, CI Linux evidence for the stall reporter, on
+  # a branch that never merges (kgn-e/harness-2-followup-ci-r): the PR head
+  # itself checked out (not the merge), its parent the landing commit
+  # 78bb5bbbd, in the browser suite's pinned image, user and options.
+  # stall-reruns.test.mjs, then motion-harness.spec.ts once under
+  # CI_GATE=browser, its job summary printed (ci/evidence/followup/
+  # stall-linux.sh, exact bars, nonzero only on a miss).
+  followup-evidence:
+    name: followup-evidence (harness push 2 follow-up, the stall reporter on CI Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 2
+      - name: HEAD
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git rev-parse HEAD
+          git rev-parse HEAD^
+          echo "PR head $PR_HEAD"
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: stall-reruns.test.mjs and motion-harness.spec.ts x 1, the job summary printed
+        env:
+          LANDING: 78bb5bbbd51d25426ca22b7cb4cec4e505bad117
+        run: node ci/run.mjs followup-evidence -- sh ci/evidence/followup/stall-linux.sh "$LANDING"
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-followup-evidence
           path: reports/
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
