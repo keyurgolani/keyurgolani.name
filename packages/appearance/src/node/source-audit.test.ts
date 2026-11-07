@@ -11,6 +11,7 @@ import {
   runSourceAudit,
   SOURCE_AUDIT_REMEDIES,
   SOURCE_AUDIT_RULES,
+  sourceAuditRemedy,
   sourceAuditReport,
   variantPackageDirs,
   type SourceAuditRule,
@@ -1032,5 +1033,28 @@ test('row 73: any other value of the two, any other platform property, and eithe
   assert.deepEqual(
     auditStylesheetText(rule('--color-focus: red;')).map(({ rule: name }) => name),
     [],
+  );
+});
+
+test("row 73: a stylesheet's bad value of the two says the values they take, and every other refusal keeps today's remedy", () => {
+  assert.equal(
+    sourceAuditRemedy('custom-property', '--color-focus: red;'),
+    "sets --color-focus: red, and a composition may set --color-focus only as var(--color-on-scrim), var(--color-focus-inverse), var(--color-text-primary), var(--color-on-accent), or var(--color-on-emphasis), and --ui-focus-offset only as calc(var(--ui-focus-width) * -1), 0, or a var(--space-*) token, in its stylesheet, and no other property in the platform's namespaces.",
+  );
+  for (const found of [
+    '--acme-tint: 1;',
+    '--ui-focus-width: 4px;',
+    "const s = { '--color-focus': 'red' };",
+  ]) {
+    assert.equal(
+      sourceAuditRemedy('custom-property', found),
+      SOURCE_AUDIT_REMEDIES['custom-property'],
+      found,
+    );
+  }
+  // An allowed value isn't a finding, so it has no remedy of its own.
+  assert.equal(
+    sourceAuditRemedy('custom-property', '--color-focus: var(--color-on-scrim);'),
+    SOURCE_AUDIT_REMEDIES['custom-property'],
   );
 });

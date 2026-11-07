@@ -1233,6 +1233,17 @@ test('row 73: any other value of the two, and any other platform property, is re
     );
     assert.match(found[0]![1], /in a namespace the platform's tokens own/, declaration);
   }
+  // The bad-value text, exactly, and today's text for every other platform property.
+  assert.deepEqual(
+    reportsIn(rule('--color-focus: red;')).find(([, message]) => message.startsWith('sets ')),
+    ['audit.css-appearance', "sets --color-focus: red, and a composition may set --color-focus only as var(--color-on-scrim), var(--color-focus-inverse), var(--color-text-primary), var(--color-on-accent), or var(--color-on-emphasis), and --ui-focus-offset only as calc(var(--ui-focus-width) * -1), 0, or a var(--space-*) token, in its stylesheet, and no other property in the platform's namespaces."],
+  );
+  assert.deepEqual(reportsIn(rule('--ui-focus-width: 4px;')), [
+    [
+      'audit.css-appearance',
+      "declares --ui-focus-width, in a namespace the platform's tokens own, which a composition reads and never sets.",
+    ],
+  ]);
   // !important is its own refusal, beside the value's.
   assert.deepEqual(
     reportsIn(rule('--ui-focus-offset: var(--space-3xs) !important;')).map(([code]) => code),

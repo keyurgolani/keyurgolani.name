@@ -153,6 +153,22 @@ export const SOURCE_AUDIT_REMEDIES: Readonly<Record<SourceAuditRule, string>> = 
     "Write names, selectors, and values out in full, with no backslash outside a string: an escape gets past every check that reads the name. A string's escape, such as content: '\\201C', is fine.",
 };
 
+/**
+ * The remedy a finding's line gets: its rule's, but for a stylesheet's bad
+ * value of a property COMPOSITION_SETTABLE names (row 73), which says the
+ * values that property takes.
+ */
+export function sourceAuditRemedy(rule: SourceAuditRule, found: string): string {
+  if (rule === 'custom-property') {
+    const declaration = /^(--[a-z0-9-]+)\s*:\s*(.*?)\s*;?$/.exec(found);
+    const problem = declaration
+      ? compositionSettableProblem(declaration[1]!, declaration[2]!)
+      : null;
+    if (problem) return problem;
+  }
+  return SOURCE_AUDIT_REMEDIES[rule];
+}
+
 export interface SourceAuditFinding {
   /** Relative to the repository root, with `/` separators. */
   readonly path: string;
@@ -1853,7 +1869,7 @@ export function sourceAuditReport(
       ...result.exceptionProblems.map((problem) => `${shown}: ${problem}`),
       ...result.findings.map(
         ({ path: file, line, rule, found }) =>
-          `${file}:${line} ${rule}: ${found} ${SOURCE_AUDIT_REMEDIES[rule]}`,
+          `${file}:${line} ${rule}: ${found} ${sourceAuditRemedy(rule, found)}`,
       ),
       ...result.unused.map(
         ({ path: file, rule }) =>
