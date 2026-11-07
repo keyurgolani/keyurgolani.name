@@ -342,18 +342,63 @@ test('the controller never takes over the wheel or a touch (it reads their way, 
       );
   }
   if (handlers.length > 0) assert.doesNotMatch(bodyOf('tell'), writes, 'tell');
-  // It calls preventDefault for an arrow step and for Home or End alone, and in the open chapter
-  // sheet for Tab at either end of its links, which goes round them.
-  assert.equal(source.match(/preventDefault\(\)/g)?.length, 3);
-  assert.match(
-    source,
-    /if \(event\.key !== 'Tab' \|\| event\.altKey \|\| event\.ctrlKey \|\| event\.metaKey\) return;[\s\S]{0,400}if \(!to\) return;\s*event\.preventDefault\(\);/,
-  );
+  // Its preventDefault calls are keydown handlers' alone, three in all: the test below names each.
   assert.doesNotMatch(source, /pushState|location\.(?:assign|replace)\(|location\.hash\s*=/);
   assert.equal(source.match(/history\.replaceState/g)?.length, 1);
   // It names a scene in the URL only while one is being read, and never over a fragment inside that scene.
   assert.match(source, /if \(!framed && readsScene\(\) && !namesWithin\(position\)\)/);
   assert.match(source, /const framed = window\.self !== window\.top;/);
+});
+
+test("every preventDefault the controller calls is a named keydown handler's own, three in all: the arrow step and Home or End in onKey, and the open chapter sheet's Tab, only where it wraps", () => {
+  const source = readFileSync(new URL('./controller.tsx', import.meta.url), 'utf8');
+  // A handler's body: from its own opening line to the closing line at that line's indentation. A
+  // listener is `const <name> = (...) => {`; a React handler is `on<Event>={(event) => {`.
+  const opening =
+    /^( *)(?:const (\w+) = \([^)]*\)(?:: \w+)? => \{|(on[A-Z]\w*)=\{\([^)]*\) => \{)$/gm;
+  const handlers = [...source.matchAll(opening)].map((open) => {
+    const start = open.index!;
+    const end = source.indexOf(`\n${open[1]}}`, start);
+    assert.notEqual(end, -1, open[0]);
+    return { name: open[2] ?? open[3]!, start, end };
+  });
+  // The innermost handler holding each call.
+  const holder = (at: number) =>
+    handlers
+      .filter((handler) => handler.start < at && at < handler.end)
+      .sort((a, b) => b.start - a.start)[0]?.name;
+  const calls = [...source.matchAll(/preventDefault\(\)/g)].map((call) => holder(call.index!));
+  assert.equal(calls.length, 3);
+  assert.deepEqual(calls, ['onKeyDown', 'onKey', 'onKey']);
+  // onKey is the shell's keydown listener, and listens to nothing else.
+  assert.deepEqual(
+    [...source.matchAll(/addEventListener\(\s*['"`](\w+)['"`],\s*onKey\b/g)].map(
+      ([, type]) => type,
+    ),
+    ['keydown'],
+  );
+  assert.match(source, /rootElement\.removeEventListener\('keydown', onKey\);/);
+  // The other onKeyDown is the chapter sheet's, inside Jump, and its one call comes only once a Tab
+  // has an end to wrap from: past `if (!to) return;`, never before it.
+  const jump = source.indexOf('function Jump(');
+  const sheet = handlers.find((handler) => handler.name === 'onKeyDown')!;
+  assert.ok(
+    jump !== -1 && jump < sheet.start && sheet.end < source.indexOf('\nfunction ', jump + 1),
+  );
+  const body = source.slice(sheet.start, sheet.end);
+  assert.match(
+    body,
+    /if \(event\.key !== 'Tab' \|\| event\.altKey \|\| event\.ctrlKey \|\| event\.metaKey\) return;/,
+  );
+  assert.match(body, /if \(!to\) return;\s*event\.preventDefault\(\);\s*to\.focus\(\);/);
+  assert.equal(body.indexOf('preventDefault'), body.lastIndexOf('preventDefault'));
+  // No other listener calls it, whatever its event: wheel, touch, scroll, focus, pointer or the page's keys.
+  for (const [, type, name] of source.matchAll(/addEventListener\(\s*['"`](\w+)['"`],\s*(\w+)/g)) {
+    if (name === 'onKey') continue;
+    const own = handlers.find((handler) => handler.name === name);
+    if (own)
+      assert.doesNotMatch(source.slice(own.start, own.end), /preventDefault/, `${type} ${name}`);
+  }
 });
 
 test('torn down, the controller refits nothing and leaves none of its attributes on the shell', () => {
