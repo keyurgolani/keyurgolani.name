@@ -135,6 +135,67 @@ export function arrivedAt(scope: Scope, index: number, ms = 5000): Promise<boole
   );
 }
 
+/**
+ * From a scene's last link, mid-strip, Tab goes on into a later scene, as a keyboard walk does: a
+ * foot's Next, or a chapter's own list. Read as the walk reads it, two frames and 50 ms on and then
+ * frame by frame for 800 ms, the stop is shown in the stage, never moves more than a pixel, keeps
+ * focus, and once the strip rests its scene is current and announced. Returns how many Tabs crossed.
+ * With `back`, the same from a scene's first link, Shift+Tab back into an earlier scene. `from`, the
+ * scenes it sets out from, each holding a link: by default, four spread through the complete fixture.
+ */
+export async function tabIntoLaterScenes(
+  page: Page,
+  { back = false, from: starts }: { back?: boolean; from?: readonly number[] } = {},
+): Promise<number> {
+  const { scenes } = await read(page);
+  const total = scenes.length;
+  let crossed = 0;
+  for (const from of starts ?? (back ? [3, 6, 9, 12] : [2, 5, 8, 11])) {
+    const links = page.locator(`#${scenes[from]} a[href]`);
+    await (back ? links.first() : links.last()).focus();
+    await expectAt(page, from);
+    await page.keyboard.press(back ? 'Shift+Tab' : 'Tab');
+    const seen = await page.evaluate(async (ids) => {
+      const frame = () => new Promise((done) => requestAnimationFrame(done));
+      await frame();
+      await frame();
+      await new Promise((done) => setTimeout(done, 50));
+      const active = document.activeElement as HTMLElement;
+      const to = ids.findIndex((id) => document.getElementById(id)?.contains(active));
+      const first = active.getBoundingClientRect();
+      const stage = document.querySelector('.hc-stage')!.getBoundingClientRect();
+      const shown =
+        first.width > 0 &&
+        first.left >= stage.left - 0.5 &&
+        first.right <= stage.right + 0.5 &&
+        first.top >= 0 &&
+        first.bottom <= window.innerHeight;
+      let moved = 0;
+      const end = performance.now() + 800;
+      while (performance.now() < end) {
+        await frame();
+        const now = active.getBoundingClientRect();
+        moved = Math.max(moved, Math.abs(now.left - first.left), Math.abs(now.top - first.top));
+      }
+      return { to, shown, still: moved <= 1, focused: document.activeElement === active };
+    }, scenes);
+    if (seen.to < 0 || (back ? seen.to >= from : seen.to <= from)) continue;
+    crossed += 1;
+    expect(
+      seen,
+      `${back ? 'Shift+Tab' : 'Tab'} from ${scenes[from]} into ${scenes[seen.to]}`,
+    ).toEqual({
+      to: seen.to,
+      shown: true,
+      still: true,
+      focused: true,
+    });
+    await expectAt(page, seen.to);
+    await expectAnnounced(page, seen.to, total);
+  }
+  return crossed;
+}
+
 /** Waits for the live status to name scene `index` (from 0) of `total`. */
 export async function expectAnnounced(scope: Scope, index: number, total: number): Promise<void> {
   await expect
