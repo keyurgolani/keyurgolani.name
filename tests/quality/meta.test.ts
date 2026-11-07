@@ -293,6 +293,21 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'enhancement/script-only-live-off',
     'inventory/script-only-link',
     'enhancement/script-only-link',
+    // Live as ARIA reads it (the coordinator, 7 Nov 2026, F2): a status with an empty aria-live,
+    // and aria-live=" Polite ", are live; an empty, "OFF" or unknown aria-live, and a status
+    // with aria-live="off", aren't.
+    'inventory/script-only-status-empty-live',
+    'enhancement/script-only-status-empty-live',
+    'inventory/script-only-live-cased',
+    'enhancement/script-only-live-cased',
+    'inventory/script-only-live-empty',
+    'enhancement/script-only-live-empty',
+    'inventory/script-only-live-upper-off',
+    'enhancement/script-only-live-upper-off',
+    'inventory/script-only-live-bogus',
+    'enhancement/script-only-live-bogus',
+    'inventory/script-only-status-off',
+    'enhancement/script-only-status-off',
     // Text only: a block holding a link or a control, and a heading, inside a marked status still
     // count; and a marked status holding the server's own words is a finding by name (the
     // coordinator, 6 Nov 2026).
