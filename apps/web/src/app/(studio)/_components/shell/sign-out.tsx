@@ -1,27 +1,57 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
-// Sign out (#8, Slice 1; refined Slice 2 item 3): while this browser's
-// journal holds unsaved changes, this tab's or any other's, it asks first
-// whether to keep them here for the next sign-in or discard them, since a
-// shared machine's next user signs in to the same browser. Discard reaches
-// every open Studio tab, so none writes its text back. With nothing in the
-// journal, it signs out at once.
+// Sign out (#8, Slice 1; refined Slice 2 item 3, and row 88): while this
+// browser's journal holds unsaved changes, this tab's or any other's, it
+// asks first whether to keep them here for the next sign-in or discard them,
+// since a shared machine's next user signs in to the same browser. Discard
+// reaches every open Studio tab, so none writes its text back. With nothing
+// in the journal, it signs out at once.
+//
+// The shell holds what it shows, busy, failed, and asking, so the header's
+// Sign out and the workspace's, which takes its place once Studio is ready,
+// are one control: a failure the header showed still shows in the
+// workspace, and an open question stays open. Until the shell has hydrated
+// the button is aria-disabled, in Studio's busy look, and takes no click;
+// the server renders it so (row 88).
+
+/** What Sign out shows, which the shell keeps across the header and the workspace. */
+export interface SignOutState {
+  /** Signing out now: the button holds, in the busy look. */
+  readonly busy: boolean;
+  /** The last sign-out didn't go through. */
+  readonly failed: boolean;
+  /** The keep-or-discard question is open. */
+  readonly asking: boolean;
+}
+
+export const SIGN_OUT_IDLE: SignOutState = Object.freeze({
+  busy: false,
+  failed: false,
+  asking: false,
+});
 
 export function SignOut({
-  shouldAsk,
+  canSignOut,
+  state,
   onSignOut,
+  onChoose,
+  onCancel,
 }: {
-  /** Whether the journal holds unsaved changes, read when the owner clicks. */
-  shouldAsk: () => boolean;
-  /** Signs out, keeping or discarding the journal. False when the server refused. */
-  onSignOut: (keep: boolean) => Promise<boolean>;
+  /** Whether the shell has hydrated, so a click reaches it: false in the server's markup. */
+  canSignOut: boolean;
+  state: SignOutState;
+  /** The button's click, once it can sign out: the shell asks or signs out. */
+  onSignOut: () => void;
+  /** The owner's answer to the question: keep the journal, or discard it. */
+  onChoose: (keep: boolean) => void;
+  /** The question closed with no answer. */
+  onCancel: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const [asking, setAsking] = useState(false);
+  const { busy, failed, asking } = state;
+  const held = !canSignOut || busy;
 
   useEffect(() => {
     const element = dialog.current;
@@ -30,30 +60,15 @@ export function SignOut({
     if (!asking && element.open) element.close();
   }, [asking]);
 
-  async function go(keep: boolean) {
-    if (busy) return;
-    setBusy(true);
-    setFailed(false);
-    let ok = false;
-    try {
-      ok = await onSignOut(keep);
-    } catch {
-      ok = false;
-    }
-    if (!ok) {
-      setBusy(false);
-      setAsking(false);
-      setFailed(true);
-    }
-  }
-
   return (
     <>
       <button
         type="button"
         className="studio-button studio-button--quiet"
-        aria-disabled={busy ? true : undefined}
-        onClick={() => (shouldAsk() ? setAsking(true) : void go(false))}
+        aria-disabled={held ? true : undefined}
+        onClick={() => {
+          if (!held) onSignOut();
+        }}
       >
         Sign out
       </button>
@@ -64,7 +79,7 @@ export function SignOut({
         ref={dialog}
         className="studio-dialog"
         aria-labelledby="studio-sign-out-heading"
-        onClose={() => setAsking(false)}
+        onClose={onCancel}
       >
         <h2 id="studio-sign-out-heading">Keep your unsaved changes?</h2>
         <p>
@@ -72,21 +87,17 @@ export function SignOut({
           you sign in again, or discard them, as you should on a shared computer.
         </p>
         <div className="studio-dialog__actions">
-          <button type="button" className="studio-button" onClick={() => void go(true)}>
+          <button type="button" className="studio-button" onClick={() => onChoose(true)}>
             Keep them and sign out
           </button>
           <button
             type="button"
             className="studio-button studio-button--quiet"
-            onClick={() => void go(false)}
+            onClick={() => onChoose(false)}
           >
             Discard them and sign out
           </button>
-          <button
-            type="button"
-            className="studio-button studio-button--quiet"
-            onClick={() => setAsking(false)}
-          >
+          <button type="button" className="studio-button studio-button--quiet" onClick={onCancel}>
             Cancel
           </button>
         </div>
