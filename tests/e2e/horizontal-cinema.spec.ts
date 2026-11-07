@@ -12,6 +12,7 @@ import {
   load,
   railClashes,
   read,
+  renderedLayout,
   widenRailYears,
   watchKeys,
 } from './horizontal-cinema-model';
@@ -482,6 +483,10 @@ for (const [width, height] of [
     async ({ page }) => {
       await page.setViewportSize({ width, height });
       await load(page);
+      // Which layout the complete fixture renders here differs by platform: at 1024 by 768 it stacks
+      // on macOS and may pin on CI Linux. So the test reads the layout the page rendered and checks
+      // that one's contract: pinned, the rail shows and holds its labels; stacked, no bar is drawn.
+      await renderedLayout(page);
       expect(await railClashes(page)).toEqual([]);
     },
   );
@@ -551,7 +556,9 @@ test(
     await expect(page.locator('.hc-scrub[data-live]')).toHaveCount(1);
     await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => done(null))));
     expect(await page.evaluate(() => document.readyState)).not.toBe('complete');
-    // The live bar, its transport and status in, holds its rail, or the strip has stacked.
+    // The live bar, its transport and status in, holds its rail, or the strip has stacked: the
+    // layout as it is now, before load, which differs by platform here (see the rail loop above).
+    await renderedLayout(page, { wait: false });
     expect(await railClashes(page)).toEqual([]);
   },
 );
