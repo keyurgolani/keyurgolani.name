@@ -90,6 +90,22 @@ export const PRINT_IGNORE = /^(?:control|button label|control label|script-only)
 export const NO_SCRIPT_IGNORE =
   /^(?:control: (?:button:(?:button|reset)|skip-link)|button label:|control label:|script-only:) /;
 
+/**
+ * Row 92's key-hint allowance (the coordinator, 7 Nov 2026): a block marked data-script-only that
+ * holds a <kbd>, no heading, link, image or control, and names the control it stands for with
+ * data-key-hint-for, is the inventory's `key-hint: #<id> <words>` (probe.ts). It tells a keyboard
+ * user how to do what that control does, so where a condition takes it away it may go only while
+ * the control it names is there: under touch and without JavaScript (failed enhancement too), in
+ * the DOM, shown and enabled (`usable`); in print, which lets every control go, in the DOM
+ * (`in-dom`). Any other condition still counts it. The harness never infers which control a hint
+ * stands for: a hint with no id, or one naming nothing, no control, or a control the condition
+ * hides or disables, is a finding.
+ */
+export const KEY_HINT = /^key-hint: #(\S+) /;
+
+/** How a condition's dropped key hint's control must be: usable, or in the DOM. */
+export type KeyHintRule = 'usable' | 'in-dom';
+
 /** What a condition does to the page, and how the check knows it took. */
 export interface Condition {
   readonly id: string;
@@ -97,6 +113,8 @@ export interface Condition {
   readonly reload: boolean;
   /** Fields it may take away, as nothing a visitor needs under it. */
   readonly ignore?: RegExp;
+  /** Whether it may take a key hint away, and how the hint's control must be then (KEY_HINT). */
+  readonly keyHint?: KeyHintRule;
   setup(page: Page, cdp: CDPSession): Promise<void>;
   /** Why it didn't take, or null when it did. */
   verify(page: Page): Promise<string | null>;
@@ -183,6 +201,8 @@ export function conditions(): Condition[] {
       // Touch: no hover and no pointer precision, as Chromium's touch emulation reports them.
       id: 'touch',
       reload: true,
+      // Its first allowance: a key hint shown only to a fine pointer, beside its control (row 92).
+      keyHint: 'usable',
       setup: async (_page, cdp) => {
         await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
       },
@@ -227,6 +247,7 @@ export function conditions(): Condition[] {
       reload: true,
       // A button that submits nothing is an enhancement, which may wait for JavaScript.
       ignore: NO_SCRIPT_IGNORE,
+      keyHint: 'usable',
       setup: async (_page, cdp) => {
         await cdp.send('Emulation.setScriptExecutionDisabled', { value: true });
       },
@@ -239,6 +260,7 @@ export function conditions(): Condition[] {
       id: 'print',
       reload: false,
       ignore: PRINT_IGNORE,
+      keyHint: 'in-dom',
       setup: (page) => page.emulateMedia({ media: 'print' }),
       verify: matches('print'),
       teardown: (page) => page.emulateMedia({ media: null }),
@@ -576,6 +598,8 @@ export function watchEnhancements(page: Page): EnhancementWatch {
 interface Expected {
   readonly baseline: readonly string[];
   readonly ignore?: RegExp;
+  /** Whether a key hint may be gone, so the wait doesn't wait for one (KEY_HINT). */
+  readonly keyHint?: KeyHintRule;
 }
 
 /** The fields of `before` that `now` lacks, but for those `ignore` lets go. */
@@ -592,9 +616,12 @@ const lacking = (before: readonly string[], now: readonly string[], ignore?: Reg
  * read's own finding, so it adds none.
  */
 async function baselineShown(page: Page, expected: Expected, end: number): Promise<void> {
+  const wanted = expected.keyHint
+    ? expected.baseline.filter((item) => !KEY_HINT.test(item))
+    : expected.baseline;
   while (
-    lacking(expected.baseline, await inPage<string[]>(page, { kind: 'inventory' }), expected.ignore)
-      .length > 0 &&
+    lacking(wanted, await inPage<string[]>(page, { kind: 'inventory' }), expected.ignore).length >
+      0 &&
     Date.now() < end
   ) {
     await page.waitForTimeout(100);
@@ -678,22 +705,51 @@ async function reload(
   ];
 }
 
-/** What `before` has and `now` lacks, as findings under `condition`. */
-function missingItems(
+/**
+ * What `before` has and `now` lacks, as findings under `condition`. With `keyHint`, a key hint
+ * that's gone is let go while its control is as the rule needs it, on the page as it stands, and
+ * is a finding of its own, naming the control and how it is, while it isn't (KEY_HINT).
+ */
+async function missingItems(
+  page: Page,
   rule: string,
   gate: string,
   condition: string,
   before: readonly string[],
   now: readonly string[],
   ignore?: RegExp,
-): Finding[] {
-  const gone = lacking(before, now, ignore);
-  return gone.slice(0, 10).map((item) => ({
-    gate,
-    rule,
-    expected: `present under ${condition}`,
-    actual: `${gone.length} field(s) missing, here ${item}`,
-  }));
+  keyHint?: KeyHintRule,
+): Promise<Finding[]> {
+  const gone: string[] = [];
+  const hints: Finding[] = [];
+  for (const item of lacking(before, now, ignore)) {
+    const id = keyHint ? KEY_HINT.exec(item)?.[1] : undefined;
+    if (id === undefined) {
+      gone.push(item);
+      continue;
+    }
+    const control = await inPage<string>(page, {
+      kind: 'key-hint-control',
+      id,
+      usable: keyHint === 'usable',
+    });
+    if (control !== 'there')
+      hints.push({
+        gate,
+        rule,
+        expected: `present under ${condition}, or gone while the control it names is ${keyHint === 'usable' ? 'shown and enabled' : 'in the page'}`,
+        actual: `a key hint gone, its control #${id} ${control === 'missing' ? 'not in the page' : control === 'not a control' ? 'no control' : control} under ${condition}, here ${item}`,
+      });
+  }
+  return [
+    ...gone.slice(0, 10).map((item) => ({
+      gate,
+      rule,
+      expected: `present under ${condition}`,
+      actual: `${gone.length} field(s) missing, here ${item}`,
+    })),
+    ...hints.slice(0, 10),
+  ];
 }
 
 /** The inventory under each condition, against `baseline`, the page's own. Leaves the page as the cell loaded it. */
@@ -715,14 +771,14 @@ export async function inventoryFindings(
       // loads again first, its enhancements in, and what that load owes is print's. A page that
       // needs its script reads print over its no-JavaScript page on purpose, below.
       if (!condition.reload && scriptless && !scriptRequired) {
-        const live = { baseline, ignore: condition.ignore };
+        const live = { baseline, ignore: condition.ignore, keyHint: condition.keyHint };
         findings.push(...(await reload(page, path, condition.id, live)));
         scriptless = false;
       }
       await condition.setup(page, cdp);
       try {
         if (condition.reload) {
-          const expected = { baseline, ignore: condition.ignore };
+          const expected = { baseline, ignore: condition.ignore, keyHint: condition.keyHint };
           findings.push(...(await reload(page, path, condition.id, expected)));
         }
         // A condition read on the page as it stands, such as print, reads it from the top, where
@@ -765,14 +821,16 @@ export async function inventoryFindings(
           continue;
         }
         findings.push(
-          ...missingItems(
+          ...(await missingItems(
+            page,
             'content',
             'inventory',
             condition.id,
             baseline,
             await inPage<string[]>(page, { kind: 'inventory' }),
             condition.ignore,
-          ),
+            condition.keyHint,
+          )),
         );
         if (condition.id === 'no-javascript')
           findings.push(...(await scriptOnlyTextFindings(page, baseline)));
@@ -791,12 +849,13 @@ export async function inventoryFindings(
 
 /**
  * An inventory field's own words (harness push 2's follow-up, INV-N1): a link's and a control's
- * name, not its target or its kind; a skip link's name past its target; any other field's text.
+ * name, not its target or its kind; a skip link's name past its target; a key hint's past the
+ * control it names (row 92); any other field's text.
  */
 export function ownWords(item: string): string {
   const kind = item.slice(0, item.indexOf(':'));
   const rest = item.slice(item.indexOf(':') + 1).trimStart();
-  if (kind === 'link') return rest.slice(rest.indexOf(' ') + 1);
+  if (kind === 'link' || kind === 'key-hint') return rest.slice(rest.indexOf(' ') + 1);
   if (kind === 'control') {
     const [what, ...more] = rest.split(' ');
     return what === 'skip-link' ? more.slice(1).join(' ') : more.join(' ');
@@ -808,12 +867,12 @@ export function ownWords(item: string): string {
  * Script-only words the page shows without JavaScript: the mark lets go words only live script
  * sets, so neither may the server render them. Read on the page as it stands without
  * JavaScript, two things are each a finding, one per element, by path:
- * - a live status marked data-script-only that holds words, the server's own;
+ * - an element marked data-script-only that holds words, the server's own, whatever it is: a
+ *   live status, a key hint (row 92), or anything else the mark is on;
  * - any field the inventory shows, of any kind, whose words are a `script-only:` field of
  *   `baseline`, the page with its script. The mark and the liveness are read on the live page
  *   there, so this holds words a script makes live, marks, or moves into a marked status to
  *   what the server sent.
- * A mark on any other element is ignored, so its words are the inventory's own fields.
  */
 export async function scriptOnlyTextFindings(
   page: Page,
@@ -846,7 +905,7 @@ export async function scriptOnlyTextFindings(
     rule: 'script-only-text',
     path,
     expected:
-      'words only live script sets are not on the page without JavaScript: a live status marked data-script-only is empty, and no field shows its words',
+      'words only live script sets are not on the page without JavaScript: an element marked data-script-only is empty, and no field shows its words',
     actual: `${hits.length} element(s) with script-only words without JavaScript, here "${text.slice(0, 80)}"`,
   }));
 }
@@ -1065,17 +1124,23 @@ export async function enhancementFindings(
     // A button that submits nothing is an enhancement, which may wait for its script. A page
     // that needs its script shows its failure state in place of its content, so it's read as
     // soon as its chunks have failed.
-    const expected = { baseline: scriptRequired ? [] : baseline, ignore: NO_SCRIPT_IGNORE };
+    const expected = {
+      baseline: scriptRequired ? [] : baseline,
+      ignore: NO_SCRIPT_IGNORE,
+      keyHint: 'usable' as const,
+    };
     findings.push(...(await reload(page, path, 'failed enhancement', expected)));
     const structure = await inPage<Structure>(page, { kind: 'structure' });
     const missing = async () =>
       missingItems(
+        page,
         'semantics',
         'enhancement',
         'failed enhancement',
         baseline,
         await inPage<string[]>(page, { kind: 'inventory' }),
         NO_SCRIPT_IGNORE,
+        'usable',
       );
     // A page that needs the script it lost works without it, or shows its failure state in
     // place of the content it couldn't load. It's read as it loaded, before the skip link is

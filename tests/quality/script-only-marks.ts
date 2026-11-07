@@ -1,7 +1,11 @@
 // Where data-script-only may go (the coordinator, 7 Nov 2026, inventory addendum F5). The mark
 // lets words go without JavaScript, under failed enhancement and in print (lib/a11y/probe.ts's
-// inventory), so it's for live status chrome whose words only live script sets, and nothing
-// else. Nothing in the harness itself keeps it there: a marked live region a script fills with
+// inventory), so it has two uses and no other: live status chrome whose words only live script
+// sets, and, row 92's (the coordinator, 7 Nov 2026), a key hint, a block holding a <kbd> and no
+// link or control that names its control with data-key-hint-for, such as Spatial Bento's Esc
+// hint beside Back to the field, which touch, no JavaScript and print may drop while that
+// control is there (lib/a11y/conditions.ts, KEY_HINT). The server renders either empty or not at
+// all. Nothing in the harness itself keeps it there: a marked live region a script fills with
 // words it fetched goes unrecorded. So every file outside the harness, the docs and the tests
 // that names the mark is listed here, with how many times it names it and why, and
 // script-only-marks.test.ts fails a file that isn't, a count that changed, and an entry that
@@ -24,7 +28,7 @@ export interface ScriptOnlyMark {
   readonly file: string;
   /** How many times its text holds the mark's name. */
   readonly marks: number;
-  /** Why: what the marked element is, and why only live script sets its words, in a sentence. */
+  /** Why: what the marked element is (a live status or a key hint), and why only live script sets its words, in a sentence. */
   readonly reason: string;
 }
 

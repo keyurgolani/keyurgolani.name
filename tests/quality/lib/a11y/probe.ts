@@ -107,6 +107,7 @@ export type ProbeRequest =
   | { readonly kind: 'title-only' }
   | { readonly kind: 'inventory'; readonly paths?: boolean }
   | { readonly kind: 'script-only-text' }
+  | { readonly kind: 'key-hint-control'; readonly id: string; readonly usable: boolean }
   | { readonly kind: 'structure' }
   | { readonly kind: 'reflow' }
   | { readonly kind: 'transparency' }
@@ -568,11 +569,22 @@ function probe(request: ProbeRequest): unknown {
       // plain words. And the server renders such a status empty: one with words without
       // JavaScript is a finding of its own (scriptOnlyTextFindings, the `script-only-text` read),
       // so the mark can't excuse them.
+      const NOT_TEXT =
+        'h1, h2, h3, h4, h5, h6, [role=heading], a[href], area[href], img, button, input, select, textarea, summary, iframe, audio[controls], video[controls], [contenteditable]:not([contenteditable=false]), [role=button], [role=link], [tabindex]';
       const scriptOnly = (el: Element): boolean =>
-        liveStatus(el.closest('[data-script-only]')) &&
-        el.querySelector(
-          'h1, h2, h3, h4, h5, h6, [role=heading], a[href], area[href], img, button, input, select, textarea, summary, iframe, audio[controls], video[controls], [contenteditable]:not([contenteditable=false]), [role=button], [role=link], [tabindex]',
-        ) === null;
+        liveStatus(el.closest('[data-script-only]')) && el.querySelector(NOT_TEXT) === null;
+      // Row 92's key hint (the coordinator, 7 Nov 2026), the mark's one other use: a block that
+      // carries data-script-only itself, holds a <kbd> and no heading, link, image or control, and
+      // names the control it stands for by id, data-key-hint-for. It's `key-hint: #<id> <words>`,
+      // the id kept so a condition can look the control up where the hint is gone: a hint says
+      // how to do by key what that control does, so it may go only while the control is there
+      // (conditions.ts, KEY_HINT). The harness never guesses which control that is.
+      const keyHint = (el: Element): string | null => {
+        if (!el.hasAttribute('data-script-only')) return null;
+        const id = (el.getAttribute('data-key-hint-for') ?? '').trim();
+        if (id === '' || /\s/.test(id)) return null;
+        return el.querySelector('kbd') && el.querySelector(NOT_TEXT) === null ? id : null;
+      };
       // A button that submits nothing: type=button or reset.
       const inertButton = (el: Element | null): boolean =>
         el?.localName === 'button' && /^(?:button|reset)$/.test((el as HTMLButtonElement).type);
@@ -612,7 +624,13 @@ function probe(request: ProbeRequest): unknown {
               : buttons + skips > 0 && own.length <= 3
                 ? 'control label'
                 : 'text';
-          add(el, `${scriptOnly(el) ? 'script-only' : kind}: ${value}`);
+          const hint = scriptOnly(el) ? null : keyHint(el);
+          add(
+            el,
+            hint
+              ? `key-hint: #${hint} ${value}`
+              : `${scriptOnly(el) ? 'script-only' : kind}: ${value}`,
+          );
         }
       }
       for (const el of doc.body.querySelectorAll<HTMLAnchorElement>('a[href]')) {
@@ -641,16 +659,37 @@ function probe(request: ProbeRequest): unknown {
         : [...items.keys()];
     }
     case 'script-only-text':
-      // Each live status marked data-script-only that holds words as the page stands: read without
-      // JavaScript, the server's own words, which the mark may not excuse. A mark on any other
-      // element is ignored, here as in the inventory.
+      // Each element marked data-script-only that holds words as the page stands: read without
+      // JavaScript, the server's own words, which the mark may not excuse, whatever the element
+      // (row 92, the coordinator, 7 Nov 2026: a key hint's words included). A marked element
+      // inside another counts once, as the outer one.
       return [...doc.querySelectorAll('[data-script-only]')]
-        .filter(liveStatus)
+        .filter((el) => el.parentElement?.closest('[data-script-only]') == null)
         .map((el) => ({
           path: cssPath(el),
           text: (el.textContent ?? '').replace(/\s+/g, ' ').trim(),
         }))
         .filter(({ text: words }) => words !== '');
+    case 'key-hint-control': {
+      // The control a key hint names (row 92): there, a control, and, where the hint's condition
+      // needs it usable (touch, no JavaScript), shown and enabled. Print lets controls go, so
+      // there it need only be in the DOM.
+      const el = doc.getElementById(request.id);
+      if (!el) return 'missing';
+      if (
+        !el.matches(
+          'a[href], area[href], button, input:not([type=hidden]), select, textarea, summary, [role=button], [role=link]',
+        )
+      )
+        return 'not a control';
+      if (!request.usable) return 'there';
+      if (!shown(el)) return 'hidden';
+      const disabled =
+        el.matches(':disabled') ||
+        el.closest('[inert]') !== null ||
+        (el.getAttribute('aria-disabled') ?? '').trim().toLowerCase() === 'true';
+      return disabled ? 'disabled' : 'there';
+    }
     case 'structure': {
       const skip = doc.querySelector<HTMLAnchorElement>('a[href^="#"]');
       const target = skip ? doc.getElementById(decodeURIComponent(skip.hash.slice(1))) : null;

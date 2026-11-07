@@ -1414,6 +1414,8 @@ test("an inventory field's own words: a link's and a control's name, any other f
     ['text: Opening, 1 of 21', 'Opening, 1 of 21'],
     ['control label: This page Back to the top', 'This page Back to the top'],
     ['button label: Copy email', 'Copy email'],
+    // Row 92: a key hint's words, past the control it names.
+    ['key-hint: #back Press Esc to close.', 'Press Esc to close.'],
   ] as const) {
     assert.equal(ownWords(item), words, item);
   }
