@@ -338,3 +338,79 @@ test("failed enhancement on a page whose own scripts can't be told apart records
     'one runner finding, own-scripts',
   );
 });
+
+/**
+ * A page whose lazy chunk (one its HTML doesn't name) fails as the page loads, at a time the test
+ * controls, and is asked for again `retryMs` later, as Turbopack's runtime retries a failed chunk
+ * once, 200 to 600 ms after the failure. It records when the failure fired and when the retry
+ * started; every waitForTimeout it's asked for runs.
+ */
+function failedChunkPage(retryMs: number) {
+  const LAZY = 'http://app.test/_next/static/chunks/lazy.js';
+  const handlers = new Map<string, Set<(value: unknown) => void>>();
+  const emit = (event: string, value: unknown) => {
+    for (const handler of handlers.get(event) ?? []) handler(value);
+  };
+  const times = { failed: 0, retried: 0 };
+  const failed = { resourceType: () => 'script', url: () => LAZY };
+  const retry = { resourceType: () => 'script', url: () => LAZY };
+  const served = {
+    url: () => 'http://app.test/',
+    status: () => 200,
+    request: () => ({ resourceType: () => 'document' }),
+    text: async () => MAIN_HTML,
+  };
+  const page = {
+    on: (event: string, handler: (value: unknown) => void) => {
+      if (!handlers.has(event)) handlers.set(event, new Set());
+      handlers.get(event)!.add(handler);
+    },
+    off: (event: string, handler: (value: unknown) => void) => {
+      handlers.get(event)?.delete(handler);
+    },
+    goto: async () => {
+      emit('response', served);
+      emit('request', failed);
+      emit('requestfailed', failed);
+      times.failed = Date.now();
+      setTimeout(() => {
+        times.retried = Date.now();
+        emit('request', retry);
+        setTimeout(() => emit('requestfinished', retry), 10);
+      }, retryMs);
+      return null;
+    },
+    waitForFunction: async () => ({}),
+    waitForTimeout: async (ms: number) => {
+      await new Promise((done) => setTimeout(done, ms));
+    },
+    evaluate: async (fn: unknown) => {
+      const source = String(fn);
+      if (source.includes('fonts.ready')) return undefined;
+      if (source.includes('scripting: none')) return false;
+      if (source.includes('requestIdleCallback')) return undefined;
+      if (source.includes('requestAnimationFrame')) return undefined;
+      if (source.includes('data-enhancement-island')) return '';
+      return 0;
+    },
+  };
+  return { page: page as unknown as Page, times };
+}
+
+// A failed chunk's floor holds past Turbopack's longest retry and the margin (push 3 r5, item 4;
+// the coordinator's option (i)): with the failure at a time the test controls, the wait doesn't
+// return before failure + 600 + 200, so a retry at +590, and the block it commits, are read. The
+// clock is the harness's own, as on the quality build, so Playwright's event lag plays no part.
+test("a chunk that failed just before the wait holds it past the runtime's longest retry, so a retry at +590 is seen", async () => {
+  const { page, times } = failedChunkPage(590);
+  await load(page, '/', undefined, { enhancements: true });
+  const returned = Date.now();
+  assert.ok(
+    returned - times.failed >= 600 + 200,
+    `the wait returned ${returned - times.failed} ms after the failure, not 800 or more`,
+  );
+  assert.ok(
+    times.retried > 0 && times.retried < returned,
+    'the retry started before the wait returned',
+  );
+});
