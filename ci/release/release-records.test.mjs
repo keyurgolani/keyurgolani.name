@@ -6,6 +6,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  CELL_CHECKS,
+  CONDITION_CHECKS,
   FLAKY_HELD,
   isFlaky,
   judgeListed,
@@ -170,9 +172,12 @@ test('a strict entry whose test passes still blocks, beside a flaky one', () => 
 });
 
 test("with owedOnly, a flaky or strict entry whose check its test didn't owe is not judged; without it, rc-quality's judging stands", () => {
+  assert.deepEqual(CELL_CHECKS, ['status', 'emulation', 'clock', 'axe', 'contrast']);
+  assert.deepEqual(CONDITION_CHECKS, ['reflow', 'inventory', 'enhancement']);
   const reflow = (entry) => ({ ...entry, check: 'reflow', rule: 'overflow' });
-  const passing = cellTest('passed');
-  // Owed only status and focus: a reflow entry's check never ran there.
+  const ran = [...CELL_CHECKS, 'focus'];
+  const passing = { ...cellTest('passed'), checks: ran, owed: ran };
+  // Owed and ran CELL_CHECKS and focus: a reflow entry's check never ran there.
   const strictReflow = reflow(strict('#r'));
   const flakyReflow = reflow(flaky('#r'));
   const read = judgeListed([passing], [strictReflow, flakyReflow], { owedOnly: true });

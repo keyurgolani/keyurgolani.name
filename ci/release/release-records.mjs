@@ -40,6 +40,19 @@ export const FLAKY_HELD =
 /** The most flaky entries a list holds: more need the coordinator's word, and a change here. */
 export const MAX_FLAKY = 5;
 
+/**
+ * The checks every cell test owes whatever its row and viewport, tests/quality/lib/checks.ts's
+ * CELL_CHECKS (release-scope.test.ts holds the two equal): an owed list without one of them is
+ * malformed, for judgeListed().
+ */
+export const CELL_CHECKS = ['status', 'emulation', 'clock', 'axe', 'contrast'];
+/**
+ * The conditions a push run's cell test may not owe (row 64): requiredChecks() gives them to a
+ * cell's first-viewport default test only where the plan says the cell takes them. Only an entry
+ * of one of them can come out not judged.
+ */
+export const CONDITION_CHECKS = ['reflow', 'inventory', 'enhancement'];
+
 /** The fields that name a record, in key order. */
 export const KEY_FIELDS = ['cell', 'viewport', 'row', 'engine', 'check', 'rule', 'target'];
 const ENTRY_FIELDS = new Set([...KEY_FIELDS, 'owner', 'routed', 'note', 'flaky', 'seen']);
@@ -266,13 +279,15 @@ export function uncovered(test) {
  *   An uncovered test is held: what it failed on says nothing of its records (it may have timed
  *   out before it wrote any, or skipped the check behind one), so no entry of it is passed;
  * - notJudged: with `owedOnly` (rc-verify's read of a push run), each strict entry that would be
- *   passed but whose test, by its well-formed `owed` list, didn't owe the entry's check on this
- *   run (a quality-pr sentinel owes no reflow, inventory or enhancement), with why. An entry
- *   counts as passed only where its check ran. A missing or malformed `owed` keeps the entry
- *   judged, as passed. rc-quality never sets it: full mode owes every condition;
+ *   passed but whose check is a condition (CONDITION_CHECKS) its test neither owed, by its
+ *   well-formed `owed` list, nor ran, by its `checks` list, on this run, with why: a quality-pr
+ *   test owes the conditions only where the plan gives the cell them, so most sentinels owe none.
+ *   An entry counts as passed only where its check ran. Any other check, a missing or malformed
+ *   `owed` (not a list of names, or short of a CELL_CHECKS name), or a missing `checks` keeps the
+ *   entry judged, as passed. rc-quality never sets it: full mode owes every condition;
  * - flaky: each flaky entry and how it came out here: `failed` (its record failed), `passed` (its
- *   test ran without it), `not judged` (its test is held, or with `owedOnly` didn't owe its
- *   check), or `not run`. A flaky entry is never `passed` above; its test's other failures are
+ *   test ran without it), `not judged` (its test is held, or with `owedOnly` is a condition its
+ *   test neither owed nor ran), or `not run`. A flaky entry is never `passed` above; its test's other failures are
  *   unlisted all the same.
  * Entries whose test didn't run here are the caller's to judge.
  */
@@ -284,8 +299,10 @@ export function judgeListed(tests, listed, { owedOnly = false } = {}) {
   const covered = [];
   const ran = new Map();
   const held = new Set();
-  // Each test's owed checks, when its list is well formed: a non-empty list of names.
+  // Each test's owed checks, when its list is well formed: names, CELL_CHECKS among them; and the
+  // checks it ran, when it lists them.
   const owedBy = new Map();
+  const checksBy = new Map();
   for (const test of tests ?? []) {
     if (test?.kind !== 'cell' || test.outcome === 'skipped') continue;
     const why = test.outcome === 'unexpected' ? uncovered(test) : null;
@@ -300,11 +317,12 @@ export function judgeListed(tests, listed, { owedOnly = false } = {}) {
     owedBy.set(
       testKey,
       Array.isArray(owed) &&
-        owed.length > 0 &&
-        owed.every((check) => typeof check === 'string' && check !== '')
+        owed.every((check) => typeof check === 'string' && check !== '') &&
+        CELL_CHECKS.every((check) => owed.includes(check))
         ? new Set(owed)
         : null,
     );
+    checksBy.set(testKey, Array.isArray(test.checks) ? new Set(test.checks) : null);
     if (test.outcome !== 'unexpected') continue;
     if (why !== null) {
       unrecorded.push({ test, why });
@@ -325,11 +343,21 @@ export function judgeListed(tests, listed, { owedOnly = false } = {}) {
   }
   const keyOf = (entry) => JSON.stringify([entry.cell, entry.viewport, entry.row, entry.engine]);
   const ownOf = (entry) => ran.get(keyOf(entry));
-  // With owedOnly, an entry whose test's well-formed owed list lacks its check, whose check never
-  // ran there: a missing or malformed list judges it as before.
+  // With owedOnly, a condition entry whose test's well-formed owed list lacks its check and whose
+  // checks list doesn't hold it, so its check never ran there: any other check, or a missing or
+  // malformed list, judges it as before.
   const unowed = (entry) => {
+    if (!owedOnly || !CONDITION_CHECKS.includes(entry.check)) return false;
     const owed = owedBy.get(keyOf(entry));
-    return owedOnly && owed !== undefined && owed !== null && !owed.has(entry.check);
+    const checks = checksBy.get(keyOf(entry));
+    return (
+      owed !== undefined &&
+      owed !== null &&
+      !owed.has(entry.check) &&
+      checks !== undefined &&
+      checks !== null &&
+      !checks.has(entry.check)
+    );
   };
   const gone = (listed ?? []).filter((entry) => {
     const own = ownOf(entry);
