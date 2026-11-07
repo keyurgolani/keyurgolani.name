@@ -481,7 +481,7 @@ interface Loaded {
  * enhancements put on it is there to reflow, and there's no baseline to
  * compare it with. With script off nothing mounts, so neither waits.
  */
-async function load(
+export async function load(
   page: Page,
   path: string,
   expected?: Expected,
