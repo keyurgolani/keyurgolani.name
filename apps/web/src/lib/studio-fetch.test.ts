@@ -128,6 +128,13 @@ test('a sign-out that succeeds signs every other tab out, and nothing else does'
   await createStudioFetch(signedOut)('auth.logout', { body: {}, csrfToken: 't'.repeat(43) });
   assert.deepEqual(signedOut.seen.broadcasts, [SIGNED_OUT]);
   assert.deepEqual(signedOut.seen.navigations, []);
+  // One the store couldn't finish is a 200 too: the other tabs leave all the same (row 88b).
+  const storeFailed = env(() =>
+    Response.json({ data: { signedOut: true, reason: 'store_failed' } }),
+  );
+  await createStudioFetch(storeFailed)('auth.logout', { body: {}, csrfToken: 't'.repeat(43) });
+  assert.deepEqual(storeFailed.seen.broadcasts, [SIGNED_OUT]);
+  assert.deepEqual(storeFailed.seen.navigations, []);
   const refused = env(() => Response.json({}, { status: 403 }));
   await createStudioFetch(refused)('auth.logout', { body: {} });
   const other = env(ok);

@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { memoryAuditSink } from '../audit/sink';
 import { revokeAllSessionFiles } from '../auth/session-files.mjs';
-import { filesystemSessionStore } from '../auth/session-store';
+import { filesystemSessionStore, type SessionStore } from '../auth/session-store';
 import { createSessions, type Sessions, type SessionLifetime } from '../auth/sessions';
 import { probeDataDirectory } from '../data/layout.mjs';
 import { onStoreEvent } from '../store/common';
@@ -34,6 +34,7 @@ import {
   filesystemGrantStore,
   previewPaths,
   type GrantEnvironment,
+  type GrantStore,
   type GrantSubject,
 } from './grant-store';
 import {
@@ -77,7 +78,17 @@ interface Setup {
 
 async function setup(
   t: TestContext,
-  { lifetime }: { readonly lifetime?: SessionLifetime } = {},
+  {
+    lifetime,
+    sessionStore = (store) => store,
+    grantStore = (store) => store,
+  }: {
+    readonly lifetime?: SessionLifetime;
+    /** Wraps the session store, as a test that makes it fail does. */
+    readonly sessionStore?: (store: SessionStore) => SessionStore;
+    /** Wraps each grant store, as a test that makes it fail does. */
+    readonly grantStore?: (store: GrantStore) => GrantStore;
+  } = {},
 ): Promise<Setup> {
   let at = Date.UTC(2026, 9, 22, 12, 0, 0);
   const now = () => at;
@@ -85,7 +96,7 @@ async function setup(
   const dataDir = store.paths.root;
   assert.equal(await probeDataDirectory(dataDir), null);
   const sessions = createSessions({
-    store: filesystemSessionStore(dataDir),
+    store: sessionStore(filesystemSessionStore(dataDir)),
     audit: memoryAuditSink(now),
     fingerprint: 'MKhpw6F1Y5AkDvbeT_fgmw',
     now,
@@ -93,7 +104,7 @@ async function setup(
   });
   const lines: GrantLogEntry[] = [];
   const options = (extra: Partial<PreviewGrantsOptions> = {}): PreviewGrantsOptions => ({
-    store: filesystemGrantStore(dataDir),
+    store: grantStore(filesystemGrantStore(dataDir)),
     sessions: { resolveDigest: (digest) => sessions.resolveDigest(digest) },
     drafts: { exists: async (draftId) => (await store.drafts.get(draftId)) !== null },
     profile: 'owner',
@@ -105,7 +116,13 @@ async function setup(
   const grants = createPreviewGrants(options());
   // #2's onSessionEnded, as the owner composition passes it on.
   const pending: Promise<unknown>[] = [];
-  sessions.onSessionEnded((digest) => pending.push(grants.endSession(digest)));
+  sessions.onSessionEnded((digest) => {
+    const ending = grants.endSession(digest);
+    // Handled here too, so one that fails before settle() is asked for isn't
+    // an unhandled rejection; settle() still rejects with it.
+    ending.catch(() => {});
+    pending.push(ending);
+  });
   return {
     store,
     dataDir,
@@ -352,6 +369,46 @@ test('every grant stops on logout, revocation, expiry, profile change, and timeo
     assert.equal(await statusOf(grants, token), 'expired');
     assert.equal((await grants.renew(token, record.digest)).status, 'expired');
   }
+});
+
+test("a grant whose session's end the store refused is refused at its next check, even when no grant can be written (row 88b)", async (t) => {
+  const failing = { sessionDelete: false, grantPut: false };
+  const { store, dataDir, sessions, grants, settle } = await setup(t, {
+    sessionStore: (base) => ({
+      ...base,
+      delete: async (digest) => {
+        if (failing.sessionDelete) {
+          throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+        }
+        return base.delete(digest);
+      },
+    }),
+    grantStore: (base) => ({
+      ...base,
+      put: async (record) => {
+        if (failing.grantPut) {
+          throw Object.assign(new Error('EROFS: read-only file system'), { code: 'EROFS' });
+        }
+        return base.put(record);
+      },
+    }),
+  });
+  const { record, session } = await signIn(sessions);
+  const { token } = await mintDraft(grants, session, await newDraft(store));
+  assert.equal(await statusOf(grants, token), 'active');
+
+  // The data directory refuses writes: the session's record stays, and so
+  // does the grant's, since endSession can't mark it.
+  failing.sessionDelete = true;
+  failing.grantPut = true;
+  await assert.rejects(sessions.end(record.digest, 'logout'), /EACCES/);
+  await settle().catch(() => {});
+  assert.equal(
+    (await filesystemGrantStore(dataDir).get(grantDigest(token)))?.state,
+    'active',
+    'nothing marked the grant',
+  );
+  assert.equal(await statusOf(grants, token), 'session_ended');
 });
 
 test("renewal slides only the grant's idle limit, never past its cap or its session's absolute expiry, and never slides the session", async (t) => {
