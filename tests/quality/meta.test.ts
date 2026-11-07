@@ -427,3 +427,28 @@ test("harness push 2's follow-up cases are in the table: row 65's slow loop and 
     assert.ok(ids.includes(id), id);
   }
 });
+
+// Row 92, in a block of its own (push 3 and row 91 edit this file too).
+test("row 92's cases are in the table: print reads the live page, and the key hint's passes and guards", () => {
+  const ids = META_CASES.map(({ id }) => id);
+  for (const id of [
+    'inventory/print-reads-live',
+    'inventory/key-hint-touch',
+    'inventory/key-hint-no-javascript',
+    'inventory/key-hint-print',
+    'inventory/key-hint-no-id',
+    'inventory/key-hint-dangling',
+    'inventory/key-hint-dangling-print',
+    'inventory/key-hint-control-touch-hidden',
+    'inventory/key-hint-control-scriptless-hidden',
+    'inventory/key-hint-not-a-control',
+    'inventory/key-hint-unmarked',
+    'inventory/key-hint-no-kbd',
+    'inventory/key-hint-link-inside',
+    'inventory/key-hint-mark-on-text',
+    'inventory/key-hint-mark-on-wrapper',
+    'inventory/key-hint-server-words',
+  ]) {
+    assert.ok(ids.includes(id), id);
+  }
+});

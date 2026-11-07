@@ -1851,6 +1851,37 @@ const loopEvery250 = `<!doctype html><html lang="en"><head><meta charset="utf-8"
 const filledStatus =
   '<div role="status" data-script-only><p hidden data-lazy data-words="Opening, 1 of 21"></p></div>';
 
+// Row 92 (the coordinator, 7 Nov 2026), in a block of its own: Spatial Bento's case-page hint,
+// "Press Esc to close. The field keeps your place.", which only a fine pointer is shown and only
+// the client renders, once CaseFocus listens. The key-hint allowance lets it go under touch,
+// without JavaScript and in print while the control it names, "Back to the field", is there.
+const KEY_HINT_WORDS = 'Press Esc to close. The field keeps your place.';
+/** The hint as the client renders it: a marked <p> with a <kbd>, naming #back, or `attrs`. */
+const keyHintHtml = (
+  attrs = 'data-script-only data-key-hint-for="back"',
+  words = 'Press <kbd>Esc</kbd> to close. The field keeps your place.',
+) => `<p class="key-hint" ${attrs}>${words}</p>`;
+/** The hint the client renders: the server sends an empty, hidden holder, which the chunk fills. */
+const clientHint = (hint = keyHintHtml()) =>
+  `<div hidden data-lazy data-html="${hint.replace(/"/g, '&quot;')}"></div>`;
+/** The control the hint stands for, "Back to the field", a link alone in its box. */
+const BACK = '<div><a id="back" href="/field">Back to the field</a></div>';
+/** Shown to a fine pointer alone, and never in print, as Spatial Bento shows it. */
+const KEY_HINT_STYLE =
+  '<style>.key-hint { display: none; } @media (pointer: fine) { .key-hint { display: block; } } @media print { .key-hint { display: none !important; } } @media (pointer: coarse) { .touch-hidden { display: none; } } @media (scripting: none) { .needs-script { display: none; } }</style>';
+const keyHintPage = (title: string, body: string) => lazyReveal(title, body, KEY_HINT_STYLE);
+/** The inventory under `only`, read once the hint has come. */
+const keyHintUnder = (only: readonly string[]) =>
+  revealed(async (page: Page) => inventoryFindings(page, '/', await baseline(page), only));
+/** A key hint gone without its control as the condition needs it. */
+const keyHintGone = (control: string, under: string, id = 'back') =>
+  `a key hint gone, its control #${id} ${control} under ${under}, here key-hint: #${escaped(id)} ${escaped(KEY_HINT_WORDS)}`;
+/** The hint missing as a plain field, here as `kind`: what the allowance doesn't cover. */
+const hintMissing = (kind = 'text', words = KEY_HINT_WORDS) =>
+  `\\d+ field\\(s\\) missing, here ${kind}: ${escaped(words)}`;
+/** Print, after no JavaScript, reads the live page: only no JavaScript misses what the script shows. */
+const LIVE_WORDS = '<p hidden data-lazy data-words="Scenes run left to right."></p>';
+
 export const A11Y_CASES: readonly MetaCase[] = [
   bad('trap', 'keyboard-trap.html', 'keyboard', 'trap|reachable', keyboard),
   {
@@ -3374,5 +3405,136 @@ export const A11Y_CASES: readonly MetaCase[] = [
       revealed(scriptlessInventory),
       { chunk: REVEAL },
     ),
+  ),
+  // Row 92 (the coordinator, 7 Nov 2026), in a block of its own (push 3 and row 91 edit this table
+  // too). Print reads the live page: after no JavaScript's reload, words only the script shows are
+  // missing without JavaScript alone, never in print.
+  builtCase(
+    'print-reads-live',
+    'inventory',
+    'Words the chunk shows, no JavaScript then print, in one read',
+    lazyReveal('Words the script shows', LIVE_WORDS),
+    /^inventory content: present under no-javascript: 1 field\(s\) missing, here text: Scenes run left to right\.$/,
+    revealed(
+      missingUnder(['no-javascript'], async (page) =>
+        inventoryFindings(page, '/', await baseline(page), ['no-javascript', 'print']),
+      ),
+    ),
+    { chunk: REVEAL },
+  ),
+  // The key hint, let go beside its control: under touch, without JavaScript, and in print.
+  ...(['touch', 'no-javascript', 'print'] as const).map((condition): MetaCase => ({
+    id: `inventory/key-hint-${condition}`,
+    gate: 'inventory',
+    input: `Spatial Bento's Esc hint, client-rendered for a fine pointer, beside Back to the field, under ${condition}`,
+    expect: 'pass',
+    browser: true,
+    run: () =>
+      onPage(keyHintPage('A key hint', `${BACK}${clientHint()}`), keyHintUnder([condition]), {
+        chunk: REVEAL,
+      }),
+  })),
+  // And not otherwise: each guard a known-bad page, failing for the reason it names.
+  ...(
+    [
+      [
+        'key-hint-no-id',
+        'a hint that names no control',
+        'touch',
+        `${BACK}${clientHint(keyHintHtml('data-script-only'))}`,
+        `^inventory content: ${hintMissing()}$`,
+      ],
+      [
+        'key-hint-dangling',
+        'a hint naming an id no element has',
+        'touch',
+        `${BACK}${clientHint(keyHintHtml('data-script-only data-key-hint-for="nowhere"'))}`,
+        `^inventory content: ${keyHintGone('not in the page', 'touch', 'nowhere')}$`,
+      ],
+      [
+        'key-hint-dangling-print',
+        'a hint naming an id no element has, in print',
+        'print',
+        `${BACK}${clientHint(keyHintHtml('data-script-only data-key-hint-for="nowhere"'))}`,
+        `^inventory content: ${keyHintGone('not in the page', 'print', 'nowhere')}$`,
+      ],
+      [
+        'key-hint-control-touch-hidden',
+        'a hint whose control touch hides',
+        'touch',
+        `<div><a id="back" class="touch-hidden" href="/field">Back to the field</a></div>${clientHint()}`,
+        `^inventory content: (?:${keyHintGone('hidden', 'touch')}|${hintMissing('link', '/field Back to the field')})$`,
+      ],
+      [
+        'key-hint-control-scriptless-hidden',
+        'a hint whose control is hidden without JavaScript',
+        'no-javascript',
+        `<div><button type="button" id="back" class="needs-script">Back to the field</button></div>${clientHint()}`,
+        `^inventory content: ${keyHintGone('hidden', 'no-javascript')}$`,
+      ],
+      [
+        'key-hint-not-a-control',
+        'a hint naming a paragraph, not a control',
+        'touch',
+        `<p id="back">Back to the field</p>${clientHint()}`,
+        `^inventory content: ${keyHintGone('no control', 'touch')}$`,
+      ],
+      [
+        'key-hint-unmarked',
+        'an unmarked hint',
+        'touch',
+        `${BACK}${clientHint(keyHintHtml('data-key-hint-for="back"'))}`,
+        `^inventory content: ${hintMissing()}$`,
+      ],
+      [
+        'key-hint-no-kbd',
+        'a hint with no <kbd>',
+        'touch',
+        `${BACK}${clientHint(keyHintHtml(undefined, 'Press Esc to close. The field keeps your place.'))}`,
+        `^inventory content: ${hintMissing()}$`,
+      ],
+      [
+        'key-hint-link-inside',
+        'a hint holding a link',
+        'touch',
+        `${BACK}${clientHint(keyHintHtml(undefined, 'Press <kbd>Esc</kbd> to close, or <a href="/field">go back</a>.'))}`,
+        `^inventory content: (?:${hintMissing('text', 'Press Esc to close, or go back.')}|${hintMissing('link', '/field go back')})$`,
+      ],
+      [
+        'key-hint-mark-on-text',
+        'the mark on ordinary text, no hint',
+        'touch',
+        `${BACK}${clientHint(keyHintHtml('data-script-only', 'The field keeps your place.'))}`,
+        `^inventory content: ${hintMissing('text', 'The field keeps your place.')}$`,
+      ],
+      [
+        'key-hint-mark-on-wrapper',
+        "the mark on the hint's wrapper, not on the hint",
+        'touch',
+        `${BACK}${clientHint(`<div data-script-only>${keyHintHtml('data-key-hint-for="back"')}</div>`)}`,
+        `^inventory content: ${hintMissing()}$`,
+      ],
+    ] as const
+  ).map(([id, what, condition, body, reason]) =>
+    builtCase(
+      id,
+      'inventory',
+      `${what}, beside Back to the field, under ${condition}`,
+      keyHintPage('A key hint', body),
+      new RegExp(reason),
+      keyHintUnder([condition]),
+      { chunk: REVEAL },
+    ),
+  ),
+  // Item 2: a key hint's words the server sent are refused without JavaScript, whatever control
+  // it names, since the mark lets go only words live script sets.
+  builtCase(
+    'key-hint-server-words',
+    'inventory',
+    'A key hint the server sends with its words, beside Back to the field, without JavaScript',
+    keyHintPage('A key hint', `${BACK}${keyHintHtml()}${LATER_ANCHOR}`),
+    scriptOnlyText(KEY_HINT_WORDS),
+    keyHintUnder(['no-javascript']),
+    { chunk: REVEAL },
   ),
 ];
