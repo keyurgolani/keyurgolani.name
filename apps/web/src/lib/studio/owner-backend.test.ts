@@ -92,6 +92,32 @@ test('a 401 is a signed-out result, a network failure and an error code are fail
   assert.doesNotMatch((full as { message: string }).message, /var\/lib/);
 });
 
+test("sign-out answers 'ended' when the server ended the session, 'store_failed' when its store couldn't, and false when it didn't sign out (row 88b)", async () => {
+  // Nothing signed out: the cookie is still there, so the shell offers to try again.
+  for (const [what, answer] of [
+    ['a 503', () => json(503, { error: { code: 'unavailable' } })],
+    ['a 500', () => json(500, { error: { code: 'internal_error' } })],
+    [
+      'a network failure',
+      () => {
+        throw new TypeError('Failed to fetch');
+      },
+    ],
+  ] as const) {
+    assert.equal(await backend(answer).studio.signOut('discard'), false, what);
+  }
+  assert.equal(
+    await backend(() => json(200, { data: { signedOut: true } })).studio.signOut('keep'),
+    'ended',
+  );
+  assert.equal(
+    await backend(() =>
+      json(200, { data: { signedOut: true, reason: 'store_failed' } }),
+    ).studio.signOut('keep'),
+    'store_failed',
+  );
+});
+
 test('reads are queries, and a new draft starts from live with draft.create', async () => {
   const { sent, studio } = backend(({ name }) =>
     name === 'live.get'
@@ -126,8 +152,8 @@ test("the session check is auth.session, and sign-out is auth.logout with the to
     name === 'auth.session' ? json(200, { data: {} }) : json(200, { data: { signedOut: true } }),
   );
   assert.equal(await studio.session(), true);
-  assert.equal(await studio.signOut('discard'), true);
-  assert.equal(await studio.signOut('keep'), true);
+  assert.equal(await studio.signOut('discard'), 'ended');
+  assert.equal(await studio.signOut('keep'), 'ended');
   assert.deepEqual(
     sent.map(({ name, options }) => [name, options.csrfToken ?? null, options.signOut ?? null]),
     [

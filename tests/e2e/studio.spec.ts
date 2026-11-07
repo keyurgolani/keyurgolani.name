@@ -13,7 +13,16 @@ const STUDIO = { type: 'route', description: '/studio' };
 const SIGN_IN = { type: 'route', description: '/studio/sign-in' };
 
 const secret = ownerSecret();
-test.use({ appOptions: ownerApp(secret.hash) });
+const owner = ownerApp(secret.hash);
+// An idle limit other than the default 60 minutes, which the store-failed
+// sign-in state names (row 88b).
+const IDLE_MINUTES = 30;
+test.use({
+  appOptions: {
+    ...owner,
+    env: { ...owner.env, PORTFOLIO_AUTH_SESSION_IDLE_MINUTES: String(IDLE_MINUTES) },
+  },
+});
 // Written while Studio opened on Content: each tab starts where the owner last left it, in
 // Content, and a task link still moves it on (OWN-3 lands a fresh tab on Appearance).
 test.use({ studioLastTask: 'content' });
@@ -318,6 +327,98 @@ test(
     } finally {
       await context.close();
     }
+  },
+);
+
+/** The sign-in state a sign-out the store couldn't finish lands on (row 88b). */
+const STORE_FAILED = `Signed out of this browser. The server couldn't remove the session, so it lapses within ${IDLE_MINUTES} minutes.`;
+
+test(
+  "a sign-out the store couldn't finish has its own sign-in state, naming the configured idle minutes, with JavaScript and without (row 88b)",
+  { annotation: [SIGN_IN] },
+  async ({ browser, page, app }, testInfo) => {
+    // Shots for the look ruling, at desktop and phone widths.
+    const shot = async (on: Page, name: string) => {
+      await testInfo.attach(`sign-in-store-failed-${name}.png`, {
+        body: await on.screenshot({ fullPage: true }),
+        contentType: 'image/png',
+      });
+    };
+    const DESKTOP = { width: 1440, height: 900 };
+    const PHONE = { width: 390, height: 844 };
+    await page.setViewportSize(DESKTOP);
+    const shown = await page.goto('/studio/sign-in?state=store_failed');
+    expect(shown?.status()).toBe(200);
+    await expect(page.getByLabel('Password')).toBeVisible();
+    await expect.soft(notice(page), 'with JavaScript').toHaveText(STORE_FAILED);
+    await expect.soft(notice(page), 'with JavaScript').toBeFocused();
+    await shot(page, 'js-1440');
+    await page.setViewportSize(PHONE);
+    await page.goto('/studio/sign-in?state=store_failed');
+    await expect(page.getByLabel('Password')).toBeVisible();
+    await shot(page, 'js-390');
+    for (const [viewport, name] of [
+      [DESKTOP, 'no-js-1440'],
+      [PHONE, 'no-js-390'],
+    ] as const) {
+      const context = await browser.newContext({
+        javaScriptEnabled: false,
+        baseURL: app.origin,
+        viewport,
+      });
+      try {
+        const plain = await context.newPage();
+        expect((await plain.goto('/studio/sign-in?state=store_failed'))?.status()).toBe(200);
+        await expect(plain.getByLabel('Password')).toBeVisible();
+        if (viewport === DESKTOP) {
+          await expect(notice(plain), 'without JavaScript').toHaveText(STORE_FAILED);
+        }
+        await shot(plain, name);
+      } finally {
+        await context.close();
+      }
+    }
+  },
+);
+
+test(
+  "Sign out goes to the store-failed state when the store couldn't end the session, with no Try again, and one the server refused stays on Studio to try again (row 88b)",
+  { annotation: [STUDIO] },
+  async ({ page, app }) => {
+    await page.goto('/studio/sign-in');
+    await page.getByLabel('Password').fill(secret.password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page).toHaveURL(`${app.origin}/studio`);
+    // The shell has its backend once it has read the draft.
+    await expect(page.locator('.studio-state__lines')).toBeAttached();
+    const signOut = page.getByRole('button', { name: 'Sign out' });
+
+    // A server that didn't sign out, so the cookie is still there: Studio stays, and says to try again.
+    await page.route('**/api/studio/auth.logout', (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: envelope('unavailable'),
+      }),
+    );
+    await signOut.click();
+    await expect(page.getByText("Couldn't sign out. Try again.")).toBeVisible();
+    await expect(page).toHaveURL(`${app.origin}/studio`);
+
+    // The server signed this browser out, clearing the cookie, but its store
+    // couldn't end the session: the real logout, with the answer it gives then.
+    await page.unrouteAll();
+    await page.route('**/api/studio/auth.logout', async (route) => {
+      const response = await route.fetch();
+      await route.fulfill({
+        response,
+        body: JSON.stringify({ data: { signedOut: true, reason: 'store_failed' } }),
+      });
+    });
+    await signOut.click();
+    await expect(page).toHaveURL(`${app.origin}/studio/sign-in?state=store_failed`);
+    await expect(notice(page)).toHaveText(STORE_FAILED);
+    await expect(page.getByText(/Try again/)).toHaveCount(0);
   },
 );
 

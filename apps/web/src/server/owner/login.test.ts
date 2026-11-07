@@ -9,9 +9,13 @@ import {
   memoryAuditSink,
   preflight,
   probeDataDirectory,
+  sessionDigest,
   type MemoryAuditSink,
 } from '@portfolio/core/owner';
-import { revokeAllSessionFiles } from '../../../../../packages/core/src/auth/session-files.mjs';
+import {
+  readSessionFile,
+  revokeAllSessionFiles,
+} from '../../../../../packages/core/src/auth/session-files.mjs';
 import { authorize, type Authorized } from '../authorize';
 import { accessIn, CAPABILITIES } from '../capabilities';
 import type { DeploymentConfig } from '../config';
@@ -1132,58 +1136,116 @@ test('a malformed sign-in form goes back to the sign-in page with no verificatio
 });
 
 test('logout always answers signed out, clearing the cookie and the cache: with no session, an ended one, or a store that fails', async (t) => {
-  const { send, auth, advance } = await setup(t);
-  const logged = t.mock.method(console, 'log', () => {});
-  const signedOut = async (response: Response, what: string) => {
-    assert.equal(response.status, 200, what);
-    assert.deepEqual((await response.json()) as unknown, { data: { signedOut: true } }, what);
-    assert.deepEqual(response.headers.getSetCookie(), [CLEARED], what);
-    assert.equal(response.headers.get('clear-site-data'), '"cache"', what);
-  };
-  /** A logout carrying `cookie` and no CSRF token, which it has no session to take one from. */
-  const logout = (cookie?: string) => {
-    const request = studio('auth.logout');
-    if (cookie) request.headers.set('cookie', `__Host-studio_session=${cookie}`);
-    return send(request);
-  };
-  await signedOut(await logout(), 'no cookie');
-  await signedOut(await logout('not-a-token'), 'a cookie that is no token');
+  const { send, advance } = await setup(t);
+  t.mock.method(console, 'log', () => {});
+  await signedOut(await logout(send), 'no cookie');
+  await signedOut(await logout(send, 'not-a-token'), 'a cookie that is no token');
   // Revoked from another tab, and expired.
   const revoked = tokenOf(await send(login()))!;
   await send(studio('auth.sessions.revokeAll', tokenOf(await send(login()))!));
-  await signedOut(await logout(revoked), 'a revoked session');
+  await signedOut(await logout(send, revoked), 'a revoked session');
   const idle = tokenOf(await send(login()))!;
   advance(61 * MINUTE);
-  await signedOut(await logout(idle), 'an expired session');
+  await signedOut(await logout(send, idle), 'an expired session');
+});
 
-  // A store that can't be read: the cookie is cleared all the same.
-  const unread = tokenOf(await send(login()))!;
-  const resolve = auth.sessions.resolve;
-  (auth.sessions as { resolve: typeof resolve }).resolve = async () => ({ status: 'unavailable' });
+/** A logout's plain answer: signed out, with the cookie and the HTTP cache cleared. */
+async function signedOut(response: Response, what: string, reason?: 'store_failed') {
+  assert.equal(response.status, 200, what);
+  assert.deepEqual(response.headers.getSetCookie(), [CLEARED], what);
+  assert.equal(response.headers.get('clear-site-data'), '"cache"', what);
+  assert.deepEqual(
+    (await response.json()) as unknown,
+    { data: reason ? { signedOut: true, reason } : { signedOut: true } },
+    what,
+  );
+}
+
+/** A logout carrying `cookie` and no CSRF token, which it has no session to take one from. */
+function logout(send: (request: Request) => Promise<Response>, cookie?: string) {
+  const request = studio('auth.logout');
+  if (cookie) request.headers.set('cookie', `__Host-studio_session=${cookie}`);
+  return send(request);
+}
+
+/** Runs `task` with one of auth.sessions' methods stood in for, and puts it back after. */
+async function standingIn<K extends 'resolve' | 'end', T>(
+  auth: OwnerAuth,
+  name: K,
+  stand: OwnerAuth['sessions'][K],
+  task: () => Promise<T>,
+): Promise<T> {
+  const sessions = auth.sessions as { [P in K]: OwnerAuth['sessions'][P] };
+  const real = sessions[name];
+  sessions[name] = stand;
   try {
-    await signedOut(await logout(unread), 'a store that cannot be read');
+    return await task();
   } finally {
-    (auth.sessions as { resolve: typeof resolve }).resolve = resolve;
+    sessions[name] = real;
   }
+}
 
-  // A store that can't end the session: the browser is signed out, and the
-  // failure is logged.
+const refusedEnd: OwnerAuth['sessions']['end'] = async () => {
+  throw new Error('disk full');
+};
+
+test("a logout the store can't finish still signs this browser out, and says the store failed (row 88b)", async (t) => {
+  const { send, auth } = await setup(t);
+  const logged = t.mock.method(console, 'log', () => {});
   const unended = tokenOf(await send(login()))!;
-  const end = auth.sessions.end;
-  (auth.sessions as { end: typeof end }).end = async () => {
-    throw new Error('disk full');
-  };
-  try {
-    await signedOut(await send(studio('auth.logout', unended)), 'a store that cannot end it');
-  } finally {
-    (auth.sessions as { end: typeof end }).end = end;
-  }
+  const response = await standingIn(auth, 'end', refusedEnd, () =>
+    send(studio('auth.logout', unended)),
+  );
+  await signedOut(response, "a store that can't end it", 'store_failed');
   assert.ok(
     logged.mock.calls.some((call) =>
       String(call.arguments[0]).includes('"event":"logout.store_failed"'),
     ),
     'the failure was not logged',
   );
+});
+
+test("a logout whose session the store couldn't read ends that cookie's session, and says the store failed when it still can't (row 88b)", async (t) => {
+  const { send, auth } = await setup(t);
+  t.mock.method(console, 'log', () => {});
+  const unread = tokenOf(await send(login()))!;
+  const response = await standingIn(
+    auth,
+    'resolve',
+    async () => ({ status: 'unavailable' }),
+    () => standingIn(auth, 'end', refusedEnd, () => logout(send, unread)),
+  );
+  await signedOut(response, "a store that can't read or end it", 'store_failed');
+});
+
+test("a logout whose session the store couldn't read ends that cookie's session once the store is back, with the plain answer (row 88b)", async (t) => {
+  const { send, auth } = await setup(t);
+  const unread = tokenOf(await send(login()))!;
+  const response = await standingIn(
+    auth,
+    'resolve',
+    async () => ({ status: 'unavailable' }),
+    () => logout(send, unread),
+  );
+  await signedOut(response, 'a store that is back by the handler');
+  assert.equal((await send(studio('auth.session', unread))).status, 401);
+});
+
+test('a logout never slides the session, so one the store cannot end keeps the idle limit it had (row 88b)', async (t) => {
+  const { send, auth, advance, dataDir } = await setup(t);
+  t.mock.method(console, 'log', () => {});
+  const token = tokenOf(await send(login()))!;
+  const digest = sessionDigest(token);
+  const before = await readSessionFile(dataDir, digest);
+  assert.ok(before, 'the sign-in wrote a record');
+  advance(2 * MINUTE);
+  const response = await standingIn(auth, 'end', refusedEnd, () =>
+    send(studio('auth.logout', token)),
+  );
+  assert.equal(response.status, 200);
+  const after = await readSessionFile(dataDir, digest);
+  assert.ok(after, "the record the store couldn't end is still there");
+  assert.equal(after.lastSeenAt, before.lastSeenAt, 'the logout slid the session');
 });
 
 test('logout still needs the exact Origin, and with a session that counts, its CSRF token', async (t) => {
