@@ -22,6 +22,7 @@ import {
   failureStateFindings,
   inventoryFindings,
   notBusy,
+  reflowConditions,
   reflowFindings,
   scriptRequiredFindings,
   STILL_BUSY,
@@ -473,6 +474,50 @@ const namingUnder =
         })),
     ];
   };
+
+/**
+ * `check`'s findings, and one more unless they're exactly the runner findings `wanted` lists, each
+ * by its rule, what it expected and the viewport it names, no more and no fewer.
+ */
+const exactlyRunner =
+  (
+    wanted: readonly {
+      readonly rule: string;
+      readonly expected: string;
+      readonly viewport: string;
+    }[],
+    check: (page: Page) => Promise<Finding[]>,
+  ) =>
+  async (page: Page): Promise<Finding[]> => {
+    const findings = await check(page);
+    const key = (each: { rule: string; expected?: string; viewport?: string }) =>
+      `${each.rule} | ${each.expected ?? ''} | ${each.viewport ?? 'no viewport'}`;
+    const got = findings
+      .filter((each) => each.gate === 'runner')
+      .map(key)
+      .sort();
+    const want = wanted.map(key).sort();
+    return JSON.stringify(got) === JSON.stringify(want) && got.length === findings.length
+      ? findings
+      : [
+          ...findings,
+          {
+            gate: 'meta',
+            rule: 'runner-records',
+            actual: `wanted ${want.join(' ; ')}, got ${findings.map((each) => `${each.gate} ${key(each)}`).join(' ; ') || 'none'}`,
+          },
+        ];
+  };
+
+/** A lazy enhancement whose chunk never comes, on lazyReveal's page: its words stay hidden. */
+const NEVER_ENHANCED = lazyReveal(
+  'An enhancement that never settles',
+  '<p hidden data-lazy data-words="Opening, 1 of 21"></p>',
+);
+
+/** A page whose status says it's busy for good, and no enhancement. */
+const ALWAYS_BUSY =
+  '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Busy for good</title></head><body><main><h1>Busy for good</h1><p aria-busy="true">Loading the draft…</p></main></body></html>';
 
 /** `check`'s findings, and one more if none of them names `path`: the record must name the element. */
 const naming =
@@ -1882,6 +1927,62 @@ export const A11Y_CASES: readonly MetaCase[] = [
     /^reflow (?:reflow|zoom|root-text): /,
     naming('#late-wide', (page) => reflowFindings(page, '/')),
     { chunk: LATE_WIDE_CHUNK },
+  ),
+  // A page whose enhancements never settle is no skip (push 3 r2, F2 and F4): each reflow
+  // condition records STILL_ENHANCING, one each by its rule and at its own viewport, and so does
+  // the landscape pass, at the phone's viewport turned. Each waits out BUSY_LIMIT_MS.
+  builtCase(
+    'never-enhanced',
+    'reflow',
+    'A lazy enhancement whose chunk never comes, under each reflow condition',
+    NEVER_ENHANCED,
+    /^runner enhanced: /,
+    exactlyRunner(
+      reflowConditions().map((condition) => ({
+        rule: 'enhanced',
+        expected: `the page's enhancements mount or fail under ${condition.rule}`,
+        viewport: condition.id,
+      })),
+      (page) => reflowFindings(page, '/'),
+    ),
+    { chunk: 'never' },
+  ),
+  builtCase(
+    'landscape-never-enhanced',
+    'occlusion',
+    'A lazy enhancement whose chunk never comes, in the landscape pass at 844x390',
+    NEVER_ENHANCED,
+    /^runner enhanced: /,
+    exactlyRunner(
+      [
+        {
+          rule: 'enhanced',
+          expected: "the page's enhancements mount or fail under landscape occlusion",
+          viewport: '844x390',
+        },
+      ],
+      (page) => landscapeOcclusionFindings(page, '/', { width: 390, height: 844 }, false),
+    ),
+    { chunk: 'never', viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true },
+  ),
+  // And a page that never settles is STILL_BUSY there (push 3 r2, F3), at 844x390.
+  builtCase(
+    'landscape-still-busy',
+    'occlusion',
+    'A page busy for good, in the landscape pass at 844x390',
+    ALWAYS_BUSY,
+    /^runner settled: /,
+    exactlyRunner(
+      [
+        {
+          rule: 'settled',
+          expected: 'the page settles under landscape occlusion',
+          viewport: '844x390',
+        },
+      ],
+      (page) => landscapeOcclusionFindings(page, '/', { width: 390, height: 844 }, false),
+    ),
+    { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true },
   ),
   // Each reflow reload waits out React's Suspense retry when the page changed during the wait
   // (the coordinator, 7 Nov 2026, push 3 r2 F1): a chunk that lands and then commits its content
