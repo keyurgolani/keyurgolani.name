@@ -665,7 +665,7 @@ const mediaDocument = (assetIds: readonly string[], sha256: string, blob: string
   });
 
 test('a grant serves the renditions of the media it pinned, private and no-store, and nothing past them (#10)', async (t) => {
-  const { store, command, endSession } = await setup(t);
+  const { store, previews, command, endSession } = await setup(t);
   const bytes = Buffer.from('a draft rendition, in bytes');
   const { sha256: blob } = await store.assets.put(bytes, 'image/webp');
   const hex = blob.slice('sha256:'.length);
@@ -761,8 +761,13 @@ test('a grant serves the renditions of the media it pinned, private and no-store
   rmSync(store.paths.blob(blob));
   await refused(await get(next, `portrait/${'c'.repeat(64)}/w480-a1.webp`), 'the blob gone');
 
-  // The session ends, and the grant with it.
+  // The session ends, and the grant with it: refused by the grant itself, before the missing blob could mask it.
   await endSession();
+  assert.equal(
+    await previews.port.admit(next),
+    false,
+    'the grant is let in after its session ended',
+  );
   await refused(await get(next, `portrait/${'c'.repeat(64)}/w480-a1.webp`), 'after the session');
 });
 

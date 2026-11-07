@@ -259,3 +259,79 @@ test(
     await expect(page.locator('#studio-main')).toBeFocused();
   },
 );
+
+/** Every auth.logout `page` sends, from now on (row 88). */
+function logoutsOf(page: Page): string[] {
+  const sent: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().endsWith('/api/studio/auth.logout'))
+      sent.push(request.url());
+  });
+  return sent;
+}
+
+// Row 88's two below run last in this serial file, the guard first: a red on main skips only what follows it.
+test(
+  "when the store can't read the draft, Sign out is still ready and signs out: one auth.logout, then sign-in (row 88, guard)",
+  { annotation: [STUDIO] },
+  async ({ page, app }) => {
+    await signIn(page, app, secret.password);
+    await page.route(/\/api\/studio\/draft\.getWorking/, (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: {
+            code: 'storage_unavailable',
+            message: "The data directory can't be used right now.",
+            requestId: 'req_e2e',
+          },
+        }),
+      }),
+    );
+    const logouts = logoutsOf(page);
+    await page.goto('/studio');
+    const alert = page.getByRole('alert').filter({ hasText: "Studio couldn't read the draft" });
+    await expect(alert).toBeVisible({ timeout: 20_000 });
+    // The shell isn't ready, and Sign out doesn't wait for it to be.
+    const signOut = page.getByRole('button', { name: 'Sign out' });
+    await expect(signOut).not.toHaveAttribute('aria-disabled', 'true');
+    await signOut.click();
+    await expect(page).toHaveURL(`${app.origin}/studio/sign-in?state=signed_out`);
+    expect(logouts, 'one auth.logout').toHaveLength(1);
+  },
+);
+
+test(
+  "when the part that reaches the store doesn't arrive, Sign out still signs out beside Studio couldn't load: one auth.logout, then sign-in (row 88)",
+  { annotation: [STUDIO] },
+  async ({ page, app }) => {
+    await signIn(page, app, secret.password);
+    await page.goto('/studio');
+    await expect(page.locator('.studio-state__lines')).toBeAttached();
+    // The owner adapter's chunk is refused; the rest load (as :160 does, which a draft seeded before it reads).
+    const refused: string[] = [];
+    await page.route(/\/_next\/static\/chunks\/.*\.js/, async (route) => {
+      const response = await route.fetch();
+      const body = await response.text();
+      if (!OWNER_CHUNK.test(body)) return route.fulfill({ response, body });
+      refused.push(route.request().url());
+      return route.abort('blockedbyclient');
+    });
+    const logouts = logoutsOf(page);
+    await page.reload();
+    await expect
+      .poll(() => refused.length, "the owner adapter's chunk is asked for, and refused")
+      .toBe(1);
+    const alert = page.getByRole('alert').filter({ hasText: "Studio couldn't load" });
+    await expect(alert).toBeVisible({ timeout: 20_000 });
+    const signOut = page.getByRole('button', { name: 'Sign out' });
+    await expect
+      .soft(signOut, 'Sign out is ready without the adapter')
+      .not.toHaveAttribute('aria-disabled', 'true');
+    await signOut.click();
+    // Soft, so a run that stays on /studio says how many auth.logout requests went too.
+    await expect.soft(page).toHaveURL(`${app.origin}/studio/sign-in?state=signed_out`);
+    expect(logouts, 'one auth.logout').toHaveLength(1);
+  },
+);
