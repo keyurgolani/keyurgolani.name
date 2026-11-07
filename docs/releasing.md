@@ -57,7 +57,7 @@ TAG=v1.0.0-rc.1 node ci/release/verify-scope.mjs &&
   GITHUB_TOKEN="$(gh auth token)" node ci/release/verify-rc.mjs
 ```
 
-Tag only when both exit 0 and the second prints `eligible on its records list` (or, on a green run, `eligible`). It reads the same push run, jobs and artifact the tag's `rc-verify` will, so it also catches a cancelled browser shard. After a refusal, re-run nothing on that push run, since a second attempt never counts while the list names an entry: fix the cause and push a new candidate commit.
+Tag only when both exit 0 and the second prints `eligible on its records list` (or, on a green run, `eligible`). It reads the same push run, jobs and artifact the tag's `rc-verify` will, so it also catches a cancelled browser shard. While the list names an entry, a re-run never counts, green or red, since only a first attempt does: fix what refused it and push a new candidate commit.
 
 ## Promotion
 
