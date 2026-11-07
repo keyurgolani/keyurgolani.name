@@ -626,9 +626,10 @@ test(
 // fifth of the way at most, then reaches its scene in one frame (a probe at 1440 by 900, row 53 r2),
 // so a visitor's hand takes it over inside those first frames. What finishes the travel is the way
 // their own input went, never the page's place: the browser's own scroll can step back a little as
-// it takes a glide over, and an instant scroll by script is folded into the glide, not a stop. A
-// wheel notch against the glide in those first frames is one Chromium doesn't apply: the page never
-// steps back, and the glide goes on to its scene (r2/probe-de, on base and on the rework alike).
+// it takes a glide over. An instant scroll by script isn't folded into the glide: it stops it where
+// it puts the page, and with no input the way that last step went says how it finishes. A wheel
+// notch against the glide in those first frames is one Chromium doesn't apply: the page never steps
+// back, and the glide goes on to its scene (r2/probe-de, on base and on the rework alike).
 
 /** Waits until the snap has set out from `from` the way `way` goes, `by` px: inside its first frames. */
 async function glideSetOut(page: Page, from: number, way: 1 | -1, by = 8): Promise<void> {
@@ -698,7 +699,7 @@ test(
   { annotation, tag },
   async ({ page }) => {
     // As the scroll bar, find in page or a link move the page: no input of the visitor's says which
-    // way, so the glide's own scene stands.
+    // way, so the page's own last step does, here on the way it glided, and its scene stands.
     await snapFromStart(page);
     await page.evaluate(() => window.scrollTo({ top: window.scrollY + 60, behavior: 'instant' }));
     await expectRestsOn(page, 1);
