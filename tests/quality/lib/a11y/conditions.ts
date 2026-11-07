@@ -323,6 +323,15 @@ function watchScripts(page: Page): ScriptWatch {
   };
 }
 
+/**
+ * React's Suspense retry delay: a lazy component's content commits no sooner than this after its
+ * fallback showed, on a timer, the page idle in between (react-dom 19.2.5's FALLBACK_THROTTLE_MS,
+ * cjs/react-dom-client: `FALLBACK_THROTTLE_MS = 300`).
+ */
+export const SUSPENSE_RETRY_MS = 300;
+/** What enhancementsSettled() waits past SUSPENSE_RETRY_MS, for the timer and the commit's frames. */
+export const SUSPENSE_RETRY_MARGIN_MS = 200;
+
 /** One idle period, or `ms` at most (a second at most) if the page has none, then two frames. */
 async function idle(page: Page, ms: number): Promise<void> {
   await page.evaluate(
@@ -344,7 +353,11 @@ async function idle(page: Page, ms: number): Promise<void> {
  * holds its own markup marked so until then; the kit takes both off for one
  * that fails or is turned off. So the page is done when, across one idle period and two
  * frames, no script request was in flight or started, no island's
- * data-island changed, and nothing on the page is still marked pending. An
+ * data-island changed, and nothing on the page is still marked pending; and,
+ * when a script request or an island's change happened during the wait, no
+ * sooner than SUSPENSE_RETRY_MS and its margin after the last one, since React
+ * commits a lazy component's content on a timer that long after its fallback,
+ * the page idle in between. A page quiet throughout waits as before. An
  * island that never starts, out of view, paused, or lacking what it
  * requires, stays markup, which is settled too. Until `end`: false when
  * they still hadn't settled, and the caller fails the cell with
@@ -367,14 +380,29 @@ async function enhancementsSettled(
   const pending = () =>
     page.evaluate((marker) => document.querySelectorAll(`[${marker}]`).length, ENHANCEMENT_PENDING);
   let before: string | null = null;
+  // The page's scripts and islands as the wait began, and when it last saw one of them change.
+  let seen = `${scripts.started()} ${await islands()}`;
+  let changed: number | null = scripts.pending() > 0 ? Date.now() : null;
   while (Date.now() < end) {
     if (scripts.pending() > 0) {
       before = null;
+      changed = Date.now();
       await page.waitForTimeout(50);
       continue;
     }
     const now = `${scripts.started()} ${await islands()}`;
-    if (now === before && (await pending()) === 0) return true;
+    if (now !== seen) {
+      seen = now;
+      changed = Date.now();
+    }
+    if (now === before && (await pending()) === 0) {
+      // React's retry: no sooner than its delay and a margin after the last change.
+      const floor = changed === null ? 0 : changed + SUSPENSE_RETRY_MS + SUSPENSE_RETRY_MARGIN_MS;
+      if (Date.now() >= floor) return true;
+      await page.waitForTimeout(Math.max(1, Math.min(floor, end) - Date.now()));
+      before = null;
+      continue;
+    }
     before = now;
     await idle(page, end - Date.now());
   }
