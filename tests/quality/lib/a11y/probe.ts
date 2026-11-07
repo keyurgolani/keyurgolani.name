@@ -571,7 +571,7 @@ function probe(request: ProbeRequest): unknown {
       const scriptOnly = (el: Element): boolean =>
         liveStatus(el.closest('[data-script-only]')) &&
         el.querySelector(
-          'h1, h2, h3, h4, h5, h6, a[href], img, button, input, select, textarea, [role=button], [role=link], [tabindex]',
+          'h1, h2, h3, h4, h5, h6, [role=heading], a[href], area[href], img, button, input, select, textarea, summary, iframe, audio[controls], video[controls], [contenteditable]:not([contenteditable=false]), [role=button], [role=link], [tabindex]',
         ) === null;
       // A button that submits nothing: type=button or reset.
       const inertButton = (el: Element | null): boolean =>
