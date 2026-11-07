@@ -479,13 +479,20 @@ interface Loaded {
  * shows (baselineShown()). With `enhancements` and no `expected`, as each
  * reflow condition reads, it waits for the first alone: what the page's
  * enhancements put on it is there to reflow, and there's no baseline to
- * compare it with. With script off nothing mounts, so neither waits.
+ * compare it with. With script off nothing mounts, so neither waits. Then it
+ * awaits document.fonts.ready, as the main pass does, since the reflow probe
+ * measures text boxes, and only then sets `rootText` (a scale of the root
+ * font, as the root-text condition has it) and draws its frames: so what the
+ * enhancements mounted, they mounted at the page's own root text.
  */
 export async function load(
   page: Page,
   path: string,
   expected?: Expected,
-  { enhancements = expected !== undefined }: { readonly enhancements?: boolean } = {},
+  {
+    enhancements = expected !== undefined,
+    rootText = 1,
+  }: { readonly enhancements?: boolean; readonly rootText?: number } = {},
 ): Promise<Loaded> {
   const scripts = enhancements ? watchScripts(page) : null;
   try {
@@ -496,6 +503,16 @@ export async function load(
       const end = Date.now() + BUSY_LIMIT_MS;
       enhanced = await enhancementsSettled(page, scripts, end);
       if (enhanced && expected) await baselineShown(page, expected, end);
+    }
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+    });
+    if (rootText !== 1) {
+      await page.evaluate(
+        (scale) =>
+          document.documentElement.style.setProperty('font-size', `${scale * 100}%`, 'important'),
+        rootText,
+      );
     }
     await frames(page);
     return { settled, enhanced };
@@ -978,19 +995,15 @@ export async function reflowFindings(
       // Read once the page's enhancements have mounted or failed (push 3): a lazy one, such as
       // Spatial Bento's live stage, would otherwise mount after the probe, or after the root-text
       // switch, and go unread. One that never does is STILL_ENHANCING, read as it stands.
-      const loaded = await load(page, path, undefined, { enhancements: true });
+      // The root text is set inside load(), once the wait and the fonts are done.
+      const loaded = await load(page, path, undefined, {
+        enhancements: true,
+        rootText: condition.text,
+      });
       // Each at its condition's viewport, so it's its own record and says where (F4).
       if (!loaded.settled) findings.push({ ...stillBusy(condition.rule), viewport: condition.id });
       if (!loaded.enhanced) {
         findings.push({ ...stillEnhancing(condition.rule), viewport: condition.id });
-      }
-      if (condition.text !== 1) {
-        await page.evaluate(
-          (scale) =>
-            document.documentElement.style.setProperty('font-size', `${scale * 100}%`, 'important'),
-          condition.text,
-        );
-        await frames(page);
       }
       const probe = async (state: string) => {
         for (const problem of await inPage<{ rule: string; path: string; detail: string }[]>(page, {
