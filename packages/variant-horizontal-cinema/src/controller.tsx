@@ -411,7 +411,8 @@ function LiveStage(props: StageProps) {
   const { scenes } = props;
   const { attachRoot, state } = Runtime.useEnhancementRuntime();
   const [current, setCurrent] = useState(0);
-  // What the status says once a move settles; it starts on the first scene, unannounced.
+  // What the status says once a move settles. It starts on the scene the page loads on, the first or a
+  // link's, set before the status first shows, so it's the status's own words and never news.
   const [status, setStatus] = useState(() => ({ title: scenes[0]?.title ?? '', number: 1 }));
   const [window_, setWindow] = useState({ start: 0, size: 0 });
   // The transport and the live status appear once the controller runs: the
@@ -1450,6 +1451,14 @@ function LiveStage(props: StageProps) {
     const scope: HTMLElement = rootElement.closest<HTMLElement>('.hc') ?? rootElement;
     scope.addEventListener('click', onLink);
     paint();
+    // A fresh load on a link's scene, or anywhere the browser restored, names that scene from the
+    // start. Set with the transport's own first render (the same effect as setHydrated), so the status
+    // appears saying it rather than changing to it: nothing is announced at load. No scroll comes after
+    // the listeners attach on such a load, so no settle would ever write it.
+    if (position !== 0) {
+      const scene = scenes[position]!;
+      setStatus({ title: scene.title, number: scene.number });
+    }
     return () => {
       scope.removeEventListener('click', onLink);
       disposed = true;
