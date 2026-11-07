@@ -372,7 +372,7 @@ const enhancementAfter =
     if (ready) {
       await ready(page).catch(() => undefined);
       // And loudly (push 3 r5): a baseline without the control the case reveals would pass a
-      // known-bad, so the case gives a runner finding instead, and isn't judged.
+      // known-bad, so the case fails as a runner finding instead, known-bad and known-good alike.
       const shown = await page.evaluate(
         () => document.querySelector('[data-lazy]:not([hidden])') !== null,
       );
@@ -411,15 +411,20 @@ addEventListener('load', () => setTimeout(() => {
  * server's markup, name: a role (data-role), the data-script-only mark
  * (data-mark), or where they sit (data-move-into, a selector they move into).
  */
-const REVEAL = {
-  body: "setTimeout(() => { for (const el of document.querySelectorAll('[data-later]')) { if (el.dataset.role) el.setAttribute('role', el.dataset.role); if ('mark' in el.dataset) el.setAttribute('data-script-only', ''); if (el.dataset.moveInto) document.querySelector(el.dataset.moveInto).append(el); } for (const el of document.querySelectorAll('[data-lazy]')) { if (el.dataset.words) el.textContent = el.dataset.words; if (el.dataset.html) el.innerHTML = el.dataset.html; el.hidden = false; } }, 400);",
-};
+/**
+ * The reveal's chunk body, its timer `ms` after the chunk lands: REVEAL's and REVEAL_LATE's one
+ * source, so neither can drift from the other (push 3 r5c).
+ */
+const revealAfter = (ms: number) => ({
+  body: `setTimeout(() => { for (const el of document.querySelectorAll('[data-later]')) { if (el.dataset.role) el.setAttribute('role', el.dataset.role); if ('mark' in el.dataset) el.setAttribute('data-script-only', ''); if (el.dataset.moveInto) document.querySelector(el.dataset.moveInto).append(el); } for (const el of document.querySelectorAll('[data-lazy]')) { if (el.dataset.words) el.textContent = el.dataset.words; if (el.dataset.html) el.innerHTML = el.dataset.html; el.hidden = false; } }, ${ms});`,
+});
+const REVEAL = revealAfter(400);
 
 /**
  * REVEAL, its reveal 900 ms after it lands, past the enhancements' 500 ms floor (push 3 r5): only
  * the helper's own revealed() wait puts the control in the baseline.
  */
-const REVEAL_LATE = { body: REVEAL.body.replace('}, 400);', '}, 900);') };
+const REVEAL_LATE = revealAfter(900);
 
 /**
  * What a lazy chunk reveals that no condition misses, a button that submits nothing alone in its
@@ -473,6 +478,9 @@ const missingUnder =
   (under: readonly string[], check: (page: Page) => Promise<Finding[]>) =>
   async (page: Page): Promise<Finding[]> => {
     const findings = await check(page);
+    // A runner finding means the read didn't happen: it passes through as it is, with no line of
+    // this helper's own, so it never reads as a guard's red (push 3 r5c).
+    if (findings.some(({ gate }) => gate === 'runner')) return findings;
     return [
       ...findings.map((each) => ({ ...each, actual: `${each.expected}: ${each.actual}` })),
       ...under

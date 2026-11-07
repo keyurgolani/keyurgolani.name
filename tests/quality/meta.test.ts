@@ -354,6 +354,18 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     // From a chunk that landed before the wait, and on a held page flipped twice (push 3 r3).
     'reflow/suspense-retry-early',
     'reflow/held-flip',
+    // With the chunk's tag kept, as Turbopack keeps it, and from the later of two early chunks
+    // (push 3 r4's pins).
+    'reflow/suspense-retry-early-removed-tag',
+    'reflow/suspense-retry-two-early',
+    // A chunk that failed before the wait and was asked for again, after a 404 or at the network,
+    // and failed enhancement letting the page's own chunk through and waiting out a late reveal
+    // (push 3 r5's pins and r5c's).
+    'reflow/suspense-retry-failed-250',
+    'reflow/suspense-retry-failed-590',
+    'reflow/suspense-retry-aborted-590',
+    'enhancement/own-chunk',
+    'enhancement/lazy-link-late-reveal',
     // A page that never settles is no skip: STILL_ENHANCING under each reflow condition and in the
     // landscape pass, and STILL_BUSY there, each at its own viewport (push 3 r2, F2, F3 and F4).
     'reflow/never-enhanced',
