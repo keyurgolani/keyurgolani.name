@@ -24,7 +24,9 @@
 // - Focus (Slice 3): every focusable [data-ui-slot] part draws its ring here,
 //   from the focus tokens and --color-focus, so no language stylesheet can
 //   remove or hide it. A language shapes the ring through --ui-focus-*
-//   alone, and forced colors map its color to Highlight.
+//   alone, and forced colors map its color to Highlight. A composition may
+//   set --color-focus and --ui-focus-offset on its own bands and parts (row
+//   73, COMPOSITION_SETTABLE); under forced colors its color gives way here.
 //
 // The shared primitives' rules (Slice 3, ../primitives/styles.css) join the
 // reset and utilities layers here, so they read the same tokens and every
@@ -394,7 +396,16 @@ export function platformStylesheet(): string {
         block(APPEARANCE_CONTROL, CONTROL_SURFACE) +
         block([APPEARANCE_CONTROL[0]!], CONTROL_RING_ROOM),
     ),
-    wrap('@media (forced-colors: active)', block([BOUNDARY], { ...forced, ...FORCED_EFFECTS })),
+    // Under forced colors every element inside a boundary inherits its focus color, so the ring
+    // is the system color the boundary maps it to, or a surface hook's or the control plate's
+    // (which this rule's selector doesn't outweigh), never a color a composition set on a band
+    // or a part in an earlier layer (row 73: COMPOSITION_SETTABLE's --color-focus). It comes
+    // first, so a nested boundary's own map, as specific, still wins on that boundary.
+    wrap(
+      '@media (forced-colors: active)',
+      block([`${BOUNDARY} *`], { '--color-focus': 'inherit' }) +
+        block([BOUNDARY], { ...forced, ...FORCED_EFFECTS }),
+    ),
     // A Surface's level is a background image, which forced colors drop, over a transparent
     // color: Canvas keeps it opaque, and an overlay's edge shows in CanvasText, since its
     // shadow goes too (EE's Contents sheet found it, C's EE-LANG H1).

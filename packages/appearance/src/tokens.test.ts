@@ -187,6 +187,6 @@ test("the variant contract's list of platform tokens is every token this package
     ),
     [],
   );
-  // Nothing a composition may set is yet in the allowlist.
-  assert.deepEqual(contract.COMPOSITION_SETTABLE, []);
+  // What a composition may set itself (row 73): the ring's color and offset, and nothing else.
+  assert.deepEqual(contract.COMPOSITION_SETTABLE, ['--color-focus', '--ui-focus-offset']);
 });

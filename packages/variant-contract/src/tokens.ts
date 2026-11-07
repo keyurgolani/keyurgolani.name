@@ -221,12 +221,69 @@ export const PLATFORM_TOKENS: readonly string[] = Object.freeze([
 ]);
 
 /**
- * The platform properties a composition may set itself, by name: none yet.
- * Measures-2 adds --type-measure-scale.
+ * The platform properties a composition may set itself, by name, in its
+ * stylesheet (row 73): the focus ring's color and offset, which the
+ * platform's ring in the utilities layer reads by inheritance, so a band or a
+ * part shapes its own ring without an outline of its own, which that later
+ * layer would beat. Each takes only the values compositionSettableProblem()
+ * passes. Measures-2 adds --type-measure-scale.
  */
-export const COMPOSITION_SETTABLE: readonly string[] = Object.freeze([]);
+export const COMPOSITION_SETTABLE: readonly string[] = Object.freeze([
+  '--color-focus',
+  '--ui-focus-offset',
+]);
+
+/**
+ * The roles a composition's --color-focus may read (row 73): an ink the
+ * scheme gate holds to its own ground, on-scrim on the scrim, focus-inverse
+ * on the inverse ground, text-primary on the canvas and surfaces, on-accent
+ * on the accent, and on-emphasis on the emphasis fill. Where the composition
+ * puts it, the quality cells measure it.
+ */
+export const FOCUS_COLOR_ROLES = Object.freeze([
+  'on-scrim',
+  'focus-inverse',
+  'text-primary',
+  'on-accent',
+  'on-emphasis',
+] as const);
+
+/** What a composition may set, and how: the sentence each audit's refusal carries. */
+export const COMPOSITION_SETTABLE_RULE = `a composition may set --color-focus only as ${FOCUS_COLOR_ROLES.map(
+  (role) => `var(--color-${role})`,
+)
+  .join(', ')
+  .replace(
+    /, (?=[^,]*$)/,
+    ', or ',
+  )}, and --ui-focus-offset only as calc(var(--ui-focus-width) * -1), 0, or a var(--space-*) token, in its stylesheet, and no other property in the platform's namespaces.`;
 
 const PLATFORM = new Set(PLATFORM_TOKENS);
+
+const FOCUS_COLOR = new Set<string>(FOCUS_COLOR_ROLES.map((role) => `--color-${role}`));
+/** One var() of a custom property, with no fallback: var(--name). */
+const PLAIN_VAR = /^var\(\s*(--[a-z0-9-]+)\s*\)$/;
+/** The inset ring: the focus width, negated. */
+const INSET = /^calc\(\s*var\(\s*--ui-focus-width\s*\)\s*\*\s*-1\s*\)$/;
+
+/**
+ * Why a composition may not give `property` the value `value`, or null when
+ * it may, or when `property` isn't one COMPOSITION_SETTABLE names, which
+ * isReservedProperty() answers for (row 73). Function names are read as
+ * written, lowercase, so a form the check doesn't read is refused.
+ */
+export function compositionSettableProblem(property: string, value: string): string | null {
+  if (!COMPOSITION_SETTABLE.includes(property)) return null;
+  const written = value.trim();
+  const named = PLAIN_VAR.exec(written)?.[1];
+  const passes =
+    property === '--color-focus'
+      ? named !== undefined && FOCUS_COLOR.has(named)
+      : written === '0' ||
+        INSET.test(written) ||
+        (named !== undefined && named.startsWith('--space-') && PLATFORM.has(named));
+  return passes ? null : `sets ${property}: ${written}, and ${COMPOSITION_SETTABLE_RULE}`;
+}
 
 /** Whether `name` is a token the platform defines. */
 export function isPlatformToken(name: string): boolean {

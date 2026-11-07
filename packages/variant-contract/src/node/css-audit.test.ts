@@ -1140,3 +1140,102 @@ test("no variant declares or runs the host's reduced-motion keyframes, _portfoli
     [],
   );
 });
+
+/** Each [code, message] the variant audit reports for `css`, in order. */
+const reportsIn = (css: string) => {
+  const found: [string, string][] = [];
+  auditStylesheet(css, { id: 'acme', rtl: false }, (code, _at, message) =>
+    found.push([code, message]),
+  );
+  return found;
+};
+
+test('row 73: a composition sets --color-focus and --ui-focus-offset, in their value forms alone, on any of its selectors', () => {
+  const allowed = [
+    '--color-focus: var(--color-on-scrim);',
+    '--color-focus: var(--color-focus-inverse);',
+    '--color-focus: var(--color-text-primary);',
+    '--color-focus: var(--color-on-accent);',
+    '--color-focus: var(--color-on-emphasis);',
+    '--color-focus: var( --color-on-scrim );',
+    '--ui-focus-offset: calc(var(--ui-focus-width) * -1);',
+    '--ui-focus-offset: calc( var(--ui-focus-width)*-1 );',
+    '--ui-focus-offset: 0;',
+    '--ui-focus-offset: var(--space-3xs);',
+    '--ui-focus-offset: var(--space-xl-3xl);',
+  ];
+  // A band, a focused part, and the root rule: wherever the composition puts it.
+  for (const selector of [
+    "[data-variant='acme'] .band",
+    "[data-variant='acme'] .stage:focus-visible",
+    "[data-variant='acme']",
+  ]) {
+    for (const declaration of allowed) {
+      assert.deepEqual(
+        reportsIn(rule(declaration, selector)),
+        [],
+        `${selector} { ${declaration} }`,
+      );
+    }
+  }
+});
+
+test('row 73: any other value of the two, and any other platform property, is refused', () => {
+  const values = [
+    '--color-focus: red;',
+    '--color-focus: var(--color-surface);',
+    '--color-focus: var(--color-surface-default);',
+    '--color-focus: var(--color-focus);',
+    '--color-focus: var(--color-text-inverse);',
+    '--color-focus: var(--color-on-scrim, white);',
+    '--color-focus: color-mix(in oklab, var(--color-on-scrim), var(--color-canvas));',
+    '--color-focus: VAR(--color-on-scrim);',
+    '--color-focus: var(--layout-ink);',
+    '--ui-focus-offset: -10px;',
+    '--ui-focus-offset: 2px;',
+    '--ui-focus-offset: 0px;',
+    '--ui-focus-offset: calc(var(--ui-focus-width) * -2);',
+    '--ui-focus-offset: calc(var(--ui-focus-offset) * -1);',
+    '--ui-focus-offset: var(--space-huge);',
+    '--ui-focus-offset: var(--ui-focus-width);',
+    '--ui-focus-offset: calc(var(--space-3xs) * 2);',
+  ];
+  for (const declaration of values) {
+    const found = reportsIn(rule(declaration));
+    assert.ok(found.length > 0, declaration);
+    assert.ok(
+      found.every(([code]) => code === 'audit.css-appearance'),
+      declaration,
+    );
+    // The value's own refusal, beside any other a value breaks too, such as red's raw color.
+    const said = found.filter(([, message]) =>
+      message.startsWith(`sets ${declaration.slice(0, declaration.indexOf(':'))}: `),
+    );
+    assert.equal(said.length, 1, declaration);
+    assert.match(said[0]![1], /may set --color-focus only as var\(--color-on-scrim\)/, declaration);
+    assert.match(
+      said[0]![1],
+      /--ui-focus-offset only as calc\(var\(--ui-focus-width\) \* -1\), 0, or a var\(--space-\*\) token/,
+      declaration,
+    );
+  }
+  for (const declaration of [
+    '--ui-focus-width: 4px;',
+    '--ui-focus-style: dashed;',
+    '--color-focus-inverse: var(--color-on-scrim);',
+    '--color-on-scrim: var(--color-canvas);',
+  ]) {
+    const found = reportsIn(rule(declaration));
+    assert.deepEqual(
+      found.map(([code]) => code),
+      ['audit.css-appearance'],
+      declaration,
+    );
+    assert.match(found[0]![1], /in a namespace the platform's tokens own/, declaration);
+  }
+  // !important is its own refusal, beside the value's.
+  assert.deepEqual(
+    reportsIn(rule('--ui-focus-offset: var(--space-3xs) !important;')).map(([code]) => code),
+    ['audit.css-important'],
+  );
+});

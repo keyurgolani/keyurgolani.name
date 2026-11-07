@@ -972,3 +972,65 @@ test("a '/*' or a '*/' inside a string hides nothing from the source audit (K-5 
     ['custom-property'],
   );
 });
+
+test('row 73: a variant stylesheet sets --color-focus and --ui-focus-offset in their value forms, on any selector', () => {
+  const at = (selector: string, css: string) => `${selector} {\n  ${css}\n}\n`;
+  for (const selector of [
+    "[data-variant='acme'] .band",
+    "[data-variant='acme'] .stage:focus-visible",
+    "[data-variant='acme']",
+  ]) {
+    for (const css of [
+      '--color-focus: var(--color-on-scrim);',
+      '--color-focus: var(--color-focus-inverse);',
+      '--color-focus: var(--color-text-primary);',
+      '--color-focus: var(--color-on-accent);',
+      '--color-focus: var(--color-on-emphasis);',
+      '--ui-focus-offset: calc(var(--ui-focus-width) * -1);',
+      '--ui-focus-offset: 0;',
+      '--ui-focus-offset: var(--space-3xs);',
+    ]) {
+      assert.deepEqual(rulesIn(at(selector, css)), [], `${selector} { ${css} }`);
+    }
+  }
+  // The remedy says what a composition may set, and how.
+  assert.match(
+    SOURCE_AUDIT_REMEDIES['custom-property'],
+    /--color-focus only as var\(--color-on-scrim\), var\(--color-focus-inverse\), var\(--color-text-primary\), var\(--color-on-accent\), or var\(--color-on-emphasis\)/,
+  );
+});
+
+test('row 73: any other value of the two, any other platform property, and either one set from code, is refused', () => {
+  for (const css of [
+    '--color-focus: red;',
+    '--color-focus: var(--color-surface);',
+    '--color-focus: var(--color-surface-default);',
+    '--color-focus: var(--color-text-inverse);',
+    '--color-focus: var(--color-on-scrim, white);',
+    '--ui-focus-offset: -10px;',
+    '--ui-focus-offset: 0px;',
+    '--ui-focus-offset: calc(var(--ui-focus-width) * -2);',
+    '--ui-focus-offset: var(--space-huge);',
+    '--ui-focus-width: 4px;',
+    '--ui-focus-style: dashed;',
+    '--color-focus-inverse: var(--color-on-scrim);',
+  ]) {
+    assert.ok(rulesIn(rule(css)).includes('custom-property'), css);
+  }
+  // A stylesheet's rule alone sets them: code's inline style is in no layer.
+  const variantCode = (source: string) =>
+    auditCodeText(source, { variant: true }).map(({ rule: name }) => name);
+  for (const source of [
+    "const s = { '--color-focus': 'var(--color-on-scrim)' };",
+    "<div style={{ '--ui-focus-offset': '0' }} />",
+    "el.style.setProperty('--color-focus', 'var(--color-on-accent)');",
+    "const css = '--ui-focus-offset: var(--space-3xs)';",
+  ]) {
+    assert.ok(variantCode(source).includes('custom-property'), source);
+  }
+  // The kit's and a non-variant stylesheet's custom properties aren't held, as before.
+  assert.deepEqual(
+    auditStylesheetText(rule('--color-focus: red;')).map(({ rule: name }) => name),
+    [],
+  );
+});

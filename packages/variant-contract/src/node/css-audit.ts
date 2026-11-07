@@ -11,7 +11,8 @@
 // reads tokens alone, as the appearance source audit holds it, and a radius
 // may read --layout-round where the stylesheet declares it 50%. A variant
 // declares no custom property in the platform's namespaces (--color-, --ui-,
-// --type-, --space-, --motion-, --rhythm-) but those ../tokens allows, and a
+// --type-, --space-, --motion-, --rhythm-) but those ../tokens allows (row
+// 73: --color-focus and --ui-focus-offset, each in its value forms), and a
 // token reader takes only a token ../tokens lists, never a name a variant
 // could declare its way into. A -webkit- or other vendor prefix doesn't
 // hide a property, and a named color is a color in any image value too. A
@@ -73,7 +74,7 @@ import { HOST_KEYFRAMES_PREFIX, TRANSITION_PSEUDO_ELEMENTS } from '../transition
 import { shapeRadii } from '../shapes';
 import { motionSlotValue, MOTION_SLOT } from '../motion-bands';
 import { stripCssComments } from '../css-text';
-import { isPlatformToken, isReservedProperty } from '../tokens';
+import { compositionSettableProblem, isPlatformToken, isReservedProperty } from '../tokens';
 import { cssTokens, parseCssText, splitSelectors, type CssNode, type Position } from './css';
 
 /** The codes this module reports, which audit.ts describes. */
@@ -611,6 +612,12 @@ function checkDeclaration(
       `declares ${property}, in a namespace the platform's tokens own, which a composition reads and never sets.`,
     );
   }
+  // The two it may set, each in its value forms alone (row 73).
+  const settable =
+    context !== 'descriptors' && property.startsWith('--')
+      ? compositionSettableProblem(property, value)
+      : null;
+  if (settable) report('audit.css-appearance', node.at, settable);
   if (target.rtl) {
     const physical = physicalProperty(property, value);
     if (physical) {

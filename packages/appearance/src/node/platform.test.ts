@@ -529,3 +529,99 @@ test("the surface hook: inside a region marked data-ui-surface, the focus color 
     ['accent', 'inverse', 'emphasis'],
   );
 });
+
+test("under forced colors a focused band link's ring is the system color, whatever --color-focus the composition gave the band (row 73)", () => {
+  const accessibility = css.indexOf('@layer accessibility {');
+  const forcedAt = css.indexOf('@media (forced-colors: active) {', accessibility);
+  assert.ok(
+    accessibility >= 0 && forcedAt > accessibility,
+    'forced colors sit in the accessibility layer',
+  );
+  // The rule the safeguard adds, and the boundary's own map, from the compiled stylesheet.
+  const inherits = declarations(
+    '    [data-appearance-boundary] *',
+    '@media (forced-colors: active)',
+  );
+  assert.deepEqual(Object.fromEntries(inherits), { '--color-focus': 'inherit' });
+  const mapped = declarations('    [data-appearance-boundary]', '@media (forced-colors: active)');
+  assert.equal(mapped.get('--color-focus'), 'Highlight');
+  // The ring reads the focus color, in utilities and again in accessibility.
+  for (const [selectors, layer] of [
+    ['  [data-appearance-boundary] :focus-visible', '@layer utilities'],
+    ['  [data-appearance-boundary] [data-ui-slot]:focus-visible', '@layer accessibility'],
+  ] as const) {
+    assert.match(
+      declarations(selectors, layer).get('outline')!,
+      /var\(--color-focus\)$/,
+      selectors,
+    );
+  }
+  const hook = SURFACE_HOOKS.find(({ surface }) => surface === 'inverse')!;
+  const region = `  [data-appearance-boundary] [data-ui-surface='${hook.surface}']`;
+  assert.equal(
+    declarations(region, '@layer accessibility').get('--color-focus'),
+    `var(--color-${hook.focus})`,
+  );
+
+  // The cascade for --color-focus down boundary > root > band > link, and in a hook's region,
+  // each declaration in its layer (LAYER_ORDER), with its specificity and its source order.
+  const layers = LAYER_ORDER.replace(/^@layer |;$/g, '').split(', ');
+  interface Declared {
+    readonly layer: string;
+    readonly specificity: number;
+    readonly order: number;
+    readonly value: string;
+    readonly forced?: boolean;
+  }
+  const declared: Record<string, Declared[]> = {
+    boundary: [
+      { layer: 'scheme', specificity: 10, order: 0, value: 'rgb(176, 91, 49)' },
+      {
+        layer: 'accessibility',
+        specificity: 10,
+        order: 2,
+        value: mapped.get('--color-focus')!,
+        forced: true,
+      },
+    ],
+    root: [{ layer: 'accessibility', specificity: 10, order: 1, value: 'inherit', forced: true }],
+    // The composition's own: a band, and the focused link on it, in variant-layout.
+    band: [
+      { layer: 'variant-layout', specificity: 20, order: 0, value: 'var(--color-on-scrim)' },
+      { layer: 'accessibility', specificity: 10, order: 1, value: 'inherit', forced: true },
+    ],
+    link: [
+      { layer: 'variant-layout', specificity: 31, order: 1, value: 'var(--color-on-scrim)' },
+      { layer: 'accessibility', specificity: 10, order: 1, value: 'inherit', forced: true },
+    ],
+    region: [
+      { layer: 'accessibility', specificity: 20, order: 0, value: `var(--color-${hook.focus})` },
+      { layer: 'variant-layout', specificity: 20, order: 0, value: 'var(--color-on-scrim)' },
+      { layer: 'accessibility', specificity: 10, order: 1, value: 'inherit', forced: true },
+    ],
+  };
+  const parent: Record<string, string | null> = {
+    boundary: null,
+    root: 'boundary',
+    band: 'root',
+    link: 'band',
+    region: 'root',
+  };
+  const resolve = (element: string, forcedColors: boolean): string => {
+    const winner = declared[element]!.filter(({ forced }) => forcedColors || !forced).sort(
+      (a, b) =>
+        layers.indexOf(b.layer) - layers.indexOf(a.layer) ||
+        b.specificity - a.specificity ||
+        b.order - a.order,
+    )[0];
+    const up = parent[element];
+    if (!winner || winner.value === 'inherit') return up ? resolve(up, forcedColors) : 'initial';
+    return winner.value;
+  };
+  assert.ok(layers.indexOf('accessibility') > layers.indexOf('variant-layout'));
+  // Forced colors on: the band link's ring is Highlight, and a hook's region keeps its own pair.
+  assert.equal(resolve('link', true), 'Highlight');
+  assert.equal(resolve('region', true), `var(--color-${hook.focus})`);
+  // Forced colors off: the composition's band color reaches its link's ring.
+  assert.equal(resolve('link', false), 'var(--color-on-scrim)');
+});

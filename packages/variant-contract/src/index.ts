@@ -33,6 +33,9 @@ export {
 export { BUDGET_KINDS, BudgetsSchema, type BudgetKind, type Budgets } from './budgets';
 export {
   COMPOSITION_SETTABLE,
+  COMPOSITION_SETTABLE_RULE,
+  compositionSettableProblem,
+  FOCUS_COLOR_ROLES,
   isPlatformToken,
   isReservedProperty,
   PLATFORM_TOKENS,

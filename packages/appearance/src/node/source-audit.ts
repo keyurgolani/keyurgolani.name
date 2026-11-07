@@ -32,7 +32,9 @@
 // - `legacy-property`: the retired v1 properties, `--paper`, `--ink`, and
 //   any `--kc-` or `--vt-` one;
 // - `custom-property`: in a variant's stylesheet, a custom property of its
-//   own that isn't a `--layout-*` one, or one of the platform's defaults
+//   own that isn't a `--layout-*` one or one COMPOSITION_SETTABLE names in
+//   its value forms (row 73: --color-focus and --ui-focus-offset, which
+//   code never sets), or one of the platform's defaults
 //   (`--layout-grid-*`, `--layout-width-*`, `--layout-motion-*`) set
 //   anywhere but the composition's root rule, `[data-variant='<id>']`, or
 //   from code.
@@ -95,6 +97,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   COMPOSITION_SETTABLE,
+  COMPOSITION_SETTABLE_RULE,
+  compositionSettableProblem,
   isPlatformToken,
   MOTION_SLOT,
   motionSlotValue,
@@ -138,8 +142,7 @@ export const SOURCE_AUDIT_REMEDIES: Readonly<Record<SourceAuditRule, string>> = 
   blur: "Use the design language's blur, var(--ui-backdrop-blur).",
   timing: 'Take durations from the design language: var(--ui-motion-fast), -standard, or -slow.',
   'legacy-property': "The v1 properties are gone: read #19's --color-, --ui-, and --type- tokens.",
-  'custom-property':
-    'A variant declares --layout-* properties alone: read the --color-, --ui-, and --type- tokens for the rest.',
+  'custom-property': `A variant declares --layout-* properties, and ${COMPOSITION_SETTABLE_RULE.replace(/^a composition may/, 'may')} Read the --color-, --ui-, and --type- tokens for the rest.`,
   'motion-gate':
     "Give the loop animation-play-state: var(--motion-ambient-state), after its last animation shorthand, so reduced motion, static, print, and the runtime's pause stop it, under the kit runtime's [data-kit-runtime] gate too.",
   'layout-line':
@@ -484,6 +487,8 @@ interface DeclarationContext {
   readonly fromCode: ReadonlySet<string>;
   /** The selector the declaration sits under, or '' when it's unknown. */
   readonly selector?: string;
+  /** A declaration in code, a style value or a style attribute's text, rather than a stylesheet's. */
+  readonly code?: boolean;
 }
 
 /** A composition's motion slots, by the part of the name after --layout-motion-. */
@@ -682,8 +687,16 @@ function declarationRules(
   const custom = property.startsWith('--');
   const layout = property.startsWith('--layout-');
   // A composition sets only --layout-* properties, and the platform properties
-  // COMPOSITION_SETTABLE names (K-5): none yet.
-  if (custom && !layout && context.variant && !COMPOSITION_SETTABLE.includes(property))
+  // COMPOSITION_SETTABLE names (K-5), each in its value forms, in a stylesheet
+  // alone (row 73): code's inline style is in no layer.
+  if (
+    custom &&
+    !layout &&
+    context.variant &&
+    (!COMPOSITION_SETTABLE.includes(property) ||
+      context.code === true ||
+      compositionSettableProblem(property, value) !== null)
+  )
     rules.push('custom-property');
   if (MOTION_SLOT.test(property) && !motionSlotValue(property, value)) rules.push('timing');
   // A named color, past the names of the properties var() reads, a url(),
@@ -1583,7 +1596,12 @@ export function auditCodeText(text: string, options: StylesheetOptions = {}): Fo
   const lines = text.split('\n');
   const findings: Found[] = [];
   const variant = options.variant === true;
-  const context: DeclarationContext = { layout: new Map(), variant, fromCode: new Set() };
+  const context: DeclarationContext = {
+    layout: new Map(),
+    variant,
+    fromCode: new Set(),
+    code: true,
+  };
   for (const found of stringsOf(text)) {
     const { value, offset, before } = found;
     const line = lineAt(starts, offset);
@@ -1596,7 +1614,8 @@ export function auditCodeText(text: string, options: StylesheetOptions = {}): Fo
     if (
       variant &&
       key !== null &&
-      ((!key.startsWith('--layout-') && !COMPOSITION_SETTABLE.includes(key)) || ROOT_ONLY.test(key))
+      // COMPOSITION_SETTABLE's are a stylesheet's to set (row 73), never code's.
+      (!key.startsWith('--layout-') || ROOT_ONLY.test(key))
     ) {
       report('custom-property');
     }

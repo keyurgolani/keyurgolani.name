@@ -907,3 +907,13 @@ test('on-fill: every shipped language pack keeps its fills to its on-* text', ()
     );
   }
 });
+
+test("a language sets neither of the focus tokens a composition may (row 73): its ring is its manifest's", () => {
+  for (const css of [
+    "[data-ui-slot='action'] { --color-focus: var(--color-on-scrim); }",
+    "[data-ui-slot='action']:focus-visible { --ui-focus-offset: calc(var(--ui-focus-width) * -1); }",
+    "[data-ui-slot='surface'] { --ui-focus-offset: var(--space-3xs); }",
+  ]) {
+    assert.equal(read(css).ok, false, css);
+  }
+});
