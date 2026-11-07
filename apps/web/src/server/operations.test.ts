@@ -400,8 +400,31 @@ test('auth.logout needs no session, so it signs out whatever the cookie carries,
   assert.equal(logout.originCheck, true);
   assert.equal(logout.capability, 'auth.session');
   assert.deepEqual(logout.errors, reachable(logout));
+  // Its declared errors stay as they are: a store that can't end the session is no error (row 88b).
+  assert.deepEqual(logout.errors, [
+    'not_available_in_profile',
+    'method_not_allowed',
+    'request_origin_rejected',
+    'capability_denied',
+    'invalid_input',
+    'internal_error',
+  ]);
   assert.equal(logout.output.safeParse({ signedOut: true }).success, true);
   assert.equal(logout.output.safeParse({ signedOut: false }).success, false);
+  // Signed out either way, and saying so when the store couldn't end the session (row 88b).
+  assert.equal(
+    logout.output.safeParse({ signedOut: true, reason: 'store_failed' }).success,
+    true,
+    'the store-failed answer',
+  );
+  for (const answer of [
+    { signedOut: false, reason: 'store_failed' },
+    { signedOut: true, reason: 'unavailable' },
+    { signedOut: true, reason: null },
+    { reason: 'store_failed' },
+  ]) {
+    assert.equal(logout.output.safeParse(answer).success, false, JSON.stringify(answer));
+  }
 });
 
 test('the other auth entries need a session, and the session list never shows a token or a digest', () => {

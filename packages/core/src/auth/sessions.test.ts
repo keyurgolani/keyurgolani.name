@@ -337,6 +337,98 @@ test('logout, revocation, and revoke-all each end a session in the store, tell o
   );
 });
 
+test("an end the store can't finish still ends the session in this process: announced once, audited as a failure, and its record goes at the next delete that works (row 88b)", async () => {
+  const base = memorySessionStore();
+  const refusing = { delete: true };
+  const deletes: string[] = [];
+  const puts: SessionRecord[] = [];
+  // deleteSessionFile's directory check or its rm throwing, before anything
+  // is deleted: the record stays, and reads still work.
+  const store: SessionStore = {
+    ...base,
+    put: async (record) => {
+      puts.push(record);
+      await base.put(record);
+    },
+    delete: async (digest) => {
+      deletes.push(digest);
+      if (refusing.delete) {
+        throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+      }
+      return base.delete(digest);
+    },
+  };
+  const { time, audit, sessions, ended } = setup({ store });
+  const { token, record } = await sessions.issue({ uaFamily: 'firefox' });
+  const { digest } = record;
+  puts.length = 0;
+  time.advance(2 * MINUTE);
+
+  await assert.rejects(sessions.end(digest, 'logout', { requestId: 'req-end' }), /EACCES/);
+  assert.ok(await base.get(digest), 'the store kept the record');
+  assert.deepEqual(ended, [digest], 'onSessionEnded heard the end');
+  assert.deepEqual(
+    audit.records.map(({ type, actor, outcome, refs }) => ({ type, actor, outcome, refs })),
+    [
+      {
+        type: 'logout',
+        actor: 'owner',
+        outcome: 'failure',
+        refs: { sessionRef: sessionRef(digest), requestId: 'req-end' },
+      },
+    ],
+  );
+
+  // The record is still there, and still readable, and none of it counts.
+  assert.equal(statusOf(await sessions.resolve(token)), 'ended:unknown');
+  const byDigest = await sessions.resolveDigest(digest);
+  assert.equal(
+    byDigest.status === 'ended' ? `ended:${byDigest.reason}` : byDigest.status,
+    'ended:unknown',
+  );
+  let ran = false;
+  const held = await sessions.holding(token, async () => {
+    ran = true;
+  });
+  assert.equal(statusOf(held as Resolution), 'ended:unknown');
+  assert.equal(ran, false, 'holding ran a commit');
+  assert.equal(await sessions.touch(record, { kind: 'command', extend: true }), null);
+  assert.deepEqual(puts, [], 'a touch wrote lastSeenAt');
+  assert.deepEqual(await sessions.list(), []);
+  assert.ok(await base.get(digest), 'every delete was refused, so the record is still there');
+  assert.deepEqual(ended, [digest], 'a refused retry announces nothing more');
+
+  // Once a delete works, the next resolve removes the record, and the mark clears.
+  refusing.delete = false;
+  assert.equal(statusOf(await sessions.resolve(token)), 'ended:unknown');
+  assert.equal(await base.get(digest), null, 'the next resolve removed the record');
+  const tried = deletes.length;
+  assert.equal(statusOf(await sessions.resolve(token)), 'ended:unknown');
+  assert.equal(deletes.length, tried, 'the mark cleared, so no delete is retried');
+  assert.deepEqual(ended, [digest], 'onSessionEnded heard it once, all told');
+  assert.equal(audit.records.length, 1);
+});
+
+test("revoking every session clears the mark an end the store couldn't finish left (row 88b)", async () => {
+  const base = memorySessionStore();
+  const deletes: string[] = [];
+  const store: SessionStore = {
+    ...base,
+    delete: async (digest) => {
+      deletes.push(digest);
+      throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+    },
+  };
+  const { sessions } = setup({ store });
+  const { token, record } = await sessions.issue({ uaFamily: 'firefox' });
+  await assert.rejects(sessions.end(record.digest, 'logout'), /EACCES/);
+  assert.equal(await sessions.revokeAll(), 1);
+  assert.equal(await base.get(record.digest), null, 'revoke-all removed the record');
+  const tried = deletes.length;
+  assert.notEqual(statusOf(await sessions.resolve(token)), 'valid');
+  assert.equal(deletes.length, tried, 'the mark is gone, so no delete is retried');
+});
+
 test('every way a session ends fires onSessionEnded with its digest', async () => {
   type Run = ReturnType<typeof setup> & { readonly issued: Issued };
   /**
@@ -807,7 +899,7 @@ async function settlesWithin<T>(promise: Promise<T>, ms: number, what: string): 
 }
 
 test("a commit that asks for its own session's lock fails at once instead of waiting on itself", async () => {
-  const { sessions, time } = setup();
+  const { sessions, time, ended, audit } = setup();
   const { token, record } = await sessions.issue({ uaFamily: 'firefox' });
   const holding = await settlesWithin(
     sessions.holding(token, async () => {
@@ -823,6 +915,9 @@ test("a commit that asks for its own session's lock fails at once instead of wai
       // expires mid-commit, would drop it under the lock the commit holds.
       time.advance(61 * MINUTE);
       await assert.rejects(sessions.list(), SessionReentryError);
+      // A reentry ends nothing, so it announces and audits nothing (row 88b).
+      assert.deepEqual(ended, [], 'a reentry announced an end');
+      assert.deepEqual(audit.records, [], 'a reentry audited an end');
       return 'done';
     }),
     2_000,
