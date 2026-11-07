@@ -35,6 +35,8 @@ function fakePage() {
         return undefined;
       }
       if (source.includes('data-enhancement-island')) return '';
+      // The scripts the page's HTML loads itself, which the floor's seed leaves out: none here.
+      if (source.includes('document.scripts')) return [];
       return 0;
     },
   };
