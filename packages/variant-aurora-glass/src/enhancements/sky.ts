@@ -54,7 +54,8 @@ export function liveIndex(
 ): () => void {
   if (!popover) return () => undefined;
   root.dataset.agLive = '';
-  // Live, the Index is a dialog over the page, named by its heading; in the flow it was a contents list.
+  // Live, the Index is a popover dialog over the page, named by its heading; served, it's a contents list.
+  index?.setAttribute('popover', 'auto');
   index?.setAttribute('role', 'dialog');
   index?.setAttribute('aria-labelledby', `${index.id}--h`);
   const close = (event: Event) => {
@@ -63,10 +64,12 @@ export function liveIndex(
   index?.addEventListener('click', close);
   return () => {
     index?.removeEventListener('click', close);
+    // Closed first, while it's still a popover; then the contents list it was served as.
+    if (index?.matches(':popover-open')) index.hidePopover();
+    index?.removeAttribute('popover');
     index?.removeAttribute('role');
     index?.removeAttribute('aria-labelledby');
     delete root.dataset.agLive;
-    if (index?.matches(':popover-open')) index.hidePopover();
   };
 }
 

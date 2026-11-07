@@ -68,9 +68,11 @@ export function IndexDialog({
   const counted = (n: number, one: string, many: string) =>
     `${formatNumber(n, locale)} ${n === 1 ? one : many}`;
   return (
-    // No role and no name of its own while it's the contents list: its nav carries the name.
-    // The enhancement gives it both, the dialog role and this heading's name, when the page goes live.
-    <div className="ag-index ag-pane" id={dialog} popover="auto">
+    // No role, no name and no popover of its own while it's the contents list: its nav carries
+    // the name, and a closed popover the page shows would hide its links from a reader that knows
+    // closed popovers aren't shown (row 62). The enhancement makes it the popover, with the dialog
+    // role and this heading's name, when the page goes live.
+    <div className="ag-index ag-pane" id={dialog}>
       <div className="ag-index__head">
         <h2 className="ag-index__title" id={title} data-type-role="headline">
           <Words lang={lang}>Index</Words>
