@@ -101,3 +101,15 @@ test('a scene that still overflows in a wider face opens a width wider, never sh
       assert.doesNotMatch(body!, /font-size|line-height|font-family|--type-|zoom|scale/);
   }
 });
+
+test('top to bottom the stage rings its edges over its scenes while it has focus, and only there', () => {
+  const ring = declared(at(".hc-shell[data-fit='over'] .hc-stage:focus-visible::after"), CSS);
+  assert.match(ring, /content: '';/);
+  assert.match(ring, /position: absolute;/);
+  assert.match(ring, /z-index: 1;/);
+  assert.match(ring, /inset: 0;/);
+  assert.match(ring, /border: var\(--ui-focus-width\) solid var\(--color-focus\);/);
+  assert.match(ring, /pointer-events: none;/);
+  // The pinned strip draws none of its own: the rule names the stacked shell alone.
+  assert.equal(declared(at('.hc-stage:focus-visible::after'), CSS), '');
+});
