@@ -123,6 +123,19 @@ test('the capsule: the name and at most five destinations, Contact the filled ca
   assert.match(capsule, /popoverTarget="ag--index"|popovertarget="ag--index"/i);
 });
 
+test('with no band to list there is no Index: no trigger in the capsule and no list or dialog (row 62)', () => {
+  // identity-only holds no band, so an Index would open on nothing, and its empty nav fails the
+  // readable scan once it's no longer a closed popover.
+  const html = renderInput(fixtureInput('identity-only'));
+  assert.doesNotMatch(html, /ag-capsule__index/);
+  assert.doesNotMatch(html, /id="ag--index"/);
+  // Wherever there are bands, the Index and both its triggers are there.
+  const full = sample();
+  assert.match(full, /class="ag-capsule__index ag-capsule__index--live"/);
+  assert.match(full, /class="ag-capsule__index ag-capsule__index--plain" href="#ag--index"/);
+  assert.match(full, /<nav aria-labelledby="ag--index--h"><ol class="ag-index__rows">/);
+});
+
 test('with no script the Index is a plain link to a contents list after main; marked live, the popover', () => {
   const html = sample();
   const capsule =
