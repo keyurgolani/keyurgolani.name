@@ -3,8 +3,8 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { clearJournal, readJournal } from '~/lib/studio/journal';
 import { NEUTRAL_TITLE } from '~/lib/studio/session-end';
-import { signOutWith } from '~/lib/studio/sign-out';
-import { SIGNED_OUT_LOCATION, studioFetch } from '~/lib/studio-fetch';
+import { signedOutLocation, signOutWith } from '~/lib/studio/sign-out';
+import { studioFetch } from '~/lib/studio-fetch';
 import { SIGN_OUT_IDLE, SignOut, type SignOutState } from '../shell/sign-out';
 import { StudioLoadBoundary } from './load-boundary';
 
@@ -37,7 +37,7 @@ function LoadSignOut({ csrfToken, pressed }: { csrfToken: string; pressed: () =>
     if (store && !keep) clearJournal(store);
     if (await signOutWith(studioFetch, csrfToken, keep ? 'keep' : 'discard')) {
       document.title = NEUTRAL_TITLE;
-      window.location.assign(SIGNED_OUT_LOCATION);
+      window.location.assign(signedOutLocation('ended'));
       return;
     }
     busy.current = false;
