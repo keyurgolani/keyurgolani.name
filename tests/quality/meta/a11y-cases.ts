@@ -1975,6 +1975,21 @@ export const A11Y_CASES: readonly MetaCase[] = [
     revealed(scriptlessInventory),
     { chunk: REVEAL },
   ),
+  // And when the server hides the status it fills (the coordinator, 7 Nov 2026): the words are
+  // the server's, shown or not.
+  builtCase(
+    'script-only-hidden-server-words',
+    'inventory',
+    'A hidden status marked data-script-only whose words the server renders, without JavaScript and in print',
+    lazyReveal(
+      'A hidden script-only status',
+      '<p role="status" data-script-only hidden data-lazy>Opening, 1 of 21</p>',
+      PRINT_HIDES,
+    ),
+    scriptOnlyText('Opening, 1 of 21'),
+    revealed(scriptlessInventory),
+    { chunk: REVEAL },
+  ),
   // The same on a marked aria-live region (the coordinator, 7 Nov 2026, F3).
   builtCase(
     'script-only-live-server-words',
