@@ -705,8 +705,10 @@ export async function runPass(
   if (isAppearanceCell(cell) && row.id !== 'print' && !cell.sweep) {
     const before = found.length;
     const route = primitivesPath(cell, row);
-    const answer = await page.goto(route, { waitUntil: 'load' });
-    await settle(page);
+    // Read as the main pass reads its page (push 3 r2, F6): settled, its fonts in, and its
+    // enhancements mounted or failed. Its settled and enhanced answers go unread, as settle()'s
+    // answer did before.
+    const { response: answer } = await loadForPass(page, route);
     const surface = { id: PRIMITIVES_SURFACE, route: PRIMITIVES_ROUTE };
     const findings: Finding[] = [];
     if (answer?.status() !== 200) {
