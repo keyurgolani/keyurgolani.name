@@ -268,6 +268,35 @@ test(
 );
 
 test(
+  'on the top line a view link focused from the keyboard rings in the band’s ink, not the page’s focus color',
+  { annotation, tag },
+  async ({ page }) => {
+    await load(page);
+    // The name, then a Tab: the Strip link, focused as a keyboard focuses it.
+    await page.locator('.hc-chrome__name').focus();
+    await page.keyboard.press('Tab');
+    const ring = await page.evaluate(() => {
+      const link = document.activeElement as HTMLElement;
+      const ink = document.createElement('span');
+      ink.style.color = 'var(--color-on-scrim)';
+      link.closest('.hc-chrome')!.append(ink);
+      const band = getComputedStyle(ink).color;
+      ink.remove();
+      const style = getComputedStyle(link);
+      return {
+        views: link.matches('.hc-chrome__views a:focus-visible'),
+        style: style.outlineStyle,
+        color: style.outlineColor,
+        band,
+      };
+    });
+    expect(ring.views).toBe(true);
+    expect(ring.style).toBe('solid');
+    expect(ring.color).toBe(ring.band);
+  },
+);
+
+test(
   'a Shift+Tab back into an earlier scene steps the strip there at once too: what it reached holds still in view, and the status names its scene once the strip rests',
   { annotation, tag },
   async ({ page }) => {

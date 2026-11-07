@@ -91,10 +91,12 @@
   /* The top line is a band of the matte, so the mattes and the scrubber are the page's only bands. */
   background-color: var(--layout-matte);
   color: var(--color-on-scrim);
-}
-
-[data-variant='horizontal-cinema'] .hc-chrome :focus-visible {
-  outline-color: var(--color-on-scrim);
+  /*
+   * A ring on the band in the band's ink. The platform's ring, in a later layer than this one,
+   * reads the focus color by inheritance, as its surface hooks set it on a region; an outline
+   * color here would lose to it.
+   */
+  --color-focus: var(--color-on-scrim);
 }
 
 [data-variant='horizontal-cinema'] .hc-chrome__name {
@@ -264,6 +266,7 @@
   padding-inline: var(--layout-pad);
   background-color: var(--layout-matte);
   color: color-mix(in oklab, var(--color-on-scrim) 72%, var(--layout-matte));
+  --color-focus: var(--color-on-scrim);
 }
 
 [data-variant='horizontal-cinema'] .hc-bar__lead {
@@ -305,8 +308,12 @@
   text-underline-offset: 0.25em;
 }
 
-[data-variant='horizontal-cinema'] :is(.hc-bar, [data-matte]) :focus-visible {
-  outline-color: var(--color-on-scrim);
+/*
+ * A matte scene (the title card, an intertitle, the closing slate) rings in the band's ink too. The
+ * scene, not every [data-matte]: the board map's matte marks sit on the canvas, and ring there.
+ */
+[data-variant='horizontal-cinema'] .hc-scene[data-matte] {
+  --color-focus: var(--color-on-scrim);
 }
 
 /* The picture: the scene's content on the module. */
