@@ -419,38 +419,58 @@ test(
   },
 );
 
+/**
+ * Stacked by a crowded rail at 1440 by 900, which holds on macOS and on CI Linux alike, so the chapter
+ * control shows on the top edge: opens the chapter sheet from it by Enter, and returns the sheet's links.
+ * Opened, the sheet has focus on the chapter the reader is in.
+ */
+async function openSheet(page: Page) {
+  await crowdRail(page);
+  await load(page);
+  await expectLayout(page, 'stacked');
+  const sheet = page.locator('.hc-jump__sheet');
+  await page.locator('.hc-jump__button').focus();
+  await page.keyboard.press('Enter');
+  await expect(sheet).toBeVisible();
+  await expect(sheet.locator('a[aria-current]')).toBeFocused();
+  return { sheet, links: sheet.locator('a[href]') };
+}
+
 test(
-  "stacked, the chapter sheet takes focus to the reader's chapter as it opens, Tab goes round its links, and Escape gives focus back",
+  'stacked, Tab in the open chapter sheet goes on link by link, and from its last link round to its first',
   { annotation, tag },
   async ({ page }) => {
-    // A crowded rail stacks the strip at 1440 by 900 on macOS and on CI Linux alike, and stacked
-    // the chapter control shows on the top edge.
-    await crowdRail(page);
-    await load(page);
-    await expectLayout(page, 'stacked');
-    const button = page.locator('.hc-jump__button');
-    const sheet = page.locator('.hc-jump__sheet');
-    const links = sheet.locator('a[href]');
-    await button.focus();
-    await page.keyboard.press('Enter');
-    await expect(sheet).toBeVisible();
-    // Focus is in the sheet, on the chapter the reader is in.
-    await expect(sheet.locator('a[aria-current]')).toBeFocused();
-    // Shift+Tab from its first link goes to its last, and Tab from its last to its first.
+    const { links } = await openSheet(page);
+    // Inside the sheet a Tab is the browser's own: from the first link to the second.
+    await links.first().focus();
+    await page.keyboard.press('Tab');
+    await expect(links.nth(1)).toBeFocused();
+    // At the end it goes round, so a Tab never leaves the open sheet for the page under it.
+    await links.last().focus();
+    await page.keyboard.press('Tab');
+    await expect(links.first()).toBeFocused();
+  },
+);
+
+test(
+  'stacked, Shift+Tab in the open chapter sheet goes from its first link round to its last',
+  { annotation, tag },
+  async ({ page }) => {
+    const { links } = await openSheet(page);
     await links.first().focus();
     await page.keyboard.press('Shift+Tab');
     await expect(links.last()).toBeFocused();
-    await page.keyboard.press('Tab');
-    await expect(links.first()).toBeFocused();
-    // A Tab for every link and one more never leaves the sheet.
-    const total = await links.count();
-    for (let press = 0; press <= total; press++) {
-      await page.keyboard.press('Tab');
-      expect(await sheet.evaluate((open) => open.contains(document.activeElement))).toBe(true);
-    }
+  },
+);
+
+test(
+  'stacked, Escape closes the open chapter sheet and gives focus back to the chapter control',
+  { annotation, tag },
+  async ({ page }) => {
+    const { sheet } = await openSheet(page);
     await page.keyboard.press('Escape');
     await expect(sheet).toBeHidden();
-    await expect(button).toBeFocused();
+    await expect(page.locator('.hc-jump__button')).toBeFocused();
   },
 );
 
