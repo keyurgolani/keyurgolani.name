@@ -1,6 +1,6 @@
 import type { Frame, Page } from '@playwright/test';
 import { WORD } from '../../packages/variant-horizontal-cinema/src/chapters';
-import { expect } from '../harness/fixtures';
+import { expect, test } from '../harness/fixtures';
 
 // Horizontal Cinema's scene model and the readers its browser specs share
 // (redesign): the scenes in strip order, which one the page says is
@@ -142,6 +142,63 @@ export async function watchKeys(scope: Scope): Promise<void> {
 
 export const keys = (scope: Scope) =>
   scope.evaluate(() => (window as Window & { __keys?: boolean[] }).__keys ?? []);
+
+/** The two layouts the fit check leaves a desktop strip in. */
+export type Layout = 'pinned' | 'stacked';
+
+/** The marks each layout carries, whole: the stage's direction, the pin, the fit's mark, the bar. */
+const LAYOUTS = {
+  // Across the stage and pinned to the page's scroll, nothing over, the bar under the stage shown.
+  pinned: { layout: 'horizontal', pinned: true, fit: null, bar: true },
+  // Top to bottom, unpinned, the fit's mark over, and no bar: nothing of the rail is drawn.
+  stacked: { layout: 'vertical', pinned: false, fit: 'over', bar: false },
+} as const;
+
+const marks = async (scope: Scope) => {
+  const { layout, pinned, fit } = await read(scope);
+  const bar = await scope.evaluate(
+    () => document.querySelector<HTMLElement>('.hc-scrub')?.offsetParent != null,
+  );
+  return { layout, pinned, fit, bar };
+};
+
+const layoutOf = (seen: Awaited<ReturnType<typeof marks>>): Layout | undefined =>
+  (Object.keys(LAYOUTS) as Layout[]).find((name) =>
+    Object.entries(LAYOUTS[name]).every(([key, value]) => seen[key as keyof typeof seen] === value),
+  );
+
+/**
+ * The layout the strip has rendered, read from its own marks, with that layout's whole contract
+ * checked: pinned, or stacked, as LAYOUTS has them. Anything else fails, naming what it saw. The
+ * layout found goes on the test as a 'layout' annotation, so a CI read shows which contract the test
+ * checked. Only for a test whose layout differs by platform (the complete fixture at 1024 by 768
+ * stacks on macOS and may pin on CI Linux); a test that needs one layout asserts that one instead,
+ * at a width or on a fixture where it holds on both. `wait` polls until a layout holds; without it,
+ * the page is read once, as it is now.
+ */
+export async function renderedLayout(
+  scope: Scope,
+  { wait = true }: { wait?: boolean } = {},
+): Promise<Layout> {
+  let seen = await marks(scope);
+  if (wait) {
+    await expect
+      .poll(async () => {
+        seen = await marks(scope);
+        return layoutOf(seen) ?? JSON.stringify(seen);
+      })
+      .toMatch(/^(pinned|stacked)$/);
+  }
+  const layout = layoutOf(seen);
+  expect(layout, `neither layout's marks: ${JSON.stringify(seen)}`).toBeDefined();
+  test.info().annotations.push({ type: 'layout', description: layout! });
+  return layout!;
+}
+
+/** Waits for the strip to render `layout`, its whole contract as LAYOUTS has it. */
+export async function expectLayout(scope: Scope, layout: Layout): Promise<void> {
+  await expect.poll(() => marks(scope)).toEqual(LAYOUTS[layout]);
+}
 
 /**
  * Every heading word in the strip's scenes that sits on more than one line:
