@@ -3,6 +3,7 @@ import {
   frameLoops,
   loadHome,
   MOTION_STALL_RERUN,
+  MotionStall,
   nextFrames,
   runningAnimations,
   scrollThrough,
@@ -160,8 +161,25 @@ test('a requestAnimationFrame loop is one frameLoops() sees, and a double frame 
 // reaches a step. Either gets one rerun of the whole check from its start, in
 // a fresh context, as the test's annotation; a stall on both runs fails.
 
-/** How a stub page stalls: its frames stop, or its main thread blocks, at STALL_STEP. */
-type Stall = 'frames' | 'block';
+/**
+ * How a stub page stalls. `frames`: its frames stop, from step STALL_STEP's next frames on. `block`:
+ * its main thread blocks inside step STALL_STEP's own scroll. And one per bounded call, each blocked
+ * 9 s by the page's own copy of what that call uses (R60-4): `scroll-call`, Element.prototype.scrollTo
+ * on its STALL_STEP-th call (step STALL_STEP's scroll); `animations-call`,
+ * Document.prototype.getAnimations on its STALL_STEP-th call (step STALL_STEP's running animations);
+ * `mark-call`, window.getComputedStyle on its first call (marking the scrollers).
+ */
+type Stall = 'frames' | 'block' | 'scroll-call' | 'animations-call' | 'mark-call';
+
+/** What a stub page does besides its stall. */
+interface StubOptions {
+  /** On a stalling load, an endless CSS animation in view from the first step (R60-1). */
+  readonly animate?: boolean;
+}
+
+/** 9 s of busy main thread, past the bound and the probe; the console line first, so a test can time it. */
+const BLOCK =
+  "console.log('motion-stub: blocking'); const end = Date.now() + 9000; while (Date.now() < end) {}";
 
 /**
  * The step a stub page stalls at, by its index in scrollThrough()'s pass, never by a scroll
@@ -181,7 +199,13 @@ const STALL_STEP = 2;
  * to each fresh one `fresh` opens, which reaches nothing else, as the test's
  * own doesn't, and counts the loads.
  */
-async function stallSite(browser: Browser, page: Page, stall: Stall, once: boolean) {
+async function stallSite(
+  browser: Browser,
+  page: Page,
+  stall: Stall,
+  once: boolean,
+  { animate = false }: StubOptions = {},
+) {
   const served = { loads: 0 };
   const serve = (context: BrowserContext) =>
     context.route('http://stall.test/**', (route) => {
@@ -190,12 +214,31 @@ async function stallSite(browser: Browser, page: Page, stall: Stall, once: boole
       // A frame stall: from that step's next frames on, the harness's own requestAnimationFrame
       // never calls back, and the main thread stays free. A block: that step's scroll runs 9 s, past
       // the bound and the probe.
-      const trap =
-        stall === 'frames'
-          ? 'window.__motionFrames.frame = () => 0;'
-          : 'const end = Date.now() + 9000; while (Date.now() < end) {}';
-      const script = stalls
-        ? `<script>let steps; Object.defineProperty(window, '__motionSteps', {
+      const trap = stall === 'frames' ? 'window.__motionFrames.frame = () => 0;' : BLOCK;
+      // Each call stub counts its own calls, so it blocks at STALL_STEP, never by position.
+      const calls: Record<string, string> = {
+        'scroll-call': `const scrollTo = Element.prototype.scrollTo; let calls = 0;
+          Element.prototype.scrollTo = function (...args) {
+            if (calls++ === ${STALL_STEP}) { ${BLOCK} }
+            return scrollTo.apply(this, args);
+          };`,
+        'animations-call': `const getAnimations = Document.prototype.getAnimations; let calls = 0;
+          Document.prototype.getAnimations = function () {
+            if (calls++ === ${STALL_STEP}) { ${BLOCK} }
+            return getAnimations.call(this);
+          };`,
+        'mark-call': `const style = window.getComputedStyle; let armed = true;
+          window.getComputedStyle = function (...args) {
+            if (armed) { armed = false; ${BLOCK} }
+            return style.apply(this, args);
+          };`,
+      };
+      const spin = stalls && animate ? '<span class="spin">spinning</span>' : '';
+      const script = !stalls
+        ? ''
+        : stall in calls
+          ? `<script>${calls[stall]}</script>`
+          : `<script>let steps; Object.defineProperty(window, '__motionSteps', {
             configurable: true,
             get: () => steps,
             set(list) {
@@ -207,12 +250,12 @@ async function stallSite(browser: Browser, page: Page, stall: Stall, once: boole
                 return length;
               };
             },
-          });</script>`
-        : '';
+          });</script>`;
       return route.fulfill({
         contentType: 'text/html',
-        body: `<!doctype html><html><head><style>body { margin: 0 }</style></head><body>
-<div data-variant="probe"><main id="main">${SECTIONS}</main></div>${script}</body></html>`,
+        body: `<!doctype html><html><head><style>body { margin: 0 }
+@keyframes probe-spin { to { opacity: 0.5; } } .spin { animation: probe-spin 1s infinite; }</style></head><body>
+<div data-variant="probe"><main id="main">${spin}${SECTIONS}</main></div>${script}</body></html>`,
       });
     });
   await serve(page.context());
@@ -307,4 +350,144 @@ test('a stall on both runs fails, naming both kinds, after one rerun', async ({
   expect(served.loads).toBe(2);
   expect(record.runs).toBe(2);
   expect(reruns()).toEqual([`kind=frame-stall scroller=0 step=${STALL_STEP} call=next-frames`]);
+});
+
+// Row 60's addendum (the coordinator's 19:0x read): what a stall may not hide, what never reruns, and
+// each bounded call's own stall.
+
+test('an endless animation found before a stall fails as itself, and nothing reruns it', async ({
+  browser,
+  page,
+}) => {
+  const { served, fresh } = await stallSite(browser, page, 'frames', true, { animate: true });
+  const { record, run } = counted();
+  await expect(withStallRerun(page, run, fresh)).rejects.toThrow(
+    new RegExp(
+      `^scrollThrough found 1 endless animation\\(s\\) before the page stalled, so the stall can't rerun them: css probe-spin on span\\.spin; then frame-stall at scroller 0, step ${STALL_STEP}: `,
+    ),
+  );
+  expect(served.loads).toBe(1);
+  expect(record.runs).toBe(1);
+  expect(reruns()).toEqual([]);
+});
+
+test("a body's own failure on its first run fails as itself, and fresh() never runs", async ({
+  page,
+}) => {
+  let runs = 0;
+  let freshes = 0;
+  await expect(
+    withStallRerun(
+      page,
+      async () => {
+        runs++;
+        throw new Error('real');
+      },
+      async () => {
+        freshes++;
+        return page;
+      },
+    ),
+  ).rejects.toThrow(/^real$/);
+  expect(runs).toBe(1);
+  expect(freshes).toBe(0);
+  expect(reruns()).toEqual([]);
+});
+
+test("a body's own failure on the rerun stands, not as a second stall", async ({
+  browser,
+  page,
+}) => {
+  let runs = 0;
+  const run = async () => {
+    runs++;
+    if (runs === 1) throw new MotionStall(0, STALL_STEP, 'next-frames', false);
+    throw new Error('real');
+  };
+  const fresh = async () => (await browser.newContext()).newPage();
+  const failure = withStallRerun(page, run, fresh);
+  await expect(failure).rejects.toThrow(/^real$/);
+  expect(runs).toBe(2);
+  expect(reruns()).toEqual([`kind=frame-stall scroller=0 step=${STALL_STEP} call=next-frames`]);
+});
+
+for (const [stall, annotation] of [
+  ['scroll-call', `kind=main-thread-block scroller=0 step=${STALL_STEP} call=scroll`],
+  [
+    'animations-call',
+    `kind=main-thread-block scroller=0 step=${STALL_STEP} call=running-animations`,
+  ],
+  ['mark-call', 'kind=main-thread-block scroller=none step=none call=mark-scrollers'],
+] as const) {
+  test(`a block inside ${stall.replace('-call', '')}'s own call is bounded, named and rerun once`, async ({
+    browser,
+    page,
+  }) => {
+    const { served, fresh } = await stallSite(browser, page, stall, true);
+    const { record, run } = counted();
+    await withStallRerun(page, run, fresh);
+    expect(served.loads).toBe(2);
+    expect(record.runs).toBe(2);
+    expect(reruns()).toEqual([annotation]);
+    expect(reruns()[0]).toMatch(SHAPE);
+  });
+}
+
+test("a fresh() that gives a page in the stalled page's own context fails, rather than rerun there", async ({
+  browser,
+  page,
+}) => {
+  const { served } = await stallSite(browser, page, 'frames', true);
+  const { record, run } = counted();
+  await expect(withStallRerun(page, run, async () => page.context().newPage())).rejects.toThrow(
+    /got a page in the stalled page's own context: it needs a fresh one/,
+  );
+  expect(served.loads).toBe(1);
+  expect(record.runs).toBe(1);
+});
+
+test('a probe that rejects, its page closed mid-probe, fails as itself and is never rerun', async ({
+  browser,
+  page,
+}) => {
+  // The block starts inside step STALL_STEP's scroll; its page closes 6 s on, inside the probe's
+  // window (the 5 s bound, then up to 2 s), so the probe rejects instead of timing out.
+  page.on('console', (message) => {
+    if (message.text() === 'motion-stub: blocking') {
+      setTimeout(() => page.close().catch(() => {}), 6_000);
+    }
+  });
+  const { served, fresh } = await stallSite(browser, page, 'scroll-call', true);
+  const { record, run } = counted();
+  await expect(withStallRerun(page, run, fresh)).rejects.toThrow(/closed/);
+  expect(served.loads).toBe(1);
+  expect(record.runs).toBe(1);
+  expect(reruns()).toEqual([]);
+});
+
+test.describe('under reduced motion', () => {
+  test.use({ contextOptions: { reducedMotion: 'reduce' } });
+  test("the rerun's fresh context keeps the test's viewport and its reduced motion", async ({
+    browser,
+    page,
+  }) => {
+    const { fresh } = await stallSite(browser, page, 'frames', true);
+    const { record, run } = counted();
+    // Read while the page is live: withStallRerun closes the rerun's context once it returns. Only
+    // the rerun gets past run(), so this holds the rerun page's own reading and nothing else.
+    const seen: { viewport: { width: number; height: number } | null; reduce: boolean }[] = [];
+    await withStallRerun(
+      page,
+      async (on) => {
+        await run(on);
+        seen.push({
+          viewport: on.viewportSize(),
+          reduce: await on.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches),
+        });
+      },
+      fresh,
+    );
+    expect(record.runs).toBe(2);
+    expect(seen).toEqual([{ viewport: { width: 1280, height: 480 }, reduce: true }]);
+  });
 });
