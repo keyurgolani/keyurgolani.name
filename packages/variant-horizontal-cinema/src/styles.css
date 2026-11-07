@@ -2921,9 +2921,10 @@
  * (64rem by 44rem and up, by size, whatever the pointer): the bar shows, in flow at the end of the
  * scenes, wrapping as it needs, so every scene, the status and the credits link are there by touch
  * as by mouse. A phone and a short landscape window keep the chapter sheet alone, and the mouse
- * strip and the fallback a face too wide sends top to bottom don't change.
+ * strip and the fallback a face too wide sends top to bottom don't change. A screen's only: on paper
+ * the bar stays hidden, as it is by mouse.
  */
-@media (min-width: 64rem) and (min-height: 44rem) and (not ((hover: hover) and (pointer: fine))) {
+@media screen and (min-width: 64rem) and (min-height: 44rem) and (not ((hover: hover) and (pointer: fine))) {
   [data-variant='horizontal-cinema'] .hc[data-view='strip'] .hc-chrome__views {
     display: inline-flex;
   }
