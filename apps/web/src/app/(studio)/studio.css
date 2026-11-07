@@ -123,6 +123,18 @@
   opacity: 0.7;
 }
 
+/* The load boundary's wrapper around Studio's shell (row 88c): no box of its own, and hidden
+   while the late alert (late-alert.tsx), a <studio-load-late> right under body, stands in for a
+   shell still on its way. Keyed on that element, so the late path sets nothing on a node React
+   hydrates. */
+.studio-load {
+  display: contents;
+}
+
+body:has(> studio-load-late) .studio-load {
+  display: none;
+}
+
 .studio-input:focus-visible,
 .studio-button:focus-visible,
 .studio-alert:focus-visible {
