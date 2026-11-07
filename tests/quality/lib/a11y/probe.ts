@@ -188,13 +188,18 @@ function probe(request: ProbeRequest): unknown {
   };
   const text = (el: Element) => (el.textContent ?? '').replace(/\s+/g, ' ').trim();
   /**
-   * Whether `el` is a live status: role="status" (its first role token, as ARIA reads it), or an
-   * aria-live other than "off". The only element a data-script-only mark counts on.
+   * Whether `el` is a live status, as ARIA reads it: an aria-live that, trimmed and in lower case,
+   * is "polite" or "assertive"; or role="status" (its first role token) unless aria-live is
+   * explicitly "off". An empty or unknown aria-live is the default: off, or the role's polite. The
+   * only element a data-script-only mark counts on.
    */
-  const liveStatus = (el: Element | null): boolean =>
-    el !== null &&
-    ((el.getAttribute('role') ?? '').trim().split(/\s+/)[0] === 'status' ||
-      (el.hasAttribute('aria-live') && el.getAttribute('aria-live')!.trim() !== 'off'));
+  const liveStatus = (el: Element | null): boolean => {
+    if (el === null) return false;
+    const live = (el.getAttribute('aria-live') ?? '').trim().toLowerCase();
+    if (live === 'polite' || live === 'assertive') return true;
+    if (live === 'off') return false;
+    return (el.getAttribute('role') ?? '').trim().split(/\s+/)[0] === 'status';
+  };
   const nameOf = (el: Element): string =>
     (
       el.getAttribute('aria-label') ??

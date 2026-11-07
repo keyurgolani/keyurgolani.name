@@ -501,6 +501,26 @@ const SCRIPT_GUARDS = [
     scriptless: ['text: Opening, 1 of 21'],
     print: ['text: Opening, 1 of 21'],
   },
+  // Not live as ARIA reads it (the coordinator, 7 Nov 2026, F2): an empty, upper-case "off" or
+  // unknown aria-live is off, and an explicit aria-live="off" overrides a status's polite.
+  ...(
+    [
+      ['script-only-live-empty', 'an aria-live=""', '<p aria-live=""'],
+      ['script-only-live-upper-off', 'an aria-live="OFF"', '<p aria-live="OFF"'],
+      ['script-only-live-bogus', 'an aria-live="bogus"', '<p aria-live="bogus"'],
+      [
+        'script-only-status-off',
+        'a role="status" aria-live="off"',
+        '<p role="status" aria-live="off"',
+      ],
+    ] as const
+  ).map(([id, on, open]) => ({
+    id,
+    what: `The same words, marked, on ${on} element`,
+    html: `${open} data-script-only hidden data-lazy data-words="Opening, 1 of 21"></p>`,
+    scriptless: ['text: Opening, 1 of 21'],
+    print: ['text: Opening, 1 of 21'],
+  })),
   {
     id: 'unmarked-status',
     what: 'The same status, unmarked',
@@ -1827,6 +1847,18 @@ export const A11Y_CASES: readonly MetaCase[] = [
       // (lead, 3 Nov 2026, for HC's position status; only on a live status, 6 Nov 2026).
       ['script-only', 'A script-only status', SCRIPT_ONLY],
       ['script-only-live', 'A script-only live region', SCRIPT_ONLY_LIVE],
+      // Live as ARIA reads it (the coordinator, 7 Nov 2026, F2): an empty aria-live is the
+      // role's default, so a status stays live; and aria-live is read trimmed, in lower case.
+      [
+        'script-only-status-empty-live',
+        'A script-only status with an empty aria-live',
+        '<p role="status" aria-live="" data-script-only hidden data-lazy data-words="Opening, 1 of 21"></p>',
+      ],
+      [
+        'script-only-live-cased',
+        'A script-only live region whose aria-live is " Polite "',
+        '<p aria-live=" Polite " data-script-only hidden data-lazy data-words="Opening, 1 of 21"></p>',
+      ],
     ] as const
   ).flatMap(([id, what, html]): MetaCase[] => [
     {
