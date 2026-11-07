@@ -3611,7 +3611,6 @@
 
 @media print {
   [data-variant='horizontal-cinema'] .hc-scrub,
-  [data-variant='horizontal-cinema'] .hc-skip,
   [data-variant='horizontal-cinema'] .hc-fold__state {
     display: none;
   }

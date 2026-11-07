@@ -146,3 +146,12 @@ test('a touch screen in the strip’s room shows the strip’s bar in flow and S
     0,
   );
 });
+
+test('on paper the skip link stays in the page, off it by its own move as on screen, never removed', () => {
+  const print = blocks('print').join('\n');
+  assert.doesNotMatch(print, /\.hc-skip[,\s{]/);
+  assert.match(
+    declared(at('.hc-skip'), CSS),
+    /position: absolute;[\s\S]*transform: translateY\(-200%\);/,
+  );
+});
