@@ -1,7 +1,7 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,6 +19,7 @@ import {
   probeDataDirectory,
   previewPaths,
   type Draft,
+  type SessionStore,
   type Store,
 } from '@portfolio/core/owner';
 import { DerivedSchemeSchema } from '@portfolio/appearance';
@@ -96,6 +97,8 @@ async function setup(
     readonly fixtures?: (id: string) => PreviewFixture | null;
     /** The clock grants run on, the real one unless a test passes its own. */
     readonly now?: () => number;
+    /** Wraps the session store, as a test that makes it fail does. */
+    readonly sessionStore?: (store: SessionStore) => SessionStore;
   } = {},
 ): Promise<Setup> {
   const fixtures =
@@ -127,8 +130,9 @@ async function setup(
       ...(options.schemes ? { schemes: options.schemes } : {}),
     },
   });
+  const sessionStore = filesystemSessionStore(dataDir);
   const sessions = createSessions({
-    store: filesystemSessionStore(dataDir),
+    store: options.sessionStore ? options.sessionStore(sessionStore) : sessionStore,
     audit: memoryAuditSink(),
     fingerprint: credentialFingerprint(HASH),
   });
@@ -466,6 +470,39 @@ test('publishing, discarding, and the session ending stop grants at once, throug
   // The record says why, until its cap: the next session can't ask for it,
   // but the grant service can.
   assert.equal((await previews.grants.check(revision)).status, 'session_ended');
+});
+
+test("a grant stops opening when its session's end fails in the store, though the session's record is still there (row 88b)", async (t) => {
+  const refusing = { delete: false };
+  const { store, previews, command, endSession, digest } = await setup(t, {
+    sessionStore: (base) => ({
+      ...base,
+      delete: async (name) => {
+        if (refusing.delete) {
+          throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+        }
+        return base.delete(name);
+      },
+    }),
+  });
+  const draft = await createDraft(store);
+  const grant = minted(
+    await command('preview.grant.mint', {
+      subject: { draft: draft.draftId, version: draft.version },
+      environment: ENVIRONMENT,
+    }),
+  );
+  assert.equal(await previews.port.admit(grant), true);
+
+  refusing.delete = true;
+  await assert.rejects(endSession(), /EACCES/);
+  // onSessionEnded, if anything heard, passes it on without waiting.
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.ok(
+    existsSync(path.join(store.paths.root, 'ephemeral', 'auth', 'sessions', `${digest}.json`)),
+    "the session's record is still there",
+  );
+  assert.equal(await previews.port.admit(grant), false);
 });
 
 test('renew and status never slide the session, a session the provider no longer holds gets none of them, and revoke ends a grant as superseded (#7)', async (t) => {
