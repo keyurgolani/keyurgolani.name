@@ -10,11 +10,14 @@ import {
   expectAnnounced,
   expectAt,
   expectLayout,
+  frames,
   keys,
   load,
   railClashes,
   read,
   renderedLayout,
+  resizeTo,
+  sceneOffset,
   tabIntoLaterScenes,
   widenRailYears,
   watchKeys,
@@ -801,6 +804,52 @@ test(
   },
 );
 
+test(
+  'a reader on a scene of the pinned strip keeps it, in the same place, through a resize and back and a text size and back',
+  { annotation, tag },
+  async ({ page }) => {
+    await load(page);
+    expect(await read(page)).toMatchObject({ layout: 'horizontal', pinned: true });
+    const next = page.getByRole('button', { name: 'Next scene' });
+    for (let at = 1; at <= 6; at++) {
+      await next.click();
+      await expectAt(page, at);
+    }
+    const before = await sceneOffset(page, 6);
+    // Each refit (row 53 r2, 1b) holds the reader's scene where it was, to the pixel.
+    const keeps = async (step: string) => {
+      await expect
+        .poll(
+          async () => {
+            const { layout, pinned, current } = await read(page);
+            return { layout, pinned, current };
+          },
+          { message: step, timeout: 1000 },
+        )
+        .toEqual({ layout: 'horizontal', pinned: true, current: 6 });
+      expect(
+        Math.abs((await sceneOffset(page, 6)) - before),
+        `${step}: the scene's place`,
+      ).toBeLessThanOrEqual(1);
+    };
+    await resizeTo(page, { width: 1440, height: 800 });
+    await keeps('at 1440 by 800');
+    await resizeTo(page, { width: 1440, height: 900 });
+    await keeps('back at 1440 by 900');
+    // The root's text a step larger and back, as a reader's own setting does: the sentinel refits at once.
+    await page.evaluate(() =>
+      document.documentElement.style.setProperty('font-size', '112.5%', 'important'),
+    );
+    await frames(page);
+    await frames(page);
+    await keeps('the text at 112.5%');
+    await page.evaluate(() => document.documentElement.style.removeProperty('font-size'));
+    await frames(page);
+    await frames(page);
+    await keeps('the text back at its own size');
+  },
+);
+
 test.describe('reduced motion', () => {
   test(
     'the strip stays, and every step is a cut onto its scene',
@@ -967,6 +1016,39 @@ test.describe('on a phone', () => {
         window.scrollBy({ top: by, behavior: 'instant' });
       }, at);
       await expectAt(page, at + 1);
+    },
+  );
+  test(
+    'reading down a scene, a resize and back keeps the reader in the same place in it',
+    { annotation, tag },
+    async ({ page }) => {
+      await load(page);
+      // A scene taller than the window's reading line and more, with one after it.
+      const at = await page.evaluate(() =>
+        [...document.querySelectorAll('.hc-track .hc-scene')].findIndex(
+          (scene, index, all) =>
+            index >= 2 &&
+            index < all.length - 1 &&
+            scene.getBoundingClientRect().height > innerHeight * 0.45,
+        ),
+      );
+      expect(at, 'the fixture has a tall scene with one after it').toBeGreaterThanOrEqual(2);
+      // The reader 120 px into it, as their own scroll puts them.
+      await page.evaluate((index) => {
+        const scene = document.querySelectorAll('.hc-track .hc-scene')[index]!;
+        window.scrollBy({ top: scene.getBoundingClientRect().top + 120, behavior: 'instant' });
+      }, at);
+      await frames(page);
+      await expectAt(page, at);
+      const before = await sceneOffset(page, at);
+      // A shorter window and back (row 53 r2, 1b): the refits keep them on it, where they were.
+      await resizeTo(page, { width: 390, height: 700 });
+      await resizeTo(page, { width: 390, height: 844 });
+      await expectAt(page, at);
+      expect(
+        Math.abs((await sceneOffset(page, at)) - before),
+        "the reader's place in the scene",
+      ).toBeLessThanOrEqual(1);
     },
   );
 });
