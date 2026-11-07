@@ -17,6 +17,7 @@ import {
   read,
   renderedLayout,
   resizeTo,
+  resizeWith,
   sceneOffset,
   tabIntoLaterScenes,
   widenRailYears,
@@ -865,6 +866,18 @@ test(
   },
 );
 
+test(
+  "a step the reader takes inside a resize's burst is kept by the strip's refit, not undone",
+  { annotation, tag },
+  async ({ page }) => {
+    await onSixKept(page);
+    // Next pressed between the burst's first resize and its refit (row 53 r2, 1b): the refit
+    // holds the scene the step went to, not the one the resize found.
+    await resizeWith(page, { width: 1440, height: 800 }, { press: 'Next scene' });
+    await expectAt(page, 7);
+  },
+);
+
 test.describe('reduced motion', () => {
   test(
     'the strip stays, and every step is a cut onto its scene',
@@ -1064,6 +1077,19 @@ test.describe('on a phone', () => {
         Math.abs((await sceneOffset(page, at)) - before),
         "the reader's place in the scene",
       ).toBeLessThanOrEqual(1);
+    },
+  );
+  test(
+    "a link followed inside a resize's burst lands on its chapter, and the strip's refit keeps it there",
+    { annotation, tag },
+    async ({ page }) => {
+      await load(page);
+      const { scenes } = await read(page);
+      const craft = scenes.indexOf('chapter-craft');
+      expect(craft).toBeGreaterThan(0);
+      // The link followed between the burst's first resize and its refit (row 53 r2, 1b).
+      await resizeWith(page, { width: 390, height: 700 }, { hash: '#chapter-craft' });
+      await expectAt(page, craft, { landed: true });
     },
   );
 });

@@ -447,6 +447,24 @@ function LiveStage(props: StageProps) {
     const inset = () =>
       Number.parseFloat(getComputedStyle(stageElement).scrollPaddingInlineStart) || 0;
     let position = 0;
+    /**
+     * The scene the reader is on as a layout change begins (reading(), below): whether they're
+     * reading one, which, and where its top is in the window.
+     */
+    interface Reading {
+      readonly inside: boolean;
+      readonly held: number;
+      readonly top: number;
+    }
+    /**
+     * The reading a resize found, kept for the refit its settle runs: a resize's own paint reads the
+     * page again on the new layout before the refit does, and with the strip's lengths not yet
+     * refitted it can name the scene before the reader's (row 53 r2, 1b). The first resize of a
+     * burst reads it; the refit that ends the burst takes it. A move of the controller's own to a
+     * scene in between (a step, a link, the phone's turn) leaves it stale, so each drops it, and the
+     * refit reads the page as that move left it.
+     */
+    let kept: Reading | undefined;
     // The scene a move the controller started is headed for, until it settles: a second key retargets from it.
     let aligning: number | null = null;
     /**
@@ -1063,6 +1081,7 @@ function LiveStage(props: StageProps) {
     const align = (to: number, how: ScrollBehavior) => {
       const element = elements[to];
       if (!element) return;
+      kept = undefined;
       moved = true;
       overdue = false;
       if (overdueTimer !== undefined) clearTimeout(overdueTimer);
@@ -1144,6 +1163,7 @@ function LiveStage(props: StageProps) {
     };
 
     const onHash = () => {
+      kept = undefined;
       // A link to where the page already is moves nothing, so read where it is now that the URL names it.
       if (frame === undefined) frame = requestAnimationFrame(paint);
       // A link into a folded scene opens it, then lands on what it names, as on arrival.
@@ -1182,6 +1202,7 @@ function LiveStage(props: StageProps) {
         elements[held]?.scrollIntoView({ block: 'start', behavior: 'instant' });
         // The controller put the scene at the top, so it keeps the page as a link's landing would.
         land(held);
+        kept = undefined;
       }
     };
     /** Whether an element is in a scene of the strip while the strip shows, where the strip lands it. */
@@ -1238,11 +1259,6 @@ function LiveStage(props: StageProps) {
      * one), which: the one holding focus, else the current one, and where its top is in the window.
      * Read before anything moves.
      */
-    interface Reading {
-      readonly inside: boolean;
-      readonly held: number;
-      readonly top: number;
-    }
     const reading = (): Reading => {
       const active = doc.activeElement;
       const holding = active
@@ -1255,13 +1271,8 @@ function LiveStage(props: StageProps) {
         top: elements[held]?.getBoundingClientRect().top ?? 0,
       };
     };
-    /**
-     * The reading a resize found, kept for the refit its settle runs: a resize's own paint reads the
-     * page again on the new layout before the refit does, and with the strip's lengths not yet
-     * refitted it can name the scene before the reader's (row 53 r2, 1b). The first resize of a
-     * burst reads it; the refit that ends the burst takes it.
-     */
-    let kept: Reading | undefined;
+    // The reading a resize found (`kept`, declared with the position): the refit that ends the burst
+    // takes it.
     /**
      * That scene brought back on the layout now in force: pinned, the page at its share of the
      * strip; top to bottom, where the reader had it, its top as far from the window's as before. Not
@@ -1386,7 +1397,10 @@ function LiveStage(props: StageProps) {
       fitName();
       fit();
       pin();
-      if (pinned !== was) hold(at);
+      if (pinned !== was) {
+        hold(at);
+        kept = undefined;
+      }
       // The faces or a late picture moved the scenes with no scroll: read where the page is again.
       if (frame === undefined) frame = requestAnimationFrame(paint);
     };
