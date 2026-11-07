@@ -14,6 +14,7 @@ import {
   bucketGroups,
   cellRotation,
   dayNumber,
+  fitReleaseCeiling,
   FULL_FIXED,
   FULL_GROUP_BUDGET,
   FULL_SHARDS,
@@ -31,6 +32,7 @@ import {
   nightSlice,
   planFingerprint,
   RELEASE_CEILING,
+  RELEASE_PACE,
   RELEASE_PARALLEL,
   releaseDurations,
   releaseFloor,
@@ -586,7 +588,8 @@ test(`the release plan fits rc-quality's timeout in the fewest shards that do, a
   assert.ok(CATALOG_SHARDS < MAX_RELEASE_SHARDS);
   const job = RELEASE['rc-quality']!;
   assert.equal(job['timeout-minutes'], releaseTimeoutMinutes());
-  assert.equal(releaseTimeoutMinutes(), timeoutMinutes(RELEASE_CEILING));
+  // The cap stays; the ceiling is fitted to it at the measured pace (release-fit.test.ts).
+  assert.equal(RELEASE_CEILING, fitReleaseCeiling(RELEASE_PACE));
   assert.ok(releaseTimeoutMinutes() <= JOB_LIMIT_MINUTES);
   const weights = releaseDurations();
   for (const [name, unscoped] of [

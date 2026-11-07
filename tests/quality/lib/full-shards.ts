@@ -33,8 +33,9 @@
 //
 // The release plan. Before a release, every group of the scope's plan runs, in the fewest
 // shards that keep each within RELEASE_CEILING (releaseFor), RELEASE_PARALLEL
-// at a time, so in waves; rc-quality's timeout is sized from that ceiling
-// (releaseTimeoutMinutes). release.yml's rc-quality-plan works the count out
+// at a time, so in waves; that ceiling is fitted to rc-quality's 120-minute
+// timeout at the job's measured pace (fitReleaseCeiling, RELEASE_PACE), and
+// the timeout stays. release.yml's rc-quality-plan works the count out
 // (full-plan.ts) and hands it to the matrix. Release shards are dealt
 // heaviest first, not by a hash, so the count needs no steps: unlike the
 // nightly cycle, nothing nests across counts. A plan that needs more than
@@ -101,13 +102,69 @@ export const NIGHTLY_TIMEOUT_MINUTES = 90;
 export const NIGHTLY_CEILING = Math.floor((NIGHTLY_TIMEOUT_MINUTES * 60) / TIMEOUT_MARGIN);
 /** The most one group may weigh: it runs on one worker, after the shard's fixed part. */
 export const FULL_GROUP_BUDGET = NIGHTLY_CEILING - FULL_FIXED;
-/** The slowest a release shard may be estimated at, in seconds. */
-export const RELEASE_CEILING = 4800;
+/**
+ * rc-quality's and rc-preflight's preflight-quality's timeout-minutes, the release shard's cap. It
+ * stays at 120, as does RELEASE_PARALLEL's 10 (the coordinator's release-path ruling, 2026-11-07):
+ * the shard target, RELEASE_CEILING, is fitted to this cap, never the cap to the target.
+ */
+export const RELEASE_TIMEOUT_MINUTES = 120;
+
+/** A release shard job's measured pace, which RELEASE_CEILING is fitted to the cap at. */
+export interface ReleasePace {
+  /** Where the numbers come from: the run, its commit, and what was read. */
+  readonly source: string;
+  /** The job's fixed part on CI Linux, in seconds: its install, and the reference variant's worktree and build. */
+  readonly overheadSeconds: number;
+  /** The shard's measured test time on CI Linux per second of its estimate (shardWall at the release's weights). */
+  readonly pace: number;
+}
+
+/**
+ * The pace RELEASE_CEILING is fitted at. Until r5c evidence's CI Linux times are read
+ * (release-fit.ts prints them for a times file), it holds the plan's own assumptions: FULL_FIXED,
+ * and the release's weights at face value. Fitting a measured pace sets these two numbers and
+ * nothing else.
+ */
+export const RELEASE_PACE: ReleasePace = {
+  source:
+    "The plan's own assumptions, not a measurement: FULL_FIXED, and the release block's p90 weights (shard-durations.json) at face value.",
+  overheadSeconds: FULL_FIXED,
+  pace: 1,
+};
+
+/**
+ * The per-shard target a pace fits to `minutes`: the slowest a release shard may be estimated at,
+ * in seconds, FULL_FIXED included. It's set so that the measured fixed part plus the shard's test
+ * time at that pace stays within `minutes` over `margin`: at TIMEOUT_MARGIN's 1.5x, within 80 of
+ * the 120 minutes, so 40 are to spare. It throws when the fixed part alone leaves no time.
+ */
+export function fitReleaseCeiling(
+  { overheadSeconds, pace }: Pick<ReleasePace, 'overheadSeconds' | 'pace'>,
+  minutes: number = RELEASE_TIMEOUT_MINUTES,
+  margin: number = TIMEOUT_MARGIN,
+): number {
+  if (!(pace > 0)) throw new Error(`A release pace of ${pace} can't fit a shard.`);
+  const usable = Math.floor((minutes * 60) / margin);
+  if (overheadSeconds >= usable) {
+    throw new Error(
+      `A release shard's fixed part of ${overheadSeconds}s leaves no time within ${usable}s, ${minutes} minutes over a ${margin}x margin.`,
+    );
+  }
+  return FULL_FIXED + Math.floor((usable - overheadSeconds) / pace);
+}
+
+/**
+ * The slowest a release shard may be estimated at, in seconds, its fixed part included: the release
+ * plan's per-shard target, which rc-quality-plan counts its shards by (releaseFor). It's
+ * fitReleaseCeiling(RELEASE_PACE), the 120-minute cap (RELEASE_TIMEOUT_MINUTES) over
+ * TIMEOUT_MARGIN at the pace measured on CI Linux, and 4,800 s at the plan's own assumptions.
+ */
+export const RELEASE_CEILING = fitReleaseCeiling(RELEASE_PACE);
 
 /** A shard job's timeout-minutes, for a shard estimated at up to `ceiling` seconds. */
 export const timeoutMinutes = (ceiling: number) => Math.ceil((ceiling * TIMEOUT_MARGIN) / 60);
-/** rc-quality's timeout-minutes. */
-export const releaseTimeoutMinutes = () => timeoutMinutes(RELEASE_CEILING);
+/** rc-quality's timeout-minutes: the cap, which a fitted ceiling never moves. */
+export const releaseTimeoutMinutes = () => RELEASE_TIMEOUT_MINUTES;
 
 /**
  * The weights the release plan sizes its shards by: `durations` with its `release` block over
@@ -345,17 +402,18 @@ export function rotationFor(
   );
 }
 
-/** The release plan in `shards` shards, each within RELEASE_CEILING, or it throws. */
+/** The release plan in `shards` shards, each within `ceiling` (RELEASE_CEILING), or it throws. */
 export function releasePlan(
   groups: readonly ShardGroup[],
   durations: Pick<ShardDurations, 'group'> = loadDurations(),
   shards: number,
+  ceiling: number = RELEASE_CEILING,
 ): { readonly shards: PrShard[]; readonly slowest: number } {
   const assigned = assignShards(splitGroups(groups, FULL_GROUP_BUDGET, durations), shards);
   const { estimate, heaviest } = slowestOf(assigned);
-  if (estimate > RELEASE_CEILING) {
+  if (estimate > ceiling) {
     throw new Error(
-      `The release plan in ${shards} shards leaves a shard at about ${Math.round(estimate)}s, over the ${RELEASE_CEILING}s ceiling. Its heaviest group is ${groupKey(heaviest)}, at about ${Math.round(heaviest.weight)}s.`,
+      `The release plan in ${shards} shards leaves a shard at about ${Math.round(estimate)}s, over the ${ceiling}s ceiling. Its heaviest group is ${groupKey(heaviest)}, at about ${Math.round(heaviest.weight)}s.`,
     );
   }
   return { shards: assigned, slowest: estimate };
@@ -370,12 +428,13 @@ export function releasePlan(
 export function releaseFloor(
   groups: readonly ShardGroup[],
   durations: Pick<ShardDurations, 'group'> = loadDurations(),
+  ceiling: number = RELEASE_CEILING,
 ): number {
   const weight = splitGroups(groups, FULL_GROUP_BUDGET, durations).reduce(
     (sum, group) => sum + group.weight,
     0,
   );
-  return Math.max(1, Math.ceil(weight / (SHARD_WORKERS * (RELEASE_CEILING - FULL_FIXED))));
+  return Math.max(1, Math.ceil(weight / (SHARD_WORKERS * (ceiling - FULL_FIXED))));
 }
 
 /**
@@ -387,15 +446,16 @@ export function releaseFloor(
 export function releaseFor(
   groups: readonly ShardGroup[],
   durations: Pick<ShardDurations, 'group'> = loadDurations(),
+  ceiling: number = RELEASE_CEILING,
 ): { readonly count: number; readonly shards: PrShard[]; readonly slowest: number } {
   let failure = '';
   for (
-    let count = Math.min(releaseFloor(groups, durations), MAX_RELEASE_SHARDS);
+    let count = Math.min(releaseFloor(groups, durations, ceiling), MAX_RELEASE_SHARDS);
     count <= MAX_RELEASE_SHARDS;
     count += 1
   ) {
     try {
-      return { count, ...releasePlan(groups, durations, count) };
+      return { count, ...releasePlan(groups, durations, count, ceiling) };
     } catch (error) {
       failure = (error as Error).message;
       if (!/^The release plan in \d+ shards/.test(failure)) throw error;
