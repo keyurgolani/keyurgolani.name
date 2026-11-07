@@ -262,8 +262,11 @@ interface SuiteRun {
 }
 
 /**
- * The landscape occlusion pass at the phone's viewport turned: `at` loaded there and read at its
- * load event and two frames. Then the viewport goes back and `at` loads again.
+ * The landscape occlusion pass at the phone's viewport turned: `at` loaded there, read once its
+ * enhancements have mounted or failed, as each reflow condition reads (push 3): an occluder a lazy
+ * enhancement mounts late, a fixed bar over a focus stop, would otherwise mount after the read. One
+ * that never settles is STILL_ENHANCING, read as it stands. Then the viewport goes back and `at`
+ * loads again, a restore only: no check reads that page, and the next read loads its own.
  */
 export async function landscapeOcclusionFindings(
   page: Page,
@@ -275,8 +278,15 @@ export async function landscapeOcclusionFindings(
   const [width, height] = [viewport.height, viewport.width];
   const original = page.viewportSize()!;
   await page.setViewportSize({ width, height });
-  await page.goto(at, { waitUntil: 'load' });
-  await frames(page);
+  const { enhanced } = await loadForPass(page, at);
+  if (!enhanced) {
+    findings.push({
+      gate: 'runner',
+      rule: 'enhanced',
+      expected: "the page's enhancements mount or fail under landscape occlusion",
+      actual: STILL_ENHANCING,
+    });
+  }
   for (const finding of await keyboardFindings(page, { occlusion: true, framed })) {
     if (finding.gate === 'occlusion') findings.push({ ...finding, viewport: `${width}x${height}` });
   }
