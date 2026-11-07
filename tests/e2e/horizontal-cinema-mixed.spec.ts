@@ -7,7 +7,7 @@ import { load, railClashes, read } from './horizontal-cinema-model';
 
 // Horizontal Cinema right to left: the mixed contract fixture (Arabic, dir=rtl). The fit check measures
 // the rail under the stage in the bar's own inline direction, so a right-to-left rail that holds its
-// labels pins the strip as a left-to-right one does, and one that can't still stacks it.
+// labels pins the strip as a left-to-right one does. A crowded right-to-left rail is the rtl spec's.
 
 const FIXTURE = contractFixture('mixed');
 const DIR = path.dirname(FIXTURE.files.portfolio);
