@@ -455,3 +455,77 @@ test(
     }
   },
 );
+
+// Without script nothing moves the dock aside, so a dock held at the viewport's foot sat over the
+// arc stops the first screen shows: at 1024 x 768 the Work ring's three stops ran under it (the
+// quality row's target-size records). Without script the dock is in the flow instead, after the
+// page, and every stop link on the first screen is the topmost thing at its own centre.
+test(
+  'with no script, at 1024 by 768, no arc stop on the first screen is under the dock',
+  { annotation },
+  async ({ browser, page }) => {
+    await page.goto('/', { waitUntil: 'networkidle' });
+    const context = await browser.newContext({
+      javaScriptEnabled: false,
+      baseURL: page.url(),
+      viewport: { width: 1024, height: 768 },
+    });
+    try {
+      const still = await context.newPage();
+      await still.goto('/', { waitUntil: 'load' });
+      await expect(still.locator('main.kc-main > noscript > [data-kc-nojs]')).toHaveCount(1);
+      const stops = await still.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>('.kc-arc__stop a')].flatMap((link) => {
+          const box = link.getBoundingClientRect();
+          if (box.width === 0 || box.height === 0 || box.bottom <= 0 || box.top >= innerHeight)
+            return [];
+          const x = box.left + box.width / 2;
+          const y = box.top + box.height / 2;
+          const top = document.elementFromPoint(x, y);
+          return [
+            {
+              link: (link.textContent ?? '').trim(),
+              topmost: !!top && link.contains(top),
+              under: top?.closest('.kc-dock') ? 'the dock' : null,
+            },
+          ];
+        }),
+      );
+      // The first screen shows some: a pin over none would pass on any page.
+      expect(stops.length).toBeGreaterThan(0);
+      expect(stops.filter((stop) => !stop.topmost)).toEqual([]);
+    } finally {
+      await context.close();
+    }
+  },
+);
+
+// The dock leaves the viewport's foot only under the mark: with script there's no mark, the dock
+// stays sticky at the foot (the runtime moves it aside while the stage is in view), and the
+// scripted page is what it was.
+test(
+  'with script there is no noscript mark and the dock stays sticky; without, it is in the flow',
+  { annotation },
+  async ({ browser, page }) => {
+    await page.goto('/', { waitUntil: 'networkidle' });
+    await expect(page.locator('[data-kc-nojs]')).toHaveCount(0);
+    expect(await page.locator('.kc-dock').evaluate((dock) => getComputedStyle(dock).position)).toBe(
+      'sticky',
+    );
+    const context = await browser.newContext({
+      javaScriptEnabled: false,
+      baseURL: page.url(),
+      viewport: { width: 1280, height: 800 },
+    });
+    try {
+      const still = await context.newPage();
+      await still.goto('/', { waitUntil: 'load' });
+      await expect(still.locator('[data-kc-nojs]')).toHaveCount(1);
+      expect(
+        await still.locator('.kc-dock').evaluate((dock) => getComputedStyle(dock).position),
+      ).toBe('static');
+    } finally {
+      await context.close();
+    }
+  },
+);

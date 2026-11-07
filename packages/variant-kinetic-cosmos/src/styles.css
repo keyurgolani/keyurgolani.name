@@ -3036,6 +3036,15 @@
  * it shows, the island gives the document a scroll padding of its height, so
  * focus and anchors land above it (WCAG 2.4.11, technique C43).
  */
+/*
+ * Without script the dock never steps aside, so it sits in the flow after the closing
+ * contact instead of over the page's foot, where it covered the first ring's stops. A browser
+ * without :has() keeps the sticky dock, as before: no regression, so no fallback.
+ */
+[data-variant='kinetic-cosmos']:has([data-kc-nojs]) .kc-dock {
+  position: static;
+}
+
 [data-variant='kinetic-cosmos'] .kc-dock {
   --layout-ink: var(--color-text-primary);
   --layout-ink-quiet: var(--color-text-secondary);
