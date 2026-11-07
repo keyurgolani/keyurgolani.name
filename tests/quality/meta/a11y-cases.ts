@@ -1989,6 +1989,17 @@ export const A11Y_CASES: readonly MetaCase[] = [
     revealed(scriptlessInventory),
     { chunk: REVEAL },
   ),
+  // On a surface that needs its script, too, whose notice stands in for its content without
+  // JavaScript (the coordinator, 7 Nov 2026, F6): a marked status with the server's words is a
+  // finding there as well.
+  builtCase(
+    'script-only-requires-script',
+    'inventory',
+    'A page that needs JavaScript, and says so, with a status marked data-script-only whose words the server renders, without JavaScript',
+    `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>A page that needs JavaScript</title></head><body><a href="#content">Skip to the task</a><h1>Portfolio Studio</h1><main><div id="content" tabindex="-1"><noscript><p>Studio needs JavaScript. Turn it on, then reload.</p></noscript></div><p role="status" data-script-only>Saved 2 minutes ago</p></main></body></html>`,
+    scriptOnlyText('Saved 2 minutes ago'),
+    async (page) => inventoryFindings(page, '/', await baseline(page), ['no-javascript'], true),
+  ),
   // Judged against the page with its script (the coordinator, 7 Nov 2026, F1): a `script-only:`
   // field of the baseline that the page without JavaScript still shows, as any kind, is the
   // server's words, whatever the server's markup marks. So it holds words a script makes a live

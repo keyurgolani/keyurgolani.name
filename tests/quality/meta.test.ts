@@ -342,6 +342,8 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'inventory/script-only-role-by-script',
     'inventory/script-only-mark-by-script',
     'inventory/script-only-moved',
+    // And on a surface that needs its script (F6).
+    'inventory/script-only-requires-script',
     // A row's main pass audits the page once its enhancements have mounted or failed (lead,
     // 1 Nov 2026): a pale plain link a late chunk hides passes, a pale live button it shows fails.
     'contrast/pre-live-node',

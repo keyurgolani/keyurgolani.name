@@ -549,8 +549,11 @@ export async function inventoryFindings(
           continue;
         }
         // Without JavaScript, and in print over that page, a page that needs it says so instead.
+        // Its notice stands in for its content, but script-only words the server sent are still
+        // a finding (the coordinator, 7 Nov 2026, F6), as print lets them go there too.
         if (scriptRequired && condition.id === 'no-javascript') {
           findings.push(...(await scriptRequiredFindings(page, cdp, condition.id)));
+          findings.push(...(await scriptOnlyTextFindings(page, baseline)));
           continue;
         }
         if (scriptRequired && condition.id === 'print') {
