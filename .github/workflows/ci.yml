@@ -54,7 +54,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      jobs: ${{ steps.select.outputs.jobs }}
+      # Batch S's evidence branch, never merged: the selection emptied
+      # (ci/evidence/row88/keep-jobs.mjs), so row88-evidence runs alone.
+      # complete stays the selection's.
+      jobs: ${{ steps.keep.outputs.jobs }}
       complete: ${{ steps.select.outputs.complete }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -67,6 +70,11 @@ jobs:
           PR_DRAFT: ${{ github.event.pull_request.draft }}
           BASE_REF: ${{ github.base_ref }}
         run: node ci/select-jobs.mjs --github
+      - name: Keep the evidence branch's jobs
+        id: keep
+        env:
+          SELECTED: ${{ steps.select.outputs.jobs }}
+        run: node ci/evidence/row88/keep-jobs.mjs
 
   static:
     name: static
@@ -1137,6 +1145,57 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: reports-fresh-clone
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # Batch S (rows 88, 88c, 88b), CI Linux evidence, on a branch that never
+  # merges (kgn/b-row88-evidence): the PR head itself checked out (not the
+  # merge), its parent the landing commit e6a407054, in the browser suite's
+  # pinned image, user and options, after the build the browser shards run.
+  # studio-signout.spec.ts, studio-preview.spec.ts's sign-out in another tab,
+  # studio.spec.ts's logout across tabs, the two load-failure specs, and
+  # studio.spec.ts's row 88b cases, each x 10 with no retry
+  # (ci/evidence/row88/signout-x10.sh, exact bars, nonzero only on a miss).
+  row88-evidence:
+    name: row88-evidence (Batch S x 10 on CI Linux, no retries)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 2
+      - name: HEAD
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git rev-parse HEAD
+          git rev-parse HEAD^
+          echo "PR head $PR_HEAD"
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm ci:build
+        run: pnpm ci:build
+      - name: studio-signout.spec.ts, studio-preview.spec.ts:296, studio.spec.ts:500, both load-failure specs and studio.spec.ts's row 88b cases, each x 10, retries 0
+        env:
+          LANDING: e6a40705440ef5ce0e89f70aae6e33a206c299a9
+        run: node ci/run.mjs row88-evidence -- sh ci/evidence/row88/signout-x10.sh "$LANDING"
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-row88-evidence
           path: reports/
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
