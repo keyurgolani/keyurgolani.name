@@ -707,11 +707,28 @@ export async function runPass(
     const before = found.length;
     const route = primitivesPath(cell, row);
     // Read as the main pass reads its page (push 3 r2, F6): settled, its fonts in, and its
-    // enhancements mounted or failed. Its settled and enhanced answers go unread, as settle()'s
-    // answer did before.
-    const { response: answer } = await loadForPass(page, route);
+    // enhancements mounted or failed. A primitives page that never settles, or whose
+    // enhancements never do, is STILL_BUSY or STILL_ENHANCING under the primitives surface at
+    // the test's viewport, as the landscape pass records them (push 3 r3, item 4).
+    const { response: answer, settled, enhanced } = await loadForPass(page, route);
     const surface = { id: PRIMITIVES_SURFACE, route: PRIMITIVES_ROUTE };
     const findings: Finding[] = [];
+    if (!settled) {
+      findings.push({
+        gate: 'runner',
+        rule: 'settled',
+        expected: 'the primitives page settles',
+        actual: STILL_BUSY,
+      });
+    }
+    if (!enhanced) {
+      findings.push({
+        gate: 'runner',
+        rule: 'enhanced',
+        expected: "the primitives page's enhancements mount or fail",
+        actual: STILL_ENHANCING,
+      });
+    }
     if (answer?.status() !== 200) {
       findings.push({
         gate: 'runner',
