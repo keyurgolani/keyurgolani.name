@@ -10,9 +10,10 @@ import {
 
 // Horizontal Cinema on a laptop's window (HOR-1): the bundled sample, whose
 // Practice scene is the tallest, at the viewports a 13 to 15 inch laptop's
-// browser leaves, 1440 by 800 and 1366 by 768. Every scene's picture fits
-// the stage there, so the fit check never falls back to the vertical
-// stack, and the strip is pinned to the page's scroll as at 1440 by 900.
+// browser leaves, 1440 by 800, 1366 by 768 and 1280 by 800. Every scene's
+// picture fits the stage there, its essays reel opening a width at 1280,
+// so the fit check never falls back to the vertical stack, and the strip
+// is pinned to the page's scroll as at 1440 by 900.
 
 const DEMO = { type: 'profile', description: 'demo' };
 const annotation = [{ type: 'route', description: '/sample' }, DEMO];
@@ -22,6 +23,7 @@ test.use({ appOptions: DEMO_APP });
 for (const [width, height] of [
   [1440, 800],
   [1366, 768],
+  [1280, 800],
 ] as const) {
   test(
     `at ${width} by ${height} the sample's strip fits and pins, with no scene over the stage`,
