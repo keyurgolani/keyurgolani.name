@@ -17,10 +17,14 @@
 //   own label, as without JavaScript and in print.
 // - Each reload under a condition with script on, failed enhancement
 //   included, is read once its enhancements have mounted or failed, as the
-//   cell's own read is: no script chunk still loading and no island's
-//   data-island still changing, and then, as React may reveal what a chunk
+//   cell's own read is (its first phase): no script chunk still loading, no
+//   island's data-island still changing, and nothing marked pending, and the
+//   wait then holds 500 ms past the last chunk or island change, React's
+//   retry delay and a margin; and then, as React may reveal what a chunk
 //   loaded a while after it lands, until the page shows what the baseline
-//   had, all within BUSY_LIMIT_MS. Chunks or islands still at it then fail
+//   had, all within BUSY_LIMIT_MS. The same wait serves the main pass, the
+//   landscape pass, the variant shots (tests/variants/modes.ts) and the e2e
+//   watches (watchEnhancements()). Chunks or islands still at it then fail
 //   the cell with STILL_ENHANCING; a field still missing is the read's own
 //   finding. Either way the page is read as it stands. A reflow condition's
 //   reload takes the first phase only, the enhancements, since it has no
@@ -290,7 +294,7 @@ const stillBusy = (condition: string): Finding => ({
 });
 
 /** What a page whose enhancements never finished mounting or failing is, as a finding's words. */
-export const STILL_ENHANCING = `the page's enhancements were still loading, a script in flight, an island changing or a first pass pending, after ${BUSY_LIMIT_MS / 1000} s`;
+export const STILL_ENHANCING = `the page's enhancements were still loading, a script in flight, an island changing or a first pass pending, or within React's retry delay after the last one, after ${BUSY_LIMIT_MS / 1000} s`;
 
 /** The script requests a page has made since it started watching, and the ones still in flight. */
 interface ScriptWatch {
@@ -337,9 +341,9 @@ function watchScripts(page: Page): ScriptWatch {
 }
 
 /**
- * React's Suspense retry delay: a lazy component's content commits no sooner than this after its
- * fallback showed, on a timer, the page idle in between (react-dom 19.2.5's FALLBACK_THROTTLE_MS,
- * cjs/react-dom-client: `FALLBACK_THROTTLE_MS = 300`).
+ * React's Suspense retry delay: a lazy component's content commits no sooner than 300 ms after the
+ * latest fallback shown or hidden on the page, on a timer, the page idle in between. What ships is
+ * next@16.4.1's vendored React 19.3 canary, 19.3.0-canary-278794d7-20261002 (dist/compiled/react-dom/cjs/react-dom-client.development.js: `FALLBACK_THROTTLE_MS = 300`), as react-dom 19.2.5 has it too.
  */
 export const SUSPENSE_RETRY_MS = 300;
 /** What enhancementsSettled() waits past SUSPENSE_RETRY_MS, for the timer and the commit's frames. */
@@ -367,10 +371,11 @@ async function idle(page: Page, ms: number): Promise<void> {
  * that fails or is turned off. So the page is done when, across one idle period and two
  * frames, no script request was in flight or started, no island's
  * data-island changed, and nothing on the page is still marked pending; and,
- * when a script request or an island's change happened during the wait, no
- * sooner than SUSPENSE_RETRY_MS and its margin after the last one, since React
- * commits a lazy component's content on a timer that long after its fallback,
- * the page idle in between. A page quiet throughout waits as before. An
+ * when a script request or an island's change happened during the wait, or an
+ * optional chunk finished just before it, no sooner than SUSPENSE_RETRY_MS and
+ * its margin after the last one, since React commits a lazy component's
+ * content on a timer 300 ms after the latest fallback shown or hidden on the
+ * page, the page idle in between. A page quiet throughout waits as before. An
  * island that never starts, out of view, paused, or lacking what it
  * requires, stays markup, which is settled too. Until `end`: false when
  * they still hadn't settled, and the caller fails the cell with

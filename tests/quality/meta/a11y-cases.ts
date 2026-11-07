@@ -452,10 +452,10 @@ const LATE_WIDE_CHUNK = {
 };
 
 /**
- * The late-overflow page's chunk on React's own schedule (react-dom 19.2.5's FALLBACK_THROTTLE_MS):
- * React.lazy under Suspense, no island hold, commits the content no sooner than 300 ms after the
- * fallback showed, on a timer, the page idle in between. So the chunk lands, and the block mounts
- * 300 ms later.
+ * The late-overflow page's chunk on React's own schedule (FALLBACK_THROTTLE_MS, 300, in next@16.4.1's
+ * vendored React 19.3 canary): React.lazy under Suspense, no island hold, commits the content no
+ * sooner than 300 ms after the latest fallback shown or hidden on the page, on a timer, the page
+ * idle in between. So the chunk lands, and the block mounts 300 ms later.
  */
 const RETRY_WIDE_CHUNK = {
   body: "setTimeout(() => { const wide = document.createElement('p'); wide.id = 'late-retry'; wide.style.width = '1400px'; wide.textContent = 'A block React commits on its retry, wider than any reflow viewport.'; document.querySelector('[data-enhancement-island]').append(wide); }, 300);",
@@ -2064,7 +2064,7 @@ export const A11Y_CASES: readonly MetaCase[] = [
   builtCase(
     'suspense-retry',
     'reflow',
-    `A 1400 px wide block a lazy chunk commits 300 ms after it lands (React's FALLBACK_THROTTLE_MS), under each reflow condition`,
+    `A 1400 px wide block a lazy chunk commits 300 ms after it lands (FALLBACK_THROTTLE_MS in next@16.4.1's vendored React 19.3 canary), under each reflow condition`,
     LATE_WIDE,
     /^reflow (?:reflow|zoom|root-text): /,
     namingUnder('#late-retry', ['reflow', 'zoom', 'root-text'], (page) =>
