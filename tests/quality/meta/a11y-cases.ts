@@ -67,8 +67,8 @@ interface PageOptions extends BrowserContextOptions {
   readonly media?: 'print';
   /** JavaScript off, through CDP, as run-cell.ts turns it off for the no-JavaScript row. */
   readonly noScript?: boolean;
-  /** A lazy enhancement's chunk the stand-in serves too, at LAZY_CHUNK: after LAZY_DELAY_MS, or never. */
-  readonly chunk?: { readonly body: string } | 'never';
+  /** A lazy enhancement's chunk the stand-in serves too, at LAZY_CHUNK: after `delayMs` (LAZY_DELAY_MS unless given), or never. */
+  readonly chunk?: { readonly body: string; readonly delayMs?: number } | 'never';
 }
 
 /** Where a lazy enhancement's chunk is served: a chunk the page's HTML doesn't name, which failed enhancement blocks. */
@@ -100,7 +100,7 @@ async function onPage(
       setTimeout(() => {
         response.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
         response.end(chunk.body);
-      }, LAZY_DELAY_MS);
+      }, chunk.delayMs ?? LAZY_DELAY_MS);
       return;
     }
     const found = asked === '/';
@@ -458,6 +458,55 @@ const LATE_WIDE_CHUNK = {
  */
 const RETRY_WIDE_CHUNK = {
   body: "setTimeout(() => { const wide = document.createElement('p'); wide.id = 'late-retry'; wide.style.width = '1400px'; wide.textContent = 'A block React commits on its retry, wider than any reflow viewport.'; document.querySelector('[data-enhancement-island]').append(wide); }, 300);",
+};
+
+/**
+ * A page whose lazy chunk, asked for as the page parses and served at once, lands before the
+ * load event, so before the enhancements' wait begins; it commits its block 300 ms after it runs,
+ * on React's schedule (push 3 r3, item 1).
+ */
+const EARLY_RETRY = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>An early chunk</title></head><body><a href="#main">Skip to content</a><main id="main" tabindex="-1"><h1>An early chunk</h1><div id="early-host"><p>The page reads without its enhancement.</p></div></main><script>
+const chunk = document.createElement('script');
+chunk.src = '${LAZY_CHUNK}';
+chunk.onload = () => chunk.remove();
+chunk.onerror = () => chunk.remove();
+document.head.append(chunk);
+</script></body></html>`;
+
+/** EARLY_RETRY's chunk, served at once: it commits a 1400 px block 300 ms after it runs. */
+const EARLY_RETRY_CHUNK = {
+  delayMs: 0,
+  body: "setTimeout(() => { const wide = document.createElement('p'); wide.id = 'early-retry'; wide.style.width = '1400px'; wide.textContent = 'A block React commits on its retry, from a chunk that landed before the wait.'; document.getElementById('early-host').append(wide); }, 300);",
+};
+
+/**
+ * A page held, then flipped, on React's schedule (push 3 r3, item 2): its status is marked
+ * enhancement-pending from load to +200 ms; at +100 its first island goes live and asks for a
+ * chunk served at once, which commits #held-a 300 ms after the flip; at +500, inside the floor
+ * that first change began, its second island goes live and #held-b commits 300 ms after that.
+ */
+const HELD_FLIP = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>A held flip</title></head><body><a href="#main">Skip to content</a><main id="main" tabindex="-1"><h1>A held flip</h1><p data-enhancement-pending>Getting ready</p><div data-enhancement-island="first" data-island="markup"><p>The page reads without its first enhancement.</p></div><div data-enhancement-island="second" data-island="markup"><p>The page reads without its second enhancement.</p></div></main><script>
+addEventListener('load', () => {
+  setTimeout(() => {
+    document.querySelector('[data-enhancement-island="first"]').setAttribute('data-island', 'live');
+    const chunk = document.createElement('script');
+    chunk.src = '${LAZY_CHUNK}';
+    chunk.onload = () => chunk.remove();
+    document.head.append(chunk);
+  }, 100);
+  setTimeout(() => document.querySelector('[data-enhancement-pending]').removeAttribute('data-enhancement-pending'), 200);
+  setTimeout(() => {
+    const second = document.querySelector('[data-enhancement-island="second"]');
+    second.setAttribute('data-island', 'live');
+    setTimeout(() => { const wide = document.createElement('p'); wide.id = 'held-b'; wide.style.width = '1400px'; wide.textContent = 'The second island, committed on its retry.'; second.append(wide); }, 300);
+  }, 500);
+});
+</script></body></html>`;
+
+/** HELD_FLIP's chunk, served at once: it commits #held-a 300 ms after it runs. */
+const HELD_FLIP_CHUNK = {
+  delayMs: 0,
+  body: "setTimeout(() => { const wide = document.createElement('p'); wide.id = 'held-a'; wide.style.width = '1400px'; wide.textContent = 'The first island, committed on its retry.'; document.querySelector('[data-enhancement-island=\"first\"]').append(wide); }, 300);",
 };
 
 /**
@@ -2013,6 +2062,36 @@ export const A11Y_CASES: readonly MetaCase[] = [
       reflowFindings(page, '/'),
     ),
     { chunk: RETRY_WIDE_CHUNK },
+  ),
+  // And when the chunk landed before the wait began (push 3 r3, item 1): asked for as the page
+  // parses and served at once, it's in before the load event, and the floor starts from when it
+  // finished, so its block, 300 ms later, is read under each reflow condition.
+  builtCase(
+    'suspense-retry-early',
+    'reflow',
+    'A 1400 px block a lazy chunk that landed before the wait commits 300 ms after it runs, under each reflow condition',
+    EARLY_RETRY,
+    /^reflow (?:reflow|zoom|root-text): /,
+    namingUnder('#early-retry', ['reflow', 'zoom', 'root-text'], (page) =>
+      reflowFindings(page, '/'),
+    ),
+    { chunk: EARLY_RETRY_CHUNK },
+  ),
+  // And a page held, then flipped, with a second change inside the floor (push 3 r3, item 2): the
+  // floor starts at the flip's change, not only at a request in flight, and starts again at a
+  // change seen once it has run, so both islands' blocks are read under each reflow condition.
+  builtCase(
+    'held-flip',
+    'reflow',
+    'A page held to +200 ms, its first island live at +100 and its second at +500, each committing a 1400 px block 300 ms after, under each reflow condition',
+    HELD_FLIP,
+    /^reflow (?:reflow|zoom|root-text): /,
+    namingUnder(
+      '#held-a',
+      ['reflow', 'zoom', 'root-text'],
+      namingUnder('#held-b', ['reflow', 'zoom', 'root-text'], (page) => reflowFindings(page, '/')),
+    ),
+    { chunk: HELD_FLIP_CHUNK },
   ),
   bad('needs-hover', 'inventory.html', 'inventory', 'content', inventory),
   good('inventory', inventory),
