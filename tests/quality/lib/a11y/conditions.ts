@@ -68,16 +68,18 @@ export const NO_CANVAS = `(() => {
  * submits nothing takes its own label, a block of nothing else (the
  * inventory's `button label:`), with it. A same-document skip link is a
  * control too (`control: skip-link`), and a block of such controls and at
- * most a short label of its own (`control label:`) goes with them. A submit
- * button's label and a link's text are still the page's text.
+ * most a short label of its own (`control label:`) goes with them. Words
+ * marked data-script-only, which only live script sets (`script-only:`), go
+ * too. A submit button's label and a link's text are still the page's text.
  */
-export const PRINT_IGNORE = /^(?:control|button label|control label): /;
+export const PRINT_IGNORE = /^(?:control|button label|control label|script-only): /;
 /**
  * Without JavaScript, or its enhancements, a button that submits no form may stay out, its own
- * label with it, and so may a skip link and a block of such controls and a short label.
+ * label with it, and so may a skip link and a block of such controls and a short label, and
+ * words marked data-script-only.
  */
 export const NO_SCRIPT_IGNORE =
-  /^(?:control: (?:button:(?:button|reset)|skip-link)|button label:|control label:) /;
+  /^(?:control: (?:button:(?:button|reset)|skip-link)|button label:|control label:|script-only:) /;
 
 /** What a condition does to the page, and how the check knows it took. */
 export interface Condition {
@@ -574,6 +576,8 @@ export async function inventoryFindings(
             condition.ignore,
           ),
         );
+        if (condition.id === 'no-javascript')
+          findings.push(...(await scriptOnlyTextFindings(page)));
       } finally {
         await condition.teardown(page, cdp);
       }
@@ -584,6 +588,25 @@ export async function inventoryFindings(
   if (!(await load(page, path)).settled)
     findings.push(stillBusy('the reload after the conditions'));
   return findings;
+}
+
+/**
+ * Words in a live status marked data-script-only, read without JavaScript:
+ * the mark lets go words only live script sets, so the server renders such a
+ * status empty, and words it rendered there are the page's own content,
+ * which the mark may not excuse. One finding each, by path. A mark on any
+ * other element is ignored, so its words are the inventory's own fields.
+ */
+export async function scriptOnlyTextFindings(page: Page): Promise<Finding[]> {
+  const marked = await inPage<{ path: string; text: string }[]>(page, { kind: 'script-only-text' });
+  return marked.slice(0, 10).map(({ path, text }) => ({
+    gate: 'inventory',
+    rule: 'script-only-text',
+    path,
+    expected:
+      'a live status marked data-script-only is empty without JavaScript: only live script sets its words',
+    actual: `${marked.length} marked status(es) with words without JavaScript, here "${text.slice(0, 80)}"`,
+  }));
 }
 
 /**

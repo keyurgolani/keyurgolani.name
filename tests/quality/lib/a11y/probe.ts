@@ -106,6 +106,7 @@ export type ProbeRequest =
   | { readonly kind: 'hover-targets'; readonly limit: number }
   | { readonly kind: 'title-only' }
   | { readonly kind: 'inventory' }
+  | { readonly kind: 'script-only-text' }
   | { readonly kind: 'structure' }
   | { readonly kind: 'reflow' }
   | { readonly kind: 'transparency' }
@@ -186,6 +187,14 @@ function probe(request: ProbeRequest): unknown {
     return false;
   };
   const text = (el: Element) => (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+  /**
+   * Whether `el` is a live status: role="status" (its first role token, as ARIA reads it), or an
+   * aria-live other than "off". The only element a data-script-only mark counts on.
+   */
+  const liveStatus = (el: Element | null): boolean =>
+    el !== null &&
+    ((el.getAttribute('role') ?? '').trim().split(/\s+/)[0] === 'status' ||
+      (el.hasAttribute('aria-live') && el.getAttribute('aria-live')!.trim() !== 'off'));
   const nameOf = (el: Element): string =>
     (
       el.getAttribute('aria-label') ??
@@ -540,6 +549,21 @@ function probe(request: ProbeRequest): unknown {
         const href = el?.getAttribute('href') ?? '';
         return href.startsWith('#') && ownIds.has(href.slice(1));
       };
+      // Words only live script sets, such as HC's position status ("Opening, 1 of 21"), which a
+      // static stand-in would get wrong wherever the reader is: an author marks the element
+      // data-script-only, and its text blocks are `script-only:` fields, which no JavaScript and
+      // print let go (NO_SCRIPT_IGNORE, PRINT_IGNORE). Only on a live status, role="status" or a
+      // live aria-live: on any other element the mark is ignored and its words count. Text only: a
+      // block that holds a heading, a link, an image or a control is no script-only field, its
+      // words included, and each of those still counts as itself, so the mark waives nothing but
+      // plain words. And the server renders such a status empty: one with words without
+      // JavaScript is a finding of its own (scriptOnlyTextFindings, the `script-only-text` read),
+      // so the mark can't excuse them.
+      const scriptOnly = (el: Element): boolean =>
+        liveStatus(el.closest('[data-script-only]')) &&
+        el.querySelector(
+          'h1, h2, h3, h4, h5, h6, a[href], img, button, input, select, textarea, [role=button], [role=link], [tabindex]',
+        ) === null;
       // A button that submits nothing: type=button or reset.
       const inertButton = (el: Element | null): boolean =>
         el?.localName === 'button' && /^(?:button|reset)$/.test((el as HTMLButtonElement).type);
@@ -579,7 +603,7 @@ function probe(request: ProbeRequest): unknown {
               : buttons + skips > 0 && own.length <= 3
                 ? 'control label'
                 : 'text';
-          items.add(`${kind}: ${value}`);
+          items.add(`${scriptOnly(el) ? 'script-only' : kind}: ${value}`);
         }
       }
       for (const el of doc.body.querySelectorAll<HTMLAnchorElement>('a[href]')) {
@@ -604,6 +628,17 @@ function probe(request: ProbeRequest): unknown {
       }
       return [...items];
     }
+    case 'script-only-text':
+      // Each live status marked data-script-only that holds words as the page stands: read without
+      // JavaScript, the server's own words, which the mark may not excuse. A mark on any other
+      // element is ignored, here as in the inventory.
+      return [...doc.querySelectorAll('[data-script-only]')]
+        .filter(liveStatus)
+        .map((el) => ({
+          path: cssPath(el),
+          text: (el.textContent ?? '').replace(/\s+/g, ' ').trim(),
+        }))
+        .filter(({ text: words }) => words !== '');
     case 'structure': {
       const skip = doc.querySelector<HTMLAnchorElement>('a[href^="#"]');
       const target = skip ? doc.getElementById(decodeURIComponent(skip.hash.slice(1))) : null;

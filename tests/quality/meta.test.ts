@@ -273,6 +273,33 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'enhancement/own-words-and-button',
     'inventory/label-and-link',
     'enhancement/label-and-link',
+    // Words on a live status marked data-script-only go the same way (lead, 3 Nov 2026, for HC's
+    // position status), on role="status" and on an aria-live region, and nothing broader: the
+    // status unmarked, the mark on an ordinary element or an aria-live="off" one (the mark counts
+    // only on a live status, lead, 6 Nov 2026), and a link, a heading or a control inside a
+    // marked status still count.
+    'inventory/script-only',
+    'enhancement/script-only',
+    'inventory/script-only-live',
+    'enhancement/script-only-live',
+    'inventory/unmarked-status',
+    'enhancement/unmarked-status',
+    'inventory/script-only-ordinary',
+    'enhancement/script-only-ordinary',
+    'inventory/script-only-live-off',
+    'enhancement/script-only-live-off',
+    'inventory/script-only-link',
+    'enhancement/script-only-link',
+    // Text only: a block holding a link or a control, and a heading, inside a marked status still
+    // count; and a marked status holding the server's own words is a finding by name (the
+    // coordinator, 6 Nov 2026).
+    'inventory/script-only-block-link',
+    'enhancement/script-only-block-link',
+    'inventory/script-only-heading',
+    'enhancement/script-only-heading',
+    'inventory/script-only-control',
+    'enhancement/script-only-control',
+    'inventory/script-only-server-words',
     // A row's main pass audits the page once its enhancements have mounted or failed (lead,
     // 1 Nov 2026): a pale plain link a late chunk hides passes, a pale live button it shows fails.
     'contrast/pre-live-node',

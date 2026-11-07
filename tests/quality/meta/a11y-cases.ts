@@ -309,7 +309,7 @@ addEventListener('load', () => setTimeout(() => {
  * reveals a lazy enhancement a while after its chunk, the page idle between.
  */
 const REVEAL = {
-  body: "setTimeout(() => { for (const el of document.querySelectorAll('[data-lazy]')) el.hidden = false; }, 400);",
+  body: "setTimeout(() => { for (const el of document.querySelectorAll('[data-lazy]')) { if (el.dataset.words) el.textContent = el.dataset.words; if (el.dataset.html) el.innerHTML = el.dataset.html; el.hidden = false; } }, 400);",
 };
 
 /** `check` once the lazy enhancement has revealed its control, as the cell reads its baseline once axe has run. */
@@ -426,6 +426,76 @@ const SKIP_GUARDS = [
     html: '<p hidden data-lazy><b>This page</b> <a href="/elsewhere">Elsewhere</a></p>',
     scriptless: ['text: This page Elsewhere', 'link: /elsewhere Elsewhere'],
     print: ['text: This page Elsewhere', 'link: /elsewhere Elsewhere'],
+  },
+] as const;
+
+/**
+ * HC's position status: a live status, role="status", whose words only live script sets, marked
+ * data-script-only. The server renders it empty; the chunk sets its words (data-words, which
+ * REVEAL writes in) as it reveals it.
+ */
+const SCRIPT_ONLY =
+  '<p role="status" data-script-only hidden data-lazy data-words="Opening, 1 of 21"></p>';
+
+/** The same status as an aria-live region, the other live status the mark counts on. */
+const SCRIPT_ONLY_LIVE =
+  '<p aria-live="polite" data-script-only hidden data-lazy data-words="Opening, 1 of 21"></p>';
+
+/** What the script-only mark must still count, as LABEL_GUARDS words it. */
+const SCRIPT_GUARDS = [
+  {
+    // The mark counts only on a live status (the lead, 6 Nov 2026): on an ordinary element it's
+    // ignored, and the words its script sets are missing without it.
+    id: 'script-only-ordinary',
+    what: 'The same words, marked, on an ordinary element',
+    html: '<p data-script-only hidden data-lazy data-words="Opening, 1 of 21"></p>',
+    scriptless: ['text: Opening, 1 of 21'],
+    print: ['text: Opening, 1 of 21'],
+  },
+  {
+    id: 'script-only-live-off',
+    what: 'The same words, marked, on an aria-live="off" element',
+    html: '<p aria-live="off" data-script-only hidden data-lazy data-words="Opening, 1 of 21"></p>',
+    scriptless: ['text: Opening, 1 of 21'],
+    print: ['text: Opening, 1 of 21'],
+  },
+  {
+    id: 'unmarked-status',
+    what: 'The same status, unmarked',
+    html: '<p hidden data-lazy>Opening, 1 of 21</p>',
+    scriptless: ['text: Opening, 1 of 21'],
+    print: ['text: Opening, 1 of 21'],
+  },
+  {
+    id: 'script-only-link',
+    what: 'A link inside a script-only status',
+    html: '<div role="status" data-script-only hidden data-lazy data-html="<p>Opening, 1 of 21</p><a href=&quot;/elsewhere&quot;>Elsewhere</a>"></div>',
+    scriptless: ['link: /elsewhere Elsewhere'],
+    print: ['link: /elsewhere Elsewhere'],
+  },
+  {
+    // Text only (the coordinator, 6 Nov 2026): a block holding a link is no script-only field, its
+    // words included, whatever marks it.
+    id: 'script-only-block-link',
+    what: 'A script-only status whose words hold a link',
+    html: '<div role="status" data-script-only hidden data-lazy data-html="<p>Read <a href=&quot;/elsewhere&quot;>Elsewhere</a></p>"></div>',
+    scriptless: ['text: Read Elsewhere', 'link: /elsewhere Elsewhere'],
+    print: ['text: Read Elsewhere', 'link: /elsewhere Elsewhere'],
+  },
+  {
+    id: 'script-only-heading',
+    what: 'A heading inside a script-only status',
+    html: '<div role="status" data-script-only hidden data-lazy data-html="<h2>Opening</h2>"></div>',
+    scriptless: ['heading: Opening'],
+    print: ['heading: Opening'],
+  },
+  {
+    id: 'script-only-control',
+    what: 'A control inside a script-only status',
+    html: '<div role="status" data-script-only hidden data-lazy data-html="<p>Where <input type=&quot;text&quot; aria-label=&quot;Where to&quot;></p>"></div>',
+    // Print counts no control, so the control is missing without JavaScript alone.
+    scriptless: ['text: Where', 'control: input Where to'],
+    print: ['text: Where'],
   },
 ] as const;
 
@@ -1681,6 +1751,10 @@ export const A11Y_CASES: readonly MetaCase[] = [
     [
       ['skip-link', 'A skip link', SKIP_LINK],
       ['control-label', 'A control label', CONTROL_LABEL],
+      // Words only live script sets, on a live status marked data-script-only, go the same way
+      // (lead, 3 Nov 2026, for HC's position status; only on a live status, 6 Nov 2026).
+      ['script-only', 'A script-only status', SCRIPT_ONLY],
+      ['script-only-live', 'A script-only live region', SCRIPT_ONLY_LIVE],
     ] as const
   ).flatMap(([id, what, html]): MetaCase[] => [
     {
@@ -1706,28 +1780,47 @@ export const A11Y_CASES: readonly MetaCase[] = [
   ]),
   // Nothing broader: a paragraph, a link's text, a submit button's label, or a link styled as a
   // button, hidden the same way, is still missing, each field of it, under each condition; and so
-  // are a link to a section, a paragraph of its own words beside a button, and a short label
-  // beside a real link.
-  ...[...LABEL_GUARDS, ...SKIP_GUARDS].flatMap(({ id, what, html, scriptless, print }) => [
-    builtCase(
-      id,
-      'inventory',
-      `${what}, ${html}, which a lazy chunk reveals and print hides, without JavaScript and in print`,
-      lazyReveal(what, html, PRINT_HIDES),
-      missingFields('inventory content', { 'no-javascript': scriptless, print }),
-      missingUnder(['no-javascript', 'print'], revealed(scriptlessInventory)),
-      { chunk: REVEAL },
+  // are a link to a section, a paragraph of its own words beside a button, a short label beside
+  // a real link, the status unmarked, the mark on an ordinary element or an aria-live="off" one,
+  // and a link, a heading or a control inside a script-only status.
+  ...[...LABEL_GUARDS, ...SKIP_GUARDS, ...SCRIPT_GUARDS].flatMap(
+    ({ id, what, html, scriptless, print }) => [
+      builtCase(
+        id,
+        'inventory',
+        `${what}, ${html}, which a lazy chunk reveals and print hides, without JavaScript and in print`,
+        lazyReveal(what, html, PRINT_HIDES),
+        missingFields('inventory content', { 'no-javascript': scriptless, print }),
+        missingUnder(['no-javascript', 'print'], revealed(scriptlessInventory)),
+        { chunk: REVEAL },
+      ),
+      builtCase(
+        id,
+        'enhancement',
+        `${what}, ${html}, which a lazy chunk reveals, under failed enhancement`,
+        lazyReveal(what, html, PRINT_HIDES),
+        missingFields('enhancement semantics', { 'failed enhancement': scriptless }),
+        missingUnder(['failed enhancement'], revealed(enhancement)),
+        { chunk: REVEAL },
+      ),
+    ],
+  ),
+  // The mark can't excuse the server's own words (the coordinator, 6 Nov 2026): a live status
+  // marked data-script-only that holds words without JavaScript is a finding of its own, by name,
+  // though nothing is missing under any condition.
+  builtCase(
+    'script-only-server-words',
+    'inventory',
+    'A status marked data-script-only whose words the server renders, without JavaScript and in print',
+    lazyReveal(
+      'A script-only status',
+      '<p role="status" data-script-only data-lazy>Opening, 1 of 21</p>',
+      PRINT_HIDES,
     ),
-    builtCase(
-      id,
-      'enhancement',
-      `${what}, ${html}, which a lazy chunk reveals, under failed enhancement`,
-      lazyReveal(what, html, PRINT_HIDES),
-      missingFields('enhancement semantics', { 'failed enhancement': scriptless }),
-      missingUnder(['failed enhancement'], revealed(enhancement)),
-      { chunk: REVEAL },
-    ),
-  ]),
+    /^inventory script-only-text: 1 marked status\(es\) with words without JavaScript, here "Opening, 1 of 21"$/,
+    revealed(scriptlessInventory),
+    { chunk: REVEAL },
+  ),
   // A page that declares nothing is read after its skip link is followed, as a visitor has it.
   bad('skip-changes', 'enhancement-skip-changes.html', 'enhancement', 'semantics', enhancement),
   // A Studio surface that declares requiresScript: with JavaScript off it says so in #content.
