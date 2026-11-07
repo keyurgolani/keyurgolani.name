@@ -1,9 +1,16 @@
 import { readFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
 import path from 'node:path';
 import { fixtureSiteSelecting } from '../../packages/variant-contract/src/contract-fixtures';
 import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
 import { expect, test } from '../harness/fixtures';
-import { load, stepAcrossStacked } from './horizontal-cinema-model';
+import {
+  load,
+  loadAtStacked,
+  sceneIndexStacked,
+  stepNextStacked,
+  stepPreviousStacked,
+} from './horizontal-cinema-model';
 
 // Horizontal Cinema stacked top to bottom by a touch screen in the strip's own room (64rem by 44rem
 // and up): the strip's bar shows, in flow at the end of the scenes, with Scenes by chapter, Previous
@@ -145,14 +152,52 @@ for (const [width, height] of [
     },
   );
 
+  // The walk both ways is four tests, cut at the Craft chapter's card, each well inside the default
+  // test budget, with every step's checks. A piece that doesn't start on the first scene starts by a
+  // fresh load of its first scene's link, and checks that it landed there first.
+  const ready = async (page: Page) => {
+    await page.setViewportSize({ width, height });
+    await load(page);
+    await expect(page.locator('.hc-shell')).not.toHaveAttribute('data-pin');
+    return sceneIndexStacked(page, 'chapter-craft');
+  };
+
   test(
-    `stacked by touch at ${width} by ${height}, the bar's Next steps from the first scene to the last and Previous back`,
+    `stacked by touch at ${width} by ${height}, the bar's Next steps from the first scene to the Craft chapter`,
     { annotation, tag },
     async ({ page }) => {
-      await page.setViewportSize({ width, height });
-      await load(page);
-      await expect(page.locator('.hc-shell')).not.toHaveAttribute('data-pin');
-      expect(await stepAcrossStacked(page)).toBe(2 * (SCENES - 1));
+      const cut = await ready(page);
+      expect(await stepNextStacked(page, { to: cut })).toBe(cut);
+    },
+  );
+
+  test(
+    `stacked by touch at ${width} by ${height}, loaded at the Craft chapter, the bar's Next steps on to the last scene`,
+    { annotation, tag },
+    async ({ page }) => {
+      const cut = await ready(page);
+      await loadAtStacked(page, cut);
+      expect(await stepNextStacked(page, { from: cut })).toBe(SCENES - 1 - cut);
+    },
+  );
+
+  test(
+    `stacked by touch at ${width} by ${height}, loaded at the last scene, the bar's Previous steps back to the Craft chapter`,
+    { annotation, tag },
+    async ({ page }) => {
+      const cut = await ready(page);
+      await loadAtStacked(page);
+      expect(await stepPreviousStacked(page, { to: cut })).toBe(SCENES - 1 - cut);
+    },
+  );
+
+  test(
+    `stacked by touch at ${width} by ${height}, loaded at the Craft chapter, the bar's Previous steps back to the first scene`,
+    { annotation, tag },
+    async ({ page }) => {
+      const cut = await ready(page);
+      await loadAtStacked(page, cut);
+      expect(await stepPreviousStacked(page, { from: cut })).toBe(cut);
     },
   );
 }

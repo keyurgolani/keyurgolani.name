@@ -492,13 +492,13 @@ export async function widenRailYears(page: Page, spacing = '1.5em'): Promise<voi
 }
 
 /**
- * Stacked by touch in the strip's room, the bar's Next from the first scene to the last and Previous
- * back: after each press the status names the scene stepped to, and the minimap marks its chapter.
- * Returns the scenes it stepped through, for the caller to check the count. The bar lies in flow
- * after the scenes, so each press is the button's own click, with no scroll to the bar first: a tap
- * there would scroll the page to the bar, and the scene in view at the bar would be the one named.
+ * Stacked by touch in the strip's room, the bar's walk: the scene count, the press, and the checks
+ * after each press, that the status names the scene stepped to and the minimap marks its chapter.
+ * The bar lies in flow after the scenes, so each press is the button's own click, with no scroll to
+ * the bar first: a tap there would scroll the page to the bar, and the scene in view at the bar would
+ * be the one named.
  */
-export async function stepAcrossStacked(page: Page): Promise<number> {
+async function stackedWalk(page: Page) {
   const total = await page.locator('.hc-track .hc-scene').count();
   const perChapter = await page
     .locator('.hc-minimap__chapter')
@@ -527,18 +527,81 @@ export async function stepAcrossStacked(page: Page): Promise<number> {
         ),
     ).toBe(chapterOf(index));
   };
-  await check(0);
+  return { total, press, check };
+}
+
+/**
+ * The bar's Next from scene `from` to scene `to` (indices; the first and the last by default), checked
+ * after each press as stackedWalk checks: the page must already be on `from`, which is checked first,
+ * and Next is disabled where the walk ends on the last scene. Returns the scenes it stepped through.
+ */
+export async function stepNextStacked(
+  page: Page,
+  { from = 0, to }: { from?: number; to?: number } = {},
+): Promise<number> {
+  const { total, press, check } = await stackedWalk(page);
+  const end = to ?? total - 1;
+  await check(from);
   let stepped = 0;
-  for (let index = 1; index < total; index++) {
+  for (let index = from + 1; index <= end; index++) {
     await press('Next scene');
     await check(index);
     stepped += 1;
   }
-  await expect(page.getByRole('button', { name: 'Next scene' })).toBeDisabled();
-  for (let index = total - 2; index >= 0; index--) {
+  if (end === total - 1) {
+    await expect(page.getByRole('button', { name: 'Next scene' })).toBeDisabled();
+  }
+  return stepped;
+}
+
+/**
+ * The bar's Previous from scene `from` back to scene `to` (indices; the last and the first by default),
+ * checked after each press as stackedWalk checks: the page must already be on `from`, which is
+ * checked first, with Next disabled there when it's the last. Returns the scenes it stepped through.
+ */
+export async function stepPreviousStacked(
+  page: Page,
+  { from, to = 0 }: { from?: number; to?: number } = {},
+): Promise<number> {
+  const { total, press, check } = await stackedWalk(page);
+  const start = from ?? total - 1;
+  await check(start);
+  if (start === total - 1) {
+    await expect(page.getByRole('button', { name: 'Next scene' })).toBeDisabled();
+  }
+  let stepped = 0;
+  for (let index = start - 1; index >= to; index--) {
     await press('Previous scene');
     await check(index);
     stepped += 1;
   }
   return stepped;
+}
+
+/** The index of the scene whose id is `id`, read from the page; it must be there. */
+export async function sceneIndexStacked(page: Page, id: string): Promise<number> {
+  const ids = await page
+    .locator('.hc-track .hc-scene')
+    .evaluateAll((scenes) => scenes.map((scene) => scene.id));
+  expect(ids).toContain(id);
+  return ids.indexOf(id);
+}
+
+/** A fresh load of the page at scene `index` (the last by default), by the scene's own fragment. */
+export async function loadAtStacked(page: Page, index?: number): Promise<void> {
+  const scenes = page.locator('.hc-track .hc-scene');
+  const id = await (index === undefined ? scenes.last() : scenes.nth(index)).getAttribute('id');
+  expect(id).toBeTruthy();
+  // A fresh document, not a same-page fragment change.
+  await page.goto('about:blank');
+  await load(page, `/#${id}`);
+  await expect(page).toHaveURL(new RegExp(`#${id}$`));
+}
+
+/**
+ * The bar's Next from the first scene to the last and Previous back, in one test: for a strip short
+ * enough to walk both ways inside a test's budget. Returns the scenes it stepped through.
+ */
+export async function stepAcrossStacked(page: Page): Promise<number> {
+  return (await stepNextStacked(page)) + (await stepPreviousStacked(page));
 }
