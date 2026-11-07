@@ -352,6 +352,24 @@ test("WCAG A and AA failures on essential content can't be excepted, in any tier
   assert.deepEqual(contrast('non-text'), []);
 });
 
+test('inventory script-only-text is a rule at A, so no exception waives it', () => {
+  assert.equal(ruleLevel('inventory', 'script-only-text'), 'A');
+  assert.deepEqual(
+    messages(
+      quality([
+        edit(TARGET, {
+          gate: 'inventory',
+          rule: 'script-only-text',
+          scope: scopeFor('inventory'),
+        }),
+      ]),
+    ),
+    [
+      "exceptions[0] (login-primary-target) kind: inventory script-only-text is WCAG A: a WCAG A or AA failure on essential content can't be excepted, in any tier. This exception is non-waivable.",
+    ],
+  );
+});
+
 test('a gate or rule named for a prototype key is no gate or rule, reported and never thrown', () => {
   for (const name of ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf']) {
     assert.equal(ruleLevel(name, 'text'), undefined, name);
