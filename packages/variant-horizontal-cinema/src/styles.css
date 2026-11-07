@@ -3181,9 +3181,10 @@
 }
 
 /*
- * The one orchestrated moment: the title card's picture opens from a slit, then the name fades up.
- * On screen only: on paper neither runs, so the picture prints whole and the name at full opacity.
- * Without a script the fade still plays, as CSS, from the first paint, so it never flashes.
+ * The one orchestrated moment: the title card's picture opens from a slit, then the name rises into
+ * place. It rises at full strength, never from transparent, so the page's one heading is there to read
+ * from the first paint, with or without a script, the rise playing as CSS either way.
+ * On screen only: on paper neither runs, so the picture prints whole.
  */
 @media screen and (prefers-reduced-motion: no-preference) {
   [data-variant='horizontal-cinema']:not([data-motion='reduced'], [data-motion='static']) .hc-card {
@@ -3192,7 +3193,7 @@
 
   [data-variant='horizontal-cinema']:not([data-motion='reduced'], [data-motion='static'])
     .hc-card__name {
-    animation: horizontal-cinema-fade var(--motion-scene) var(--motion-curve) backwards;
+    animation: horizontal-cinema-rise var(--motion-scene) var(--motion-curve) backwards;
     animation-delay: calc(var(--motion-scene) * 0.4);
   }
 }
@@ -3219,9 +3220,8 @@
   }
 }
 
-@keyframes horizontal-cinema-fade {
+@keyframes horizontal-cinema-rise {
   from {
-    opacity: 0;
     transform: translateY(0.12em);
   }
 }
