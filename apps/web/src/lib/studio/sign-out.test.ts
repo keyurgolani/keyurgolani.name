@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { StudioFetchOptions } from '~/lib/studio-fetch';
-import { signOutWith } from './sign-out';
+import { signedOutLocation, signOutWith } from './sign-out';
 
 // Signing out without the owner adapter (row 88): auth.logout through
 // studioFetch, with the page's CSRF token and the owner's choice, and true
@@ -61,4 +61,9 @@ test("a sign-out whose store couldn't end the session is 'store_failed': this br
     const { fetch: odd } = fetcher(async () => answer());
     assert.equal(await signOutWith(odd, 'csrf-token', 'keep'), 'store_failed', what);
   }
+});
+
+test("a sign-out that ended the session lands on signed out, and one whose store couldn't goes to its own state, never to signed out (row 88b)", () => {
+  assert.equal(signedOutLocation('ended'), '/studio/sign-in?state=signed_out');
+  assert.equal(signedOutLocation('store_failed'), '/studio/sign-in?state=store_failed');
 });
