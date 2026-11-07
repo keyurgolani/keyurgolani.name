@@ -804,38 +804,53 @@ test(
   },
 );
 
+/**
+ * The pinned strip's reader on scene 6, by Next (focus on the bar, not in a scene), and a check that a
+ * refit keeps them there: scene 6 current and its start within 1 px of where it was (row 53 r2, 1b).
+ */
+async function onSixKept(page: Page) {
+  await load(page);
+  expect(await read(page)).toMatchObject({ layout: 'horizontal', pinned: true });
+  const next = page.getByRole('button', { name: 'Next scene' });
+  for (let at = 1; at <= 6; at++) {
+    await next.click();
+    await expectAt(page, at);
+  }
+  const before = await sceneOffset(page, 6);
+  return async (step: string) => {
+    await expect
+      .poll(
+        async () => {
+          const { layout, pinned, current } = await read(page);
+          return { layout, pinned, current };
+        },
+        { message: step, timeout: 1000 },
+      )
+      .toEqual({ layout: 'horizontal', pinned: true, current: 6 });
+    expect(
+      Math.abs((await sceneOffset(page, 6)) - before),
+      `${step}: the scene's place`,
+    ).toBeLessThanOrEqual(1);
+  };
+}
+
 test(
-  'a reader on a scene of the pinned strip keeps it, in the same place, through a resize and back and a text size and back',
+  'a reader on a scene of the pinned strip keeps it, in the same place, through a resize and back',
   { annotation, tag },
   async ({ page }) => {
-    await load(page);
-    expect(await read(page)).toMatchObject({ layout: 'horizontal', pinned: true });
-    const next = page.getByRole('button', { name: 'Next scene' });
-    for (let at = 1; at <= 6; at++) {
-      await next.click();
-      await expectAt(page, at);
-    }
-    const before = await sceneOffset(page, 6);
-    // Each refit (row 53 r2, 1b) holds the reader's scene where it was, to the pixel.
-    const keeps = async (step: string) => {
-      await expect
-        .poll(
-          async () => {
-            const { layout, pinned, current } = await read(page);
-            return { layout, pinned, current };
-          },
-          { message: step, timeout: 1000 },
-        )
-        .toEqual({ layout: 'horizontal', pinned: true, current: 6 });
-      expect(
-        Math.abs((await sceneOffset(page, 6)) - before),
-        `${step}: the scene's place`,
-      ).toBeLessThanOrEqual(1);
-    };
+    const keeps = await onSixKept(page);
     await resizeTo(page, { width: 1440, height: 800 });
     await keeps('at 1440 by 800');
     await resizeTo(page, { width: 1440, height: 900 });
     await keeps('back at 1440 by 900');
+  },
+);
+
+test(
+  'a reader on a scene of the pinned strip keeps it, in the same place, through a text size and back',
+  { annotation, tag },
+  async ({ page }) => {
+    const keeps = await onSixKept(page);
     // The root's text a step larger and back, as a reader's own setting does: the sentinel refits at once.
     await page.evaluate(() =>
       document.documentElement.style.setProperty('font-size', '112.5%', 'important'),
