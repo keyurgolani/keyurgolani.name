@@ -196,6 +196,20 @@
   outline-offset: calc(var(--ui-focus-width) * -1);
 }
 
+/*
+ * Top to bottom the stage is the page's height and its scenes cover its own ring, the platform's
+ * outline inset at its edges, so focus changed nothing on screen. There a ring in the focus colour
+ * lies over the scenes at the stage's edges while it has focus. The pinned strip keeps its own.
+ */
+[data-variant='horizontal-cinema'] .hc-shell[data-fit='over'] .hc-stage:focus-visible::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  border: var(--ui-focus-width) solid var(--color-focus);
+  pointer-events: none;
+}
+
 [data-variant='horizontal-cinema'] .hc-track {
   display: flex;
   flex-direction: column;
