@@ -797,6 +797,268 @@ jobs:
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
 
+  # Push 3's evidence only, never merged: RC1's cells that push 3 moves, on CI Linux, at this
+  # branch's head, as rc-quality runs them (the coordinator, 11-07, r5c item 6):
+  #   QUALITY_RELEASE_SCOPE=quality/release/scope.json pnpm ci:quality-full --grep=<grep> --retries=0
+  # in quality-pr's pinned image, user and options, after install and ci:build. One matrix of 14
+  # jobs, each a grep with a known listing count, max-parallel 4 across all of them, so the
+  # account's other repos keep their slots:
+  # - sb-1 to sb-5: Spatial Bento's 675 RC1 tests (672 cells, its perf test and its 2 visual
+  #   tests), by state. RC1 runs one SB pack (platform-neutral/warm-parchment/humanist-ui), so a
+  #   split by pack is one job; by state it's five, about an hour each. last-known-good and
+  #   unavailable skip on every row (stand-ins), so each rides with a complete route.
+  #   195 + 192 + 96 + 96 + 96 = 675.
+  # - fe-1 to fe-9: the default row at 1440x900, 'at 1440x900, default( @[^ ]+)*$' (489 listed
+  #   and 353 running under --external-variant, which ci:quality-full passes), two compositions
+  #   a job, and the reference variant with the surfaces in the ninth, the complement of the
+  #   other eight. 8 x 56 + 41 = 489. There's no base side, and that fails closed: no head
+  #   finding of failed enhancement can be excused as on the base too, so E's CI read holds every
+  #   one to its exact key, by design and listed, or a product row with an owner. (The base does
+  #   block chunks: its own set is document.scripts once, as suites() starts, so a chunk first
+  #   asked for later, a late lazy chunk or one an interaction loads, is blocked there too.)
+  # Estimates, from RC1's plan at the release weights (shard-durations.json's release block, as
+  # lib/full-shards.ts weighs a release shard, 2 workers, 420 s fixed): about 59-61 min a job;
+  # fe-9 about 52. timeout-minutes is 120, about 2x the estimate, past TIMEOUT_MARGIN's 1.5 so a
+  # runner 1.9x slower still ends (the coordinator, r5c). A job that hits it is NOT READ in E's CI
+  # read and re-runs once, alone, split in two by halving its grep, the halves' counts summing to
+  # its own; it never passes on a partial run.
+  # No `--` before the grep: pnpm passes a `--` through, and ci:quality-full's own script ends in
+  # `-- --external-variant`, so a second `--` would reach Playwright, which takes what follows it
+  # as file filters (probed on pnpm 10.33.0). The run's own verdict fails by design (a grep of the
+  # plan is judged against all of it), so its exit is printed and kept apart; a job fails on a
+  # listing of other than its count, on the argv checks, or on its read-back's bars.
+  rc1-evidence:
+    name: rc1-evidence ${{ matrix.id }} (${{ matrix.what }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - id: fe-1
+            read: fe
+            count: 56
+            what: 'aurora-glass and chapters at 1440x900, default'
+            cells: '^composition:(aurora-glass|chapters) '
+            grep: 'composition:(aurora-glass|chapters) .*at 1440x900, default( @[^ ]+)*$'
+          - id: fe-2
+            read: fe
+            count: 56
+            what: 'editorial-evidence and fallback at 1440x900, default'
+            cells: '^composition:(editorial-evidence|fallback) '
+            grep: 'composition:(editorial-evidence|fallback) .*at 1440x900, default( @[^ ]+)*$'
+          - id: fe-3
+            read: fe
+            count: 56
+            what: 'flux and horizontal-cinema at 1440x900, default'
+            cells: '^composition:(flux|horizontal-cinema) '
+            grep: 'composition:(flux|horizontal-cinema) .*at 1440x900, default( @[^ ]+)*$'
+          - id: fe-4
+            read: fe
+            count: 56
+            what: 'kinetic-cosmos and mission-control at 1440x900, default'
+            cells: '^composition:(kinetic-cosmos|mission-control) '
+            grep: 'composition:(kinetic-cosmos|mission-control) .*at 1440x900, default( @[^ ]+)*$'
+          - id: fe-5
+            read: fe
+            count: 56
+            what: 'obsidian-atelier and raw-grid at 1440x900, default'
+            cells: '^composition:(obsidian-atelier|raw-grid) '
+            grep: 'composition:(obsidian-atelier|raw-grid) .*at 1440x900, default( @[^ ]+)*$'
+          - id: fe-6
+            read: fe
+            count: 56
+            what: 'schematic and shell at 1440x900, default'
+            cells: '^composition:(schematic|shell) '
+            grep: 'composition:(schematic|shell) .*at 1440x900, default( @[^ ]+)*$'
+          - id: fe-7
+            read: fe
+            count: 56
+            what: 'singular and spatial-bento at 1440x900, default'
+            cells: '^composition:(singular|spatial-bento) '
+            grep: 'composition:(singular|spatial-bento) .*at 1440x900, default( @[^ ]+)*$'
+          - id: fe-8
+            read: fe
+            count: 56
+            what: 'swiss-signal and terra-field at 1440x900, default'
+            cells: '^composition:(swiss-signal|terra-field) '
+            grep: 'composition:(swiss-signal|terra-field) .*at 1440x900, default( @[^ ]+)*$'
+          - id: fe-9
+            read: fe
+            count: 41
+            what: 'the reference variant and the surfaces at 1440x900, default'
+            cells: '^(?!composition:(aurora-glass|chapters|editorial-evidence|fallback|flux|horizontal-cinema|kinetic-cosmos|mission-control|obsidian-atelier|raw-grid|schematic|shell|singular|spatial-bento|swiss-signal|terra-field) )'
+            grep: '^(?!.*composition:(aurora-glass|chapters|editorial-evidence|fallback|flux|horizontal-cinema|kinetic-cosmos|mission-control|obsidian-atelier|raw-grid|schematic|shell|singular|spatial-bento|swiss-signal|terra-field) ).*at 1440x900, default( @[^ ]+)*$'
+          - id: sb-1
+            read: sb
+            count: 195
+            what: "Spatial Bento's complete / and last-known-good, its perf and visual tests"
+            grep: 'spatial-bento (complete|last-known-good) /[ ,]'
+          - id: sb-2
+            read: sb
+            count: 192
+            what: "Spatial Bento's complete /work/project-name and unavailable"
+            grep: 'spatial-bento (complete /work/project-name|unavailable /) '
+          - id: sb-3
+            read: sb
+            count: 96
+            what: "Spatial Bento's missing-media"
+            grep: 'spatial-bento missing-media / '
+          - id: sb-4
+            read: sb
+            count: 96
+            what: "Spatial Bento's not-found"
+            grep: 'spatial-bento not-found /'
+          - id: sb-5
+            read: sb
+            count: 96
+            what: "Spatial Bento's sparse"
+            grep: 'spatial-bento sparse / '
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      # The image this job runs in, so the visual cells know they're in it.
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      QUALITY_RELEASE_SCOPE: quality/release/scope.json
+      CI_REPORTS_DIR: reports/rc1-${{ matrix.id }}
+      EV_ID: ${{ matrix.id }}
+      EV_GREP: ${{ matrix.grep }}
+      EV_COUNT: ${{ matrix.count }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: pnpm ci:build
+        run: pnpm ci:build
+      # The listing's own verdict fails (no test ran), hence || true. The count decides: exactly
+      # EV_COUNT tests, on Playwright's Total line and in its list lines, or the job fails here,
+      # before the run.
+      - name: List the job's tests
+        id: list
+        shell: bash
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary-list
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets-list
+          LIST_FILE: ${{ runner.temp }}/rc1-list.txt
+        run: |
+          echo "[rc1 $EV_ID] grep: $EV_GREP"
+          pnpm ci:quality-full "--grep=$EV_GREP" --retries=0 --list > "$LIST_FILE" 2>&1 || true
+          cat "$LIST_FILE"
+          total=$(awk '/^Total: [0-9]+ tests? in /{n=$2} END{if (n == "") print "unread"; else print n}' "$LIST_FILE")
+          lines=$(awk '/^  \[[a-z]+ [0-9a-f]+\] /{n++} END{print n+0}' "$LIST_FILE")
+          echo "[rc1 $EV_ID] listed $total test(s), $lines list line(s); want exactly $EV_COUNT"
+          echo "listed=$total" >> "$GITHUB_OUTPUT"
+          if [ "$total" != "$EV_COUNT" ] || [ "$lines" != "$EV_COUNT" ]; then
+            echo "[rc1 $EV_ID] FAIL: the grep listed $total test(s) and $lines list line(s), not exactly $EV_COUNT"
+            exit 1
+          fi
+      # The run's verdict fails by design (a grep run exits 1), so its exit is data, printed. The
+      # step fails only on the argv checks, each an exact argument of the process (its
+      # /proc/<pid>/cmdline, split on NUL): the runner's holds --external-variant and
+      # --grep=<EV_GREP>; Playwright's holds --grep=<EV_GREP> and --retries=0, and no `--`; and
+      # both were seen.
+      - name: pnpm ci:quality-full --grep=<the job's grep> --retries=0
+        id: run
+        if: ${{ !cancelled() && steps.list.outcome == 'success' }}
+        shell: bash
+        env:
+          CI_REPRO_COMMAND: "QUALITY_RELEASE_SCOPE=quality/release/scope.json pnpm ci:quality-full '--grep=${{ matrix.grep }}' --retries=0"
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+          RUN_LOG: ${{ runner.temp }}/rc1-run.txt
+        run: |
+          pnpm ci:quality-full "--grep=$EV_GREP" --retries=0 > "$RUN_LOG" 2>&1 &
+          pid=$!
+          # The runner's (tests/quality/run.ts) and Playwright's process, each once, from /proc.
+          runner=''
+          playwright=''
+          while kill -0 "$pid" 2> /dev/null && [ -z "$playwright" ]; do
+            for f in /proc/[0-9]*/cmdline; do
+              a=$(tr '\0' ' ' < "$f" 2> /dev/null || true)
+              case "$a" in
+                *'tests/quality/run.ts full'*) [ -n "$runner" ] || { runner=$f; cp "$f" "$RUNNER_TEMP/runner.argv" 2> /dev/null || true; echo "[rc1 $EV_ID] runner argv: $a"; } ;;
+                *'@playwright/test/cli'*' test --config '*) [ -n "$playwright" ] || { playwright=$f; cp "$f" "$RUNNER_TEMP/playwright.argv" 2> /dev/null || true; echo "[rc1 $EV_ID] playwright argv: $a"; } ;;
+              esac
+            done
+            sleep 1
+          done
+          rc=0
+          wait "$pid" || rc=$?
+          cat "$RUN_LOG"
+          echo "[rc1 $EV_ID] the run exited $rc (data: a grep of the plan is judged against all of it)"
+          has() { [ -s "$1" ] && tr '\0' '\n' < "$1" | grep -Fxq -- "$2"; }
+          fail=''
+          if [ ! -s "$RUNNER_TEMP/runner.argv" ]; then
+            fail="$fail; the runner's argv was not seen"
+          else
+            has "$RUNNER_TEMP/runner.argv" --external-variant || fail="$fail; the runner's argv lacks --external-variant"
+            has "$RUNNER_TEMP/runner.argv" "--grep=$EV_GREP" || fail="$fail; the runner's argv lacks --grep=$EV_GREP as one argument"
+          fi
+          if [ ! -s "$RUNNER_TEMP/playwright.argv" ]; then
+            fail="$fail; Playwright's argv was not seen"
+          else
+            has "$RUNNER_TEMP/playwright.argv" "--grep=$EV_GREP" || fail="$fail; Playwright's argv lacks --grep=$EV_GREP as one argument"
+            has "$RUNNER_TEMP/playwright.argv" --retries=0 || fail="$fail; Playwright's argv lacks --retries=0"
+            if has "$RUNNER_TEMP/playwright.argv" --; then fail="$fail; Playwright's argv holds a --, so what follows it is file filters"; fi
+          fi
+          if [ -n "$fail" ]; then
+            echo "[rc1 $EV_ID] FAIL: ${fail#; }"
+            exit 1
+          fi
+          echo "[rc1 $EV_ID] argv checks: passed"
+      - name: The job's tests, read back
+        if: ${{ always() && steps.run.outcome != 'skipped' }}
+        shell: bash
+        env:
+          LISTED: ${{ steps.list.outputs.listed }}
+          EV_READ: ${{ matrix.read }}
+          EV_CELLS: ${{ matrix.cells }}
+        run: |
+          if ! command -v python3 > /dev/null; then
+            echo "::error::python3 isn't in this image: the tests aren't read here; the artifact holds them"
+            exit 1
+          fi
+          if [ "$EV_READ" = sb ]; then
+            python3 -I _ci-evidence/sb-rc1-read.py "$EV_ID" "reports/rc1-$EV_ID/quality" "$LISTED"
+          else
+            python3 -I _ci-evidence/fe-rc1-read.py "$EV_ID" "reports/rc1-$EV_ID/quality" "$LISTED" "$EV_CELLS"
+          fi
+      # The reports upload only when this succeeds: it deletes what it can't read, and fails when
+      # it did, or when the canary is still in any.
+      - name: Scrub its reports
+        id: scrub
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload the job's tests
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rc1-${{ matrix.id }}
+          path: |
+            reports/rc1-${{ matrix.id }}/quality/results/
+            reports/rc1-${{ matrix.id }}/quality/summary.json
+            reports/rc1-${{ matrix.id }}/quality/verdict.json
+            reports/rc1-${{ matrix.id }}/quality/plan.json
+          if-no-files-found: error
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
   # quality-pr's shards judged whole (tests/quality/lib/shards.ts): zero
   # tests, the plan's coverage, perf coverage, empty projects, the canary
   # probe, and targets with no result, across every shard together. A shard
