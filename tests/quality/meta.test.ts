@@ -298,6 +298,7 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'inventory/script-only-inner-mark',
     'enhancement/script-only-inner-mark',
     'inventory/script-only-live-server-words',
+    'inventory/script-only-hidden-server-words',
     'inventory/script-only-ordinary',
     'enhancement/script-only-ordinary',
     'inventory/script-only-live-off',
