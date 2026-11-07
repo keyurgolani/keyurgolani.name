@@ -45,7 +45,7 @@ import {
 } from '../lib/a11y/interaction';
 import { killSwitches, MOTION_SAMPLER, motionFindings, osWinsFindings } from '../lib/a11y/motion';
 import { inPage, type Active } from '../lib/a11y/probe';
-import { applyRow, audit, loadForPass, runPass } from '../lib/run-cell';
+import { applyRow, audit, landscapeOcclusionFindings, loadForPass, runPass } from '../lib/run-cell';
 import type { MetaCase, MetaOutcome } from './cases';
 
 const FIXTURES = fileURLToPath(new URL('../fixtures/a11y/', import.meta.url));
@@ -397,6 +397,28 @@ const missingUnder =
         })),
     ];
   };
+
+/**
+ * A page whose lazy enhancement, an island that goes live once the page has loaded and loads its
+ * chunk from LAZY_CHUNK, which the stand-in serves late, mounts a fixed footer: occlusion.html's,
+ * over the link below the fold, but late.
+ */
+const LATE_OCCLUDER = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>A late footer</title><style>:focus-visible { outline: 2px solid #000; outline-offset: 2px; } footer { position: fixed; inset: auto 0 0 0; height: 160px; background: #222; color: #fff; } .spacer { height: 1600px; }</style></head><body><main><h1>A link under a late footer</h1><div data-enhancement-island="late" data-island="markup"><p>The page reads without its enhancement.</p></div><div class="spacer"></div><p><a href="#below" id="below">Below the fold</a></p></main><script>
+addEventListener('load', () => setTimeout(() => {
+  const island = document.querySelector('[data-enhancement-island]');
+  island.setAttribute('data-island', 'live');
+  const chunk = document.createElement('script');
+  chunk.src = '${LAZY_CHUNK}';
+  chunk.onload = () => chunk.remove();
+  chunk.onerror = () => { chunk.remove(); island.setAttribute('data-island', 'failed'); };
+  document.head.append(chunk);
+}));
+</script></body></html>`;
+
+/** The late-occluder case's chunk: it mounts the footer at once, as it runs. */
+const LATE_OCCLUDER_CHUNK = {
+  body: "{ const footer = document.createElement('footer'); footer.innerHTML = '<p>A late fixed footer</p>'; document.body.append(footer); }",
+};
 
 /** What the late-overflow case's enhancement mounts. */
 const LATE_WIDE_WHAT = 'A 1400 px wide block';
@@ -1742,6 +1764,23 @@ export const A11Y_CASES: readonly MetaCase[] = [
   },
   good('focus', focus),
   bad('fixed-footer', 'occlusion.html', 'occlusion', 'obscured', occlusion),
+  // The landscape pass reads the page once its enhancements have mounted or failed (push 3): a
+  // fixed footer a lazy enhancement mounts 750 ms after load covers the focus stop at the phone's
+  // viewport turned, 844x390. Read at the load event, as it was, the footer isn't there yet.
+  builtCase(
+    'late-occluder',
+    'occlusion',
+    `A fixed footer a lazy chunk mounts ${LAZY_DELAY_MS} ms after load, over a focus stop, in the landscape pass at 844x390`,
+    LATE_OCCLUDER,
+    /^occlusion obscured: /,
+    (page) => landscapeOcclusionFindings(page, '/', { width: 390, height: 844 }, false),
+    {
+      chunk: LATE_OCCLUDER_CHUNK,
+      viewport: { width: 390, height: 844 },
+      hasTouch: true,
+      isMobile: true,
+    },
+  ),
   bad('pointer-events-footer', 'occlusion-pointer.html', 'occlusion', 'obscured', occlusion),
   bad('scroll-shown-footer', 'occlusion-scroll.html', 'occlusion', 'obscured', occlusion),
   {

@@ -261,6 +261,31 @@ interface SuiteRun {
   readonly settleLog?: SettleRecord[];
 }
 
+/**
+ * The landscape occlusion pass at the phone's viewport turned: `at` loaded there and read at its
+ * load event and two frames. Then the viewport goes back and `at` loads again.
+ */
+export async function landscapeOcclusionFindings(
+  page: Page,
+  at: string,
+  viewport: { readonly width: number; readonly height: number },
+  framed: boolean,
+): Promise<Finding[]> {
+  const findings: Finding[] = [];
+  const [width, height] = [viewport.height, viewport.width];
+  const original = page.viewportSize()!;
+  await page.setViewportSize({ width, height });
+  await page.goto(at, { waitUntil: 'load' });
+  await frames(page);
+  for (const finding of await keyboardFindings(page, { occlusion: true, framed })) {
+    if (finding.gate === 'occlusion') findings.push({ ...finding, viewport: `${width}x${height}` });
+  }
+  await page.setViewportSize(original);
+  await page.goto(at, { waitUntil: 'load' });
+  await frames(page);
+  return findings;
+}
+
 /** Slice 2's suites on the page `run.at` names, as `run.owed` says. Motion runs before axe, in runCell. */
 async function suites(run: SuiteRun): Promise<Finding[]> {
   const { page, at, owed, ran } = run;
@@ -287,21 +312,9 @@ async function suites(run: SuiteRun): Promise<Finding[]> {
   if (does('hover')) findings.push(...(await hoverFindings(page)));
   if (does('transparency')) findings.push(...(await transparencyFindings(page)));
   if (does('landscape-occlusion')) {
-    const [width, height] = [run.viewport.height, run.viewport.width];
-    const original = page.viewportSize()!;
-    await page.setViewportSize({ width, height });
-    await page.goto(at, { waitUntil: 'load' });
-    await frames(page);
-    for (const finding of await keyboardFindings(page, {
-      occlusion: true,
-      framed: run.framed ?? false,
-    })) {
-      if (finding.gate === 'occlusion')
-        findings.push({ ...finding, viewport: `${width}x${height}` });
-    }
-    await page.setViewportSize(original);
-    await page.goto(at, { waitUntil: 'load' });
-    await frames(page);
+    findings.push(
+      ...(await landscapeOcclusionFindings(page, at, run.viewport, run.framed ?? false)),
+    );
   }
   if (does('reflow')) {
     const disclosures = run.interactions.filter((each) => each.kind === 'disclosure');
