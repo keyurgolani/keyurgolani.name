@@ -540,3 +540,49 @@ export function sceneOffset(scope: Scope, index: number): Promise<number> {
     return (rtl ? box.right - at.right : at.left - box.left) - inset;
   }, index);
 }
+
+/** What resizeWith() does inside the burst: press the strip's Next, or follow a link to a fragment. */
+export type DuringResize = { readonly press: 'Next scene' } | { readonly hash: string };
+
+/**
+ * Sets the window to `size` and, at the first resize event that comes, inside the burst whose
+ * settle the strip's refit waits for, does `during` in the page: a resize listener added after the
+ * controller's runs straight after it, so `during` comes between the burst's first resize and its
+ * refit by the event's own order, not a timer. Then waits for the refit as resizeTo() does.
+ */
+export async function resizeWith(
+  page: Page,
+  size: { width: number; height: number },
+  during: DuringResize,
+): Promise<void> {
+  await page.evaluate((during) => {
+    const w = window as unknown as { __hcRefitted?: Promise<void> };
+    let ran = false;
+    w.__hcRefitted = new Promise<void>((done) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      window.addEventListener('resize', () => {
+        if (!ran) {
+          ran = true;
+          if ('hash' in during) location.hash = during.hash;
+          else {
+            // The button the accessibility tree names so: its label, or its text.
+            const named = (button: HTMLButtonElement) =>
+              (button.getAttribute('aria-label') ?? button.textContent ?? '').trim();
+            const button = [...document.querySelectorAll('button')].find(
+              (one) => named(one) === during.press,
+            );
+            if (!button) throw new Error(`no button named ${during.press}`);
+            button.click();
+          }
+        }
+        clearTimeout(timer);
+        timer = setTimeout(
+          () => requestAnimationFrame(() => requestAnimationFrame(() => done())),
+          400,
+        );
+      });
+    });
+  }, during);
+  await page.setViewportSize(size);
+  await page.evaluate(() => (window as unknown as { __hcRefitted: Promise<void> }).__hcRefitted);
+}
