@@ -14,6 +14,7 @@ import {
 import type { AppearanceCatalog } from '~/lib/studio/appearance';
 import type { StudioPolicy } from '~/lib/studio/backend';
 import type { StudioDraft } from '~/lib/studio/documents';
+import { useStudioMounted } from '../load/load-boundary';
 import { DemoStudio } from './demo-studio';
 
 // Demo Studio's page shell (#9): it loads the browser backend's chunk, the
@@ -37,6 +38,8 @@ export interface DemoShellProps {
 
 export function DemoShell({ policy, setup }: DemoShellProps) {
   const { catalog, schemeModes, unit, defaults, reference } = setup;
+  // The page's load boundary hears that the shell arrived (row 88c).
+  useStudioMounted();
   const [backend, setBackend] = useState<DemoBackend | null>(null);
   const [source, setSource] = useState<DemoSource>('sample');
   const [failed, setFailed] = useState(false);

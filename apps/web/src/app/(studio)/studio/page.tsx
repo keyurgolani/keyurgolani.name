@@ -7,6 +7,8 @@ import { signInLocation } from '~/server/return-to';
 import { appearanceCatalog } from '~/server/studio-appearance';
 import { studioPolicy } from '~/server/studio-policy';
 import { requireDemoPage, requireOwnerPage } from '~/server/studio-guard';
+import { DemoLoadBoundary } from '../_components/load/demo-load-boundary';
+import { OwnerLoadBoundary } from '../_components/load/owner-load-boundary';
 import { StudioEntry } from '../_components/studio-entry';
 
 // /studio (#8, Slice 1; #9): the Owner Studio shell under owner, and Demo
@@ -20,7 +22,9 @@ import { StudioEntry } from '../_components/studio-entry';
 // and the bundled sample, and keeps everything else in the visitor's
 // browser. StudioEntry renders the profile's shell, each through a client
 // import() of its own, so each profile's /studio loads its own shell's
-// chunks and none of the other's.
+// chunks and none of the other's. Each sits in its profile's load boundary
+// (row 88c), which says Studio couldn't load when the shell doesn't arrive,
+// the owner's with Sign out.
 
 export const metadata = { title: 'Portfolio Studio' };
 
@@ -31,11 +35,13 @@ async function Studio() {
       : await requireOwnerPage('studio.view');
   if (!owner) {
     return (
-      <StudioEntry
-        profile="demo"
-        policy={studioPolicy('demo', null)}
-        setup={await demoStudioSetup()}
-      />
+      <DemoLoadBoundary>
+        <StudioEntry
+          profile="demo"
+          policy={studioPolicy('demo', null)}
+          setup={await demoStudioSetup()}
+        />
+      </DemoLoadBoundary>
     );
   }
   const { authorized, csrfToken } = owner;
@@ -53,13 +59,15 @@ async function Studio() {
       }
     : null;
   return (
-    <StudioEntry
-      profile="owner"
-      csrfToken={csrfToken}
-      policy={policy}
-      appearance={appearanceCatalog()}
-      preview={preview}
-    />
+    <OwnerLoadBoundary csrfToken={csrfToken}>
+      <StudioEntry
+        profile="owner"
+        csrfToken={csrfToken}
+        policy={policy}
+        appearance={appearanceCatalog()}
+        preview={preview}
+      />
+    </OwnerLoadBoundary>
   );
 }
 

@@ -64,6 +64,7 @@ import { SIGN_OUT_IDLE, SignOut, type SignOutState } from './sign-out';
 import { StudioFrame, TaskNav } from './studio-frame';
 import { StudioMark } from '../split/studio-split';
 import { AppearanceWorkspace, type PreviewSetup } from './appearance-workspace';
+import { STUDIO_LOAD_TIMEOUT_MS, useStudioMounted } from '../load/load-boundary';
 
 // Publish history loads with its task, never with the rest of /studio.
 const HistoryTask = dynamic(() => import('./history-task').then((module) => module.HistoryTask), {
@@ -92,7 +93,7 @@ import { foldAppearance } from '~/lib/studio/fold-appearance';
  * How long the owner adapter's chunk may take before Studio says it couldn't
  * load. One that arrives later still loads Studio, and the message goes.
  */
-const BACKEND_TIMEOUT_MS = 5_000;
+const BACKEND_TIMEOUT_MS = STUDIO_LOAD_TIMEOUT_MS;
 
 /** How long typing pauses before the journal takes the editor's text. */
 const JOURNAL_PAUSE_MS = 300;
@@ -161,6 +162,8 @@ export function StudioShell({
   /** The preview's sandbox, origin, and override options, or null when the session can't preview. */
   preview: PreviewSetup | null;
 }) {
+  // The page's load boundary hears that the shell arrived (row 88c).
+  useStudioMounted();
   const tasks = useMemo(() => tasksFor(policy.allowed), [policy.allowed]);
   const [task, setTask] = useState<TaskId>(tasks[0]?.id ?? 'content');
   const [session, dispatch] = useReducer(draftSession, INITIAL_SESSION);
