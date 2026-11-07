@@ -136,6 +136,12 @@ test("at the 1024 reload (root text 200%), reflowFindings' load awaits the fonts
     ['switch', 'frame'],
     'then the root text switches, and frames are drawn',
   );
+  // And only there (push 3 r4, item 3): the 320 and 640 reloads, and the restore, stay at 100%.
+  assert.deepEqual(
+    events.filter((each) => each.kind === 'switch').map((each) => each.width),
+    [1024],
+    'the root text switches at the 1024 reload alone',
+  );
 });
 
 test('a page busy for good gives reflowFindings one STILL_BUSY a condition, each at its own viewport, and the restore at none', async () => {
@@ -150,4 +156,71 @@ test('a page busy for good gives reflowFindings one STILL_BUSY a condition, each
       ['runner', 'settled', 'the page settles under the reload after reflow', null],
     ],
   );
+});
+
+/**
+ * A page whose HTML, as served, names one chunk, which finished just before the enhancements'
+ * wait began, its tag kept in the live page as Turbopack leaves it; nothing else happens on it.
+ * Every waitForTimeout it's asked for is kept, and run.
+ */
+function servedChunkPage() {
+  const CHUNK = 'http://app.test/_next/static/chunks/main.js';
+  const handlers = new Map<string, Set<(value: unknown) => void>>();
+  const emit = (event: string, value: unknown) => {
+    for (const handler of handlers.get(event) ?? []) handler(value);
+  };
+  const waits: number[] = [];
+  const chunk = { resourceType: () => 'script', url: () => CHUNK };
+  const document = {
+    url: () => 'http://app.test/',
+    status: () => 200,
+    request: () => ({ resourceType: () => 'document' }),
+    text: async () =>
+      '<!doctype html><html><head><script src="/_next/static/chunks/main.js" async=""></script></head><body><main><h1>A page</h1></main></body></html>',
+  };
+  const page = {
+    on: (event: string, handler: (value: unknown) => void) => {
+      if (!handlers.has(event)) handlers.set(event, new Set());
+      handlers.get(event)!.add(handler);
+    },
+    off: (event: string, handler: (value: unknown) => void) => {
+      handlers.get(event)?.delete(handler);
+    },
+    goto: async () => {
+      emit('response', document);
+      emit('request', chunk);
+      emit('requestfinished', chunk);
+      return null;
+    },
+    waitForFunction: async () => ({}),
+    waitForTimeout: async (ms: number) => {
+      waits.push(ms);
+      await new Promise((done) => setTimeout(done, ms));
+    },
+    evaluate: async (fn: unknown) => {
+      const source = String(fn);
+      if (source.includes('fonts.ready')) return undefined;
+      if (source.includes('scripting: none')) return false;
+      if (source.includes('requestIdleCallback')) return undefined;
+      if (source.includes('requestAnimationFrame')) return undefined;
+      if (source.includes('data-enhancement-island')) return '';
+      if (source.includes('document.scripts')) return [CHUNK];
+      return 0;
+    },
+  };
+  return { page: page as unknown as Page, waits };
+}
+
+test("a chunk the page's HTML names as served, finished just before the wait, asks for no wait of 400 ms or more", async () => {
+  const { page, waits } = servedChunkPage();
+  const started = Date.now();
+  const loaded = await load(page, '/', undefined, { enhancements: true });
+  const took = Date.now() - started;
+  assert.deepEqual(loaded, { settled: true, enhanced: true });
+  assert.deepEqual(
+    waits.filter((ms) => ms >= 400),
+    [],
+    'no waitForTimeout of 400 ms or more',
+  );
+  assert.ok(took < 400, `load() returns in under 400 ms, not ${took}`);
 });

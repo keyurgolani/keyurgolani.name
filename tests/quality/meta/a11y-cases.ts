@@ -67,7 +67,11 @@ interface PageOptions extends BrowserContextOptions {
   readonly media?: 'print';
   /** JavaScript off, through CDP, as run-cell.ts turns it off for the no-JavaScript row. */
   readonly noScript?: boolean;
-  /** A lazy enhancement's chunk the stand-in serves too, at LAZY_CHUNK: after `delayMs` (LAZY_DELAY_MS unless given), or never. */
+  /**
+   * A lazy enhancement's chunk the stand-in serves too, at LAZY_CHUNK: after `delayMs` (LAZY_DELAY_MS
+   * unless given), or never. A request whose query names `delay` waits that many ms instead, so a
+   * page can ask for the chunk twice, each on its own schedule (push 3 r4).
+   */
   readonly chunk?: { readonly body: string; readonly delayMs?: number } | 'never';
 }
 
@@ -93,14 +97,18 @@ async function onPage(
   const html = file.startsWith('<') ? file : readFileSync(path.join(FIXTURES, file), 'utf8');
   const { init, at, features, media, noScript, chunk, ...context } = options;
   const server = createServer((request, response) => {
-    const asked = new URL(request.url ?? '/', 'http://stand-in').pathname;
+    const url = new URL(request.url ?? '/', 'http://stand-in');
+    const asked = url.pathname;
     if (chunk && asked === LAZY_CHUNK) {
       // One that never comes holds its request open until the page goes.
       if (chunk === 'never') return;
-      setTimeout(() => {
-        response.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
-        response.end(chunk.body);
-      }, chunk.delayMs ?? LAZY_DELAY_MS);
+      setTimeout(
+        () => {
+          response.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
+          response.end(chunk.body);
+        },
+        Number(url.searchParams.get('delay') ?? chunk.delayMs ?? LAZY_DELAY_MS),
+      );
       return;
     }
     const found = asked === '/';
@@ -315,8 +323,9 @@ const enhancement = async (page: Page) =>
  * markup, as Shell's palette reveals its jump buttons: once the page has
  * loaded, its island goes live, as the host marks one, and loads its chunk
  * from LAZY_CHUNK, which the stand-in serves late. The chunk's script
- * element goes once it has run, so the page names no chunk of its own; if
- * it fails, the island marks itself failed and keeps its markup.
+ * element stays once it has run and goes only if it fails, as Turbopack's
+ * runtime leaves it (push 3 r4): the page's HTML, as served, names no chunk
+ * of its own. If it fails, the island marks itself failed and keeps its markup.
  */
 const lazyReveal = (title: string, control: string, head = '') =>
   `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${title}</title>${head}</head><body><a href="#main">Skip to content</a><main id="main" tabindex="-1"><h1>${title}</h1><div data-enhancement-island="reveal" data-island="markup"><p>The page reads without its enhancement.</p>${control}</div></main><script>
@@ -325,7 +334,6 @@ addEventListener('load', () => setTimeout(() => {
   island.setAttribute('data-island', 'live');
   const chunk = document.createElement('script');
   chunk.src = '${LAZY_CHUNK}';
-  chunk.onload = () => chunk.remove();
   chunk.onerror = () => { chunk.remove(); island.setAttribute('data-island', 'failed'); };
   document.head.append(chunk);
 }));
@@ -410,7 +418,6 @@ addEventListener('load', () => setTimeout(() => {
   island.setAttribute('data-island', 'live');
   const chunk = document.createElement('script');
   chunk.src = '${LAZY_CHUNK}';
-  chunk.onload = () => chunk.remove();
   chunk.onerror = () => { chunk.remove(); island.setAttribute('data-island', 'failed'); };
   document.head.append(chunk);
 }));
@@ -435,7 +442,6 @@ addEventListener('load', () => setTimeout(() => {
   island.setAttribute('data-island', 'live');
   const chunk = document.createElement('script');
   chunk.src = '${LAZY_CHUNK}';
-  chunk.onload = () => chunk.remove();
   chunk.onerror = () => { chunk.remove(); island.setAttribute('data-island', 'failed'); };
   document.head.append(chunk);
 }));
@@ -464,15 +470,20 @@ const RETRY_WIDE_CHUNK = {
 /**
  * A page whose lazy chunk, asked for as the page parses and served at once, lands before the
  * load event, so before the enhancements' wait begins; it commits its block 300 ms after it runs,
- * on React's schedule (push 3 r3, item 1).
+ * on React's schedule (push 3 r3, item 1). Its script element stays once it has run, as
+ * Turbopack's runtime leaves it (push 3 r4, item 1): the live page names the chunk, and only its
+ * HTML as served doesn't.
  */
-const EARLY_RETRY = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>An early chunk</title></head><body><a href="#main">Skip to content</a><main id="main" tabindex="-1"><h1>An early chunk</h1><div id="early-host"><p>The page reads without its enhancement.</p></div></main><script>
+const earlyRetry = (onload: string) =>
+  `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>An early chunk</title></head><body><a href="#main">Skip to content</a><main id="main" tabindex="-1"><h1>An early chunk</h1><div id="early-host"><p>The page reads without its enhancement.</p></div></main><script>
 const chunk = document.createElement('script');
-chunk.src = '${LAZY_CHUNK}';
-chunk.onload = () => chunk.remove();
+chunk.src = '${LAZY_CHUNK}';${onload}
 chunk.onerror = () => chunk.remove();
 document.head.append(chunk);
 </script></body></html>`;
+const EARLY_RETRY = earlyRetry('');
+/** EARLY_RETRY's twin whose chunk's element goes once it has run, as webpack's runtime has it. */
+const EARLY_RETRY_REMOVED = earlyRetry('\nchunk.onload = () => chunk.remove();');
 
 /** EARLY_RETRY's chunk, served at once: it commits a 1400 px block 300 ms after it runs. */
 const EARLY_RETRY_CHUNK = {
@@ -481,10 +492,32 @@ const EARLY_RETRY_CHUNK = {
 };
 
 /**
+ * A page that asks for two lazy chunks as it parses, both in before the load event (push 3 r4,
+ * item 1): the first served at once, the second 400 ms later, which commits its block 300 ms after
+ * it runs. The floor starts from the later of the two.
+ */
+const TWO_EARLY = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Two early chunks</title></head><body><a href="#main">Skip to content</a><main id="main" tabindex="-1"><h1>Two early chunks</h1><div id="early-host"><p>The page reads without its enhancements.</p></div></main><script>
+for (const query of ['first', 'second&delay=400']) {
+  const chunk = document.createElement('script');
+  chunk.src = '${LAZY_CHUNK}?' + query;
+  chunk.onerror = () => chunk.remove();
+  document.head.append(chunk);
+}
+</script></body></html>`;
+
+/** TWO_EARLY's chunks: the second commits a 1400 px block 300 ms after it runs; the first, nothing. */
+const TWO_EARLY_CHUNK = {
+  delayMs: 0,
+  body: "if (document.currentScript.src.includes('second')) setTimeout(() => { const wide = document.createElement('p'); wide.id = 'early-second'; wide.style.width = '1400px'; wide.textContent = 'A block React commits on its retry, from the later of two chunks that landed before the wait.'; document.getElementById('early-host').append(wide); }, 300);",
+};
+
+/**
  * A page held, then flipped, on React's schedule (push 3 r3, item 2): its status is marked
  * enhancement-pending from load to +200 ms; at +100 its first island goes live and asks for a
  * chunk served at once, which commits #held-a 300 ms after the flip; at +500, inside the floor
- * that first change began, its second island goes live and #held-b commits 300 ms after that.
+ * that first change began, its second island goes live and #held-b commits 300 ms after that; at
+ * +900, inside the floor the second change began, it asks for a chunk alone, no island changing,
+ * served 100 ms later, which commits #held-c 300 ms after it runs (push 3 r4, item 1).
  */
 const HELD_FLIP = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>A held flip</title></head><body><a href="#main">Skip to content</a><main id="main" tabindex="-1"><h1>A held flip</h1><p data-enhancement-pending>Getting ready</p><div data-enhancement-island="first" data-island="markup"><p>The page reads without its first enhancement.</p></div><div data-enhancement-island="second" data-island="markup"><p>The page reads without its second enhancement.</p></div></main><script>
 addEventListener('load', () => {
@@ -492,7 +525,6 @@ addEventListener('load', () => {
     document.querySelector('[data-enhancement-island="first"]').setAttribute('data-island', 'live');
     const chunk = document.createElement('script');
     chunk.src = '${LAZY_CHUNK}';
-    chunk.onload = () => chunk.remove();
     document.head.append(chunk);
   }, 100);
   setTimeout(() => document.querySelector('[data-enhancement-pending]').removeAttribute('data-enhancement-pending'), 200);
@@ -501,13 +533,21 @@ addEventListener('load', () => {
     second.setAttribute('data-island', 'live');
     setTimeout(() => { const wide = document.createElement('p'); wide.id = 'held-b'; wide.style.width = '1400px'; wide.textContent = 'The second island, committed on its retry.'; second.append(wide); }, 300);
   }, 500);
+  setTimeout(() => {
+    const third = document.createElement('script');
+    third.src = '${LAZY_CHUNK}?third&delay=100';
+    document.head.append(third);
+  }, 900);
 });
 </script></body></html>`;
 
-/** HELD_FLIP's chunk, served at once: it commits #held-a 300 ms after it runs. */
+/**
+ * HELD_FLIP's chunk, served at once unless asked otherwise: it commits #held-a in the first island
+ * 300 ms after it runs, or, asked for as the third change, #held-c in main.
+ */
 const HELD_FLIP_CHUNK = {
   delayMs: 0,
-  body: "setTimeout(() => { const wide = document.createElement('p'); wide.id = 'held-a'; wide.style.width = '1400px'; wide.textContent = 'The first island, committed on its retry.'; document.querySelector('[data-enhancement-island=\"first\"]').append(wide); }, 300);",
+  body: "{ const third = document.currentScript.src.includes('third'); setTimeout(() => { const wide = document.createElement('p'); wide.id = third ? 'held-c' : 'held-a'; wide.style.width = '1400px'; wide.textContent = third ? 'A chunk alone, committed on its retry.' : 'The first island, committed on its retry.'; document.querySelector(third ? 'main' : '[data-enhancement-island=\"first\"]').append(wide); }, 300); }",
 };
 
 /**
@@ -817,7 +857,6 @@ main { padding: 1rem; }
 addEventListener('load', () => setTimeout(() => {
   const chunk = document.createElement('script');
   chunk.src = '${LAZY_CHUNK}';
-  chunk.onload = () => chunk.remove();
   document.head.append(chunk);
 }));
 </script></body></html>`;
@@ -2086,19 +2125,53 @@ export const A11Y_CASES: readonly MetaCase[] = [
     ),
     { chunk: EARLY_RETRY_CHUNK },
   ),
+  // Its twin, whose chunk's element goes once it has run (push 3 r4, item 1): the same block, read
+  // under each reflow condition, whichever way the runtime leaves the element.
+  builtCase(
+    'suspense-retry-early-removed-tag',
+    'reflow',
+    "suspense-retry-early's page, its chunk's element removed once it has run, under each reflow condition",
+    EARLY_RETRY_REMOVED,
+    /^reflow (?:reflow|zoom|root-text): /,
+    namingUnder('#early-retry', ['reflow', 'zoom', 'root-text'], (page) =>
+      reflowFindings(page, '/'),
+    ),
+    { chunk: EARLY_RETRY_CHUNK },
+  ),
+  // And two chunks in before the wait (push 3 r4, item 1): the floor starts from the later, so
+  // the block it commits 300 ms after it runs is read under each reflow condition.
+  builtCase(
+    'suspense-retry-two-early',
+    'reflow',
+    'A 1400 px block the later of two chunks that landed before the wait commits 300 ms after it runs, the first 400 ms before it, under each reflow condition',
+    TWO_EARLY,
+    /^reflow (?:reflow|zoom|root-text): /,
+    namingUnder('#early-second', ['reflow', 'zoom', 'root-text'], (page) =>
+      reflowFindings(page, '/'),
+    ),
+    { chunk: TWO_EARLY_CHUNK },
+  ),
   // And a page held, then flipped, with a second change inside the floor (push 3 r3, item 2): the
   // floor starts at the flip's change, not only at a request in flight, and starts again at a
   // change seen once it has run, so both islands' blocks are read under each reflow condition.
+  // And a third change, a chunk alone inside the second floor (push 3 r4, item 1): a script
+  // request started and finished between two polls, no island changing, starts the floor again.
   builtCase(
     'held-flip',
     'reflow',
-    'A page held to +200 ms, its first island live at +100 and its second at +500, each committing a 1400 px block 300 ms after, under each reflow condition',
+    'A page held to +200 ms, its first island live at +100 and its second at +500, each committing a 1400 px block 300 ms after, and a chunk alone asked for at +900 and served 100 ms later, committing a third 300 ms after it runs, under each reflow condition',
     HELD_FLIP,
     /^reflow (?:reflow|zoom|root-text): /,
     namingUnder(
       '#held-a',
       ['reflow', 'zoom', 'root-text'],
-      namingUnder('#held-b', ['reflow', 'zoom', 'root-text'], (page) => reflowFindings(page, '/')),
+      namingUnder(
+        '#held-b',
+        ['reflow', 'zoom', 'root-text'],
+        namingUnder('#held-c', ['reflow', 'zoom', 'root-text'], (page) =>
+          reflowFindings(page, '/'),
+        ),
+      ),
     ),
     { chunk: HELD_FLIP_CHUNK },
   ),
