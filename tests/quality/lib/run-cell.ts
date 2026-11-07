@@ -78,6 +78,7 @@ import {
   reflowFindings,
   transparencyFindings,
   watchEnhancements,
+  type OwnScripts,
 } from './a11y/conditions';
 import {
   CONTRAST_RULE,
@@ -121,7 +122,8 @@ async function settle(page: Page): Promise<boolean> {
  * replaces once it mounts, such as a plain link the live control stands
  * in for, whose box would be gone by the time the sampler looked for it.
  * `served` are the paths of the scripts its HTML names, as served, which
- * failed enhancement lets through (watchEnhancements()'s own()).
+ * failed enhancement lets through (watchEnhancements()'s own(), OwnScripts:
+ * closed when they couldn't be told).
  */
 export async function loadForPass(
   page: Page,
@@ -130,7 +132,7 @@ export async function loadForPass(
   response: Response | null;
   settled: boolean;
   enhanced: boolean;
-  served: ReadonlySet<string>;
+  served: OwnScripts;
 }> {
   const enhancements = watchEnhancements(page);
   try {
@@ -260,8 +262,8 @@ interface SuiteRun {
   readonly conditions: boolean;
   /** What those conditions compare with: the page's inventory, as audit() read it before its sampler. */
   readonly baseline: readonly string[];
-  /** The paths of the scripts the page's HTML names, as served, as loadForPass() read them. */
-  readonly served: ReadonlySet<string>;
+  /** The scripts the page's HTML names, as served, as loadForPass() read them (OwnScripts). */
+  readonly served: OwnScripts;
   /** A Studio surface that needs JavaScript: without it, its notice stands in for its content. */
   readonly scriptRequired: boolean;
   /** A surface whose frame's document its composition cells cover: the walk takes the frame as one stop. */

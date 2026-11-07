@@ -20,7 +20,9 @@
 //   cell's own read is (its first phase): no script chunk still loading, no
 //   island's data-island still changing, and nothing marked pending, and the
 //   wait then holds 500 ms past the last optional chunk or island change,
-//   React's retry delay and a margin; and then, as React may reveal what a
+//   React's retry delay and a margin, and 800 ms past an optional chunk
+//   that failed, Turbopack's longest retry and the margin; and then, as
+//   React may reveal what a
 //   chunk loaded a while after it lands, until the page shows what the
 //   baseline had, all within BUSY_LIMIT_MS. The same wait serves the main
 //   pass, the primitives page, the landscape pass, the variant shots
@@ -296,22 +298,47 @@ const stillBusy = (condition: string): Finding => ({
 /** What a page whose enhancements never finished mounting or failing is, as a finding's words. */
 export const STILL_ENHANCING = `the page's enhancements were still loading, a script in flight, an island changing or a first pass pending, or within React's retry delay after the last one, after ${BUSY_LIMIT_MS / 1000} s`;
 
+/**
+ * A page's own scripts: the paths its documents' HTML names, as served (htmlScripts()). `closed`
+ * when they couldn't be told (no document read, a body unreadable, or none by the wait's end):
+ * `paths` is empty then, so every chunk counts as optional, and failed enhancement says so rather
+ * than read a page with every chunk blocked (push 3 r5, item 4).
+ */
+export interface OwnScripts {
+  readonly paths: ReadonlySet<string>;
+  readonly closed: boolean;
+}
+
 /** The script requests a page has made since it started watching, and the ones still in flight. */
 interface ScriptWatch {
   readonly started: () => number;
   readonly pending: () => number;
-  /** When each script request it saw finish did, by URL, the latest last. */
-  readonly finished: () => readonly { readonly url: string; readonly at: number }[];
-  /** The page's own scripts: what its documents' HTML names, as served (htmlScripts()). */
-  readonly own: () => Promise<ReadonlySet<string>>;
+  /**
+   * When each script request it saw finish did, by URL, the latest last, and whether it failed: no
+   * response, or an HTTP error, which Turbopack's runtime retries (TURBOPACK_RETRY_MAX_MS).
+   */
+  readonly finished: () => readonly {
+    readonly url: string;
+    readonly at: number;
+    readonly failed: boolean;
+  }[];
+  /** The page's own scripts (OwnScripts), waiting for its documents' bodies until `end` at most. */
+  readonly own: (end: number) => Promise<OwnScripts>;
   readonly stop: () => void;
 }
 
-/** The paths of the scripts `html` loads itself, its <script src>s, against `base`. */
+/**
+ * The paths of the scripts `html` loads itself, its <script src>s, against `base`. A src that
+ * won't parse as a URL is skipped.
+ */
 export const htmlScripts = (html: string, base: string): string[] =>
-  [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map(
-    (match) => new URL(match[1]!, base).pathname,
-  );
+  [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].flatMap((match) => {
+    try {
+      return [new URL(match[1]!, base).pathname];
+    } catch {
+      return [];
+    }
+  });
 
 /**
  * An optional enhancement's chunk: a script under /_next/static/chunks/ whose path the page's
@@ -327,16 +354,22 @@ const optionalChunk = (url: string, own: ReadonlySet<string>) => {
 /**
  * Counts `page`'s script requests from now: a lazy enhancement's chunk is one, as failed
  * enhancement blocks it. And reads each document it loads from now, the main frame's and every
- * frame's, as served: the scripts that HTML names are the page's own (`own()`). It fails closed:
- * with no document read, or one whose body can't be, `own()` is empty, and every chunk counts as
- * optional.
+ * frame's, as served: the scripts that HTML names are the page's own (`own()`), the union of
+ * every document's. It fails closed: with no document read, one whose body can't be, or bodies
+ * still unread at `end`, `own()` is closed and empty, and every chunk counts as optional.
  */
 function watchScripts(page: Page): ScriptWatch {
   const inFlight = new Set<Request>();
-  const done: { url: string; at: number }[] = [];
+  const errored = new Set<Request>();
+  const done: { url: string; at: number; failed: boolean }[] = [];
   const documents: Promise<readonly string[] | null>[] = [];
   let started = 0;
   const onResponse = (response: Response) => {
+    // A script the server answered with an error failed, as the runtime sees it.
+    if (response.request().resourceType() === 'script') {
+      if (response.status() >= 400) errored.add(response.request());
+      return;
+    }
     if (response.request().resourceType() !== 'document') return;
     // A redirect has no body; the document it leads to is read in turn.
     if (response.status() >= 300 && response.status() < 400) return;
@@ -352,27 +385,36 @@ function watchScripts(page: Page): ScriptWatch {
     inFlight.add(request);
     started += 1;
   };
-  const onDone = (request: Request) => {
-    if (inFlight.delete(request)) done.push({ url: request.url(), at: Date.now() });
+  const onDone = (failed: boolean) => (request: Request) => {
+    if (inFlight.delete(request))
+      done.push({ url: request.url(), at: Date.now(), failed: failed || errored.has(request) });
   };
+  const onFinished = onDone(false);
+  const onFailed = onDone(true);
   page.on('response', onResponse);
   page.on('request', onRequest);
-  page.on('requestfinished', onDone);
-  page.on('requestfailed', onDone);
+  page.on('requestfinished', onFinished);
+  page.on('requestfailed', onFailed);
   return {
     started: () => started,
     pending: () => inFlight.size,
     finished: () => done,
-    own: async () => {
-      const read = await Promise.all(documents);
-      if (read.length === 0 || read.some((each) => each === null)) return new Set();
-      return new Set(read.flatMap((each) => each ?? []));
+    own: async (end) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const late = new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), Math.max(0, end - Date.now()));
+      });
+      const read = await Promise.race([Promise.all(documents), late]);
+      clearTimeout(timer);
+      if (read === null || read.length === 0 || read.some((each) => each === null))
+        return { paths: new Set(), closed: true };
+      return { paths: new Set(read.flatMap((each) => each ?? [])), closed: false };
     },
     stop: () => {
       page.off('response', onResponse);
       page.off('request', onRequest);
-      page.off('requestfinished', onDone);
-      page.off('requestfailed', onDone);
+      page.off('requestfinished', onFinished);
+      page.off('requestfailed', onFailed);
     },
   };
 }
@@ -385,6 +427,13 @@ function watchScripts(page: Page): ScriptWatch {
 export const SUSPENSE_RETRY_MS = 300;
 /** What enhancementsSettled() waits past SUSPENSE_RETRY_MS, for the timer and the commit's frames. */
 export const SUSPENSE_RETRY_MARGIN_MS = 200;
+/**
+ * The longest Turbopack's runtime waits before it asks again for a chunk that failed: it retries a
+ * failed chunk once, 200 to 600 ms later (the runtime in next@16.4.1's swc binary, as the
+ * coordinator read it, 7 Nov 2026). A failed optional chunk holds the wait that long past its
+ * failure, and the margin, so the retry is seen; the retried chunk then starts the floor again.
+ */
+export const TURBOPACK_RETRY_MAX_MS = 600;
 
 /** One idle period, or `ms` at most (a second at most) if the page has none, then two frames. */
 async function idle(page: Page, ms: number): Promise<void> {
@@ -440,7 +489,16 @@ async function enhancementsSettled(
   // the wait began (push 3 r3), since a chunk from cache can land before the wait and commit after.
   // Optional by the HTML as served (push 3 r4), as the live page names every chunk it loaded.
   let seen = `${scripts.started()} ${await islands()}`;
-  const own = await scripts.own();
+  const own = (await scripts.own(end)).paths;
+  // The latest optional chunk that failed, before the wait or during it: its retry may come up to
+  // TURBOPACK_RETRY_MAX_MS later (push 3 r5, item 4).
+  const lastFailed = () => {
+    const failed = scripts
+      .finished()
+      .filter(({ url, failed }) => failed && optionalChunk(url, own))
+      .map(({ at }) => at);
+    return failed.length > 0 ? Math.max(...failed) : null;
+  };
   const early = scripts
     .finished()
     .filter(({ url }) => optionalChunk(url, own))
@@ -460,8 +518,13 @@ async function enhancementsSettled(
       changed = Date.now();
     }
     if (now === before && (await pending()) === 0) {
-      // React's retry: no sooner than its delay and a margin after the last change.
-      const floor = changed === null ? 0 : changed + SUSPENSE_RETRY_MS + SUSPENSE_RETRY_MARGIN_MS;
+      // React's retry: no sooner than its delay and a margin after the last change; and a failed
+      // chunk's, no sooner than the runtime's longest retry and the margin after it failed.
+      const failedAt = lastFailed();
+      const floor = Math.max(
+        changed === null ? 0 : changed + SUSPENSE_RETRY_MS + SUSPENSE_RETRY_MARGIN_MS,
+        failedAt === null ? 0 : failedAt + TURBOPACK_RETRY_MAX_MS + SUSPENSE_RETRY_MARGIN_MS,
+      );
       if (Date.now() >= floor) return true;
       await page.waitForTimeout(Math.max(1, Math.min(floor, end) - Date.now()));
       before = null;
@@ -477,10 +540,10 @@ async function enhancementsSettled(
 export interface EnhancementWatch {
   /**
    * The paths of the scripts the page's HTML names, as served, read as it loaded: what failed
-   * enhancement lets through. Empty when a document's body couldn't be read, so every chunk is
-   * optional.
+   * enhancement lets through (OwnScripts). Closed and empty when a document's body couldn't be
+   * read by `end` (BUSY_LIMIT_MS from now unless given).
    */
-  readonly own: () => Promise<ReadonlySet<string>>;
+  readonly own: (end?: number) => Promise<OwnScripts>;
   /**
    * Waits, until `end`, for the enhancements to mount or fail
    * (enhancementsSettled(), a condition's reload's first phase); true at
@@ -499,7 +562,7 @@ export interface EnhancementWatch {
 export function watchEnhancements(page: Page): EnhancementWatch {
   const scripts = watchScripts(page);
   return {
-    own: () => scripts.own(),
+    own: (end = Date.now() + BUSY_LIMIT_MS) => scripts.own(end),
     settled: async (end = Date.now() + BUSY_LIMIT_MS) => {
       if (await page.evaluate(() => matchMedia('(scripting: none)').matches)) return true;
       return enhancementsSettled(page, scripts, end);
@@ -944,17 +1007,34 @@ interface Structure {
   readonly fragments: readonly { path: string; href: string; found: boolean }[];
 }
 
+/** What failed enhancement records for a page whose own scripts couldn't be told from its lazy ones. */
+export const OWN_SCRIPTS_UNKNOWN =
+  "the page's own scripts couldn't be told from its lazy ones: its HTML, as served, wasn't read";
+
 /**
  * The page with its optional enhancement taken away. `own` are the paths of the scripts its HTML
- * names, as served, as its main pass read them (loadForPass()): every other chunk is blocked.
+ * names, as served, as its main pass read them (loadForPass()): every other chunk is blocked. When
+ * they couldn't be told (`own.closed`), it reads nothing, since every chunk would be blocked, and
+ * records a runner finding instead (push 3 r5, item 4).
  */
 export async function enhancementFindings(
   page: Page,
   path: string,
   baseline: readonly string[],
-  own: ReadonlySet<string>,
+  served: OwnScripts,
   scriptRequired = false,
 ): Promise<Finding[]> {
+  if (served.closed) {
+    return [
+      {
+        gate: 'runner',
+        rule: 'own-scripts',
+        expected: "the page's own scripts told from its lazy ones, by its HTML as served",
+        actual: OWN_SCRIPTS_UNKNOWN,
+      },
+    ];
+  }
+  const own = served.paths;
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Page.enable');
   const { identifier } = await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
