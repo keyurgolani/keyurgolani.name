@@ -385,8 +385,9 @@ test("an entry whose check its test didn't owe on the push run is not judged: a 
     notOwed.notJudged.map(({ entry: each }) => each.check),
     ['reflow'],
   );
-  // A missing or malformed owed list, or a checks list that's missing or holds the check, keeps
-  // today's judging: passed, so refused. Each row but the last two breaks one conjunct alone.
+  // A missing or malformed owed list, an owed or checks list that holds the check, or a missing
+  // checks list keeps today's judging: passed, so refused. Each row breaks one conjunct alone, but
+  // the last two, an owed list of a name no check has or of an upper-case name, which break two.
   const open = [];
   for (const [label, extra] of [
     ['no owed list', { owed: undefined }],
@@ -409,11 +410,15 @@ test("an entry whose check its test didn't owe on the push run is not judged: a 
       { checks: [...SENTINEL, 'reflow'] },
     ],
     [
+      "the sentinel's owed list with reflow in it, reflow not among the checks",
+      { owed: [...SENTINEL, 'reflow'] },
+    ],
+    [
       'an owed list of a name no check has, reflow ran',
       { owed: ['bogus'], checks: [...SENTINEL, 'reflow'] },
     ],
     [
-      'an owed list of a lowercase name, reflow ran',
+      'an owed list of an upper-case name, reflow ran',
       { owed: ['REFLOW'], checks: [...SENTINEL, 'reflow'] },
     ],
   ]) {
@@ -1463,7 +1468,7 @@ test("the artifact's summary is read out of its zip, and a malformed, oversized,
     [
       // Info-ZIP's UID/GID field first (15 bytes), so the extra is 44 bytes, a multiple of 4, and no
       // 0x7075 sits on a 4-byte boundary: a walk that steps by 4 reads past the Unicode Path field
-      // to the end, and returns the decoy, so the row pins the step by acceptance.
+      // to the end and returns the summary, so the row pins the step by acceptance.
       'a Unicode Path field second, after a UID/GID field',
       withCentralExtra(zipOf({ [QPR_SUMMARY]: summary, 'decoy.json': summary }), 1, [
         extraField(0x7875, Buffer.from([1, 4, 0xe8, 3, 0, 0, 4, 0xe8, 3, 0, 0])),

@@ -24,9 +24,10 @@
 // list (quality/release/records.json) names, by the same matcher rc-quality's
 // verdict uses (ci/release/release-records.mjs): no other failing test, no
 // verdict rule but tests-failed (and shard-job beside it), no listed record
-// that ran, its check owed there, and no longer fails (a condition entry whose
-// check its test neither owed nor ran is not judged, a note). A green run with a non-empty list is held
-// to the last of those too, its summary a green verdict over no failed test.
+// that ran and no longer fails (a condition entry whose test neither owed nor
+// ran its check is not judged, a note). A green run with a non-empty list is
+// held to the last of those too, its summary a green verdict over no failed
+// test.
 // Either way the summary must have the shape both read (summaryProblem). The
 // artifact is the one live one the run's latest quality-pr-verdict job, of the
 // run's own attempt, uploaded, its size checked, and its digest when the API
@@ -345,8 +346,8 @@ export function summaryProblem(summary) {
  * Why the quality-pr summary `summary` (its verdict's quality/summary.json, parsed, untrusted)
  * doesn't show quality-pr's red as the records list `listed` names it, one reason a line; none
  * when it does: its verdict failed on tests-failed alone, every failing test a cell test, every
- * failure record of each listed, and no listed record whose test ran, owing its check, gone from
- * it.
+ * failure record of each listed, and no listed record that ran and no longer fails (a condition
+ * entry whose test neither owed nor ran its check is not judged, a note).
  */
 export function qualityPrUnlisted(summary, listed, { jobsProven = false } = {}) {
   const shape = summaryProblem(summary);
@@ -420,9 +421,9 @@ export function redRuns(sha, runs) {
  * artifact listing (`artifacts`) and its quality-pr summary (`summaries`; an Error for one that
  * couldn't be read). A green run counts as before; with a non-empty list, only on its first
  * attempt, its summary showing no strict entry's test passing without it, a condition entry whose
- * check its test didn't owe or run there aside (not judged, in `notJudged`). A red run counts on its first
- * attempt when every other job gate needs succeeded, its quality-pr jobs show their red is the
- * quality runs' own, its artifact is the one its verdict job made, and its summary's every
+ * check its test didn't owe or run there aside (not judged, in `notJudged`). A red run counts on
+ * its first attempt when every other job gate needs succeeded, its quality-pr jobs show their red
+ * is the quality runs' own, its artifact is the one its verdict job made, and its summary's every
  * failure is listed (`listed: true` then).
  *
  * `counts` are the shard counts of the ci.yml that ran the runs, SHARD_COUNTS (this commit's) by
@@ -550,8 +551,8 @@ export function notJudgedLines(notJudged) {
 
 /**
  * The summary's lines for each flaky entry and how it came out in the run rc-verify read: failed
- * (on its record), passed, not judged (its test unrecorded, so held, or a condition not owed or run), or
- * not run.
+ * (on its record), passed, not judged (its test unrecorded, so held, or a condition not owed or
+ * run), or not run.
  */
 export function flakyLines(flaky) {
   return (flaky ?? []).map(
@@ -609,8 +610,11 @@ export async function qualityPrSummary(
 export function summaryMarkdown(verdict, { tag, sha }) {
   let summary = verdict.ok
     ? verdict.listed
-      ? `### ${tag}: eligible on its records list\n\n${sha} is on main, and ci run [${verdict.run.id}](${verdict.run.html_url}) failed only quality-pr, on records quality/release/records.json names.\n`
-      : `### ${tag}: eligible\n\n${sha} is on main, and ci run [${verdict.run.id}](${verdict.run.html_url}) passed gate on it.\n`
+      ? `### ${tag}: eligible on its records list\n\n` +
+        `${sha} is on main, and ci run [${verdict.run.id}](${verdict.run.html_url}) ` +
+        'failed only quality-pr, on records quality/release/records.json names.\n'
+      : `### ${tag}: eligible\n\n` +
+        `${sha} is on main, and ci run [${verdict.run.id}](${verdict.run.html_url}) passed gate on it.\n`
     : `### ${tag}: refused\n\n${verdict.reasons.map((reason) => `- ${reason}.`).join('\n')}\n`;
   const notes = notJudgedLines(verdict.notJudged);
   if (notes.length > 0)

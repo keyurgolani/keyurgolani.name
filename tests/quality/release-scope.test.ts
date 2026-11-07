@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -29,6 +29,7 @@ import { mergeShards, readShards } from './lib/shards';
 import { mergeRun } from './merge';
 import { judge, type VerdictInput } from './lib/verdict';
 import { CELL_CHECKS, requiredChecks } from './lib/checks';
+import { PREFERENCE_MODES } from './lib/vocabulary';
 import type { SummaryFailure, SummaryTest } from './reporter';
 import { ALSO_RUNS, CELL, cellTest, HELD, PLAN, PROBE, RUNS, summary } from './meta/runner-cases';
 import { SHARD_1, SHARD_2, writeShards } from './meta/shard-cases';
@@ -401,7 +402,8 @@ test("rc-verify's not-judged names are the harness's: CELL_CHECKS as checks.ts h
     CONDITION_CHECKS,
   );
   // Every row and viewport owes CELL_CHECKS, so an owed list short of one is malformed.
-  for (const row of ['default', 'reduced-motion', 'print', 'no-javascript', 'reduced-transparency'])
+  assert.equal(PREFERENCE_MODES.length, 8);
+  for (const row of PREFERENCE_MODES)
     for (const { id } of VIEWPORTS) {
       const owed = requiredChecks(row, id);
       assert.ok(
@@ -409,6 +411,18 @@ test("rc-verify's not-judged names are the harness's: CELL_CHECKS as checks.ts h
         `${row} ${id}`,
       );
     }
+  // verify-rc-listed.test.mjs's SENTINEL is a real sentinel's owed list: a default test at 1440 with
+  // no conditions, as requiredChecks() gives it.
+  const listed = readFileSync(
+    path.join(import.meta.dirname, '../../ci/release/verify-rc-listed.test.mjs'),
+    'utf8',
+  );
+  const literal = /const SENTINEL = \[([^\]]*)\];/.exec(listed);
+  assert.ok(literal, 'verify-rc-listed.test.mjs declares SENTINEL');
+  assert.deepEqual(
+    [...literal[1].matchAll(/'([^']+)'/g)].map((m) => m[1]),
+    requiredChecks('default', '1440x900', false),
+  );
   const swept = requiredChecks('default', first, true, true);
   assert.ok(RELEASE_CELL_CHECKS.every((check) => swept.includes(check)));
 });

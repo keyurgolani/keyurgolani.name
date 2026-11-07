@@ -594,6 +594,21 @@ export async function inventoryFindings(
 }
 
 /**
+ * An inventory field's own words (harness push 2's follow-up, INV-N1): a link's and a control's
+ * name, not its target or its kind; a skip link's name past its target; any other field's text.
+ */
+export function ownWords(item: string): string {
+  const kind = item.slice(0, item.indexOf(':'));
+  const rest = item.slice(item.indexOf(':') + 1).trimStart();
+  if (kind === 'link') return rest.slice(rest.indexOf(' ') + 1);
+  if (kind === 'control') {
+    const [what, ...more] = rest.split(' ');
+    return what === 'skip-link' ? more.slice(1).join(' ') : more.join(' ');
+  }
+  return rest;
+}
+
+/**
  * Script-only words the page shows without JavaScript: the mark lets go words only live script
  * sets, so neither may the server render them. Read on the page as it stands without
  * JavaScript, two things are each a finding, one per element, by path:
@@ -625,7 +640,7 @@ export async function scriptOnlyTextFindings(
       kind: 'inventory',
       paths: true,
     })) {
-      const value = item.slice(item.indexOf(': ') + 2);
+      const value = ownWords(item);
       if (words.has(value) && !shown.has(path)) shown.set(path, value);
     }
   }

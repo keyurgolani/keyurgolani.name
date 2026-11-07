@@ -377,3 +377,17 @@ test('pnpm quality:meta --no-browser passes on the repository, every case it run
     assert.equal(usage.status, 2, args.join(' '));
   }
 });
+
+// Harness push 2's follow-up, in a block of its own (push 3 edits this file too).
+test("harness push 2's follow-up cases are in the table: row 65's slow loop and INV-N1's four field shapes", () => {
+  const ids = META_CASES.map(({ id }) => id);
+  for (const id of [
+    'motion/loop-every-250ms',
+    'inventory/script-only-as-link',
+    'inventory/script-only-as-submit',
+    'inventory/script-only-as-heading',
+    'inventory/script-only-as-image-alt',
+  ]) {
+    assert.ok(ids.includes(id), id);
+  }
+});
