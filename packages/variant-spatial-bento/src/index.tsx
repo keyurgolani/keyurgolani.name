@@ -17,3 +17,6 @@ import { HomePage, SECTIONS } from './home';
 export const sections = SECTIONS;
 
 export default composePages({ HomePage, CaseStudyPage });
+
+// Push 3 evidence only, not for merge (row 50): this line makes quality:pr change-direct Spatial
+// Bento, so its 1440 default cells take the reload conditions beside the sentinels on the evidence PR.
