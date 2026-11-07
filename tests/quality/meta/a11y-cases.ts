@@ -444,6 +444,36 @@ const LATE_WIDE_CHUNK = {
   body: "{ const wide = document.createElement('p'); wide.id = 'late-wide'; wide.style.width = '1400px'; wide.textContent = 'A late block, wider than any reflow viewport.'; document.querySelector('[data-enhancement-island]').append(wide); }",
 };
 
+/**
+ * The late-overflow page's chunk on React's own schedule (react-dom 19.2.5's FALLBACK_THROTTLE_MS):
+ * React.lazy under Suspense, no island hold, commits the content no sooner than 300 ms after the
+ * fallback showed, on a timer, the page idle in between. So the chunk lands, and the block mounts
+ * 300 ms later.
+ */
+const RETRY_WIDE_CHUNK = {
+  body: "setTimeout(() => { const wide = document.createElement('p'); wide.id = 'late-retry'; wide.style.width = '1400px'; wide.textContent = 'A block React commits on its retry, wider than any reflow viewport.'; document.querySelector('[data-enhancement-island]').append(wide); }, 300);",
+};
+
+/**
+ * `check`'s findings, and one more for each of `rules` none of them names `path` under: under
+ * each rule, a record must name the element.
+ */
+const namingUnder =
+  (path: string, rules: readonly string[], check: (page: Page) => Promise<Finding[]>) =>
+  async (page: Page): Promise<Finding[]> => {
+    const findings = await check(page);
+    return [
+      ...findings,
+      ...rules
+        .filter((rule) => !findings.some((each) => each.rule === rule && each.path === path))
+        .map((rule) => ({
+          gate: 'meta',
+          rule: 'element',
+          actual: `no ${rule} record names ${path}`,
+        })),
+    ];
+  };
+
 /** `check`'s findings, and one more if none of them names `path`: the record must name the element. */
 const naming =
   (path: string, check: (page: Page) => Promise<Finding[]>) =>
@@ -1852,6 +1882,21 @@ export const A11Y_CASES: readonly MetaCase[] = [
     /^reflow (?:reflow|zoom|root-text): /,
     naming('#late-wide', (page) => reflowFindings(page, '/')),
     { chunk: LATE_WIDE_CHUNK },
+  ),
+  // Each reflow reload waits out React's Suspense retry when the page changed during the wait
+  // (the coordinator, 7 Nov 2026, push 3 r2 F1): a chunk that lands and then commits its content
+  // 300 ms later, as React.lazy does with no hold, still scrolls the page sideways under each
+  // reflow condition, and a record names the block under each.
+  builtCase(
+    'suspense-retry',
+    'reflow',
+    `A 1400 px wide block a lazy chunk commits 300 ms after it lands (React's FALLBACK_THROTTLE_MS), under each reflow condition`,
+    LATE_WIDE,
+    /^reflow (?:reflow|zoom|root-text): /,
+    namingUnder('#late-retry', ['reflow', 'zoom', 'root-text'], (page) =>
+      reflowFindings(page, '/'),
+    ),
+    { chunk: RETRY_WIDE_CHUNK },
   ),
   bad('needs-hover', 'inventory.html', 'inventory', 'content', inventory),
   good('inventory', inventory),
