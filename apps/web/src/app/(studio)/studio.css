@@ -123,6 +123,16 @@
   opacity: 0.7;
 }
 
+/* The load boundary's wrapper around Studio's shell (row 88c): no box of its own, and hidden
+   while the alert stands in for a shell still on its way. */
+.studio-load {
+  display: contents;
+}
+
+.studio-load[hidden] {
+  display: none;
+}
+
 .studio-input:focus-visible,
 .studio-button:focus-visible,
 .studio-alert:focus-visible {
