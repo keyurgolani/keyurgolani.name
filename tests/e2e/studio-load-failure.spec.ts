@@ -154,6 +154,30 @@ test(
 );
 
 test(
+  "with the shell's chunks refused, a Sign out the store couldn't finish lands on the store-failed state, and never says you're signed out (row 88b)",
+  { annotation: [STUDIO] },
+  async ({ page, app }) => {
+    await signIn(page, app, secret.password);
+    await failEnhancement(page, app.origin);
+    const logouts = logoutsOf(page);
+    // The real logout, which clears the cookie, with the answer it gives when its store can't end the session.
+    await page.route('**/api/studio/auth.logout', async (route) => {
+      const response = await route.fetch();
+      await route.fulfill({
+        response,
+        body: JSON.stringify({ data: { signedOut: true, reason: 'store_failed' } }),
+      });
+    });
+    await page.goto('/studio');
+    await expect(alert(page)).toBeVisible({ timeout: PAST_TIMEOUT_MS });
+    await signOut(page).click();
+    await expect(page).toHaveURL(`${app.origin}/studio/sign-in?state=store_failed`);
+    await expect(page.getByText("You're signed out.")).toHaveCount(0);
+    expect(logouts, 'one auth.logout').toHaveLength(1);
+  },
+);
+
+test(
   "with the shell's chunks refused and unsaved text in the journal, Sign out asks first, and Discard clears the journal before auth.logout goes (row 88c, R4)",
   { annotation: [STUDIO] },
   async ({ page, app }) => {
