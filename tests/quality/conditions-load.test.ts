@@ -165,10 +165,14 @@ test('a page busy for good gives reflowFindings one STILL_BUSY a condition, each
  * wait began, its tag kept in the live page as Turbopack leaves it; nothing else happens on it.
  * Every waitForTimeout it's asked for is kept, and run.
  */
-/** A document the fake page loads: its URL and its HTML, or a body that can't be read, or never comes. */
+/**
+ * A document the fake page loads: its URL and its HTML, or a body that can't be read, or one that
+ * comes only after 20 s ('never', a bounded live timer, so a run that waits for it ends: push 3 r5c,
+ * item 3) or after 1 s ('late').
+ */
 interface FakeDocument {
   readonly url: string;
-  readonly html: string | 'unreadable' | 'never';
+  readonly html: string | 'unreadable' | 'never' | 'late';
 }
 
 const MAIN_HTML =
@@ -190,8 +194,10 @@ function servedChunkPage({
     status: () => 200,
     request: () => ({ resourceType: () => 'document' }),
     text: () =>
-      html === 'never'
-        ? new Promise<string>(() => undefined)
+      html === 'never' || html === 'late'
+        ? new Promise<string>((resolve) =>
+            setTimeout(() => resolve(MAIN_HTML), html === 'never' ? 20_000 : 1_000),
+          )
         : html === 'unreadable'
           ? Promise.reject(new Error('No resource with given identifier found'))
           : Promise.resolve(html),
@@ -302,7 +308,8 @@ test("a script src that won't parse is skipped, and the HTML's other scripts sti
 // doesn't hold the read past it; it fails closed.
 test(
   "a document body that never comes holds load() no longer than the wait's end",
-  { timeout: 30_000 },
+  // Red as a timeout of its own where own() waits for the body (push 3 r5c, item 3).
+  { timeout: 15_000 },
   async () => {
     const { page } = servedChunkPage({ documents: [{ url: 'http://app.test/', html: 'never' }] });
     const started = Date.now();
@@ -345,7 +352,7 @@ test("failed enhancement on a page whose own scripts can't be told apart records
  * once, 200 to 600 ms after the failure. It records when the failure fired and when the retry
  * started; every waitForTimeout it's asked for runs.
  */
-function failedChunkPage(retryMs: number) {
+function failedChunkPage(retryMs: number, how: 'requestfailed' | '404' = 'requestfailed') {
   const LAZY = 'http://app.test/_next/static/chunks/lazy.js';
   const handlers = new Map<string, Set<(value: unknown) => void>>();
   const emit = (event: string, value: unknown) => {
@@ -371,7 +378,13 @@ function failedChunkPage(retryMs: number) {
     goto: async () => {
       emit('response', served);
       emit('request', failed);
-      emit('requestfailed', failed);
+      if (how === 'requestfailed') {
+        emit('requestfailed', failed);
+      } else {
+        // An HTTP error: a response of 404, then requestfinished (push 3 r5c, item 2).
+        emit('response', { request: () => failed, url: () => LAZY, status: () => 404 });
+        emit('requestfinished', failed);
+      }
       times.failed = Date.now();
       setTimeout(() => {
         times.retried = Date.now();
@@ -413,4 +426,42 @@ test("a chunk that failed just before the wait holds it past the runtime's longe
     times.retried > 0 && times.retried < returned,
     'the retry started before the wait returned',
   );
+});
+
+// The HTTP-error half (push 3 r5c, item 2): the same, the chunk failing by a 404 response and then
+// requestfinished, which Turbopack's runtime retries as it does a network failure.
+test("a chunk answered with a 404 just before the wait holds it past the runtime's longest retry, so a retry at +590 is seen", async () => {
+  const { page, times } = failedChunkPage(590, '404');
+  await load(page, '/', undefined, { enhancements: true });
+  const returned = Date.now();
+  assert.ok(
+    returned - times.failed >= 600 + 200,
+    `the wait returned ${returned - times.failed} ms after the 404, not 800 or more`,
+  );
+  assert.ok(
+    times.retried > 0 && times.retried < returned,
+    'the retry started before the wait returned',
+  );
+});
+
+// own() closed, pinned on both of its branches (push 3 r5c, item 5): a document body still unread
+// at `end`, and no document read at all.
+test("own() is closed when a document's body is still unread at the end it's given", async () => {
+  const { page } = servedChunkPage({ documents: [{ url: 'http://app.test/', html: 'late' }] });
+  const watch = watchEnhancements(page);
+  await page.goto('/');
+  const own = await watch.own(Date.now() + 50);
+  watch.stop();
+  assert.equal(own.closed, true, 'closed at the end');
+  assert.deepEqual([...own.paths], [], 'and empty');
+});
+
+test('own() is closed when no document was read', async () => {
+  const { page } = servedChunkPage({ documents: [] });
+  const watch = watchEnhancements(page);
+  await page.goto('/');
+  const own = await watch.own(Date.now() + 50);
+  watch.stop();
+  assert.equal(own.closed, true, 'closed with no document');
+  assert.deepEqual([...own.paths], [], 'and empty');
 });

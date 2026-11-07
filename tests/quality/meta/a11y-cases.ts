@@ -78,6 +78,12 @@ interface PageOptions extends BrowserContextOptions {
    * (push 3 r5, item 4): failed enhancement must let it through.
    */
   readonly own?: { readonly body: string };
+  /**
+   * A lazy chunk's request whose query names `abort` fails at the network the first time each
+   * document asks for it (route.abort, so Playwright reports requestfailed), and goes through the
+   * next (push 3 r5c, item 2).
+   */
+  readonly abortFirst?: boolean;
 }
 
 /** Where a lazy enhancement's chunk is served: a chunk the page's HTML doesn't name, which failed enhancement blocks. */
@@ -102,12 +108,14 @@ async function onPage(
 ): Promise<MetaOutcome> {
   // A fixture's name, or a page built here.
   const html = file.startsWith('<') ? file : readFileSync(path.join(FIXTURES, file), 'utf8');
-  const { init, at, features, media, noScript, chunk, own, ...context } = options;
-  // The URLs asked for once already: a lazy chunk's request whose query names `fail` fails the
-  // first time it's asked for, a 404, and is served the next (push 3 r5, item 4).
+  const { init, at, features, media, noScript, chunk, own, abortFirst, ...context } = options;
+  // The URLs asked for once already since the last document: a lazy chunk's request whose query
+  // names `fail` fails the first time each document asks for it, a 404 nothing may store, and is
+  // served the next (push 3 r5c, item 1: each reload's first ask fails, not only the case's first).
   const asked = new Set<string>();
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? '/', 'http://stand-in');
+    if (url.pathname === '/') asked.clear();
     const first = !asked.has(url.href);
     asked.add(url.href);
     if (own && url.pathname === OWN_CHUNK) {
@@ -119,7 +127,10 @@ async function onPage(
       // One that never comes holds its request open until the page goes.
       if (chunk === 'never') return;
       if (url.searchParams.has('fail') && first) {
-        response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+        response.writeHead(404, {
+          'content-type': 'text/plain; charset=utf-8',
+          'cache-control': 'no-store',
+        });
         response.end('Not found');
         return;
       }
@@ -150,6 +161,20 @@ async function onPage(
       })
     ).newPage();
     if (init) await page.addInitScript(init);
+    if (abortFirst) {
+      // Each document's first ask of an `abort` chunk fails at the network; a reload's again.
+      const aborted = new Set<string>();
+      page.on('request', (request) => {
+        if (request.resourceType() === 'document') aborted.clear();
+      });
+      await page.route(`**${LAZY_CHUNK}*`, (route) => {
+        const asked = route.request().url();
+        if (!new URL(asked).searchParams.has('abort') || aborted.has(asked))
+          return route.fallback();
+        aborted.add(asked);
+        return route.abort('failed');
+      });
+    }
     if (media) await page.emulateMedia({ media });
     if (features) {
       const cdp = await page.context().newCDPSession(page);
@@ -569,15 +594,16 @@ const TWO_EARLY_CHUNK = {
 };
 
 /**
- * A page whose lazy chunk, asked for as it parses, fails (the stand-in's first answer is a 404)
- * before the load event, so before the enhancements' wait begins; as Turbopack's runtime does,
+ * A page whose lazy chunk, asked for as it parses, fails before the load event, so before the
+ * enhancements' wait begins: the stand-in's first answer to each document's ask is a 404 (`fail`),
+ * or the ask is aborted at the network (`abort`, with onPage's abortFirst); as Turbopack's runtime does,
  * the page drops the element and asks again, here `retryMs` later (the runtime's retry falls 200 to
  * 600 ms after a failure: push 3 r5, item 4). The retried chunk commits its block 300 ms after it
  * runs, on React's schedule. Nothing on the page is marked pending.
  */
-const failedRetry = (retryMs: number) =>
+const failedRetry = (retryMs: number, how: 'fail' | 'abort' = 'fail') =>
   `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>A failed chunk, retried</title></head><body><a href="#main">Skip to content</a><main id="main" tabindex="-1"><h1>A failed chunk, retried</h1><div id="early-host"><p>The page reads without its enhancement.</p></div></main><script>
-const src = '${LAZY_CHUNK}?fail';
+const src = '${LAZY_CHUNK}?${how}';
 const chunk = document.createElement('script');
 chunk.src = src;
 chunk.onerror = () => {
@@ -2299,6 +2325,19 @@ export const A11Y_CASES: readonly MetaCase[] = [
       ),
       { chunk: FAILED_RETRY_CHUNK },
     ),
+  ),
+  // And the network-level twin (push 3 r5c, item 2): the chunk's first ask is aborted, so
+  // Playwright reports requestfailed, not a response, and the retry at +590 is read the same way.
+  builtCase(
+    'suspense-retry-aborted-590',
+    'reflow',
+    'A 1400 px block a lazy chunk commits 300 ms after it runs, the chunk having failed at the network before the wait and been asked for again 590 ms later, under each reflow condition',
+    failedRetry(590, 'abort'),
+    /^reflow (?:reflow|zoom|root-text): /,
+    namingUnder('#failed-retry', ['reflow', 'zoom', 'root-text'], (page) =>
+      reflowFindings(page, '/'),
+    ),
+    { chunk: FAILED_RETRY_CHUNK, abortFirst: true },
   ),
   // And two chunks in before the wait (push 3 r4, item 1): the floor starts from the later, so
   // the block it commits 300 ms after it runs is read under each reflow condition.

@@ -16,19 +16,20 @@
 //   submits nothing, an enhancement that may wait for its script, and its
 //   own label, as without JavaScript and in print.
 // - Each reload under a condition with script on, failed enhancement
-//   included, is read once its enhancements have mounted or failed, as the
-//   cell's own read is (its first phase): no script chunk still loading, no
-//   island's data-island still changing, and nothing marked pending, and the
-//   wait then holds 500 ms past the last optional chunk or island change,
-//   React's retry delay and a margin, and 800 ms past an optional chunk
-//   that failed, Turbopack's longest retry and the margin; and then, as
-//   React may reveal what a
-//   chunk loaded a while after it lands, until the page shows what the
-//   baseline had, all within BUSY_LIMIT_MS. The same wait serves the main
-//   pass, the primitives page, the landscape pass, the variant shots
-//   (tests/variants/modes.ts) and the e2e watches (watchEnhancements()). Chunks or islands still at it then fail
-//   the cell with STILL_ENHANCING; a field still missing is the read's own
-//   finding. Either way the page is read as it stands. A reflow condition's
+//   included, is read once its enhancements have mounted or failed, as
+//   the cell's own read is (its first phase): no script chunk still
+//   loading, no island's data-island still changing, and nothing marked
+//   pending, and the wait then holds 500 ms past the last optional chunk
+//   or island change, React's retry delay and a margin, and 800 ms past
+//   an optional chunk that failed, Turbopack's longest retry and the
+//   margin; and then, as React may reveal what a chunk loaded a while
+//   after it lands, until the page shows what the baseline had, all
+//   within BUSY_LIMIT_MS. The same wait serves the main pass, the
+//   primitives page, the landscape pass, the variant shots
+//   (tests/variants/modes.ts) and the e2e watches (watchEnhancements()).
+//   Chunks or islands still at it then fail the cell with
+//   STILL_ENHANCING; a field still missing is the read's own finding.
+//   Either way the page is read as it stands. A reflow condition's
 //   reload takes the first phase only, the enhancements, since it has no
 //   baseline to show; then its fonts, and only then its root text.
 // - reflow: at 320x568, at 200% zoom (640x400 at deviceScaleFactor 2), and
