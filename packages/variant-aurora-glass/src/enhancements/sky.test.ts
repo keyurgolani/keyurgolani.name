@@ -30,8 +30,14 @@ function stubs() {
   const index = {
     id: 'ag--index',
     attributes,
-    setAttribute: (name: string, value: string) => attributes.set(name, value),
-    removeAttribute: (name: string) => attributes.delete(name),
+    setAttribute: (name: string, value: string) => {
+      calls.push(`set ${name}`);
+      attributes.set(name, value);
+    },
+    removeAttribute: (name: string) => {
+      calls.push(`unset ${name}`);
+      attributes.delete(name);
+    },
     addEventListener: (type: string, listener: (event: Event) => void) => {
       calls.push(`add ${type}`);
       listeners.set(type, listener);
@@ -85,6 +91,8 @@ test('with popover support the page goes live, a followed link closes it, and th
   const { calls, root, index, click, setOpen, args } = stubs();
   const undo = liveIndex(...args, supportsPopover({ popover: null }));
   assert.equal(root.dataset.agLive, '');
+  // Live, it's the popover the capsule's button opens; served, it was a plain list (row 62).
+  assert.equal(index.attributes.get('popover'), 'auto');
   assert.equal(index.attributes.get('role'), 'dialog');
   assert.equal(index.attributes.get('aria-labelledby'), 'ag--index--h');
   click(false);
@@ -96,7 +104,14 @@ test('with popover support the page goes live, a followed link closes it, and th
   assert.equal('agLive' in root.dataset, false);
   assert.equal(index.attributes.has('role'), false);
   assert.equal(index.attributes.has('aria-labelledby'), false);
-  assert.deepEqual(calls.slice(-3), ['remove click', 'matches :popover-open', 'hide']);
+  // Closed first, then no longer a popover: the list it was.
+  assert.equal(index.attributes.has('popover'), false);
+  const after = calls.slice(calls.indexOf('remove click'));
+  assert.deepEqual(after.slice(0, 3), ['remove click', 'matches :popover-open', 'hide']);
+  assert.ok(
+    after.indexOf('hide') < after.indexOf('unset popover'),
+    'hidden before it stops being a popover',
+  );
 });
 
 /** Two Pause copies and a document, as stubs: each copy shown or not, the document's focus and its listeners. */

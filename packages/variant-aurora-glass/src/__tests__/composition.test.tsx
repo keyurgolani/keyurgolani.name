@@ -135,10 +135,9 @@ test('with no script the Index is a plain link to a contents list after main; ma
     html.indexOf('</footer>') < html.indexOf('id="ag--index"'),
     'the list follows the footer',
   );
-  assert.match(
-    html,
-    /<div class="ag-index ag-pane" id="ag--index" popover="auto"><div class="ag-index__head">/,
-  );
+  // A contents list, not a closed popover the page shows (row 62): the enhancement makes it one.
+  assert.match(html, /<div class="ag-index ag-pane" id="ag--index"><div class="ag-index__head">/);
+  assert.doesNotMatch(html, /id="ag--index"[^>]*\bpopover=/);
   assert.equal(count(html, /<dialog\b/g), 0);
   // Unmarked, the button and the Close are gone and the dialog is in the flow; marked, the link is.
   assert.match(
