@@ -609,7 +609,7 @@ test('under forced colors the sky goes and every frosted surface takes Canvas', 
 });
 
 // The default recipe's reflow at 320 and root text at 1024: at 320 nothing clips its own words
-// (the capsule's name and a fold's first line wrap, and the Menu's word steps aside for its mark,
+// (the capsule's name wraps there, a fold's first line everywhere, and the Menu's word steps aside for its mark,
 // its name kept), and at enlarged text the capsule folds as a narrow screen's does, never past the page.
 test('at 320 nothing in the capsule or a fold clips its words, and the capsule folds when the text grows', () => {
   const css = readFileSync(
@@ -620,9 +620,16 @@ test('at 320 nothing in the capsule or a fold clips its words, and the capsule f
   assert.ok(narrow.length > 0 && css.includes('@media (max-width: 20rem) {'));
   assert.ok(
     narrow.includes(
-      ':is(.ag-capsule__name, .ag-fold__first) { overflow: visible; text-overflow: clip; white-space: normal;',
+      '.ag-capsule__name { overflow: visible; text-overflow: clip; white-space: normal;',
     ),
   );
+  // A fold's first line wraps at every width and text size, not only at 320 (row 62).
+  const first = /\.ag-fold__first \{([^}]*)\}/.exec(css)?.[1] ?? '';
+  assert.ok(
+    first.includes('grid-column: 2 / -1;') && first.includes('overflow-wrap: anywhere;'),
+    first,
+  );
+  assert.doesNotMatch(first, /white-space: nowrap|text-overflow: ellipsis|overflow: hidden/);
   // The Menu's word stays on screen (one name, "Menu"); the name steps down a size to make room.
   assert.ok(!narrow.includes('.ag-capsule .ag-narrow { position: absolute;'));
   assert.ok(narrow.includes('.ag-capsule__name { font-size: var(--type-step--1); }'));

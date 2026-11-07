@@ -2171,11 +2171,13 @@
   background-color: var(--color-accent);
 }
 
+/*
+ * The first item under the heading wraps, at every width and text size, a long word included: held
+ * to one line with an ellipsis, zoom or larger text clipped it in its own box (row 62, reflow).
+ */
 [data-variant='aurora-glass'] .ag-fold__first {
   grid-column: 2 / -1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   color: var(--color-text-secondary);
 }
 
@@ -3013,11 +3015,11 @@
 }
 
 /*
- * At 320 nothing clips its own words (the reflow check): the capsule's name and a fold's first
- * line wrap, and the name steps down a size so the Menu's word keeps its place.
+ * At 320 nothing clips its own words (the reflow check): the capsule's name wraps (a fold's first
+ * line always does), and the name steps down a size so the Menu's word keeps its place.
  */
 @media (max-width: 20rem) {
-  [data-variant='aurora-glass'] :is(.ag-capsule__name, .ag-fold__first) {
+  [data-variant='aurora-glass'] .ag-capsule__name {
     overflow: visible;
     text-overflow: clip;
     white-space: normal;
