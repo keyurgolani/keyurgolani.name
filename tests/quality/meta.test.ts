@@ -351,6 +351,11 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'reflow/late-overflow',
     // And waits out React's Suspense retry when the page changed during the wait (push 3 r2, F1).
     'reflow/suspense-retry',
+    // A page that never settles is no skip: STILL_ENHANCING under each reflow condition and in the
+    // landscape pass, and STILL_BUSY there, each at its own viewport (push 3 r2, F2, F3 and F4).
+    'reflow/never-enhanced',
+    'occlusion/landscape-never-enhanced',
+    'occlusion/landscape-still-busy',
     // So does the landscape occlusion pass (push 3, run-cell.ts:293).
     'occlusion/late-occluder',
     'contrast/pre-live-node',
