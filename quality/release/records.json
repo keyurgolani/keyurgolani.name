@@ -1,1 +1,14 @@
-[]
+[
+  {
+    "cell": "composition:spatial-bento complete / spatial-bento/platform-neutral/warm-parchment/humanist-ui/system",
+    "viewport": "1440x900",
+    "row": "default",
+    "engine": "chromium",
+    "check": "reflow",
+    "rule": "root-text",
+    "target": "@1024x768 html",
+    "owner": "lane E",
+    "routed": "row 75",
+    "note": "canvas[data-spatial-canvas] in .sb-still__canvas observes its own box, not its host, so at 200% root text it keeps 111 px: scrollWidth 1067 in 1024 (CI Linux, #184; the packs RC1 doesn't plan read 1066–1069); fixed by RC2 row 75, the kit SpatialCanvas observing its host."
+  }
+]
