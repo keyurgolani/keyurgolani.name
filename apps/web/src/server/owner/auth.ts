@@ -82,9 +82,11 @@ export interface OwnerAuthOptions {
 /**
  * Commands that pass every check yet never slide the session: #7's grant
  * renewal and status, which Studio sends on its own, as a heartbeat and when
- * a frame doesn't load, so an open tab can't keep a session alive.
+ * a frame doesn't load, so an open tab can't keep a session alive; and
+ * sign-out, so one whose store can't end the session never gives it longer
+ * to lapse (row 88b).
  */
-const NEVER_SLIDE = new Set(['preview.grant.renew', 'preview.grant.status']);
+const NEVER_SLIDE = new Set(['preview.grant.renew', 'preview.grant.status', 'auth.logout']);
 
 /** Sign-in: the one command without a CSRF token, as it has no session to take one from yet. */
 const SIGN_IN = 'auth.login';

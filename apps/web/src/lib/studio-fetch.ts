@@ -163,3 +163,9 @@ export function announceSignedOut(env: Pick<StudioFetchEnv, 'channel'> = browser
 
 /** Where a page goes once its own sign-out succeeds. */
 export const SIGNED_OUT_LOCATION = signInLocation('signed_out', DEFAULT_RETURN_TO);
+
+/**
+ * Where a page goes once its own sign-out signed this browser out but the
+ * server's store couldn't end the session (row 88b).
+ */
+export const STORE_FAILED_LOCATION = signInLocation('store_failed', DEFAULT_RETURN_TO);

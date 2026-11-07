@@ -18,7 +18,10 @@ export interface GrantSessionPort {
   of(
     session: Session | null,
   ): { readonly digest: string; readonly absoluteExpiresAt: number } | null;
-  /** Whether the session `digest` names still counts, read without sliding it. */
+  /**
+   * Whether the session `digest` names still counts, read without sliding it.
+   * One whose end the store couldn't finish doesn't (row 88b).
+   */
   resolveDigest(digest: string): Promise<{ readonly status: 'valid' | 'ended' | 'unavailable' }>;
   /** Called with the digest of each session that ends in this process. Returns an unsubscribe. */
   onSessionEnded(listener: (digest: string) => void): () => void;

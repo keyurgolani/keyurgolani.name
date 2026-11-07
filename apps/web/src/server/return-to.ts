@@ -49,14 +49,15 @@ export function safeReturnTo(value: string | null | undefined): string {
 
 /**
  * Why the sign-in page is showing: a failed, throttled, or broken sign-in,
- * a sign-out, or a session that ended. A request that never had a session
- * comes with none.
+ * a sign-out, a sign-out whose session the store couldn't end (row 88b), or
+ * a session that ended. A request that never had a session comes with none.
  */
 export const SIGN_IN_STATES = [
   'failed',
   'rate_limited',
   'error',
   'signed_out',
+  'store_failed',
   'session_ended',
 ] as const;
 export type SignInState = (typeof SIGN_IN_STATES)[number];
