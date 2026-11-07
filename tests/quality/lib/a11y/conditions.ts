@@ -979,8 +979,11 @@ export async function reflowFindings(
       // Spatial Bento's live stage, would otherwise mount after the probe, or after the root-text
       // switch, and go unread. One that never does is STILL_ENHANCING, read as it stands.
       const loaded = await load(page, path, undefined, { enhancements: true });
-      if (!loaded.settled) findings.push(stillBusy(condition.rule));
-      if (!loaded.enhanced) findings.push(stillEnhancing(condition.rule));
+      // Each at its condition's viewport, so it's its own record and says where (F4).
+      if (!loaded.settled) findings.push({ ...stillBusy(condition.rule), viewport: condition.id });
+      if (!loaded.enhanced) {
+        findings.push({ ...stillEnhancing(condition.rule), viewport: condition.id });
+      }
       if (condition.text !== 1) {
         await page.evaluate(
           (scale) =>

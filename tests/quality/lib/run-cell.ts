@@ -278,13 +278,24 @@ export async function landscapeOcclusionFindings(
   const [width, height] = [viewport.height, viewport.width];
   const original = page.viewportSize()!;
   await page.setViewportSize({ width, height });
-  const { enhanced } = await loadForPass(page, at);
+  const { settled, enhanced } = await loadForPass(page, at);
+  // Each at the turned viewport, so it's its own record and says where (F4).
+  if (!settled) {
+    findings.push({
+      gate: 'runner',
+      rule: 'settled',
+      expected: 'the page settles under landscape occlusion',
+      actual: STILL_BUSY,
+      viewport: `${width}x${height}`,
+    });
+  }
   if (!enhanced) {
     findings.push({
       gate: 'runner',
       rule: 'enhanced',
       expected: "the page's enhancements mount or fail under landscape occlusion",
       actual: STILL_ENHANCING,
+      viewport: `${width}x${height}`,
     });
   }
   for (const finding of await keyboardFindings(page, { occlusion: true, framed })) {
