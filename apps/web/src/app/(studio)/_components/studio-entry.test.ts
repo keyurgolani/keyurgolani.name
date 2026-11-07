@@ -12,7 +12,10 @@ import { fileURLToPath } from 'node:url';
 // apps/web/.next, when there is one; the browser checks,
 // tests/e2e/demo-studio-chunks.spec.ts and owner-studio-chunks.spec.ts,
 // read what each profile's page loads. With no build here, it has nothing
-// to read, and says so.
+// to read, and says so. Nor do the chunks of the client components the page
+// renders itself, which Turbopack merges into the page's entry and both
+// profiles' pages load (row 88c): none of studioFetch, the journal, or the
+// sign-out.
 
 const WEB = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
 const NEXT = path.join(WEB, '.next');
@@ -47,6 +50,16 @@ const DEMO = [
   'Import another pair in Content',
   'local-images',
 ];
+
+/** Strings only Owner Studio's client modules that a page's own client code must not reach hold. */
+const OWNER_ONLY = {
+  // lib/studio-fetch.ts: the event it sends when a session ends.
+  studioFetch: 'studio:auth-required',
+  // lib/studio/journal.ts: its key prefix.
+  journal: 'portfolio-studio:',
+  // lib/studio/sign-out.ts: the operation it sends.
+  'sign-out': 'auth.logout',
+};
 
 const CHUNK = /static\/chunks\/[\w.-]+\.js/g;
 
@@ -130,6 +143,7 @@ test("a build's /studio entry holds neither shell, and each shell's chunks hold 
   new Function(readFileSync(MANIFEST, 'utf8'))();
   const manifest = Object.values(scope.__RSC_MANIFEST)[0] as {
     entryJSFiles: Record<string, string[]>;
+    clientModules: Record<string, { readonly chunks: readonly unknown[] }>;
   };
   delete scope.__RSC_MANIFEST;
   const page = Object.entries(manifest.entryJSFiles).find(([name]) =>
@@ -138,6 +152,21 @@ test("a build's /studio entry holds neither shell, and each shell's chunks hold 
   assert.ok(page && page.length > 0, "the manifest names /studio's entry chunks");
   // The entry itself holds neither profile's code.
   assert.deepEqual(holding(page, [...OWNER, ...DEMO]), []);
+  // Nor do the chunks of the client components /studio renders itself, its load boundary among
+  // them, which both profiles' pages load with the entry (row 88c).
+  const own = new Set(
+    Object.values(manifest.clientModules).flatMap(({ chunks }) =>
+      chunks.flatMap((chunk) => String(chunk).match(CHUNK) ?? []),
+    ),
+  );
+  assert.ok(own.size > 0, "the manifest names the chunks of /studio's client components");
+  assert.deepEqual(
+    Object.entries(OWNER_ONLY)
+      .filter(([, marker]) => holding([...own, ...page], [marker]).length > 0)
+      .map(([name]) => name),
+    [],
+    "the chunks /studio's own client components load hold Owner Studio's modules",
+  );
   // Each async group the entry loads, as Turbopack writes it: a list of chunks it loads together.
   const groups = page.flatMap((chunk) =>
     [...chunkText(chunk).matchAll(/Promise\.all\(\[((?:"static\/chunks\/[^"]+",?)+)\]/g)].map(
