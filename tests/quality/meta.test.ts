@@ -328,6 +328,14 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'enhancement/script-only-heading',
     'inventory/script-only-control',
     'enhancement/script-only-control',
+    // Whatever the kind (the coordinator, 7 Nov 2026, F4): an image, a submit button, or a
+    // focusable span in the block.
+    'inventory/script-only-image',
+    'enhancement/script-only-image',
+    'inventory/script-only-submit',
+    'enhancement/script-only-submit',
+    'inventory/script-only-tabindex',
+    'enhancement/script-only-tabindex',
     'inventory/script-only-server-words',
     // Judged against the page with its script: server words a script makes live, marks, or moves
     // into a marked status are a finding too (the coordinator, 7 Nov 2026, F1).
