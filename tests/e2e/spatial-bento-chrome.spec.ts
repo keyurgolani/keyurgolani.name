@@ -434,6 +434,41 @@ test.describe('the field and its case pages, by keyboard and fragment', () => {
     },
   );
 
+  // RC1 row 92: the hint's words are true only once the sheet listens, so the server sends none
+  // of them, and the live page, with a keyboard's fine pointer, shows them marked script-only.
+  test(
+    'listening, under a fine pointer, the sheet shows its Escape hint, which the server never sent',
+    { annotation },
+    async ({ page }) => {
+      const path = await openCase(page);
+      const served = await (await page.request.get(new URL(path, page.url()).href)).text();
+      expect(served).toContain('sb-case__back');
+      expect(served).not.toContain('sb-case__esc');
+      expect(served).not.toContain('Press <kbd>Esc');
+      expect(await page.evaluate(() => matchMedia('(pointer: fine)').matches)).toBe(true);
+      const hint = page.locator('.sb-case__nav p.sb-case__esc');
+      await expect(hint).toBeVisible();
+      await expect(hint).toHaveText('Press Esc to close. The field keeps your place.');
+      await expect(hint).toHaveAttribute('data-script-only', '');
+      await expect(hint.locator('kbd')).toHaveText('Esc');
+      // It names the control that does the same without a script: Back to the field.
+      const back = await hint.getAttribute('data-key-hint-for');
+      expect(back).toBeTruthy();
+      expect(
+        await page.evaluate(
+          (id) => document.getElementById(id)?.matches('a.sb-case__back[href]') ?? false,
+          back!,
+        ),
+      ).toBe(true);
+      // One element holds that id, live and as served.
+      expect(
+        await page.evaluate((id) => document.querySelectorAll(`[id="${id}"]`).length, back!),
+      ).toBe(1);
+      expect(served.split(` id="${back}"`).length - 1).toBe(1);
+      await expect(page.locator('.sb-case__back')).toBeVisible();
+    },
+  );
+
   test(
     'Back to the field lands on the tile\u2019s link to the sheet',
     { annotation },

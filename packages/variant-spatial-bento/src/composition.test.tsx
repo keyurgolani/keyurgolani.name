@@ -1380,7 +1380,21 @@ test('the case page is one sheet over the receded field: no tiles in it, the sto
         head,
       )?.[1];
       assert.ok(back, `${name}: the way back opens the page`);
-      assert.match(head, /<p class="sb-case__esc"(?: dir="ltr")?>Press <kbd>Esc<\/kbd> to close\./);
+      // The Escape hint's words are true only once CaseFocus listens, so the server sends none
+      // of them (RC1 row 92; esc-hint.tsx renders them on the client).
+      assert.doesNotMatch(markup, /sb-case__esc/, `${name} /work/${slug}: no Escape hint`);
+      assert.doesNotMatch(markup, /Press <kbd>Esc/, `${name} /work/${slug}: no Escape hint`);
+      // The hint names the way back by its id, so that id is one element on the page, a link.
+      const backId = /<a class="sb-btn sb-btn--ghost sb-case__back" id="([^"]+)"/.exec(head)?.[1];
+      assert.ok(backId, `${name} /work/${slug}: the way back has an id`);
+      const holders = [...markup.matchAll(/<([a-z][a-z0-9]*)\b[^>]*\sid="([^"]*)"/g)].filter(
+        (each) => each[2] === backId,
+      );
+      assert.deepEqual(
+        holders.map((each) => each[1]),
+        ['a'],
+        `${name} /work/${slug}: ${backId} is one link`,
+      );
       if (homeMarkup.includes(` id="${work.id}"`)) {
         assert.ok(back.endsWith(`#${work.id}`), `${name}: ${back}`);
       }
@@ -1435,10 +1449,10 @@ test('the case page is one sheet over the receded field: no tiles in it, the sto
     /@media \(pointer: fine\) \{\s*\[data-variant='spatial-bento'\] \.sb-case__esc\[data-listening\] \{\s*display: block;/,
   );
   assert.doesNotMatch(CSS, /@media[^{]*\bscripting\b/);
-  assert.match(
-    readFileSync(new URL('./case-focus.tsx', import.meta.url), 'utf8'),
-    /hint\?\.setAttribute\('data-listening', ''\)/,
-  );
+  // CaseFocus tells the hint once its listener is attached, and again when it's taken off.
+  const focus = readFileSync(new URL('./case-focus.tsx', import.meta.url), 'utf8');
+  assert.match(focus, /document\.addEventListener\('keydown', onKey\);\s*hearsEscape\(true\);/);
+  assert.match(focus, /document\.removeEventListener\('keydown', onKey\);\s*hearsEscape\(false\);/);
 });
 
 test('the load settle runs only where motion is welcome: not under the system’s reduce, a reducing site, a page already scrolled, or a late hydration', () => {
