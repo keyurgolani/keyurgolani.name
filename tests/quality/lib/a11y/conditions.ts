@@ -9,8 +9,8 @@
 //   font), and with JavaScript off and in print. A field counts when shown
 //   or inside a closed <details>. Each condition must take, or the check
 //   fails rather than pass a page it never changed.
-// - enhancement: with the optional chunks (every script chunk the HTML
-//   doesn't load itself), the canvas contexts, and the fonts taken away,
+// - enhancement: with the optional chunks (every script chunk the HTML,
+//   as served, doesn't name), the canvas contexts, and the fonts taken away,
 //   the page keeps one main, an h1, a skip link that lands in its target,
 //   every fragment link's target, and its inventory, but a button that
 //   submits nothing, an enhancement that may wait for its script, and its
@@ -44,7 +44,7 @@
 //   couldn't load, a control to try again that takes focus, nothing still
 //   aria-busy, and axe, beside the landmark, fragment, and skip checks.
 
-import type { CDPSession, Page, Request } from '@playwright/test';
+import type { CDPSession, Page, Request, Response } from '@playwright/test';
 import { loadThresholds, viewportSize } from '../../../../quality/thresholds';
 import { axeFor } from '../axe';
 import { frames, type Finding } from './interaction';
@@ -302,21 +302,51 @@ interface ScriptWatch {
   readonly pending: () => number;
   /** When each script request it saw finish did, by URL, the latest last. */
   readonly finished: () => readonly { readonly url: string; readonly at: number }[];
+  /** The page's own scripts: what its documents' HTML names, as served (htmlScripts()). */
+  readonly own: () => Promise<ReadonlySet<string>>;
   readonly stop: () => void;
 }
 
-/**
- * An optional enhancement's chunk: a script under /_next/static/chunks/ that the page's HTML
- * doesn't load itself (`own`), as failed enhancement tells them apart.
- */
-const optionalChunk = (url: string, own: ReadonlySet<string>) =>
-  /\/_next\/static\/chunks\//.test(url) && !own.has(url);
+/** The paths of the scripts `html` loads itself, its <script src>s, against `base`. */
+export const htmlScripts = (html: string, base: string): string[] =>
+  [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map(
+    (match) => new URL(match[1]!, base).pathname,
+  );
 
-/** Counts `page`'s script requests from now: a lazy enhancement's chunk is one, as failed enhancement blocks it. */
+/**
+ * An optional enhancement's chunk: a script under /_next/static/chunks/ whose path the page's
+ * HTML, as served, doesn't name (`own`), as failed enhancement tells them apart. Not the live
+ * page's scripts: Turbopack, which builds next@16.4.1, appends a script element for every chunk
+ * it loads and removes it only on error, so the live page names every lazy chunk too.
+ */
+const optionalChunk = (url: string, own: ReadonlySet<string>) => {
+  const { pathname } = new URL(url);
+  return /\/_next\/static\/chunks\//.test(pathname) && !own.has(pathname);
+};
+
+/**
+ * Counts `page`'s script requests from now: a lazy enhancement's chunk is one, as failed
+ * enhancement blocks it. And reads each document it loads from now, the main frame's and every
+ * frame's, as served: the scripts that HTML names are the page's own (`own()`). It fails closed:
+ * with no document read, or one whose body can't be, `own()` is empty, and every chunk counts as
+ * optional.
+ */
 function watchScripts(page: Page): ScriptWatch {
   const inFlight = new Set<Request>();
   const done: { url: string; at: number }[] = [];
+  const documents: Promise<readonly string[] | null>[] = [];
   let started = 0;
+  const onResponse = (response: Response) => {
+    if (response.request().resourceType() !== 'document') return;
+    // A redirect has no body; the document it leads to is read in turn.
+    if (response.status() >= 300 && response.status() < 400) return;
+    documents.push(
+      response.text().then(
+        (html) => htmlScripts(html, response.url()),
+        () => null,
+      ),
+    );
+  };
   const onRequest = (request: Request) => {
     if (request.resourceType() !== 'script') return;
     inFlight.add(request);
@@ -325,6 +355,7 @@ function watchScripts(page: Page): ScriptWatch {
   const onDone = (request: Request) => {
     if (inFlight.delete(request)) done.push({ url: request.url(), at: Date.now() });
   };
+  page.on('response', onResponse);
   page.on('request', onRequest);
   page.on('requestfinished', onDone);
   page.on('requestfailed', onDone);
@@ -332,7 +363,13 @@ function watchScripts(page: Page): ScriptWatch {
     started: () => started,
     pending: () => inFlight.size,
     finished: () => done,
+    own: async () => {
+      const read = await Promise.all(documents);
+      if (read.length === 0 || read.some((each) => each === null)) return new Set();
+      return new Set(read.flatMap((each) => each ?? []));
+    },
     stop: () => {
+      page.off('response', onResponse);
       page.off('request', onRequest);
       page.off('requestfinished', onDone);
       page.off('requestfailed', onDone);
@@ -401,10 +438,9 @@ async function enhancementsSettled(
   // The page's scripts and islands as the wait began, and when it last saw one of them change:
   // a request in flight now, or else the end of the last optional chunk that finished before
   // the wait began (push 3 r3), since a chunk from cache can land before the wait and commit after.
+  // Optional by the HTML as served (push 3 r4), as the live page names every chunk it loaded.
   let seen = `${scripts.started()} ${await islands()}`;
-  const own = new Set(
-    await page.evaluate(() => [...document.scripts].map((script) => script.src).filter(Boolean)),
-  );
+  const own = await scripts.own();
   const early = scripts
     .finished()
     .filter(({ url }) => optionalChunk(url, own))
@@ -440,6 +476,12 @@ async function enhancementsSettled(
 /** A watch on a page's enhancements, started before its load: `settled()` once it has loaded. */
 export interface EnhancementWatch {
   /**
+   * The paths of the scripts the page's HTML names, as served, read as it loaded: what failed
+   * enhancement lets through. Empty when a document's body couldn't be read, so every chunk is
+   * optional.
+   */
+  readonly own: () => Promise<ReadonlySet<string>>;
+  /**
    * Waits, until `end`, for the enhancements to mount or fail
    * (enhancementsSettled(), a condition's reload's first phase); true at
    * once with script off, where nothing mounts. False when they hadn't
@@ -457,6 +499,7 @@ export interface EnhancementWatch {
 export function watchEnhancements(page: Page): EnhancementWatch {
   const scripts = watchScripts(page);
   return {
+    own: () => scripts.own(),
     settled: async (end = Date.now() + BUSY_LIMIT_MS) => {
       if (await page.evaluate(() => matchMedia('(scripting: none)').matches)) return true;
       return enhancementsSettled(page, scripts, end);
@@ -901,16 +944,18 @@ interface Structure {
   readonly fragments: readonly { path: string; href: string; found: boolean }[];
 }
 
-/** The page with its optional enhancement taken away. `scripts` are the script URLs its HTML loads itself. */
+/**
+ * The page with its optional enhancement taken away. `own` are the paths of the scripts its HTML
+ * names, as served, as its main pass read them (loadForPass()): every other chunk is blocked.
+ */
 export async function enhancementFindings(
   page: Page,
   path: string,
   baseline: readonly string[],
-  scripts: readonly string[],
+  own: ReadonlySet<string>,
   scriptRequired = false,
 ): Promise<Finding[]> {
   const cdp = await page.context().newCDPSession(page);
-  const own = new Set(scripts);
   await cdp.send('Page.enable');
   const { identifier } = await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
     source: NO_CANVAS,
