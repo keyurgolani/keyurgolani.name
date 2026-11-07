@@ -24,8 +24,8 @@
 // list (quality/release/records.json) names, by the same matcher rc-quality's
 // verdict uses (ci/release/release-records.mjs): no other failing test, no
 // verdict rule but tests-failed (and shard-job beside it), no listed record
-// that ran, its check owed there, and no longer fails (one whose check its test
-// didn't owe is not judged, a note). A green run with a non-empty list is held
+// that ran, its check owed there, and no longer fails (a condition entry whose
+// check its test neither owed nor ran is not judged, a note). A green run with a non-empty list is held
 // to the last of those too, its summary a green verdict over no failed test.
 // Either way the summary must have the shape both read (summaryProblem). The
 // artifact is the one live one the run's latest quality-pr-verdict job, of the
@@ -368,8 +368,8 @@ export function qualityPrUnlisted(summary, listed, { jobsProven = false } = {}) 
   const tests = summary.tests;
   for (const test of tests.filter((each) => each?.outcome === 'unexpected' && each.kind !== 'cell'))
     reasons.push(`${clean(test.title)} failed, and it isn't a cell test`);
-  // rc-verify reads a push run, whose sentinels owe no conditions: an entry counts as passed
-  // only where its check ran.
+  // rc-verify reads a push run, whose quality-pr tests owe the conditions only where the plan
+  // gives the cell them: a condition entry counts as passed only where its check ran.
   const judged = judgeListed(tests, listed, { owedOnly: true });
   for (const { test, failure, entry } of judged.unlisted)
     reasons.push(
@@ -419,7 +419,8 @@ export function redRuns(sha, runs) {
  * candidate's records list (`listed`, already validated) and, by run id, each read run's
  * artifact listing (`artifacts`) and its quality-pr summary (`summaries`; an Error for one that
  * couldn't be read). A green run counts as before; with a non-empty list, only on its first
- * attempt, its summary showing no strict entry's test passing. A red run counts on its first
+ * attempt, its summary showing no strict entry's test passing without it, a condition entry whose
+ * check its test didn't owe or run there aside (not judged, in `notJudged`). A red run counts on its first
  * attempt when every other job gate needs succeeded, its quality-pr jobs show their red is the
  * quality runs' own, its artifact is the one its verdict job made, and its summary's every
  * failure is listed (`listed: true` then).
@@ -537,8 +538,8 @@ export function evaluateRc({ tag, sha, compare, runs, jobsByRun, quality, counts
 }
 
 /**
- * The summary's notes for each strict entry not judged on the run rc-verify read: its test didn't
- * owe its check there (judgeListed's notJudged), so it neither failed nor passed.
+ * The summary's notes for each strict entry not judged on the run rc-verify read: a condition its
+ * test neither owed nor ran there (judgeListed's notJudged), so it neither failed nor passed.
  */
 export function notJudgedLines(notJudged) {
   return (notJudged ?? []).map(
@@ -549,7 +550,7 @@ export function notJudgedLines(notJudged) {
 
 /**
  * The summary's lines for each flaky entry and how it came out in the run rc-verify read: failed
- * (on its record), passed, not judged (its test unrecorded, so held, or its check not owed), or
+ * (on its record), passed, not judged (its test unrecorded, so held, or a condition not owed or run), or
  * not run.
  */
 export function flakyLines(flaky) {
@@ -600,6 +601,25 @@ export async function qualityPrSummary(
   }
 }
 
+/**
+ * The job summary main() prints and appends for `verdict` on `tag` at `sha`: eligible, eligible on
+ * its records list, or refused with each reason; then the notes for each entry not judged
+ * (notJudgedLines) and each flaky entry (flakyLines), under their headings, when there are any.
+ */
+export function summaryMarkdown(verdict, { tag, sha }) {
+  let summary = verdict.ok
+    ? verdict.listed
+      ? `### ${tag}: eligible on its records list\n\n${sha} is on main, and ci run [${verdict.run.id}](${verdict.run.html_url}) failed only quality-pr, on records quality/release/records.json names.\n`
+      : `### ${tag}: eligible\n\n${sha} is on main, and ci run [${verdict.run.id}](${verdict.run.html_url}) passed gate on it.\n`
+    : `### ${tag}: refused\n\n${verdict.reasons.map((reason) => `- ${reason}.`).join('\n')}\n`;
+  const notes = notJudgedLines(verdict.notJudged);
+  if (notes.length > 0)
+    summary += `\nNot judged on this run, their check not owed there:\n\n${notes.join('\n')}\n`;
+  const flaky = flakyLines(verdict.flaky);
+  if (flaky.length > 0) summary += `\nFlaky entries in the records list:\n\n${flaky.join('\n')}\n`;
+  return summary;
+}
+
 async function main() {
   const tag = process.env.TAG ?? '';
   const sha = process.env.SHA ?? '';
@@ -635,16 +655,7 @@ async function main() {
     quality.artifacts[String(run.id)] = got.artifacts;
   }
   const verdict = evaluateRc({ tag, sha, compare, runs, jobsByRun, quality });
-  let summary = verdict.ok
-    ? verdict.listed
-      ? `### ${tag}: eligible on its records list\n\n${sha} is on main, and ci run [${verdict.run.id}](${verdict.run.html_url}) failed only quality-pr, on records quality/release/records.json names.\n`
-      : `### ${tag}: eligible\n\n${sha} is on main, and ci run [${verdict.run.id}](${verdict.run.html_url}) passed gate on it.\n`
-    : `### ${tag}: refused\n\n${verdict.reasons.map((reason) => `- ${reason}.`).join('\n')}\n`;
-  const notes = notJudgedLines(verdict.notJudged);
-  if (notes.length > 0)
-    summary += `\nNot judged on this run, their check not owed there:\n\n${notes.join('\n')}\n`;
-  const flaky = flakyLines(verdict.flaky);
-  if (flaky.length > 0) summary += `\nFlaky entries in the records list:\n\n${flaky.join('\n')}\n`;
+  const summary = summaryMarkdown(verdict, { tag, sha });
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
   console.log(summary);
   for (const reason of verdict.reasons)
