@@ -258,10 +258,10 @@ const layoutOf = (seen: Awaited<ReturnType<typeof marks>>): Layout | undefined =
  * The layout the strip has rendered, read from its own marks, with that layout's whole contract
  * checked: pinned, or stacked, as LAYOUTS has them. Anything else fails, naming what it saw. The
  * layout found goes on the test as a 'layout' annotation, so a CI read shows which contract the test
- * checked. Only for a test whose layout differs by platform (the complete fixture at 1024 by 768
- * stacks on macOS and may pin on CI Linux); a test that needs one layout asserts that one instead,
- * at a width or on a fixture where it holds on both. `wait` polls until a layout holds; without it,
- * the page is read once, as it is now.
+ * checked. Only for a test whose layout can differ by platform (the complete fixture at 1024 by 768
+ * pins on macOS, and its layout on CI Linux is CI's to show); a test that needs one layout asserts
+ * that one instead, at a width or on a fixture where it holds on both. `wait` polls until a layout
+ * holds; without it, the page is read once, as it is now.
  */
 export async function renderedLayout(
   scope: Scope,
