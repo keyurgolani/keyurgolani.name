@@ -871,6 +871,39 @@ export function reflowConditions() {
   ];
 }
 
+/** One of reflowConditions(). */
+export type ReflowCondition = ReturnType<typeof reflowConditions>[number];
+
+/**
+ * Puts `page` under one reflow condition, as the reflow check reads it: the
+ * viewport and scale set through `cdp`, `path` loaded, and then the root
+ * text scaled on html. Whether the page settled.
+ */
+export async function enterReflowCondition(
+  page: Page,
+  cdp: CDPSession,
+  condition: ReflowCondition,
+  path: string,
+): Promise<boolean> {
+  const { width, height } = viewportSize(condition.id);
+  await cdp.send('Emulation.setDeviceMetricsOverride', {
+    width,
+    height,
+    deviceScaleFactor: condition.scale,
+    mobile: false,
+  });
+  const { settled } = await load(page, path);
+  if (condition.text !== 1) {
+    await page.evaluate(
+      (scale) =>
+        document.documentElement.style.setProperty('font-size', `${scale * 100}%`, 'important'),
+      condition.text,
+    );
+    await frames(page);
+  }
+  return settled;
+}
+
 /** The reflow check under each condition. It puts the viewport back and reloads. */
 export async function reflowFindings(
   page: Page,
@@ -882,21 +915,8 @@ export async function reflowFindings(
   const cdp = await page.context().newCDPSession(page);
   try {
     for (const condition of reflowConditions()) {
-      const { width, height } = viewportSize(condition.id);
-      await cdp.send('Emulation.setDeviceMetricsOverride', {
-        width,
-        height,
-        deviceScaleFactor: condition.scale,
-        mobile: false,
-      });
-      if (!(await load(page, path)).settled) findings.push(stillBusy(condition.rule));
-      if (condition.text !== 1) {
-        await page.evaluate(
-          (scale) =>
-            document.documentElement.style.setProperty('font-size', `${scale * 100}%`, 'important'),
-          condition.text,
-        );
-        await frames(page);
+      if (!(await enterReflowCondition(page, cdp, condition, path))) {
+        findings.push(stillBusy(condition.rule));
       }
       const probe = async (state: string) => {
         for (const problem of await inPage<{ rule: string; path: string; detail: string }[]>(page, {

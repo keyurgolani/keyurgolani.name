@@ -54,8 +54,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      jobs: ${{ steps.select.outputs.jobs }}
-      complete: ${{ steps.select.outputs.complete }}
+      # Rows 45/50's evidence branch, never merged: no check job runs, so a
+      # ci.yml change doesn't start the complete product and quality-pr's
+      # matrix. sb-reflow-probe runs alone. The selection still runs below,
+      # and its summary shows what it would have picked.
+      jobs: '[]'
+      complete: 'false'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -314,6 +318,95 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: reports-browser-${{ matrix.shard }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # Rows 45/50's probe, on an evidence branch that never merges: the four
+  # tests/e2e/sb-reflow-probe-<pack>.spec.ts files read Spatial Bento's home
+  # at 1024x768 with 200% root text (and 100%, as a control) under two packs
+  # that fail #178's root-text record and two that pass, on CI Linux's fonts,
+  # in the browser suite's container, image, install, Next cache, build and
+  # ci/run.mjs wrapper. It lists first and stops unless exactly four tests
+  # are listed; then it runs them, with no retry, compares the packs, and
+  # uploads the readings. No pipes: every output goes to a file, read back
+  # with cat and awk (which exit 0 on no match), under bash -eo pipefail.
+  sb-reflow-probe:
+    name: sb-reflow-probe (rows 45/50, four packs at 200% root text)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      SB_PROBE_SPECS: tests/e2e/sb-reflow-probe-
+      SB_PROBE_OUT: reports/browser
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: Restore the Next build cache
+        id: next-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/web/.next/cache
+          key: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/src/**', 'apps/web/scripts/**', 'apps/web/public/**', 'apps/web/*.ts', 'apps/web/*.json', 'packages/*/src/**', 'packages/*/packs/**', 'packages/*/*.json', 'package.json', 'tsconfig.base.json', 'pnpm-workspace.yaml', '.npmrc', '*.example.yml', 'example-media/**', 'snapshots/**') }}
+          restore-keys: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      - name: Next build cache hit
+        if: ${{ steps.next-cache.outputs.cache-hit == 'true' }}
+        run: echo "Next build cache restored for these build inputs"
+      - name: pnpm ci:build
+        run: pnpm ci:build
+      - name: List the four probe tests, and require exactly 4
+        shell: bash
+        run: |
+          mkdir -p "$SB_PROBE_OUT"
+          node_modules/.bin/playwright test "$SB_PROBE_SPECS" --project chromium --retries=0 --list > "$SB_PROBE_OUT/sb-probe-list.txt" 2>&1 || true
+          cat "$SB_PROBE_OUT/sb-probe-list.txt"
+          total=$(awk '/^Total: [0-9]+ tests? in /{n=$2} END{print n+0}' "$SB_PROBE_OUT/sb-probe-list.txt")
+          lines=$(awk '/^  \[chromium\] .*sb-reflow-probe-[a-z0-9-]+\.spec\.ts:/{n++} END{print n+0}' "$SB_PROBE_OUT/sb-probe-list.txt")
+          echo "[sb-probe] listed $total test(s), $lines list line(s); want exactly 4"
+          if [ "$total" != 4 ] || [ "$lines" != 4 ]; then
+            echo "::error::sb-reflow-probe listed $total test(s), not exactly 4"
+            exit 1
+          fi
+      # Each test prints its pack's readings as one "[sb-probe] json" line, the
+      # fc-match of every family in the stacks the page resolves and of every
+      # local() name their @font-face rules give, and attaches its JSON to the
+      # HTML report as sb-reflow-probe-<pack>.json. They pass whatever they find.
+      - name: The four probe tests, no retry
+        shell: bash
+        env:
+          CI_REPRO_COMMAND: pnpm exec playwright test tests/e2e/sb-reflow-probe- --project chromium --retries=0
+        run: |
+          status=0
+          node ci/run.mjs browser -- node_modules/.bin/playwright test "$SB_PROBE_SPECS" --project chromium --retries=0 > "$SB_PROBE_OUT/sb-probe-run.txt" 2>&1 || status=$?
+          cat "$SB_PROBE_OUT/sb-probe-run.txt"
+          sed 's/\x1b\[[0-9;]*m//g' "$SB_PROBE_OUT/sb-probe-run.txt" > "$SB_PROBE_OUT/sb-probe-run-plain.txt"
+          awk '/\[sb-probe\]/' "$SB_PROBE_OUT/sb-probe-run-plain.txt" > "$SB_PROBE_OUT/sb-probe.txt"
+          node tests/e2e/sb-reflow-probe-diff.mjs "$SB_PROBE_OUT/sb-probe.txt" > "$SB_PROBE_OUT/sb-probe-diff.txt" 2>&1 || true
+          cat "$SB_PROBE_OUT/sb-probe-diff.txt"
+          passed=$(awk '/^ +[0-9]+ passed/{n=$1} END{print n+0}' "$SB_PROBE_OUT/sb-probe-run-plain.txt")
+          failed=$(awk '/^ +[0-9]+ failed/{n=$1} END{print n+0}' "$SB_PROBE_OUT/sb-probe-run-plain.txt")
+          json=$(awk '/\[sb-probe\] json /{n++} END{print n+0}' "$SB_PROBE_OUT/sb-probe.txt")
+          echo "[sb-probe] $passed passed, $failed failed, of 4 asked; $json json line(s) of 4; playwright exit $status"
+          exit "$status"
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload the probe's readings
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sb-reflow-probe
           path: reports/
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
