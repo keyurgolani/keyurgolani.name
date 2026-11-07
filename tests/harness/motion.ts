@@ -119,11 +119,13 @@ export async function loadHome(page: Page, url = '/'): Promise<void> {
  * How long one of scrollThrough()'s calls into the page may take before it
  * counts as a stall. A healthy call takes 1 to 35 ms, on CI too (row 60's
  * traces: every evaluate and frame pair before the hang); 5 s is over 100
- * times the slowest of them. The longest path, a stall and its probe
- * (5 + 2 s), the stalled page's close (bounded the same), and a second stall
- * and its probe (5 + 2 s), past the test body's own few seconds twice, is
- * about 25 s at most, inside a test's 30 s, so the failure names the stalls,
- * not the test's timeout.
+ * times the slowest of them. The longest path is a stall and its probe
+ * (5 + 2 s), the stalled page's close (2 s at most), a fresh context's load,
+ * a second stall and its probe (5 + 2 s), and the fresh context's close (2 s
+ * at most, though Playwright's close takes a screenshot of each page, up to
+ * 5 s, which the bound cuts off), past the test body's own few seconds twice:
+ * about 25 s, inside a test's 30 s, so the failure names the stalls, not the
+ * test's timeout.
  */
 export const MOTION_CALL_MS = 5_000;
 
@@ -142,10 +144,11 @@ export type MotionCall = 'mark-scrollers' | 'scroll' | 'next-frames' | 'running-
 
 /**
  * A call into the page that never answered (row 60). The probe after it, a
- * trivial evaluate, names the kind: one that answers means the page's main
- * thread was free and only its frames stopped, `frame-stall`; one that
- * doesn't means the main thread was blocked, by a script or by layout,
- * `main-thread-block`.
+ * trivial evaluate once the bound has passed, says whether the page's main
+ * thread answers then: `frame-stall` if it does, `main-thread-block` if not.
+ * It names what the page did after the bound, not what stalled: a block that
+ * ends within the probe's 2 s reads as a frame stall, and a renderer hang
+ * reads as a block as a script's own does.
  */
 export class MotionStall extends Error {
   readonly kind: 'frame-stall' | 'main-thread-block';
@@ -188,12 +191,16 @@ async function within<T>(work: Promise<T>, ms: number): Promise<T | typeof UNANS
   }
 }
 
-/** Whether the page's main thread is blocked: a trivial evaluate gives no answer in MOTION_PROBE_MS. */
+/**
+ * Whether the page's main thread is blocked: a trivial evaluate gives no answer in MOTION_PROBE_MS.
+ * A probe that rejects (a crashed renderer, a closed page, a destroyed context) is neither kind of
+ * stall, so its error is thrown as the body's own, and nothing reruns it.
+ */
 async function blocked(page: Page): Promise<boolean> {
   const answer = await within(
     page.evaluate(() => 1),
     MOTION_PROBE_MS,
-  ).catch(() => UNANSWERED);
+  );
   return answer !== 1;
 }
 
@@ -218,7 +225,10 @@ async function bounded<T>(
  * MOTION_STALL_RERUN annotation, naming the stall's kind, where it hung, and
  * the call.
  * A stall on both runs fails, naming both kinds; any other failure is the
- * body's own. Closes the fresh page's context when the rerun ends.
+ * body's own, on either run. A `fresh` that gives a page in the stalled
+ * page's own context fails too: the rerun needs a new renderer. Closes the
+ * fresh page's context when the rerun ends, bounded, since Playwright's close
+ * takes a screenshot of each page.
  */
 export async function withStallRerun(
   page: Page,
@@ -235,8 +245,13 @@ export async function withStallRerun(
   }
   test.info().annotations.push({ type: MOTION_STALL_RERUN, description: first.annotation });
   // A wedged renderer may not close in time; the test's own teardown closes its context.
-  await within(page.close(), MOTION_CALL_MS).catch(() => {});
+  await within(page.close(), MOTION_PROBE_MS).catch(() => {});
   const again = await fresh();
+  if (again.context() === page.context()) {
+    throw new Error(
+      `The rerun after ${first.message} got a page in the stalled page's own context: it needs a fresh one, a new renderer.`,
+    );
+  }
   try {
     await run(again);
   } catch (error) {
@@ -245,7 +260,7 @@ export async function withStallRerun(
       `The test stalled on both runs: first ${first.message}; then, in a fresh context, ${error.message}.`,
     );
   } finally {
-    await again.context().close();
+    await within(again.context().close(), MOTION_PROBE_MS).catch(() => {});
   }
 }
 
@@ -281,6 +296,28 @@ export async function scrollThrough(page: Page): Promise<RunningAnimation[]> {
         return marked;
       }),
   );
+  try {
+    await stepThrough(page, scrollers, seen);
+  } catch (error) {
+    // What the pass already found stands (R60-1): an endless animation seen before a stall is the
+    // check's own failure, never a stall to rerun, so it's thrown as a plain Error, not a MotionStall.
+    if (error instanceof MotionStall && seen.size > 0) {
+      const found = [...seen.values()].map(({ kind, target }) => `${kind} on ${target}`).join(', ');
+      throw new Error(
+        `scrollThrough found ${seen.size} endless animation(s) before the page stalled, so the stall can't rerun them: ${found}; then ${error.message}.`,
+      );
+    }
+    throw error;
+  }
+  return [...seen.values()];
+}
+
+/** Each scroller's pass, step by step, each endless animation it finds kept in `seen`. */
+async function stepThrough(
+  page: Page,
+  scrollers: readonly number[],
+  seen: Map<string, RunningAnimation>,
+): Promise<void> {
   for (const scroller of scrollers) {
     for (let step = 0; ; step++) {
       const where = { scroller, step };
@@ -306,7 +343,6 @@ export async function scrollThrough(page: Page): Promise<RunningAnimation[]> {
       if (!more) break;
     }
   }
-  return [...seen.values()];
 }
 
 /** What scrollThrough() keeps in the page: each `scroller:step` its current pass scrolled to. */
