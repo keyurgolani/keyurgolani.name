@@ -3,10 +3,14 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { failureOf } from '../../ci/release/release-records.mjs';
+import {
+  CELL_CHECKS as RELEASE_CELL_CHECKS,
+  CONDITION_CHECKS,
+  failureOf,
+} from '../../ci/release/release-records.mjs';
 import { planCells, type Plan } from './cells';
 import type { CellFailure } from './lib/failure-records';
-import { RUN_ENGINES } from './lib/matrix';
+import { RUN_ENGINES, VIEWPORTS } from './lib/matrix';
 import { loadRegistrations } from './lib/registration';
 import {
   loadReleaseScope,
@@ -24,7 +28,7 @@ import {
 import { mergeShards, readShards } from './lib/shards';
 import { mergeRun } from './merge';
 import { judge, type VerdictInput } from './lib/verdict';
-import { requiredChecks } from './lib/checks';
+import { CELL_CHECKS, requiredChecks } from './lib/checks';
 import type { SummaryFailure, SummaryTest } from './reporter';
 import { ALSO_RUNS, CELL, cellTest, HELD, PLAN, PROBE, RUNS, summary } from './meta/runner-cases';
 import { SHARD_1, SHARD_2, writeShards } from './meta/shard-cases';
@@ -385,6 +389,28 @@ test("rc-quality judges a listed record whose check its test didn't owe as passe
     ),
     failed.failures.map((each) => `${each.rule} ${each.message}`).join(' | '),
   );
+});
+
+test("rc-verify's not-judged names are the harness's: CELL_CHECKS as checks.ts has them, owed everywhere, and the conditions requiredChecks() gives a default test only with its cell's conditions", () => {
+  assert.deepEqual(RELEASE_CELL_CHECKS, [...CELL_CHECKS]);
+  const first = VIEWPORTS[0]!.id;
+  const withConditions = requiredChecks('default', first, true);
+  const without = requiredChecks('default', first, false);
+  assert.deepEqual(
+    withConditions.filter((check) => !without.includes(check)),
+    CONDITION_CHECKS,
+  );
+  // Every row and viewport owes CELL_CHECKS, so an owed list short of one is malformed.
+  for (const row of ['default', 'reduced-motion', 'print', 'no-javascript', 'reduced-transparency'])
+    for (const { id } of VIEWPORTS) {
+      const owed = requiredChecks(row, id);
+      assert.ok(
+        RELEASE_CELL_CHECKS.every((check) => owed.includes(check)),
+        `${row} ${id}`,
+      );
+    }
+  const swept = requiredChecks('default', first, true, true);
+  assert.ok(RELEASE_CELL_CHECKS.every((check) => swept.includes(check)));
 });
 
 test('a listed record that no longer fails fails the gate, since a fixed record leaves the list', () => {

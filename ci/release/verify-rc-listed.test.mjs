@@ -19,6 +19,7 @@ import {
   commandText,
   downloadProblem,
   evaluateRc,
+  flakyLines,
   GATE_NEEDS,
   notJudgedLines,
   otherJobsRed,
@@ -29,6 +30,7 @@ import {
   qualityPrSummary,
   qualityPrUnlisted,
   SHARD_COUNTS,
+  summaryMarkdown,
   summaryProblem,
 } from './verify-rc.mjs';
 import { crc32, zipEntry } from './zip.mjs';
@@ -323,12 +325,44 @@ test('a listed test that also failed on anything no record names blocks the tag:
   assert.deepEqual(open, []);
 });
 
+/**
+ * A quality-pr sentinel's owed checks at 1440, default, without the conditions the plan gives
+ * only some cells: CELL_CHECKS, the default row's suites, and hover at a pointer viewport, as
+ * requiredChecks('default', '1440x900', false) gives them.
+ */
+const SENTINEL = [
+  'status',
+  'emulation',
+  'clock',
+  'axe',
+  'contrast',
+  'keyboard',
+  'focus',
+  'occlusion',
+  'overlays',
+  'hover',
+];
+/** cellTest() as a sentinel: it owed and ran SENTINEL's checks. */
+const sentinel = (failures, extra = {}) =>
+  cellTest(failures, { checks: SENTINEL, owed: SENTINEL, ...extra });
+/** A condition record a sentinel's push-run test never runs: reflow isn't among its owed checks. */
+const REFLOW = { check: 'reflow', rule: 'overflow', target: '@320x568 #main > p:nth-child(3)' };
+/** The green push run's input, its listed test passed, with `tests` as its summary's tests. */
+const greenWith = (listed, tests) =>
+  input({
+    run: GREEN,
+    jobList: jobs({}, { red: false }),
+    artifacts: [artifact(GREEN)],
+    listed,
+    summary: { ...qprSummary('passed'), tests },
+  });
+/** The red push run's input, red on FOCUS and AXE alone, `extra` listed beside them. */
+const redWith = (extra, test) =>
+  input({ listed: [...LISTED, ...extra], summary: { ...qprSummary([FOCUS, AXE]), tests: [test] } });
+
 test("an entry whose check its test didn't owe on the push run is not judged: a note, never 'take its entry out', while a missing or malformed owed list judges it as before", () => {
-  // A condition record a sentinel's push-run test never runs: reflow isn't among its owed checks.
-  const REFLOW = { check: 'reflow', rule: 'overflow', target: '@320x568 #main > p:nth-child(3)' };
-  const withReflow = [...LISTED, entry(REFLOW)];
   // The red path: quality-pr red on FOCUS and AXE alone, the reflow entry beside them.
-  const red = evaluateRc(input({ listed: withReflow }));
+  const red = evaluateRc(redWith([entry(REFLOW)], sentinel([FOCUS, AXE])));
   assert.deepEqual(red.reasons, []);
   assert.equal(red.ok, true);
   assert.deepEqual(red.notJudged, [
@@ -338,40 +372,135 @@ test("an entry whose check its test didn't owe on the push run is not judged: a 
     `- not judged: ${CELL} at 1440x900, default, on chromium: reflow overflow on @320x568 #main > p:nth-child(3) (its test didn't owe its reflow check on this run; owner lane C, row 5)`,
   ]);
   // Owed, and gone: it's passed, and the tag is refused, as any listed record that no longer fails.
-  const owed = ['status', 'axe', 'keyboard', 'focus', 'reflow'];
-  const ranReflow = {
-    ...qprSummary([FOCUS, AXE]),
-    tests: [cellTest([FOCUS, AXE], { owed, checks: owed })],
-  };
+  const owed = [...SENTINEL, 'reflow'];
   assert.match(
-    refusal(evaluateRc(input({ listed: withReflow, summary: ranReflow }))),
+    refusal(evaluateRc(redWith([entry(REFLOW)], sentinel([FOCUS, AXE], { owed, checks: owed })))),
     /reflow overflow on @320x568 #main > p:nth-child\(3\) no longer fails: take its entry out/,
   );
   // The green path: the listed test passed without owing reflow; the reflow entry alone is listed.
-  const green = { run: GREEN, jobList: jobs({}, { red: false }), artifacts: [artifact(GREEN)] };
-  const notOwed = evaluateRc(
-    input({ ...green, listed: [entry(REFLOW)], summary: qprSummary('passed') }),
-  );
+  const notOwed = evaluateRc(greenWith([entry(REFLOW)], [sentinel('passed')]));
   assert.deepEqual(notOwed.reasons, []);
   assert.equal(notOwed.ok, true);
   assert.deepEqual(
     notOwed.notJudged.map(({ entry: each }) => each.check),
     ['reflow'],
   );
-  // A missing or malformed owed list keeps today's judging: passed, so refused.
+  // A missing or malformed owed list, or a checks list that's missing or holds the check, keeps
+  // today's judging: passed, so refused. Each row but the last two breaks one conjunct alone.
   const open = [];
-  for (const [label, owedList] of [
-    ['no owed list', undefined],
-    ['an empty owed list', []],
-    ['an owed list holding a number', ['status', 7]],
-    ['an owed list that is a string', 'status axe'],
+  for (const [label, extra] of [
+    ['no owed list', { owed: undefined }],
+    ['an empty owed list', { owed: [] }],
+    ['an owed list holding a number', { owed: ['status', 7] }],
+    ['an owed list that is a string', { owed: 'status axe' }],
+    ["the sentinel's owed list and a number", { owed: [...SENTINEL, 7] }],
+    ["the sentinel's owed list and an empty name", { owed: [...SENTINEL, ''] }],
+    ['an empty name alone', { owed: [''] }],
+    ['status and an empty name', { owed: ['status', ''] }],
+    ["the sentinel's owed list short of axe", { owed: SENTINEL.filter((each) => each !== 'axe') }],
+    [
+      "the sentinel's owed list short of clock",
+      { owed: SENTINEL.filter((each) => each !== 'clock') },
+    ],
+    ['no checks list', { checks: undefined }],
+    ['a checks list that is a string', { checks: SENTINEL.join(' ') }],
+    [
+      "the sentinel's owed list, reflow among the checks it ran",
+      { checks: [...SENTINEL, 'reflow'] },
+    ],
+    [
+      'an owed list of a name no check has, reflow ran',
+      { owed: ['bogus'], checks: [...SENTINEL, 'reflow'] },
+    ],
+    [
+      'an owed list of a lowercase name, reflow ran',
+      { owed: ['REFLOW'], checks: [...SENTINEL, 'reflow'] },
+    ],
   ]) {
-    const summary = { ...qprSummary('passed'), tests: [cellTest('passed', { owed: owedList })] };
-    const verdict = evaluateRc(input({ ...green, listed: [entry(REFLOW)], summary }));
+    const verdict = evaluateRc(greenWith([entry(REFLOW)], [sentinel('passed', extra)]));
     if (verdict.ok || !/passed in ci run 202's quality-pr/.test(verdict.reasons.join(' | ')))
       open.push(`${label}: ${verdict.reasons.join(' | ') || 'accepted'}`);
   }
   assert.deepEqual(open, []);
+});
+
+test("only a condition entry can come out not judged: an entry of any other check, misspelt, the runner's, or a swept test's transparency, is judged on both paths as before row 64", () => {
+  const NOT_CONDITIONS = [
+    ['a check spelt with a capital', { check: 'Focus', rule: 'contrast', target: NAV }],
+    ['a misspelt check', { check: 'focuss', rule: 'contrast', target: NAV }],
+    ["the runner's", { check: 'runner', rule: 'settled', target: null }],
+    ['motion on a default-row key', { check: 'motion', rule: 'frame-loop', target: null }],
+    ['a check no test runs', { check: 'notice', rule: 'missing', target: NAV }],
+  ];
+  // A swept test (a pack change on a push runs swept cells): its owed and checks use
+  // sweepCheck()'s names, its records the bare gate, a transparency record its element's path.
+  const swept = ['default', 'forced-colors', 'reduced-motion', 'reduced-transparency'].flatMap(
+    (row, at) =>
+      [
+        ...SENTINEL.slice(0, 5),
+        'sweep-pack',
+        ...(at === 0 ? ['sweep-isolation'] : []),
+        ...{
+          default: ['keyboard', 'focus'],
+          'forced-colors': ['keyboard', 'focus'],
+          'reduced-motion': ['motion'],
+          'reduced-transparency': ['transparency'],
+        }[row],
+      ].map((check) => (row === 'default' ? check : `${row}:${check}`)),
+  );
+  assert.ok(swept.includes('reduced-transparency:transparency') && !swept.includes('transparency'));
+  const TRANSPARENCY = { check: 'transparency', rule: 'opaque', target: 'nav.ag-capsule' };
+  const open = [];
+  for (const [label, failure, extra] of [
+    ...NOT_CONDITIONS.map(([label, failure]) => [label, failure, {}]),
+    ["a swept test's transparency", TRANSPARENCY, { owed: swept, checks: swept }],
+  ]) {
+    const green = evaluateRc(greenWith([entry(failure)], [sentinel('passed', extra)]));
+    if (green.ok || !/passed in ci run 202's quality-pr/.test(green.reasons.join(' | ')))
+      open.push(`green, ${label}: ${green.reasons.join(' | ') || 'accepted'}`);
+    const red = evaluateRc(redWith([entry(failure)], sentinel([FOCUS, AXE], extra)));
+    if (red.ok || !/no longer fails: take its entry out/.test(red.reasons.join(' | ')))
+      open.push(`red, ${label}: ${red.reasons.join(' | ') || 'accepted'}`);
+    if ((green.notJudged ?? []).length + (red.notJudged ?? []).length > 0)
+      open.push(`${label}: not judged`);
+  }
+  assert.deepEqual(open, []);
+  // The three conditions, on the same sentinel, are the ones not judged.
+  const conditions = ['reflow', 'inventory', 'enhancement'].map((check) =>
+    entry({ check, rule: 'r', target: '#main' }),
+  );
+  const notJudged = evaluateRc(greenWith(conditions, [sentinel('passed')]));
+  assert.deepEqual(notJudged.reasons, []);
+  assert.deepEqual(
+    notJudged.notJudged.map(({ entry: each }) => each.check),
+    ['reflow', 'inventory', 'enhancement'],
+  );
+});
+
+test("rc-verify's job summary prints each entry not judged and each flaky entry under its heading, after the verdict's own lines", () => {
+  const verdict = evaluateRc(greenWith([entry(REFLOW)], [sentinel('passed')]));
+  const flaky = [
+    {
+      entry: { ...entry(AXE), flaky: true, seen: { commit: SHA, failed: '7', passed: '8' } },
+      outcome: 'not run',
+    },
+  ];
+  const text = summaryMarkdown({ ...verdict, flaky }, { tag: 'v1.0.0-rc.1', sha: SHA });
+  assert.equal(
+    text,
+    [
+      `### v1.0.0-rc.1: eligible\n\n${SHA} is on main, and ci run [202](${GREEN.html_url}) passed gate on it.\n`,
+      `\nNot judged on this run, their check not owed there:\n\n${notJudgedLines(verdict.notJudged).join('\n')}\n`,
+      `\nFlaky entries in the records list:\n\n${flakyLines(flaky).join('\n')}\n`,
+    ].join(''),
+  );
+  assert.equal(notJudgedLines(verdict.notJudged).length, 1);
+  // A refusal names each reason; with nothing not judged or flaky, no heading follows.
+  const refused = summaryMarkdown(
+    { ok: false, reasons: ['one', 'two'], notJudged: [], flaky: [] },
+    { tag: 'v1.0.0-rc.1', sha: SHA },
+  );
+  assert.equal(refused, '### v1.0.0-rc.1: refused\n\n- one.\n- two.\n');
 });
 
 test('any other job gate needs that is not green blocks the tag, whatever the list says, browser included', () => {
