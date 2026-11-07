@@ -1235,25 +1235,48 @@ function LiveStage(props: StageProps) {
     /**
      * The scene the reader is on, as the layout is about to change under them: whether they're
      * reading one at all (inside the pin, or one across the reading line top to bottom, or focus in
-     * one), and which: the one holding focus, else the current one. Read before anything moves.
+     * one), which: the one holding focus, else the current one, and where its top is in the window.
+     * Read before anything moves.
      */
-    const reading = (): { inside: boolean; held: number } => {
+    interface Reading {
+      readonly inside: boolean;
+      readonly held: number;
+      readonly top: number;
+    }
+    const reading = (): Reading => {
       const active = doc.activeElement;
       const holding = active
         ? elements.findIndex((element) => element !== null && element.contains(active))
         : -1;
-      return { inside: holding >= 0 || readsScene(), held: holding >= 0 ? holding : position };
+      const held = holding >= 0 ? holding : position;
+      return {
+        inside: holding >= 0 || readsScene(),
+        held,
+        top: elements[held]?.getBoundingClientRect().top ?? 0,
+      };
     };
     /**
-     * That scene brought back on the layout now in force: pinned, the page at its share of the
-     * strip; top to bottom, at the top. What has focus comes with it: focus left on the bar, which
-     * top to bottom isn't shown, goes to the scene, and focus in a scene is brought into view.
+     * The reading a resize found, kept for the refit its settle runs: a resize's own paint reads the
+     * page again on the new layout before the refit does, and with the strip's lengths not yet
+     * refitted it can name the scene before the reader's (row 53 r2, 1b). The first resize of a
+     * burst reads it; the refit that ends the burst takes it.
      */
-    const hold = ({ inside, held }: { inside: boolean; held: number }) => {
+    let kept: Reading | undefined;
+    /**
+     * That scene brought back on the layout now in force: pinned, the page at its share of the
+     * strip; top to bottom, where the reader had it, its top as far from the window's as before. Not
+     * brought to the top: a reader at the page's top, the title card across the reading line, would
+     * be moved on by a refit they didn't make, and in Chromium a scene scrolled into view takes the
+     * keyboard's starting point with it, so the first Tab passes the skip link (row 53 r2, 1b).
+     * What has focus comes with it: focus left on the bar, which top to bottom isn't shown, goes to
+     * the scene, and focus in a scene is brought into view.
+     */
+    const hold = ({ inside, held, top }: Reading) => {
       if (!inside) return;
       if (pinned) window.scrollTo({ top: pinStart() + offsetOf(held), behavior: 'instant' });
       else if (!strip()) {
-        elements[held]?.scrollIntoView({ block: 'start', behavior: 'instant' });
+        const moved = (elements[held]?.getBoundingClientRect().top ?? top) - top;
+        if (Math.abs(moved) >= 0.5) window.scrollBy({ top: moved, behavior: 'instant' });
         land(held);
       }
       const active = doc.activeElement;
@@ -1265,8 +1288,10 @@ function LiveStage(props: StageProps) {
     };
     const refitNow = (landing = false) => {
       if (disposed) return;
-      // Where the reader is, before the pin's length or the layout changes under them.
-      const at = reading();
+      // Where the reader is, before the pin's length or the layout changes under them: as the
+      // burst's first resize found it, if one did.
+      const at = kept ?? reading();
+      kept = undefined;
       delete rootElement.dataset.fit;
       unroom();
       invalidate();
@@ -1282,6 +1307,7 @@ function LiveStage(props: StageProps) {
     };
     refit.current = refitNow;
     const onResize = () => {
+      kept ??= reading();
       if (refitTimer !== undefined) clearTimeout(refitTimer);
       refitTimer = setTimeout(() => {
         refitTimer = undefined;
