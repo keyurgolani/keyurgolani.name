@@ -261,6 +261,49 @@ test("pnpm 10's sequential output is measured too, and measuring merges into the
   assert.deepEqual(Object.keys(mergeDurations(undefined, measured)), Object.keys(measured).sort());
 });
 
+test("a unit item the log never closes isn't measured: a job cancelled at its limit, or ended by a failure, keeps that item's weight", () => {
+  const seq = (time, text) => logLine('pnpm ci:unit', time, text);
+  const kit = seq(
+    '01:00.0',
+    '> @portfolio/kit@0.1.1 test /home/runner/work/site/site/packages/kit',
+  );
+  const quality = seq(
+    '02:00.0',
+    '> portfolio-monorepo@0.1.1 test:quality /home/runner/work/site/site',
+  );
+  const plan = seq(
+    '11:00.0',
+    '> portfolio-monorepo@0.1.1 test:variants-plan /home/runner/work/site/site',
+  );
+  // Cancelled at the limit, inside its last item: no [ci] line, so test:variants-plan is cut short.
+  const cancelled = [
+    kit,
+    quality,
+    plan,
+    seq('11:03.7', 'ok 135 - links are read as same-origin paths'),
+  ];
+  assert.deepEqual(measure('unit', cancelled.join('\n')), {
+    'pkg:packages/kit': 60,
+    'script:test:quality': 540,
+  });
+  // The same job run to its end closes the item with the runner's line, and measures it.
+  const finished = [...cancelled.slice(0, 3), seq('11:02.6', '[ci] unit passed in 662.6s')];
+  assert.deepEqual(measure('unit', finished.join('\n')), {
+    'pkg:packages/kit': 60,
+    'script:test:quality': 540,
+    'script:test:variants-plan': 2.6,
+  });
+  // Ended by a failure, its runner's line missing: the open item isn't measured either, and the
+  // merge keeps the weight it had.
+  const failed = [kit, quality, seq('05:00.0', ' ELIFECYCLE  Command failed with exit code 1.')];
+  const measured = measure('unit', failed.join('\n'));
+  assert.deepEqual(measured, { 'pkg:packages/kit': 60 });
+  assert.deepEqual(mergeDurations({ 'script:test:quality': 540.8 }, measured), {
+    'pkg:packages/kit': 60,
+    'script:test:quality': 540.8,
+  });
+});
+
 test('Playwright durations are summed per spec file, or per project for variants', () => {
   const log = [
     logLine(
