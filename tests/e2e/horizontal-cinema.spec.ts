@@ -297,6 +297,32 @@ test(
 );
 
 test(
+  'at 1024 by 768 the focused stage rings inside its own edges, clear of the top line',
+  { annotation, tag },
+  async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await load(page);
+    test.info().annotations.push({ type: 'layout', description: await renderedLayout(page) });
+    await page.locator('.hc-stage').focus();
+    const ring = await page.evaluate(() => {
+      const stage = document.querySelector<HTMLElement>('.hc-stage')!;
+      const style = getComputedStyle(stage);
+      return {
+        visible: stage.matches(':focus-visible'),
+        width: style.outlineWidth,
+        offset: style.outlineOffset,
+        stageTop: stage.getBoundingClientRect().top,
+        chromeBottom: document.querySelector('.hc-chrome')!.getBoundingClientRect().bottom,
+      };
+    });
+    expect(ring.visible).toBe(true);
+    // The ring's outer edge is the stage's own edge: an offset of minus its width.
+    expect(ring.offset).toBe(`-${ring.width}`);
+    expect(ring.chromeBottom).toBeLessThanOrEqual(ring.stageTop + 0.5);
+  },
+);
+
+test(
   'a Shift+Tab back into an earlier scene steps the strip there at once too: what it reached holds still in view, and the status names its scene once the strip rests',
   { annotation, tag },
   async ({ page }) => {

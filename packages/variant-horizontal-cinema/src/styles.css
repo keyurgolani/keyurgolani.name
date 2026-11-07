@@ -194,8 +194,13 @@
   background-color: var(--color-surface-default);
 }
 
+/*
+ * The focused stage's ring inside its edges, where the top line and the rail can't cover it. Set as
+ * the offset the platform's ring reads (its later layer beats an outline-offset here), on the stage
+ * while it has focus, so the links inside it keep theirs.
+ */
 [data-variant='horizontal-cinema'] .hc-stage:focus-visible {
-  outline-offset: calc(var(--ui-focus-width) * -1);
+  --ui-focus-offset: calc(var(--ui-focus-width) * -1);
 }
 
 /*
@@ -253,7 +258,7 @@
 }
 
 [data-variant='horizontal-cinema'] .hc-scene:focus-visible {
-  outline-offset: calc(var(--ui-focus-width) * -1);
+  --ui-focus-offset: calc(var(--ui-focus-width) * -1);
 }
 
 /* The bars: the scene's chapter, title, and counter above; its credit and the next scene below. */
@@ -2044,7 +2049,7 @@
 }
 
 [data-variant='horizontal-cinema'] .hc-minimap__chapter a:focus-visible {
-  outline-offset: var(--space-3xs);
+  --ui-focus-offset: var(--space-3xs);
 }
 
 [data-variant='horizontal-cinema'] .hc-scrub__end {
@@ -2780,7 +2785,7 @@
 }
 
 [data-variant='horizontal-cinema'] .hc-board__map a:focus-visible {
-  outline-offset: var(--space-3xs);
+  --ui-focus-offset: var(--space-3xs);
 }
 
 [data-variant='horizontal-cinema'] .hc-board__where {
@@ -3583,7 +3588,7 @@
 [data-variant='horizontal-cinema']
   .hc-record__item:focus-within
   > .hc-record__summary:focus-visible {
-  outline-offset: var(--space-3xs);
+  --ui-focus-offset: var(--space-3xs);
 }
 
 /*
