@@ -310,13 +310,31 @@ const occlusion = async (page: Page) =>
 const overlays = (page: Page) => overlayFindings(page, []);
 const baseline = (page: Page) => inPage<string[]>(page, { kind: 'inventory' });
 const inventory = async (page: Page) => inventoryFindings(page, '/', await baseline(page));
-const enhancement = async (page: Page) =>
-  enhancementFindings(
-    page,
-    '/',
-    await baseline(page),
-    await page.evaluate(() => [...document.scripts].map((script) => script.src)),
-  );
+/** What a failed-enhancement case gives when its baseline would miss the control the case reveals. */
+const BASELINE_MISSED = 'baseline missed the revealed control';
+
+/**
+ * Failed enhancement as a row's pass reads it: the page loaded through loadForPass(), whose read
+ * of the HTML as served gives the scripts it lets through; then, when `ready` is given, the case's
+ * own wait on that load, since a case's wait on its first load doesn't carry over to this one, and
+ * no floor or timer decides what the baseline holds (push 3 r5); then its baseline, then the read.
+ */
+const enhancementAfter =
+  (ready?: (page: Page) => Promise<unknown>) =>
+  async (page: Page): Promise<Finding[]> => {
+    const { served } = await loadForPass(page, '/');
+    if (ready) {
+      await ready(page).catch(() => undefined);
+      // And loudly (push 3 r5): a baseline without the control the case reveals would pass a
+      // known-bad, so the case gives a runner finding instead, and isn't judged.
+      const shown = await page.evaluate(
+        () => document.querySelector('[data-lazy]:not([hidden])') !== null,
+      );
+      if (!shown) return [{ gate: 'runner', rule: 'baseline', actual: BASELINE_MISSED }];
+    }
+    return enhancementFindings(page, '/', await baseline(page), served);
+  };
+const enhancement = enhancementAfter();
 
 /**
  * A page whose lazy enhancement reveals `control`, hidden in its server
@@ -352,6 +370,12 @@ const REVEAL = {
 };
 
 /**
+ * REVEAL, its reveal 900 ms after it lands, past the enhancements' 500 ms floor (push 3 r5): only
+ * the helper's own revealed() wait puts the control in the baseline.
+ */
+const REVEAL_LATE = { body: REVEAL.body.replace('}, 400);', '}, 900);') };
+
+/**
  * What a lazy chunk reveals that no condition misses, a button that submits nothing alone in its
  * block, so a page whose other fields the server shows has something to wait for.
  */
@@ -363,13 +387,24 @@ const scriptOnlyText = (words: string) =>
     `^inventory script-only-text: 1 element\\(s\\) with script-only words without JavaScript, here "${escaped(words)}"$`,
   );
 
+/** The lazy enhancement's control, revealed: what revealed() waits for. */
+const revealWait = (page: Page) =>
+  page.waitForSelector('[data-lazy]:not([hidden])', { timeout: 5_000 });
+
 /** `check` once the lazy enhancement has revealed its control, as the cell reads its baseline once axe has run. */
 const revealed =
   (check: (page: Page) => Promise<Finding[]>) =>
   async (page: Page): Promise<Finding[]> => {
-    await page.waitForSelector('[data-lazy]:not([hidden])', { timeout: 5_000 });
+    await revealWait(page);
     return check(page);
   };
+
+/**
+ * Failed enhancement once the lazy enhancement has revealed its control: on the case's first load,
+ * and again on the helper's own load, before its baseline (push 3 r5), so the baseline holds the
+ * control whatever the enhancements' wait does about REVEAL's 400 ms timer.
+ */
+const revealedEnhancement = revealed(enhancementAfter(revealWait));
 
 /**
  * The conditions that let a button that submits nothing go, on a page whose
@@ -2240,7 +2275,7 @@ export const A11Y_CASES: readonly MetaCase[] = [
     run: () =>
       onPage(
         lazyReveal('A lazy button', '<button type="button" hidden data-lazy>jump</button>'),
-        revealed(enhancement),
+        revealedEnhancement,
         { chunk: REVEAL },
       ),
   },
@@ -2261,9 +2296,21 @@ export const A11Y_CASES: readonly MetaCase[] = [
       `${control}, hidden in the server markup, which a lazy chunk reveals, under failed enhancement`,
       lazyReveal(`A lazy ${id.slice(5)}`, control),
       /^enhancement semantics: 1 field\(s\) missing, here (?:link|control): /,
-      revealed(enhancement),
+      revealedEnhancement,
       { chunk: REVEAL },
     ),
+  ),
+  // And a reveal past the floor (push 3 r5): the helper waits for it on its own load, so the
+  // baseline holds the link and failed enhancement still finds it missing. Without that wait, the
+  // case gives "baseline missed the revealed control", never a silent pass.
+  builtCase(
+    'lazy-link-late-reveal',
+    'enhancement',
+    '<a href="/elsewhere" hidden data-lazy>Elsewhere</a>, hidden in the server markup, which a lazy chunk reveals 900 ms after it lands, past the floor, under failed enhancement',
+    lazyReveal('A late lazy link', '<a href="/elsewhere" hidden data-lazy>Elsewhere</a>'),
+    /^enhancement semantics: 1 field\(s\) missing, here link: /,
+    revealedEnhancement,
+    { chunk: REVEAL_LATE },
   ),
   // A button that submits nothing goes with its own label: a block that holds nothing else, as
   // Flux's Copy email holds its <p>, isn't missing without JavaScript, under failed enhancement,
@@ -2290,7 +2337,7 @@ export const A11Y_CASES: readonly MetaCase[] = [
     expect: 'pass',
     browser: true,
     run: () =>
-      onPage(lazyReveal('A button label', BUTTON_LABEL, PRINT_HIDES), revealed(enhancement), {
+      onPage(lazyReveal('A button label', BUTTON_LABEL, PRINT_HIDES), revealedEnhancement, {
         chunk: REVEAL,
       }),
   },
@@ -2337,7 +2384,7 @@ export const A11Y_CASES: readonly MetaCase[] = [
       expect: 'pass',
       browser: true,
       run: () =>
-        onPage(lazyReveal(what, html, PRINT_HIDES), revealed(enhancement), { chunk: REVEAL }),
+        onPage(lazyReveal(what, html, PRINT_HIDES), revealedEnhancement, { chunk: REVEAL }),
     },
   ]),
   // Nothing broader: a paragraph, a link's text, a submit button's label, or a link styled as a
@@ -2362,7 +2409,7 @@ export const A11Y_CASES: readonly MetaCase[] = [
         `${what}, ${html}, which a lazy chunk reveals, under failed enhancement`,
         lazyReveal(what, html, PRINT_HIDES),
         missingFields('enhancement semantics', { 'failed enhancement': scriptless }),
-        missingUnder(['failed enhancement'], revealed(enhancement)),
+        missingUnder(['failed enhancement'], revealedEnhancement),
         { chunk: REVEAL },
       ),
     ],

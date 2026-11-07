@@ -120,18 +120,25 @@ async function settle(page: Page): Promise<boolean> {
  * axe audits the live page, not server markup an enhancement hides or
  * replaces once it mounts, such as a plain link the live control stands
  * in for, whose box would be gone by the time the sampler looked for it.
+ * `served` are the paths of the scripts its HTML names, as served, which
+ * failed enhancement lets through (watchEnhancements()'s own()).
  */
 export async function loadForPass(
   page: Page,
   at: string,
-): Promise<{ response: Response | null; settled: boolean; enhanced: boolean }> {
+): Promise<{
+  response: Response | null;
+  settled: boolean;
+  enhanced: boolean;
+  served: ReadonlySet<string>;
+}> {
   const enhancements = watchEnhancements(page);
   try {
     const response = await page.goto(at, { waitUntil: 'load' });
     const settled = await settle(page);
     const enhanced = await enhancements.settled();
     if (enhanced) await frames(page);
-    return { response, settled, enhanced };
+    return { response, settled, enhanced, served: await enhancements.own() };
   } finally {
     enhancements.stop();
   }
@@ -253,6 +260,8 @@ interface SuiteRun {
   readonly conditions: boolean;
   /** What those conditions compare with: the page's inventory, as audit() read it before its sampler. */
   readonly baseline: readonly string[];
+  /** The paths of the scripts the page's HTML names, as served, as loadForPass() read them. */
+  readonly served: ReadonlySet<string>;
   /** A Studio surface that needs JavaScript: without it, its notice stands in for its content. */
   readonly scriptRequired: boolean;
   /** A surface whose frame's document its composition cells cover: the walk takes the frame as one stop. */
@@ -318,7 +327,6 @@ async function suites(run: SuiteRun): Promise<Finding[]> {
     return true;
   };
   const { baseline } = run;
-  const scripts = await page.evaluate(() => [...document.scripts].map((script) => script.src));
   if (owed.has('keyboard')) {
     findings.push(
       ...(await keyboardFindings(page, {
@@ -354,7 +362,9 @@ async function suites(run: SuiteRun): Promise<Finding[]> {
     if (run.scriptRequired) ran.add(NOTICE_CHECK);
   }
   if (run.conditions && does('enhancement')) {
-    findings.push(...(await enhancementFindings(page, at, baseline, scripts, run.scriptRequired)));
+    findings.push(
+      ...(await enhancementFindings(page, at, baseline, run.served, run.scriptRequired)),
+    );
   }
   return findings;
 }
@@ -570,7 +580,7 @@ export async function runPass(
   if (options.reemulate) await emulateRow(page, onScreen);
   else await applyRow(page, onScreen);
   const at = rowPath(cell, row);
-  const { response, settled, enhanced } = await loadForPass(page, at);
+  const { response, settled, enhanced, served } = await loadForPass(page, at);
   const status = response?.status() ?? 0;
   ran.add('status');
   if (first) {
@@ -673,6 +683,7 @@ export async function runPass(
       ran,
       conditions: contentRow,
       baseline: inventory,
+      served,
       scriptRequired: cell.requiresScript !== undefined,
       framed: cell.framed !== undefined,
       settleLog,
@@ -710,7 +721,12 @@ export async function runPass(
     // enhancements mounted or failed. A primitives page that never settles, or whose
     // enhancements never do, is STILL_BUSY or STILL_ENHANCING under the primitives surface at
     // the test's viewport, as the landscape pass records them (push 3 r3, item 4).
-    const { response: answer, settled, enhanced } = await loadForPass(page, route);
+    const {
+      response: answer,
+      settled,
+      enhanced,
+      served: primitivesServed,
+    } = await loadForPass(page, route);
     const surface = { id: PRIMITIVES_SURFACE, route: PRIMITIVES_ROUTE };
     const findings: Finding[] = [];
     if (!settled) {
@@ -762,6 +778,7 @@ export async function runPass(
           ran: new Set(),
           conditions: false,
           baseline: [],
+          served: primitivesServed,
           scriptRequired: false,
         })),
       );

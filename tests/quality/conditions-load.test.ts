@@ -35,8 +35,6 @@ function fakePage() {
         return undefined;
       }
       if (source.includes('data-enhancement-island')) return '';
-      // The scripts the page's HTML loads itself, which the floor's seed leaves out: none here.
-      if (source.includes('document.scripts')) return [];
       return 0;
     },
   };
@@ -110,7 +108,6 @@ function fakeReflowPage({ heldAt, busy = false }: { heldAt?: number; busy?: bool
         return undefined;
       }
       if (source.includes('data-enhancement-island')) return '';
-      if (source.includes('document.scripts')) return [];
       return 0;
     },
   };
@@ -171,7 +168,7 @@ function servedChunkPage() {
   };
   const waits: number[] = [];
   const chunk = { resourceType: () => 'script', url: () => CHUNK };
-  const document = {
+  const served = {
     url: () => 'http://app.test/',
     status: () => 200,
     request: () => ({ resourceType: () => 'document' }),
@@ -187,7 +184,7 @@ function servedChunkPage() {
       handlers.get(event)?.delete(handler);
     },
     goto: async () => {
-      emit('response', document);
+      emit('response', served);
       emit('request', chunk);
       emit('requestfinished', chunk);
       return null;
@@ -204,6 +201,7 @@ function servedChunkPage() {
       if (source.includes('requestIdleCallback')) return undefined;
       if (source.includes('requestAnimationFrame')) return undefined;
       if (source.includes('data-enhancement-island')) return '';
+      // As Turbopack leaves it, the live page names the chunk too.
       if (source.includes('document.scripts')) return [CHUNK];
       return 0;
     },
