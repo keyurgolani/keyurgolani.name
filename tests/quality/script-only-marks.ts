@@ -29,7 +29,14 @@ export interface ScriptOnlyMark {
 }
 
 /** Every file outside the harness, the docs and the tests that names data-script-only. */
-export const SCRIPT_ONLY_MARKS: readonly ScriptOnlyMark[] = [];
+export const SCRIPT_ONLY_MARKS: readonly ScriptOnlyMark[] = [
+  {
+    file: 'packages/variant-spatial-bento/src/esc-hint.tsx',
+    marks: 1,
+    reason:
+      "The case's Esc keyboard hint, which CaseFocus shows only once its Escape listener is attached; Back to the field does the same action.",
+  },
+];
 
 /** The mark's name, as a file's text holds it. */
 export const MARK = 'data-script-only';

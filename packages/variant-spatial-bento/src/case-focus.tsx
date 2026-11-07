@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useBoundary } from '@portfolio/appearance/react';
+import { hearsEscape } from './esc-hint';
 import { cameFrom } from './return-focus';
 
 // The case sheet takes focus on arrival (#16): opened from its tile on the
@@ -12,8 +13,9 @@ import { cameFrom } from './return-focus';
 // Escape closes the sheet as its hint says, by following the way back to
 // the tile, unless the key was meant for something else: a field being
 // typed in, an open dialog, or a key another handler already took. The
-// hint shows once this listens (no scripting media query, which the quality
-// runner's axe pass would flip). It renders nothing.
+// hint (esc-hint.tsx) renders once this listens, and the server sends none
+// of it (no scripting media query, which the quality runner's axe pass
+// would flip). It renders nothing.
 
 /** Whether an Escape keydown is the sheet's to close on. */
 export function closesSheet(
@@ -50,12 +52,10 @@ export function CaseFocus({ target, back }: { readonly target: string; readonly 
       link.click();
     };
     document.addEventListener('keydown', onKey);
-    // The hint says Escape closes the sheet only once this listens for it.
-    const hint = document.getElementById(back)?.closest('nav')?.querySelector('.sb-case__esc');
-    hint?.setAttribute('data-listening', '');
+    hearsEscape(true);
     return () => {
       document.removeEventListener('keydown', onKey);
-      hint?.removeAttribute('data-listening');
+      hearsEscape(false);
     };
   }, [plate, target, back]);
   return null;

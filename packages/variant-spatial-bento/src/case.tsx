@@ -18,6 +18,7 @@ import {
 } from '@portfolio/kit/sections';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
 import { CaseFocus } from './case-focus';
+import { EscHint } from './esc-hint';
 import { AwardFigure, captionable, ChangeFigure } from './case-figures';
 import { changeIn } from './figures';
 import { FooterTile, uiLangOf } from './chrome';
@@ -300,9 +301,8 @@ export function CaseStudyPage({ input, work, outline }: CaseStudyPageProps) {
                 <span lang={outline.next.lang}>{outline.next.title}</span>
               </a>
             ) : null}
-            <p className="sb-case__esc" dir={uiLang ? 'ltr' : undefined}>
-              Press <kbd>Esc</kbd> to close. The field keeps your place.
-            </p>
+            {/* Rendered once CaseFocus listens for Escape: the server sends none of its words. */}
+            <EscHint back={backId} dir={uiLang ? 'ltr' : undefined} />
           </nav>
           <header className="sb-case__head">
             <div className="sb-tile sb-tile--large sb-case__title">

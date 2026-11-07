@@ -208,6 +208,46 @@ for (const width of [320, 390]) {
   });
 }
 
+// RC1 row 92: the Escape hint names Back to the field as the control that does the same without a
+// key, so where the hint never shows, on a phone under touch and with no script, that control is
+// shown, enabled, and outside anything inert.
+for (const { name, width, touch, script } of [
+  { name: 'at 390px, under touch', width: 390, touch: true, script: true },
+  { name: 'at 390px, with no script', width: 390, touch: true, script: false },
+  { name: 'at 1440px, with no script', width: 1440, touch: false, script: false },
+]) {
+  test.describe(`a case page ${name}`, () => {
+    test.use({
+      viewport: { width, height: 844 },
+      hasTouch: touch,
+      isMobile: touch,
+      javaScriptEnabled: script,
+    });
+
+    test(
+      'the way back the Escape hint names is shown, enabled, and outside anything inert',
+      { annotation },
+      async ({ page }) => {
+        await page.goto('/', { waitUntil: 'networkidle' });
+        const href = (await page.locator('a[href*="/work/"]').first().getAttribute('href'))!;
+        await page.goto(href, { waitUntil: 'networkidle' });
+        const back = page.locator('a.sb-case__back[href]');
+        await expect(back).toHaveCount(1);
+        const id = (await back.getAttribute('id'))!;
+        expect(id).toMatch(/^\S+$/);
+        const control = page.locator(`[id="${id}"]`);
+        await expect(control).toHaveCount(1);
+        await expect(control).toBeVisible();
+        await expect(control).not.toHaveAttribute('aria-disabled', 'true');
+        await expect(page.locator(`[inert] [id="${id}"]`)).toHaveCount(0);
+        const box = (await control.boundingBox())!;
+        expect(box.width).toBeGreaterThan(1);
+        expect(box.height).toBeGreaterThan(1);
+      },
+    );
+  });
+}
+
 // M3: from 1024 up the overview's DOM is the phone's (the hero, then Selected
 // work), while its rows set Contents beside the hero and the works under it.
 // reading-flow makes Tab follow the rows.
