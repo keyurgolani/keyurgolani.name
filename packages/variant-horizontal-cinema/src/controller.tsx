@@ -489,6 +489,13 @@ function LiveStage(props: StageProps) {
      */
     let snapTo: { top: number; way: number } | null = null;
     let told = 0;
+    /**
+     * While the snap glides, where the page last was and which way its last step went, 1 on and -1
+     * back, 0 for none since it set out: what a move with no input of the visitor's says, such as
+     * the scroll bar, find in page or a link stopping the glide short.
+     */
+    let lastY = window.scrollY;
+    let lastStep = 0;
     let snapFrame: number | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let frame: number | undefined;
@@ -941,12 +948,13 @@ function LiveStage(props: StageProps) {
       // The pin's snap: a travel that comes to rest between scenes finishes onto the next one the
       // way it went from where the page last rested, so a slow wheel's notch is never pulled back.
       if (pinned && aligning === null && !reduced()) {
-        // A snap that stopped short of its scene. The visitor's own input on the way it glided
-        // took it over, so the travel finishes ahead, from where it set out. Input against it, or
-        // none (the scroll bar, find in page, a link, the browser's own scroll), reads as before:
-        // from the scene it glided to, as though it got there.
+        // A snap that stopped short of its scene. The way the visitor's own input went, where
+        // there's any, says how it finishes; with none (the scroll bar, find in page, a link), the
+        // way the page's last step went. On the way it glided, the travel finishes ahead, from
+        // where it set out; against it, from the scene it glided to, as though it got there.
         if (snapTo) {
-          if (told !== snapTo.way) rest = snapTo.top;
+          const way = told || lastStep;
+          if (way !== snapTo.way) rest = snapTo.top;
           snapTo = null;
         }
         const progress = window.scrollY - pinStart();
@@ -962,6 +970,8 @@ function LiveStage(props: StageProps) {
             // there, even a notch that comes as the snap closes, so that one travels on from it.
             snapTo = { top, way: Math.sign(top - window.scrollY) };
             told = 0;
+            lastY = window.scrollY;
+            lastStep = 0;
             if (snapFrame === undefined) snapFrame = requestAnimationFrame(watchSnap);
             window.scrollTo({ top, behavior: behavior() });
             return;
@@ -1035,6 +1045,11 @@ function LiveStage(props: StageProps) {
       timer = setTimeout(settle, SETTLE_MS);
     };
     const onPageScroll = () => {
+      if (snapTo) {
+        const y = window.scrollY;
+        if (y !== lastY) lastStep = Math.sign(y - lastY);
+        lastY = y;
+      }
       arrive();
       follow();
       onScroll();
