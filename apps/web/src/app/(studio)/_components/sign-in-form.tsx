@@ -24,7 +24,7 @@ type Notice =
       readonly seconds: number;
     };
 
-const TEXT: Readonly<Record<Exclude<Notice['kind'], 'rate_limited'>, string>> = {
+const TEXT: Readonly<Record<Exclude<Notice['kind'], 'rate_limited' | 'store_failed'>, string>> = {
   submitting: 'Signing in…',
   failed: "That password didn't work.",
   network: "Couldn't reach the server. Check your connection, then try again.",
@@ -37,9 +37,16 @@ const seconds = (count: number) => `${count} ${count === 1 ? 'second' : 'seconds
 
 /**
  * What the alert says. For a rate limit it changes twice only: once as the
- * limit starts, and once as it lifts.
+ * limit starts, and once as it lifts. A sign-out whose session the store
+ * couldn't end names the deployment's idle limit, which ends it (row 88b).
  */
-function message(notice: Notice): string {
+function message(notice: Notice, idleMinutes: number | null): string {
+  if (notice.kind === 'store_failed') {
+    // Owner's config always has the limit; without one, nothing is claimed for it.
+    return idleMinutes === null
+      ? "Signed out of this browser. The server couldn't remove the session, so it lapses at its idle limit."
+      : `Signed out of this browser. The server couldn't remove the session, so it lapses within ${idleMinutes} minutes.`;
+  }
   if (notice.kind !== 'rate_limited') return TEXT[notice.kind];
   return notice.seconds > 0
     ? `Too many attempts. Try again in ${seconds(notice.initial)}.`
@@ -53,6 +60,8 @@ export interface SignInFormProps {
   readonly returnTo: string;
   /** Seconds left, for `rate_limited`. */
   readonly retryAfter: number | null;
+  /** The deployment's idle limit in minutes, which `store_failed` names; null when it has none. */
+  readonly idleMinutes: number | null;
 }
 
 const subscribeNothing = () => () => {};
@@ -73,7 +82,7 @@ function initial({ state, retryAfter }: SignInFormProps): Notice | null {
 }
 
 export function SignInForm(props: SignInFormProps) {
-  const { returnTo } = props;
+  const { returnTo, idleMinutes } = props;
   const [notice, setNotice] = useState<Notice | null>(() => initial(props));
   // False while the server renders and the page hydrates, then true: the
   // toggle and the scripted post work only from then on.
@@ -140,7 +149,7 @@ export function SignInForm(props: SignInFormProps) {
       onSubmit={enhanced ? submit : undefined}
     >
       <p ref={alert} className="studio-alert" role="alert" tabIndex={-1} hidden={notice === null}>
-        {notice ? message(notice) : null}
+        {notice ? message(notice, idleMinutes) : null}
       </p>
       {/* Not a live region: a screen reader hears the alert, not each second. */}
       {waiting ? <p className="studio-countdown">{seconds(notice.seconds)} left.</p> : null}

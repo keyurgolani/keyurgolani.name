@@ -647,10 +647,14 @@ const OPERATIONS: readonly Operation[] = [
     kind: 'command',
     capability: 'auth.session',
     input: NO_INPUT,
-    output: z.object({ signedOut: z.literal(true) }).strict(),
+    output: z
+      .object({ signedOut: z.literal(true), reason: z.literal('store_failed').optional() })
+      .strict(),
     // Signing out answers as signed out with or without a session that
     // counts, so a cookie the store couldn't check, or one that ended, is
-    // cleared all the same. The Origin check still applies.
+    // cleared all the same. The Origin check still applies. `store_failed`
+    // says the store couldn't end the session: this browser is signed out,
+    // and the session lapses at its idle limit (row 88b).
     session: false,
     originCheck: true,
     errors: [

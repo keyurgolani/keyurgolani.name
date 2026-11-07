@@ -707,7 +707,8 @@ export function StudioShell({
     }
     leaving.current = true;
     // Without the adapter (row 88). The other tabs hear the choice: on discard, none writes its text back.
-    if (!(await signOutWith(studioFetch, csrfToken, keep ? 'keep' : 'discard'))) {
+    const answered = await signOutWith(studioFetch, csrfToken, keep ? 'keep' : 'discard');
+    if (!answered) {
       leaving.current = false;
       const from = latestBackend.current;
       if (dropped.current && from) void load(from);
@@ -718,7 +719,8 @@ export function StudioShell({
     if (keep) dispatch({ type: 'expired' });
     else discard();
     document.title = NEUTRAL_TITLE;
-    window.location.assign(signedOutLocation('ended'));
+    // To the state that says what the server did: no Try again either way (row 88b).
+    window.location.assign(signedOutLocation(answered));
     return true;
   }
 
