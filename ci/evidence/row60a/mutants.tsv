@@ -1,0 +1,9 @@
+# name	file	anchor (\n for a newline)	replacement	tests (Playwright --grep)	want failed
+seen-check-dropped	tests/harness/motion.ts	if (error instanceof MotionStall && seen.size > 0) {	if (error instanceof MotionStall && seen.size < 0) {	an endless animation found before a stall fails as itself	1
+m1-any-error-reruns	tests/harness/motion.ts	    if (!(error instanceof MotionStall)) throw error;\n    first = error;	    first = error as MotionStall;	a body's own failure on its first run fails as itself	1
+m2-rerun-failure-swallowed	tests/harness/motion.ts	    if (!(error instanceof MotionStall)) throw error;\n    throw new Error(	    if (!(error instanceof MotionStall)) return;\n    throw new Error(	a body's own failure on the rerun stands	1
+scroll-bound-removed	tests/harness/motion.ts	  const answer = await within(run(), MOTION_CALL_MS);	  if (where.call === 'scroll') return run();\n  const answer = await within(run(), MOTION_CALL_MS);	a block inside scroll's own call	1
+animations-bound-removed	tests/harness/motion.ts	  const answer = await within(run(), MOTION_CALL_MS);	  if (where.call === 'running-animations') return run();\n  const answer = await within(run(), MOTION_CALL_MS);	a block inside animations's own call	1
+mark-bound-removed	tests/harness/motion.ts	  const answer = await within(run(), MOTION_CALL_MS);	  if (where.call === 'mark-scrollers') return run();\n  const answer = await within(run(), MOTION_CALL_MS);	a block inside mark's own call	1
+same-context-guard-dropped	tests/harness/motion.ts	  if (again.context() === page.context()) {	  if (false) {	gives a page in the stalled page's own context	1
+probe-rethrow-undone	tests/harness/motion.ts	    MOTION_PROBE_MS,\n  );\n  return answer !== 1;	    MOTION_PROBE_MS,\n  ).catch(() => UNANSWERED);\n  return answer !== 1;	a probe that rejects, its page closed mid-probe	1

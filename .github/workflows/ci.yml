@@ -54,7 +54,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      jobs: ${{ steps.select.outputs.jobs }}
+      # Harness push 2's evidence branch, never merged: the selection's jobs
+      # kept to quality-pr's three, quality-meta and unit
+      # (ci/evidence/harness-2/keep-jobs.mjs), so quality-pr plans and runs
+      # as the selection has it; every other check job is emptied. complete
+      # stays the selection's.
+      jobs: ${{ steps.keep.outputs.jobs }}
       complete: ${{ steps.select.outputs.complete }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -67,6 +72,11 @@ jobs:
           PR_DRAFT: ${{ github.event.pull_request.draft }}
           BASE_REF: ${{ github.base_ref }}
         run: node ci/select-jobs.mjs --github
+      - name: Keep the evidence branch's jobs
+        id: keep
+        env:
+          SELECTED: ${{ steps.select.outputs.jobs }}
+        run: node ci/evidence/harness-2/keep-jobs.mjs
 
   static:
     name: static
@@ -881,6 +891,160 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: reports-quality-meta
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # Harness push 2's CI Linux evidence, on a branch that never merges
+  # (kgn-e/harness-2-ci): every new or changed spec and pin of the push, in
+  # the browser suite's pinned image, user, options, install, Next cache and
+  # build. Each step goes through ci/run.mjs, as the suite's do, under a gate
+  # name of its own, so one step's failure record never replaces another's.
+  # Row 68's red is main's push run 42327335855 (62af1e18b, browser 3/4, job
+  # 128265602762), so it isn't rerun here; the mutants have a job of their
+  # own below. Each step prints exact counts and exits nonzero only when its
+  # bar is missed; every step runs, whatever the one before did.
+  harness-2-evidence:
+    name: harness-2-evidence (harness push 2's pins on CI Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: Restore the Next build cache
+        id: next-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/web/.next/cache
+          key: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/src/**', 'apps/web/scripts/**', 'apps/web/public/**', 'apps/web/*.ts', 'apps/web/*.json', 'packages/*/src/**', 'packages/*/packs/**', 'packages/*/*.json', 'package.json', 'tsconfig.base.json', 'pnpm-workspace.yaml', '.npmrc', '*.example.yml', 'example-media/**', 'snapshots/**') }}
+          restore-keys: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      - name: pnpm ci:build
+        run: pnpm ci:build
+      # What the steps below lean on, printed: the image's tools.
+      - name: tools
+        shell: bash
+        run: |
+          for tool in node pnpm python3 tar awk sed; do
+            if command -v "$tool" > /dev/null; then echo "$tool: $(command -v "$tool")"; else echo "$tool: none"; fi
+          done
+      # Rows 68 and 60: motion-harness.spec.ts, every test 5 times, no retry (18 listed, 90
+      # passed), then stall-reruns.test.mjs (4 passed).
+      - name: rows 68 and 60 green, motion-harness.spec.ts x 5 and stall-reruns.test.mjs
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          ROW60A_OUT: reports/row60a
+        run: node ci/run.mjs harness-2-row60a-green -- sh ci/evidence/row60a/ci-row60-addendum.sh green
+      # The push's unit pins: the quality ones it changes (meta, a11y, exceptions, script-only
+      # marks, release scope) and ci/release's, each count held exactly.
+      - name: unit pins, quality and ci/release
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: node ci/run.mjs harness-2-units -- bash ci/evidence/harness-2/meta-linux.sh units
+      # The meta cases: every A11Y_CASES case at this head (the a11y and motion ones, the
+      # inventory addendum's among them), the count held exactly, and its 49 script-only ids ok.
+      - name: the a11y and motion meta cases, and the 49 script-only ids
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: node ci/run.mjs harness-2-cases -- bash ci/evidence/harness-2/meta-linux.sh cases
+      # Rows 48 and 65 red first, in a temp copy of the workspace (62af1e18b's files swapped in).
+      - name: rows 48 and 65 red first on 62af1e18b's code, and the rafFrames 0 mutant
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: node ci/run.mjs harness-2-red -- bash ci/evidence/harness-2/meta-linux.sh red
+      # The inventory addendum red first, in a temp copy: its 49 script-only ids on 62af1e18b's
+      # probe.ts and conditions.ts, F1's 3, F6's 1 and F2's 8 red, exactly 12; the three
+      # server-words cases listed apart, red by their message alone.
+      - name: inventory addendum red first on 62af1e18b's probe.ts and conditions.ts
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: node ci/run.mjs harness-2-inv-red -- bash ci/evidence/harness-2/meta-linux.sh inv-red
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-harness-2-evidence
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # The motion pins' mutants, in a job of their own, each step's bar being that
+  # its pins fail. Row 60's addendum: each of mutants.tsv's 8 rows written into
+  # its file in place, its pins run (each listed 1, failed 1), the file put
+  # back, and "ran 8 of 8". Row 68's: a temp copy of motion-harness.spec.ts
+  # whose stub stalls at STALL_STEP + 1 while its pins still name STALL_STEP
+  # (4 listed, 4 failed). The inventory addendum's 12 meta mutants, each in a
+  # temp copy, each of its ids NOT OK, 12 of 12. The job passes when the pins
+  # catch every mutant, and fails if one passes.
+  harness-2-mutants:
+    name: harness-2-mutants (rows 60, 68 and the inventory, the pins catch each mutant)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: Restore the Next build cache
+        id: next-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/web/.next/cache
+          key: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/src/**', 'apps/web/scripts/**', 'apps/web/public/**', 'apps/web/*.ts', 'apps/web/*.json', 'packages/*/src/**', 'packages/*/packs/**', 'packages/*/*.json', 'package.json', 'tsconfig.base.json', 'pnpm-workspace.yaml', '.npmrc', '*.example.yml', 'example-media/**', 'snapshots/**') }}
+          restore-keys: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      - name: pnpm ci:build
+        run: pnpm ci:build
+      - name: row 60 addendum mutants, 8 of 8
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          ROW60A_OUT: reports/row60a
+        run: node ci/run.mjs harness-2-row60a-mutants -- sh ci/evidence/row60a/ci-row60-addendum.sh mutants
+      - name: row 68 mutant, the stall one step later
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          ROW68_OUT: reports/row68
+        run: node ci/run.mjs harness-2-row68-mutant -- sh ci/evidence/row68/ci-red-green.sh mutant
+      # The inventory addendum's 12 meta mutants (a05b7's), each in a temp copy, each of its ids
+      # NOT OK, ran 12 of 12.
+      - name: inventory addendum mutants, 12 of 12
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: node ci/run.mjs harness-2-inv-mutants -- bash ci/evidence/harness-2/meta-linux.sh inv-mutants
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-harness-2-mutants
           path: reports/
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
