@@ -398,6 +398,40 @@ const missingUnder =
     ];
   };
 
+/** What the late-overflow case's enhancement mounts. */
+const LATE_WIDE_WHAT = 'A 1400 px wide block';
+
+/**
+ * A page whose lazy enhancement, an island that goes live once the page has loaded and loads its
+ * chunk from LAZY_CHUNK, which the stand-in serves late, mounts a 1400 px wide block in main.
+ */
+const LATE_WIDE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>A late enhancement</title></head><body><a href="#main">Skip to content</a><main id="main" tabindex="-1"><h1>A late enhancement</h1><div data-enhancement-island="late" data-island="markup"><p>The page reads without its enhancement.</p></div></main><script>
+addEventListener('load', () => setTimeout(() => {
+  const island = document.querySelector('[data-enhancement-island]');
+  island.setAttribute('data-island', 'live');
+  const chunk = document.createElement('script');
+  chunk.src = '${LAZY_CHUNK}';
+  chunk.onload = () => chunk.remove();
+  chunk.onerror = () => { chunk.remove(); island.setAttribute('data-island', 'failed'); };
+  document.head.append(chunk);
+}));
+</script></body></html>`;
+
+/** The late-overflow case's chunk: it mounts the block at once, as it runs. */
+const LATE_WIDE_CHUNK = {
+  body: "{ const wide = document.createElement('p'); wide.id = 'late-wide'; wide.style.width = '1400px'; wide.textContent = 'A late block, wider than any reflow viewport.'; document.querySelector('[data-enhancement-island]').append(wide); }",
+};
+
+/** `check`'s findings, and one more if none of them names `path`: the record must name the element. */
+const naming =
+  (path: string, check: (page: Page) => Promise<Finding[]>) =>
+  async (page: Page): Promise<Finding[]> => {
+    const findings = await check(page);
+    return findings.some((each) => each.path === path)
+      ? findings
+      : [...findings, { gate: 'meta', rule: 'element', actual: `no record names ${path}` }];
+  };
+
 /** Hides the lazy enhancement in print too, as Flux's print sheet hides Copy email, and styles .button as one (shown only, so hidden still hides it). */
 const PRINT_HIDES =
   '<style>@media print { [data-lazy] { display: none !important; } } .button:not([hidden]) { display: inline-block; padding: 8px 16px; border: 2px solid #1a1a1a; border-radius: 6px; background: #f2f2f2; color: #1a1a1a; text-decoration: none; }</style>';
@@ -1785,6 +1819,20 @@ export const A11Y_CASES: readonly MetaCase[] = [
     reflowFindings(page, '/'),
   ),
   good('reflow', (page) => reflowFindings(page, '/')),
+  // Each reflow condition's reload reads the page once its enhancements have mounted or failed
+  // (the coordinator, 7 Nov 2026, push 3, for row 50's race): a lazy enhancement that lands about
+  // a second after load and puts a 1400 px block on the page scrolls it sideways at 320, at 200%
+  // zoom and at 200% root text, and the record names the block. Read at the load event, as it
+  // was, the block isn't there yet and the page passes.
+  builtCase(
+    'late-overflow',
+    'reflow',
+    `${LATE_WIDE_WHAT}, which a lazy chunk mounts ${LAZY_DELAY_MS} ms after load, under each reflow condition`,
+    LATE_WIDE,
+    /^reflow (?:reflow|zoom|root-text): /,
+    naming('#late-wide', (page) => reflowFindings(page, '/')),
+    { chunk: LATE_WIDE_CHUNK },
+  ),
   bad('needs-hover', 'inventory.html', 'inventory', 'content', inventory),
   good('inventory', inventory),
   // Print reads the page from the top, where the baseline was read: a running head a script
