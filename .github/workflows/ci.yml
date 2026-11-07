@@ -54,7 +54,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      jobs: ${{ steps.select.outputs.jobs }}
+      # Batch K's evidence branch, never merged: the selection's jobs kept to
+      # quality-pr's three and variants (ci/evidence/batch-k/keep-jobs.mjs), so
+      # quality-pr plans and runs Kinetic Cosmos's directed cells as the
+      # selection has them; every other check job is emptied. complete stays
+      # the selection's.
+      jobs: ${{ steps.keep.outputs.jobs }}
       complete: ${{ steps.select.outputs.complete }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -67,6 +72,11 @@ jobs:
           PR_DRAFT: ${{ github.event.pull_request.draft }}
           BASE_REF: ${{ github.base_ref }}
         run: node ci/select-jobs.mjs --github
+      - name: Keep the evidence branch's jobs
+        id: keep
+        env:
+          SELECTED: ${{ steps.select.outputs.jobs }}
+        run: node ci/evidence/batch-k/keep-jobs.mjs
 
   static:
     name: static
@@ -881,6 +891,89 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: reports-quality-meta
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # Batch K's CI Linux evidence, on a branch that never merges
+  # (kgn-e/batch-k-evidence): row 61's and row 94's pins by exact title, and the
+  # 16 Kinetic Cosmos cells by exact grep, in quality-pr's pinned image, user,
+  # options and QUALITY_CONTAINER, with the browser job's install, Next cache
+  # and build. Each step goes through ci/run.mjs under a gate name of its own,
+  # prints exact counts and exits nonzero only when its bar is missed; every step
+  # runs, whatever the one before did. The reports are scrubbed as quality-pr's
+  # are, and upload only when the scrub passes.
+  batch-k-evidence:
+    name: batch-k-evidence (rows 61 and 94's pins and Kinetic Cosmos's 16 cells on CI Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      # The image this job runs in, so the visual cells know they're in it.
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Restore the Next build cache
+        id: next-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/web/.next/cache
+          key: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/src/**', 'apps/web/scripts/**', 'apps/web/public/**', 'apps/web/*.ts', 'apps/web/*.json', 'packages/*/src/**', 'packages/*/packs/**', 'packages/*/*.json', 'package.json', 'tsconfig.base.json', 'pnpm-workspace.yaml', '.npmrc', '*.example.yml', 'example-media/**', 'snapshots/**') }}
+          restore-keys: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      - name: pnpm ci:build
+        run: pnpm ci:build
+      # composition.test.tsx: row 61's 2 and row 94's 1 named tests, each passed
+      # 1 and failed 0; the whole file, passed == its tests.
+      - name: the three unit pins by title, and composition.test.tsx whole
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          K_OUT: reports/batch-k
+        run: node ci/run.mjs batch-k-unit -- sh ci/evidence/batch-k/k-pins.sh unit
+      # kinetic-motion.spec.ts: row 61's 3 named tests, 3 listed, then 5 times
+      # each, no retry: 15 passed, 0 failed.
+      - name: the three e2e pins by title x 5, --retries=0
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          K_OUT: reports/batch-k
+        run: node ci/run.mjs batch-k-e2e -- sh ci/evidence/batch-k/k-pins.sh e2e
+      # The 12 print cells and #197's 4 reduced-transparency cells by exact grep:
+      # 16 listed, then run, no retry; k-read.py names each cell's status and
+      # keys. Print holds row 94's bar (passed, no key); reduced-transparency is
+      # row 91's, expected red, shown as data.
+      - name: the 16 cells by exact grep, and k-read.py
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          K_OUT: reports/batch-k
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+        run: node ci/run.mjs batch-k-cells -- sh ci/evidence/batch-k/k-pins.sh cells
+      - name: Scrub reports
+        id: scrub
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-batch-k-evidence
           path: reports/
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
