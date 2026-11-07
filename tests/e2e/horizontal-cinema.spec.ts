@@ -484,9 +484,10 @@ for (const [width, height] of [
     async ({ page }) => {
       await page.setViewportSize({ width, height });
       await load(page);
-      // Which layout the complete fixture renders here differs by platform: at 1024 by 768 it stacks
-      // on macOS and may pin on CI Linux. So the test reads the layout the page rendered and checks
-      // that one's contract: pinned, the rail shows and holds its labels; stacked, no bar is drawn.
+      // Which layout the complete fixture renders here can differ by platform: at 1024 by 768 it
+      // pins on macOS, and its layout on CI Linux is CI's to show. So the test reads the layout the
+      // page rendered and checks that one's contract: pinned, the rail shows and holds its labels;
+      // stacked, no bar is drawn.
       await renderedLayout(page);
       expect(await railClashes(page)).toEqual([]);
     },
