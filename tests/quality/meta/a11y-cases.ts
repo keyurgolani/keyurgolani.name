@@ -426,9 +426,10 @@ const LATE_WIDE_WHAT = 'A block 1100 x 16 / root px wide';
 
 /**
  * A page whose lazy enhancement, an island that goes live once the page has loaded and loads its
- * chunk from LAZY_CHUNK, which the stand-in serves late, mounts a 1400 px wide block in main.
+ * chunk from LAZY_CHUNK, which the stand-in serves late, mounts a block in main (its chunk sizes
+ * it). Its own #root-wide, 40rem, fits 1024 only at 100% root text.
  */
-const LATE_WIDE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>A late enhancement</title></head><body><a href="#main">Skip to content</a><main id="main" tabindex="-1"><h1>A late enhancement</h1><div data-enhancement-island="late" data-island="markup"><p>The page reads without its enhancement.</p></div></main><script>
+const LATE_WIDE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>A late enhancement</title></head><body><a href="#main">Skip to content</a><main id="main" tabindex="-1"><h1>A late enhancement</h1><p id="root-wide" style="width: 40rem">A block 40rem wide: 640 px at 16 px root text, which 1024 holds, and 1280 px at 200%.</p><div data-enhancement-island="late" data-island="markup"><p>The page reads without its enhancement.</p></div></main><script>
 addEventListener('load', () => setTimeout(() => {
   const island = document.querySelector('[data-enhancement-island]');
   island.setAttribute('data-island', 'live');
@@ -1989,7 +1990,15 @@ export const A11Y_CASES: readonly MetaCase[] = [
     `${LATE_WIDE_WHAT}, which a lazy chunk mounts ${LAZY_DELAY_MS} ms after load, under each reflow condition`,
     LATE_WIDE,
     /^reflow (?:reflow|zoom|root-text): /,
-    namingUnder('#late-wide', ['reflow', 'zoom', 'root-text'], (page) => reflowFindings(page, '/')),
+    // And the root-text switch itself happens (push 3 r3, 3a): #root-wide, 40rem, fits 1024 only
+    // at 100% root text, so a root-text record must name it.
+    namingUnder(
+      '#root-wide',
+      ['root-text'],
+      namingUnder('#late-wide', ['reflow', 'zoom', 'root-text'], (page) =>
+        reflowFindings(page, '/'),
+      ),
+    ),
     { chunk: LATE_WIDE_CHUNK },
   ),
   // A page whose enhancements never settle is no skip (push 3 r2, F2 and F4): each reflow
