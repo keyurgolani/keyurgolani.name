@@ -136,10 +136,70 @@ export function arrivedAt(scope: Scope, index: number, ms = 5000): Promise<boole
 }
 
 /**
+ * Whether scene `index` (from 0) is held at the strip's end: its start can't reach the stage's start,
+ * since the strip's travel ends before it does. read() names the last scene on screen there, so
+ * expectAt can't see such a scene; expectHeldAtEnd checks its own contract instead.
+ */
+export function heldAtEnd(scope: Scope, index: number): Promise<boolean> {
+  return scope.evaluate((index) => {
+    const stage = document.querySelector<HTMLElement>('.hc-stage')!;
+    const scene = document.querySelectorAll<HTMLElement>('.hc-track .hc-scene')[index];
+    if (!scene || !['auto', 'scroll'].includes(getComputedStyle(stage).overflowX)) return false;
+    const rtl = getComputedStyle(stage).direction === 'rtl';
+    const box = stage.getBoundingClientRect();
+    const at = scene.getBoundingClientRect();
+    const inset = Number.parseFloat(getComputedStyle(stage).scrollPaddingInlineStart) || 0;
+    const offset =
+      (rtl ? box.right - at.right : at.left - box.left) - inset + Math.abs(stage.scrollLeft);
+    return offset > stage.scrollWidth - stage.clientWidth + 1;
+  }, index);
+}
+
+/**
+ * Waits for a scene held at the strip's end (heldAtEnd) to hold as the strip's end holds it: the
+ * strip at its end, the scene current, and focus on a link of its own that shows in the stage.
+ */
+export async function expectHeldAtEnd(scope: Scope, index: number): Promise<void> {
+  await expect
+    .poll(() =>
+      scope.evaluate((index) => {
+        const stage = document.querySelector<HTMLElement>('.hc-stage')!;
+        const box = stage.getBoundingClientRect();
+        const scene = document.querySelectorAll<HTMLElement>('.hc-track .hc-scene')[index];
+        const active = document.activeElement as HTMLElement | null;
+        const link = active?.matches('a[href]') && scene?.contains(active) ? active : null;
+        const at = link?.getBoundingClientRect();
+        const blocks = [...document.querySelectorAll('.hc-minimap__blocks i')];
+        return {
+          atEnd: Math.abs(stage.scrollLeft) >= stage.scrollWidth - stage.clientWidth - 1,
+          current: blocks.findIndex((block) => block.hasAttribute('data-now')),
+          focused: link !== null,
+          shown:
+            at !== undefined &&
+            at.width > 0 &&
+            at.left >= box.left - 0.5 &&
+            at.right <= box.right + 0.5 &&
+            at.top >= 0 &&
+            at.bottom <= window.innerHeight,
+        };
+      }, index),
+    )
+    .toEqual({ atEnd: true, current: index, focused: true, shown: true });
+}
+
+/** expectAt, or for a scene held at the strip's end, expectHeldAtEnd. */
+async function expectAtOrHeld(page: Page, index: number): Promise<void> {
+  if (await heldAtEnd(page, index)) await expectHeldAtEnd(page, index);
+  else await expectAt(page, index);
+}
+
+/**
  * From a scene's last link, mid-strip, Tab goes on into a later scene, as a keyboard walk does: a
  * foot's Next, or a chapter's own list. Read as the walk reads it, two frames and 50 ms on and then
  * frame by frame for 800 ms, the stop is shown in the stage, never moves more than a pixel, keeps
- * focus, and once the strip rests its scene is current and announced. Returns how many Tabs crossed.
+ * focus, and once the strip rests its scene is current and announced. A scene held at the strip's
+ * end, where none reaches the stage's start, holds as the end holds it (expectHeldAtEnd), on either
+ * side of the key. Returns how many Tabs crossed.
  * With `back`, the same from a scene's first link, Shift+Tab back into an earlier scene. `from`, the
  * scenes it sets out from, each holding a link: by default, four spread through the complete fixture.
  */
@@ -153,7 +213,7 @@ export async function tabIntoLaterScenes(
   for (const from of starts ?? (back ? [3, 6, 9, 12] : [2, 5, 8, 11])) {
     const links = page.locator(`#${scenes[from]} a[href]`);
     await (back ? links.first() : links.last()).focus();
-    await expectAt(page, from);
+    await expectAtOrHeld(page, from);
     await page.keyboard.press(back ? 'Shift+Tab' : 'Tab');
     const seen = await page.evaluate(async (ids) => {
       const frame = () => new Promise((done) => requestAnimationFrame(done));
@@ -190,7 +250,7 @@ export async function tabIntoLaterScenes(
       still: true,
       focused: true,
     });
-    await expectAt(page, seen.to);
+    await expectAtOrHeld(page, seen.to);
     await expectAnnounced(page, seen.to, total);
   }
   return crossed;
