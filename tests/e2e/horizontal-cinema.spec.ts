@@ -626,7 +626,9 @@ test(
 // fifth of the way at most, then reaches its scene in one frame (a probe at 1440 by 900, row 53 r2),
 // so a visitor's hand takes it over inside those first frames. What finishes the travel is the way
 // their own input went, never the page's place: the browser's own scroll can step back a little as
-// it takes a glide over, and an instant scroll by script is folded into the glide, not a stop.
+// it takes a glide over, and an instant scroll by script is folded into the glide, not a stop. A
+// wheel notch against the glide in those first frames is one Chromium doesn't apply: the page never
+// steps back, and the glide goes on to its scene (r2/probe-de, on base and on the rework alike).
 
 /** Waits until the snap has set out from `from` the way `way` goes, `by` px: inside its first frames. */
 async function glideSetOut(page: Page, from: number, way: 1 | -1, by = 8): Promise<void> {
@@ -678,13 +680,16 @@ test(
   },
 );
 
+// A guard, not a pin: the snap before the rework finishes there too, so it keeps the rework from
+// reading the unapplied notch as a turn. A notch back once the snap has arrived turns the strip back
+// (the slow wheel's last notch, and the notch that comes as the snap arrives back on a scene).
 test(
-  "the pin's snap, turned back by a wheel notch inside its glide, finishes on the scene it left",
+  "the pin's snap, a wheel notch against it during its eased frames, finishes on scene 1 and stays",
   { annotation, tag },
   async ({ page }) => {
     await snapFromStart(page);
     await page.mouse.wheel(0, -40);
-    await expectRestsOn(page, 0);
+    await expectRestsOn(page, 1);
   },
 );
 
