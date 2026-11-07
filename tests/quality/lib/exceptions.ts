@@ -186,7 +186,9 @@ export const EXCEPTION_GATES = {
     description:
       'Every authored field survives each condition, and no visible button outside a form without JavaScript (Slice 2).',
     scope: [...CELL, 'preferenceMode'],
-    rules: { content: 'A', 'button-without-form': 'A' },
+    // script-only-text: words the mark lets go that the server sent are the page's own content,
+    // so no exception waives them (the coordinator, 7 Nov 2026).
+    rules: { content: 'A', 'button-without-form': 'A', 'script-only-text': 'A' },
   },
   hover: {
     description:
