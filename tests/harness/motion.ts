@@ -5,6 +5,7 @@
 // callbacks asking for the next frame, which watchFrames() counts. A canvas
 // drawn without requestAnimationFrame doesn't show here.
 import { expect, test, type Page } from '@playwright/test';
+import { MOTION_STALL_RERUN } from './stall-reruns.mjs';
 
 export interface RunningAnimation {
   /** `css <name>`, `transition <property>`, or `script <properties>`. */
@@ -135,9 +136,11 @@ export const MOTION_PROBE_MS = 2_000;
 /**
  * The annotation a test carries for the one rerun a stall took: its type, and
  * its description's fixed shape, `kind=<kind> scroller=<n> step=<k> call=<call>`,
- * which later runs are counted by (row 60's only data, RC2's flake list).
+ * which later runs are counted by (row 60's only data, RC2's flake list):
+ * failure-reporter.ts gives each a workflow warning and the job summary a
+ * count (stall-reruns.mjs, which holds the type).
  */
-export const MOTION_STALL_RERUN = 'motion-stall-rerun';
+export { MOTION_STALL_RERUN };
 
 /** The page call in scrollThrough() that hung, by its name in the annotation. */
 export type MotionCall = 'mark-scrollers' | 'scroll' | 'next-frames' | 'running-animations';
