@@ -349,6 +349,8 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     // 1 Nov 2026): a pale plain link a late chunk hides passes, a pale live button it shows fails.
     // Each reflow condition reads the page once its enhancements have settled (push 3, row 50).
     'reflow/late-overflow',
+    // So does the landscape occlusion pass (push 3, run-cell.ts:293).
+    'occlusion/late-occluder',
     'contrast/pre-live-node',
     'axe/low-after-live',
   ]) {
