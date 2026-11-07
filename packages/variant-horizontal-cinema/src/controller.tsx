@@ -1190,21 +1190,52 @@ function LiveStage(props: StageProps) {
 
     let refitTimer: ReturnType<typeof setTimeout> | undefined;
     /** The strip laid out again for the viewport and the text size now in force: the fit check, room, and pin. */
+    /**
+     * The scene the reader is on, as the layout is about to change under them: whether they're
+     * reading one at all (inside the pin, or one across the reading line top to bottom, or focus in
+     * one), and which: the one holding focus, else the current one. Read before anything moves.
+     */
+    const reading = (): { inside: boolean; held: number } => {
+      const active = doc.activeElement;
+      const holding = active
+        ? elements.findIndex((element) => element !== null && element.contains(active))
+        : -1;
+      return { inside: holding >= 0 || readsScene(), held: holding >= 0 ? holding : position };
+    };
+    /**
+     * That scene brought back on the layout now in force: pinned, the page at its share of the
+     * strip; top to bottom, at the top. What has focus comes with it: focus left on the bar, which
+     * top to bottom isn't shown, goes to the scene, and focus in a scene is brought into view.
+     */
+    const hold = ({ inside, held }: { inside: boolean; held: number }) => {
+      if (!inside) return;
+      if (pinned) window.scrollTo({ top: pinStart() + offsetOf(held), behavior: 'instant' });
+      else if (!strip()) {
+        elements[held]?.scrollIntoView({ block: 'start', behavior: 'instant' });
+        land(held);
+      }
+      const active = doc.activeElement;
+      if (!(active instanceof HTMLElement)) return;
+      const bar = active.closest<HTMLElement>('.hc-scrub');
+      if (bar && bar.offsetParent === null) elements[held]?.focus({ preventScroll: true });
+      else if (!strip() && elements[held]?.contains(active))
+        active.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+    };
     const refitNow = (landing = false) => {
       if (disposed) return;
+      // Where the reader is, before the pin's length or the layout changes under them.
+      const at = reading();
       delete rootElement.dataset.fit;
       unroom();
       invalidate();
-      // Where the page was in the pin, as a scene, before the pin's length changes under it.
-      const inside =
-        pinned && window.scrollY >= pinStart() && window.scrollY <= pinStart() + travel();
-      const held = position;
       fitName();
       fit(landing);
       pin();
-      // A reader inside the strip keeps their scene; one above or below it stays where they are.
-      if (inside && pinned)
-        window.scrollTo({ top: pinStart() + offsetOf(held), behavior: 'instant' });
+      // A reader in the strip keeps their scene and focus; one above or below it stays where they
+      // are. As the page loads, the scene the URL names is landed by the fit itself.
+      if (!landing) hold(at);
+      else if (at.inside && pinned)
+        window.scrollTo({ top: pinStart() + offsetOf(at.held), behavior: 'instant' });
       paint();
     };
     refit.current = refitNow;
@@ -1279,10 +1310,15 @@ function LiveStage(props: StageProps) {
     fit();
     pin();
     const relayout = () => {
+      // The faces or a late picture can stack the strip or unstack it too: the reader keeps their
+      // scene then. Short of that, the page stays where the reader has it.
+      const at = reading();
+      const was = pinned;
       invalidate();
       fitName();
       fit();
       pin();
+      if (pinned !== was) hold(at);
       // The faces or a late picture moved the scenes with no scroll: read where the page is again.
       if (frame === undefined) frame = requestAnimationFrame(paint);
     };
