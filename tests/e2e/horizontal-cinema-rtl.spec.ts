@@ -3,7 +3,15 @@ import path from 'node:path';
 import { fixtureSiteSelecting } from '../../packages/variant-contract/src/contract-fixtures';
 import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
 import { expect, test } from '../harness/fixtures';
-import { crowdRail, load, railClashes, read, widenRailYears } from './horizontal-cinema-model';
+import type { Page } from '@playwright/test';
+import {
+  crowdRail,
+  load,
+  railClashes,
+  read,
+  tabIntoLaterScenes,
+  widenRailYears,
+} from './horizontal-cinema-model';
 
 // Horizontal Cinema right to left: the rtl contract fixture (Hebrew, dir=rtl). The fit check measures
 // the rail under the stage in the bar's own inline direction, so a right-to-left rail that holds its
@@ -13,6 +21,7 @@ const FIXTURE = contractFixture('rtl');
 const DIR = path.dirname(FIXTURE.files.portfolio);
 const READ_ONLY = { type: 'profile', description: 'read-only' };
 const annotation = [{ type: 'route', description: '/' }, READ_ONLY];
+const tag = '@interaction';
 
 test.use({
   appOptions: {
@@ -105,5 +114,40 @@ test(
       })
       .toEqual({ layout: 'horizontal', pinned: true, fit: null, rail: 'short' });
     expect(await railClashes(page)).toEqual([]);
+  },
+);
+
+/** Every scene a Tab can set out from, holding a link, with a scene to go on (or back) into. */
+const linkedScenes = async (page: Page, back: boolean): Promise<number[]> => {
+  const { scenes } = await read(page);
+  return page.evaluate(
+    ([ids, back]) =>
+      ids.flatMap((id, index) =>
+        (back ? index > 0 : index < ids.length - 1) &&
+        document.getElementById(id)?.querySelector('a[href]')
+          ? [index]
+          : [],
+      ),
+    [scenes, back] as const,
+  );
+};
+
+test(
+  'right to left, a Tab into a later scene steps the strip there at once: what it reached holds still in view, and the status names its scene once the strip rests',
+  { annotation, tag },
+  async ({ page }) => {
+    await load(page);
+    const from = await linkedScenes(page, false);
+    expect(await tabIntoLaterScenes(page, { from })).toBeGreaterThanOrEqual(2);
+  },
+);
+
+test(
+  'right to left, a Shift+Tab back into an earlier scene steps the strip there at once too: what it reached holds still in view, and the status names its scene once the strip rests',
+  { annotation, tag },
+  async ({ page }) => {
+    await load(page);
+    const from = await linkedScenes(page, true);
+    expect(await tabIntoLaterScenes(page, { back: true, from })).toBeGreaterThanOrEqual(2);
   },
 );
