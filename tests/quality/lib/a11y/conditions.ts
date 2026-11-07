@@ -577,7 +577,7 @@ export async function inventoryFindings(
           ),
         );
         if (condition.id === 'no-javascript')
-          findings.push(...(await scriptOnlyTextFindings(page)));
+          findings.push(...(await scriptOnlyTextFindings(page, baseline)));
       } finally {
         await condition.teardown(page, cdp);
       }
@@ -591,21 +591,49 @@ export async function inventoryFindings(
 }
 
 /**
- * Words in a live status marked data-script-only, read without JavaScript:
- * the mark lets go words only live script sets, so the server renders such a
- * status empty, and words it rendered there are the page's own content,
- * which the mark may not excuse. One finding each, by path. A mark on any
- * other element is ignored, so its words are the inventory's own fields.
+ * Script-only words the page shows without JavaScript: the mark lets go words only live script
+ * sets, so neither may the server render them. Read on the page as it stands without
+ * JavaScript, two things are each a finding, one per element, by path:
+ * - a live status marked data-script-only that holds words, the server's own;
+ * - any field the inventory shows, of any kind, whose words are a `script-only:` field of
+ *   `baseline`, the page with its script. The mark and the liveness are read on the live page
+ *   there, so this holds words a script makes live, marks, or moves into a marked status to
+ *   what the server sent.
+ * A mark on any other element is ignored, so its words are the inventory's own fields.
  */
-export async function scriptOnlyTextFindings(page: Page): Promise<Finding[]> {
-  const marked = await inPage<{ path: string; text: string }[]>(page, { kind: 'script-only-text' });
-  return marked.slice(0, 10).map(({ path, text }) => ({
+export async function scriptOnlyTextFindings(
+  page: Page,
+  baseline: readonly string[],
+): Promise<Finding[]> {
+  const SCRIPT_ONLY = 'script-only: ';
+  const words = new Set(
+    baseline
+      .filter((item) => item.startsWith(SCRIPT_ONLY))
+      .map((item) => item.slice(SCRIPT_ONLY.length)),
+  );
+  const shown = new Map<string, string>();
+  for (const { path, text } of await inPage<{ path: string; text: string }[]>(page, {
+    kind: 'script-only-text',
+  })) {
+    if (!shown.has(path)) shown.set(path, text);
+  }
+  if (words.size > 0) {
+    for (const { item, path } of await inPage<{ item: string; path: string }[]>(page, {
+      kind: 'inventory',
+      paths: true,
+    })) {
+      const value = item.slice(item.indexOf(': ') + 2);
+      if (words.has(value) && !shown.has(path)) shown.set(path, value);
+    }
+  }
+  const hits = [...shown];
+  return hits.slice(0, 10).map(([path, text]) => ({
     gate: 'inventory',
     rule: 'script-only-text',
     path,
     expected:
-      'a live status marked data-script-only is empty without JavaScript: only live script sets its words',
-    actual: `${marked.length} marked status(es) with words without JavaScript, here "${text.slice(0, 80)}"`,
+      'words only live script sets are not on the page without JavaScript: a live status marked data-script-only is empty, and no field shows its words',
+    actual: `${hits.length} element(s) with script-only words without JavaScript, here "${text.slice(0, 80)}"`,
   }));
 }
 

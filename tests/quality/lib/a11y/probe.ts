@@ -105,7 +105,7 @@ export type ProbeRequest =
   | { readonly kind: 'shown' }
   | { readonly kind: 'hover-targets'; readonly limit: number }
   | { readonly kind: 'title-only' }
-  | { readonly kind: 'inventory' }
+  | { readonly kind: 'inventory'; readonly paths?: boolean }
   | { readonly kind: 'script-only-text' }
   | { readonly kind: 'structure' }
   | { readonly kind: 'reflow' }
@@ -535,8 +535,12 @@ function probe(request: ProbeRequest): unknown {
         .map((el) => ({ path: cssPath(el), title: el.getAttribute('title')! }));
     case 'inventory': {
       // Every authored field, as a visitor gets it: headings, text blocks,
-      // links with their targets, images by alt, and controls by name.
-      const items = new Set<string>();
+      // links with their targets, images by alt, and controls by name. With `paths`, each field
+      // with the path of the first element that gives it.
+      const items = new Map<string, Element>();
+      const add = (el: Element, item: string) => {
+        if (!items.has(item)) items.set(item, el);
+      };
       // A same-document skip link: one to #main or #top, or to the page's own main or top
       // (its <main>'s id, or <html>'s or <body>'s). It moves the reader within the page and
       // carries nothing of the page's content, so it's a control, not a link: Swiss's "Back to
@@ -568,7 +572,7 @@ function probe(request: ProbeRequest): unknown {
       const inertButton = (el: Element | null): boolean =>
         el?.localName === 'button' && /^(?:button|reset)$/.test((el as HTMLButtonElement).type);
       for (const el of doc.body.querySelectorAll('h1, h2, h3, h4, h5, h6')) {
-        if (present(el)) items.add(`heading: ${text(el)}`);
+        if (present(el)) add(el, `heading: ${text(el)}`);
       }
       for (const el of doc.body.querySelectorAll(
         'p, li, dd, dt, td, th, figcaption, blockquote, time, pre',
@@ -603,19 +607,20 @@ function probe(request: ProbeRequest): unknown {
               : buttons + skips > 0 && own.length <= 3
                 ? 'control label'
                 : 'text';
-          items.add(`${scriptOnly(el) ? 'script-only' : kind}: ${value}`);
+          add(el, `${scriptOnly(el) ? 'script-only' : kind}: ${value}`);
         }
       }
       for (const el of doc.body.querySelectorAll<HTMLAnchorElement>('a[href]')) {
         if (present(el)) {
-          items.add(
+          add(
+            el,
             `${skipLink(el) ? 'control: skip-link' : 'link:'} ${el.getAttribute('href')} ${nameOf(el)}`,
           );
         }
       }
       for (const el of doc.body.querySelectorAll('img[alt]')) {
         if (el.getAttribute('alt')!.trim() && present(el))
-          items.add(`image: ${el.getAttribute('alt')!.trim()}`);
+          add(el, `image: ${el.getAttribute('alt')!.trim()}`);
       }
       for (const el of doc.body.querySelectorAll(
         'button, input:not([type=hidden]), select, textarea',
@@ -624,9 +629,11 @@ function probe(request: ProbeRequest): unknown {
         // JavaScript; one that doesn't is an enhancement.
         const kind =
           el.localName === 'button' ? `button:${(el as HTMLButtonElement).type}` : el.localName;
-        if (present(el)) items.add(`control: ${kind} ${nameOf(el)}`);
+        if (present(el)) add(el, `control: ${kind} ${nameOf(el)}`);
       }
-      return [...items];
+      return request.paths
+        ? [...items].map(([item, el]) => ({ item, path: cssPath(el) }))
+        : [...items.keys()];
     }
     case 'script-only-text':
       // Each live status marked data-script-only that holds words as the page stands: read without
