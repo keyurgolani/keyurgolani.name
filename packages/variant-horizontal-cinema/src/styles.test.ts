@@ -56,9 +56,11 @@ test('on a laptop’s short window the strip steps its spacing down and widens t
   );
   assert.equal(short.length, 1);
   const block = short[0]!;
-  // Only where the strip shows, below the 900 px window the strip was laid out for.
+  // Only where the strip shows, below the 900 px window the strip was laid out for: a shell that
+  // falls back top to bottom keeps the full top line and bars, so their controls' rings aren't cut.
+  assert.equal(declared(at(".hc[data-view='strip']"), block), '');
   assert.match(
-    declared(at(".hc[data-view='strip']"), block),
+    declared(at(".hc[data-view='strip']:not(:has(.hc-shell[data-fit='over']))"), block),
     /--layout-pad-block: var\(--space-2xs\);/,
   );
   assert.match(block, /\[data-w='8'\]:has\(\.hc-section \+ \.hc-section\) \{\s*--layout-cols: 10;/);
