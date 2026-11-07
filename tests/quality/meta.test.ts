@@ -345,10 +345,10 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'inventory/script-only-moved',
     // And on a surface that needs its script (F6).
     'inventory/script-only-requires-script',
-    // A row's main pass audits the page once its enhancements have mounted or failed (lead,
-    // 1 Nov 2026): a pale plain link a late chunk hides passes, a pale live button it shows fails.
-    // Each reflow condition reads the page once its enhancements have settled (push 3, row 50).
+    // Each reflow condition reads the page once its enhancements have settled, before its root
+    // text (push 3, row 50), and so does the landscape occlusion pass (push 3, run-cell.ts:293).
     'reflow/late-overflow',
+    'occlusion/late-occluder',
     // And waits out React's Suspense retry when the page changed during the wait (push 3 r2, F1).
     'reflow/suspense-retry',
     // A page that never settles is no skip: STILL_ENHANCING under each reflow condition and in the
@@ -356,8 +356,8 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'reflow/never-enhanced',
     'occlusion/landscape-never-enhanced',
     'occlusion/landscape-still-busy',
-    // So does the landscape occlusion pass (push 3, run-cell.ts:293).
-    'occlusion/late-occluder',
+    // A row's main pass audits the page once its enhancements have mounted or failed (lead,
+    // 1 Nov 2026): a pale plain link a late chunk hides passes, a pale live button it shows fails.
     'contrast/pre-live-node',
     'axe/low-after-live',
   ]) {
