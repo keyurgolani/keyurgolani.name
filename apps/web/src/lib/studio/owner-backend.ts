@@ -17,6 +17,7 @@ import type {
   SourceDocuments,
   StudioDraft,
 } from './documents';
+import { signOutWith } from './sign-out';
 
 // The owner adapter of the Studio shell's backend (#8, Slice 1): #3's store,
 // through #1's registry entries at /api/studio/<name> and #2's guard. Every
@@ -24,7 +25,8 @@ import type {
 // page's CSRF token on the app's own origin, keeps nothing in the HTTP
 // cache, and on a 401 tells the other tabs and the shell. Draft text goes
 // only in a command's JSON body, never in a URL. The shell imports this
-// module only when its policy says the profile is owner.
+// module only when its policy says the profile is owner. Sign-out is
+// sign-out.ts's, which the shell also calls itself, without this module.
 
 type Fetch = (name: string, options?: StudioFetchOptions) => Promise<Response>;
 
@@ -243,9 +245,6 @@ export function ownerBackend(studioFetch: Fetch, csrfToken: string): OwnerBacken
       move('publish', { draftId, draftVersion, expectedLiveRevisionId, idempotencyKey }),
     rollback: ({ targetRevisionId, expectedLiveRevisionId, idempotencyKey }) =>
       move('rollback', { targetRevisionId, expectedLiveRevisionId, idempotencyKey }),
-    async signOut(choice) {
-      const sent = await send('auth.logout', { body: {}, csrfToken, signOut: choice });
-      return !('kind' in sent) && sent.response.ok;
-    },
+    signOut: (choice) => signOutWith(studioFetch, csrfToken, choice),
   };
 }

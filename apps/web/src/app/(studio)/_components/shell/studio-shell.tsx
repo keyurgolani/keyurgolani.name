@@ -54,12 +54,13 @@ import {
   type TaskId,
 } from '~/lib/studio/tasks';
 import { AUTH_REQUIRED, onSignedOut, SIGNED_OUT_LOCATION, studioFetch } from '~/lib/studio-fetch';
+import { signOutWith } from '~/lib/studio/sign-out';
 import { ContentEditor } from '../fields/content-editor';
 import type { FindingsLineHandle } from '../fields/findings-line';
 import { FindingsSummary } from '../fields/findings-summary';
 import { PublishDialog } from './publish-dialog';
 import { ConflictPanel, OrphanPanel } from './conflict-panel';
-import { SignOut } from './sign-out';
+import { SIGN_OUT_IDLE, SignOut, type SignOutState } from './sign-out';
 import { StudioFrame, TaskNav } from './studio-frame';
 import { StudioMark } from '../split/studio-split';
 import { AppearanceWorkspace, type PreviewSetup } from './appearance-workspace';
@@ -82,7 +83,10 @@ import { foldAppearance } from '~/lib/studio/fold-appearance';
 // path. It renders only inside /studio's page, after requireOwnerPage let
 // it, so nothing here, the journal included, renders before
 // authentication. It reaches storage only through the StudioBackend its
-// policy picks: the owner adapter, loaded only under owner.
+// policy picks: the owner adapter, loaded only under owner. Signing out is
+// the one exception (row 88): it sends auth.logout itself through
+// lib/studio/sign-out.ts, which the adapter uses too, so Sign out works from
+// the moment the shell hydrates, whether or not the adapter's chunk comes.
 
 /**
  * How long the owner adapter's chunk may take before Studio says it couldn't
@@ -174,6 +178,20 @@ export function StudioShell({
   const [notice, setNotice] = useState('');
   // Set once this tab's own sign-out succeeds, so a late 401 doesn't send it to "session ended".
   const signingOut = useRef(false);
+  // From the moment a sign-out starts until it fails: no first load starts, and a load's late
+  // answer is dropped before it shows anything (row 88). One dropped runs again if it fails.
+  const leaving = useRef(false);
+  const dropped = useRef(false);
+  // What Sign out shows, held here so the header's and the workspace's are one control (row 88).
+  const [signOutState, setSignOutState] = useState<SignOutState>(SIGN_OUT_IDLE);
+  const signOutBusy = useRef(false);
+  // Sign out takes a click once the shell has hydrated, and never waits on anything else: not
+  // the adapter, the draft, or `ready` (row 88). False in the server's markup.
+  const canSignOut = useSyncExternalStore(
+    noChange,
+    () => true,
+    () => false,
+  );
   // Whether the workspace's publish confirmation is open (P1-9).
   const [publishing, setPublishing] = useState(false);
   // The site Studio edits, as the workspace's top bar tags its name: empty on the server.
@@ -183,6 +201,8 @@ export function StudioShell({
     () => '',
   );
   const latest = useRef<DraftSession>(session);
+  // The backend this render has, for a sign-out that fails after a load it dropped.
+  const latestBackend = useRef<StudioBackend | null>(null);
   // This tab's id in the journal, and when the editor's text last changed.
   const tab = useRef<string | null>(null);
   // Settles once this tab holds its id's lock, which a load waits for.
@@ -195,6 +215,7 @@ export function StudioShell({
   // Before any other effect reads it: the session this render shows.
   useLayoutEffect(() => {
     latest.current = session;
+    latestBackend.current = backend;
   });
   // Before the shell loads anything: what may not stay in the journal goes.
   useLayoutEffect(() => {
@@ -300,7 +321,15 @@ export function StudioShell({
   );
 
   const load = useCallback(async (from: StudioBackend) => {
+    // A page signing out reads nothing more of the session, and shows nothing it reads late.
+    const leavingNow = () => {
+      if (leaving.current) dropped.current = true;
+      return leaving.current;
+    };
+    if (leavingNow()) return;
+    dropped.current = false;
     const [draft, live] = await Promise.all([from.workingDraft(), from.live(), claimed.current]);
+    if (leavingNow()) return;
     if (draft.kind === 'signed-out' || live.kind === 'signed-out') return;
     if (draft.kind === 'failed') {
       dispatch({ type: 'failed', error: draft.message });
@@ -310,6 +339,7 @@ export function StudioShell({
     const own = tab.current ?? '';
     // Another tab's entry only once that tab is gone: an open one still holds its text.
     const open = await openTabs();
+    if (leavingNow()) return;
     const now = Date.now();
     const restorable = store
       ? readJournal(store, now).filter((entry) => mayRestore(entry.tabId, own, open))
@@ -372,7 +402,12 @@ export function StudioShell({
         return () => window.clearTimeout(timer);
       },
     });
-    const unsubscribe = onSignedOut(signedOut.heard);
+    // A tab whose own sign-out is on its way hears a discard alone: a plain or keep message would
+    // only send it to sign-in again, with returnTo (row 88, F4). A discard still drops its text.
+    const unsubscribe = onSignedOut((choice) => {
+      if (signingOut.current && choice !== 'discard') return;
+      signedOut.heard(choice);
+    });
     // Into the back-forward cache, the page hides before it's frozen, and a
     // restore shows nothing until the session checks out.
     const { pagehide, pageshow } = pageCacheHandlers({
@@ -383,8 +418,12 @@ export function StudioShell({
       },
       hide: () => flushSync(() => setVerified(false)),
       recheck: () => {
-        // A page back from the cache is no longer leaving: a 401 there means what it says.
+        // A page back from the cache is no longer leaving: a 401 there means what it says, it
+        // loads again, and Sign out starts over.
         signingOut.current = false;
+        leaving.current = false;
+        signOutBusy.current = false;
+        setSignOutState(SIGN_OUT_IDLE);
         if (!backend) return;
         void backend.session().then((ok) => {
           if (ok) {
@@ -657,13 +696,19 @@ export function StudioShell({
 
   async function signOut(keep: boolean): Promise<boolean> {
     const store = storage();
+    // Before the request: a discard leaves no tab's text behind, whatever the server answers.
     if (store) {
       if (keep) flush();
       else clearJournal(store);
     }
-    if (!backend) return false;
-    // The other tabs hear the choice: on discard, none writes its text back.
-    if (!(await backend.signOut(keep ? 'keep' : 'discard'))) return false;
+    leaving.current = true;
+    // Without the adapter (row 88). The other tabs hear the choice: on discard, none writes its text back.
+    if (!(await signOutWith(studioFetch, csrfToken, keep ? 'keep' : 'discard'))) {
+      leaving.current = false;
+      const from = latestBackend.current;
+      if (dropped.current && from) void load(from);
+      return false;
+    }
     signingOut.current = true;
     // Nothing of the session stays on the page as it goes.
     if (keep) dispatch({ type: 'expired' });
@@ -717,7 +762,33 @@ export function StudioShell({
       ))}
     </dl>
   );
-  const signOutControl = <SignOut shouldAsk={journalHolds} onSignOut={signOut} />;
+  /** Signs out, keeping or discarding the journal; a refusal shows until the next try. */
+  async function go(keep: boolean) {
+    if (signOutBusy.current) return;
+    signOutBusy.current = true;
+    setSignOutState((now) => ({ ...now, busy: true, failed: false }));
+    let ok = false;
+    try {
+      ok = await signOut(keep);
+    } catch {
+      ok = false;
+    }
+    if (!ok) {
+      signOutBusy.current = false;
+      setSignOutState({ busy: false, failed: true, asking: false });
+    }
+  }
+  const signOutControl = (
+    <SignOut
+      canSignOut={canSignOut}
+      state={signOutState}
+      onSignOut={() =>
+        journalHolds() ? setSignOutState((now) => ({ ...now, asking: true })) : void go(false)
+      }
+      onChoose={(keep) => void go(keep)}
+      onCancel={() => setSignOutState((now) => (now.asking ? { ...now, asking: false } : now))}
+    />
+  );
 
   return (
     <StudioFrame
