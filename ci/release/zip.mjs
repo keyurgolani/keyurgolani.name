@@ -63,8 +63,8 @@ export function zipEntry(zip, name, { maxBytes = 64 * 1024 * 1024 } = {}) {
   if (eocd >= 20 && u32(eocd - 20) === ZIP64_LOCATOR) fail('a ZIP64 archive, by its locator');
   if (start + size > eocd) fail('the central directory runs past its end record');
   // The whole directory first: every entry's name, once, and nothing past the count. A name twice
-  // byte for byte is refused, and so are the names extractors map onto another path (a NUL, a
-  // backslash, a path that isn't plain and relative) and a directory with more in it than its
+  // byte for byte is refused, and so are names an extractor maps onto another path by a NUL, a
+  // backslash, or a form that isn't plain and relative, and a directory with more in it than its
   // count says.
   let at = start;
   let found = null;
@@ -89,8 +89,8 @@ export function zipEntry(zip, name, { maxBytes = 64 * 1024 * 1024 } = {}) {
     // A name another reader cuts at a NUL or reads as a path by its backslash names another file.
     if (/[\u0000\\]/.test(entryName))
       fail(`central entry ${entry + 1}'s name holds a NUL or a backslash`);
-    // A path an extractor writes elsewhere than it reads: absolute, or with an empty, `.` or `..`
-    // segment. A directory's own trailing `/` is plain.
+    // A path an extractor writes elsewhere than it reads: absolute by a leading /, or with an
+    // empty, `.` or `..` segment. A directory's own trailing `/` is plain.
     const plain = `central entry ${entry + 1}'s name isn't a plain relative path`;
     if (entryName.startsWith('/')) fail(plain);
     if (entryName.includes('//')) fail(plain);

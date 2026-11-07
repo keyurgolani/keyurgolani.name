@@ -1461,9 +1461,12 @@ test("the artifact's summary is read out of its zip, and a malformed, oversized,
       /central entry 2 carries a Unicode Path field/,
     ],
     [
-      'a Unicode Path field second, after a timestamp',
+      // Info-ZIP's UID/GID field first (15 bytes), so the extra is 44 bytes, a multiple of 4, and no
+      // 0x7075 sits on a 4-byte boundary: a walk that steps by 4 reads past the Unicode Path field
+      // to the end, and returns the decoy, so the row pins the step by acceptance.
+      'a Unicode Path field second, after a UID/GID field',
       withCentralExtra(zipOf({ [QPR_SUMMARY]: summary, 'decoy.json': summary }), 1, [
-        extraField(0x5455, Buffer.from([1, 0, 0, 0, 0])),
+        extraField(0x7875, Buffer.from([1, 4, 0xe8, 3, 0, 0, 4, 0xe8, 3, 0, 0])),
         unicodePath('decoy.json', QPR_SUMMARY),
       ]),
       /central entry 2 carries a Unicode Path field/,
