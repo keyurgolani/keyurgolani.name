@@ -54,7 +54,7 @@ import {
   type TaskId,
 } from '~/lib/studio/tasks';
 import { AUTH_REQUIRED, onSignedOut, SIGNED_OUT_LOCATION, studioFetch } from '~/lib/studio-fetch';
-import { signOutWith } from '~/lib/studio/sign-out';
+import { signedOutLocation, signOutWith } from '~/lib/studio/sign-out';
 import { ContentEditor } from '../fields/content-editor';
 import type { FindingsLineHandle } from '../fields/findings-line';
 import { FindingsSummary } from '../fields/findings-summary';
@@ -718,7 +718,7 @@ export function StudioShell({
     if (keep) dispatch({ type: 'expired' });
     else discard();
     document.title = NEUTRAL_TITLE;
-    window.location.assign(SIGNED_OUT_LOCATION);
+    window.location.assign(signedOutLocation('ended'));
     return true;
   }
 
