@@ -582,7 +582,9 @@ function LiveStage(props: StageProps) {
     // What the controller last wrote, so the scroll it causes isn't read as the visitor's.
     let wrote: { along?: number; top?: number } = {};
 
-    const pin = () => {
+    // `andFollow` false leaves the strip where it is: a refit brings it into step itself, once the
+    // page is back where the reader was (refitNow).
+    const pin = (andFollow = true) => {
       invalidate();
       const want = strip() && rootElement.dataset.fit !== 'over';
       if (!want) {
@@ -601,7 +603,7 @@ function LiveStage(props: StageProps) {
       );
       // The pin's own length moves nothing above it, but read the geometry fresh with it on.
       invalidate();
-      follow();
+      if (andFollow) follow();
     };
 
     /** The strip, from the page: travelled in step with it, or cut to the scene it has reached. */
@@ -1308,12 +1310,17 @@ function LiveStage(props: StageProps) {
       invalidate();
       fitName();
       fit(landing);
-      pin();
+      // The strip follows the page only once the page is back where the reader was. Pinned again
+      // from top to bottom, the browser can carry the page to its foot as the pin's length comes
+      // back: read from there, the strip would show its last scene until the hold brought the page
+      // back and its scroll brought the strip with it (#201's :96, current 20 on CI).
+      pin(false);
       // A reader in the strip keeps their scene and focus; one above or below it stays where they
       // are. As the page loads, the scene the URL names is landed by the fit itself.
       if (!landing) hold(at);
       else if (at.inside && pinned)
         window.scrollTo({ top: pinStart() + offsetOf(at.held), behavior: 'instant' });
+      follow();
       paint();
     };
     refit.current = refitNow;
