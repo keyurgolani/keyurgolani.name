@@ -562,7 +562,8 @@ const PENDING = readPendingList() as PendingList;
  * That the page's enhancements have mounted or failed, by the quality
  * cells' own rule (watchEnhancements(), imported so the two can't drift): no
  * script chunk in flight or started and no island changing across an idle
- * period and two frames, within its BUSY_LIMIT_MS. A variant's lazy
+ * period and two frames, and then 500 ms past the last chunk or island change
+ * (React's retry delay and a margin), within its BUSY_LIMIT_MS. A variant's lazy
  * <Enhancement> loads its chunk after hydration, and a shot taken before it
  * runs captures the page as it is without script (the capture race,
  * 2026-11-03). `watch` started before the page loaded, so it saw the chunk

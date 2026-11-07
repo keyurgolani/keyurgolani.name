@@ -265,7 +265,8 @@ interface SuiteRun {
  * The landscape occlusion pass at the phone's viewport turned: `at` loaded there, read once its
  * enhancements have mounted or failed, as each reflow condition reads (push 3): an occluder a lazy
  * enhancement mounts late, a fixed bar over a focus stop, would otherwise mount after the read. One
- * that never settles is STILL_ENHANCING, read as it stands. Then the viewport goes back and `at`
+ * that never settles is STILL_BUSY, one whose enhancements never do is STILL_ENHANCING, each at the
+ * turned viewport, and it's read as it stands. Then the viewport goes back and `at`
  * loads again, a restore only: no check reads that page, and the next read loads its own.
  */
 export async function landscapeOcclusionFindings(
