@@ -713,6 +713,25 @@ test(
 );
 
 test(
+  'a 3 px wheel nudge from rest on a scene returns to that scene, never on to the next',
+  { annotation, tag },
+  async ({ page }) => {
+    await load(page);
+    await page.locator('.hc-stage').focus();
+    for (const at of [1, 2]) {
+      await page.keyboard.press('ArrowRight');
+      await expectAt(page, at);
+    }
+    await page.waitForTimeout(400);
+    const two = (await read(page)).scrollY;
+    await page.mouse.move(720, 450);
+    await page.mouse.wheel(0, 3);
+    await expectRestsOn(page, 2);
+    expect(Math.abs((await read(page)).scrollY - two)).toBeLessThanOrEqual(1);
+  },
+);
+
+test(
   "coming back up from the credits, a stop just inside the strip's end keeps the end in view",
   { annotation, tag },
   async ({ page }) => {
