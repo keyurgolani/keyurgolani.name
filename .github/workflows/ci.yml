@@ -54,8 +54,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      jobs: ${{ steps.select.outputs.jobs }}
-      complete: ${{ steps.select.outputs.complete }}
+      # Row 24's evidence branch, never merged: no check job runs, so a
+      # ci.yml change doesn't start the complete product and quality-pr's
+      # matrix. row24-evidence runs alone. The selection still runs below, and
+      # its summary shows what it would have picked.
+      jobs: '[]'
+      complete: 'false'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -795,6 +799,214 @@ jobs:
           name: reports-quality-pr-shard-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # Row 24's proof of record, on an evidence branch that never merges: the 18
+  # schematic complete print cells in full mode under the release scope, as
+  # release.yml's rc-quality and rc-preflight run them (pnpm ci:quality-full,
+  # so with the reference variant), in quality-pr's pinned image, user and
+  # options. That's the default tuple (platform-neutral, warm-parchment,
+  # humanist-ui) in system, dark and high-contrast, home and
+  # /work/project-name, at 1440x900, 1024x768 and 390x844. Two runs, each
+  # with its own listing (exactly 18), exit, reports directory, canary, scrub,
+  # records read-back and artifact, so a red in one never hides the other:
+  # - base: origin/main 6c246c594, checked out in base/ and installed there
+  #   from the same store (the same lockfile). Expected: 12 elementless
+  #   inventory records, the phone bar's and the running markers' Index links
+  #   that print hides.
+  # - head: this branch's tree, 37767046a (the fix) and this ci.yml.
+  #   Expected: 0 records.
+  # Each run's verdict fails by design, since the plan's other tests have no
+  # result; the cells' own outcomes are in their records.
+  # Playwright greps the title path joined by spaces (no "›"), with tags after
+  # each level, so the grep names each level and ends at a space or the end.
+  row24-evidence:
+    name: row24-evidence (schematic print, 18 cells, full mode; base 6c246c594 and head)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      # The image this job runs in, so the visual cells know they're in it.
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      QUALITY_RELEASE_SCOPE: quality/release/scope.json
+      ROW24_GREP: 'cells\.spec\.ts composition:schematic complete (/|/work/project-name) schematic/platform-neutral/warm-parchment/humanist-ui/(system|dark|high-contrast)( @[^ ]+)* (1440x900|1024x768|390x844) print( @[^ ]+)* schematic complete (/|/work/project-name) at (1440x900|1024x768|390x844), print( |$)'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      # The base: current origin/main, where the 12 records stand (row 24 changes
+      # no file that 62af1e18b..6c246c594 changed).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: 6c246c5948585398fca846dca26fcbcceb305c80
+          path: base
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      # The same lockfile as the head (row 24 changes none), so the store the
+      # install restored serves it.
+      - name: Install the base
+        working-directory: base
+        run: pnpm install --frozen-lockfile
+      # The base's listing. Its own verdict fails (no test ran), hence || true;
+      # the count decides.
+      - name: Base, list the 18 cells, and require exactly 18
+        id: listbase
+        working-directory: base
+        shell: bash
+        env:
+          CI_REPORTS_DIR: reports/row24-base-18
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary-base
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets-base
+          LIST_FILE: ${{ runner.temp }}/row24-base-list.txt
+        run: |
+          pnpm ci:quality-full "--grep=$ROW24_GREP" --retries=0 --list > "$LIST_FILE" 2>&1 || true
+          cat "$LIST_FILE"
+          total=$(awk '/^Total: [0-9]+ tests? in /{n=$2} END{print n+0}' "$LIST_FILE")
+          lines=$(awk '/^  \[[a-z]+ [0-9a-f]+\] /{n++} END{print n+0}' "$LIST_FILE")
+          echo "[row24 base] listed $total test(s), $lines list line(s); want exactly 18"
+          if [ "$total" != 18 ] || [ "$lines" != 18 ]; then
+            echo "::error::row 24's grep listed $total test(s) on the base, not exactly 18"
+            exit 1
+          fi
+      # The run's verdict fails by design, so its exit is kept and the step
+      # fails with it, after the log is printed; the next steps run anyway.
+      - name: Base, pnpm ci:quality-full, the 18 cells, no retry
+        id: runbase
+        if: ${{ !cancelled() && steps.listbase.outcome == 'success' }}
+        working-directory: base
+        shell: bash
+        env:
+          CI_REPRO_COMMAND: 'pnpm ci:quality-full "--grep=$ROW24_GREP" --retries=0 on 6c246c594 (ROW24_GREP is row24-evidence''s, in ci.yml; QUALITY_RELEASE_SCOPE=quality/release/scope.json)'
+          CI_REPORTS_DIR: reports/row24-base-18
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary-base
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets-base
+          RUN_LOG: ${{ runner.temp }}/row24-base-run.txt
+        run: |
+          rc=0
+          pnpm ci:quality-full "--grep=$ROW24_GREP" --retries=0 > "$RUN_LOG" 2>&1 || rc=$?
+          cat "$RUN_LOG"
+          echo "[row24 base] the run exited $rc"
+          exit "$rc"
+      - name: Base, the 18 cells' records, read back
+        if: ${{ always() && steps.runbase.outcome != 'skipped' }}
+        shell: bash
+        run: |
+          if ! command -v python3 > /dev/null; then
+            echo "::error::python3 isn't in this image: the records aren't read here; row24-base-18's artifact holds them"
+            exit 1
+          fi
+          python3 -I _ci-evidence/row24-records.py "row24 base" base/reports/row24-base-18/quality/results 18 12
+      # The head, after the base whatever its outcome. Its listing's own
+      # verdict fails, hence || true; the count decides.
+      - name: Head, list the 18 cells, and require exactly 18
+        id: listhead
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          CI_REPORTS_DIR: reports/row24-head-18
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary-head
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets-head
+          LIST_FILE: ${{ runner.temp }}/row24-head-list.txt
+        run: |
+          pnpm ci:quality-full "--grep=$ROW24_GREP" --retries=0 --list > "$LIST_FILE" 2>&1 || true
+          cat "$LIST_FILE"
+          total=$(awk '/^Total: [0-9]+ tests? in /{n=$2} END{print n+0}' "$LIST_FILE")
+          lines=$(awk '/^  \[[a-z]+ [0-9a-f]+\] /{n++} END{print n+0}' "$LIST_FILE")
+          echo "[row24 head] listed $total test(s), $lines list line(s); want exactly 18"
+          if [ "$total" != 18 ] || [ "$lines" != 18 ]; then
+            echo "::error::row 24's grep listed $total test(s) on the head, not exactly 18"
+            exit 1
+          fi
+      - name: Head, pnpm ci:quality-full, the 18 cells, no retry
+        id: runhead
+        if: ${{ !cancelled() && steps.listhead.outcome == 'success' }}
+        shell: bash
+        env:
+          CI_REPRO_COMMAND: 'pnpm ci:quality-full "--grep=$ROW24_GREP" --retries=0 (ROW24_GREP is row24-evidence''s, in ci.yml; QUALITY_RELEASE_SCOPE=quality/release/scope.json)'
+          CI_REPORTS_DIR: reports/row24-head-18
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary-head
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets-head
+          RUN_LOG: ${{ runner.temp }}/row24-head-run.txt
+        run: |
+          rc=0
+          pnpm ci:quality-full "--grep=$ROW24_GREP" --retries=0 > "$RUN_LOG" 2>&1 || rc=$?
+          cat "$RUN_LOG"
+          echo "[row24 head] the run exited $rc"
+          exit "$rc"
+      - name: Head, the 18 cells' records, read back
+        if: ${{ always() && steps.runhead.outcome != 'skipped' }}
+        shell: bash
+        run: |
+          if ! command -v python3 > /dev/null; then
+            echo "::error::python3 isn't in this image: the records aren't read here; row24-head-18's artifact holds them"
+            exit 1
+          fi
+          python3 -I _ci-evidence/row24-records.py "row24 head" reports/row24-head-18/quality/results 18 0
+      # Each run's records upload only when its own scrub succeeds: it deletes
+      # what it can't read, and fails when it did, or when that run's canary
+      # is still in any.
+      - name: Base, scrub its reports
+        id: scrubbase
+        if: ${{ always() }}
+        working-directory: base
+        run: node tests/quality/scrub.mjs
+        env:
+          CI_REPORTS_DIR: reports/row24-base-18
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary-base
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets-base
+      - name: Head, scrub its reports
+        id: scrubhead
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          CI_REPORTS_DIR: reports/row24-head-18
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary-head
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets-head
+      - name: Base, failure summary
+        if: ${{ always() }}
+        working-directory: base
+        run: node ci/summarize.mjs
+        env:
+          CI_REPORTS_DIR: reports/row24-base-18
+      - name: Head, failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+        env:
+          CI_REPORTS_DIR: reports/row24-head-18
+      # The 18 results folders (quality-records.json, axe.json, vitals.json,
+      # and trace.zip and error-context.md for a cell that failed), with the
+      # run's summary and verdict.
+      - name: Upload the base's 18 cells
+        if: ${{ always() && steps.scrubbase.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: row24-base-18
+          path: |
+            base/reports/row24-base-18/quality/results/
+            base/reports/row24-base-18/quality/summary.json
+            base/reports/row24-base-18/quality/verdict.json
+          if-no-files-found: error
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+      - name: Upload the head's 18 cells
+        if: ${{ always() && steps.scrubhead.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: row24-head-18
+          path: |
+            reports/row24-head-18/quality/results/
+            reports/row24-head-18/quality/summary.json
+            reports/row24-head-18/quality/verdict.json
+          if-no-files-found: error
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
 
   # quality-pr's shards judged whole (tests/quality/lib/shards.ts): zero
