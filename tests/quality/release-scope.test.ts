@@ -120,11 +120,37 @@ function verdict(failures: readonly SummaryFailure[] | 'passed', listed: Verdict
 
 const rules = (failures: readonly { rule: string }[]) => failures.map((each) => each.rule).sort();
 
-test('the checked-in scope is RC1 on its default packs, with an empty records list, and loads', () => {
+test("the checked-in scope is RC1 on its default packs, its records list Spatial Bento's root-text record on the platform-neutral pack alone, routed to row 75, and it loads", () => {
   const loaded = loadReleaseScope({ [SCOPE_ENV]: SCOPE_FILE })!;
   assert.equal(loaded.scope.release, '1.0.0-rc.1');
   assert.equal(loaded.scope.scope, 'default-packs');
-  assert.deepEqual(loaded.records, []);
+  // The one cell RC1's plan has that shows row 50's record (push 3 r4, item 2).
+  assert.deepEqual(
+    loaded.records.map((each) => [
+      each.cell,
+      each.viewport,
+      each.row,
+      each.engine,
+      each.check,
+      each.rule,
+      each.target,
+      each.owner,
+      each.routed,
+    ]),
+    [
+      [
+        'composition:spatial-bento complete / spatial-bento/platform-neutral/warm-parchment/humanist-ui/system',
+        '1440x900',
+        'default',
+        'chromium',
+        'reflow',
+        'root-text',
+        '@1024x768 html',
+        'lane E',
+        'row 75',
+      ],
+    ],
+  );
   // No scope env, no scope: quality:full plans the whole matrix as before.
   assert.equal(loadReleaseScope({}), null);
 });
