@@ -5,6 +5,7 @@ import {
   enhancementFindings,
   load,
   reflowFindings,
+  STILL_ENHANCING,
   watchEnhancements,
 } from './lib/a11y/conditions';
 import { landscapeOcclusionFindings } from './lib/run-cell';
@@ -545,15 +546,30 @@ test('a script request in a live frame, its end never reported, still holds the 
 
 /**
  * A page as landscapeOcclusionFindings drives it, holding `/` at 390x844: what it did, in order,
- * and each resize with the document it held then. Its keyboard walk ends at once, no stop.
+ * and each resize with the document it held then. Its keyboard walk ends at once, no stop. When
+ * `stuck`, each load of a page but about:blank starts one script request in the main frame whose
+ * end never comes, and every waitForTimeout it's asked for runs.
  */
-function turnPage() {
+function turnPage({ stuck = false }: { readonly stuck?: boolean } = {}) {
   const steps: string[] = [];
   let size = { width: 390, height: 844 };
   let holding = '/';
+  const handlers = new Map<string, Set<(value: unknown) => void>>();
+  const main = { isDetached: () => false, url: () => 'http://app.test/' };
+  const request = {
+    resourceType: () => 'script',
+    url: () => 'http://app.test/_next/static/chunks/stuck.js',
+    frame: () => main,
+  };
   const page = {
-    on: () => undefined,
-    off: () => undefined,
+    on: (event: string, handler: (value: unknown) => void) => {
+      if (!handlers.has(event)) handlers.set(event, new Set());
+      handlers.get(event)!.add(handler);
+    },
+    off: (event: string, handler: (value: unknown) => void) => {
+      handlers.get(event)?.delete(handler);
+    },
+    mainFrame: () => main,
     viewportSize: () => size,
     setViewportSize: async (next: { width: number; height: number }) => {
       steps.push(`resize ${next.width}x${next.height} on ${holding}`);
@@ -562,11 +578,16 @@ function turnPage() {
     goto: async (url: string) => {
       holding = url;
       steps.push(`goto ${url}`);
+      if (stuck && url !== 'about:blank') {
+        for (const handler of handlers.get('request') ?? []) handler(request);
+      }
       return null;
     },
     waitForLoadState: async () => undefined,
     waitForFunction: async () => ({}),
-    waitForTimeout: async () => undefined,
+    waitForTimeout: async (ms: number) => {
+      if (stuck) await new Promise((done) => setTimeout(done, ms));
+    },
     mouse: { move: async () => undefined },
     keyboard: { press: async () => undefined },
     evaluate: async (fn: unknown) => {
@@ -600,3 +621,34 @@ test('the landscape pass resizes only on about:blank, the turn and the restore, 
     'goto /',
   ]);
 });
+
+// The settle result names what held it (the coordinator's ruling on row 109, 7 Nov 2026): a
+// STILL_ENHANCING finding keeps the fixed text as its prefix and adds, after "; held by ", what
+// the wait ended on. That's the scripts in flight, each with its frame; the last start's age; the
+// islands' change across the wait; the pending count; and the floor against the end. Here, one
+// script in the main frame whose end never comes, in the landscape pass.
+test(
+  "the landscape pass's STILL_ENHANCING names what held the wait: the script in flight and its frame, the last start, the islands, the pending count and the floor",
+  { timeout: 20_000 },
+  async () => {
+    const { page } = turnPage({ stuck: true });
+    const findings = await landscapeOcclusionFindings(
+      page,
+      '/',
+      { width: 390, height: 844 },
+      false,
+    );
+    const enhanced = findings.filter(({ rule }) => rule === 'enhanced');
+    assert.equal(enhanced.length, 1, 'one runner enhanced finding');
+    const escaped = STILL_ENHANCING.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    assert.match(
+      enhanced[0]!.actual ?? '',
+      new RegExp(
+        `^${escaped}; held by 1 script in flight \\(/_next/static/chunks/stuck\\.js, main frame\\), ` +
+          'the last started \\d+ ms before the end \\(/_next/static/chunks/stuck\\.js\\), ' +
+          'islands unchanged, 0 marked pending, the floor \\d+ ms (past|before) the end$',
+      ),
+    );
+    assert.equal(enhanced[0]!.viewport, '844x390', 'at the turned viewport');
+  },
+);
