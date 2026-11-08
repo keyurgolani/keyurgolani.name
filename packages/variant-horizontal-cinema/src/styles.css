@@ -3662,6 +3662,13 @@
     display: none;
   }
 
+  /* A full-record section opens on paper under its own heading, so its summary's name doesn't print twice over it. */
+  [data-variant='horizontal-cinema']
+    .hc-record__item:has(.hc-record__body :is(h2, h3, h4))
+    > .hc-record__summary {
+    display: none;
+  }
+
   /* The top line prints on the paper in the print ink, not as the matte's band. */
   [data-variant='horizontal-cinema'] .hc-chrome {
     background-color: transparent;
