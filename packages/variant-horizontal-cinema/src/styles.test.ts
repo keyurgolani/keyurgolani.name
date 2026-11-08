@@ -170,7 +170,8 @@ test('the title card’s name rises into place at full strength, never from tran
 test('on the matte’s bands a focus ring is the band’s ink, through the focus color the platform’s ring reads', () => {
   // The platform draws every ring from --color-focus in a later layer than this stylesheet, so a
   // band sets the color it inherits, and no outline color of its own, which would lose to it.
-  for (const band of ['.hc-chrome', '.hc-bar', '.hc-scene[data-matte]'])
+  // The top line's own links take it from their own rule, below: the band itself keeps the page's.
+  for (const band of ['.hc-bar', '.hc-scene[data-matte]'])
     assert.match(declared(at(band), CSS), /--color-focus: var\(--color-on-scrim\);/, band);
   assert.doesNotMatch(CSS, /outline-color/);
 });
@@ -223,4 +224,35 @@ test('no other link in a bar sets its ring’s offset: the inset is the Next lin
     .map(({ head }) => head)
     .filter((head) => head !== next);
   assert.deepEqual(others, []);
+});
+
+/** The top line's own links: its name and its site nav, never the band as a whole. */
+const TOP_LINE_LINKS = ':is(.hc-chrome__name, .hc-chrome__nav)';
+
+test('on the top line only its own links ring in the band’s ink, so the visitor’s control keeps the page’s focus color', () => {
+  // The visitor's control (the Appearance summary) draws on its own surface, so the band's ink
+  // there was a regression (#213's cluster D); the name and the nav sit on the band itself.
+  assert.doesNotMatch(declared(at('.hc-chrome'), CSS), /--color-focus/);
+  assert.match(declared(at(TOP_LINE_LINKS), CSS), /--color-focus: var\(--color-on-scrim\);/);
+});
+
+test('every top-line link row 90 cleared takes the band’s ink from the name and nav rule: the name, Strip, List and Get in touch', () => {
+  assert.match(declared(at(TOP_LINE_LINKS), CSS), /--color-focus: var\(--color-on-scrim\);/);
+  const index = readFileSync(new URL('./index.tsx', import.meta.url), 'utf8');
+  const header = index.slice(
+    index.indexOf('<header className="hc-chrome">'),
+    index.indexOf('</header>'),
+  );
+  const nav = header.slice(
+    header.indexOf('<nav className="hc-chrome__nav"'),
+    header.indexOf('</nav>') + '</nav>'.length,
+  );
+  assert.match(header, /<a className="hc-chrome__name"/);
+  assert.match(nav, /<span className="hc-chrome__views"/);
+  assert.match(nav, />Strip</);
+  assert.match(nav, />List</);
+  assert.match(nav, /<a className="hc-chrome__contact"/);
+  // Every link the top line draws is its name or one in the nav: the visitor's control is a slot.
+  const links = (text: string) => (text.match(/<a\b/g) ?? []).length;
+  assert.equal(links(header), 1 + links(nav));
 });

@@ -297,3 +297,46 @@ for (const language of LANGUAGES) {
     );
   }
 }
+
+for (const language of LANGUAGES) {
+  test(
+    `in ${language} at 1024 by 768, the top line's Appearance control focused from the keyboard keeps the page's focus color, not the band's ink, and passes the focus check`,
+    { annotation, tag },
+    async ({ page, app }) => {
+      await page.setViewportSize({ width: 1024, height: 768 });
+      await loadIn(page, app.origin, language);
+      const summary = page.locator('.hc-chrome [data-visitor-control-slot] summary');
+      await expect(summary).toHaveCount(1);
+      await tabTo(page, summary, 'the Appearance control');
+      const ring = await ringOf(summary);
+      const scrim = await inkIn(summary, '.hc-chrome', 'on-scrim');
+      expect(ring.visible).toBe(true);
+      expect(ring.style).toBe('solid');
+      expect(ring.color).not.toBe(scrim);
+      await expectNoFocusFinding(page, summary, 'the Appearance control');
+    },
+  );
+
+  test(
+    `a guard: in ${language} at 1440 under more contrast, the top line's Strip, List and Get in touch still ring in the band's ink and pass the focus check`,
+    { annotation, tag },
+    async ({ page, app }) => {
+      await page.emulateMedia({ contrast: 'more' });
+      await loadIn(page, app.origin, language);
+      const views = page.locator('.hc-chrome__views a');
+      const stops = [
+        { name: 'Strip', stop: views.nth(0) },
+        { name: 'List', stop: views.nth(1) },
+        { name: 'Get in touch', stop: page.locator('.hc-chrome__contact') },
+      ];
+      for (const { name, stop } of stops) {
+        await expect(stop).toHaveCount(1);
+        await tabTo(page, stop, name);
+        const ring = await ringOf(stop);
+        expect(ring.visible, name).toBe(true);
+        expect(ring.color, name).toBe(await inkIn(stop, '.hc-chrome', 'on-scrim'));
+        await expectNoFocusFinding(page, stop, name);
+      }
+    },
+  );
+}
