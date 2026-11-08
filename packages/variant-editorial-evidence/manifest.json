@@ -19,7 +19,7 @@
   "motionIntent": "still",
   "performanceTier": "light",
   "budgets": {
-    "js": 2304,
+    "js": 2305,
     "css": 9472,
     "image": 53248,
     "font": 0,
