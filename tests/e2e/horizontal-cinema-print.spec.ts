@@ -97,6 +97,17 @@ test(
       expect.soft(summary.svgs, `${said}: a chevron shown`).toBe(0);
       expect.soft(summary.toggles, `${said}: toggle words shown`).toEqual([]);
     }
+    // 2b. No full-record section prints its title twice: its summary's name over its body's own heading of the same words.
+    const same = (a: string, b: string) =>
+      a.replace(/\s+/g, ' ').trim().toLowerCase() === b.replace(/\s+/g, ' ').trim().toLowerCase();
+    expect.soft(look.records.length, 'full-record sections on paper').toBeGreaterThan(0);
+    for (const record of look.records)
+      expect
+        .soft(
+          record.summaryShown && record.headingShown && same(record.name, record.heading ?? ''),
+          `"${record.name}": its summary (shown ${record.summaryShown}) over its own heading "${record.heading}" (shown ${record.headingShown})`,
+        )
+        .toBe(false);
     // 3. Each rail label keeps its years apart: 0.25em of their font size, or another line.
     const withYears = look.labels.filter(({ years }) => years !== null);
     if (YEARS) {
