@@ -60,7 +60,7 @@ import {
   type CellContext,
   type ResolvedTokens,
 } from './records';
-import { loadRegistrations, type Interaction } from './registration';
+import { interactionsOn, loadRegistrations, type Interaction } from './registration';
 import { APPEARANCE_STATE } from './state-fixtures';
 import { CANARY_COOKIE } from './env';
 import { packCookie, packFindings, SWEEP_ROWS } from './sweep';
@@ -244,13 +244,17 @@ export async function applyRow(page: Page, row: PreferenceRow): Promise<void> {
 
 let interactionsByTarget: Promise<Map<string, readonly Interaction[]>> | undefined;
 
-/** The interactions a surface or unit registers for `target`, on `route`. */
-async function interactionsFor(target: string, route: string): Promise<readonly Interaction[]> {
+/** The interactions a surface or unit registers for `target`, on `route` in `state`. */
+async function interactionsFor(
+  target: string,
+  route: string,
+  state: string,
+): Promise<readonly Interaction[]> {
   interactionsByTarget ??= loadRegistrations().then(
     ({ surfaces, units }) =>
       new Map([...surfaces, ...units].map((each) => [each.id, each.interactions])),
   );
-  return ((await interactionsByTarget).get(target) ?? []).filter((each) => each.route === route);
+  return interactionsOn((await interactionsByTarget).get(target) ?? [], route, state);
 }
 
 interface SuiteRun {
@@ -692,7 +696,7 @@ export async function runPass(
       page,
       at,
       owed,
-      interactions: await interactionsFor(cell.target, cell.route),
+      interactions: await interactionsFor(cell.target, cell.route, cell.state),
       viewport,
       ran,
       conditions: contentRow,

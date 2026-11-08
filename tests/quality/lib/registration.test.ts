@@ -4,10 +4,12 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {
+  interactionsOn,
   loadRegistrations,
   RegistrationError,
   validateSurface,
   validateUnit,
+  type Interaction,
   type SurfaceRegistration,
 } from './registration';
 
@@ -408,5 +410,116 @@ test('a missing directory registers nothing', async () => {
     assert.deepEqual(await loadRegistrations(root), { surfaces: [], units: [] });
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("an interaction named from one state's content is looked up on that state only, and one with no state on every state of its route (row 102)", () => {
+  const registered = [
+    { kind: 'dialog', name: '3 linked records', route: '/', state: 'complete' },
+    { kind: 'disclosure', name: 'Menu', route: '/' },
+    { kind: 'disclosure', name: 'Filters', route: '/work' },
+  ] as unknown as readonly Interaction[];
+  const names = (state: string, route = '/') =>
+    interactionsOn(registered, route, state).map((each) => each.name);
+  assert.deepEqual(names('complete'), ['3 linked records', 'Menu']);
+  assert.deepEqual(names('sparse'), ['Menu']);
+  assert.deepEqual(names('missing-media'), ['Menu']);
+  assert.deepEqual(names('sparse', '/work'), ['Filters']);
+});
+
+test("Mission Control's controls named from the complete fixture are looked up on it alone, so a sparse or missing-media page owes none of them (#211, row 102)", async () => {
+  const { units } = await loadRegistrations();
+  const registered = units.find((unit) => unit.id === 'mission-control')!.interactions;
+  const complete = [
+    '3 linked records',
+    'Education title 1 entry',
+    '2 earlier entries',
+    'Credits and notes',
+  ];
+  assert.deepEqual(
+    interactionsOn(registered, '/', 'complete').map((each) => each.name),
+    complete,
+  );
+  // On main these four were owed on every state of /, and the overlay check recorded each as
+  // "no control on the page has that name" on the sparse and missing-media pages (#211, rc1-fe-4).
+  for (const state of ['sparse', 'missing-media'])
+    assert.deepEqual(
+      interactionsOn(registered, '/', state)
+        .map((each) => each.name)
+        .filter((name) => complete.includes(name)),
+      [],
+      state,
+    );
+});
+
+test("an interaction's state is one its target renders: a surface's own stateFixtures, a composition unit's fixtures", () => {
+  const surface = (state: unknown) =>
+    problems({
+      ...LOGIN,
+      interactions: [
+        {
+          kind: 'status',
+          name: 'Sign in',
+          route: '/studio/sign-in',
+          announces: 'Each state.',
+          state,
+        },
+      ],
+    });
+  assert.deepEqual(surface('signed-out'), []);
+  assert.ok(
+    surface('complete').some((p) => p.includes('interactions[0].state names one of its states')),
+  );
+  assert.ok(surface('').some((p) => p.includes('interactions[0].state names one of its states')));
+  const unit = (state: unknown) => {
+    try {
+      validateUnit(
+        { interactions: [{ kind: 'disclosure', name: 'Credits and notes', route: '/', state }] },
+        'quality/units/mission-control.ts',
+      );
+      return [];
+    } catch (error) {
+      assert.ok(error instanceof RegistrationError);
+      return [...error.problems];
+    }
+  };
+  assert.deepEqual(unit('complete'), []);
+  assert.deepEqual(unit('missing-media'), []);
+  assert.ok(
+    unit('signed-out').some((p) => p.includes('interactions[0].state names one of its states')),
+  );
+});
+
+test("a registration that names a state its target doesn't have fails the load, naming it (row 102)", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'quality-registrations-'));
+  const good = mkdtempSync(path.join(tmpdir(), 'quality-registrations-'));
+  try {
+    mkdirSync(path.join(root, 'units'));
+    writeFileSync(
+      path.join(root, 'units', 'mission-control.ts'),
+      "export const interactions = [{ kind: 'disclosure', name: 'Credits and notes', route: '/', state: 'signed-out' }];\n",
+    );
+    await assert.rejects(loadRegistrations(root), (error: unknown) => {
+      assert.ok(error instanceof RegistrationError);
+      assert.match(error.message, /units\/mission-control\.ts is not a valid registration/);
+      assert.ok(
+        error.problems.some((p) => p.startsWith('interactions[0].state names one of its states')),
+        error.problems.join('; '),
+      );
+      return true;
+    });
+    // A root of its own: the module loader keeps the first file's module under its path.
+    mkdirSync(path.join(good, 'units'));
+    writeFileSync(
+      path.join(good, 'units', 'mission-control.ts'),
+      "export const interactions = [{ kind: 'disclosure', name: 'Credits and notes', route: '/', state: 'sparse' }];\n",
+    );
+    assert.deepEqual(
+      (await loadRegistrations(good)).units.map((unit) => unit.interactions[0]?.state),
+      ['sparse'],
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(good, { recursive: true, force: true });
   }
 });
