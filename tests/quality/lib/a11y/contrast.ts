@@ -939,10 +939,15 @@ export const QUIET_MS = 400;
 /** The attributes the sampler sets itself, which never count as the page changing. */
 const OWN_ATTRIBUTE = /^data-quality-/;
 
-/** What watchTurnsScript() keeps under its key: when it began, and each change, when and where. */
+/**
+ * What watchTurnsScript() keeps under its key: when it began, and each node's last attribute
+ * change, by node (row25-quiet-rc2-hardening): whether a node changed since a time is whether its
+ * last change is at or after it, so the watch holds one entry a node, however often the page
+ * changes it.
+ */
 interface Turns {
   readonly start: number;
-  readonly records: { t: number; target: Node }[];
+  readonly last: Map<Node, number>;
 }
 
 /**
@@ -953,12 +958,11 @@ interface Turns {
 export function watchTurnsScript({ key, own }: { key: string; own: string }): true {
   const w = window as unknown as Record<string, unknown>;
   const ownAttribute = new RegExp(own);
-  const state: Turns = { start: performance.now(), records: [] };
+  const state: Turns = { start: performance.now(), last: new Map() };
   const observer = new MutationObserver((list) => {
     const t = performance.now();
     for (const record of list)
-      if (!ownAttribute.test(record.attributeName ?? ''))
-        state.records.push({ t, target: record.target });
+      if (!ownAttribute.test(record.attributeName ?? '')) state.last.set(record.target, t);
   });
   observer.observe(document.documentElement, { subtree: true, attributes: true });
   (w[`__qualityTurnsOff_${key}`] as (() => void) | undefined)?.();
@@ -983,13 +987,10 @@ export function turnsQuietScript(
   const state = w[`__qualityTurns_${key}`] as Turns | undefined;
   if (!state) return Promise.resolve('restless');
   const list: readonly Element[] = Array.isArray(els) ? els : [els as Element];
-  // Whether one of them or an ancestor changed since `since`, read back from the latest change.
+  // Whether one of them or an ancestor changed since `since`: a node whose last change is then.
   const changedSince = (since: number): boolean => {
-    for (let at = state.records.length - 1; at >= 0; at--) {
-      const { t, target } = state.records[at]!;
-      if (t < since) return false;
-      if (list.some((el) => target.contains(el))) return true;
-    }
+    for (const [target, t] of state.last)
+      if (t >= since && list.some((el) => target.contains(el))) return true;
     return false;
   };
   const calm = (now: number) => now - state.start >= ms && !changedSince(now - ms);
@@ -2134,11 +2135,8 @@ export async function batchFindings(
                   if (!turns || typeof stopAt !== 'number') return true;
                   const members = ats.map((at) => els[at]!);
                   if ((await helpers.quiet(members, { key, ms, cap })) === 'restless') return true;
-                  for (let at = turns.records.length - 1; at >= 0; at--) {
-                    const { t, target } = turns.records[at]!;
-                    if (t < stopAt) return false;
-                    if (members.some((el) => target.contains(el))) return true;
-                  }
+                  for (const [target, t] of turns.last)
+                    if (t >= stopAt && members.some((el) => target.contains(el))) return true;
                   return false;
                 },
                 {
