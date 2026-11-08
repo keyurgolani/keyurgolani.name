@@ -213,7 +213,11 @@ export function ScrollSpy() {
 
     rewatch = watchRail;
 
+    // On paper the running head keeps what the screen showed: print's reflow can bring another
+    // band onto the reading line, and a head rewritten there prints words the screen never had.
+    const paper = view.matchMedia('print');
     const show = (place: HTMLElement) => {
+      if (paper.matches) return;
       // The opening is the issue's start, before any chapter: the running head names the
       // first chapter, and nothing is marked as the place being read.
       const opening = place.matches('.ee-opening');
@@ -270,8 +274,14 @@ export function ScrollSpy() {
     };
     const sized = new ResizeObserver(observe);
     sized.observe(sentinel);
+    // Back on screen, the place on the reading line is read again.
+    const unpaper = () => {
+      if (!paper.matches) observe();
+    };
+    paper.addEventListener('change', unpaper);
     return () => {
       off();
+      paper.removeEventListener('change', unpaper);
       sized.disconnect();
       observer?.disconnect();
       dockWatch?.disconnect();
