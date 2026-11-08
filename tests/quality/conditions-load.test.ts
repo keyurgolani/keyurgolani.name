@@ -3,6 +3,7 @@ import test from 'node:test';
 import type { Page } from '@playwright/test';
 import {
   enhancementFindings,
+  inventoryFindings,
   load,
   reflowFindings,
   STILL_ENHANCING,
@@ -650,5 +651,135 @@ test(
       ),
     );
     assert.equal(enhanced[0]!.viewport, '844x390', 'at the turned viewport');
+  },
+);
+
+// Spatial Bento's Esc hint (preflight 1, shards 31 and 35: five inventory records under
+// reduced-motion, no-canvas, reduced-transparency, grayscale and no-font). The hint shows only to
+// a fine pointer, by design (row 92: `@media (pointer: fine)`). On CI's Linux Chromium the touch
+// condition, which runs first, leaves (pointer) at none for the rest of the page's life once its
+// teardown turns touch off (row 44, PR #174), so each later condition read the hint as missing.
+// Where the page reads no fine pointer, a condition takes the hint as no JavaScript does: let go
+// while the control it names is shown and enabled, a finding naming the control while it isn't.
+// With a fine pointer, a missing hint is still a missing field. Driven with a fake page under the
+// reduced-motion condition alone.
+
+const HINT = 'key-hint: #sb--case-back Press Esc to close. The field keeps your place.';
+const HINT_BASELINE = ['heading: A case', HINT, 'link: Back to the field'];
+
+/**
+ * A page inventoryFindings reads under reduced-motion: its pointer fine or not, its inventory the
+ * baseline without `gone` (the hint, by default), and the hint's control `control` as the probe
+ * finds it. It records each key-hint-control probe's usable flag. Every waitForTimeout runs on
+ * the real clock.
+ */
+function pointerPage({
+  fine,
+  control = 'there',
+  gone = HINT,
+}: {
+  readonly fine: boolean;
+  readonly control?: 'there' | 'hidden';
+  /** The baseline field the page no longer shows: the hint, unless another is given. */
+  readonly gone?: string;
+}) {
+  const probes: { usable: boolean }[] = [];
+  const media = (query: string) =>
+    query === '(pointer: fine)'
+      ? fine
+      : query === '(prefers-reduced-motion: reduce)'
+        ? true
+        : false;
+  const cdp = { send: async () => ({}), detach: async () => undefined };
+  const page = {
+    on: () => undefined,
+    off: () => undefined,
+    context: () => ({ newCDPSession: async () => cdp }),
+    goto: async () => null,
+    emulateMedia: async () => undefined,
+    waitForFunction: async () => ({}),
+    waitForTimeout: (ms: number) => new Promise<void>((done) => setTimeout(done, ms)),
+    evaluate: async (fn: unknown, arg?: unknown) => {
+      const source = String(fn);
+      // inPage()'s requests, by the JSON it appends.
+      if (source.includes('({"kind":"inventory"')) {
+        return HINT_BASELINE.filter((item) => item !== gone);
+      }
+      const probe = /\(({"kind":"key-hint-control"[^)]*})\)\)$/.exec(source);
+      if (probe) {
+        probes.push({ usable: (JSON.parse(probe[1]!) as { usable: boolean }).usable });
+        return control;
+      }
+      if (typeof arg === 'string' && source.includes('matchMedia')) return media(arg);
+      if (source.includes('(pointer: fine)')) return fine;
+      if (source.includes('fonts.ready')) return undefined;
+      if (source.includes('scripting: none')) return false;
+      if (source.includes('requestIdleCallback')) return undefined;
+      if (source.includes('requestAnimationFrame')) return undefined;
+      if (source.includes('data-enhancement-island')) return '';
+      return 0;
+    },
+  };
+  return { page: page as unknown as Page, probes };
+}
+
+test(
+  "where the page reads no fine pointer, a key hint shown only to one is let go under reduced-motion while its control is shown and enabled (Spatial Bento's Esc hint, preflight 1)",
+  { timeout: 30_000 },
+  async () => {
+    const { page, probes } = pointerPage({ fine: false });
+    const findings = await inventoryFindings(page, '/', HINT_BASELINE, ['reduced-motion']);
+    assert.deepEqual(
+      findings.map((each) => each.actual),
+      [],
+      'no finding: the hint is gone only because the pointer is not fine',
+    );
+    assert.deepEqual(probes, [{ usable: true }], 'its control was checked, shown and enabled');
+  },
+);
+
+test(
+  'with a fine pointer, a key hint gone under reduced-motion is still a missing field (guard)',
+  { timeout: 30_000 },
+  async () => {
+    const { page } = pointerPage({ fine: true });
+    const findings = await inventoryFindings(page, '/', HINT_BASELINE, ['reduced-motion']);
+    assert.deepEqual(
+      findings.map((each) => [each.rule, each.expected, each.actual]),
+      [['content', 'present under reduced-motion', `1 field(s) missing, here ${HINT}`]],
+    );
+  },
+);
+
+test(
+  "where the page reads no fine pointer and the hint's control is hidden, the gone hint is a finding naming the control (guard)",
+  { timeout: 30_000 },
+  async () => {
+    const { page } = pointerPage({ fine: false, control: 'hidden' });
+    const findings = await inventoryFindings(page, '/', HINT_BASELINE, ['reduced-motion']);
+    assert.deepEqual(
+      findings.map((each) => each.actual),
+      [`a key hint gone, its control #sb--case-back hidden under reduced-motion, here ${HINT}`],
+    );
+  },
+);
+
+test(
+  'where the page reads no fine pointer, a field that is not a key hint and is gone under reduced-motion is still a missing field (guard)',
+  { timeout: 30_000 },
+  async () => {
+    const { page, probes } = pointerPage({ fine: false, gone: 'link: Back to the field' });
+    const findings = await inventoryFindings(page, '/', HINT_BASELINE, ['reduced-motion']);
+    assert.deepEqual(
+      findings.map((each) => [each.rule, each.expected, each.actual]),
+      [
+        [
+          'content',
+          'present under reduced-motion',
+          '1 field(s) missing, here link: Back to the field',
+        ],
+      ],
+    );
+    assert.deepEqual(probes, [], 'no key-hint control probe: the allowance is for key hints alone');
   },
 );
