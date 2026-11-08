@@ -1119,3 +1119,5 @@ export function Stage(props: StageProps) {
     </div>
   );
 }
+
+// HC evidence only, not for merge (H1's no-op base): quality:pr change-directs Horizontal Cinema, its check slice H1's evidence's.
