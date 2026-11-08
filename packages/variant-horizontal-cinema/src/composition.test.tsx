@@ -597,3 +597,46 @@ test('only the live position status is marked script-only, the one text no page 
     /<p\s+className="hc-scrub__status"\s+role="status"\s+data-type-role="label"\s+data-script-only=""\s*>/,
   );
 });
+
+test("the board map's position, rendered on the server, names the slate, the first scene: no live script yet reads one", () => {
+  // The case page without JavaScript keeps the server's words (the content inventory reads them
+  // there), and its first view is the slate, so that's the position the server sends.
+  const pair = pairOf('complete');
+  const slug = inputOf(pair).portfolio.works.find((work) => work.caseStudy && work.slug)?.slug;
+  assert.ok(slug);
+  const markup = html(inputOf(pair, { route: 'work', slug } as never));
+  const where = /<p class="hc-board__where"[^>]*>([\s\S]*?)<\/p>/.exec(markup)?.[1];
+  assert.ok(where !== undefined, 'the board map has its position line');
+  assert.equal(where.replace(/<[^>]+>/g, ''), 'The slate, 1 of 6');
+});
+
+test('the title scene sets the name inside the title card whether a hero gives it or not, so the name sizes to the card (HC family 1)', () => {
+  // The name's size is a share of its card's width (16.6cqi on .hc-card, a container) and the
+  // controller's fit reads the card it's in; set outside a card, the name sizes on the page's
+  // widest container instead, and nothing fits it back (rc-preflight, sparse in high contrast).
+  // Every fixture whose title scene has the name, the ones with no hero among them.
+  const checked: string[] = [];
+  const outside: string[] = [];
+  for (const fixture of CONTRACT_FIXTURES) {
+    const markup = html(inputOf(pairOf(fixture.name)));
+    const name = markup.indexOf('class="hc-card__name"');
+    if (name < 0) continue;
+    checked.push(fixture.name);
+    const scene = markup.lastIndexOf('id="chapter-prologue"', name);
+    const card = markup.lastIndexOf('<div class="hc-card"', name);
+    // Inside the card: it opens in the title scene before the name, and is still open there, as
+    // many divs opened since the card as closed, the card's own aside.
+    const between = card >= 0 ? markup.slice(card, name) : '';
+    const opened = between.match(/<div[\s>]/g)?.length ?? 0;
+    const closed = between.match(/<\/div>/g)?.length ?? 0;
+    if (!(scene >= 0 && card > scene && opened > closed)) {
+      outside.push(
+        `${fixture.name} (scene at ${scene}, card at ${card}, ${opened} opened, ${closed} closed)`,
+      );
+    }
+  }
+  // The sparse fixture, which has no hero, is among them: its title scene names the identity.
+  assert.ok(checked.includes('sparse'), `sparse is checked: ${checked.join(', ')}`);
+  assert.ok(checked.length > 1, `more fixtures than sparse are checked: ${checked.join(', ')}`);
+  assert.deepEqual(outside, [], 'title scenes whose name is set outside a .hc-card');
+});

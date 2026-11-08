@@ -3647,9 +3647,138 @@
 }
 
 @media print {
-  [data-variant='horizontal-cinema'] .hc-scrub,
-  [data-variant='horizontal-cinema'] .hc-fold__state {
+  /*
+   * Nothing interactive prints: a disclosure's Show and Hide (its content prints open), the chapter
+   * sheet's button, and the visitor's appearance control (at the strip's own weight too, which shows it).
+   */
+  [data-variant='horizontal-cinema'] .hc-fold__state,
+  [data-variant='horizontal-cinema'] .hc-record .hc-fold__state,
+  [data-variant='horizontal-cinema'] .hc-jump,
+  [data-variant='horizontal-cinema'] .hc-chrome > [data-visitor-control-slot],
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-chrome
+    > [data-visitor-control-slot] {
     display: none;
+  }
+
+  /* A full-record section opens on paper under its own heading, so its summary's name doesn't print twice over it. */
+  [data-variant='horizontal-cinema']
+    .hc-record__item:has(.hc-record__body :is(h2, h3, h4))
+    > .hc-record__summary {
+    display: none;
+  }
+
+  /* The top line prints on the paper in the print ink, not as the matte's band. */
+  [data-variant='horizontal-cinema'] .hc-chrome {
+    background-color: transparent;
+    color: var(--color-text-primary);
+  }
+
+  [data-variant='horizontal-cinema'] :is(.hc-chrome__name, .hc-chrome__contact) {
+    color: var(--color-text-primary);
+  }
+
+  [data-variant='horizontal-cinema'] .hc-chrome__running {
+    color: var(--color-text-secondary);
+  }
+
+  /*
+   * On paper the rail prints as the five chapters in reading order, a plain numbered list in the print
+   * palette: its links print as their words, as the site prints every internal link (a URL follows an
+   * external one alone). The mouse strip's rule shows the bar as a grid, so its own selector is set here too.
+   * The scrubber's buttons, the live status, the strip's blocks and window, and the hover contents are the
+   * screen's, and stay hidden.
+   */
+  [data-variant='horizontal-cinema'] .hc-scrub {
+    display: block;
+    min-block-size: 0;
+    padding-block: var(--space-s);
+    background-color: transparent;
+  }
+
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-shell:not([data-fit='over'])
+    .hc-scrub {
+    display: block;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-scrub__transport {
+    display: none;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-scrub__status {
+    display: none;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-minimap__blocks {
+    display: none;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-minimap__window {
+    display: none;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-minimap__contents {
+    display: none;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-minimap ol {
+    display: block;
+    padding-inline-start: var(--space-l);
+    list-style: decimal;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-minimap__chapter {
+    display: list-item;
+    opacity: 1;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-minimap__chapter a {
+    display: inline;
+    min-block-size: 0;
+    color: var(--color-text-primary);
+  }
+
+  [data-variant='horizontal-cinema'] .hc-minimap__label {
+    display: inline;
+    white-space: normal;
+  }
+
+  /* Inline on paper, a chapter's years keep their space after its name: "Origins 2012–2021". */
+  [data-variant='horizontal-cinema'] .hc-minimap__years {
+    margin-inline-start: 0.4em;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-scrub__end {
+    display: block;
+    margin-block-start: var(--space-xs);
+  }
+
+  /* Strip | List print too, whatever the pointer, as one plain line in the top line, in the print palette. */
+  [data-variant='horizontal-cinema'] .hc-chrome__views {
+    display: inline-flex;
+    gap: var(--space-s);
+    padding: 0;
+    background-color: transparent;
+  }
+
+  [data-variant='horizontal-cinema'] .hc-chrome__views a {
+    min-block-size: 0;
+    padding-inline: 0;
+    color: var(--color-text-primary);
+  }
+
+  [data-variant='horizontal-cinema'] .hc-chrome__views a[aria-current] {
+    background-color: transparent;
+    color: var(--color-text-primary);
+    font-weight: 650;
+  }
+
+  /* And whatever the fit: a page refit for paper reads top to bottom, and the views print there too. */
+  [data-variant='horizontal-cinema'] .hc:has(.hc-shell[data-fit='over']) .hc-chrome__views {
+    display: inline-flex;
   }
 
   /* Every disclosure prints open, with or without the script that opens them before printing. */

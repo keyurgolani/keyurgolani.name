@@ -237,7 +237,11 @@ function HomePage({ input }: HomePageProps) {
                   scene.hero ? (
                     renderAt(scene.hero, input, 1)
                   ) : (
-                    <h1 className="hc-card__name">{portfolio.identity.name}</h1>
+                    // No hero: the name still sits in the title card, the container its size and
+                    // the controller's fit are read against (HC family 1).
+                    <div className="hc-card">
+                      <h1 className="hc-card__name">{portfolio.identity.name}</h1>
+                    </div>
                   )
                 ) : scene.kind === 'lead' ? (
                   <LeadScene scene={scene} input={input} />
