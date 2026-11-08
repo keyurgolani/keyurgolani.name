@@ -597,3 +597,15 @@ test('only the live position status is marked script-only, the one text no page 
     /<p\s+className="hc-scrub__status"\s+role="status"\s+data-type-role="label"\s+data-script-only=""\s*>/,
   );
 });
+
+test("the board map's position, rendered on the server, names the slate, the first scene: no live script yet reads one", () => {
+  // The case page without JavaScript keeps the server's words (the content inventory reads them
+  // there), and its first view is the slate, so that's the position the server sends.
+  const pair = pairOf('complete');
+  const slug = inputOf(pair).portfolio.works.find((work) => work.caseStudy && work.slug)?.slug;
+  assert.ok(slug);
+  const markup = html(inputOf(pair, { route: 'work', slug } as never));
+  const where = /<p class="hc-board__where"[^>]*>([\s\S]*?)<\/p>/.exec(markup)?.[1];
+  assert.ok(where !== undefined, 'the board map has its position line');
+  assert.equal(where.replace(/<[^>]+>/g, ''), 'The slate, 1 of 6');
+});
