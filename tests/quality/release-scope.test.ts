@@ -120,36 +120,39 @@ function verdict(failures: readonly SummaryFailure[] | 'passed', listed: Verdict
 
 const rules = (failures: readonly { rule: string }[]) => failures.map((each) => each.rule).sort();
 
-test("the checked-in scope is RC1 on its default packs, its records list Spatial Bento's root-text record on the platform-neutral pack alone, routed to row 75, and it loads", () => {
+test("the checked-in scope is RC1 on its default packs, its records list preflight 1's 647 keys, each a valid entry routed to a row on a platform-neutral cell, main's Spatial Bento root-text record still among them, and it loads", () => {
   const loaded = loadReleaseScope({ [SCOPE_ENV]: SCOPE_FILE })!;
   assert.equal(loaded.scope.release, '1.0.0-rc.1');
   assert.equal(loaded.scope.scope, 'default-packs');
-  // The one cell RC1's plan has that shows row 50's record (push 3 r4, item 2).
-  assert.deepEqual(
-    loaded.records.map((each) => [
-      each.cell,
-      each.viewport,
-      each.row,
-      each.engine,
-      each.check,
-      each.rule,
-      each.target,
-      each.owner,
-      each.routed,
-    ]),
-    [
-      [
-        'composition:spatial-bento complete / spatial-bento/platform-neutral/warm-parchment/humanist-ui/system',
-        '1440x900',
-        'default',
-        'chromium',
-        'reflow',
-        'root-text',
-        '@1024x768 html',
-        'lane E',
-        'row 75',
-      ],
-    ],
+  // Preflight 1's list for the candidate (run 42489261932, 89 shards): the keys that still fail on
+  // it, every one a valid entry, each key once.
+  assert.equal(loaded.records.length, 647);
+  assert.deepEqual(recordsProblems(loaded.records, loaded.scope), []);
+  assert.equal(new Set(loaded.records.map(recordKey)).size, loaded.records.length);
+  for (const each of loaded.records) assert.match(each.routed, /^row [1-9]\d*[a-z]?$/, each.cell);
+  // Each on a cell of RC1's plan, its default pack: an entry on a pack the plan doesn't run is
+  // listed-unplanned in the release run's verdict, which fails it.
+  for (const each of loaded.records) {
+    const pack = each.cell.split(' ').at(-1)?.split('/')[1];
+    assert.equal(pack, 'platform-neutral', `${each.cell} is on the platform-neutral pack`);
+  }
+  // Main's one entry before preflight 1, the one cell RC1's plan has that shows row 50's record
+  // (push 3 r4, item 2), still listed.
+  assert.ok(
+    loaded.records.some(
+      (each) =>
+        each.cell ===
+          'composition:spatial-bento complete / spatial-bento/platform-neutral/warm-parchment/humanist-ui/system' &&
+        each.viewport === '1440x900' &&
+        each.row === 'default' &&
+        each.engine === 'chromium' &&
+        each.check === 'reflow' &&
+        each.rule === 'root-text' &&
+        each.target === '@1024x768 html' &&
+        each.owner === 'lane E' &&
+        each.routed === 'row 75',
+    ),
+    "Spatial Bento's root-text record on the platform-neutral pack, row 75",
   );
   // No scope env, no scope: quality:full plans the whole matrix as before.
   assert.equal(loadReleaseScope({}), null);
