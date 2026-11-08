@@ -54,8 +54,14 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      jobs: ${{ steps.select.outputs.jobs }}
-      complete: ${{ steps.select.outputs.complete }}
+      # Batch Q's evidence branch, never merged: only quality-pr-plan and
+      # quality-pr run, on Q's head (034d32cef) with this ci.yml, and with
+      # QUALITY_CHANGED_FILES naming Q's 19 files plus a Kinetic Cosmos file, so
+      # the [37] rule directs Spatial Bento and Kinetic Cosmos against every
+      # stable pack. The selection still runs below, and its summary shows what
+      # it would have picked.
+      jobs: '["quality-pr-plan","quality-pr"]'
+      complete: 'false'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -728,6 +734,8 @@ jobs:
           QUALITY_WEB: apps/web
           QUALITY_CHANGED_BASE: ${{ steps.base.outputs.base }}
           QUALITY_CHANGED_DIFF: ${{ steps.base.outputs.diff }}
+          # Batch Q's evidence: main..Q's 19 paths and a Kinetic Cosmos file.
+          QUALITY_CHANGED_FILES: '["docs/variants.md","packages/variant-spatial-bento/src/case-focus.tsx","packages/variant-spatial-bento/src/case.tsx","packages/variant-spatial-bento/src/composition.test.tsx","packages/variant-spatial-bento/src/esc-hint.test.tsx","packages/variant-spatial-bento/src/esc-hint.tsx","tests/e2e/spatial-bento-chrome.spec.ts","tests/quality/a11y.test.ts","tests/quality/fixtures/a11y/transparency-edge-jitter.html","tests/quality/fixtures/a11y/transparency-input-jitter.html","tests/quality/fixtures/a11y/transparency-near-opaque.html","tests/quality/fixtures/a11y/transparency-ring-restless.html","tests/quality/fixtures/a11y/transparency-ring-script-settling.html","tests/quality/fixtures/a11y/transparency-ring-settling.html","tests/quality/lib/a11y/conditions.ts","tests/quality/lib/a11y/probe.ts","tests/quality/meta.test.ts","tests/quality/meta/a11y-cases.ts","tests/quality/script-only-marks.ts","packages/variant-kinetic-cosmos/src/styles.css"]'
         run: pnpm exec tsx tests/quality/pr-count.ts
 
   quality-pr:
@@ -776,6 +784,8 @@ jobs:
           QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
           QUALITY_CHANGED_BASE: ${{ needs.quality-pr-plan.outputs.base }}
           QUALITY_CHANGED_DIFF: ${{ needs.quality-pr-plan.outputs.diff }}
+          # Batch Q's evidence: the plan's paths, so every shard plans the same cells.
+          QUALITY_CHANGED_FILES: '["docs/variants.md","packages/variant-spatial-bento/src/case-focus.tsx","packages/variant-spatial-bento/src/case.tsx","packages/variant-spatial-bento/src/composition.test.tsx","packages/variant-spatial-bento/src/esc-hint.test.tsx","packages/variant-spatial-bento/src/esc-hint.tsx","tests/e2e/spatial-bento-chrome.spec.ts","tests/quality/a11y.test.ts","tests/quality/fixtures/a11y/transparency-edge-jitter.html","tests/quality/fixtures/a11y/transparency-input-jitter.html","tests/quality/fixtures/a11y/transparency-near-opaque.html","tests/quality/fixtures/a11y/transparency-ring-restless.html","tests/quality/fixtures/a11y/transparency-ring-script-settling.html","tests/quality/fixtures/a11y/transparency-ring-settling.html","tests/quality/lib/a11y/conditions.ts","tests/quality/lib/a11y/probe.ts","tests/quality/meta.test.ts","tests/quality/meta/a11y-cases.ts","tests/quality/script-only-marks.ts","packages/variant-kinetic-cosmos/src/styles.css"]'
       # The reports upload only when this succeeds: it deletes what it can't
       # read, and fails when it did, or when the canary is still in any.
       - name: Scrub reports
