@@ -176,6 +176,15 @@ test('on the matte’s bands a focus ring is the band’s ink, through the focus
   assert.doesNotMatch(CSS, /outline-color/);
 });
 
+test('the end credits are a band of the matte, so their rings are the band’s ink too, under more contrast as at rest (row 46)', () => {
+  // The roll's ground is the matte and its links the matte's ink, as on a bar; the page's focus
+  // color is the canvas's, and under prefers-contrast: more it's the text color, dark on the matte.
+  const credits = declared(at('.hc-credits'), CSS);
+  assert.match(credits, /background-color: var\(--layout-matte\);/);
+  assert.match(declared(at('.hc-credits a'), CSS), /color: var\(--color-on-scrim\);/);
+  assert.match(credits, /--color-focus: var\(--color-on-scrim\);/);
+});
+
 test('a ring is shaped through the focus tokens alone: no outline of its own, and the stage and a scene ring inside their edges', () => {
   // An outline here loses to the platform's ring, a later layer, so the stylesheet sets none.
   assert.doesNotMatch(CSS, /(^|[\s;{])outline(-[a-z]+)?\s*:/m);
