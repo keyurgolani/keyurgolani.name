@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A word on a gradient beside a page that churns attributes every frame, known-good</title>
+    <!--
+      Row 25's RC2 hardening, part 3: the sampler watches every attribute the page changes for as
+      long as it runs, and a page that changes many every frame (a live board's cells, a canvas
+      library's nodes) must not grow that watch past what it needs. The word sits on a gradient,
+      so axe leaves it to the sampler, and passes (#222 on #fff to #f6f6f6). Beside it, 300 empty
+      spans, none of them its ancestor, each flip an attribute every frame for good.
+    -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #fff;
+        color: #222;
+      }
+      main {
+        padding: 1rem;
+      }
+      .band {
+        background: linear-gradient(90deg, #fff, #f6f6f6);
+        color: #222;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Churn</h1>
+      <p class="band"><span class="word">A word beside a busy page.</span></p>
+      <div id="board" aria-hidden="true"></div>
+    </main>
+    <script>
+      const board = document.getElementById('board');
+      const cells = Array.from({ length: 300 }, () =>
+        board.appendChild(document.createElement('span')),
+      );
+      let beat = 0;
+      const churn = () => {
+        beat += 1;
+        for (const cell of cells) cell.setAttribute('data-beat', String(beat % 2));
+        requestAnimationFrame(churn);
+      };
+      requestAnimationFrame(churn);
+    </script>
+  </body>
+</html>
