@@ -2418,9 +2418,11 @@
   }
 
   /* A sheet is no width a phone is: it names all five destinations, not where the screen was,
-     and no row prints as the one being read. */
+     and no row prints as the one being read. They wrap, so a narrow sheet (or a phone printing at
+     its own width) keeps them all inside the page. */
   [data-variant='shell'] .sh-tmux__wins {
     display: flex;
+    flex-wrap: wrap;
   }
 
   [data-variant='shell'] :is(.sh-tmux__cur, .sh-tmux__pos) {
