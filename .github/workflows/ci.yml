@@ -54,8 +54,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      jobs: ${{ steps.select.outputs.jobs }}
-      complete: ${{ steps.select.outputs.complete }}
+      # Rows 109 and 102's evidence branch, never merged: only quality-pr-plan and
+      # quality-pr run, on their landing head (ed51cac00) with this ci.yml, and with
+      # QUALITY_CHANGED_FILES naming their 10 files plus demo-studio's surface and a
+      # Mission Control file, so the [37] rule directs Demo Studio and Mission Control.
+      # The selection still runs below, and its summary shows what it would have picked.
+      jobs: '["quality-pr-plan","quality-pr"]'
+      complete: 'false'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -728,6 +733,8 @@ jobs:
           QUALITY_WEB: apps/web
           QUALITY_CHANGED_BASE: ${{ steps.base.outputs.base }}
           QUALITY_CHANGED_DIFF: ${{ steps.base.outputs.diff }}
+          # Rows 109 and 102's evidence: 034d32cef..ed51cac00's 10 paths, demo-studio's surface and an MC file.
+          QUALITY_CHANGED_FILES: '["quality/manual-runs/templates/mission-control.voiceover-safari-macos.yml","quality/units/mission-control.ts","tests/quality/checklist.ts","tests/quality/conditions-load.test.ts","tests/quality/lib/a11y/conditions.ts","tests/quality/lib/registration.test.ts","tests/quality/lib/registration.ts","tests/quality/lib/run-cell.ts","tests/quality/meta/a11y-cases.ts","tests/variants/modes.ts","quality/surfaces/demo-studio.ts","packages/variant-mission-control/src/styles.css"]'
         run: pnpm exec tsx tests/quality/pr-count.ts
 
   quality-pr:
@@ -776,6 +783,8 @@ jobs:
           QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
           QUALITY_CHANGED_BASE: ${{ needs.quality-pr-plan.outputs.base }}
           QUALITY_CHANGED_DIFF: ${{ needs.quality-pr-plan.outputs.diff }}
+          # Rows 109 and 102's evidence: the plan's paths, so every shard plans the same cells.
+          QUALITY_CHANGED_FILES: '["quality/manual-runs/templates/mission-control.voiceover-safari-macos.yml","quality/units/mission-control.ts","tests/quality/checklist.ts","tests/quality/conditions-load.test.ts","tests/quality/lib/a11y/conditions.ts","tests/quality/lib/registration.test.ts","tests/quality/lib/registration.ts","tests/quality/lib/run-cell.ts","tests/quality/meta/a11y-cases.ts","tests/variants/modes.ts","quality/surfaces/demo-studio.ts","packages/variant-mission-control/src/styles.css"]'
       # The reports upload only when this succeeds: it deletes what it can't
       # read, and fails when it did, or when the canary is still in any.
       - name: Scrub reports
