@@ -34,6 +34,7 @@ import {
   CONTRAST_RULE,
   ENHANCED_CONTRAST_RULE,
   incompleteContrastFindings,
+  watchTurnsScript,
 } from '../lib/a11y/contrast';
 import {
   FRAME_PRESSES,
@@ -1401,6 +1402,73 @@ const ARRIVAL_SCROLL_DRIVEN = withFixture(
   '<!-- scroll-driven -->',
   '<figure class="arrives later"><p class="band">Text whose figure slides in as it scrolls into view.</p></figure>',
 );
+
+/**
+ * The sampler on ARRIVAL_SCROLL_DRIVEN, held to two more things (row25-quiet-rc2-hardening,
+ * part 2a). Its own pins, the style writes stillnessScript() and releaseScript() make on the
+ * figure, are never the page's changes: the page never writes the figure's attributes, so the
+ * sampler's watch must never hold it, polled every 10 ms while it runs. And a page change still
+ * pending when the sampler writes its own is kept, as the watch's observer would have delivered
+ * it: in one task, under a watch of its own, the page sets an attribute on the figure's parent,
+ * then a pin's write is made the way the sampler makes it; the parent must be held, the figure not.
+ * Each that fails adds a finding no case's reason matches.
+ */
+const ownPinStill = async (page: Page): Promise<Finding[]> => {
+  await page.evaluate(() => {
+    const w = window as unknown as Record<string, unknown>;
+    const figure = document.querySelector('figure.arrives')!;
+    w.__metaPinHeld = false;
+    setInterval(() => {
+      for (const name of Object.keys(w)) {
+        if (!name.startsWith('__qualityTurns_')) continue;
+        const state = w[name] as
+          { records?: { target: Node }[]; last?: Map<Node, number> } | undefined;
+        const held = Array.isArray(state?.records)
+          ? state.records.some((record) => record.target === figure)
+          : state?.last instanceof Map && state.last.has(figure);
+        if (held) w.__metaPinHeld = true;
+      }
+    }, 10);
+  });
+  const findings = await contrast(page);
+  const meta: Finding[] = [];
+  if (await page.evaluate(() => (window as unknown as Record<string, boolean>).__metaPinHeld))
+    meta.push({
+      gate: 'contrast',
+      rule: 'own-pin',
+      actual: "the sampler's watch held the figure, which only its own pins wrote",
+    });
+  await page.evaluate(watchTurnsScript, { key: 'metapin', own: '^data-quality-' });
+  const kept = await page.evaluate(async () => {
+    const w = window as unknown as Record<string, unknown>;
+    const figure = document.querySelector('figure.arrives') as HTMLElement;
+    const parent = figure.parentElement!;
+    const own = w.__qualityTurnsOwn_metapin as { take: () => void; drop: () => void } | undefined;
+    parent.setAttribute('data-meta-beat', 'on');
+    own?.take();
+    figure.style.setProperty('translate', '0px', 'important');
+    own?.drop();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const state = w.__qualityTurns_metapin as { last?: Map<Node, number> } | undefined;
+    return {
+      parent: state?.last instanceof Map && state.last.has(parent),
+      figure: state?.last instanceof Map && state.last.has(figure),
+    };
+  });
+  if (!kept.parent)
+    meta.push({
+      gate: 'contrast',
+      rule: 'own-pin',
+      actual: "a page change pending at the sampler's own write wasn't kept",
+    });
+  if (kept.figure)
+    meta.push({
+      gate: 'contrast',
+      rule: 'own-pin',
+      actual: "the sampler's own write, made through its watch's own-write guard, was held",
+    });
+  return [...findings, ...meta];
+};
 
 /** contrast-animated.html with a block whose outline and --x pulse for good, beside a spinning sibling. */
 const ARRIVAL_UNRELATED = withFixture(
@@ -3138,6 +3206,17 @@ export const A11Y_CASES: readonly MetaCase[] = [
       /^contrast text: unresolved: its ancestors' attributes were still changing \d+(?:\.\d+)? s after its shots, so its color can't be read from one state of the page$/,
     browser: true,
     run: () => onPage('contrast-restless-ancestor.html', contrast),
+  },
+  // The sampler's own pins never count as the page's changes, and a page change pending at its own
+  // write is still kept (row25-quiet-rc2-hardening, part 2a).
+  {
+    id: 'contrast/own-pin-still',
+    gate: 'contrast',
+    input:
+      "contrast-animated.html with a figure a scroll-driven animation slides in, which the sampler pins: its watch never holds the figure, and a page change pending at the pin's write is kept",
+    expect: 'pass',
+    browser: true,
+    run: () => onPage(ARRIVAL_SCROLL_DRIVEN, ownPinStill),
   },
   // The sampler's watch of the page's changes stays bounded beside a page that churns attributes
   // every frame (row25-quiet-rc2-hardening, part 3): by node, never by change.
