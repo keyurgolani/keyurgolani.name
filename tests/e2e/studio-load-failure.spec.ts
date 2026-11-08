@@ -45,6 +45,33 @@ const optional = (request: Request, own: Set<string>) =>
   /\/_next\/static\/chunks\//.test(request.url()) &&
   !own.has(request.url());
 
+/**
+ * What Playwright says when a route outlives its page, its context or the test: the closed-target
+ * message, or "Test ended." when the test finishes first (#214's plant saw both). Playwright gives
+ * no closed state for a context or a finished test, so page.isClosed() and these two are the checks.
+ */
+const CLOSED = /Target page, context or browser has been closed|Test ended/;
+
+/**
+ * A route handler's work, on a page that may have gone by the time it runs (#214): a test that
+ * ends on a navigation or a reload can close the context while the next page's requests still come
+ * through here. Only that is swallowed; any other failure fails the test.
+ */
+async function unlessGone(page: Page, work: () => Promise<unknown>): Promise<void> {
+  try {
+    await work();
+  } catch (error) {
+    if (page.isClosed() || CLOSED.test(String(error))) return;
+    throw error;
+  }
+}
+
+// Every route here can still be running as a test ends: let them go before the context closes, as
+// studio-signout.spec.ts's W2 does.
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+});
+
 /** Failed enhancement on `page`: its optional chunks and its fonts refused. Returns what it refused. */
 async function failEnhancement(page: Page, origin: string): Promise<string[]> {
   const own = await ownScripts(page, origin);
@@ -53,9 +80,9 @@ async function failEnhancement(page: Page, origin: string): Promise<string[]> {
     const request = route.request();
     if (optional(request, own) || request.resourceType() === 'font') {
       refused.push(request.url());
-      return route.abort('blockedbyclient');
+      return unlessGone(page, () => route.abort('blockedbyclient'));
     }
-    return route.fallback();
+    return unlessGone(page, () => route.fallback());
   });
   return refused;
 }
@@ -75,10 +102,11 @@ async function holdShell(
     settle = resolve;
   });
   await page.route('**/*', async (route: Route) => {
-    if (!optional(route.request(), own)) return route.fallback();
+    if (!optional(route.request(), own)) return unlessGone(page, () => route.fallback());
     held.push(route.request().url());
     const how = await gate;
-    // A page that reloaded or left has no request to go on with.
+    // A page that reloaded or left has no request to go on with: a reload cancels the held
+    // request, whose error isn't the closed-target one, so any error is let go here.
     await (how === 'refuse' ? route.abort('blockedbyclient') : route.fallback()).catch(() => {});
   });
   return { held, release: () => settle('release'), refuse: () => settle('refuse') };

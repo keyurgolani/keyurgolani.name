@@ -22,6 +22,33 @@ test.use({ appOptions: ownerApp(secret.hash) });
 test.use({ studioLastTask: 'content' });
 test.describe.configure({ mode: 'serial' });
 
+/**
+ * What Playwright says when a route outlives its page, its context or the test: the closed-target
+ * message, or "Test ended." when the test finishes first (#214's plant saw both). Playwright gives
+ * no closed state for a context or a finished test, so page.isClosed() and these two are the checks.
+ */
+const CLOSED = /Target page, context or browser has been closed|Test ended/;
+
+/**
+ * A route handler's work, on a page that may have gone by the time it runs (#214): a test that
+ * ends on a navigation, or as its last checks pass, can close the context while a chunk the next
+ * page asked for is still in route.fetch. Only that is swallowed; any other failure fails the test.
+ */
+async function unlessGone(page: Page, work: () => Promise<unknown>): Promise<void> {
+  try {
+    await work();
+  } catch (error) {
+    if (page.isClosed() || CLOSED.test(String(error))) return;
+    throw error;
+  }
+}
+
+// The chunk handlers below can still be running as a test ends: let them go before the context
+// closes, as studio-signout.spec.ts's W2 does.
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+});
+
 const line = (page: Page, label: string) =>
   page
     .locator('.studio-state__line')
@@ -167,13 +194,15 @@ test(
     await expect(line(page, 'Draft')).toHaveText(/^Saved draft, version \d+\.$/);
     // The owner adapter's chunk, the one script that names its commands, is refused; the rest load.
     const refused: string[] = [];
-    await page.route(/\/_next\/static\/chunks\/.*\.js/, async (route) => {
-      const response = await route.fetch();
-      const body = await response.text();
-      if (!/["']draft\.applyEdits["']/.test(body)) return route.fulfill({ response, body });
-      refused.push(route.request().url());
-      return route.abort('blockedbyclient');
-    });
+    await page.route(/\/_next\/static\/chunks\/.*\.js/, (route) =>
+      unlessGone(page, async () => {
+        const response = await route.fetch();
+        const body = await response.text();
+        if (!/["']draft\.applyEdits["']/.test(body)) return route.fulfill({ response, body });
+        refused.push(route.request().url());
+        return route.abort('blockedbyclient');
+      }),
+    );
     await page.reload();
     await expect
       .poll(() => refused.length, "the owner adapter's chunk is asked for, and refused")
@@ -241,12 +270,14 @@ test(
     await page.goto('/studio');
     await expect(line(page, 'Draft')).toHaveText(/^Saved draft, version \d+\.$/);
     // The owner adapter's chunk comes 7 seconds late, past the shell's 5 second wait.
-    await page.route(/\/_next\/static\/chunks\/.*\.js/, async (route) => {
-      const response = await route.fetch();
-      const body = await response.text();
-      if (OWNER_CHUNK.test(body)) await new Promise((done) => setTimeout(done, 7_000));
-      return route.fulfill({ response, body });
-    });
+    await page.route(/\/_next\/static\/chunks\/.*\.js/, (route) =>
+      unlessGone(page, async () => {
+        const response = await route.fetch();
+        const body = await response.text();
+        if (OWNER_CHUNK.test(body)) await new Promise((done) => setTimeout(done, 7_000));
+        return route.fulfill({ response, body });
+      }),
+    );
     await page.reload();
     const alert = page.getByRole('alert').filter({ hasText: "Studio couldn't load" });
     await expect(alert).toBeVisible({ timeout: 20_000 });
@@ -311,13 +342,16 @@ test(
     await expect(page.locator('.studio-state__lines')).toBeAttached();
     // The owner adapter's chunk is refused; the rest load (as :160 does, which a draft seeded before it reads).
     const refused: string[] = [];
-    await page.route(/\/_next\/static\/chunks\/.*\.js/, async (route) => {
-      const response = await route.fetch();
-      const body = await response.text();
-      if (!OWNER_CHUNK.test(body)) return route.fulfill({ response, body });
-      refused.push(route.request().url());
-      return route.abort('blockedbyclient');
-    });
+    // The sign-in page's own chunks come through here too, after the sign-out (#214).
+    await page.route(/\/_next\/static\/chunks\/.*\.js/, (route) =>
+      unlessGone(page, async () => {
+        const response = await route.fetch();
+        const body = await response.text();
+        if (!OWNER_CHUNK.test(body)) return route.fulfill({ response, body });
+        refused.push(route.request().url());
+        return route.abort('blockedbyclient');
+      }),
+    );
     const logouts = logoutsOf(page);
     await page.reload();
     await expect

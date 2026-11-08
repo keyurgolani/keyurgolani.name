@@ -27,8 +27,12 @@ const JOURNAL_KEY = 'portfolio-studio:journal:v1';
 const SCRIPT_CHUNK = /\/_next\/static\/chunks\/[^?#]+\.js(?:[?#].*)?$/;
 /** The owner adapter's chunk, the one script that names its commands (studio-recovery.spec.ts). */
 const OWNER_CHUNK = /["']draft\.applyEdits["']/;
-/** What Playwright says when a route's page, context or browser has gone. */
-const CLOSED = /Target page, context or browser has been closed/;
+/**
+ * What Playwright says when a route outlives its page, its context or the test: the closed-target
+ * message, or "Test ended." when the test finishes first (#214's plant saw both). Playwright gives
+ * no closed state for a context or a finished test, so page.isClosed() and these two are the checks.
+ */
+const CLOSED = /Target page, context or browser has been closed|Test ended/;
 /** How long a click has to land while the chunks are held. */
 const LANDS_MS = 1_000;
 /**
