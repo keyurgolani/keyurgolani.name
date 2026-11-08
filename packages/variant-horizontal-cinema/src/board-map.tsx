@@ -92,9 +92,14 @@ export function BoardMap({
           </li>
         ))}
       </ol>
+      {/* Before the observer reads a scene, the server's and the first render's words, the page opens on
+          the first scene, the slate, so that's its position: a count instead would be a line the live page
+          never shows, and the page without its script would read it. */}
       <p className="hc-board__where" data-type-role="label" aria-hidden="true">
         {now ? (
           <Words lang={lang}>{`${now.label}, ${(current ?? 0) + 1} of ${marks.length}`}</Words>
+        ) : marks[0] ? (
+          <Words lang={lang}>{`${marks[0].label}, 1 of ${marks.length}`}</Words>
         ) : (
           <Words lang={lang}>{`${marks.length} scenes`}</Words>
         )}
