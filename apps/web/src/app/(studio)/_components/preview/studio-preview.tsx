@@ -122,6 +122,20 @@ function useSystemReducesMotion(): boolean {
   );
 }
 
+const noChange = () => () => {};
+
+/**
+ * Whether the page has hydrated, so a click reaches its script: false in the server's markup
+ * (row 89, as Sign out's canSignOut, row 88).
+ */
+function useHydrated(): boolean {
+  return useSyncExternalStore(
+    noChange,
+    () => true,
+    () => false,
+  );
+}
+
 export function StudioPreview({
   csrfToken,
   choices,
@@ -154,6 +168,9 @@ export function StudioPreview({
   const [javascript, setJavaScript] = useState(true);
   const [refresh, setRefresh] = useState(0);
   const systemReduces = useSystemReducesMotion();
+  // Refresh takes a click once the page has hydrated: until then nothing would load the frame
+  // again, so the server's markup holds it (row 89).
+  const hydrated = useHydrated();
   /** The control that asked for a new load, which gets focus back once the frame settles. */
   const cause = useRef<HTMLElement | null>(null);
   const onSettled = useCallback(() => {
@@ -416,10 +433,13 @@ export function StudioPreview({
           </select>
         </div>
         <div className="studio-preview__field">
+          {/* Held, in Studio's busy look, until the page hydrates: never natively disabled. */}
           <button
             type="button"
             className="studio-button"
+            aria-disabled={hydrated ? undefined : true}
             onClick={(event) => {
+              if (!hydrated) return;
               reloadFrom(event.currentTarget);
               setRefresh((count) => count + 1);
             }}
