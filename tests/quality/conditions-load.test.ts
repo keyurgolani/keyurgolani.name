@@ -7,6 +7,7 @@ import {
   reflowFindings,
   watchEnhancements,
 } from './lib/a11y/conditions';
+import { landscapeOcclusionFindings } from './lib/run-cell';
 
 // Each reflow reload awaits document.fonts.ready before its frames (push 3 r2, item 4), as the
 // main pass and the landscape pass do, since the reflow probe measures text boxes. Driven with a
@@ -464,4 +465,138 @@ test('own() is closed when no document was read', async () => {
   watch.stop();
   assert.equal(own.closed, true, 'closed with no document');
   assert.deepEqual([...own.paths], [], 'and empty');
+});
+
+/**
+ * A page whose served HTML names main.js, and which, as it loads, starts one script request in a
+ * frame that is `detached` or live, reporting no end for it, neither requestfinished nor
+ * requestfailed. Every waitForTimeout it's asked for runs.
+ */
+function frameRequestPage(detached: boolean) {
+  const CHUNK = 'http://app.test/_next/static/chunks/sample-runtime.js';
+  const handlers = new Map<string, Set<(value: unknown) => void>>();
+  const emit = (event: string, value: unknown) => {
+    for (const handler of handlers.get(event) ?? []) handler(value);
+  };
+  const frame = { isDetached: () => detached, url: () => 'http://app.test/sample' };
+  const request = { resourceType: () => 'script', url: () => CHUNK, frame: () => frame };
+  const served = {
+    url: () => 'http://app.test/',
+    status: () => 200,
+    request: () => ({ resourceType: () => 'document' }),
+    text: async () => MAIN_HTML,
+  };
+  const page = {
+    on: (event: string, handler: (value: unknown) => void) => {
+      if (!handlers.has(event)) handlers.set(event, new Set());
+      handlers.get(event)!.add(handler);
+    },
+    off: (event: string, handler: (value: unknown) => void) => {
+      handlers.get(event)?.delete(handler);
+    },
+    goto: async () => {
+      emit('response', served);
+      emit('request', request);
+      return null;
+    },
+    waitForFunction: async () => ({}),
+    waitForTimeout: async (ms: number) => {
+      await new Promise((done) => setTimeout(done, ms));
+    },
+    evaluate: async (fn: unknown) => {
+      const source = String(fn);
+      if (source.includes('fonts.ready')) return undefined;
+      if (source.includes('scripting: none')) return false;
+      if (source.includes('requestIdleCallback')) return undefined;
+      if (source.includes('requestAnimationFrame')) return undefined;
+      if (source.includes('data-enhancement-island')) return '';
+      return 0;
+    },
+  };
+  return page as unknown as Page;
+}
+
+// A script request in a frame that has gone holds no wait (studio-runner-still-enhancing-gate:
+// main 5036c16d5, push run 42443937323, demo-studio content at 844x390). There, the landscape
+// pass's resize opened the old document's preview gate, its frame started /sample's chunks, and
+// the goto tore the frame down: 21 requests ended net::ERR_ABORTED while paused in a route, and
+// the wait counted them in flight to its end. A request whose frame has gone can't finish or
+// commit anything. One in a live frame still holds the wait, to its end.
+test('a script request in a frame that has detached, its end never reported, holds no wait', async () => {
+  const page = frameRequestPage(true);
+  const watch = watchEnhancements(page);
+  await page.goto('/');
+  const started = Date.now();
+  const settled = await watch.settled(Date.now() + 2_000);
+  const took = Date.now() - started;
+  watch.stop();
+  assert.equal(settled, true, "settled: the gone frame's request lets the wait go");
+  assert.ok(took < 1_000, `settled in under 1,000 ms, not ${took}`);
+});
+
+test('a script request in a live frame, its end never reported, still holds the wait to its end', async () => {
+  const page = frameRequestPage(false);
+  const watch = watchEnhancements(page);
+  await page.goto('/');
+  const settled = await watch.settled(Date.now() + 1_000);
+  watch.stop();
+  assert.equal(settled, false, "not settled: a live frame's request is still in flight");
+});
+
+/**
+ * A page as landscapeOcclusionFindings drives it, holding `/` at 390x844: what it did, in order,
+ * and each resize with the document it held then. Its keyboard walk ends at once, no stop.
+ */
+function turnPage() {
+  const steps: string[] = [];
+  let size = { width: 390, height: 844 };
+  let holding = '/';
+  const page = {
+    on: () => undefined,
+    off: () => undefined,
+    viewportSize: () => size,
+    setViewportSize: async (next: { width: number; height: number }) => {
+      steps.push(`resize ${next.width}x${next.height} on ${holding}`);
+      size = next;
+    },
+    goto: async (url: string) => {
+      holding = url;
+      steps.push(`goto ${url}`);
+      return null;
+    },
+    waitForLoadState: async () => undefined,
+    waitForFunction: async () => ({}),
+    waitForTimeout: async () => undefined,
+    mouse: { move: async () => undefined },
+    keyboard: { press: async () => undefined },
+    evaluate: async (fn: unknown) => {
+      const source = String(fn);
+      // inPage()'s requests, by the JSON it appends.
+      if (source.includes('({"kind":"tabbables"')) return [];
+      if (source.includes('({"kind":"active"')) return { none: true };
+      if (source.includes('fonts.ready')) return undefined;
+      if (source.includes('scripting: none')) return false;
+      if (source.includes('data-enhancement-island')) return '';
+      return 0;
+    },
+  };
+  return { page: page as unknown as Page, steps };
+}
+
+// The landscape pass turns the viewport off the page (studio-runner-still-enhancing-gate): a
+// resize on the page it holds reflows that document first, and Demo Studio's, crossing
+// NARROW_STUDIO, opens its preview gate and starts a whole /sample load, which the goto then
+// tears down mid-flight. So each resize, the turn and the restore, happens on about:blank, and the
+// page the pass reads is a fresh load at the turned viewport.
+test('the landscape pass resizes only on about:blank, the turn and the restore, each followed by a fresh load', async () => {
+  const { page, steps } = turnPage();
+  await landscapeOcclusionFindings(page, '/', { width: 390, height: 844 }, false);
+  assert.deepEqual(steps, [
+    'goto about:blank',
+    'resize 844x390 on about:blank',
+    'goto /',
+    'goto about:blank',
+    'resize 390x844 on about:blank',
+    'goto /',
+  ]);
 });
