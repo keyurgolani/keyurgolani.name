@@ -335,6 +335,7 @@ export interface OwnScripts {
 /** The script requests a page has made since it started watching, and the ones still in flight. */
 interface ScriptWatch {
   readonly started: () => number;
+  /** The script requests still in flight, but for one in a frame that has gone. */
   readonly pending: () => number;
   /**
    * When each script request it saw finish did, by URL, the latest last, and whether it failed: no
@@ -414,13 +415,30 @@ function watchScripts(page: Page): ScriptWatch {
   };
   const onFinished = onDone(false);
   const onFailed = onDone(true);
+  // A request in a frame that has detached can never end in a way that matters, nor change the
+  // page: no document is left to run what it brings. Playwright may report no end for it at all,
+  // as for one paused in a route when its frame was torn down (main 5036c16d5, demo-studio content
+  // at 844x390: 21 such requests held the wait to its end). So it's dropped, not recorded as
+  // finished or failed, and no retry floor follows it. The bound: a request whose frame can't be
+  // told, frame() throwing as for a worker's, stays counted.
+  const gone = (request: Request) => {
+    try {
+      return request.frame().isDetached();
+    } catch {
+      return false;
+    }
+  };
+  const pending = () => {
+    for (const request of inFlight) if (gone(request)) inFlight.delete(request);
+    return inFlight.size;
+  };
   page.on('response', onResponse);
   page.on('request', onRequest);
   page.on('requestfinished', onFinished);
   page.on('requestfailed', onFailed);
   return {
     started: () => started,
-    pending: () => inFlight.size,
+    pending,
     finished: () => done,
     own: async (end) => {
       let timer: ReturnType<typeof setTimeout> | undefined;

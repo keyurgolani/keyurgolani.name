@@ -278,7 +278,9 @@ interface SuiteRun {
  * enhancement mounts late, a fixed bar over a focus stop, would otherwise mount after the read. One
  * that never settles is STILL_BUSY, one whose enhancements never do is STILL_ENHANCING, each at the
  * turned viewport, and it's read as it stands. Then the viewport goes back and `at`
- * loads again, a restore only: no check reads that page, and the next read loads its own.
+ * loads again, a restore only: no check reads that page, and the next read loads its own. Each
+ * resize, the turn and the restore, happens on about:blank, so no document reflows into a load
+ * the next goto would tear down.
  */
 export async function landscapeOcclusionFindings(
   page: Page,
@@ -289,6 +291,10 @@ export async function landscapeOcclusionFindings(
   const findings: Finding[] = [];
   const [width, height] = [viewport.height, viewport.width];
   const original = page.viewportSize()!;
+  // Off the page before each resize (studio-runner-still-enhancing-gate): a resize on the page it
+  // holds reflows that document first, and Demo Studio's, crossing NARROW_STUDIO, opens its preview
+  // gate and starts a whole /sample load, which the goto then tears down mid-flight.
+  await page.goto('about:blank');
   await page.setViewportSize({ width, height });
   const { settled, enhanced } = await loadForPass(page, at);
   // Each at the turned viewport, so it's its own record and says where (F4).
@@ -313,6 +319,7 @@ export async function landscapeOcclusionFindings(
   for (const finding of await keyboardFindings(page, { occlusion: true, framed })) {
     if (finding.gate === 'occlusion') findings.push({ ...finding, viewport: `${width}x${height}` });
   }
+  await page.goto('about:blank');
   await page.setViewportSize(original);
   await page.goto(at, { waitUntil: 'load' });
   await frames(page);
