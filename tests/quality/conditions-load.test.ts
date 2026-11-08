@@ -61,7 +61,7 @@ test("a reflow reload's load() runs no frame while document.fonts.ready is pendi
   assert.equal(state.framesAfterAsk, 0, 'no frame runs while the fonts are pending');
   state.resolve();
   const loaded = await loading;
-  assert.deepEqual(loaded, { settled: true, enhanced: true });
+  assert.deepEqual(loaded, { settled: true, enhanced: true, held: null });
   assert.equal(state.framesAfterAsk, 1, 'once they resolve, load() runs its frames once');
 });
 
@@ -253,7 +253,7 @@ test("a chunk the page's HTML names as served, finished just before the wait, as
   const started = Date.now();
   const loaded = await load(page, '/', undefined, { enhancements: true });
   const took = Date.now() - started;
-  assert.deepEqual(loaded, { settled: true, enhanced: true });
+  assert.deepEqual(loaded, { settled: true, enhanced: true, held: null });
   assert.deepEqual(
     waits.filter((ms) => ms >= 400),
     [],
@@ -298,7 +298,7 @@ test("a script src that won't parse is skipped, and the HTML's other scripts sti
     ],
   });
   const loaded = await load(page, '/', undefined, { enhancements: true });
-  assert.deepEqual(loaded, { settled: true, enhanced: true });
+  assert.deepEqual(loaded, { settled: true, enhanced: true, held: null });
   assert.deepEqual(
     waits.filter((ms) => ms >= 400),
     [],

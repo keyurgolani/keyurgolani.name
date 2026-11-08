@@ -72,7 +72,7 @@ import {
   revealNoscript,
   scriptRequiredFindings,
   STILL_BUSY,
-  STILL_ENHANCING,
+  stillEnhancingText,
   scriptingMediaFindings,
   inventoryFindings,
   reflowFindings,
@@ -132,6 +132,8 @@ export async function loadForPass(
   response: Response | null;
   settled: boolean;
   enhanced: boolean;
+  /** What held the enhancements' wait when they hadn't settled (heldAt()), else null. */
+  held: string | null;
   served: OwnScripts;
 }> {
   const enhancements = watchEnhancements(page);
@@ -140,7 +142,8 @@ export async function loadForPass(
     const settled = await settle(page);
     const enhanced = await enhancements.settled();
     if (enhanced) await frames(page);
-    return { response, settled, enhanced, served: await enhancements.own() };
+    const held = enhancements.held();
+    return { response, settled, enhanced, held, served: await enhancements.own() };
   } finally {
     enhancements.stop();
   }
@@ -296,7 +299,7 @@ export async function landscapeOcclusionFindings(
   // gate and starts a whole /sample load, which the goto then tears down mid-flight.
   await page.goto('about:blank');
   await page.setViewportSize({ width, height });
-  const { settled, enhanced } = await loadForPass(page, at);
+  const { settled, enhanced, held } = await loadForPass(page, at);
   // Each at the turned viewport, so it's its own record and says where (F4).
   if (!settled) {
     findings.push({
@@ -312,7 +315,7 @@ export async function landscapeOcclusionFindings(
       gate: 'runner',
       rule: 'enhanced',
       expected: "the page's enhancements mount or fail under landscape occlusion",
-      actual: STILL_ENHANCING,
+      actual: stillEnhancingText(held),
       viewport: `${width}x${height}`,
     });
   }
@@ -547,6 +550,8 @@ export interface Pass {
   readonly settled: boolean;
   /** Whether its enhancements mounted or failed before the audit (loadForPass()); a stub may leave it out. */
   readonly enhanced?: boolean;
+  /** What held its enhancements' wait if they hadn't settled (loadForPass()); a stub may omit it. */
+  readonly held?: string | null;
   readonly emulation: readonly string[];
   readonly now: number;
   readonly results: AxeResults;
@@ -589,7 +594,7 @@ export async function runPass(
   if (options.reemulate) await emulateRow(page, onScreen);
   else await applyRow(page, onScreen);
   const at = rowPath(cell, row);
-  const { response, settled, enhanced, served } = await loadForPass(page, at);
+  const { response, settled, enhanced, held, served } = await loadForPass(page, at);
   const status = response?.status() ?? 0;
   ran.add('status');
   if (first) {
@@ -734,6 +739,7 @@ export async function runPass(
       response: answer,
       settled: primitivesSettled,
       enhanced: primitivesEnhanced,
+      held: primitivesHeld,
       served: primitivesServed,
     } = await loadForPass(page, route);
     const surface = { id: PRIMITIVES_SURFACE, route: PRIMITIVES_ROUTE };
@@ -751,7 +757,7 @@ export async function runPass(
         gate: 'runner',
         rule: 'enhanced',
         expected: "the primitives page's enhancements mount or fail",
-        actual: STILL_ENHANCING,
+        actual: stillEnhancingText(primitivesHeld),
       });
     }
     if (answer?.status() !== 200) {
@@ -803,7 +809,7 @@ export async function runPass(
       : [runnerFailure(context, 'status', `${status}, not ${cell.expectedStatus}`)]),
     ...emulation.map((problem) => runnerFailure(context, 'media-emulation', problem)),
     ...(settled ? [] : [runnerFailure(context, 'settled', STILL_BUSY)]),
-    ...(enhanced ? [] : [runnerFailure(context, 'enhanced', STILL_ENHANCING)]),
+    ...(enhanced ? [] : [runnerFailure(context, 'enhanced', stillEnhancingText(held))]),
     ...[...isolation, ...sweptPack].map((finding) => ({
       ...runnerFailure(context, finding.rule, finding.actual ?? ''),
       expected: finding.expected,
@@ -827,6 +833,7 @@ export async function runPass(
     status,
     settled,
     enhanced,
+    held,
     emulation,
     now,
     results,
@@ -937,7 +944,10 @@ export async function runCell(run: CellRun, pass: typeof runPass = runPass) {
       .toBe(cell.expectedStatus);
     expect.soft(settled ? null : STILL_BUSY, `${cell.path} settles${under}`).toBeNull();
     expect
-      .soft(each.enhanced === false ? STILL_ENHANCING : null, `${cell.path} enhances${under}`)
+      .soft(
+        each.enhanced === false ? stillEnhancingText(each.held) : null,
+        `${cell.path} enhances${under}`,
+      )
       .toBeNull();
     expect.soft(emulation, `the ${row.id} row's media emulation`).toEqual([]);
     expect

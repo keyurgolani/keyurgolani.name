@@ -23,7 +23,7 @@ import {
 import type { ContractFixtureName } from '../../packages/variant-contract/src/node/fixtures';
 import { runningAnimations } from '../harness/motion';
 import {
-  STILL_ENHANCING,
+  stillEnhancingText,
   watchEnhancements,
   type EnhancementWatch,
 } from '../quality/lib/a11y/conditions';
@@ -570,7 +570,8 @@ const PENDING = readPendingList() as PendingList;
  * start.
  */
 export async function expectEnhancementsSettled(watch: EnhancementWatch): Promise<void> {
-  expect(await watch.settled(), STILL_ENHANCING).toBe(true);
+  // The message is read once settled() has returned, so it names what held the wait.
+  expect(await watch.settled(), stillEnhancingText(watch.held())).toBe(true);
 }
 
 /**
