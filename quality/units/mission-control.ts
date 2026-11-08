@@ -29,6 +29,11 @@ export const interactions: readonly Interaction[] = [
   { kind: 'disclosure', name: '2 earlier entries', route: '/', state: 'complete' },
   // A work cell's own fold, named by what it holds.
   { kind: 'disclosure', name: 'Credits and notes', route: '/', state: 'complete' },
+  // The sparse and missing-media pages' own, from each one's server render (row 102's SSR probe at
+  // 459fea159): sparse's one closed panel of the full record, and a missing-media work cell's fold.
+  // Missing-media's "1 more quote" is the phone's quote fold, not on the page at every width.
+  { kind: 'disclosure', name: 'Skills 1 group', route: '/', state: 'sparse' },
+  { kind: 'disclosure', name: 'Frames', route: '/', state: 'missing-media' },
 ];
 
 export const notApplicable: readonly NotApplicable[] = [

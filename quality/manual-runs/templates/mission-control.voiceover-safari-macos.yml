@@ -74,6 +74,12 @@ items:
   - id: interaction:disclosure:Credits and notes
     check: 'Toggle "Credits and notes" on / (complete): its expanded or pressed state is announced, and what it shows is reachable.'
     result: todo
+  - id: interaction:disclosure:Skills 1 group
+    check: 'Toggle "Skills 1 group" on / (sparse): its expanded or pressed state is announced, and what it shows is reachable.'
+    result: todo
+  - id: interaction:disclosure:Frames
+    check: 'Toggle "Frames" on / (missing-media): its expanded or pressed state is announced, and what it shows is reachable.'
+    result: todo
   - id: action:none
     check: None registered.
     result: todo
