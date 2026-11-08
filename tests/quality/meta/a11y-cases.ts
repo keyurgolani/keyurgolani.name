@@ -3059,6 +3059,11 @@ export const A11Y_CASES: readonly MetaCase[] = [
   // sampler's own mark and its removal set the transition off, so a link read again part-way back
   // to its ink is read at the transition's end, never called turned (row 25).
   goodFile('own-transition', 'contrast-own-transition.html', 'contrast', contrast),
+  // And one a chain of timeouts turns well after its drop's short transition has ended, as Flux's
+  // tabs at their snap do (#211's 1.00:1): an ancestor's attribute changed since the sampler moved
+  // to it, so its color is read again only once its ancestors' attributes have held still
+  // (QUIET_MS), never dark ink read before and after over the dark drop shot (row 25).
+  goodFile('late-turn', 'contrast-late-turn.html', 'contrast', contrast),
   // A word whose color a script changes every frame never shows one state twice: unresolved,
   // a record that fails the gate, never a pass (row 25).
   {
@@ -3070,6 +3075,20 @@ export const A11Y_CASES: readonly MetaCase[] = [
       /^contrast text: unresolved: its color turned while its background was shot, .+, and again once it held still, .+, so its color and its background never came from one state of the page$/,
     browser: true,
     run: () => onPage('contrast-restless-ink.html', contrast),
+  },
+  // And a word whose ancestor's attribute a script flips for good, the ground under it with it:
+  // its ancestors never hold still for QUIET_MS within the cap, so it's never read from one state
+  // of the page: unresolved, a record that fails the gate, never a pass (row 25's quiet wait,
+  // failing closed), though its ink is the same before and after its shots.
+  {
+    id: 'contrast/restless-ancestor',
+    gate: 'contrast',
+    input: 'tests/quality/fixtures/a11y/contrast-restless-ancestor.html',
+    expect: 'fail',
+    reason:
+      /^contrast text: unresolved: its ancestors' attributes were still changing \d+(?:\.\d+)? s after its shots, so its color can't be read from one state of the page$/,
+    browser: true,
+    run: () => onPage('contrast-restless-ancestor.html', contrast),
   },
   // So is text whose ancestor a scroll-driven animation slides in, once its progress holds.
   {

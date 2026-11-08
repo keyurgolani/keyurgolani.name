@@ -207,6 +207,10 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'contrast/timed-turn',
     'contrast/own-transition',
     'contrast/restless-ink',
+    // Row 25's residual (#211): a turn a chain of timeouts makes after the drop's transition, read
+    // once the word's ancestors hold still; and one whose ancestor never does, unresolved.
+    'contrast/late-turn',
+    'contrast/restless-ancestor',
     // High contrast at thresholds.json's 7:1: 5.5:1 text fails there and passes in normal mode.
     'axe/high-contrast-solid-5-5',
     'contrast/high-contrast-gradient-5-5',

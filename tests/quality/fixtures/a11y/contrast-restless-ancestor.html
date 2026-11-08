@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A word whose ancestor's attribute a script changes for good, known-bad</title>
+    <!--
+      Row 25's guard for the quiet wait: as the word comes into view, a script flips an attribute
+      on its ancestor at once, then every 150 ms for good, and the attribute sets the ground under
+      the word (its ink holds still). The ground is a gradient, both ways, so axe can't measure the
+      word and leaves it to the sampler. Its ancestors' attributes never hold still, so the sampler
+      can't read the word from one state of the page: unresolved, a record that fails the gate,
+      never a pass. Main reads it: its ink the same before and after, its ground shot, it passes.
+    -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 Arial,
+          'Liberation Sans',
+          Helvetica,
+          sans-serif;
+        background: #fff;
+        color: #222;
+      }
+      main {
+        padding: 1rem 1rem 50vh;
+      }
+      .row {
+        margin-top: 150vh;
+        padding: 0.5rem;
+        background: linear-gradient(90deg, #fff, #f6f6f6);
+      }
+      .row .word {
+        color: #222;
+      }
+      .row[data-beat='b'] {
+        background: linear-gradient(90deg, #f4f4f4, #ececec);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A beat</h1>
+      <p class="row" id="row" data-beat="a"><span class="word">Live</span></p>
+    </main>
+    <script>
+      const row = document.getElementById('row');
+      const beat = () => row.setAttribute('data-beat', row.dataset.beat === 'a' ? 'b' : 'a');
+      let started = false;
+      new IntersectionObserver((entries) => {
+        if (started || !entries.some((entry) => entry.isIntersecting)) return;
+        started = true;
+        beat();
+        setInterval(beat, 150);
+      }).observe(row);
+    </script>
+  </body>
+</html>
