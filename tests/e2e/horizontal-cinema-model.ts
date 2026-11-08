@@ -926,3 +926,211 @@ export function printedRail(scope: Scope): Promise<PrintedRail> {
     };
   });
 }
+
+/** A colour as the page computes it, read back as sRGB through a canvas, with its relative luminance. */
+export interface PrintedColour {
+  readonly css: string;
+  readonly rgb: readonly [number, number, number];
+  readonly luminance: number;
+}
+
+/** Strip or List on paper, as the print look reads it. */
+export interface PrintedView {
+  readonly href: string;
+  /** Its words as drawn (innerText), trimmed. */
+  readonly text: string;
+  readonly shown: boolean;
+  /** Its top, for the one line both sit on. */
+  readonly top: number;
+  readonly colour: PrintedColour;
+  /** The first ancestor with a background-colour that isn't transparent, and that colour. */
+  readonly ground: { readonly element: string; readonly colour: PrintedColour };
+  /** The text against its ground, WCAG's ratio. */
+  readonly contrast: number;
+  /** Any fill, border or shadow on the link, or on .hc-chrome__views, as `<what> <value>`; empty is none. */
+  readonly paint: readonly string[];
+}
+
+/** A summary in the boundary on paper: its words, whether it shows, its marker, and any toggle part that prints. */
+export interface PrintedSummary {
+  readonly element: string;
+  readonly text: string;
+  readonly shown: boolean;
+  /** Its whole text is toggle words alone (Show, Hide, Open, Close, More, Less), with or without a chevron. */
+  readonly onlyToggle: boolean;
+  /** Its display and its ::marker's content, as computed. */
+  readonly marker: { readonly display: string; readonly content: string };
+  /** Shown svgs inside it (the chevron). */
+  readonly svgs: number;
+  /** Shown descendants whose own words are toggle words alone, each as `<element> "<words>"`. */
+  readonly toggles: readonly string[];
+}
+
+/** A rail label on paper, with the years beside it when it has them. */
+export interface PrintedLabel {
+  readonly label: string;
+  readonly years: string | null;
+  /** The years show (a box over 1px each way): a shortened rail hides them. */
+  readonly yearsShown: boolean;
+  /** The years' left edge past the label's own text's right edge, in px (Ranges over the label's own text nodes). */
+  readonly gap: number;
+  /** 0.25em of the years' font size, in px. */
+  readonly need: number;
+  /** The years start on another line than the label's text ends. */
+  readonly otherLine: boolean;
+}
+
+/** What the print look reads, under print media: the views, every visible form control, the summaries, the labels. */
+export interface PrintedLook {
+  readonly views: readonly PrintedView[];
+  /** Every shown input, select, textarea, button, [role=button] or [role=combobox] in the boundary, `<tag.class "label"> x,y wxh`. */
+  readonly controls: readonly string[];
+  readonly summaries: readonly PrintedSummary[];
+  readonly labels: readonly PrintedLabel[];
+}
+
+/**
+ * Under print media (the caller emulates it), the print look's reads, beside printedRail's: Strip and List with their
+ * colours against their effective ground (the first ancestor with a background-colour that isn't transparent), any
+ * paint on them; the boundary's shown form controls; its summaries, their markers, chevrons and toggle words; and the
+ * rail's labels against their years.
+ */
+export function printedLook(scope: Scope): Promise<PrintedLook> {
+  return scope.evaluate(() => {
+    const shown = (element: Element) =>
+      element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden';
+    const name = (element: Element) =>
+      `${element.localName}${element.id ? `#${element.id}` : ''}${[...element.classList].map((c) => `.${c}`).join('')}`;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const context = canvas.getContext('2d', { willReadFrequently: true })!;
+    const channel = (value: number) => {
+      const s = value / 255;
+      return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    };
+    const colourOf = (css: string) => {
+      context.clearRect(0, 0, 1, 1);
+      context.fillStyle = '#000';
+      context.fillStyle = css;
+      context.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = context.getImageData(0, 0, 1, 1).data as unknown as number[];
+      const rgb = [r!, g!, b!] as [number, number, number];
+      const luminance =
+        0.2126 * channel(rgb[0]) + 0.7152 * channel(rgb[1]) + 0.0722 * channel(rgb[2]);
+      return { css, rgb, luminance: Math.round(luminance * 1000) / 1000, alpha: a! };
+    };
+    const transparent = (css: string) => {
+      context.clearRect(0, 0, 1, 1);
+      context.fillStyle = 'rgba(0, 0, 0, 0)';
+      context.fillStyle = css;
+      context.fillRect(0, 0, 1, 1);
+      return context.getImageData(0, 0, 1, 1).data[3] === 0;
+    };
+    const paint = (element: Element, what: string) => {
+      const style = getComputedStyle(element);
+      const found: string[] = [];
+      if (!transparent(style.backgroundColor))
+        found.push(`${what} background-color ${style.backgroundColor}`);
+      if (style.backgroundImage !== 'none')
+        found.push(`${what} background-image ${style.backgroundImage}`);
+      for (const side of ['Top', 'Right', 'Bottom', 'Left'] as const) {
+        const width = style.getPropertyValue(`border-${side.toLowerCase()}-width`);
+        const kind = style.getPropertyValue(`border-${side.toLowerCase()}-style`);
+        if (kind !== 'none' && kind !== 'hidden' && Number.parseFloat(width) > 0)
+          found.push(`${what} border-${side.toLowerCase()} ${width} ${kind}`);
+      }
+      if (style.boxShadow !== 'none') found.push(`${what} box-shadow ${style.boxShadow}`);
+      return found;
+    };
+    const holder = document.querySelector('.hc-chrome__views');
+    const views = [
+      ...document.querySelectorAll<HTMLAnchorElement>('.hc-chrome__views a[href]'),
+    ].map((link) => {
+      let at: Element | null = link.parentElement;
+      while (at && transparent(getComputedStyle(at).backgroundColor)) at = at.parentElement;
+      const colour = colourOf(getComputedStyle(link).color);
+      const ground = at
+        ? { element: name(at), colour: colourOf(getComputedStyle(at).backgroundColor) }
+        : { element: '(none: the page canvas, white)', colour: colourOf('#fff') };
+      const [hi, lo] = [colour.luminance, ground.colour.luminance].sort((a, b) => b - a) as [
+        number,
+        number,
+      ];
+      return {
+        href: link.getAttribute('href') ?? '',
+        text: link.innerText.trim(),
+        shown: shown(link),
+        top: Math.round(link.getBoundingClientRect().top * 10) / 10,
+        colour,
+        ground,
+        contrast: Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100,
+        paint: [...paint(link, name(link)), ...(holder ? paint(holder, name(holder)) : [])],
+      };
+    });
+    const boundary = document.querySelector('[data-variant]') ?? document.body;
+    const controls = [
+      ...boundary.querySelectorAll(
+        'input, select, textarea, button, [role="button"], [role="combobox"]',
+      ),
+    ]
+      .filter(shown)
+      .map((element) => {
+        const r = element.getBoundingClientRect();
+        const label =
+          element.getAttribute('aria-label') ||
+          (element as HTMLInputElement).labels?.[0]?.innerText.trim() ||
+          (element as HTMLElement).innerText?.trim().slice(0, 40) ||
+          (element as HTMLInputElement).value ||
+          '';
+        return `<${name(element)} "${label}"> ${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.width)}x${Math.round(r.height)}`;
+      });
+    const TOGGLE = /^(?:(?:show|hide|open|close|more|less)[\s⌄▾▼⌃▴▲›‹»«]*)+$/i;
+    const summaries = [...boundary.querySelectorAll('summary')].map((summary) => {
+      const text = summary.innerText.trim();
+      const marker = getComputedStyle(summary, '::marker');
+      return {
+        element: name(summary),
+        text: text.slice(0, 80),
+        shown: shown(summary),
+        onlyToggle: text !== '' && TOGGLE.test(text),
+        marker: { display: getComputedStyle(summary).display, content: marker.content },
+        svgs: [...summary.querySelectorAll('svg')].filter(shown).length,
+        toggles: [...summary.querySelectorAll<HTMLElement>('*')]
+          .filter((element) => shown(element))
+          .flatMap((element) => {
+            const own = element.innerText?.trim() ?? '';
+            return own !== '' && TOGGLE.test(own) ? [`${name(element)} "${own}"`] : [];
+          }),
+      };
+    });
+    const labels = [...document.querySelectorAll('.hc-minimap__label')].map((label) => {
+      const years = label.querySelector<HTMLElement>('.hc-minimap__years');
+      const own = [...label.childNodes].filter(
+        (node) => !(node instanceof Element && node.matches('.hc-minimap__years')),
+      );
+      const boxes = own
+        .map((node) => {
+          const range = document.createRange();
+          range.selectNodeContents(node);
+          return [...range.getClientRects()];
+        })
+        .flat()
+        .filter((box) => box.width > 0 || box.height > 0);
+      const textRight = boxes.length > 0 ? boxes[boxes.length - 1]! : null;
+      const y = years?.getBoundingClientRect();
+      const fontSize = years ? Number.parseFloat(getComputedStyle(years).fontSize) || 0 : 0;
+      return {
+        label: own
+          .map((node) => node.textContent ?? '')
+          .join('')
+          .trim(),
+        years: years ? (years.textContent ?? '').trim() : null,
+        yearsShown: !!y && y.width > 1 && y.height > 1 && shown(years!),
+        gap: y && textRight ? Math.round((y.left - textRight.right) * 100) / 100 : 0,
+        need: Math.round(fontSize * 0.25 * 100) / 100,
+        otherLine: !!y && !!textRight && y.top >= textRight.bottom - 0.5,
+      };
+    });
+    return { views, controls, summaries, labels };
+  });
+}
