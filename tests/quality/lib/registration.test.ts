@@ -450,6 +450,15 @@ test("Mission Control's controls named from the complete fixture are looked up o
       [],
       state,
     );
+  // Each keeps what its own page holds (its server render, row 102's SSR probe).
+  assert.deepEqual(
+    interactionsOn(registered, '/', 'sparse').map((each) => each.name),
+    ['Skills 1 group'],
+  );
+  assert.deepEqual(
+    interactionsOn(registered, '/', 'missing-media').map((each) => each.name),
+    ['Frames'],
+  );
 });
 
 test("an interaction's state is one its target renders: a surface's own stateFixtures, a composition unit's fixtures", () => {
