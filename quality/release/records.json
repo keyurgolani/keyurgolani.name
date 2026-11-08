@@ -6300,18 +6300,6 @@
     "note": "TF case page: the next case link's ring, 580 of 922 points; #211 (row 8 was the address ring)"
   },
   {
-    "cell": "composition:swiss-signal complete /work/project-name swiss-signal/platform-neutral/warm-parchment/humanist-ui/high-contrast",
-    "viewport": "390x844",
-    "row": "default",
-    "engine": "chromium",
-    "check": "keyboard",
-    "rule": "focus-return",
-    "target": "html > body:nth-child(2) > div:nth-child(2) > div:nth-child(2) > header:nth-child(1) > div:nth-child(1) > div:nth-child(3) > button:nth-child(1)",
-    "owner": "lane D",
-    "routed": "row 108",
-    "note": "SS case page, high-contrast: focus doesn't return to the header's button after its overlay closes; #211"
-  },
-  {
     "cell": "surface:demo-studio content /studio?task=content fallback/platform-neutral/warm-parchment/humanist-ui/system",
     "viewport": "1440x900",
     "row": "default",
