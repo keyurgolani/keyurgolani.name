@@ -75,6 +75,8 @@ import {
   stillEnhancingText,
   scriptingMediaFindings,
   inventoryFindings,
+  conditionsBeforeTouch,
+  TOUCH_CONDITION,
   reflowFindings,
   transparencyFindings,
   watchEnhancements,
@@ -374,7 +376,11 @@ async function suites(run: SuiteRun): Promise<Finding[]> {
     );
   }
   if (run.conditions && does('inventory')) {
-    findings.push(...(await inventoryFindings(page, at, baseline, undefined, run.scriptRequired)));
+    // Every condition but touch: touch runs alone at the cell's end, after the primitives, since
+    // nothing may read the page after it (row 44, conditions-pointer-leak-rc2).
+    findings.push(
+      ...(await inventoryFindings(page, at, baseline, conditionsBeforeTouch(), run.scriptRequired)),
+    );
     // Its no-JavaScript and print conditions read the notice in place of the content.
     if (run.scriptRequired) ran.add(NOTICE_CHECK);
   }
@@ -805,6 +811,21 @@ export async function runPass(
     }
     await record(findings, surface);
     primitives.push(...found.splice(before));
+  }
+  // The touch condition last, on its own, once everything else has read the page: on CI's Linux
+  // Chromium its teardown leaves (pointer) and (hover) at none, and no CDP call gives the fine
+  // pointer back, so a read after it would be of a page without a mouse (row 44, CI run
+  // 42217082243, conditions-pointer-leak-rc2). Its findings are the cell's own.
+  if (contentRow && owed.has('inventory')) {
+    await record(
+      await inventoryFindings(
+        page,
+        at,
+        inventory,
+        [TOUCH_CONDITION],
+        cell.requiresScript !== undefined,
+      ),
+    );
   }
 
   const failures: CellFailure[] = [
