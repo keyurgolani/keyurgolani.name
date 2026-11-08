@@ -10,8 +10,10 @@ import { posterHeading } from '../poster';
 // résumé". Until the Position controller has run and marked the page
 // (no script, before hydration, a failed bundle) the Index is a plain link
 // and the sheet a contents list in the page's flow after main, so nothing
-// can be left open over a section. Marked, it's a native popover on the
-// Index button: Escape and an outside click close it and focus goes back
+// can be left open over a section. Served, the sheet is no popover: a closed
+// popover the page shows would hide its links from a reader that knows
+// closed popovers aren't shown. Marked, Position makes it a native popover on
+// the Index button: Escape and an outside click close it and focus goes back
 // to the button; the controller closes it on a link click and when focus
 // ends up outside it (S4), and shows the print button (styles.css).
 
@@ -83,7 +85,7 @@ export function IndexSheet({
     );
   };
   return (
-    <div className="ss-index__sheet" id={sheet} popover="auto">
+    <div className="ss-index__sheet" id={sheet}>
       <nav className="ss-grid" aria-label="Index of sections">
         <ol className="ss-index__parts">
           {opening.length > 0 ? (

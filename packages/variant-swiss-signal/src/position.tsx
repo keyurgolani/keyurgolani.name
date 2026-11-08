@@ -93,11 +93,15 @@ export function Position({ prefix }: { readonly prefix: string }) {
     const button = root.querySelector<HTMLElement>('.ss-index__button');
     if (sheet && typeof sheet.hidePopover === 'function') {
       // The page is live: the Index shows its button, and the sheet is a popover (styles.css).
+      // Served, it's none (index-sheet.tsx), so the no-script contents list is never a closed one.
+      sheet.setAttribute('popover', 'auto');
       root.setAttribute('data-ss-live', '');
       const open = () => sheet.matches(':popover-open');
-      // Unmarked, the sheet is a contents list again: close it first, so it never stays a popover.
+      // Unmarked, the sheet is a contents list again: closed first, while it's still a popover,
+      // then the plain list it was served as.
       cleanups.push(() => {
         if (open()) sheet.hidePopover();
+        sheet.removeAttribute('popover');
         root.removeAttribute('data-ss-live');
       });
       const inside = (node: Node | null) =>
