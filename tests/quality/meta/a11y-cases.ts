@@ -48,6 +48,13 @@ import { killSwitches, MOTION_SAMPLER, motionFindings, osWinsFindings } from '..
 import { inPage, type Active } from '../lib/a11y/probe';
 import { applyRow, audit, landscapeOcclusionFindings, loadForPass, runPass } from '../lib/run-cell';
 import type { MetaCase, MetaOutcome } from './cases';
+import { noteReach } from './reach';
+
+/** An axe analysis's results, its incomplete contrast count noted for the reach file first. */
+const reached = <R extends Parameters<typeof noteReach>[0]>(results: R): R => {
+  noteReach(results);
+  return results;
+};
 
 const FIXTURES = fileURLToPath(new URL('../fixtures/a11y/', import.meta.url));
 
@@ -1082,19 +1089,19 @@ const touchInventory = async (page: Page) =>
 const axeRule =
   (rule: string) =>
   async (page: Page): Promise<Finding[]> =>
-    (await axeFor(page).analyze()).violations
-      .filter((each) => each.id === rule)
+    reached(await axeFor(page).analyze())
+      .violations.filter((each) => each.id === rule)
       .flatMap((each) =>
         each.nodes.map((node) => ({ gate: 'axe', rule: each.id, actual: node.failureSummary })),
       );
 const axeAll = async (page: Page): Promise<Finding[]> =>
-  (await axeFor(page).analyze()).violations.map((each) => ({
+  reached(await axeFor(page).analyze()).violations.map((each) => ({
     gate: 'axe',
     rule: each.id,
     actual: each.help,
   }));
 const contrast = async (page: Page) =>
-  incompleteContrastFindings(page, await axeFor(page).analyze());
+  incompleteContrastFindings(page, reached(await axeFor(page).analyze()));
 
 /** How many changes the sampler's watch of the page may hold at once (row25-quiet-rc2-hardening). */
 const TURNS_BOUND = 1000;
@@ -1144,7 +1151,7 @@ const contrastTurnsBounded = async (page: Page): Promise<Finding[]> => {
  * it, finds anything else, record for record (row 14's equivalence).
  */
 const contrastBothWays = async (page: Page): Promise<Finding[]> => {
-  const results = await axeFor(page).analyze();
+  const results = reached(await axeFor(page).analyze());
   const batched = await incompleteContrastFindings(page, results);
   const alone = await incompleteContrastFindings(page, results, false, { batch: false });
   const records = (each: readonly Finding[]) => each.map((finding) => JSON.stringify(finding));
@@ -1172,7 +1179,7 @@ const tripsFor = (elements: number) => Math.ceil(elements / 2) + 20;
  * 14), about fifteen round trips and three shots an element.
  */
 const contrastTrips = async (page: Page): Promise<Finding[]> => {
-  const results = await axeFor(page).analyze();
+  const results = reached(await axeFor(page).analyze());
   let trips = 0;
   let shots = 0;
   const counted = <T extends object>(target: T, calls: readonly string[]): T =>
