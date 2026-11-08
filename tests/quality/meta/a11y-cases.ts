@@ -2456,13 +2456,22 @@ export const A11Y_CASES: readonly MetaCase[] = [
         { chunk: REVEAL },
       ),
   },
-  // And one whose chunk never comes is no read: past BUSY_LIMIT_MS the cell fails, saying so.
+  // And one whose chunk never comes is no read: past BUSY_LIMIT_MS the cell fails, saying so,
+  // and naming what held it (row 109's ruling): that one chunk in flight in the main frame; the
+  // island live already as the wait began, or going live after (its timer after load may fire
+  // either side of the wait's first read); nothing pending; and the floor past the end.
   builtCase(
     'lazy-never',
     'runner',
     'a lazy chunk the stand-in never serves, under the touch condition',
     lazyReveal('A chunk that never comes', '<button type="button" hidden data-lazy>jump</button>'),
-    new RegExp(`^runner enhanced: ${STILL_ENHANCING.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`),
+    new RegExp(
+      `^runner enhanced: ${STILL_ENHANCING.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}; held by ` +
+        '1 script in flight \\(/[^ ,()]+, main frame\\), ' +
+        'the last started \\d+ ms before the end \\(/[^ ,()]+\\), ' +
+        'islands (unchanged|changed \\(reveal markup to live\\)), 0 marked pending, ' +
+        'the floor \\d+ ms past the end$',
+    ),
     touchInventory,
     { chunk: 'never' },
   ),

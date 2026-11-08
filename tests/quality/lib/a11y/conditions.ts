@@ -322,6 +322,13 @@ const stillBusy = (condition: string): Finding => ({
 export const STILL_ENHANCING = `the page's enhancements were still loading, a script in flight, an island changing or a first pass pending, or within React's retry delay after the last one, after ${BUSY_LIMIT_MS / 1000} s`;
 
 /**
+ * STILL_ENHANCING and what held the wait as it ended (enhancementsSettled(), row 109): the fixed
+ * text stays the prefix, and `held`, when there is one, follows "; held by ".
+ */
+export const stillEnhancingText = (held?: string | null): string =>
+  held ? `${STILL_ENHANCING}; held by ${held}` : STILL_ENHANCING;
+
+/**
  * A page's own scripts: the paths its documents' HTML names, as served (htmlScripts()). `closed`
  * when they couldn't be told (no document read, a body unreadable, or none by the wait's end):
  * `paths` is empty then, so every chunk counts as optional, and failed enhancement says so rather
@@ -337,6 +344,10 @@ interface ScriptWatch {
   readonly started: () => number;
   /** The script requests still in flight, but for one in a frame that has gone. */
   readonly pending: () => number;
+  /** Those requests, each by its path and frame: the main frame, a frame by its path, or none. */
+  readonly open: () => readonly { readonly path: string; readonly frame: string }[];
+  /** The latest script request started, by its path, and when; null before the first. */
+  readonly last: () => { readonly path: string; readonly at: number } | null;
   /**
    * When each script request it saw finish did, by URL, the latest last, and whether it failed: no
    * response, or an HTTP error, which Turbopack's runtime retries (TURBOPACK_RETRY_MAX_MS).
@@ -375,6 +386,15 @@ const optionalChunk = (url: string, own: ReadonlySet<string>) => {
   return /\/_next\/static\/chunks\//.test(pathname) && !own.has(pathname);
 };
 
+/** A URL's path, as a held wait names a request or a frame; the URL itself if it won't parse. */
+const pathOf = (url: string) => {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url;
+  }
+};
+
 /**
  * Counts `page`'s script requests from now: a lazy enhancement's chunk is one, as failed
  * enhancement blocks it. And reads each document it loads from now, the main frame's and every
@@ -388,6 +408,7 @@ function watchScripts(page: Page): ScriptWatch {
   const done: { url: string; at: number; failed: boolean }[] = [];
   const documents: Promise<readonly string[] | null>[] = [];
   let started = 0;
+  let latest: { readonly path: string; readonly at: number } | null = null;
   const onResponse = (response: Response) => {
     // A script the server answered with an error failed, as the runtime sees it.
     if (response.request().resourceType() === 'script') {
@@ -408,6 +429,7 @@ function watchScripts(page: Page): ScriptWatch {
     if (request.resourceType() !== 'script') return;
     inFlight.add(request);
     started += 1;
+    latest = { path: pathOf(request.url()), at: Date.now() };
   };
   const onDone = (failed: boolean) => (request: Request) => {
     if (inFlight.delete(request))
@@ -432,6 +454,21 @@ function watchScripts(page: Page): ScriptWatch {
     for (const request of inFlight) if (gone(request)) inFlight.delete(request);
     return inFlight.size;
   };
+  // A request's frame, as a held wait names it: one that can't be told is none.
+  const frameOf = (request: Request) => {
+    let frame: ReturnType<Request['frame']>;
+    try {
+      frame = request.frame();
+    } catch {
+      return 'no frame';
+    }
+    try {
+      if (frame === page.mainFrame()) return 'main frame';
+    } catch {
+      // A page that can't name its main frame: the frame by its path, then.
+    }
+    return `frame ${pathOf(frame.url())}`;
+  };
   page.on('response', onResponse);
   page.on('request', onRequest);
   page.on('requestfinished', onFinished);
@@ -439,6 +476,14 @@ function watchScripts(page: Page): ScriptWatch {
   return {
     started: () => started,
     pending,
+    open: () => {
+      pending();
+      return [...inFlight].map((request) => ({
+        path: pathOf(request.url()),
+        frame: frameOf(request),
+      }));
+    },
+    last: () => latest,
     finished: () => done,
     own: async (end) => {
       let timer: ReturnType<typeof setTimeout> | undefined;
@@ -504,15 +549,16 @@ async function idle(page: Page, ms: number): Promise<void> {
  * content on a timer 300 ms after the latest fallback shown or hidden on the
  * page, the page idle in between. A page quiet throughout waits as before. An
  * island that never starts, out of view, paused, or lacking what it
- * requires, stays markup, which is settled too. Until `end`: false when
- * they still hadn't settled, and the caller fails the cell with
- * STILL_ENHANCING and reads the page as it stands.
+ * requires, stays markup, which is settled too. Until `end`: null once
+ * they've settled; else what held the wait as it ended (heldAt()), and the
+ * caller fails the cell with stillEnhancingText() of it and reads the page
+ * as it stands.
  */
 async function enhancementsSettled(
   page: Page,
   scripts: ScriptWatch,
   end: number,
-): Promise<boolean> {
+): Promise<string | null> {
   const islands = () =>
     page.evaluate(() =>
       [...document.querySelectorAll('[data-enhancement-island]')]
@@ -529,7 +575,8 @@ async function enhancementsSettled(
   // a request in flight now, or else the end of the last optional chunk that finished before
   // the wait began (push 3 r3), since a chunk from cache can land before the wait and commit after.
   // Optional by the HTML as served (push 3 r4), as the live page names every chunk it loaded.
-  let seen = `${scripts.started()} ${await islands()}`;
+  const islandsAtStart = await islands();
+  let seen = `${scripts.started()} ${islandsAtStart}`;
   const own = (await scripts.own(end)).paths;
   // The latest optional chunk that failed, before the wait or during it: its retry may come up to
   // TURBOPACK_RETRY_MAX_MS later (push 3 r5, item 4).
@@ -546,6 +593,15 @@ async function enhancementsSettled(
     .map(({ at }) => at);
   let changed: number | null =
     scripts.pending() > 0 ? Date.now() : early.length > 0 ? Math.max(...early) : null;
+  // React's retry: no sooner than its delay and a margin after the last change; and a failed
+  // chunk's, no sooner than the runtime's longest retry and the margin after it failed. 0: none.
+  const floorAt = () => {
+    const failedAt = lastFailed();
+    return Math.max(
+      changed === null ? 0 : changed + SUSPENSE_RETRY_MS + SUSPENSE_RETRY_MARGIN_MS,
+      failedAt === null ? 0 : failedAt + TURBOPACK_RETRY_MAX_MS + SUSPENSE_RETRY_MARGIN_MS,
+    );
+  };
   while (Date.now() < end) {
     if (scripts.pending() > 0) {
       before = null;
@@ -559,14 +615,8 @@ async function enhancementsSettled(
       changed = Date.now();
     }
     if (now === before && (await pending()) === 0) {
-      // React's retry: no sooner than its delay and a margin after the last change; and a failed
-      // chunk's, no sooner than the runtime's longest retry and the margin after it failed.
-      const failedAt = lastFailed();
-      const floor = Math.max(
-        changed === null ? 0 : changed + SUSPENSE_RETRY_MS + SUSPENSE_RETRY_MARGIN_MS,
-        failedAt === null ? 0 : failedAt + TURBOPACK_RETRY_MAX_MS + SUSPENSE_RETRY_MARGIN_MS,
-      );
-      if (Date.now() >= floor) return true;
+      const floor = floorAt();
+      if (Date.now() >= floor) return null;
       await page.waitForTimeout(Math.max(1, Math.min(floor, end) - Date.now()));
       before = null;
       continue;
@@ -574,7 +624,69 @@ async function enhancementsSettled(
     before = now;
     await idle(page, end - Date.now());
   }
-  return false;
+  return heldAt(scripts, end, {
+    islandsAtStart,
+    islandsAtEnd: await islands().catch(() => null),
+    pending: await pending().catch(() => null),
+    floor: floorAt(),
+  });
+}
+
+/** `ms` against the wait's end: so many ms before it, or past it. */
+const againstEnd = (ms: number) => (ms > 0 ? `${ms} ms past the end` : `${-ms} ms before the end`);
+
+/**
+ * What held enhancementsSettled() as it ended (row 109's ruling), each part named: the script
+ * requests in flight, each by its path and frame, the first three listed; the last start's age
+ * and path; the islands' change across the wait, by name, from its state as the wait began to its
+ * state at the end; the count of what's marked pending; and the floor (React's retry delay, or a
+ * failed chunk's) against the end. A read the page refused, closed say, is unread.
+ */
+function heldAt(
+  scripts: ScriptWatch,
+  end: number,
+  at: {
+    readonly islandsAtStart: string;
+    readonly islandsAtEnd: string | null;
+    readonly pending: number | null;
+    readonly floor: number;
+  },
+): string {
+  const open = scripts.open();
+  const flight =
+    open.length === 0
+      ? 'no script in flight'
+      : `${open.length} script${open.length === 1 ? '' : 's'} in flight (${open
+          .slice(0, 3)
+          .map(({ path, frame }) => `${path}, ${frame}`)
+          .join('; ')}${open.length > 3 ? `; and ${open.length - 3} more` : ''})`;
+  const last = scripts.last();
+  const started =
+    last === null ? 'none started' : `the last started ${againstEnd(last.at - end)} (${last.path})`;
+  // Each island as islands() reads it, name=state, by its name.
+  const states = (text: string) =>
+    new Map(
+      text
+        .split(' ')
+        .filter(Boolean)
+        .map((each) => {
+          const cut = each.lastIndexOf('=');
+          return [each.slice(0, cut), each.slice(cut + 1)] as const;
+        }),
+    );
+  let islandText = 'islands unread';
+  if (at.islandsAtEnd !== null) {
+    const before = states(at.islandsAtStart);
+    const after = states(at.islandsAtEnd);
+    const changes = [...new Set([...before.keys(), ...after.keys()])]
+      .filter((name) => before.get(name) !== after.get(name))
+      .map((name) => `${name} ${before.get(name) ?? 'absent'} to ${after.get(name) ?? 'absent'}`);
+    islandText =
+      changes.length === 0 ? 'islands unchanged' : `islands changed (${changes.join('; ')})`;
+  }
+  const pendingText = at.pending === null ? 'pending unread' : `${at.pending} marked pending`;
+  const floor = at.floor === 0 ? 'no floor' : `the floor ${againstEnd(at.floor - end)}`;
+  return [flight, started, islandText, pendingText, floor].join(', ');
 }
 
 /** A watch on a page's enhancements, started before its load: `settled()` once it has loaded. */
@@ -589,9 +701,11 @@ export interface EnhancementWatch {
    * Waits, until `end`, for the enhancements to mount or fail
    * (enhancementsSettled(), a condition's reload's first phase); true at
    * once with script off, where nothing mounts. False when they hadn't
-   * settled by then: the caller fails the cell with STILL_ENHANCING.
+   * settled by then: the caller fails the cell with stillEnhancingText(held()).
    */
   readonly settled: (end?: number) => Promise<boolean>;
+  /** What held the last settled() that returned false (heldAt()); else null. */
+  readonly held: () => string | null;
   readonly stop: () => void;
 }
 
@@ -602,12 +716,16 @@ export interface EnhancementWatch {
  */
 export function watchEnhancements(page: Page): EnhancementWatch {
   const scripts = watchScripts(page);
+  let held: string | null = null;
   return {
     own: (end = Date.now() + BUSY_LIMIT_MS) => scripts.own(end),
     settled: async (end = Date.now() + BUSY_LIMIT_MS) => {
+      held = null;
       if (await page.evaluate(() => matchMedia('(scripting: none)').matches)) return true;
-      return enhancementsSettled(page, scripts, end);
+      held = await enhancementsSettled(page, scripts, end);
+      return held === null;
     },
+    held: () => held,
     stop: () => scripts.stop(),
   };
 }
@@ -650,6 +768,8 @@ async function baselineShown(page: Page, expected: Expected, end: number): Promi
 interface Loaded {
   readonly settled: boolean;
   readonly enhanced: boolean;
+  /** What held the enhancements' wait when they hadn't (heldAt()), else null. */
+  readonly held: string | null;
 }
 
 /**
@@ -678,11 +798,11 @@ export async function load(
   try {
     await page.goto(path, { waitUntil: 'load' });
     const settled = await notBusy(page);
-    let enhanced = true;
+    let held: string | null = null;
     if (scripts && !(await page.evaluate(() => matchMedia('(scripting: none)').matches))) {
       const end = Date.now() + BUSY_LIMIT_MS;
-      enhanced = await enhancementsSettled(page, scripts, end);
-      if (enhanced && expected) await baselineShown(page, expected, end);
+      held = await enhancementsSettled(page, scripts, end);
+      if (held === null && expected) await baselineShown(page, expected, end);
     }
     await page.evaluate(async () => {
       await document.fonts.ready;
@@ -695,18 +815,18 @@ export async function load(
       );
     }
     await frames(page);
-    return { settled, enhanced };
+    return { settled, enhanced: held === null, held };
   } finally {
     scripts?.stop();
   }
 }
 
-/** A finding for a page a condition reloaded whose enhancements never finished. */
-const stillEnhancing = (condition: string): Finding => ({
+/** A finding for a page a condition reloaded whose enhancements never finished, and its hold. */
+const stillEnhancing = (condition: string, held: string | null): Finding => ({
   gate: 'runner',
   rule: 'enhanced',
   expected: `the page's enhancements mount or fail under ${condition}`,
-  actual: STILL_ENHANCING,
+  actual: stillEnhancingText(held),
 });
 
 /** Reloads `path` for `condition`'s read, its enhancements in, and what it owes if it didn't settle. */
@@ -716,10 +836,10 @@ async function reload(
   condition: string,
   expected: Expected,
 ): Promise<Finding[]> {
-  const { settled, enhanced } = await load(page, path, expected);
+  const { settled, enhanced, held } = await load(page, path, expected);
   return [
     ...(settled ? [] : [stillBusy(condition)]),
-    ...(enhanced ? [] : [stillEnhancing(condition)]),
+    ...(enhanced ? [] : [stillEnhancing(condition, held)]),
   ];
 }
 
@@ -1264,7 +1384,7 @@ export async function reflowFindings(
       // Each at its condition's viewport, so it's its own record and says where (F4).
       if (!loaded.settled) findings.push({ ...stillBusy(condition.rule), viewport: condition.id });
       if (!loaded.enhanced) {
-        findings.push({ ...stillEnhancing(condition.rule), viewport: condition.id });
+        findings.push({ ...stillEnhancing(condition.rule, loaded.held), viewport: condition.id });
       }
       const probe = async (state: string) => {
         for (const problem of await inPage<{ rule: string; path: string; detail: string }[]>(page, {
