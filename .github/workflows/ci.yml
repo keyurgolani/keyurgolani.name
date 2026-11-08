@@ -54,7 +54,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      jobs: ${{ steps.select.outputs.jobs }}
+      # Batch S's evidence branch, never merged: the selection cut to build
+      # (ci/evidence/row88/keep-jobs.mjs), so build, with ci:studio-chunks,
+      # and row88-evidence run. complete stays the selection's.
+      jobs: ${{ steps.keep.outputs.jobs }}
       complete: ${{ steps.select.outputs.complete }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -67,6 +70,11 @@ jobs:
           PR_DRAFT: ${{ github.event.pull_request.draft }}
           BASE_REF: ${{ github.base_ref }}
         run: node ci/select-jobs.mjs --github
+      - name: Keep the evidence branch's jobs
+        id: keep
+        env:
+          SELECTED: ${{ steps.select.outputs.jobs }}
+        run: node ci/evidence/row88/keep-jobs.mjs
 
   static:
     name: static
@@ -1137,6 +1145,55 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: reports-fresh-clone
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # Batch S (rows 88, 88c, 88b), CI Linux evidence, on a branch that never
+  # merges (kgn/b-batchS-evidence-*): the PR head itself checked out (not the
+  # merge), its parent the landing commit, in the browser suite's pinned image,
+  # user and options, after the build the browser shards run. Each selection
+  # x 3 with no retry, each with an output directory of its own, so traces,
+  # screenshots and error-context.md stay (ci/evidence/row88/batchS-x3.sh).
+  row88-evidence:
+    name: row88-evidence (Batch S, its pins x 3 on CI Linux, kept)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 2
+      - name: HEAD
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git rev-parse HEAD
+          git rev-parse HEAD^
+          echo "PR head $PR_HEAD"
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm ci:build
+        run: pnpm ci:build
+      - name: "Batch S's pins, each selection x 3, retries 0, results kept"
+        env:
+          LANDING: 7ef2bc8dca9e6a26127e7b7c68f63e094b047808
+        run: node ci/run.mjs row88-evidence -- sh ci/evidence/row88/batchS-x3.sh "$LANDING"
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-row88-evidence
           path: reports/
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
