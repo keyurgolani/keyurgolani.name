@@ -8,8 +8,9 @@
 // where no browser is installed, it leaves out the cases that launch one
 // and says how many.
 
-import { currentGate, writeFailureRecord } from '../../../ci/lib/reports.mjs';
+import { currentGate, reportsDir, writeFailureRecord } from '../../../ci/lib/reports.mjs';
 import { judge, META_CASES, tableProblems, type MetaOutcome } from './cases';
+import { reach, writeReach } from './reach';
 
 const TAG = '[quality:meta]';
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
@@ -33,6 +34,7 @@ async function main(): Promise<number> {
   const misses: string[] = [];
   for (const metaCase of cases) {
     let outcome: MetaOutcome;
+    reach.start(metaCase.id);
     try {
       outcome = await metaCase.run();
     } catch (error) {
@@ -59,6 +61,8 @@ async function main(): Promise<number> {
       process.stdout.write(`${TAG} ok ${metaCase.id}: ${result}.\n`);
     }
   }
+  // Each case's incomplete contrast count, in a side file: the lines above stay as they are.
+  writeReach(reportsDir());
   const bad = cases.filter(({ expect }) => expect === 'fail').length;
   const good = cases.length - bad;
   const gates = new Set(cases.map(({ gate: name }) => name)).size;
