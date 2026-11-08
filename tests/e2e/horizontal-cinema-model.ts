@@ -895,3 +895,34 @@ export async function ringContrast(page: Page, locator: Locator): Promise<RingCo
     },
   };
 }
+
+/** What the page puts on paper of the rail and the views, read under print media. */
+export interface PrintedRail {
+  /** The rail's chapter links, in order (one a chapter): each one's href, and whether it has a box and shows. */
+  readonly rail: readonly { readonly href: string; readonly shown: boolean }[];
+  /** Strip and List: each one's href, and whether it has a box and shows. */
+  readonly views: readonly { readonly href: string; readonly shown: boolean }[];
+  /** How many of the scrubber's buttons have a box and show. */
+  readonly buttons: number;
+}
+
+/**
+ * Under print media (the caller emulates it), the rail's chapter links (one a chapter), the top line's
+ * views, and the scrubber's buttons, each as rendered: with a client rect, and visible.
+ */
+export function printedRail(scope: Scope): Promise<PrintedRail> {
+  return scope.evaluate(() => {
+    const shown = (element: Element) =>
+      element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden';
+    const links = (selector: string) =>
+      [...document.querySelectorAll<HTMLAnchorElement>(selector)].map((link) => ({
+        href: link.getAttribute('href') ?? '',
+        shown: shown(link),
+      }));
+    return {
+      rail: links('.hc-minimap__chapter > a[href]'),
+      views: links('.hc-chrome__views a[href]'),
+      buttons: [...document.querySelectorAll('.hc-scrub button')].filter(shown).length,
+    };
+  });
+}

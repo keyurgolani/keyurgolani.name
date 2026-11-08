@@ -135,9 +135,9 @@ test('a touch screen in the strip’s room shows the strip’s bar in flow and S
     declared(at(".hc[data-view='strip'] .hc-chrome__views"), touch[0]!),
     /display: inline-flex;/,
   );
-  // A screen's only: on paper the print rule's hidden bar stands, by touch as by mouse.
+  // A screen's only: on paper the print rule's plain rail stands, by touch as by mouse (RC1 6(a)).
   assert.equal(blocks(TOUCH.replace('screen and ', '')).length, 0);
-  assert.match(blocks('print').join('\n'), /\.hc-scrub,[^{]*\{\s*display: none;/);
+  assert.match(declared(at('.hc-scrub'), blocks('print').join('\n')), /display: block;/);
   // Nothing else shows the bar or sticks it, so a phone, a short landscape window, the mouse strip,
   // and the fallback a face too wide sends top to bottom keep what they had.
   assert.doesNotMatch(CSS, /\.hc-scrub \{[^}]*position: sticky/);
@@ -255,4 +255,35 @@ test('every top-line link row 90 cleared takes the band’s ink from the name an
   // Every link the top line draws is its name or one in the nav: the visitor's control is a slot.
   const links = (text: string) => (text.match(/<a\b/g) ?? []).length;
   assert.equal(links(header), 1 + links(nav));
+});
+
+test('on paper the rail prints as a plain list of its chapters and Strip | List as a plain line, and the scrubber’s buttons stay hidden', () => {
+  // RC1 6(a): print keeps the rail and the views, in the print palette, nothing interactive. The rail's
+  // chapter links are internal, so they print as their words (a URL follows only an external link).
+  const print = blocks('print').join('\n');
+  for (const rail of [
+    '.hc-scrub',
+    ".hc[data-view='strip'] .hc-shell:not([data-fit='over']) .hc-scrub",
+  ])
+    assert.match(declared(at(rail), print), /display: block;/, rail);
+  for (const gone of [
+    '.hc-scrub__transport',
+    '.hc-scrub__status',
+    '.hc-minimap__blocks',
+    '.hc-minimap__window',
+    '.hc-minimap__contents',
+  ])
+    assert.match(declared(at(gone), print), /display: none;/, gone);
+  assert.match(declared(at('.hc-minimap ol'), print), /display: block;[\s\S]*list-style: decimal;/);
+  assert.match(declared(at('.hc-minimap__chapter'), print), /display: list-item;/);
+  assert.match(
+    declared(at('.hc-minimap__chapter a'), print),
+    /color: var\(--color-text-primary\);/,
+  );
+  assert.match(declared(at('.hc-chrome__views'), print), /display: inline-flex;/);
+  assert.match(
+    declared(at('.hc-chrome__views a[aria-current]'), print),
+    /background-color: transparent;/,
+  );
+  assert.doesNotMatch(print, /\.hc-scrub,/);
 });
