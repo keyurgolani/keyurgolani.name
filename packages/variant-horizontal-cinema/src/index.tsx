@@ -278,3 +278,5 @@ function HomePage({ input }: HomePageProps) {
 }
 
 export default composePages({ HomePage, CaseStudyPage });
+
+// HC evidence only, not for merge (H1): quality:pr change-directs Horizontal Cinema, its check slice the no-op base's.
