@@ -1,6 +1,16 @@
-import type { Frame, Page } from '@playwright/test';
+import type { Frame, Locator, Page } from '@playwright/test';
 import { WORD } from '../../packages/variant-horizontal-cinema/src/chapters';
+import { loadThresholds } from '../../quality/thresholds';
 import { expect, test } from '../harness/fixtures';
+import {
+  centreLineChange,
+  clipAround,
+  frames as drawn,
+  ringCentreLine,
+  type LinePoint,
+} from '../quality/lib/a11y/interaction';
+import { inPage, type Active, type Box } from '../quality/lib/a11y/probe';
+import { decodePng } from '../quality/lib/pixels';
 
 // Horizontal Cinema's scene model and the readers its browser specs share
 // (redesign): the scenes in strip order, which one the page says is
@@ -700,4 +710,64 @@ export async function loadAtStacked(page: Page, index?: number): Promise<void> {
  */
 export async function stepAcrossStacked(page: Page): Promise<number> {
   return (await stepNextStacked(page)) + (await stepPreviousStacked(page));
+}
+
+/** A side of a focus ring, as its centre line's normal points out from the box. */
+export type RingSide = 'top' | 'right' | 'bottom' | 'left';
+
+/** A ring measured along its centre line, side by side, and the line's own box. */
+export interface RingContrast {
+  /** Each side's points in view, and how many of them the focus change takes to 3:1. */
+  readonly sides: Readonly<Record<RingSide, { readonly points: number; readonly strong: number }>>;
+  /** The box the centre line runs round: the border box set out by the offset and half the width. */
+  readonly box: Box;
+}
+
+/**
+ * The focused stop's outline ring, along its centre line, side by side: the focus check's own
+ * measure (tests/quality/lib/a11y/interaction.ts ringCentreLine and centreLineChange, at the
+ * non-text contrast threshold), on its shots in its order. A focused shot of the box and as far as
+ * the ring reaches, a pixel more; the blur, two frames, and the blurred shot; then focus back, as a
+ * script gives it, so the stop still shows its ring. Decoded here, in Node. It reports and asserts
+ * nothing: the verdict is focusFindings()'s, and these numbers say which side a red one fails on.
+ */
+export async function ringContrast(page: Page, locator: Locator): Promise<RingContrast> {
+  if (!(await locator.evaluate((element) => element === document.activeElement)))
+    throw new Error('ringContrast measures the stop that has focus');
+  const active = await inPage<Active>(page, { kind: 'active' });
+  const width = active.rounding?.width ?? 0;
+  if (!active.rounding || width === 0) throw new Error(`${active.path} has no outline ring`);
+  const clip = clipAround(active.box, Math.ceil(active.reach) + 1, page.viewportSize()!);
+  if (!clip) throw new Error(`${active.path} is out of the viewport`);
+  const shot = async () =>
+    decodePng(await page.screenshot({ clip, animations: 'disabled', caret: 'hide' }));
+  await drawn(page);
+  const focused = await shot();
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await drawn(page);
+  const blurred = await shot();
+  await locator.evaluate((element: HTMLElement) => element.focus());
+  const distance = active.rounding.offset + width / 2;
+  const line = ringCentreLine(active.box, active.rounding.corners, distance);
+  // A corner's arc goes to the side its normal points out from most.
+  const sideOf = ({ nx, ny }: LinePoint): RingSide =>
+    Math.abs(ny) >= Math.abs(nx) ? (ny < 0 ? 'top' : 'bottom') : nx > 0 ? 'right' : 'left';
+  const ratio = loadThresholds().contrast.nonText;
+  const sides = Object.fromEntries(
+    (['top', 'right', 'bottom', 'left'] as const).map((side) => {
+      const points = line.filter((point) => sideOf(point) === side);
+      const { strong, total } = centreLineChange(focused, blurred, clip, points, ratio, width / 2);
+      return [side, { points: total, strong }];
+    }),
+  ) as RingContrast['sides'];
+  const { x, y, width: across, height } = active.box;
+  return {
+    sides,
+    box: {
+      x: x - distance,
+      y: y - distance,
+      width: across + 2 * distance,
+      height: height + 2 * distance,
+    },
+  };
 }

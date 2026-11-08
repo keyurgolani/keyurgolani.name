@@ -191,3 +191,13 @@ test('a ring is shaped through the focus tokens alone: no outline of its own, an
   ])
     assert.match(declared(at(part), CSS), /--ui-focus-offset: var\(--space-3xs\);/, part);
 });
+
+test('on the title card a focus ring is the canvas’s ink, text-primary: the card’s panel is the canvas, not the matte', () => {
+  // The matte scene's rule gives its rings the band's ink, on-scrim; the card inside it is drawn on
+  // the canvas, so it sets the focus color its rings read there, and still no outline of its own.
+  assert.match(
+    declared(at('.hc-scene[data-matte] .hc-card'), CSS),
+    /--color-focus: var\(--color-text-primary\);/,
+  );
+  assert.doesNotMatch(CSS, /(^|[\s;{])outline(-[a-z]+)?\s*:/m);
+});
