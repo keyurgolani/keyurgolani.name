@@ -91,11 +91,15 @@
   /* The top line is a band of the matte, so the mattes and the scrubber are the page's only bands. */
   background-color: var(--layout-matte);
   color: var(--color-on-scrim);
-  /*
-   * A ring on the band in the band's ink. The platform's ring, in a later layer than this one,
-   * reads the focus color by inheritance, as its surface hooks set it on a region; an outline
-   * color here would lose to it.
-   */
+}
+
+/*
+ * A ring on the band in the band's ink, on the top line's own links: its name and its nav. The
+ * platform's ring, in a later layer than this one, reads the focus color by inheritance, as its
+ * surface hooks set it on a region; an outline color here would lose to it. The visitor's control
+ * draws on its own surface, so it keeps the page's focus color.
+ */
+[data-variant='horizontal-cinema'] :is(.hc-chrome__name, .hc-chrome__nav) {
   --color-focus: var(--color-on-scrim);
 }
 
