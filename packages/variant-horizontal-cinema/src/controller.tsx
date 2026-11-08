@@ -550,9 +550,14 @@ function LiveStage(props: StageProps) {
     }
     let geo: Geometry | undefined;
     const geometry = (): Geometry => {
-      if (geo) return geo;
-      const rightToLeft = rtl();
+      // Kept only while the strip is the length it was read at. A relayout no refit has run for yet,
+      // a text size say, moves the scenes' starts, and the browser then moves the strip and the page
+      // under it (it snaps the strip onto its scene's new start; the page anchors): read on the old
+      // starts, the strip there would name the scene before the reader's, and the refit would hold
+      // that one (row 93). The length is two reads of a layout a scroll handler already has.
       const travelled = Math.max(0, stageElement.scrollWidth - stageElement.clientWidth);
+      if (geo && geo.travel === travelled) return geo;
+      const rightToLeft = rtl();
       const padding = inset();
       geo = {
         travel: travelled,
