@@ -339,6 +339,9 @@
   grid-column: 2;
   color: var(--layout-ink-quiet);
   font-size: var(--type-label-font-size);
+  /* The tagline lies over the link's second row, its sibling painted after it: a pointer there
+     reaches the wordmark link under it, as the link's own name does (preflight 1, 390). */
+  pointer-events: none;
 }
 
 [data-variant='kinetic-cosmos'] .kc-masthead__controls {
