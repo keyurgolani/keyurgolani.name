@@ -54,8 +54,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      jobs: ${{ steps.select.outputs.jobs }}
-      complete: ${{ steps.select.outputs.complete }}
+      # Row 25's evidence branch, never merged: only quality-pr-plan and quality-pr
+      # run, on its fix (53282d003) with this ci.yml, and with QUALITY_CHANGED_FILES
+      # naming its 5 files plus a Flux file, so the [37] rule directs the harness's
+      # cells and Flux against every stable pack.
+      jobs: '["quality-pr-plan","quality-pr"]'
+      complete: 'false'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -728,6 +732,8 @@ jobs:
           QUALITY_WEB: apps/web
           QUALITY_CHANGED_BASE: ${{ steps.base.outputs.base }}
           QUALITY_CHANGED_DIFF: ${{ steps.base.outputs.diff }}
+          # Row 25's evidence: 9603c11b2..53282d003's 5 paths and a Flux file.
+          QUALITY_CHANGED_FILES: '["tests/quality/fixtures/a11y/contrast-late-turn.html","tests/quality/fixtures/a11y/contrast-restless-ancestor.html","tests/quality/lib/a11y/contrast.ts","tests/quality/meta.test.ts","tests/quality/meta/a11y-cases.ts","packages/variant-flux/src/styles.css"]'
         run: pnpm exec tsx tests/quality/pr-count.ts
 
   quality-pr:
@@ -776,6 +782,8 @@ jobs:
           QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
           QUALITY_CHANGED_BASE: ${{ needs.quality-pr-plan.outputs.base }}
           QUALITY_CHANGED_DIFF: ${{ needs.quality-pr-plan.outputs.diff }}
+          # Row 25's evidence: the plan's paths, so every shard plans the same cells.
+          QUALITY_CHANGED_FILES: '["tests/quality/fixtures/a11y/contrast-late-turn.html","tests/quality/fixtures/a11y/contrast-restless-ancestor.html","tests/quality/lib/a11y/contrast.ts","tests/quality/meta.test.ts","tests/quality/meta/a11y-cases.ts","packages/variant-flux/src/styles.css"]'
       # The reports upload only when this succeeds: it deletes what it can't
       # read, and fails when it did, or when the canary is still in any.
       - name: Scrub reports
