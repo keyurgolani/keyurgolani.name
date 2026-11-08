@@ -1238,6 +1238,7 @@ const rowContrast =
   async (page: Page): Promise<Finding[]> => {
     const row = PREFERENCE_ROWS.find((each) => each.id === rowId)!;
     const { results, contrast: resampled } = await audit(page, row);
+    reached(results);
     const axe = results.violations
       .filter((rule) => rule.id === CONTRAST_RULE || rule.id === ENHANCED_CONTRAST_RULE)
       .flatMap((rule) =>
