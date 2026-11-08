@@ -168,8 +168,9 @@ export function StudioPreview({
   const [javascript, setJavaScript] = useState(true);
   const [refresh, setRefresh] = useState(0);
   const systemReduces = useSystemReducesMotion();
-  // Refresh takes a click once the page has hydrated: until then nothing would load the frame
-  // again, so the server's markup holds it (row 89).
+  // Refresh takes a click, and the selects a change, once the page has hydrated: until then nothing
+  // would hear them, so the server's markup holds Refresh and disables the selects, in
+  // .studio-input:disabled's look; a select can't be held by aria-disabled (row 89).
   const hydrated = useHydrated();
   /** The control that asked for a new load, which gets focus back once the frame settles. */
   const cause = useRef<HTMLElement | null>(null);
@@ -278,6 +279,7 @@ export function StudioPreview({
           <select
             id={`${ids}-content`}
             className="studio-input"
+            disabled={!hydrated}
             value={choice.id}
             onChange={(event) => {
               reloadFrom(event.currentTarget);
@@ -300,6 +302,7 @@ export function StudioPreview({
           <select
             id={`${ids}-viewport`}
             className="studio-input"
+            disabled={!hydrated}
             value={viewportId}
             aria-describedby={`${ids}-widths`}
             onChange={(event) => setViewportId(event.currentTarget.value as Viewport['id'])}
@@ -336,6 +339,7 @@ export function StudioPreview({
           <select
             id={`${ids}-mode`}
             className="studio-input"
+            disabled={!hydrated}
             value={environment.displayMode}
             onChange={(event) =>
               setEnvironment({
@@ -358,7 +362,7 @@ export function StudioPreview({
             id={`${ids}-motion`}
             className="studio-input"
             value={motion}
-            disabled={systemReduces}
+            disabled={!hydrated || systemReduces}
             aria-describedby={systemReduces ? `${ids}-motion-note` : undefined}
             onChange={(event) =>
               setEnvironment({
@@ -383,6 +387,7 @@ export function StudioPreview({
           <select
             id={`${ids}-contrast`}
             className="studio-input"
+            disabled={!hydrated}
             value={environment.contrast}
             onChange={(event) =>
               setEnvironment({
@@ -402,6 +407,7 @@ export function StudioPreview({
           <select
             id={`${ids}-enhancement`}
             className="studio-input"
+            disabled={!hydrated}
             value={environment.enhancement}
             onChange={(event) => {
               reloadFrom(event.currentTarget);
@@ -422,6 +428,7 @@ export function StudioPreview({
           <select
             id={`${ids}-javascript`}
             className="studio-input"
+            disabled={!hydrated}
             value={javascript ? 'on' : 'off'}
             onChange={(event) => {
               reloadFrom(event.currentTarget);
@@ -458,6 +465,7 @@ export function StudioPreview({
             idPrefix={`${ids}-appearance`}
             legend="Appearance"
             own={choice.appearance}
+            held={!hydrated}
             value={own}
             options={appearanceOptions}
             onChange={(next, control) => {

@@ -30,6 +30,8 @@ export interface AppearanceControlsProps {
   readonly options: AppearanceOptions;
   /** A part changed, from `control`: the whole selection it makes, or null when that's the site's own. */
   readonly onChange: (next: AppearanceSelection | null, control: HTMLElement) => void;
+  /** Disabled until the page hydrates, so a change before then is never lost (row 89). */
+  readonly held?: boolean;
 }
 
 /** `options`, with the site's own `current` among them when this build doesn't register it. */
@@ -49,12 +51,13 @@ export function AppearanceControls({
   value,
   options,
   onChange,
+  held = false,
 }: AppearanceControlsProps) {
   const shown = value ?? own;
   return (
     <fieldset
       className="studio-preview__appearance"
-      disabled={own === null}
+      disabled={held || own === null}
       aria-describedby={own === null ? `${idPrefix}-none` : undefined}
     >
       <legend className="studio-label">{legend}</legend>
