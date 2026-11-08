@@ -890,3 +890,93 @@ test(
     await tab.unrouteAll({ behavior: 'ignoreErrors' });
   },
 );
+
+// Row 89's selects (draft, unrun until RC2's tickets queue): the server renders the controls
+// form's seven selects and the frame's appearance, and each one's only effect is the page's own
+// script. The server's markup disables them until the page hydrates, so a change before then
+// can't be made and lost, and the live page enables them with no hydration mismatch.
+
+/** The controls form's seven selects, by name. */
+const SELECTS = [
+  'Content',
+  'Width (simulated)',
+  'Display mode',
+  'Motion',
+  'Contrast',
+  'Enhancements',
+  'JavaScript',
+] as const;
+
+/** The frame's appearance fieldset, and the note it shows when the version selects none. */
+const appearanceOf = (page: Page) => page.locator('fieldset.studio-preview__appearance');
+const NO_APPEARANCE = /selects no whole appearance/;
+
+test(
+  "/studio/preview's HTML renders its selects disabled, and the live page enables them with no hydration mismatch (row 89)",
+  { annotation: [PAGE] },
+  async ({ page, app }) => {
+    await seedDraft(app, 'Select Person');
+    await signIn(page, app, secret.password);
+    const html = await (await page.request.get(PREVIEW_PAGE)).text();
+    const form =
+      /<form[^>]*aria-label="Preview controls"[^>]*>[\s\S]*?<\/form>/.exec(html)?.[0] ?? '';
+    const selects = [...form.matchAll(/<select[^>]*>/g)].map(([tag]) => tag);
+    expect(selects, 'the server renders the seven').toHaveLength(SELECTS.length);
+    for (const tag of selects) expect.soft(tag, 'held before scripts run').toMatch(/\sdisabled=""/);
+    const fieldset = /<fieldset[^>]*class="studio-preview__appearance"[^>]*>/.exec(html)?.[0] ?? '';
+    expect.soft(fieldset, 'the appearance held before scripts run').toMatch(/\sdisabled=""/);
+    const errors: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(message.text());
+    });
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto(PREVIEW_PAGE);
+    await expect(stage(page)).toHaveAttribute('data-phase', 'ready');
+    for (const name of SELECTS) {
+      await expect(controls(page).getByRole('combobox', { name })).toBeEnabled();
+    }
+    // Once hydrated, the appearance is held only when the version selects none, and then says so.
+    const none = (await appearanceOf(page).textContent())?.match(NO_APPEARANCE) !== null;
+    if (none) await expect(appearanceOf(page)).toBeDisabled();
+    else await expect(appearanceOf(page)).toBeEnabled();
+    // React reports a hydration mismatch as a console error (#418, #423 or #425 in production).
+    expect(errors.filter((text) => /hydrat|#41[89]|#42[35]/i.test(text))).toEqual([]);
+  },
+);
+
+test(
+  "/studio/preview's selects can't be changed before the page hydrates, and once it has, a change reaches the frame (row 89)",
+  { annotation: [PAGE] },
+  async ({ page, context, app }) => {
+    await seedDraft(app, 'Early Select Person');
+    await signIn(page, app, secret.password);
+    const tab = await context.newPage();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const scripts: string[] = [];
+    await tab.route(SCRIPT_CHUNK, async (route) => {
+      scripts.push(route.request().url());
+      await held;
+      await route.continue().catch(() => {});
+    });
+    // Async chunks don't hold DOMContentLoaded, so the server's markup is all there is.
+    await tab.goto(PREVIEW_PAGE, { waitUntil: 'domcontentloaded' });
+    expect(scripts.length, 'a script chunk is held').toBeGreaterThan(0);
+    for (const name of SELECTS) {
+      await expect(controls(tab).getByRole('combobox', { name }), name).toBeDisabled();
+    }
+    await expect(appearanceOf(tab)).toBeDisabled();
+    release();
+    await expect(stage(tab)).toHaveAttribute('data-phase', 'ready');
+    const mode = controls(tab).getByRole('combobox', { name: 'Display mode' });
+    await expect(mode).toBeEnabled();
+    await expect(mode).toHaveValue('system');
+    await mode.selectOption('dark');
+    await expect
+      .poll(async () => environmentIn(await grantFrame(tab)))
+      .toMatchObject({
+        displayMode: 'dark',
+      });
+    await tab.unrouteAll({ behavior: 'ignoreErrors' });
+  },
+);

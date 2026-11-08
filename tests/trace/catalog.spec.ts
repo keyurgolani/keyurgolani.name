@@ -261,3 +261,73 @@ test('the catalog fixture shows stills first, and live frames only on request or
     if (chosen.has(id)) expect(files[0], `${owner}: its <img>'s candidate`).toBe(chosen.get(id));
   }
 });
+
+// Row 89 (draft, unrun until RC2's tickets queue): every plate's Live preview is the page's own
+// script's, the preview scheduler's. The server's markup disables it natively until the page
+// hydrates (A's ruling (a)), so a click before then is never lost without a word, and the live
+// page enables it with no hydration mismatch.
+
+/** Every script chunk under /_next/static/chunks, which the page hydrates from. */
+const SCRIPT_CHUNK = /\/_next\/static\/chunks\/[^?#]+\.js(?:[?#].*)?$/;
+
+const livePreview = (plate: Locator) => plate.getByRole('button', { name: 'Live preview' });
+
+test("the catalog's HTML renders every Live preview disabled, and the live page enables them with no hydration mismatch (row 89)", async ({
+  page,
+  app,
+}) => {
+  await signIn(page, app.origin);
+  const html = await (await page.request.get(PAGE)).text();
+  const buttons = [...html.matchAll(/<button[^>]*>Live preview<\/button>/g)].map(([tag]) => tag);
+  expect(buttons.length, 'a Live preview per plate').toBeGreaterThanOrEqual(2);
+  for (const tag of buttons) expect.soft(tag, 'held before scripts run').toMatch(/\sdisabled=""/);
+  const errors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto(PAGE, { waitUntil: 'load' });
+  const all = plates(page);
+  for (let index = 0; index < (await all.count()); index++) {
+    await expect(livePreview(all.nth(index))).toBeEnabled();
+  }
+  // React reports a hydration mismatch as a console error (#418, #423 or #425 in production).
+  expect(errors.filter((text) => /hydrat|#41[89]|#42[35]/i.test(text))).toEqual([]);
+});
+
+test('a Live preview clicked before the catalog hydrates does nothing, and once it has, the plate goes live on request (row 89)', async ({
+  page,
+  context,
+  app,
+}) => {
+  await signIn(page, app.origin);
+  const tab = await context.newPage();
+  await tab.setViewportSize({ width: 1440, height: 900 });
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const scripts: string[] = [];
+  await tab.route(SCRIPT_CHUNK, async (route) => {
+    scripts.push(route.request().url());
+    await held;
+    await route.continue().catch(() => {});
+  });
+  // Async chunks don't hold DOMContentLoaded, so the server's markup is all there is.
+  await tab.goto(PAGE, { waitUntil: 'domcontentloaded' });
+  expect(scripts.length, 'a script chunk is held').toBeGreaterThan(0);
+  // The second plate, viewports down, which only a request makes live.
+  const second = plates(tab).nth(1);
+  const button = livePreview(second);
+  await expect(button).toBeDisabled();
+  // A real click on the disabled button: force skips Playwright's wait for it to be enabled.
+  await button.click({ force: true });
+  release();
+  await expect(button).toBeEnabled();
+  // The early click wasn't kept: the plate keeps its still, and its button isn't pressed.
+  await tab.waitForTimeout(2_000);
+  expect(await liveOf(second)).toBe('still');
+  await expect(button).toHaveAttribute('aria-pressed', 'false');
+  await button.click();
+  await expect.poll(() => liveOf(second)).toBe('request');
+  await expect(button).toHaveAttribute('aria-pressed', 'true');
+  await tab.unrouteAll({ behavior: 'ignoreErrors' });
+});
