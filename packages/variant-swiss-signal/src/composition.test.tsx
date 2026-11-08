@@ -170,6 +170,9 @@ for (const { name, input: build } of cases) {
       assert.doesNotMatch(markup, /data-ss-live|data-open|aria-expanded/);
       // The sheet sits after main, out of the sticky masthead, for the no-script path.
       assert.match(markup, /<\/main><div class="ss-index__sheet"/);
+      // Served, it's a contents list, not a closed popover the page shows: a reader that knows
+      // closed popovers aren't shown would skip its links. Position makes it the popover when live.
+      assert.doesNotMatch(markup, /<div class="ss-index__sheet"[^>]*\bpopover\b/);
     }
   });
 }
