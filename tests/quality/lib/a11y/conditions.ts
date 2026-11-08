@@ -194,24 +194,18 @@ function noCanvas(): Condition {
   };
 }
 
-/** The original's item 4 conditions, then no JavaScript and print. */
+/** The touch condition, which every cell runs last. */
+export const TOUCH_CONDITION = 'touch';
+
+/** Every condition but touch, which a cell runs alone at its end. */
+export const conditionsBeforeTouch = (): string[] =>
+  conditions()
+    .map((each) => each.id)
+    .filter((id) => id !== TOUCH_CONDITION);
+
+/** The original's item 4 conditions but touch, then no JavaScript and print, then touch. */
 export function conditions(): Condition[] {
   return [
-    {
-      // Touch: no hover and no pointer precision, as Chromium's touch emulation reports them.
-      id: 'touch',
-      reload: true,
-      // Its first allowance: a key hint shown only to a fine pointer, beside its control (row 92).
-      keyHint: 'usable',
-      setup: async (_page, cdp) => {
-        await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
-      },
-      verify: async (page) =>
-        (await matches('(hover: none)')(page)) ?? (await matches('(pointer: coarse)')(page)),
-      teardown: async (_page, cdp) => {
-        await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false });
-      },
-    },
     {
       id: 'reduced-motion',
       reload: true,
@@ -264,6 +258,24 @@ export function conditions(): Condition[] {
       setup: (page) => page.emulateMedia({ media: 'print' }),
       verify: matches('print'),
       teardown: (page) => page.emulateMedia({ media: null }),
+    },
+    {
+      // Touch: no hover and no pointer precision, as Chromium's touch emulation reports them. Last,
+      // and on its own at the cell's very end (run-cell.ts): on CI's Linux Chromium its teardown
+      // leaves (pointer) and (hover) at none, and no CDP call gives the fine pointer back, so
+      // nothing may read the page after it.
+      id: 'touch',
+      reload: true,
+      // Its first allowance: a key hint shown only to a fine pointer, beside its control.
+      keyHint: 'usable',
+      setup: async (_page, cdp) => {
+        await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+      },
+      verify: async (page) =>
+        (await matches('(hover: none)')(page)) ?? (await matches('(pointer: coarse)')(page)),
+      teardown: async (_page, cdp) => {
+        await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+      },
     },
   ];
 }
