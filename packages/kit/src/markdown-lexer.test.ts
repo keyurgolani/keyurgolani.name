@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Lexer, Marked, type MarkedOptions } from 'marked';
+import { Lexer, Marked, type MarkedOptions, type Token } from 'marked';
 import { markdownOverLimit } from '@portfolio/schema';
 import { renderMarkdown } from './markdown';
 import { lexBlocks } from './markdown-lexer';
@@ -110,25 +110,48 @@ test("a lazy line under quotes has the renderer lex a paragraph's inline text on
   }
 });
 
-test('renderMarkdown lexes a paragraph under four quotes and a lazy line in about the time it lexes the paragraph alone', () => {
+/**
+ * How much inline text `render` hands marked's inline lexer: the characters of every
+ * Lexer#inlineTokens call, nested ones included, so a step count rather than a time.
+ */
+function inlineSteps(render: () => unknown): { readonly calls: number; readonly chars: number } {
+  const original = Lexer.prototype.inlineTokens;
+  let calls = 0;
+  let chars = 0;
+  Lexer.prototype.inlineTokens = function (this: Lexer, src: string, tokens?: Token[]) {
+    calls++;
+    chars += src.length;
+    return original.call(this, src, tokens);
+  };
+  try {
+    render();
+  } finally {
+    Lexer.prototype.inlineTokens = original;
+  }
+  return { calls, chars };
+}
+
+test("renderMarkdown lexes a paragraph under four quotes and a lazy line with the inline steps it takes for the paragraph alone, where marked's lexer takes four times as many", (t) => {
   // 256 marks that never close, which marked would lex four times over.
   const paragraph = `x ${'*a '.repeat(256)}${'word '.repeat(700)}\nlazy`;
   const quoted = `>>>> ${paragraph}`;
   assert.equal(markdownOverLimit(quoted), null);
   assert.ok(renderMarkdown(quoted).startsWith('<blockquote>'));
-  const times: number[] = [];
-  const bases: number[] = [];
-  renderMarkdown(quoted);
-  renderMarkdown(paragraph);
-  for (let i = 0; i < 7; i++) {
-    let start = performance.now();
-    renderMarkdown(paragraph);
-    bases.push(performance.now() - start);
-    start = performance.now();
-    renderMarkdown(quoted);
-    times.push(performance.now() - start);
-  }
-  const median = (list: number[]) => list.sort((a, b) => a - b)[3]!;
-  const [time, base] = [median(times), median(bases)];
-  assert.ok(time < 2 * base, `${time.toFixed(1)} ms quoted against ${base.toFixed(1)} ms alone`);
+  const alone = inlineSteps(() => renderMarkdown(paragraph));
+  const deep = inlineSteps(() => renderMarkdown(quoted));
+  assert.ok(alone.chars >= paragraph.length - 'x '.length, `${alone.chars} inline chars alone`);
+  // The quoted paragraph is lexed inline once: no more steps than alone.
+  assert.ok(
+    deep.chars <= alone.chars,
+    `${deep.chars} inline chars quoted against ${alone.chars} alone`,
+  );
+  // marked's own lexer queues it once for each quote, so the count tells the two apart.
+  const markedSteps = inlineSteps(() => Lexer.lex(quoted, options()));
+  t.diagnostic(
+    `inline steps: alone ${alone.calls} calls, ${alone.chars} chars; quoted ${deep.calls}, ${deep.chars}; marked ${markedSteps.calls}, ${markedSteps.chars}`,
+  );
+  assert.ok(
+    markedSteps.chars >= 3 * alone.chars,
+    `marked: ${markedSteps.chars} against ${alone.chars}`,
+  );
 });
