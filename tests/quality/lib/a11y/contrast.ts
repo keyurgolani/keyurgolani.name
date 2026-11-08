@@ -924,6 +924,101 @@ export function stillUnresolved(motion: NonNullable<Motion>): string {
  * transparent back to their ink), and a page's own is heading to the state
  * the shots showed. Runs in the browser.
  */
+/**
+ * How long a word's ancestors' attributes hold still before its color is read again, once one has
+ * changed since the sampler moved to it (row 25). A page can turn a word's ink by a chain of
+ * timeouts that outlasts every transition its shots ended (Flux's snap: a move, a snap, a turn,
+ * each up to its drop's duration apart), so the wait runs from the last change, not from the
+ * shots; 400 ms is past the longest gap in that chain (row 25's probe: 60 of 93 re-reads raced a
+ * turn without it, 0 of 110 with it). The chain can start before the sampler reaches the word (the
+ * batch path's scroll set it off, a stop or more before), so the wait looks back over all the
+ * sampler has watched, from its start, never only from the word's own scroll.
+ */
+export const QUIET_MS = 400;
+
+/** The attributes the sampler sets itself, which never count as the page changing. */
+const OWN_ATTRIBUTE = /^data-quality-/;
+
+/** What watchTurnsScript() keeps under its key: when it began, and each change, when and where. */
+interface Turns {
+  readonly start: number;
+  readonly records: { t: number; target: Node }[];
+}
+
+/**
+ * Watches every attribute the page changes (the sampler's own data-quality-* marks left out) under
+ * `key`, from the sampler's start to its end, so that turnsQuietScript() knows when an attribute
+ * of a word or an ancestor last changed, wherever the sampler was then (row 25).
+ */
+export function watchTurnsScript({ key, own }: { key: string; own: string }): true {
+  const w = window as unknown as Record<string, unknown>;
+  const ownAttribute = new RegExp(own);
+  const state: Turns = { start: performance.now(), records: [] };
+  const observer = new MutationObserver((list) => {
+    const t = performance.now();
+    for (const record of list)
+      if (!ownAttribute.test(record.attributeName ?? ''))
+        state.records.push({ t, target: record.target });
+  });
+  observer.observe(document.documentElement, { subtree: true, attributes: true });
+  (w[`__qualityTurnsOff_${key}`] as (() => void) | undefined)?.();
+  w[`__qualityTurns_${key}`] = state;
+  w[`__qualityTurnsOff_${key}`] = () => observer.disconnect();
+  return true;
+}
+
+/**
+ * Before a color is read again: waits until no attribute of `els` or their ancestors has changed
+ * for `ms`, and watchTurnsScript() has watched for `ms` at least (a chain the page began before
+ * the watch shows its next turn within it), held to `cap`. Says `still` when that already holds
+ * (no wait), `quiet` once it does, `restless` when it never did within the cap, and `restless`
+ * too when there's no watch to ask, so a wait that can't be read fails closed. Runs in the
+ * browser, on the per-element path and inside the batch path's helpers.
+ */
+export function turnsQuietScript(
+  els: Element | readonly Element[],
+  { key, ms, cap }: { key: string; ms: number; cap: number },
+): Promise<'still' | 'quiet' | 'restless'> {
+  const w = window as unknown as Record<string, unknown>;
+  const state = w[`__qualityTurns_${key}`] as Turns | undefined;
+  if (!state) return Promise.resolve('restless');
+  const list: readonly Element[] = Array.isArray(els) ? els : [els as Element];
+  // Whether one of them or an ancestor changed since `since`, read back from the latest change.
+  const changedSince = (since: number): boolean => {
+    for (let at = state.records.length - 1; at >= 0; at--) {
+      const { t, target } = state.records[at]!;
+      if (t < since) return false;
+      if (list.some((el) => target.contains(el))) return true;
+    }
+    return false;
+  };
+  const calm = (now: number) => now - state.start >= ms && !changedSince(now - ms);
+  const begun = performance.now();
+  if (calm(begun)) return Promise.resolve('still');
+  return new Promise((resolve) => {
+    const tick = () => {
+      const now = performance.now();
+      if (calm(now)) return resolve('quiet');
+      if (now - begun >= cap) return resolve('restless');
+      setTimeout(tick, 25);
+    };
+    tick();
+  });
+}
+
+/** Ends watchTurnsScript()'s watch under `key`. */
+export function unwatchTurnsScript(key: string): true {
+  const w = window as unknown as Record<string, unknown>;
+  (w[`__qualityTurnsOff_${key}`] as (() => void) | undefined)?.();
+  delete w[`__qualityTurns_${key}`];
+  delete w[`__qualityTurnsOff_${key}`];
+  return true;
+}
+
+/** Why a word whose ancestors never held still within the cap has no color to read. */
+export const turnsUnresolved = (cap: number): string =>
+  `unresolved: its ancestors' attributes were still changing ${cap / 1000} s after its shots, so its color can't be read from one state of the page`;
+
 export function inkScript(el: Element): string {
   const style = getComputedStyle(el);
   const ending = (property: 'color' | 'webkitTextFillColor'): string | null => {
@@ -1245,6 +1340,7 @@ interface BatchHelpers {
   readonly sample: typeof sampleScript;
   readonly restless: typeof restlessScript;
   readonly ink: typeof inkScript;
+  readonly quiet: typeof turnsQuietScript;
 }
 
 /**
@@ -1862,7 +1958,7 @@ export async function batchFindings(
   const selectors = new Map(items.map(({ at, selector }) => [at, selector]));
   const installed = await page
     .evaluate(
-      `globalThis[${JSON.stringify(`__qualityBatch_${key}`)}] = { still: ${stillnessScript}, release: ${releaseScript}, cover: ${stuckCoverScript}, sample: ${sampleScript}, restless: ${restlessScript}, ink: ${inkScript} }, true`,
+      `globalThis[${JSON.stringify(`__qualityBatch_${key}`)}] = { still: ${stillnessScript}, release: ${releaseScript}, cover: ${stuckCoverScript}, sample: ${sampleScript}, restless: ${restlessScript}, ink: ${inkScript}, quiet: ${turnsQuietScript} }, true`,
     )
     .catch(() => false);
   if (installed !== true) return done;
@@ -1887,6 +1983,14 @@ export async function batchFindings(
     }, key)
     .catch(() => null);
   if (!Array.isArray(origin)) return done;
+  // When this stop's scroll began (row 25): a stop whose members' ancestors changed after it
+  // judges none of them (the batch's inks, below); the sampler's own watch has each change.
+  await page
+    .evaluate((key) => {
+      (window as unknown as Record<string, unknown>)[`__qualityBatchStop_${key}`] =
+        performance.now();
+    }, key)
+    .catch(() => undefined);
   const [left, top, height] = origin;
   const camera = await shotsFor(page);
   const visited = new Set<number>([top]);
@@ -2014,17 +2118,50 @@ export async function batchFindings(
             // Each member's color read again once the shots are taken and what they ended has had
             // its time (inkScript()): one the page turned meanwhile leaves the batch for its own
             // path, which reads it once more, or says it never came from one state (row 25).
-            const inks = await page
+            // Whether the page changed an attribute of a member or an ancestor since this stop's
+            // scroll began, once their ancestors have held still QUIET_MS (row 25): a chain an
+            // earlier stop set off shows its next turn in that wait. If so, or if they never held
+            // still, the batch judges none of them, and each goes its own path, which waits for
+            // them too. Unreadable counts as changed.
+            const changed = await page
               .evaluate(
-                ({ key, ats }) => {
+                async ({ key, ats, ms, cap }) => {
                   const w = window as unknown as Record<string, unknown>;
                   const els = w[`__qualityBatchEls_${key}`] as Element[];
                   const helpers = w[`__qualityBatch_${key}`] as BatchHelpers;
-                  return ats.map((at) => helpers.ink(els[at]!));
+                  const turns = w[`__qualityTurns_${key}`] as Turns | undefined;
+                  const stopAt = w[`__qualityBatchStop_${key}`];
+                  if (!turns || typeof stopAt !== 'number') return true;
+                  const members = ats.map((at) => els[at]!);
+                  if ((await helpers.quiet(members, { key, ms, cap })) === 'restless') return true;
+                  for (let at = turns.records.length - 1; at >= 0; at--) {
+                    const { t, target } = turns.records[at]!;
+                    if (t < stopAt) return false;
+                    if (members.some((el) => target.contains(el))) return true;
+                  }
+                  return false;
                 },
-                { key, ats: members.map(({ entry }) => entry.at) },
+                {
+                  key,
+                  ats: members.map(({ entry }) => entry.at),
+                  ms: QUIET_MS,
+                  cap: NODE_LIMIT_MS,
+                },
               )
-              .catch(() => null);
+              .catch(() => true);
+            const inks = changed
+              ? null
+              : await page
+                  .evaluate(
+                    ({ key, ats }) => {
+                      const w = window as unknown as Record<string, unknown>;
+                      const els = w[`__qualityBatchEls_${key}`] as Element[];
+                      const helpers = w[`__qualityBatch_${key}`] as BatchHelpers;
+                      return ats.map((at) => helpers.ink(els[at]!));
+                    },
+                    { key, ats: members.map(({ entry }) => entry.at) },
+                  )
+                  .catch(() => null);
             for (const [k, { entry }] of members.entries()) {
               if (!Array.isArray(inks) || !sameInk(entry.sample.color, inks[k] ?? null)) continue;
               const found = judged(
@@ -2048,6 +2185,12 @@ export async function batchFindings(
         Math.min(Math.floor(height / 4), Math.floor(height - (highest.bottom - highest.top)) - 1),
       );
       const next = Math.max(0, Math.floor(highest.top) - room);
+      await page
+        .evaluate((key) => {
+          (window as unknown as Record<string, unknown>)[`__qualityBatchStop_${key}`] =
+            performance.now();
+        }, key)
+        .catch(() => undefined);
       const reached = await page
         .evaluate(
           ([x, y]) =>
@@ -2085,6 +2228,7 @@ export async function batchFindings(
             `__qualityBatchEls_${key}`,
             `__qualityBatchMarks_${key}`,
             `__qualityBatchSeen_${key}`,
+            `__qualityBatchStop_${key}`,
           ])
             delete w[name];
           for (let at = 0; at < count; at++) delete w[`${near}_${at}`];
@@ -2131,6 +2275,10 @@ export async function incompleteContrastFindings(
     },
     { css: hideCss(key), key },
   );
+  // Every attribute the page changes from here to the end, when and where (row 25): a word's color
+  // is read again once it and its ancestors have held still, wherever the sampler was when they
+  // changed.
+  await page.evaluate(watchTurnsScript, { key, own: OWN_ATTRIBUTE.source }).catch(() => undefined);
   /** Takes this call's neighbour marks off, and the texts the page kept. */
   const unmarkNeighbours = () =>
     page.evaluate(
@@ -2188,7 +2336,14 @@ export async function incompleteContrastFindings(
           again: boolean,
         ): Promise<
           | string
-          | { sample: Sample; shot: Buffer; black: Buffer; white: Buffer; after: string | null }
+          | {
+              sample: Sample;
+              shot: Buffer;
+              black: Buffer;
+              white: Buffer;
+              after: string | null;
+              restless: boolean;
+            }
         > => {
           if (again) await page.evaluate(pageRestScript, NODE_LIMIT_MS).catch(() => false);
           const motion = await locator
@@ -2260,10 +2415,18 @@ export async function incompleteContrastFindings(
             await page
               .evaluate(shotSettleScript, Math.min(ends.left ?? NODE_LIMIT_MS, NODE_LIMIT_MS))
               .catch(() => undefined);
+          // A page that changed something round it since the sampler moved to it may still be
+          // turning it on a timer no shot ended: its color is read again only once its ancestors'
+          // attributes have held still QUIET_MS, and never judged if they don't within the cap
+          // (row 25): a color that turned is still read as turned, and one that didn't is
+          // unresolved, never a pass (`restless`).
+          const quiet = await locator
+            .evaluate(turnsQuietScript, { key, ms: QUIET_MS, cap: NODE_LIMIT_MS })
+            .catch(() => 'restless' as const);
           const after = await locator
             .evaluate(inkScript, undefined, { timeout: NODE_LIMIT_MS })
             .catch(() => null);
-          return { sample, shot, black, white, after };
+          return { sample, shot, black, white, after, restless: quiet === 'restless' };
         };
         // Its color and its background from one state of the page (row 25). Its color is read
         // outside the shots, and the page can turn it in between (a script's class as the
@@ -2290,6 +2453,11 @@ export async function incompleteContrastFindings(
             continue;
           }
         }
+        // Its ancestors still changing at the cap, though its color held: no one state to judge.
+        if (taken.restless) {
+          unresolved(turnsUnresolved(NODE_LIMIT_MS));
+          continue;
+        }
         const found = judged(selector, taken.sample, taken.shot, taken.black, taken.white);
         if (found) findings.push(found);
       } finally {
@@ -2303,6 +2471,7 @@ export async function incompleteContrastFindings(
       }
     }
   } finally {
+    await page.evaluate(unwatchTurnsScript, key).catch(() => undefined);
     await page.evaluate(
       ({ key, near }) => {
         document.querySelector(`style[data-quality-glyphs="${key}"]`)?.remove();
