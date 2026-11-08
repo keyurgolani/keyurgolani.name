@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Page } from '@playwright/test';
 import {
+  conditions,
   enhancementFindings,
   inventoryFindings,
   load,
@@ -766,9 +767,11 @@ test(
 // a fine pointer, by design (row 92: `@media (pointer: fine)`). On CI's Linux Chromium the touch
 // condition, which runs first, leaves (pointer) at none for the rest of the page's life once its
 // teardown turns touch off (row 44, PR #174), so each later condition read the hint as missing.
-// Where the page reads no fine pointer, a condition takes the hint as no JavaScript does: let go
-// while the control it names is shown and enabled, a finding naming the control while it isn't.
-// With a fine pointer, a missing hint is still a missing field. Driven with a fake page under the
+// The fix is the order (conditions-pointer-leak, the coordinator's ruling (c), v1.0.0): touch runs
+// last, alone, so no condition reads the page after its teardown. The test-side fallback that let
+// such a hint go wherever the page read no fine pointer is retired; touch keeps its own key-hint
+// allowance (row 92), and the product's `(pointer: fine)` rule stays. So outside touch, a missing
+// hint is a missing field, whatever the pointer reads. Driven with a fake page under the
 // reduced-motion condition alone.
 
 const HINT = 'key-hint: #sb--case-back Press Esc to close. The field keeps your place.';
@@ -831,17 +834,16 @@ function pointerPage({
 }
 
 test(
-  "where the page reads no fine pointer, a key hint shown only to one is let go under reduced-motion while its control is shown and enabled (Spatial Bento's Esc hint, preflight 1)",
+  'outside touch, where the page reads no fine pointer, a key hint gone under reduced-motion is a missing field: no fallback lets it go (conditions-pointer-leak, ruling (c))',
   { timeout: 30_000 },
   async () => {
     const { page, probes } = pointerPage({ fine: false });
     const findings = await inventoryFindings(page, '/', HINT_BASELINE, ['reduced-motion']);
     assert.deepEqual(
-      findings.map((each) => each.actual),
-      [],
-      'no finding: the hint is gone only because the pointer is not fine',
+      findings.map((each) => [each.rule, each.expected, each.actual]),
+      [['content', 'present under reduced-motion', `1 field(s) missing, here ${HINT}`]],
     );
-    assert.deepEqual(probes, [{ usable: true }], 'its control was checked, shown and enabled');
+    assert.deepEqual(probes, [], 'no key-hint control probe outside touch');
   },
 );
 
@@ -854,19 +856,6 @@ test(
     assert.deepEqual(
       findings.map((each) => [each.rule, each.expected, each.actual]),
       [['content', 'present under reduced-motion', `1 field(s) missing, here ${HINT}`]],
-    );
-  },
-);
-
-test(
-  "where the page reads no fine pointer and the hint's control is hidden, the gone hint is a finding naming the control (guard)",
-  { timeout: 30_000 },
-  async () => {
-    const { page } = pointerPage({ fine: false, control: 'hidden' });
-    const findings = await inventoryFindings(page, '/', HINT_BASELINE, ['reduced-motion']);
-    assert.deepEqual(
-      findings.map((each) => each.actual),
-      [`a key hint gone, its control #sb--case-back hidden under reduced-motion, here ${HINT}`],
     );
   },
 );
@@ -890,3 +879,81 @@ test(
     assert.deepEqual(probes, [], 'no key-hint control probe: the allowance is for key hints alone');
   },
 );
+
+// conditions-pointer-leak-rc2 (B, 8 Nov 2026). On CI's Linux Chromium, touch's teardown,
+// Emulation.setTouchEmulationEnabled({ enabled: false }), leaves (pointer) and (hover) at none for
+// the rest of the page's life (row 44, PR #174, run 42217082243). Blink's DevToolsEmulator restores
+// the embedder's pointer and hover types, which come from the platform, while Playwright's headless
+// fine pointer is a --blink-settings override that never reaches them. setEmulatedMedia can't
+// override pointer or hover (Blink's MediaFeatureOverrides takes neither), and
+// setEmitTouchEventsForMouse is the browser's touch emulator alone. So no teardown gives the
+// pointer back, and every condition but touch must read the page before touch runs. Driven with a
+// fake page whose touch teardown does what Linux's does.
+
+/**
+ * A page inventoryFindings reads, whose pointer is fine until touch's teardown and none after it,
+ * as on CI's Linux Chromium. It records whether the pointer was fine as reduced-motion set up.
+ */
+function leakPage() {
+  let touch = false;
+  let fine = true;
+  const seen: boolean[] = [];
+  const media = (query: string) =>
+    query === '(pointer: fine)'
+      ? fine && !touch
+      : query === '(hover: none)' || query === '(pointer: coarse)'
+        ? touch || !fine
+        : query === '(prefers-reduced-motion: reduce)';
+  const cdp = {
+    send: async (method: string, params?: { enabled?: boolean }) => {
+      if (method === 'Emulation.setTouchEmulationEnabled') {
+        touch = params?.enabled === true;
+        // Linux: touch off leaves the platform's pointer, none, not the headless fine one.
+        if (!touch) fine = false;
+      }
+      return {};
+    },
+    detach: async () => undefined,
+  };
+  const page = {
+    on: () => undefined,
+    off: () => undefined,
+    context: () => ({ newCDPSession: async () => cdp }),
+    goto: async () => null,
+    emulateMedia: async (options: { reducedMotion?: string | null }) => {
+      if (options.reducedMotion === 'reduce') seen.push(fine && !touch);
+    },
+    waitForFunction: async () => ({}),
+    waitForTimeout: (ms: number) => new Promise<void>((done) => setTimeout(done, ms)),
+    evaluate: async (fn: unknown, arg?: unknown) => {
+      const source = String(fn);
+      if (source.includes('({"kind":"inventory"')) return ['heading: A page'];
+      if (source.includes('({"kind":"key-hint-control"')) return 'there';
+      if (typeof arg === 'string' && source.includes('matchMedia')) return media(arg);
+      if (source.includes('(pointer: fine)')) return fine && !touch;
+      if (source.includes('fonts.ready')) return undefined;
+      if (source.includes('scripting: none')) return false;
+      if (source.includes('requestIdleCallback')) return undefined;
+      if (source.includes('requestAnimationFrame')) return undefined;
+      if (source.includes('data-enhancement-island')) return '';
+      return 0;
+    },
+  };
+  return { page: page as unknown as Page, seen };
+}
+
+test('every condition but touch reads a fine pointer, as the page loaded it: touch, whose teardown leaves none on Linux, runs after them (conditions-pointer-leak-rc2)', async () => {
+  const { page, seen } = leakPage();
+  await inventoryFindings(page, '/', ['heading: A page'], ['touch', 'reduced-motion']);
+  assert.deepEqual(seen, [true], 'reduced-motion read a fine pointer');
+});
+
+test('touch is the last condition, and the only one of its id (conditions-pointer-leak-rc2)', () => {
+  const ids = conditions().map((each) => each.id);
+  assert.equal(
+    ids.at(-1),
+    'touch',
+    `touch runs last, not before ${ids.slice(ids.indexOf('touch') + 1).join(', ')}`,
+  );
+  assert.equal(ids.filter((id) => id === 'touch').length, 1);
+});
