@@ -201,3 +201,26 @@ test('on the title card a focus ring is the canvas’s ink, text-primary: the ca
   );
   assert.doesNotMatch(CSS, /(^|[\s;{])outline(-[a-z]+)?\s*:/m);
 });
+
+test('a bar’s Next rings inside its bar: an inset ring, and the box grown by the ring’s width each side so it clears the text', () => {
+  // The bar is barely taller than the link's line, so a ring offset outward overhangs it onto the
+  // scene's canvas, in the band's light ink. Inset, the ring keeps to the box; the padding gives it
+  // the ring's width clear of the text, and the margin takes that back, so the text stays put.
+  assert.match(
+    declared(at('.hc-bar__next:focus-visible'), CSS),
+    /--ui-focus-offset: calc\(var\(--ui-focus-width\) \* -1\);/,
+  );
+  const next = declared(at('.hc-bar__next'), CSS);
+  assert.match(next, /padding-inline: var\(--ui-focus-width\);/);
+  assert.match(next, /margin-inline: calc\(var\(--ui-focus-width\) \* -1\);/);
+});
+
+test('no other link in a bar sets its ring’s offset: the inset is the Next link’s alone, the one with the padding to clear its text', () => {
+  const next = at('.hc-bar__next:focus-visible');
+  const others = [...CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .map(([, head, body]) => ({ head: head!.trim().replace(/\s+/g, ' '), body: body! }))
+    .filter(({ head, body }) => head.includes('.hc-bar') && body.includes('--ui-focus-offset'))
+    .map(({ head }) => head)
+    .filter((head) => head !== next);
+  assert.deepEqual(others, []);
+});
