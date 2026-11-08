@@ -302,6 +302,9 @@
 [data-variant='horizontal-cinema'] .hc-bar__next {
   flex: none;
   display: inline-block;
+  /* The ring's width clear of the text on either side, taken back by the margin, so the text stays put. */
+  padding-inline: var(--ui-focus-width);
+  margin-inline: calc(var(--ui-focus-width) * -1);
   line-height: 1.5rem;
   color: var(--color-on-scrim);
   font-weight: 650;
@@ -311,6 +314,15 @@
 [data-variant='horizontal-cinema'] .hc-bar__next:hover {
   text-decoration: underline;
   text-underline-offset: 0.25em;
+}
+
+/*
+ * The bar is barely taller than its Next link's line, so a ring offset outward would overhang it
+ * onto the scene's canvas, where the band's ink doesn't hold. The Next link rings inside its own
+ * box, which its padding keeps the ring's width clear of the text.
+ */
+[data-variant='horizontal-cinema'] .hc-bar__next:focus-visible {
+  --ui-focus-offset: calc(var(--ui-focus-width) * -1);
 }
 
 /*
