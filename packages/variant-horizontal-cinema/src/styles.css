@@ -321,6 +321,14 @@
   --color-focus: var(--color-on-scrim);
 }
 
+/*
+ * The title card's panel is the canvas, not the matte, so its rings take the canvas's focus ink,
+ * text-primary, rather than the band's.
+ */
+[data-variant='horizontal-cinema'] .hc-scene[data-matte] .hc-card {
+  --color-focus: var(--color-text-primary);
+}
+
 /* The picture: the scene's content on the module. */
 [data-variant='horizontal-cinema'] .hc-pic {
   display: grid;
