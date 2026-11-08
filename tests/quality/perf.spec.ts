@@ -17,6 +17,7 @@ import {
   totalBlockingTime,
 } from './lib/perf/measure';
 import { PERF_KIND, perfCells } from './lib/perf/plan';
+import { compareGridVerdict } from './lib/perf/compare-grid';
 import { ceilingFor, perfFindings, timingResult, type PerfRun } from './lib/perf/samples';
 import { RECORDS_ATTACHMENT, recordTuple } from './lib/records';
 import { PERF_TAG } from './lib/pr-shards';
@@ -318,18 +319,19 @@ if (demoStudio) {
           path: records,
           contentType: 'application/json',
         });
-        expect.soft(status, `${demoStudio.route} answers 200`).toBe(200);
-        expect.soft(frames, 'the grid holds four frames at most').toBeLessThanOrEqual(4);
-        expect.soft(Number.isFinite(heapMiB), 'the heap was read').toBe(true);
-        expect
-          .soft(heapMiB, `the heap within memory.heapMiB.${demoStudio.performanceTier}`)
-          .toBeLessThanOrEqual(heapBudget);
-        expect(handedOn, 'every rest in the sweep handed the heavy slot on').toBe(
-          SWEEP_ORDER.length,
-        );
-        expect
-          .soft(sweepTbtMs, `a sweep across the plates and back within vitals.tbtMs`)
-          .toBeLessThanOrEqual(tbtCeiling);
+        // The verdict (lib/perf/compare-grid.ts): what the readings fail, and what's only reported.
+        const verdict = compareGridVerdict({
+          status,
+          frames,
+          heapMiB,
+          heapBudgetMiB: heapBudget,
+          handedOn,
+          rests: SWEEP_ORDER.length,
+          tbtMs: sweepTbtMs,
+          tbtCeilingMs: tbtCeiling,
+        });
+        testInfo.annotations.push(...verdict.reported);
+        expect(verdict.failures, `the Compare grid on ${demoStudio.route}`).toEqual([]);
       },
     );
   });
