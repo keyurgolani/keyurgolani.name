@@ -1096,6 +1096,48 @@ const axeAll = async (page: Page): Promise<Finding[]> =>
 const contrast = async (page: Page) =>
   incompleteContrastFindings(page, await axeFor(page).analyze());
 
+/** How many changes the sampler's watch of the page may hold at once (row25-quiet-rc2-hardening). */
+const TURNS_BOUND = 1000;
+
+/**
+ * The sampler's findings, and a `contrast turns-bound` finding when its watch of the page's
+ * changes (watchTurnsScript()) ever holds more than TURNS_BOUND at once, polled from the page
+ * every 20 ms while it runs: a page that churns attributes every frame must not grow it without
+ * bound (row25-quiet-rc2-hardening, part 3).
+ */
+const contrastTurnsBounded = async (page: Page): Promise<Finding[]> => {
+  await page.evaluate(() => {
+    const w = window as unknown as Record<string, unknown>;
+    w.__metaTurnsMost = 0;
+    setInterval(() => {
+      for (const name of Object.keys(w)) {
+        if (!name.startsWith('__qualityTurns_')) continue;
+        const state = w[name] as { records?: unknown[]; last?: Map<unknown, number> } | undefined;
+        const held = Array.isArray(state?.records)
+          ? state.records.length
+          : state?.last instanceof Map
+            ? state.last.size
+            : 0;
+        if (held > (w.__metaTurnsMost as number)) w.__metaTurnsMost = held;
+      }
+    }, 20);
+  });
+  const findings = await contrast(page);
+  const most = await page.evaluate(
+    () => (window as unknown as Record<string, number | undefined>).__metaTurnsMost ?? 0,
+  );
+  return most > TURNS_BOUND
+    ? [
+        ...findings,
+        {
+          gate: 'contrast',
+          rule: 'turns-bound',
+          actual: `the sampler's watch held ${most} changes at once, over ${TURNS_BOUND}`,
+        },
+      ]
+    : findings;
+};
+
 /**
  * The sampler's findings, the batch path's, and a `contrast batch`
  * finding as well when the per-element path, run on the same page after
@@ -3089,6 +3131,16 @@ export const A11Y_CASES: readonly MetaCase[] = [
       /^contrast text: unresolved: its ancestors' attributes were still changing \d+(?:\.\d+)? s after its shots, so its color can't be read from one state of the page$/,
     browser: true,
     run: () => onPage('contrast-restless-ancestor.html', contrast),
+  },
+  // The sampler's watch of the page's changes stays bounded beside a page that churns attributes
+  // every frame (row25-quiet-rc2-hardening, part 3): by node, never by change.
+  {
+    id: 'contrast/turns-bounded',
+    gate: 'contrast',
+    input: `tests/quality/fixtures/a11y/contrast-churn.html: a word on a gradient beside 300 spans that flip an attribute every frame, the watch at most ${TURNS_BOUND} at once`,
+    expect: 'pass',
+    browser: true,
+    run: () => onPage('contrast-churn.html', contrastTurnsBounded),
   },
   // So is text whose ancestor a scroll-driven animation slides in, once its progress holds.
   {
