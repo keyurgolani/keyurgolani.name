@@ -2236,11 +2236,16 @@
 
 /* ── The credits roll ──────────────────────────────────────────────────── */
 
+/*
+ * The roll is a band of the matte, so its rings are the band's ink, as a bar's and a matte scene's
+ * are: the page's focus color is the canvas's, the text color under more contrast, dark on the matte.
+ */
 [data-variant='horizontal-cinema'] .hc-credits {
   padding-block: var(--space-3xl) var(--space-2xl);
   padding-inline: var(--layout-grid-margin);
   background-color: var(--layout-matte);
   color: var(--color-on-scrim);
+  --color-focus: var(--color-on-scrim);
 }
 
 [data-variant='horizontal-cinema'] .hc-credits a {
