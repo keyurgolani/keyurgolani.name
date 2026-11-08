@@ -9,7 +9,7 @@ import { expect, test } from '../harness/fixtures';
 import { focusFindings } from '../quality/lib/a11y/interaction';
 import { inPage, type Active } from '../quality/lib/a11y/probe';
 import { packCookie } from '../quality/lib/sweep';
-import { load, ringContrast } from './horizontal-cinema-model';
+import { expectAt, load, read, ringContrast } from './horizontal-cinema-model';
 
 // Horizontal Cinema's focus rings in every stable design language, as the quality matrix runs it
 // (row 53 r2, row 90b): the language the visitor's cookie picks, on the platform's default scheme,
@@ -150,4 +150,150 @@ for (const language of LANGUAGES) {
       await expectNoFocusFinding(page, primary, 'the title card’s primary action');
     },
   );
+}
+
+/**
+ * The quality cells' default widths for the foot bar's Next: the laptop's, where #213's keys fell,
+ * and the desktop's, a guard, where the bar already holds an outward ring (C's probe at 1440: the
+ * bar 782-818, the link 788-812, its ring 784-816, every side at 3:1).
+ */
+const SIZES = [
+  { width: 1024, height: 768, guard: false },
+  { width: 1440, height: 900, guard: true },
+] as const;
+
+/** The foot bars whose Next #213 keyed: a scene's (cluster A) and an intertitle's (cluster C). */
+const FOOT_NEXT = ['scene-2', 'chapter-origins'] as const;
+
+type Edges = { left: number; top: number; right: number; bottom: number };
+
+/** Which of `inner`'s edges lie inside `outer`'s, each true when it does. */
+const insideOf = (inner: Edges, outer: Edges) => ({
+  left: inner.left >= outer.left,
+  top: inner.top >= outer.top,
+  right: inner.right <= outer.right,
+  bottom: inner.bottom <= outer.bottom,
+});
+const INSIDE = { left: true, top: true, right: true, bottom: true };
+
+/** Whether two boxes share any area. */
+const overlap = (a: Edges, b: Edges) =>
+  Math.min(a.right, b.right) > Math.max(a.left, b.left) &&
+  Math.min(a.bottom, b.bottom) > Math.max(a.top, b.top);
+
+/** A foot Next as laid out: its box, its ring's box (offset and width out from it), its bar's, and the bar's other children's. */
+const footOf = (next: Locator) =>
+  next.evaluate((link) => {
+    const edges = (element: Element) => {
+      const { left, top, right, bottom } = element.getBoundingClientRect();
+      return { left, top, right, bottom };
+    };
+    const style = getComputedStyle(link);
+    const reach =
+      (Number.parseFloat(style.outlineOffset) || 0) + (Number.parseFloat(style.outlineWidth) || 0);
+    const box = edges(link);
+    const bar = link.closest('.hc-bar--bottom')!;
+    return {
+      box,
+      ring: {
+        left: box.left - reach,
+        top: box.top - reach,
+        right: box.right + reach,
+        bottom: box.bottom + reach,
+      },
+      bar: edges(bar),
+      others: [...bar.children].filter((child) => child !== link).map(edges),
+    };
+  });
+
+/** What a link paints round its box: its background, outline, shadow and border, as computed. */
+const paintOf = (stop: Locator) =>
+  stop.evaluate((link) => {
+    const style = getComputedStyle(link);
+    return {
+      background: `${style.backgroundColor} ${style.backgroundImage}`,
+      outline: style.outlineStyle,
+      shadow: style.boxShadow,
+      border: [
+        style.borderTopStyle,
+        style.borderRightStyle,
+        style.borderBottomStyle,
+        style.borderLeftStyle,
+      ].join(' '),
+    };
+  });
+const PAINTS_NOTHING = {
+  background: 'rgba(0, 0, 0, 0) none',
+  outline: 'none',
+  shadow: 'none',
+  border: 'none none none none',
+};
+
+for (const language of LANGUAGES) {
+  for (const size of SIZES) {
+    test(
+      `${size.guard ? 'a guard: ' : ''}in ${language} at ${size.width} by ${size.height}, a foot bar's Next focused from the keyboard rings inside its bar at 3:1 on every side, its box clear of the credit, and hover and press paint nothing round it`,
+      { annotation, tag },
+      async ({ page, app }) => {
+        await page.setViewportSize({ width: size.width, height: size.height });
+        await loadIn(page, app.origin, language);
+        const { scenes } = await read(page);
+        // In strip order, so Tab reaches each from the one before.
+        const stops = [...FOOT_NEXT].sort((a, b) => scenes.indexOf(a) - scenes.indexOf(b));
+        for (const id of stops) {
+          const index = scenes.indexOf(id);
+          expect(index, `${id} is a scene of the strip`).toBeGreaterThanOrEqual(0);
+          const name = `${id}'s foot Next`;
+          const next = page.locator(`#${id} .hc-bar--bottom > a.hc-bar__next`);
+          await expect(next).toHaveCount(1);
+          await tabTo(page, next, name);
+          await expectAt(page, index);
+          const ring = await ringOf(next);
+          expect(ring.visible, name).toBe(true);
+          expect(ring.style, name).toBe('solid');
+          // (i) The ring lies inside its bar, where the bar's ink is its ground.
+          const foot = await footOf(next);
+          expect(insideOf(foot.ring, foot.bar), `${name}: ring ${JSON.stringify(foot)}`).toEqual(
+            INSIDE,
+          );
+          // (ii) Every point of its centre line, on every side, at 3:1, and the focus check's verdict.
+          const active = await inPage<Active>(page, { kind: 'active' });
+          const measured = await ringContrast(page, next);
+          for (const [side, { points, strong }] of Object.entries(measured.sides)) {
+            expect(points, `${name}: the ${side} side's centre line in view`).toBeGreaterThan(0);
+            expect(strong, `${name}: the ${side} side at 3:1 ${JSON.stringify(measured)}`).toBe(
+              points,
+            );
+          }
+          expect(
+            await focusFindings(page, active),
+            `${name}: its ring's centre line ${JSON.stringify(measured)}`,
+          ).toEqual([]);
+          // (iii) Its box, grown for the ring, stays inside the bar and clear of the bar's credit.
+          expect(insideOf(foot.box, foot.bar), `${name}: box ${JSON.stringify(foot)}`).toEqual(
+            INSIDE,
+          );
+          expect(
+            foot.others.filter((other) => overlap(foot.box, other)),
+            `${name}: box ${JSON.stringify(foot)}`,
+          ).toEqual([]);
+          // (iv) Under the pointer and pressed it paints nothing round its box; hover's underline is
+          // the one change, on the text. The press is let go off the link, so it doesn't follow it.
+          await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+          expect(await paintOf(next), `${name} at rest`).toEqual(PAINTS_NOTHING);
+          const at = (await next.boundingBox())!;
+          await page.mouse.move(at.x + at.width / 2, at.y + at.height / 2);
+          expect(await next.evaluate((link) => link.matches(':hover')), name).toBe(true);
+          expect(await paintOf(next), `${name} under the pointer`).toEqual(PAINTS_NOTHING);
+          await page.mouse.down();
+          expect(await next.evaluate((link) => link.matches(':active')), name).toBe(true);
+          expect(await paintOf(next), `${name} pressed`).toEqual(PAINTS_NOTHING);
+          await page.mouse.move(1, 1);
+          await page.mouse.up();
+          // Focus back on it, so the next Tab goes on from here.
+          await next.evaluate((link: HTMLElement) => link.focus());
+        }
+      },
+    );
+  }
 }
