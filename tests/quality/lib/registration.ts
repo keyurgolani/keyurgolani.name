@@ -69,6 +69,19 @@ export interface Interaction {
   readonly announces?: string;
 }
 
+/**
+ * The interactions of `registered` that a cell on `route`, in the state `state`, looks up: those
+ * on its route.
+ */
+export function interactionsOn(
+  registered: readonly Interaction[],
+  route: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- the cell's state, read once interactions name one
+  state: string,
+): readonly Interaction[] {
+  return registered.filter((each) => each.route === route);
+}
+
 /** The fields a cell varies on, each optional in a match: what notApplicable excludes. */
 export const CELL_FIELDS = ['route', 'state', 'viewport', 'row', 'engine'] as const;
 export type CellField = (typeof CELL_FIELDS)[number];
