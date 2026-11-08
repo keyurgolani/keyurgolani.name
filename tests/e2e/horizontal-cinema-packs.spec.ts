@@ -8,8 +8,9 @@ import { contractFixture } from '../../packages/variant-contract/src/node/fixtur
 import { expect, test } from '../harness/fixtures';
 import { focusFindings } from '../quality/lib/a11y/interaction';
 import { inPage, type Active } from '../quality/lib/a11y/probe';
+import { contrast, type Rgb } from '../quality/lib/pixels';
 import { packCookie } from '../quality/lib/sweep';
-import { expectAt, load, read, ringContrast } from './horizontal-cinema-model';
+import { expectAt, frames, load, read, ringContrast } from './horizontal-cinema-model';
 
 // Horizontal Cinema's focus rings in every stable design language, as the quality matrix runs it
 // (row 53 r2, row 90b): the language the visitor's cookie picks, on the platform's default scheme,
@@ -296,6 +297,98 @@ for (const language of LANGUAGES) {
       },
     );
   }
+}
+
+/**
+ * The ring measure's own planted defects (row 90b's :234): ringContrast must find each one weak on every side, every point,
+ * so its measuring where the paint put the ring can't pass a ring the check should fail. Planted through a constructed
+ * style sheet (CSSOM, which the page's CSP lets in, and which no product file holds) over the bar's Next on scene-2, at
+ * 1024 by 768 in the platform's default language: a 1 px ring, inset as the bar's own is; and the bar's own 2 px ring in
+ * a mid grey read at about 2.5:1 on the bar's computed ground.
+ */
+async function plant(page: Page, css: string): Promise<void> {
+  await page.evaluate((text) => {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(text);
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+  }, css);
+  await frames(page);
+  await frames(page);
+}
+
+/** The grey that reads nearest `ratio`:1 on `ground` (a computed rgb() colour), on its lighter side if there is one. */
+function greyAt(ratio: number, ground: string): string {
+  const [r, g, b] = (ground.match(/\d+(\.\d+)?/g) ?? []).map(Number) as [number, number, number];
+  const base: Rgb = [r, g, b];
+  let best = 0;
+  for (let v = 0; v <= 255; v++) {
+    const [now, was] = [contrast([v, v, v], base), contrast([best, best, best], base)];
+    if (Math.abs(now - ratio) < Math.abs(was - ratio)) best = v;
+  }
+  return `rgb(${best}, ${best}, ${best})`;
+}
+
+const NEXT_FOCUSED = "[data-variant='horizontal-cinema'] .hc-bar__next:focus-visible";
+/** The planted ring as computed. */
+interface PlantedStyle {
+  readonly width: string;
+  readonly offset: string;
+  readonly color: string;
+}
+/** A planted defect: its style sheet, from the bar's computed ground, and whether the computed ring shows it took. */
+interface Plant {
+  readonly name: string;
+  readonly css: (ground: string) => string;
+  readonly took: (style: PlantedStyle, ground: string) => boolean;
+}
+const PLANTS: readonly Plant[] = [
+  {
+    name: 'a 1 px ring, inset',
+    css: () =>
+      `${NEXT_FOCUSED} { outline-width: 1px !important; outline-offset: -1px !important; }`,
+    took: (style) => style.width === '1px' && style.offset === '-1px',
+  },
+  {
+    name: 'a ring at about 2.5:1 on the bar',
+    css: (ground) => `${NEXT_FOCUSED} { outline-color: ${greyAt(2.5, ground)} !important; }`,
+    took: (style, ground) => style.color === greyAt(2.5, ground),
+  },
+];
+
+for (const planted of PLANTS) {
+  test(
+    `the ring measure finds a planted defect weak on every side, every point: ${planted.name}, on scene-2's foot Next at 1024 by 768`,
+    { annotation, tag },
+    async ({ page, app }) => {
+      await page.setViewportSize({ width: 1024, height: 768 });
+      await loadIn(page, app.origin, PLATFORM_DEFAULTS.designLanguage);
+      const { scenes } = await read(page);
+      const next = page.locator('#scene-2 .hc-bar--bottom > a.hc-bar__next');
+      await expect(next).toHaveCount(1);
+      await tabTo(page, next, "scene-2's foot Next");
+      await expectAt(page, scenes.indexOf('scene-2'));
+      const ground = await next.evaluate(
+        (link) => getComputedStyle(link.closest('.hc-bar--bottom')!).backgroundColor,
+      );
+      await plant(page, planted.css(ground));
+      const style = await next.evaluate((link) => {
+        const computed = getComputedStyle(link);
+        return {
+          width: computed.outlineWidth,
+          offset: computed.outlineOffset,
+          color: computed.outlineColor,
+        };
+      });
+      expect(planted.took(style, ground), `the plant took: ${JSON.stringify(style)}`).toBe(true);
+      const measured = await ringContrast(page, next);
+      for (const [side, { points, strong }] of Object.entries(measured.sides)) {
+        expect(points, `${planted.name}: the ${side} side's centre line in view`).toBeGreaterThan(
+          0,
+        );
+        expect(strong, `${planted.name}: the ${side} side ${JSON.stringify(measured)}`).toBe(0);
+      }
+    },
+  );
 }
 
 for (const language of LANGUAGES) {
