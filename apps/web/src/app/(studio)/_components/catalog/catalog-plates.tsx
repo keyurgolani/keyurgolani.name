@@ -49,6 +49,17 @@ export interface CatalogPlatesProps {
 
 const DESKTOP = VIEWPORTS[0]!;
 
+const noChange = () => () => {};
+
+/** Whether the page has hydrated, so a click reaches the scheduler: false in the server's markup (row 89). */
+function useHydrated(): boolean {
+  return useSyncExternalStore(
+    noChange,
+    () => true,
+    () => false,
+  );
+}
+
 /** The still a plate shows: the smallest, with every one in its srcset. */
 function stillOf(stills: readonly CatalogStill[]) {
   const smallest = [...stills].sort((a, b) => a.width - b.width)[0];
@@ -71,6 +82,9 @@ function Plate({
   props: CatalogPlatesProps;
 }) {
   const root = useRef<HTMLElement | null>(null);
+  // Live preview takes a click once the page has hydrated: until then nothing would hear it, so the
+  // server's markup disables it, in the browser's own look (row 89).
+  const hydrated = useHydrated();
   const live = useSyncExternalStore(
     scheduler.subscribe,
     () => scheduler.liveFor(plate.id),
@@ -141,6 +155,7 @@ function Plate({
         <button
           type="button"
           aria-pressed={live === 'request'}
+          disabled={!hydrated}
           onClick={() =>
             live === 'request' ? scheduler.release(plate.id) : scheduler.request(plate.id)
           }
