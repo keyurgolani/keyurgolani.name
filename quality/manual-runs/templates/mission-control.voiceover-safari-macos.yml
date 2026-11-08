@@ -63,16 +63,16 @@ items:
     check: "/work/project-name (last-known-good): headings, landmarks, and every control's name and state read correctly, and the reading order matches the visual order."
     result: todo
   - id: interaction:dialog:3 linked records
-    check: 'Open "3 linked records" on / with the keyboard: focus moves into it, Escape closes it, and focus returns to "3 linked records".'
+    check: 'Open "3 linked records" on / (complete) with the keyboard: focus moves into it, Escape closes it, and focus returns to "3 linked records".'
     result: todo
   - id: interaction:disclosure:Education title 1 entry
-    check: 'Toggle "Education title 1 entry" on /: its expanded or pressed state is announced, and what it shows is reachable.'
+    check: 'Toggle "Education title 1 entry" on / (complete): its expanded or pressed state is announced, and what it shows is reachable.'
     result: todo
   - id: interaction:disclosure:2 earlier entries
-    check: 'Toggle "2 earlier entries" on /: its expanded or pressed state is announced, and what it shows is reachable.'
+    check: 'Toggle "2 earlier entries" on / (complete): its expanded or pressed state is announced, and what it shows is reachable.'
     result: todo
   - id: interaction:disclosure:Credits and notes
-    check: 'Toggle "Credits and notes" on /: its expanded or pressed state is announced, and what it shows is reachable.'
+    check: 'Toggle "Credits and notes" on / (complete): its expanded or pressed state is announced, and what it shows is reachable.'
     result: todo
   - id: action:none
     check: None registered.

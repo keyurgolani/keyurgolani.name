@@ -15,18 +15,20 @@
 // that's on the page at every width the cells run (a phone's one-quote fold
 // isn't: on 8 columns and more all the quotes stand). A summary's heading
 // sits inside it, so a VoiceOver run checks it's still in the headings list.
+// Each name is the complete fixture's content, so each is on that state alone:
+// the sparse and missing-media pages hold none of these records (#211, row 102).
 import type { Interaction, NotApplicable } from '../../tests/quality/lib/registration';
 
 export const interactions: readonly Interaction[] = [
   // The signature work's Linked control: its list opens like a non-modal dialog (focus moves
   // in, Tab off an end or Escape closes it, focus goes back to the control).
-  { kind: 'dialog', name: '3 linked records', route: '/' },
+  { kind: 'dialog', name: '3 linked records', route: '/', state: 'complete' },
   // A closed panel of the full record, by its summary: its title, then its count.
-  { kind: 'disclosure', name: 'Education title 1 entry', route: '/' },
+  { kind: 'disclosure', name: 'Education title 1 entry', route: '/', state: 'complete' },
   // The ended entries inside Experience.
-  { kind: 'disclosure', name: '2 earlier entries', route: '/' },
+  { kind: 'disclosure', name: '2 earlier entries', route: '/', state: 'complete' },
   // A work cell's own fold, named by what it holds.
-  { kind: 'disclosure', name: 'Credits and notes', route: '/' },
+  { kind: 'disclosure', name: 'Credits and notes', route: '/', state: 'complete' },
 ];
 
 export const notApplicable: readonly NotApplicable[] = [

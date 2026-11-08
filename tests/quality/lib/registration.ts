@@ -42,6 +42,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { REFERENCE_ID } from '../../external-variant/id';
 import { isReason } from './checks';
+import { STATE_FIXTURES } from './state-fixtures';
 
 export const PROFILES = ['owner', 'demo', 'read-only'] as const;
 export type Profile = (typeof PROFILES)[number];
@@ -67,19 +68,26 @@ export interface Interaction {
   readonly alternative?: string;
   /** For a status change: what its live region announces (4.1.3). */
   readonly announces?: string;
+  /**
+   * The state it's on, for a control named from that state's content: one of its target's
+   * states (a surface's stateFixtures, a composition's state fixtures). Absent, it's on every
+   * state of its route, so its control must be on each one (row 102).
+   */
+  readonly state?: string;
 }
 
 /**
  * The interactions of `registered` that a cell on `route`, in the state `state`, looks up: those
- * on its route.
+ * on its route that name no state, or name this one.
  */
 export function interactionsOn(
   registered: readonly Interaction[],
   route: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- the cell's state, read once interactions name one
   state: string,
 ): readonly Interaction[] {
-  return registered.filter((each) => each.route === route);
+  return registered.filter(
+    (each) => each.route === route && (each.state === undefined || each.state === state),
+  );
 }
 
 /** The fields a cell varies on, each optional in a match: what notApplicable excludes. */
@@ -283,7 +291,7 @@ function oneOf<T extends string>(
   if (!allowed.includes(value as T)) problems.push(`${field} is one of ${allowed.join(', ')}`);
 }
 
-function interactions(value: unknown, problems: string[]): void {
+function interactions(value: unknown, states: readonly unknown[], problems: string[]): void {
   if (!Array.isArray(value)) {
     problems.push('interactions is a list');
     return;
@@ -295,12 +303,15 @@ function interactions(value: unknown, problems: string[]): void {
       return;
     }
     const unknown = Object.keys(item).filter(
-      (key) => !['kind', 'name', 'route', 'alternative', 'announces'].includes(key),
+      (key) => !['kind', 'name', 'route', 'alternative', 'announces', 'state'].includes(key),
     );
     if (unknown.length > 0) problems.push(`${at} has unknown fields: ${unknown.join(', ')}`);
     oneOf(item.kind, INTERACTION_KINDS, `${at}.kind`, problems);
     if (!isString(item.name)) problems.push(`${at}.name is its control's accessible name`);
     if (!isString(item.route) || !ROUTE.test(item.route)) problems.push(`${at}.route is a path`);
+    if ('state' in item && (!isString(item.state) || !states.includes(item.state))) {
+      problems.push(`${at}.state names one of its states: ${states.join(', ')}`);
+    }
     if (item.kind === 'drag' && !isString(item.alternative)) {
       problems.push(`${at} is a drag, so it names its keyboard or single-pointer alternative`);
     }
@@ -396,7 +407,13 @@ export function validateSurface(exports: Exports, file: string): SurfaceRegistra
   }
   oneOf(exports.performanceTier, PERFORMANCE_TIERS, 'performanceTier', problems);
   oneOf(exports.auth, AUTH_MODES, 'auth', problems);
-  interactions(exports.interactions, problems);
+  interactions(
+    exports.interactions,
+    Array.isArray(exports.stateFixtures)
+      ? (exports.stateFixtures as { id?: unknown }[]).map((state) => state?.id)
+      : [],
+    problems,
+  );
   strings(exports.primaryActions, 'primaryActions', problems);
   notApplicable(exports.notApplicable, problems);
   if ('perfState' in exports) {
@@ -462,7 +479,13 @@ export function validateUnit(exports: Exports, file: string): UnitRegistration {
   const id = path.basename(file, path.extname(file));
   if ('outlineKnown' in exports) outlineKnown(exports.outlineKnown, id, problems);
   if ('contentRuled' in exports) contentRuled(exports.contentRuled, problems);
-  if ('interactions' in exports) interactions(exports.interactions, problems);
+  if ('interactions' in exports) {
+    interactions(
+      exports.interactions,
+      STATE_FIXTURES.map((state) => state.id),
+      problems,
+    );
+  }
   if ('primaryActions' in exports) strings(exports.primaryActions, 'primaryActions', problems);
   if ('notApplicable' in exports) notApplicable(exports.notApplicable, problems);
   if (problems.length > 0) throw new RegistrationError(file, problems);

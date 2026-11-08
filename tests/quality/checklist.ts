@@ -55,7 +55,7 @@ export interface ChecklistItem {
 }
 
 function interactionItem(interaction: Interaction): string {
-  const where = `on ${interaction.route}`;
+  const where = `on ${interaction.route}${interaction.state ? ` (${interaction.state})` : ''}`;
   switch (interaction.kind) {
     case 'dialog':
       return `Open "${interaction.name}" ${where} with the keyboard: focus moves into it, Escape closes it, and focus returns to "${interaction.name}".`;
