@@ -148,23 +148,40 @@ export function Position({ prefix }: { readonly prefix: string }) {
         document.removeEventListener('pointerup', released);
         document.removeEventListener('pointercancel', released);
       });
-      let tabbed = false;
+      // Tab past the sheet's last control: it closes, and focus goes back to its button, as Escape
+      // gives it back (the overlay's focus return), in the same task as the close, so no key, read
+      // or script in between finds focus anywhere else. Tab is the browser's only when the sheet
+      // has a control after this one; a popover's Tab order runs on after its invoker, so where
+      // the browser would send it says nothing.
+      const stops = () =>
+        [
+          ...sheet.querySelectorAll<HTMLElement>(
+            'a[href], button, input, select, textarea, summary, [tabindex]',
+          ),
+        ].filter(
+          (el) =>
+            el.tabIndex >= 0 &&
+            !el.hidden &&
+            !(el as HTMLButtonElement).disabled &&
+            el.getClientRects().length > 0,
+        );
       on(sheet, 'keydown', (event) => {
-        tabbed = (event as KeyboardEvent).key === 'Tab';
+        const key = event as KeyboardEvent;
+        if (key.key !== 'Tab' || key.shiftKey || key.altKey || key.ctrlKey || key.metaKey) return;
+        if (!open() || !button) return;
+        const all = stops();
+        const at = all.indexOf(key.target as HTMLElement);
+        if (at >= 0 && at < all.length - 1) return;
+        key.preventDefault();
+        sheet.hidePopover();
+        button.focus();
       });
+      // A click elsewhere, and Shift+Tab off the button, leave focus where they put it.
       const left = (event: Event) => {
-        const viaTab = tabbed;
-        tabbed = false;
         if (!open()) return;
         const next = (event as FocusEvent).relatedTarget as Node | null;
         if (inside(next) || (next === null && pressing)) return;
         sheet.hidePopover();
-        // Tab past the sheet's last link: it closes, and focus goes back to its button, as Escape
-        // gives it back (the overlay's focus return). A popover's Tab order runs on after its
-        // invoker, so where focus went says nothing; that Tab took it out of the sheet does. A
-        // click elsewhere, and Shift+Tab off the button, leave focus where they put it.
-        if (viaTab && next && sheet.contains(event.target as Node))
-          setTimeout(() => button?.focus());
       };
       on(sheet, 'focusout', left);
       if (button) on(button, 'focusout', left);
