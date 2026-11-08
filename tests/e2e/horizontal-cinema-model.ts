@@ -980,6 +980,15 @@ export interface PrintedLabel {
   readonly otherLine: boolean;
 }
 
+/** A full-record section on paper: its summary's name and its body's own first heading, each with whether it shows. */
+export interface PrintedRecord {
+  readonly name: string;
+  readonly summaryShown: boolean;
+  /** The body's first h2 to h4, its words, or null when the body has none. */
+  readonly heading: string | null;
+  readonly headingShown: boolean;
+}
+
 /** What the print look reads, under print media: the views, every visible form control, the summaries, the labels. */
 export interface PrintedLook {
   readonly views: readonly PrintedView[];
@@ -987,6 +996,8 @@ export interface PrintedLook {
   readonly controls: readonly string[];
   readonly summaries: readonly PrintedSummary[];
   readonly labels: readonly PrintedLabel[];
+  /** The full record's sections (.hc-record__item), so a section that prints its title twice shows. */
+  readonly records: readonly PrintedRecord[];
 }
 
 /**
@@ -1131,6 +1142,16 @@ export function printedLook(scope: Scope): Promise<PrintedLook> {
         otherLine: !!y && !!textRight && y.top >= textRight.bottom - 0.5,
       };
     });
-    return { views, controls, summaries, labels };
+    const records = [...boundary.querySelectorAll('.hc-record__item')].map((item) => {
+      const summary = item.querySelector(':scope > summary');
+      const heading = item.querySelector<HTMLElement>('.hc-record__body :is(h2, h3, h4)');
+      return {
+        name: (summary?.querySelector('.hc-record__name')?.textContent ?? '').trim(),
+        summaryShown: !!summary && shown(summary),
+        heading: heading ? (heading.textContent ?? '').trim() : null,
+        headingShown: !!heading && shown(heading),
+      };
+    });
+    return { views, controls, summaries, labels, records };
   });
 }
