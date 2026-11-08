@@ -3647,8 +3647,33 @@
 }
 
 @media print {
-  [data-variant='horizontal-cinema'] .hc-fold__state {
+  /*
+   * Nothing interactive prints: a disclosure's Show and Hide (its content prints open), the chapter
+   * sheet's button, and the visitor's appearance control (at the strip's own weight too, which shows it).
+   */
+  [data-variant='horizontal-cinema'] .hc-fold__state,
+  [data-variant='horizontal-cinema'] .hc-record .hc-fold__state,
+  [data-variant='horizontal-cinema'] .hc-jump,
+  [data-variant='horizontal-cinema'] .hc-chrome > [data-visitor-control-slot],
+  [data-variant='horizontal-cinema']
+    .hc[data-view='strip']
+    .hc-chrome
+    > [data-visitor-control-slot] {
     display: none;
+  }
+
+  /* The top line prints on the paper in the print ink, not as the matte's band. */
+  [data-variant='horizontal-cinema'] .hc-chrome {
+    background-color: transparent;
+    color: var(--color-text-primary);
+  }
+
+  [data-variant='horizontal-cinema'] :is(.hc-chrome__name, .hc-chrome__contact) {
+    color: var(--color-text-primary);
+  }
+
+  [data-variant='horizontal-cinema'] .hc-chrome__running {
+    color: var(--color-text-secondary);
   }
 
   /*
@@ -3714,6 +3739,11 @@
     white-space: normal;
   }
 
+  /* Inline on paper, a chapter's years keep their space after its name: "Origins 2012–2021". */
+  [data-variant='horizontal-cinema'] .hc-minimap__years {
+    margin-inline-start: 0.4em;
+  }
+
   [data-variant='horizontal-cinema'] .hc-scrub__end {
     display: block;
     margin-block-start: var(--space-xs);
@@ -3737,6 +3767,11 @@
     background-color: transparent;
     color: var(--color-text-primary);
     font-weight: 650;
+  }
+
+  /* And whatever the fit: a page refit for paper reads top to bottom, and the views print there too. */
+  [data-variant='horizontal-cinema'] .hc:has(.hc-shell[data-fit='over']) .hc-chrome__views {
+    display: inline-flex;
   }
 
   /* Every disclosure prints open, with or without the script that opens them before printing. */
