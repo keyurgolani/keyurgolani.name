@@ -815,3 +815,78 @@ test(
     await expect(stage(page)).toHaveAttribute('data-phase', 'ready');
   },
 );
+
+// Row 89, row 88's class (draft, unrun until RC2's tickets queue): the server renders Refresh, and
+// its only effect is the page's own script. The server's markup holds it, aria-disabled, until the
+// page hydrates, so a click before then is never lost without a word, and the live page takes the
+// hold off with no hydration mismatch.
+
+/** Every script chunk under /_next/static/chunks, which the page hydrates from. */
+const SCRIPT_CHUNK = /\/_next\/static\/chunks\/[^?#]+\.js(?:[?#].*)?$/;
+
+test(
+  "/studio/preview's HTML renders Refresh aria-disabled, and the live page takes it off with no hydration mismatch (row 89)",
+  { annotation: [PAGE] },
+  async ({ page, app }) => {
+    await seedDraft(app, 'Held Person');
+    await signIn(page, app, secret.password);
+    const html = await (await page.request.get(PREVIEW_PAGE)).text();
+    const tag = /<button[^>]*>Refresh<\/button>/.exec(html)?.[0] ?? '';
+    expect(tag, 'the server renders Refresh').not.toBe('');
+    expect.soft(tag, 'held before scripts run').toContain('aria-disabled="true"');
+    expect.soft(tag, 'never natively disabled').not.toMatch(/\sdisabled[=\s>]/);
+    const errors: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(message.text());
+    });
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto(PREVIEW_PAGE);
+    await expect(stage(page)).toHaveAttribute('data-phase', 'ready');
+    await expect(controls(page).getByRole('button', { name: 'Refresh' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    // React reports a hydration mismatch as a console error (#418, #423 or #425 in production).
+    expect(errors.filter((text) => /hydrat|#41[89]|#42[35]/i.test(text))).toEqual([]);
+  },
+);
+
+test(
+  'a Refresh clicked before /studio/preview hydrates reads held and loads nothing, and once the page hydrates Refresh loads the frame again (row 89)',
+  { annotation: [PAGE] },
+  async ({ page, context, app }) => {
+    await seedDraft(app, 'Early Person');
+    await signIn(page, app, secret.password);
+    const tab = await context.newPage();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const scripts: string[] = [];
+    await tab.route(SCRIPT_CHUNK, async (route) => {
+      scripts.push(route.request().url());
+      await held;
+      await route.continue().catch(() => {});
+    });
+    const mints: number[] = [];
+    tab.on('request', (request) => {
+      if (request.url().endsWith('/api/studio/preview.grant.mint')) mints.push(Date.now());
+    });
+    // Async chunks don't hold DOMContentLoaded, so the server's markup is all there is.
+    await tab.goto(PREVIEW_PAGE, { waitUntil: 'domcontentloaded' });
+    expect(scripts.length, 'a script chunk is held').toBeGreaterThan(0);
+    const refresh = controls(tab).getByRole('button', { name: 'Refresh' });
+    await expect(refresh).toBeVisible();
+    await expect(refresh).toHaveAttribute('aria-disabled', 'true');
+    // A real click on the held button: force skips Playwright's wait for it to be enabled.
+    await refresh.click({ force: true });
+    expect(mints, 'no grant before the page hydrates').toEqual([]);
+    release();
+    await expect(stage(tab)).toHaveAttribute('data-phase', 'ready');
+    await expect(refresh).not.toHaveAttribute('aria-disabled', 'true');
+    // The page's own first load alone: the early click is not replayed as a refresh.
+    expect(mints, "the page's first grant alone").toHaveLength(1);
+    await refresh.click();
+    await expect.poll(() => mints.length, { message: 'Refresh asks for a new grant' }).toBe(2);
+    await expect(stage(tab)).toHaveAttribute('data-phase', 'ready');
+    await tab.unrouteAll({ behavior: 'ignoreErrors' });
+  },
+);
