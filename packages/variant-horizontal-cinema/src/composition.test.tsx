@@ -507,6 +507,32 @@ test('a refit brings the strip into step only after the page is back where the r
   assert.equal(source.match(/\bpin\(\);/g)?.length, 3);
 });
 
+test("the strip's geometry is kept only while the strip is the length it was read at, so a relayout before its refit is never read on the scenes' old starts (row 93)", () => {
+  const source = readFileSync(new URL('./controller.tsx', import.meta.url), 'utf8');
+  const start = source.indexOf('const geometry = ');
+  assert.notEqual(start, -1);
+  const body = source.slice(start, source.indexOf('\n    };\n', start)).replace(/\/\/[^\n]*/g, '');
+  assert.match(
+    body,
+    /const travelled = Math\.max\(0, stageElement\.scrollWidth - stageElement\.clientWidth\);\s*if \(geo && geo\.travel === travelled\) return geo;/,
+  );
+  // Every reader of the strip's lengths and starts goes through it: the check is the cache's one read.
+  assert.equal(source.match(/\bgeo\.(?:travel|start|offsets)\b/g)?.length, 1);
+  // Both orders the browser's two scroll events come in after such a relayout read it fresh: the page's
+  // first (onPageScroll's follow, from the page's place on the pin) and the strip's first
+  // (onStageScroll's lead, the page from the strip's place), and the paint after either (measure).
+  const bodyOf = (name: string) => {
+    const at = source.indexOf(`const ${name} = `);
+    assert.notEqual(at, -1, name);
+    return source.slice(at, source.indexOf('\n    };\n', at)).replace(/\/\/[^\n]*/g, '');
+  };
+  assert.match(bodyOf('onPageScroll'), /\bfollow\(\);/);
+  assert.match(bodyOf('onStageScroll'), /\blead\(\);/);
+  assert.match(bodyOf('follow'), /window\.scrollY - pinStart\(\)/);
+  assert.match(bodyOf('lead'), /const top = pinStart\(\) \+ along\(\);/);
+  assert.match(bodyOf('measure'), /sceneAlong\(geometry\(\)\.offsets,/);
+});
+
 test("a work whose title repeats its section's still links to its own address", () => {
   const pair = pairOf('complete');
   const works = pair.portfolio.works ?? [];
