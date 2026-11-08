@@ -44,9 +44,17 @@ export function compareGridVerdict(reading: CompareGridReading): CompareGridVerd
     failures.push(
       `${reading.handedOn} of the sweep's ${reading.rests} rests handed the heavy slot on`,
     );
-  if (reading.tbtMs > reading.tbtCeilingMs)
-    failures.push(
-      `a sweep across the plates and back blocks ${reading.tbtMs} ms, over vitals.tbtMs's ${reading.tbtCeilingMs}`,
-    );
-  return { failures, reported: [] };
+  // RC1 only (the coordinator's ruling, 2026-11-08, a listed exception): the sweep's TBT is
+  // reported, not gated, until the grid's settle waits on the plates' own loads (RC2) and the bar
+  // is hard again. perf.json keeps the reading and its ceiling.
+  const reported =
+    reading.tbtMs > reading.tbtCeilingMs
+      ? [
+          {
+            type: 'compare grid sweep tbt (reported, not gated, for RC1)',
+            description: `a sweep across the plates and back blocks ${reading.tbtMs} ms, over vitals.tbtMs's ${reading.tbtCeilingMs}`,
+          },
+        ]
+      : [];
+  return { failures, reported };
 }
