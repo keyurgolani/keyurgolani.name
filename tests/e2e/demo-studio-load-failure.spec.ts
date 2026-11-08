@@ -17,6 +17,29 @@ test.use({ appOptions: DEMO_APP });
 /** The shell's own wait (late-alert.tsx's STUDIO_LOAD_TIMEOUT_MS), and margin past it. */
 const PAST_TIMEOUT_MS = 10_000;
 
+/** What Playwright says when a route's page, context or browser has gone. */
+const CLOSED = /Target page, context or browser has been closed/;
+
+/**
+ * A route handler's work, on a page that may have gone by the time it runs (#214): a test that
+ * ends on a navigation or a reload can close the context while the next page's requests still come
+ * through here. Only that is swallowed; any other failure fails the test.
+ */
+async function unlessGone(page: Page, work: () => Promise<unknown>): Promise<void> {
+  try {
+    await work();
+  } catch (error) {
+    if (page.isClosed() || CLOSED.test(String(error))) return;
+    throw error;
+  }
+}
+
+// Every route here can still be running as a test ends: let them go before the context closes, as
+// studio-signout.spec.ts's W2 does.
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+});
+
 /** Failed enhancement on `page` for `path`: its optional chunks and its fonts refused. */
 async function failEnhancement(page: Page, path: string): Promise<string[]> {
   const response = await page.request.get(path);
@@ -35,9 +58,9 @@ async function failEnhancement(page: Page, path: string): Promise<string[]> {
     const request = route.request();
     if (optional(request) || request.resourceType() === 'font') {
       refused.push(request.url());
-      return route.abort('blockedbyclient');
+      return unlessGone(page, () => route.abort('blockedbyclient'));
     }
-    return route.fallback();
+    return unlessGone(page, () => route.fallback());
   });
   return refused;
 }
