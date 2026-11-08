@@ -213,6 +213,8 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'contrast/restless-ancestor',
     // Row 25's RC2 hardening: the sampler's watch bounded on a churning page.
     'contrast/turns-bounded',
+    // Its own pins never the page's changes, a pending page change still kept.
+    'contrast/own-pin-still',
     // High contrast at thresholds.json's 7:1: 5.5:1 text fails there and passes in normal mode.
     'axe/high-contrast-solid-5-5',
     'contrast/high-contrast-gradient-5-5',
