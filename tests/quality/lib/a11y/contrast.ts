@@ -249,17 +249,27 @@ export function stillnessScript(
           name: named(animation),
         });
     }
-    for (const { target, property, value, name } of wanted) {
-      const inline = (target as HTMLElement).style;
-      if (!inline) return { kind: 'unholdable', name };
-      if (!held.some((each) => each.target === target))
-        held.push({ target, style: target.getAttribute('style') });
-      inline.setProperty(property, value, 'important');
-      if (
-        inline.getPropertyValue(property) === '' ||
-        getComputedStyle(target).getPropertyValue(property) !== value
-      )
-        return { kind: 'unholdable', name };
+    // The pins are the sampler's own writes, never the page's changes (watchTurnsScript(), under
+    // the call's key, the batch's `<key>_<at>` cut to it).
+    const own = (window as unknown as Record<string, unknown>)[
+      `__qualityTurnsOwn_${key.split('_')[0]}`
+    ] as { take: () => void; drop: () => void } | undefined;
+    own?.take();
+    try {
+      for (const { target, property, value, name } of wanted) {
+        const inline = (target as HTMLElement).style;
+        if (!inline) return { kind: 'unholdable', name };
+        if (!held.some((each) => each.target === target))
+          held.push({ target, style: target.getAttribute('style') });
+        inline.setProperty(property, value, 'important');
+        if (
+          inline.getPropertyValue(property) === '' ||
+          getComputedStyle(target).getPropertyValue(property) !== value
+        )
+          return { kind: 'unholdable', name };
+      }
+    } finally {
+      own?.drop();
     }
     return null;
   };
@@ -310,12 +320,21 @@ export function releaseScript(key: string): void {
   const name = `__qualityHeld_${key}`;
   const held = (window as unknown as Record<string, unknown>)[name] as
     { target: Element; style: string | null }[] | undefined;
-  for (const { target, style } of held ?? []) {
-    // Reading the attribute first writes the pins' CSSOM changes into it, which the engine may
-    // otherwise do after the restore, as an empty style="".
-    void target.getAttribute('style');
-    if (style === null) target.removeAttribute('style');
-    else target.setAttribute('style', style);
+  // The release is the sampler's own write too (stillnessScript()'s pins).
+  const own = (window as unknown as Record<string, unknown>)[
+    `__qualityTurnsOwn_${key.split('_')[0]}`
+  ] as { take: () => void; drop: () => void } | undefined;
+  own?.take();
+  try {
+    for (const { target, style } of held ?? []) {
+      // Reading the attribute first writes the pins' CSSOM changes into it, which the engine may
+      // otherwise do after the restore, as an empty style="".
+      void target.getAttribute('style');
+      if (style === null) target.removeAttribute('style');
+      else target.setAttribute('style', style);
+    }
+  } finally {
+    own?.drop();
   }
   delete (window as unknown as Record<string, unknown>)[name];
 }
@@ -959,15 +978,23 @@ export function watchTurnsScript({ key, own }: { key: string; own: string }): tr
   const w = window as unknown as Record<string, unknown>;
   const ownAttribute = new RegExp(own);
   const state: Turns = { start: performance.now(), last: new Map() };
-  const observer = new MutationObserver((list) => {
+  const handle = (list: MutationRecord[]) => {
     const t = performance.now();
     for (const record of list)
       if (!ownAttribute.test(record.attributeName ?? '')) state.last.set(record.target, t);
-  });
+  };
+  const observer = new MutationObserver(handle);
   observer.observe(document.documentElement, { subtree: true, attributes: true });
   (w[`__qualityTurnsOff_${key}`] as (() => void) | undefined)?.();
   w[`__qualityTurns_${key}`] = state;
   w[`__qualityTurnsOff_${key}`] = () => observer.disconnect();
+  // The sampler's own writes (its pins and their release, row25-quiet-rc2-hardening part 2a):
+  // take() hands the page's changes still pending to the watch first, in order, as its observer
+  // would have; drop() then throws away the records the sampler's own writes queued.
+  w[`__qualityTurnsOwn_${key}`] = {
+    take: () => handle(observer.takeRecords()),
+    drop: () => void observer.takeRecords(),
+  };
   return true;
 }
 
@@ -1013,6 +1040,7 @@ export function unwatchTurnsScript(key: string): true {
   (w[`__qualityTurnsOff_${key}`] as (() => void) | undefined)?.();
   delete w[`__qualityTurns_${key}`];
   delete w[`__qualityTurnsOff_${key}`];
+  delete w[`__qualityTurnsOwn_${key}`];
   return true;
 }
 
