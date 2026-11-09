@@ -109,6 +109,7 @@ export const GATE_NEEDS = [
   'rehearsal',
   'fresh-clone',
   'docs',
+  'deps-scan',
 ];
 /** The gate's quality-pr jobs, whose red a records list can explain. */
 export const QPR_JOBS = new Set(['quality-pr', 'quality-pr-verdict']);

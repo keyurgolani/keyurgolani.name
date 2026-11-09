@@ -915,6 +915,61 @@ jobs:
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
 
+  # The production dependency scan rc-scan runs (ci/release/deps-scan.mjs),
+  # with rc-scan's baseline, the newest final release, so a High or Critical
+  # finding in what the app ships is red here before a release candidate is
+  # tagged. It runs on every complete run; a dependency only changes with the
+  # lockfile or a package.json, which make a run complete.
+  deps-scan:
+    name: deps-scan
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'deps-scan') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      REPORTS: reports/deps-scan
+      INVENTORY: inventory/deps-scan
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The previous final release's lockfile is the baseline.
+          fetch-depth: 0
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: Install Grype
+        run: |
+          node ci/release/install-grype.mjs "$RUNNER_TEMP/grype"
+          echo "$RUNNER_TEMP/grype" >> "$GITHUB_PATH"
+      # The newest final release before this commit that has a published
+      # GitHub Release (ci/release/baseline.mjs), as rc-scan finds it.
+      - name: Find the dependency baseline
+        id: baseline
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node ci/release/baseline.mjs
+      - name: pnpm ci:deps-scan
+        env:
+          BASELINE: ${{ steps.baseline.outputs.tag }}
+        run: pnpm ci:deps-scan
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-deps-scan
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
   image:
     name: image
     needs: [changes]
@@ -1169,6 +1224,7 @@ jobs:
         rehearsal,
         fresh-clone,
         docs,
+        deps-scan,
       ]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -1210,6 +1266,7 @@ jobs:
         rehearsal,
         fresh-clone,
         docs,
+        deps-scan,
       ]
     runs-on: ubuntu-24.04
     timeout-minutes: 5

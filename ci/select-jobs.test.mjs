@@ -21,7 +21,7 @@ const CI_YML = readFileSync(path.join(ROOT, '.github', 'workflows', 'ci.yml'), '
 // the whole map.
 const WORKFLOW = [...CONTROL_JOBS, ...CHECK_JOBS];
 const ALL = CHECK_JOBS;
-const PRODUCT = CHECK_JOBS.filter((job) => job !== 'docs');
+const PRODUCT = CHECK_JOBS.filter((job) => job !== 'docs' && job !== 'deps-scan');
 
 const draft = (files) =>
   selectJobs({

@@ -183,6 +183,7 @@ Tests use Node's built-in `node:test`, through `tsx` for TypeScript. A single fi
 | `rehearsal`                          | `pnpm rehearse (its container rows need Docker and REHEARSAL_IMAGE)`                                                                                                                  |
 | `fresh-clone`                        | `pnpm fresh-clone (its container steps need Docker and FRESH_CLONE_CONTAINERS=1)`                                                                                                     |
 | `docs`                               | `pnpm check:docs`                                                                                                                                                                     |
+| `deps-scan`                          | `pnpm ci:deps-scan`                                                                                                                                                                   |
 | `selected`                           | CI only: it reads the results of the run it is in                                                                                                                                     |
 | `gate`                               | CI only: it reads the results of the run it is in                                                                                                                                     |
 
