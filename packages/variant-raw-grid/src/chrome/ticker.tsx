@@ -6,9 +6,10 @@ import type { TickerFact } from '../model';
 // prominent ground. The track is decoration over facts the page shows as
 // text (At a glance, the awards), so it's hidden from assistive technology
 // whole, its second copy included. With no script, in a plate, under
-// reduced motion, on a still language, and where the window is narrow or
-// short or the text enlarged (so nothing is clipped), it's one static pass
-// that wraps. The client module runs it (data-ticker="running") on the
+// reduced motion, on a still language, where the window is narrow or
+// short or the text enlarged (so nothing is clipped), and under high
+// contrast, in its display mode, more contrast or forced colors (so its
+// text keeps its contrast in every frame), it's one static pass that wraps. The client module runs it (data-ticker="running") on the
 // kit's runtime, which pauses it off screen, in a hidden tab, and when the
 // visitor pauses motion; it pauses on hover too. Its end cell is the kit's
 // MotionControl (WCAG 2.2.2): pausing stops every effect on the page, this

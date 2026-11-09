@@ -7080,30 +7080,6 @@
     "note": "Swiss mailto band: the email link's large text under its contrast bar at 390; RC2 (preflight 1)"
   },
   {
-    "cell": "composition:raw-grid complete / raw-grid/platform-neutral/warm-parchment/humanist-ui/high-contrast",
-    "viewport": "1024x768",
-    "row": "contrast-more",
-    "engine": "chromium",
-    "check": "contrast",
-    "rule": "text",
-    "target": "ul[data-copy=\"\"] > li:nth-child(1)",
-    "owner": "lane C",
-    "routed": "row 116",
-    "note": "Raw Grid ticker at 1024: the check couldn't sample the moving ticker's text (its first item); RC2 (preflight 1)"
-  },
-  {
-    "cell": "composition:raw-grid complete / raw-grid/platform-neutral/warm-parchment/humanist-ui/high-contrast",
-    "viewport": "1024x768",
-    "row": "default",
-    "engine": "chromium",
-    "check": "contrast",
-    "rule": "text",
-    "target": "ul[data-copy=\"\"] > li:nth-child(1)",
-    "owner": "lane C",
-    "routed": "row 116",
-    "note": "Raw Grid ticker at 1024: the check couldn't sample the moving ticker's text (its first item); RC2 (preflight 1)"
-  },
-  {
     "cell": "composition:flux complete / flux/platform-neutral/warm-parchment/humanist-ui/dark",
     "viewport": "390x844",
     "row": "default",

@@ -120,13 +120,13 @@ function verdict(failures: readonly SummaryFailure[] | 'passed', listed: Verdict
 
 const rules = (failures: readonly { rule: string }[]) => failures.map((each) => each.rule).sort();
 
-test("the checked-in scope is RC1 on its default packs, its records list preflight 1's 646 keys, each a valid entry routed to a row on a platform-neutral cell, main's Spatial Bento root-text record still among them, and it loads", () => {
+test("the checked-in scope is RC1 on its default packs, its records list preflight 1's 644 keys, each a valid entry routed to a row on a platform-neutral cell, main's Spatial Bento root-text record still among them, and it loads", () => {
   const loaded = loadReleaseScope({ [SCOPE_ENV]: SCOPE_FILE })!;
   assert.equal(loaded.scope.release, '1.0.0-rc.1');
   assert.equal(loaded.scope.scope, 'default-packs');
   // Preflight 1's list for the candidate (run 42489261932, 89 shards): the keys that still fail on
   // it, every one a valid entry, each key once.
-  assert.equal(loaded.records.length, 646);
+  assert.equal(loaded.records.length, 644);
   assert.deepEqual(recordsProblems(loaded.records, loaded.scope), []);
   assert.equal(new Set(loaded.records.map(recordKey)).size, loaded.records.length);
   for (const each of loaded.records) assert.match(each.routed, /^row [1-9]\d*[a-z]?$/, each.cell);

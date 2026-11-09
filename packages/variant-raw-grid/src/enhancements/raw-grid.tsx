@@ -8,8 +8,9 @@ import { useEnhancementRuntime, type RuntimeState } from '@portfolio/kit/runtime
 // index in the foot, and the header marks nothing):
 // 1. the ticker runs on the kit's runtime, which the kit's MotionControl
 //    pauses, as it does off screen and in a hidden tab, and holds still
-//    under reduced motion, on a reduced or static boundary, and where its
-//    room is cramped;
+//    under reduced motion, on a reduced or static boundary, where its
+//    room is cramped, and under high contrast (its display mode, more
+//    contrast, or forced colors);
 // 2. the Index opens the foot's one index over the page as a popover (the
 //    same element, never a copy), with Escape, Close, light dismiss, and
 //    focus back on the Index; following a link in it closes it first;
@@ -61,19 +62,39 @@ function cramped(root: HTMLElement, short: MediaQueryList): boolean {
   return short.matches || rem >= 24 || root.clientWidth / rem < 22.5;
 }
 
+/**
+ * Whether the page is in high contrast, in any of its forms: the boundary's high-contrast display
+ * mode, the visitor's more contrast, or forced colors. There the ticker holds still (row 116), so
+ * its facts keep their contrast in every frame, never a moving glyph's edge against its ground.
+ */
+function contrasty(root: HTMLElement, more: MediaQueryList, forced: MediaQueryList): boolean {
+  return root.dataset.displayMode === 'high-contrast' || more.matches || forced.matches;
+}
+
 /** The ticker's state for the stylesheet: running (paused or not, the runtime's), or still. */
 function ticker(root: HTMLElement, box: HTMLElement, state: RuntimeState): () => void {
   const short = matchMedia('(height < 32rem)');
+  const more = matchMedia('(prefers-contrast: more)');
+  const forced = matchMedia('(forced-colors: active)');
   const sync = () => {
-    box.dataset.ticker = state === 'static' || cramped(root, short) ? 'still' : 'running';
+    box.dataset.ticker =
+      state === 'static' || cramped(root, short) || contrasty(root, more, forced)
+        ? 'still'
+        : 'running';
   };
   const resize = new ResizeObserver(sync);
   resize.observe(root);
-  short.addEventListener('change', sync);
+  // A page can set the boundary's display mode in place (Studio's preview frame does, through
+  // frame-channel.ts), so a switch into high contrast stills the belt, and one out lets it run.
+  const mode = new MutationObserver(sync);
+  mode.observe(root, { attributes: true, attributeFilter: ['data-display-mode'] });
+  const queries = [short, more, forced];
+  for (const query of queries) query.addEventListener('change', sync);
   sync();
   return () => {
     resize.disconnect();
-    short.removeEventListener('change', sync);
+    mode.disconnect();
+    for (const query of queries) query.removeEventListener('change', sync);
   };
 }
 
