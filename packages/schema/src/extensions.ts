@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from './zod';
 import { EXTENSION_SECTION_NAME_PATTERN, isPackageName, parseExtensionKind } from './ids';
 import { addNestedIssue } from './issues';
 import {

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@portfolio/schema/zod';
 import { defineContentExtension } from '@portfolio/schema';
 
 // A test content extension: a photographer's exhibitions. Tests register it

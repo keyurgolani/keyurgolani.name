@@ -2,7 +2,7 @@
 // 2.0. The contract version comes first, since another major's fields mean
 // something else. Then the shape, then the rules the shape can't state.
 
-import { z } from 'zod';
+import { z } from '@portfolio/schema/zod';
 import {
   ALL_SECTION_KINDS,
   closestWord,

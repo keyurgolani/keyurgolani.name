@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@portfolio/schema/zod';
 import { isSectionId } from '@portfolio/schema/ids';
 
 // The preview's message protocol (#7, Slice 3): every message between Studio

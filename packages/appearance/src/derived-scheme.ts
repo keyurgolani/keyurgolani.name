@@ -5,7 +5,7 @@
 // the high-contrast sets when the generator gives them. Browser-safe, like
 // the root entry, so the store and the resolver read one shape.
 
-import { z } from 'zod';
+import { z } from '@portfolio/schema/zod';
 import { withDerivedRoles } from './derived-roles';
 import { ColorTokenSetSchema } from './manifests';
 import { GENERATOR_V1_FOCUS_TARGETS } from './solve';

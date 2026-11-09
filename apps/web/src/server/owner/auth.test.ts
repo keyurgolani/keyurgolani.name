@@ -5,7 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { z } from 'zod';
+import { z } from '@portfolio/schema/zod';
 import {
   assertSessionHeld,
   csrfToken,

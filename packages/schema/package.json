@@ -13,6 +13,7 @@
     "./ids": "./src/ids.ts",
     "./kinds": "./src/kinds/index.ts",
     "./migrate": "./src/migrate/index.ts",
+    "./zod": "./src/zod.ts",
     "./node": "./src/node.ts"
   },
   "scripts": {

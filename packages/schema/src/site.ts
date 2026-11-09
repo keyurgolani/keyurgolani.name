@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from './zod';
 import { EXTENSION_MAX_DEPTH, isPlainObject, plainJsonProblem } from './json';
 import { FALLBACK_VARIANT_ID } from './ids';
 import { SectionIdSchema, type SchemaParts } from './kinds/common';

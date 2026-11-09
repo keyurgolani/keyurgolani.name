@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { ZodTypeAny } from 'zod';
+import type { z } from '@portfolio/schema/zod';
 import { DisplayModeSchema } from '@portfolio/schema';
 import { PreviewEnvironmentSchema } from '~/server/operations';
 import {
@@ -111,7 +111,7 @@ const INVALID: Record<string, unknown> = {
   asset: { key: '', blob: new SizedBlob(1) },
 };
 
-const TABLES: ReadonlyArray<readonly [string, Readonly<Record<string, ZodTypeAny>>]> = [
+const TABLES: ReadonlyArray<readonly [string, Readonly<Record<string, z.ZodTypeAny>>]> = [
   ['the hello Studio takes', STUDIO_HANDSHAKE],
   ['the connect a frame takes', FRAME_HANDSHAKE],
   ['what a frame sends Studio', TO_STUDIO],

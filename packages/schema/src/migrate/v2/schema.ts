@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '../../zod';
 import { sectionRouter } from '../../compose';
 import { createExtensionRegistry } from '../../extensions';
 import { LanguageTagSchema, makeParts } from '../../kinds/common';
