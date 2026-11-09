@@ -148,20 +148,24 @@ test('every field the body lists is required', () => {
     'kind',
   ]) {
     const found = messages(quality([edit(TARGET, { [field]: undefined })]));
+    // zod 4 names the type a missing field needs, or the options of a missing enum.
+    const missing = new RegExp(
+      `${field}: Invalid (?:input: expected \\w+, received undefined|option: expected one of ")`,
+    );
     assert.ok(
-      found.some((message) => message.includes(`${field}: Required`)),
+      found.some((message) => missing.test(message)),
       `${field}: ${found.join('; ')}`,
     );
   }
   // Nothing the schema doesn't name, so no tier can lower a floor.
   assert.ok(
     messages(quality([edit(TARGET, { tier: 'experimental' })])).some((message) =>
-      message.includes("Unrecognized key(s) in object: 'tier'"),
+      message.includes('Unrecognized key: "tier"'),
     ),
   );
   assert.ok(
     messages(quality([scoped(TARGET, { fixture: 'complete' })])).some((message) =>
-      message.includes("Unrecognized key(s) in object: 'fixture'"),
+      message.includes('Unrecognized key: "fixture"'),
     ),
   );
   for (const [field, value] of [
@@ -514,7 +518,7 @@ test('a false positive names its manual run, and lapses on an axe upgrade', () =
   // It isn't an open exception: it carries no owner or expiry, and a scheduled run doesn't need it matched.
   assert.ok(
     messages(quality([], [edit(positive, { expires: '2027-01-01' })])).some((message) =>
-      message.includes("Unrecognized key(s) in object: 'expires'"),
+      message.includes('Unrecognized key: "expires"'),
     ),
   );
   assert.deepEqual(
@@ -599,7 +603,7 @@ test('a file that is no YAML, holds a key twice, or has a top-level key it shoul
     },
     budgets: fixtureInputs({}).budgets,
   };
-  assert.deepEqual(messages(extra), ["(file): Unrecognized key(s) in object: 'waivers'"]);
+  assert.deepEqual(messages(extra), ['(file): Unrecognized key: "waivers"']);
   const json = {
     quality: fixtureInputs({}).quality,
     budgets: { file: 'runtime-budgets.json', text: '{' },

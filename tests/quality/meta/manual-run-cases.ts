@@ -146,11 +146,16 @@ export const MANUAL_RUN_CASES: readonly MetaCase[] = [
       (run) => ({ run: { ...run, tester } }),
     ),
   ),
-  badCase('missing-tester', 'a record with no tester', /: tester: Required$/, (run) => {
-    const { tester: _tester, ...rest } = run;
-    void _tester;
-    return { run: rest };
-  }),
+  badCase(
+    'missing-tester',
+    'a record with no tester',
+    /: tester: Invalid input: expected string, received undefined$/,
+    (run) => {
+      const { tester: _tester, ...rest } = run;
+      void _tester;
+      return { run: rest };
+    },
+  ),
   badCase(
     'unknown-item',
     "a record answering an item its checklist doesn't have",

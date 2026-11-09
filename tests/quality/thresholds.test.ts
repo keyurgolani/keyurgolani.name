@@ -114,7 +114,7 @@ test('no limit has a tier of its own, so no tier can lower one', () => {
 
 test('a value of the wrong type, out of range, or unknown fails, naming its path', () => {
   assert.deepEqual(problems(changed(['contrast.text', '4.5'])), [
-    'contrast.text: Expected number, received string',
+    'contrast.text: Invalid input: expected number, received string',
   ]);
   assert.ok(problems(changed(['contrast.nonText', 0.5]))[0]!.startsWith('contrast.nonText:'));
   assert.ok(
