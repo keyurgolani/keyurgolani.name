@@ -1315,19 +1315,34 @@ test('a Sign out form post with a session, on the exact Origin and same-origin, 
   assert.equal((await send(studio('auth.session', token))).status, 401);
 });
 
-test("a Sign out form post that asks to discard clears the browser's storage too; keep, or no choice, leaves it (row 88c-RC2)", async (t) => {
+/** The pending-discard marker an https Studio sets (lib/studio/discard-marker.ts): script reads it, so not HttpOnly. */
+const DISCARD_MARKER = '__Host-studio_discard=1; Path=/; Max-Age=604800; SameSite=Strict; Secure';
+
+test("a Sign out form post that asks to discard clears the cache alone, never the origin's storage, and leaves a pending-discard marker for Studio's next script; keep, or no choice, leaves none (row 88c-RC2)", async (t) => {
   const { send } = await setup(t);
-  for (const [choice, cleared] of [
-    [undefined, '"cache"'],
-    ['keep', '"cache"'],
-    ['discard', '"cache", "storage"'],
+  for (const [choice, marked] of [
+    [undefined, false],
+    ['keep', false],
+    ['discard', true],
   ] as const) {
     const token = tokenOf(await send(login()))!;
     const out = await send(formLogout(token, choice ? { choice } : {}));
     assert.equal(out.status, 303, String(choice));
-    assert.equal(out.headers.get('clear-site-data'), cleared, String(choice));
+    // The public site's preferences stay: no "storage", ever.
+    assert.equal(out.headers.get('clear-site-data'), '"cache"', String(choice));
+    assert.deepEqual(
+      out.headers.getSetCookie(),
+      marked ? [CLEARED, DISCARD_MARKER] : [CLEARED],
+      String(choice),
+    );
     assert.equal((await send(studio('auth.session', token))).status, 401, String(choice));
   }
+  // A JSON logout, whose script clears the journal itself, sets no marker.
+  const scripted = tokenOf(await send(login()))!;
+  const json = await send(studio('auth.logout', scripted, { choice: 'discard' }));
+  assert.equal(json.status, 200);
+  assert.equal(json.headers.get('clear-site-data'), '"cache"');
+  assert.deepEqual(json.headers.getSetCookie(), [CLEARED]);
   // Any other choice is no Sign out: the session stays.
   const token = tokenOf(await send(login()))!;
   const odd = await send(formLogout(token, { choice: 'everything' }));

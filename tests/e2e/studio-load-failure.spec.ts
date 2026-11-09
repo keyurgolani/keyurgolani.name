@@ -323,11 +323,14 @@ test(
 );
 
 test(
-  "with the shell's chunks refused, the alert's discard signs out and clears this browser's storage (row 88c-RC2, R4 discard)",
+  "with the shell's chunks refused, the alert's discard signs out, and the sign-in page's script clears the journal alone (row 88c-RC2, R4 discard)",
   { annotation: [STUDIO] },
   async ({ page, app }) => {
     await signIn(page, app, secret.password);
-    await page.evaluate((key) => localStorage.setItem(key, '{"kept":true}'), JOURNAL_KEY);
+    await page.evaluate((key) => {
+      localStorage.setItem(key, '{"kept":true}');
+      localStorage.setItem('portfolio.motion.paused', '1');
+    }, JOURNAL_KEY);
     await failEnhancement(page, app.origin);
     const logouts = logoutsOf(page);
     await page.goto('/studio');
@@ -335,8 +338,12 @@ test(
     await alertDiscard(page).click();
     await expect(page).toHaveURL(`${app.origin}${SIGNED_OUT}`);
     expect(logouts, 'one auth.logout').toHaveLength(1);
-    // Clear-Site-Data "storage" emptied the origin's storage, the journal with it.
-    expect(await page.evaluate((key) => localStorage.getItem(key), JOURNAL_KEY)).toBeNull();
+    // The sign-in page's script reads the pending-discard marker first and clears the journal,
+    // and only the journal: the site's own keys stay.
+    await expect
+      .poll(() => page.evaluate((key) => localStorage.getItem(key), JOURNAL_KEY))
+      .toBeNull();
+    expect(await page.evaluate(() => localStorage.getItem('portfolio.motion.paused'))).toBe('1');
   },
 );
 

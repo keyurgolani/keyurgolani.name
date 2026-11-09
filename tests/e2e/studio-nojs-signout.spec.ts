@@ -8,8 +8,8 @@ import { ownerApp } from '../harness/profile-matrix';
 // 88c-RC2, F2(ii) as the owner ruled; draft, unrun until RC2's tickets queue). Sign out is a form
 // post to auth.logout from the first byte: auth.logout takes it without a CSRF token on the exact
 // Origin with Sec-Fetch-Site same-origin, and answers a 303 to sign-in. Without JavaScript a
-// second submit discards this browser's unsaved changes, its answer clearing the origin's storage
-// too. The sign-in page it lands on posts the tabs' logout once its script runs, only when it came
+// second submit discards this browser's unsaved changes: its answer leaves a pending-discard
+// marker, which Studio's next script reads first. The sign-in page it lands on posts the tabs' logout once its script runs, only when it came
 // there from this origin.
 
 const secret = ownerSecret();
@@ -89,12 +89,16 @@ test(
 );
 
 test(
-  "without JavaScript, Discard unsaved changes and sign out signs out and clears this browser's storage (row 88c-RC2)",
+  "without JavaScript, Discard unsaved changes and sign out signs out, and Studio's next script clears the journal before anything restores it, the site's own keys kept (row 88c-RC2)",
   { annotation: [STUDIO] },
   async ({ browser, page, app }) => {
     await signIn(page, app, secret.password);
-    await page.evaluate((key) => localStorage.setItem(key, '{"kept":true}'), JOURNAL_KEY);
+    await page.evaluate((key) => {
+      localStorage.setItem(key, '{"kept":true}');
+      localStorage.setItem('portfolio.motion.paused', '1');
+    }, JOURNAL_KEY);
     const context = await withoutScript(page, app.origin, browser);
+    let after: Awaited<ReturnType<BrowserContext['storageState']>>;
     try {
       const plain = await context.newPage();
       const logouts = logoutsOf(plain);
@@ -102,9 +106,34 @@ test(
       await discard(plain).click();
       await expect(plain).toHaveURL(`${app.origin}${SIGNED_OUT}`);
       expect(logouts, 'one auth.logout').toHaveLength(1);
-      expect(await journalIn(context, app.origin), 'the journal cleared').toBeNull();
+      after = await context.storageState();
     } finally {
       await context.close();
+    }
+    // Without script nothing could clear storage at sign-out: Clear-Site-Data says "cache" alone,
+    // and the answer left the pending-discard marker.
+    const local = after.origins.find((each) => each.origin === app.origin)?.localStorage ?? [];
+    expect(local.find(({ name }) => name === JOURNAL_KEY)?.value).toBe('{"kept":true}');
+    expect(after.cookies.map(({ name }) => name)).toContainEqual(
+      expect.stringMatching(/^(?:__Host-)?studio_discard$/),
+    );
+    // The next page with script, in the same browser, reads the marker first.
+    const scripted = await browser.newContext({ baseURL: app.origin, storageState: after });
+    try {
+      const next = await scripted.newPage();
+      await next.goto('/studio/sign-in');
+      await expect(next.getByLabel('Password')).toBeVisible();
+      await expect
+        .poll(() => next.evaluate((key) => localStorage.getItem(key), JOURNAL_KEY))
+        .toBeNull();
+      expect(await next.evaluate(() => localStorage.getItem('portfolio.motion.paused'))).toBe('1');
+      const left = (await scripted.cookies()).map(({ name }) => name);
+      expect(
+        left.some((name) => /studio_discard$/.test(name)),
+        'the marker dropped',
+      ).toBe(false);
+    } finally {
+      await scripted.close();
     }
   },
 );
