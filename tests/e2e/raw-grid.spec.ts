@@ -1089,3 +1089,80 @@ test.describe('at 1440px, a card whose title opens its case', () => {
     },
   );
 });
+
+// Under high contrast the ticker holds still (row 116): rc.1's release run read its first fact's
+// contrast as unsampleable while the belt moved, at 1024 in the high-contrast display mode, default
+// and contrast-more, intermittently, as a moving target is. Still, its text sits on its ground in
+// every frame and the quality cell reads one sample. The ruling: high contrast in any of its forms,
+// the boundary's display mode, prefers-contrast: more, or forced colors, stills it as cramped room
+// does, one wrapped pass with the kit's Pause kept, and plain light still runs (the ticker's own
+// test above). At 1024 by 768, where the record is, with motion allowed.
+test.describe('under high contrast', () => {
+  test.use({ contextOptions: { reducedMotion: 'no-preference' } });
+
+  const ROWS = {
+    'the high-contrast display mode': {
+      mode: 'high-contrast',
+      media: { contrast: 'no-preference', forcedColors: 'none' },
+    },
+    'prefers-contrast: more': {
+      mode: 'light',
+      media: { contrast: 'more', forcedColors: 'none' },
+    },
+    'forced colors': {
+      mode: 'light',
+      media: { contrast: 'no-preference', forcedColors: 'active' },
+    },
+  } as const;
+
+  for (const [row, { mode, media }] of Object.entries(ROWS)) {
+    test(
+      `in ${row} the ticker is one still pass that holds for 1 s, its copy hidden and nothing running on its belt (row 116)`,
+      { annotation },
+      async ({ page, app }) => {
+        await page.setViewportSize({ width: 1024, height: 768 });
+        await page.context().addCookies([
+          {
+            name: 'portfolio_appearance',
+            value: new URLSearchParams({ scheme: 'warm-parchment', mode }).toString(),
+            url: app.origin,
+          },
+        ]);
+        await page.emulateMedia(media);
+        await page.goto('/', { waitUntil: 'networkidle' });
+        const ticker = page.locator('.rg-ticker');
+        test.skip((await ticker.count()) === 0, 'the fixture has fewer than two facts');
+        await expect(page.locator('[data-variant]').first()).toHaveAttribute(
+          'data-display-mode',
+          mode,
+        );
+        // The page has hydrated: the kit's Pause is in, as it is wherever the ticker runs.
+        await expect(
+          page.locator('.rg-ticker__toggle').getByRole('button', { name: 'Pause motion' }),
+        ).toBeVisible();
+        await expect(ticker, row).toHaveAttribute('data-ticker', 'still');
+        await expect(page.locator('.rg-ticker__run[data-copy]')).toBeHidden();
+        const belt = page.locator('.rg-ticker__belt');
+        const running = () =>
+          belt.evaluate(
+            (el) =>
+              document.getAnimations().filter((animation) => {
+                const target = (animation.effect as KeyframeEffect | null)?.target;
+                return (
+                  animation.playState === 'running' &&
+                  target instanceof Node &&
+                  (target === el || el.contains(target))
+                );
+              }).length,
+          );
+        const first = page.locator('.rg-ticker__run:not([data-copy]) > li').first();
+        const at = () => first.evaluate((el) => el.getBoundingClientRect().x);
+        expect(await running(), row).toBe(0);
+        const before = await at();
+        await page.waitForTimeout(1000);
+        expect(await at(), row).toBe(before);
+        expect(await running(), row).toBe(0);
+      },
+    );
+  }
+});
