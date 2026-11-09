@@ -1,4 +1,4 @@
-import { z } from '../../../zod';
+import * as z from '../../../zod';
 import { SECTION_ID_MAX_LENGTH, SECTION_ID_PATTERN } from '../../../ids';
 import type { SchemaParts } from '../../../kinds/common';
 

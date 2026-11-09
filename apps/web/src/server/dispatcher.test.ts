@@ -1,6 +1,6 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import { z } from '@portfolio/schema/zod';
+import * as z from '@portfolio/schema/zod';
 import { accessIn, CAPABILITIES, type Capability, type Profile } from './capabilities';
 import type { DeploymentConfig } from './config';
 import { setDeploymentState } from './config-store';

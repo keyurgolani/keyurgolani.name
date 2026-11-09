@@ -1,4 +1,4 @@
-import { z } from '@portfolio/schema/zod';
+import * as z from '@portfolio/schema/zod';
 
 // The schemas of the revision store's registry entries (#3, item 22), which
 // operations.ts lists: data only, so loading them never loads owner code.

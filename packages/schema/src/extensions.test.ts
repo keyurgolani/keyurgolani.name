@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { z } from './zod';
+import * as z from './zod';
 import { acmePortfolioPhotography } from './__fixtures__/acme-portfolio-photography';
 import { composeSchemas } from './compose';
 import {

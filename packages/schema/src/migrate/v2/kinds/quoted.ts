@@ -1,4 +1,4 @@
-import { z } from '../../../zod';
+import * as z from '../../../zod';
 import { LooseDateSchema, UrlSchema, type SchemaParts } from '../../../kinds/common';
 
 export function quotedSchemas({ object, section, Image }: SchemaParts) {

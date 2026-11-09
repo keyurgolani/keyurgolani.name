@@ -9,7 +9,7 @@
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { z } from '@portfolio/schema/zod';
+import * as z from '@portfolio/schema/zod';
 import {
   aliasNotice,
   APPEARANCE_AXES,

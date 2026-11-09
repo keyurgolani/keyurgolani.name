@@ -5,7 +5,7 @@
 // tokens mean something else; then the shape; then the rules the shape
 // can't state.
 
-import { z } from '@portfolio/schema/zod';
+import * as z from '@portfolio/schema/zod';
 import {
   allowedKeysAt,
   closestWord,

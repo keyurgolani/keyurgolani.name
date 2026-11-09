@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { z } from './zod';
+import * as z from './zod';
 
 // The demo's worker, the preview frame, and Studio run under a strict CSP, with
 // no 'unsafe-eval'. zod 4 probes for `new Function` when it builds an object

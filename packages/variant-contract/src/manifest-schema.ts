@@ -3,7 +3,7 @@
 // strict, so a key contract 2.0 doesn't define is reported, never dropped.
 // validateManifest() checks the rules the shape can't, such as ids and ranges.
 
-import { z } from '@portfolio/schema/zod';
+import * as z from '@portfolio/schema/zod';
 import { ALL_SECTION_KINDS, parseExtensionKind, REGISTRY_ID_PATTERN } from '@portfolio/schema';
 import { BudgetsSchema } from './budgets';
 import { MAX_TRANSITION_NAME_LENGTH, MAX_TRANSITION_NAMES } from './transitions';

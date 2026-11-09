@@ -1,4 +1,4 @@
-import { z } from '@portfolio/schema/zod';
+import * as z from '@portfolio/schema/zod';
 
 // The runtime budgets a unit declares (#6, item 3): a variant in its
 // manifest, and each of #19's appearance packs in its own. Six kinds, each

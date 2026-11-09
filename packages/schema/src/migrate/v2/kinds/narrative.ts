@@ -1,4 +1,4 @@
-import { z } from '../../../zod';
+import * as z from '../../../zod';
 import { LabelSchema, LooseDateSchema, type SchemaParts } from '../../../kinds/common';
 
 export function narrativeSchemas({ section, Link }: SchemaParts) {

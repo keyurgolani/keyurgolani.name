@@ -1,5 +1,5 @@
 import 'server-only';
-import { z } from '@portfolio/schema/zod';
+import * as z from '@portfolio/schema/zod';
 import {
   APPEARANCE_AXES,
   PACK_AXES,

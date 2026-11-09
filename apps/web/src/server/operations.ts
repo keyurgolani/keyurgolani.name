@@ -1,4 +1,4 @@
-import { z } from '@portfolio/schema/zod';
+import * as z from '@portfolio/schema/zod';
 import { CAPABILITIES, PROFILES, type Capability } from './capabilities';
 import {
   AssetMissingDetails,

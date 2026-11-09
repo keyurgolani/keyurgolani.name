@@ -1,4 +1,4 @@
-import { z } from '../zod';
+import * as z from '../zod';
 import { makeExtensionsSchema, type ExtensionRegistry, type Extensions } from '../extensions';
 import {
   isLanguageTag,

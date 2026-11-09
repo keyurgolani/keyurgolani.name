@@ -1,4 +1,4 @@
-import { z } from './zod';
+import * as z from './zod';
 import { isSectionId } from './ids';
 import { isHttpsMediaUrl, isMediaRootPath } from './media-source';
 import { checked, parseJsonFile, type UnitFileResult } from './snapshots';

@@ -5,7 +5,7 @@
 // define is reported, never dropped. validatePackManifest() checks what the
 // shape can't, and the tier and license policy.
 
-import { z } from '@portfolio/schema/zod';
+import * as z from '@portfolio/schema/zod';
 import { REGISTRY_ID_PATTERN } from '@portfolio/schema';
 import { BudgetsSchema } from '@portfolio/variant-contract';
 import {

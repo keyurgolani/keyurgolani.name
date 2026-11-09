@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { z } from '@portfolio/schema/zod';
+import type * as z from '@portfolio/schema/zod';
 import { DisplayModeSchema } from '@portfolio/schema';
 import { PreviewEnvironmentSchema } from '~/server/operations';
 import {

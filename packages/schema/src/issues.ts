@@ -1,4 +1,4 @@
-import { z } from './zod';
+import * as z from './zod';
 import { isPlainObject } from './json';
 import { redactedPointer } from './secrets';
 

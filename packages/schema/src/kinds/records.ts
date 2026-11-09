@@ -1,4 +1,4 @@
-import { z } from '../zod';
+import * as z from '../zod';
 import { parseExtensionKind } from '../ids';
 import { isMediaSource } from '../media-source';
 import {

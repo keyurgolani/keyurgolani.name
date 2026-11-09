@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { z } from './zod';
+import * as z from './zod';
 import { acmePortfolioPhotography } from './__fixtures__/acme-portfolio-photography';
 import { composeSchemas, EXTENSION_DATA, SECTION_ROUTE, type ComposedSchemas } from './compose';
 import { EXTENSION_FIELDS } from './extensions';
