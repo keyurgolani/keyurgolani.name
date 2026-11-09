@@ -125,7 +125,7 @@ export function wordClass(text: string): 'long' | undefined {
   return longestWord(text) >= 9 ? 'long' : undefined;
 }
 
-/** The custom property the phone rule fits a display word to. */
+/** The custom property the poster's display type fits its longest word to: the phone rule's, and row 127's. */
 export function wordFit(text: string): Record<'--layout-ss-word', number> {
   return { '--layout-ss-word': longestWord(text) };
 }
