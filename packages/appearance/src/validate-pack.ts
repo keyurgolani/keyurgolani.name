@@ -5,8 +5,16 @@
 // tokens mean something else; then the shape; then the rules the shape
 // can't state.
 
-import { z } from 'zod';
-import { allowedKeysAt, closestWord, isPlainObject, REGISTRY_ID_PATTERN } from '@portfolio/schema';
+import { z } from '@portfolio/schema/zod';
+import {
+  allowedKeysAt,
+  closestWord,
+  isPlainObject,
+  issueView,
+  reportedIssues,
+  REGISTRY_ID_PATTERN,
+  valueAt,
+} from '@portfolio/schema';
 import {
   FIRST_PARTY_SCOPE,
   MANIFEST_CODES,
@@ -171,7 +179,9 @@ export function validatePackManifest<K extends PackKind>(
   const schema: z.ZodTypeAny = SCHEMAS[context.kind];
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
-    for (const issue of parsed.error.issues) shapeIssue(issue, schema, input, context.kind, report);
+    for (const issue of reportedIssues(parsed.error.issues)) {
+      shapeIssue(issue, schema, input, context.kind, report);
+    }
     return result();
   }
   const manifest = parsed.data as PackManifestByKind[K];
@@ -413,9 +423,12 @@ function shapeIssue(
   kind: PackKind,
   report: Report,
 ) {
-  const path = issue.path;
-  switch (issue.code) {
+  const path = issue.path as (string | number)[];
+  const value = valueAt(input, path);
+  const view = issueView(issue, input);
+  switch (view.code) {
     case 'unrecognized_keys':
+      if (issue.code !== 'unrecognized_keys') return;
       for (const key of issue.keys) {
         const hint = closestWord(key, allowedKeysAt(schema, input, path) ?? []);
         report(
@@ -429,8 +442,8 @@ function shapeIssue(
         );
       }
       return;
-    case 'invalid_type':
-      if (issue.received === 'undefined') {
+    case 'invalid_type': {
+      if (view.received === 'undefined') {
         report(
           'manifest.missing',
           path,
@@ -438,33 +451,40 @@ function shapeIssue(
           `Add it. A token set gives every role. ${OPTIONAL_FIELDS[kind]}`,
         );
       } else {
+        const expected = view.expected ?? '';
+        const received = view.received ?? '';
         report(
           'manifest.invalid',
           path,
-          `must be ${article(issue.expected)}, not ${article(issue.received)}.`,
-          `Change it to ${article(issue.expected)}.`,
-          { expected: issue.expected, actual: issue.received },
+          `must be ${article(expected)}, not ${article(received)}.`,
+          `Change it to ${article(expected)}.`,
+          { expected, actual: received },
         );
       }
       return;
-    case 'invalid_enum_value':
+    }
+    case 'invalid_enum_value': {
+      const options = view.options ?? [];
       report(
         'manifest.invalid',
         path,
-        `must be one of: ${issue.options.join(', ')}.`,
-        `Use one of: ${issue.options.join(', ')}.`,
-        { expected: issue.options.join(' | '), actual: String(issue.received) },
+        `must be one of: ${options.join(', ')}.`,
+        `Use one of: ${options.join(', ')}.`,
+        { expected: options.join(' | '), actual: String(value) },
       );
       return;
-    case 'invalid_literal':
+    }
+    case 'invalid_literal': {
+      const { literal } = view;
       report(
         'manifest.invalid',
         path,
-        `must be ${JSON.stringify(issue.expected)}.`,
-        `Set it to ${JSON.stringify(issue.expected)}.`,
-        { expected: JSON.stringify(issue.expected) },
+        `must be ${JSON.stringify(literal)}.`,
+        `Set it to ${JSON.stringify(literal)}.`,
+        { expected: JSON.stringify(literal) },
       );
       return;
+    }
     case 'invalid_union':
       report(
         'manifest.invalid',
@@ -486,12 +506,12 @@ function shapeIssue(
 function issueMessage(issue: z.ZodIssue): string {
   switch (issue.code) {
     case 'too_small':
-      if (issue.type === 'array') return `must have at least ${issue.minimum} items.`;
-      if (issue.type === 'string') return `must be at least ${issue.minimum} characters.`;
+      if (issue.origin === 'array') return `must have at least ${issue.minimum} items.`;
+      if (issue.origin === 'string') return `must be at least ${issue.minimum} characters.`;
       return `must be at least ${issue.minimum}.`;
     case 'too_big':
-      if (issue.type === 'array') return `must have at most ${issue.maximum} items.`;
-      if (issue.type === 'string') return `must be at most ${issue.maximum} characters.`;
+      if (issue.origin === 'array') return `must have at most ${issue.maximum} items.`;
+      if (issue.origin === 'string') return `must be at most ${issue.maximum} characters.`;
       return `must be at most ${issue.maximum}.`;
     default: {
       // Custom and pattern messages are written as "must ...".

@@ -28,3 +28,12 @@ export * from './validate';
 export * from './edit';
 export * from './serialize';
 export { allowedKeysAt, closestWord } from './hints';
+export {
+  isDiscriminatorIssue,
+  issueCode,
+  issueView,
+  reportedIssues,
+  unionFailures,
+  valueAt,
+  type IssueView,
+} from './issues';

@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "./src/zod.ts"
+  ],
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
@@ -13,6 +15,7 @@
     "./ids": "./src/ids.ts",
     "./kinds": "./src/kinds/index.ts",
     "./migrate": "./src/migrate/index.ts",
+    "./zod": "./src/zod.ts",
     "./node": "./src/node.ts"
   },
   "scripts": {
@@ -20,7 +23,7 @@
     "test": "tsx --test 'src/**/*.test.ts'"
   },
   "dependencies": {
-    "zod": "^3.24.1",
+    "zod": "^4.6.6",
     "yaml": "^2.6.1"
   },
   "devDependencies": {

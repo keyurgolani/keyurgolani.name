@@ -2,8 +2,17 @@
 // 2.0. The contract version comes first, since another major's fields mean
 // something else. Then the shape, then the rules the shape can't state.
 
-import { z } from 'zod';
-import { ALL_SECTION_KINDS, closestWord, isPlainObject, SCHEMA_VERSIONS } from '@portfolio/schema';
+import { z } from '@portfolio/schema/zod';
+import {
+  ALL_SECTION_KINDS,
+  closestWord,
+  isPlainObject,
+  issueCode,
+  issueView,
+  reportedIssues,
+  SCHEMA_VERSIONS,
+  valueAt,
+} from '@portfolio/schema';
 import {
   MANIFEST_CODES,
   toPointer,
@@ -135,7 +144,7 @@ export function validateManifest(input: unknown, context: ManifestContext): Mani
 
   const parsed = ManifestSchema.safeParse(input);
   if (!parsed.success) {
-    for (const issue of parsed.error.issues) shapeIssue(issue, input, report);
+    for (const issue of reportedIssues(parsed.error.issues)) shapeIssue(issue, input, report);
     return result();
   }
   checkRules(parsed.data, context, report, notChecked);
@@ -158,13 +167,16 @@ const UNION_MESSAGES: Readonly<Record<string, string>> = {
 
 /** One zod issue as manifest records. */
 function shapeIssue(issue: z.ZodIssue, input: unknown, report: Report) {
-  const path = issue.path;
-  switch (issue.code) {
+  const path = issue.path as (string | number)[];
+  const value = valueAt(input, path);
+  const view = issueView(issue, input);
+  switch (view.code) {
     case 'unrecognized_keys':
+      if (issue.code !== 'unrecognized_keys') return;
       for (const key of issue.keys) unknownKey(path, key, input, report);
       return;
-    case 'invalid_type':
-      if (issue.received === 'undefined') {
+    case 'invalid_type': {
+      if (view.received === 'undefined') {
         report(
           'manifest.missing',
           path,
@@ -172,33 +184,40 @@ function shapeIssue(issue: z.ZodIssue, input: unknown, report: Report) {
           'Add it. Every field but author, homepage, bestFor, budgets, enhancements, keyBindings, kitLayout, recommendedAppearance, studio, and transitions is required.',
         );
       } else {
+        const expected = view.expected ?? '';
+        const received = view.received ?? '';
         report(
           'manifest.invalid',
           path,
-          `must be ${article(issue.expected)}, not ${article(issue.received)}.`,
-          `Change it to ${article(issue.expected)}.`,
-          { expected: issue.expected, actual: issue.received },
+          `must be ${article(expected)}, not ${article(received)}.`,
+          `Change it to ${article(expected)}.`,
+          { expected, actual: received },
         );
       }
       return;
-    case 'invalid_enum_value':
+    }
+    case 'invalid_enum_value': {
+      const options = view.options ?? [];
       report(
         'manifest.invalid',
         path,
-        `must be one of: ${issue.options.join(', ')}.`,
-        `Use one of: ${issue.options.join(', ')}.`,
-        { expected: issue.options.join(' | '), actual: String(issue.received) },
+        `must be one of: ${options.join(', ')}.`,
+        `Use one of: ${options.join(', ')}.`,
+        { expected: options.join(' | '), actual: String(value) },
       );
       return;
-    case 'invalid_union_discriminator':
+    }
+    case 'invalid_union_discriminator': {
+      const options = discriminatorOptions(ManifestSchema, input, path);
       report(
         'manifest.invalid',
         path,
-        `must be one of: ${issue.options.map(String).join(', ')}.`,
-        `Use one of: ${issue.options.map(String).join(', ')}.`,
-        { expected: issue.options.map(String).join(' | ') },
+        `must be one of: ${options.join(', ')}.`,
+        `Use one of: ${options.join(', ')}.`,
+        { expected: options.join(' | ') },
       );
       return;
+    }
     case 'invalid_union': {
       const last = path.at(-1);
       const message =
@@ -212,7 +231,7 @@ function shapeIssue(issue: z.ZodIssue, input: unknown, report: Report) {
       report(
         'manifest.invalid',
         path,
-        issueMessage(issue),
+        issueMessage(issue, input),
         'Change the value to what the message asks for.',
       );
   }
@@ -254,26 +273,26 @@ function unknownKey(path: Path, key: string, input: unknown, report: Report) {
   );
 }
 
-function issueMessage(issue: z.ZodIssue): string {
+function issueMessage(issue: z.ZodIssue, input: unknown): string {
   switch (issue.code) {
     case 'too_small':
-      if (issue.type === 'array') return `must have at least ${issue.minimum} items.`;
-      if (issue.type === 'string') return `must be at least ${issue.minimum} characters.`;
+      if (issue.origin === 'array') return `must have at least ${issue.minimum} items.`;
+      if (issue.origin === 'string') return `must be at least ${issue.minimum} characters.`;
       return `must be at least ${issue.minimum}.`;
     case 'too_big':
-      if (issue.type === 'array') return `must have at most ${issue.maximum} items.`;
-      if (issue.type === 'string') return `must be at most ${issue.maximum} characters.`;
+      if (issue.origin === 'array') return `must have at most ${issue.maximum} items.`;
+      if (issue.origin === 'string') return `must be at most ${issue.maximum} characters.`;
       return `must be at most ${issue.maximum}.`;
-    case 'invalid_literal':
-      return `must be ${JSON.stringify(issue.expected)}.`;
+    case 'invalid_value':
+      if (issueCode(issue, input) === 'invalid_literal')
+        return `must be ${JSON.stringify(issue.values[0])}.`;
+      break;
     case 'not_multiple_of':
-      return `must be a multiple of ${issue.multipleOf}.`;
-    default: {
-      // Custom and pattern messages are written as "must ...".
-      const text = issue.message.trim();
-      return /^(?:must|is|has)\b/.test(text) ? text : `is invalid: ${text}`;
-    }
+      return `must be a multiple of ${issue.divisor}.`;
   }
+  // Custom and pattern messages are written as "must ...".
+  const text = issue.message.trim();
+  return /^(?:must|is|has)\b/.test(text) ? text : `is invalid: ${text}`;
 }
 
 function count(n: number, noun: string): string {
@@ -286,6 +305,28 @@ function article(noun: string): string {
 
 /** The keys the schema allows on the object at `path`, following the data through unions. */
 function allowedKeysAt(schema: z.ZodTypeAny, data: unknown, path: Path): string[] | undefined {
+  const at = schemaAt(schema, data, path);
+  const current = at && unwrap(at.schema, at.value);
+  return current instanceof z.ZodObject ? Object.keys(current.shape) : undefined;
+}
+
+/** The tags the discriminated union holding the tag at `path` allows, for its issue. */
+function discriminatorOptions(schema: z.ZodTypeAny, data: unknown, path: Path): string[] {
+  const at = schemaAt(schema, data, path.slice(0, -1));
+  const union = at && unwrap(at.schema, at.value, { stopAtUnion: true });
+  if (!(union instanceof z.ZodDiscriminatedUnion)) return [];
+  const tag = String(union._zod.def.discriminator);
+  return (union.options as z.ZodTypeAny[]).flatMap((option) =>
+    [...(option._zod.propValues?.[tag] ?? [])].map(String),
+  );
+}
+
+/** The schema at `path` in `data`, before unwrapping, and the value there. */
+function schemaAt(
+  schema: z.ZodTypeAny,
+  data: unknown,
+  path: Path,
+): { readonly schema: z.ZodTypeAny | undefined; readonly value: unknown } | undefined {
   let current: z.ZodTypeAny | undefined = schema;
   let value = data;
   for (const segment of path) {
@@ -296,7 +337,7 @@ function allowedKeysAt(schema: z.ZodTypeAny, data: unknown, path: Path): string[
     } else if (current instanceof z.ZodArray) {
       current = current.element as z.ZodTypeAny;
     } else if (current instanceof z.ZodRecord) {
-      current = current.valueSchema as z.ZodTypeAny;
+      current = current.valueType as z.ZodTypeAny;
     } else {
       return undefined;
     }
@@ -305,22 +346,33 @@ function allowedKeysAt(schema: z.ZodTypeAny, data: unknown, path: Path): string[
         ? (value as Record<string | number, unknown>)[segment]
         : undefined;
   }
-  current = unwrap(current, value);
-  return current instanceof z.ZodObject ? Object.keys(current.shape) : undefined;
+  return { schema: current, value };
 }
 
-function unwrap(schema: z.ZodTypeAny | undefined, value: unknown): z.ZodTypeAny | undefined {
+function unwrap(
+  schema: z.ZodTypeAny | undefined,
+  value: unknown,
+  { stopAtUnion = false } = {},
+): z.ZodTypeAny | undefined {
   let current = schema;
   for (;;) {
-    if (current instanceof z.ZodOptional || current instanceof z.ZodNullable) {
+    if (
+      current instanceof z.ZodOptional ||
+      current instanceof z.ZodNullable ||
+      current instanceof z.ZodDefault
+    ) {
       current = current.unwrap() as z.ZodTypeAny;
-    } else if (current instanceof z.ZodDefault) {
-      current = current.removeDefault() as z.ZodTypeAny;
-    } else if (current instanceof z.ZodEffects) {
-      current = current.innerType() as z.ZodTypeAny;
+    } else if (current instanceof z.ZodPipe) {
+      // A transform's pipeline names its keys on the way in.
+      current = (current.out instanceof z.ZodTransform ? current.in : current.out) as z.ZodTypeAny;
+    } else if (stopAtUnion && current instanceof z.ZodUnion) {
+      return current;
     } else if (current instanceof z.ZodDiscriminatedUnion) {
-      const tag = isPlainObject(value) ? value[current.discriminator as string] : undefined;
-      current = current.optionsMap.get(tag as never) as z.ZodTypeAny | undefined;
+      const key = String(current._zod.def.discriminator);
+      const tag = isPlainObject(value) ? value[key] : undefined;
+      current = (current.options as z.ZodTypeAny[]).find((option) =>
+        option._zod.propValues?.[key]?.has(tag as never),
+      );
     } else if (current instanceof z.ZodUnion) {
       const options = current.options as z.ZodTypeAny[];
       const keys = isPlainObject(value) ? Object.keys(value) : [];

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '../../../zod';
 import type { SchemaParts } from '../../../kinds/common';
 
 export function githubSchemas({ section }: SchemaParts) {

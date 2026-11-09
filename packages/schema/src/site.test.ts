@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SiteSchema } from './compose';
 import { DisplayModeSchema, MotionPolicySchema } from './site';
+import { issueCode, reportedIssues } from './issues';
 
 // The shape from the issue: every top-level key, optional ones included.
 const FULL = {
@@ -33,7 +34,9 @@ void [appearanceInputs, routes, variantControls, sections];
 
 function codes(input: unknown): string[] {
   const result = SiteSchema.safeParse(input);
-  return result.success ? [] : result.error.issues.map((i) => `${i.path.join('/')}:${i.code}`);
+  return result.success
+    ? []
+    : reportedIssues(result.error.issues).map((i) => `${i.path.join('/')}:${issueCode(i, input)}`);
 }
 
 test('the full site document parses', () => {
@@ -197,9 +200,6 @@ test('variant control values are plain JSON: no .inf or .nan, at most 8 levels d
   assert.deepEqual(entry({ nested: deep(9) }), ['variantControls/editorial/values/nested:custom']);
   assert.deepEqual(
     codes({ ...MINIMAL, variantControls: { editorial: { version: Infinity, values: {} } } }),
-    [
-      'variantControls/editorial/version:not_finite',
-      'variantControls/editorial/version:invalid_type',
-    ],
+    ['variantControls/editorial/version:not_finite'],
   );
 });

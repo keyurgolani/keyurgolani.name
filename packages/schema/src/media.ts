@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from './zod';
 import { isSectionId } from './ids';
 import { isHttpsMediaUrl, isMediaRootPath } from './media-source';
 import { checked, parseJsonFile, type UnitFileResult } from './snapshots';
@@ -218,7 +218,7 @@ export const MediaDocumentSchema = z
       }
       seen.add(record.assetId);
     });
-  }) as z.ZodType<MediaDocument, z.ZodTypeDef, unknown>;
+  }) as z.ZodType<MediaDocument, unknown>;
 
 /**
  * A rendition's URL: `<mediaBase>/<assetId>/<sha256>/<rendition>.<ext>`

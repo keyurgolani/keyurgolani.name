@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PortfolioSchema } from './compose';
 import { ALL_SECTION_KINDS, CORE_SECTION_KINDS, EVIDENCE_TYPES, WORK_MEDIA } from './kinds';
+import { issueCode, reportedIssues } from './issues';
 
 const BASE = {
   schemaVersion: 3,
@@ -12,7 +13,9 @@ const BASE = {
 
 function codes(input: unknown): string[] {
   const result = PortfolioSchema.safeParse(input);
-  return result.success ? [] : result.error.issues.map((i) => `${i.path.join('/')}:${i.code}`);
+  return result.success
+    ? []
+    : reportedIssues(result.error.issues).map((i) => `${i.path.join('/')}:${issueCode(i, input)}`);
 }
 
 function messages(input: unknown): string[][] {

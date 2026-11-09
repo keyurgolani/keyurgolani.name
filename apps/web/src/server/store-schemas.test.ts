@@ -5,7 +5,8 @@ import { runGenerator } from '@portfolio/appearance/generators';
 import { DERIVED_CAUSES } from '@portfolio/schema';
 import { DerivedChangeSchema, DerivedSchemeEntrySchema } from './store-schemas';
 
-// store-schemas.ts imports zod alone (the store-schemas-are-data rule), so
+// store-schemas.ts imports zod alone, through @portfolio/schema/zod (the
+// store-schemas-are-data rule), so
 // it writes out the derived block's causes and generated scheme shape. These
 // hold them to the packages' own.
 

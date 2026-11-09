@@ -97,7 +97,10 @@ function named(
 }
 
 /** A zod schema as far as this reads it: its definition's type name and children. */
-type SchemaNode = { readonly _def: Record<string, unknown> } & Record<string, unknown>;
+type SchemaNode = { readonly _zod: { readonly def: Record<string, unknown> } } & Record<
+  string,
+  unknown
+>;
 
 let words: ReadonlySet<string> | undefined;
 
@@ -116,12 +119,12 @@ export function schemaWords(): ReadonlySet<string> {
     ...DEFAULT_SCHEMAS.coreSections,
   ];
   for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
-    if (typeof next !== 'object' || next === null || seen.has(next) || !('_def' in next)) continue;
+    if (typeof next !== 'object' || next === null || seen.has(next) || !('_zod' in next)) continue;
     seen.add(next);
     const node = next as SchemaNode;
-    const def = node._def;
-    switch (def.typeName) {
-      case 'ZodObject': {
+    const def = node._zod.def;
+    switch (def.type) {
+      case 'object': {
         const shape = (node as unknown as { shape: Record<string, unknown> }).shape;
         for (const [key, child] of Object.entries(shape)) {
           found.add(key);
@@ -129,25 +132,23 @@ export function schemaWords(): ReadonlySet<string> {
         }
         break;
       }
-      case 'ZodArray':
-        pending.push(def.type);
+      case 'array':
+        pending.push(def.element);
         break;
-      case 'ZodRecord':
+      case 'record':
         pending.push(def.valueType);
         break;
-      case 'ZodOptional':
-      case 'ZodNullable':
-      case 'ZodDefault':
+      case 'optional':
+      case 'nullable':
+      case 'default':
         pending.push(def.innerType);
         break;
-      case 'ZodEffects':
-        pending.push(def.schema);
-        break;
-      case 'ZodPipeline':
+      // A transform's pipeline holds the transform, which holds no schema.
+      case 'pipe':
         pending.push(def.in, def.out);
         break;
-      case 'ZodUnion':
-      case 'ZodDiscriminatedUnion':
+      // A discriminated union is a union with a discriminator.
+      case 'union':
         pending.push(...(def.options as unknown[]));
         break;
       default:

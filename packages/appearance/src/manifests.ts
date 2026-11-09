@@ -5,7 +5,7 @@
 // define is reported, never dropped. validatePackManifest() checks what the
 // shape can't, and the tier and license policy.
 
-import { z } from 'zod';
+import { z } from '@portfolio/schema/zod';
 import { REGISTRY_ID_PATTERN } from '@portfolio/schema';
 import { BudgetsSchema } from '@portfolio/variant-contract';
 import {
@@ -247,7 +247,7 @@ export const ColorTokenSetSchema = z
     if (missing.length === 0 || missing.length === DERIVED_ROLES.length) return;
     for (const role of missing)
       context.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: [role],
         message: DERIVED_ROLES_ALL_OR_NONE,
       });

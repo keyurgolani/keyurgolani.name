@@ -3,7 +3,7 @@
 // strict, so a key contract 2.0 doesn't define is reported, never dropped.
 // validateManifest() checks the rules the shape can't, such as ids and ranges.
 
-import { z } from 'zod';
+import { z } from '@portfolio/schema/zod';
 import { ALL_SECTION_KINDS, parseExtensionKind, REGISTRY_ID_PATTERN } from '@portfolio/schema';
 import { BudgetsSchema } from './budgets';
 import { MAX_TRANSITION_NAME_LENGTH, MAX_TRANSITION_NAMES } from './transitions';
@@ -148,6 +148,17 @@ const Routes = z
 
 const controlBase = { id: ControlId, label: plainText(60), description: plainText(300) };
 
+/**
+ * A whole number of any size. zod 4's .int() stops at the largest safe
+ * integer, and a controls version past it is still a version: it gets the
+ * missing migration it asks for, not a type error.
+ */
+const WholeNumber = z.number().superRefine((value, ctx) => {
+  if (!Number.isInteger(value)) {
+    ctx.addIssue({ code: 'invalid_type', expected: 'int', input: value, continue: false });
+  }
+});
+
 const ControlItem = z.discriminatedUnion('type', [
   z.object({ type: z.literal('boolean'), ...controlBase, default: z.boolean() }).strict(),
   z
@@ -244,7 +255,7 @@ const Migration = z
 
 const Controls = z
   .object({
-    version: z.number().int().positive(),
+    version: WholeNumber.positive(),
     items: z.array(ControlItem).max(32),
     migrations: z.array(Migration).max(64),
   })
