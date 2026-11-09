@@ -60,19 +60,20 @@ export function defineContentExtension<const T extends ContentExtensionSpec>(spe
 /**
  * Whether the schema, or one inside it, is an object that takes keys it
  * doesn't name without checking them: z.object() without .strict() or a
- * catchall. Duck-typed, so an extension built with its own copy of zod is
- * checked too.
+ * catchall that checks them, so .passthrough() is loose too. Duck-typed, so
+ * an extension built with its own copy of zod 4 is checked too.
  */
 function hasLooseObject(schema: unknown, seen = new Set<unknown>()): boolean {
   if (!isZodSchema(schema) || seen.has(schema)) return false;
   seen.add(schema);
-  const def = schema._def as Record<string, unknown>;
+  const def = schema._zod.def as Record<string, unknown>;
   let children: unknown[];
-  if (def.typeName === 'ZodObject') {
-    const catchall = def.catchall as { _def?: { typeName?: unknown } } | undefined;
-    if (catchall?._def?.typeName === 'ZodNever' && def.unknownKeys !== 'strict') return true;
-    children = [...Object.values((def.shape as () => Record<string, unknown>)()), catchall];
-  } else if (def.typeName === 'ZodLazy') {
+  if (def.type === 'object') {
+    const catchall = def.catchall as { _zod?: { def?: { type?: unknown } } } | undefined;
+    const kept = catchall?._zod?.def?.type;
+    if (kept === undefined || kept === 'unknown' || kept === 'any') return true;
+    children = [...Object.values(def.shape as Record<string, unknown>), catchall];
+  } else if (def.type === 'lazy') {
     children = [(def.getter as () => unknown)()];
   } else {
     // Every other schema keeps the schemas inside it in its definition.
@@ -81,11 +82,11 @@ function hasLooseObject(schema: unknown, seen = new Set<unknown>()): boolean {
   return children.some((child) => hasLooseObject(child, seen));
 }
 
-function isZodSchema(value: unknown): value is { readonly _def: unknown } {
+function isZodSchema(value: unknown): value is { readonly _zod: { readonly def: unknown } } {
   return (
     typeof value === 'object' &&
     value !== null &&
-    '_def' in value &&
+    '_zod' in value &&
     typeof (value as { safeParse?: unknown }).safeParse === 'function'
   );
 }
@@ -134,24 +135,27 @@ const NOT_JSON = "holds a value JSON can't represent, such as .inf or .nan.";
 
 /**
  * An extension section's `data`, required and plain JSON within the limits.
- * A registered extension's own schema checks it after this.
+ * A registered extension's own schema checks it after this, in a pipeline,
+ * and only when this passes: each issue here stops the pipeline.
  */
 export const ExtensionDataSchema = z.unknown().superRefine((value, ctx) => {
   if (value === undefined) {
-    ctx.addIssue({ code: z.ZodIssueCode.invalid_type, expected: 'object', received: 'undefined' });
+    ctx.addIssue({ code: 'invalid_type', expected: 'object', input: value, continue: false });
     return;
   }
   const problem = plainJsonProblem(value, EXTENSION_MAX_DEPTH);
-  if (problem)
-    ctx.addIssue({ code: 'custom', message: problem === 'too-deep' ? TOO_DEEP : NOT_JSON });
-  else if (jsonByteLength(value) > EXTENSION_MAX_BYTES)
-    ctx.addIssue({ code: 'custom', message: TOO_LARGE });
+  if (problem) {
+    const message = problem === 'too-deep' ? TOO_DEEP : NOT_JSON;
+    ctx.addIssue({ code: 'custom', message, continue: false });
+  } else if (jsonByteLength(value) > EXTENSION_MAX_BYTES) {
+    ctx.addIssue({ code: 'custom', message: TOO_LARGE, continue: false });
+  }
 });
 
 /** Where an `extensions` schema keeps its namespace lookup, for hint resolution. */
 export const EXTENSION_FIELDS: unique symbol = Symbol('portfolio.extensionFields');
 
-export type ExtensionsSchema = z.ZodType<Extensions, z.ZodTypeDef, unknown> & {
+export type ExtensionsSchema = z.ZodType<Extensions, unknown> & {
   /** The `fields` schema of a registered namespace. */
   readonly [EXTENSION_FIELDS]: (namespace: string) => z.ZodTypeAny | undefined;
 };

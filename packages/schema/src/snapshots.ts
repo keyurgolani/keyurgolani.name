@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { isSectionId } from './ids';
 import { isPlainObject, plainJsonProblem } from './json';
-import { describeIssue } from './issues';
+import { describeIssue, issueCode, reportedIssues } from './issues';
 import { TimestampSchema } from './timestamp';
 import { redactedPointer, redactSecrets } from './secrets';
 import { parseSource } from './source';
@@ -158,7 +158,7 @@ export const GitHubSnapshotSchema = z
       }
       seen.add(record.sectionId);
     });
-  }) as z.ZodType<GitHubSnapshot, z.ZodTypeDef, unknown>;
+  }) as z.ZodType<GitHubSnapshot, unknown>;
 
 // --- URLs --------------------------------------------------------------------
 
@@ -226,7 +226,7 @@ export const UrlTableSchema = z
         });
       }
     }
-  }) as z.ZodType<UrlTable, z.ZodTypeDef, unknown>;
+  }) as z.ZodType<UrlTable, unknown>;
 
 // --- Generated schemes -----------------------------------------------------------
 
@@ -392,16 +392,16 @@ export function parseJsonFile<T>(
 }
 
 /** A schema's verdict on data, as value-free problems with pointers. */
-export function checked<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, data: unknown) {
+export function checked<T>(schema: z.ZodType<T, unknown>, data: unknown) {
   const result = schema.safeParse(data);
   if (result.success) return { ok: true as const, value: result.data };
   return {
     ok: false as const,
-    problems: result.error.issues.map((issue): UnitFileProblem => ({
+    problems: reportedIssues(result.error.issues).map((issue): UnitFileProblem => ({
       kind: 'schema',
-      code: issue.code,
+      code: issueCode(issue, data),
       pointer: redactedPointer(issue.path),
-      message: redactSecrets(describeIssue(issue)),
+      message: redactSecrets(describeIssue(issue, data)),
     })),
   };
 }

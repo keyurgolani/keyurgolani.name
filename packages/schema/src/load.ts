@@ -5,8 +5,15 @@ import {
   type ContentExtension,
   type ExtensionRegistry,
 } from './extensions';
-import { closestWord, keyContext } from './hints';
-import { describeIssue } from './issues';
+import { closestWord, discriminatorOptions, keyContext } from './hints';
+import {
+  describeIssue,
+  isDiscriminatorIssue,
+  issueCode,
+  reportedIssues,
+  unionFailures,
+  valueAt,
+} from './issues';
 import { parseExtensionKind } from './ids';
 import { isPlainObject } from './json';
 import { detectDocument, legacyFields, legacyMessage, MIGRATE_COMMAND, shellQuote } from './legacy';
@@ -194,7 +201,7 @@ function schemasFor(extensions: readonly ContentExtension[] | undefined): Compos
 }
 
 function readWith<T>(
-  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
+  schema: z.ZodType<T, unknown>,
   registry: ExtensionRegistry,
   source: string,
   format: DocumentFormat,
@@ -268,7 +275,7 @@ function readWith<T>(
 
   const result = schema.safeParse(data);
   if (!result.success) {
-    const problems = result.error.issues.flatMap((issue) =>
+    const problems = reportedIssues(result.error.issues).flatMap((issue) =>
       issueProblems(issue, schema, data).map(({ path, at, ...problem }): DocumentProblem => ({
         ...problem,
         ...locate(path, at),
@@ -327,7 +334,7 @@ function issueProblems(issue: z.ZodIssue, schema: z.ZodTypeAny, data: unknown): 
     const { allowed = [], extension } = keyContext(schema, data, issue.path);
     const present = new Set(Object.keys(valueAt(data, issue.path) ?? {}));
     return issue.keys.map((key) => {
-      const path = [...issue.path, key];
+      const path = [...issue.path, key] as (string | number)[];
       const pointer = redactedPointer(path);
       const suggestion = closestWord(
         key,
@@ -351,39 +358,44 @@ function issueProblems(issue: z.ZodIssue, schema: z.ZodTypeAny, data: unknown): 
   if (issue.code === 'invalid_union') {
     // When every shape fails and the closest one names an unknown key, its
     // problems say more than "matches no shape": the key gets its hint.
-    const closest = closestUnionFailure(issue.unionErrors);
-    if (closest?.issues.some(({ code }) => code === 'unrecognized_keys')) {
-      return closest.issues.flatMap((inner) => issueProblems(inner, schema, data));
+    const closest = closestUnionFailure(unionFailures(issue));
+    if (closest?.some(({ code }) => code === 'unrecognized_keys')) {
+      return closest.flatMap((inner) => issueProblems(inner, schema, data));
     }
   }
   const problem: IssueProblem = {
     kind: 'schema',
     // A Markdown field over the cap carries its own code (../markdown.ts).
-    code: markdownIssueCode(issue) ?? issue.code,
+    code: markdownIssueCode(issue) ?? issueCode(issue, data),
     pointer: redactedPointer(issue.path),
-    path: issue.path,
-    message: describeIssue(issue),
+    path: issue.path as (string | number)[],
+    message: describeIssue(issue, data),
   };
-  if (issue.code === 'invalid_union_discriminator') {
-    const hint = kindHint(valueAt(data, issue.path), issue.options.map(String));
+  if (isDiscriminatorIssue(issue)) {
+    // The section router names the kinds it knows; a discriminated union's are in its options.
+    const { options } = issue as { readonly options?: readonly unknown[] };
+    const known = options?.map(String) ?? discriminatorOptions(schema, data, issue.path);
+    const hint = kindHint(valueAt(data, issue.path), known);
     return [{ ...problem, message: `${problem.message}${hint}` }];
   }
   return [problem];
 }
 
 /** The failed union shape with the fewest unknown keys, then the fewest problems; the first on a tie. */
-function closestUnionFailure(failures: readonly z.ZodError[]): z.ZodError | undefined {
-  const unknown = (failure: z.ZodError) =>
-    failure.issues.reduce(
+function closestUnionFailure(
+  failures: readonly (readonly z.ZodIssue[])[],
+): readonly z.ZodIssue[] | undefined {
+  const unknown = (failure: readonly z.ZodIssue[]) =>
+    failure.reduce(
       (count, issue) => count + (issue.code === 'unrecognized_keys' ? issue.keys.length : 0),
       0,
     );
-  let best: z.ZodError | undefined;
+  let best: readonly z.ZodIssue[] | undefined;
   for (const failure of failures) {
     if (
       !best ||
       unknown(failure) < unknown(best) ||
-      (unknown(failure) === unknown(best) && failure.issues.length < best.issues.length)
+      (unknown(failure) === unknown(best) && failure.length < best.length)
     ) {
       best = failure;
     }
@@ -422,16 +434,6 @@ function kindHint(kind: unknown, known: readonly string[]): string {
   return kind.includes('/')
     ? ' An extension section kind is <npm package name>/<name>, such as @acme/portfolio-photography/exhibitions.'
     : ' A section kind from an extension is <npm package name>/<name>.';
-}
-
-function valueAt(data: unknown, path: readonly (string | number)[]): unknown {
-  let value = data;
-  for (const segment of path) {
-    if (!isPlainObject(value) && !Array.isArray(value)) return undefined;
-    if (!Object.hasOwn(value, segment)) return undefined;
-    value = (value as Record<string | number, unknown>)[segment];
-  }
-  return value;
 }
 
 export { describeIssue } from './issues';

@@ -223,11 +223,14 @@ export const sectionBase = {
 };
 
 type ExtensionsField = {
-  extensions: z.ZodOptional<z.ZodType<Extensions, z.ZodTypeDef, unknown>>;
+  extensions: z.ZodOptional<z.ZodType<Extensions, unknown>>;
 };
 
 /** A strict object schema that may also carry `extensions`. */
-export type ContentObject<T extends z.ZodRawShape> = z.ZodObject<T & ExtensionsField, 'strict'>;
+export type ContentObject<T extends z.ZodRawShape> = z.ZodObject<
+  T & ExtensionsField,
+  z.core.$strict
+>;
 
 /** The object schemas for one set of registered content extensions. */
 export function makeParts(registry: ExtensionRegistry) {

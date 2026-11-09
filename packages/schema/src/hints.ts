@@ -8,6 +8,11 @@ import { isPlainObject } from './json';
 
 type Lookup = (key: unknown) => z.ZodTypeAny | undefined;
 
+/** A schema's definition, which names its type and holds the schemas inside it. */
+function defOf(schema: z.ZodTypeAny): Record<string, unknown> & { readonly type: string } {
+  return schema._zod.def as unknown as Record<string, unknown> & { readonly type: string };
+}
+
 /**
  * The keys the schema allows on the object at `path` in `data`, or undefined
  * when the path doesn't lead to an object the schema describes, such as one
@@ -16,7 +21,7 @@ type Lookup = (key: unknown) => z.ZodTypeAny | undefined;
 export function allowedKeysAt(
   schema: z.ZodTypeAny,
   data: unknown,
-  path: readonly (string | number)[],
+  path: readonly PropertyKey[],
 ): string[] | undefined {
   return keyContext(schema, data, path).allowed;
 }
@@ -29,14 +34,62 @@ export function allowedKeysAt(
 export function keyContext(
   schema: z.ZodTypeAny,
   data: unknown,
-  path: readonly (string | number)[],
+  path: readonly PropertyKey[],
 ): { readonly allowed?: string[]; readonly extension: boolean } {
+  const at = walk(schema, data, path);
+  if (!at) return { extension: false };
+  const current = resolve(at.schema, at.value);
+  return current && defOf(current).type === 'object'
+    ? { allowed: Object.keys(shapeOf(current)), extension: at.extension }
+    : { extension: at.extension };
+}
+
+/**
+ * The tags a discriminated union at `path` in `data` allows, for a hint when
+ * a value's tag is none of them. Empty when no such union is there.
+ */
+export function discriminatorOptions(
+  schema: z.ZodTypeAny,
+  data: unknown,
+  path: readonly PropertyKey[],
+): string[] {
+  const tag = path.at(-1);
+  const at = walk(schema, data, path.slice(0, -1));
+  let current = at ? resolve(at.schema, at.value, { stopAtUnion: true }) : undefined;
+  if (!current || defOf(current).type !== 'union') return [];
+  const def = defOf(current);
+  if (def.discriminator !== tag) return [];
+  return (def.options as z.ZodTypeAny[]).flatMap((option) => {
+    current = resolve(option, undefined);
+    const field =
+      current && defOf(current).type === 'object' ? shapeOf(current)[String(tag)] : undefined;
+    const values = field ? defOf(field).values : undefined;
+    return Array.isArray(values) ? values.map(String) : [];
+  });
+}
+
+/**
+ * The schema and the value at `path`, before unwrapping, and whether the path
+ * passes through an extension. Undefined when the path leaves the schema.
+ */
+function walk(
+  schema: z.ZodTypeAny,
+  data: unknown,
+  path: readonly PropertyKey[],
+):
+  | {
+      readonly schema: z.ZodTypeAny | undefined;
+      readonly value: unknown;
+      readonly extension: boolean;
+    }
+  | undefined {
   let current: z.ZodTypeAny | undefined = schema;
   let value = data;
   let extension = false;
   for (const segment of path) {
+    if (typeof segment === 'symbol') return undefined;
     current = resolve(current, value);
-    if (!current) return { extension };
+    if (!current) return { schema: undefined, value: undefined, extension };
     if (EXTENSION_FIELDS in current) {
       // An `extensions` field: each entry is its registered namespace's schema.
       extension = true;
@@ -44,35 +97,40 @@ export function keyContext(
         String(segment),
       );
     } else {
-      const typeName = current._def.typeName as z.ZodFirstPartyTypeKind;
-      if (typeName === z.ZodFirstPartyTypeKind.ZodObject) {
+      const def = defOf(current);
+      if (def.type === 'object') {
         // Own keys only: a __proto__ in the data names no field.
-        const { shape } = current as z.AnyZodObject;
+        const shape = shapeOf(current);
         current = Object.hasOwn(shape, segment) ? shape[segment] : undefined;
         if (current && EXTENSION_DATA in current) extension = true;
-      } else if (typeName === z.ZodFirstPartyTypeKind.ZodArray) {
-        current = (current as z.ZodArray<z.ZodTypeAny>).element;
-      } else if (typeName === z.ZodFirstPartyTypeKind.ZodRecord) {
-        current = (current as z.ZodRecord).valueSchema;
-      } else return { extension };
+      } else if (def.type === 'array') {
+        current = def.element as z.ZodTypeAny;
+      } else if (def.type === 'record') {
+        current = def.valueType as z.ZodTypeAny;
+      } else return { schema: undefined, value: undefined, extension };
     }
     value =
       (isPlainObject(value) || Array.isArray(value)) && Object.hasOwn(value, segment)
         ? (value as never)[segment]
         : undefined;
   }
-  current = resolve(current, value);
-  return current?._def.typeName === z.ZodFirstPartyTypeKind.ZodObject
-    ? { allowed: Object.keys((current as z.AnyZodObject).shape), extension }
-    : { extension };
+  return { schema: current, value, extension };
+}
+
+function shapeOf(schema: z.ZodTypeAny): Record<string, z.ZodTypeAny> {
+  return defOf(schema).shape as Record<string, z.ZodTypeAny>;
 }
 
 /**
- * Unwraps optional, default, effects, pipelines, the section router, and
+ * Unwraps optional, default, transforms, pipelines, the section router, and
  * unions, for `value`. Stops at an `extensions` field, which the caller
- * steps into by namespace.
+ * steps into by namespace, and at a union when asked to.
  */
-function resolve(schema: z.ZodTypeAny | undefined, value: unknown): z.ZodTypeAny | undefined {
+function resolve(
+  schema: z.ZodTypeAny | undefined,
+  value: unknown,
+  { stopAtUnion = false } = {},
+): z.ZodTypeAny | undefined {
   let current = schema;
   for (;;) {
     if (!current || EXTENSION_FIELDS in current) return current;
@@ -81,22 +139,24 @@ function resolve(schema: z.ZodTypeAny | undefined, value: unknown): z.ZodTypeAny
       current = route(isPlainObject(value) ? value.kind : undefined);
       continue;
     }
-    switch (current._def.typeName as z.ZodFirstPartyTypeKind) {
-      case z.ZodFirstPartyTypeKind.ZodOptional:
-      case z.ZodFirstPartyTypeKind.ZodNullable:
-      case z.ZodFirstPartyTypeKind.ZodDefault:
-        current = current._def.innerType as z.ZodTypeAny;
+    const def = defOf(current);
+    switch (def.type) {
+      case 'optional':
+      case 'nullable':
+      case 'default':
+        current = def.innerType as z.ZodTypeAny;
         break;
-      case z.ZodFirstPartyTypeKind.ZodEffects:
-        current = current._def.schema as z.ZodTypeAny;
+      case 'pipe': {
+        // A transform's pipeline names its keys on the way in. Every other
+        // pipeline checks the value as a whole first (as plain JSON, or for
+        // both appearance input keys), then with the schema naming its keys.
+        const out = def.out as z.ZodTypeAny;
+        current = defOf(out).type === 'transform' ? (def.in as z.ZodTypeAny) : out;
         break;
-      case z.ZodFirstPartyTypeKind.ZodPipeline:
-        // Each pipeline checks the value as a whole first (as plain JSON, or
-        // for both appearance input keys), then with the schema naming its keys.
-        current = current._def.out as z.ZodTypeAny;
-        break;
-      case z.ZodFirstPartyTypeKind.ZodUnion:
-        current = closestOption(current._def.options as z.ZodTypeAny[], value);
+      }
+      case 'union':
+        if (stopAtUnion) return current;
+        current = closestOption(def.options as z.ZodTypeAny[], value);
         break;
       default:
         return current;
@@ -111,8 +171,8 @@ function closestOption(options: z.ZodTypeAny[], value: unknown): z.ZodTypeAny | 
   let bestScore = -1;
   for (const option of options) {
     const resolved = resolve(option, value);
-    if (resolved?._def.typeName !== z.ZodFirstPartyTypeKind.ZodObject) continue;
-    const shape = (resolved as z.AnyZodObject).shape;
+    if (!resolved || defOf(resolved).type !== 'object') continue;
+    const shape = shapeOf(resolved);
     const score = keys.filter((key) => key in shape).length;
     if (score > bestScore) {
       best = resolved;
