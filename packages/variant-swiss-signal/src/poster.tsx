@@ -34,11 +34,7 @@ export function Poster({ input }: { input: VariantRenderInput }) {
         id={posterHeading(input)}
         data-length={line.length}
         data-word={line.length === 'long' ? undefined : wordClass(line.text)}
-        style={
-          line.length !== 'long' && wordClass(line.text)
-            ? (wordFit(line.text) as CSSProperties)
-            : undefined
-        }
+        style={line.length !== 'long' ? (wordFit(line.text) as CSSProperties) : undefined}
       >
         {/* SS-M5: the name leads the h1 for the outline and search, visible in the masthead. */}
         {/* The hero's own name, where it gives one other than the identity's (which the

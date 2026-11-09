@@ -2014,6 +2014,10 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
+    /* Its one row's space above and below the Index button, kept when it wraps: the name sits that far
+       under the masthead's top, and the Index that far over its rule (row 127). In one row it is the same
+       box as before. */
+    padding-block: max(0px, calc((var(--layout-masthead) - 2.75rem) / 2));
   }
 
   [data-variant='swiss-signal'] .ss-masthead__name {
@@ -2418,5 +2422,36 @@
 
   [data-variant='swiss-signal'] :is(.ss-sel__title, .ss-row__title) a::after {
     position: static;
+  }
+}
+
+/* ── The poster line where its column is narrow for the reader's text ── */
+
+/*
+ * Where the poster's column holds under 14rem, the poster line's display type (the home hero, a case's
+ * title) is sized from its column: its step, or the size at which its longest word fits the column at
+ * 0.85em a letter, whichever is smaller, never under body size, and it breaks only between words (row 127).
+ * The width is in rem, not px, on purpose: in a container query rem resolves against the root's font size,
+ * so 14rem tracks the reader's text size. At 1x every phone's column holds 17.75rem or more and nothing here
+ * applies; with the root text at 200% a phone's holds 7.75 to 9.9rem. A single word wider than the column at
+ * body size (at 320 with 200% text, about 12 capitals or more) still runs past it: no browser this site is
+ * tested in hyphenates.
+ */
+@container (max-width: 14rem) {
+  [data-variant='swiss-signal'] .ss-poster__line:not([data-length='long']) .ss-poster__text {
+    font-size: max(
+      var(--type-body-font-size),
+      min(var(--type-step-7), calc(100cqi / (var(--layout-ss-word, 8) * 0.85)))
+    );
+    overflow-wrap: normal;
+  }
+
+  [data-variant='swiss-signal']
+    :is(.ss-poster__line[data-length='medium'], .ss-poster__line[data-word='long'])
+    .ss-poster__text {
+    font-size: max(
+      var(--type-body-font-size),
+      min(var(--type-step-6), calc(100cqi / (var(--layout-ss-word, 8) * 0.85)))
+    );
   }
 }
