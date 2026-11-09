@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import { lateCommitted, latePressed, StudioLoadAlert, type CommitPhase } from './late-alert';
+import { useStudioProfile } from '../sign-out-form';
 
 // When Studio's shell doesn't load (row 88c): /studio's page wraps its entry,
 // under either profile, in this boundary, outside the shell's lazy chunk, so
@@ -36,7 +37,8 @@ import { lateCommitted, latePressed, StudioLoadAlert, type CommitPhase } from '.
 // reloads: this renders no alert of its own, and a shell that arrives in the
 // moment before the reload lands may show until it does.
 //
-// Reload alone, under both profiles: this is in the page's entry, which both
+// Reload under both profiles, and under owner Sign out, a plain form post
+// (sign-out-form.tsx, row 88c-RC2): this is in the page's entry, which both
 // profiles' pages load, so it reaches no owner code (#9; load-imports.test.ts).
 // The alert never says the owner is signed out: it says only that Studio
 // didn't load.
@@ -79,6 +81,8 @@ export function StudioLoadBoundary({ children }: { readonly children: ReactNode 
   const rejected = useRef(false);
   const handed = useRef(false);
   const reload = useRef<HTMLButtonElement>(null);
+  // Under owner the alert offers Sign out, a plain form (row 88c-RC2).
+  const profile = useStudioProfile();
 
   const [mounted] = useState(() => () => {
     live.current = true;
@@ -107,7 +111,12 @@ export function StudioLoadBoundary({ children }: { readonly children: ReactNode 
   return (
     <>
       {alerting ? (
-        <StudioLoadAlert main reload={reload} onReload={() => window.location.reload()} />
+        <StudioLoadAlert
+          main
+          reload={reload}
+          profile={profile}
+          onReload={() => window.location.reload()}
+        />
       ) : null}
       {phase === 'rejected' ? null : (
         // The wrapper adds no box of its own (.studio-load, display: contents); studio.css hides it

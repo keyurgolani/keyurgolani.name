@@ -251,7 +251,7 @@ test('a command without an exact Origin, from a cross-site fetch, without a matc
   assert.equal(audit.records.at(-1)?.actor, 'anonymous');
 });
 
-test('every command but auth.login, and auth.logout with no session, needs the CSRF token, and a query that asks for the check needs the exact Origin too', async (t) => {
+test("every command but auth.login, auth.logout with no session, and Studio's Sign out form, needs the CSRF token, and a query that asks for the check needs the exact Origin too", async (t) => {
   const { dispatch, handled, issue, audit, auth } = await setup(t);
   // A command that needs no session still needs a token, so without one it is refused.
   const bare = await dispatch(request('test.public'), 'test.public');

@@ -29,7 +29,14 @@ import type { PageResolution, StudioPages } from '../studio-port';
 import { errorResult, redirectResult } from '../studio-result';
 import { authHandlers, isFormPost, returnToOf, throttledAnswer, type Held } from './auth-commands';
 import { clearedSessionCookie, cookieMode, readCookies, type CookieMode } from './cookie';
-import { checkCsrf, checkMutationOrigin, checkRequestOrigin, clientAddress } from './guard';
+import {
+  checkCsrf,
+  checkMutationOrigin,
+  checkRequestOrigin,
+  checkSameOriginFetch,
+  clientAddress,
+  isFormBody,
+} from './guard';
 import { loginLimits, type LoginLimits } from './login-limits';
 
 // The owner's auth provider (#2): the dispatcher's session, origin, touch,
@@ -225,9 +232,15 @@ export async function provider(
         operation.kind === 'command'
           ? checkMutationOrigin(request, { origin: config.origin, bodyTypes: operation.bodyTypes })
           : checkRequestOrigin(request, config.origin);
-      // And its session's CSRF token, with or without a session: only
-      // auth.login goes without, and auth.logout when no session resolved.
-      const tokenless = operation.name === SIGN_IN || (operation.name === SIGN_OUT && !entry);
+      // Studio's Sign out form (row 88c-RC2): a form post nothing without script can add a token
+      // to, so it goes without one, but only with Sec-Fetch-Site sent and same-origin, on top of
+      // the exact Origin above. JSON keeps the token.
+      const formSignOut = operation.name === SIGN_OUT && isFormBody(request);
+      if (reason === null && formSignOut) reason = checkSameOriginFetch(request);
+      // And its session's CSRF token, with or without a session: only auth.login goes without,
+      // auth.logout when no session resolved, and Studio's Sign out form.
+      const tokenless =
+        operation.name === SIGN_IN || (operation.name === SIGN_OUT && (!entry || formSignOut));
       if (reason === null && !tokenless) {
         reason = entry ? checkCsrf(request, entry.token) : 'csrf_missing';
       }
