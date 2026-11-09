@@ -7726,5 +7726,53 @@
     "owner": "lane D",
     "routed": "row 122",
     "note": "OA: a plaque line's text under its contrast bar at 390 reduced-transparency; RC2 (preflight 1)"
+  },
+  {
+    "cell": "composition:kinetic-cosmos missing-media / kinetic-cosmos/platform-neutral/warm-parchment/humanist-ui/system",
+    "viewport": "390x844",
+    "row": "default",
+    "engine": "chromium",
+    "check": "occlusion",
+    "rule": "obscured",
+    "target": "#kc--top > p:nth-child(1) > a:nth-child(1)",
+    "owner": "lane C",
+    "routed": "row 129",
+    "note": "the tagline .kc-wordmark__role lies over the wordmark link's lower half at 390 on missing-media (rc.1's release run 42540152468)"
+  },
+  {
+    "cell": "composition:kinetic-cosmos missing-media / kinetic-cosmos/platform-neutral/warm-parchment/humanist-ui/dark",
+    "viewport": "390x844",
+    "row": "default",
+    "engine": "chromium",
+    "check": "occlusion",
+    "rule": "obscured",
+    "target": "#kc--top > p:nth-child(1) > a:nth-child(1)",
+    "owner": "lane C",
+    "routed": "row 129",
+    "note": "the tagline .kc-wordmark__role lies over the wordmark link's lower half at 390 on missing-media (rc.1's release run 42540152468)"
+  },
+  {
+    "cell": "composition:kinetic-cosmos missing-media / kinetic-cosmos/platform-neutral/warm-parchment/humanist-ui/light",
+    "viewport": "390x844",
+    "row": "default",
+    "engine": "chromium",
+    "check": "occlusion",
+    "rule": "obscured",
+    "target": "#kc--top > p:nth-child(1) > a:nth-child(1)",
+    "owner": "lane C",
+    "routed": "row 129",
+    "note": "the tagline .kc-wordmark__role lies over the wordmark link's lower half at 390 on missing-media (rc.1's release run 42540152468)"
+  },
+  {
+    "cell": "composition:kinetic-cosmos missing-media / kinetic-cosmos/platform-neutral/warm-parchment/humanist-ui/high-contrast",
+    "viewport": "390x844",
+    "row": "default",
+    "engine": "chromium",
+    "check": "occlusion",
+    "rule": "obscured",
+    "target": "#kc--top > p:nth-child(1) > a:nth-child(1)",
+    "owner": "lane C",
+    "routed": "row 129",
+    "note": "the tagline .kc-wordmark__role lies over the wordmark link's lower half at 390 on missing-media (rc.1's release run 42540152468)"
   }
 ]
