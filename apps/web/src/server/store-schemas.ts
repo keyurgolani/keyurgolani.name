@@ -111,8 +111,8 @@ export const DerivedChangeSchema = z
       'scheme-regenerated',
     ]),
     subject: ChangeSubjectSchema,
-    before: z.record(z.unknown()).nullable(),
-    after: z.record(z.unknown()),
+    before: z.record(z.string(), z.unknown()).nullable(),
+    after: z.record(z.string(), z.unknown()),
     fields: z.array(z.string()),
     decision: z.union([
       z.object({ state: z.literal('pending') }).strict(),
@@ -216,7 +216,7 @@ const ManifestSchema = z
       .object({
         variant: Versioned.nullable(),
         packs: z.array(Versioned),
-        contracts: z.record(z.string()),
+        contracts: z.record(z.string(), z.string()),
       })
       .strict(),
     blobs: z.array(Sha256Schema),
