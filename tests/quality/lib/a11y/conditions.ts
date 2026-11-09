@@ -359,6 +359,8 @@ interface ScriptWatch {
   }[];
   /** The page's own scripts (OwnScripts), waiting for its documents' bodies until `end` at most. */
   readonly own: (end: number) => Promise<OwnScripts>;
+  /** The documents whose bodies are still unread, but for one in a frame that has gone, as open(). */
+  readonly unread: () => readonly { readonly path: string; readonly frame: string }[];
   readonly stop: () => void;
 }
 
@@ -395,18 +397,30 @@ const pathOf = (url: string) => {
   }
 };
 
+/** How often own() looks again for a document whose frame has gone, while it awaits their bodies. */
+const OWN_RECHECK_MS = 50;
+
 /**
  * Counts `page`'s script requests from now: a lazy enhancement's chunk is one, as failed
  * enhancement blocks it. And reads each document it loads from now, the main frame's and every
  * frame's, as served: the scripts that HTML names are the page's own (`own()`), the union of
  * every document's. It fails closed: with no document read, one whose body can't be, or bodies
- * still unread at `end`, `own()` is closed and empty, and every chunk counts as optional.
+ * still unread at `end`, `own()` is closed and empty, and every chunk counts as optional. But for
+ * a document whose frame has gone, its body unread: it's waited for no longer (row 130), as a
+ * script request in such a frame holds no wait.
  */
 function watchScripts(page: Page): ScriptWatch {
   const inFlight = new Set<Request>();
   const errored = new Set<Request>();
   const done: { url: string; at: number; failed: boolean }[] = [];
-  const documents: Promise<readonly string[] | null>[] = [];
+  // Each document the page loaded, its body as it comes: done once read, or once it couldn't be.
+  const documents: {
+    readonly request: Request;
+    readonly path: string;
+    readonly body: Promise<readonly string[] | null>;
+    done: boolean;
+    value: readonly string[] | null;
+  }[] = [];
   let started = 0;
   let latest: { readonly path: string; readonly at: number } | null = null;
   const onResponse = (response: Response) => {
@@ -418,12 +432,22 @@ function watchScripts(page: Page): ScriptWatch {
     if (response.request().resourceType() !== 'document') return;
     // A redirect has no body; the document it leads to is read in turn.
     if (response.status() >= 300 && response.status() < 400) return;
-    documents.push(
-      response.text().then(
-        (html) => htmlScripts(html, response.url()),
-        () => null,
-      ),
+    const body = response.text().then(
+      (html) => htmlScripts(html, response.url()),
+      () => null,
     );
+    const entry = {
+      request: response.request(),
+      path: pathOf(response.url()),
+      body,
+      done: false,
+      value: null as readonly string[] | null,
+    };
+    void body.then((value) => {
+      entry.done = true;
+      entry.value = value;
+    });
+    documents.push(entry);
   };
   const onRequest = (request: Request) => {
     if (request.resourceType() !== 'script') return;
@@ -486,16 +510,33 @@ function watchScripts(page: Page): ScriptWatch {
     last: () => latest,
     finished: () => done,
     own: async (end) => {
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const late = new Promise<null>((resolve) => {
-        timer = setTimeout(() => resolve(null), Math.max(0, end - Date.now()));
-      });
-      const read = await Promise.race([Promise.all(documents), late]);
-      clearTimeout(timer);
-      if (read === null || read.length === 0 || read.some((each) => each === null))
+      // Each document as its body comes. One whose frame has gone, its body still unread, is
+      // waited for no longer: Playwright ends no routed request whose frame was torn down, so its
+      // body may never come (row 130), and that document runs nothing on the page. Rechecked each
+      // OWN_RECHECK_MS, as a frame may go while its body is awaited.
+      const read = [...documents];
+      const waiting = () => read.filter((each) => !each.done && !gone(each.request));
+      while (waiting().length > 0) {
+        const left = end - Date.now();
+        if (left <= 0) return { paths: new Set(), closed: true };
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        await Promise.race([
+          Promise.all(waiting().map(({ body }) => body)),
+          new Promise<void>((resolve) => {
+            timer = setTimeout(resolve, Math.min(OWN_RECHECK_MS, left));
+          }),
+        ]);
+        clearTimeout(timer);
+      }
+      const kept = read.filter((each) => each.done);
+      if (kept.length === 0 || kept.some((each) => each.value === null))
         return { paths: new Set(), closed: true };
-      return { paths: new Set(read.flatMap((each) => each ?? [])), closed: false };
+      return { paths: new Set(kept.flatMap((each) => each.value ?? [])), closed: false };
     },
+    unread: () =>
+      documents
+        .filter((each) => !each.done && !gone(each.request))
+        .map((each) => ({ path: each.path, frame: frameOf(each.request) })),
     stop: () => {
       page.off('response', onResponse);
       page.off('request', onRequest);
@@ -577,7 +618,10 @@ async function enhancementsSettled(
   // Optional by the HTML as served (push 3 r4), as the live page names every chunk it loaded.
   const islandsAtStart = await islands();
   let seen = `${scripts.started()} ${islandsAtStart}`;
-  const own = (await scripts.own(end)).paths;
+  const served = await scripts.own(end);
+  const own = served.paths;
+  // The bodies still unread at the end: the wait for them took it all (row 130).
+  const unread = served.closed && Date.now() >= end;
   // The latest optional chunk that failed, before the wait or during it: its retry may come up to
   // TURBOPACK_RETRY_MAX_MS later (push 3 r5, item 4).
   const lastFailed = () => {
@@ -629,8 +673,23 @@ async function enhancementsSettled(
     islandsAtEnd: await islands().catch(() => null),
     pending: await pending().catch(() => null),
     floor: floorAt(),
+    unread,
   });
 }
+
+/**
+ * The page's own scripts unread by the end, each document still unread by its path and frame, the
+ * first three listed (row 130), as heldAt() names the scripts in flight.
+ */
+const unreadText = (documents: readonly { readonly path: string; readonly frame: string }[]) =>
+  documents.length === 0
+    ? 'own scripts unread by the end'
+    : `own scripts unread by the end (${documents.length} document${
+        documents.length === 1 ? '' : 's'
+      }: ${documents
+        .slice(0, 3)
+        .map(({ path, frame }) => `${path}, ${frame}`)
+        .join('; ')}${documents.length > 3 ? `; and ${documents.length - 3} more` : ''})`;
 
 /** `ms` against the wait's end: so many ms before it, or past it. */
 const againstEnd = (ms: number) => (ms > 0 ? `${ms} ms past the end` : `${-ms} ms before the end`);
@@ -640,7 +699,8 @@ const againstEnd = (ms: number) => (ms > 0 ? `${ms} ms past the end` : `${-ms} m
  * requests in flight, each by its path and frame, the first three listed; the last start's age
  * and path; the islands' change across the wait, by name, from its state as the wait began to its
  * state at the end; the count of what's marked pending; and the floor (React's retry delay, or a
- * failed chunk's) against the end. A read the page refused, closed say, is unread.
+ * failed chunk's) against the end; and, when the wait for the page's own scripts took it all,
+ * that they were unread by the end, each document still unread by its path and frame (row 130). A read the page refused, closed say, is unread.
  */
 function heldAt(
   scripts: ScriptWatch,
@@ -650,6 +710,8 @@ function heldAt(
     readonly islandsAtEnd: string | null;
     readonly pending: number | null;
     readonly floor: number;
+    /** Whether the page's own scripts were still unread at the end: own() took the wait. */
+    readonly unread?: boolean;
   },
 ): string {
   const open = scripts.open();
@@ -686,7 +748,14 @@ function heldAt(
   }
   const pendingText = at.pending === null ? 'pending unread' : `${at.pending} marked pending`;
   const floor = at.floor === 0 ? 'no floor' : `the floor ${againstEnd(at.floor - end)}`;
-  return [flight, started, islandText, pendingText, floor].join(', ');
+  return [
+    flight,
+    started,
+    islandText,
+    pendingText,
+    floor,
+    ...(at.unread ? [unreadText(scripts.unread())] : []),
+  ].join(', ');
 }
 
 /** A watch on a page's enhancements, started before its load: `settled()` once it has loaded. */
