@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { DiscardSubmit, SIGN_OUT_ACTION } from '../sign-out-form';
 
 // Sign out (#8, Slice 1; refined Slice 2 item 3, and row 88): while this
 // browser's journal holds unsaved changes, this tab's or any other's, it
@@ -12,9 +13,14 @@ import { useEffect, useRef } from 'react';
 // The shell holds what it shows, busy, failed, and asking, so the header's
 // Sign out and the workspace's, which takes its place once Studio is ready,
 // are one control: a failure the header showed still shows in the
-// workspace, and an open question stays open. Until the shell has hydrated
-// the button is aria-disabled, in Studio's busy look, and takes no click;
-// the server renders it so (row 88).
+// workspace, and an open question stays open.
+//
+// It is a form post to auth.logout from the first byte (row 88c-RC2): before
+// the shell hydrates, or without JavaScript, a click is the native post,
+// which keeps this browser's unsaved changes, and without JavaScript a second
+// submit discards them. Once the shell has hydrated, the shell signs out as
+// above and the native post doesn't go. Row 88's hold, aria-disabled until
+// hydration, came off with it: the native post is the way out before then.
 
 /** What Sign out shows, which the shell keeps across the header and the workspace. */
 export interface SignOutState {
@@ -39,7 +45,7 @@ export function SignOut({
   onChoose,
   onCancel,
 }: {
-  /** Whether the shell has hydrated, so a click reaches it: false in the server's markup. */
+  /** Whether the shell has hydrated, so it signs out itself: false in the server's markup, where the native post goes. */
   canSignOut: boolean;
   state: SignOutState;
   /** The button's click, once it can sign out: the shell asks or signs out. */
@@ -51,7 +57,6 @@ export function SignOut({
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const { busy, failed, asking } = state;
-  const held = !canSignOut || busy;
 
   useEffect(() => {
     const element = dialog.current;
@@ -62,16 +67,29 @@ export function SignOut({
 
   return (
     <>
-      <button
-        type="button"
-        className="studio-button studio-button--quiet"
-        aria-disabled={held ? true : undefined}
-        onClick={() => {
-          if (!held) onSignOut();
+      <form
+        method="post"
+        action={SIGN_OUT_ACTION}
+        className="studio-sign-out"
+        onSubmit={(event) => {
+          // Before the shell can sign out, the native post goes.
+          if (!canSignOut) return;
+          event.preventDefault();
+          if (!busy) onSignOut();
         }}
       >
-        Sign out
-      </button>
+        <button
+          type="submit"
+          className="studio-button studio-button--quiet"
+          aria-disabled={busy ? true : undefined}
+        >
+          Sign out
+        </button>
+        {/* With JavaScript, the dialog asks; without it, the owner chooses here. */}
+        <noscript>
+          <DiscardSubmit />
+        </noscript>
+      </form>
       <p className="studio-alert" role="alert" hidden={!failed}>
         {failed ? "Couldn't sign out. Try again." : null}
       </p>

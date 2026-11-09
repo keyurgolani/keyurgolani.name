@@ -3,6 +3,7 @@
 import type { ReactNode, Ref } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
+import { SignOutForm, studioProfileOf } from '../sign-out-form';
 
 // Studio's late alert (row 88c): when the shell's chunk is still on its way
 // after STUDIO_LOAD_TIMEOUT_MS, "Studio couldn't load." shows in a React root
@@ -45,10 +46,10 @@ import { createRoot } from 'react-dom/client';
 //   are left alone, and the boundary renders no second alert. A shell that
 //   arrives in the moment before the reload lands may show until it does.
 //
-// The alert offers Reload Studio alone, here and in the boundary, under both
-// profiles: no owner code goes in the page's entry, which Demo Studio's page
-// loads too (#9). Signing out without the shell is RC2's no-JavaScript
-// sign-out.
+// The alert offers Reload Studio, here and in the boundary, under both
+// profiles, and under owner Sign out too: a plain form post to auth.logout
+// (sign-out-form.tsx, row 88c-RC2), so no owner code goes in the page's entry,
+// which Demo Studio's page loads too (#9).
 
 /** How long a shell, or the owner adapter it loads, may take before Studio says it couldn't load. */
 export const STUDIO_LOAD_TIMEOUT_MS = 5_000;
@@ -68,10 +69,13 @@ export function StudioLoadAlert({
   main,
   reload,
   onReload,
+  profile = null,
 }: {
   readonly main: boolean;
   readonly reload?: Ref<HTMLButtonElement>;
   readonly onReload: () => void;
+  /** The page's profile, as <body> names it: under owner the alert offers Sign out (row 88c-RC2). */
+  readonly profile?: string | null;
 }) {
   const content = (
     <>
@@ -81,6 +85,7 @@ export function StudioLoadAlert({
         <button ref={reload} type="button" className="studio-button" onClick={onReload}>
           Reload Studio
         </button>
+        {profile === 'owner' ? <SignOutForm /> : null}
       </div>
     </>
   );
@@ -138,6 +143,7 @@ export function createLateAlert(host: LateHost): LateAlert {
       late,
       <StudioLoadAlert
         main={false}
+        profile={studioProfileOf(document.body)}
         onReload={() => {
           if (state === 'shown') state = 'pressed';
           host.reload();

@@ -160,8 +160,13 @@ test(
     await expect.poll(() => refused.length, 'the optional chunks are asked for').toBeGreaterThan(0);
     await expect(alert(page)).toBeVisible({ timeout: PAST_TIMEOUT_MS });
     await expect(reloadStudio(page)).toBeFocused();
-    // Reload alone: no owner code is in the page's entry (#9).
-    await expect(alert(page).getByRole('button')).toHaveCount(1);
+    // Reload, and the owner's Sign out, keep or discard: a plain form, so no owner code is in the
+    // page's entry (#9; row 88c-RC2).
+    await expect(alert(page).getByRole('button')).toHaveText([
+      'Reload Studio',
+      'Sign out',
+      'Discard unsaved changes and sign out',
+    ]);
     // The quality harness's own verdict on a failure state, E's read's.
     expect(await failureStateFindings(page)).toEqual([]);
     // It never says the owner is signed out.

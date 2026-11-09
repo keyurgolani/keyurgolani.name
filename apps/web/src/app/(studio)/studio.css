@@ -123,6 +123,11 @@
   opacity: 0.7;
 }
 
+/* Sign out's form (row 88c-RC2) adds no box of its own: its buttons sit where Sign out's button sat. */
+.studio-sign-out {
+  display: contents;
+}
+
 /* The load boundary's wrapper around Studio's shell (row 88c): no box of its own, and hidden
    while the late alert (late-alert.tsx), a <studio-load-late> right under body, stands in for a
    shell still on its way. Keyed on that element, so the late path sets nothing on a node React
