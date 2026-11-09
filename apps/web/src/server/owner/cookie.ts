@@ -1,6 +1,7 @@
 import 'server-only';
 import { recordOwnerModule } from '../load-trace';
 import { sessionCookieName, type SessionCookieName } from '../session-cookie';
+import { DISCARD_MARKER_MAX_AGE, discardMarkerName } from '~/lib/studio/discard-marker';
 
 // The Studio session cookie (#2). Over https it is __Host-studio_session,
 // Secure, HttpOnly, SameSite=Strict, Path=/, with no Domain, which a sibling
@@ -37,6 +38,16 @@ export function sessionCookie(mode: CookieMode, token: string, maxAgeSeconds: nu
 }
 
 /** The Set-Cookie value that clears the session cookie. */
+/**
+ * The pending-discard marker a Sign out without JavaScript leaves when it chose to discard (row
+ * 88c-RC2; lib/studio/discard-marker.ts): Studio's next script reads it, clears the journal, and
+ * drops it. Not HttpOnly, as script reads it; SameSite=Strict, and Secure over https.
+ */
+export function discardMarkerCookie(mode: CookieMode): string {
+  const name = discardMarkerName(mode.secure);
+  return `${name}=1; Path=/; Max-Age=${DISCARD_MARKER_MAX_AGE}; SameSite=Strict${mode.secure ? '; Secure' : ''}`;
+}
+
 export function clearedSessionCookie(mode: CookieMode): string {
   return `${mode.name}=; ${attributes(mode, 0)}`;
 }

@@ -39,6 +39,7 @@ import {
   writeEntry,
   type JournalEntry,
 } from '~/lib/studio/journal';
+import { journalStorage } from '~/lib/studio/discard-marker';
 import { pageCacheHandlers, restoredMayKeep } from '~/lib/studio/page-cache';
 import { claimTab, mayRestore, openTabs } from '~/lib/studio/tab-presence';
 import { endSession, NEUTRAL_TITLE, signOutListener } from '~/lib/studio/session-end';
@@ -132,8 +133,10 @@ function taskFromHash(tasks: readonly StudioTask[]): TaskId {
 
 /** The browser's localStorage, or null where it can't be reached. */
 function storage(): Storage | null {
+  // Every journal read goes through here, so a pending discard (a Sign out without JavaScript that
+  // chose to discard) clears the journal before any draft is restored (row 88c-RC2).
   try {
-    return window.localStorage;
+    return journalStorage(window);
   } catch {
     return null;
   }
