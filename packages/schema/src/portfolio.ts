@@ -24,10 +24,7 @@ export type Direction = z.infer<typeof DirectionSchema>;
  * them in the order the author chose. Presentation and product behavior live
  * in the site document, and deployment settings in the environment.
  */
-export function portfolioSchemas(
-  parts: SchemaParts,
-  sections: z.ZodType<Section, z.ZodTypeDef, unknown>,
-) {
+export function portfolioSchemas(parts: SchemaParts, sections: z.ZodType<Section, unknown>) {
   const { object, Link, Placement } = parts;
   const records = recordSchemas(parts);
 

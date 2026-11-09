@@ -13,8 +13,8 @@ import { parsePortfolio, parseSite } from './load';
 // variantControls.<id>.values, which take any keys.
 
 /** Every object schema reachable from `root`, by a readable path. */
-function objects(root: z.ZodTypeAny, schemas: ComposedSchemas): Map<string, z.AnyZodObject> {
-  const found = new Map<string, z.AnyZodObject>();
+function objects(root: z.ZodTypeAny, schemas: ComposedSchemas): Map<string, z.ZodObject> {
+  const found = new Map<string, z.ZodObject>();
   const seen = new Set<z.ZodTypeAny>();
   const visit = (schema: z.ZodTypeAny | undefined, path: string): void => {
     if (!schema || seen.has(schema)) return;
@@ -28,32 +28,31 @@ function objects(root: z.ZodTypeAny, schemas: ComposedSchemas): Map<string, z.An
       for (const kind of kinds) visit(route(kind), `${path}<${kind}>`);
       return;
     }
-    const def = schema._def as Record<string, unknown> & { typeName: z.ZodFirstPartyTypeKind };
-    switch (def.typeName) {
-      case z.ZodFirstPartyTypeKind.ZodObject: {
-        const object = schema as z.AnyZodObject;
+    const def = schema._zod.def as unknown as Record<string, unknown> & { type: string };
+    switch (def.type) {
+      case 'object': {
+        const object = schema as z.ZodObject;
         found.set(path, object);
         for (const [key, child] of Object.entries(object.shape)) {
           visit(child as z.ZodTypeAny, `${path}/${key}`);
         }
         return;
       }
-      case z.ZodFirstPartyTypeKind.ZodArray:
-        return visit(def.type as z.ZodTypeAny, `${path}/*`);
-      case z.ZodFirstPartyTypeKind.ZodRecord:
+      case 'array':
+        return visit(def.element as z.ZodTypeAny, `${path}/*`);
+      case 'record':
         // variantControls.<id>.values holds any keys by design.
         if (path.endsWith('variantControls/*/values')) return;
         return visit(def.valueType as z.ZodTypeAny, `${path}/*`);
-      case z.ZodFirstPartyTypeKind.ZodOptional:
-      case z.ZodFirstPartyTypeKind.ZodNullable:
-      case z.ZodFirstPartyTypeKind.ZodDefault:
+      case 'optional':
+      case 'nullable':
+      case 'default':
         return visit(def.innerType as z.ZodTypeAny, path);
-      case z.ZodFirstPartyTypeKind.ZodEffects:
-        return visit(def.schema as z.ZodTypeAny, path);
-      case z.ZodFirstPartyTypeKind.ZodPipeline:
+      case 'pipe':
+        // A transform's pipeline ends in the transform, which holds no schema.
         visit(def.in as z.ZodTypeAny, path);
         return visit(def.out as z.ZodTypeAny, path);
-      case z.ZodFirstPartyTypeKind.ZodUnion:
+      case 'union':
         for (const option of def.options as z.ZodTypeAny[]) visit(option, path);
         return;
       default:
@@ -95,7 +94,9 @@ for (const [label, schemas] of [
       assert.ok(paths.includes(path), `the walk didn't reach ${path}`);
     }
     for (const [path, object] of all) {
-      assert.equal(object._def.unknownKeys, 'strict', `${path || '(root)'} isn't strict`);
+      // .strict() is a catchall that refuses every key the object doesn't name.
+      const catchall = object._zod.def.catchall;
+      assert.equal(catchall?._zod.def.type, 'never', `${path || '(root)'} isn't strict`);
       assert.ok('extensions' in object.shape, `${path || '(root)'} doesn't take extensions`);
     }
   });

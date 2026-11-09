@@ -93,11 +93,13 @@ export function siteSchemas({ object }: SchemaParts) {
   const AppearanceInputSchema = z
     .unknown()
     .superRefine((value, ctx) => {
-      // Either shape would call the other's key unknown, which misses the point.
+      // Either shape would call the other's key unknown, which misses the point,
+      // so this issue stops the pipeline.
       if (isPlainObject(value) && 'seedColor' in value && 'sourceAsset' in value) {
         ctx.addIssue({
           code: 'custom',
           message: "has both seedColor and sourceAsset, which can't be used together. Keep one.",
+          continue: false,
         });
       }
     })

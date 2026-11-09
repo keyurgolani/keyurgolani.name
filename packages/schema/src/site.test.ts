@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SiteSchema } from './compose';
 import { DisplayModeSchema, MotionPolicySchema } from './site';
+import { issueCode, reportedIssues } from './issues';
 
 // The shape from the issue: every top-level key, optional ones included.
 const FULL = {
@@ -33,7 +34,9 @@ void [appearanceInputs, routes, variantControls, sections];
 
 function codes(input: unknown): string[] {
   const result = SiteSchema.safeParse(input);
-  return result.success ? [] : result.error.issues.map((i) => `${i.path.join('/')}:${i.code}`);
+  return result.success
+    ? []
+    : reportedIssues(result.error.issues).map((i) => `${i.path.join('/')}:${issueCode(i, input)}`);
 }
 
 test('the full site document parses', () => {

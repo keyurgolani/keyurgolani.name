@@ -6,7 +6,7 @@ import {
   type ExtensionRegistry,
 } from './extensions';
 import { parseExtensionKind } from './ids';
-import { addNestedIssue } from './issues';
+import { addNestedIssue, NO_MATCHING_DISCRIMINATOR } from './issues';
 import { isPlainObject } from './json';
 import {
   coreSectionSchemas,
@@ -26,7 +26,7 @@ export const SECTION_ROUTE: unique symbol = Symbol('portfolio.sectionRoute');
 /** Marks an extension section's `data` schema, for hint resolution. */
 export const EXTENSION_DATA: unique symbol = Symbol('portfolio.extensionData');
 
-export type SectionRouter = z.ZodType<Section, z.ZodTypeDef, unknown> & {
+export type SectionRouter = z.ZodType<Section, unknown> & {
   readonly [SECTION_ROUTE]: (kind: unknown) => z.ZodTypeAny | undefined;
 };
 
@@ -54,7 +54,7 @@ export type ComposedSchemas = ReturnType<typeof composeSchemas>;
  */
 export function sectionRouter(
   parts: SchemaParts,
-  core: readonly z.AnyZodObject[],
+  core: readonly z.ZodObject[],
   registry: ExtensionRegistry,
 ): SectionRouter {
   // `data` is checked as plain JSON first, then against the extension's schema.
@@ -85,27 +85,23 @@ export function sectionRouter(
 
   const schema = z.unknown().transform((value, ctx): Section => {
     if (!isPlainObject(value)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.invalid_type,
-        expected: 'object',
-        received: typeName(value),
-      } as z.IssueData);
+      ctx.addIssue({ code: 'invalid_type', expected: 'object', input: value });
       return z.NEVER;
     }
     if (typeof value.kind !== 'string') {
-      ctx.addIssue({
-        code: z.ZodIssueCode.invalid_type,
-        expected: 'string',
-        received: value.kind === undefined ? 'undefined' : typeName(value.kind),
-        path: ['kind'],
-      } as z.IssueData);
+      ctx.addIssue({ code: 'invalid_type', expected: 'string', input: value.kind, path: ['kind'] });
       return z.NEVER;
     }
     const target = route(value.kind);
     if (!target) {
+      // As a discriminated union reports it, with the kinds it knows for the hint.
       ctx.addIssue({
-        code: z.ZodIssueCode.invalid_union_discriminator,
+        code: 'invalid_union',
+        errors: [],
+        note: NO_MATCHING_DISCRIMINATOR,
+        discriminator: 'kind',
         options: known,
+        input: value.kind,
         path: ['kind'],
       });
       return z.NEVER;
@@ -116,13 +112,6 @@ export function sectionRouter(
     return z.NEVER;
   });
   return Object.assign(schema, { [SECTION_ROUTE]: route });
-}
-
-/** The type name zod would report for a value. */
-function typeName(value: unknown): string {
-  if (value === null) return 'null';
-  if (Array.isArray(value)) return 'array';
-  return typeof value;
 }
 
 const DEFAULTS = composeSchemas();

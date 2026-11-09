@@ -47,7 +47,7 @@ export const WorkMediumSchema = z
     {
       message: `should be one of: ${WORK_MEDIA.join(', ')}, or an extension's <npm package name>/<name>.`,
     },
-  ) as z.ZodType<WorkMedium, z.ZodTypeDef, unknown>;
+  ) as z.ZodType<WorkMedium, unknown>;
 
 /** What a piece of evidence is. */
 export const EVIDENCE_TYPES = [
