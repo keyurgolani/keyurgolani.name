@@ -179,26 +179,29 @@ const page = (input: VariantRenderInput) =>
 
 // The fixture has to have every field for the next tests to mean anything.
 
-/** What a zod schema's definition holds, read without importing zod. */
+/** What a zod 4 schema's definition holds, read without importing zod. */
 interface Schema {
-  readonly _def: {
-    readonly typeName: string;
-    readonly innerType?: Schema;
-    readonly schema?: Schema;
-    readonly type?: Schema;
-    readonly value?: unknown;
+  readonly _zod: {
+    readonly def: {
+      readonly type: string;
+      readonly innerType?: Schema;
+      readonly in?: Schema;
+      readonly out?: Schema;
+      readonly element?: Schema;
+      readonly values?: readonly unknown[];
+    };
   };
   readonly shape?: Record<string, Schema>;
 }
 
-/** The schema inside optional, nullable, default, and refinement wrappers. */
+/** The schema inside optional, nullable, and default wrappers, and before a transform. */
 function unwrap(schema: Schema): Schema {
   for (;;) {
-    const { typeName, innerType, schema: inner } = schema._def;
-    if (['ZodOptional', 'ZodNullable', 'ZodDefault'].includes(typeName) && innerType) {
+    const { type, innerType, in: before, out } = schema._zod.def;
+    if (['optional', 'nullable', 'default'].includes(type) && innerType) {
       schema = innerType;
-    } else if (typeName === 'ZodEffects' && inner) {
-      schema = inner;
+    } else if (type === 'pipe' && before && out?._zod.def.type === 'transform') {
+      schema = before;
     } else {
       return schema;
     }
@@ -214,7 +217,7 @@ function missingFields(schema: Schema, value: unknown, path: string, placements 
   if (unwrapped === PLACEMENT && !placements) return isPlainObject(value) ? [] : [path];
   const fieldsOf = (object: Schema) =>
     Object.entries(object.shape ?? {}).filter(([key]) => key !== 'extensions');
-  if (unwrapped._def.typeName === 'ZodObject') {
+  if (unwrapped._zod.def.type === 'object') {
     if (!isPlainObject(value)) return [path];
     return fieldsOf(unwrapped).flatMap(([key, child]) =>
       Object.hasOwn(value, key)
@@ -222,10 +225,10 @@ function missingFields(schema: Schema, value: unknown, path: string, placements 
         : [`${path}/${key}`],
     );
   }
-  if (unwrapped._def.typeName === 'ZodArray') {
+  if (unwrapped._zod.def.type === 'array') {
     if (!Array.isArray(value) || value.length === 0) return [`${path}/0`];
-    const element = unwrap(unwrapped._def.type!);
-    if (element._def.typeName !== 'ZodObject') return [];
+    const element = unwrap(unwrapped._zod.def.element!);
+    if (element._zod.def.type !== 'object') return [];
     if (element === PLACEMENT && !placements) return [];
     // Each field has to appear in some item.
     return fieldsOf(element).flatMap(([key, child]) => {
@@ -284,7 +287,7 @@ test('the fixture has every core kind, and every field each section, record, and
   ];
   for (const [name, item, values] of lists) {
     const missing = missingFields(
-      { _def: { typeName: 'ZodArray', type: schema(item) } },
+      { _zod: { def: { type: 'array', element: schema(item) } } },
       values,
       name,
       name === 'placements',
@@ -294,9 +297,13 @@ test('the fixture has every core kind, and every field each section, record, and
   const kinds = COMPLETE.sections.map((section) => section.kind);
   assert.deepEqual([...new Set(kinds)].sort(), Object.keys(SHARED_RENDERERS).sort());
   for (const core of SCHEMAS.coreSections as unknown as Schema[]) {
-    const kind = String(core.shape!.kind!._def.value);
+    const kind = String(core.shape!.kind!._zod.def.values![0]);
     const sections = COMPLETE.sections.filter((candidate) => candidate.kind === kind);
-    const missing = missingFields({ _def: { typeName: 'ZodArray', type: core } }, sections, kind)
+    const missing = missingFields(
+      { _zod: { def: { type: 'array', element: core } } },
+      sections,
+      kind,
+    )
       // A section's language is checked on the hero alone.
       .filter((path) => path !== `${kind}/*/lang` || kind === 'hero');
     assert.deepEqual(missing, [], kind);
