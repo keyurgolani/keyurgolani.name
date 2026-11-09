@@ -546,6 +546,113 @@ test('a script request in a live frame, its end never reported, still holds the 
 });
 
 /**
+ * A page whose main document, served, names main.js, and whose preview frame's document answers
+ * as it loads, its body never coming: Playwright ends no routed request whose frame was torn
+ * down, so its text() never settles. The frame is live as the answer comes, and detaches
+ * `detachAfterMs` after the goto, as the next goto tears it down; null keeps it live.
+ */
+function frameDocumentPage(detachAfterMs: number | null) {
+  const handlers = new Map<string, Set<(value: unknown) => void>>();
+  const emit = (event: string, value: unknown) => {
+    for (const handler of handlers.get(event) ?? []) handler(value);
+  };
+  let detached = false;
+  const frame = { isDetached: () => detached, url: () => 'http://app.test/sample' };
+  const served = {
+    url: () => 'http://app.test/',
+    status: () => 200,
+    request: () => ({ resourceType: () => 'document' }),
+    text: async () => MAIN_HTML,
+  };
+  const sample = {
+    url: () => 'http://app.test/sample',
+    status: () => 200,
+    request: () => ({ resourceType: () => 'document', frame: () => frame }),
+    // Never settles, and holds no timer: nothing ends it.
+    text: () => new Promise<string>(() => undefined),
+  };
+  const page = {
+    on: (event: string, handler: (value: unknown) => void) => {
+      if (!handlers.has(event)) handlers.set(event, new Set());
+      handlers.get(event)!.add(handler);
+    },
+    off: (event: string, handler: (value: unknown) => void) => {
+      handlers.get(event)?.delete(handler);
+    },
+    goto: async () => {
+      emit('response', served);
+      emit('response', sample);
+      if (detachAfterMs !== null) setTimeout(() => (detached = true), detachAfterMs);
+      return null;
+    },
+    waitForFunction: async () => ({}),
+    waitForTimeout: async (ms: number) => {
+      await new Promise((done) => setTimeout(done, ms));
+    },
+    evaluate: async (fn: unknown) => {
+      const source = String(fn);
+      if (source.includes('fonts.ready')) return undefined;
+      if (source.includes('scripting: none')) return false;
+      if (source.includes('requestIdleCallback')) return undefined;
+      if (source.includes('requestAnimationFrame')) return undefined;
+      if (source.includes('data-enhancement-island')) return '';
+      return 0;
+    },
+  };
+  return page as unknown as Page;
+}
+
+// A document in a frame that has gone holds no wait (row 130: rc.1 release run 42540152468, shard
+// 87, demo-studio content at 1440x900, its root-text reload at 1024x768). There, reflowFindings'
+// resize from 640 to 1024 widened the held Demo Studio page past NARROW_STUDIO, its preview gate
+// opened and its frame started /sample, and load()'s goto tore that frame down after /sample had
+// answered. Its body never came, so own() waited for it to the end, and the wait never began:
+// "no script in flight, ... islands unchanged, 0 marked pending, the floor 9541 ms before the end".
+test('a document in a frame that detaches, its body never coming, holds neither own() nor the wait', async () => {
+  const page = frameDocumentPage(100);
+  const watch = watchEnhancements(page);
+  await page.goto('/');
+  const started = Date.now();
+  const settled = await watch.settled(Date.now() + 2_000);
+  const took = Date.now() - started;
+  watch.stop();
+  assert.equal(settled, true, "settled: the gone frame's document lets the wait go");
+  assert.ok(took < 1_000, `settled in under 1,000 ms, not ${took}`);
+});
+
+// The bound, the coordinator's condition on row 130: a live frame that never sends its document's
+// body still fails closed. own() comes back closed and empty at its end, and the wait it holds
+// still ends unsettled, before the fix and after it. Only a frame that has gone is let go.
+test('a document in a live frame, its body never coming, still closes own() at the end and holds the wait', async () => {
+  const page = frameDocumentPage(null);
+  const watch = watchEnhancements(page);
+  await page.goto('/');
+  const own = await watch.own(Date.now() + 300);
+  assert.equal(own.closed, true, 'closed at the end');
+  assert.deepEqual([...own.paths], [], 'and empty');
+  const settled = await watch.settled(Date.now() + 300);
+  watch.stop();
+  assert.equal(settled, false, "not settled: the live frame's document is still unread");
+  assert.notEqual(watch.held(), null, 'and what held it is named');
+});
+
+// And what held that wait names the unread document, by its path and frame (row 130): the other
+// parts alone, "no script in flight, ... islands unchanged, 0 marked pending", read as a page that
+// held nothing, as rc.1's record did.
+test('a wait whose own scripts were still unread at the end names the unread document and its frame in what held it', async () => {
+  const page = frameDocumentPage(null);
+  const watch = watchEnhancements(page);
+  await page.goto('/');
+  const settled = await watch.settled(Date.now() + 300);
+  watch.stop();
+  assert.equal(settled, false, 'not settled');
+  assert.match(
+    watch.held() ?? '',
+    /, own scripts unread by the end \(1 document: \/sample, frame \/sample\)$/,
+  );
+});
+
+/**
  * A page as landscapeOcclusionFindings drives it, holding `/` at 390x844: what it did, in order,
  * and each resize with the document it held then. Its keyboard walk ends at once, no stop. When
  * `stuck`, each load of a page but about:blank starts one script request in the main frame whose
