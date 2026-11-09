@@ -12,6 +12,8 @@ import { z } from './zod';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const MODULE = 'packages/schema/src/zod.ts';
+/** This file, whose own samples name zod. */
+const SELF = 'packages/schema/src/zod.test.ts';
 /** Where product code lives: the packages and the app, their tests and scripts too. */
 const PRODUCT = ['packages', 'apps'];
 const SOURCE = /\.(?:[cm]?[jt]sx?)$/;
@@ -32,12 +34,25 @@ test('no product source imports zod but the one module that configures it', () =
     encoding: 'utf8',
   })
     .split('\0')
-    .filter((file) => SOURCE.test(file) && file !== MODULE && !file.includes('/node_modules/'));
+    .filter(
+      (file) =>
+        SOURCE.test(file) && file !== MODULE && file !== SELF && !file.includes('/node_modules/'),
+    );
   assert.ok(files.length > 100, `only ${files.length} product sources listed`);
   const offenders = files.filter((file) =>
     ZOD_IMPORT.test(readFileSync(path.join(ROOT, file), 'utf8')),
   );
   assert.deepEqual(offenders, [], 'these import zod directly; import z from @portfolio/schema/zod');
+});
+
+test('a bundler keeps the config: the package names zod.ts in sideEffects', () => {
+  const manifest = JSON.parse(
+    readFileSync(path.join(ROOT, 'packages/schema/package.json'), 'utf8'),
+  ) as { sideEffects?: unknown };
+  assert.ok(
+    Array.isArray(manifest.sideEffects) && manifest.sideEffects.includes('./src/zod.ts'),
+    `sideEffects is ${JSON.stringify(manifest.sideEffects)}`,
+  );
 });
 
 test('the scan catches every form of a zod import, and not a mention', () => {

@@ -7,7 +7,9 @@ import { z } from 'zod';
 // catches the throw: in the demo's worker, the preview frame, and Studio. So
 // zod runs jitless, interpreted, everywhere. The config has to be set before
 // the first schema is built, so every product module imports z from here, never
-// from zod itself (zod.test.ts holds them to it).
+// from zod itself (zod.test.ts holds them to it). package.json names this file
+// in sideEffects: a bundler that took the package as side-effect free would
+// resolve the re-export straight to zod and drop the config.
 z.config({ jitless: true });
 
 export { z };
