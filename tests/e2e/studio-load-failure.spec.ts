@@ -290,3 +290,73 @@ test(
     expect(await failureStateFindings(page)).toEqual([]);
   },
 );
+
+// The owner's Sign out where Studio didn't load (row 88c-RC2, the pins row 88c owed: R3, R4 as
+// keep and discard, H4). The alert's Sign out is a plain form post to auth.logout, so it signs out
+// with the shell's chunks refused or held. Draft, unrun until RC2's tickets queue.
+
+/** The alert's own Sign out, by its exact name: the discard's name has "sign out" in it too. */
+const alertSignOut = (page: Page) =>
+  alert(page).getByRole('button', { name: 'Sign out', exact: true });
+const alertDiscard = (page: Page) =>
+  alert(page).getByRole('button', { name: 'Discard unsaved changes and sign out' });
+const JOURNAL_KEY = 'portfolio-studio:journal:v1';
+
+test(
+  "with the shell's chunks refused, the alert's Sign out signs out: one auth.logout, then signed out, and this browser's unsaved changes kept (row 88c-RC2, R3, R4 keep)",
+  { annotation: [STUDIO] },
+  async ({ page, app }) => {
+    await signIn(page, app, secret.password);
+    await page.evaluate((key) => localStorage.setItem(key, '{"kept":true}'), JOURNAL_KEY);
+    const refused = await failEnhancement(page, app.origin);
+    const logouts = logoutsOf(page);
+    await page.goto('/studio');
+    await expect.poll(() => refused.length, 'the optional chunks are asked for').toBeGreaterThan(0);
+    await expect(alert(page)).toBeVisible({ timeout: PAST_TIMEOUT_MS });
+    await alertSignOut(page).click();
+    await expect(page).toHaveURL(`${app.origin}${SIGNED_OUT}`);
+    expect(logouts, 'one auth.logout').toHaveLength(1);
+    expect(await page.evaluate((key) => localStorage.getItem(key), JOURNAL_KEY)).toBe(
+      '{"kept":true}',
+    );
+  },
+);
+
+test(
+  "with the shell's chunks refused, the alert's discard signs out and clears this browser's storage (row 88c-RC2, R4 discard)",
+  { annotation: [STUDIO] },
+  async ({ page, app }) => {
+    await signIn(page, app, secret.password);
+    await page.evaluate((key) => localStorage.setItem(key, '{"kept":true}'), JOURNAL_KEY);
+    await failEnhancement(page, app.origin);
+    const logouts = logoutsOf(page);
+    await page.goto('/studio');
+    await expect(alert(page)).toBeVisible({ timeout: PAST_TIMEOUT_MS });
+    await alertDiscard(page).click();
+    await expect(page).toHaveURL(`${app.origin}${SIGNED_OUT}`);
+    expect(logouts, 'one auth.logout').toHaveLength(1);
+    // Clear-Site-Data "storage" emptied the origin's storage, the journal with it.
+    expect(await page.evaluate((key) => localStorage.getItem(key), JOURNAL_KEY)).toBeNull();
+  },
+);
+
+test(
+  "the late alert's Sign out, with the shell still held, signs out once, and a shell released after it shows nothing (row 88c-RC2, H4)",
+  { annotation: [STUDIO] },
+  async ({ page, app }) => {
+    await signIn(page, app, secret.password);
+    const { release } = await holdShell(page, app.origin);
+    const logouts = logoutsOf(page);
+    try {
+      await page.goto('/studio', { waitUntil: 'domcontentloaded' });
+      await expect(lateNode(page)).toHaveCount(1, { timeout: PAST_TIMEOUT_MS });
+      await alertSignOut(page).click();
+      await expect(page).toHaveURL(`${app.origin}${SIGNED_OUT}`);
+    } finally {
+      release();
+    }
+    await pause(1_000);
+    await expect(page).toHaveURL(`${app.origin}${SIGNED_OUT}`);
+    expect(logouts, 'one auth.logout').toHaveLength(1);
+  },
+);
