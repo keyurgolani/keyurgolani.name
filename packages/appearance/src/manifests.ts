@@ -247,7 +247,7 @@ export const ColorTokenSetSchema = z
     if (missing.length === 0 || missing.length === DERIVED_ROLES.length) return;
     for (const role of missing)
       context.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: [role],
         message: DERIVED_ROLES_ALL_OR_NONE,
       });
