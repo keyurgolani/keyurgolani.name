@@ -1196,10 +1196,15 @@ test("main's real red push run, 42161399250: its jobs prove quality-pr's red, it
   assert.equal(judgeListed(tests, listed).covered.length, 3);
   // As it ran, browser's shards were cancelled: refused, by them.
   assert.match(refusal(evaluateRc(realInput(real))), /browser \(1\/2\) ended cancelled/);
-  // Had browser passed, quality-pr's red on HC's listed records is accepted.
-  const browserGreen = real.map((each) =>
-    each.name.startsWith('browser (') ? { ...each, conclusion: 'success' } : each,
-  );
+  // Had browser passed, quality-pr's red on HC's listed records is accepted. The run
+  // predates deps-scan, which gate needs since; it's given as docs ran, green.
+  const docs = real.find((each) => each.name === 'docs');
+  const browserGreen = [
+    ...real.map((each) =>
+      each.name.startsWith('browser (') ? { ...each, conclusion: 'success' } : each,
+    ),
+    { ...docs, name: 'deps-scan' },
+  ];
   const accepted = evaluateRc(realInput(browserGreen));
   assert.deepEqual(accepted.reasons, []);
   assert.equal(accepted.ok, true);

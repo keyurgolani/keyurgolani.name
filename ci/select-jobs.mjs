@@ -55,6 +55,10 @@ export const CHECK_JOBS = [
   // The public guide from a fresh clone (#12, 12-5).
   'fresh-clone',
   'docs',
+  // The production dependency scan rc-scan runs, on complete runs only: a
+  // dependency changes with the lockfile or a package.json, which make a run
+  // complete.
+  'deps-scan',
   // #11's quality cells and the quality gates' own proof (#74). quality-pr
   // runs in the shards quality-pr-plan counts, and quality-pr-verdict judges
   // them whole, so every rule that selects one selects all three.
@@ -70,8 +74,8 @@ export const CHECK_JOBS = [
 
 const without = (jobs, ...drop) => jobs.filter((job) => !drop.includes(job));
 
-/** Everything a change to the product itself can break: every check but docs. */
-const PRODUCT = without(CHECK_JOBS, 'docs');
+/** Everything a change to the product itself can break: every check but docs and deps-scan. */
+const PRODUCT = without(CHECK_JOBS, 'docs', 'deps-scan');
 
 // First match wins, so narrow rules come before the broad ones they carve
 // out of. `static` joins every selection: format, lint, typecheck, and the
@@ -188,6 +192,11 @@ export const RULES = [
       'tests/proxy/**',
       'tests/harness/compose/**',
     ],
+  },
+  {
+    class: 'dependency scan',
+    jobs: ['unit', 'deps-scan'],
+    paths: ['ci/release/deps-scan.mjs'],
   },
   {
     class: 'docs check',

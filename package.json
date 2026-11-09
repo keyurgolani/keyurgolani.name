@@ -101,6 +101,7 @@
     "ci:preview-fixtures-browser": "node ci/run.mjs preview-fixtures-browser -- pnpm test:preview-fixtures",
     "ci:external-variant": "node ci/run.mjs external-variant -- pnpm test:external-variant",
     "ci:docs": "node ci/run.mjs docs -- node ci/docs-check.mjs",
+    "ci:deps-scan": "node ci/run.mjs deps-scan -- node ci/release/deps-scan.mjs",
     "ci:links": "node ci/run.mjs links -- node ci/docs-check.mjs --external",
     "ci:catalog-provenance": "node ci/run.mjs catalog-provenance -- node ci/check-catalog-provenance.mjs",
     "ci:quality-pr": "node ci/run.mjs quality-pr -- pnpm quality:pr",
