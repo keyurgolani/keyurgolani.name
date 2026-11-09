@@ -1,4 +1,4 @@
-import type { z } from 'zod';
+import type { z } from './zod';
 
 // The Markdown cap (#10): a Markdown field's size and shape, measured before
 // anything lexes it, and the limits every Markdown field keeps to. A field

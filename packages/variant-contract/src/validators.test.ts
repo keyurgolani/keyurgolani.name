@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { z } from 'zod';
+import { z } from '@portfolio/schema/zod';
 import {
   defineContentExtension,
   validatePublicationUnit,

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from './zod';
 import { EXTENSION_DATA, SECTION_ROUTE } from './compose';
 import { EXTENSION_FIELDS } from './extensions';
 import { isPlainObject } from './json';

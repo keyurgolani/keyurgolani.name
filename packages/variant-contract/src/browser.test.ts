@@ -98,7 +98,7 @@ test("the package's own modules import only zod, @portfolio/schema, and each oth
     ].map((match) => match[1]!);
     for (const specifier of specifiers) {
       assert.ok(
-        specifier === 'zod' ||
+        specifier === '@portfolio/schema/zod' ||
           specifier === '@portfolio/schema' ||
           specifier === '@portfolio/schema/ids' ||
           specifier.startsWith('./'),

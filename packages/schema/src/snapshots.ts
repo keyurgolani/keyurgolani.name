@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from './zod';
 import { isSectionId } from './ids';
 import { isPlainObject, plainJsonProblem } from './json';
 import { describeIssue, issueCode, reportedIssues } from './issues';

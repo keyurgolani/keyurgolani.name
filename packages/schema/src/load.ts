@@ -1,4 +1,4 @@
-import type { z } from 'zod';
+import type { z } from './zod';
 import { composeSchemas, DEFAULT_SCHEMAS, type ComposedSchemas } from './compose';
 import {
   findUnregisteredExtensions,

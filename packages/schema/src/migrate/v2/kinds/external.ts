@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '../../../zod';
 import { UrlSchema, type SchemaParts } from '../../../kinds/common';
 
 /**
