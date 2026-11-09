@@ -393,6 +393,23 @@ test('auth.login needs no session, takes JSON or the sign-in form up to 4 KB, an
   assert.equal(login.input.safeParse({ password: 'p', returnTo: '/studio' }).success, true);
 });
 
+test("auth.logout takes Studio's Sign out form as well as JSON, its one field the choice to keep or discard (row 88c-RC2)", () => {
+  const logout = entry('auth.logout');
+  assert.deepEqual(logout.bodyTypes, ['json', 'form']);
+  for (const input of [{}, { choice: 'keep' }, { choice: 'discard' }]) {
+    assert.equal(logout.input.safeParse(input).success, true, JSON.stringify(input));
+  }
+  for (const input of [{ choice: 'everything' }, { choice: '' }, { other: 'x' }]) {
+    assert.equal(logout.input.safeParse(input).success, false, JSON.stringify(input));
+  }
+  // Every other command stays JSON alone, but auth.login, which has its own form.
+  const forms = listOperations()
+    .filter((each) => each.bodyTypes?.includes('form'))
+    .map((each) => each.name)
+    .sort();
+  assert.deepEqual(forms, ['auth.login', 'auth.logout']);
+});
+
 test('auth.logout needs no session, so it signs out whatever the cookie carries, and still checks the Origin', () => {
   const logout = entry('auth.logout');
   assert.equal(logout.kind, 'command');
