@@ -204,6 +204,7 @@ const ManifestSchema = z
       })
       .strict(),
     snapshots: z.record(
+      z.string(),
       z
         .object({
           file: z.string().regex(/^[a-z][a-z0-9-]{0,63}\.json$/),
