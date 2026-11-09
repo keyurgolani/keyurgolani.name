@@ -148,6 +148,17 @@ const Routes = z
 
 const controlBase = { id: ControlId, label: plainText(60), description: plainText(300) };
 
+/**
+ * A whole number of any size. zod 4's .int() stops at the largest safe
+ * integer, and a controls version past it is still a version: it gets the
+ * missing migration it asks for, not a type error.
+ */
+const WholeNumber = z.number().superRefine((value, ctx) => {
+  if (!Number.isInteger(value)) {
+    ctx.addIssue({ code: 'invalid_type', expected: 'int', input: value, continue: false });
+  }
+});
+
 const ControlItem = z.discriminatedUnion('type', [
   z.object({ type: z.literal('boolean'), ...controlBase, default: z.boolean() }).strict(),
   z
@@ -244,7 +255,7 @@ const Migration = z
 
 const Controls = z
   .object({
-    version: z.number().int().positive(),
+    version: WholeNumber.positive(),
     items: z.array(ControlItem).max(32),
     migrations: z.array(Migration).max(64),
   })
