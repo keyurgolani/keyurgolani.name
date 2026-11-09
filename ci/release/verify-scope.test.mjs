@@ -9,12 +9,12 @@ import { readScope, SCOPE_FILE, scopeMismatch } from './verify-scope.mjs';
 
 const scope = (release) => ({ release, scope: 'default-packs', records: 'records.json' });
 
-test("a candidate tag whose scope file is its own passes, and the checked-in file is RC1's", () => {
+test("a candidate tag whose scope file is its own passes, and the checked-in file is RC2's", () => {
   assert.equal(scopeMismatch('v1.0.0-rc.1', scope('1.0.0-rc.1')), null);
   const checkedIn = JSON.parse(
     readFileSync(new URL(`../../${SCOPE_FILE}`, import.meta.url), 'utf8'),
   );
-  assert.equal(scopeMismatch('v1.0.0-rc.1', checkedIn), null);
+  assert.equal(scopeMismatch('v1.0.0-rc.2', checkedIn), null);
 });
 
 test("a candidate tag whose scope file is another release's, or names none, is refused", () => {
