@@ -322,9 +322,10 @@ test('a Live preview clicked before the catalog hydrates does nothing, and once 
   await button.click({ force: true });
   release();
   await expect(button).toBeEnabled();
-  // The early click wasn't kept: the plate keeps its still, and its button isn't pressed.
+  // The early click wasn't kept: the plate isn't live on request, and its button isn't pressed.
+  // (The click scrolled the plate near the screen, so it may prefetch, which is the scheduler's own.)
   await tab.waitForTimeout(2_000);
-  expect(await liveOf(second)).toBe('still');
+  expect(await liveOf(second)).not.toBe('request');
   await expect(button).toHaveAttribute('aria-pressed', 'false');
   await button.click();
   await expect.poll(() => liveOf(second)).toBe('request');

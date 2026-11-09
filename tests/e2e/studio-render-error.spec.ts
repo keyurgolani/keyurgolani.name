@@ -46,8 +46,11 @@ function blockDrafts(dataDir: string): () => void {
   };
 }
 
-/** The visible text of `page`'s body, trimmed. */
-const bodyText = async (page: Page) => ((await page.locator('body').textContent()) ?? '').trim();
+/**
+ * The text `page`'s body renders, trimmed: innerText, as textContent would count the inline scripts
+ * that carry Next's error payload, which render nothing.
+ */
+const bodyText = async (page: Page) => ((await page.locator('body').innerText()) ?? '').trim();
 
 test(
   'an owner render that throws answers the empty error document, so without JavaScript the page is blank and offers nothing (row 89, 88c-RC2)',

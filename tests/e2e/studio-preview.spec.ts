@@ -909,6 +909,11 @@ const SELECTS = [
 
 /** The frame's appearance fieldset, and the note it shows when the version selects none. */
 const appearanceOf = (page: Page) => page.locator('fieldset.studio-preview__appearance');
+/**
+ * The appearance's own selects: a disabled fieldset disables them, and Playwright reads disabled
+ * on its controls, never on the fieldset itself.
+ */
+const appearanceSelect = (page: Page) => appearanceOf(page).getByRole('combobox').first();
 const NO_APPEARANCE = /selects no whole appearance/;
 
 test(
@@ -937,8 +942,8 @@ test(
     }
     // Once hydrated, the appearance is held only when the version selects none, and then says so.
     const none = (await appearanceOf(page).textContent())?.match(NO_APPEARANCE) !== null;
-    if (none) await expect(appearanceOf(page)).toBeDisabled();
-    else await expect(appearanceOf(page)).toBeEnabled();
+    if (none) await expect(appearanceSelect(page)).toBeDisabled();
+    else await expect(appearanceSelect(page)).toBeEnabled();
     // React reports a hydration mismatch as a console error (#418, #423 or #425 in production).
     expect(errors.filter((text) => /hydrat|#41[89]|#42[35]/i.test(text))).toEqual([]);
   },
@@ -965,7 +970,7 @@ test(
     for (const name of SELECTS) {
       await expect(controls(tab).getByRole('combobox', { name }), name).toBeDisabled();
     }
-    await expect(appearanceOf(tab)).toBeDisabled();
+    await expect(appearanceSelect(tab)).toBeDisabled();
     release();
     await expect(stage(tab)).toHaveAttribute('data-phase', 'ready');
     const mode = controls(tab).getByRole('combobox', { name: 'Display mode' });
