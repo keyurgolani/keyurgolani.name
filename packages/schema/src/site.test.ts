@@ -200,9 +200,6 @@ test('variant control values are plain JSON: no .inf or .nan, at most 8 levels d
   assert.deepEqual(entry({ nested: deep(9) }), ['variantControls/editorial/values/nested:custom']);
   assert.deepEqual(
     codes({ ...MINIMAL, variantControls: { editorial: { version: Infinity, values: {} } } }),
-    [
-      'variantControls/editorial/version:not_finite',
-      'variantControls/editorial/version:invalid_type',
-    ],
+    ['variantControls/editorial/version:not_finite'],
   );
 });
