@@ -1,3 +1,5 @@
+import { renameSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import type { Page, Request, Route } from '@playwright/test';
 import { expect, test } from '../harness/fixtures';
 import { ownerSecret } from '../harness/owner-secret.mjs';
@@ -365,5 +367,29 @@ test(
     await pause(1_000);
     await expect(page).toHaveURL(`${app.origin}${SIGNED_OUT}`);
     expect(logouts, 'one auth.logout').toHaveLength(1);
+  },
+);
+
+test(
+  "with the shell's chunks refused and a store that can't end the session, the alert's Sign out lands on the store-failed state, never on signed out (row 88c-RC2, 88b's alert case)",
+  { annotation: [STUDIO] },
+  async ({ page, app }) => {
+    await signIn(page, app, secret.password);
+    await failEnhancement(page, app.origin);
+    await page.goto('/studio');
+    await expect(alert(page)).toBeVisible({ timeout: PAST_TIMEOUT_MS });
+    // The store's sessions moved aside and a plain file in their place, in the fixture app's own
+    // data directory: ending the session can't be done. Put back by renaming, deleting nothing.
+    const sessions = path.join(app.env.PORTFOLIO_DATA_DIR!, 'ephemeral', 'auth', 'sessions');
+    renameSync(sessions, `${sessions}.held`);
+    writeFileSync(sessions, 'not a directory (row 88c-RC2, studio-load-failure.spec.ts)\n');
+    try {
+      await alertSignOut(page).click();
+      await expect(page).toHaveURL(`${app.origin}/studio/sign-in?state=store_failed`);
+    } finally {
+      renameSync(sessions, `${sessions}.blocker`);
+      renameSync(`${sessions}.held`, sessions);
+    }
+    await expect(page.getByRole('alert')).not.toContainText("You're signed out.");
   },
 );
