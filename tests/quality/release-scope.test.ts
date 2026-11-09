@@ -120,9 +120,9 @@ function verdict(failures: readonly SummaryFailure[] | 'passed', listed: Verdict
 
 const rules = (failures: readonly { rule: string }[]) => failures.map((each) => each.rule).sort();
 
-test("the checked-in scope is RC1 on its default packs, its records list 648 keys, each a valid entry routed to a row on a platform-neutral cell, main's Spatial Bento root-text record still among them, and it loads", () => {
+test("the checked-in scope is RC2 on its default packs, its records list 648 keys, each a valid entry routed to a row on a platform-neutral cell, main's Spatial Bento root-text record still among them, and it loads", () => {
   const loaded = loadReleaseScope({ [SCOPE_ENV]: SCOPE_FILE })!;
-  assert.equal(loaded.scope.release, '1.0.0-rc.1');
+  assert.equal(loaded.scope.release, '1.0.0-rc.2');
   assert.equal(loaded.scope.scope, 'default-packs');
   // Preflight 1's list for the candidate (run 42489261932, 89 shards): the keys that still fail on
   // it, less those rows 108 and 116 fixed, plus row 129's four from rc.1's release run (42540152468,
@@ -520,7 +520,7 @@ test("the merge judges a release's shards against the list, as a single run's ve
 
 test('only quality:full judged whole takes a release scope: a PR run, a night, or a merge of either refuses one, by rule', (t) => {
   const named = { [SCOPE_ENV]: SCOPE_FILE };
-  assert.equal(releaseScopeFor('full', true, named)?.scope.release, '1.0.0-rc.1');
+  assert.equal(releaseScopeFor('full', true, named)?.scope.release, '1.0.0-rc.2');
   assert.equal(releaseScopeFor('pr', false, {}), null);
   assert.throws(
     () => releaseScopeFor('pr', true, named),
@@ -609,7 +609,7 @@ test("run.ts's scope: a whole full run takes the one its env names; a PR run or 
   assert.deepEqual(runReleaseScope('pr', null, {}), { scope: null, refused: null });
   const whole = runReleaseScope('full', null, named);
   assert.equal(whole.refused, null);
-  assert.equal(whole.scope?.scope.release, '1.0.0-rc.1');
+  assert.equal(whole.scope?.scope.release, '1.0.0-rc.2');
   assert.deepEqual(runReleaseScope('pr', null, named), {
     scope: null,
     refused: {
