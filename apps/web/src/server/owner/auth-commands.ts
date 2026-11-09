@@ -19,7 +19,13 @@ import { log } from '../log';
 import type { AuthSessionView } from '../operations';
 import type { Session } from '../session';
 import { dataResult, errorResult, redirectResult, type StudioResult } from '../studio-result';
-import { clearedSessionCookie, readCookies, sessionCookie, type CookieMode } from './cookie';
+import {
+  clearedSessionCookie,
+  discardMarkerCookie,
+  readCookies,
+  sessionCookie,
+  type CookieMode,
+} from './cookie';
 import { clientAddress } from './guard';
 import type { LoginLimits } from './login-limits';
 import { DEFAULT_RETURN_TO, safeReturnTo, signInLocation } from '../return-to';
@@ -242,10 +248,14 @@ export function authHandlers(tools: AuthCommandTools): Readonly<Record<string, H
           storeFailed = true;
         }
       }
-      // The no-JS choice to discard this browser's unsaved changes clears its storage too (row
-      // 88c-RC2); keep, the default, clears the cache alone.
-      const clearing = choice === 'discard' ? '"cache", "storage"' : '"cache"';
-      const headers: [string, string][] = [...cleared(), ['clear-site-data', clearing]];
+      // The cache alone, never "storage", which would clear the public site's preferences too.
+      // Sign out's form that chose to discard leaves the pending-discard marker instead, which
+      // Studio's next script reads first to clear the journal (row 88c-RC2). A JSON logout's own
+      // script clears the journal itself.
+      const headers: [string, string][] = [...cleared(), ['clear-site-data', '"cache"']];
+      if (context.inputType === 'form' && choice === 'discard') {
+        headers.push(['set-cookie', discardMarkerCookie(cookie)]);
+      }
       // Studio's Sign out form goes to sign-in, saying how it went (row 88c-RC2, row 88b).
       if (context.inputType === 'form') {
         return redirectResult(

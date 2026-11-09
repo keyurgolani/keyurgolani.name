@@ -10,7 +10,9 @@ import { DOCUMENT_NAMES, type SourceDocument, type SourceDocuments } from './doc
 //
 // - Studio's own key. It sits under STUDIO_STORAGE_PREFIX, which nothing on
 //   the public site reads or writes, and Studio writes no other localStorage
-//   key, no cookie, and never the #19 visitor preference.
+//   key and never the #19 visitor preference. Its one cookie write drops the
+//   pending-discard marker a Sign out without JavaScript left
+//   (discard-marker.ts, row 88c-RC2), which clears this journal first.
 // - Never rendered before authentication. Only the signed-in Studio shell
 //   reads entries to show them, after requireOwnerPage let the page render.
 //   The sign-in page only prunes: it drops what's expired and reads nothing
