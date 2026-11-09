@@ -872,14 +872,65 @@ async function expectRestsOn(page: Page, index: number): Promise<void> {
   }
 }
 
-/** From rest at the strip's start, a 200 px notch; the snap then glides on toward scene 1. */
-async function snapFromStart(page: Page): Promise<void> {
+/** From rest at the strip's start, a 200 px notch, applied; the snap's glide is yet to set out. */
+async function notchFromStart(page: Page): Promise<void> {
   await load(page);
   await page.locator('.hc-stage').focus();
   await page.mouse.move(720, 450);
   await page.mouse.wheel(0, 200);
   await page.waitForFunction(() => window.scrollY >= 200, undefined, { polling: 'raf' });
+}
+
+/** From rest at the strip's start, a 200 px notch; the snap then glides on toward scene 1. */
+async function snapFromStart(page: Page): Promise<void> {
+  await notchFromStart(page);
   await glideSetOut(page, 200, 1);
+}
+
+// A script's instant scroll back inside the glide, as the scroll bar drags it (row 123). Under CPU
+// throttling the browser's own smooth glide can land its next frame over a scroll a separate evaluate
+// makes, so the page never sits where the script put it and the test reads a premise that never held
+// (probe: 10 to 30 of 50 red at 4x and 6x, every red's next frame ahead of the move). Here the move is
+// made in the frame that sees the glide set out (glideSetOut's 208), and the next frame confirms the
+// page is no further on than where it was put. If the glide took it over, the move is sent again from
+// where the page is, at most 3 times, the count recorded; one that never holds fails as that.
+async function moveBackInGlide(page: Page, by: number): Promise<void> {
+  const sent = await page.evaluate(
+    (by) =>
+      new Promise<{ held: boolean; resends: number; reads: number[] }>((resolve) => {
+        const reads: number[] = [];
+        let target: number | null = null;
+        let resends = 0;
+        const until = performance.now() + 5000;
+        const move = () => {
+          target = window.scrollY - by;
+          window.scrollTo({ top: target, behavior: 'instant' });
+        };
+        const frame = () => {
+          if (target === null) {
+            if (window.scrollY >= 208) move();
+          } else {
+            reads.push(window.scrollY);
+            if (window.scrollY <= target + 1) return resolve({ held: true, resends, reads });
+            if (resends === 3) return resolve({ held: false, resends, reads });
+            resends += 1;
+            move();
+          }
+          if (performance.now() > until) return resolve({ held: false, resends, reads });
+          requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
+      }),
+    by,
+  );
+  test.info().annotations.push({
+    type: 'premise-resends',
+    description: `${sent.resends} (next-frame reads ${JSON.stringify(sent.reads)})`,
+  });
+  expect(
+    sent.held,
+    `premise never held: a ${by} px move back inside the glide, ${sent.resends} resends, next-frame reads ${JSON.stringify(sent.reads)}`,
+  ).toBe(true);
 }
 
 test(
@@ -935,8 +986,8 @@ test(
   "the pin's snap, moved back by a script's scroll inside its glide and by no input, as the scroll bar drags it, finishes on the scene it left",
   { annotation, tag },
   async ({ page }) => {
-    await snapFromStart(page);
-    await page.evaluate(() => window.scrollTo({ top: window.scrollY - 60, behavior: 'instant' }));
+    await notchFromStart(page);
+    await moveBackInGlide(page, 60);
     await expectRestsOn(page, 0);
   },
 );
