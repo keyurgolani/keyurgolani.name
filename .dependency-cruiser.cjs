@@ -443,11 +443,16 @@ module.exports = {
       severity: 'error',
       comment:
         "The preview's message protocol (#7, Slice 3) is read by both sides and by Node tests, " +
-        'so it imports zod and the browser-safe @portfolio/schema/ids and nothing else: no ' +
+        'so it imports zod, through @portfolio/schema/zod, and the browser-safe ' +
+        '@portfolio/schema/ids and nothing else: no ' +
         'React, no Next, no server code.',
       from: { path: '^apps/web/src/preview/protocol\\.ts$' },
       to: {
-        pathNot: ['^node_modules/(\\.pnpm/zod@|zod/)', '^packages/schema/src/ids\\.ts$'],
+        pathNot: [
+          '^node_modules/(\\.pnpm/zod@|zod/)',
+          '^packages/schema/src/zod\\.ts$',
+          '^packages/schema/src/ids\\.ts$',
+        ],
       },
     },
     {
@@ -597,7 +602,9 @@ module.exports = {
           '^apps/web/src/server/capabilities\\.ts$',
           // #3's store entries' schemas, data like the rest.
           '^apps/web/src/server/store-schemas\\.ts$',
+          // zod, through @portfolio/schema/zod.
           '^node_modules/(\\.pnpm/zod@|zod/)',
+          '^packages/schema/src/zod\\.ts$',
         ],
       },
     },
@@ -606,9 +613,9 @@ module.exports = {
       severity: 'error',
       comment:
         "The store entries' schemas load with the registry in every profile, so they import " +
-        'zod and nothing else (#3, item 22).',
+        'zod, through @portfolio/schema/zod, and nothing else (#3, item 22).',
       from: { path: '^apps/web/src/server/store-schemas\\.ts$' },
-      to: { pathNot: ['^node_modules/(\\.pnpm/zod@|zod/)'] },
+      to: { pathNot: ['^node_modules/(\\.pnpm/zod@|zod/)', '^packages/schema/src/zod\\.ts$'] },
     },
   ],
   options: {
