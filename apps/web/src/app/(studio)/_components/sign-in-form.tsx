@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react';
+import { BROWSER_CLOCK, startCountdown } from '~/lib/studio/countdown';
 import { LOGIN_PATH, loginAction, type SignInState } from '~/server/return-to';
 
 // The sign-in form (#2). Without JavaScript it is a plain form post to
@@ -9,10 +10,10 @@ import { LOGIN_PATH, loginAction, type SignInState } from '~/server/return-to';
 // JSON and shows each state in that alert, which takes focus: submitting, a
 // wrong password, a rate limit, a network failure, and a server error. A
 // rate limit is announced once, with the time it started with, and once
-// more when it lifts; the seconds left count down beside it, where nothing
-// is announced. The username is fixed to owner for password managers, the
-// password field takes paste, and a toggle can show it. Nothing asks for
-// more than the password (WCAG 2.2 SC 3.3.8).
+// more when it lifts; the seconds left count down beside it, to a deadline
+// read from the clock, where nothing is announced. The username is fixed to
+// owner for password managers, the password field takes paste, and a toggle
+// can show it. Nothing asks for more than the password (WCAG 2.2 SC 3.3.8).
 
 type Notice =
   | { readonly kind: Exclude<SignInState, 'rate_limited'> | 'submitting' | 'network' }
@@ -20,7 +21,9 @@ type Notice =
       readonly kind: 'rate_limited';
       /** The seconds it started with, which the alert says. */
       readonly initial: number;
-      /** The seconds left, which count down outside the alert. */
+      /** When it lifts, by this browser's clock: Date.now() + Retry-After as it started. */
+      readonly deadline: number;
+      /** The seconds left to the deadline, which count down outside the alert. */
       readonly seconds: number;
     };
 
@@ -68,10 +71,11 @@ const subscribeNothing = () => () => {};
 const hydrated = () => true;
 const notHydrated = () => false;
 
-/** A rate limit of `count` seconds, just started. */
+/** A rate limit of `count` seconds, just started: it lifts at a deadline, now + `count` seconds. */
 const limited = (count: number): Notice => ({
   kind: 'rate_limited',
   initial: count,
+  deadline: Date.now() + count * 1000,
   seconds: count,
 });
 
@@ -92,6 +96,7 @@ export function SignInForm(props: SignInFormProps) {
   const kind = notice?.kind;
   const busy = kind === 'submitting';
   const waiting = notice?.kind === 'rate_limited' && notice.seconds > 0;
+  const deadline = notice?.kind === 'rate_limited' ? notice.deadline : null;
 
   // Each new notice is announced, and the alert takes focus. A countdown's
   // ticks aren't new notices, and happen outside the alert.
@@ -99,16 +104,18 @@ export function SignInForm(props: SignInFormProps) {
     if (kind) alert.current?.focus();
   }, [kind]);
 
-  // A rate limit counts down to the second it lifts.
+  // A rate limit counts down to its deadline, read from the clock each second (lib/studio/countdown.ts),
+  // so the seconds shown never drift from it, and it lifts once.
   useEffect(() => {
-    if (!waiting) return;
-    const timer = setTimeout(() => {
+    if (!waiting || deadline === null) return;
+    return startCountdown(deadline, BROWSER_CLOCK, (left) =>
       setNotice((current) =>
-        current?.kind === 'rate_limited' ? { ...current, seconds: current.seconds - 1 } : current,
-      );
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [notice, waiting]);
+        current?.kind === 'rate_limited' && current.deadline === deadline
+          ? { ...current, seconds: left }
+          : current,
+      ),
+    );
+  }, [deadline, waiting]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
