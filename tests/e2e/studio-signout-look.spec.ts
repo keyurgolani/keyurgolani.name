@@ -23,11 +23,12 @@ const VIEWPORTS = [
   { width: 390, height: 844 },
 ] as const;
 
-const shoot = async (page: Page, name: string, testInfo: TestInfo) =>
-  testInfo.attach(`look-${name}.png`, {
-    body: await page.screenshot({ fullPage: true }),
-    contentType: 'image/png',
-  });
+/** Shoots `page` whole, as look-<name>.png in the test's output directory, and attaches it. */
+const shoot = async (page: Page, name: string, testInfo: TestInfo) => {
+  const file = testInfo.outputPath(`look-${name}.png`);
+  await page.screenshot({ fullPage: true, path: file });
+  await testInfo.attach(`look-${name}.png`, { path: file, contentType: 'image/png' });
+};
 
 /** The script URLs /studio's HTML loads itself; any other chunk is the shell's, and optional. */
 async function ownScripts(page: Page, origin: string): Promise<Set<string>> {
