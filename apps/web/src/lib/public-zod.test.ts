@@ -17,7 +17,7 @@ const SRC = fileURLToPath(new URL('../', import.meta.url));
 const ROOT = path.resolve(SRC, '..', '..', '..');
 const ZOD = path.join(ROOT, 'packages/schema/src/zod.ts');
 
-/** Where a public page's client modules come from: the packages a page renders, and the site's own. */
+/** Where a public page's client modules come from: the packages a page renders, and the site's own, its chrome and error pages too. */
 const PUBLIC_DIRS = [
   'packages/appearance/src',
   'packages/kit/src',
@@ -26,12 +26,13 @@ const PUBLIC_DIRS = [
     .filter((name) => name.startsWith('variant-') && name !== 'variant-contract')
     .map((name) => `packages/${name}/src`),
   'apps/web/src/lib',
-  'apps/web/src/app/(site)',
+  'apps/web/src/app',
 ];
-/** Inside those, what only Studio, Demo Studio, a frame or Node loads. */
+/** Inside those, what only Studio, Demo Studio, a frame, a fixture page or Node loads. */
 const NOT_PUBLIC = [
   /^packages\/appearance\/src\/(?:node|studio)\//,
   /^apps\/web\/src\/lib\/(?:demo|studio)\//,
+  /^apps\/web\/src\/app\/\((?:studio|preview|fixtures)\)\//,
   /\.test\.tsx?$/,
   /\/test-support\//,
   /\/__fixtures__\//,
@@ -69,6 +70,8 @@ function staticImports(file: string): string[] {
   for (const [, specifier] of text.matchAll(
     /^\s*(?:import|export)\s+(?!type\b)(?:[^'";]*?\sfrom\s*)?['"]([^'"]+)['"]/gm,
   )) {
+    // A stylesheet brings no script.
+    if (specifier!.endsWith('.css')) continue;
     let base: string | null = null;
     if (specifier!.startsWith('~/')) base = path.join(SRC, specifier!.slice(2));
     else if (specifier!.startsWith('.')) base = path.resolve(path.dirname(file), specifier!);
