@@ -201,12 +201,25 @@ test("/studio's load boundary renders the shell whole on the first render after 
 // Row 137 (load-boundary-ssr-flake): the check below failed once in ci:unit at 7e60d9083 under load
 // 25-37, "a cold render streams it out of line", and passed in the same run's unit-web and 3/3
 // alone. Over a Suspense boundary the cold render streams the shell out of line only if the lazy
-// module settles after Fizz's first flush. The stand-in's load settles on microtasks, which race
-// the one setImmediate before the pipe: where the lazy wins, Fizz completes the boundary before the
-// shell is flushed and writes it inline. Here the lazy is held, and let go just before the pipe,
-// with Fizz's scheduled work given its turns: the schedule the CI run took, every time.
+// module settles after Fizz's first flush. The stand-in's load settled on microtasks, which raced
+// the one setImmediate before the pipe: where the lazy won, Fizz completed the boundary before the
+// shell was flushed and wrote it inline. So the check holds the lazy until the sink's first write,
+// once Fizz has flushed the shell with the boundary's fallback in it: it loses the race by
+// construction, on any load.
 test('the cold render check sees a Suspense boundary around the shell (row 88c)', async () => {
   // The same pipeline over a Suspense boundary, as a boundary inside StudioLoadBoundary would be.
+  const held = gate();
+  const Shell = loadable(held.shut);
+  const page = () =>
+    h('div', { className: 'studio-load' }, h(React.Suspense, { fallback: null }, h(Shell)));
+  const first = await render(page(), { firstWrite: () => held.open() });
+  assert.notDeepEqual(outOfLine(first), [], 'a cold render streams it out of line');
+  assert.deepEqual(outOfLine(await render(page())), [], 'a warm one does not');
+});
+
+// Why the check holds the lazy (row 137): one that settles before the pipe, Fizz's scheduled work
+// given its turns, is written inline even over a Suspense boundary, which is what ci:unit saw.
+test('a lazy that settles before the first flush is written inline over a Suspense boundary, so the cold render check holds it until then (row 137)', async () => {
   const held = gate();
   const Shell = loadable(held.shut);
   const page = () =>
@@ -217,6 +230,5 @@ test('the cold render check sees a Suspense boundary around the shell (row 88c)'
       for (let turn = 0; turn < 3; turn += 1) await immediate();
     },
   });
-  assert.notDeepEqual(outOfLine(first), [], 'a cold render streams it out of line');
-  assert.deepEqual(outOfLine(await render(page())), [], 'a warm one does not');
+  assert.deepEqual(outOfLine(first), [], 'settled before the flush, it is written inline');
 });
