@@ -3398,3 +3398,5 @@
     display: block;
   }
 }
+
+/* evidence only, not for merge: directs this variant in the pointer-leak CI run (kgn/b-v1-pointer-leak) */
