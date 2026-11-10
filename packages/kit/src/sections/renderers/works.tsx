@@ -1,5 +1,5 @@
 import type { Work } from '@portfolio/schema';
-import { routeHref } from '@portfolio/variant-contract';
+import { routeHref } from '@portfolio/variant-contract/runtime';
 import { formatEpisodeDuration, formatTrackDuration } from '../../format';
 import { MediaFigure } from '../media';
 import { placedMedia } from '../placement';

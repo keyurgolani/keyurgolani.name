@@ -1,4 +1,4 @@
-import { isAllowedUrl } from '@portfolio/schema';
+import { isAllowedUrl } from '@portfolio/schema/url';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
 import { cn } from '../cn';
 import { escapeHtml, unescapeHtml } from '../html-escape';

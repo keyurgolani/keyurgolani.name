@@ -1,5 +1,6 @@
 import { Marked, Tokenizer, type MarkedToken, type Token, type Tokens } from 'marked';
-import { isAllowedUrl, markdownOverLimit } from '@portfolio/schema';
+import { markdownOverLimit } from '@portfolio/schema/markdown';
+import { isAllowedUrl } from '@portfolio/schema/url';
 import { escapeHtml } from './html-escape';
 import { decodeReferences } from './html-references';
 import { emStrong } from './markdown-emphasis';

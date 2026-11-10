@@ -9,13 +9,12 @@
 // page's life where storage throws, as it does in an opaque-origin preview
 // frame, so `/` can still be turned off (WCAG 2.1.4).
 
-import {
-  documentKeyAction,
-  isEditableTarget,
-  type DocumentAction,
-  type DocumentBinding,
-  type DocumentKeyEvent,
+import type {
+  DocumentAction,
+  DocumentBinding,
+  DocumentKeyEvent,
 } from '@portfolio/variant-contract';
+import { documentKeyAction, isEditableTarget } from '@portfolio/variant-contract/runtime';
 
 /** Where the visitor's choice lasts: localStorage, `off` while single-key shortcuts are off. */
 export const SINGLE_KEY_SHORTCUTS_KEY = 'portfolio.shortcuts.single-key';

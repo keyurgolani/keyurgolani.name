@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode } from 'react';
 import type { Link, Period, Section } from '@portfolio/schema';
-import { routeHref, type VariantRenderInput } from '@portfolio/variant-contract';
+import type { VariantRenderInput } from '@portfolio/variant-contract';
+import { routeHref } from '@portfolio/variant-contract/runtime';
 import { formatDate, parseLooseDate } from '../format';
 import type { HeadingLevel } from './types';
 

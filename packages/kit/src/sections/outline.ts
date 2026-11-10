@@ -10,7 +10,8 @@
 // network, or randomness.
 
 import type { CaseStudy, Link, Section, Work } from '@portfolio/schema';
-import { routeHref, type RouteTarget, type VariantRenderInput } from '@portfolio/variant-contract';
+import type { RouteTarget, VariantRenderInput } from '@portfolio/variant-contract';
+import { routeHref } from '@portfolio/variant-contract/runtime';
 import type { PlacedImage } from './media';
 import { hrefFor, present } from './primitives';
 import { CASE_STUDY_FIELDS, type CaseStudyField } from './case-study-fields';
