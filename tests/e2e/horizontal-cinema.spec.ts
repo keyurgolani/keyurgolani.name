@@ -1412,3 +1412,20 @@ test.describe('on a phone', () => {
     },
   );
 });
+
+// Row 123's CI Linux evidence (evidence only, never merged): the :934 test above, its body exactly,
+// 20 more times at retries 0, in this spec so it runs in the browser job that holds :934.
+test.describe('row 123 x20', () => {
+  test.describe.configure({ retries: 0 });
+  for (let run = 1; run <= 20; run++) {
+    test(
+      `run ${String(run).padStart(2, '0')}: the pin's snap, moved back by a script's scroll inside its glide and by no input, as the scroll bar drags it, finishes on the scene it left`,
+      { annotation, tag },
+      async ({ page }) => {
+        await notchFromStart(page);
+        await moveBackInGlide(page, 60);
+        await expectRestsOn(page, 0);
+      },
+    );
+  }
+});
