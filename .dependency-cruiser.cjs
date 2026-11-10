@@ -381,6 +381,38 @@ module.exports = {
       },
     },
     {
+      name: 'public-client-code-imports-no-zod-hub',
+      severity: 'error',
+      comment:
+        "A visitor's page validates nothing in the browser, so no client module a public page " +
+        "loads at once reaches zod (row 134): the appearance boundary, the kit's runtime and " +
+        "sections, and the contract's runtime leaf take what they need from subpaths that bring " +
+        'no schema, @portfolio/schema/ids, ./url and ./markdown, @portfolio/variant-contract/runtime, ' +
+        "and the appearance package's own zod-free modules, and types bring no code. Studio, Demo " +
+        'Studio and the preview frames validate, and keep zod. depcruise follows type-only imports ' +
+        'for reachability, so apps/web/src/lib/public-zod.test.ts walks every public client ' +
+        "module's run time graph; this holds the direct imports.",
+      from: {
+        path: [
+          '^packages/appearance/src/(?:react|primitives)/',
+          '^packages/appearance/src/(?:axes|boundary|color-set|derived-roles|registry|resolve-tokens|roles|selection|sets|visitor-model)\\.ts$',
+          '^packages/kit/src/(?:runtime|sections)/',
+          '^packages/kit/src/markdown\\.ts$',
+          '^packages/variant-contract/src/(?:ids|keys|registry|routes|runtime)\\.ts$',
+        ],
+        pathNot: ['\\.test\\.tsx?$', '/test-support/'],
+      },
+      to: {
+        path: [
+          '^node_modules/(?:\\.pnpm/zod@|zod/)',
+          '^packages/schema/src/(?:index|zod)\\.ts$',
+          '^packages/variant-contract/src/index\\.ts$',
+          '^packages/appearance/src/(?:index|manifests|validate-pack)\\.ts$',
+        ],
+        dependencyTypesNot: ['type-only'],
+      },
+    },
+    {
       name: 'preview-imports-no-studio',
       severity: 'error',
       comment:
