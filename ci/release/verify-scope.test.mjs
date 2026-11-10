@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { readScope, SCOPE_FILE, scopeMismatch } from './verify-scope.mjs';
+import { finalScopeRefusal, readScope, SCOPE_FILE, scopeMismatch } from './verify-scope.mjs';
 
 const scope = (release) => ({ release, scope: 'default-packs', records: 'records.json' });
 
@@ -95,4 +95,18 @@ test("rc-verify's scripts import only what its sparse checkout holds: ci/release
     'ci/release/',
     'quality/release/',
   ]);
+});
+
+test("a final's scope refuses any timingReported that isn't an empty list, and takes an empty one", () => {
+  const full = { release: '1.0.0-rc.2', scope: 'full', records: 'records.json' };
+  assert.equal(finalScopeRefusal({ ...full, timingReported: [] }, []), null);
+  assert.equal(finalScopeRefusal(full, []), null);
+  assert.match(
+    finalScopeRefusal({ ...full, timingReported: {} }, []) ?? '',
+    /its timingReported is not a list\./,
+  );
+  assert.match(
+    finalScopeRefusal({ ...full, timingReported: [{ target: 'composition:flux' }] }, []) ?? '',
+    /its timingReported lists 1 timing reported, not gated\./,
+  );
 });

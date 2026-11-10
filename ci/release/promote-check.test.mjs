@@ -176,7 +176,7 @@ test("promotion is refused while the candidate's quality scope is narrowed or it
   assert.deepEqual(narrowed.targets, []);
   assert.equal(
     narrowed.reasons.join(),
-    `quality/release/scope.json keeps the candidate from a final release: its scope is "default-packs", not full. A final needs the full matrix clean: scope full and an empty list, then a new candidate. The full matrix fits the release's 256-shard matrix only once RC2's sizing item (per-test cost, then splitting the release matrix across jobs) lands, so v1.0.0 waits on it (on ${SHA})`,
+    `quality/release/scope.json keeps the candidate from a final release: its scope is "default-packs", not full. A final needs the full matrix clean: scope full, an empty list and no timingReported, then a new candidate. The full matrix fits the release's 256-shard matrix only once RC2's sizing item (per-test cost, then splitting the release matrix across jobs) lands, so v1.0.0 waits on it (on ${SHA})`,
   );
   const listed = evaluatePromotion(
     input({ quality: { scope: { ...scope, scope: 'full' }, records: [{ cell: 'a' }] } }),
@@ -184,8 +184,19 @@ test("promotion is refused while the candidate's quality scope is narrowed or it
   assert.match(listed.reasons.join(), /its records list names 1 failing cell test\./);
   const both = evaluatePromotion(input({ quality: { scope, records: [{}, {}] } }));
   assert.match(both.reasons.join(), /not full, and its records list names 2 failing cell tests\./);
+  // A scope that reports any timing instead of gating it can't promote either.
+  const timed = evaluatePromotion(
+    input({
+      quality: {
+        scope: { ...scope, scope: 'full', timingReported: [{ target: 'composition:flux' }] },
+        records: [],
+      },
+    }),
+  );
+  assert.equal(timed.ok, false);
+  assert.match(timed.reasons.join(), /its timingReported lists 1 timing reported, not gated\./);
   assert.match(evaluatePromotion(input({ quality: null })).reasons.join(), /wasn't read/);
-  // The checked-in RC1 scope, on its default packs, can't promote to 1.0.0.
+  // The checked-in RC2 scope, on its default packs, can't promote to 1.0.0.
   const checkedIn = readScope(fileURLToPath(new URL('../../', import.meta.url)));
   assert.equal(evaluatePromotion(input({ quality: checkedIn })).ok, false);
 });

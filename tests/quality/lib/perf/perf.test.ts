@@ -456,6 +456,122 @@ test('the timing trend reports each median over its ceiling, and never fails a p
   assert.deepEqual(timingFailures({ tests: [perfSummaryTest('a')] }, undefined, {}), []);
 });
 
+test("a candidate's scope can list a target's metric as reported, not gated: over its bar it fails nothing, and nothing else is waived", () => {
+  const first = { GITHUB_RUN_ATTEMPT: '1' };
+  const load = (target: string, run: Partial<typeof GOOD_RUN>) =>
+    perfSummaryTest(target, {
+      target,
+      perf: { timing: timingResult(five({ ...GOOD_RUN, ...run }), 'light') },
+    });
+  const reported = [{ target: 'composition:fallback', metric: 'tbtMs' as const }];
+  const failed = (tests: SummaryTest[], list: typeof reported = reported) =>
+    timingFailures({ tests }, undefined, first, list).map(
+      ({ rule, message }) => `${rule}: ${message}`,
+    );
+  // Over its bar, the listed metric fails nothing; under it, nothing either: a reading is noisy
+  // run to run, so a listed one coming in under isn't held against the candidate.
+  assert.deepEqual(failed([load('composition:fallback', { tbtMs: 367 })]), []);
+  assert.deepEqual(failed([load('composition:fallback', { tbtMs: 150 })]), []);
+  // Without the list it fails as before.
+  assert.deepEqual(failed([load('composition:fallback', { tbtMs: 367 })], []), [
+    "timing-over: composition:fallback: tbtMs's median 367 is over 220, its light ceiling 200 plus 10%.",
+  ]);
+  // The target's other metrics still gate, and so does the same metric on another target.
+  assert.deepEqual(failed([load('composition:fallback', { tbtMs: 367, heapMiB: 30 })]), [
+    "timing-over: composition:fallback: heapMiB's median 30 is over 17.6, its light ceiling 16 plus 10%.",
+  ]);
+  assert.deepEqual(failed([load('composition:flux', { tbtMs: 367 })]), [
+    "timing-over: composition:flux: tbtMs's median 367 is over 220, its light ceiling 200 plus 10%.",
+  ]);
+  // A listed target's perf test still has to run, once, with every load and every value.
+  assert.deepEqual(
+    failed([{ ...load('composition:fallback', { tbtMs: 367 }), outcome: 'flaky' }]).map(
+      (line) => line.split(':')[0],
+    ),
+    ['timing-retried'],
+  );
+  assert.deepEqual(
+    failed([{ ...load('composition:fallback', { tbtMs: 367 }), status: 'not run' }]).map(
+      (line) => line.split(':')[0],
+    ),
+    ['timing-missing'],
+  );
+  const loads = (runs: (typeof GOOD_RUN)[]) =>
+    perfSummaryTest('composition:fallback', {
+      target: 'composition:fallback',
+      perf: { timing: timingResult(runs, 'light') },
+    });
+  const listedRun = { ...GOOD_RUN, tbtMs: 367 };
+  assert.deepEqual(
+    failed([loads(five(listedRun).slice(0, 4))]).map((line) => line.split(':')[0]),
+    ['timing-runs'],
+  );
+  assert.deepEqual(
+    failed([
+      loads([...five(listedRun).slice(0, 4), { ...listedRun, tbtMs: null as unknown as number }]),
+    ]),
+    ["timing-missing: composition:fallback: tbtMs didn't come on 1 of 5 load(s)."],
+  );
+  // And a re-run still never counts.
+  assert.deepEqual(
+    timingFailures({ tests: [] }, undefined, { GITHUB_RUN_ATTEMPT: '2' }, reported).map(
+      ({ rule }) => rule,
+    ),
+    ['timing-rerun'],
+  );
+});
+
+test('TIMING_GATE takes the reported list from the release scope its env names, and reads none without one', (t) => {
+  const reports = mkdtempSync(path.join(tmpdir(), 'quality-timing-scope-'));
+  const attempt = process.env.GITHUB_RUN_ATTEMPT;
+  const named = process.env.QUALITY_RELEASE_SCOPE;
+  t.after(() => {
+    if (attempt === undefined) delete process.env.GITHUB_RUN_ATTEMPT;
+    else process.env.GITHUB_RUN_ATTEMPT = attempt;
+    if (named === undefined) delete process.env.QUALITY_RELEASE_SCOPE;
+    else process.env.QUALITY_RELEASE_SCOPE = named;
+    rmSync(reports, { recursive: true, force: true });
+  });
+  process.env.GITHUB_RUN_ATTEMPT = '1';
+  mkdirSync(path.join(reports, 'quality'));
+  writeFileSync(
+    path.join(reports, 'quality', 'summary.json'),
+    JSON.stringify({
+      tests: [
+        perfSummaryTest('a', {
+          perf: { timing: timingResult(five({ ...GOOD_RUN, tbtMs: 367 }), 'light') },
+        }),
+      ],
+    }),
+  );
+  delete process.env.QUALITY_RELEASE_SCOPE;
+  assert.deepEqual(
+    TIMING_GATE.run({ reports }).map(({ rule }) => rule),
+    ['timing-over'],
+  );
+  const scope = path.join(reports, 'scope.json');
+  writeFileSync(
+    scope,
+    JSON.stringify({
+      release: '1.0.0-rc.2',
+      scope: 'default-packs',
+      unswept: 'the other packs',
+      records: 'records.json',
+      timingReported: [
+        {
+          target: 'composition:fallback',
+          metric: 'tbtMs',
+          row: 'row 135',
+          reason: 'over at rc.1 too; v1.0.0 gates it',
+        },
+      ],
+    }),
+  );
+  writeFileSync(path.join(reports, 'records.json'), '[]');
+  process.env.QUALITY_RELEASE_SCOPE = scope;
+  assert.deepEqual(TIMING_GATE.run({ reports }), []);
+});
+
 test('TIMING_GATE reads quality/summary.json under the reports it is given, and fails closed without one', () => {
   const reports = mkdtempSync(path.join(tmpdir(), 'quality-timing-'));
   // The gate reads this job's own attempt, which a re-run of the unit job would raise.

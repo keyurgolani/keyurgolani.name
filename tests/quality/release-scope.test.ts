@@ -698,6 +698,64 @@ test('a final release keeps the full matrix: scope full and an empty records lis
   ]);
 });
 
+test("a candidate's scope file may list timings reported, not gated, each a target's metric with its row and reason, and a final's may list none", () => {
+  const good = {
+    release: '1.0.0-rc.2',
+    scope: 'default-packs',
+    unswept: 'the other packs',
+    records: 'records.json',
+  };
+  const entry = {
+    target: 'composition:flux',
+    metric: 'tbtMs',
+    row: 'row 135',
+    reason: 'over at rc.1 too',
+  };
+  assert.deepEqual(scopeProblems({ ...good, timingReported: [] }), []);
+  assert.deepEqual(scopeProblems({ ...good, timingReported: [entry] }), []);
+  assert.deepEqual(
+    scopeProblems({
+      ...good,
+      timingReported: [entry, { ...entry, target: 'surface:demo-studio' }],
+    }),
+    [],
+  );
+  assert.deepEqual(scopeProblems({ ...good, timingReported: {} }), [
+    'timingReported is not a list',
+  ]);
+  assert.deepEqual(scopeProblems({ ...good, timingReported: [{ ...entry, target: 'flux' }] }), [
+    'timingReported entry 1: target is "flux", not composition:<id> or surface:<id>',
+  ]);
+  assert.deepEqual(scopeProblems({ ...good, timingReported: [{ ...entry, metric: 'tbt' }] }), [
+    'timingReported entry 1: metric is "tbt", not one of lcpMs, cls, tbtMs, idleTaskMs, heapMiB, growthMiB',
+  ]);
+  assert.deepEqual(scopeProblems({ ...good, timingReported: [{ ...entry, row: '' }] }), [
+    'timingReported entry 1: row is "", not "row <n>"',
+  ]);
+  assert.deepEqual(scopeProblems({ ...good, timingReported: [{ ...entry, row: '135' }] }), [
+    'timingReported entry 1: row is "135", not "row <n>"',
+  ]);
+  assert.deepEqual(scopeProblems({ ...good, timingReported: [{ ...entry, reason: ' ' }] }), [
+    'timingReported entry 1: reason must say, in words, why the timing is reported',
+  ]);
+  assert.deepEqual(scopeProblems({ ...good, timingReported: [{ ...entry, owner: 'E' }] }), [
+    'timingReported entry 1: owner is not a field',
+  ]);
+  assert.deepEqual(scopeProblems({ ...good, timingReported: [entry, entry] }), [
+    'timingReported entry 2: composition:flux tbtMs is listed twice',
+  ]);
+  assert.deepEqual(
+    scopeProblems({
+      ...good,
+      release: '1.0.0',
+      scope: 'full',
+      unswept: '',
+      timingReported: [entry],
+    }),
+    ['timingReported must be empty for a final release (1.0.0): a final gates every timing'],
+  );
+});
+
 test('a scope file names its release, scope, what it leaves unswept, and its list, or it is refused, and the loader throws on either file', (t) => {
   const good = {
     release: '1.0.0-rc.1',
