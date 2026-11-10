@@ -1,6 +1,9 @@
 import * as z from './zod';
 import { EXTENSION_MAX_DEPTH, isPlainObject, plainJsonProblem } from './json';
 import { DISPLAY_MODE_IDS, FALLBACK_VARIANT_ID, REGISTRY_ID_PATTERN } from './ids';
+
+// The id pattern lives in ./ids, which brings no zod; it was this module's, and still is by name.
+export { REGISTRY_ID_PATTERN };
 import { SectionIdSchema, type SchemaParts } from './kinds/common';
 import { SITE_SCHEMA_VERSION } from './versions';
 
