@@ -3,13 +3,14 @@
 // its own. Every list here is in axis order, the order the resolver applies
 // visitor values in.
 
-import {
-  DisplayModeSchema,
-  type AppearanceAxis,
-  type AppearanceSelection,
-  type DisplayMode,
-  type VisitorControls,
+import type {
+  AppearanceAxis,
+  AppearanceSelection,
+  DisplayMode,
+  VisitorControls,
 } from '@portfolio/schema';
+// The id rules alone, which bring no zod: the axes load on every visitor's page.
+import { DISPLAY_MODE_IDS } from '@portfolio/schema/ids';
 
 export const APPEARANCE_AXES = [
   'variant',
@@ -35,8 +36,13 @@ export const PACK_KIND_BY_AXIS = {
 } as const satisfies Record<PackAxis, string>;
 export type PackKind = (typeof PACK_KIND_BY_AXIS)[PackAxis];
 
+/** Each pack kind's axis. */
+export const AXIS_BY_KIND = Object.fromEntries(
+  PACK_AXES.map((axis) => [PACK_KIND_BY_AXIS[axis], axis]),
+) as Readonly<Record<PackKind, PackAxis>>;
+
 /** system, light, dark, and high-contrast, as the site document allows them. */
-export const DISPLAY_MODES: readonly DisplayMode[] = DisplayModeSchema.options;
+export const DISPLAY_MODES: readonly DisplayMode[] = DISPLAY_MODE_IDS;
 
 /** The two base modes a color scheme's token sets come in. */
 export type BaseMode = 'light' | 'dark';

@@ -129,3 +129,18 @@ export function generatedSchemeSets(tokens: {
 export function printSet(sets: SchemeSets, highContrast: boolean): ColorSetName {
   return highContrast || !sets.light ? 'high-contrast-light' : 'light';
 }
+
+/** What of a scheme manifest (./manifests) names its modes, which this module can't import. */
+interface SchemeModes {
+  readonly light?: unknown;
+  readonly dark?: unknown;
+}
+
+/** The base modes a scheme manifest has: a generator gives both. */
+export function baseModes(
+  manifest: SchemeModes & { readonly generator?: unknown; readonly anchors?: SchemeModes },
+): readonly ('light' | 'dark')[] {
+  if (manifest.generator) return ['light', 'dark'];
+  const source = manifest.anchors ?? manifest;
+  return (['light', 'dark'] as const).filter((mode) => source[mode] !== undefined);
+}

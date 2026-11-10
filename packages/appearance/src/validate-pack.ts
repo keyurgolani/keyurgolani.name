@@ -25,15 +25,15 @@ import {
   type ManifestDiagnostic,
 } from '@portfolio/variant-contract';
 import {
+  AXIS_BY_KIND,
   AXIS_NAMES,
   PACK_AXES,
-  PACK_KIND_BY_AXIS,
   PLATFORM_DEFAULTS,
   type BaseMode,
-  type PackAxis,
   type PackKind,
 } from './axes';
 import { anchorV2Adjustments, type Adjustments } from './anchor-v2';
+import { baseModes } from './sets';
 import { luminance } from './color';
 import { isUpstreamLicense } from './governance';
 import {
@@ -47,10 +47,9 @@ import {
   type TypographyManifest,
 } from './manifests';
 
-/** Each pack kind's axis. */
-export const AXIS_BY_KIND = Object.fromEntries(
-  PACK_AXES.map((axis) => [PACK_KIND_BY_AXIS[axis], axis]),
-) as Readonly<Record<PackKind, PackAxis>>;
+// Each pack kind's axis, and a scheme's base modes, live where a visitor's page
+// can load them without zod; validation reads them from there.
+export { AXIS_BY_KIND, baseModes };
 
 export interface PackContext {
   /** The `portfolio.kind` of the package that holds the pack. */
@@ -751,13 +750,6 @@ function checkApprovedOpacity(manifest: DesignLanguageManifest, report: Report) 
       { actual: shipped },
     );
   }
-}
-
-/** The base modes a scheme manifest has: a generator gives both. */
-export function baseModes(manifest: ColorSchemeManifest): readonly ('light' | 'dark')[] {
-  if (manifest.generator) return ['light', 'dark'];
-  const source = manifest.anchors ?? manifest;
-  return (['light', 'dark'] as const).filter((mode) => source[mode] !== undefined);
 }
 
 /** A file a package could load as script. */

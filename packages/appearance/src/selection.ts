@@ -3,13 +3,9 @@
 // setAxis() changes exactly one value or changes nothing, and the cookie and
 // the demo query carry values in one text form, `variant=...&mode=...`.
 
-import {
-  REGISTRY_ID_PATTERN,
-  type AppearanceAxis,
-  type AppearanceSelection,
-  type DisplayMode,
-} from '@portfolio/schema';
-import { FALLBACK_ID } from '@portfolio/variant-contract';
+import type { AppearanceAxis, AppearanceSelection, DisplayMode } from '@portfolio/schema';
+import { REGISTRY_ID_PATTERN } from '@portfolio/schema/ids';
+import { FALLBACK_ID } from '@portfolio/variant-contract/runtime';
 import {
   APPEARANCE_AXES,
   AXIS_NAMES,

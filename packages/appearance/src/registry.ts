@@ -4,12 +4,8 @@
 // Each scheme's base sets are derived once, here, so resolving a request
 // only looks them up.
 
-import {
-  FALLBACK_ID,
-  findVariant,
-  type RegisteredVariant,
-  type VariantRegistry,
-} from '@portfolio/variant-contract';
+import type { RegisteredVariant, VariantRegistry } from '@portfolio/variant-contract';
+import { FALLBACK_ID, findVariant } from '@portfolio/variant-contract/runtime';
 import {
   ID_AXES,
   PACK_AXES,
@@ -24,7 +20,8 @@ import { withDerivedRoles } from './derived-roles';
 import { deriveBaseSet } from './sets';
 import type { ColorSchemeManifest, DesignLanguageManifest, TypographyManifest } from './manifests';
 import type { ColorTokens } from './tokens';
-import { AXIS_BY_KIND, baseModes } from './validate-pack';
+import { AXIS_BY_KIND } from './axes';
+import { baseModes } from './sets';
 
 /** A file registry generation wrote into the pack directory, where the host serves it from. */
 export interface PackFileRef {

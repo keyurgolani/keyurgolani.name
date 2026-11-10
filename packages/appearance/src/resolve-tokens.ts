@@ -11,7 +11,7 @@ import {
   type SchemeAnchors,
   type SchemeDerivation,
 } from './sets';
-import { ColorTokenSetSchema } from './manifests';
+import { isColorTokenSet } from './color-set';
 import {
   axisFallback,
   canonicalId,
@@ -47,7 +47,7 @@ export function generatedSets(
 ): GeneratedScheme | undefined {
   const entry = generated && Object.hasOwn(generated, schemeId) ? generated[schemeId] : undefined;
   if (!entry) return undefined;
-  const complete = (set: unknown) => ColorTokenSetSchema.safeParse(set).success;
+  const complete = isColorTokenSet;
   if (!complete(entry.light) || !complete(entry.dark)) return undefined;
   if (
     entry.highContrast &&

@@ -18,6 +18,7 @@ import {
   type TypographyMeasure,
   type TypographyRole,
 } from './tokens';
+import { HEX_COLOR } from './color-set';
 import { DERIVED_ROLES, type DerivedRole } from './derived-roles';
 import { languageTokenProblem } from './language-grammar';
 import { SIZE_ADJUST_RANGE } from './scales';
@@ -212,7 +213,7 @@ const common = {
   caveats: z.array(plainText(300)).max(16),
 };
 
-const Hex = z.string().regex(/^#[0-9a-f]{6}$/, {
+const Hex = z.string().regex(HEX_COLOR, {
   message: 'must be a six-digit lowercase hex color, such as #2b241c.',
 });
 

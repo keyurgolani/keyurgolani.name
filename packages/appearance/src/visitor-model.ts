@@ -13,7 +13,7 @@
 // selection's stylesheets, which the control preloads before it refreshes.
 
 import type { AppearanceAxis, DisplayMode, VisitorControls } from '@portfolio/schema';
-import { FALLBACK_ID } from '@portfolio/variant-contract';
+import { FALLBACK_ID } from '@portfolio/variant-contract/runtime';
 import { APPEARANCE_AXES, PACK_AXES, QUERY_KEYS, type PackAxis } from './axes';
 import type { PackTier } from './manifests';
 import { findPack, type AppearanceRegistry } from './registry';
