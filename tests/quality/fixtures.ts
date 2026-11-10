@@ -29,6 +29,13 @@ import { canaryPassword } from './lib/artifacts.mjs';
 import { pinPageClock } from './lib/clock';
 import { CANARY_COOKIE, qualityWeb, runCanary } from './lib/env';
 import {
+  isolationFor,
+  isolationLock,
+  MAX_WAIT_MS,
+  runIsolationDir,
+  type IsolationLock,
+} from './lib/perf/isolation';
+import {
   egressFailure,
   guardRequests,
   installBrowserPolicy,
@@ -70,7 +77,13 @@ interface QualityWorkerFixtures {
 interface QualityTestFixtures {
   /** Whether the cell's page loads signed in: `session` for a surface that registers it. */
   cellAuth: 'none' | 'session';
+  /** The run's isolation lock, held for the test: exclusive for a perf test, shared otherwise. */
+  isolation: void;
 }
+
+let lock: IsolationLock | undefined;
+/** The run's lock (lib/perf/isolation.ts): a perf test runs alone on its runner. */
+const runIsolation = () => (lock ??= isolationLock(runIsolationDir(runCanary())));
 
 export const test = base.extend<QualityTestFixtures, QualityWorkerFixtures>({
   cellServer: [null, { scope: 'worker', option: true }],
@@ -103,14 +116,48 @@ export const test = base.extend<QualityTestFixtures, QualityWorkerFixtures>({
       const options = cellServer
         ? appOptionsFor(cellServer, qualityWeb(), runCanary())
         : { ...appOptions, web: appOptions.web ?? qualityWeb() };
-      const app = await startApp({ ...options, logFile });
+      // A server's start is a burst of CPU, so none starts beside a perf test.
+      const started = await runIsolation().acquire(
+        `worker-${workerInfo.workerIndex}-app`,
+        'shared',
+      );
+      let app: Awaited<ReturnType<typeof startApp>>;
+      try {
+        app = await startApp({ ...options, logFile });
+      } finally {
+        started();
+      }
       await provide(app);
       await app.stop();
       // Read once the trap has closed, so nothing on its way in is missed.
       const failure = serverEgressFailure(app.egress());
       if (failure) throw new Error(failure);
     },
-    { scope: 'worker', timeout: 120_000 },
+    // Its start may wait for a perf test, up to the lock's ceiling.
+    { scope: 'worker', timeout: 120_000 + MAX_WAIT_MS },
+  ],
+
+  // Every test runs inside the lock: a perf test alone on its runner, every other test beside the
+  // others but never beside a perf test. The wait isn't the test's own time, so it extends the
+  // test's timeout by as much.
+  isolation: [
+    async ({}, provide, testInfo) => {
+      const own = testInfo.timeout;
+      // The wait isn't the test's own time: room for it up to the ceiling, then exactly what it took.
+      if (own > 0) testInfo.setTimeout(own + MAX_WAIT_MS);
+      const asked = Date.now();
+      const release = await runIsolation().acquire(
+        `worker-${testInfo.workerIndex}`,
+        isolationFor(testInfo.file),
+      );
+      if (own > 0) testInfo.setTimeout(own + (Date.now() - asked));
+      try {
+        await provide();
+      } finally {
+        release();
+      }
+    },
+    { auto: true },
   ],
 
   context: async ({ context, app, cellAuth, ownerSession }, provide) => {
