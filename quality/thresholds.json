@@ -75,7 +75,7 @@
     "growthMiB": 1
   },
   "timing": {
-    "description": "Vitals, idle work, and memory take the median of runs. Pull request and scheduled runs report it as a trend. Release-candidate runs fail a median more than releaseTolerance over its ceiling.",
+    "description": "Vitals, idle work, and memory take the median of runs. Pull request and scheduled runs report it as a trend. Release-candidate runs fail a median more than releaseTolerance over its ceiling, except a metric the candidate's quality/release/scope.json lists in timingReported, which they report instead.",
     "runs": 5,
     "releaseTolerance": 0.1
   },

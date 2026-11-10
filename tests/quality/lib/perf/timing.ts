@@ -9,7 +9,10 @@
 //   timing.releaseTolerance over its ceiling, a test with fewer loads than
 //   timing.runs or a metric that didn't come, and a perf test that ran more
 //   than once, or a workflow run past its first attempt (GITHUB_RUN_ATTEMPT),
-//   since a retried test's numbers aren't its first run's. It
+//   since a retried test's numbers aren't its first run's. A metric the
+//   candidate's scope lists in timingReported (lib/release-scope.ts) is logged
+//   against its bar instead of failing over it; nothing else of its target is
+//   waived. It
 //   fails closed on a run with no summary or no perf test. It has the shape
 //   of 11-4's ReleaseGate, for its RELEASE_GATES seam.
 
@@ -18,6 +21,7 @@ import path from 'node:path';
 import { loadThresholds, type Thresholds } from '../../../../quality/thresholds';
 import type { Summary, SummaryTest } from '../../reporter';
 import type { Failure } from '../verdict';
+import { loadReleaseScope, type ReportedTiming } from '../release-scope';
 import { PERF_KIND } from './plan';
 import { releaseProblems, type TimingResult } from './samples';
 
@@ -99,7 +103,11 @@ export function timingFailures(
   summary: Pick<Summary, 'tests'> | null,
   thresholds: Thresholds = loadThresholds(),
   env: NodeJS.ProcessEnv = process.env,
+  // The candidate's scope file's timingReported (lib/release-scope.ts): a listed target's listed
+  // metric is reported, not gated, over its bar or under it. Nothing else of the target is waived.
+  reported: readonly Pick<ReportedTiming, 'target' | 'metric'>[] = [],
 ): Failure[] {
+  const waived = new Set(reported.map(({ target, metric }) => `${target} ${metric}`));
   // A re-run of the job is a retry too: its numbers aren't the first run's.
   const attempt = Number(env.GITHUB_RUN_ATTEMPT ?? '1');
   const rerun: Failure[] =
@@ -145,7 +153,13 @@ export function timingFailures(
       failures.push({ rule: 'timing-missing', message: `${name}'s perf test kept no timing.` });
       continue;
     }
-    for (const { rule, message } of releaseProblems(timing, thresholds)) {
+    const gated = {
+      ...timing,
+      rows: timing.rows.map((row) =>
+        waived.has(`${name} ${row.metric}`) ? { ...row, overRelease: false } : row,
+      ),
+    };
+    for (const { rule, message } of releaseProblems(gated, thresholds)) {
       failures.push({ rule, message: `${name}: ${message}` });
     }
   }
@@ -171,7 +185,22 @@ export interface TimingGateContext {
 /** The release run's timing gate, for 11-4's RELEASE_GATES. */
 export const TIMING_GATE = {
   id: 'timing',
-  description: `the median of ${loadThresholds().timing.runs} loads of each perf cell, at most ${Math.round(loadThresholds().timing.releaseTolerance * 100)}% over its ceiling in quality/thresholds.json`,
-  run: ({ reports }: TimingGateContext): readonly Failure[] =>
-    timingFailures(readQualitySummary(reports)),
+  description: `the median of ${loadThresholds().timing.runs} loads of each perf cell, at most ${Math.round(loadThresholds().timing.releaseTolerance * 100)}% over its ceiling in quality/thresholds.json, except a metric the candidate's scope lists in timingReported`,
+  run: ({ reports }: TimingGateContext): readonly Failure[] => {
+    const reported = loadReleaseScope()?.scope.timingReported ?? [];
+    const summary = readQualitySummary(reports);
+    // What the list waives is still read out, for the candidate's notes.
+    for (const entry of summary ? timingTrend(summary).tests : []) {
+      for (const row of entry.timing?.rows ?? []) {
+        const listed = reported.find(
+          ({ target, metric }) => target === entry.target && metric === row.metric,
+        );
+        if (listed)
+          console.log(
+            `[timing] reported, not gated (scope's timingReported, ${listed.row}): ${entry.target} ${row.metric} median ${row.median ?? 'none'}, its bar ${row.releaseLimit}${row.overRelease ? ', over' : ''}`,
+          );
+      }
+    }
+    return timingFailures(summary, undefined, process.env, reported);
+  },
 } as const;

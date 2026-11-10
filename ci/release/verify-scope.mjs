@@ -28,8 +28,8 @@ export function scopeMismatch(tag, scope) {
 
 /**
  * Why a final release can't promote the candidate whose commit holds `scope` and `records` (the
- * parsed files), or null when it can: a final keeps the full matrix's rule, every cell in scope
- * and none listed as failing.
+ * parsed files), or null when it can: a final keeps the full matrix's rule, every cell in scope,
+ * none listed as failing, and no timing reported instead of gated.
  */
 export function finalScopeRefusal(scope, records) {
   if (!scope || typeof scope !== 'object' || !Array.isArray(records))
@@ -41,9 +41,18 @@ export function finalScopeRefusal(scope, records) {
     problems.push(
       `its records list names ${records.length} failing cell test${records.length === 1 ? '' : 's'}`,
     );
+  if (scope.timingReported !== undefined) {
+    if (!Array.isArray(scope.timingReported)) problems.push('its timingReported is not a list');
+    else if (scope.timingReported.length > 0) {
+      const reported = scope.timingReported.length;
+      problems.push(
+        `its timingReported lists ${reported} timing${reported === 1 ? '' : 's'} reported, not gated`,
+      );
+    }
+  }
   return problems.length === 0
     ? null
-    : `${SCOPE_FILE} keeps the candidate from a final release: ${problems.join(', and ')}. A final needs the full matrix clean: scope full and an empty list, then a new candidate. The full matrix fits the release's 256-shard matrix only once RC2's sizing item (per-test cost, then splitting the release matrix across jobs) lands, so v1.0.0 waits on it`;
+    : `${SCOPE_FILE} keeps the candidate from a final release: ${problems.join(', and ')}. A final needs the full matrix clean: scope full, an empty list and no timingReported, then a new candidate. The full matrix fits the release's 256-shard matrix only once RC2's sizing item (per-test cost, then splitting the release matrix across jobs) lands, so v1.0.0 waits on it`;
 }
 
 /** The scope file and its records list at `root`, parsed; throws when either can't be read. */

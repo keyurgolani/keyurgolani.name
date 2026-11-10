@@ -7,8 +7,9 @@
 // release compares every first-party composition's screenshots against its
 // baselines, so it waits until the last of them is committed. And it refuses
 // while the commit's quality scope (quality/release/scope.json,
-// verify-scope.mjs) is narrowed or its records list names a failing cell: a
-// final release keeps the full matrix clean.
+// verify-scope.mjs) is narrowed, its records list names a failing cell, or it
+// lists a timing reported, not gated: a final release keeps the full matrix
+// clean.
 //
 //   GITHUB_TOKEN=... GITHUB_REPOSITORY=owner/repo TAG=v1.2.0 SHA=<commit> \
 //     node ci/release/promote-check.mjs

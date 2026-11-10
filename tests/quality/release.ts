@@ -63,7 +63,8 @@ export const MATRIX_GATE: ReleaseGate = {
 /**
  * Every release gate, in order: the matrix, then 11-3's timing gate, which
  * fails a median past its ceiling's release tolerance in the run's
- * summary.json (lib/perf/timing.ts). A sharded release reads the summary
+ * summary.json, except a metric the candidate's scope lists in timingReported
+ * (lib/perf/timing.ts). A sharded release reads the summary
  * quality:merge joins from every shard.
  */
 export const RELEASE_GATES: readonly ReleaseGate[] = [MATRIX_GATE, TIMING_GATE];

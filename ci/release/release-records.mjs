@@ -64,6 +64,9 @@ export const isFlaky = (entry) => entry?.flaky === true;
 /** Whether `release` is X.Y.Z or X.Y.Z-rc.N. */
 export const isRelease = (release) => typeof release === 'string' && RELEASE.test(release);
 
+/** Whether `value` is a routed row: `row <n>`, such as `row 5` or `row 22b`. */
+export const isRouted = (value) => typeof value === 'string' && ROUTED.test(value);
+
 /**
  * A failure record's element, as an entry's `target` names it: the page selector the check
  * recorded; for an element with none (inside a frame or a shadow root), `aria:` and its role,
@@ -161,7 +164,7 @@ export function recordsProblems(records, scope) {
       NO_OWNER.has(entry.owner.trim().toLowerCase())
     )
       problems.push(`${where}: owner is ${JSON.stringify(entry.owner)}, not a lane or person`);
-    if (typeof entry.routed !== 'string' || !ROUTED.test(entry.routed))
+    if (!isRouted(entry.routed))
       problems.push(`${where}: routed is ${JSON.stringify(entry.routed)}, not "row <n>"`);
     if (
       entry.note !== undefined &&

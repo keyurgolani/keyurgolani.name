@@ -19,15 +19,20 @@
 // a test that ran, since a fixed record leaves the list. A final release keeps the full matrix's
 // rule: scope `full` and an empty list.
 //
+// A candidate's file may also list `timingReported`: a target's timing metric whose release median
+// is reported, not gated (lib/perf/timing.ts), each with its routed row and its reason. A final's
+// must list none, as promotion checks (ci/release/verify-scope.mjs).
+//
 // release.yml's and rc-preflight.yml's quality jobs name the file in QUALITY_RELEASE_SCOPE; with
 // no such variable, quality:full plans the whole matrix and the list is empty, as before.
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { REPO_ROOT } from '../../../ci/lib/reports.mjs';
-import { isRelease, recordsProblems } from '../../../ci/release/release-records.mjs';
+import { isRelease, isRouted, recordsProblems } from '../../../ci/release/release-records.mjs';
 import type { Plan } from '../cells';
 import { RUN_ENGINES } from './matrix';
+import { TIMING_METRICS, type TimingMetric } from './perf/samples';
 
 export const SCOPES = ['full', 'default-packs'] as const;
 export type ReleaseScopeKind = (typeof SCOPES)[number];
@@ -40,6 +45,62 @@ export interface ReleaseScope {
   readonly unswept: string;
   /** The records list, relative to the scope file. */
   readonly records: string;
+  /** A candidate's timings reported, not gated, by its release run's timing gate. */
+  readonly timingReported?: readonly ReportedTiming[];
+}
+
+/** A target's timing metric a candidate's release run reports instead of gating. */
+export interface ReportedTiming {
+  /** The perf test's target, as summary.json names it: composition:<id> or surface:<id>. */
+  readonly target: string;
+  readonly metric: TimingMetric;
+  /** The routed row that gates it again before the final release. */
+  readonly row: string;
+  /** Why it's reported, in words, for the candidate's notes. */
+  readonly reason: string;
+}
+
+const REPORTED_FIELDS = ['target', 'metric', 'row', 'reason'];
+
+/** Why `list` isn't a valid timingReported list for `release`, one problem a line. */
+function reportedProblems(list: unknown, release: unknown): string[] {
+  if (list === undefined) return [];
+  if (!Array.isArray(list)) return ['timingReported is not a list'];
+  if (isRelease(release) && !String(release).includes('-rc.') && list.length > 0)
+    return [
+      `timingReported must be empty for a final release (${String(release)}): a final gates every timing`,
+    ];
+  const problems: string[] = [];
+  const seen = new Set<string>();
+  list.forEach((value: Partial<ReportedTiming> | null, at) => {
+    const entry = `timingReported entry ${at + 1}`;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      problems.push(`${entry}: is not an object`);
+      return;
+    }
+    for (const field of Object.keys(value)) {
+      if (!REPORTED_FIELDS.includes(field)) problems.push(`${entry}: ${field} is not a field`);
+    }
+    if (
+      typeof value.target !== 'string' ||
+      !/^(composition|surface):[a-z0-9-]+$/.test(value.target)
+    )
+      problems.push(
+        `${entry}: target is ${JSON.stringify(value.target)}, not composition:<id> or surface:<id>`,
+      );
+    if (!(TIMING_METRICS as readonly unknown[]).includes(value.metric))
+      problems.push(
+        `${entry}: metric is ${JSON.stringify(value.metric)}, not one of ${TIMING_METRICS.join(', ')}`,
+      );
+    if (!isRouted(value.row))
+      problems.push(`${entry}: row is ${JSON.stringify(value.row)}, not "row <n>"`);
+    if (typeof value.reason !== 'string' || value.reason.trim() === '')
+      problems.push(`${entry}: reason must say, in words, why the timing is reported`);
+    const key = `${String(value.target)} ${String(value.metric)}`;
+    if (seen.has(key)) problems.push(`${entry}: ${key} is listed twice`);
+    seen.add(key);
+  });
+  return problems;
 }
 
 /**
@@ -88,7 +149,7 @@ export {
 } from '../../../ci/release/release-records.mjs';
 
 /** The scope file's fields, and the records list it names: the one file beside it, by one name. */
-const SCOPE_FIELDS = ['release', 'scope', 'unswept', 'records'];
+const SCOPE_FIELDS = ['release', 'scope', 'unswept', 'records', 'timingReported'];
 export const RECORDS_FILE = 'records.json';
 
 /** The env variable a release job names its scope file in. */
@@ -113,6 +174,7 @@ export function scopeProblems(scope: unknown): string[] {
     problems.push(
       `records is ${JSON.stringify(value.records)}, not ${JSON.stringify(RECORDS_FILE)}`,
     );
+  problems.push(...reportedProblems(value.timingReported, value.release));
   return problems;
 }
 
