@@ -1,7 +1,7 @@
 // Variant ids (#5, Slice 1): one grammar for every registry kind, a reserved
 // set for the platform's own packages, and a scope prefix for everyone else's.
 
-import { FALLBACK_VARIANT_ID, REGISTRY_ID_PATTERN } from '@portfolio/schema';
+import { FALLBACK_VARIANT_ID, REGISTRY_ID_PATTERN } from '@portfolio/schema/ids';
 
 /** `^[a-z][a-z0-9-]{1,47}$`, the registry grammar #4's site document uses. */
 export const VARIANT_ID_PATTERN = REGISTRY_ID_PATTERN;

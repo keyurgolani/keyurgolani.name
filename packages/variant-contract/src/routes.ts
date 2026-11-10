@@ -2,7 +2,8 @@
 // views a variant declares under either, canonical to their parent route.
 // Pure helpers the host's pages, #7's frame, and #9's browser render share.
 
-import { isSectionId, type Site } from '@portfolio/schema';
+import type { Site } from '@portfolio/schema';
+import { isSectionId } from '@portfolio/schema/ids';
 import type { VariantManifest, ViewDeclaration } from './manifest-schema';
 import {
   isParamValue,

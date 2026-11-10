@@ -10,6 +10,7 @@
     ".": "./src/index.ts",
     "./fixture-names": "./src/fixture-names.ts",
     "./node": "./src/node/index.ts",
+    "./runtime": "./src/runtime.ts",
     "./segments": "./src/segments.ts",
     "./settle": "./src/settle.ts",
     "./status": "./src/status.ts",
