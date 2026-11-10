@@ -4,7 +4,7 @@
 // color only through var(--color-<role>), never a literal, and references no
 // other custom property.
 
-import { COLOR_ROLES, LANGUAGE_KEYS } from './tokens';
+import { COLOR_ROLES, LANGUAGE_KEYS } from './roles';
 
 /** The characters a language value may use: no quote, brace, semicolon, backslash, #, !, @, :, or angle bracket. */
 const LANGUAGE_CHARACTERS = /^[A-Za-z0-9 .,%()+\-*/_]+$/;
