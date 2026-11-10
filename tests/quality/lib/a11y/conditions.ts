@@ -996,24 +996,12 @@ export async function inventoryFindings(
       }
       await condition.setup(page, cdp);
       try {
-        // A key hint a page shows only to a fine pointer (row 92) is gone where the page reads
-        // none. On CI's Linux Chromium the touch condition's teardown leaves (pointer) at none for
-        // the rest of the page's life (row 44), so each later condition takes such a hint as no
-        // JavaScript does: let go while the control it names is shown and enabled, a finding
-        // naming the control while it isn't (Spatial Bento's Esc hint, preflight 1). With a fine
-        // pointer, and for a condition with a rule of its own, nothing changes.
-        // The rule (the coordinator, 8 Nov 2026): absence is accepted only for a key-hint field
-        // (KEY_HINT), keyed to the control it names, with that control shown and enabled, and only
-        // while (pointer: fine) reads false. missingItems applies a keyHint rule to KEY_HINT items
-        // alone, so every other field a coarse pointer drops is still a missing field: never a
-        // general coarse-pointer tolerance.
-        const keyHint =
-          condition.keyHint ??
-          ((await page.evaluate(() => matchMedia('(pointer: fine)').matches))
-            ? undefined
-            : 'usable');
+        // A condition's own key-hint rule alone (touch's, no JavaScript's, print's): touch runs
+        // last, so every other condition reads the page with the pointer it loaded with, and a
+        // missing hint there is a missing field. No fallback lets a hint go where the page reads
+        // no fine pointer: that made up for touch's teardown, which now runs last.
         if (condition.reload) {
-          const expected = { baseline, ignore: condition.ignore, keyHint };
+          const expected = { baseline, ignore: condition.ignore, keyHint: condition.keyHint };
           findings.push(...(await reload(page, path, condition.id, expected)));
         }
         // A condition read on the page as it stands, such as print, reads it from the top, where
@@ -1064,7 +1052,7 @@ export async function inventoryFindings(
             baseline,
             await inPage<string[]>(page, { kind: 'inventory' }),
             condition.ignore,
-            keyHint,
+            condition.keyHint,
           )),
         );
         if (condition.id === 'no-javascript')
