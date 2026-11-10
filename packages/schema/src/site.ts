@@ -1,6 +1,6 @@
 import * as z from './zod';
 import { EXTENSION_MAX_DEPTH, isPlainObject, plainJsonProblem } from './json';
-import { FALLBACK_VARIANT_ID } from './ids';
+import { DISPLAY_MODE_IDS, FALLBACK_VARIANT_ID, REGISTRY_ID_PATTERN } from './ids';
 import { SectionIdSchema, type SchemaParts } from './kinds/common';
 import { SITE_SCHEMA_VERSION } from './versions';
 
@@ -11,7 +11,7 @@ export { SITE_SCHEMA_VERSION } from './versions';
  * prefers-color-scheme, the others pin one mode. An environment modifier, not
  * a fifth appearance axis.
  */
-export const DisplayModeSchema = z.enum(['system', 'light', 'dark', 'high-contrast']);
+export const DisplayModeSchema = z.enum(DISPLAY_MODE_IDS);
 export type DisplayMode = z.infer<typeof DisplayModeSchema>;
 
 /**
@@ -25,11 +25,7 @@ export type MotionPolicy = z.infer<typeof MotionPolicySchema>;
 export const VisitorControlSchema = z.enum(['locked', 'selectable']);
 export type VisitorControl = z.infer<typeof VisitorControlSchema>;
 
-/**
- * A variant, pack, or route id: #5's registry grammar. Third-party ids carry
- * their scope as a prefix, so `@acme/ocean` is `acme-ocean`.
- */
-export const REGISTRY_ID_PATTERN = /^[a-z][a-z0-9-]{1,47}$/;
+/** A variant, pack, or route id: #5's registry grammar (./ids). */
 export const RegistryIdSchema = z.string().regex(REGISTRY_ID_PATTERN, {
   message:
     'must start with a lowercase letter, then 1 to 47 lowercase letters, digits, or hyphens, such as editorial.',

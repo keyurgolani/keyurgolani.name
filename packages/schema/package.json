@@ -14,7 +14,9 @@
     "./direction": "./src/direction.ts",
     "./ids": "./src/ids.ts",
     "./kinds": "./src/kinds/index.ts",
+    "./markdown": "./src/markdown.ts",
     "./migrate": "./src/migrate/index.ts",
+    "./url": "./src/url.ts",
     "./zod": "./src/zod.ts",
     "./node": "./src/node.ts"
   },

@@ -89,6 +89,18 @@ export function workPath(slug: string): string {
  */
 export const FALLBACK_VARIANT_ID = 'fallback';
 
+/**
+ * A variant, pack, or route id: #5's registry grammar. Third-party ids carry
+ * their scope as a prefix, so `@acme/ocean` is `acme-ocean`.
+ */
+export const REGISTRY_ID_PATTERN = /^[a-z][a-z0-9-]{1,47}$/;
+
+/**
+ * How the selected color scheme resolves, as the site document allows them:
+ * `system` follows the visitor's prefers-color-scheme, the others pin one mode.
+ */
+export const DISPLAY_MODE_IDS = ['system', 'light', 'dark', 'high-contrast'] as const;
+
 /** A BCP 47 language tag, such as `en` or `pt-BR`: one Intl.getCanonicalLocales accepts. */
 export function isLanguageTag(value: string): boolean {
   try {
