@@ -120,10 +120,22 @@ function verdict(failures: readonly SummaryFailure[] | 'passed', listed: Verdict
 
 const rules = (failures: readonly { rule: string }[]) => failures.map((each) => each.rule).sort();
 
-test("the checked-in scope is RC2 on its default packs, its records list 648 keys, each a valid entry routed to a row on a platform-neutral cell, main's Spatial Bento root-text record still among them, and it loads", () => {
+test("the checked-in scope is RC2 on its default packs, its records list 648 keys, each a valid entry routed to a row on a platform-neutral cell, main's Spatial Bento root-text record still among them, and it loads, and its timingReported lists flux's, horizontal-cinema's and swiss-signal's tbtMs under row 135", () => {
   const loaded = loadReleaseScope({ [SCOPE_ENV]: SCOPE_FILE })!;
   assert.equal(loaded.scope.release, '1.0.0-rc.2');
   assert.equal(loaded.scope.scope, 'default-packs');
+  // rc.2 reports these timings instead of gating them: the three that rc.1's release run
+  // (42540152468) also read over, routed to row 135, which blocks v1.0.0.
+  assert.deepEqual(
+    (loaded.scope.timingReported ?? []).map(
+      ({ target, metric, row }) => `${target} ${metric} ${row}`,
+    ),
+    [
+      'composition:flux tbtMs row 135',
+      'composition:horizontal-cinema tbtMs row 135',
+      'composition:swiss-signal tbtMs row 135',
+    ],
+  );
   // Preflight 1's list for the candidate (run 42489261932, 89 shards): the keys that still fail on
   // it, less those rows 108 and 116 fixed, plus row 129's four from rc.1's release run (42540152468,
   // shards 39, 48, 82 and 84); every one a valid entry, each key once.
