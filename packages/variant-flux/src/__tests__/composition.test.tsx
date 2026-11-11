@@ -597,3 +597,26 @@ test("a case's facts stack under its intro once the sheet, measured in root rem,
   const threshold = Number(at?.[1]);
   assert.ok(threshold > 1224 / 32 && threshold < 886 / 16, `${threshold}rem`);
 });
+
+test("folds run together only to a ring's reach: the next fold's hairline sits clear of a focused summary's ring", () => {
+  // A fold's summary carries a hairline on its top edge, and the folds after the first pull up by
+  // the sheet's gap so they run together. That put the next fold's hairline about 3.5px under the
+  // summary before it, inside its ring's reach (offset 2px plus width 2px). The ring paints over it
+  // (z-index 1), but under contrast-more the hairline is dark: the ring's outer row, black on it,
+  // changed by 2.52:1, so the bottom edge didn't count and the perimeter failed (390, #talks, light
+  // and system). The folds pull up by the gap less a ring's reach, at every width.
+  const folds = rulesFor('.fx-sheet__body > .fx-sec--fold + .fx-sec--fold');
+  assert.equal(folds.length, 2, 'the wide rule and the phones rule');
+  for (const fold of folds) {
+    const gap = valueOf(
+      rulesFor('.fx-sheet__body', (rule) => rule.at.join() === fold.at.join())[0]?.body ?? '',
+      'gap',
+    );
+    assert.ok(gap, `${fold.at.join(' ')}: the sheet's gap`);
+    assert.equal(
+      valueOf(fold.body, 'margin-block-start'),
+      `calc(var(--ui-focus-offset) + var(--ui-focus-width) - ${gap})`,
+      `${fold.at.join(' ') || 'everywhere'}`,
+    );
+  }
+});
