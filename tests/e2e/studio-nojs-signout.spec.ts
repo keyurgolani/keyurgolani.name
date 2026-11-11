@@ -2,6 +2,7 @@ import type { BrowserContext, Page } from '@playwright/test';
 import { expect, test } from '../harness/fixtures';
 import { ownerSecret } from '../harness/owner-secret.mjs';
 import { signIn } from '../harness/preview-grants';
+import { JOURNAL_KEY, seedJournal } from '../harness/studio-journal';
 import { ownerApp } from '../harness/profile-matrix';
 
 // Studio's Sign out without JavaScript, and how a native sign-out reaches the other tabs (row
@@ -18,7 +19,6 @@ test.use({ studioLastTask: 'content' });
 
 const STUDIO = { type: 'route', description: '/studio' };
 const SIGNED_OUT = '/studio/sign-in?state=signed_out';
-const JOURNAL_KEY = 'portfolio-studio:journal:v1';
 /** How long a tab that heard nothing is watched, to say it stayed. */
 const QUIET_MS = 2_000;
 
@@ -64,7 +64,7 @@ test(
   { annotation: [STUDIO] },
   async ({ browser, page, app }, testInfo) => {
     await signIn(page, app, secret.password);
-    await page.evaluate((key) => localStorage.setItem(key, '{"kept":true}'), JOURNAL_KEY);
+    const seeded = await seedJournal(page);
     const context = await withoutScript(page, app.origin, browser);
     try {
       const plain = await context.newPage();
@@ -79,7 +79,7 @@ test(
       await signOut(plain).click();
       await expect(plain).toHaveURL(`${app.origin}${SIGNED_OUT}`);
       expect(logouts, 'one auth.logout').toHaveLength(1);
-      expect(await journalIn(context, app.origin), 'keep is the default').toBe('{"kept":true}');
+      expect(await journalIn(context, app.origin), 'keep is the default').toBe(seeded);
       // The old session's cookie, still in the scripted tab's context, no longer counts.
       expect((await page.request.get('/api/studio/auth.session')).status()).toBe(401);
     } finally {
@@ -93,10 +93,9 @@ test(
   { annotation: [STUDIO] },
   async ({ browser, page, app }) => {
     await signIn(page, app, secret.password);
-    await page.evaluate((key) => {
-      localStorage.setItem(key, '{"kept":true}');
-      localStorage.setItem('portfolio.motion.paused', '1');
-    }, JOURNAL_KEY);
+    // A valid entry, which Studio's prune keeps: only the discard the marker owes removes it.
+    const seeded = await seedJournal(page);
+    await page.evaluate(() => localStorage.setItem('portfolio.motion.paused', '1'));
     const context = await withoutScript(page, app.origin, browser);
     let after: Awaited<ReturnType<BrowserContext['storageState']>>;
     try {
@@ -113,7 +112,7 @@ test(
     // Without script nothing could clear storage at sign-out: Clear-Site-Data says "cache" alone,
     // and the answer left the pending-discard marker.
     const local = after.origins.find((each) => each.origin === app.origin)?.localStorage ?? [];
-    expect(local.find(({ name }) => name === JOURNAL_KEY)?.value).toBe('{"kept":true}');
+    expect(local.find(({ name }) => name === JOURNAL_KEY)?.value).toBe(seeded);
     expect(after.cookies.map(({ name }) => name)).toContainEqual(
       expect.stringMatching(/^(?:__Host-)?studio_discard$/),
     );
