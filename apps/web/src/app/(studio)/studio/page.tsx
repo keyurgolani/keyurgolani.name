@@ -35,7 +35,7 @@ async function Studio() {
       : await requireOwnerPage('studio.view');
   if (!owner) {
     return (
-      <StudioLoadBoundary>
+      <StudioLoadBoundary profile="demo">
         <StudioEntry
           profile="demo"
           policy={studioPolicy('demo', null)}
@@ -59,7 +59,7 @@ async function Studio() {
       }
     : null;
   return (
-    <StudioLoadBoundary>
+    <StudioLoadBoundary profile="owner">
       <StudioEntry
         profile="owner"
         csrfToken={csrfToken}

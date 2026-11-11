@@ -3,7 +3,7 @@
 import type { ReactNode, Ref } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
-import { SignOutForm, studioProfileOf } from '../sign-out-form';
+import { pageProfileOf, SignOutForm } from '../sign-out-form';
 
 // Studio's late alert (row 88c): when the shell's chunk is still on its way
 // after STUDIO_LOAD_TIMEOUT_MS, "Studio couldn't load." shows in a React root
@@ -74,7 +74,7 @@ export function StudioLoadAlert({
   readonly main: boolean;
   readonly reload?: Ref<HTMLButtonElement>;
   readonly onReload: () => void;
-  /** The page's profile, as <body> names it: under owner the alert offers Sign out (row 88c-RC2). */
+  /** The page's profile, as its load boundary names it: under owner the alert offers Sign out (row 88c-RC2). */
   readonly profile?: string | null;
 }) {
   const content = (
@@ -102,7 +102,7 @@ export function StudioLoadAlert({
 
 /** What the late alert reaches in the page: the browser's, or a test's. */
 export interface LateHost {
-  readonly document: Pick<Document, 'body' | 'createElement' | 'getElementById'>;
+  readonly document: Pick<Document, 'body' | 'createElement' | 'getElementById' | 'querySelector'>;
   readonly setTimeout: (run: () => void, ms: number) => unknown;
   readonly clearTimeout: (timer: unknown) => void;
   /** Renders `alert` into `node`, in a root of its own, before it returns; returns the unmount. */
@@ -143,7 +143,7 @@ export function createLateAlert(host: LateHost): LateAlert {
       late,
       <StudioLoadAlert
         main={false}
-        profile={studioProfileOf(document.body)}
+        profile={pageProfileOf(document)}
         onReload={() => {
           if (state === 'shown') state = 'pressed';
           host.reload();

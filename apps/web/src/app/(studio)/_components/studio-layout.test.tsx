@@ -26,7 +26,7 @@ registerHooks({
 
 test("Studio's <body> names no profile, under owner, demo, or none: the page names it, not the layout (row 88c-RC2 (b))", async (t) => {
   t.after(() => setDeploymentState(undefined));
-  const { default: StudioLayout } = await import('./layout');
+  const { default: StudioLayout } = await import('../layout');
   for (const profile of ['owner', 'demo'] as const) {
     setDeploymentState({ config: { profile } } as unknown as DeploymentState);
     const html = renderToStaticMarkup(<StudioLayout>{null}</StudioLayout>);

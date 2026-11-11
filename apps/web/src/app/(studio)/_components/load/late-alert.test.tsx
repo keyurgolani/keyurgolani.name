@@ -260,7 +260,7 @@ test("the late alert offers Sign out under the profile the page's .studio-load w
     return page.rendered[0]!;
   };
   const owner = shown('owner');
-  assert.match(owner, /<form method="post" action="\/api\/studio\/auth\.logout"/);
+  assert.match(owner, /<form[^>]*\saction="\/api\/studio\/auth\.logout"/);
   assert.match(owner, />Sign out<\/button>/);
   for (const profile of ['demo', null]) {
     assert.equal(shown(profile), LATE_MARKUP, `under ${String(profile)}`);

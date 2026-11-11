@@ -104,10 +104,23 @@ test('look: error.tsx for an owner render that throws, at 1440 and 390 (row 88c-
   try {
     for (const viewport of VIEWPORTS) {
       await page.setViewportSize(viewport);
+      // error.tsx offers Sign out once one auth.session query answers 200 (row 88c-RC2 (b)): the
+      // shot waits for it where it's asked, and a tree that never asks shoots at once.
+      const probed = page
+        .waitForResponse(
+          (response) => new URL(response.url()).pathname === '/api/studio/auth.session',
+          {
+            timeout: 10_000,
+          },
+        )
+        .catch(() => null);
       await page.goto('/studio/preview');
       await expect(page.getByRole('heading', { name: 'Something went wrong' })).toBeVisible({
         timeout: 15_000,
       });
+      if ((await probed)?.status() === 200) {
+        await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+      }
       await shoot(page, `error-${viewport.width}`, testInfo);
     }
   } finally {
