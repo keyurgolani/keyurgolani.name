@@ -545,3 +545,27 @@ test('two loops, each on the ambient slot, gated by the runtime, reduced motion 
   for (const [, frames] of CSS.matchAll(/@keyframes flux-drift-[ab] \{([\s\S]*?)\n\}/g))
     assert.doesNotMatch(frames!, /(?:^|\s)(?:top|left|width|height|margin|inset)[a-z-]*:/);
 });
+
+test("a case sheet's grid keeps the grid's own gutter: nothing on it sets column-gap, so 200% text at 1024 never widens the page", () => {
+  // From 64rem a sheet's parts sit on the 12-column grid with the gutter between its columns. A
+  // media query's rem is the initial 16px, so with the root text at 200% the grid is still on at
+  // 1024px while every --space-* step doubles: a column gap of --space-2xl, eleven of them, is
+  // about 1615px, and the tracks run to about 1701px (quality, the case page's reflow at 200% root
+  // text, 112 records). The case sheet spaces its parts' rows, never its columns.
+  const wide = (rule: Rule) => rule.at.includes('@media (min-width: 64rem)');
+  assert.equal(
+    valueOf(rulesFor('.fx-sheet__body', wide)[0]?.body ?? '', 'column-gap'),
+    'var(--layout-grid-gutter)',
+  );
+  const sheet = rulesFor('.fx-case__sheet .fx-sheet__body');
+  assert.ok(sheet.length > 0, 'the case sheet has rules of its own');
+  for (const rule of sheet) {
+    const where = `${[...rule.at, rule.selector].join(' ')}`;
+    assert.equal(
+      valueOf(rule.body, 'gap'),
+      undefined,
+      `${where} sets gap, which sets column-gap too`,
+    );
+    assert.equal(valueOf(rule.body, 'column-gap'), undefined, `${where} sets column-gap`);
+  }
+});
