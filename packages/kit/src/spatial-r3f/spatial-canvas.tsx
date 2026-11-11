@@ -210,6 +210,66 @@ export function mountCanvas<R>(host: CanvasHost, options: CanvasMountOptions<R>)
   };
 }
 
+/** The two elements a mount sizes its scene between: the host it renders, and its canvas. */
+export interface SizeTargets {
+  readonly host: Element;
+  readonly canvas: Element;
+}
+
+/** The box a scene takes its size and offset from. */
+export interface SceneBox {
+  readonly width: number;
+  readonly height: number;
+  readonly top: number;
+  readonly left: number;
+}
+
+/** What watchSceneBox needs of a ResizeObserver. */
+export interface SizeObserver {
+  observe(target: Element): void;
+  disconnect(): void;
+}
+
+/**
+ * The box the scene is sized to: the host's (row 75). R3F's setSize writes
+ * the canvas's size into its style in pixels, so the canvas's own box is
+ * the last size it was given, never what its host has room for now.
+ */
+export function sceneBox(targets: SizeTargets): SceneBox {
+  const box = targets.host.getBoundingClientRect();
+  return { width: box.width, height: box.height, top: box.top, left: box.left };
+}
+
+/**
+ * Tells `onResize` the scene's box each time it may have changed, until the
+ * returned stop: it watches the host, since the canvas, at a size in pixels,
+ * never changes on its own. `observer` makes the ResizeObserver, a stand-in
+ * in tests.
+ */
+export function watchSceneBox(
+  targets: SizeTargets,
+  onResize: (box: SceneBox) => void,
+  observer: (callback: () => void) => SizeObserver = (callback) => new ResizeObserver(callback),
+): () => void {
+  const watching = observer(() => onResize(sceneBox(targets)));
+  watching.observe(targets.host);
+  return () => watching.disconnect();
+}
+
+/**
+ * The host's own style: a block filling its caller's box, which clips its
+ * canvas, wider than it between the host shrinking and the scene's next
+ * size, and gives its caller's layout none of the canvas's width, so a grid
+ * or flex column isn't held open by it (row 75).
+ */
+export const SPATIAL_HOST_STYLE = {
+  display: 'block',
+  inlineSize: '100%',
+  blockSize: '100%',
+  overflow: 'hidden',
+  contain: 'inline-size',
+} as const;
+
 export function SpatialCanvas({
   state,
   onFailure,
@@ -265,7 +325,7 @@ export function SpatialCanvas({
         let done = false;
         let tornDown = false;
         let root: ReconcilerRoot<HTMLCanvasElement> | null = null;
-        let resize: ResizeObserver | null = null;
+        let stopWatching: (() => void) | null = null;
         const lost = (event: Event) => {
           event.preventDefault();
           fail('context-lost');
@@ -276,7 +336,7 @@ export function SpatialCanvas({
           done = true;
           // First, since disposing of the renderer and forcing its context lost both fire it.
           canvas.removeEventListener('webglcontextlost', lost);
-          resize?.disconnect();
+          stopWatching?.();
           live.current = null;
           try {
             root?.unmount();
@@ -302,15 +362,12 @@ export function SpatialCanvas({
         };
         extend({ ...SCENE_CATALOGUE, ...catalogue } as unknown as Parameters<typeof extend>[0]);
         root = createRoot(canvas);
-        const measured = () => {
-          const box = canvas.getBoundingClientRect();
-          return { width: box.width, height: box.height, top: box.top, left: box.left };
-        };
+        const targets = { host, canvas };
         const owned = root;
         root
           .configure({
             gl: renderer,
-            size: measured(),
+            size: sceneBox(targets),
             dpr: startingDpr(window.devicePixelRatio, maxDpr, minDpr),
             frameloop: 'never',
             camera: { fov: camera?.fov ?? 50, position: [...(camera?.position ?? [0, 0, 6])] },
@@ -319,17 +376,15 @@ export function SpatialCanvas({
             () => {
               if (done) return;
               live.current = { root: owned, store: null, fail };
-              resize = new ResizeObserver(() => {
+              stopWatching = watchSceneBox(targets, (size) => {
                 // The size alone, on the root's store: configure() again would put its own
                 // defaults back, a frameloop of `always` and a pixel ratio up to 2.
                 const store = live.current?.store;
                 if (!store) return;
-                const size = measured();
                 store.getState().setSize(size.width, size.height, size.top, size.left);
                 // A resize clears the canvas, and nothing renders it again until the runtime is active.
                 if (latest.current.state !== 'active') canvas.setAttribute('data-stale', '');
               });
-              resize.observe(canvas);
               setReady(true);
             },
             (error: unknown) => fail('configure', error),
@@ -400,14 +455,7 @@ export function SpatialCanvas({
     }
   });
 
-  return (
-    <div
-      ref={hostRef}
-      aria-hidden="true"
-      data-spatial-host=""
-      style={{ display: 'block', inlineSize: '100%', blockSize: '100%' }}
-    />
-  );
+  return <div ref={hostRef} aria-hidden="true" data-spatial-host="" style={SPATIAL_HOST_STYLE} />;
 }
 
 // The boundary's colors for the scene, read once and again on an appearance
