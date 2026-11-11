@@ -1458,8 +1458,10 @@
   font-size: var(--type-step-2);
 }
 
+/* Together, less a ring's reach: the next fold's hairline sits clear of a focused summary's ring,
+   which under contrast-more didn't change enough over a dark line to count. */
 [data-variant='flux'] .fx-sheet__body > .fx-sec--fold + .fx-sec--fold {
-  margin-block-start: calc(-1 * var(--space-2xl));
+  margin-block-start: calc(var(--ui-focus-offset) + var(--ui-focus-width) - var(--space-2xl));
 }
 
 [data-variant='flux'] .fx-sec--fold {
@@ -3336,7 +3338,7 @@
   }
 
   [data-variant='flux'] .fx-sheet__body > .fx-sec--fold + .fx-sec--fold {
-    margin-block-start: calc(-1 * var(--space-xl));
+    margin-block-start: calc(var(--ui-focus-offset) + var(--ui-focus-width) - var(--space-xl));
   }
 
   [data-variant='flux'] .fx-sheet__body > [data-fx-turn] {
