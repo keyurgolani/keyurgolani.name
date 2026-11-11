@@ -34,7 +34,8 @@ interface FakeBody {
   appendChild(node: FakeNode): FakeNode;
 }
 
-function fakePage() {
+/** The page, whose .studio-load wrapper names `profile` (the load boundary's, row 88c-RC2 (b)). */
+function fakePage(profile: string | null = null) {
   let focused: string | null = null;
   const body: FakeBody = {
     children: [],
@@ -65,6 +66,10 @@ function fakePage() {
     },
     getElementById: (id: string) =>
       id === 'studio-main' ? { focus: () => void (focused = 'studio-main') } : null,
+    querySelector: (selectors: string) =>
+      selectors === '.studio-load'
+        ? { getAttribute: (name: string) => (name === 'data-studio-profile' ? profile : null) }
+        : null,
   };
   const armed: number[] = [];
   const cleared: unknown[] = [];
@@ -241,4 +246,23 @@ test('once Reload Studio is pressed in the late alert, the page reloads, and a c
   await Promise.resolve();
   assert.equal(page.unmounted(), 0, 'its root stays mounted');
   t.mock.timers.reset();
+});
+
+test("the late alert offers Sign out under the profile the page's .studio-load wrapper names, owner alone, never <body>'s (row 88c-RC2 (b))", (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const shown = (profile: string | null) => {
+    const page = fakePage(profile);
+    // A <body> that still named owner would offer it under demo: the wrapper is what counts.
+    Object.assign(page.body, { dataset: { studioProfile: 'owner' } });
+    createLateAlert(page.host).start();
+    t.mock.timers.tick(STUDIO_LOAD_TIMEOUT_MS);
+    assert.equal(page.rendered.length, 1);
+    return page.rendered[0]!;
+  };
+  const owner = shown('owner');
+  assert.match(owner, /<form method="post" action="\/api\/studio\/auth\.logout"/);
+  assert.match(owner, />Sign out<\/button>/);
+  for (const profile of ['demo', null]) {
+    assert.equal(shown(profile), LATE_MARKUP, `under ${String(profile)}`);
+  }
 });
