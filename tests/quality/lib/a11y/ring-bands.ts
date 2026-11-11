@@ -30,8 +30,12 @@ interface Band {
  * Where the paint put each side of the ring, in device pixels: for the top and bottom, the outermost run of rows, from
  * the clip's edge in toward the box's middle, in which a pixel changes between the focused and the blurred clip; for the
  * left and right, the outermost run of columns. A row is read only across the box's columns clear of its corners, and a
- * column only across its rows clear of them: `reach` CSS px (the ring's offset and width) in from each end, a device
- * pixel more, so the other sides' ring, which an inset ring lays inside the box's span, never counts toward a side.
+ * column only across its rows clear of them: from each end, `reach` CSS px (the ring's offset and width) or the corner's
+ * radius, whichever is more, a device pixel more, so neither the other sides' ring, which an inset ring lays inside the
+ * box's span, nor a rounded corner's arc, which bends in from the side's line until the radius, ever counts toward a
+ * side (row 146). The radii are `corners` (top-left, top-right, bottom-right, bottom-left, each horizontal and
+ * vertical, as the probe reads them), scaled down together where they overlap, as CSS draws them. A side whose corners
+ * leave it no straight run (a pill's round ends) is read clear of `reach` alone.
  * The outermost run, so a change inside the ring (a text or underline colour) never widens it. A side with no changed
  * row or column has no band.
  *
@@ -47,6 +51,7 @@ export function paintedBands(
   clip: Box,
   box: Box,
   reach: number,
+  corners: readonly (readonly [number, number])[] = [],
 ): Record<RingSide, Band | null> {
   const scale = focused.width / clip.width;
   const changed = (column: number, row: number) => {
@@ -54,23 +59,51 @@ export function paintedBands(
     const [a, b] = [pixel(focused, i), pixel(blurred, i)];
     return a[0] !== b[0] || a[1] !== b[1] || a[2] !== b[2];
   };
-  const clear = Math.ceil(reach * scale) + 1;
-  const span = (from: number, to: number, size: number) => {
+  // Each corner's radii as CSS draws them: all scaled by one factor where a side's two overlap.
+  const radius = (corner: number, axis: 0 | 1) => Math.max(0, corners[corner]?.[axis] ?? 0);
+  const fit = Math.min(
+    1,
+    ...(
+      [
+        [box.width, radius(0, 0) + radius(1, 0)],
+        [box.width, radius(3, 0) + radius(2, 0)],
+        [box.height, radius(0, 1) + radius(3, 1)],
+        [box.height, radius(1, 1) + radius(2, 1)],
+      ] as const
+    )
+      .filter(([, sum]) => sum > 0)
+      .map(([length, sum]) => length / sum),
+  );
+  const clear = (corner: number, axis: 0 | 1) =>
+    Math.ceil(Math.max(reach, radius(corner, axis) * fit) * scale) + 1;
+  const plain = Math.ceil(reach * scale) + 1;
+  const span = (from: number, to: number, size: number, start: number, end: number) => {
     const out: number[] = [];
     for (
-      let at = Math.max(0, Math.ceil(from) + clear);
-      at <= Math.min(size - 1, Math.floor(to) - clear);
+      let at = Math.max(0, Math.ceil(from) + start);
+      at <= Math.min(size - 1, Math.floor(to) - end);
       at++
     )
       out.push(at);
     return out;
   };
+  // A side's straight run, clear of its corners, or clear of the reach alone where there's none.
+  const straight = (from: number, to: number, size: number, start: number, end: number) => {
+    const run = span(from, to, size, start, end);
+    return run.length > 0 ? run : span(from, to, size, plain, plain);
+  };
   const [left, right] = [(box.x - clip.x) * scale, (box.x + box.width - clip.x) * scale];
   const [top, bottom] = [(box.y - clip.y) * scale, (box.y + box.height - clip.y) * scale];
-  const columns = span(left, right, focused.width);
-  const rows = span(top, bottom, focused.height);
-  const rowChanged = (row: number) => columns.some((column) => changed(column, row));
-  const columnChanged = (column: number) => rows.some((row) => changed(column, row));
+  const across = {
+    top: straight(left, right, focused.width, clear(0, 0), clear(1, 0)),
+    bottom: straight(left, right, focused.width, clear(3, 0), clear(2, 0)),
+    left: straight(top, bottom, focused.height, clear(0, 1), clear(3, 1)),
+    right: straight(top, bottom, focused.height, clear(1, 1), clear(2, 1)),
+  };
+  const rowChanged = (columns: readonly number[]) => (row: number) =>
+    columns.some((column) => changed(column, row));
+  const columnChanged = (rows: readonly number[]) => (column: number) =>
+    rows.some((row) => changed(column, row));
   // From `from` toward `to` (exclusive), by `step`: the first run of indices that pass `test`.
   const run = (
     from: number,
@@ -88,10 +121,10 @@ export function paintedBands(
   };
   const [midX, midY] = [Math.floor((left + right) / 2), Math.floor((top + bottom) / 2)];
   return {
-    top: run(0, midY + 1, 1, rowChanged),
-    bottom: run(focused.height - 1, midY, -1, rowChanged),
-    left: run(0, midX + 1, 1, columnChanged),
-    right: run(focused.width - 1, midX, -1, columnChanged),
+    top: run(0, midY + 1, 1, rowChanged(across.top)),
+    bottom: run(focused.height - 1, midY, -1, rowChanged(across.bottom)),
+    left: run(0, midX + 1, 1, columnChanged(across.left)),
+    right: run(focused.width - 1, midX, -1, columnChanged(across.right)),
   };
 }
 
@@ -118,6 +151,7 @@ export function measureRing(
     clip,
     active.box,
     Math.abs(active.rounding.offset) + width,
+    active.rounding.corners,
   );
   // Each side's band, at least `need` device pixels across, widened outward from the box.
   const across = (side: RingSide): Band | null => {
