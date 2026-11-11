@@ -5,22 +5,16 @@
   "records": "records.json",
   "timingReported": [
     {
-      "target": "composition:flux",
+      "target": "composition:mission-control",
       "metric": "tbtMs",
-      "row": "row 135",
-      "reason": "Its release median was over the bar in 1.0.0-rc.1's release run (42540152468) too, before rc.2's zod regression: rc.2 reports it, and v1.0.0 gates it again."
+      "row": "row 141",
+      "reason": "Under the bar in 1.0.0-rc.1's release run (42540152468), over it in rc.2's preflight 42801199348; an A/B of rc.1's code against 37c8d3f1a on one machine found it no slower than in rc.1: rc.2 reports it, and v1.0.0 gates it again."
     },
     {
-      "target": "composition:horizontal-cinema",
+      "target": "composition:raw-grid",
       "metric": "tbtMs",
-      "row": "row 135",
-      "reason": "Its release median was over the bar in 1.0.0-rc.1's release run (42540152468) too, before rc.2's zod regression: rc.2 reports it, and v1.0.0 gates it again."
-    },
-    {
-      "target": "composition:swiss-signal",
-      "metric": "tbtMs",
-      "row": "row 135",
-      "reason": "Its release median was over the bar in 1.0.0-rc.1's release run (42540152468) too, before rc.2's zod regression: rc.2 reports it, and v1.0.0 gates it again."
+      "row": "row 141",
+      "reason": "Under the bar in 1.0.0-rc.1's release run (42540152468), over it in rc.2's preflights 42801199348 and 42872581515; an A/B of rc.1's code against 37c8d3f1a on one machine found it no slower than in rc.1: rc.2 reports it, and v1.0.0 gates it again."
     }
   ]
 }
