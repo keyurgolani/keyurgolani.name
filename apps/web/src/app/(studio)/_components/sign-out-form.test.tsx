@@ -36,6 +36,13 @@ function ownersForm(html: string, where: string) {
     );
   }
   assert.ok(!found.includes('<noscript>'), `${where}: both submits show`);
+  // One actions row holds Reload Studio and the form's two submits (the coordinator's gap ruling,
+  // row 88c-RC2): the form adds no box, so all three are the row's items, spaced by its gap.
+  assert.match(
+    html,
+    /<div class="studio-alert__actions"><button[^>]*>Reload Studio<\/button><form[^>]*class="studio-sign-out"[^>]*>[\s\S]*?<\/form><\/div>/,
+    `${where}: Reload and Sign out share the actions row`,
+  );
 }
 
 test("error.tsx's view offers the owner Sign out, keep or discard, beside Reload Studio, and offers demo none (row 88c-RC2)", () => {

@@ -82,10 +82,13 @@ export function StudioLoadAlert({
       <h1 className="studio-shell__name">Portfolio Studio</h1>
       <div className="studio-alert" role="alert">
         <p>Studio couldn&apos;t load.</p>
-        <button ref={reload} type="button" className="studio-button" onClick={onReload}>
-          Reload Studio
-        </button>
-        {profile === 'owner' ? <SignOutForm /> : null}
+        {/* One actions row, spaced by studio.css's gap (row 88c-RC2): the form adds no box. */}
+        <div className="studio-alert__actions">
+          <button ref={reload} type="button" className="studio-button" onClick={onReload}>
+            Reload Studio
+          </button>
+          {profile === 'owner' ? <SignOutForm /> : null}
+        </div>
       </div>
     </>
   );

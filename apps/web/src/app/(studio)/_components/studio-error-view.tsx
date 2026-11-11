@@ -26,15 +26,18 @@ export function StudioErrorView({
       <h1>Something went wrong</h1>
       <div className="studio-alert" role="alert">
         <p>Studio couldn&apos;t load.</p>
-        <button
-          ref={reload}
-          type="button"
-          className="studio-button"
-          onClick={() => window.location.reload()}
-        >
-          Reload Studio
-        </button>
-        {profile === 'owner' ? <SignOutForm /> : null}
+        {/* One actions row, spaced by studio.css's gap (row 88c-RC2): the form adds no box. */}
+        <div className="studio-alert__actions">
+          <button
+            ref={reload}
+            type="button"
+            className="studio-button"
+            onClick={() => window.location.reload()}
+          >
+            Reload Studio
+          </button>
+          {profile === 'owner' ? <SignOutForm /> : null}
+        </div>
       </div>
       {error.digest ? (
         <p className="studio-chrome__reference">
