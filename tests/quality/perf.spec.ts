@@ -17,6 +17,7 @@ import {
   totalBlockingTime,
 } from './lib/perf/measure';
 import { PERF_KIND, perfCells } from './lib/perf/plan';
+import { setOwnTimeout } from './lib/perf/isolation';
 import { compareGridVerdict } from './lib/perf/compare-grid';
 import { ceilingFor, perfFindings, timingResult, type PerfRun } from './lib/perf/samples';
 import { RECORDS_ATTACHMENT, recordTuple } from './lib/records';
@@ -66,7 +67,8 @@ for (const cell of perfCells(plan)) {
     async ({ page, browserName }, testInfo) => {
       // Each load runs up to memory.growthWindowMs[1] after its load event, throttled.
       const perLoad = thresholds.memory.growthWindowMs[1] + 30_000;
-      test.setTimeout(60_000 + perLoad * (thresholds.timing.runs + 1));
+      // Plus the time it waited for the isolation lock (lib/perf/isolation.ts).
+      setOwnTimeout(testInfo, 60_000 + perLoad * (thresholds.timing.runs + 1));
       expect(browserName, "the perf cells measure through Chromium's CDP").toBe('chromium');
       await page.addInitScript(PERF_PROBE);
       const cdp = await startLab(page);
@@ -196,7 +198,7 @@ if (demoStudio) {
         ],
       },
       async ({ page, browserName }, testInfo) => {
-        test.setTimeout(120_000);
+        setOwnTimeout(testInfo, 120_000);
         expect(browserName, "the perf cells measure through Chromium's CDP").toBe('chromium');
         const ran: string[] = [];
         await page.addInitScript(PERF_PROBE);
