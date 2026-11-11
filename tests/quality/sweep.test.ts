@@ -25,6 +25,7 @@ import {
   runnerFailure,
 } from './lib/records';
 import { runCell, startPack, storageFindings, type runPass } from './lib/run-cell';
+import { recordIsolationWait } from './lib/perf/isolation';
 import { validateExceptions, type QualityException } from './lib/exceptions';
 import { fixtureContext, fixtureInputs } from './lib/exception-fixtures';
 import type { CellFailure } from './lib/failure-records';
@@ -327,13 +328,46 @@ test("a swept test that didn't run fails plan-coverage, naming its pack and vari
   }
 });
 
+test("a cell test's timeout is its own 240 s plus the time it waited for the isolation lock, so a test that waited for a perf test keeps its whole budget", async () => {
+  const plan = planCells({ meta: twoPacks(), registrations, mode: 'pr', changes: CHANGES });
+  const plain = plan.cells.find((each) => !each.sweep)!;
+  const own = plan.tests.find((each) => each.cell === plain)!;
+  // Push B's CI (42951677137): Editorial Evidence's 1440 default waited about 93 s for chapters' perf
+  // test, then timed out at exactly 240,000 ms, since runCell's timeout replaced the fixture's extension.
+  for (const [waited, wanted] of [
+    [null, 240_000],
+    [0, 240_000],
+    [93_000, 333_000],
+  ] as const) {
+    const { dir, testInfo, expect, page } = stubRun(null);
+    const set: number[] = [];
+    testInfo.setTimeout = (ms: number) => void set.push(ms);
+    if (waited !== null) recordIsolationWait(testInfo, waited);
+    await runCell(
+      {
+        page: page as never,
+        cell: plain,
+        viewport: own.viewport,
+        row: own.row,
+        conditions: own.conditions,
+        testInfo: testInfo as never,
+        expect: expect as never,
+        origin: 'http://127.0.0.1:3000',
+      },
+      stubPass,
+    );
+    rmSync(dir, { recursive: true, force: true });
+    assert.equal(set.at(-1), wanted, `waited ${waited}`);
+  }
+});
+
 /** A stand-in for a Playwright run of one cell test: its output in a temp dir, its soft expectations kept. */
 function stubRun(throwOn: string | null) {
   const dir = mkdtempSync(path.join(tmpdir(), 'sweep-run-'));
   const softs: string[] = [];
   const testInfo = {
     annotations: [] as { type: string; description?: string }[],
-    setTimeout: () => undefined,
+    setTimeout: (_ms: number) => undefined as void,
     outputPath: (name: string) => path.join(dir, name),
     attach: async () => undefined,
   };

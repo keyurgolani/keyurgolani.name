@@ -40,6 +40,21 @@ export const STALE_MS = 30_000;
 /** The longest a test waits for the lock: several perf tests' worth, then it fails. */
 export const MAX_WAIT_MS = 10 * 60_000;
 
+// How long each test waited for the lock, by its TestInfo. The fixture extends the test's timeout
+// by the wait, and a test body that sets a timeout of its own (lib/run-cell.ts) adds the wait back,
+// so a test that waited for a perf test still has all of its own budget.
+const waits = new WeakMap<object, number>();
+
+/** Records how long a test waited for the lock (fixtures.ts, once it holds it). */
+export function recordIsolationWait(testInfo: object, waitedMs: number): void {
+  waits.set(testInfo, waitedMs);
+}
+
+/** How long a test waited for the lock: 0 for one that didn't, or that has no record. */
+export function isolationWaitFor(testInfo: object): number {
+  return waits.get(testInfo) ?? 0;
+}
+
 /** A test file's isolation: a perf test runs alone, and every other test shares the runner. */
 export function isolationFor(file: string): Isolation {
   return path.basename(file) === PERF_SPEC ? 'exclusive' : 'shared';
