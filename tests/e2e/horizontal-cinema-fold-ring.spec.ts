@@ -5,14 +5,18 @@ import { contractFixture } from '../../packages/variant-contract/src/node/fixtur
 import { expect, test } from '../harness/fixtures';
 import { focusFindings } from '../quality/lib/a11y/interaction';
 import { inPage, type Active } from '../quality/lib/a11y/probe';
-import { load, ringContrast } from './horizontal-cinema-model';
+import { load } from './horizontal-cinema-model';
 
 // Horizontal Cinema's scene folds at 390 (row 111, HC family 4): on a phone a scene that folds
 // shows its picture under a disclosure, the summary a bar across the scene. The scene clips
 // (overflow: clip), and the summary runs its full width, so a ring drawn outside the summary
 // lost its sides to the clip: the quality cells read #scene-5, -6 and -15's fold summaries' focus
 // under 3:1 in every mode and row. Focused from the keyboard, a fold's summary rings inside its own
-// edges, at 3:1 on every side of its centre line, and passes the focus check, in light and dark.
+// edges (a closed fold's, its scene's last row on a phone, round its scene's corners) and passes the
+// focus check, the quality cells' own verdict, in light and dark. The verdict is focusFindings()'s
+// alone: ringContrast (horizontal-cinema-model.ts) clears a side's band of its corners by the ring's
+// offset and width only, so a rounded corner's arc joins the side and moves its centre line off the
+// ring (C's bands probe, 11-11); row 146 fixes that, and this test can read it again then.
 // On the complete contract fixture at 390 by 844, the scheme and mode by the visitor's cookie.
 
 const FIXTURE = contractFixture('complete');
@@ -39,7 +43,7 @@ const SCENES = ['scene-5', 'scene-6', 'scene-15'] as const;
 
 for (const mode of ['light', 'dark'] as const) {
   test(
-    `in ${mode} at 390, each scene fold's summary focused from the keyboard rings inside its edges at 3:1 on every side and passes the focus check (row 111)`,
+    `in ${mode} at 390, each scene fold's summary focused from the keyboard rings an outline inside its edges and passes the focus check (row 111)`,
     { annotation, tag },
     async ({ page, app }) => {
       await page.context().addCookies([
@@ -57,15 +61,8 @@ for (const mode of ['light', 'dark'] as const) {
         await page.keyboard.press('Shift');
         await summary.focus();
         expect(await summary.evaluate((el) => el.matches(':focus-visible')), scene).toBe(true);
-        const measured = await ringContrast(page, summary);
-        const sides = (['top', 'right', 'bottom', 'left'] as const).map((side) => {
-          const { points, strong } = measured.sides[side];
-          return { side, inView: points > 0, atThreeToOne: strong === points };
-        });
-        expect(sides, `${scene}: its ring's centre line ${JSON.stringify(measured)}`).toEqual(
-          sides.map(({ side }) => ({ side, inView: true, atThreeToOne: true })),
-        );
         const active = await inPage<Active>(page, { kind: 'active' });
+        expect(active.rounding?.width ?? 0, `${scene}: its ring is an outline`).toBeGreaterThan(0);
         expect(await focusFindings(page, active), `${scene}: the focus check`).toEqual([]);
       }
     },
