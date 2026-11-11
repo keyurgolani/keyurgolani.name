@@ -797,6 +797,165 @@ jobs:
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
 
+  # Row 129's evidence only, never merged: Kinetic Cosmos's four missing-media cells at 390x844 in
+  # the default row (light, dark, high-contrast and system on platform-neutral/warm-parchment/
+  # humanist-ui), on CI Linux, at row 129's fix (lead A and the coordinator, 11-11, row 119's
+  # evidence shape, #239, after rc1-evidence's, 18a0b7800):
+  #   pnpm ci:quality-full --grep=<grep> --retries=0 tests/quality/cells.spec.ts
+  # in quality-pr's pinned image, user and options, after install and ci:build. No PR plan holds
+  # these cells: a state's sentinel is on the first composition only (tests/quality/cells.ts), and a
+  # directed variant plans its complete state alone. Their four records (occlusion, obscured, on
+  # the wordmark link #kc--top > p:nth-child(1) > a:nth-child(1), row 129) should be gone here.
+  # This workflow change makes the draft run the complete product, by design (ci/select-jobs.mjs).
+  # No `--` before the grep: pnpm passes a `--` through, and ci:quality-full's own script ends in
+  # `-- --external-variant`, so a second `--` would reach Playwright as file filters. The run's own
+  # verdict fails by design (a grep of the plan is judged against all of it), so its exit is
+  # printed and kept apart; the job fails on a listing of other than exactly 4, on the argv
+  # checks, or when the read-back doesn't find the four cells once each.
+  row129-evidence:
+    name: row129-evidence (KC missing-media 390x844 default, 4 cells)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      # The image this job runs in, so the visual cells know they're in it.
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      CI_REPORTS_DIR: reports/row129
+      EV_GREP: 'composition:kinetic-cosmos missing-media / kinetic-cosmos/platform-neutral/warm-parchment/humanist-ui/(light|dark|high-contrast|system) 390x844 default '
+      EV_COUNT: '4'
+      # cells.spec.ts alone, as the local listings had it: a file filter Playwright takes from the
+      # runner, so the plan's other specs neither list nor collect.
+      EV_SPEC: tests/quality/cells.spec.ts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: pnpm ci:build
+        run: pnpm ci:build
+      # The listing's own verdict fails (no test ran), hence || true. The count decides: exactly
+      # EV_COUNT tests, on Playwright's Total line and in its list lines, or the job fails here,
+      # before the run.
+      - name: List the job's tests
+        id: list
+        shell: bash
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary-list
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets-list
+          LIST_FILE: ${{ runner.temp }}/row129-list.txt
+        run: |
+          echo "[row129] grep: $EV_GREP"
+          pnpm ci:quality-full "--grep=$EV_GREP" --retries=0 --list "$EV_SPEC" > "$LIST_FILE" 2>&1 || true
+          cat "$LIST_FILE"
+          total=$(awk '/^Total: [0-9]+ tests? in /{n=$2} END{if (n == "") print "unread"; else print n}' "$LIST_FILE")
+          lines=$(awk '/^  \[[a-z]+ [0-9a-f]+\] /{n++} END{print n+0}' "$LIST_FILE")
+          echo "[row129] listed $total test(s), $lines list line(s); want exactly $EV_COUNT"
+          echo "listed=$total" >> "$GITHUB_OUTPUT"
+          if [ "$total" != "$EV_COUNT" ] || [ "$lines" != "$EV_COUNT" ]; then
+            echo "[row129] FAIL: the grep listed $total test(s) and $lines list line(s), not exactly $EV_COUNT"
+            exit 1
+          fi
+      # The run's verdict fails by design (a grep run exits 1), so its exit is data, printed. The
+      # step fails only on the argv checks, each an exact argument of the process (its
+      # /proc/<pid>/cmdline, split on NUL): the runner's holds --external-variant and
+      # --grep=<EV_GREP>; Playwright's holds --grep=<EV_GREP>, --retries=0 and EV_SPEC, and no `--`;
+      # and both were seen.
+      - name: pnpm ci:quality-full --grep=<the four cells> --retries=0 tests/quality/cells.spec.ts
+        id: run
+        if: ${{ !cancelled() && steps.list.outcome == 'success' }}
+        shell: bash
+        env:
+          CI_REPRO_COMMAND: "pnpm ci:quality-full '--grep=${{ env.EV_GREP }}' --retries=0 ${{ env.EV_SPEC }}"
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+          RUN_LOG: ${{ runner.temp }}/row129-run.txt
+        run: |
+          pnpm ci:quality-full "--grep=$EV_GREP" --retries=0 "$EV_SPEC" > "$RUN_LOG" 2>&1 &
+          pid=$!
+          # The runner's (tests/quality/run.ts) and Playwright's process, each once, from /proc.
+          runner=''
+          playwright=''
+          while kill -0 "$pid" 2> /dev/null && [ -z "$playwright" ]; do
+            for f in /proc/[0-9]*/cmdline; do
+              a=$(tr '\0' ' ' < "$f" 2> /dev/null || true)
+              case "$a" in
+                *'tests/quality/run.ts full'*) [ -n "$runner" ] || { runner=$f; cp "$f" "$RUNNER_TEMP/runner.argv" 2> /dev/null || true; echo "[row129] runner argv: $a"; } ;;
+                *'@playwright/test/cli'*' test --config '*) [ -n "$playwright" ] || { playwright=$f; cp "$f" "$RUNNER_TEMP/playwright.argv" 2> /dev/null || true; echo "[row129] playwright argv: $a"; } ;;
+              esac
+            done
+            sleep 1
+          done
+          rc=0
+          wait "$pid" || rc=$?
+          cat "$RUN_LOG"
+          echo "[row129] the run exited $rc (data: a grep of the plan is judged against all of it)"
+          has() { [ -s "$1" ] && tr '\0' '\n' < "$1" | grep -Fxq -- "$2"; }
+          fail=''
+          if [ ! -s "$RUNNER_TEMP/runner.argv" ]; then
+            fail="$fail; the runner's argv was not seen"
+          else
+            has "$RUNNER_TEMP/runner.argv" --external-variant || fail="$fail; the runner's argv lacks --external-variant"
+            has "$RUNNER_TEMP/runner.argv" "--grep=$EV_GREP" || fail="$fail; the runner's argv lacks --grep=$EV_GREP as one argument"
+          fi
+          if [ ! -s "$RUNNER_TEMP/playwright.argv" ]; then
+            fail="$fail; Playwright's argv was not seen"
+          else
+            has "$RUNNER_TEMP/playwright.argv" "--grep=$EV_GREP" || fail="$fail; Playwright's argv lacks --grep=$EV_GREP as one argument"
+            has "$RUNNER_TEMP/playwright.argv" --retries=0 || fail="$fail; Playwright's argv lacks --retries=0"
+            has "$RUNNER_TEMP/playwright.argv" "$EV_SPEC" || fail="$fail; Playwright's argv lacks $EV_SPEC"
+            if has "$RUNNER_TEMP/playwright.argv" --; then fail="$fail; Playwright's argv holds a --, so what follows it is file filters"; fi
+          fi
+          if [ -n "$fail" ]; then
+            echo "[row129] FAIL: ${fail#; }"
+            exit 1
+          fi
+          echo "[row129] argv checks: passed"
+      - name: The four cells, read back
+        if: ${{ always() && steps.run.outcome != 'skipped' }}
+        shell: bash
+        env:
+          LISTED: ${{ steps.list.outputs.listed }}
+        run: |
+          if ! command -v python3 > /dev/null; then
+            echo "::error::python3 isn't in this image: the cells aren't read here; the artifact holds them"
+            exit 1
+          fi
+          python3 -I _ci-evidence/kc-row129-read.py reports/row129/quality "$LISTED"
+      # The reports upload only when this succeeds: it deletes what it can't read, and fails when
+      # it did, or when the canary is still in any.
+      - name: Scrub its reports
+        id: scrub
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload the four cells
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: row129-evidence
+          path: |
+            reports/row129/quality/results/
+            reports/row129/quality/summary.json
+            reports/row129/quality/verdict.json
+            reports/row129/quality/plan.json
+          if-no-files-found: error
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
   # quality-pr's shards judged whole (tests/quality/lib/shards.ts): zero
   # tests, the plan's coverage, perf coverage, empty projects, the canary
   # probe, and targets with no result, across every shard together. A shard
