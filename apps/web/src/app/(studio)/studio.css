@@ -631,9 +631,12 @@ body:has(> studio-load-late) .studio-load {
   background: transparent;
 }
 
+/* Studio's button rows. The load alert's and error.tsx's row holds Reload Studio and Sign out's
+   form, whose display: contents makes its two submits the row's items (row 88c-RC2). */
 .studio-source__actions,
 .studio-conflict__actions,
-.studio-dialog__actions {
+.studio-dialog__actions,
+.studio-alert__actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;

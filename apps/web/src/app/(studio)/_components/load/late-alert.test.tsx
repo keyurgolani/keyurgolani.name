@@ -114,7 +114,7 @@ function fakePage(profile: string | null = null) {
 
 /** The alert the late root renders: the one the boundary renders too, as a plain box. */
 const LATE_MARKUP =
-  '<div class="studio-shell__main" id="studio-load-failure" tabindex="-1"><h1 class="studio-shell__name">Portfolio Studio</h1><div class="studio-alert" role="alert"><p>Studio couldn&#x27;t load.</p><button type="button" class="studio-button">Reload Studio</button></div></div>';
+  '<div class="studio-shell__main" id="studio-load-failure" tabindex="-1"><h1 class="studio-shell__name">Portfolio Studio</h1><div class="studio-alert" role="alert"><p>Studio couldn&#x27;t load.</p><div class="studio-alert__actions"><button type="button" class="studio-button">Reload Studio</button></div></div></div>';
 
 test("a commit before 5 seconds stops the late alert's clock: no <studio-load-late>, even once the timers run past 5 seconds (row 88c)", (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
