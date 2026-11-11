@@ -300,8 +300,12 @@
   align-items: center;
 }
 
-/* A grid of its own on the wordmark's tracks: display: contents would take the link out of the tab order. */
+/* A grid of its own on the wordmark's tracks: display: contents would take the link out of the tab order.
+   It paints above its tagline, which lies on its second row: the link has no ground, so the tagline
+   shows through, and the link is what's on top at its center, its ring over the tagline (row 129). */
 [data-variant='kinetic-cosmos'] .kc-wordmark__link {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-column: 1 / -1;
   grid-row: 1 / span 2;
