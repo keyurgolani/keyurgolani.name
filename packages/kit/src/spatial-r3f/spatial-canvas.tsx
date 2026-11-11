@@ -230,15 +230,21 @@ export interface SizeObserver {
   disconnect(): void;
 }
 
-/** The box the scene is sized to. */
+/**
+ * The box the scene is sized to: the host's. R3F's setSize writes
+ * the canvas's size into its style in pixels, so the canvas's own box is
+ * the last size it was given, never what its host has room for now.
+ */
 export function sceneBox(targets: SizeTargets): SceneBox {
-  const box = targets.canvas.getBoundingClientRect();
+  const box = targets.host.getBoundingClientRect();
   return { width: box.width, height: box.height, top: box.top, left: box.left };
 }
 
 /**
  * Tells `onResize` the scene's box each time it may have changed, until the
- * returned stop. `observer` makes the ResizeObserver, a stand-in in tests.
+ * returned stop: it watches the host, since the canvas, at a size in pixels,
+ * never changes on its own. `observer` makes the ResizeObserver, a stand-in
+ * in tests.
  */
 export function watchSceneBox(
   targets: SizeTargets,
@@ -246,15 +252,22 @@ export function watchSceneBox(
   observer: (callback: () => void) => SizeObserver = (callback) => new ResizeObserver(callback),
 ): () => void {
   const watching = observer(() => onResize(sceneBox(targets)));
-  watching.observe(targets.canvas);
+  watching.observe(targets.host);
   return () => watching.disconnect();
 }
 
-/** The host's own style: a block filling its caller's box. */
+/**
+ * The host's own style: a block filling its caller's box, which clips its
+ * canvas, wider than it between the host shrinking and the scene's next
+ * size, and gives its caller's layout none of the canvas's width, so a grid
+ * or flex column isn't held open by it.
+ */
 export const SPATIAL_HOST_STYLE = {
   display: 'block',
   inlineSize: '100%',
   blockSize: '100%',
+  overflow: 'hidden',
+  contain: 'inline-size',
 } as const;
 
 export function SpatialCanvas({
