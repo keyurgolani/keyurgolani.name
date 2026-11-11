@@ -20,22 +20,19 @@ registerHooks({
       : nextResolve(specifier, context),
 });
 
-// Studio's <body> names the deployment's profile (row 88c-RC2), so error.tsx and the load alerts,
-// which load no owner code, offer Sign out under owner alone.
+// Studio's layout renders markup only (row 88c-RC2 (b); routes.test.ts): <body> names no profile,
+// under either. The page's load boundary names it on its own wrapper, and error.tsx asks
+// auth.session.
 
-test("Studio's <body> names the deployment's profile, which error.tsx and the load alerts read (row 88c-RC2)", async (t) => {
+test("Studio's <body> names no profile, under owner, demo, or none: the page names it, not the layout (row 88c-RC2 (b))", async (t) => {
   t.after(() => setDeploymentState(undefined));
   const { default: StudioLayout } = await import('./layout');
   for (const profile of ['owner', 'demo'] as const) {
     setDeploymentState({ config: { profile } } as unknown as DeploymentState);
     const html = renderToStaticMarkup(<StudioLayout>{null}</StudioLayout>);
-    assert.match(
-      html,
-      new RegExp(`<body class="studio" data-studio-profile="${profile}">`),
-      profile,
-    );
+    assert.match(html, /<body class="studio"><\/body>/, profile);
   }
   setDeploymentState(undefined);
   const none = renderToStaticMarkup(<StudioLayout>{null}</StudioLayout>);
-  assert.match(none, /<body class="studio">/, 'no deployment, no profile');
+  assert.match(none, /<body class="studio"><\/body>/, 'no deployment');
 });
