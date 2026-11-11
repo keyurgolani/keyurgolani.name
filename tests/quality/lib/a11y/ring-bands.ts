@@ -1,11 +1,14 @@
 import type { Active, Box } from './probe';
-import { centreLineChange, ringCentreLine, type LinePoint } from './interaction';
+import { centreLineChange, EDGE_ALLOWANCE, ringCentreLine, type LinePoint } from './interaction';
 import { pixel, type Image } from '../pixels';
 
 // A focused stop's outline ring measured on two shots of it, focused and blurred, side by side along
 // its centre line: Horizontal Cinema's e2e ring checks' measure (tests/e2e/horizontal-cinema-model.ts
 // ringContrast takes the shots and calls measureRing). Pure, on the images, so a unit can read a
 // known ring through it.
+
+/** Whether a centre line point is on a corner's arc: its normal along neither axis. */
+const onArc = ({ nx, ny }: LinePoint) => Math.abs(nx) !== 1 && Math.abs(ny) !== 1;
 
 /** A side of a focus ring, as its centre line's normal points out from the box. */
 export type RingSide = 'top' | 'right' | 'bottom' | 'left';
@@ -16,6 +19,15 @@ export interface RingContrast {
   readonly sides: Readonly<Record<RingSide, { readonly points: number; readonly strong: number }>>;
   /** Each side's painted band, how many device pixels across (0 where the paint left the side untouched). */
   readonly bands: Readonly<Record<RingSide, number>>;
+  /**
+   * Each side's arc points that read weak alone and that the arc rule holds strong (counted in its
+   * `strong`): a corner's arc holds its lone antialiased misses when no two adjacent points on it
+   * are weak and the whole line reads at the gate's EDGE_ALLOWANCE (row 146, the coordinator's
+   * ruling, option 1). A straight side holds every point, so it's 0 on one with no arc.
+   */
+  readonly held: Readonly<Record<RingSide, number>>;
+  /** The whole line, each point read alone: how many are in the clips, and how many of them are strong. */
+  readonly line: { readonly points: number; readonly strong: number };
   /** The box the centre line runs round: the border box set out by the offset and half the width. */
   readonly box: Box;
 }
@@ -187,18 +199,58 @@ export function measureRing(
   const sideOf = ({ nx, ny }: LinePoint): RingSide =>
     Math.abs(ny) >= Math.abs(nx) ? (ny < 0 ? 'top' : 'bottom') : nx > 0 ? 'right' : 'left';
   const halves = { top: t, right: r, bottom: b, left: l };
+  // Each point read alone, at its side's band: whether it's in the clips, and whether it's strong. A
+  // side the paint left untouched has every point weak.
+  const reads = line.map((point) => {
+    const side = sideOf(point);
+    const band = halves[side];
+    const { strong, total } = centreLineChange(
+      focused,
+      blurred,
+      clip,
+      [point],
+      ratio,
+      band ? band.half : width / 2,
+    );
+    return { side, counted: total > 0, strong: band !== null && strong > 0, arc: onArc(point) };
+  });
+  // The arc rule (row 146, the coordinator's ruling, option 1). Round a corner, where the paint
+  // antialiases every pixel, a lone point under 3:1 is the blend, not a gap in the ring: an arc
+  // holds its weak points strong when no two adjacent points on it are weak, and only while the
+  // whole line reads at the gate's EDGE_ALLOWANCE. A straight side, painted on whole device pixels,
+  // holds every point. A run of adjacent weak points, an arc gone, fails its arc whole.
+  const counted = reads.filter((read) => read.counted);
+  const whole =
+    counted.length > 0 &&
+    counted.filter((read) => read.strong).length >= counted.length * EDGE_ALLOWANCE;
+  const held = new Set<number>();
+  if (whole) {
+    // Each arc: a run of consecutive arc points along the line, which closes on itself.
+    const n = reads.length;
+    const start = reads.findIndex((read, i) => read.arc && !reads[(i - 1 + n) % n]!.arc);
+    for (let i = start; start >= 0 && i < start + n; i++) {
+      const at = i % n;
+      if (!reads[at]!.arc || reads[(at - 1 + n) % n]!.arc) continue;
+      const run: number[] = [];
+      for (let k = at; reads[k % n]!.arc && run.length < n; k++) run.push(k % n);
+      const weak = run.filter((k) => reads[k]!.counted && !reads[k]!.strong);
+      const adjacent = weak.some((k, j) => j > 0 && weak[j - 1] === (k - 1 + n) % n);
+      if (!adjacent) for (const k of weak) held.add(k);
+    }
+  }
   const sides = Object.fromEntries(
     (['top', 'right', 'bottom', 'left'] as const).map((side) => {
-      const points = line.filter((point) => sideOf(point) === side);
-      const band = halves[side];
-      if (!band) {
-        const { total } = centreLineChange(focused, blurred, clip, points, ratio, width / 2);
-        return [side, { points: total, strong: 0 }];
-      }
-      const { strong, total } = centreLineChange(focused, blurred, clip, points, ratio, band.half);
-      return [side, { points: total, strong }];
+      const mine = reads.flatMap((read, i) => (read.side === side && read.counted ? [i] : []));
+      const strong = mine.filter((i) => reads[i]!.strong || held.has(i)).length;
+      return [side, { points: mine.length, strong }];
     }),
   ) as RingContrast['sides'];
+  const heldBy = Object.fromEntries(
+    (['top', 'right', 'bottom', 'left'] as const).map((side) => [
+      side,
+      [...held].filter((i) => reads[i]!.side === side).length,
+    ]),
+  ) as RingContrast['held'];
   const painted = Object.fromEntries(
     (['top', 'right', 'bottom', 'left'] as const).map((side) => {
       const band = bands[side];
@@ -208,6 +260,8 @@ export function measureRing(
   return {
     sides,
     bands: painted,
+    held: heldBy,
+    line: { points: counted.length, strong: counted.filter((read) => read.strong).length },
     box: {
       x: snapped.x - distance,
       y: snapped.y - distance,

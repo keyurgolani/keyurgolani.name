@@ -721,7 +721,9 @@ export type { RingContrast, RingSide } from '../quality/lib/a11y/ring-bands';
  * middle of its painted band, the band at least the focus check's perimeterPx across (a thinner band
  * is widened outward by whole device pixels, which then must change too), and every point of it is
  * held to 3:1 across the whole band, as centreLineChange holds it. A side the paint left untouched
- * has every point weak. Only where it measures moved: every point, no tolerance, 3:1.
+ * has every point weak. Only where it measures moved: every straight point at 3:1, no tolerance; round a
+ * corner's arc, where the paint antialiases every pixel, a lone point under 3:1 holds when no two adjacent
+ * points on that arc are weak and the whole line reads at the gate's EDGE_ALLOWANCE (row 146, option 1).
  */
 export async function ringContrast(page: Page, locator: Locator): Promise<RingContrast> {
   if (!(await locator.evaluate((element) => element === document.activeElement)))
