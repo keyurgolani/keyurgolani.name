@@ -211,6 +211,16 @@ test('on a phone a scene fold’s summary rings inside its own edges: the scene 
   );
 });
 
+test('on a phone a closed fold’s summary rounds its bottom corners to its scene’s, so its inset ring keeps them (row 111)', () => {
+  // On a phone the bottom bar is hidden, so a closed fold's summary is its scene's last row, and the
+  // scene rounds and clips its corners: square, the summary's inset ring lost its bottom corners there.
+  const phone = blocks(PHONE).join('\n');
+  assert.match(declared(at('.hc-shell .hc-bar--bottom'), phone), /display: none;/);
+  const closed = declared(at('.hc-shell .hc-fold:not([open]) > .hc-fold__summary'), phone);
+  assert.match(closed, /border-end-start-radius: var\(--ui-radius-media\);/);
+  assert.match(closed, /border-end-end-radius: var\(--ui-radius-media\);/);
+});
+
 test('on the title card a focus ring is the canvas’s ink, text-primary: the card’s panel is the canvas, not the matte', () => {
   // The matte scene's rule gives its rings the band's ink, on-scrim; the card inside it is drawn on
   // the canvas, so it sets the focus color its rings read there, and still no outline of its own.
