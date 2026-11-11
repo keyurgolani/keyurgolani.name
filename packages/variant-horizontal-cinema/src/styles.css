@@ -1874,6 +1874,14 @@
     --ui-focus-offset: calc(var(--ui-focus-width) * -1);
   }
 
+  /* Closed, the summary is its scene's last row (the bottom bar is hidden here), and the scene rounds
+     and clips its corners: the summary takes the scene's radius there, so its inset ring follows the
+     corners inside the clip. It has no ground of its own, so nothing changes at rest (row 111). */
+  [data-variant='horizontal-cinema'] .hc-shell .hc-fold:not([open]) > .hc-fold__summary {
+    border-end-start-radius: var(--ui-radius-media);
+    border-end-end-radius: var(--ui-radius-media);
+  }
+
   [data-variant='horizontal-cinema'] .hc-fold__credit {
     color: var(--color-text-secondary);
   }
