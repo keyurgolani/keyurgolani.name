@@ -4,11 +4,18 @@
 // are rounded reads 2 px on every side, its centre line round the stop's, and every point of it strong, as the
 // focus check's own centre line (ringCentreLine and centreLineChange) reads it whole. Its centre
 // line's box is the stop's set in by a pixel, half the width less the offset.
+//
+// And a ring as Chromium painted it (row 146's probe, saved under fixtures/ring-bands): #scene-5's fold
+// summary at 390, its bottom corners rounded 16 px on a fractional box. Its straight sides hold every
+// point; round each arc the antialiasing leaves a few lone points under 3:1, which the arc rule (the
+// coordinator's ruling, option 1: no two adjacent weak points on an arc, and the whole line at the
+// gate's 0.9) holds strong. A stretch of a straight side gone, or a run of an arc, still fails.
 
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { loadThresholds } from '../../quality/thresholds';
-import type { Image } from './lib/pixels';
+import { decodePng, type Image } from './lib/pixels';
 import { centreLineChange, ringCentreLine, type LinePoint } from './lib/a11y/interaction';
 import { measureRing, type RingSide } from './lib/a11y/ring-bands';
 
@@ -107,5 +114,81 @@ for (const radius of [0, 4, 8, 16]) {
       const { points, strong } = ring.sides[side];
       assert.ok(points > 0 && strong === points, `${side}: ${strong}/${points}`);
     }
+  });
+}
+
+const FIXTURES = new URL('./fixtures/ring-bands/', import.meta.url);
+const painted = JSON.parse(
+  readFileSync(new URL('scene-5-summary-390.json', FIXTURES), 'utf8'),
+) as Record<
+  'light' | 'dark',
+  {
+    readonly box: { x: number; y: number; width: number; height: number };
+    readonly clip: { x: number; y: number; width: number; height: number };
+    readonly rounding: {
+      readonly corners: readonly (readonly [number, number])[];
+      readonly offset: number;
+      readonly width: number;
+    };
+  }
+>;
+/** The probe's two shots of the summary's clip in `mode`, and where it lay. */
+function chromium(mode: 'light' | 'dark') {
+  const read = (shot: string) =>
+    decodePng(readFileSync(new URL(`scene-5-summary-390-${mode}.${shot}.png`, FIXTURES)));
+  return { ...painted[mode], focused: read('focused'), blurred: read('blurred') };
+}
+/** `focused` with the pixels `gone` picks (CSS px in the clip) set back to `blurred`'s: the ring missing there. */
+function without(
+  { focused, blurred, clip }: { focused: Image; blurred: Image; clip: { x: number; y: number } },
+  gone: (x: number, y: number) => boolean,
+): Image {
+  const data = new Uint8Array(focused.data);
+  for (let row = 0; row < focused.height; row++)
+    for (let column = 0; column < focused.width; column++) {
+      if (!gone(clip.x + column + 0.5, clip.y + row + 0.5)) continue;
+      const i = (row * focused.width + column) * 4;
+      data.set(blurred.data.subarray(i, i + 4), i);
+    }
+  return { width: focused.width, height: focused.height, data };
+}
+const whole = (ring: ReturnType<typeof measureRing>) =>
+  Object.fromEntries(
+    SIDES.map((side) => [side, ring.sides[side].strong === ring.sides[side].points]),
+  );
+
+for (const mode of ['light', 'dark'] as const) {
+  test(`#scene-5's fold summary as Chromium painted it in ${mode} at 390 reads whole: every straight point strong, each arc's lone antialiased misses held by the arc rule (row 146)`, () => {
+    const shot = chromium(mode);
+    const ring = measureRing(shot.focused, shot.blurred, shot.clip, shot, held);
+    assert.deepEqual(ring.bands, { top: 2, right: 2, bottom: 2, left: 2 });
+    assert.deepEqual(
+      whole(ring),
+      { top: true, right: true, bottom: true, left: true },
+      JSON.stringify(ring),
+    );
+  });
+
+  test(`#scene-5's fold summary in ${mode} with a stretch of its right side's ring gone reads its right side weak (row 146)`, () => {
+    const shot = chromium(mode);
+    const right = shot.box.x + shot.box.width;
+    const focused = without(shot, (x, y) => x > right - 4 && x < right + 1 && y > 400 && y < 420);
+    const ring = measureRing(focused, shot.blurred, shot.clip, shot, held);
+    assert.equal(whole(ring).right, false, JSON.stringify(ring));
+  });
+
+  test(`#scene-5's fold summary in ${mode} with a run of its bottom-right arc gone reads that corner weak (row 146)`, () => {
+    const shot = chromium(mode);
+    const radius = shot.rounding.corners[2]![0];
+    const [cx, cy] = [shot.box.x + shot.box.width - radius, shot.box.y + shot.box.height - radius];
+    // The arc between 20 and 50 degrees below the horizontal: a run of several adjacent points.
+    const focused = without(shot, (x, y) => {
+      const [dx, dy] = [x - cx, y - cy];
+      const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+      return Math.hypot(dx, dy) > radius - 5 && angle > 20 && angle < 50;
+    });
+    const ring = measureRing(focused, shot.blurred, shot.clip, shot, held);
+    const sides = whole(ring);
+    assert.ok(!sides.right || !sides.bottom, JSON.stringify(ring));
   });
 }
