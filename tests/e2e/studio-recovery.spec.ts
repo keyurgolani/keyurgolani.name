@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 import { expect, test } from '../harness/fixtures';
 import { ownerSecret } from '../harness/owner-secret.mjs';
@@ -222,6 +223,21 @@ test(
 /** The owner adapter's chunk, the one script that names its commands. */
 const OWNER_CHUNK = /["']draft\.applyEdits["']/;
 
+/**
+ * How long the shell waits for its chunks before it says Studio couldn't load: late-alert.tsx's
+ * STUDIO_LOAD_TIMEOUT_MS, read from its source, since the module itself renders React roots.
+ */
+const STUDIO_LOAD_TIMEOUT_MS = (() => {
+  const source = readFileSync(
+    new URL('../../apps/web/src/app/(studio)/_components/load/late-alert.tsx', import.meta.url),
+    'utf8',
+  );
+  const found = /export const STUDIO_LOAD_TIMEOUT_MS = ([\d_]+);/.exec(source)?.[1];
+  if (!found)
+    throw new Error('late-alert.tsx no longer exports STUDIO_LOAD_TIMEOUT_MS as a number');
+  return Number(found.replaceAll('_', ''));
+})();
+
 test(
   "when the store can't read the draft as Studio loads, it says so with Try again, which takes focus, and nothing stays loading",
   { annotation: [STUDIO] },
@@ -269,19 +285,32 @@ test(
     await signIn(page, app, secret.password);
     await page.goto('/studio');
     await expect(line(page, 'Draft')).toHaveText(/^Saved draft, version \d+\.$/);
-    // The owner adapter's chunk comes 7 seconds late, past the shell's 5 second wait.
+    // The owner adapter's chunk is held until Studio has said it couldn't load, past the shell's
+    // own wait however late its clock starts, and only then arrives. A fixed delay raced that
+    // clock: under load the page's entry evaluated late enough that a 7 second chunk was still
+    // in time, and no alert came (rc.3's diag, both trees).
+    const held: string[] = [];
+    let arrive!: () => void;
+    const arrival = new Promise<void>((done) => (arrive = done));
     await page.route(/\/_next\/static\/chunks\/.*\.js/, (route) =>
       unlessGone(page, async () => {
         const response = await route.fetch();
         const body = await response.text();
-        if (OWNER_CHUNK.test(body)) await new Promise((done) => setTimeout(done, 7_000));
+        if (OWNER_CHUNK.test(body)) {
+          held.push(route.request().url());
+          await arrival;
+        }
         return route.fulfill({ response, body });
       }),
     );
     await page.reload();
+    await expect
+      .poll(() => held.length, "the owner adapter's chunk is asked for, and held")
+      .toBe(1);
     const alert = page.getByRole('alert').filter({ hasText: "Studio couldn't load" });
-    await expect(alert).toBeVisible({ timeout: 20_000 });
+    await expect(alert).toBeVisible({ timeout: STUDIO_LOAD_TIMEOUT_MS + 15_000 });
     await expect(page.getByRole('button', { name: 'Reload Studio' })).toBeFocused();
+    arrive();
     // It arrives: the draft loads, the alert goes, and focus doesn't fall to the page's body.
     await expect(line(page, 'Draft')).toHaveText(/^Saved draft, version \d+\.$/, {
       timeout: 20_000,
