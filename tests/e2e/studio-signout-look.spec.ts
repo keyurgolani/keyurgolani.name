@@ -7,12 +7,14 @@ import { seedDraft, signIn } from '../harness/preview-grants';
 import { ownerApp } from '../harness/profile-matrix';
 
 // Row 88c-RC2's look packet, for the coordinator before any push: the three places Sign out's look
-// changes, at 1440 and 390. It shoots only, with no assertion on Sign out, so the same file runs at
-// the base, for the before, and at the head, for the after.
-//   1. /studio without JavaScript: the header's Sign out (after: and the discard beside it).
+// changes. It shoots only, with no assertion on Sign out, so the same file runs at the base, for
+// the before, and at the head, for the after.
+//   1. /studio without JavaScript: the header's Sign out (after: and the discard beside it), at
+//      1440 and 390, as look-no-js-shell-<width>.png.
 //   2. /studio with the shell's chunks refused: the load alert (after: Sign out and the discard).
 //   3. /studio/preview whose render throws, with JavaScript: error.tsx (after: the same two).
-// Each shot is attached as look-<state>-<width>.png.
+// Both alerts are shot at 1440, 1280 and 390, light and dark, as look-<state>-<width>-<scheme>.png:
+// the coordinator's look call on their actions row's gap.
 
 const secret = ownerSecret();
 test.use({ appOptions: ownerApp(secret.hash) });
@@ -22,6 +24,17 @@ const VIEWPORTS = [
   { width: 1440, height: 900 },
   { width: 390, height: 844 },
 ] as const;
+
+/**
+ * Where both alerts are shot, in each color scheme: the coordinator's look call on their actions
+ * row's gap (row 88c-RC2) wants 1280 beside 1440 and 390, light and dark.
+ */
+const ALERT_VIEWPORTS = [
+  { width: 1440, height: 900 },
+  { width: 1280, height: 800 },
+  { width: 390, height: 844 },
+] as const;
+const SCHEMES = ['light', 'dark'] as const;
 
 /** Shoots `page` whole, as look-<name>.png in the test's output directory, and attaches it. */
 const shoot = async (page: Page, name: string, testInfo: TestInfo) => {
@@ -69,7 +82,7 @@ test('look: /studio without JavaScript, the header Sign out, at 1440 and 390 (ro
   }
 });
 
-test("look: /studio with the shell's chunks refused, the load alert, at 1440 and 390 (row 88c-RC2)", async ({
+test("look: /studio with the shell's chunks refused, the load alert, at 1440, 1280 and 390, light and dark (row 88c-RC2)", async ({
   page,
   app,
 }, testInfo) => {
@@ -80,18 +93,21 @@ test("look: /studio with the shell's chunks refused, the load alert, at 1440 and
       ? route.abort('blockedbyclient').catch(() => {})
       : route.fallback().catch(() => {}),
   );
-  for (const viewport of VIEWPORTS) {
-    await page.setViewportSize(viewport);
-    await page.goto('/studio');
-    await expect(page.getByRole('alert').filter({ hasText: "Studio couldn't load." })).toBeVisible({
-      timeout: 10_000,
-    });
-    await shoot(page, `load-alert-${viewport.width}`, testInfo);
+  for (const scheme of SCHEMES) {
+    await page.emulateMedia({ colorScheme: scheme });
+    for (const viewport of ALERT_VIEWPORTS) {
+      await page.setViewportSize(viewport);
+      await page.goto('/studio');
+      await expect(
+        page.getByRole('alert').filter({ hasText: "Studio couldn't load." }),
+      ).toBeVisible({ timeout: 10_000 });
+      await shoot(page, `load-alert-${viewport.width}-${scheme}`, testInfo);
+    }
   }
   await page.unrouteAll({ behavior: 'ignoreErrors' });
 });
 
-test('look: error.tsx for an owner render that throws, at 1440 and 390 (row 88c-RC2)', async ({
+test('look: error.tsx for an owner render that throws, at 1440, 1280 and 390, light and dark (row 88c-RC2)', async ({
   page,
   app,
 }, testInfo) => {
@@ -102,7 +118,10 @@ test('look: error.tsx for an owner render that throws, at 1440 and 390 (row 88c-
   renameSync(drafts, `${drafts}.held`);
   writeFileSync(drafts, 'not a directory (row 88c-RC2, studio-signout-look.spec.ts)\n');
   try {
-    for (const viewport of VIEWPORTS) {
+    for (const [scheme, viewport] of SCHEMES.flatMap((each) =>
+      ALERT_VIEWPORTS.map((size) => [each, size] as const),
+    )) {
+      await page.emulateMedia({ colorScheme: scheme });
       await page.setViewportSize(viewport);
       // error.tsx offers Sign out once one auth.session query answers 200 (row 88c-RC2 (b)): the
       // shot waits for it where it's asked, and a tree that never asks shoots at once.
@@ -121,7 +140,7 @@ test('look: error.tsx for an owner render that throws, at 1440 and 390 (row 88c-
       if ((await probed)?.status() === 200) {
         await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
       }
-      await shoot(page, `error-${viewport.width}`, testInfo);
+      await shoot(page, `error-${viewport.width}-${scheme}`, testInfo);
     }
   } finally {
     renameSync(drafts, `${drafts}.blocker`);
