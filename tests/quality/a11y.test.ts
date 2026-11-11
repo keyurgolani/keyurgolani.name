@@ -57,7 +57,7 @@ import { animationFindings, killSwitches } from './lib/a11y/motion';
 import { requiredChecks } from './lib/checks';
 import { displayModeProblems } from './lib/emulation';
 import { PREFERENCE_ROWS, VIEWPORTS } from './lib/matrix';
-import { contrast, decodePng, parseCssColor, pixel } from './lib/pixels';
+import { contrast, decodePng, parseCssColor, pixel, type Image } from './lib/pixels';
 import { axeRunOptions, rowIsHighContrast, type AxeRunOptions } from './lib/run-cell';
 import { PREFERENCE_MODES } from './lib/vocabulary';
 
@@ -1447,4 +1447,77 @@ test("the see-through check counts a pixel only when every channel moves the fil
     ),
     true,
   );
+});
+
+// Row 119: Kinetic Cosmos's index under reduced transparency at 1024x768, missing-media / dark. Its
+// dialog is opaque, and one antialiased pixel of the orrery's SVG, at (480, 327) in a 934x634 clip
+// from (45, 67), rasters a level apart between the two fills, in the three directions the fills
+// move (probe-1110-2023, both passes). A surface short of solid moves every pixel of its fill; one
+// pixel, or a few apart, is the raster, not the fill. What is see-through still is.
+const ROW119_CLIP = { x: 45, y: 67, width: 934, height: 634 } as const;
+const DIALOG = [244, 232, 210] as const;
+/** The two shots of a clip filled with `ground`, each pixel `paint` names set to its pair instead. */
+function shotPair(
+  width: number,
+  height: number,
+  ground: readonly [number, number, number],
+  paint: (x: number, y: number) => readonly [readonly number[], readonly number[]] | null,
+): [Image, Image] {
+  const shots = [0, 1].map(() => new Uint8Array(width * height * 4));
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const pair = paint(x, y);
+      shots.forEach((data, which) =>
+        data.set([...(pair ? pair[which]! : ground), 255], (y * width + x) * 4),
+      );
+    }
+  return [
+    { width, height, data: shots[0]! },
+    { width, height, data: shots[1]! },
+  ];
+}
+/** The orrery's pixel, under magenta and then under green. */
+const ROW119_PIXEL = [
+  [231, 218, 198],
+  [230, 219, 197],
+] as const;
+/** A 254/255 surface of #f6eddc, under magenta and then under green. */
+const NEARLY_SOLID = [
+  [246, 236, 220],
+  [245, 237, 219],
+] as const;
+
+test("one antialiased pixel a level apart, the fills' way, in an opaque clip is not see-through (row 119)", () => {
+  const at = { x: 480 - ROW119_CLIP.x, y: 327 - ROW119_CLIP.y };
+  const [a, b] = shotPair(ROW119_CLIP.width, ROW119_CLIP.height, DIALOG, (x, y) =>
+    x === at.x && y === at.y ? ROW119_PIXEL : null,
+  );
+  assert.equal(showsThrough(a, b), false);
+});
+
+test('three such pixels scattered across an opaque clip are not see-through either (row 119)', () => {
+  const scattered = new Set(['12,9', '435,260', '901,610']);
+  const [a, b] = shotPair(ROW119_CLIP.width, ROW119_CLIP.height, DIALOG, (x, y) =>
+    scattered.has(`${x},${y}`) ? ROW119_PIXEL : null,
+  );
+  assert.equal(showsThrough(a, b), false);
+});
+
+test('a whole surface 254 of 255 opaque still shows through (row 119)', () => {
+  const [a, b] = shotPair(ROW119_CLIP.width, ROW119_CLIP.height, DIALOG, () => NEARLY_SOLID);
+  assert.equal(showsThrough(a, b), true);
+});
+
+test('an 8x8 inset 254 of 255 opaque in an opaque clip still shows through (row 119)', () => {
+  const [a, b] = shotPair(ROW119_CLIP.width, ROW119_CLIP.height, DIALOG, (x, y) =>
+    x >= 400 && x < 408 && y >= 200 && y < 208 ? NEARLY_SOLID : null,
+  );
+  assert.equal(showsThrough(a, b), true);
+});
+
+test('a 1x40 hairline 254 of 255 opaque in an opaque clip still shows through (row 119)', () => {
+  const [a, b] = shotPair(ROW119_CLIP.width, ROW119_CLIP.height, DIALOG, (x, y) =>
+    x === 300 && y >= 100 && y < 140 ? NEARLY_SOLID : null,
+  );
+  assert.equal(showsThrough(a, b), true);
 });
