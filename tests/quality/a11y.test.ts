@@ -37,7 +37,7 @@ import {
   stillnessScript,
   worstRatio,
 } from './lib/a11y/contrast';
-import { ownWords, showsThrough } from './lib/a11y/conditions';
+import { ownWords, seenThrough, showsThrough } from './lib/a11y/conditions';
 import { stuckCoverScript } from './lib/a11y/covers';
 import {
   centreLineChange,
@@ -1535,4 +1535,28 @@ test("in a 40x40 control, 15 pixels moving the fills' way are not see-through (r
 test("in a 40x40 control, 16 pixels moving the fills' way are see-through (row 119, the bar)", () => {
   const [a, b] = controlWith(16);
   assert.equal(showsThrough(a, b), true);
+});
+
+test('a surface that never held still fails closed: any pixel that differs at all is see-through (row 119)', () => {
+  const at = { x: 480 - ROW119_CLIP.x, y: 327 - ROW119_CLIP.y };
+  // The KC pixel, which settled shots let pass, counts off shots that never settled.
+  const [a, b] = shotPair(ROW119_CLIP.width, ROW119_CLIP.height, DIALOG, (x, y) =>
+    x === at.x && y === at.y ? ROW119_PIXEL : null,
+  );
+  assert.equal(seenThrough(a, b, true), false);
+  assert.equal(seenThrough(a, b, false), true);
+  // So does a pixel moving against the fills, and two clips of different sizes, settled or not;
+  // two equal shots don't.
+  const [c, d] = shotPair(40, 40, DIALOG, (x, y) =>
+    x === 3 && y === 3
+      ? [
+          [197, 123, 84],
+          [190, 118, 81],
+        ]
+      : null,
+  );
+  assert.equal(seenThrough(c, d, false), true);
+  assert.equal(seenThrough(c, a, false), true);
+  assert.equal(seenThrough(c, a, true), true);
+  assert.equal(seenThrough(c, c, false), false);
 });
