@@ -4,6 +4,7 @@ import type { Page, Request, Route } from '@playwright/test';
 import { expect, test } from '../harness/fixtures';
 import { ownerSecret } from '../harness/owner-secret.mjs';
 import { signIn } from '../harness/preview-grants';
+import { JOURNAL_KEY, seedJournal } from '../harness/studio-journal';
 import { ownerApp } from '../harness/profile-matrix';
 import { failureStateFindings } from '../quality/lib/a11y/conditions';
 
@@ -302,14 +303,13 @@ const alertSignOut = (page: Page) =>
   alert(page).getByRole('button', { name: 'Sign out', exact: true });
 const alertDiscard = (page: Page) =>
   alert(page).getByRole('button', { name: 'Discard unsaved changes and sign out' });
-const JOURNAL_KEY = 'portfolio-studio:journal:v1';
 
 test(
   "with the shell's chunks refused, the alert's Sign out signs out: one auth.logout, then signed out, and this browser's unsaved changes kept (row 88c-RC2, R3, R4 keep)",
   { annotation: [STUDIO] },
   async ({ page, app }) => {
     await signIn(page, app, secret.password);
-    await page.evaluate((key) => localStorage.setItem(key, '{"kept":true}'), JOURNAL_KEY);
+    const seeded = await seedJournal(page);
     const refused = await failEnhancement(page, app.origin);
     const logouts = logoutsOf(page);
     await page.goto('/studio');
@@ -318,9 +318,8 @@ test(
     await alertSignOut(page).click();
     await expect(page).toHaveURL(`${app.origin}${SIGNED_OUT}`);
     expect(logouts, 'one auth.logout').toHaveLength(1);
-    expect(await page.evaluate((key) => localStorage.getItem(key), JOURNAL_KEY)).toBe(
-      '{"kept":true}',
-    );
+    // The sign-in page's script ran and pruned, and kept the entry: no discard was owed.
+    expect(await page.evaluate((key) => localStorage.getItem(key), JOURNAL_KEY)).toBe(seeded);
   },
 );
 
@@ -329,10 +328,10 @@ test(
   { annotation: [STUDIO] },
   async ({ page, app }) => {
     await signIn(page, app, secret.password);
-    await page.evaluate((key) => {
-      localStorage.setItem(key, '{"kept":true}');
-      localStorage.setItem('portfolio.motion.paused', '1');
-    }, JOURNAL_KEY);
+    // A valid entry, which the sign-in page's prune keeps (the keep test above): only the discard
+    // the marker owes removes it.
+    await seedJournal(page);
+    await page.evaluate(() => localStorage.setItem('portfolio.motion.paused', '1'));
     await failEnhancement(page, app.origin);
     const logouts = logoutsOf(page);
     await page.goto('/studio');
