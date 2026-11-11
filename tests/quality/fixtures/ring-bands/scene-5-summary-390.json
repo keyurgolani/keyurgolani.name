@@ -1,0 +1,51 @@
+{
+  "source": "c-r146-probe-2dc26d3f5 (row 146): #scene-5 > details.hc-fold > summary at 390x844, HC complete, warm-parchment, Chromium headless on macOS at 2dc26d3f5; the probe page read its box and rounding, and these two shots of its clip, focused and blurred, are ringContrast's",
+  "light": {
+    "box": {
+      "x": 9.03125,
+      "y": 390.5625,
+      "width": 371.9375,
+      "height": 63.625
+    },
+    "clip": {
+      "x": 6,
+      "y": 387,
+      "width": 378,
+      "height": 71
+    },
+    "rounding": {
+      "corners": [
+        [0, 0],
+        [0, 0],
+        [16, 16],
+        [16, 16]
+      ],
+      "offset": -2,
+      "width": 2
+    }
+  },
+  "dark": {
+    "box": {
+      "x": 9.03125,
+      "y": 390.5625,
+      "width": 371.9375,
+      "height": 63.625
+    },
+    "clip": {
+      "x": 6,
+      "y": 387,
+      "width": 378,
+      "height": 71
+    },
+    "rounding": {
+      "corners": [
+        [0, 0],
+        [0, 0],
+        [16, 16],
+        [16, 16]
+      ],
+      "offset": -2,
+      "width": 2
+    }
+  }
+}
