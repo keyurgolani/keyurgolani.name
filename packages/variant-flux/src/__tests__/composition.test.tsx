@@ -569,3 +569,31 @@ test("a case sheet's grid keeps the grid's own gutter: nothing on it sets column
     assert.equal(valueOf(rule.body, 'column-gap'), undefined, `${where} sets column-gap`);
   }
 });
+
+test("a case's facts stack under its intro once the sheet, measured in root rem, is too narrow for a fact to hold a word", () => {
+  // From 64rem the facts take four of the open grid's twelve columns beside the intro. The media
+  // query's rem is the initial 16px, so with the root text at 200% the grid stays on at 1024px:
+  // the facts are about 254px wide, the term column's 6rem floor takes 192px of them, and each
+  // value got about 30px, one or two characters a line (the look, base 8ea4d003a). A container
+  // query's rem is the root's, so the sheet's own width in root rem says when that happens: the
+  // facts stack full width under the intro below 44rem. That's under the 55.4rem a 1024px sheet
+  // holds at default text, so default text never stacks, and over the 38.25rem a 1440px sheet
+  // holds at 200% (1224px at 32px), where values still broke mid-word.
+  const sheet = rulesFor('.fx-sheet', everywhere);
+  assert.equal(valueOf(sheet[0]?.body ?? '', 'container-name'), 'fx-sheet');
+  assert.equal(valueOf(sheet[0]?.body ?? '', 'container-type'), 'inline-size');
+  const narrow = (rule: Rule) =>
+    rule.at.includes('@media (min-width: 64rem)') &&
+    rule.at.includes('@container fx-sheet (inline-size < 44rem)');
+  for (const part of ['.fx-case__intro', '.fx-case__facts']) {
+    const rules = RULES.filter(
+      (rule) =>
+        narrow(rule) && rule.selector.split(/\s*,\s*/).includes(`[data-variant='flux'] ${part}`),
+    );
+    assert.equal(rules.length, 1, `${part} has one narrow-sheet rule`);
+    assert.equal(valueOf(rules[0]!.body, 'grid-column'), '1 / -1', `${part} spans the open grid`);
+  }
+  const at = /@container fx-sheet \(inline-size < ([0-9.]+)rem\)/.exec(CSS);
+  const threshold = Number(at?.[1]);
+  assert.ok(threshold > 1224 / 32 && threshold < 886 / 16, `${threshold}rem`);
+});
