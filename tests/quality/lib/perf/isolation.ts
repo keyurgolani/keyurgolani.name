@@ -55,6 +55,15 @@ export function isolationWaitFor(testInfo: object): number {
   return waits.get(testInfo) ?? 0;
 }
 
+/**
+ * Sets a test body's own timeout, plus the time the test waited for the lock: Playwright's timeout
+ * counts that wait, and a body's setTimeout replaces the fixture's extension. Every test body under
+ * tests/quality sets its timeout through this (isolation.test.ts holds them to it).
+ */
+export function setOwnTimeout(testInfo: { setTimeout(ms: number): void }, ownMs: number): void {
+  testInfo.setTimeout(ownMs + isolationWaitFor(testInfo));
+}
+
 /** A test file's isolation: a perf test runs alone, and every other test shares the runner. */
 export function isolationFor(file: string): Isolation {
   return path.basename(file) === PERF_SPEC ? 'exclusive' : 'shared';

@@ -4,10 +4,19 @@
 // screenshots, reading 234 ms where rc.1's, beside light cells, read 132 (and 19-24 ms either way
 // on a quiet machine). These pin the lock that keeps them apart.
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 const load = () => import('./isolation');
 const tick = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -198,4 +207,53 @@ test('a wait has a ceiling: past it the asker fails loudly, and leaves nothing t
   const perf = await lock.acquire('worker-2', 'exclusive');
   await assert.rejects(lock.acquire('worker-1', 'shared', 60), /its ceiling/);
   perf();
+});
+
+test("a test body's own timeout adds the time its test waited for the lock, and one that waited nothing keeps exactly its own", async () => {
+  const { recordIsolationWait, setOwnTimeout } = await load();
+  const set: number[] = [];
+  const waited = { setTimeout: (ms: number) => void set.push(ms) };
+  recordIsolationWait(waited, 90_000);
+  setOwnTimeout(waited, 120_000);
+  const none = { setTimeout: (ms: number) => void set.push(ms) };
+  setOwnTimeout(none, 120_000);
+  const zero = { setTimeout: (ms: number) => void set.push(ms) };
+  recordIsolationWait(zero, 0);
+  setOwnTimeout(zero, 330_000);
+  assert.deepEqual(set, [210_000, 120_000, 330_000]);
+});
+
+// Push B's CI (42951677137): runCell's absolute setTimeout replaced the fixture's extension, so a cell
+// that waited for a perf test timed out at exactly 240,000 ms. perf.spec's two tests did the same.
+test('no test body under tests/quality sets an absolute timeout: each goes through setOwnTimeout, so the lock wait stays on top', () => {
+  const root = fileURLToPath(new URL('../../', import.meta.url)).replace(/\/$/, '');
+  const own = new Set([
+    path.join(root, 'fixtures.ts'),
+    path.join(root, 'lib', 'perf', 'isolation.ts'),
+  ]);
+  const files: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const at = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(at);
+      else if (
+        /\.(ts|mts|mjs|js)$/.test(entry.name) &&
+        !/\.test\./.test(entry.name) &&
+        !own.has(at)
+      )
+        files.push(at);
+    }
+  };
+  walk(root);
+  const absolute: string[] = [];
+  for (const file of files) {
+    readFileSync(file, 'utf8')
+      .split('\n')
+      .forEach((line, at) => {
+        if (/\b(?:testInfo|test|info\(\))\.setTimeout\(/.test(line))
+          absolute.push(`${path.relative(root, file)}:${at + 1}`);
+      });
+  }
+  assert.ok(files.length > 50, `walked ${files.length} files`);
+  assert.deepEqual(absolute, []);
 });
