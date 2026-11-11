@@ -9,10 +9,12 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPT = path.join(__dirname, 'server.cjs');
 
-function startServer(projectDir) {
-  const proc = spawn('node', [SCRIPT, '--project-dir', projectDir, '--foreground', '--port', '0'], {
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+function startServer(projectDir, nodeArgs = []) {
+  const proc = spawn(
+    'node',
+    [...nodeArgs, SCRIPT, '--project-dir', projectDir, '--foreground', '--port', '0'],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  );
   return new Promise((resolve, reject) => {
     let buf = '';
     const timer = setTimeout(() => reject(new Error('server start timeout: ' + buf)), 5000);
@@ -132,4 +134,56 @@ test('serving a NEW fragment file clears the events file', async () => {
     ? readFileSync(path.join(info.state_dir, 'events'), 'utf8')
     : '';
   assert.equal(events, '', 'events should be cleared after new screen pushed');
+});
+
+// Row 147: the watcher's first sight of a screen can land after a click recorded against it, under
+// load (fs.watch late, the 250 ms poll not yet due), and clear that click. This preload holds the
+// watcher back until the first event is written, then lets it look: the worst order, every time.
+const LATE_WATCHER = `
+const fs = require('node:fs');
+const path = require('node:path');
+const realSetInterval = global.setInterval;
+let poll = null;
+let released = false;
+fs.watch = () => ({ close() {}, on() { return this; }, unref() { return this; } });
+global.setInterval = (fn, ms, ...rest) => {
+  if (ms !== 250) return realSetInterval(fn, ms, ...rest);
+  poll = fn;
+  return realSetInterval(() => {}, 1e9);
+};
+const realAppend = fs.appendFileSync;
+fs.appendFileSync = function (file, ...rest) {
+  const out = realAppend.call(this, file, ...rest);
+  if (!released && path.basename(String(file)) === 'events' && poll) {
+    released = true;
+    setImmediate(poll);
+    realSetInterval(poll, 250);
+  }
+  return out;
+};
+`;
+
+test('a click recorded against the first screen survives the watcher seeing that screen late, and a NEW screen still clears it (row 147)', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'vc-'));
+  const preload = path.join(mkdtempSync(path.join(tmpdir(), 'vc-late-')), 'late-watcher.cjs');
+  writeFileSync(preload, LATE_WATCHER);
+  const { proc, info } = await startServer(dir, ['--require', preload]);
+  after(() => proc.kill('SIGTERM'));
+  writeFileSync(path.join(info.screen_dir, 'first.html'), '<h2>first</h2>');
+  await sleep(100);
+  await fetch(info.url + '/__events__', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'click', choice: 'a' }),
+  });
+  // The held watcher now looks at the screen dir for the first time, right after the click.
+  await sleep(100);
+  let events = readFileSync(path.join(info.state_dir, 'events'), 'utf8');
+  assert.match(events, /"choice":"a"/, 'the click on the first screen is kept');
+  writeFileSync(path.join(info.screen_dir, 'second.html'), '<h2>second</h2>');
+  await sleep(500);
+  events = existsSync(path.join(info.state_dir, 'events'))
+    ? readFileSync(path.join(info.state_dir, 'events'), 'utf8')
+    : '';
+  assert.equal(events, '', 'a NEW screen still clears the events');
 });
