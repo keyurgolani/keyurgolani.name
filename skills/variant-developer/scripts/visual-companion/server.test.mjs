@@ -187,3 +187,39 @@ test('a click recorded against the first screen survives the watcher seeing that
     : '';
   assert.equal(events, '', 'a NEW screen still clears the events');
 });
+
+// The watcher held for good: it never looks, so only recordEvent's own check can see a new screen.
+const HELD_WATCHER = `
+const fs = require('node:fs');
+const realSetInterval = global.setInterval;
+fs.watch = () => ({ close() {}, on() { return this; }, unref() { return this; } });
+global.setInterval = (fn, ms, ...rest) =>
+  ms === 250 ? realSetInterval(() => {}, 1e9) : realSetInterval(fn, ms, ...rest);
+`;
+
+test('a click posted after a NEW screen is written, before the watcher has seen it, is filed against that screen: events hold that click alone (row 147)', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'vc-'));
+  const preload = path.join(mkdtempSync(path.join(tmpdir(), 'vc-held-')), 'held-watcher.cjs');
+  writeFileSync(preload, HELD_WATCHER);
+  const { proc, info } = await startServer(dir, ['--require', preload]);
+  after(() => proc.kill('SIGTERM'));
+  const click = (choice) =>
+    fetch(info.url + '/__events__', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'click', choice }),
+    });
+  writeFileSync(path.join(info.screen_dir, 'first.html'), '<h2>first</h2>');
+  await sleep(100);
+  await click('a');
+  await sleep(100);
+  // A NEW screen, newer on disk, and a click on it before any watcher pass.
+  writeFileSync(path.join(info.screen_dir, 'second.html'), '<h2>second</h2>');
+  await sleep(100);
+  await click('b');
+  await sleep(100);
+  const events = readFileSync(path.join(info.state_dir, 'events'), 'utf8');
+  assert.doesNotMatch(events, /"choice":"a"/, "the first screen's click went with its screen");
+  assert.match(events, /"choice":"b"/, 'the click on the new screen is kept');
+  assert.equal(events.trim().split('\n').length, 1, 'events hold that click alone');
+});
