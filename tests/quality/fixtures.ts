@@ -32,6 +32,7 @@ import {
   isolationFor,
   isolationLock,
   MAX_WAIT_MS,
+  recordIsolationWait,
   runIsolationDir,
   type IsolationLock,
 } from './lib/perf/isolation';
@@ -150,7 +151,10 @@ export const test = base.extend<QualityTestFixtures, QualityWorkerFixtures>({
         `worker-${testInfo.workerIndex}`,
         isolationFor(testInfo.file),
       );
-      if (own > 0) testInfo.setTimeout(own + (Date.now() - asked));
+      const waited = Date.now() - asked;
+      // A test body that sets its own timeout (lib/run-cell.ts) adds this back, so it keeps the extension.
+      recordIsolationWait(testInfo, waited);
+      if (own > 0) testInfo.setTimeout(own + waited);
       try {
         await provide();
       } finally {

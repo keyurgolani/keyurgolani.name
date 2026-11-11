@@ -107,10 +107,11 @@ test("the quality fixtures take the lock: every test by its file's isolation, an
     source,
     /isolation: \[\s*async \(\{\}, provide, testInfo\) =>[\s\S]*?isolationFor\(testInfo\.file\)[\s\S]*?\{ auto: true \}/,
   );
-  // The wait gets room up to the ceiling, then the test's timeout grows by exactly the wait.
+  // The wait gets room up to the ceiling, then the test's timeout grows by exactly the wait, which it
+  // records, so a test body's own timeout (setOwnTimeout) adds it back.
   assert.match(
     source,
-    /testInfo\.setTimeout\(own \+ MAX_WAIT_MS\)[\s\S]*?testInfo\.setTimeout\(own \+ \(Date\.now\(\) - asked\)\)/,
+    /testInfo\.setTimeout\(own \+ MAX_WAIT_MS\)[\s\S]*?const waited = Date\.now\(\) - asked;[\s\S]*?recordIsolationWait\(testInfo, waited\);[\s\S]*?testInfo\.setTimeout\(own \+ waited\)/,
   );
   // The app's start, a build-sized burst of CPU, is shared too, so no server boots beside a perf test.
   assert.match(
