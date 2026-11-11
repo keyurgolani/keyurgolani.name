@@ -93,14 +93,99 @@ function current(entry: JournalEntry, now: number): boolean {
   );
 }
 
-function store(storage: JournalStorage, entries: readonly JournalEntry[]): boolean {
+/**
+ * A pending discard's record (row 88c-RC2, the coordinator's ruling): the sign-out time T the
+ * journal last pruned for (discard-marker.ts), kept in the journal's own key beside the entries so
+ * the prune and its record are one write, and a later page that renders the same T prunes nothing.
+ * It's never an entry.
+ */
+export interface DiscardRecord {
+  readonly discardApplied: number;
+}
+
+function isRecord(value: unknown): value is DiscardRecord {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    Object.keys(value).length === 1 &&
+    Number.isFinite((value as Record<string, unknown>).discardApplied)
+  );
+}
+
+/** Writes `entries`, and `record` first when there is one, in one write; none of either removes the key. */
+function store(
+  storage: JournalStorage,
+  entries: readonly JournalEntry[],
+  record: DiscardRecord | null = null,
+): boolean {
   try {
-    if (entries.length === 0) storage.removeItem(JOURNAL_KEY);
-    else storage.setItem(JOURNAL_KEY, JSON.stringify(entries));
+    if (entries.length === 0 && record === null) storage.removeItem(JOURNAL_KEY);
+    else storage.setItem(JOURNAL_KEY, JSON.stringify(record ? [record, ...entries] : entries));
     return true;
   } catch {
     return false;
   }
+}
+
+/** What the journal's key holds, read and checked but never written: its entries that may stay, and its record. */
+function peek(
+  storage: JournalStorage,
+  now: number,
+): {
+  readonly entries: JournalEntry[];
+  readonly record: DiscardRecord | null;
+  readonly clean: boolean;
+} | null {
+  let text: string | null;
+  try {
+    text = storage.getItem(JOURNAL_KEY);
+  } catch {
+    return null;
+  }
+  if (text === null) return { entries: [], record: null, clean: true };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    parsed = null;
+  }
+  const all: unknown[] = Array.isArray(parsed) ? parsed : [];
+  const records = all.filter(isRecord);
+  const candidates = all.filter((each) => !isRecord(each));
+  const entries = candidates
+    .filter((entry): entry is JournalEntry => isEntry(entry) && current(entry, now))
+    .filter(
+      (entry, index, list) => list.findIndex((other) => other.tabId === entry.tabId) === index,
+    )
+    .sort((a, b) => b.savedAt - a.savedAt)
+    .slice(0, JOURNAL_MAX_ENTRIES);
+  return {
+    entries,
+    record: records[0] ?? null,
+    clean:
+      Array.isArray(parsed) &&
+      records.length <= 1 &&
+      (records.length === 0 || isRecord(all[0])) &&
+      entries.length === candidates.length,
+  };
+}
+
+/** The journal's entries that may stay at `now`, and its discard record, read without writing. */
+export function journalState(
+  storage: JournalStorage,
+  now: number,
+): { readonly entries: JournalEntry[]; readonly record: DiscardRecord | null } | null {
+  const read = peek(storage, now);
+  return read && { entries: read.entries, record: read.record };
+}
+
+/** Writes the journal whole, entries and record, in one write: false when storage refused it. */
+export function storeJournal(
+  storage: JournalStorage,
+  entries: readonly JournalEntry[],
+  record: DiscardRecord | null,
+): boolean {
+  return store(storage, entries, record);
 }
 
 /**
@@ -109,29 +194,10 @@ function store(storage: JournalStorage, entries: readonly JournalEntry[]): boole
  * future is removed as this reads. Storage that throws reads as none.
  */
 export function readJournal(storage: JournalStorage, now: number): JournalEntry[] {
-  let text: string | null;
-  try {
-    text = storage.getItem(JOURNAL_KEY);
-  } catch {
-    return [];
-  }
-  if (text === null) return [];
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    parsed = null;
-  }
-  const all: unknown[] = Array.isArray(parsed) ? parsed : [];
-  const kept = all
-    .filter((entry): entry is JournalEntry => isEntry(entry) && current(entry, now))
-    .filter(
-      (entry, index, list) => list.findIndex((other) => other.tabId === entry.tabId) === index,
-    )
-    .sort((a, b) => b.savedAt - a.savedAt)
-    .slice(0, JOURNAL_MAX_ENTRIES);
-  if (kept.length !== all.length || !Array.isArray(parsed)) store(storage, kept);
-  return kept;
+  const read = peek(storage, now);
+  if (read === null) return [];
+  if (!read.clean) store(storage, read.entries, read.record);
+  return read.entries;
 }
 
 /** Drops what may not stay, as the sign-in page and the shell do before anything shows. */
@@ -142,7 +208,11 @@ export function pruneJournal(storage: JournalStorage, now: number): void {
 /** Writes `entry` as its tab's, keeping every other tab's. Returns false when storage refused it. */
 export function writeEntry(storage: JournalStorage, entry: JournalEntry, now: number): boolean {
   const others = readJournal(storage, now).filter((other) => other.tabId !== entry.tabId);
-  return store(storage, [entry, ...others].slice(0, JOURNAL_MAX_ENTRIES));
+  return store(
+    storage,
+    [entry, ...others].slice(0, JOURNAL_MAX_ENTRIES),
+    peek(storage, now)?.record ?? null,
+  );
 }
 
 /**
@@ -165,6 +235,7 @@ export function removeEntry(storage: JournalStorage, tabId: string, now: number)
     store(
       storage,
       entries.filter((entry) => entry.tabId !== tabId),
+      peek(storage, now)?.record ?? null,
     );
   }
 }

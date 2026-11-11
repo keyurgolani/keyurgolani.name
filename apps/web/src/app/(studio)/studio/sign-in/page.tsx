@@ -1,6 +1,7 @@
 import { headers } from 'next/headers';
 import { requireDeploymentConfig } from '~/server/config-store';
 import { servedPage } from '~/server/page-guard';
+import { pendingDiscard } from '~/server/pending-discard';
 import { announcesSignOut, safeReturnTo, signInStateOf } from '~/server/return-to';
 import { AnnounceSignOut } from '../../_components/announce-sign-out';
 import { PruneJournal } from '../../_components/prune-journal';
@@ -40,7 +41,7 @@ async function SignIn({ searchParams }: { searchParams: Query }) {
         retryAfter={state === 'rate_limited' ? seconds(one(query.retryAfter)) : null}
         idleMinutes={requireDeploymentConfig().sessionLifetime?.idleMinutes ?? null}
       />
-      <PruneJournal />
+      <PruneJournal pending={await pendingDiscard()} />
       {announcesSignOut(state, (await headers()).get('sec-fetch-site')) ? (
         <AnnounceSignOut />
       ) : null}

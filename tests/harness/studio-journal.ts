@@ -28,3 +28,18 @@ export async function seedJournal(page: Page): Promise<string> {
     return value;
   }, JOURNAL_KEY);
 }
+
+/**
+ * How many entries `page`'s journal holds, beside any discard's record (row 88c-RC2): a discard's
+ * prune leaves the record "applied T" in the journal's key, so its value isn't null after one.
+ */
+export async function journalEntryCount(page: Page): Promise<number> {
+  return page.evaluate((key) => {
+    const value = localStorage.getItem(key);
+    if (value === null) return 0;
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter((each) => each && typeof each === 'object' && 'tabId' in each).length
+      : 0;
+  }, JOURNAL_KEY);
+}

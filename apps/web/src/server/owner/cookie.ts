@@ -40,12 +40,13 @@ export function sessionCookie(mode: CookieMode, token: string, maxAgeSeconds: nu
 /** The Set-Cookie value that clears the session cookie. */
 /**
  * The pending-discard marker a Sign out without JavaScript leaves when it chose to discard (row
- * 88c-RC2; lib/studio/discard-marker.ts): Studio's next script reads it, clears the journal, and
- * drops it. Not HttpOnly, as script reads it; SameSite=Strict, and Secure over https.
+ * 88c-RC2, the coordinator's ruling; lib/studio/discard-marker.ts): its value is the sign-out's
+ * time, which Studio's pages read as they render and hand to their script. HttpOnly, as no script
+ * reads it; SameSite=Strict, Secure over https, Path=/, for the journal's retention.
  */
-export function discardMarkerCookie(mode: CookieMode): string {
+export function discardMarkerCookie(mode: CookieMode, at: number): string {
   const name = discardMarkerName(mode.secure);
-  return `${name}=1; Path=/; Max-Age=${DISCARD_MARKER_MAX_AGE}; SameSite=Strict${mode.secure ? '; Secure' : ''}`;
+  return `${name}=${Math.max(0, Math.floor(at))}; ${attributes(mode, DISCARD_MARKER_MAX_AGE)}`;
 }
 
 export function clearedSessionCookie(mode: CookieMode): string {
