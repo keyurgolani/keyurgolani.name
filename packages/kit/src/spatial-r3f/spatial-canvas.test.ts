@@ -7,7 +7,16 @@
 // repository has no DOM to run the component in.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mountCanvas, type CanvasHost } from './spatial-canvas';
+import {
+  mountCanvas,
+  sceneBox,
+  SPATIAL_HOST_STYLE,
+  watchSceneBox,
+  type CanvasHost,
+  type SceneBox,
+  type SizeObserver,
+  type SizeTargets,
+} from './spatial-canvas';
 
 interface FakeCanvas {
   readonly id: number;
@@ -311,4 +320,76 @@ test('what drei draws inside a kit primitive is registered by that primitive: Fl
   }
   // Inside the component, under its occlude, not at import.
   assert.match(card, /if \(occlude\) extend\(\{/);
+});
+
+// R3F's setSize writes the canvas's size into its style in pixels, so
+// once a scene is sized the canvas keeps that width whatever its host does.
+// Watched and measured itself, the canvas never sees its column shrink: Spatial
+// Bento's field stayed 1067 px wide in a 1024 px page with text at 200%, and the
+// page scrolled sideways. The scene follows the host, and the host clips.
+
+/** An element whose box the test sets, as layout would. */
+function boxed(box: SceneBox) {
+  return {
+    box,
+    getBoundingClientRect() {
+      return {
+        ...this.box,
+        right: this.box.left + this.box.width,
+        bottom: this.box.top + this.box.height,
+      };
+    },
+  };
+}
+
+/** A ResizeObserver stand-in: it fires for a target only when that target is observed. */
+function fakeObservers() {
+  const observed = new Set<unknown>();
+  let callback: (() => void) | null = null;
+  const make = (fire: () => void): SizeObserver => {
+    callback = fire;
+    return {
+      observe: (target) => void observed.add(target),
+      disconnect: () => observed.clear(),
+    };
+  };
+  const resized = (target: unknown) => {
+    if (observed.has(target)) callback?.();
+  };
+  return { make, resized, observed };
+}
+
+test("the scene is sized to its host, not to the canvas's own pixel width", () => {
+  const host = boxed({ width: 1024, height: 480, top: 10, left: 0 });
+  // R3F set the canvas to its first size, in pixels, wider than the host has since become.
+  const canvas = boxed({ width: 1067, height: 480, top: 10, left: 0 });
+  const targets = { host, canvas } as unknown as SizeTargets;
+  assert.deepEqual(sceneBox(targets), { width: 1024, height: 480, top: 10, left: 0 });
+});
+
+test('a host that shrinks resizes the scene, though the canvas keeps its pixel width', () => {
+  const host = boxed({ width: 1067, height: 480, top: 0, left: 0 });
+  const canvas = boxed({ width: 1067, height: 480, top: 0, left: 0 });
+  const targets = { host, canvas } as unknown as SizeTargets;
+  const { make, resized, observed } = fakeObservers();
+  const sizes: SceneBox[] = [];
+  const stop = watchSceneBox(targets, (box) => sizes.push(box), make);
+  // Text at 200%: the column, and so the host, shrinks; the canvas's style still says 1067px.
+  host.box = { width: 1000, height: 480, top: 0, left: 0 };
+  resized(host);
+  resized(canvas);
+  assert.deepEqual(sizes, [{ width: 1000, height: 480, top: 0, left: 0 }]);
+  assert.deepEqual([...observed], [host], 'it watches the host alone');
+  stop();
+  assert.equal(observed.size, 0, 'the stop disconnects the observer');
+});
+
+test("the host clips its canvas and gives its caller's layout none of the canvas's width", () => {
+  // Between the host shrinking and the scene's next size, the canvas is wider than its host:
+  // it never shows past it, nor holds a grid or flex column open by its pixel width.
+  const style: Readonly<Record<string, string>> = SPATIAL_HOST_STYLE;
+  assert.equal(style.overflow, 'hidden');
+  assert.equal(style.contain, 'inline-size');
+  assert.equal(style.inlineSize, '100%');
+  assert.equal(style.blockSize, '100%');
 });
