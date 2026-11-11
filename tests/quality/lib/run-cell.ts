@@ -100,7 +100,7 @@ import {
 } from './a11y/interaction';
 import { MOTION_SAMPLER, motionFindings } from './a11y/motion';
 import { inPage } from './a11y/probe';
-import { isolationWaitFor } from './perf/isolation';
+import { setOwnTimeout } from './perf/isolation';
 
 /** Waits for the page to settle: loaded, its fonts in, and two frames drawn (or their time, without JavaScript). */
 /** Waits for the page to load and settle, and answers whether it settled (notBusy()). */
@@ -868,9 +868,8 @@ function cellExceptions(): Promise<readonly QualityException[]> {
  */
 export async function runCell(run: CellRun, pass: typeof runPass = runPass) {
   const { cell, testInfo, expect } = run;
-  // Its own budget, plus the time it waited for the isolation lock (fixtures.ts), since Playwright's
-  // timeout counts that wait and this replaces the fixture's extension.
-  testInfo.setTimeout(CELL_TIMEOUT_MS + isolationWaitFor(testInfo));
+  // Its own budget, plus the time it waited for the isolation lock (lib/perf/isolation.ts).
+  setOwnTimeout(testInfo, CELL_TIMEOUT_MS);
   // First, so a cell that throws carries them too.
   testInfo.annotations.push(...cellAnnotations(cell));
   const passes: Pass[] = [];
