@@ -3,7 +3,6 @@ import type { Metadata } from 'next';
 import '../experience-base.css';
 // Studio's own styles, its error and not-found pages' included: no other layout loads them (#7).
 import './studio.css';
-import { getDeploymentConfig } from '~/server/config-store';
 
 // Studio's own root layout (#2): /studio and everything under it, sign-in
 // included. It renders none of the site's inline script or JSON-LD, so the
@@ -24,10 +23,7 @@ export const metadata: Metadata = {
 export default function StudioLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      {/* The profile, which error.tsx and the load alerts read to offer Sign out under owner alone (row 88c-RC2). */}
-      <body className="studio" data-studio-profile={getDeploymentConfig()?.profile}>
-        {children}
-      </body>
+      <body className="studio">{children}</body>
     </html>
   );
 }

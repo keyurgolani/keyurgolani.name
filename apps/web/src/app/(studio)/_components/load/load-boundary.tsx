@@ -11,7 +11,6 @@ import {
   type ReactNode,
 } from 'react';
 import { lateCommitted, latePressed, StudioLoadAlert, type CommitPhase } from './late-alert';
-import { useStudioProfile } from '../sign-out-form';
 
 // When Studio's shell doesn't load (row 88c): /studio's page wraps its entry,
 // under either profile, in this boundary, outside the shell's lazy chunk, so
@@ -73,7 +72,14 @@ class Rejected extends Component<
 
 type Phase = 'waiting' | 'live' | 'rejected';
 
-export function StudioLoadBoundary({ children }: { readonly children: ReactNode }) {
+export function StudioLoadBoundary({
+  children,
+  profile,
+}: {
+  readonly children: ReactNode;
+  /** The page's profile (row 88c-RC2 (b)): under owner the alerts offer Sign out. */
+  readonly profile: 'owner' | 'demo';
+}) {
   const [phase, setPhase] = useState<Phase>('waiting');
   // Set in the same commit as the shell's mount or the refusal's catch, before this boundary's
   // layout effect, where `phase` still reads 'waiting'.
@@ -81,8 +87,6 @@ export function StudioLoadBoundary({ children }: { readonly children: ReactNode 
   const rejected = useRef(false);
   const handed = useRef(false);
   const reload = useRef<HTMLButtonElement>(null);
-  // Under owner the alert offers Sign out, a plain form (row 88c-RC2).
-  const profile = useStudioProfile();
 
   const [mounted] = useState(() => () => {
     live.current = true;
@@ -120,8 +124,9 @@ export function StudioLoadBoundary({ children }: { readonly children: ReactNode 
       ) : null}
       {phase === 'rejected' ? null : (
         // The wrapper adds no box of its own (.studio-load, display: contents); studio.css hides it
-        // while the late alert's node is in the page.
-        <div className="studio-load">
+        // while the late alert's node is in the page. It names the page's profile, which the late
+        // alert, in a root of its own, reads (row 88c-RC2 (b)).
+        <div className="studio-load" data-studio-profile={profile}>
           <MountedContext.Provider value={mounted}>
             <Rejected onRejected={onRejected}>{children}</Rejected>
           </MountedContext.Provider>
