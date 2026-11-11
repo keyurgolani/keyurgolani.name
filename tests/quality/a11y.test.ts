@@ -1521,3 +1521,18 @@ test('a 1x40 hairline 254 of 255 opaque in an opaque clip still shows through (r
   );
   assert.equal(showsThrough(a, b), true);
 });
+
+/** A 40x40 control's clip with the first `count` pixels of its middle row moving the fills' way, a level. */
+function controlWith(count: number): [Image, Image] {
+  return shotPair(40, 40, DIALOG, (x, y) => (y === 20 && x < count ? NEARLY_SOLID : null));
+}
+
+test("in a 40x40 control, 15 pixels moving the fills' way are not see-through (row 119, the bar)", () => {
+  const [a, b] = controlWith(15);
+  assert.equal(showsThrough(a, b), false);
+});
+
+test("in a 40x40 control, 16 pixels moving the fills' way are see-through (row 119, the bar)", () => {
+  const [a, b] = controlWith(16);
+  assert.equal(showsThrough(a, b), true);
+});
