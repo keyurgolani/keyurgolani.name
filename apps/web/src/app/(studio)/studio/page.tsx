@@ -1,6 +1,7 @@
 import { frameSandbox } from '~/lib/preview-frame';
 import { getDeploymentState, requireDeploymentConfig } from '~/server/config-store';
 import { demoStudioSetup } from '~/server/demo-studio';
+import { pendingDiscard } from '~/server/pending-discard';
 import { servedPage } from '~/server/page-guard';
 import { previewAppearanceOptions } from '~/server/preview-options';
 import { signInLocation } from '~/server/return-to';
@@ -65,6 +66,7 @@ async function Studio() {
         policy={policy}
         appearance={appearanceCatalog()}
         preview={preview}
+        pendingDiscard={await pendingDiscard()}
       />
     </StudioLoadBoundary>
   );

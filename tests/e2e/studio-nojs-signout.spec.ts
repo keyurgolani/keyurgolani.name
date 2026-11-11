@@ -2,7 +2,7 @@ import type { BrowserContext, Page } from '@playwright/test';
 import { expect, test } from '../harness/fixtures';
 import { ownerSecret } from '../harness/owner-secret.mjs';
 import { signIn } from '../harness/preview-grants';
-import { JOURNAL_KEY, seedJournal } from '../harness/studio-journal';
+import { JOURNAL_KEY, journalEntryCount, seedJournal } from '../harness/studio-journal';
 import { ownerApp } from '../harness/profile-matrix';
 
 // Studio's Sign out without JavaScript, and how a native sign-out reaches the other tabs (row
@@ -116,21 +116,18 @@ test(
     expect(after.cookies.map(({ name }) => name)).toContainEqual(
       expect.stringMatching(/^(?:__Host-)?studio_discard$/),
     );
-    // The next page with script, in the same browser, reads the marker first.
+    // The next page with script, in the same browser: the sign-in page read the marker as it
+    // rendered, and its script prunes what was saved before the sign-out, once.
     const scripted = await browser.newContext({ baseURL: app.origin, storageState: after });
     try {
       const next = await scripted.newPage();
       await next.goto('/studio/sign-in');
       await expect(next.getByLabel('Password')).toBeVisible();
-      await expect
-        .poll(() => next.evaluate((key) => localStorage.getItem(key), JOURNAL_KEY))
-        .toBeNull();
+      await expect.poll(() => journalEntryCount(next)).toBe(0);
       expect(await next.evaluate(() => localStorage.getItem('portfolio.motion.paused'))).toBe('1');
-      const left = (await scripted.cookies()).map(({ name }) => name);
-      expect(
-        left.some((name) => /studio_discard$/.test(name)),
-        'the marker dropped',
-      ).toBe(false);
+      // No script touches the marker: it stays, HttpOnly, until it lapses at the journal's retention.
+      const marker = (await scripted.cookies()).find(({ name }) => /studio_discard$/.test(name));
+      expect(marker?.httpOnly, 'the marker stays, HttpOnly').toBe(true);
     } finally {
       await scripted.close();
     }

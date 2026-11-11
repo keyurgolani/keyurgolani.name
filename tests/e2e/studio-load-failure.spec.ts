@@ -4,7 +4,7 @@ import type { Page, Request, Route } from '@playwright/test';
 import { expect, test } from '../harness/fixtures';
 import { ownerSecret } from '../harness/owner-secret.mjs';
 import { signIn } from '../harness/preview-grants';
-import { JOURNAL_KEY, seedJournal } from '../harness/studio-journal';
+import { JOURNAL_KEY, journalEntryCount, seedJournal } from '../harness/studio-journal';
 import { ownerApp } from '../harness/profile-matrix';
 import { failureStateFindings } from '../quality/lib/a11y/conditions';
 
@@ -358,9 +358,7 @@ test(
     expect(logouts, 'one auth.logout').toHaveLength(1);
     // The sign-in page's script reads the pending-discard marker first and clears the journal,
     // and only the journal: the site's own keys stay.
-    await expect
-      .poll(() => page.evaluate((key) => localStorage.getItem(key), JOURNAL_KEY))
-      .toBeNull();
+    await expect.poll(() => journalEntryCount(page)).toBe(0);
     expect(await page.evaluate(() => localStorage.getItem('portfolio.motion.paused'))).toBe('1');
   },
 );

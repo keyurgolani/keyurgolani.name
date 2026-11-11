@@ -32,6 +32,7 @@ export function StudioEntry(props: StudioEntryProps) {
       policy={props.policy}
       appearance={props.appearance}
       preview={props.preview}
+      pendingDiscard={props.pendingDiscard}
     />
   );
 }

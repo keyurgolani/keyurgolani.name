@@ -249,12 +249,12 @@ export function authHandlers(tools: AuthCommandTools): Readonly<Record<string, H
         }
       }
       // The cache alone, never "storage", which would clear the public site's preferences too.
-      // Sign out's form that chose to discard leaves the pending-discard marker instead, which
-      // Studio's next script reads first to clear the journal (row 88c-RC2). A JSON logout's own
-      // script clears the journal itself.
+      // Sign out's form that chose to discard leaves the pending-discard marker instead, the
+      // sign-out's time, which Studio's next page reads as it renders and its script prunes the
+      // journal by, once (row 88c-RC2). A JSON logout's own script clears the journal itself.
       const headers: [string, string][] = [...cleared(), ['clear-site-data', '"cache"']];
       if (context.inputType === 'form' && choice === 'discard') {
-        headers.push(['set-cookie', discardMarkerCookie(cookie)]);
+        headers.push(['set-cookie', discardMarkerCookie(cookie, Date.now())]);
       }
       // Studio's Sign out form goes to sign-in, saying how it went (row 88c-RC2, row 88b).
       if (context.inputType === 'form') {
