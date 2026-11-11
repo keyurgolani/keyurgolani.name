@@ -75,13 +75,30 @@ test.afterEach(async ({ page }) => {
   await page.unrouteAll({ behavior: 'ignoreErrors' });
 });
 
-/** Failed enhancement on `page`: its optional chunks and its fonts refused. Returns what it refused. */
+/**
+ * Whether `request` comes from a document on /studio itself. A request whose frame can't be told is
+ * taken as /studio's, as before. The sign-in page a Sign out lands on is not /studio: its own
+ * chunks, the one that applies a pending discard among them, aren't /studio's to refuse (row
+ * 88c-RC2's first proof: the R4 discard's sign-in chunk was refused, so nothing cleared the journal).
+ */
+function fromStudio(request: Request): boolean {
+  try {
+    return new URL(request.frame().url()).pathname === '/studio';
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Failed enhancement on `page`: its optional chunks and its fonts refused, while it's on /studio
+ * alone. Returns what it refused.
+ */
 async function failEnhancement(page: Page, origin: string): Promise<string[]> {
   const own = await ownScripts(page, origin);
   const refused: string[] = [];
   await page.route('**/*', (route) => {
     const request = route.request();
-    if (optional(request, own) || request.resourceType() === 'font') {
+    if ((optional(request, own) || request.resourceType() === 'font') && fromStudio(request)) {
       refused.push(request.url());
       return unlessGone(page, () => route.abort('blockedbyclient'));
     }
