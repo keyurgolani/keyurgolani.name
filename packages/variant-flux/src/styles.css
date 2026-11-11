@@ -2949,8 +2949,10 @@
   color: var(--color-text-secondary);
 }
 
+/* Its rows only: the columns keep the grid's gutter. A column gap of --space-2xl, eleven of them,
+   outgrew the page at 1024px with 200% text, where the grid is still on. */
 [data-variant='flux'] .fx-case__sheet .fx-sheet__body {
-  gap: var(--space-2xl);
+  row-gap: var(--space-2xl);
 }
 
 [data-variant='flux'] :is(.fx-case__decide, .fx-case__story, .fx-case__reflect, .fx-case__record) {
