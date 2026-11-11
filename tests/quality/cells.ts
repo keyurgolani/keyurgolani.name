@@ -660,8 +660,19 @@ export function planCells({
   };
 
   const ordered = [...cells.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  // EVIDENCE ONLY, never merged (pointer-leak's CI Linux evidence drafts, A's F1, 2026-11-10):
+  // Spatial Bento complete /work/project-name, its published default in the system mode, at
+  // 1440x900 default with the reload conditions, the cell rc.1's preflight 1 read the leak on.
+  const evidenceCell = (cell: Cell) =>
+    cell.kind === 'composition' &&
+    cell.target === 'spatial-bento' &&
+    cell.state === APPEARANCE_STATE.id &&
+    cell.path === '/work/project-name' &&
+    tupleKey(cell.tuple) === tupleKey(defaultTuple('spatial-bento', 'system'));
   const selected = (
-    mode === 'full' ? ordered : ordered.filter((cell) => cell.sentinel || cell.changed)
+    mode === 'full'
+      ? ordered
+      : ordered.filter((cell) => cell.sentinel || cell.changed || evidenceCell(cell))
   ).map((cell) => (sweeps(cell, mode) ? { ...cell, sweep: true } : cell));
   const firstDefault = selected.find(
     (cell) =>
@@ -676,6 +687,9 @@ export function planCells({
     for (const viewport of VIEWPORTS) {
       for (const row of PREFERENCE_ROWS) {
         // A swept cell is one test at the sweep's viewport, which runs the [37] rows itself.
+        if (mode !== 'full' && evidenceCell(cell) && !cell.sentinel && !cell.changed) {
+          if (viewport !== VIEWPORTS[0] || row !== DEFAULT_ROW) continue;
+        }
         const planned = cell.sweep
           ? viewport === SWEEP_VIEWPORT && row === DEFAULT_ROW
           : mode === 'full' ||
@@ -707,6 +721,7 @@ export function planCells({
           conditions:
             mode === 'full' ||
             cell === firstDefault ||
+            evidenceCell(cell) ||
             cell.pack !== undefined ||
             (cell.changed !== undefined && !cell.sweep),
         });

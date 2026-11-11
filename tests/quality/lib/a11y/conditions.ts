@@ -194,24 +194,18 @@ function noCanvas(): Condition {
   };
 }
 
-/** The original's item 4 conditions, then no JavaScript and print. */
+/** The touch condition, which every cell runs last (row 44, conditions-pointer-leak-rc2). */
+export const TOUCH_CONDITION = 'touch';
+
+/** Every condition but touch, which a cell runs alone at its end (row 44). */
+export const conditionsBeforeTouch = (): string[] =>
+  conditions()
+    .map((each) => each.id)
+    .filter((id) => id !== TOUCH_CONDITION);
+
+/** The original's item 4 conditions but touch, then no JavaScript and print, then touch (row 44). */
 export function conditions(): Condition[] {
   return [
-    {
-      // Touch: no hover and no pointer precision, as Chromium's touch emulation reports them.
-      id: 'touch',
-      reload: true,
-      // Its first allowance: a key hint shown only to a fine pointer, beside its control (row 92).
-      keyHint: 'usable',
-      setup: async (_page, cdp) => {
-        await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
-      },
-      verify: async (page) =>
-        (await matches('(hover: none)')(page)) ?? (await matches('(pointer: coarse)')(page)),
-      teardown: async (_page, cdp) => {
-        await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false });
-      },
-    },
     {
       id: 'reduced-motion',
       reload: true,
@@ -264,6 +258,25 @@ export function conditions(): Condition[] {
       setup: (page) => page.emulateMedia({ media: 'print' }),
       verify: matches('print'),
       teardown: (page) => page.emulateMedia({ media: null }),
+    },
+    {
+      // Touch: no hover and no pointer precision, as Chromium's touch emulation reports them. Last,
+      // and on its own at the cell's very end (run-cell.ts): on CI's Linux Chromium its teardown
+      // leaves (pointer) and (hover) at none, and no CDP call gives the fine pointer back
+      // (conditions-pointer-leak-rc2), so nothing may read the page after it (row 44, CI run
+      // 42217082243).
+      id: 'touch',
+      reload: true,
+      // Its first allowance: a key hint shown only to a fine pointer, beside its control (row 92).
+      keyHint: 'usable',
+      setup: async (_page, cdp) => {
+        await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+      },
+      verify: async (page) =>
+        (await matches('(hover: none)')(page)) ?? (await matches('(pointer: coarse)')(page)),
+      teardown: async (_page, cdp) => {
+        await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+      },
     },
   ];
 }
@@ -984,24 +997,12 @@ export async function inventoryFindings(
       }
       await condition.setup(page, cdp);
       try {
-        // A key hint a page shows only to a fine pointer (row 92) is gone where the page reads
-        // none. On CI's Linux Chromium the touch condition's teardown leaves (pointer) at none for
-        // the rest of the page's life (row 44), so each later condition takes such a hint as no
-        // JavaScript does: let go while the control it names is shown and enabled, a finding
-        // naming the control while it isn't (Spatial Bento's Esc hint, preflight 1). With a fine
-        // pointer, and for a condition with a rule of its own, nothing changes.
-        // The rule (the coordinator, 8 Nov 2026): absence is accepted only for a key-hint field
-        // (KEY_HINT), keyed to the control it names, with that control shown and enabled, and only
-        // while (pointer: fine) reads false. missingItems applies a keyHint rule to KEY_HINT items
-        // alone, so every other field a coarse pointer drops is still a missing field: never a
-        // general coarse-pointer tolerance.
-        const keyHint =
-          condition.keyHint ??
-          ((await page.evaluate(() => matchMedia('(pointer: fine)').matches))
-            ? undefined
-            : 'usable');
+        // A condition's own key-hint rule alone (touch's, no JavaScript's, print's): touch runs
+        // last, so every other condition reads the page with the pointer it loaded with, and a
+        // missing hint there is a missing field (conditions-pointer-leak, the coordinator's ruling
+        // (c), 2026-11-09, retiring 72fbef710's no-fine-pointer fallback).
         if (condition.reload) {
-          const expected = { baseline, ignore: condition.ignore, keyHint };
+          const expected = { baseline, ignore: condition.ignore, keyHint: condition.keyHint };
           findings.push(...(await reload(page, path, condition.id, expected)));
         }
         // A condition read on the page as it stands, such as print, reads it from the top, where
@@ -1052,7 +1053,7 @@ export async function inventoryFindings(
             baseline,
             await inPage<string[]>(page, { kind: 'inventory' }),
             condition.ignore,
-            keyHint,
+            condition.keyHint,
           )),
         );
         if (condition.id === 'no-javascript')
