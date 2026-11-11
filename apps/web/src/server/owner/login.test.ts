@@ -1315,8 +1315,13 @@ test('a Sign out form post with a session, on the exact Origin and same-origin, 
   assert.equal((await send(studio('auth.session', token))).status, 401);
 });
 
-/** The pending-discard marker an https Studio sets (lib/studio/discard-marker.ts): script reads it, so not HttpOnly. */
-const DISCARD_MARKER = '__Host-studio_discard=1; Path=/; Max-Age=604800; SameSite=Strict; Secure';
+/**
+ * The pending-discard marker an https Studio sets (lib/studio/discard-marker.ts, the coordinator's
+ * ruling, 2026-11-10): its value is the sign-out's time, and it's HttpOnly, as only Studio's pages
+ * read it, server-side. The same name, scope and lifetime as before.
+ */
+const DISCARD_MARKER =
+  /^__Host-studio_discard=(\d+); Path=\/; Max-Age=604800; HttpOnly; SameSite=Strict; Secure$/;
 
 test("a Sign out form post that asks to discard clears the cache alone, never the origin's storage, and leaves a pending-discard marker for Studio's next script; keep, or no choice, leaves none (row 88c-RC2)", async (t) => {
   const { send } = await setup(t);
@@ -1326,15 +1331,22 @@ test("a Sign out form post that asks to discard clears the cache alone, never th
     ['discard', true],
   ] as const) {
     const token = tokenOf(await send(login()))!;
+    const asked = Date.now();
     const out = await send(formLogout(token, choice ? { choice } : {}));
+    const answered = Date.now();
     assert.equal(out.status, 303, String(choice));
     // The public site's preferences stay: no "storage", ever.
     assert.equal(out.headers.get('clear-site-data'), '"cache"', String(choice));
-    assert.deepEqual(
-      out.headers.getSetCookie(),
-      marked ? [CLEARED, DISCARD_MARKER] : [CLEARED],
-      String(choice),
-    );
+    const cookies = out.headers.getSetCookie();
+    assert.equal(cookies[0], CLEARED, String(choice));
+    assert.equal(cookies.length, marked ? 2 : 1, String(choice));
+    if (marked) {
+      const at = Number(DISCARD_MARKER.exec(cookies[1]!)?.[1]);
+      assert.ok(
+        at >= asked && at <= answered,
+        `the marker holds the sign-out's time: ${cookies[1]}`,
+      );
+    }
     assert.equal((await send(studio('auth.session', token))).status, 401, String(choice));
   }
   // A JSON logout, whose script clears the journal itself, sets no marker.

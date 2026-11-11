@@ -1,52 +1,57 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyPendingDiscard, DISCARD_MARKER_MAX_AGE, journalStorage } from './discard-marker';
-import { JOURNAL_KEY, JOURNAL_RETENTION_MS, readJournal, type JournalEntry } from './journal';
+import { applyDiscard, DISCARD_MARKER_MAX_AGE, journalStorage } from './discard-marker';
+import {
+  JOURNAL_CLOCK_SKEW_MS,
+  JOURNAL_KEY,
+  JOURNAL_RETENTION_MS,
+  readJournal,
+  writeEntry,
+  type JournalEntry,
+} from './journal';
 
-// The pending discard (row 88c-RC2, as the coordinator narrowed it): a Sign out without JavaScript
-// that chose to discard can't clear this browser's storage then, and Clear-Site-Data "storage"
-// would clear the public site's preferences too. So the answer leaves a marker cookie, and
-// Studio's next script, on the sign-in page or in the shell, reads it first: it clears exactly
-// what the JavaScript dialog's discard clears, the journal, before any draft is restored, then
-// drops the marker.
+// The pending discard (row 88c-RC2, as the coordinator ruled it, 2026-11-10): a Sign out without
+// JavaScript that chose to discard can't clear this browser's storage then, and Clear-Site-Data
+// "storage" would clear the public site's preferences too. So the answer leaves an HttpOnly marker
+// whose value is the sign-out's time T. Studio's pages read it as they render and hand T, and the
+// time they rendered at, to their script, which prunes every journal entry saved before T, on the
+// page's own clock, before anything reads the journal. It prunes once per T: the prune and its
+// record, "applied T", are one write to the journal's own key, so a later page that renders the
+// same T leaves alone what the new session has saved since. No script reads or writes a cookie.
 
-/** A Storage over a Map. */
+/** A Storage over a Map; `failWrites` makes the next so many setItem calls throw. */
 function memoryStorage(entries: Record<string, string>) {
   const map = new Map(Object.entries(entries));
+  const state = { failWrites: 0, writes: 0 };
   return {
     map,
+    state,
     getItem: (key: string) => map.get(key) ?? null,
-    setItem: (key: string, value: string) => void map.set(key, value),
+    setItem: (key: string, value: string) => {
+      if (state.failWrites > 0) {
+        state.failWrites -= 1;
+        throw new Error('QuotaExceededError');
+      }
+      state.writes += 1;
+      map.set(key, value);
+    },
     removeItem: (key: string) => void map.delete(key),
   };
 }
 
-/** document.cookie as a jar: reads give `cookies`, writes are kept in order. */
-function cookieJar(cookies: string) {
-  const writes: string[] = [];
-  return {
-    writes,
-    get cookie() {
-      return cookies;
-    },
-    set cookie(value: string) {
-      writes.push(value);
-    },
-  };
-}
+/** The sign-out's time on the server's clock. */
+const T = Date.parse('2026-11-08T12:00:00Z');
 
-const NOW = Date.parse('2026-11-08T12:00:00Z');
-/** An entry that reads, as journal.test.ts's: with no marker, it would come back. */
-const entry: JournalEntry = {
-  tabId: 'tab-aaaaaaaa',
+const entry = (tabId: string, savedAt: number): JournalEntry => ({
+  tabId,
   draftId: `drf_${'a'.repeat(32)}`,
   baseVersion: 3,
   documents: {
     portfolio: { format: 'yaml', sourceText: 'schemaVersion: 3\n# unsaved\n' },
     site: { format: 'json', sourceText: '{"schemaVersion": 2}\n' },
   },
-  savedAt: NOW - 60_000,
-};
+  savedAt,
+});
 
 /** What the public site and Studio keep in localStorage besides the journal. */
 const KEPT = {
@@ -55,45 +60,76 @@ const KEPT = {
   'studio.task': 'appearance',
 };
 
-test("a pending-discard marker clears the journal, and only the journal, then drops itself; the appearance and display-mode cookie and the site's keys stay (row 88c-RC2)", () => {
-  for (const marker of ['__Host-studio_discard', 'studio_discard']) {
-    const storage = memoryStorage({ [JOURNAL_KEY]: JSON.stringify([entry]), ...KEPT });
-    const jar = cookieJar(`portfolio_appearance=dark; ${marker}=1; other=x`);
-    assert.equal(applyPendingDiscard(jar, storage), true, marker);
-    assert.equal(storage.map.has(JOURNAL_KEY), false, `${marker}: the journal cleared`);
-    for (const [key, value] of Object.entries(KEPT)) {
-      assert.equal(storage.map.get(key), value, `${marker}: ${key} kept`);
-    }
-    // Only the marker is written, expired with its own attributes; nothing touches the
-    // appearance cookie (HttpOnly in a browser, so script never sees it anyway).
-    assert.equal(jar.writes.length, 1, marker);
-    assert.match(jar.writes[0]!, new RegExp(`^${marker}=; Path=/; Max-Age=0; SameSite=Strict`));
-    assert.equal(jar.writes[0]!.endsWith('; Secure'), marker.startsWith('__Host-'), marker);
-    assert.ok(!jar.writes.some((write) => write.startsWith('portfolio_appearance')), marker);
-  }
+test("a pending discard prunes what was saved before the sign-out, and only the journal: the site's keys stay (row 88c-RC2)", () => {
+  const storage = memoryStorage({
+    [JOURNAL_KEY]: JSON.stringify([entry('tab-before-1', T - 60_000)]),
+    ...KEPT,
+  });
+  // The page rendered just after the sign-out and its script runs a second later, on the same clock.
+  assert.equal(applyDiscard(storage, { at: T, renderedAt: T + 5_000 }, T + 6_000), true);
+  assert.deepEqual(readJournal(storage, T + 6_000), [], 'the entry saved before T is gone');
+  for (const [key, value] of Object.entries(KEPT)) assert.equal(storage.map.get(key), value, key);
 });
 
-test('with no marker nothing is cleared, and with storage out of reach the marker stays for the next script (row 88c-RC2)', () => {
-  const storage = memoryStorage({ [JOURNAL_KEY]: JSON.stringify([entry]), ...KEPT });
-  const plain = cookieJar('portfolio_appearance=dark; studio_discardx=1');
-  assert.equal(applyPendingDiscard(plain, storage), false);
-  assert.ok(storage.map.has(JOURNAL_KEY));
-  assert.deepEqual(plain.writes, []);
-  const marked = cookieJar('studio_discard=1');
-  assert.equal(applyPendingDiscard(marked, null), false);
-  assert.deepEqual(marked.writes, [], 'the marker waits for storage');
+test('a discard applies once per marker value: sign out, sign in, save within the skew, reload, and the entry survives (row 88c-RC2)', () => {
+  const storage = memoryStorage({ [JOURNAL_KEY]: JSON.stringify([entry('tab-before-1', T - 1)]) });
+  // The client's clock runs 4 minutes ahead of the server's: the per-load skew from the render.
+  const ahead = 4 * 60_000;
+  const firstLoad = T + 10_000;
+  const pending = { at: T, renderedAt: firstLoad };
+  assert.equal(applyDiscard(storage, pending, firstLoad + ahead), true, 'the first load prunes');
+  assert.deepEqual(readJournal(storage, firstLoad + ahead), []);
+  // The new session saves within the skew window: on the client's clock, before T + skew.
+  const saved = entry('tab-after-01', T + ahead - 30_000);
+  writeEntry(storage, saved, firstLoad + ahead + 1_000);
+  // A reload renders the same T: the discard was applied, so nothing goes.
+  const reload = { at: T, renderedAt: firstLoad + 60_000 };
+  assert.equal(applyDiscard(storage, reload, firstLoad + 60_000 + ahead), false, 'applied once');
+  assert.deepEqual(readJournal(storage, firstLoad + 60_000 + ahead), [saved]);
+  // journalStorage, as Studio reads through it, does the same.
+  const read = journalStorage({ localStorage: storage }, reload, firstLoad + 60_000 + ahead);
+  assert.deepEqual(readJournal(read!, firstLoad + 60_000 + ahead), [saved]);
 });
 
-test('no draft comes back after a discard: the journal Studio reads through journalStorage is empty once a marker was pending (row 88c-RC2)', () => {
-  const storage = memoryStorage({ [JOURNAL_KEY]: JSON.stringify([entry]), ...KEPT });
-  const jar = cookieJar('studio_discard=1');
-  // The same journal without a marker gives the entry back: what the marker stops.
-  const unmarked = memoryStorage({ [JOURNAL_KEY]: JSON.stringify([entry]) });
-  const without = journalStorage({ document: cookieJar(''), localStorage: unmarked });
-  assert.equal(readJournal(without!, NOW).length, 1, 'the entry reads');
-  const read = journalStorage({ document: jar, localStorage: storage });
-  assert.deepEqual(readJournal(read!, NOW), []);
-  assert.equal(jar.writes.length, 1, 'the marker dropped');
-  // And the marker outlives every entry it has to clear: the journal's own retention.
+test('a prune whose write fails leaves the journal and its record as they were, and the next load prunes once (row 88c-RC2)', () => {
+  const before = JSON.stringify([entry('tab-before-1', T - 60_000)]);
+  const storage = memoryStorage({ [JOURNAL_KEY]: before });
+  const pending = { at: T, renderedAt: T + 5_000 };
+  storage.state.failWrites = 1;
+  assert.equal(applyDiscard(storage, pending, T + 6_000), false, 'the write failed');
+  assert.equal(storage.map.get(JOURNAL_KEY), before, 'neither the prune nor the record landed');
+  assert.equal(applyDiscard(storage, pending, T + 7_000), true, 'the next load prunes');
+  assert.deepEqual(readJournal(storage, T + 7_000), []);
+  assert.equal(applyDiscard(storage, pending, T + 8_000), false, 'and only once');
+  assert.equal(storage.state.writes, 1, 'the prune and its record were one write');
+});
+
+test('a new discard, a later T, prunes again; no marker prunes nothing (row 88c-RC2)', () => {
+  const storage = memoryStorage({ [JOURNAL_KEY]: JSON.stringify([entry('tab-before-1', T - 1)]) });
+  assert.equal(applyDiscard(storage, null, T), false);
+  assert.equal(readJournal(storage, T).length, 1, 'no marker, nothing pruned');
+  assert.equal(applyDiscard(storage, { at: T, renderedAt: T }, T), true);
+  const later = entry('tab-after-01', T + 60_000);
+  writeEntry(storage, later, T + 61_000);
+  const again = { at: T + 120_000, renderedAt: T + 120_000 };
+  assert.equal(applyDiscard(storage, again, T + 120_000), true, 'a later sign-out prunes again');
+  assert.deepEqual(readJournal(storage, T + 120_000), []);
+});
+
+test('Studio reads the journal through journalStorage: with a marker no draft from before the sign-out comes back, and storage out of reach is null (row 88c-RC2)', () => {
+  const journal = JSON.stringify([entry('tab-before-1', T - 60_000)]);
+  const unmarked = memoryStorage({ [JOURNAL_KEY]: journal });
+  assert.equal(readJournal(journalStorage({ localStorage: unmarked }, null, T)!, T).length, 1);
+  const marked = memoryStorage({ [JOURNAL_KEY]: journal });
+  const read = journalStorage({ localStorage: marked }, { at: T, renderedAt: T }, T);
+  assert.deepEqual(readJournal(read!, T), []);
+  const refusing = {
+    get localStorage(): Storage {
+      throw new Error('SecurityError');
+    },
+  };
+  assert.equal(journalStorage(refusing, { at: T, renderedAt: T }, T), null);
+  // The marker outlives every entry it has to prune: the journal's own retention.
   assert.equal(DISCARD_MARKER_MAX_AGE, JOURNAL_RETENTION_MS / 1000);
+  assert.ok(JOURNAL_CLOCK_SKEW_MS > 0);
 });
