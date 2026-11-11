@@ -10,6 +10,7 @@ import {
   longestWord,
   wordClass,
   wordFit,
+  asideFit,
   caseFacts,
   foldedOf,
   foldLine,
@@ -732,6 +733,8 @@ test('the case study: month and year, the aside, the fact sheet rows the work ha
   assert.equal(wordClass('Postmortem Template Kit'), 'long');
   assert.equal(wordClass('I make failure legible.'), undefined);
   assert.deepEqual(wordFit('Work Showcase'), { '--layout-ss-word': 8 });
+  // The aside's longest word as it prints, its parentheses on its first and last words (row 127).
+  assert.deepEqual(asideFit('software, 2022–now'), { '--layout-ss-aside-word': 10 });
   assert.equal(monthYear('2022-01'), 'January 2022');
   assert.equal(monthYear('2022'), '2022');
   assert.equal(monthYear(undefined), undefined);

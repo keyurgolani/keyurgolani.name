@@ -130,6 +130,11 @@ export function wordFit(text: string): Record<'--layout-ss-word', number> {
   return { '--layout-ss-word': longestWord(text) };
 }
 
+/** The same for the poster line's aside, as it prints: its parentheses on its first and last words (row 127). */
+export function asideFit(text: string): Record<'--layout-ss-aside-word', number> {
+  return { '--layout-ss-aside-word': longestWord(`(${text})`) };
+}
+
 // ───────────── once per render ─────────────
 
 /**

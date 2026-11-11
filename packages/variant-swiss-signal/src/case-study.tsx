@@ -24,6 +24,7 @@ import {
   lengthClass,
   wordClass,
   wordFit,
+  asideFit,
   mediumWord,
   partsOf,
   present,
@@ -271,6 +272,8 @@ function CaseStudyPage({ input, work, outline }: CaseStudyPageProps) {
         {asideParts.when ? <span className="ss-nowrap">{asideParts.when}</span> : null}
       </Words>
     ) : null;
+  // The derived aside as it reads, for its longest word's fit (asideFit).
+  const derivedText = [asideParts.medium, asideParts.when].filter(Boolean).join(', ');
   // A long title is set in sentence case at step 5 already; the word fit is for uppercase lines (as poster.tsx).
   const length = lengthClass(title);
   const fits = length !== 'long' && wordClass(title) === 'long';
@@ -328,7 +331,11 @@ function CaseStudyPage({ input, work, outline }: CaseStudyPageProps) {
                 {authoredAside ? (
                   <>
                     {' '}
-                    <Paren signal className="ss-poster__aside">
+                    <Paren
+                      signal
+                      className="ss-poster__aside"
+                      style={asideFit(authoredAside) as CSSProperties}
+                    >
                       {authoredAside}
                     </Paren>
                   </>
@@ -337,7 +344,11 @@ function CaseStudyPage({ input, work, outline }: CaseStudyPageProps) {
               {!authoredAside && derived ? (
                 <>
                   {' '}
-                  <Paren signal className="ss-poster__aside">
+                  <Paren
+                    signal
+                    className="ss-poster__aside"
+                    style={asideFit(derivedText) as CSSProperties}
+                  >
                     {derived}
                   </Paren>
                 </>

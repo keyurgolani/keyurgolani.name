@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { RichText } from '@portfolio/kit/sections';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
 import { shortDate } from './model';
@@ -33,13 +33,16 @@ export function Paren({
   children,
   signal = false,
   className,
+  style,
 }: {
   children: ReactNode;
   signal?: boolean;
   className?: string;
+  style?: CSSProperties;
 }) {
   return (
     <span
+      style={style}
       className={['ss-paren', signal ? 'ss-paren--signal' : '', className ?? '']
         .filter(Boolean)
         .join(' ')}

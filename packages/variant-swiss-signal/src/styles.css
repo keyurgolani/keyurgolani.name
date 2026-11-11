@@ -2429,13 +2429,13 @@
 
 /*
  * Where the poster's column holds under 14rem, the poster line's display type (the home hero, a case's
- * title) is sized from its column: its step, or the size at which its longest word fits the column at
+ * title), and its aside after it, are each sized from its column: its step, or the size at which its longest word fits the column at
  * 0.85em a letter, whichever is smaller, never under body size, and it breaks only between words (row 127).
  * The width is in rem, not px, on purpose: in a container query rem resolves against the root's font size,
  * so 14rem tracks the reader's text size. At 1x every phone's column holds 17.75rem or more and nothing here
  * applies; with the root text at 200% a phone's holds 7.75 to 9.9rem. A single word wider than the column at
- * body size (at 320 with 200% text, about 12 capitals or more) still runs past it: no browser this site is
- * tested in hyphenates.
+ * body size (at 320 with 200% text, about 12 capitals or more, or an aside's word of about 15 letters) still
+ * runs past it: no browser this site is tested in hyphenates.
  */
 @container (max-width: 14rem) {
   [data-variant='swiss-signal'] .ss-poster__line:not([data-length='long']) .ss-poster__text {
@@ -2453,5 +2453,14 @@
       var(--type-body-font-size),
       min(var(--type-step-6), calc(100cqi / (var(--layout-ss-word, 8) * 0.85)))
     );
+  }
+
+  /* Its aside the same way, from its own longest word (asideFit, its parentheses counted), at its step or under. */
+  [data-variant='swiss-signal'] .ss-poster__line .ss-poster__aside {
+    font-size: max(
+      var(--type-body-font-size),
+      min(var(--type-step-3), calc(100cqi / (var(--layout-ss-aside-word, 8) * 0.85)))
+    );
+    overflow-wrap: normal;
   }
 }

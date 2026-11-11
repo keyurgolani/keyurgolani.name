@@ -2,7 +2,16 @@ import type { Section } from '@portfolio/schema';
 import { hrefFor, type SectionRendererProps } from '@portfolio/kit/sections';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
 import type { CSSProperties } from 'react';
-import { heroOf, ownerName, posterLede, posterLine, present, wordClass, wordFit } from './model';
+import {
+  asideFit,
+  heroOf,
+  ownerName,
+  posterLede,
+  posterLine,
+  present,
+  wordClass,
+  wordFit,
+} from './model';
 import { Hidden, ownId, Paren, Phrase } from './parts';
 import { SelectedIndex } from './selected-index';
 
@@ -55,7 +64,11 @@ export function Poster({ input }: { input: VariantRenderInput }) {
         {line.aside ? (
           <>
             {' '}
-            <Paren signal className="ss-poster__aside">
+            <Paren
+              signal
+              className="ss-poster__aside"
+              style={asideFit(line.aside.text) as CSSProperties}
+            >
               {line.aside.text}
             </Paren>
             {line.tail ? <span data-type-role="display">{line.tail}</span> : null}
