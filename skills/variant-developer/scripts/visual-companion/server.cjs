@@ -156,6 +156,25 @@ function serveHelper(res) {
   res.end(HELPER_JS);
 }
 
+// ----- new screens -----------------------------------------------------------
+// A newest screen file the server hasn't seen yet clears the events, which belong to the screen
+// before it. The watcher below calls this, and so does recordEvent before it writes a click (row
+// 147): a click is filed against the newest screen on disk, so a watcher pass that comes later,
+// late under load, finds that screen already seen and never clears the click.
+
+function checkForNewScreen() {
+  const newest = findNewestFile(screenDir);
+  if (!newest) return;
+  if (newest.path !== lastNewestPath) {
+    lastNewestPath = newest.path;
+    try {
+      fs.writeFileSync(path.join(stateDir, 'events'), '');
+    } catch {
+      /* non-fatal */
+    }
+  }
+}
+
 function recordEvent(req, res) {
   let buf = '';
   req.on('data', (c) => {
@@ -173,6 +192,8 @@ function recordEvent(req, res) {
       res.end('bad json: ' + e.message);
       return;
     }
+    // The screen this click belongs to is registered before the click is written (row 147).
+    checkForNewScreen();
     try {
       fs.appendFileSync(path.join(stateDir, 'events'), buf.replace(/\s+$/, '') + '\n');
     } catch (e) {
@@ -231,19 +252,6 @@ server.listen(port, host, () => {
   // fs.watch can be unreliable across platforms; fall back to a polling
   // interval that detects mtime changes too. Both running together is fine —
   // the lastNewestPath guard makes the action idempotent.
-
-  function checkForNewScreen() {
-    const newest = findNewestFile(screenDir);
-    if (!newest) return;
-    if (newest.path !== lastNewestPath) {
-      lastNewestPath = newest.path;
-      try {
-        fs.writeFileSync(path.join(stateDir, 'events'), '');
-      } catch {
-        /* non-fatal */
-      }
-    }
-  }
 
   try {
     fs.watch(screenDir, (_event, filename) => {
