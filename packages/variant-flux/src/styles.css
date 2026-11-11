@@ -1304,8 +1304,10 @@
 
 [data-variant='flux'] .fx-sheet {
   position: relative;
-  /* Its tab measures the sheet's width (cqi) to place itself and to size its word. */
+  /* Its tab measures the sheet's width (cqi) to place itself and to size its word; the case's
+     open grid asks it how wide it is in the root's rem. */
   container-type: inline-size;
+  container-name: fx-sheet;
   margin-block-start: calc(var(--type-step-7) + var(--space-3xl));
   padding-block: var(--space-2xl) var(--space-3xl);
   padding-inline: var(--layout-fx-edge);
@@ -3162,6 +3164,16 @@
 
   [data-variant='flux'] .fx-case__facts {
     grid-column: 9 / span 4;
+  }
+
+  /* A container query's rem is the root's, where the media query's is 16px: with large text the
+     grid stays on, and below 44rem of sheet four columns can't hold a fact's word. The facts go
+     under the intro, the whole width (1024px at 200% left a value about 30px wide). */
+  @container fx-sheet (inline-size < 44rem) {
+    [data-variant='flux'] .fx-case__intro,
+    [data-variant='flux'] .fx-case__facts {
+      grid-column: 1 / -1;
+    }
   }
 
   /* Two decisions a row, the second hanging lower: one cascade, never a row of equal cards. */
