@@ -113,3 +113,34 @@ test(
     }
   },
 );
+
+test(
+  "Studio's Sign out form posted from the demo origin with the owner cookie attached is refused, keep or discard, and ends nothing (row 88c-RC2)",
+  { annotation: ROW },
+  async ({ target }) => {
+    const session = await signIn(target);
+    const demo = demoOrigin(target);
+    // A form post needs no CSRF token (studio-2's one exception), so the Origin and Sec-Fetch-Site
+    // are all that stand between the demo origin's script and the owner's sign-out.
+    for (const choice of ['keep', 'discard']) {
+      for (const fetchSite of ['same-site', 'cross-site', null]) {
+        const answer = await target.request('/api/studio/auth.logout', {
+          method: 'POST',
+          headers: {
+            origin: demo,
+            ...(fetchSite ? { 'sec-fetch-site': fetchSite } : {}),
+            'content-type': 'application/x-www-form-urlencoded',
+            cookie: session.cookie,
+          },
+          body: `choice=${choice}`,
+        });
+        const what = `${choice}, Sec-Fetch-Site ${fetchSite ?? 'absent'}`;
+        expect(answer.status, what).toBe(403);
+        expect(errorCode(answer), what).toBe('request_origin_rejected');
+        // No cleared cookie, and no pending-discard marker.
+        expect(setCookies(answer), what).toEqual([]);
+      }
+    }
+    expect((await query(target, 'auth.session', { cookie: session.cookie })).status).toBe(200);
+  },
+);

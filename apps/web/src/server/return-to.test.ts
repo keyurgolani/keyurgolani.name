@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  announcesSignOut,
   DEFAULT_RETURN_TO,
   loginAction,
   safeReturnTo,
@@ -134,5 +135,21 @@ test('the sign-in page reads only the states it knows', () => {
   for (const state of SIGN_IN_STATES) assert.equal(signInStateOf(state), state);
   for (const value of [null, undefined, '', 'FAILED', 'failed ', 'signed_in', '<script>']) {
     assert.equal(signInStateOf(value), null, String(value));
+  }
+});
+
+test("the sign-in page tells Studio's other tabs to leave only after a sign-out this origin sent it from (row 88c-RC2)", () => {
+  // A native Sign out's 303 lands here same-origin, as a JavaScript one's does.
+  for (const state of ['signed_out', 'store_failed'] as const) {
+    assert.equal(announcesSignOut(state, 'same-origin'), true, state);
+  }
+  // A cross-site link, a bookmark or a typed URL never signs the owner's tabs out of Studio.
+  for (const site of ['cross-site', 'same-site', 'none', null]) {
+    assert.equal(announcesSignOut('signed_out', site), false, String(site));
+    assert.equal(announcesSignOut('store_failed', site), false, String(site));
+  }
+  // Nor does any other state.
+  for (const state of ['failed', 'rate_limited', 'error', 'session_ended', null] as const) {
+    assert.equal(announcesSignOut(state, 'same-origin'), false, String(state));
   }
 });

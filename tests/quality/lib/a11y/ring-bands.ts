@@ -1,0 +1,272 @@
+import type { Active, Box } from './probe';
+import { centreLineChange, EDGE_ALLOWANCE, ringCentreLine, type LinePoint } from './interaction';
+import { pixel, type Image } from '../pixels';
+
+// A focused stop's outline ring measured on two shots of it, focused and blurred, side by side along
+// its centre line: Horizontal Cinema's e2e ring checks' measure (tests/e2e/horizontal-cinema-model.ts
+// ringContrast takes the shots and calls measureRing). Pure, on the images, so a unit can read a
+// known ring through it.
+
+/** Whether a centre line point is on a corner's arc: its normal along neither axis. */
+const onArc = ({ nx, ny }: LinePoint) => Math.abs(nx) !== 1 && Math.abs(ny) !== 1;
+
+/** A side of a focus ring, as its centre line's normal points out from the box. */
+export type RingSide = 'top' | 'right' | 'bottom' | 'left';
+
+/** A ring measured along its centre line, side by side, and the line's own box. */
+export interface RingContrast {
+  /** Each side's points in view, and how many of them the focus change takes to 3:1. */
+  readonly sides: Readonly<Record<RingSide, { readonly points: number; readonly strong: number }>>;
+  /** Each side's painted band, how many device pixels across (0 where the paint left the side untouched). */
+  readonly bands: Readonly<Record<RingSide, number>>;
+  /**
+   * Each side's arc points that read weak alone and that the arc rule holds strong (counted in its
+   * `strong`): a corner's arc holds its lone antialiased misses when no two adjacent points on it
+   * are weak and the whole line reads at the gate's EDGE_ALLOWANCE (row 146, the coordinator's
+   * ruling, option 1). A straight side holds every point, so it's 0 on one with no arc.
+   */
+  readonly held: Readonly<Record<RingSide, number>>;
+  /** The whole line, each point read alone: how many are in the clips, and how many of them are strong. */
+  readonly line: { readonly points: number; readonly strong: number };
+  /** The box the centre line runs round: the border box set out by the offset and half the width. */
+  readonly box: Box;
+}
+
+/** A side's painted band: the device rows (top, bottom) or columns (left, right) its changed pixels cover. */
+interface Band {
+  readonly from: number;
+  readonly to: number;
+}
+
+/**
+ * Where the paint put each side of the ring, in device pixels: for the top and bottom, the outermost run of rows, from
+ * the clip's edge in toward the box's middle, in which a pixel changes between the focused and the blurred clip; for the
+ * left and right, the outermost run of columns. A row is read only across the box's columns clear of its corners, and a
+ * column only across its rows clear of them: from each end, `reach` CSS px (the ring's offset and width) or the corner's
+ * radius, whichever is more, a device pixel more, so neither the other sides' ring, which an inset ring lays inside the
+ * box's span, nor a rounded corner's arc, which bends in from the side's line until the radius, ever counts toward a
+ * side (row 146). The radii are `corners` (top-left, top-right, bottom-right, bottom-left, each horizontal and
+ * vertical, as the probe reads them), scaled down together where they overlap, as CSS draws them. A side whose corners
+ * leave it no straight run (a pill's round ends) is read clear of `reach` alone.
+ * The outermost run, so a change inside the ring (a text or underline colour) never widens it. A side with no changed
+ * row or column has no band.
+ *
+ * SNAP RULE (draft, row 90b's :234, pending #220's CI Linux diagnosis, zz-kgn-hc-234-diag's painted edges): Chromium
+ * paints a straight outline on whole device pixels, its edges snapped from the box's fractional ones, so the ring's
+ * band is the changed pixels' rows or columns, not the box set out by the offset. DIAG-CONFIRMED RULE: (placeholder:
+ * the rounding the diag's painted edges show, such as round-half-up of each fractional edge, replaces or confirms
+ * this read of the changed pixels).
+ */
+export function paintedBands(
+  focused: Image,
+  blurred: Image,
+  clip: Box,
+  box: Box,
+  reach: number,
+  corners: readonly (readonly [number, number])[] = [],
+): Record<RingSide, Band | null> {
+  const scale = focused.width / clip.width;
+  const changed = (column: number, row: number) => {
+    const i = row * focused.width + column;
+    const [a, b] = [pixel(focused, i), pixel(blurred, i)];
+    return a[0] !== b[0] || a[1] !== b[1] || a[2] !== b[2];
+  };
+  // Each corner's radii as CSS draws them: all scaled by one factor where a side's two overlap.
+  const radius = (corner: number, axis: 0 | 1) => Math.max(0, corners[corner]?.[axis] ?? 0);
+  const fit = Math.min(
+    1,
+    ...(
+      [
+        [box.width, radius(0, 0) + radius(1, 0)],
+        [box.width, radius(3, 0) + radius(2, 0)],
+        [box.height, radius(0, 1) + radius(3, 1)],
+        [box.height, radius(1, 1) + radius(2, 1)],
+      ] as const
+    )
+      .filter(([, sum]) => sum > 0)
+      .map(([length, sum]) => length / sum),
+  );
+  const clear = (corner: number, axis: 0 | 1) =>
+    Math.ceil(Math.max(reach, radius(corner, axis) * fit) * scale) + 1;
+  const plain = Math.ceil(reach * scale) + 1;
+  const span = (from: number, to: number, size: number, start: number, end: number) => {
+    const out: number[] = [];
+    for (
+      let at = Math.max(0, Math.ceil(from) + start);
+      at <= Math.min(size - 1, Math.floor(to) - end);
+      at++
+    )
+      out.push(at);
+    return out;
+  };
+  // A side's straight run, clear of its corners, or clear of the reach alone where there's none.
+  const straight = (from: number, to: number, size: number, start: number, end: number) => {
+    const run = span(from, to, size, start, end);
+    return run.length > 0 ? run : span(from, to, size, plain, plain);
+  };
+  const [left, right] = [(box.x - clip.x) * scale, (box.x + box.width - clip.x) * scale];
+  const [top, bottom] = [(box.y - clip.y) * scale, (box.y + box.height - clip.y) * scale];
+  const across = {
+    top: straight(left, right, focused.width, clear(0, 0), clear(1, 0)),
+    bottom: straight(left, right, focused.width, clear(3, 0), clear(2, 0)),
+    left: straight(top, bottom, focused.height, clear(0, 1), clear(3, 1)),
+    right: straight(top, bottom, focused.height, clear(1, 1), clear(2, 1)),
+  };
+  const rowChanged = (columns: readonly number[]) => (row: number) =>
+    columns.some((column) => changed(column, row));
+  const columnChanged = (rows: readonly number[]) => (column: number) =>
+    rows.some((row) => changed(column, row));
+  // From `from` toward `to` (exclusive), by `step`: the first run of indices that pass `test`.
+  const run = (
+    from: number,
+    to: number,
+    step: 1 | -1,
+    test: (at: number) => boolean,
+  ): Band | null => {
+    let at = from;
+    while (at !== to && !test(at)) at += step;
+    if (at === to) return null;
+    const first = at;
+    while (at !== to && test(at)) at += step;
+    const last = at - step;
+    return { from: Math.min(first, last), to: Math.max(first, last) };
+  };
+  const [midX, midY] = [Math.floor((left + right) / 2), Math.floor((top + bottom) / 2)];
+  return {
+    top: run(0, midY + 1, 1, rowChanged(across.top)),
+    bottom: run(focused.height - 1, midY, -1, rowChanged(across.bottom)),
+    left: run(0, midX + 1, 1, columnChanged(across.left)),
+    right: run(focused.width - 1, midX, -1, columnChanged(across.right)),
+  };
+}
+
+/**
+ * The ring on `focused` against `blurred`, both shots of `clip`, for the stop `active` (its box and
+ * rounding as the probe read them), at the non-text contrast `nonText` and the focus check's
+ * perimeterPx: see ringContrast (tests/e2e/horizontal-cinema-model.ts) for how it's measured.
+ */
+export function measureRing(
+  focused: Image,
+  blurred: Image,
+  clip: Box,
+  active: Pick<Active, 'box' | 'rounding'>,
+  thresholds: { readonly nonText: number; readonly perimeterPx: number },
+): RingContrast {
+  if (!active.rounding) throw new Error('measureRing measures an outline ring');
+  const width = active.rounding.width ?? 0;
+  const ratio = thresholds.nonText;
+  const scale = focused.width / clip.width;
+  const need = Math.ceil(thresholds.perimeterPx * scale);
+  const bands = paintedBands(
+    focused,
+    blurred,
+    clip,
+    active.box,
+    Math.abs(active.rounding.offset) + width,
+    active.rounding.corners,
+  );
+  // Each side's band, at least `need` device pixels across, widened outward from the box.
+  const across = (side: RingSide): Band | null => {
+    const band = bands[side];
+    if (!band || band.to - band.from + 1 >= need) return band;
+    const short = need - (band.to - band.from + 1);
+    return side === 'top' || side === 'left'
+      ? { from: band.from - short, to: band.to }
+      : { from: band.from, to: band.to + short };
+  };
+  // A band's middle and half its width, in CSS px, on the clip's axis for that side.
+  const middle = (side: RingSide) => {
+    const band = across(side);
+    if (!band) return null;
+    const origin = side === 'top' || side === 'bottom' ? clip.y : clip.x;
+    return {
+      at: origin + (band.from + band.to + 1) / 2 / scale,
+      half: (band.to - band.from + 1) / 2 / scale,
+    };
+  };
+  const distance = active.rounding.offset + width / 2;
+  const [t, r, b, l] = (['top', 'right', 'bottom', 'left'] as const).map(middle);
+  // The box whose ring, at the computed distance, runs down the painted bands' middles; where a side
+  // has no band, the box's own edge stands.
+  const { x, y, width: wide, height } = active.box;
+  const x0 = l ? l.at + distance : x;
+  const y0 = t ? t.at + distance : y;
+  const x1 = r ? r.at - distance : x + wide;
+  const y1 = b ? b.at - distance : y + height;
+  const snapped = { x: x0, y: y0, width: Math.max(0, x1 - x0), height: Math.max(0, y1 - y0) };
+  const line = ringCentreLine(snapped, active.rounding.corners, distance);
+  // A corner's arc goes to the side its normal points out from most.
+  const sideOf = ({ nx, ny }: LinePoint): RingSide =>
+    Math.abs(ny) >= Math.abs(nx) ? (ny < 0 ? 'top' : 'bottom') : nx > 0 ? 'right' : 'left';
+  const halves = { top: t, right: r, bottom: b, left: l };
+  // Each point read alone, at its side's band: whether it's in the clips, and whether it's strong. A
+  // side the paint left untouched has every point weak.
+  const reads = line.map((point) => {
+    const side = sideOf(point);
+    const band = halves[side];
+    const { strong, total } = centreLineChange(
+      focused,
+      blurred,
+      clip,
+      [point],
+      ratio,
+      band ? band.half : width / 2,
+    );
+    return { side, counted: total > 0, strong: band !== null && strong > 0, arc: onArc(point) };
+  });
+  // The arc rule (row 146, the coordinator's ruling, option 1). Round a corner, where the paint
+  // antialiases every pixel, a lone point under 3:1 is the blend, not a gap in the ring: an arc
+  // holds its weak points strong when no two adjacent points on it are weak, and only while the
+  // whole line reads at the gate's EDGE_ALLOWANCE. A straight side, painted on whole device pixels,
+  // holds every point. A run of adjacent weak points, an arc gone, fails its arc whole.
+  const counted = reads.filter((read) => read.counted);
+  const whole =
+    counted.length > 0 &&
+    counted.filter((read) => read.strong).length >= counted.length * EDGE_ALLOWANCE;
+  const held = new Set<number>();
+  if (whole) {
+    // Each arc: a run of consecutive arc points along the line, which closes on itself.
+    const n = reads.length;
+    const start = reads.findIndex((read, i) => read.arc && !reads[(i - 1 + n) % n]!.arc);
+    for (let i = start; start >= 0 && i < start + n; i++) {
+      const at = i % n;
+      if (!reads[at]!.arc || reads[(at - 1 + n) % n]!.arc) continue;
+      const run: number[] = [];
+      for (let k = at; reads[k % n]!.arc && run.length < n; k++) run.push(k % n);
+      const weak = run.filter((k) => reads[k]!.counted && !reads[k]!.strong);
+      const adjacent = weak.some((k, j) => j > 0 && weak[j - 1] === (k - 1 + n) % n);
+      if (!adjacent) for (const k of weak) held.add(k);
+    }
+  }
+  const sides = Object.fromEntries(
+    (['top', 'right', 'bottom', 'left'] as const).map((side) => {
+      const mine = reads.flatMap((read, i) => (read.side === side && read.counted ? [i] : []));
+      const strong = mine.filter((i) => reads[i]!.strong || held.has(i)).length;
+      return [side, { points: mine.length, strong }];
+    }),
+  ) as RingContrast['sides'];
+  const heldBy = Object.fromEntries(
+    (['top', 'right', 'bottom', 'left'] as const).map((side) => [
+      side,
+      [...held].filter((i) => reads[i]!.side === side).length,
+    ]),
+  ) as RingContrast['held'];
+  const painted = Object.fromEntries(
+    (['top', 'right', 'bottom', 'left'] as const).map((side) => {
+      const band = bands[side];
+      return [side, band ? band.to - band.from + 1 : 0];
+    }),
+  ) as RingContrast['bands'];
+  return {
+    sides,
+    bands: painted,
+    held: heldBy,
+    line: { points: counted.length, strong: counted.filter((read) => read.strong).length },
+    box: {
+      x: snapped.x - distance,
+      y: snapped.y - distance,
+      width: snapped.width + 2 * distance,
+      height: snapped.height + 2 * distance,
+    },
+  };
+}

@@ -183,7 +183,7 @@ test(
 );
 
 test(
-  'a Sign out clicked before the shell hydrates waits for it, then signs out, once (row 88, W1)',
+  'a Sign out clicked before the shell hydrates is the native form post, and signs out, once (row 88c-RC2, was row 88 W1)',
   { annotation: [STUDIO] },
   async ({ page, context, app }) => {
     await signIn(page, app, secret.password);
@@ -204,6 +204,8 @@ test(
     const button = signOutButton(tab);
     await expect(button).toBeVisible();
     const started = Date.now();
+    // Sign out is a form from the first byte (row 88c-RC2): with no script yet, the click is the
+    // native post, and it lands while every script chunk is still held.
     const click = button.click();
     await landed(click, 'while every script chunk was held');
     await pause(Math.max(0, LANDS_MS - (Date.now() - started)));
@@ -216,14 +218,18 @@ test(
 );
 
 test(
-  "/studio's HTML renders Sign out aria-disabled, and the live page takes it off with no hydration mismatch (row 88)",
+  "/studio's HTML renders Sign out as a form post to auth.logout, ready before scripts run, and the live page takes it over with no hydration mismatch (row 88c-RC2, was row 88)",
   { annotation: [STUDIO] },
   async ({ page, app }) => {
     await signIn(page, app, secret.password);
     const html = await (await page.request.get('/studio')).text();
-    const tag = /<button[^>]*>Sign out<\/button>/.exec(html)?.[0] ?? '';
-    expect(tag, 'the server renders Sign out').not.toBe('');
-    expect.soft(tag, 'not ready before scripts run').toContain('aria-disabled="true"');
+    const form =
+      /<form[^>]*action="\/api\/studio\/auth\.logout"[^>]*>[\s\S]*?<\/form>/.exec(html)?.[0] ?? '';
+    expect(form, 'the server renders Sign out as a form').not.toBe('');
+    expect.soft(form, 'a post').toMatch(/^<form[^>]*\smethod="post"/);
+    const tag = /<button[^>]*>Sign out<\/button>/.exec(form)?.[0] ?? '';
+    expect.soft(tag, 'a submit').toMatch(/\stype="submit"/);
+    expect.soft(tag, 'ready before scripts run').not.toContain('aria-disabled');
     const errors: string[] = [];
     page.on('console', (message) => {
       if (message.type() === 'error') errors.push(message.text());

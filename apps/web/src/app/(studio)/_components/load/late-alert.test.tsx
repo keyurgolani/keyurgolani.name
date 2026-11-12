@@ -34,7 +34,8 @@ interface FakeBody {
   appendChild(node: FakeNode): FakeNode;
 }
 
-function fakePage() {
+/** The page, whose .studio-load wrapper names `profile` (the load boundary's, row 88c-RC2 (b)). */
+function fakePage(profile: string | null = null) {
   let focused: string | null = null;
   const body: FakeBody = {
     children: [],
@@ -65,6 +66,10 @@ function fakePage() {
     },
     getElementById: (id: string) =>
       id === 'studio-main' ? { focus: () => void (focused = 'studio-main') } : null,
+    querySelector: (selectors: string) =>
+      selectors === '.studio-load'
+        ? { getAttribute: (name: string) => (name === 'data-studio-profile' ? profile : null) }
+        : null,
   };
   const armed: number[] = [];
   const cleared: unknown[] = [];
@@ -109,7 +114,7 @@ function fakePage() {
 
 /** The alert the late root renders: the one the boundary renders too, as a plain box. */
 const LATE_MARKUP =
-  '<div class="studio-shell__main" id="studio-load-failure" tabindex="-1"><h1 class="studio-shell__name">Portfolio Studio</h1><div class="studio-alert" role="alert"><p>Studio couldn&#x27;t load.</p><button type="button" class="studio-button">Reload Studio</button></div></div>';
+  '<div class="studio-shell__main" id="studio-load-failure" tabindex="-1"><h1 class="studio-shell__name">Portfolio Studio</h1><div class="studio-alert" role="alert"><p>Studio couldn&#x27;t load.</p><div class="studio-alert__actions"><button type="button" class="studio-button">Reload Studio</button></div></div></div>';
 
 test("a commit before 5 seconds stops the late alert's clock: no <studio-load-late>, even once the timers run past 5 seconds (row 88c)", (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
@@ -241,4 +246,23 @@ test('once Reload Studio is pressed in the late alert, the page reloads, and a c
   await Promise.resolve();
   assert.equal(page.unmounted(), 0, 'its root stays mounted');
   t.mock.timers.reset();
+});
+
+test("the late alert offers Sign out under the profile the page's .studio-load wrapper names, owner alone, never <body>'s (row 88c-RC2 (b))", (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const shown = (profile: string | null) => {
+    const page = fakePage(profile);
+    // A <body> that still named owner would offer it under demo: the wrapper is what counts.
+    Object.assign(page.body, { dataset: { studioProfile: 'owner' } });
+    createLateAlert(page.host).start();
+    t.mock.timers.tick(STUDIO_LOAD_TIMEOUT_MS);
+    assert.equal(page.rendered.length, 1);
+    return page.rendered[0]!;
+  };
+  const owner = shown('owner');
+  assert.match(owner, /<form[^>]*\saction="\/api\/studio\/auth\.logout"/);
+  assert.match(owner, />Sign out<\/button>/);
+  for (const profile of ['demo', null]) {
+    assert.equal(shown(profile), LATE_MARKUP, `under ${String(profile)}`);
+  }
 });

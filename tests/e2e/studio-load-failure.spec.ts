@@ -1,7 +1,10 @@
+import { renameSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import type { Page, Request, Route } from '@playwright/test';
 import { expect, test } from '../harness/fixtures';
 import { ownerSecret } from '../harness/owner-secret.mjs';
 import { signIn } from '../harness/preview-grants';
+import { JOURNAL_KEY, journalEntryCount, seedJournal } from '../harness/studio-journal';
 import { ownerApp } from '../harness/profile-matrix';
 import { failureStateFindings } from '../quality/lib/a11y/conditions';
 
@@ -72,13 +75,30 @@ test.afterEach(async ({ page }) => {
   await page.unrouteAll({ behavior: 'ignoreErrors' });
 });
 
-/** Failed enhancement on `page`: its optional chunks and its fonts refused. Returns what it refused. */
+/**
+ * Whether `request` comes from a document on /studio itself. A request whose frame can't be told is
+ * taken as /studio's, as before. The sign-in page a Sign out lands on is not /studio: its own
+ * chunks, the one that applies a pending discard among them, aren't /studio's to refuse (row
+ * 88c-RC2's first proof: the R4 discard's sign-in chunk was refused, so nothing cleared the journal).
+ */
+function fromStudio(request: Request): boolean {
+  try {
+    return new URL(request.frame().url()).pathname === '/studio';
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Failed enhancement on `page`: its optional chunks and its fonts refused, while it's on /studio
+ * alone. Returns what it refused.
+ */
 async function failEnhancement(page: Page, origin: string): Promise<string[]> {
   const own = await ownScripts(page, origin);
   const refused: string[] = [];
   await page.route('**/*', (route) => {
     const request = route.request();
-    if (optional(request, own) || request.resourceType() === 'font') {
+    if ((optional(request, own) || request.resourceType() === 'font') && fromStudio(request)) {
       refused.push(request.url());
       return unlessGone(page, () => route.abort('blockedbyclient'));
     }
@@ -160,8 +180,13 @@ test(
     await expect.poll(() => refused.length, 'the optional chunks are asked for').toBeGreaterThan(0);
     await expect(alert(page)).toBeVisible({ timeout: PAST_TIMEOUT_MS });
     await expect(reloadStudio(page)).toBeFocused();
-    // Reload alone: no owner code is in the page's entry (#9).
-    await expect(alert(page).getByRole('button')).toHaveCount(1);
+    // Reload, and the owner's Sign out, keep or discard: a plain form, so no owner code is in the
+    // page's entry (#9; row 88c-RC2).
+    await expect(alert(page).getByRole('button')).toHaveText([
+      'Reload Studio',
+      'Sign out',
+      'Discard unsaved changes and sign out',
+    ]);
     // The quality harness's own verdict on a failure state, E's read's.
     expect(await failureStateFindings(page)).toEqual([]);
     // It never says the owner is signed out.
@@ -283,5 +308,102 @@ test(
     await expect(page.locator('main#studio-load-failure').getByRole('alert')).toBeVisible();
     await expect(reloadStudio(page)).toBeFocused();
     expect(await failureStateFindings(page)).toEqual([]);
+  },
+);
+
+// The owner's Sign out where Studio didn't load (row 88c-RC2, the pins row 88c owed: R3, R4 as
+// keep and discard, H4). The alert's Sign out is a plain form post to auth.logout, so it signs out
+// with the shell's chunks refused or held. Draft, unrun until RC2's tickets queue.
+
+/** The alert's own Sign out, by its exact name: the discard's name has "sign out" in it too. */
+const alertSignOut = (page: Page) =>
+  alert(page).getByRole('button', { name: 'Sign out', exact: true });
+const alertDiscard = (page: Page) =>
+  alert(page).getByRole('button', { name: 'Discard unsaved changes and sign out' });
+
+test(
+  "with the shell's chunks refused, the alert's Sign out signs out: one auth.logout, then signed out, and this browser's unsaved changes kept (row 88c-RC2, R3, R4 keep)",
+  { annotation: [STUDIO] },
+  async ({ page, app }) => {
+    await signIn(page, app, secret.password);
+    const seeded = await seedJournal(page);
+    const refused = await failEnhancement(page, app.origin);
+    const logouts = logoutsOf(page);
+    await page.goto('/studio');
+    await expect.poll(() => refused.length, 'the optional chunks are asked for').toBeGreaterThan(0);
+    await expect(alert(page)).toBeVisible({ timeout: PAST_TIMEOUT_MS });
+    await alertSignOut(page).click();
+    await expect(page).toHaveURL(`${app.origin}${SIGNED_OUT}`);
+    expect(logouts, 'one auth.logout').toHaveLength(1);
+    // The sign-in page's script ran and pruned, and kept the entry: no discard was owed.
+    expect(await page.evaluate((key) => localStorage.getItem(key), JOURNAL_KEY)).toBe(seeded);
+  },
+);
+
+test(
+  "with the shell's chunks refused, the alert's discard signs out, and the sign-in page's script clears the journal alone (row 88c-RC2, R4 discard)",
+  { annotation: [STUDIO] },
+  async ({ page, app }) => {
+    await signIn(page, app, secret.password);
+    // A valid entry, which the sign-in page's prune keeps (the keep test above): only the discard
+    // the marker owes removes it.
+    await seedJournal(page);
+    await page.evaluate(() => localStorage.setItem('portfolio.motion.paused', '1'));
+    await failEnhancement(page, app.origin);
+    const logouts = logoutsOf(page);
+    await page.goto('/studio');
+    await expect(alert(page)).toBeVisible({ timeout: PAST_TIMEOUT_MS });
+    await alertDiscard(page).click();
+    await expect(page).toHaveURL(`${app.origin}${SIGNED_OUT}`);
+    expect(logouts, 'one auth.logout').toHaveLength(1);
+    // The sign-in page's script reads the pending-discard marker first and clears the journal,
+    // and only the journal: the site's own keys stay.
+    await expect.poll(() => journalEntryCount(page)).toBe(0);
+    expect(await page.evaluate(() => localStorage.getItem('portfolio.motion.paused'))).toBe('1');
+  },
+);
+
+test(
+  "the late alert's Sign out, with the shell still held, signs out once, and a shell released after it shows nothing (row 88c-RC2, H4)",
+  { annotation: [STUDIO] },
+  async ({ page, app }) => {
+    await signIn(page, app, secret.password);
+    const { release } = await holdShell(page, app.origin);
+    const logouts = logoutsOf(page);
+    try {
+      await page.goto('/studio', { waitUntil: 'domcontentloaded' });
+      await expect(lateNode(page)).toHaveCount(1, { timeout: PAST_TIMEOUT_MS });
+      await alertSignOut(page).click();
+      await expect(page).toHaveURL(`${app.origin}${SIGNED_OUT}`);
+    } finally {
+      release();
+    }
+    await pause(1_000);
+    await expect(page).toHaveURL(`${app.origin}${SIGNED_OUT}`);
+    expect(logouts, 'one auth.logout').toHaveLength(1);
+  },
+);
+
+test(
+  "with the shell's chunks refused and a store that can't end the session, the alert's Sign out lands on the store-failed state, never on signed out (row 88c-RC2, 88b's alert case)",
+  { annotation: [STUDIO] },
+  async ({ page, app }) => {
+    await signIn(page, app, secret.password);
+    await failEnhancement(page, app.origin);
+    await page.goto('/studio');
+    await expect(alert(page)).toBeVisible({ timeout: PAST_TIMEOUT_MS });
+    // The store's sessions moved aside and a plain file in their place, in the fixture app's own
+    // data directory: ending the session can't be done. Put back by renaming, deleting nothing.
+    const sessions = path.join(app.env.PORTFOLIO_DATA_DIR!, 'ephemeral', 'auth', 'sessions');
+    renameSync(sessions, `${sessions}.held`);
+    writeFileSync(sessions, 'not a directory (row 88c-RC2, studio-load-failure.spec.ts)\n');
+    try {
+      await alertSignOut(page).click();
+      await expect(page).toHaveURL(`${app.origin}/studio/sign-in?state=store_failed`);
+    } finally {
+      renameSync(sessions, `${sessions}.blocker`);
+      renameSync(`${sessions}.held`, sessions);
+    }
+    await expect(page.getByRole('alert')).not.toContainText("You're signed out.");
   },
 );

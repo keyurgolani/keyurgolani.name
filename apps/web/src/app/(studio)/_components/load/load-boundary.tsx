@@ -36,7 +36,8 @@ import { lateCommitted, latePressed, StudioLoadAlert, type CommitPhase } from '.
 // reloads: this renders no alert of its own, and a shell that arrives in the
 // moment before the reload lands may show until it does.
 //
-// Reload alone, under both profiles: this is in the page's entry, which both
+// Reload under both profiles, and under owner Sign out, a plain form post
+// (sign-out-form.tsx, row 88c-RC2): this is in the page's entry, which both
 // profiles' pages load, so it reaches no owner code (#9; load-imports.test.ts).
 // The alert never says the owner is signed out: it says only that Studio
 // didn't load.
@@ -71,7 +72,14 @@ class Rejected extends Component<
 
 type Phase = 'waiting' | 'live' | 'rejected';
 
-export function StudioLoadBoundary({ children }: { readonly children: ReactNode }) {
+export function StudioLoadBoundary({
+  children,
+  profile,
+}: {
+  readonly children: ReactNode;
+  /** The page's profile (row 88c-RC2 (b)): under owner the alerts offer Sign out. */
+  readonly profile: 'owner' | 'demo';
+}) {
   const [phase, setPhase] = useState<Phase>('waiting');
   // Set in the same commit as the shell's mount or the refusal's catch, before this boundary's
   // layout effect, where `phase` still reads 'waiting'.
@@ -107,12 +115,18 @@ export function StudioLoadBoundary({ children }: { readonly children: ReactNode 
   return (
     <>
       {alerting ? (
-        <StudioLoadAlert main reload={reload} onReload={() => window.location.reload()} />
+        <StudioLoadAlert
+          main
+          reload={reload}
+          profile={profile}
+          onReload={() => window.location.reload()}
+        />
       ) : null}
       {phase === 'rejected' ? null : (
         // The wrapper adds no box of its own (.studio-load, display: contents); studio.css hides it
-        // while the late alert's node is in the page.
-        <div className="studio-load">
+        // while the late alert's node is in the page. It names the page's profile, which the late
+        // alert, in a root of its own, reads (row 88c-RC2 (b)).
+        <div className="studio-load" data-studio-profile={profile}>
           <MountedContext.Provider value={mounted}>
             <Rejected onRejected={onRejected}>{children}</Rejected>
           </MountedContext.Provider>

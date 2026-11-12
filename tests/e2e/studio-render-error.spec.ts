@@ -14,8 +14,9 @@ import { ownerApp } from '../harness/profile-matrix';
 // <html id="__next_error__"> with nothing in its body. error.tsx is a client error boundary, so it
 // is never in the server's HTML. With JavaScript off, that empty document is all there is. With
 // JavaScript on, whatever Next's client renders from the error payload is what shows: by reading,
-// error.tsx, "Something went wrong" and "Studio couldn't load." with Reload Studio, and no Sign out
-// (row 88c, RC1). No test made a Studio render throw before this one, so that is unseen.
+// error.tsx, "Something went wrong" and "Studio couldn't load." with Reload Studio, and under owner
+// the Sign out form, keep or discard (row 88c-RC2; RC1 offered no Sign out). No test made a Studio
+// render throw before this one, so that is unseen.
 //
 // The throw, test-only and with no code changed: /studio/preview reads the working draft as it
 // renders (previewable, server/owner/preview.ts), and the store's getWorking rethrows a read it
@@ -98,7 +99,7 @@ test(
 );
 
 test(
-  "an owner render that throws shows error.tsx once its script runs: Studio couldn't load, with Reload Studio focused and no Sign out (row 89, 88c-RC2)",
+  "an owner render that throws shows error.tsx once its script runs: Studio couldn't load, with Reload Studio focused and the owner's Sign out form (row 89, 88c-RC2)",
   { annotation: [PAGE] },
   async ({ page, app }, testInfo) => {
     await seedDraft(app, 'Thrown Person');
@@ -126,7 +127,11 @@ test(
         .soft(page.getByRole('alert').filter({ hasText: "Studio couldn't load." }))
         .toBeVisible();
       await expect.soft(reload).toBeFocused();
-      await expect.soft(page.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
+      // Under owner, the Sign out form, keep or discard (row 88c-RC2).
+      await expect.soft(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+      await expect
+        .soft(page.getByRole('button', { name: 'Discard unsaved changes and sign out' }))
+        .toBeVisible();
       await expect.soft(page.getByRole('form', { name: 'Preview controls' })).toHaveCount(0);
       // Once the store reads again, Reload Studio brings the page back.
       restore();

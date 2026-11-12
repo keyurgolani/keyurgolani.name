@@ -39,6 +39,7 @@ import {
   writeEntry,
   type JournalEntry,
 } from '~/lib/studio/journal';
+import { journalStorage, type PendingDiscard } from '~/lib/studio/discard-marker';
 import { pageCacheHandlers, restoredMayKeep } from '~/lib/studio/page-cache';
 import { claimTab, mayRestore, openTabs } from '~/lib/studio/tab-presence';
 import { endSession, NEUTRAL_TITLE, signOutListener } from '~/lib/studio/session-end';
@@ -130,10 +131,16 @@ function taskFromHash(tasks: readonly StudioTask[]): TaskId {
   return task;
 }
 
+/** The discard this page found owed as it rendered (row 88c-RC2), set once, before any journal read. */
+let pagePending: PendingDiscard | null = null;
+
 /** The browser's localStorage, or null where it can't be reached. */
 function storage(): Storage | null {
+  // Every journal read goes through here, so a pending discard (a Sign out without JavaScript that
+  // chose to discard) prunes what was saved before it, once, before any draft is restored (row
+  // 88c-RC2).
   try {
-    return window.localStorage;
+    return journalStorage(window, pagePending);
   } catch {
     return null;
   }
@@ -155,6 +162,7 @@ export function StudioShell({
   policy,
   appearance,
   preview,
+  pendingDiscard = null,
 }: {
   csrfToken: string;
   policy: StudioPolicy;
@@ -162,7 +170,13 @@ export function StudioShell({
   appearance: AppearanceCatalog;
   /** The preview's sandbox, origin, and override options, or null when the session can't preview. */
   preview: PreviewSetup | null;
+  /** The discard /studio found owed as it rendered (row 88c-RC2), or null. */
+  pendingDiscard?: PendingDiscard | null;
 }) {
+  // Before any effect reads the journal: the first render sets what storage() applies.
+  useState(() => {
+    pagePending = pendingDiscard;
+  });
   // The page's load boundary hears that the shell arrived (row 88c).
   useStudioMounted();
   const tasks = useMemo(() => tasksFor(policy.allowed), [policy.allowed]);

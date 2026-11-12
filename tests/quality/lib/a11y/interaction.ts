@@ -68,7 +68,7 @@ const MIN_MARGIN = 4;
  * antialiases its edge pixels under 3:1: a solid 2px ring measures 94% to
  * 99% of its area in Chromium. A 1px ring, at half, still fails.
  */
-const EDGE_ALLOWANCE = 0.9;
+export const EDGE_ALLOWANCE = 0.9;
 /**
  * How many presses a framed walk takes inside one frame before it calls the
  * frame a trap. While Tab moves through a frame's own document, the page's

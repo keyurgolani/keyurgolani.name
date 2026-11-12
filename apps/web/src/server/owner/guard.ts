@@ -32,6 +32,21 @@ export function checkFetchSite(request: Request): 'fetch_site' | null {
 }
 
 /**
+ * Sec-Fetch-Site sent, and same-origin: for the one request that goes without a CSRF token while a
+ * session counts, Studio's Sign out form (row 88c-RC2). Only a browser sets it, and one that
+ * doesn't send it is refused, failing closed.
+ */
+export function checkSameOriginFetch(request: Request): 'fetch_site' | null {
+  return request.headers.get('sec-fetch-site') === 'same-origin' ? null : 'fetch_site';
+}
+
+/** Whether a request's body is a form, by its Content-Type, read without the body. */
+export function isFormBody(request: Request): boolean {
+  const essence = request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
+  return essence === MEDIA_TYPES.form;
+}
+
+/**
  * Why a request fails the origin check, or null when it passes: an Origin
  * exactly `origin`, the canonical origin, never one read from the request's
  * Host or a forwarded header, and a same-origin fetch.

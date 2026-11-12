@@ -100,21 +100,34 @@ test("the owner shell's and Appearance workspace's markup is the snapshot's, so 
   assert.equal(now, readFileSync(SNAPSHOT, 'utf8'));
 });
 
-const signOut = (html: string) => /<button[^>]*>Sign out<\/button>/.exec(html)?.[0] ?? '';
+const signOutForm = (html: string) =>
+  /<form[^>]*action="\/api\/studio\/auth\.logout"[^>]*>[\s\S]*?<\/form>/.exec(html)?.[0] ?? '';
 
-test('Sign out renders aria-disabled before any script runs, so a click before the shell hydrates is never lost (row 88)', async () => {
+test('Sign out is a form post to auth.logout from the first byte, so it signs out before the shell hydrates and without JavaScript, its discard choice for no-JS alone (row 88c-RC2)', async () => {
   const { StudioShell } = await import('./studio-shell');
   const shell = renderToStaticMarkup(
     <StudioShell csrfToken="csrf-token" policy={OWNER} appearance={CATALOG} preview={null} />,
   );
-  const button = signOut(shell);
-  assert.notEqual(button, '', 'the shell renders Sign out');
-  // Studio styles only [aria-disabled='true'], the busy look, and the button keeps its place in the
-  // focus order; its click guard holds until the shell has hydrated.
-  assert.ok(button.includes('aria-disabled="true"'), button);
+  const form = signOutForm(shell);
+  assert.notEqual(form, '', 'the shell renders Sign out as a form');
+  assert.match(/^<form[^>]*>/.exec(form)![0], /\smethod="post"/);
+  const button = /<button[^>]*>Sign out<\/button>/.exec(form)?.[0] ?? '';
+  assert.match(button, /\stype="submit"/, button);
+  // It takes a click from the first byte: the native post is the way out before hydration
+  // (row 88's aria-disabled hold comes off).
+  assert.ok(!button.includes('aria-disabled'), button);
+  assert.ok(!/\sdisabled[=\s>]/.test(button), button);
+  // Without JavaScript the owner can choose to discard this browser's unsaved changes; with it,
+  // the dialog asks, so the second submit is in <noscript>.
+  const noscript = /<noscript>([\s\S]*?)<\/noscript>/.exec(form)?.[1] ?? '';
+  const discard =
+    /<button[^>]*>Discard unsaved changes and sign out<\/button>/.exec(noscript)?.[0] ?? '';
+  for (const attribute of ['type="submit"', 'name="choice"', 'value="discard"']) {
+    assert.ok(discard.includes(attribute), `the discard submit: ${attribute} in ${discard}`);
+  }
   assert.ok(
-    !/\sdisabled[=\s>]/.test(button),
-    'never natively disabled, which Studio has no look for',
+    !/name="choice"/.test(form.replace(/<noscript>[\s\S]*?<\/noscript>/, '')),
+    'keep is the default',
   );
 });
 
