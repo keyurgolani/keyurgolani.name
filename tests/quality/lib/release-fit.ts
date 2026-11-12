@@ -29,6 +29,7 @@ import {
   RELEASE_TIMEOUT_MINUTES,
   releaseFor,
   TIMEOUT_MARGIN,
+  type ReleasePace,
 } from './full-shards';
 import { CELL_SPEC, shardWall, type PrShard, type ShardGroup } from './pr-shards';
 
@@ -177,4 +178,61 @@ export function measuredLines(times: ReleaseTimes, release: MeasuredRelease): st
       ? '[release-fit] no estimates in the file, so no pace or fitted ceiling'
       : `[release-fit] measured pace ${release.pace.toFixed(3)}s a second estimated: RELEASE_PACE { overheadSeconds: ${Math.round(times.overheadSeconds)}, pace: ${release.pace.toFixed(3)} } fits RELEASE_CEILING at ${release.ceiling}s (${FULL_FIXED}s fixed part included)`,
   ];
+}
+
+/**
+ * A release run's shards as its jobs measured them, beside the estimate rc-quality-plan gave each
+ * (tests/quality/fixtures/release-run-<id>.json): each job's time, its run step's time, and the
+ * sum of its tests' per-key p90 weights. The jobs' times come from the Actions API's job and step
+ * timestamps, so no artifact or log is read.
+ */
+export interface ShardRun {
+  readonly source: string;
+  readonly run: string;
+  readonly commit: string;
+  readonly shards: readonly {
+    readonly shard: number;
+    readonly estimate: number;
+    readonly jobSeconds: number;
+    readonly runSeconds: number;
+  }[];
+}
+
+/** `path`'s release run file, checked: its source, and every shard's estimate and times. */
+export function loadShardRun(path: string): ShardRun {
+  const run = JSON.parse(readFileSync(path, 'utf8')) as ShardRun;
+  if (typeof run.source !== 'string' || run.source.trim() === '')
+    throw new Error(`${path}: a run file names its source.`);
+  if (!Array.isArray(run.shards) || run.shards.length === 0)
+    throw new Error(`${path}: a run file has its shards.`);
+  for (const each of run.shards) {
+    for (const field of ['estimate', 'jobSeconds', 'runSeconds'] as const) {
+      if (!(Number.isFinite(each[field]) && each[field] >= 0))
+        throw new Error(
+          `${path}: shard ${each.shard} needs its ${field.replace('Seconds', ' time')}.`,
+        );
+    }
+    if (!(each.estimate > FULL_FIXED))
+      throw new Error(`${path}: shard ${each.shard}'s estimate is within its fixed part.`);
+  }
+  return run;
+}
+
+/**
+ * The pace a release run measured, fitted to its slowest shard: the fixed part is each job's time
+ * outside its run step, on the mean (setup, checkout, install; the reference variant's build is in
+ * the run step, so it counts as test time here, on the safe side), and the pace the most any shard
+ * took past that per second of its estimate past FULL_FIXED, rounded up to a thousandth. So at
+ * that pace every shard of the run is covered, and the ceiling it fits holds the 1.5x margin for
+ * the slowest of them.
+ */
+export function fitShardPace(run: ShardRun): Pick<ReleasePace, 'overheadSeconds' | 'pace'> {
+  const overheadSeconds = Math.round(
+    run.shards.reduce((sum, each) => sum + (each.jobSeconds - each.runSeconds), 0) /
+      run.shards.length,
+  );
+  const slowest = Math.max(
+    ...run.shards.map((each) => (each.jobSeconds - overheadSeconds) / (each.estimate - FULL_FIXED)),
+  );
+  return { overheadSeconds, pace: Math.ceil(slowest * 1000) / 1000 };
 }
