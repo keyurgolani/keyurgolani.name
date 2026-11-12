@@ -1770,8 +1770,13 @@
   --layout-fx-clip: var(--layout-fx-drop);
 }
 
+/* One column, the figure's own width: an item's content-based minimum never widens it past its
+   frame. An unavailable picture's box grows in height to its label, and through its aspect ratio
+   that minimum asked for width too (184px in a 115px column at 320), so the column ran past the
+   window, the caption with it. */
 [data-variant='flux'] .fx-frame figure {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-2xs);
   align-content: start;
 }
@@ -3008,6 +3013,14 @@
 
 [data-variant='flux'] .fx-case__pictures .fx-frame {
   --layout-fx-frame: 8 / 5;
+}
+
+/* An unavailable picture's box holds its label, not media: its overflow shows, so the 8:5 box keeps
+   its automatic minimum and grows to the label where the label outgrows it (72px tall,
+   the label 79px at 320). Its clip-path still shapes it: clip-path clips painting whatever overflow
+   is, and the label stays inside the shape's padding. */
+[data-variant='flux'] .fx-case__pictures .pf-figure--unavailable > .pf-media-box {
+  overflow: visible;
 }
 
 /* The decisions: each stands on its own lip, in the inks in turn, its drip off the end shoulder. */
