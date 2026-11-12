@@ -1796,6 +1796,15 @@
   padding-block: 0.1em;
 }
 
+/*
+ * The case page's All work link (row 107) is a display-size inline link with its words' underline
+ * too, so its ring's foot ran over that line the same way. The same block padding clears it. The
+ * onward "Next case study" link, a headline, isn't in the h2, so this reaches All work alone.
+ */
+[data-variant='terra-field'] h2.tf-casenext__title > a {
+  padding-block: 0.1em;
+}
+
 [data-variant='terra-field'] .tf-close__mail {
   font-family: var(--type-display-font-family);
   font-weight: var(--type-display-font-weight);
